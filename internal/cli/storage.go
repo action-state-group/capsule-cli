@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -20,8 +19,8 @@ import (
 	driver "github.com/go-sql-driver/mysql"
 )
 
-var ErrConflict = errors.New("operation conflicts with its frozen input or target")
-var ErrPending = errors.New("operation durably saved; delivery pending, retry the same request and key")
+var ErrConflict = errors.New("stored state conflicts with the selected target or identity")
+var ErrPending = errors.New("operation durably saved; delivery pending, retry the same frozen request and target")
 var ErrReadOnlyCLL = errors.New("operation requires writes; profile is read-only")
 var ErrPartial = errors.New("verification incomplete or required originals unavailable")
 
@@ -29,16 +28,14 @@ var ErrPartial = errors.New("verification incomplete or required originals unava
 // artifact schema or CLL schema. MySQL DDL is individually idempotent; a log is
 // marked ready only after every library's explicit initialization succeeds.
 type coordinationStatement struct {
-	sql       string
-	artifacts bool
-	cll       bool
+	sql string
+	cll bool
 }
 
 var coordinationDDL = []coordinationStatement{
-	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_identity (singleton TINYINT PRIMARY KEY, store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, CHECK(singleton=1)) ENGINE=InnoDB`, artifacts: false, cll: false},
-	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_logs (log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PRIMARY KEY, namespace VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL) ENGINE=InnoDB`, artifacts: false, cll: true},
-	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_operations (store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, namespace VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, operation_key VARBINARY(191) NOT NULL, request_digest BINARY(32) NOT NULL, signer BINARY(32) NOT NULL, capsule_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, appended_seq BIGINT UNSIGNED NULL, PRIMARY KEY(store_id,namespace,log_id,operation_key)) ENGINE=InnoDB`, artifacts: true, cll: true},
-	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_checkpoints (store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, mmr_size BIGINT UNSIGNED NOT NULL, statement LONGBLOB NOT NULL, service_id VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, PRIMARY KEY(store_id,log_id,mmr_size)) ENGINE=InnoDB`, artifacts: false, cll: true},
+	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_identity (singleton TINYINT PRIMARY KEY, store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, CHECK(singleton=1)) ENGINE=InnoDB`, cll: false},
+	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_logs (log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PRIMARY KEY, namespace VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL) ENGINE=InnoDB`, cll: true},
+	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_checkpoints (store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, mmr_size BIGINT UNSIGNED NOT NULL, statement LONGBLOB NOT NULL, service_id VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, PRIMARY KEY(store_id,log_id,mmr_size)) ENGINE=InnoDB`, cll: true},
 }
 
 type target struct {
@@ -145,7 +142,7 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 	}
 	if use == useInitialization {
 		for _, stmt := range coordinationDDL {
-			if stmt.artifacts && !needsArtifacts || stmt.cll && !needsCLL {
+			if stmt.cll && !needsCLL {
 				continue
 			}
 			if _, err = db.ExecContext(ctx, stmt.sql); err != nil {
@@ -215,13 +212,12 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 	return t, nil
 }
 
-// Publication identifies the persisted exact-byte operation. A caller should
-// retain this result and use the same named target/key when resuming.
+// Publication reports Capsule identity and delivery state. A caller should
+// retain the frozen request and use the same signing configuration and target.
 type Publication struct {
 	StoreID   string `json:"store_id"`
 	Namespace string `json:"namespace"`
 	LogID     string `json:"log_id"`
-	Key       string `json:"idempotency_key"`
 	CapsuleID string `json:"capsule_id"`
 	Sequence  uint64 `json:"sequence,omitempty"`
 	State     string `json:"state"`
@@ -243,13 +239,6 @@ func (t *target) loadIdentity(ctx context.Context) error {
 	return nil
 }
 
-func rollback(tx *sql.Tx, err *error) {
-	e := tx.Rollback()
-	if !errors.Is(e, sql.ErrTxDone) {
-		*err = errors.Join(*err, e)
-	}
-}
-
 func requirePublisherKey(p Profile, private ed25519.PrivateKey) error {
 	public, ok := private.Public().(ed25519.PublicKey)
 	if !ok {
@@ -267,113 +256,32 @@ func requirePublisherKey(p Profile, private ed25519.PrivateKey) error {
 	return errors.Join(ErrInput, artifact.ErrUntrustedSigner)
 }
 
-// preparePublication serializes aliases on an authoritative transactional claim.
-// The claim, exact bytes via SDK PutTx, and Capsule ID commit together. A crash
-// before that commit cannot append; a crash after it resumes without sealing.
-func (t *target) preparePublication(ctx context.Context, raw []byte, r Request, key string, private ed25519.PrivateKey) (_ Publication, err error) {
-	if key == "" || len(key) > 191 {
-		return Publication{}, inputError("idempotency key must have 1..191 bytes")
-	}
-	public, ok := private.Public().(ed25519.PublicKey)
-	if !ok {
-		return Publication{}, errors.New("invalid signer")
-	}
+// preparePublication persists the deterministic record through the artifact SDK.
+// No operation journal is needed: retries reuse the frozen request and signer.
+func (t *target) preparePublication(ctx context.Context, r Request, private ed25519.PrivateKey) (Publication, error) {
 	if err := requirePublisherKey(t.profile, private); err != nil {
 		return Publication{}, err
 	}
-	digest := sha256.Sum256(raw)
-	tx, err := t.db.BeginTx(ctx, nil)
+	record, err := seal(r, private)
 	if err != nil {
 		return Publication{}, err
 	}
-	defer rollback(tx, &err)
-	args := []any{t.storeID, t.profile.Namespace, t.profile.LogID, key}
-	insert := append(append([]any{}, args...), digest[:], []byte(public))
-	if _, err = tx.ExecContext(ctx, `INSERT INTO capsule_cli_operations(store_id,namespace,log_id,operation_key,request_digest,signer) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE operation_key=operation_key`, insert...); err != nil {
+	if len(missingBindings(record)) != 0 {
+		return Publication{}, ErrPartial
+	}
+	if err = t.artifacts.Put(ctx, record); err != nil {
 		return Publication{}, err
 	}
-	var storedDigest, storedSigner []byte
-	var id sql.NullString
-	var seq sql.NullInt64
-	if err = tx.QueryRowContext(ctx, `SELECT request_digest,signer,capsule_id,appended_seq FROM capsule_cli_operations WHERE store_id=? AND namespace=? AND log_id=? AND operation_key=? FOR UPDATE`, args...).Scan(&storedDigest, &storedSigner, &id, &seq); err != nil {
-		return Publication{}, err
-	}
-	if !bytes.Equal(storedDigest, digest[:]) || !bytes.Equal(storedSigner, public) {
-		return Publication{}, ErrConflict
-	}
-	if !id.Valid {
-		record, e := seal(r, private)
-		if e != nil {
-			return Publication{}, e
-		}
-		if len(missingBindings(record)) != 0 {
-			return Publication{}, ErrPartial
-		}
-		if err = t.artifacts.PutTx(ctx, tx, record); err != nil {
-			return Publication{}, err
-		}
-		id = sql.NullString{String: record.CapsuleID, Valid: true}
-		if _, err = tx.ExecContext(ctx, `UPDATE capsule_cli_operations SET capsule_id=? WHERE store_id=? AND namespace=? AND log_id=? AND operation_key=?`, append([]any{id.String}, args...)...); err != nil {
-			return Publication{}, err
-		}
-	} else {
-		if _, err = t.artifacts.GetTx(ctx, tx, id.String, false); err != nil {
-			return Publication{}, err
-		}
-	}
-	if err = tx.Commit(); err != nil {
-		return Publication{}, err
-	}
-	result := Publication{StoreID: t.storeID, Namespace: t.profile.Namespace, LogID: t.profile.LogID, Key: key, CapsuleID: id.String, State: "pending"}
-	if seq.Valid {
-		result.Sequence = uint64(seq.Int64)
-		result.State = "appended"
-	}
-	return result, nil
+	return Publication{StoreID: t.storeID, Namespace: t.profile.Namespace, LogID: t.profile.LogID, CapsuleID: record.CapsuleID, State: "pending"}, nil
 }
-func (t *target) publish(ctx context.Context, raw []byte, r Request, key string, private ed25519.PrivateKey) (Publication, error) {
-	result, e := t.preparePublication(ctx, raw, r, key, private)
-	if e != nil {
-		return result, e
+func (t *target) publish(ctx context.Context, r Request, private ed25519.PrivateKey) (Publication, error) {
+	result, err := t.preparePublication(ctx, r, private)
+	if err != nil {
+		return result, err
 	}
-	// Reconcile actual presence first. Completed retries, including a lost ACK,
-	// must not append again or become pending merely because originals were
-	// legitimately purged after the original successful append.
-	record, e := t.artifacts.Get(ctx, result.CapsuleID)
-	if e != nil {
-		return result, e
-	}
-	id, e := hex.DecodeString(record.CapsuleID)
-	if e != nil {
-		return result, ErrConflict
-	}
-	entry, e := t.log.GetEntry(ctx, id)
-	switch {
-	case e == nil:
-		if !bytes.Equal(entry.Value, id) || (result.Sequence != 0 && result.Sequence != entry.Seq) {
-			return result, ErrConflict
-		}
-	case errors.Is(e, cll.ErrNotFound):
-		if result.Sequence != 0 {
-			return result, ErrConflict
-		}
-		// Only an actually new append requires currently retained originals.
-		if len(missingBindings(record)) != 0 {
-			return result, ErrPartial
-		}
-		entry, e = appendRecord(ctx, t.log, record.CapsuleID)
-		if e != nil {
-			return result, e
-		}
-	default:
-		return result, appendError(e)
-	}
-	if result.Sequence != 0 {
-		return result, nil
-	}
-	_, e = t.db.ExecContext(ctx, `UPDATE capsule_cli_operations SET appended_seq=? WHERE store_id=? AND namespace=? AND log_id=? AND operation_key=? AND capsule_id=?`, entry.Seq, t.storeID, t.profile.Namespace, t.profile.LogID, key, result.CapsuleID)
-	if e != nil {
-		return result, ErrPending
+	entry, err := appendRecord(ctx, t.log, result.CapsuleID)
+	if err != nil {
+		return result, err
 	}
 	result.Sequence = entry.Seq
 	result.State = "appended"

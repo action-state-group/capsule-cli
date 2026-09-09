@@ -230,7 +230,7 @@ func NewCommand() *cobra.Command {
 	}}
 	verify.Flags().String("capsule", "", "artifact.Record JSON file")
 	root.AddCommand(verify)
-	publish := &cobra.Command{Use: "publish", Short: "Durably seal/persist/append with shared idempotency", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	publish := &cobra.Command{Use: "publish", Short: "Seal, persist artifacts, and append to CLL", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
 		if e != nil {
 			return e
@@ -239,10 +239,6 @@ func NewCommand() *cobra.Command {
 			return ErrReadOnlyCLL
 		}
 		path, _ := c.Flags().GetString("request")
-		key, _ := c.Flags().GetString("idempotency-key")
-		if key == "" || len(key) > 191 {
-			return inputError("--idempotency-key is required and bounded")
-		}
 		raw, e := readInput(path)
 		if e != nil {
 			return e
@@ -263,7 +259,7 @@ func NewCommand() *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.close()) }()
-		result, e := t.publish(c.Context(), raw, r, key, private)
+		result, e := t.publish(c.Context(), r, private)
 		if result.CapsuleID != "" {
 			if outErr := output(c, result); outErr != nil {
 				return outErr
@@ -272,7 +268,6 @@ func NewCommand() *cobra.Command {
 		return e
 	}}
 	publish.Flags().String("request", "", "capsule-seal-request/v1 JSON file")
-	publish.Flags().String("idempotency-key", "", "Stable operation key for exact input bytes")
 	root.AddCommand(publish)
 	logs := &cobra.Command{Use: "cll"}
 	root.AddCommand(logs)

@@ -26,7 +26,7 @@ capsule store init --profile NAME
 capsule seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsule get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsule verify --profile NAME --capsule ARTIFACT.json
-capsule publish --profile NAME --request INPUT.json --idempotency-key KEY
+capsule publish --profile NAME --request INPUT.json
 capsule cll list --profile NAME --after SEQ [--through SEQ] [--limit 100]
 capsule cll append --profile NAME --capsule ARTIFACT.json
 capsule cll verify --profile NAME --proof PROOF.json
@@ -137,7 +137,7 @@ transactional; each initialization step is idempotent and log readiness is
 recorded last. Normal log operations never invent a missing identity. Initialized
 profiles cannot change log ID/namespace through update; create another profile.
 Endpoint/credential changes must still resolve the pinned physical store ID.
-An independent database clone requires deliberate identity/journal reprovisioning
+An independent database clone requires deliberate identity reprovisioning
 by an operator; automatic clone recovery is not provided.
 
 ## Seal request and stored artifact
@@ -252,22 +252,26 @@ store-identity metadata (`capsule_cli_identity`).
 
 ## Publication and recovery
 
-`publish` uses an authoritative shared MySQL journal keyed by physical store ID,
-namespace, log ID and exact idempotency key. The transaction claims the operation
-before sealing, writes exact artifact bytes with SDK `PutTx`, and commits their
-Capsule ID together. No append happens before that commit. A crash before commit
-rolls back the whole claim; after commit, retries load the stored artifact and
-never reseal it. Changed input bytes (even whitespace) or signing identity conflict.
+The unreleased CLI no longer accepts `--idempotency-key` or returns the
+`idempotency_key` JSON field. `capsule_cli_operations` is unused and may be
+dropped after checking for unfinished operations. Initialization does not
+silently delete existing tables.
 
-Append and journal completion are reconciled against the actual CLL entry. Lost
-append acknowledgments are safe because the underlying CLL append is explicitly
-identity-idempotent. A process/host/profile-alias retry uses the same shared journal,
-not a local cache. Keep the same request file, key and target. `cll append` accepts
-an existing artifact file, persists it via the SDK first, then appends its identity.
-Missing required originals prevent a new append. If the entry already exists,
-retry reconciles completion without appending again or resurrecting purged originals.
-If the journal records completion but the log entry is absent, publish returns a
-conflict and never recreates missing log history.
+`cll append` accepts an existing artifact file, persists it through the SDK,
+then appends its Capsule ID. Missing required originals prevent a new append.
+
+`publish` seals the supplied request, persists the complete record through the
+artifact SDK, then calls CLL's identity-idempotent append. It does not maintain
+an operation journal or accept a business idempotency key.
+
+For retries, retain the complete request (including ActionID and Timestamp),
+signing configuration and target. Repeat the same command. A lost append response
+is safe to retry: CLL returns the existing sequence for that Capsule ID. Changed
+requests are new publications, not conflicts against an earlier business key.
+There is no background recovery guarantee or atomic transaction across storage
+and CLL. A failed delivery leaves the persisted artifact available for retry.
+Purged originals are never recreated; publish fails rather than bypassing the
+artifact SDK's retention checks. Use CLL lookup to inspect prior delivery.
 
 ## Checkpoints and verification
 

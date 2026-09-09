@@ -71,31 +71,28 @@ func TestMySQLPublishRecovery(t *testing.T) {
 	request, e := parseRequest(raw)
 	require.NoError(t, e)
 	target.log = &lostAck{Backend: target.log}
-	first, e := target.publish(t.Context(), raw, request, "operation-one", key)
+	first, e := target.publish(t.Context(), request, key)
 	require.ErrorIs(t, e, ErrPending)
 	assert.NotEmpty(t, first.CapsuleID)
 	record, e := target.artifacts.Get(t.Context(), first.CapsuleID)
 	require.NoError(t, e)
-	second, e := target.publish(t.Context(), raw, request, "operation-one", key)
+	second, e := target.publish(t.Context(), request, key)
 	require.NoError(t, e)
 	assert.Equal(t, first.CapsuleID, second.CapsuleID)
 	assert.Equal(t, uint64(1), second.Sequence)
 	again, e := target.artifacts.Get(t.Context(), first.CapsuleID)
 	require.NoError(t, e)
 	assert.Equal(t, record, again)
-	changed := append(append([]byte(nil), raw...), '\n')
-	_, e = target.publish(t.Context(), changed, request, "operation-one", key)
-	require.ErrorIs(t, e, ErrConflict)
-	// A different alias and fresh client must consult the same shared authority.
+	// A fresh client publishing identical input gets the same CLL entry.
 	alias := p
 	alias.Name = "alias"
 	other, e := openTarget(t.Context(), alias, usePublication)
 	require.NoError(t, e)
 	defer func() { require.NoError(t, other.close()) }()
-	third, e := other.publish(t.Context(), raw, request, "operation-one", key)
+	third, e := other.publish(t.Context(), request, key)
 	require.NoError(t, e)
 	assert.Equal(t, second, third)
-	// A completed journal row is checked against the real backend, not trusted alone.
+	// Repeated publication must leave only one CLL entry.
 	entries, e := other.log.ScanEntries(t.Context(), 0, 100)
 	require.NoError(t, e)
 	require.Len(t, entries, 1)
@@ -105,7 +102,7 @@ func TestMySQLPublishRecovery(t *testing.T) {
 	_, e = openTarget(t.Context(), wrong, usePublication)
 	require.ErrorIs(t, e, ErrConflict)
 }
-func TestMySQLConcurrentClaims(t *testing.T) {
+func TestMySQLConcurrentPublishes(t *testing.T) {
 	p, key := mysqlProfile(t)
 	target, e := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, e)
@@ -122,7 +119,7 @@ func TestMySQLConcurrentClaims(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r, e := target.publish(t.Context(), raw, request, "shared-key", key)
+			r, e := target.publish(t.Context(), request, key)
 			results <- r
 			errs <- e
 		}()
@@ -188,13 +185,13 @@ func TestMySQLPendingSurvivesRestart(t *testing.T) {
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
 	require.NoError(t, e)
-	prepared, e := target.preparePublication(t.Context(), raw, request, "prepared", key)
+	prepared, e := target.preparePublication(t.Context(), request, key)
 	require.NoError(t, e)
 	require.NoError(t, target.close())
 	reopened, e := openTarget(t.Context(), p, usePublication)
 	require.NoError(t, e)
 	defer func() { require.NoError(t, reopened.close()) }()
-	published, e := reopened.publish(t.Context(), raw, request, "prepared", key)
+	published, e := reopened.publish(t.Context(), request, key)
 	require.NoError(t, e)
 	assert.Equal(t, prepared.CapsuleID, published.CapsuleID)
 	assert.Equal(t, "appended", published.State)
@@ -214,7 +211,7 @@ func TestMySQLCheckpointCommandsAndRetry(t *testing.T) {
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
 	require.NoError(t, e)
-	_, e = target.publish(t.Context(), raw, request, "checkpoint-input", key)
+	_, e = target.publish(t.Context(), request, key)
 	require.NoError(t, e)
 	out, e := invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
 	require.NoError(t, e)
@@ -256,7 +253,7 @@ func TestMySQLCheckpointNewServiceDoesNotRedirectOld(t *testing.T) {
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
 	require.NoError(t, e)
-	_, e = target.publish(t.Context(), raw, request, "first", key)
+	_, e = target.publish(t.Context(), request, key)
 	require.NoError(t, e)
 	_, e = invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
 	require.NoError(t, e)
@@ -266,7 +263,7 @@ func TestMySQLCheckpointNewServiceDoesNotRedirectOld(t *testing.T) {
 	request.Capsule.ActionID = "second-checkpoint-action"
 	raw, e = json.Marshal(request)
 	require.NoError(t, e)
-	_, e = target.publish(t.Context(), raw, request, "second", key)
+	_, e = target.publish(t.Context(), request, key)
 	require.NoError(t, e)
 	out, e := invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
 	require.NoError(t, e)
@@ -281,7 +278,7 @@ func TestMySQLCheckpointNewServiceDoesNotRedirectOld(t *testing.T) {
 	assert.Equal(t, expected, newService)
 }
 
-func TestMySQLPublishMissingEffectOriginalRollsBack(t *testing.T) {
+func TestMySQLPublishMissingEffectOriginalRejectedBeforePersist(t *testing.T) {
 	p, key := mysqlProfile(t)
 	target, e := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, e)
@@ -289,14 +286,12 @@ func TestMySQLPublishMissingEffectOriginalRollsBack(t *testing.T) {
 	request, e := parseRequest(requestFixture(t))
 	require.NoError(t, e)
 	request.Capsule.Effect = &emit.Effect{Type: "urn:test:publication:v1", Status: emit.EffectConfirmed, IrreversibilityClass: emit.IrreversibilityTwoWay, EffectAttestation: emit.AttestationRuntimeClaimed, RequestDigest: strings.Repeat("a", 64), ResponseDigest: strings.Repeat("b", 64)}
-	raw, e := json.Marshal(request)
-	require.NoError(t, e)
-	_, e = target.publish(t.Context(), raw, request, "missing-effect-originals", key)
+	_, e = target.publish(t.Context(), request, key)
 	require.ErrorIs(t, e, ErrPartial)
-	var count int
-	e = target.db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM capsule_cli_operations WHERE namespace=?", p.Namespace).Scan(&count)
+	record, e := seal(request, key)
 	require.NoError(t, e)
-	assert.Zero(t, count)
+	_, e = target.artifacts.Get(t.Context(), record.CapsuleID)
+	require.ErrorIs(t, e, artifact.ErrNotFound)
 	entries, e := target.log.ScanEntries(t.Context(), 0, 10)
 	require.NoError(t, e)
 	assert.Empty(t, entries)
@@ -312,7 +307,7 @@ func TestMySQLCLLCommandsNeedNoProducerKeys(t *testing.T) {
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
 	require.NoError(t, e)
-	_, e = target.publish(t.Context(), raw, request, "existing-entry", key)
+	_, e = target.publish(t.Context(), request, key)
 	require.NoError(t, e)
 	p.TrustedKeys = nil
 	p.Signing = Secret{}
@@ -333,11 +328,11 @@ func TestMySQLPendingPurgeFailsWithoutAppendOrResurrection(t *testing.T) {
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
 	require.NoError(t, e)
-	prepared, e := target.preparePublication(t.Context(), raw, request, "purged-before-delivery", key)
+	prepared, e := target.preparePublication(t.Context(), request, key)
 	require.NoError(t, e)
 	require.NoError(t, target.artifacts.Purge(t.Context(), prepared.CapsuleID))
-	_, e = target.publish(t.Context(), raw, request, "purged-before-delivery", key)
-	require.ErrorIs(t, e, ErrPartial)
+	_, e = target.publish(t.Context(), request, key)
+	require.ErrorIs(t, e, artifact.ErrPurged)
 	entries, e := target.log.ScanEntries(t.Context(), 0, 10)
 	require.NoError(t, e)
 	assert.Empty(t, entries)
@@ -346,46 +341,6 @@ func TestMySQLPendingPurgeFailsWithoutAppendOrResurrection(t *testing.T) {
 	for _, a := range record.Artifacts {
 		assert.Equal(t, artifact.Purged, a.State)
 		assert.Nil(t, a.Content)
-	}
-}
-
-type forbidAppend struct {
-	cll.Backend
-	called bool
-}
-
-func (f *forbidAppend) Append(context.Context, cll.AppendInput) (cll.AppendResult, error) {
-	f.called = true
-	return cll.AppendResult{}, errors.New("unexpected append during completion reconciliation")
-}
-func TestMySQLCompletedAndLostACKPurgeRetriesOnlyReconcile(t *testing.T) {
-	for _, lost := range []bool{false, true} {
-		t.Run(strconv.FormatBool(lost), func(t *testing.T) {
-			p, key := mysqlProfile(t)
-			target, e := openTarget(t.Context(), p, useInitialization)
-			require.NoError(t, e)
-			defer func() { require.NoError(t, target.close()) }()
-			raw := requestFixture(t)
-			request, e := parseRequest(raw)
-			require.NoError(t, e)
-			if lost {
-				target.log = &lostAck{Backend: target.log}
-			}
-			first, e := target.publish(t.Context(), raw, request, "completed-then-purged", key)
-			if lost {
-				require.ErrorIs(t, e, ErrPending)
-			} else {
-				require.NoError(t, e)
-			}
-			require.NoError(t, target.artifacts.Purge(t.Context(), first.CapsuleID))
-			guard := &forbidAppend{Backend: target.log}
-			target.log = guard
-			resumed, e := target.publish(t.Context(), raw, request, "completed-then-purged", key)
-			require.NoError(t, e)
-			assert.Equal(t, "appended", resumed.State)
-			assert.Equal(t, uint64(1), resumed.Sequence)
-			assert.False(t, guard.called)
-		})
 	}
 }
 
@@ -401,7 +356,7 @@ func (f *failFirstLookup) GetEntry(ctx context.Context, id []byte) (cll.Entry, e
 	}
 	return f.Backend.GetEntry(ctx, id)
 }
-func TestMySQLPreAppendLookupFailureRemainsResumable(t *testing.T) {
+func TestMySQLAppendReadBackFailureRemainsResumable(t *testing.T) {
 	p, key := mysqlProfile(t)
 	target, e := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, e)
@@ -410,10 +365,10 @@ func TestMySQLPreAppendLookupFailureRemainsResumable(t *testing.T) {
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
 	require.NoError(t, e)
-	first, e := target.publish(t.Context(), raw, request, "lookup-failure", key)
+	first, e := target.publish(t.Context(), request, key)
 	require.ErrorIs(t, e, ErrPending)
 	assert.NotEmpty(t, first.CapsuleID)
-	second, e := target.publish(t.Context(), raw, request, "lookup-failure", key)
+	second, e := target.publish(t.Context(), request, key)
 	require.NoError(t, e)
 	assert.Equal(t, first.CapsuleID, second.CapsuleID)
 	assert.Equal(t, "appended", second.State)
