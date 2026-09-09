@@ -178,7 +178,7 @@ contain only the decoded 32-byte Capsule ID and ordered position/time.
 bound-original verification. An unpinned reader profile needs only the artifact
 tables. If the profile contains an explicit `store_id` (as store init adds), get
 also requires SELECT on the CLI identity row and verifies that pin. Neither mode
-opens CLL or needs private signing keys. `--output` writes readable JSON by default, or the exact-byte SDK record with `--raw`; stdout wraps the selected representation in the result envelope. Artifact ordering is not meaningful: use names.
+opens CLL or needs private signing keys. `--output` writes readable JSON by default, or the exact-byte SDK record with `--raw`; stdout adds `spec_version` alongside the selected representation's fields. Artifact ordering is not meaningful: use names.
 Unbound attachments are explicitly not producer-authenticated original content.
 
 ### Readable output and exact-byte export
@@ -194,9 +194,9 @@ a round-trip format for signed bytes. `seal --output` remains an exact-byte
 SDK export. No stored bytes, digests, or Capsule IDs change.
 
 ```bash
-capsule get --profile alchemy --capsule-id <capsule-id> | jq '.result.capsule'
+capsule get --profile alchemy --capsule-id <capsule-id> | jq '.capsule'
 capsule get --profile alchemy --capsule-id <capsule-id> |
-  jq '.result.artifacts[] | select(.name == "payload") | .content'
+  jq '.artifacts[] | select(.name == "payload") | .content'
 ```
 
 ## Example: read an Alchemy investigation
@@ -289,7 +289,7 @@ No trusted external prefix/time is inferred merely from a self-consistent checkp
 ## Output and known limitations
 
 Successful stdout is one JSON object:
-`{"spec_version":"capsule-cli-result/v1","result":...}`.
+`{"spec_version":"capsule-cli-result/v1",...}`.
 Diagnostics never expose raw driver/config/service errors. Exit codes: 0 success,
 1 operational failure, 2 invalid input/profile, 3 partial verification, 4 durable delivery pending,
 5 frozen input/target conflict. Inspect the exit code, not only a result object.

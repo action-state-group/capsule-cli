@@ -31,10 +31,23 @@ func noArgs(_ *cobra.Command, args []string) error {
 	return nil
 }
 func output(c *cobra.Command, value any) error {
-	return json.NewEncoder(c.OutOrStdout()).Encode(struct {
-		Version string `json:"spec_version"`
-		Result  any    `json:"result"`
-	}{"capsule-cli-result/v1", value})
+	// RawMessage preserves exact JSON numbers while promoting result fields.
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if fields == nil {
+		return errors.New("command output must be a JSON object")
+	}
+	if _, exists := fields["spec_version"]; exists {
+		return errors.New("command output uses reserved spec_version field")
+	}
+	fields["spec_version"] = json.RawMessage(`"capsule-cli-result/v1"`)
+	return json.NewEncoder(c.OutOrStdout()).Encode(fields)
 }
 
 // SafeError intentionally never returns a driver/config/request error string:
