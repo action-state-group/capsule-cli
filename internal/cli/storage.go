@@ -22,17 +22,23 @@ import (
 
 var ErrConflict = errors.New("operation conflicts with its frozen input or target")
 var ErrPending = errors.New("operation durably saved; delivery pending, retry the same request and key")
-var ErrReadOnlyCLL = errors.New("CLL MySQL Open requires DDL; this library cannot open a read-only profile")
+var ErrReadOnlyCLL = errors.New("operation requires writes; profile is read-only")
 var ErrPartial = errors.New("verification incomplete or required originals unavailable")
 
 // CLI-owned tables contain coordination only, never a replacement for the SDK
 // artifact schema or CLL schema. MySQL DDL is individually idempotent; a log is
 // marked ready only after every library's explicit initialization succeeds.
-var coordinationDDL = []string{
-	`CREATE TABLE IF NOT EXISTS capsule_cli_identity (singleton TINYINT PRIMARY KEY, store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, CHECK(singleton=1)) ENGINE=InnoDB`,
-	`CREATE TABLE IF NOT EXISTS capsule_cli_logs (log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PRIMARY KEY, namespace VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL) ENGINE=InnoDB`,
-	`CREATE TABLE IF NOT EXISTS capsule_cli_operations (store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, namespace VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, operation_key VARBINARY(191) NOT NULL, request_digest BINARY(32) NOT NULL, signer BINARY(32) NOT NULL, capsule_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, appended_seq BIGINT UNSIGNED NULL, PRIMARY KEY(store_id,namespace,log_id,operation_key)) ENGINE=InnoDB`,
-	`CREATE TABLE IF NOT EXISTS capsule_cli_checkpoints (store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, mmr_size BIGINT UNSIGNED NOT NULL, statement LONGBLOB NOT NULL, service_id VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, PRIMARY KEY(store_id,log_id,mmr_size)) ENGINE=InnoDB`,
+type coordinationStatement struct {
+	sql       string
+	artifacts bool
+	cll       bool
+}
+
+var coordinationDDL = []coordinationStatement{
+	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_identity (singleton TINYINT PRIMARY KEY, store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, CHECK(singleton=1)) ENGINE=InnoDB`, artifacts: false, cll: false},
+	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_logs (log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PRIMARY KEY, namespace VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL) ENGINE=InnoDB`, artifacts: false, cll: true},
+	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_operations (store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, namespace VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, operation_key VARBINARY(191) NOT NULL, request_digest BINARY(32) NOT NULL, signer BINARY(32) NOT NULL, capsule_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL, appended_seq BIGINT UNSIGNED NULL, PRIMARY KEY(store_id,namespace,log_id,operation_key)) ENGINE=InnoDB`, artifacts: true, cll: true},
+	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_checkpoints (store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, mmr_size BIGINT UNSIGNED NOT NULL, statement LONGBLOB NOT NULL, service_id VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, PRIMARY KEY(store_id,log_id,mmr_size)) ENGINE=InnoDB`, artifacts: false, cll: true},
 }
 
 type target struct {
@@ -52,6 +58,7 @@ const (
 	useArtifacts targetUse = iota
 	useCLL
 	usePublication
+	useCLLRead
 	useInitialization
 )
 
@@ -91,14 +98,22 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 	if use > useInitialization {
 		return nil, inputError("unsupported target facilities")
 	}
-	if p.ReadOnly && use != useArtifacts {
+	needsArtifacts := use == useArtifacts || use == usePublication || (use == useInitialization && p.Namespace != "")
+	needsCLL := use == useCLL || use == useCLLRead || use == usePublication || (use == useInitialization && p.LogID != "")
+	if needsArtifacts && p.Namespace == "" {
+		return nil, inputError("this command requires an artifact namespace")
+	}
+	if needsCLL && p.LogID == "" {
+		return nil, inputError("this command requires a log_id")
+	}
+	if p.ReadOnly && use != useArtifacts && use != useCLLRead {
 		return nil, ErrReadOnlyCLL
 	}
 	keys, err := parseKeys(p.TrustedKeys)
 	if err != nil {
 		return nil, err
 	}
-	if len(keys) == 0 && use != useCLL {
+	if len(keys) == 0 && needsArtifacts {
 		return nil, inputError("artifact operations require producer trusted_keys")
 	}
 	db, dsn, err := connection(p)
@@ -113,7 +128,7 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 	}()
 	// CLL-only commands do not need producer policy or an artifact store. The
 	// SDK constructor rightly requires trust, but that is not a CLL requirement.
-	if use != useCLL {
+	if needsArtifacts {
 		t.artifacts, err = artifactmysql.New(db, p.Namespace, keys)
 		if err != nil {
 			return nil, err
@@ -122,9 +137,18 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 	if use == useArtifacts && p.StoreID == "" {
 		return t, nil
 	}
+	if use == useCLLRead && p.StoreID == "" {
+		if t.log, err = cllmysql.Open(ctx, dsn, p.LogID); err != nil {
+			return nil, err
+		}
+		return t, nil
+	}
 	if use == useInitialization {
 		for _, stmt := range coordinationDDL {
-			if _, err = db.ExecContext(ctx, stmt); err != nil {
+			if stmt.artifacts && !needsArtifacts || stmt.cll && !needsCLL {
+				continue
+			}
+			if _, err = db.ExecContext(ctx, stmt.sql); err != nil {
 				return nil, err
 			}
 		}
@@ -136,17 +160,26 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 			return nil, err
 		}
 	}
-	if err = db.QueryRowContext(ctx, `SELECT store_id FROM capsule_cli_identity WHERE singleton=1`).Scan(&t.storeID); err != nil {
+	if err = t.loadIdentity(ctx); err != nil {
 		return nil, err
 	}
-	if len(t.storeID) != 64 || (p.StoreID != t.storeID && (use != useInitialization || p.StoreID != "")) {
-		return nil, ErrConflict
+	if p.StoreID == "" && use != useInitialization && use != useCLLRead {
+		return nil, inputError("write operations require store init to pin the store identity")
 	}
+
 	if use == useArtifacts {
 		return t, nil
 	}
 	if use == useInitialization {
-		if err = t.artifacts.Init(ctx); err != nil {
+		if needsArtifacts {
+			if err = t.artifacts.Init(ctx); err != nil {
+				return nil, err
+			}
+		}
+		if !needsCLL {
+			return t, nil
+		}
+		if err = cllmysql.Init(ctx, dsn, p.LogID); err != nil {
 			return nil, err
 		}
 		if t.log, err = cllmysql.Open(ctx, dsn, p.LogID); err != nil {
@@ -155,12 +188,23 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 		if _, err = db.ExecContext(ctx, `INSERT IGNORE INTO capsule_cli_logs(log_id,namespace) VALUES(?,?)`, p.LogID, p.Namespace); err != nil {
 			return nil, err
 		}
+		if needsArtifacts {
+			if _, err = db.ExecContext(ctx, `UPDATE capsule_cli_logs SET namespace=? WHERE log_id=? AND namespace=''`, p.Namespace, p.LogID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if use == useCLLRead {
+		if t.log, err = cllmysql.Open(ctx, dsn, p.LogID); err != nil {
+			return nil, err
+		}
+		return t, nil
 	}
 	var namespace string
 	if err = db.QueryRowContext(ctx, `SELECT namespace FROM capsule_cli_logs WHERE log_id=?`, p.LogID).Scan(&namespace); err != nil {
 		return nil, err
 	}
-	if namespace != p.Namespace {
+	if needsArtifacts && namespace != p.Namespace {
 		return nil, ErrConflict
 	}
 	if use != useInitialization {
@@ -181,6 +225,22 @@ type Publication struct {
 	CapsuleID string `json:"capsule_id"`
 	Sequence  uint64 `json:"sequence,omitempty"`
 	State     string `json:"state"`
+}
+
+// loadIdentity reads CLI coordination identity without provisioning it. An
+// explicit profile pin is always checked, including on read-only paths.
+func (t *target) loadIdentity(ctx context.Context) error {
+	err := t.db.QueryRowContext(ctx, `SELECT store_id FROM capsule_cli_identity WHERE singleton=1`).Scan(&t.storeID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return inputError("CLI store identity is not initialized")
+	}
+	if err != nil {
+		return err
+	}
+	if len(t.storeID) != 64 || (t.profile.StoreID != "" && t.profile.StoreID != t.storeID) {
+		return ErrConflict
+	}
+	return nil
 }
 
 func rollback(tx *sql.Tx, err *error) {

@@ -274,7 +274,7 @@ func NewCommand() *cobra.Command {
 		if limit < 1 || limit > cll.MaxScanLimit || after > cll.MaxPortableInteger || (through != 0 && through < after) {
 			return inputError("invalid bounded range")
 		}
-		t, e := openTarget(c.Context(), p, useCLL)
+		t, e := openTarget(c.Context(), p, useCLLRead)
 		if e != nil {
 			return e
 		}
@@ -318,13 +318,19 @@ func NewCommand() *cobra.Command {
 		if len(missingBindings(r)) != 0 {
 			return ErrPartial
 		}
-		t, e := openTarget(c.Context(), p, usePublication)
+		use := useCLL
+		if p.Namespace != "" {
+			use = usePublication
+		}
+		t, e := openTarget(c.Context(), p, use)
 		if e != nil {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.close()) }()
-		if e = t.artifacts.Put(c.Context(), r); e != nil {
-			return e
+		if t.artifacts != nil {
+			if e = t.artifacts.Put(c.Context(), r); e != nil {
+				return e
+			}
 		}
 		entry, e := appendRecord(c.Context(), t.log, r.CapsuleID)
 		if e != nil {
@@ -332,7 +338,7 @@ func NewCommand() *cobra.Command {
 		}
 		return output(c, map[string]any{"capsule_id": r.CapsuleID, "sequence": entry.Seq, "log_id": p.LogID, "store_id": t.storeID})
 	}}
-	appendCmd.Flags().String("capsule", "", "Existing artifact.Record file; SDK persists it before append")
+	appendCmd.Flags().String("capsule", "", "Verified artifact.Record file; persisted first only when artifact storage is configured")
 	logs.AddCommand(appendCmd)
 	addCheckpointCommands(logs)
 	root.SetHelpCommand(&cobra.Command{Use: "help [command]", RunE: func(c *cobra.Command, args []string) error {

@@ -131,7 +131,7 @@ current CLL MySQL schema. Namespace and profile names use letters/digits, `_`,
 and `-`, maximum 64 characters. TLS defaults to verified TLS (`true`); explicit
 `false` is intended only for isolated local development. No insecure TLS fallback.
 
-`store init` provisions library schemas plus CLI coordination metadata and pins
+`store init` provisions only the configured library schemas plus required CLI coordination metadata and pins
 the existing/generated `store_id` into the profile. MySQL DDL itself is not
 transactional; each initialization step is idempotent and log readiness is
 recorded last. Normal log operations never invent a missing identity. Initialized
@@ -244,11 +244,11 @@ command decodes its retained payload. Decoding alone is not verification.
 For a tunnel, use its local host and `--mysql-port`. Verified TLS must still
 match the database certificate; do not disable verification merely for a tunnel.
 
-This read-only profile cannot run CLL commands. They currently require initialized
-CLI coordination metadata and write-capable access because the CLL backend uses
-an initializing API. Artifact verification does not itself prove CLL inclusion.
-Use a separately provisioned CLL-capable profile to inspect the log, rather than
-escalating the reader's permissions.
+This read-only profile can run `cll list` against an existing log without DDL or
+CLI initialization. Explicit `store_id` pins are checked when configured. It
+cannot append, publish, create checkpoints, or initialize storage. Checkpoint
+status reads additionally need existing CLI checkpoint archive tables and
+store-identity metadata (`capsule_cli_identity`).
 
 ## Publication and recovery
 
@@ -295,12 +295,12 @@ Diagnostics never expose raw driver/config/service errors. Exit codes: 0 success
 5 frozen input/target conflict. Inspect the exit code, not only a result object.
 Verification lists passed/not-performed checks instead of calling all evidence valid.
 
-Current cll-go MySQL `Open` always performs initialization DDL and metadata writes;
-it has no exported open-existing/read-only constructor. Consequently **all CLL
-commands explicitly reject read_only profiles before connecting**. This is not
-solved by secretly escalating permissions or duplicating library SQL. Artifact
-`get` and offline verification work independently. Strict read-only CLL range
-reading needs an upstream API addition before deployment to such accounts.
+Only `store init` calls CLL `Init` and provisions selected library schemas.
+Other commands call CLL `Open`, which does not execute DDL or insert metadata.
+Read-only profiles allow artifact reads, CLL listing, checkpoint status, and
+offline verification; write commands fail before connecting. Missing storage
+is an error, never a reason to initialize implicitly.
+
 
 The pinned CLL dependency allows unrelated application tables to coexist.
 It still validates actual CLL state and does not migrate or remove old tables.
@@ -341,3 +341,26 @@ The artifact storage SDK is maintained and tested separately in
 [capsule-emit-go](https://github.com/action-state-group/capsule-emit-go), whose CI
 sets `CAPSULE_STORAGE_TEST_DSN` for its own isolated MySQL integration tests.
 CLI CI tests integration with the SDK version pinned in `go.mod`.
+
+## Artifact-only and CLL-only profiles
+
+The profile format is unchanged. An artifact namespace enables artifact storage;
+a log ID enables CLL. Configure either or both. Existing profiles retain both.
+Only filled fields are validated when loading; each command requires its own
+facilities. `publish` requires both, and `store init` initializes only the
+configured facilities. `seal` and offline verification do not open storage.
+
+```bash
+# Add your MySQL host/database/credential flags to each create command.
+capsule profile create --name artifacts --namespace alchemy --log-id '' ...
+capsule profile create --name ledger --namespace '' --log-id investigations ...
+```
+
+The namespace defaults to `capsule` for backward compatibility; explicitly
+clear it with `--namespace ''` for a CLL-only profile. `cll append --capsule`
+verifies the supplied raw SDK record; when no artifact namespace is configured,
+it appends only the ID and leaves artifact retention to the caller. It does not
+provide a backup of the Capsule or originals. With both facilities configured,
+it persists the verified record before appending. A log's artifact namespace is
+bound when artifact-backed initialization first occurs; CLL-only readers do not
+need to know that namespace.

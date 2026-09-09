@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/action-state-group/capsule-emit-go v0.0.0-20260909004115-3ed0f7c646a9
-	github.com/action-state-group/cll-go v0.0.0-20260909014310-ecf5f10c4cfb
+	github.com/action-state-group/cll-go v0.0.0-20260909041951-65cc10f6b718
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/spf13/cobra v1.10.2

@@ -101,8 +101,14 @@ type Profile struct {
 }
 
 func (p Profile) validate() error {
-	if !profileName.MatchString(p.Name) || p.Type != "mysql" || !logName.MatchString(p.LogID) || !profileName.MatchString(p.Namespace) {
-		return inputError("profile needs a valid name, mysql type, log_id and namespace")
+	if !profileName.MatchString(p.Name) || p.Type != "mysql" {
+		return inputError("profile needs a valid name and mysql type")
+	}
+	if (p.LogID != "" && !logName.MatchString(p.LogID)) || (p.Namespace != "" && !profileName.MatchString(p.Namespace)) {
+		return inputError("invalid log_id or namespace")
+	}
+	if p.LogID == "" && p.Namespace == "" {
+		return inputError("configure an artifact namespace, a log_id, or both")
 	}
 	if p.Connection.Host == "" || p.Connection.Database == "" || p.Connection.Port < 1 || p.Connection.Port > 65535 {
 		return inputError("profile needs a MySQL host, port and database")
@@ -281,7 +287,7 @@ func profileCommands() *cobra.Command {
 			f.String(flag, "", "Profile setting")
 		}
 		f.Int("mysql-port", 3306, "MySQL port")
-		f.Bool("read-only", false, "Reject operations requiring writes or CLL Open DDL")
+		f.Bool("read-only", false, "Reject operations requiring writes")
 		f.StringSlice("trusted-key", nil, "Trusted producer public key hex (repeatable)")
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
 		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token"}
@@ -342,7 +348,7 @@ func profileCommands() *cobra.Command {
 				for _, item := range []struct {
 					label  string
 					target *string
-				}{{"Name", &p.Name}, {"MySQL host", &p.Connection.Host}, {"Database", &p.Connection.Database}, {"Log ID", &p.LogID}, {"MySQL user", &p.Credentials.Username}} {
+				}{{"Name", &p.Name}, {"MySQL host", &p.Connection.Host}, {"Database", &p.Connection.Database}, {"Log ID (optional for artifact-only)", &p.LogID}, {"MySQL user", &p.Credentials.Username}} {
 					if *item.target == "" {
 						if _, e := fmt.Fprint(c.ErrOrStderr(), item.label+": "); e != nil {
 							return e

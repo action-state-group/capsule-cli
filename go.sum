@@ -10,8 +10,8 @@ github.com/action-state-group/agent-action-capsule/go v0.0.0-20260907232726-d1be
 github.com/action-state-group/agent-action-capsule/go v0.0.0-20260907232726-d1befd155511/go.mod h1:zDZ7uE7cjiDa4XBC68hgcFhuVKqqPVS5ihQpxVkYfRI=
 github.com/action-state-group/capsule-emit-go v0.0.0-20260909004115-3ed0f7c646a9 h1:Hu6QCGC3fUhnLFrNlnW4qRLB23xSXbUdRr0cBB6HdUY=
 github.com/action-state-group/capsule-emit-go v0.0.0-20260909004115-3ed0f7c646a9/go.mod h1:yHy2S9TM1Zwe5WO1Fv4fk29/1klqOXC2vgAWbe+1XwI=
-github.com/action-state-group/cll-go v0.0.0-20260909014310-ecf5f10c4cfb h1:1cSJ+GEPPelZXtwG8TR00PIKOm1JsXz4sTVkEMksmS8=
-github.com/action-state-group/cll-go v0.0.0-20260909014310-ecf5f10c4cfb/go.mod h1:56rOQ/W8Uk7nz69nfqQ3AKqyJ9ZTmwLfhYPLsc1BEEM=
+github.com/action-state-group/cll-go v0.0.0-20260909041951-65cc10f6b718 h1:+IKxin2l7DIsvp+ipO1LjtqalFg0g84cwEbWMu5961M=
+github.com/action-state-group/cll-go v0.0.0-20260909041951-65cc10f6b718/go.mod h1:56rOQ/W8Uk7nz69nfqQ3AKqyJ9ZTmwLfhYPLsc1BEEM=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
 github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=

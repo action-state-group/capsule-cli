@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	emit "github.com/action-state-group/capsule-emit-go"
 	"github.com/action-state-group/capsule-emit-go/artifact"
@@ -230,6 +231,10 @@ func TestMySQLCheckpointCommandsAndRetry(t *testing.T) {
 	require.NoError(t, e)
 	assert.NotContains(t, state.LastError, "127.0.0.1")
 	assert.Contains(t, state.LastError, "suppressed")
+	// Freeze the retry deadline: jitter may be shorter than a CLI invocation.
+	nextAttempt := time.Now().UTC().Add(time.Hour)
+	state.NextAttemptAt = nextAttempt
+	require.NoError(t, target.log.CommitWitness(t.Context(), state.Attempts, state))
 	// Backoff state survives a new CLI invocation and must not make another call.
 	out, e = invoke(t, "", "cll", "checkpoint", "publish", "--profile", p.Name, "--checkpoint", "1")
 	require.ErrorIs(t, e, ErrPending)

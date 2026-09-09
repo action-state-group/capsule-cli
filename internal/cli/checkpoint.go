@@ -328,11 +328,20 @@ func addCheckpointCommands(logs *cobra.Command) {
 			if service == "" {
 				return inputError("checkpoint service not configured")
 			}
-			t, e := openTarget(c.Context(), p, useCLL)
+			use := useCLLRead
+			if publish {
+				use = useCLL
+			}
+			t, e := openTarget(c.Context(), p, use)
 			if e != nil {
 				return e
 			}
 			defer func() { err = errors.Join(err, t.close()) }()
+			if t.storeID == "" {
+				if e = t.loadIdentity(c.Context()); e != nil {
+					return e
+				}
+			}
 			statement, savedService, e := t.savedCheckpoint(c.Context(), size)
 			if e != nil {
 				return e
