@@ -5,12 +5,16 @@ artifact SDK, and `cll-go`. Applications import those libraries, not this CLI.
 No Alchemy/evaluation semantics, database migration tools, selective disclosure,
 or implicit login/default profile are included.
 
-## Development status
+## Build from source
 
-Implementation and tests are present. Publication is not yet authorized for
-this checkout. The artifact SDK dependency is pinned to its published commit;
-ordinary `GOWORK=off go build ./cmd/capsule` needs no sibling checkout, local
-replacement or Python runtime. Do not commit machine-specific go.work files.
+```bash
+go build -o capsule ./cmd/capsule
+./capsule --help
+```
+
+The artifact SDK and CLL dependencies are pinned to published commits.
+`GOWORK=off go build ./cmd/capsule` needs no sibling checkout, local
+replacement, or Python runtime. Do not commit machine-specific `go.work` files.
 
 ## Commands
 
@@ -36,6 +40,24 @@ and credentials are accepted only by profile create/update. Each invocation
 gets a fresh Cobra/Viper instance. No automatic environment override is enabled.
 
 ## Profile setup
+
+These identifiers select different layers:
+
+| Setting | Meaning |
+| --- | --- |
+| `--name` | Local profile name selected by subsequent `--profile` flags. |
+| `--mysql-database` | MySQL database containing the storage tables. |
+| `--namespace` | Artifact SDK logical grouping within `capsule_store_capsules` and `capsule_store_artifacts`. Records are addressed by namespace and Capsule ID. Not a MySQL database/schema or an authorization boundary. |
+| `--log-id` | CLL log within shared `cll_*` tables, not a table name. |
+| `--trusted-key` | Independently provisioned Ed25519 producer public key used to verify Capsule signatures. Not a password or a private signing key. Never trust a key merely because the artifact supplies it. |
+
+One MySQL database can contain both `alchemy` and `evaluations` namespaces in
+the same artifact tables. Database permissions, not namespace names, control access.
+
+For profile `alchemy`, the default file is
+`~/.config/capsule/profiles/alchemy.yaml`, or
+`$XDG_CONFIG_HOME/capsule/profiles/alchemy.yaml` when `XDG_CONFIG_HOME` is set.
+Use `capsule profile show --profile alchemy` to inspect it with secrets redacted.
 
 Profiles live in `$XDG_CONFIG_HOME/capsule/profiles/NAME.yaml`, falling back to
 `$HOME/.config/capsule/profiles/NAME.yaml`. Files must be owner-only regular files
@@ -160,6 +182,57 @@ opens CLL or needs private signing keys. `--output` writes the raw SDK record; o
 contains it in the result envelope. Artifact ordering is not meaningful: use names.
 Unbound attachments are explicitly not producer-authenticated original content.
 
+## Example: read an Alchemy investigation
+
+Replace the placeholders with the deployment's database connection, configured
+`aac.log-id`, and independently obtained producer public key. The artifact
+namespace must match the writer's namespace. This does not trigger an investigation.
+
+```bash
+chmod 600 /protected/alchemy-db-password
+
+./capsule profile create \
+  --name alchemy \
+  --type mysql \
+  --namespace alchemy \
+  --log-id <alchemy-log-id> \
+  --mysql-host <alchemy-db-host> \
+  --mysql-database alchemy \
+  --mysql-user <read-only-db-user> \
+  --mysql-password-file /protected/alchemy-db-password \
+  --trusted-key <producer-public-key-hex> \
+  --read-only
+
+./capsule profile show --profile alchemy
+
+./capsule get \
+  --profile alchemy \
+  --capsule-id <capsule-id> \
+  --output investigation-artifact.json
+
+./capsule verify \
+  --profile alchemy \
+  --capsule investigation-artifact.json
+
+jq -r '.artifacts[] | select(.name == "payload") | .content' \
+  investigation-artifact.json | base64 --decode | jq .
+```
+
+The password file contains the database password. The trusted key is the 64-hex
+Ed25519 public key, not the private seed. A reader needs neither a signing key nor
+`store init`: do not initialize storage just to read existing artifacts. The
+exported file is an SDK artifact record, not plain investigation JSON; the last
+command decodes its retained payload. Decoding alone is not verification.
+
+For a tunnel, use its local host and `--mysql-port`. Verified TLS must still
+match the database certificate; do not disable verification merely for a tunnel.
+
+This read-only profile cannot run CLL commands. They currently require initialized
+CLI coordination metadata and write-capable access because the CLL backend uses
+an initializing API. Artifact verification does not itself prove CLL inclusion.
+Use a separately provisioned CLL-capable profile to inspect the log, rather than
+escalating the reader's permissions.
+
 ## Publication and recovery
 
 `publish` uses an authoritative shared MySQL journal keyed by physical store ID,
@@ -212,9 +285,8 @@ solved by secretly escalating permissions or duplicating library SQL. Artifact
 `get` and offline verification work independently. Strict read-only CLL range
 reading needs an upstream API addition before deployment to such accounts.
 
-The currently pinned CLL dependency also refuses databases containing its legacy
-`ledger_metadata` table. Artifact-only get is unaffected. Coexistence requires an
-upstream fix; this CLI does not bypass that guard or drop legacy tables.
+The pinned CLL dependency allows unrelated application tables to coexist.
+It still validates actual CLL state and does not migrate or remove old tables.
 
 Checkpoint service success conformance, broad fault-injection coverage and peer
 review status are tracked in the implementation handoff, not implied by compilation.
