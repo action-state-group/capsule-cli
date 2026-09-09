@@ -320,3 +320,24 @@ CAPSULE_CLI_TEST_MYSQL_PORT=<disposable-local-port> go test -race ./...
 Integration tests use only `127.0.0.1` and database `capsule_cli_test`, isolated
 namespaces/logs per run. Tests use testify assert/require, real emitter/artifact/CLL
 libraries and a dedicated MySQL container. Never point them at production.
+
+## Continuous integration
+
+Run `make test` for the complete suite, including MySQL integration tests and
+the race detector. Locally this requires Docker: the runner creates a temporary
+MySQL 8.4 container on a random loopback port and removes it when finished.
+CI supplies its own disposable service via `CAPSULE_CLI_TEST_MYSQL_PORT`.
+Only set that variable yourself for a disposable test database, never a
+production tunnel. Missing Docker or unavailable MySQL fails the run rather
+than skipping integration tests.
+
+GitHub Actions runs on pull requests and pushes to `main`, with manual dispatch
+also available. It checks formatting, module-file consistency, vet, and the CLI
+build. Tests run with the race detector against a disposable MySQL 8.4 service;
+`CAPSULE_CLI_TEST_MYSQL_PORT` is set so MySQL integration tests are not skipped.
+No production credentials or database tunnels are used.
+
+The artifact storage SDK is maintained and tested separately in
+[capsule-emit-go](https://github.com/action-state-group/capsule-emit-go), whose CI
+sets `CAPSULE_STORAGE_TEST_DSN` for its own isolated MySQL integration tests.
+CLI CI tests integration with the SDK version pinned in `go.mod`.
