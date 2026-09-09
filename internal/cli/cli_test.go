@@ -108,6 +108,35 @@ func TestGuidedAndUnknownConfig(t *testing.T) {
 	_, e = loadProfile("guided")
 	require.Error(t, e)
 }
+
+func TestSQLiteProfileCreate(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dbPath := filepath.Join(t.TempDir(), "store.db")
+	trusted := strings.Repeat("ab", 32)
+	// Non-interactive: SQLite is a peer type selected with --type sqlite and a
+	// file path; no MySQL host/port/TLS is required or consulted.
+	_, e := invoke(t, "", "profile", "create", "--name", "sq", "--type", "sqlite",
+		"--sqlite-path", dbPath, "--namespace", "demo", "--log-id", "log-s", "--trusted-key", trusted)
+	require.NoError(t, e)
+	p, e := loadProfile("sq")
+	require.NoError(t, e)
+	assert.Equal(t, "sqlite", p.Type)
+	assert.Equal(t, dbPath, p.Connection.Database)
+	assert.Equal(t, "demo", p.Namespace)
+
+	// Interactive SQLite prompts only for Name, the SQLite path, and Log ID —
+	// never MySQL host/user. Empty stdin after those three still saves.
+	dbPath2 := filepath.Join(t.TempDir(), "store2.db")
+	_, e = invoke(t, "sqguided\n"+dbPath2+"\nlog-s2\n", "profile", "create", "--interactive", "--type", "sqlite")
+	require.NoError(t, e)
+	p2, e := loadProfile("sqguided")
+	require.NoError(t, e)
+	assert.Equal(t, "sqlite", p2.Type)
+	assert.Equal(t, dbPath2, p2.Connection.Database)
+	assert.Equal(t, "log-s2", p2.LogID)
+	assert.Empty(t, p2.Connection.Host)
+	assert.Empty(t, p2.Credentials.Username)
+}
 func TestRequiredProfileAndNoRuntimeOverrides(t *testing.T) {
 	for _, args := range [][]string{{"seal"}, {"get"}, {"verify"}, {"publish"}, {"store", "init"}, {"cll", "list"}, {"cll", "append"}, {"cll", "verify"}, {"cll", "checkpoint", "create"}, {"cll", "checkpoint", "publish"}, {"cll", "checkpoint", "status"}, {"profile", "show"}, {"profile", "update"}} {
 		t.Run(strings.Join(args, "-"), func(t *testing.T) { _, e := invoke(t, "", args...); require.Error(t, e) })

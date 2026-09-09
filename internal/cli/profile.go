@@ -101,8 +101,8 @@ type Profile struct {
 }
 
 func (p Profile) validate() error {
-	if !profileName.MatchString(p.Name) || p.Type != "mysql" {
-		return inputError("profile needs a valid name and mysql type")
+	if !profileName.MatchString(p.Name) || (p.Type != "mysql" && p.Type != "sqlite") {
+		return inputError("profile needs a valid name and mysql or sqlite type")
 	}
 	if (p.LogID != "" && !logName.MatchString(p.LogID)) || (p.Namespace != "" && !profileName.MatchString(p.Namespace)) {
 		return inputError("invalid log_id or namespace")
@@ -110,11 +110,19 @@ func (p Profile) validate() error {
 	if p.LogID == "" && p.Namespace == "" {
 		return inputError("configure an artifact namespace, a log_id, or both")
 	}
-	if p.Connection.Host == "" || p.Connection.Database == "" || p.Connection.Port < 1 || p.Connection.Port > 65535 {
-		return inputError("profile needs a MySQL host, port and database")
-	}
-	if p.Connection.TLS != "true" && p.Connection.TLS != "false" {
-		return inputError("mysql TLS must be true or false; insecure fallback is unsupported")
+	if p.Type == "sqlite" {
+		// SQLite stores the artifact and CLL tables in one local file; the path
+		// lives in connection.database and no host/port/TLS applies.
+		if p.Connection.Database == "" {
+			return inputError("sqlite profile needs a database file path in connection.database")
+		}
+	} else {
+		if p.Connection.Host == "" || p.Connection.Database == "" || p.Connection.Port < 1 || p.Connection.Port > 65535 {
+			return inputError("profile needs a MySQL host, port and database")
+		}
+		if p.Connection.TLS != "true" && p.Connection.TLS != "false" {
+			return inputError("mysql TLS must be true or false; insecure fallback is unsupported")
+		}
 	}
 	for _, s := range []Secret{p.Credentials.Password, p.Signing, p.Checkpoint.Signing, p.Checkpoint.Token} {
 		if e := s.validate(); e != nil {
@@ -287,6 +295,7 @@ func profileCommands() *cobra.Command {
 			f.String(flag, "", "Profile setting")
 		}
 		f.Int("mysql-port", 3306, "MySQL port")
+		f.String("sqlite-path", "", "SQLite database file path (sets connection.database for --type sqlite)")
 		f.Bool("read-only", false, "Reject operations requiring writes")
 		f.StringSlice("trusted-key", nil, "Trusted producer public key hex (repeatable)")
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
@@ -342,13 +351,30 @@ func profileCommands() *cobra.Command {
 			if e := v.UnmarshalExact(&p); e != nil {
 				return inputError("invalid profile settings")
 			}
+			if sp, _ := c.Flags().GetString("sqlite-path"); sp != "" {
+				p.Connection.Database = sp
+			}
 			interactive, _ := c.Flags().GetBool("interactive")
 			if interactive {
 				reader := bufio.NewReader(c.InOrStdin())
-				for _, item := range []struct {
+				// Prompt only for fields the selected backend needs; SQLite and
+				// MySQL are peers, so neither backend's connection fields are asked
+				// for the other.
+				type prompt struct {
 					label  string
 					target *string
-				}{{"Name", &p.Name}, {"MySQL host", &p.Connection.Host}, {"Database", &p.Connection.Database}, {"Log ID (optional for artifact-only)", &p.LogID}, {"MySQL user", &p.Credentials.Username}} {
+				}
+				prompts := []prompt{{"Name", &p.Name}}
+				if p.Type == "sqlite" {
+					prompts = append(prompts, prompt{"SQLite database file path", &p.Connection.Database})
+				} else {
+					prompts = append(prompts, prompt{"MySQL host", &p.Connection.Host}, prompt{"Database", &p.Connection.Database})
+				}
+				prompts = append(prompts, prompt{"Log ID (optional for artifact-only)", &p.LogID})
+				if p.Type != "sqlite" {
+					prompts = append(prompts, prompt{"MySQL user", &p.Credentials.Username})
+				}
+				for _, item := range prompts {
 					if *item.target == "" {
 						if _, e := fmt.Fprint(c.ErrOrStderr(), item.label+": "); e != nil {
 							return e

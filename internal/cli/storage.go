@@ -9,13 +9,17 @@ import (
 	"encoding/hex"
 	"errors"
 	"net"
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	artifactmysql "github.com/action-state-group/capsule-emit-go/artifact/mysql"
+	artifactsqlite "github.com/action-state-group/capsule-emit-go/artifact/sqlite"
 	"github.com/action-state-group/cll-go/cll"
 	cllmysql "github.com/action-state-group/cll-go/store/mysql"
+	cllsqlite "github.com/action-state-group/cll-go/store/sqlite"
 	driver "github.com/go-sql-driver/mysql"
 )
 
@@ -37,9 +41,81 @@ var coordinationDDL = []coordinationStatement{
 	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_logs (log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PRIMARY KEY, namespace VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL) ENGINE=InnoDB`, cll: true},
 }
 
+// sqliteCoordinationDDL mirrors coordinationDDL with SQLite-portable types. The
+// same coordination invariants hold: a single pinned store identity and a
+// log-to-namespace binding.
+var sqliteCoordinationDDL = []coordinationStatement{
+	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_identity (singleton INTEGER PRIMARY KEY CHECK(singleton=1), store_id TEXT NOT NULL)`, cll: false},
+	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_logs (log_id TEXT PRIMARY KEY, namespace TEXT NOT NULL)`, cll: true},
+}
+
+func coordinationStatements(kind string) []coordinationStatement {
+	switch kind {
+	case "sqlite":
+		return sqliteCoordinationDDL
+	default:
+		return coordinationDDL
+	}
+}
+
+// insertIgnore returns the backend's idempotent-insert verb.
+func insertIgnore(kind string) string {
+	switch kind {
+	case "sqlite":
+		return "INSERT OR IGNORE"
+	default:
+		return "INSERT IGNORE"
+	}
+}
+
+// openLog and initLog dispatch CLL storage by profile type. MySQL and SQLite are
+// peer backends. For SQLite the coordinate is a file path (opened as its own
+// single-writer handle); for MySQL it is the shared DSN.
+func openLog(ctx context.Context, p Profile, coordinate, logID string) (cll.Backend, error) {
+	switch p.Type {
+	case "mysql":
+		return cllmysql.Open(ctx, coordinate, logID)
+	case "sqlite":
+		return cllsqlite.Open(coordinate, logID)
+	default:
+		return nil, inputError("unsupported profile type")
+	}
+}
+
+func initLog(ctx context.Context, p Profile, coordinate, logID string) error {
+	switch p.Type {
+	case "mysql":
+		return cllmysql.Init(ctx, coordinate, logID)
+	case "sqlite":
+		return cllsqlite.Init(coordinate, logID)
+	default:
+		return inputError("unsupported profile type")
+	}
+}
+
+func newArtifactStore(p Profile, db *sql.DB, keys []ed25519.PublicKey) (artifactStore, error) {
+	switch p.Type {
+	case "mysql":
+		return artifactmysql.New(db, p.Namespace, keys)
+	case "sqlite":
+		return artifactsqlite.New(db, p.Namespace, keys)
+	default:
+		return nil, inputError("unsupported profile type")
+	}
+}
+
+// artifactStore is the subset of the artifact SDK the CLI drives, satisfied by
+// both the MySQL and SQLite backends so openTarget can pick one by profile type.
+type artifactStore interface {
+	Init(context.Context) error
+	Put(context.Context, artifact.Record) error
+	Get(context.Context, string) (artifact.Record, error)
+	Purge(context.Context, string) error
+}
+
 type target struct {
 	db        *sql.DB
-	artifacts *artifactmysql.Store
+	artifacts artifactStore
 	log       cll.Backend
 	profile   Profile
 	storeID   string
@@ -65,7 +141,20 @@ func (t *target) close() error {
 	}
 	return errors.Join(e, t.db.Close())
 }
+// connection opens the backend named by the profile type. MySQL and SQLite are
+// peer backends: neither is the default body, each is a named case.
 func connection(p Profile) (*sql.DB, string, error) {
+	switch p.Type {
+	case "mysql":
+		return mysqlConnection(p)
+	case "sqlite":
+		return sqliteConnection(p)
+	default:
+		return nil, "", inputError("unsupported profile type")
+	}
+}
+
+func mysqlConnection(p Profile) (*sql.DB, string, error) {
 	password, e := p.Credentials.Password.resolve()
 	if e != nil {
 		return nil, "", e
@@ -89,6 +178,29 @@ func connection(p Profile) (*sql.DB, string, error) {
 	}
 	db.SetMaxOpenConns(4)
 	return db, dsn, nil
+}
+
+// sqliteConnection opens the local artifact database handle and returns the
+// absolute file path as the CLL coordinate. A single open connection serializes
+// writers; foreign_keys and WAL match the cll-go SQLite store so both sets of
+// tables share one file safely.
+func sqliteConnection(p Profile) (*sql.DB, string, error) {
+	absolute, e := filepath.Abs(p.Connection.Database)
+	if e != nil {
+		return nil, "", e
+	}
+	uri := (&url.URL{Scheme: "file", Path: absolute, RawQuery: "mode=rwc"}).String()
+	db, e := sql.Open("sqlite", uri)
+	if e != nil {
+		return nil, "", e
+	}
+	db.SetMaxOpenConns(1)
+	for _, pragma := range []string{"PRAGMA foreign_keys=ON", "PRAGMA busy_timeout=5000", "PRAGMA journal_mode=WAL"} {
+		if _, e = db.ExecContext(context.Background(), pragma); e != nil {
+			return nil, "", errors.Join(e, db.Close())
+		}
+	}
+	return db, absolute, nil
 }
 func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err error) {
 	if use > useInitialization {
@@ -125,7 +237,7 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 	// CLL-only commands do not need producer policy or an artifact store. The
 	// SDK constructor rightly requires trust, but that is not a CLL requirement.
 	if needsArtifacts {
-		t.artifacts, err = artifactmysql.New(db, p.Namespace, keys)
+		t.artifacts, err = newArtifactStore(p, db, keys)
 		if err != nil {
 			return nil, err
 		}
@@ -134,13 +246,13 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 		return t, nil
 	}
 	if use == useCLLRead && p.StoreID == "" {
-		if t.log, err = cllmysql.Open(ctx, dsn, p.LogID); err != nil {
+		if t.log, err = openLog(ctx, p, dsn, p.LogID); err != nil {
 			return nil, err
 		}
 		return t, nil
 	}
 	if use == useInitialization {
-		for _, stmt := range coordinationDDL {
+		for _, stmt := range coordinationStatements(p.Type) {
 			if stmt.cll && !needsCLL {
 				continue
 			}
@@ -152,7 +264,7 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 		if _, err = rand.Read(id); err != nil {
 			return nil, err
 		}
-		if _, err = db.ExecContext(ctx, `INSERT IGNORE INTO capsule_cli_identity(singleton,store_id) VALUES(1,?)`, hex.EncodeToString(id)); err != nil {
+		if _, err = db.ExecContext(ctx, insertIgnore(p.Type)+` INTO capsule_cli_identity(singleton,store_id) VALUES(1,?)`, hex.EncodeToString(id)); err != nil {
 			return nil, err
 		}
 	}
@@ -175,13 +287,13 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 		if !needsCLL {
 			return t, nil
 		}
-		if err = cllmysql.Init(ctx, dsn, p.LogID); err != nil {
+		if err = initLog(ctx, p, dsn, p.LogID); err != nil {
 			return nil, err
 		}
-		if t.log, err = cllmysql.Open(ctx, dsn, p.LogID); err != nil {
+		if t.log, err = openLog(ctx, p, dsn, p.LogID); err != nil {
 			return nil, err
 		}
-		if _, err = db.ExecContext(ctx, `INSERT IGNORE INTO capsule_cli_logs(log_id,namespace) VALUES(?,?)`, p.LogID, p.Namespace); err != nil {
+		if _, err = db.ExecContext(ctx, insertIgnore(p.Type)+` INTO capsule_cli_logs(log_id,namespace) VALUES(?,?)`, p.LogID, p.Namespace); err != nil {
 			return nil, err
 		}
 		if needsArtifacts {
@@ -191,7 +303,7 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 		}
 	}
 	if use == useCLLRead {
-		if t.log, err = cllmysql.Open(ctx, dsn, p.LogID); err != nil {
+		if t.log, err = openLog(ctx, p, dsn, p.LogID); err != nil {
 			return nil, err
 		}
 		return t, nil
@@ -204,7 +316,7 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 		return nil, ErrConflict
 	}
 	if use != useInitialization {
-		if t.log, err = cllmysql.Open(ctx, dsn, p.LogID); err != nil {
+		if t.log, err = openLog(ctx, p, dsn, p.LogID); err != nil {
 			return nil, err
 		}
 	}
