@@ -325,7 +325,11 @@ func TestMySQLPendingPurgeFailsWithoutAppendOrResurrection(t *testing.T) {
 	require.NoError(t, e)
 	prepared, e := target.preparePublication(t.Context(), request, key)
 	require.NoError(t, e)
-	require.NoError(t, target.artifacts.Purge(t.Context(), prepared.CapsuleID))
+	// Purge is not part of the CLI-driven artifactStore interface; reach the
+	// concrete backend to set up the purged-then-republish scenario.
+	require.NoError(t, target.artifacts.(interface {
+		Purge(context.Context, string) error
+	}).Purge(t.Context(), prepared.CapsuleID))
 	_, e = target.publish(t.Context(), request, key)
 	require.ErrorIs(t, e, artifact.ErrPurged)
 	entries, e := target.log.ScanEntries(t.Context(), 0, 10)

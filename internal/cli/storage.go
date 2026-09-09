@@ -69,7 +69,6 @@ type artifactStore interface {
 	Init(context.Context) error
 	Put(context.Context, artifact.Record) error
 	Get(context.Context, string) (artifact.Record, error)
-	Purge(context.Context, string) error
 }
 
 type target struct {
@@ -162,9 +161,6 @@ func sqliteConnection(p Profile) (*sql.DB, string, error) {
 	return db, absolute, nil
 }
 func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err error) {
-	if use > useInitialization {
-		return nil, inputError("unsupported target facilities")
-	}
 	needsArtifacts := use == useArtifacts || use == usePublication || (use == useInitialization && p.Namespace != "")
 	needsCLL := use == useCLL || use == useCLLRead || use == usePublication || (use == useInitialization && p.LogID != "")
 	if needsArtifacts && p.Namespace == "" {
@@ -249,9 +245,6 @@ func requirePublisherKey(p Profile, private ed25519.PrivateKey) error {
 // preparePublication persists the deterministic record through the artifact SDK.
 // Retries reuse the frozen request and signer.
 func (t *target) preparePublication(ctx context.Context, r Request, private ed25519.PrivateKey) (Publication, error) {
-	if err := requirePublisherKey(t.profile, private); err != nil {
-		return Publication{}, err
-	}
 	record, err := seal(r, private)
 	if err != nil {
 		return Publication{}, err

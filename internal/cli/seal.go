@@ -115,6 +115,8 @@ func readRecord(path string) (artifact.Record, error) {
 // Missing originals are coverage gaps, not failed signatures. The SDK validates
 // supplied bindings; the CLI additionally reports committed fields for which
 // no retained preimage was supplied in an imported artifact file.
+// TODO: this coverage check belongs in capsule-emit-go; move it there once an
+// SDK release exposes it and bump the go.mod pin.
 func missingBindings(r artifact.Record) []string {
 	payload, err := emit.DecodePayload(r.Capsule)
 	if err != nil {

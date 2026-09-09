@@ -74,7 +74,6 @@ type bearerTransport struct {
 
 func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	copy := r.Clone(r.Context())
-	copy.Header = r.Header.Clone()
 	if b.token != "" {
 		copy.Header.Set("Authorization", "Bearer "+b.token)
 	}
