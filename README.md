@@ -8,7 +8,7 @@ or implicit login/default profile are included.
 ## Build from source
 
 ```bash
-go build -o capsule ./cmd/capsule
+make build
 ./capsule --help
 ```
 
@@ -24,7 +24,7 @@ capsule profile show --profile NAME
 capsule profile update --profile NAME [configuration flags]
 capsule store init --profile NAME
 capsule seal --profile NAME --request INPUT.json --output ARTIFACT.json
-capsule get --profile NAME --capsule-id ID [--output ARTIFACT.json]
+capsule get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsule verify --profile NAME --capsule ARTIFACT.json
 capsule publish --profile NAME --request INPUT.json --idempotency-key KEY
 capsule cll list --profile NAME --after SEQ [--through SEQ] [--limit 100]
@@ -178,9 +178,26 @@ contain only the decoded 32-byte Capsule ID and ordered position/time.
 bound-original verification. An unpinned reader profile needs only the artifact
 tables. If the profile contains an explicit `store_id` (as store init adds), get
 also requires SELECT on the CLI identity row and verifies that pin. Neither mode
-opens CLL or needs private signing keys. `--output` writes the raw SDK record; otherwise stdout
-contains it in the result envelope. Artifact ordering is not meaningful: use names.
+opens CLL or needs private signing keys. `--output` writes readable JSON by default, or the exact-byte SDK record with `--raw`; stdout wraps the selected representation in the result envelope. Artifact ordering is not meaningful: use names.
 Unbound attachments are explicitly not producer-authenticated original content.
+
+### Readable output and exact-byte export
+
+`get` decodes byte fields by default: JSON becomes a JSON value, UTF-8 text
+becomes a string, and other binary data becomes an object with `encoding` set
+to `base64` and `data` containing the encoded bytes. This applies to both
+stdout and `--output`. Artifact binding and retention metadata remain visible.
+
+Use `get --raw --output ARTIFACT.json` for the original SDK record accepted
+by `verify` and `cll append`. Readable output is a display representation, not
+a round-trip format for signed bytes. `seal --output` remains an exact-byte
+SDK export. No stored bytes, digests, or Capsule IDs change.
+
+```bash
+capsule get --profile alchemy --capsule-id <capsule-id> | jq '.result.capsule'
+capsule get --profile alchemy --capsule-id <capsule-id> |
+  jq '.result.artifacts[] | select(.name == "payload") | .content'
+```
 
 ## Example: read an Alchemy investigation
 
@@ -208,7 +225,7 @@ chmod 600 /protected/alchemy-db-password
 ./capsule get \
   --profile alchemy \
   --capsule-id <capsule-id> \
-  --output investigation-artifact.json
+  --raw --output investigation-artifact.json
 
 ./capsule verify \
   --profile alchemy \

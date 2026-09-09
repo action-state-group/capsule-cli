@@ -155,9 +155,11 @@ func NewCommand() *cobra.Command {
 		if e != nil {
 			return e
 		}
+		raw, _ := c.Flags().GetBool("raw")
+		value := getRecordOutput(r, raw)
 		path, _ := c.Flags().GetString("output")
 		if path != "" {
-			b, e := json.Marshal(r)
+			b, e := json.Marshal(value)
 			if e != nil {
 				return e
 			}
@@ -166,10 +168,11 @@ func NewCommand() *cobra.Command {
 			}
 			return output(c, map[string]string{"capsule_id": id, "artifact": path})
 		}
-		return output(c, r)
+		return output(c, value)
 	}}
 	get.Flags().String("capsule-id", "", "Capsule ID")
-	get.Flags().String("output", "", "Export an artifact.Record file instead of stdout")
+	get.Flags().Bool("raw", false, "Preserve SDK byte fields as base64 for exact-byte export and verify")
+	get.Flags().String("output", "", "Write readable JSON to a file; use --raw for a verifiable artifact.Record")
 	root.AddCommand(get)
 	verify := &cobra.Command{Use: "verify", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		p, e := selected(c)
