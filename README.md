@@ -247,22 +247,16 @@ match the database certificate; do not disable verification merely for a tunnel.
 This read-only profile can run `cll list` against an existing log without DDL or
 CLI initialization. Explicit `store_id` pins are checked when configured. It
 cannot append, publish, create checkpoints, or initialize storage. Checkpoint
-status reads additionally need existing CLI checkpoint archive tables and
-store-identity metadata (`capsule_cli_identity`).
+status reads existing CLL witness rows without CLI initialization. An explicit
+`store_id` still requires store-identity metadata for pin verification.
 
 ## Publication and recovery
-
-The unreleased CLI no longer accepts `--idempotency-key` or returns the
-`idempotency_key` JSON field. `capsule_cli_operations` is unused and may be
-dropped after checking for unfinished operations. Initialization does not
-silently delete existing tables.
 
 `cll append` accepts an existing artifact file, persists it through the SDK,
 then appends its Capsule ID. Missing required originals prevent a new append.
 
 `publish` seals the supplied request, persists the complete record through the
-artifact SDK, then calls CLL's identity-idempotent append. It does not maintain
-an operation journal or accept a business idempotency key.
+artifact SDK, then calls CLL's identity-idempotent append using the Capsule ID.
 
 For retries, retain the complete request (including ActionID and Timestamp),
 signing configuration and target. Repeat the same command. A lost append response
@@ -278,11 +272,17 @@ artifact SDK's retention checks. Use CLL lookup to inspect prior delivery.
 Checkpoint creation uses cll-go's runner, signed COSE representation, MMR state
 and durable witness rows. The returned `checkpoint` identifier is **MMR size**,
 not sequence count. Each checkpoint commits only the selected log's prefix.
-The CLI archives exact checkpoints and freezes the witness identity derived from
-HTTPS endpoint and pinned witness key. Endpoint/key changes conflict with existing
-deliveries; credential rotation does not. No HTTP success is treated as witnessing:
+CLL persists exact checkpoints and a witness identity derived from the HTTPS
+endpoint and pinned witness key. Status and publish select that existing witness
+row and verify its checkpoint signature, trusted signer, log and MMR size.
+Endpoint/key changes cannot redirect an old delivery: the new target has no row
+for that checkpoint, so the command returns not-found (exit 1). Credential
+rotation does not change the target. No HTTP success is treated as witnessing:
 cll-go verifies the receipt and persists retry/backoff state. Errors persisted by
 the submitter suppress service bodies, URLs and credentials.
+
+The latest CLL checkpoint and the statement returned by `checkpoint create`
+are available without a configured witness.
 
 `cll verify` takes JSON with `checkpoint` (base64 signed bytes), optional
 `capsule_id`, zero-based `leaf_index`, and `path` (array of base64 nodes). It verifies

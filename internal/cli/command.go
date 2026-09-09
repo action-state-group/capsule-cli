@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -136,6 +137,17 @@ func NewCommand() *cobra.Command {
 		}
 		record, e := seal(r, key)
 		if e != nil {
+			return e
+		}
+		record, e = artifact.Prepare(record)
+		if e != nil {
+			return e
+		}
+		public, ok := key.Public().(ed25519.PublicKey)
+		if !ok {
+			return inputError("invalid signing key")
+		}
+		if _, e = artifact.Verify(record, []ed25519.PublicKey{public}); e != nil {
 			return e
 		}
 		b, e := json.Marshal(record)

@@ -148,6 +148,8 @@ func TestMySQLArtifactReadWithoutCLIIdentity(t *testing.T) {
 	require.NoError(t, e)
 	record, e := seal(request, key)
 	require.NoError(t, e)
+	record, e = artifact.Prepare(record)
+	require.NoError(t, e)
 	require.NoError(t, target.artifacts.Put(t.Context(), record))
 	p.ReadOnly = true
 	p.StoreID = ""
@@ -239,7 +241,8 @@ func TestMySQLCheckpointCommandsAndRetry(t *testing.T) {
 	p.Checkpoint.Endpoint = "https://other.invalid"
 	require.NoError(t, saveProfile(p, true))
 	_, e = invoke(t, "", "cll", "checkpoint", "publish", "--profile", p.Name, "--checkpoint", "1")
-	require.ErrorIs(t, e, ErrConflict)
+	require.ErrorIs(t, e, cll.ErrNotFound)
+	assert.Equal(t, 1, ExitCode(e))
 }
 
 func TestMySQLCheckpointNewServiceDoesNotRedirectOld(t *testing.T) {
@@ -268,14 +271,16 @@ func TestMySQLCheckpointNewServiceDoesNotRedirectOld(t *testing.T) {
 	out, e := invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
 	require.NoError(t, e)
 	assert.Contains(t, out, `"checkpoint":3`)
-	_, oldService, e := target.savedCheckpoint(t.Context(), 1)
+	service, e := serviceID(p)
 	require.NoError(t, e)
-	assert.Empty(t, oldService)
-	_, newService, e := target.savedCheckpoint(t.Context(), 3)
+	_, e = target.log.GetWitness(t.Context(), service, 1)
+	require.ErrorIs(t, e, cll.ErrNotFound)
+	current, e := target.log.GetWitness(t.Context(), service, 3)
 	require.NoError(t, e)
-	expected, e := serviceID(p)
-	require.NoError(t, e)
-	assert.Equal(t, expected, newService)
+	assert.Equal(t, service, current.WitnessID)
+	_, e = invoke(t, "", "cll", "checkpoint", "publish", "--profile", p.Name, "--checkpoint", "1")
+	require.ErrorIs(t, e, cll.ErrNotFound)
+	assert.Equal(t, 1, ExitCode(e))
 }
 
 func TestMySQLPublishMissingEffectOriginalRejectedBeforePersist(t *testing.T) {
@@ -342,34 +347,4 @@ func TestMySQLPendingPurgeFailsWithoutAppendOrResurrection(t *testing.T) {
 		assert.Equal(t, artifact.Purged, a.State)
 		assert.Nil(t, a.Content)
 	}
-}
-
-type failFirstLookup struct {
-	cll.Backend
-	failed bool
-}
-
-func (f *failFirstLookup) GetEntry(ctx context.Context, id []byte) (cll.Entry, error) {
-	if !f.failed {
-		f.failed = true
-		return cll.Entry{}, errors.New("transient lookup failure")
-	}
-	return f.Backend.GetEntry(ctx, id)
-}
-func TestMySQLAppendReadBackFailureRemainsResumable(t *testing.T) {
-	p, key := mysqlProfile(t)
-	target, e := openTarget(t.Context(), p, useInitialization)
-	require.NoError(t, e)
-	defer func() { require.NoError(t, target.close()) }()
-	target.log = &failFirstLookup{Backend: target.log}
-	raw := requestFixture(t)
-	request, e := parseRequest(raw)
-	require.NoError(t, e)
-	first, e := target.publish(t.Context(), request, key)
-	require.ErrorIs(t, e, ErrPending)
-	assert.NotEmpty(t, first.CapsuleID)
-	second, e := target.publish(t.Context(), request, key)
-	require.NoError(t, e)
-	assert.Equal(t, first.CapsuleID, second.CapsuleID)
-	assert.Equal(t, "appended", second.State)
 }

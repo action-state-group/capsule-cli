@@ -100,16 +100,7 @@ func seal(r Request, key ed25519.PrivateKey) (artifact.Record, error) {
 	if r.AgentOutput != nil {
 		record.Artifacts = append(record.Artifacts, artifact.Artifact{Name: "agent_output", Binding: artifact.AgentOutputDigest, State: artifact.Present, Content: r.AgentOutput})
 	}
-	record, e = artifact.Prepare(record)
-	if e != nil {
-		return record, e
-	}
-	public, ok := key.Public().(ed25519.PublicKey)
-	if !ok {
-		return record, inputError("invalid signing key")
-	}
-	_, e = artifact.Verify(record, []ed25519.PublicKey{public})
-	return record, e
+	return record, nil
 }
 func readRecord(path string) (artifact.Record, error) {
 	var r artifact.Record

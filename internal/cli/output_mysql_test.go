@@ -19,6 +19,8 @@ func TestMySQLGetFlatOutput(t *testing.T) {
 	require.NoError(t, err)
 	record, err := seal(request, key)
 	require.NoError(t, err)
+	record, err = artifact.Prepare(record)
+	require.NoError(t, err)
 	require.NoError(t, target.artifacts.Put(t.Context(), record))
 	stored, err := target.artifacts.Get(t.Context(), record.CapsuleID)
 	require.NoError(t, err)

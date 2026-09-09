@@ -35,7 +35,6 @@ type coordinationStatement struct {
 var coordinationDDL = []coordinationStatement{
 	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_identity (singleton TINYINT PRIMARY KEY, store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, CHECK(singleton=1)) ENGINE=InnoDB`, cll: false},
 	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_logs (log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PRIMARY KEY, namespace VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL) ENGINE=InnoDB`, cll: true},
-	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_checkpoints (store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL, mmr_size BIGINT UNSIGNED NOT NULL, statement LONGBLOB NOT NULL, service_id VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, PRIMARY KEY(store_id,log_id,mmr_size)) ENGINE=InnoDB`, cll: true},
 }
 
 type target struct {
@@ -257,7 +256,7 @@ func requirePublisherKey(p Profile, private ed25519.PrivateKey) error {
 }
 
 // preparePublication persists the deterministic record through the artifact SDK.
-// No operation journal is needed: retries reuse the frozen request and signer.
+// Retries reuse the frozen request and signer.
 func (t *target) preparePublication(ctx context.Context, r Request, private ed25519.PrivateKey) (Publication, error) {
 	if err := requirePublisherKey(t.profile, private); err != nil {
 		return Publication{}, err
@@ -294,21 +293,7 @@ func appendRecord(ctx context.Context, log cll.EntryStore, capsuleID string) (cl
 	}
 	result, e := log.Append(ctx, cll.AppendInput{Value: id, AppendedAt: time.Now().UTC()})
 	if e != nil {
-		return cll.Entry{}, appendError(e)
+		return cll.Entry{}, ErrPending
 	}
-	observed, e := log.GetEntry(ctx, id)
-	if e != nil {
-		return cll.Entry{}, appendError(e)
-	}
-	if !bytes.Equal(observed.Value, id) || observed.Seq != result.Entry.Seq {
-		return cll.Entry{}, ErrConflict
-	}
-	return observed, nil
-}
-
-func appendError(err error) error {
-	if errors.Is(err, ErrConflict) {
-		return ErrConflict
-	}
-	return ErrPending
+	return result.Entry, nil
 }

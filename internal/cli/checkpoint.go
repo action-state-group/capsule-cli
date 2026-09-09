@@ -65,54 +65,6 @@ func serviceID(p Profile) (string, error) {
 	sum := sha256.Sum256([]byte(endpoint + "\n" + strings.ToLower(p.Checkpoint.PublicKey)))
 	return "service-" + hex.EncodeToString(sum[:]), nil
 }
-func (t *target) saveCheckpoint(ctx context.Context, state cll.State) error {
-	if state.Checkpoint == nil {
-		return nil
-	}
-	statement := state.Checkpoint.Bytes
-	r, e := verifyCheckpoint(t.profile, statement)
-	if e != nil {
-		return e
-	}
-	// The library saves witness IDs atomically with the checkpoint. Recover
-	// service identity from that durable state, never from today's profile alone.
-	found := ""
-	for _, w := range state.Witnesses {
-		if w.CheckpointSize == r.MMRSize {
-			if string(w.Checkpoint) != string(statement) || found != "" {
-				return ErrConflict
-			}
-			found = w.WitnessID
-		}
-	}
-	// Existing checkpoints retain their original destination; configuring a new
-	// destination affects future checkpoints only, never old pending deliveries.
-	service := found
-	_, e = t.db.ExecContext(ctx, `INSERT INTO capsule_cli_checkpoints(store_id,log_id,mmr_size,statement,service_id) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE mmr_size=mmr_size`, t.storeID, t.profile.LogID, r.MMRSize, statement, service)
-	if e != nil {
-		return e
-	}
-	var stored []byte
-	var id string
-	e = t.db.QueryRowContext(ctx, `SELECT statement,service_id FROM capsule_cli_checkpoints WHERE store_id=? AND log_id=? AND mmr_size=?`, t.storeID, t.profile.LogID, r.MMRSize).Scan(&stored, &id)
-	if e != nil {
-		return e
-	}
-	if string(stored) != string(statement) || id != service {
-		return ErrConflict
-	}
-	return nil
-}
-func (t *target) savedCheckpoint(ctx context.Context, size uint64) ([]byte, string, error) {
-	var raw []byte
-	var service string
-	e := t.db.QueryRowContext(ctx, `SELECT statement,service_id FROM capsule_cli_checkpoints WHERE store_id=? AND log_id=? AND mmr_size=?`, t.storeID, t.profile.LogID, size).Scan(&raw, &service)
-	if e != nil {
-		return nil, "", e
-	}
-	_, e = verifyCheckpoint(t.profile, raw)
-	return raw, service, e
-}
 
 // Bearer auth is attached only by the library's redirect-rejecting HTTP client.
 type bearerTransport struct {
@@ -272,34 +224,25 @@ func addCheckpointCommands(logs *cobra.Command) {
 		if e != nil {
 			return e
 		}
-		// Archive any last committed checkpoint first, covering a prior process crash
-		// between the library CAS and the CLI archive write.
-		before, e := t.log.LoadCLL(c.Context())
-		if e != nil {
-			return e
-		}
-		if before.Checkpoint != nil {
-			if e = t.saveCheckpoint(c.Context(), before); e != nil {
-				return e
-			}
-		}
 		for batch := 0; batch < 10000; batch++ {
 			changed, e := runner.RunOnce(c.Context(), time.Now().UTC())
 			if e != nil {
 				return e
 			}
-			state, e := t.log.LoadCLL(c.Context())
-			if e != nil {
-				return e
-			}
-			if state.Checkpoint != nil {
-				if e = t.saveCheckpoint(c.Context(), state); e != nil {
+			if !changed {
+				state, e := t.log.LoadCLL(c.Context())
+				if e != nil {
 					return e
 				}
-			}
-			if !changed {
 				if state.Checkpoint == nil {
 					return inputError("log has no entries")
+				}
+				record, e := verifyCheckpoint(p, state.Checkpoint.Bytes)
+				if e != nil {
+					return e
+				}
+				if record.MMRSize != state.Checkpoint.Size {
+					return ErrConflict
 				}
 				return output(c, map[string]any{"checkpoint": state.Checkpoint.Size, "indexed_sequence": state.Checkpoint.IndexedSeq, "statement": state.Checkpoint.Bytes, "store_id": t.storeID, "log_id": p.LogID})
 			}
@@ -337,23 +280,15 @@ func addCheckpointCommands(logs *cobra.Command) {
 				return e
 			}
 			defer func() { err = errors.Join(err, t.close()) }()
-			if t.storeID == "" {
-				if e = t.loadIdentity(c.Context()); e != nil {
-					return e
-				}
-			}
-			statement, savedService, e := t.savedCheckpoint(c.Context(), size)
-			if e != nil {
-				return e
-			}
-			if savedService != service {
-				return ErrConflict
-			}
 			state, e := t.log.GetWitness(c.Context(), service, size)
 			if e != nil {
 				return e
 			}
-			if string(state.Checkpoint) != string(statement) {
+			record, e := verifyCheckpoint(p, state.Checkpoint)
+			if e != nil {
+				return e
+			}
+			if record.MMRSize != size {
 				return ErrConflict
 			}
 			if publish {
@@ -399,7 +334,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 			}
 			return nil
 		}}
-		cmd.Flags().Uint64("checkpoint", 0, "Saved checkpoint MMR size (not entry count)")
+		cmd.Flags().Uint64("checkpoint", 0, "CLL checkpoint MMR size (not entry count)")
 		group.AddCommand(cmd)
 	}
 }
