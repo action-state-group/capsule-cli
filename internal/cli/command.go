@@ -105,11 +105,7 @@ func NewCommand() *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.close()) }()
-		p.StoreID = t.storeID
-		if e = saveProfile(p, true); e != nil {
-			return e
-		}
-		return output(c, map[string]string{"store_id": t.storeID, "log_id": p.LogID, "status": "initialized"})
+		return output(c, map[string]string{"log_id": p.LogID, "status": "initialized"})
 	}}
 	store.AddCommand(init)
 	root.AddCommand(store)
@@ -312,7 +308,7 @@ func NewCommand() *cobra.Command {
 			items = append(items, map[string]any{"sequence": entry.Seq, "capsule_id": hex.EncodeToString(entry.Value), "appended_at": entry.AppendedAt})
 			next = entry.Seq
 		}
-		return output(c, map[string]any{"entries": items, "next_after": next, "log_id": p.LogID, "store_id": t.storeID})
+		return output(c, map[string]any{"entries": items, "next_after": next, "log_id": p.LogID})
 	}}
 	list.Flags().Uint64("after", 0, "Exclusive sequence lower bound")
 	list.Flags().Uint64("through", 0, "Inclusive sequence upper bound (0 unbounded)")
@@ -356,7 +352,7 @@ func NewCommand() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		return output(c, map[string]any{"capsule_id": r.CapsuleID, "sequence": entry.Seq, "log_id": p.LogID, "store_id": t.storeID})
+		return output(c, map[string]any{"capsule_id": r.CapsuleID, "sequence": entry.Seq, "log_id": p.LogID})
 	}}
 	appendCmd.Flags().String("capsule", "", "Verified artifact.Record file; persisted first only when artifact storage is configured")
 	logs.AddCommand(appendCmd)

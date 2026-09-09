@@ -77,7 +77,6 @@ type Profile struct {
 	Type       string `yaml:"type" mapstructure:"type"`
 	LogID      string `yaml:"log_id" mapstructure:"log_id"`
 	Namespace  string `yaml:"namespace" mapstructure:"namespace"`
-	StoreID    string `yaml:"store_id,omitempty" mapstructure:"store_id"`
 	ReadOnly   bool   `yaml:"read_only,omitempty" mapstructure:"read_only"`
 	Connection struct {
 		Host     string `yaml:"host" mapstructure:"host"`
@@ -199,7 +198,7 @@ func loadProfile(name string) (Profile, error) {
 	d := yaml.NewDecoder(bytes.NewReader(raw))
 	d.KnownFields(true)
 	if e = d.Decode(&p); e != nil {
-		return p, inputError("invalid profile fields")
+		return Profile{}, inputError("invalid profile fields")
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
@@ -308,13 +307,11 @@ func profileCommands() *cobra.Command {
 		c.RunE = func(c *cobra.Command, _ []string) error {
 			v := viper.New()
 			v.SetConfigType("yaml")
-			var prior Profile
 			if update {
 				p, e := selected(c)
 				if e != nil {
 					return e
 				}
-				prior = p
 				b, e := yaml.Marshal(p)
 				if e != nil {
 					return e
@@ -386,9 +383,6 @@ func profileCommands() *cobra.Command {
 						*item.target = strings.TrimSpace(s)
 					}
 				}
-			}
-			if update && prior.StoreID != "" && (p.LogID != prior.LogID || p.Namespace != prior.Namespace) {
-				return inputError("initialized profile log and namespace are immutable; create a new profile")
 			}
 			if e := saveProfile(p, update); e != nil {
 				return e

@@ -214,13 +214,12 @@ func TestReadOnlyFailsBeforeConnection(t *testing.T) {
 	_, e = openTarget(t.Context(), p, useInitialization)
 	require.ErrorIs(t, e, ErrReadOnlyCLL)
 }
-func TestProfileTargetCannotDrift(t *testing.T) {
+func TestProfileTargetCanBeUpdated(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	p.StoreID = strings.Repeat("a", 64)
 	require.NoError(t, saveProfile(p, false))
 	_, e := invoke(t, "", "profile", "update", "--profile", p.Name, "--log-id", "other")
-	require.Error(t, e)
+	require.NoError(t, e)
 }
 func TestCheckpointProof(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

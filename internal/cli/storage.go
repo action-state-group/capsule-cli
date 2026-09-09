@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
-	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -27,46 +26,6 @@ var ErrConflict = errors.New("stored state conflicts with the selected target or
 var ErrPending = errors.New("operation durably saved; delivery pending, retry the same frozen request and target")
 var ErrReadOnlyCLL = errors.New("operation requires writes; profile is read-only")
 var ErrPartial = errors.New("verification incomplete or required originals unavailable")
-
-// CLI-owned tables contain coordination only, never a replacement for the SDK
-// artifact schema or CLL schema. MySQL DDL is individually idempotent; a log is
-// marked ready only after every library's explicit initialization succeeds.
-type coordinationStatement struct {
-	sql string
-	cll bool
-}
-
-var coordinationDDL = []coordinationStatement{
-	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_identity (singleton TINYINT PRIMARY KEY, store_id CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL, CHECK(singleton=1)) ENGINE=InnoDB`, cll: false},
-	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_logs (log_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PRIMARY KEY, namespace VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL) ENGINE=InnoDB`, cll: true},
-}
-
-// sqliteCoordinationDDL mirrors coordinationDDL with SQLite-portable types. The
-// same coordination invariants hold: a single pinned store identity and a
-// log-to-namespace binding.
-var sqliteCoordinationDDL = []coordinationStatement{
-	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_identity (singleton INTEGER PRIMARY KEY CHECK(singleton=1), store_id TEXT NOT NULL)`, cll: false},
-	{sql: `CREATE TABLE IF NOT EXISTS capsule_cli_logs (log_id TEXT PRIMARY KEY, namespace TEXT NOT NULL)`, cll: true},
-}
-
-func coordinationStatements(kind string) []coordinationStatement {
-	switch kind {
-	case "sqlite":
-		return sqliteCoordinationDDL
-	default:
-		return coordinationDDL
-	}
-}
-
-// insertIgnore returns the backend's idempotent-insert verb.
-func insertIgnore(kind string) string {
-	switch kind {
-	case "sqlite":
-		return "INSERT OR IGNORE"
-	default:
-		return "INSERT IGNORE"
-	}
-}
 
 // openLog and initLog dispatch CLL storage by profile type. MySQL and SQLite are
 // peer backends. For SQLite the coordinate is a file path (opened as its own
@@ -118,7 +77,6 @@ type target struct {
 	artifacts artifactStore
 	log       cll.Backend
 	profile   Profile
-	storeID   string
 }
 
 // targetUse names the actual dependencies instead of inferring artifact access
@@ -141,6 +99,7 @@ func (t *target) close() error {
 	}
 	return errors.Join(e, t.db.Close())
 }
+
 // connection opens the backend named by the profile type. MySQL and SQLite are
 // peer backends: neither is the default body, each is a named case.
 func connection(p Profile) (*sql.DB, string, error) {
@@ -242,80 +201,17 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 			return nil, err
 		}
 	}
-	if use == useArtifacts && p.StoreID == "" {
-		return t, nil
-	}
-	if use == useCLLRead && p.StoreID == "" {
-		if t.log, err = openLog(ctx, p, dsn, p.LogID); err != nil {
+	if use == useInitialization && needsArtifacts {
+		if err = t.artifacts.Init(ctx); err != nil {
 			return nil, err
 		}
-		return t, nil
 	}
-	if use == useInitialization {
-		for _, stmt := range coordinationStatements(p.Type) {
-			if stmt.cll && !needsCLL {
-				continue
-			}
-			if _, err = db.ExecContext(ctx, stmt.sql); err != nil {
+	if needsCLL {
+		if use == useInitialization {
+			if err = initLog(ctx, p, dsn, p.LogID); err != nil {
 				return nil, err
 			}
 		}
-		id := make([]byte, 32)
-		if _, err = rand.Read(id); err != nil {
-			return nil, err
-		}
-		if _, err = db.ExecContext(ctx, insertIgnore(p.Type)+` INTO capsule_cli_identity(singleton,store_id) VALUES(1,?)`, hex.EncodeToString(id)); err != nil {
-			return nil, err
-		}
-	}
-	if err = t.loadIdentity(ctx); err != nil {
-		return nil, err
-	}
-	if p.StoreID == "" && use != useInitialization && use != useCLLRead {
-		return nil, inputError("write operations require store init to pin the store identity")
-	}
-
-	if use == useArtifacts {
-		return t, nil
-	}
-	if use == useInitialization {
-		if needsArtifacts {
-			if err = t.artifacts.Init(ctx); err != nil {
-				return nil, err
-			}
-		}
-		if !needsCLL {
-			return t, nil
-		}
-		if err = initLog(ctx, p, dsn, p.LogID); err != nil {
-			return nil, err
-		}
-		if t.log, err = openLog(ctx, p, dsn, p.LogID); err != nil {
-			return nil, err
-		}
-		if _, err = db.ExecContext(ctx, insertIgnore(p.Type)+` INTO capsule_cli_logs(log_id,namespace) VALUES(?,?)`, p.LogID, p.Namespace); err != nil {
-			return nil, err
-		}
-		if needsArtifacts {
-			if _, err = db.ExecContext(ctx, `UPDATE capsule_cli_logs SET namespace=? WHERE log_id=? AND namespace=''`, p.Namespace, p.LogID); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if use == useCLLRead {
-		if t.log, err = openLog(ctx, p, dsn, p.LogID); err != nil {
-			return nil, err
-		}
-		return t, nil
-	}
-	var namespace string
-	if err = db.QueryRowContext(ctx, `SELECT namespace FROM capsule_cli_logs WHERE log_id=?`, p.LogID).Scan(&namespace); err != nil {
-		return nil, err
-	}
-	if needsArtifacts && namespace != p.Namespace {
-		return nil, ErrConflict
-	}
-	if use != useInitialization {
 		if t.log, err = openLog(ctx, p, dsn, p.LogID); err != nil {
 			return nil, err
 		}
@@ -326,28 +222,11 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 // Publication reports Capsule identity and delivery state. A caller should
 // retain the frozen request and use the same signing configuration and target.
 type Publication struct {
-	StoreID   string `json:"store_id"`
 	Namespace string `json:"namespace"`
 	LogID     string `json:"log_id"`
 	CapsuleID string `json:"capsule_id"`
 	Sequence  uint64 `json:"sequence,omitempty"`
 	State     string `json:"state"`
-}
-
-// loadIdentity reads CLI coordination identity without provisioning it. An
-// explicit profile pin is always checked, including on read-only paths.
-func (t *target) loadIdentity(ctx context.Context) error {
-	err := t.db.QueryRowContext(ctx, `SELECT store_id FROM capsule_cli_identity WHERE singleton=1`).Scan(&t.storeID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return inputError("CLI store identity is not initialized")
-	}
-	if err != nil {
-		return err
-	}
-	if len(t.storeID) != 64 || (t.profile.StoreID != "" && t.profile.StoreID != t.storeID) {
-		return ErrConflict
-	}
-	return nil
 }
 
 func requirePublisherKey(p Profile, private ed25519.PrivateKey) error {
@@ -383,7 +262,7 @@ func (t *target) preparePublication(ctx context.Context, r Request, private ed25
 	if err = t.artifacts.Put(ctx, record); err != nil {
 		return Publication{}, err
 	}
-	return Publication{StoreID: t.storeID, Namespace: t.profile.Namespace, LogID: t.profile.LogID, CapsuleID: record.CapsuleID, State: "pending"}, nil
+	return Publication{Namespace: t.profile.Namespace, LogID: t.profile.LogID, CapsuleID: record.CapsuleID, State: "pending"}, nil
 }
 func (t *target) publish(ctx context.Context, r Request, private ed25519.PrivateKey) (Publication, error) {
 	result, err := t.preparePublication(ctx, r, private)

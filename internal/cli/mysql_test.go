@@ -65,7 +65,6 @@ func TestMySQLPublishRecovery(t *testing.T) {
 	target, e := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, e)
 	defer func() { require.NoError(t, target.close()) }()
-	p.StoreID = target.storeID
 	target.profile = p
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
@@ -97,17 +96,13 @@ func TestMySQLPublishRecovery(t *testing.T) {
 	require.NoError(t, e)
 	require.Len(t, entries, 1)
 	assert.Equal(t, first.CapsuleID, hex.EncodeToString(entries[0].Value))
-	wrong := p
-	wrong.StoreID = strings.Repeat("f", 64)
-	_, e = openTarget(t.Context(), wrong, usePublication)
-	require.ErrorIs(t, e, ErrConflict)
+
 }
 func TestMySQLConcurrentPublishes(t *testing.T) {
 	p, key := mysqlProfile(t)
 	target, e := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, e)
 	defer func() { require.NoError(t, target.close()) }()
-	target.profile.StoreID = target.storeID
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
 	require.NoError(t, e)
@@ -152,7 +147,6 @@ func TestMySQLArtifactReadWithoutCLIIdentity(t *testing.T) {
 	require.NoError(t, e)
 	require.NoError(t, target.artifacts.Put(t.Context(), record))
 	p.ReadOnly = true
-	p.StoreID = ""
 	p.LogID = "unrelated-not-initialized-log"
 	// Grant only SELECT on SDK tables: this catches accidental initialization,
 	// CLI metadata reads or CLL access, not merely a read_only configuration bit.
@@ -183,7 +177,6 @@ func TestMySQLPendingSurvivesRestart(t *testing.T) {
 	p, key := mysqlProfile(t)
 	target, e := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, e)
-	p.StoreID = target.storeID
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
 	require.NoError(t, e)
@@ -207,7 +200,6 @@ func TestMySQLCheckpointCommandsAndRetry(t *testing.T) {
 	target, e := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, e)
 	defer func() { require.NoError(t, target.close()) }()
-	p.StoreID = target.storeID
 	target.profile = p
 	require.NoError(t, saveProfile(p, false))
 	raw := requestFixture(t)
@@ -251,7 +243,6 @@ func TestMySQLCheckpointNewServiceDoesNotRedirectOld(t *testing.T) {
 	target, e := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, e)
 	defer func() { require.NoError(t, target.close()) }()
-	p.StoreID = target.storeID
 	require.NoError(t, saveProfile(p, false))
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
@@ -308,7 +299,6 @@ func TestMySQLCLLCommandsNeedNoProducerKeys(t *testing.T) {
 	target, e := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, e)
 	defer func() { require.NoError(t, target.close()) }()
-	p.StoreID = target.storeID
 	raw := requestFixture(t)
 	request, e := parseRequest(raw)
 	require.NoError(t, e)

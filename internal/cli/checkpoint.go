@@ -224,28 +224,38 @@ func addCheckpointCommands(logs *cobra.Command) {
 		if e != nil {
 			return e
 		}
-		for batch := 0; batch < 10000; batch++ {
+		// RunOnce indexes up to one cll ScanLimit batch and, with CadenceEntries=1,
+		// cuts a checkpoint at that tip; it reports no change once the log is fully
+		// caught up. Loop to drain a backlog, but bound the work: a log under
+		// continuous concurrent append never reaches "no change", so an unbounded
+		// loop could spin forever (the CLI context carries no deadline). The cap is
+		// a per-invocation work budget; reaching it returns ErrPending so the
+		// operator re-runs to continue. A single-writer log converges in the first
+		// couple of batches.
+		const maxCheckpointBatches = 10000
+		for batch := 0; batch < maxCheckpointBatches; batch++ {
 			changed, e := runner.RunOnce(c.Context(), time.Now().UTC())
 			if e != nil {
 				return e
 			}
-			if !changed {
-				state, e := t.log.LoadCLL(c.Context())
-				if e != nil {
-					return e
-				}
-				if state.Checkpoint == nil {
-					return inputError("log has no entries")
-				}
-				record, e := verifyCheckpoint(p, state.Checkpoint.Bytes)
-				if e != nil {
-					return e
-				}
-				if record.MMRSize != state.Checkpoint.Size {
-					return ErrConflict
-				}
-				return output(c, map[string]any{"checkpoint": state.Checkpoint.Size, "indexed_sequence": state.Checkpoint.IndexedSeq, "statement": state.Checkpoint.Bytes, "store_id": t.storeID, "log_id": p.LogID})
+			if changed {
+				continue
 			}
+			state, e := t.log.LoadCLL(c.Context())
+			if e != nil {
+				return e
+			}
+			if state.Checkpoint == nil {
+				return inputError("log has no entries")
+			}
+			record, e := verifyCheckpoint(p, state.Checkpoint.Bytes)
+			if e != nil {
+				return e
+			}
+			if record.MMRSize != state.Checkpoint.Size {
+				return ErrConflict
+			}
+			return output(c, map[string]any{"checkpoint": state.Checkpoint.Size, "indexed_sequence": state.Checkpoint.IndexedSeq, "statement": state.Checkpoint.Bytes, "log_id": p.LogID})
 		}
 		return ErrPending
 	}}

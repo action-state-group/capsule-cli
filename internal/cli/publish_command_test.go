@@ -15,10 +15,9 @@ func TestMySQLPublishWithoutJournalOrOperationKey(t *testing.T) {
 	target, err := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, target.close()) })
-	p.StoreID = target.storeID
 	require.NoError(t, saveProfile(p, false))
 	var tables int
-	require.NoError(t, target.db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='capsule_cli_operations'").Scan(&tables))
+	require.NoError(t, target.db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND LEFT(table_name,12)='capsule_cli_'").Scan(&tables))
 	assert.Zero(t, tables)
 	path := filepath.Join(t.TempDir(), "request.json")
 	require.NoError(t, os.WriteFile(path, requestFixture(t), 0600))
@@ -27,6 +26,9 @@ func TestMySQLPublishWithoutJournalOrOperationKey(t *testing.T) {
 	second, err := invoke(t, "", "publish", "--profile", p.Name, "--request", path)
 	require.NoError(t, err)
 	assert.JSONEq(t, first, second)
+	assert.NotContains(t, first, "store_id")
+	require.NoError(t, target.db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND LEFT(table_name,12)='capsule_cli_'").Scan(&tables))
+	assert.Zero(t, tables)
 	assert.NotContains(t, first, "idempotency_key")
 	entries, err := target.log.ScanEntries(t.Context(), 0, 10)
 	require.NoError(t, err)

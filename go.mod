@@ -3,7 +3,7 @@ module github.com/action-state-group/capsule-cli
 go 1.27.0
 
 require (
-	github.com/action-state-group/capsule-emit-go v0.0.0-20260909074113-62f854a6730f
+	github.com/action-state-group/capsule-emit-go v0.0.0-20260909161105-0b7383c2d367
 	github.com/action-state-group/cll-go v0.0.0-20260909041951-65cc10f6b718
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1

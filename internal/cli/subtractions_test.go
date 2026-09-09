@@ -74,7 +74,6 @@ func TestMySQLCheckpointReadsAndValidatesCLLState(t *testing.T) {
 	target, err := openTarget(t.Context(), p, useInitialization)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, target.close()) })
-	p.StoreID = target.storeID
 	require.NoError(t, saveProfile(p, false))
 	request, err := parseRequest(requestFixture(t))
 	require.NoError(t, err)

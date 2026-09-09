@@ -123,22 +123,21 @@ Other configuration flags include `--trusted-key`, `--checkpoint-trusted-key`,
 To change secret source on update, explicitly clear the previous source flag;
 conflicting sources are rejected instead of silently taking precedence.
 
-MySQL is the only supported backend. Several profiles may use MySQL, share a
-physical database, or alias one log. Each physical log has one artifact namespace.
+MySQL and SQLite are peer backends; each profile selects one. Several profiles
+may share a physical database or reference the same log. The CLI does not bind a
+log to a single artifact namespace; callers must consistently select the
+intended namespace when writing and reading a log's artifacts.
 Log IDs are restricted to lowercase ASCII letters/digits and `._:/-`, starting
 with a letter/digit (maximum 191 bytes): this avoids collation aliases in the
 current CLL MySQL schema. Namespace and profile names use letters/digits, `_`,
 and `-`, maximum 64 characters. TLS defaults to verified TLS (`true`); explicit
 `false` is intended only for isolated local development. No insecure TLS fallback.
 
-`store init` provisions only the configured library schemas plus required CLI coordination metadata and pins
-the existing/generated `store_id` into the profile. MySQL DDL itself is not
-transactional; each initialization step is idempotent and log readiness is
-recorded last. Normal log operations never invent a missing identity. Initialized
-profiles cannot change log ID/namespace through update; create another profile.
-Endpoint/credential changes must still resolve the pinned physical store ID.
-An independent database clone requires deliberate identity reprovisioning
-by an operator; automatic clone recovery is not provided.
+`store init` provisions only the configured artifact SDK and CLL schemas.
+Initialization is idempotent. The CLI owns no database tables. Profiles select
+the database, artifact namespace, and log ID directly. Existing SDK storage
+can be used without CLI initialization. Retries must use the intended target
+and signing configuration.
 
 ## Seal request and stored artifact
 
@@ -175,10 +174,9 @@ sealed bytes and exact originals. It is **not** raw Capsule JSON alone. CLL entr
 contain only the decoded 32-byte Capsule ID and ordered position/time.
 
 `get` uses the SDK directly, including signature trust, inventory integrity and
-bound-original verification. An unpinned reader profile needs only the artifact
-tables. If the profile contains an explicit `store_id` (as store init adds), get
-also requires SELECT on the CLI identity row and verifies that pin. Neither mode
-opens CLL or needs private signing keys. `--output` writes readable JSON by default, or the exact-byte SDK record with `--raw`; stdout adds `spec_version` alongside the selected representation's fields. Artifact ordering is not meaningful: use names.
+bound-original verification. Reading artifacts requires only SELECT access to artifact SDK tables.
+It does not open CLL or require private signing keys.
+`--output` writes readable JSON by default, or the exact-byte SDK record with `--raw`; stdout adds `spec_version` alongside the selected representation's fields. Artifact ordering is not meaningful: use names.
 Unbound attachments are explicitly not producer-authenticated original content.
 
 ### Readable output and exact-byte export
@@ -244,11 +242,9 @@ command decodes its retained payload. Decoding alone is not verification.
 For a tunnel, use its local host and `--mysql-port`. Verified TLS must still
 match the database certificate; do not disable verification merely for a tunnel.
 
-This read-only profile can run `cll list` against an existing log without DDL or
-CLI initialization. Explicit `store_id` pins are checked when configured. It
-cannot append, publish, create checkpoints, or initialize storage. Checkpoint
-status reads existing CLL witness rows without CLI initialization. An explicit
-`store_id` still requires store-identity metadata for pin verification.
+This read-only profile can run `cll list` against an existing log and read
+checkpoint status from CLL witness rows without initialization. It cannot
+append, publish, create checkpoints, or initialize storage.
 
 ## Publication and recovery
 
@@ -365,6 +361,6 @@ clear it with `--namespace ''` for a CLL-only profile. `cll append --capsule`
 verifies the supplied raw SDK record; when no artifact namespace is configured,
 it appends only the ID and leaves artifact retention to the caller. It does not
 provide a backup of the Capsule or originals. With both facilities configured,
-it persists the verified record before appending. A log's artifact namespace is
-bound when artifact-backed initialization first occurs; CLL-only readers do not
-need to know that namespace.
+it persists the verified record before appending. The CLI does not bind a
+namespace to a log: a caller must select the same namespace it wrote with to
+retrieve those artifacts, while CLL-only readers need only the log.

@@ -41,7 +41,6 @@ func TestMySQLIndependentFacilitiesAndReadOnlyList(t *testing.T) {
 	require.Zero(t, count)
 	_, err = ledger.log.Append(t.Context(), cll.AppendInput{Value: make([]byte, 32), AppendedAt: time.Now().UTC()})
 	require.NoError(t, err)
-	p.StoreID = ledger.storeID
 	require.NoError(t, ledger.close())
 	p.Checkpoint.Endpoint = "https://127.0.0.1:1"
 	p.Checkpoint.PublicKey = p.Checkpoint.TrustedKeys[0]
@@ -58,17 +57,11 @@ func TestMySQLIndependentFacilitiesAndReadOnlyList(t *testing.T) {
 	p.Credentials.Username, p.Credentials.Password = "capsule_cli_reader", Secret{Value: "isolated-reader"}
 	p.ReadOnly = true
 	require.NoError(t, saveProfile(p, true))
-	for _, pinned := range []bool{true, false} {
-		if !pinned {
-			p.StoreID = ""
-			require.NoError(t, saveProfile(p, true))
-		}
-		out, err := invoke(t, "", "cll", "list", "--profile", p.Name, "--after", "0", "--through", "1")
-		require.NoError(t, err)
-		require.Contains(t, out, `"sequence":1`)
-		_, err = invoke(t, "", "cll", "checkpoint", "status", "--profile", p.Name, "--checkpoint", "1")
-		require.NoError(t, err)
-	}
+	out, err := invoke(t, "", "cll", "list", "--profile", p.Name, "--after", "0", "--through", "1")
+	require.NoError(t, err)
+	require.Contains(t, out, `"sequence":1`)
+	_, err = invoke(t, "", "cll", "checkpoint", "status", "--profile", p.Name, "--checkpoint", "1")
+	require.NoError(t, err)
 	_, err = openTarget(t.Context(), p, useInitialization)
 	require.ErrorIs(t, err, ErrReadOnlyCLL)
 	require.NoError(t, saveProfile(writer, true))
