@@ -286,6 +286,66 @@ the profile's expected log, trusted signer, embedded consistency proof and optio
 inclusion through cll-go. It does not prove producer signatures or business truth.
 No trusted external prefix/time is inferred merely from a self-consistent checkpoint.
 
+### Example: publish a checkpoint to the witness and confirm it landed
+
+`witness.agentactioncapsule.org` is the live Action State Group Transparency
+Service; its `POST /checkpoints` route countersigns a signed CLL checkpoint and
+returns a receipt. Configure the witness on the publishing profile. Two distinct
+keys are involved: your own checkpoint signer (its public key must be pinned in
+`--checkpoint-trusted-key`, mirroring producer trust) and the witness authority
+key (`--checkpoint-public-key`). The witness key must be **independently
+provisioned** and pinned out of band; do not trust a key merely because the same
+host serves it (`GET /anchor/authority-pubkey` is a distribution convenience, not
+a trust root: fetching a receipt and its verification key over one untrusted
+connection establishes nothing).
+
+```bash
+chmod 600 /protected/checkpoint-seed.hex
+
+# One-time: add checkpoint signing and the witness target to an existing profile.
+./capsule profile update \
+  --profile evaluations \
+  --checkpoint-signing-key-file /protected/checkpoint-seed.hex \
+  --checkpoint-trusted-key <your-checkpoint-public-key-hex> \
+  --checkpoint-endpoint https://witness.agentactioncapsule.org \
+  --checkpoint-public-key <pinned-witness-authority-public-key-hex>
+  # add --checkpoint-token-env WITNESS_TOKEN only if the service requires a bearer token
+
+# Cut a checkpoint at the current MMR tip; record the returned MMR size.
+./capsule cll checkpoint create --profile evaluations
+# => {"spec_version":"capsule-cli-result/v1","checkpoint":<MMR_SIZE>,...}
+
+# Submit that checkpoint to the witness and verify the returned receipt.
+./capsule cll checkpoint publish --profile evaluations --checkpoint <MMR_SIZE>
+```
+
+The checkpoint identifier is the **MMR size** printed by `create`, not an entry
+count. `publish` submits the exact signed checkpoint, then cll-go verifies the
+returned receipt against the pinned witness key and persists it. Delivery is not
+"witnessed" merely because the HTTP call returned 200: a receipt that fails
+verification, or a non-receipt response, leaves a durable retry row instead of a
+success, and service bodies, URLs, and credentials are suppressed from errors.
+Exit 4 (`pending`) means delivery is still in flight; re-run the same command to
+continue. Byte-identical resubmission is idempotent on the service, and rotating
+the endpoint or key cannot redirect an existing delivery.
+
+Confirm the checkpoint is on the service with no further network call:
+
+```bash
+./capsule cll checkpoint status --profile evaluations --checkpoint <MMR_SIZE>
+# => {"spec_version":"capsule-cli-result/v1","state":"verified","attempts":...,"receipt":{...}}
+```
+
+`status` re-verifies the persisted receipt (witness signature, pinned witness
+key, log ID, and MMR size) from the CLL witness row, so `"state":"verified"` is
+evidence the witness stamped this exact checkpoint rather than a cached success
+flag; it reads `pending` before a verified receipt and `failed` after a permanent
+rejection. A read-only profile that carries the endpoint and pinned witness key
+(but no checkpoint signing key) can run `status`; only a profile with checkpoint
+signing can `create` and `publish`. The receipt proves external registration of
+the checkpoint statement; it does not by itself establish trusted time or stream
+continuity.
+
 ## Output and known limitations
 
 Successful stdout is one JSON object:
