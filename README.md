@@ -320,7 +320,13 @@ chmod 600 /protected/checkpoint-seed.hex
 ```
 
 The checkpoint identifier is the **MMR size** printed by `create`, not an entry
-count. `publish` submits the exact signed checkpoint, then cll-go verifies the
+count. Configure the witness on the profile *before* the checkpoint is first cut:
+`create` only enrolls a witness row for the checkpoint it actually cuts, so if the
+log tip was already checkpointed (for example by an earlier `create` without a
+witness), `create` returns that existing checkpoint without a row for this
+service and `publish --checkpoint <that size>` then reports not-found (exit 1).
+In that case append a new entry and `create` again so a fresh checkpoint carries
+the witness row. `publish` submits the exact signed checkpoint, then cll-go verifies the
 returned receipt against the pinned witness key and persists it. Delivery is not
 "witnessed" merely because the HTTP call returned 200: a receipt that fails
 verification, or a non-receipt response, leaves a durable retry row instead of a
