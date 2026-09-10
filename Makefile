@@ -1,10 +1,10 @@
 .PHONY: build install test
 
 build:
-	go build -o capsule ./cmd/capsule
+	go build -o capsulectl ./cmd/capsulectl
 
 install:
-	go install ./cmd/capsule
+	go install ./cmd/capsulectl
 
 test:
 	bash scripts/test.sh

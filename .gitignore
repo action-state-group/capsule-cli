@@ -3,5 +3,6 @@
 .env.*
 *.test
 coverage.out
+/capsulectl
 /capsule
 .DS_Store

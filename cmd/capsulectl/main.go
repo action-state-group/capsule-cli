@@ -13,7 +13,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if err := cli.NewCommand().ExecuteContext(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "capsule: "+cli.SafeError(err))
+		fmt.Fprintln(os.Stderr, "capsulectl: "+cli.SafeError(err))
 		os.Exit(cli.ExitCode(err))
 	}
 }

@@ -1,6 +1,6 @@
 # capsule-cli
 
-Standalone Go executable `capsule`, wrapping `capsule-emit-go`, its optional
+Standalone Go executable `capsulectl`, wrapping `capsule-emit-go`, its optional
 artifact SDK, and `cll-go`. Applications import those libraries, not this CLI.
 No Alchemy/evaluation semantics, database migration tools, selective disclosure,
 or implicit login/default profile are included.
@@ -9,30 +9,39 @@ or implicit login/default profile are included.
 
 ```bash
 make build
-./capsule --help
+./capsulectl --help
 ```
 
 The artifact SDK and CLL dependencies are pinned to published commits.
-`GOWORK=off go build ./cmd/capsule` needs no sibling checkout, local
+`GOWORK=off go build ./cmd/capsulectl` needs no sibling checkout, local
 replacement, or Python runtime. Do not commit machine-specific `go.work` files.
+
+This CLI was previously installed as `capsule`, which collided on `PATH` with
+the Python `capsule-emit` CLI. If you installed the old binary, remove it so the
+stale name does not shadow the new one:
+
+```bash
+BIN="$(go env GOBIN)"; GOPATH="$(go env GOPATH)"; rm -f "${BIN:-${GOPATH%%:*}/bin}/capsule"
+make install   # installs capsulectl
+```
 
 ## Commands
 
 ```text
-capsule profile create --name NAME [configuration flags | --interactive]
-capsule profile show --profile NAME
-capsule profile update --profile NAME [configuration flags]
-capsule store init --profile NAME
-capsule seal --profile NAME --request INPUT.json --output ARTIFACT.json
-capsule get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
-capsule verify --profile NAME --capsule ARTIFACT.json
-capsule publish --profile NAME --request INPUT.json
-capsule cll list --profile NAME --after SEQ [--through SEQ] [--limit 100]
-capsule cll append --profile NAME --capsule ARTIFACT.json
-capsule cll verify --profile NAME --proof PROOF.json
-capsule cll checkpoint create --profile NAME
-capsule cll checkpoint publish --profile NAME --checkpoint MMR_SIZE
-capsule cll checkpoint status --profile NAME --checkpoint MMR_SIZE
+capsulectl profile create --name NAME [configuration flags | --interactive]
+capsulectl profile show --profile NAME
+capsulectl profile update --profile NAME [configuration flags]
+capsulectl store init --profile NAME
+capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
+capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
+capsulectl verify --profile NAME --capsule ARTIFACT.json
+capsulectl publish --profile NAME --request INPUT.json
+capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100]
+capsulectl cll append --profile NAME --capsule ARTIFACT.json
+capsulectl cll verify --profile NAME --proof PROOF.json
+capsulectl cll checkpoint create --profile NAME
+capsulectl cll checkpoint publish --profile NAME --checkpoint MMR_SIZE
+capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 ```
 
 Only `profile create`, help and version omit `--profile`. Connection settings
@@ -57,7 +66,7 @@ the same artifact tables. Database permissions, not namespace names, control acc
 For profile `alchemy`, the default file is
 `~/.config/capsule/profiles/alchemy.yaml`, or
 `$XDG_CONFIG_HOME/capsule/profiles/alchemy.yaml` when `XDG_CONFIG_HOME` is set.
-Use `capsule profile show --profile alchemy` to inspect it with secrets redacted.
+Use `capsulectl profile show --profile alchemy` to inspect it with secrets redacted.
 
 Profiles live in `$XDG_CONFIG_HOME/capsule/profiles/NAME.yaml`, falling back to
 `$HOME/.config/capsule/profiles/NAME.yaml`. Files must be owner-only regular files
@@ -67,13 +76,13 @@ environment references instead of literal secret flags, which may leak through
 shell history and process listings.
 
 ```bash
-capsule profile create --name evaluations \
+capsulectl profile create --name evaluations \
   --type mysql --namespace evaluations --log-id evaluation-results \
   --mysql-host db.example --mysql-database capsules --mysql-user publisher \
   --mysql-password-file /protected/mysql-password \
   --signing-key-file /protected/producer-seed.hex \
   --trusted-key <independently-provisioned-producer-public-key-hex>
-capsule store init --profile evaluations
+capsulectl store init --profile evaluations
 ```
 
 Signing files contain a 32-byte Ed25519 **seed** encoded as 64 hex characters.
@@ -192,8 +201,8 @@ a round-trip format for signed bytes. `seal --output` remains an exact-byte
 SDK export. No stored bytes, digests, or Capsule IDs change.
 
 ```bash
-capsule get --profile alchemy --capsule-id <capsule-id> | jq '.capsule'
-capsule get --profile alchemy --capsule-id <capsule-id> |
+capsulectl get --profile alchemy --capsule-id <capsule-id> | jq '.capsule'
+capsulectl get --profile alchemy --capsule-id <capsule-id> |
   jq '.artifacts[] | select(.name == "payload") | .content'
 ```
 
@@ -206,7 +215,7 @@ namespace must match the writer's namespace. This does not trigger an investigat
 ```bash
 chmod 600 /protected/alchemy-db-password
 
-./capsule profile create \
+./capsulectl profile create \
   --name alchemy \
   --type mysql \
   --namespace alchemy \
@@ -218,14 +227,14 @@ chmod 600 /protected/alchemy-db-password
   --trusted-key <producer-public-key-hex> \
   --read-only
 
-./capsule profile show --profile alchemy
+./capsulectl profile show --profile alchemy
 
-./capsule get \
+./capsulectl get \
   --profile alchemy \
   --capsule-id <capsule-id> \
   --raw --output investigation-artifact.json
 
-./capsule verify \
+./capsulectl verify \
   --profile alchemy \
   --capsule investigation-artifact.json
 
@@ -303,7 +312,7 @@ connection establishes nothing).
 chmod 600 /protected/checkpoint-seed.hex
 
 # One-time: add checkpoint signing and the witness target to an existing profile.
-./capsule profile update \
+./capsulectl profile update \
   --profile evaluations \
   --checkpoint-signing-key-file /protected/checkpoint-seed.hex \
   --checkpoint-trusted-key <your-checkpoint-public-key-hex> \
@@ -312,11 +321,11 @@ chmod 600 /protected/checkpoint-seed.hex
   # add --checkpoint-token-env WITNESS_TOKEN only if the service requires a bearer token
 
 # Cut a checkpoint at the current MMR tip; record the returned MMR size.
-./capsule cll checkpoint create --profile evaluations
+./capsulectl cll checkpoint create --profile evaluations
 # => {"spec_version":"capsule-cli-result/v1","checkpoint":<MMR_SIZE>,...}
 
 # Submit that checkpoint to the witness and verify the returned receipt.
-./capsule cll checkpoint publish --profile evaluations --checkpoint <MMR_SIZE>
+./capsulectl cll checkpoint publish --profile evaluations --checkpoint <MMR_SIZE>
 ```
 
 The checkpoint identifier is the **MMR size** printed by `create`, not an entry
@@ -338,7 +347,7 @@ the endpoint or key cannot redirect an existing delivery.
 Confirm the checkpoint is on the service with no further network call:
 
 ```bash
-./capsule cll checkpoint status --profile evaluations --checkpoint <MMR_SIZE>
+./capsulectl cll checkpoint status --profile evaluations --checkpoint <MMR_SIZE>
 # => {"spec_version":"capsule-cli-result/v1","state":"verified","attempts":...,"receipt":{...}}
 ```
 
@@ -418,8 +427,8 @@ configured facilities. `seal` and offline verification do not open storage.
 
 ```bash
 # Add your MySQL host/database/credential flags to each create command.
-capsule profile create --name artifacts --namespace alchemy --log-id '' ...
-capsule profile create --name ledger --namespace '' --log-id investigations ...
+capsulectl profile create --name artifacts --namespace alchemy --log-id '' ...
+capsulectl profile create --name ledger --namespace '' --log-id investigations ...
 ```
 
 The namespace defaults to `capsule` for backward compatibility; explicitly
