@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -48,18 +49,39 @@ func decodeJSON(raw []byte, v any) (err error) {
 	}
 	return nil
 }
+
+// inputFileError reports a user-provided input file (the value of --request,
+// --proof, or --capsule) that could not be read. The path came from a flag the
+// caller typed, so naming it in full discloses nothing sensitive — unlike the
+// profile, driver, or config detail SafeError suppresses. It still carries
+// ErrInput (exit code 2); only the SafeError message differs.
+type inputFileError struct {
+	path     string
+	notFound bool
+}
+
+func (e *inputFileError) Error() string {
+	if e.notFound {
+		return "input file not found: " + e.path
+	}
+	return "cannot read input file: " + e.path
+}
+
 func readInput(path string) ([]byte, error) {
 	if path == "" {
 		return nil, inputError("input file is required")
 	}
 	f, e := os.Open(path)
 	if e != nil {
-		return nil, inputError("cannot open input file")
+		return nil, errors.Join(ErrInput, &inputFileError{path: path, notFound: errors.Is(e, fs.ErrNotExist)})
 	}
 	b, e := io.ReadAll(io.LimitReader(f, maxInput+1))
 	e = errors.Join(e, f.Close())
 	if e != nil {
-		return nil, e
+		// A read/close failure on the caller-supplied file (e.g. it is a
+		// directory) is the same input-file class as an open failure: exit 2
+		// and name the path, not the generic operational catch-all.
+		return nil, errors.Join(ErrInput, &inputFileError{path: path})
 	}
 	if len(b) > maxInput {
 		return nil, inputError("input exceeds size limit")

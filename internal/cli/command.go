@@ -54,7 +54,13 @@ func output(c *cobra.Command, value any) error {
 // SafeError intentionally never returns a driver/config/request error string:
 // those may contain DSNs, SQL values, invalid secret flags, or service bodies.
 func SafeError(err error) string {
+	var fileErr *inputFileError
 	switch {
+	case errors.As(err, &fileErr):
+		// The path is caller-supplied via a flag, so surfacing it discloses
+		// nothing sensitive and distinguishes a missing input file from a
+		// profile/configuration problem.
+		return fileErr.Error()
 	case errors.Is(err, artifact.ErrUntrustedSigner):
 		return "producer is not authorized by the profile trusted_keys"
 	case errors.Is(err, ErrInput):

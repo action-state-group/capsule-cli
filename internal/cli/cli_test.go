@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -270,6 +271,37 @@ func TestVerifyMissingOriginalsIsPartial(t *testing.T) {
 	out, e := invoke(t, "", "verify", "--profile", p.Name, "--capsule", path)
 	require.ErrorIs(t, e, ErrPartial)
 	assert.Contains(t, out, "missing_originals")
+}
+
+func TestInputFileErrorNamesPathButProfileErrorStaysGeneric(t *testing.T) {
+	// A missing --request/--proof/--capsule file names the caller-supplied path
+	// (which discloses nothing sensitive) instead of the profile-conflated
+	// message, but keeps ErrInput / exit code 2.
+	missing := filepath.Join(t.TempDir(), "nope.json")
+	_, e := readInput(missing)
+	require.ErrorIs(t, e, ErrInput)
+	assert.Equal(t, 2, ExitCode(e))
+	assert.Equal(t, "input file not found: "+missing, SafeError(e))
+
+	// A non-not-found open failure still names the path but marks it unreadable.
+	regular := filepath.Join(t.TempDir(), "afile")
+	require.NoError(t, os.WriteFile(regular, []byte("x"), 0600))
+	notDir := filepath.Join(regular, "child.json") // parent is a file: ENOTDIR, not ErrNotExist
+	_, e = readInput(notDir)
+	require.ErrorIs(t, e, ErrInput)
+	assert.Equal(t, "cannot read input file: "+notDir, SafeError(e))
+
+	// A directory opens but fails to read (EISDIR); it stays exit 2 + named path,
+	// not the generic exit-1 operational catch-all.
+	dir := t.TempDir()
+	_, e = readInput(dir)
+	require.ErrorIs(t, e, ErrInput)
+	assert.Equal(t, 2, ExitCode(e))
+	assert.Equal(t, "cannot read input file: "+dir, SafeError(e))
+
+	// A profile/configuration failure stays generic and leaks no detail.
+	profErr := errors.Join(ErrInput, errors.New("dial tcp 10.0.0.1:3306: connection refused"))
+	assert.Equal(t, "invalid input or profile configuration", SafeError(profErr))
 }
 
 func TestInputExitCodesAreDistinctAndRedacted(t *testing.T) {
