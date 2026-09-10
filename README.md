@@ -28,6 +28,8 @@ make install   # installs capsulectl
 ## Commands
 
 ```text
+capsulectl key generate --output SEED_FILE   # -o SEED_FILE
+capsulectl key show-public SEED_FILE
 capsulectl profile create --name NAME [configuration flags | --interactive]
 capsulectl profile show --profile NAME
 capsulectl profile update --profile NAME [configuration flags]

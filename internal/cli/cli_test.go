@@ -273,6 +273,83 @@ func TestVerifyMissingOriginalsIsPartial(t *testing.T) {
 	assert.Contains(t, out, "missing_originals")
 }
 
+func TestKeyGenerateWritesSeedAndPrintsMatchingPublicKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "signer.ed25519")
+	out, e := invoke(t, "", "key", "generate", "--output", path)
+	require.NoError(t, e)
+	var result struct {
+		SpecVersion    string `json:"spec_version"`
+		PublicKey      string `json:"public_key"`
+		SigningKeyFile string `json:"signing_key_file"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &result))
+	assert.Equal(t, "capsule-cli-result/v1", result.SpecVersion)
+	assert.Equal(t, path, result.SigningKeyFile)
+
+	// The file holds the seed in the exact format --signing-key-file reads.
+	info, e := os.Stat(path)
+	require.NoError(t, e)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	seedHex, e := os.ReadFile(path)
+	require.NoError(t, e)
+	priv, e := privateKey(Secret{Value: string(seedHex)})
+	require.NoError(t, e)
+
+	// The printed public key is the seed's real Ed25519 public key.
+	public, ok := priv.Public().(ed25519.PublicKey)
+	require.True(t, ok)
+	assert.Equal(t, result.PublicKey, hex.EncodeToString(public))
+	assert.NotContains(t, out, string(seedHex)) // the secret seed is never printed
+
+	// It round-trips as a usable producer key in a profile.
+	_, e = parseKeys([]string{result.PublicKey})
+	require.NoError(t, e)
+}
+
+func TestKeyGenerateRequiresOutput(t *testing.T) {
+	_, e := invoke(t, "", "key", "generate")
+	require.ErrorIs(t, e, ErrInput)
+	assert.Equal(t, 2, ExitCode(e))
+}
+
+func TestKeyGenerateRefusesToClobber(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "k.ed25519")
+	_, e := invoke(t, "", "key", "generate", "--output", path)
+	require.NoError(t, e)
+	before, e := os.ReadFile(path)
+	require.NoError(t, e)
+	// A second generate to the same path must not destroy the existing key.
+	_, e = invoke(t, "", "key", "generate", "--output", path)
+	require.ErrorIs(t, e, ErrInput)
+	assert.Equal(t, 2, ExitCode(e))
+	after, e := os.ReadFile(path)
+	require.NoError(t, e)
+	assert.Equal(t, before, after)
+}
+
+func TestKeyShowPublicDerivesFromSeedFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.ed25519")
+	gen, e := invoke(t, "", "key", "generate", "-o", path) // also exercises the -o shorthand
+	require.NoError(t, e)
+	var g struct {
+		PublicKey string `json:"public_key"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(gen), &g))
+
+	shown, e := invoke(t, "", "key", "show-public", path)
+	require.NoError(t, e)
+	var s struct {
+		PublicKey string `json:"public_key"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(shown), &s))
+	assert.Equal(t, g.PublicKey, s.PublicKey) // seed file alone yields the same public key
+
+	// a missing seed file names the path (input-file error, exit 2)
+	_, e = invoke(t, "", "key", "show-public", filepath.Join(t.TempDir(), "nope.ed25519"))
+	require.ErrorIs(t, e, ErrInput)
+	assert.Equal(t, 2, ExitCode(e))
+}
+
 func TestInputFileErrorNamesPathButProfileErrorStaysGeneric(t *testing.T) {
 	// A missing --request/--proof/--capsule file names the caller-supplied path
 	// (which discloses nothing sensitive) instead of the profile-conflated

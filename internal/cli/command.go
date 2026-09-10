@@ -2,15 +2,65 @@ package cli
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	"github.com/action-state-group/cll-go/cll"
 	"github.com/spf13/cobra"
 )
+
+// keyCommands generates Ed25519 signing keys and derives their public key so a
+// caller needs no external crypto tooling. The seed (secret) is written to a
+// file in the exact hex format `--signing-key-file` reads; only the public key
+// is printed. SEED_FILE is a positional argument.
+func keyCommands() *cobra.Command {
+	key := &cobra.Command{Use: "key"}
+	generate := &cobra.Command{Use: "generate", Short: "Generate an Ed25519 signing key: write the seed file, print the public key", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		path, _ := c.Flags().GetString("output")
+		if path == "" {
+			return inputError("--output is required")
+		}
+		public, private, e := ed25519.GenerateKey(rand.Reader)
+		if e != nil {
+			return e
+		}
+		// O_EXCL: never clobber an existing signing key, and guarantee the seed
+		// is created owner-only (0600 applies only on create).
+		f, e := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if e != nil {
+			return inputError("cannot create signing key file (it must not already exist)")
+		}
+		_, we := f.WriteString(hex.EncodeToString(private.Seed()))
+		if e := errors.Join(we, f.Close()); e != nil {
+			return inputError("cannot write signing key file")
+		}
+		return output(c, map[string]string{"public_key": hex.EncodeToString(public), "signing_key_file": path})
+	}}
+	generate.Flags().StringP("output", "o", "", "path to write the 32-byte seed (hex, mode 0600)")
+	showPublic := &cobra.Command{Use: "show-public SEED_FILE", Short: "Print the public key for an existing Ed25519 seed file", Args: oneArg, RunE: func(c *cobra.Command, args []string) error {
+		raw, e := readInput(args[0])
+		if e != nil {
+			return e
+		}
+		private, e := privateKey(Secret{Value: strings.TrimSpace(string(raw))})
+		if e != nil {
+			return e
+		}
+		pub, ok := private.Public().(ed25519.PublicKey)
+		if !ok {
+			return inputError("not an Ed25519 key")
+		}
+		return output(c, map[string]string{"public_key": hex.EncodeToString(pub)})
+	}}
+	key.AddCommand(generate, showPublic)
+	return key
+}
 
 func selected(c *cobra.Command) (Profile, error) {
 	name, _ := c.Flags().GetString("profile")
@@ -27,6 +77,12 @@ func inputError(reason string) error { return errors.Join(ErrInput, errors.New(r
 
 func noArgs(_ *cobra.Command, args []string) error {
 	if len(args) != 0 {
+		return ErrInput
+	}
+	return nil
+}
+func oneArg(_ *cobra.Command, args []string) error {
+	if len(args) != 1 {
 		return ErrInput
 	}
 	return nil
@@ -100,6 +156,7 @@ func NewCommand() *cobra.Command {
 	root.PersistentFlags().String("profile", "", "Required named target for every operation")
 	root.SetFlagErrorFunc(func(_ *cobra.Command, _ error) error { return ErrInput })
 	root.AddCommand(profileCommands())
+	root.AddCommand(keyCommands())
 	store := &cobra.Command{Use: "store"}
 	init := &cobra.Command{Use: "init", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
