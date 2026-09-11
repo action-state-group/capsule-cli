@@ -153,7 +153,7 @@ func ExitCode(err error) int {
 // NewCommand returns a fresh tree: no shared flag/config state across invocations.
 func NewCommand() *cobra.Command {
 	root := &cobra.Command{Use: "capsulectl", Short: "Seal, store and publish AAC Capsules using named profiles", Version: "0.1.0-dev", SilenceUsage: true, SilenceErrors: true}
-	root.PersistentFlags().String("profile", "", "Required named target for every operation")
+	root.PersistentFlags().String("profile", "", "Named target for commands that operate on a profile")
 	root.SetFlagErrorFunc(func(_ *cobra.Command, _ error) error { return ErrInput })
 	root.AddCommand(profileCommands())
 	root.AddCommand(keyCommands())

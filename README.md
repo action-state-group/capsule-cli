@@ -31,7 +31,8 @@ make install   # installs capsulectl
 capsulectl key generate --output SEED_FILE   # -o SEED_FILE
 capsulectl key show-public SEED_FILE
 capsulectl profile create --name NAME [configuration flags | --interactive]
-capsulectl profile show --profile NAME
+capsulectl profile list
+capsulectl profile show NAME
 capsulectl profile update --profile NAME [configuration flags]
 capsulectl store init --profile NAME
 capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
@@ -46,9 +47,11 @@ capsulectl cll checkpoint publish --profile NAME --checkpoint MMR_SIZE
 capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 ```
 
-Only `profile create`, help and version omit `--profile`. Connection settings
-and credentials are accepted only by profile create/update. Each invocation
-gets a fresh Cobra/Viper instance. No automatic environment override is enabled.
+`profile show` takes the profile name as its positional argument. Commands
+outside profile management that access a configured target require `--profile`.
+Connection settings and credentials are accepted only by profile create/update.
+Each invocation gets a fresh Cobra/Viper instance. No automatic environment
+override is enabled.
 
 ## Profile setup
 
@@ -56,7 +59,7 @@ These identifiers select different layers:
 
 | Setting | Meaning |
 | --- | --- |
-| `--name` | Local profile name selected by subsequent `--profile` flags. |
+| `--name` | Local profile name. Commands that operate on a configured target select it with `--profile`; `profile show` takes it positionally. |
 | `--mysql-database` | MySQL database containing the storage tables. |
 | `--namespace` | Artifact SDK logical grouping within `capsule_store_capsules` and `capsule_store_artifacts`. Records are addressed by namespace and Capsule ID. Not a MySQL database/schema or an authorization boundary. |
 | `--log-id` | CLL log within shared `cll_*` tables, not a table name. |
@@ -68,7 +71,10 @@ the same artifact tables. Database permissions, not namespace names, control acc
 For profile `alchemy`, the default file is
 `~/.config/capsule/profiles/alchemy.yaml`, or
 `$XDG_CONFIG_HOME/capsule/profiles/alchemy.yaml` when `XDG_CONFIG_HOME` is set.
-Use `capsulectl profile show --profile alchemy` to inspect it with secrets redacted.
+Use `capsulectl profile show alchemy` to inspect it with secrets redacted.
+Use `capsulectl profile list` to list configured profile names without reading
+or displaying their contents. Listing discovers filenames only; `profile show`
+validates the selected file and its owner-only permissions.
 
 Profiles live in `$XDG_CONFIG_HOME/capsule/profiles/NAME.yaml`, falling back to
 `$HOME/.config/capsule/profiles/NAME.yaml`. Files must be owner-only regular files
@@ -229,7 +235,7 @@ chmod 600 /protected/alchemy-db-password
   --trusted-key <producer-public-key-hex> \
   --read-only
 
-./capsulectl profile show --profile alchemy
+./capsulectl profile show alchemy
 
 ./capsulectl get \
   --profile alchemy \

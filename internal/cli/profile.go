@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -170,8 +171,16 @@ func readProtected(path string) ([]byte, error) {
 }
 func profilePath(name string) (string, error) {
 	if !profileName.MatchString(name) {
-		return "", inputError("explicit valid --profile is required")
+		return "", inputError("valid profile name is required")
 	}
+	dir, e := profilesDir()
+	if e != nil {
+		return "", e
+	}
+	return filepath.Join(dir, name+".yaml"), nil
+}
+
+func profilesDir() (string, error) {
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if base == "" {
 		home, e := os.UserHomeDir()
@@ -183,7 +192,7 @@ func profilePath(name string) (string, error) {
 	if !filepath.IsAbs(base) {
 		return "", inputError("XDG_CONFIG_HOME must be absolute")
 	}
-	return filepath.Join(base, "capsule", "profiles", name+".yaml"), nil
+	return filepath.Join(base, "capsule", "profiles"), nil
 }
 func loadProfile(name string) (Profile, error) {
 	path, e := profilePath(name)
@@ -268,10 +277,35 @@ func saveProfile(p Profile, replace bool) error {
 }
 func profileCommands() *cobra.Command {
 	group := &cobra.Command{Use: "profile", Short: "Create, inspect or explicitly update a named target"}
-	show := &cobra.Command{Use: "show", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
-		p, e := selected(c)
+	list := &cobra.Command{Use: "list", Short: "List configured profile names", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		dir, e := profilesDir()
 		if e != nil {
 			return e
+		}
+		entries, e := os.ReadDir(dir)
+		if errors.Is(e, os.ErrNotExist) {
+			return output(c, map[string]any{"profiles": []string{}})
+		}
+		if e != nil {
+			return e
+		}
+		profiles := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			if !entry.Type().IsRegular() || filepath.Ext(entry.Name()) != ".yaml" {
+				continue
+			}
+			name := strings.TrimSuffix(entry.Name(), ".yaml")
+			if profileName.MatchString(name) {
+				profiles = append(profiles, name)
+			}
+		}
+		slices.Sort(profiles)
+		return output(c, map[string]any{"profiles": profiles})
+	}}
+	show := &cobra.Command{Use: "show NAME", Args: oneArg, RunE: func(c *cobra.Command, args []string) error {
+		p, e := loadProfile(args[0])
+		if e != nil {
+			return errors.Join(ErrInput, e)
 		}
 		p.Credentials.Password = p.Credentials.Password.redact()
 		p.Signing = p.Signing.redact()
@@ -279,7 +313,7 @@ func profileCommands() *cobra.Command {
 		p.Checkpoint.Token = p.Checkpoint.Token.redact()
 		return output(c, p)
 	}}
-	group.AddCommand(show)
+	group.AddCommand(list, show)
 	for _, update := range []bool{false, true} {
 		verb := "create"
 		if update {
