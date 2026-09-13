@@ -140,10 +140,14 @@ Other configuration flags include `--trusted-key`, `--checkpoint-trusted-key`,
 To change secret source on update, explicitly clear the previous source flag;
 conflicting sources are rejected instead of silently taking precedence.
 
-MySQL and SQLite are peer backends; each profile selects one. Several profiles
-may share a physical database or reference the same log. The CLI does not bind a
-log to a single artifact namespace; callers must consistently select the
-intended namespace when writing and reading a log's artifacts.
+MySQL, SQLite, and JSONL are peer backends; each profile selects one with
+`--type`. MySQL and SQLite keep the artifact and CLL data in one database (a
+single shared file for SQLite, via `--sqlite-path`). A JSONL profile sets
+`connection.database` (via `--jsonl-path`) to a directory holding `artifacts.jsonl`
+and `cll.jsonl`; it needs no host, port, or TLS and assumes a single writer.
+Several profiles may share a physical database or reference the same log. The CLI
+does not bind a log to a single artifact namespace; callers must consistently
+select the intended namespace when writing and reading a log's artifacts.
 Log IDs are restricted to lowercase ASCII letters/digits and `._:/-`, starting
 with a letter/digit (maximum 191 bytes): this avoids collation aliases in the
 current CLL MySQL schema. Namespace and profile names use letters/digits, `_`,

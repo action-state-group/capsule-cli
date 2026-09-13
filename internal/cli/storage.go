@@ -9,18 +9,33 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/action-state-group/capsule-emit-go/artifact"
+	artifactjsonl "github.com/action-state-group/capsule-emit-go/artifact/jsonl"
 	artifactmysql "github.com/action-state-group/capsule-emit-go/artifact/mysql"
 	artifactsqlite "github.com/action-state-group/capsule-emit-go/artifact/sqlite"
 	"github.com/action-state-group/cll-go/cll"
+	clljsonl "github.com/action-state-group/cll-go/store/jsonl"
 	cllmysql "github.com/action-state-group/cll-go/store/mysql"
 	cllsqlite "github.com/action-state-group/cll-go/store/sqlite"
 	driver "github.com/go-sql-driver/mysql"
 )
+
+// jsonlFile names the fixed artifact and CLL files inside a jsonl profile's
+// connection.database directory.
+const (
+	jsonlArtifactFile = "artifacts.jsonl"
+	jsonlLogFile      = "cll.jsonl"
+)
+
+// jsonlDir returns the absolute storage directory for a jsonl profile.
+func jsonlDir(p Profile) (string, error) {
+	return filepath.Abs(p.Connection.Database)
+}
 
 var ErrConflict = errors.New("stored state conflicts with the selected target or identity")
 var ErrPending = errors.New("operation durably saved; delivery pending, retry the same frozen request and target")
@@ -36,6 +51,9 @@ func openLog(ctx context.Context, p Profile, coordinate, logID string) (cll.Back
 		return cllmysql.Open(ctx, coordinate, logID)
 	case "sqlite":
 		return cllsqlite.Open(coordinate, logID)
+	case "jsonl":
+		// The file is the log; coordinate is the profile's storage directory.
+		return clljsonl.Open(filepath.Join(coordinate, jsonlLogFile))
 	default:
 		return nil, inputError("unsupported profile type")
 	}
@@ -47,6 +65,8 @@ func initLog(ctx context.Context, p Profile, coordinate, logID string) error {
 		return cllmysql.Init(ctx, coordinate, logID)
 	case "sqlite":
 		return cllsqlite.Init(coordinate, logID)
+	case "jsonl":
+		return clljsonl.Init(filepath.Join(coordinate, jsonlLogFile))
 	default:
 		return inputError("unsupported profile type")
 	}
@@ -58,6 +78,12 @@ func newArtifactStore(p Profile, db *sql.DB, keys []ed25519.PublicKey) (artifact
 		return artifactmysql.New(db, p.Namespace, keys)
 	case "sqlite":
 		return artifactsqlite.New(db, p.Namespace, keys)
+	case "jsonl":
+		dir, e := jsonlDir(p)
+		if e != nil {
+			return nil, e
+		}
+		return artifactjsonl.New(filepath.Join(dir, jsonlArtifactFile), p.Namespace, keys)
 	default:
 		return nil, inputError("unsupported profile type")
 	}
@@ -96,7 +122,11 @@ func (t *target) close() error {
 	if t.log != nil {
 		e = t.log.Close()
 	}
-	return errors.Join(e, t.db.Close())
+	// The jsonl backend uses no *sql.DB, so t.db is nil for that profile type.
+	if t.db != nil {
+		e = errors.Join(e, t.db.Close())
+	}
+	return e
 }
 
 // connection opens the backend named by the profile type. MySQL and SQLite are
@@ -107,9 +137,24 @@ func connection(p Profile) (*sql.DB, string, error) {
 		return mysqlConnection(p)
 	case "sqlite":
 		return sqliteConnection(p)
+	case "jsonl":
+		return jsonlConnection(p)
 	default:
 		return nil, "", inputError("unsupported profile type")
 	}
+}
+
+// jsonlConnection uses no database handle. It resolves the storage directory
+// and returns it as the coordinate without side effects; the directory is
+// provisioned only by store init (see openTarget), so a mistyped path fails
+// loudly instead of silently creating an empty tree. The artifact store and CLL
+// log open their own files (artifacts.jsonl, cll.jsonl) inside it.
+func jsonlConnection(p Profile) (*sql.DB, string, error) {
+	dir, e := jsonlDir(p)
+	if e != nil {
+		return nil, "", e
+	}
+	return nil, dir, nil
 }
 
 func mysqlConnection(p Profile) (*sql.DB, string, error) {
@@ -189,6 +234,19 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 			err = errors.Join(err, t.close())
 		}
 	}()
+	// The jsonl backend has no auto-creating handle: store init provisions the
+	// directory; any other use requires it to already exist so a mistyped path
+	// or an uninitialized store fails clearly rather than fabricating a tree.
+	if p.Type == "jsonl" {
+		if use == useInitialization {
+			if err = os.MkdirAll(dsn, 0o755); err != nil {
+				return nil, err
+			}
+		} else if _, statErr := os.Stat(dsn); statErr != nil {
+			err = inputError("jsonl storage directory does not exist; run 'store init'")
+			return nil, err
+		}
+	}
 	// CLL-only commands do not need producer policy or an artifact store. The
 	// SDK constructor rightly requires trust, but that is not a CLL requirement.
 	if needsArtifacts {

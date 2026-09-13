@@ -101,8 +101,8 @@ type Profile struct {
 }
 
 func (p Profile) validate() error {
-	if !profileName.MatchString(p.Name) || (p.Type != "mysql" && p.Type != "sqlite") {
-		return inputError("profile needs a valid name and mysql or sqlite type")
+	if !profileName.MatchString(p.Name) || (p.Type != "mysql" && p.Type != "sqlite" && p.Type != "jsonl") {
+		return inputError("profile needs a valid name and mysql, sqlite, or jsonl type")
 	}
 	if (p.LogID != "" && !logName.MatchString(p.LogID)) || (p.Namespace != "" && !profileName.MatchString(p.Namespace)) {
 		return inputError("invalid log_id or namespace")
@@ -110,11 +110,12 @@ func (p Profile) validate() error {
 	if p.LogID == "" && p.Namespace == "" {
 		return inputError("configure an artifact namespace, a log_id, or both")
 	}
-	if p.Type == "sqlite" {
-		// SQLite stores the artifact and CLL tables in one local file; the path
-		// lives in connection.database and no host/port/TLS applies.
+	if p.Type == "sqlite" || p.Type == "jsonl" {
+		// SQLite and JSONL are local backends: connection.database is a filesystem
+		// path (a file for sqlite; a directory holding artifacts.jsonl and
+		// cll.jsonl for jsonl) and no host/port/TLS applies.
 		if p.Connection.Database == "" {
-			return inputError("sqlite profile needs a database file path in connection.database")
+			return inputError("sqlite/jsonl profile needs a filesystem path in connection.database")
 		}
 	} else {
 		if p.Connection.Host == "" || p.Connection.Database == "" || p.Connection.Port < 1 || p.Connection.Port > 65535 {
@@ -329,6 +330,7 @@ func profileCommands() *cobra.Command {
 		}
 		f.Int("mysql-port", 3306, "MySQL port")
 		f.String("sqlite-path", "", "SQLite database file path (sets connection.database for --type sqlite)")
+		f.String("jsonl-path", "", "JSONL storage directory (sets connection.database for --type jsonl)")
 		f.Bool("read-only", false, "Reject operations requiring writes")
 		f.StringSlice("trusted-key", nil, "Trusted producer public key hex (repeatable)")
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
@@ -385,6 +387,9 @@ func profileCommands() *cobra.Command {
 			if sp, _ := c.Flags().GetString("sqlite-path"); sp != "" {
 				p.Connection.Database = sp
 			}
+			if jp, _ := c.Flags().GetString("jsonl-path"); jp != "" {
+				p.Connection.Database = jp
+			}
 			interactive, _ := c.Flags().GetBool("interactive")
 			if interactive {
 				reader := bufio.NewReader(c.InOrStdin())
@@ -396,13 +401,16 @@ func profileCommands() *cobra.Command {
 					target *string
 				}
 				prompts := []prompt{{"Name", &p.Name}}
-				if p.Type == "sqlite" {
+				switch p.Type {
+				case "sqlite":
 					prompts = append(prompts, prompt{"SQLite database file path", &p.Connection.Database})
-				} else {
+				case "jsonl":
+					prompts = append(prompts, prompt{"JSONL storage directory", &p.Connection.Database})
+				default:
 					prompts = append(prompts, prompt{"MySQL host", &p.Connection.Host}, prompt{"Database", &p.Connection.Database})
 				}
 				prompts = append(prompts, prompt{"Log ID (optional for artifact-only)", &p.LogID})
-				if p.Type != "sqlite" {
+				if p.Type == "mysql" {
 					prompts = append(prompts, prompt{"MySQL user", &p.Credentials.Username})
 				}
 				for _, item := range prompts {
