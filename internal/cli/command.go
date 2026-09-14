@@ -157,6 +157,7 @@ func NewCommand() *cobra.Command {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, _ error) error { return ErrInput })
 	root.AddCommand(profileCommands())
 	root.AddCommand(keyCommands())
+	root.AddCommand(bundleCommands()...)
 	store := &cobra.Command{Use: "store"}
 	init := &cobra.Command{Use: "init", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)

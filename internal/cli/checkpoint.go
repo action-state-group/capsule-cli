@@ -17,13 +17,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Proof uses the library's exact checkpoint COSE bytes and MMR inclusion path.
-// Byte slices are JSON base64. Absence of inclusion is reported as partial.
+// Proof uses the library's exact checkpoint COSE bytes and structured MMR
+// inclusion proof. Its byte slices encode as JSON base64. Absence of an
+// inclusion proof is reported as partial.
 type Proof struct {
-	Checkpoint []byte   `json:"checkpoint"`
-	CapsuleID  string   `json:"capsule_id,omitempty"`
-	LeafIndex  uint64   `json:"leaf_index"`
-	Path       [][]byte `json:"path,omitempty"`
+	Checkpoint     []byte              `json:"checkpoint"`
+	CapsuleID      string              `json:"capsule_id,omitempty"`
+	InclusionProof *mmr.InclusionProof `json:"inclusion_proof,omitempty"`
 }
 
 func verifyCheckpoint(p Profile, raw []byte) (checkpoint.Record, error) {
@@ -168,11 +168,14 @@ func addCheckpointCommands(logs *cobra.Command) {
 		}
 		checks := map[string]string{"checkpoint_signature_and_trust": "passed", "log_id": "passed", "embedded_consistency": "passed", "inclusion": "not_performed", "witness_receipt": "not_performed", "producer_signature": "not_performed"}
 		if proof.CapsuleID != "" {
+			if proof.InclusionProof == nil {
+				return inputError("inclusion proof is required with capsule_id")
+			}
 			root, e := hex.DecodeString(r.Root)
 			if e != nil {
 				return e
 			}
-			if !mmr.VerifyHexInclusion(root, r.MMRSize, proof.LeafIndex, proof.CapsuleID, proof.Path) {
+			if !mmr.VerifyHexInclusion(root, r.MMRSize, proof.InclusionProof.LeafIndex, proof.CapsuleID, *proof.InclusionProof) {
 				return errors.New("invalid inclusion proof")
 			}
 			checks["inclusion"] = "passed"
@@ -185,7 +188,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 		}
 		return nil
 	}}
-	verify.Flags().String("proof", "", "Proof JSON with base64 checkpoint/path")
+	verify.Flags().String("proof", "", "Proof JSON with a base64 checkpoint and structured inclusion_proof")
 	logs.AddCommand(verify)
 	group := &cobra.Command{Use: "checkpoint"}
 	logs.AddCommand(group)
