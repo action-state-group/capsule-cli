@@ -303,7 +303,7 @@ func profileCommands() *cobra.Command {
 		slices.Sort(profiles)
 		return output(c, map[string]any{"profiles": profiles})
 	}}
-	show := &cobra.Command{Use: "show NAME", Args: oneArg, RunE: func(c *cobra.Command, args []string) error {
+	show := &cobra.Command{Use: "show NAME", Short: "Show a profile's identity, backend and key-file paths (secrets redacted)", Args: oneArg, RunE: func(c *cobra.Command, args []string) error {
 		p, e := loadProfile(args[0])
 		if e != nil {
 			return errors.Join(ErrInput, e)

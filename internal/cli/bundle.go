@@ -337,8 +337,13 @@ func verifyProducedBundle(value map[string]interface{}, disclosuresRequired bool
 }
 
 func bundleCommands() []*cobra.Command {
+	shortFor := map[string]string{
+		"bundle":    "Assemble a self-verifying Evidence Bundle from the root's citation closure",
+		"disclose":  "Assemble an Evidence Bundle with disclosed agent_input/agent_output originals",
+		"permalink": "Mint a viewer permalink over a disclosed Evidence Bundle",
+	}
 	makeCommand := func(use string, disclosure bool, permalink bool) *cobra.Command {
-		command := &cobra.Command{Use: use, Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+		command := &cobra.Command{Use: use, Short: shortFor[use], Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 			profile, err := selected(c)
 			if err != nil {
 				return err

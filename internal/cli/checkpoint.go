@@ -190,9 +190,9 @@ func addCheckpointCommands(logs *cobra.Command) {
 	}}
 	verify.Flags().String("proof", "", "Proof JSON with a base64 checkpoint and structured inclusion_proof")
 	logs.AddCommand(verify)
-	group := &cobra.Command{Use: "checkpoint"}
+	group := &cobra.Command{Use: "checkpoint", Short: "Create signed checkpoints over the log"}
 	logs.AddCommand(group)
-	create := &cobra.Command{Use: "create", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	create := &cobra.Command{Use: "create", Short: "Cut a signed checkpoint at the current log tip", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
 		if e != nil {
 			return e
