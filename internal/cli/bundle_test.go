@@ -80,6 +80,40 @@ func TestAssembleDiscloseAndPermalink(t *testing.T) {
 	require.IsType(t, map[string]interface{}{}, roundTripped)
 }
 
+func TestPayloadsAllRequiresEveryOriginalAtDepthZero(t *testing.T) {
+	profile, key := profileFixture(t)
+	store := mapArtifactStore{}
+	rec := bundleRecord(t, key, nil, nil)
+	// Keep the committed agent_output_digest but drop the retained original, so a
+	// payloads=all claim cannot be honored.
+	kept := make([]artifact.Artifact, 0, len(rec.Artifacts))
+	for _, a := range rec.Artifacts {
+		if a.Binding != artifact.AgentOutputDigest {
+			kept = append(kept, a)
+		}
+	}
+	rec.Artifacts = kept
+	store[rec.CapsuleID] = rec
+	log := memory.New()
+	t.Cleanup(func() { require.NoError(t, log.Close()) })
+	value, err := hex.DecodeString(rec.CapsuleID)
+	require.NoError(t, err)
+	_, err = log.Append(t.Context(), cll.AppendInput{Value: value, AppendedAt: time.Now().UTC()})
+	require.NoError(t, err)
+	signer, err := checkpoint.NewEd25519Signer(key)
+	require.NoError(t, err)
+	config := checkpoint.DefaultRunnerConfig(profile.LogID)
+	config.Cadence.CadenceEntries = 1
+	runner, err := checkpoint.NewRunner(config, log, signer)
+	require.NoError(t, err)
+	_, err = runner.RunOnce(t.Context(), time.Now().UTC())
+	require.NoError(t, err)
+
+	// ClosureDepth 0 is honored (root-only); payloads=all must refuse the missing original.
+	_, err = AssembleBundle(t.Context(), store, log, profile.LogID, BundleOptions{Root: rec.CapsuleID, ClosureDepth: 0, Payloads: "all", WithDisclosure: true})
+	require.ErrorContains(t, err, "not retained")
+}
+
 func bundleRecord(t *testing.T, key ed25519.PrivateKey, chain *emit.Chain, references []emit.Reference) artifact.Record {
 	t.Helper()
 	request, err := parseRequest(requestFixture(t))

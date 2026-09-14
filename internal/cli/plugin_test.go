@@ -70,16 +70,21 @@ func TestVerifyTrustedPathRejections(t *testing.T) {
 func TestPluginCannotShadowCoreOrBuiltins(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
-	// launchers named after a core command and a cobra builtin
+	// launchers named after a core command, both cobra builtins, and a multi-token
+	// name (whose cobra name would be the first token, "verify")
 	writeLauncher(t, root, "capsulectl-verify", strings.Replace(fakePlugin, `"name":"guard"`, `"name":"verify"`, 1), 0o755)
 	writeLauncher(t, root, "capsulectl-help", strings.Replace(fakePlugin, `"name":"guard"`, `"name":"help"`, 1), 0o755)
+	writeLauncher(t, root, "capsulectl-completion", strings.Replace(fakePlugin, `"name":"guard"`, `"name":"completion"`, 1), 0o755)
+	writeLauncher(t, root, "capsulectl-verify extra", strings.Replace(fakePlugin, `"name":"guard"`, `"name":"verify extra"`, 1), 0o755)
 
 	c := NewCommand()
 	byName := map[string]int{}
 	for _, cmd := range c.Commands() {
 		byName[cmd.Name()]++
 	}
-	assert.Equal(t, 1, byName["verify"], "the core verify is not shadowed or duplicated by a plugin")
+	assert.Equal(t, 1, byName["verify"], "the core verify is not shadowed or duplicated by a plugin (incl. the multi-token launcher)")
+	assert.LessOrEqual(t, byName["completion"], 1, "a completion plugin does not add a duplicate command")
+	assert.LessOrEqual(t, byName["help"], 1, "a help plugin does not add a duplicate command")
 	// the core verify command keeps its own Short, not the plugin wrapper's
 	for _, cmd := range c.Commands() {
 		if cmd.Name() == "verify" {

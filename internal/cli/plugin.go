@@ -117,7 +117,12 @@ type pluginInfo struct {
 func pluginMetadata(path, name string) (pluginInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, path, "cli-plugin-metadata").Output()
+	cmd := exec.CommandContext(ctx, path, "cli-plugin-metadata")
+	// WaitDelay bounds the wait even if a forked descendant keeps the stdout pipe
+	// open after the timeout kills the direct process, so a misbehaving launcher
+	// cannot hang discovery indefinitely.
+	cmd.WaitDelay = 3 * time.Second
+	out, err := cmd.Output()
 	if err != nil {
 		return pluginInfo{}, fmt.Errorf("%s: cli-plugin-metadata handshake failed: %w", name, err)
 	}

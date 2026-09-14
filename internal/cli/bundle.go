@@ -181,7 +181,10 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 					if options.Suppress[member] {
 						continue
 					}
-					if members == nil || members[member] == nil {
+					// Test presence, not nil value: a retained original that is JSON
+					// null is present (DE-3 validates the value), so `== nil` would
+					// wrongly reject it as not retained.
+					if _, ok := members[member]; members == nil || !ok {
 						return nil, inputError(fmt.Sprintf("payloads=all cannot be honored: the original for %s of %s is not retained", member, id))
 					}
 				}
@@ -304,12 +307,19 @@ func allEntries(ctx context.Context, log cll.EntrySource, size uint64) ([]cll.En
 		if batch[len(batch)-1].Seq <= after {
 			return nil, errors.New("log scan did not advance")
 		}
+		before := after
 		for _, entry := range batch {
 			if entry.Seq > size {
 				break
 			}
 			entries = append(entries, entry)
 			after = entry.Seq
+		}
+		if after == before {
+			// The batch contained only entries beyond the checkpointed size (a
+			// backend that ignored the limit); advancing is impossible, so stop
+			// rather than spin.
+			return nil, errors.New("log scan returned only entries beyond the checkpointed size")
 		}
 	}
 	return entries, nil
