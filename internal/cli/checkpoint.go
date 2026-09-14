@@ -169,7 +169,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 		checks := map[string]string{"checkpoint_signature_and_trust": "passed", "log_id": "passed", "embedded_consistency": "passed", "inclusion": "not_performed", "witness_receipt": "not_performed", "producer_signature": "not_performed"}
 		if proof.CapsuleID != "" {
 			if proof.InclusionProof == nil {
-				return inputError("inclusion proof is required with capsule_id")
+				return inputError("proof is missing inclusion_proof; a proof minted before the structured-proof format (leaf_index + path) is no longer accepted — re-mint it")
 			}
 			root, e := hex.DecodeString(r.Root)
 			if e != nil {

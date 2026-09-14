@@ -60,6 +60,32 @@ func TestVerifyTrustedPathRejections(t *testing.T) {
 	link := filepath.Join(root, "capsulectl-link")
 	require.NoError(t, os.Symlink(target, link))
 	assert.ErrorContains(t, verifyTrustedPath(link), "outside the trusted plugin roots")
+
+	// a non-regular file (e.g. a directory) on the trusted root is not a launcher
+	dir := filepath.Join(root, "capsulectl-dir")
+	require.NoError(t, os.Mkdir(dir, 0o755))
+	assert.ErrorContains(t, verifyTrustedPath(dir), "not a regular file")
+}
+
+func TestPluginCannotShadowCoreOrBuiltins(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	// launchers named after a core command and a cobra builtin
+	writeLauncher(t, root, "capsulectl-verify", strings.Replace(fakePlugin, `"name":"guard"`, `"name":"verify"`, 1), 0o755)
+	writeLauncher(t, root, "capsulectl-help", strings.Replace(fakePlugin, `"name":"guard"`, `"name":"help"`, 1), 0o755)
+
+	c := NewCommand()
+	byName := map[string]int{}
+	for _, cmd := range c.Commands() {
+		byName[cmd.Name()]++
+	}
+	assert.Equal(t, 1, byName["verify"], "the core verify is not shadowed or duplicated by a plugin")
+	// the core verify command keeps its own Short, not the plugin wrapper's
+	for _, cmd := range c.Commands() {
+		if cmd.Name() == "verify" {
+			assert.NotContains(t, cmd.Short, "plugin", "verify remains the core command")
+		}
+	}
 }
 
 func TestDiscoverAndHandshake(t *testing.T) {

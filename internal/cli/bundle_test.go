@@ -55,14 +55,14 @@ func TestAssembleDiscloseAndPermalink(t *testing.T) {
 	_, err = runner.RunOnce(t.Context(), time.Now().UTC())
 	require.NoError(t, err)
 
-	bundle, err := AssembleBundle(t.Context(), store, log, profile.LogID, BundleOptions{Root: root.CapsuleID, Payloads: "all"})
+	bundle, err := AssembleBundle(t.Context(), store, log, profile.LogID, BundleOptions{Root: root.CapsuleID, ClosureDepth: 2, Payloads: "all"})
 	require.NoError(t, err)
 	verified := aacbundle.VerifyBundle(bundle)
 	require.Equal(t, "pass", verified.GraphClosure.Status)
 	require.Equal(t, "pass", verified.IntervalCoverage.Status)
 	require.Equal(t, "pass", verified.PerRecordMembership.Status)
 
-	disclosed, err := AssembleBundle(t.Context(), store, log, profile.LogID, BundleOptions{Root: root.CapsuleID, Payloads: "all", WithDisclosure: true, Suppress: map[string]bool{"agent_input": true}})
+	disclosed, err := AssembleBundle(t.Context(), store, log, profile.LogID, BundleOptions{Root: root.CapsuleID, ClosureDepth: 2, Payloads: "all", WithDisclosure: true, Suppress: map[string]bool{"agent_input": true}})
 	require.NoError(t, err)
 	verified = aacbundle.VerifyBundle(disclosed)
 	matched, withheld := false, false

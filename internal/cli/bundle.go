@@ -43,11 +43,10 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 	if len(options.Root) != 64 {
 		return nil, inputError("--root is required")
 	}
-	if options.ClosureDepth == 0 {
-		options.ClosureDepth = 2
-	}
+	// A negative depth means "unset" (the default); an explicit 0 is honored as a
+	// root-only bundle. The bundle command's flag default is 2.
 	if options.ClosureDepth < 0 {
-		return nil, inputError("closure depth must not be negative")
+		options.ClosureDepth = 2
 	}
 	if options.Payloads == "" {
 		options.Payloads = "selected"
@@ -172,12 +171,44 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		if disclosureErr != nil {
 			return nil, disclosureErr
 		}
+		// payloads=all is a claim to disclose EVERY committed eligible member that
+		// is not suppressed. If any such member's original is not retained it would
+		// verify as WITHHELD, making "all" a false claim -- refuse rather than emit it.
+		if options.Payloads == "all" {
+			for _, id := range ids {
+				members, _ := overlay[id].(map[string]interface{})
+				for _, member := range committedEligibleMembers(recordsByID[id]) {
+					if options.Suppress[member] {
+						continue
+					}
+					if members == nil || members[member] == nil {
+						return nil, inputError(fmt.Sprintf("payloads=all cannot be honored: the original for %s of %s is not retained", member, id))
+					}
+				}
+			}
+		}
 		bundle["disclosures"] = overlay
 	}
 	if err := verifyProducedBundle(bundle, options.WithDisclosure); err != nil {
 		return nil, err
 	}
 	return bundle, nil
+}
+
+// committedEligibleMembers returns the disclosure-eligible members whose digest
+// the capsule actually commits (under model_attestation.compute_attestation), so
+// payloads=all can require each of them to be disclosed.
+func committedEligibleMembers(capsule map[string]interface{}) []string {
+	attestation, _ := capsule["model_attestation"].(map[string]interface{})
+	compute, _ := attestation["compute_attestation"].(map[string]interface{})
+	var members []string
+	for member, field := range map[string]string{"agent_input": "agent_input_digest", "agent_output": "agent_output_digest"} {
+		if _, ok := compute[field].(string); ok {
+			members = append(members, member)
+		}
+	}
+	sort.Strings(members)
+	return members
 }
 
 func getCapsule(ctx context.Context, artifacts bundleArtifacts, id string) (map[string]interface{}, error) {
@@ -198,7 +229,8 @@ func getCapsule(ctx context.Context, artifacts bundleArtifacts, id string) (map[
 }
 
 func citationClosure(ctx context.Context, artifacts bundleArtifacts, root map[string]interface{}, depth int) (map[string]map[string]interface{}, []string, error) {
-	records := map[string]map[string]interface{}{root["capsule_id"].(string): root}
+	rootID, _ := root["capsule_id"].(string)
+	records := map[string]map[string]interface{}{rootID: root}
 	missingSet := make(map[string]bool)
 	frontier := []map[string]interface{}{root}
 	for i := 0; i < depth; i++ {
@@ -210,8 +242,14 @@ func citationClosure(ctx context.Context, artifacts bundleArtifacts, root map[st
 				}
 				cited, err := getCapsule(ctx, artifacts, id)
 				if err != nil {
-					missingSet[id] = true
-					continue
+					// Only a genuinely absent original is a declared-missing citation.
+					// A decode/identity/authorization/backend error is an execution
+					// failure and must not masquerade as an incomplete graph.
+					if errors.Is(err, artifact.ErrNotFound) {
+						missingSet[id] = true
+						continue
+					}
+					return nil, nil, fmt.Errorf("resolving cited record %s: %w", id, err)
 				}
 				records[id] = cited
 				next = append(next, cited)
@@ -249,7 +287,14 @@ func citations(record map[string]interface{}) []string {
 func allEntries(ctx context.Context, log cll.EntrySource, size uint64) ([]cll.Entry, error) {
 	entries := make([]cll.Entry, 0, size)
 	for after := uint64(0); after < size; {
-		batch, err := log.ScanEntries(ctx, after, cll.MaxScanLimit)
+		// Bound each page to the checkpointed range so a log that has grown past
+		// the checkpoint (newer, uncheckpointed entries) does not overshoot size
+		// and fail the dense-interval check.
+		limit := cll.MaxScanLimit
+		if remaining := int(size - after); remaining < limit {
+			limit = remaining
+		}
+		batch, err := log.ScanEntries(ctx, after, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -259,8 +304,13 @@ func allEntries(ctx context.Context, log cll.EntrySource, size uint64) ([]cll.En
 		if batch[len(batch)-1].Seq <= after {
 			return nil, errors.New("log scan did not advance")
 		}
-		entries = append(entries, batch...)
-		after = batch[len(batch)-1].Seq
+		for _, entry := range batch {
+			if entry.Seq > size {
+				break
+			}
+			entries = append(entries, entry)
+			after = entry.Seq
+		}
 	}
 	return entries, nil
 }

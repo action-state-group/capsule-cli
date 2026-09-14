@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -36,14 +38,21 @@ func trustedPluginRoots() []string {
 	return roots
 }
 
-// verifyTrustedPath rejects a launcher whose real path, or any ancestor up to the
-// filesystem root, is group-writable, other-writable, or owned by neither the
-// current user nor root; and rejects any launcher whose resolved path escapes the
-// trusted roots (so a symlink cannot redirect discovery to an untrusted target).
+// verifyTrustedPath rejects a launcher whose real path, or any directory between
+// it and the matched trusted root (inclusive), is group-writable, other-writable,
+// or owned by neither the current user nor root; and rejects any launcher whose
+// resolved path escapes the trusted roots (so a symlink cannot redirect discovery
+// to an untrusted target) or is not a regular file. The root's own parents are
+// system directories, trusted by definition, so the walk stops at the root.
 func verifyTrustedPath(path string) error {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return fmt.Errorf("cannot resolve %s: %w", path, err)
+	}
+	if info, err := os.Lstat(resolved); err != nil {
+		return err
+	} else if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", resolved)
 	}
 	realRoot := ""
 	for _, root := range trustedPluginRoots() {
@@ -106,7 +115,9 @@ type pluginInfo struct {
 // that does not answer, answers with the wrong command name, or advertises a
 // different plugin_api is refused (returned as an error) rather than trusted.
 func pluginMetadata(path, name string) (pluginInfo, error) {
-	out, err := exec.Command(path, "cli-plugin-metadata").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, path, "cli-plugin-metadata").Output()
 	if err != nil {
 		return pluginInfo{}, fmt.Errorf("%s: cli-plugin-metadata handshake failed: %w", name, err)
 	}
@@ -162,16 +173,20 @@ func discoverPlugins() []pluginInfo {
 
 // pluginCommand wraps a discovered launcher as a cobra command that execs it,
 // passing the remaining args through unchanged (flag parsing disabled so the
-// plugin owns its own flags). Core commands always win a name collision because
-// they are registered first and cobra ignores a duplicate Use.
+// plugin owns its own flags). A plugin never shadows a core command: cobra does
+// NOT ignore a duplicate Use, so addPluginCommands explicitly skips any name
+// already reserved by a core command (and by help/completion).
 func pluginCommand(info pluginInfo) *cobra.Command {
 	return &cobra.Command{
 		Use:                info.Name,
 		Short:              fmt.Sprintf("%s (plugin · %s)", firstNonEmpty(pluginShort(info), "external plugin"), firstNonEmpty(info.Vendor, "unknown vendor")),
 		DisableFlagParsing: true,
 		RunE: func(c *cobra.Command, args []string) error {
-			// Re-verify at dispatch time: the trusted path is checked again so a
-			// TOCTOU swap between discovery and exec is caught.
+			// Re-verify at dispatch time so a swap of the launcher between discovery
+			// and now is caught. This closes the discovery->dispatch window, not the
+			// residual verify->exec window (an exec via an O_PATH fd would be needed
+			// for that); under the "current user or root" trust model the remaining
+			// race is only against a same-user process.
 			if err := verifyTrustedPath(info.path); err != nil {
 				return inputError("refusing to run plugin from an untrusted path")
 			}
@@ -227,18 +242,27 @@ func pluginGroup() *cobra.Command {
 }
 
 // addPluginCommands registers the plugin group and every discovered plugin as a
-// top-level command, skipping any name already claimed by a core command so a
-// plugin can never shadow the core.
+// top-level command. A plugin can never shadow a core command or cobra's built-in
+// help/completion: the reserved set seeds those explicitly (help/completion are
+// added by cobra at execute time, not visible in root.Commands() here), and a
+// launcher whose name is not a single token is skipped, since cobra would derive
+// its command name from the first whitespace-delimited token and could otherwise
+// alias a core command.
 func addPluginCommands(root *cobra.Command) {
 	root.AddCommand(pluginGroup())
-	core := map[string]bool{}
+	reserved := map[string]bool{"help": true, "completion": true}
 	for _, c := range root.Commands() {
-		core[c.Name()] = true
+		reserved[c.Name()] = true
 	}
 	for _, info := range discoverPlugins() {
-		if core[info.Name] {
+		if strings.ContainsAny(info.Name, " \t") {
 			continue
 		}
-		root.AddCommand(pluginCommand(info))
+		cmd := pluginCommand(info)
+		if reserved[cmd.Name()] {
+			continue
+		}
+		root.AddCommand(cmd)
+		reserved[cmd.Name()] = true
 	}
 }
