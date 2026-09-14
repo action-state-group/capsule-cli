@@ -344,6 +344,7 @@ func bundleCommands() []*cobra.Command {
 				return err
 			}
 			root, _ := c.Flags().GetString("root")
+			closureDepth, _ := c.Flags().GetInt("closure-depth")
 			payloads, _ := c.Flags().GetString("payloads")
 			suppressNames, _ := c.Flags().GetStringSlice("suppress")
 			suppressSet := make(map[string]bool, len(suppressNames))
@@ -358,7 +359,7 @@ func bundleCommands() []*cobra.Command {
 				return err
 			}
 			defer func() { err = errors.Join(err, target.close()) }()
-			value, err := AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink})
+			value, err := AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink})
 			if err != nil {
 				return err
 			}
@@ -393,6 +394,7 @@ func bundleCommands() []*cobra.Command {
 			return err
 		}}
 		command.Flags().String("root", "", "Root Capsule ID")
+		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
 		if disclosure || permalink {
 			command.Flags().String("payloads", "all", "Disclosure mode: all or selected")
 			command.Flags().StringSlice("suppress", nil, "Disclosed member to withhold (agent_input or agent_output)")
