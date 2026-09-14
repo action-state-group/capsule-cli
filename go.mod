@@ -3,7 +3,7 @@ module github.com/action-state-group/capsule-cli
 go 1.27.0
 
 require (
-	github.com/action-state-group/agent-action-capsule/go v0.0.0-20260914121445-8d46ec26012f
+	github.com/action-state-group/agent-action-capsule/go v0.0.0-20260914152753-24e40bf41180
 	github.com/action-state-group/capsule-emit-go v0.0.0-20260913045558-41b8f3f619d9
 	github.com/action-state-group/cll-go v0.0.0-20260914055038-a4b1701b0ad0
 	github.com/fxamacker/cbor/v2 v2.9.0
