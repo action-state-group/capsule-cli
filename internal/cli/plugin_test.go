@@ -83,8 +83,15 @@ func TestPluginCannotShadowCoreOrBuiltins(t *testing.T) {
 		byName[cmd.Name()]++
 	}
 	assert.Equal(t, 1, byName["verify"], "the core verify is not shadowed or duplicated by a plugin (incl. the multi-token launcher)")
-	assert.LessOrEqual(t, byName["completion"], 1, "a completion plugin does not add a duplicate command")
-	assert.LessOrEqual(t, byName["help"], 1, "a help plugin does not add a duplicate command")
+	// No reserved-name command may be a plugin wrapper: a plugin command's Short is
+	// "…(plugin · <vendor>)". This catches an accidentally-registered help/completion
+	// or verify plugin even before cobra initializes its own help/completion.
+	for _, cmd := range c.Commands() {
+		switch cmd.Name() {
+		case "verify", "help", "completion":
+			assert.NotContains(t, cmd.Short, "(plugin", cmd.Name()+" must be the core/builtin command, never a plugin")
+		}
+	}
 	// the core verify command keeps its own Short, not the plugin wrapper's
 	for _, cmd := range c.Commands() {
 		if cmd.Name() == "verify" {
