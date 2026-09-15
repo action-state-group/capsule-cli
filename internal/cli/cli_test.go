@@ -16,6 +16,7 @@ import (
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	"github.com/action-state-group/cll-go/checkpoint"
 	"github.com/action-state-group/cll-go/cll"
+	"github.com/action-state-group/cll-go/mmr"
 	"github.com/action-state-group/cll-go/store/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -265,7 +266,11 @@ func TestCheckpointProof(t *testing.T) {
 	state, e := backend.LoadCLL(t.Context())
 	require.NoError(t, e)
 	require.NotNil(t, state.Checkpoint)
-	raw, e := json.Marshal(Proof{Checkpoint: state.Checkpoint.Bytes, CapsuleID: hex.EncodeToString(value)})
+	tree, e := mmr.New(state.Nodes)
+	require.NoError(t, e)
+	inclusion, e := tree.InclusionProof(0, state.Checkpoint.Size)
+	require.NoError(t, e)
+	raw, e := json.Marshal(Proof{Checkpoint: state.Checkpoint.Bytes, CapsuleID: hex.EncodeToString(value), InclusionProof: &inclusion})
 	require.NoError(t, e)
 	path := filepath.Join(t.TempDir(), "proof.json")
 	require.NoError(t, os.WriteFile(path, raw, 0600))

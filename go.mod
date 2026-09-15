@@ -3,8 +3,9 @@ module github.com/action-state-group/capsule-cli
 go 1.27.0
 
 require (
+	github.com/action-state-group/agent-action-capsule/go v0.0.0-20260915155341-70948effe945
 	github.com/action-state-group/capsule-emit-go v0.0.0-20260913045558-41b8f3f619d9
-	github.com/action-state-group/cll-go v0.0.0-20260909041951-65cc10f6b718
+	github.com/action-state-group/cll-go v0.0.0-20260915155019-7a077913a24c
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/spf13/cobra v1.10.2
@@ -16,7 +17,6 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
-	github.com/action-state-group/agent-action-capsule/go v0.0.0-20260907232726-d1befd155511 // indirect
 	github.com/datatrails/go-datatrails-merklelog/mmr v0.4.2-0.20250428132117-275103a34a08 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
