@@ -132,13 +132,20 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 			"inclusion_proof": proofJSON(proof),
 		}
 	}
-	firstProof, err := tree.InclusionProof(0, checkpointSize)
+	// CLL #13 range proof over the whole checkpointed interval [1, checkpointSeq]
+	// plus the ordered body digests of every leaf in it, so a verifier binds each
+	// record, not just the two endpoints.
+	rangeP, err := tree.RangeProof(0, checkpointSeq-1, checkpointSize)
 	if err != nil {
 		return nil, err
 	}
-	lastProof, err := tree.InclusionProof(checkpointSeq-1, checkpointSize)
-	if err != nil {
-		return nil, err
+	bodyDigests := make([]interface{}, len(entries))
+	for i, entry := range entries {
+		bodyDigests[i] = hex.EncodeToString(entry.Value)
+	}
+	witnessJSON := make([]interface{}, len(rangeP.Witness))
+	for i, w := range rangeP.Witness {
+		witnessJSON[i] = hex.EncodeToString(w)
 	}
 	missingIDs := make([]interface{}, len(missing))
 	for i := range missing {
@@ -159,9 +166,9 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		},
 		"completeness_certificate": map[string]interface{}{
 			"log_id": logID, "range_root": hex.EncodeToString(rangeRoot), "first_seq": integer(1), "last_seq": integer(checkpointSeq),
-			"first_digest": hex.EncodeToString(entries[0].Value), "last_digest": hex.EncodeToString(entries[len(entries)-1].Value),
-			"range_proof": map[string]interface{}{"from_seq": integer(1), "to_seq": integer(checkpointSeq), "size": integer(checkpointSize), "inclusion_from": proofJSON(firstProof), "inclusion_to": proofJSON(lastProof)},
-			"memberships": memberships,
+			"body_digests": bodyDigests,
+			"range_proof":  map[string]interface{}{"from_seq": integer(1), "to_seq": integer(checkpointSeq), "size": integer(checkpointSize), "from_index": integer(0), "to_index": integer(checkpointSeq - 1), "witness": witnessJSON},
+			"memberships":  memberships,
 		},
 		"checkpoint":   map[string]interface{}{"root": hex.EncodeToString(rangeRoot), "mmr_size": integer(checkpointSize), "statement": base64.StdEncoding.EncodeToString(state.Checkpoint.Bytes)},
 		"verification": map[string]interface{}{"producer": "capsulectl", "checks": []interface{}{"graph_closure", "interval_coverage", "per_record_membership"}},
