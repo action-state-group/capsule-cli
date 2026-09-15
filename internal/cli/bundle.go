@@ -75,6 +75,12 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 	if checkpointSeq == 0 {
 		return nil, inputError("covering checkpoint has no entries")
 	}
+	// The emitted range must end at the checkpoint tip (leaf_count(size) ==
+	// checkpointSeq); the verifier enforces this, so refuse to emit a cert that
+	// would fail rather than produce one that only some verifiers accept.
+	if leaves, ok := mmr.LeafCount(checkpointSize); !ok || leaves != checkpointSeq {
+		return nil, inputError("covering checkpoint is not tip-aligned (leaf_count(size) != indexed seq)")
+	}
 	entries, err := allEntries(ctx, log, checkpointSeq)
 	if err != nil {
 		return nil, err
