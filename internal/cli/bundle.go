@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	_ "embed"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
+	"github.com/action-state-group/agent-action-capsule/go/emitter"
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	"github.com/action-state-group/cll-go/cll"
 	"github.com/action-state-group/cll-go/mmr"
@@ -23,6 +25,9 @@ const defaultBundleURL = "https://verify.agentactioncapsule.org/bundle"
 type bundleArtifacts interface {
 	Get(context.Context, string) (artifact.Record, error)
 }
+
+//go:embed assets/evidence-graph.iife.js
+var evidenceGraphIIFE []byte
 
 // BundleOptions declares the citation traversal and disclosure treatment.
 type BundleOptions struct {
@@ -409,14 +414,54 @@ func verifyProducedBundle(value map[string]interface{}, disclosuresRequired bool
 	return nil
 }
 
+func validateViewRoot(bundle map[string]interface{}, root string) error {
+	reject := func(found string) error {
+		return inputError("view requires the root to be a disclosed evaluation-summary/v1 aggregate; found " + found)
+	}
+	records, _ := bundle["records"].([]interface{})
+	disclosures, _ := bundle["disclosures"].(map[string]interface{})
+	for _, value := range records {
+		record, _ := value.(map[string]interface{})
+		if record["capsule_id"] != root {
+			continue
+		}
+		attestation, _ := record["model_attestation"].(map[string]interface{})
+		compute, _ := attestation["compute_attestation"].(map[string]interface{})
+		digest, _ := compute["agent_input_digest"].(string)
+		members, ok := disclosures[digest].(map[string]interface{})
+		if !ok {
+			// Match the renderer's Capsule-ID fallback for assembled disclosures.
+			members, _ = disclosures[root].(map[string]interface{})
+		}
+		input, present := members["agent_input"]
+		if !present {
+			return reject("undisclosed agent_input")
+		}
+		payload, ok := input.(map[string]interface{})
+		if !ok {
+			return reject("non-object agent_input")
+		}
+		if payload["spec_version"] != "evaluation-summary/v1" {
+			return reject(fmt.Sprintf("agent_input spec_version=%v", payload["spec_version"]))
+		}
+		return nil
+	}
+	return reject("missing root record")
+}
+
 func bundleCommands() []*cobra.Command {
 	shortFor := map[string]string{
 		"bundle":    "Assemble a self-verifying Evidence Bundle from the root's citation closure",
 		"disclose":  "Assemble an Evidence Bundle with disclosed agent_input/agent_output originals",
 		"permalink": "Mint a viewer permalink over a disclosed Evidence Bundle",
+		"view":      "Write a disclosed Evidence Bundle evidence-graph drill-down HTML file",
 	}
-	makeCommand := func(use string, disclosure bool, permalink bool) *cobra.Command {
+	makeCommand := func(use string, disclosure bool, permalink bool, view bool) *cobra.Command {
 		command := &cobra.Command{Use: use, Short: shortFor[use], Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+			out, _ := c.Flags().GetString("out")
+			if view && out == "" {
+				return inputError("--out is required")
+			}
 			profile, err := selected(c)
 			if err != nil {
 				return err
@@ -432,13 +477,30 @@ func bundleCommands() []*cobra.Command {
 				}
 				suppressSet[name] = true
 			}
+			if view && suppressSet["agent_input"] {
+				return inputError("view cannot suppress agent_input: the root aggregate must be disclosed")
+			}
 			target, err := openTarget(c.Context(), profile, usePublication)
 			if err != nil {
 				return err
 			}
 			defer func() { err = errors.Join(err, target.close()) }()
-			value, err := AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink})
+			value, err := AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink || view})
 			if err != nil {
+				return err
+			}
+			if view {
+				if err := validateViewRoot(value, root); err != nil {
+					return err
+				}
+				html, err := emitter.EmitEvidenceGraphHTML(value, evidenceGraphIIFE)
+				if err != nil {
+					return err
+				}
+				if err := atomicFile(out, []byte(html), false); err != nil {
+					return err
+				}
+				_, err = fmt.Fprintf(c.OutOrStdout(), "wrote Evidence Bundle view to %s\n", out)
 				return err
 			}
 			if permalink {
@@ -460,7 +522,6 @@ func bundleCommands() []*cobra.Command {
 				_, err = fmt.Fprintln(c.OutOrStdout(), strings.TrimRight(base, "#")+"#"+fragment)
 				return err
 			}
-			out, _ := c.Flags().GetString("out")
 			encoded, err := json.Marshal(value)
 			if err != nil {
 				return err
@@ -473,16 +534,20 @@ func bundleCommands() []*cobra.Command {
 		}}
 		command.Flags().String("root", "", "Root Capsule ID")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
-		if disclosure || permalink {
+		if disclosure || permalink || view {
 			command.Flags().String("payloads", "all", "Disclosure mode: all or selected")
 			command.Flags().StringSlice("suppress", nil, "Disclosed member to withhold (agent_input or agent_output)")
 		}
 		if !permalink {
-			command.Flags().String("out", "", "Write the Evidence Bundle JSON to a new file")
+			outUsage := "Write the Evidence Bundle JSON to a new file"
+			if view {
+				outUsage = "Write the evidence-graph HTML to a new file"
+			}
+			command.Flags().String("out", "", outUsage)
 		} else {
 			command.Flags().String("base-url", defaultBundleURL, "Bundle viewer base URL")
 		}
 		return command
 	}
-	return []*cobra.Command{makeCommand("bundle", false, false), makeCommand("disclose", true, false), makeCommand("permalink", true, true)}
+	return []*cobra.Command{makeCommand("bundle", false, false, false), makeCommand("disclose", true, false, false), makeCommand("permalink", true, true, false), makeCommand("view", true, false, true)}
 }

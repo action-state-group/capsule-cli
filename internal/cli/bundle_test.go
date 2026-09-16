@@ -19,6 +19,27 @@ import (
 
 type mapArtifactStore map[string]artifact.Record
 
+func TestValidateViewRootDisclosureLookup(t *testing.T) {
+	root := "root"
+	digest := "input-digest"
+	bundle := map[string]interface{}{
+		"records": []interface{}{map[string]interface{}{
+			"capsule_id":        root,
+			"model_attestation": map[string]interface{}{"compute_attestation": map[string]interface{}{"agent_input_digest": digest}},
+		}},
+	}
+	require.ErrorContains(t, validateViewRoot(bundle, root), "undisclosed agent_input")
+	members := map[string]interface{}{"agent_input": map[string]interface{}{"spec_version": "evaluation-summary/v1"}}
+	bundle["disclosures"] = map[string]interface{}{digest: members}
+	require.NoError(t, validateViewRoot(bundle, root))
+	bundle["disclosures"] = map[string]interface{}{root: members}
+	require.NoError(t, validateViewRoot(bundle, root))
+	// A digest-keyed disclosure takes precedence, even if the ID fallback is valid.
+	bundle["disclosures"] = map[string]interface{}{digest: map[string]interface{}{}, root: members}
+	require.ErrorContains(t, validateViewRoot(bundle, root), "undisclosed agent_input")
+	require.ErrorContains(t, validateViewRoot(bundle, "absent"), "missing root record")
+}
+
 func (s mapArtifactStore) Get(_ context.Context, id string) (artifact.Record, error) {
 	record, ok := s[id]
 	if !ok {
