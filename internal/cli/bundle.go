@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	"github.com/action-state-group/cll-go/cll"
@@ -409,6 +411,70 @@ func verifyProducedBundle(value map[string]interface{}, disclosuresRequired bool
 	return nil
 }
 
+// disclosureRecord is the CLI-layer commitment for a disclose act: what root
+// was disclosed, in what payloads mode, which fields were suppressed, and —
+// for every member actually revealed — the digest DE-3 already binds it to,
+// not the content itself. AssembleBundle stays a pure builder; only this
+// command-layer helper (and appendDisclosureRecord below) knows about the log.
+func disclosureRecord(bundle map[string]interface{}) (map[string]interface{}, error) {
+	completeness, _ := bundle["completeness"].(map[string]interface{})
+	overlay, _ := bundle["disclosures"].(map[string]interface{})
+	ids := make([]string, 0, len(overlay))
+	for id := range overlay {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	revealed := make(map[string]interface{}, len(ids))
+	for _, id := range ids {
+		members, _ := overlay[id].(map[string]interface{})
+		names := make([]string, 0, len(members))
+		for member := range members {
+			names = append(names, member)
+		}
+		sort.Strings(names)
+		digestByMember := make(map[string]interface{}, len(names))
+		for _, member := range names {
+			digest, err := canonical.JSONDigest(members[member])
+			if err != nil {
+				return nil, fmt.Errorf("digest disclosed %s of %s: %w", member, id, err)
+			}
+			digestByMember[member] = digest
+		}
+		revealed[id] = digestByMember
+	}
+	return map[string]interface{}{
+		"type":              "disclosure_record",
+		"root":              bundle["root"],
+		"payloads_mode":     completeness["payloads_mode"],
+		"suppressed_fields": completeness["suppressed_fields"],
+		"revealed":          revealed,
+	}, nil
+}
+
+// appendDisclosureRecord seals the disclose act onto the CLL: it appends the
+// disclosure_record's own digest as a new log entry, the same way a Capsule's
+// ID (itself a content digest) is appended by publish/append. Emitting the
+// bundle file is not enough on its own -- every disclose act must be on record.
+func appendDisclosureRecord(ctx context.Context, log cll.Backend, bundle map[string]interface{}) (cll.Entry, error) {
+	record, err := disclosureRecord(bundle)
+	if err != nil {
+		return cll.Entry{}, err
+	}
+	digest, err := canonical.JSONDigest(record)
+	if err != nil {
+		return cll.Entry{}, err
+	}
+	value, err := hex.DecodeString(digest)
+	if err != nil || len(value) != cll.EntryBytes {
+		return cll.Entry{}, errors.New("disclosure record digest is not a valid log identity")
+	}
+	result, err := log.Append(ctx, cll.AppendInput{Value: value, AppendedAt: time.Now().UTC()})
+	if err != nil {
+		return cll.Entry{}, ErrPending
+	}
+	return result.Entry, nil
+}
+
 func bundleCommands() []*cobra.Command {
 	shortFor := map[string]string{
 		"bundle":    "Assemble a self-verifying Evidence Bundle from the root's citation closure",
@@ -440,6 +506,13 @@ func bundleCommands() []*cobra.Command {
 			value, err := AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink})
 			if err != nil {
 				return err
+			}
+			if use == "disclose" {
+				// Every disclose act goes on record: the CLL append must succeed
+				// before the bundle is emitted, not merely alongside it.
+				if _, err := appendDisclosureRecord(c.Context(), target.log, value); err != nil {
+					return err
+				}
 			}
 			if permalink {
 				fragment, err := aacbundle.EncodeFragment(value)

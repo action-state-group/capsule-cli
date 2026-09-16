@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -101,4 +103,80 @@ func TestJSONLProfileCreate(t *testing.T) {
 	assert.Equal(t, dir, p.Connection.Database)
 	assert.Equal(t, "demo", p.Namespace)
 	assert.Empty(t, p.Connection.Host)
+}
+
+// TestJSONLDiscloseAppendsDisclosureRecordToLog exercises the disclose command
+// end to end over the jsonl backend: it must append a disclosure_record to the
+// CLL in addition to emitting the bundle, and a plain bundle (no disclosure)
+// over the same root must NOT grow the log further.
+func TestJSONLDiscloseAppendsDisclosureRecordToLog(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, key := profileFixture(t)
+	p.Type = "jsonl"
+	dir := filepath.Join(t.TempDir(), "store")
+	p.Connection.Database = dir
+	require.NoError(t, saveProfile(p, false))
+
+	_, err := invoke(t, "", "store", "init", "--profile", p.Name)
+	require.NoError(t, err)
+
+	request, err := parseRequest(requestFixture(t))
+	require.NoError(t, err)
+	target, err := openTarget(t.Context(), p, usePublication)
+	require.NoError(t, err)
+	published, err := target.publish(t.Context(), request, key)
+	require.NoError(t, err)
+	require.NoError(t, target.close())
+
+	_, err = invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
+	require.NoError(t, err)
+
+	out, err := invoke(t, "", "disclose", "--profile", p.Name, "--root", published.CapsuleID)
+	require.NoError(t, err)
+	// UseNumber so the disclosed values decode as json.Number, matching what
+	// disclosureOverlay produced when the digest was first committed -- a plain
+	// Unmarshal into float64 would make canonical.JSONDigest reject the input.
+	var bundle map[string]interface{}
+	decoder := json.NewDecoder(strings.NewReader(out))
+	decoder.UseNumber()
+	require.NoError(t, decoder.Decode(&bundle))
+
+	listOut, err := invoke(t, "", "cll", "list", "--profile", p.Name)
+	require.NoError(t, err)
+	var listed struct {
+		Entries []struct {
+			Sequence  uint64 `json:"sequence"`
+			CapsuleID string `json:"capsule_id"`
+		} `json:"entries"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(listOut), &listed))
+	require.Len(t, listed.Entries, 2, "disclose must seal a disclosure_record onto the log, not just emit the bundle file")
+	assert.Equal(t, published.CapsuleID, listed.Entries[0].CapsuleID)
+
+	overlay := bundle["disclosures"].(map[string]interface{})
+	members := overlay[published.CapsuleID].(map[string]interface{})
+	inputDigest, err := canonical.JSONDigest(members["agent_input"])
+	require.NoError(t, err)
+	outputDigest, err := canonical.JSONDigest(members["agent_output"])
+	require.NoError(t, err)
+	expected := map[string]interface{}{
+		"type":              "disclosure_record",
+		"root":              published.CapsuleID,
+		"payloads_mode":     "all",
+		"suppressed_fields": []interface{}{},
+		"revealed": map[string]interface{}{
+			published.CapsuleID: map[string]interface{}{"agent_input": inputDigest, "agent_output": outputDigest},
+		},
+	}
+	expectedDigest, err := canonical.JSONDigest(expected)
+	require.NoError(t, err)
+	assert.Equal(t, expectedDigest, listed.Entries[1].CapsuleID, "the second log entry must commit to exactly what disclose revealed")
+
+	// A plain bundle (no disclosure) over the same root must not append again.
+	_, err = invoke(t, "", "bundle", "--profile", p.Name, "--root", published.CapsuleID)
+	require.NoError(t, err)
+	listOut, err = invoke(t, "", "cll", "list", "--profile", p.Name)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(listOut), &listed))
+	assert.Len(t, listed.Entries, 2, "a non-disclosing bundle must not seal a disclosure_record")
 }
