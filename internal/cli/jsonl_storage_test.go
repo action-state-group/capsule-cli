@@ -10,7 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestViewWritesOfflineEvidenceGraphHTML(t *testing.T) {
+func viewFixture(t *testing.T, payload string) (Profile, string) {
+	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, key := profileFixture(t)
 	p.Type = "jsonl"
@@ -23,21 +24,53 @@ func TestViewWritesOfflineEvidenceGraphHTML(t *testing.T) {
 	require.NoError(t, err)
 	request, err := parseRequest(requestFixture(t))
 	require.NoError(t, err)
+	request.Payload = []byte(payload)
 	record, err := target.publish(t.Context(), request, key)
 	require.NoError(t, err)
 	require.NoError(t, target.close())
 	_, err = invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
 	require.NoError(t, err)
+	return p, record.CapsuleID
+}
 
+func TestViewWritesOfflineEvidenceGraphHTML(t *testing.T) {
+	p, root := viewFixture(t, `{"spec_version":"evaluation-summary/v1","counts":{"reports":0,"unique_cases":0},"per_axis":{}}`)
 	out := filepath.Join(t.TempDir(), "evidence-graph.html")
-	confirmation, err := invoke(t, "", "view", "--profile", p.Name, "--root", record.CapsuleID, "--out", out)
+	confirmation, err := invoke(t, "", "view", "--profile", p.Name, "--root", root, "--out", out)
 	require.NoError(t, err)
 	assert.Contains(t, confirmation, out)
 	html, err := os.ReadFile(out)
 	require.NoError(t, err)
 	assert.Contains(t, string(html), "renderEvidenceGraph(window.__BUNDLE__")
+	assert.Contains(t, string(html), `id="app"`)
+	assert.Contains(t, string(html), `"spec_version":"evaluation-summary/v1"`)
 	assert.NotContains(t, string(html), "http://")
 	assert.NotContains(t, string(html), "https://")
+}
+
+func TestViewRejectsUnrenderableRoot(t *testing.T) {
+	for _, tc := range []struct {
+		name, payload, suppress, want string
+	}{
+		{"wrong version", `{"spec_version":"evaluation-report/v1"}`, "", "spec_version=evaluation-report/v1"},
+		{"missing version", `{"a":1}`, "", "spec_version=<nil>"},
+		{"non-object", `[]`, "", "non-object agent_input"},
+		{"suppressed input", `{"spec_version":"evaluation-summary/v1"}`, "agent_input", "cannot suppress agent_input"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, root := viewFixture(t, tc.payload)
+			out := filepath.Join(t.TempDir(), "view.html")
+			args := []string{"view", "--profile", p.Name, "--root", root, "--out", out}
+			if tc.suppress != "" {
+				args = append(args, "--suppress", tc.suppress)
+			}
+			_, err := invoke(t, "", args...)
+			require.ErrorIs(t, err, ErrInput)
+			require.ErrorContains(t, err, tc.want)
+			_, err = os.Stat(out)
+			require.ErrorIs(t, err, os.ErrNotExist)
+		})
+	}
 }
 
 // TestJSONLSDKOnlyStorage exercises the file-based jsonl profile end to end:

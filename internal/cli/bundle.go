@@ -414,6 +414,41 @@ func verifyProducedBundle(value map[string]interface{}, disclosuresRequired bool
 	return nil
 }
 
+func validateViewRoot(bundle map[string]interface{}, root string) error {
+	reject := func(found string) error {
+		return inputError("view requires the root to be a disclosed evaluation-summary/v1 aggregate; found " + found)
+	}
+	records, _ := bundle["records"].([]interface{})
+	disclosures, _ := bundle["disclosures"].(map[string]interface{})
+	for _, value := range records {
+		record, _ := value.(map[string]interface{})
+		if record["capsule_id"] != root {
+			continue
+		}
+		attestation, _ := record["model_attestation"].(map[string]interface{})
+		compute, _ := attestation["compute_attestation"].(map[string]interface{})
+		digest, _ := compute["agent_input_digest"].(string)
+		members, ok := disclosures[digest].(map[string]interface{})
+		if !ok {
+			// Match the renderer's Capsule-ID fallback for assembled disclosures.
+			members, _ = disclosures[root].(map[string]interface{})
+		}
+		input, present := members["agent_input"]
+		if !present {
+			return reject("undisclosed agent_input")
+		}
+		payload, ok := input.(map[string]interface{})
+		if !ok {
+			return reject("non-object agent_input")
+		}
+		if payload["spec_version"] != "evaluation-summary/v1" {
+			return reject(fmt.Sprintf("agent_input spec_version=%v", payload["spec_version"]))
+		}
+		return nil
+	}
+	return reject("missing root record")
+}
+
 func bundleCommands() []*cobra.Command {
 	shortFor := map[string]string{
 		"bundle":    "Assemble a self-verifying Evidence Bundle from the root's citation closure",
@@ -442,6 +477,9 @@ func bundleCommands() []*cobra.Command {
 				}
 				suppressSet[name] = true
 			}
+			if view && suppressSet["agent_input"] {
+				return inputError("view cannot suppress agent_input: the root aggregate must be disclosed")
+			}
 			target, err := openTarget(c.Context(), profile, usePublication)
 			if err != nil {
 				return err
@@ -452,6 +490,9 @@ func bundleCommands() []*cobra.Command {
 				return err
 			}
 			if view {
+				if err := validateViewRoot(value, root); err != nil {
+					return err
+				}
 				html, err := emitter.EmitEvidenceGraphHTML(value, evidenceGraphIIFE)
 				if err != nil {
 					return err
