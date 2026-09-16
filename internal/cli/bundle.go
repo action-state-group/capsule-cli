@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	_ "embed"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
+	"github.com/action-state-group/agent-action-capsule/go/emitter"
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	"github.com/action-state-group/cll-go/cll"
 	"github.com/action-state-group/cll-go/mmr"
@@ -23,6 +25,9 @@ const defaultBundleURL = "https://verify.agentactioncapsule.org/bundle"
 type bundleArtifacts interface {
 	Get(context.Context, string) (artifact.Record, error)
 }
+
+//go:embed assets/evidence-graph.iife.js
+var evidenceGraphIIFE []byte
 
 // BundleOptions declares the citation traversal and disclosure treatment.
 type BundleOptions struct {
@@ -414,9 +419,14 @@ func bundleCommands() []*cobra.Command {
 		"bundle":    "Assemble a self-verifying Evidence Bundle from the root's citation closure",
 		"disclose":  "Assemble an Evidence Bundle with disclosed agent_input/agent_output originals",
 		"permalink": "Mint a viewer permalink over a disclosed Evidence Bundle",
+		"view":      "Write a disclosed Evidence Bundle evidence-graph drill-down HTML file",
 	}
-	makeCommand := func(use string, disclosure bool, permalink bool) *cobra.Command {
+	makeCommand := func(use string, disclosure bool, permalink bool, view bool) *cobra.Command {
 		command := &cobra.Command{Use: use, Short: shortFor[use], Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+			out, _ := c.Flags().GetString("out")
+			if view && out == "" {
+				return inputError("--out is required")
+			}
 			profile, err := selected(c)
 			if err != nil {
 				return err
@@ -437,8 +447,19 @@ func bundleCommands() []*cobra.Command {
 				return err
 			}
 			defer func() { err = errors.Join(err, target.close()) }()
-			value, err := AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink})
+			value, err := AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink || view})
 			if err != nil {
+				return err
+			}
+			if view {
+				html, err := emitter.EmitEvidenceGraphHTML(value, evidenceGraphIIFE)
+				if err != nil {
+					return err
+				}
+				if err := atomicFile(out, []byte(html), false); err != nil {
+					return err
+				}
+				_, err = fmt.Fprintf(c.OutOrStdout(), "wrote Evidence Bundle view to %s\n", out)
 				return err
 			}
 			if permalink {
@@ -460,7 +481,6 @@ func bundleCommands() []*cobra.Command {
 				_, err = fmt.Fprintln(c.OutOrStdout(), strings.TrimRight(base, "#")+"#"+fragment)
 				return err
 			}
-			out, _ := c.Flags().GetString("out")
 			encoded, err := json.Marshal(value)
 			if err != nil {
 				return err
@@ -473,16 +493,20 @@ func bundleCommands() []*cobra.Command {
 		}}
 		command.Flags().String("root", "", "Root Capsule ID")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
-		if disclosure || permalink {
+		if disclosure || permalink || view {
 			command.Flags().String("payloads", "all", "Disclosure mode: all or selected")
 			command.Flags().StringSlice("suppress", nil, "Disclosed member to withhold (agent_input or agent_output)")
 		}
 		if !permalink {
-			command.Flags().String("out", "", "Write the Evidence Bundle JSON to a new file")
+			outUsage := "Write the Evidence Bundle JSON to a new file"
+			if view {
+				outUsage = "Write the evidence-graph HTML to a new file"
+			}
+			command.Flags().String("out", "", outUsage)
 		} else {
 			command.Flags().String("base-url", defaultBundleURL, "Bundle viewer base URL")
 		}
 		return command
 	}
-	return []*cobra.Command{makeCommand("bundle", false, false), makeCommand("disclose", true, false), makeCommand("permalink", true, true)}
+	return []*cobra.Command{makeCommand("bundle", false, false, false), makeCommand("disclose", true, false, false), makeCommand("permalink", true, true, false), makeCommand("view", true, false, true)}
 }

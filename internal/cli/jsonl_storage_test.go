@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -8,6 +9,36 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestViewWritesOfflineEvidenceGraphHTML(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, key := profileFixture(t)
+	p.Type = "jsonl"
+	p.Connection.Database = filepath.Join(t.TempDir(), "store")
+	require.NoError(t, saveProfile(p, false))
+
+	_, err := invoke(t, "", "store", "init", "--profile", p.Name)
+	require.NoError(t, err)
+	target, err := openTarget(t.Context(), p, usePublication)
+	require.NoError(t, err)
+	request, err := parseRequest(requestFixture(t))
+	require.NoError(t, err)
+	record, err := target.publish(t.Context(), request, key)
+	require.NoError(t, err)
+	require.NoError(t, target.close())
+	_, err = invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
+	require.NoError(t, err)
+
+	out := filepath.Join(t.TempDir(), "evidence-graph.html")
+	confirmation, err := invoke(t, "", "view", "--profile", p.Name, "--root", record.CapsuleID, "--out", out)
+	require.NoError(t, err)
+	assert.Contains(t, confirmation, out)
+	html, err := os.ReadFile(out)
+	require.NoError(t, err)
+	assert.Contains(t, string(html), "renderEvidenceGraph(window.__BUNDLE__")
+	assert.NotContains(t, string(html), "http://")
+	assert.NotContains(t, string(html), "https://")
+}
 
 // TestJSONLSDKOnlyStorage exercises the file-based jsonl profile end to end:
 // store init creates the two files, publish persists an artifact and appends to
