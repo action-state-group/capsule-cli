@@ -328,7 +328,7 @@ func (t *target) publish(ctx context.Context, r Request, private ed25519.Private
 	result.State = "appended"
 	return result, nil
 }
-func appendRecord(ctx context.Context, log cll.EntryStore, capsuleID string) (cll.Entry, error) {
+func appendRecord(ctx context.Context, log cll.Backend, capsuleID string) (cll.Entry, error) {
 	id, e := hex.DecodeString(capsuleID)
 	if e != nil || len(id) != cll.EntryBytes {
 		return cll.Entry{}, errors.New("invalid capsule identity")

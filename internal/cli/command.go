@@ -20,7 +20,7 @@ import (
 // file in the exact hex format `--signing-key-file` reads; only the public key
 // is printed. SEED_FILE is a positional argument.
 func keyCommands() *cobra.Command {
-	key := &cobra.Command{Use: "key"}
+	key := &cobra.Command{Use: "key", Short: "Generate and inspect Ed25519 signing keys"}
 	generate := &cobra.Command{Use: "generate", Short: "Generate an Ed25519 signing key: write the seed file, print the public key", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		path, _ := c.Flags().GetString("output")
 		if path == "" {
@@ -157,8 +157,9 @@ func NewCommand() *cobra.Command {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, _ error) error { return ErrInput })
 	root.AddCommand(profileCommands())
 	root.AddCommand(keyCommands())
-	store := &cobra.Command{Use: "store"}
-	init := &cobra.Command{Use: "init", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	root.AddCommand(bundleCommands()...)
+	store := &cobra.Command{Use: "store", Short: "Initialize and verify the profile's artifact and CLL store"}
+	init := &cobra.Command{Use: "init", Short: "Initialize the store and pin its store_id into the profile", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
 		if e != nil {
 			return e
@@ -258,7 +259,7 @@ func NewCommand() *cobra.Command {
 	get.Flags().Bool("raw", false, "Preserve SDK byte fields as base64 for exact-byte export and verify")
 	get.Flags().String("output", "", "Write readable JSON to a file; use --raw for a verifiable artifact.Record")
 	root.AddCommand(get)
-	verify := &cobra.Command{Use: "verify", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		p, e := selected(c)
 		if e != nil {
 			return e
@@ -340,9 +341,9 @@ func NewCommand() *cobra.Command {
 	}}
 	publish.Flags().String("request", "", "capsule-seal-request/v1 JSON file")
 	root.AddCommand(publish)
-	logs := &cobra.Command{Use: "cll"}
+	logs := &cobra.Command{Use: "cll", Short: "Inspect and append to the profile's checkpointed log"}
 	root.AddCommand(logs)
-	list := &cobra.Command{Use: "list", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	list := &cobra.Command{Use: "list", Short: "List CLL entries in sequence order", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
 		if e != nil {
 			return e
@@ -377,7 +378,7 @@ func NewCommand() *cobra.Command {
 	list.Flags().Uint64("through", 0, "Inclusive sequence upper bound (0 unbounded)")
 	list.Flags().Int("limit", 100, "Page limit, at most 1000")
 	logs.AddCommand(list)
-	appendCmd := &cobra.Command{Use: "append", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	appendCmd := &cobra.Command{Use: "append", Short: "Append a Capsule ID to the CLL as a new entry", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
 		if e != nil {
 			return e
@@ -420,7 +421,8 @@ func NewCommand() *cobra.Command {
 	appendCmd.Flags().String("capsule", "", "Verified artifact.Record file; persisted first only when artifact storage is configured")
 	logs.AddCommand(appendCmd)
 	addCheckpointCommands(logs)
-	root.SetHelpCommand(&cobra.Command{Use: "help [command]", RunE: func(c *cobra.Command, args []string) error {
+	addPluginCommands(root)
+	root.SetHelpCommand(&cobra.Command{Use: "help [command]", Short: "Help about any command", RunE: func(c *cobra.Command, args []string) error {
 		target, _, e := root.Find(args)
 		if e != nil {
 			return fmt.Errorf("unknown command")
