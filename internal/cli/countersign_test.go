@@ -348,3 +348,58 @@ print(json.dumps({
 	assert.Equal(t, "pass", pyResult.IntervalCoverage)
 	assert.Equal(t, "pass", pyResult.PerRecordMembership)
 }
+
+// TestCountersignAnchorEntryInterop is the wire-shape reconciliation's
+// acceptance proof: a countersignatures[] entry PRODUCED by the real
+// capsule-anchor countersign engine (Python) VERIFIES GREEN here and
+// resolves against the countersigner directory -- a genuine cross-language
+// round trip, not a same-language self-check. The fixture is COMMITTED
+// (testdata/countersign_anchor_interop.json, generated once from the real
+// capsule_anchor.countersign package after the reconciliation fixes: sign
+// over the bundle digest, not the statement; key_id is the full 64-hex
+// Ed25519 public key, not a truncated hash) rather than invoked live at test
+// time -- capsule-anchor is a separate, unpublished repo this CLI's CI has
+// no toolchain for, so a live invocation would only ever skip, exactly the
+// failure mode that let the two implementations diverge unnoticed (see the
+// wire-shape reconciliation brief). Regenerate the fixture whenever the
+// anchor's countersign wire shape changes.
+func TestCountersignAnchorEntryInterop(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "countersign_anchor_interop.json"))
+	require.NoError(t, err)
+	fixture, err := decodeBundleJSON(raw)
+	require.NoError(t, err)
+
+	bundle, ok := fixture["bundle_for_digest"].(map[string]interface{})
+	require.True(t, ok)
+	bundle["countersignatures"] = []interface{}{fixture["countersignature_entry"]}
+
+	expectedDigest, ok := fixture["bundle_digest"].(string)
+	require.True(t, ok)
+	gotDigest, err := aacbundle.BundleDigest(bundle)
+	require.NoError(t, err, "Go's JCS canonicalization must agree with the anchor's own digest over the same content")
+	require.Equal(t, expectedDigest, gotDigest)
+
+	directoryRaw, err := json.Marshal(fixture["directory"])
+	require.NoError(t, err)
+	dirServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(directoryRaw)
+	}))
+	defer dirServer.Close()
+	client := &http.Client{Transport: dirServer.Client().Transport, Timeout: 5 * time.Second}
+
+	producerPubkeyHex, ok := fixture["producer_pubkey_hex"].(string)
+	require.True(t, ok)
+	trusted, err := parseKeys([]string{producerPubkeyHex})
+	require.NoError(t, err)
+
+	digest, reports, summary, err := verifyCountersignatures(t.Context(), client, dirServer.URL, bundle, trusted)
+	require.NoError(t, err, "a genuine anchor-produced countersignature must verify without error")
+	assert.Equal(t, expectedDigest, digest)
+	require.Len(t, reports, 1)
+	assert.Equal(t, "resolved", reports[0].State)
+	assert.Equal(t, "Countersign Test Operator", reports[0].SignerName)
+	require.NotNil(t, reports[0].Independent)
+	assert.True(t, *reports[0].Independent)
+	assert.Equal(t, "resolved", summary)
+}
