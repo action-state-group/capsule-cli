@@ -1,0 +1,125 @@
+{
+  "bundle_digest": "7d39cb236d87eb00c3ded268b6b93e132729762081cf3cd6be8a23cf3d51506e",
+  "bundle_for_digest": {
+    "checkpoints": [
+      {
+        "key_id": "k1",
+        "log_id": "ledger:interop-fixture-001",
+        "mmr_root": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "mmr_size": 1,
+        "prev_size": 0,
+        "timestamp": "2026-09-01T00:00:00+00:00"
+      }
+    ],
+    "closure_depth": 2,
+    "ledger_id": "ledger:interop-fixture-001",
+    "payloads": "none",
+    "period": {
+      "from": "2026-09-01T00:00:00+00:00",
+      "to": "2026-09-08T00:00:00+00:00"
+    },
+    "producer_key_id": "3218f265b889c731",
+    "profile": {
+      "id": "test/v0",
+      "version": "1.0"
+    },
+    "receipts": [
+      {
+        "checkpoint_index": 0,
+        "grade": "mmr-verified",
+        "receipt_b64": "AAAA",
+        "witness_id": "did:web:witness.example"
+      }
+    ],
+    "records": [
+      {
+        "cites": null,
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "kind": "action",
+        "seq": 1,
+        "signer_key_id": null,
+        "timestamp": "2026-09-01T00:00:00+00:00"
+      }
+    ],
+    "rotations": [],
+    "schema": "evidence-bundle/v2"
+  },
+  "countersignature_entry": {
+    "independent": true,
+    "over": "7d39cb236d87eb00c3ded268b6b93e132729762081cf3cd6be8a23cf3d51506e",
+    "receipt": {
+      "entry_hash": "40e4cd4e739e5ab96dde5ba4093617ad78a739f1adaab3950157715cb94e5a64",
+      "leaf_index": 0,
+      "receipt_b64": "0oRPowEnGQGLAQ+hBhpqq36AoRkBjKEggUSDAQCA9lhALzvFqrYQCsIZ/aMdRB9dp04iYnXvhnKW/aOg5rVxKyn/TO9qzQxBTroqovom8m/T3lDH5uHjP5O8fjk1vGIYBw==",
+      "tree_size": 1
+    },
+    "signature": "05f2e0de116ce5803bfdfb9b4c87ff52775c36b20c222f316256c892c68b1cd7dbadc6bf08a2fc3a83816db52c442b33ddf04c6b4d967487e9a6e6fc8ae87d0d",
+    "signer": {
+      "id": "did:web:countersign.example",
+      "key_id": "76d4ba1d8eb7e165c84eb5b243655462f15f65b0a607dd53638f8488305796f1"
+    },
+    "statement": {
+      "checks": [
+        {
+          "detail": "a single checkpoint in the window has nothing to chain against",
+          "name": "chain consistency",
+          "result": "not checked"
+        },
+        {
+          "detail": "record sequence range [1, 1] is not within the tip mmr_size=1",
+          "name": "range membership",
+          "result": "failed"
+        },
+        {
+          "detail": "1 dated records span 0s of a 604800s window",
+          "name": "cadence",
+          "result": "established"
+        },
+        {
+          "detail": "no signer_key_id present on any record",
+          "name": "key hygiene",
+          "result": "not present"
+        },
+        {
+          "detail": "no policy module coverage for any record kind present: action",
+          "name": "profile conformance",
+          "result": "not checked"
+        }
+      ],
+      "exclusions": [
+        "capture coverage: not checked by this statement -- a declared-count reconciliation, when present in the bundle, is reported as its own named check and stands on its own, never folded into another check's result",
+        "outcome correctness: not checked by this statement -- this recompute verifies structure, sequence, and signatures, never the substance of a judgment"
+      ],
+      "profile": {
+        "id": "test/v0",
+        "version": "1.0"
+      },
+      "recomputed_at": "2026-09-17T05:45:36.496451Z",
+      "scope": {
+        "closure_depth": 2,
+        "ledger_id": "ledger:interop-fixture-001",
+        "period": {
+          "from": "2026-09-01T00:00:00+00:00",
+          "to": "2026-09-08T00:00:00+00:00"
+        }
+      }
+    }
+  },
+  "directory": {
+    "countersigners": [
+      {
+        "endpoint": "https://countersign.example",
+        "independent_of": [],
+        "key_ids": [
+          "76d4ba1d8eb7e165c84eb5b243655462f15f65b0a607dd53638f8488305796f1"
+        ],
+        "name": "Countersign Test Operator",
+        "since": "2026-09-01",
+        "statement_types_issued": [
+          "countersign/v1"
+        ]
+      }
+    ]
+  },
+  "producer_pubkey_hex": "bb5ba6433129c243a9df2025aabca48cce204bfc0ea7ccea1732af20c196e22c"
+}

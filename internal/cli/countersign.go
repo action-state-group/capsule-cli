@@ -77,11 +77,16 @@ type CountersignCheck struct {
 	Result string `json:"result"`
 }
 
-// CountersignScope names what a countersignature attests over.
+// CountersignScope names what a countersignature attests over. Period is
+// carried as raw JSON, not a fixed type: the spec item marks it optional
+// (period?) without ratifying its shape, and a producer (capsule-anchor's
+// countersign engine among them) may reasonably emit it as a
+// {from,to} object rather than a label string. This core never asserts a
+// shape it does not need -- Period is carried through, never inspected.
 type CountersignScope struct {
-	LedgerID     string      `json:"ledger_id"`
-	Period       string      `json:"period,omitempty"`
-	ClosureDepth json.Number `json:"closure_depth,omitempty"`
+	LedgerID     string          `json:"ledger_id"`
+	Period       json.RawMessage `json:"period,omitempty"`
+	ClosureDepth json.Number     `json:"closure_depth,omitempty"`
 }
 
 // CountersignStatement is the recomputation statement accompanying a
@@ -98,17 +103,20 @@ type CountersignStatement struct {
 // digest (the "over" field, UTF-8 bytes of its 64-hex-character form) -- not
 // over the statement, which accompanies the signature but is not what is
 // signed (the entry shape's own definition sentence). "independent" is never
-// carried on the wire: a self-countersignature is well-formed and it is the
+// TRUSTED off the wire: a self-countersignature is well-formed and it is the
 // verifier's job to render it as not independent by comparing the signer's
 // key against the bundle producer's trusted keys, never the countersigner's
-// own self-report.
+// own self-report -- but a producer's self-report is a decode-compatible,
+// harmless passenger (some producers, e.g. capsule-anchor, include it for
+// their own internal bookkeeping), so the field is accepted, never acted on.
 type CountersignatureEntry struct {
-	Type      string               `json:"type"`
-	Signer    CountersignSigner    `json:"signer"`
-	Over      string               `json:"over"`
-	Statement CountersignStatement `json:"statement"`
-	Signature string               `json:"signature"`
-	Receipt   json.RawMessage      `json:"receipt,omitempty"`
+	Type        string               `json:"type"`
+	Signer      CountersignSigner    `json:"signer"`
+	Over        string               `json:"over"`
+	Independent *bool                `json:"independent,omitempty"`
+	Statement   CountersignStatement `json:"statement"`
+	Signature   string               `json:"signature"`
+	Receipt     json.RawMessage      `json:"receipt,omitempty"`
 }
 
 // countersignSubmission is the request body countersign request POSTs to
@@ -392,13 +400,18 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 		if err := json.Unmarshal(encoded, &entry); err != nil {
 			return "", nil, "", fmt.Errorf("countersignatures[%d] is malformed: %w", i, err)
 		}
-		if entry.Type != countersignAPI {
+		if entry.Type != "" && entry.Type != countersignAPI {
 			// A reserved slot this core does not define: report it, verify
 			// nothing about it, never fail the bundle for it (the -00 spec's
 			// own rule for the "cose-sign1" type).
 			reports = append(reports, countersignatureReport{State: "unverified", Signer: entry.Signer})
 			continue
 		}
+		// entry.Type == "" (absent) is treated as spec-shaped -- the base
+		// Evidence Bundle draft's countersignatures[] entry shape has no
+		// "type" field at all; whether one belongs there is an open
+		// cross-lane question for the spec desk (not decided here), so its
+		// absence must never reject an otherwise well-formed entry.
 		if entry.Over != digest {
 			return "", nil, "", fmt.Errorf("countersignatures[%d] signs a different bundle digest", i)
 		}
