@@ -1,0 +1,10 @@
+{
+  "id": "ec:negative-missing-profile:2026-09-21",
+  "version": "1",
+  "requirements": [
+    {
+      "id": "req-1",
+      "statement": "no profile named at all, and not enough native fields to imply one either"
+    }
+  ]
+}

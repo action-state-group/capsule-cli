@@ -1,0 +1,26 @@
+{
+  "id": "ec:example-claims-adjudication:2026-09-21",
+  "version": "1",
+  "subject": {
+    "job_type": "insurance-claims-adjudication",
+    "population_selector": "claims closed in evaluation_period"
+  },
+  "requirements": [
+    {
+      "id": "req-outcome-1",
+      "profile": "outcome",
+      "statement": "the claim was adjudicated to a final disposition within policy SLA",
+      "evidence_requirements": {
+        "accepted_epistemic_types": ["SYSTEM_OF_RECORD_FACT", "OBSERVED_EVENT"],
+        "required_sources": ["claims-system-of-record"],
+        "minimum_assurance": ["witnessed"],
+        "freshness": "P1D",
+        "coverage": "all closed claims in population"
+      },
+      "adjudication": { "mode": "deterministic", "policy_ref": "claims-sla-policy-v1" },
+      "uncertainty": { "on_missing": "insufficient", "on_conflict": "escalate" }
+    }
+  ],
+  "temporal": { "evaluation_period": "2026-09", "reversal_window": "P30D" },
+  "consequence": { "class": "report", "rule_ref": "claims-monthly-report-v1" }
+}

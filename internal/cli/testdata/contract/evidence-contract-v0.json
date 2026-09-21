@@ -1,0 +1,379 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/action-state-group/capsule-engine/blob/main/schemas/evidence-contract-v0.json",
+  "title": "Evidence Contract v0",
+  "description": "The Evidence Contract root abstraction (action-state-ops/spec `_work/evidence-contract-internal-spec-v3.md`, held for Steven ratify at authoring time). An Evidence Contract does not say what is true -- it declares what must be established, what evidence is acceptable, what assurance properties are required, how uncertainty is handled, and what consequence follows (spec §1). `profile` is closed at 7 values and lives per-requirement, not on the root (spec §2): a contract MAY mix profiles across its own requirements. Two shapes are accepted for the `outcome` and `obligation` profiles: the abstract wire shape sketched in spec §3.1/Appendix A (evidence_requirements/adjudication/uncertainty), and capsule-engine's own native pack-declared shape (spec §3.2/§3.3 -- `EvidenceContract.canonical_dict()`, statement/evidence_rule/forward_verdict/backward_verdict/...), which the spec states this profile already implements field-for-field. Both are normative today; this is not an invented duality -- it reflects the spec's own §3.2 prose (field-for-field mapping to capsule-engine) alongside its own Appendix A.1 worked example (the generic shape), which have not yet been reconciled into one spelling upstream. `process`/`quality`/`human_role`/`attribution`/`settlement` are typed stubs (spec §3.4-§3.7): their sketched fields are typed here, but the object stays open to extension pending a full normative pass.",
+  "$comment": "No requirement $def in this schema exposes a `status`/`result` property, on ANY profile branch, including the permissive stubs -- 'status': false / 'result': false below are deliberate forbids, not omissions. Spec §5.2: 'The evidence record never self-declares that it satisfies a requirement; the Evidence Contract defines sufficiency.' bundleAssertionStatus / contractResult / verdict ($defs below) are runtime outputs of evaluating a contract against evidence -- never contract-declarable fields.",
+  "$defs": {
+    "epistemicType": {
+      "type": "string",
+      "description": "Owned by EvidenceBook's EvidenceRecordHeader (spec-evidencebook-v3.md §3), mirrored here -- see schemas/vendor/epistemic-types.json for the vendored source and tests/test_evidence_contract_schema.py for the cross-repo parity test against capsule_engine.packs.schema.EPISTEMIC_TYPE_VALUES.",
+      "enum": [
+        "OBSERVED_EVENT",
+        "SYSTEM_OF_RECORD_FACT",
+        "PRODUCER_CLAIM",
+        "HUMAN_REPORT",
+        "SEMANTIC_JUDGMENT",
+        "DERIVED_METRIC",
+        "ADJUDICATION",
+        "OBLIGATION_REFERENCE"
+      ]
+    },
+    "bundleAssertionStatus": {
+      "type": "string",
+      "description": "Per-requirement bundle assertion status (spec §5.1, fabric v3 §9.1) -- the result of evaluating ONE requirement against evidence. This is never a field a contract declares about itself; it is published here so a schema consumer (e.g. a report renderer or `capsulectl contract validate`) has one fixed vocabulary to render a Bundle's per-requirement result against. See contractResult for the derived four-value projection.",
+      "enum": [
+        "SATISFIED",
+        "INSUFFICIENT",
+        "NOT_FOUND",
+        "NOT_COMMITTED",
+        "WITHHELD",
+        "CONTRADICTED",
+        "NOT_APPLICABLE",
+        "UNKNOWN"
+      ]
+    },
+    "contractResult": {
+      "type": "string",
+      "description": "Derived mechanically from bundleAssertionStatus (spec §5.2), never a single opaque confidence score: SATISFIED->SATISFIED; NOT_FOUND|NOT_COMMITTED|WITHHELD->GAP; CONTRADICTED->GAP (with a conflict flag set, out of scope here); INSUFFICIENT->INSUFFICIENT; NOT_APPLICABLE->excluded from the evaluated population (never itself a contract result); UNKNOWN->UNKNOWN.",
+      "enum": ["SATISFIED", "GAP", "INSUFFICIENT", "UNKNOWN"]
+    },
+    "verdict": {
+      "type": "string",
+      "description": "The three-bucket judged-outcome vocabulary (spec §8), a DIFFERENT axis from bundleAssertionStatus/contractResult: verdict is about the judged outcome once evidence sufficiency allows a determination at all. A fold MUST NOT render met/not_met when the underlying contractResult is anything but SATISFIED; NOT_APPLICABLE is a distinct requirement-level exclusion, never spelled not_evaluable.",
+      "enum": ["met", "not_met", "not_evaluable"]
+    },
+    "window": {
+      "type": "object",
+      "required": ["duration"],
+      "additionalProperties": false,
+      "properties": {
+        "duration": { "type": "string", "minLength": 1, "description": "ISO-8601 duration, e.g. P7D." },
+        "cure": { "type": ["string", "null"] },
+        "grace": { "type": ["string", "null"] }
+      }
+    },
+    "evidenceInstrument": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["structured_field", "tool_call_name"] },
+        "field": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "clauseSpec": {
+      "type": "object",
+      "required": ["instrument", "article"],
+      "additionalProperties": false,
+      "properties": {
+        "instrument": { "type": "string", "minLength": 1 },
+        "article": { "type": "string", "minLength": 1 },
+        "as_amended_by": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "paragraph": { "type": "string" },
+        "jurisdiction": { "type": "string" },
+        "text_snapshot_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "effective_from": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "source_url": { "type": "string" },
+        "contested": { "type": "boolean" }
+      }
+    },
+    "evidenceRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accepted_epistemic_types": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/epistemicType" }
+        },
+        "required_sources": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "independence": { "type": "string" },
+        "minimum_assurance": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "freshness": { "type": "string" },
+        "coverage": { "type": "string" }
+      }
+    },
+    "authorityBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required_role": { "type": "string" },
+        "escalation_path": { "type": "string" }
+      }
+    },
+    "adjudication": {
+      "type": "object",
+      "required": ["mode"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "type": "string", "enum": ["deterministic", "semantic", "human", "hybrid"] },
+        "policy_ref": { "type": "string" }
+      }
+    },
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "on_missing": { "type": "string", "enum": ["insufficient", "unknown", "escalate"] },
+        "on_conflict": { "type": "string", "enum": ["contradicted", "escalate"] }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "required": ["job_type"],
+      "additionalProperties": false,
+      "properties": {
+        "job_type": { "type": "string", "minLength": 1 },
+        "population_selector": { "type": "string" }
+      }
+    },
+    "principal": {
+      "type": "object",
+      "required": ["principal_ref"],
+      "additionalProperties": false,
+      "properties": {
+        "principal_ref": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+:.+$",
+          "description": "profile-defined scheme:value, e.g. nostr-pubkey:<hex> (spec §3.1). Key control is never taken as authority; this field cites a principal, it does not itself grant, verify, or interpret authority."
+        },
+        "authority_context": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "temporal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evaluation_period": { "type": "string" },
+        "reversal_window": { "type": "string" }
+      }
+    },
+    "disclosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy_ref": { "type": "string" }
+      }
+    },
+    "consequence": {
+      "type": "object",
+      "required": ["class"],
+      "additionalProperties": false,
+      "properties": {
+        "class": { "type": "string", "enum": ["none", "report", "escalation", "settlement", "other"] },
+        "rule_ref": { "type": "string" }
+      }
+    },
+    "requirementNativeBase": {
+      "description": "capsule-engine's own EvidenceContract.canonical_dict() shape (spec §3.2/§3.3: 'field-for-field' for outcome, reused unchanged for obligation) -- the outcome and obligation profiles are the only two that reuse this flat dataclass shape in real code today.",
+      "type": "object",
+      "required": ["id", "statement", "evidence_rule", "forward_verdict", "backward_verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "profile": { "type": "string", "enum": ["outcome", "obligation"] },
+        "status": false,
+        "result": false,
+        "statement": { "type": "string", "minLength": 1 },
+        "evidence_rule": { "type": "string", "minLength": 1 },
+        "forward_verdict": {
+          "type": "string",
+          "enum": ["DETERMINISTIC", "UNAVAILABLE-MODEL-REQUIRED", "UNAVAILABLE-STATE-REQUIRED", "REFUSED"]
+        },
+        "backward_verdict": {
+          "type": "string",
+          "enum": ["DETERMINISTIC", "MODEL-ASSISTED", "MANUAL", "WITH-INSTRUMENTATION", "REFUSED"]
+        },
+        "window": { "$ref": "#/$defs/window" },
+        "effect_claim": { "type": "string", "enum": ["recommendation.acted_on", "resolution.followed_action", "agent.caused_resolution"] },
+        "refusal_reason_code": {
+          "type": "string",
+          "enum": ["agent_caused_resolution_undecomposable", "unbounded_goal_unmonitorable", "subjective_state_unattestable"]
+        },
+        "re_derivability_grade": { "type": "string", "enum": ["pure_replay", "ledger_state_dependent"] },
+        "declared_by": { "type": "string" },
+        "evidence_mapping_by": { "type": "string" },
+        "required_assurance_grade": { "type": "string" },
+        "exposure_denominator_ref": { "type": "string" },
+        "retention_check": { "type": "string" },
+        "measurability": { "type": "string", "enum": ["measured", "declared_not_measured"] },
+        "evidence_instrument": { "$ref": "#/$defs/evidenceInstrument" },
+        "tier": { "type": "string", "enum": ["must_have", "informational"] },
+        "mode": {
+          "type": "string",
+          "enum": ["structural", "value", "judged", "fold_rollup", "fold_counterparty", "fold_agent", "fold_cohort"]
+        },
+        "clause_ref": { "type": "string" },
+        "clause": { "$ref": "#/$defs/clauseSpec" },
+        "epistemic_type": { "$ref": "#/$defs/epistemicType" }
+      }
+    },
+    "requirementOutcomeNative": {
+      "allOf": [
+        { "$ref": "#/$defs/requirementNativeBase" },
+        { "properties": { "profile": { "const": "outcome" } } }
+      ]
+    },
+    "requirementObligationNative": {
+      "description": "profile=='obligation' additionally requires clause -- capsule_engine/packs/loader.py's missing_obligation_clause rule ([evidence-obligation-profile-scaffold]).",
+      "allOf": [
+        { "$ref": "#/$defs/requirementNativeBase" },
+        { "required": ["profile", "clause"], "properties": { "profile": { "const": "obligation" } } }
+      ]
+    },
+    "requirementOutcomeGeneric": {
+      "description": "The abstract root-object-model shape for an outcome requirement (spec §3.1/Appendix A.1), as an alternative to requirementOutcomeNative.",
+      "type": "object",
+      "required": ["id", "profile", "statement"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "profile": { "const": "outcome" },
+        "status": false,
+        "result": false,
+        "statement": { "type": "string", "minLength": 1 },
+        "evidence_requirements": { "$ref": "#/$defs/evidenceRequirements" },
+        "authority": { "$ref": "#/$defs/authorityBlock" },
+        "adjudication": { "$ref": "#/$defs/adjudication" },
+        "uncertainty": { "$ref": "#/$defs/uncertainty" },
+        "obligation_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "requirementObligationGeneric": {
+      "description": "spec §3.3 sketch: a versioned obligation reference bound to evidence requirements.",
+      "type": "object",
+      "required": ["id", "profile", "statement", "clause_ref"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "profile": { "const": "obligation" },
+        "status": false,
+        "result": false,
+        "statement": { "type": "string", "minLength": 1 },
+        "clause_ref": { "type": "string", "minLength": 1 },
+        "required_role": { "type": "string" },
+        "evidence_requirements": { "$ref": "#/$defs/evidenceRequirements" },
+        "retention_check": { "type": "string" },
+        "exceptions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "requirementProcess": {
+      "description": "Typed stub (spec §3.4) -- fields sketched, not exhaustively normative; open to extension pending Evidence Contract v3's full pass on this profile.",
+      "type": "object",
+      "required": ["id", "profile", "statement"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "profile": { "const": "process" },
+        "status": false,
+        "result": false,
+        "statement": { "type": "string", "minLength": 1 },
+        "required_sequence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "tools_used": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "escalation_path": { "type": "string" },
+        "approvals": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "efficiency": { "type": "object" },
+        "safety_exceptions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "evidence_requirements": { "$ref": "#/$defs/evidenceRequirements" },
+        "obligation_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "requirementQuality": {
+      "description": "Typed stub (spec §3.5) -- fields sketched, not exhaustively normative.",
+      "type": "object",
+      "required": ["id", "profile", "statement"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "profile": { "const": "quality" },
+        "status": false,
+        "result": false,
+        "statement": { "type": "string", "minLength": 1 },
+        "correctness": {},
+        "completeness": {},
+        "business_specificity": {},
+        "unsupported_claims": {},
+        "robustness": {},
+        "uncertainty": { "$ref": "#/$defs/uncertainty" },
+        "obligation_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "requirementHumanRole": {
+      "description": "Typed stub (spec §3.6) -- fields sketched, not exhaustively normative. Human experience measures MUST remain typed as HUMAN_REPORT evidence or derived metrics over it, never bare (spec §3.6/v2 §7); this schema does not mechanically enforce that cross-field rule, only the shape.",
+      "type": "object",
+      "required": ["id", "profile", "statement"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "profile": { "const": "human_role" },
+        "status": false,
+        "result": false,
+        "statement": { "type": "string", "minLength": 1 },
+        "review": { "type": "object" },
+        "override": { "type": "object" },
+        "escalation": { "type": "object" },
+        "human_report": { "type": "object" },
+        "workload_or_learning": { "type": "object" },
+        "evidence_requirements": { "$ref": "#/$defs/evidenceRequirements" },
+        "obligation_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "requirementAttribution": {
+      "description": "Typed stub (spec §3.7): the root accepts this profile value today but carries only a ref -- provenance path, utilization, incremental contribution, eligible population, and reversal/refund rules are not yet normative.",
+      "type": "object",
+      "required": ["id", "profile", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "profile": { "const": "attribution" },
+        "status": false,
+        "result": false,
+        "ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "requirementSettlement": {
+      "description": "Typed stub (spec §3.7): the root accepts this profile value today but carries only a ref -- eligible-population and settlement rules are not yet normative.",
+      "type": "object",
+      "required": ["id", "profile", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "profile": { "const": "settlement" },
+        "status": false,
+        "result": false,
+        "ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "requirement": {
+      "oneOf": [
+        { "$ref": "#/$defs/requirementOutcomeNative" },
+        { "$ref": "#/$defs/requirementOutcomeGeneric" },
+        { "$ref": "#/$defs/requirementObligationNative" },
+        { "$ref": "#/$defs/requirementObligationGeneric" },
+        { "$ref": "#/$defs/requirementProcess" },
+        { "$ref": "#/$defs/requirementQuality" },
+        { "$ref": "#/$defs/requirementHumanRole" },
+        { "$ref": "#/$defs/requirementAttribution" },
+        { "$ref": "#/$defs/requirementSettlement" }
+      ]
+    },
+    "evidenceContract": {
+      "type": "object",
+      "required": ["id", "version", "requirements"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "subject": { "$ref": "#/$defs/subject" },
+        "principal": { "$ref": "#/$defs/principal" },
+        "requirements": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/requirement" } },
+        "temporal": { "$ref": "#/$defs/temporal" },
+        "disclosure": { "$ref": "#/$defs/disclosure" },
+        "consequence": { "$ref": "#/$defs/consequence" }
+      }
+    }
+  },
+  "$ref": "#/$defs/evidenceContract"
+}

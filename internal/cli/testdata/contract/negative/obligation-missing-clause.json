@@ -1,0 +1,11 @@
+{
+  "id": "ec:negative-obligation-missing-clause:2026-09-21",
+  "version": "1",
+  "requirements": [
+    {
+      "id": "req-1",
+      "profile": "obligation",
+      "statement": "the internal change-control policy's review-before-merge control was evidenced"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "ec:negative-invalid-consequence-class:2026-09-21",
+  "version": "1",
+  "requirements": [
+    {
+      "id": "req-1",
+      "profile": "settlement",
+      "ref": "settlement-rule-v1"
+    }
+  ],
+  "consequence": { "class": "compliant" }
+}

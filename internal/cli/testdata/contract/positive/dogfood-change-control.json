@@ -1,0 +1,35 @@
+{
+  "id": "ec:dogfood-change-control:2026-09-21",
+  "version": "1",
+  "subject": {
+    "job_type": "internal-pr-merge",
+    "population_selector": "PRs merged to main in evaluation_period"
+  },
+  "requirements": [
+    {
+      "id": "req-process-1",
+      "profile": "process",
+      "statement": "a required review step preceded merge",
+      "required_sequence": ["review-requested", "review-approved", "merged"],
+      "approvals": ["at least one non-author reviewer"],
+      "evidence_requirements": {
+        "accepted_epistemic_types": ["OBSERVED_EVENT", "SYSTEM_OF_RECORD_FACT"],
+        "required_sources": ["vcs-events"],
+        "coverage": "every merge commit in population"
+      }
+    },
+    {
+      "id": "req-obligation-1",
+      "profile": "obligation",
+      "statement": "the internal change-control policy's review-before-merge control was evidenced",
+      "clause_ref": "internal-change-control-policy/section-3/v2",
+      "evidence_requirements": {
+        "accepted_epistemic_types": ["OBSERVED_EVENT"],
+        "required_sources": ["vcs-events"]
+      },
+      "retention_check": "review events retained for evaluation_period + P1Y"
+    }
+  ],
+  "temporal": { "evaluation_period": "2026-09" },
+  "consequence": { "class": "report", "rule_ref": "dogfood-change-control-report-v1" }
+}

@@ -111,12 +111,16 @@ func output(c *cobra.Command, value any) error {
 // those may contain DSNs, SQL values, invalid secret flags, or service bodies.
 func SafeError(err error) string {
 	var fileErr *inputFileError
+	var schemaErr *schemaLoadError
 	switch {
 	case errors.As(err, &fileErr):
 		// The path is caller-supplied via a flag, so surfacing it discloses
 		// nothing sensitive and distinguishes a missing input file from a
 		// profile/configuration problem.
 		return fileErr.Error()
+	case errors.As(err, &schemaErr):
+		// --schema is likewise caller-typed, not a profile secret.
+		return schemaErr.Error()
 	case errors.Is(err, artifact.ErrUntrustedSigner):
 		return "producer is not authorized by the profile trusted_keys"
 	case errors.Is(err, ErrInput):
@@ -129,6 +133,10 @@ func SafeError(err error) string {
 		return ErrReadOnlyCLL.Error()
 	case errors.Is(err, ErrPartial):
 		return ErrPartial.Error()
+	case errors.Is(err, ErrSchemaInvalid):
+		// The detailed per-issue report was already printed by `contract
+		// validate` itself; this is only the trailing summary line.
+		return ErrSchemaInvalid.Error()
 	default:
 		return "operation failed; check input, selected profile, permissions and service availability (sensitive details suppressed)"
 	}
@@ -159,6 +167,7 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(keyCommands())
 	root.AddCommand(bundleCommands()...)
 	root.AddCommand(countersignCommands())
+	root.AddCommand(contractCommands())
 	store := &cobra.Command{Use: "store", Short: "Initialize and verify the profile's artifact and CLL store"}
 	init := &cobra.Command{Use: "init", Short: "Initialize the store and pin its store_id into the profile", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
