@@ -12,7 +12,12 @@ import (
 // surface (an MCP tool, an OpenAPI verb, a bus topic) and its Signal-1
 // classification per docs/whats-consequential.md in capsule-emit (the
 // two-signal rule) -- see capsule_emit.connector.classify_signal_1 for the
-// Python implementation this mirrors. Built ONLY from config files that
+// Python implementation of the SAME DOCUMENTED priority order this file
+// implements independently in Go. No shared fixture or cross-language test
+// proves the two agree on every input today -- both are unit-tested against
+// the same worked examples in whats-consequential.md, not against each
+// other; treat "same priority order" as "implements the same written rule",
+// not as "byte-for-byte verified parity". Built ONLY from config files that
 // already passed classifyFile's allow/deny gate (discover.go) -- this file
 // never opens anything itself.
 type effectBoundary struct {

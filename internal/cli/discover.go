@@ -208,6 +208,13 @@ func scanRoot(root string, extraDeny []string) ([]discoveredFile, error) {
 			}
 			return nil
 		}
+		// checkName is what isDenyFile/isAllowFile classify against. For a
+		// symlink it MUST be the resolved target's basename, never the
+		// link's own name -- otherwise a symlink named e.g. "config.yaml"
+		// pointing at "id_rsa" would pass the deny check on its link name
+		// and digestFile would open the real secret. d.Name() is correct
+		// for every non-symlink entry.
+		checkName := d.Name()
 		if d.Type()&fs.ModeSymlink != 0 {
 			resolved, err := filepath.EvalSymlinks(path)
 			if err != nil || !(resolved == resolvedRoot || strings.HasPrefix(resolved, resolvedRoot+string(os.PathSeparator))) {
@@ -215,13 +222,14 @@ func scanRoot(root string, extraDeny []string) ([]discoveredFile, error) {
 					Disposition: dispositionExcludedSymlink, Reason: "symlink target is unresolvable or escapes the scope root"})
 				return nil
 			}
+			checkName = filepath.Base(resolved)
 		}
-		if deny, reason := isDenyFile(d.Name(), extraDeny); deny {
+		if deny, reason := isDenyFile(checkName, extraDeny); deny {
 			out = append(out, discoveredFile{Root: root, Path: rel, Kind: classifyKind(rel),
 				Disposition: dispositionExcludedSecret, Reason: reason})
 			return nil
 		}
-		if !isAllowFile(d.Name()) {
+		if !isAllowFile(checkName) {
 			info, statErr := d.Info()
 			var size int64
 			if statErr == nil {
@@ -286,11 +294,19 @@ func randomActionSuffix() (string, error) {
 }
 
 // sealScanManifest builds the capsule every discover scan must emit
-// (Do item 4: "digests of config, never contents"). The Payload passed to
-// seal() IS the manifest -- a list of {path, kind, disposition, digest}
-// rows -- so even the bytes handed to the SDK before its own digest
-// commitment never include a scanned file's raw content, only what
-// scanRoot already reduced it to.
+// (Do item 4: "digests of config, never contents"). For a plain scan the
+// Payload IS the {path, kind, disposition, digest} manifest scanRoot
+// already reduced every file to -- never a scanned file's raw bytes.
+//
+// For an --effects scan the manifest is instead the []effectBoundary list:
+// each row's Surface/Source is a STRUCTURED NAME extracted from an already
+// allow-listed (non-secret) config file's content -- an MCP tool name, an
+// "METHOD path" pair, a bus topic name -- not a digest, and not the raw
+// file either. This is a narrower claim than "digests of config": it is
+// "small, named structural facts about config, never a secret's bytes and
+// never a whole file's contents" -- the boundary discover exists to hold is
+// about payloads/secrets/credentials, not about every string this command
+// ever seals.
 func sealScanManifest(p Profile, kind string, manifest any, outputPath string) (map[string]string, error) {
 	key, err := privateKey(p.Signing)
 	if err != nil {

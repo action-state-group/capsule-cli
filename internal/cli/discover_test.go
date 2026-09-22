@@ -114,6 +114,43 @@ func TestScanRootExcludesSymlinkEscapingRoot(t *testing.T) {
 	assert.Equal(t, dispositionExcludedSymlink, files[0].Disposition)
 }
 
+// TestScanRootNeverOpensASecretBehindABenignlyNamedSymlink is the symlink
+// variant of the adversarial proof above: a real secret ("credentials.yaml",
+// 0000 permissions) lives inside the scope root, and a symlink with an
+// innocuous name points at it. The deny/allow check must classify by the
+// RESOLVED target's basename, not the link's own name -- otherwise a link
+// named e.g. "config.yaml" would sail past isDenyFile on its own name and
+// digestFile would open the real secret through the link.
+//
+// R4 mutant: pass d.Name() instead of the resolved checkName into
+// isDenyFile/isAllowFile (i.e. revert the discover.go fix) and this test
+// goes red -- the link resolves cleanly (it does not escape the root), the
+// deny check misses on the link's own name "config.yaml", and digestFile
+// hits the 0000 target with a permission-denied error.
+func TestScanRootNeverOpensASecretBehindABenignlyNamedSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits only")
+	}
+	root := t.TempDir()
+	secret := filepath.Join(root, "credentials.yaml")
+	require.NoError(t, os.WriteFile(secret, []byte("api_key: super-secret-value\n"), 0o600))
+	require.NoError(t, os.Chmod(secret, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(secret, 0o600) })
+	link := filepath.Join(root, "config.yaml")
+	require.NoError(t, os.Symlink(secret, link))
+
+	files, err := scanRoot(root, nil)
+	require.NoError(t, err, "a denied secret reached through a symlink must never fail the scan")
+	require.Len(t, files, 2)
+	byPath := map[string]discoveredFile{}
+	for _, f := range files {
+		byPath[f.Path] = f
+	}
+	assert.Equal(t, dispositionExcludedSecret, byPath["config.yaml"].Disposition,
+		"classified by the resolved target's name, not the link's own name")
+	assert.Empty(t, byPath["config.yaml"].Digest)
+}
+
 // TestScanRootNeverOpensADeniedSecret is the adversarial proof QUEUE_PROTOCOL
 // §7a requires: a planted fake secret is set to mode 0000 (unreadable, even
 // by its owner) AND given a config-shaped ".yaml" extension so it would also
@@ -227,12 +264,43 @@ func TestDiscoverCommandSealsAScanCapsule(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(sealedBytes), result.Sealed.CapsuleID)
 
+	// Cryptographic round-trip, not just "a capsule_id string is present":
+	// the sealed artifact must actually verify against the profile's own
+	// trusted key, through the CLI's own verify command.
+	verifyOut, err := invoke(t, "", "verify", "--profile", "discover-test", "--capsule", sealOutput)
+	require.NoError(t, err)
+	assert.Contains(t, verifyOut, "passed")
+
 	var byDisposition = map[string]int{}
 	for _, f := range result.Files {
 		byDisposition[f.Disposition]++
 	}
 	assert.Equal(t, 1, byDisposition[dispositionScanned])
 	assert.Equal(t, 1, byDisposition[dispositionExcludedSecret])
+}
+
+func TestDiscoverCommandTableFormat(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, _ := profileFixture(t)
+	p.Name = "discover-table-test"
+	require.NoError(t, saveProfile(p, false))
+
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "otel-collector.yaml"), []byte("receivers: {}\n"), 0o644))
+	scopePath := filepath.Join(t.TempDir(), "scope.yaml")
+	require.NoError(t, os.WriteFile(scopePath, []byte("roots:\n  - "+root+"\n"), 0o644))
+	sealOutput := filepath.Join(t.TempDir(), "scan.json")
+
+	out, err := invoke(t, "", "discover", "--profile", "discover-table-test", "--scope", scopePath,
+		"--seal-output", sealOutput, "--format", "table")
+	require.NoError(t, err)
+	assert.Contains(t, out, "ROOT")
+	assert.Contains(t, out, "DISPOSITION")
+	assert.Contains(t, out, "otel-collector.yaml")
+	assert.Contains(t, out, dispositionScanned)
+	assert.Contains(t, out, "sealed: capsule_id=")
+	// The table view must not degrade into the JSON envelope's field names.
+	assert.NotContains(t, out, `"spec_version"`)
 }
 
 func TestDiscoverCommandRequiresScope(t *testing.T) {
