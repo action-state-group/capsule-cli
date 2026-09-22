@@ -429,6 +429,144 @@ The artifact storage SDK is maintained and tested separately in
 sets `CAPSULE_STORAGE_TEST_DSN` for its own isolated MySQL integration tests.
 CLI CI tests integration with the SDK version pinned in `go.mod`.
 
+## GitHub Action: seal a capsule per pull request
+
+`action.yml` at the repository root is a composite GitHub Action, `Seal PR
+Capsule`. On a `pull_request` event it builds one capsule from public PR
+metadata, anchors it to the free public witness, and posts the `capsule_id`
+as a PR comment. It seals — it never gates the PR; a red checkpoint does not
+fail the build (see "Failure behavior" below).
+
+**What goes into the capsule, and what never does.** The capsule records:
+repo, PR number, head SHA, the PR author's declared GitHub login, and three
+sha256 digests — of the PR diff, of the CI jobs' conclusions, and (only if
+the PR author opted in) of a prompt. It never records the diff text, PR body,
+prompt text, or CI log output — those are digested on the runner by
+`scripts/pr-capsule-request.sh` and only the digest crosses into the sealed
+Capsule, the witness submission, or the PR comment. See "No text leaves the
+runner" below for how that boundary is enforced, not just intended.
+
+**Declaring an agent/model (self-attested).** A PR author who wants the
+capsule to record which agent/model produced the change opts in with an
+HTML-comment block anywhere in the PR body:
+
+```
+<!-- capsule-declare
+agent_provider: anthropic
+agent_model: claude-sonnet-5
+prompt_digest_sha256: 3b1f4e...   (64 hex chars; compute this yourself, e.g.
+                                   `sha256sum prompt.txt`; the prompt itself
+                                   is never sent anywhere by this action)
+-->
+```
+
+All three fields are optional and independently unverified — they are the PR
+author's own claim, carried through as declared. This is not a gap the action
+fails to close: the sealed capsule's own `assurance.attestation_mode` field
+reads `self_attested` whenever no stronger (compute-attested or countersigned)
+evidence is bound in, so the grade is legible in the capsule itself, not just
+in this README. A PR with no `capsule-declare` block seals with no `model`
+field at all — an ordinary human-authored capsule.
+
+**Configuring the Action.** Six repository settings are required — none of
+them are read by this action from anywhere at run time; an operator with repo
+admin access provisions them once:
+
+| Name | Kind | What it is |
+| --- | --- | --- |
+| `CAPSULE_PRODUCER_SIGNING_KEY` | secret | hex Ed25519 seed, `capsulectl key generate` |
+| `CAPSULE_PRODUCER_TRUSTED_KEY` | variable | the matching public key, `capsulectl key show-public` |
+| `CAPSULE_CHECKPOINT_SIGNING_KEY` | secret | hex Ed25519 seed, a second `capsulectl key generate` |
+| `CAPSULE_CHECKPOINT_TRUSTED_KEY` | variable | the matching public key |
+| `CAPSULE_WITNESS_PUBLIC_KEY` | variable | the witness authority's public key — see "Pinning the witness key" |
+
+The producer and checkpoint keys are two distinct keypairs (mirroring
+"Checkpoints and verification" above): the producer key signs the Capsule
+itself; the checkpoint key signs the CLL checkpoint submitted to the witness.
+Public keys are not secret — they are repository *variables*, not secrets;
+only the two seeds are secrets.
+
+**Pinning the witness key.** The default `witness-endpoint` is the free public
+instance, `https://witness.agentactioncapsule.org`. Its authority key is
+published at [`/.well-known/did.json`](https://witness.agentactioncapsule.org/.well-known/did.json)
+and its `key_id` at [`/health`](https://witness.agentactioncapsule.org/health) —
+but per "Checkpoints and verification" above, fetching a key from the same
+host it will verify against is a convenience, not a trust root. Confirm the
+key out of band (e.g. against the `capsule-anchor` operator, or a second
+independent fetch from a different network) before setting
+`CAPSULE_WITNESS_PUBLIC_KEY`. Observed 2026-09-22: `key_id 19a9ab3e02fad55c`,
+JWK `x` `ObtlTJ3Ar-HA7e8N7_qmkJm4UYg2ybom4EkVNYQPlrU` (base64url Ed25519), hex
+`39bb654c9dc0afe1c0edef0deffaa69099b8518836c9ba26e0491535840f96b5` — reconfirm
+before pinning; a stable key rotates rarely, but "observed once" is not
+"independently pinned."
+
+**Adopting this in another repo.** `examples/adopt-seal-pr-capsule.yml` is a
+copy-paste template. `needs:` only resolves jobs within the same workflow
+file, so the seal job must live in (or be added to) whatever workflow already
+runs your PR checks — it cannot react to a separate CI workflow without a
+`workflow_run` trigger, which this v1 does not implement.
+
+**Verifying a PR capsule.** The PR comment names the `capsule_id`; the
+capsule's Class-1 payload and full artifact record are also available as this
+action's own outputs (`capsule-path`, `artifact-path`) for the run that sealed
+it. Two ways to verify, both offline once you have the bytes:
+
+```bash
+# Class-1: recompute capsule_id from the payload alone (agent-action-capsule's own tool).
+agent-action-capsule verify capsule.json
+
+# Full chain: producer signature + trust + bound artifacts (this repo's own tool).
+capsulectl verify --profile <a profile pinning the producer key> --capsule artifact.json
+```
+
+A tampered capsule — any single byte changed in `capsule.json`, including one
+hex character of a digest reference — fails both: `agent-action-capsule
+verify` reports `capsule_id_mismatch` because JCS-canonicalizing the changed
+payload no longer reproduces the carried `capsule_id`, and `capsulectl verify`
+reports `capsule_and_artifacts: failed` for the same reason plus a producer
+signature that verified over the original bytes, not the tampered ones.
+
+To confirm the witness anchor independently: `capsulectl cll checkpoint
+status --profile <profile with the checkpoint keys and endpoint configured>
+--checkpoint <mmr_size>` re-verifies the persisted receipt against the pinned
+witness key — not merely a cached "200 OK".
+
+**Scope (v1).** Each run seals against a fresh, ephemeral local log — there is
+no cross-run continuity or durable per-repo CLL; every PR's checkpoint is a
+size-1 (or few-entry) tree witnessed independently. That is sufficient for
+"one capsule per PR, anchored, externally checkable" but is not the same
+guarantee as a continuously-appended log. Fork PRs are not sealed: GitHub
+withholds repository secrets from a fork's `pull_request` event, so there is
+no signing key to seal with; this is a documented gap, not a silent one.
+
+**Failure behavior.** The action's own steps fail closed (missing/invalid
+input, sealing error) but the seal job does not gate the PR — it seals
+evidence about the PR, including a failing PR; it is not itself a required
+check. If the witness checkpoint does not reach `verified` (network partition,
+witness downtime), the script exits 4 and the capsule is still sealed and
+locally verifiable — it is simply not yet anchored.
+
+The request is deterministic in everything but wall-clock: `Timestamp` is the
+head commit's own commit time (not the time the action ran), so re-running the
+workflow for the same head SHA with unchanged CI job conclusions reproduces
+the identical `capsule_id` and is a true retry of the same checkpoint, not a
+new capsule — `publish` (see "Publication and recovery" above) is
+identity-idempotent on that ID. If a re-run's CI conclusions differ from the
+first run's (a flaky test now passing, say), that is new evidence, so it
+correctly seals as a *different* capsule with its own PR comment — this is by
+design, not a rare edge case to work around.
+
+**No text leaves the runner — how this is enforced, not just intended.**
+`scripts/pr-capsule-request.sh` pipes `git diff` directly into `sha256sum`
+without ever assigning the diff to a shell variable; the PR body is read only
+through the `<!-- capsule-declare -->` block's three named fields, never
+digested or stored as a whole; CI results are passed in as job-name to
+conclusion pairs (`ci-jobs-json`), never as raw log output. Every value the
+action receives from the caller's `github` context flows through a step
+`env:` mapping, never inline `${{ }}` interpolation inside a `run:` script —
+the pattern GitHub's own docs warn is a script-injection vector when a
+PR title or body is spliced into shell text directly.
+
 ## Artifact-only and CLL-only profiles
 
 The profile format is unchanged. An artifact namespace enables artifact storage;

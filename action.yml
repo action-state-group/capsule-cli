@@ -1,0 +1,166 @@
+name: 'Seal PR Capsule'
+description: >-
+  Seals one Agent Action Capsule per pull request — repo, PR number, head SHA,
+  declared author, self-attested agent/model if declared, and sha256 digests
+  of the diff/prompt/CI result — anchors it to the free public witness, and
+  posts the capsule_id as a PR comment. The diff, prompt, and CI output are
+  digested on the runner; only the digests are ever written to the capsule,
+  the witness, or the comment.
+author: 'Action State Group'
+
+inputs:
+  github-token:
+    description: 'Token used to post the capsule_id PR comment (needs pull-requests: write)'
+    required: true
+  repo:
+    description: >-
+      owner/repo. Composite action metadata cannot read the caller's `github`
+      context on its own — the calling workflow must pass this (and every
+      other pull_request-derived input below) explicitly via `with:`, e.g.
+      `repo: ${{ github.repository }}`. See the reference workflow.
+    required: true
+  pr-number:
+    required: true
+  head-sha:
+    required: true
+  base-sha:
+    required: true
+  pr-author:
+    description: 'Declared PR author login, as reported by GitHub — not independently verified beyond GitHub auth'
+    required: true
+  pr-body:
+    description: 'PR body text. Read only to extract a self-attested <!-- capsule-declare --> block; never digested or stored verbatim.'
+    required: false
+    default: ''
+  ci-jobs-json:
+    description: 'Compact JSON object, job name -> conclusion, e.g. {"quality":"success","test":"success"}. Digested; raw job logs are never read.'
+    required: true
+  producer-signing-key:
+    description: 'Hex Ed25519 seed for the capsule producer key (secret)'
+    required: true
+  producer-trusted-key:
+    description: 'Hex Ed25519 public key matching producer-signing-key'
+    required: true
+  checkpoint-signing-key:
+    description: 'Hex Ed25519 seed for the CLL checkpoint signer (secret)'
+    required: true
+  checkpoint-trusted-key:
+    description: 'Hex Ed25519 public key matching checkpoint-signing-key'
+    required: true
+  witness-endpoint:
+    description: 'Free public witness checkpoint endpoint'
+    required: false
+    default: 'https://witness.agentactioncapsule.org'
+  witness-public-key:
+    description: >-
+      Independently-pinned hex Ed25519 public key of the witness authority.
+      Do not trust a value fetched from the witness host itself at run time —
+      see README.md "Pinning the witness key" for how to obtain and confirm it.
+    required: true
+  witness-token:
+    description: 'Bearer token, only needed for an enrolled (non-free) submitter'
+    required: false
+    default: ''
+  post-comment:
+    description: 'Post the capsule_id as a PR comment'
+    required: false
+    default: 'true'
+
+outputs:
+  capsule-id:
+    description: 'The sealed capsule_id'
+    value: ${{ steps.seal.outputs.capsule-id }}
+  checkpoint-state:
+    description: 'verified | pending | failed'
+    value: ${{ steps.seal.outputs.checkpoint-state }}
+  capsule-path:
+    description: 'Path to the class-1 capsule JSON (input for `agent-action-capsule verify`)'
+    value: ${{ steps.seal.outputs.capsule-path }}
+  artifact-path:
+    description: 'Path to the full artifact.Record JSON (input for `capsulectl verify`)'
+    value: ${{ steps.seal.outputs.artifact-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache: false
+
+    - name: Build capsulectl
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: go build -o "${{ runner.temp }}/capsulectl" ./cmd/capsulectl
+
+    - name: Build capsule request (digests only)
+      id: request
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        CAPSULE_PR_REPO: ${{ inputs.repo }}
+        CAPSULE_PR_NUMBER: ${{ inputs.pr-number }}
+        CAPSULE_PR_HEAD_SHA: ${{ inputs.head-sha }}
+        CAPSULE_PR_BASE_SHA: ${{ inputs.base-sha }}
+        CAPSULE_PR_AUTHOR: ${{ inputs.pr-author }}
+        CAPSULE_PR_BODY: ${{ inputs.pr-body }}
+        CAPSULE_CI_JOBS_JSON: ${{ inputs.ci-jobs-json }}
+        CAPSULE_PR_REPO_DIR: ${{ github.workspace }}
+        CAPSULE_REQUEST_OUTPUT: ${{ runner.temp }}/pr-capsule-request.json
+      run: ${{ github.action_path }}/scripts/pr-capsule-request.sh
+
+    - name: Seal, publish, and anchor to the free witness
+      id: seal
+      shell: bash
+      env:
+        CAPSULE_REQUEST_FILE: ${{ runner.temp }}/pr-capsule-request.json
+        CAPSULE_PRODUCER_SIGNING_KEY: ${{ inputs.producer-signing-key }}
+        CAPSULE_PRODUCER_TRUSTED_KEY: ${{ inputs.producer-trusted-key }}
+        CAPSULE_CHECKPOINT_SIGNING_KEY: ${{ inputs.checkpoint-signing-key }}
+        CAPSULE_CHECKPOINT_TRUSTED_KEY: ${{ inputs.checkpoint-trusted-key }}
+        CAPSULE_WITNESS_ENDPOINT: ${{ inputs.witness-endpoint }}
+        CAPSULE_WITNESS_PUBLIC_KEY: ${{ inputs.witness-public-key }}
+        CAPSULE_WITNESS_TOKEN: ${{ inputs.witness-token }}
+        CAPSULE_LOG_REPO: ${{ inputs.repo }}
+        CAPSULE_LOG_PR_NUMBER: ${{ inputs.pr-number }}
+        CAPSULE_LOG_HEAD_SHA: ${{ inputs.head-sha }}
+        CAPSULE_STORE_DIR: ${{ runner.temp }}/pr-capsule-store
+        CAPSULE_PROFILE_HOME: ${{ runner.temp }}/pr-capsule-profile-home
+        CAPSULE_OUTPUT_DIR: ${{ runner.temp }}/pr-capsule-out
+        CAPSULECTL: ${{ runner.temp }}/capsulectl
+      run: |
+        # Log ids are capsulectl's --log-id: ^[a-z0-9][a-z0-9._:/-]{0,190}$
+        # (internal/cli/profile.go), i.e. lowercase, that charset, <= 191
+        # bytes. repo/pr/sha inputs may carry uppercase or exceed that length
+        # (a long owner/repo plus a full 40-char sha can), so use the short
+        # sha (matching the request's own action_id convention) and
+        # hard-truncate after normalizing rather than merely lowercasing and
+        # hoping the result fits.
+        short_sha="${CAPSULE_LOG_HEAD_SHA:0:12}"
+        raw_log_id="gh-pr-capsule.${CAPSULE_LOG_REPO}.pr${CAPSULE_LOG_PR_NUMBER}.${short_sha}"
+        CAPSULE_LOG_ID=$(printf '%s' "$raw_log_id" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9._:/-' '-')
+        CAPSULE_LOG_ID="${CAPSULE_LOG_ID:0:191}"
+        export CAPSULE_LOG_ID
+        "${{ github.action_path }}/scripts/pr-capsule-seal.sh"
+        {
+          echo "capsule-id=$(cat "$CAPSULE_OUTPUT_DIR/capsule_id")"
+          echo "checkpoint-state=$(cat "$CAPSULE_OUTPUT_DIR/checkpoint_state")"
+          echo "capsule-path=$CAPSULE_OUTPUT_DIR/capsule.json"
+          echo "artifact-path=$CAPSULE_OUTPUT_DIR/artifact.json"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Post capsule_id as a PR comment
+      if: inputs.post-comment == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        CAPSULE_ID: ${{ steps.seal.outputs.capsule-id }}
+        CHECKPOINT_STATE: ${{ steps.seal.outputs.checkpoint-state }}
+        REPO: ${{ inputs.repo }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+      run: |
+        set -euo pipefail
+        body=$(printf 'Sealed [Agent Action Capsule](https://github.com/action-state-group/agent-action-capsule) `%s`\n\nWitness checkpoint: **%s** at `%s`\n\nVerify with `agent-action-capsule verify` — see README.md, "Verifying a PR capsule".\n' \
+          "$CAPSULE_ID" "$CHECKPOINT_STATE" "https://witness.agentactioncapsule.org")
+        gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" -f body="$body" >/dev/null
