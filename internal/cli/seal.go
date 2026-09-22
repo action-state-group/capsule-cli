@@ -17,14 +17,85 @@ import (
 // Request is an application-neutral v1 sealing request. Capsule metadata follows
 // emit.Input's exported field names. Identity is always supplied by the profile.
 // RawMessage retains originals exactly, separately from signed JCS digests.
+//
+// ProvenanceMode and Chain are the exception to the Go-named "capsule" object:
+// a backfill producer builds these two AAC -05 §5.3(bis) blocks straight from
+// the spec vocabulary (snake_case keys), so they are accepted here in that
+// same shape and merged into Capsule before sealing -- see parseRequest.
 type Request struct {
-	Version     string              `json:"spec_version"`
-	Capsule     emit.Input          `json:"capsule"`
-	Payload     json.RawMessage     `json:"payload,omitempty"`
-	AgentOutput json.RawMessage     `json:"agent_output,omitempty"`
-	Model       *emit.Model         `json:"model,omitempty"`
-	Runtime     string              `json:"runtime,omitempty"`
-	Artifacts   []artifact.Artifact `json:"artifacts,omitempty"`
+	Version        string                 `json:"spec_version"`
+	Capsule        emit.Input             `json:"capsule"`
+	Payload        json.RawMessage        `json:"payload,omitempty"`
+	AgentOutput    json.RawMessage        `json:"agent_output,omitempty"`
+	Model          *emit.Model            `json:"model,omitempty"`
+	Runtime        string                 `json:"runtime,omitempty"`
+	Artifacts      []artifact.Artifact    `json:"artifacts,omitempty"`
+	ProvenanceMode *provenanceModeRequest `json:"provenance_mode,omitempty"`
+	Chain          *chainRequest          `json:"chain,omitempty"`
+}
+
+// provenanceModeRequest is the -05 §5.3(bis) provenance_mode block. Fields
+// are passed through untouched into emit.ProvenanceMode -- emit.Build renders
+// the same key set back out, so a well-formed block round-trips byte-for-byte
+// into the capsule_id preimage.
+type provenanceModeRequest struct {
+	Mode             string            `json:"mode"`
+	SourceRef        *referenceRequest `json:"source_ref,omitempty"`
+	SourceAssertedAt string            `json:"source_asserted_at,omitempty"`
+	ImportBatch      string            `json:"import_batch,omitempty"`
+	ImportedAt       string            `json:"imported_at,omitempty"`
+	TimeRung         string            `json:"time_rung,omitempty"`
+}
+
+// referenceRequest is a typed digest reference (§5.5.5), scoped to what a
+// provenance_mode source_ref may carry: CitationPurpose decodes here only so
+// emit.Build's own invariant ("source ref must not carry citation purpose or
+// log coordinates") can reject it with that existing error, rather than this
+// package silently dropping the field. log_coordinates has no legal use here
+// at all (same invariant), so it is left undeclared: a request carrying it
+// fails the request's own DisallowUnknownFields, which is exactly as correct.
+type referenceRequest struct {
+	Type            string `json:"type"`
+	DigestAlg       string `json:"digest_alg"`
+	Digest          string `json:"digest"`
+	CitationPurpose string `json:"citation_purpose,omitempty"`
+}
+
+// chainRequest is the AAC chain block (§5.5.4), including relation
+// "duplicates" (-05 §5.3(bis)): a backfilled Capsule citing the
+// contemporaneous twin it duplicates.
+type chainRequest struct {
+	ParentCapsuleID string `json:"parent_capsule_id"`
+	Relation        string `json:"relation"`
+}
+
+func (p *provenanceModeRequest) toEmit() *emit.ProvenanceMode {
+	if p == nil {
+		return nil
+	}
+	mode := &emit.ProvenanceMode{
+		Mode:             emit.ProvenanceModeValue(p.Mode),
+		SourceAssertedAt: p.SourceAssertedAt,
+		ImportBatch:      p.ImportBatch,
+		ImportedAt:       p.ImportedAt,
+		TimeRung:         emit.TimeRung(p.TimeRung),
+	}
+	if p.SourceRef != nil {
+		mode.SourceRef = &emit.Reference{
+			Type:            p.SourceRef.Type,
+			DigestAlg:       p.SourceRef.DigestAlg,
+			Digest:          p.SourceRef.Digest,
+			CitationPurpose: p.SourceRef.CitationPurpose,
+		}
+	}
+	return mode
+}
+
+func (c *chainRequest) toEmit() *emit.Chain {
+	if c == nil {
+		return nil
+	}
+	return &emit.Chain{ParentCapsuleID: c.ParentCapsuleID, Relation: emit.ChainRelation(c.Relation)}
 }
 
 const maxInput = 12 << 20
@@ -96,6 +167,18 @@ func parseRequest(raw []byte) (Request, error) {
 	}
 	if r.Version != "capsule-seal-request/v1" {
 		return r, inputError("expected capsule-seal-request/v1")
+	}
+	if r.ProvenanceMode != nil {
+		if r.Capsule.ProvenanceMode != nil {
+			return r, inputError("provenance_mode must not be set on both the request and the capsule")
+		}
+		r.Capsule.ProvenanceMode = r.ProvenanceMode.toEmit()
+	}
+	if r.Chain != nil {
+		if r.Capsule.Chain != nil {
+			return r, inputError("chain must not be set on both the request and the capsule")
+		}
+		r.Capsule.Chain = r.Chain.toEmit()
 	}
 	return r, nil
 }

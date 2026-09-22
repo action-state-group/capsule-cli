@@ -42,3 +42,5 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.58.0 // indirect
 )
+
+replace github.com/action-state-group/capsule-emit-go => ../../../_worktrees/capsule-emit-go/capsulectl-publish-accept-provenance-mode
