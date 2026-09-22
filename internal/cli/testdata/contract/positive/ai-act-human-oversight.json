@@ -1,0 +1,48 @@
+{
+  "id": "ec:ai-act-human-oversight:2026-09-21",
+  "version": "1",
+  "subject": {
+    "job_type": "high-risk-ai-system-oversight",
+    "population_selector": "cases eligible for human oversight in evaluation_period"
+  },
+  "requirements": [
+    {
+      "id": "req-human-role-1",
+      "profile": "human_role",
+      "statement": "qualified human oversight was assigned",
+      "evidence_requirements": {
+        "accepted_epistemic_types": ["SYSTEM_OF_RECORD_FACT", "OBLIGATION_REFERENCE"],
+        "required_sources": ["role-assignment-record", "authority-competence-record"]
+      },
+      "obligation_refs": ["eu-ai-act:article-14"]
+    },
+    {
+      "id": "req-human-role-2",
+      "profile": "human_role",
+      "statement": "the reviewer could interpret the system's output",
+      "review": { "events": ["review-interaction-record"] },
+      "evidence_requirements": {
+        "accepted_epistemic_types": ["OBSERVED_EVENT", "HUMAN_REPORT"],
+        "required_sources": ["ui-explanation-capability-record", "review-interaction-records"]
+      },
+      "obligation_refs": ["eu-ai-act:article-14"]
+    },
+    {
+      "id": "req-human-role-3",
+      "profile": "human_role",
+      "statement": "material cases were reviewed or escalated",
+      "review": { "rate": "population_ref:eligible-cases" },
+      "escalation": { "events": ["override-events", "exception-events"] },
+      "evidence_requirements": {
+        "accepted_epistemic_types": ["OBSERVED_EVENT", "SYSTEM_OF_RECORD_FACT"],
+        "required_sources": ["review-events", "override-events", "exception-events"]
+      },
+      "obligation_refs": ["eu-ai-act:article-14"]
+    }
+  ],
+  "temporal": { "evaluation_period": "2026-09" },
+  "consequence": {
+    "class": "report",
+    "rule_ref": "ai-act-human-oversight-evidence-report-v1"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "ec:negative-malformed-principal-ref:2026-09-21",
+  "version": "1",
+  "principal": {
+    "principal_ref": "no-scheme-separator-here"
+  },
+  "requirements": [
+    {
+      "id": "req-1",
+      "profile": "attribution",
+      "ref": "attribution-rule-v1"
+    }
+  ]
+}

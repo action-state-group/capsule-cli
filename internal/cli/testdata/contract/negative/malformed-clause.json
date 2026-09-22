@@ -1,0 +1,17 @@
+{
+  "id": "ec:negative-malformed-clause:2026-09-21",
+  "version": "1",
+  "requirements": [
+    {
+      "id": "req-1",
+      "profile": "obligation",
+      "statement": "cites a clause with no article",
+      "evidence_rule": "cited clause chained to intent",
+      "forward_verdict": "DETERMINISTIC",
+      "backward_verdict": "DETERMINISTIC",
+      "clause": {
+        "instrument": "Regulation (EU) 2024/1689"
+      }
+    }
+  ]
+}

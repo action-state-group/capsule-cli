@@ -1,0 +1,12 @@
+{
+  "id": "ec:negative-self-declared-status:2026-09-21",
+  "version": "1",
+  "requirements": [
+    {
+      "id": "req-1",
+      "profile": "human_role",
+      "statement": "qualified human oversight was assigned",
+      "status": "SATISFIED"
+    }
+  ]
+}

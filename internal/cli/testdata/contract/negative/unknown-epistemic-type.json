@@ -1,0 +1,14 @@
+{
+  "id": "ec:negative-unknown-epistemic-type:2026-09-21",
+  "version": "1",
+  "requirements": [
+    {
+      "id": "req-1",
+      "profile": "outcome",
+      "statement": "the claim was adjudicated to a final disposition within policy SLA",
+      "evidence_requirements": {
+        "accepted_epistemic_types": ["VIBES_BASED_ASSERTION"]
+      }
+    }
+  ]
+}
