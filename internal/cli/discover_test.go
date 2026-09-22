@@ -101,6 +101,31 @@ func TestScanRootPrunesDenyDirsEntirely(t *testing.T) {
 	assert.Empty(t, files, "nothing under a denied directory should appear in the inventory at all")
 }
 
+// TestScanRootPrunesVendoredAndBuildDirs is the noise-pruning regression
+// case found on the 2026-09-22 own-environment live dry run: an un-pruned
+// Rust target/ directory alone produced ~1,270 rows, several mislabeled
+// "mcp-manifest" purely because a Cargo .fingerprint file name embedded a
+// dependency crate name (rmcp) containing the substring "mcp". These
+// directories hold vendored/third-party code and build output, never our
+// own OTel/MCP/gateway/CI/repo config, so they are pruned the same way
+// (SkipDir, no rows) as the security-motivated entries above.
+func TestScanRootPrunesVendoredAndBuildDirs(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{".venv", ".venv-redteam", "node_modules", "target", "__pycache__"} {
+		full := filepath.Join(root, dir, "nested")
+		require.NoError(t, os.MkdirAll(full, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(full, "config.json"), []byte(`{"tools":[]}`), 0o644))
+	}
+	// A real config file at the scope root, to prove pruning does not also
+	// eat legitimate siblings.
+	require.NoError(t, os.WriteFile(filepath.Join(root, "otel-collector.yaml"), []byte("receivers: {}\n"), 0o644))
+
+	files, err := scanRoot(root, nil)
+	require.NoError(t, err)
+	require.Len(t, files, 1, "only the real config file should survive; every vendored/build dir is pruned")
+	assert.Equal(t, "otel-collector.yaml", files[0].Path)
+}
+
 func TestScanRootExcludesSymlinkEscapingRoot(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()

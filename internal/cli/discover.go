@@ -78,8 +78,45 @@ const (
 // denyDirs are never even descended into -- their contents are not walked,
 // let alone opened. Kept separate from denyFilePatterns because a directory
 // match should prune the whole subtree (fs.SkipDir), not just skip one file.
+//
+// Two different reasons live in one set, both pruning identically (SkipDir,
+// no inventory row for the directory itself): the first group is
+// security-motivated (credential/identity material); the second is
+// noise-motivated -- vendored dependency trees and build caches are not
+// "OTel config, MCP servers, gateways, repos, CI [or] named systems" (the
+// boundary's own words), they are third-party code and build artifacts.
+// Found live on the 2026-09-22 own-environment dry run: an un-pruned Rust
+// target/ directory alone produced ~1,270 "scanned" rows, several
+// mislabeled "mcp-manifest" purely because Cargo's .fingerprint file names
+// embed a dependency crate name (e.g. the `rmcp` crate) that happens to
+// contain "mcp" -- noise, not a security issue, but exactly what an
+// eyeball-before-sealing pass exists to catch.
 var denyDirs = map[string]bool{
+	// security-motivated
 	".ssh": true, ".aws": true, ".gnupg": true, ".git": true, ".kube": true,
+	// noise-motivated: vendored dependencies and build output, exact names
+	"node_modules": true, "target": true, "__pycache__": true,
+	".pytest_cache": true, ".ruff_cache": true, ".mypy_cache": true,
+	"dist": true, "build": true,
+}
+
+// denyDirPrefixes match a directory's base name by prefix (case-insensitive)
+// -- for names a project varies per-purpose rather than using one fixed
+// string, e.g. "capsule-emit-mesh"'s own ".venv-redteam" alongside the
+// ordinary ".venv"/"venv".
+var denyDirPrefixes = []string{".venv", "venv"}
+
+func isPrunedDir(name string) bool {
+	lower := strings.ToLower(name)
+	if denyDirs[lower] {
+		return true
+	}
+	for _, prefix := range denyDirPrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return strings.HasSuffix(lower, ".egg-info")
 }
 
 // denyFilePatterns match a file's base name (case-insensitive) and always
@@ -203,7 +240,7 @@ func scanRoot(root string, extraDeny []string) ([]discoveredFile, error) {
 			return nil
 		}
 		if d.IsDir() {
-			if denyDirs[strings.ToLower(d.Name())] {
+			if isPrunedDir(d.Name()) {
 				return fs.SkipDir
 			}
 			return nil
