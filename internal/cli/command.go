@@ -431,6 +431,7 @@ func NewCommand() *cobra.Command {
 	appendCmd.Flags().String("capsule", "", "Verified artifact.Record file; persisted first only when artifact storage is configured")
 	logs.AddCommand(appendCmd)
 	addCheckpointCommands(logs)
+	root.AddCommand(discoverCommand())
 	addPluginCommands(root)
 	root.SetHelpCommand(&cobra.Command{Use: "help [command]", Short: "Help about any command", RunE: func(c *cobra.Command, args []string) error {
 		target, _, e := root.Find(args)
