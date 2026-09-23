@@ -64,3 +64,38 @@ jobs:
           cache: true
       - name: Unit and MySQL integration tests with race detector
         run: make test
+
+  seal-pr-capsule:
+    # Same-repo PRs only: a fork PR's pull_request event carries no repository
+    # secrets, so sealing (which needs the producer/checkpoint signing keys)
+    # cannot run against it. Runs on any outcome of quality/test so a failing
+    # PR still gets a capsule recording that CI failed, not just green ones.
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [quality, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Seal PR capsule
+        uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repo: ${{ github.repository }}
+          pr-number: ${{ github.event.pull_request.number }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          pr-author: ${{ github.event.pull_request.user.login }}
+          pr-body: ${{ github.event.pull_request.body }}
+          ci-jobs-json: ${{ format('{{"quality":"{0}","test":"{1}"}}', needs.quality.result, needs.test.result) }}
+          producer-signing-key: ${{ secrets.CAPSULE_PRODUCER_SIGNING_KEY }}
+          producer-trusted-key: ${{ vars.CAPSULE_PRODUCER_TRUSTED_KEY }}
+          checkpoint-signing-key: ${{ secrets.CAPSULE_CHECKPOINT_SIGNING_KEY }}
+          checkpoint-trusted-key: ${{ vars.CAPSULE_CHECKPOINT_TRUSTED_KEY }}
+          witness-public-key: ${{ vars.CAPSULE_WITNESS_PUBLIC_KEY }}

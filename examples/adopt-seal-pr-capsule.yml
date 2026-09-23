@@ -1,0 +1,64 @@
+# Template for adopting the seal-pr-capsule action in another repo.
+#
+# Not run from this location — copy it into that repo's own
+# .github/workflows/ and rename the job(s) it depends on. `needs:` only
+# resolves jobs in the SAME workflow file, so the seal job must live
+# alongside (or be folded into) whatever job(s) already run your PR checks;
+# it cannot react to a separate CI workflow without a workflow_run trigger.
+#
+# `uses: action-state-group/capsule-cli@<pinned-tag-or-sha>` checks out this
+# action's own source into a separate temp directory at run time — you do not
+# need to check out capsule-cli yourself. Your own repo still needs its own
+# `actions/checkout` step (with fetch-depth: 0, so both PR endpoints are
+# present for the diff digest) before this action runs.
+#
+# Required repo configuration (ask an org owner to provision these; see
+# README.md "Configuring the Action" for how the producer/checkpoint keys are
+# generated and why the witness key must be pinned independently, not fetched
+# at run time):
+#   Secrets:  CAPSULE_PRODUCER_SIGNING_KEY, CAPSULE_CHECKPOINT_SIGNING_KEY
+#   Variables: CAPSULE_PRODUCER_TRUSTED_KEY, CAPSULE_CHECKPOINT_TRUSTED_KEY,
+#              CAPSULE_WITNESS_PUBLIC_KEY
+
+name: Seal PR Capsule
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  your_existing_ci_job:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "replace with your repo's real build/test steps"
+
+  seal-pr-capsule:
+    if: always() && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [your_existing_ci_job]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: action-state-group/capsule-cli@REPLACE_WITH_PINNED_TAG_OR_SHA
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repo: ${{ github.repository }}
+          pr-number: ${{ github.event.pull_request.number }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          pr-author: ${{ github.event.pull_request.user.login }}
+          pr-body: ${{ github.event.pull_request.body }}
+          ci-jobs-json: ${{ format('{{"your_existing_ci_job":"{0}"}}', needs.your_existing_ci_job.result) }}
+          producer-signing-key: ${{ secrets.CAPSULE_PRODUCER_SIGNING_KEY }}
+          producer-trusted-key: ${{ vars.CAPSULE_PRODUCER_TRUSTED_KEY }}
+          checkpoint-signing-key: ${{ secrets.CAPSULE_CHECKPOINT_SIGNING_KEY }}
+          checkpoint-trusted-key: ${{ vars.CAPSULE_CHECKPOINT_TRUSTED_KEY }}
+          witness-public-key: ${{ vars.CAPSULE_WITNESS_PUBLIC_KEY }}
