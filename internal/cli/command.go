@@ -459,6 +459,7 @@ func NewCommand() *cobra.Command {
 	logs.AddCommand(appendCmd)
 	addCheckpointCommands(logs)
 	root.AddCommand(discoverCommand())
+	root.AddCommand(mapCommand())
 	root.AddCommand(doctorCommand())
 	root.AddCommand(resultCommands())
 	root.AddCommand(runCommand())
