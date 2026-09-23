@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/action-state-group/agent-action-capsule/go v0.0.0-20260915155341-70948effe945
-	github.com/action-state-group/capsule-emit-go v0.0.0-20260913045558-41b8f3f619d9
+	github.com/action-state-group/capsule-emit-go v0.1.0
 	github.com/action-state-group/cll-go v0.0.0-20260915155019-7a077913a24c
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1
@@ -42,5 +42,3 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.58.0 // indirect
 )
-
-replace github.com/action-state-group/capsule-emit-go => ../../../_worktrees/capsule-emit-go/capsulectl-publish-accept-provenance-mode
