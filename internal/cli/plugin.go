@@ -176,6 +176,27 @@ func discoverPlugins() []pluginInfo {
 	return plugins
 }
 
+// execPlugin re-verifies the launcher's trusted path at dispatch time (closing
+// the discovery->dispatch window; under the "current user or root" trust
+// model the residual verify->exec window would need an O_PATH fd to close),
+// then execs it with the given args passed straight through.
+func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
+	if err := verifyTrustedPath(info.path); err != nil {
+		return inputError("refusing to run plugin from an untrusted path")
+	}
+	cmd := exec.CommandContext(c.Context(), info.path, args...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr()
+	cmd.Env = append(os.Environ(), "CAPSULECTL_PLUGIN_API="+pluginAPI)
+	if err := cmd.Run(); err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return exit
+		}
+		return fmt.Errorf("plugin %s failed: %w", info.Name, err)
+	}
+	return nil
+}
+
 // pluginCommand wraps a discovered launcher as a cobra command that execs it,
 // passing the remaining args through unchanged (flag parsing disabled so the
 // plugin owns its own flags). A plugin never shadows a core command: cobra does
@@ -187,25 +208,7 @@ func pluginCommand(info pluginInfo) *cobra.Command {
 		Short:              fmt.Sprintf("%s (plugin · %s)", firstNonEmpty(pluginShort(info), "external plugin"), firstNonEmpty(info.Vendor, "unknown vendor")),
 		DisableFlagParsing: true,
 		RunE: func(c *cobra.Command, args []string) error {
-			// Re-verify at dispatch time so a swap of the launcher between discovery
-			// and now is caught. This closes the discovery->dispatch window, not the
-			// residual verify->exec window (an exec via an O_PATH fd would be needed
-			// for that); under the "current user or root" trust model the remaining
-			// race is only against a same-user process.
-			if err := verifyTrustedPath(info.path); err != nil {
-				return inputError("refusing to run plugin from an untrusted path")
-			}
-			cmd := exec.CommandContext(c.Context(), info.path, args...)
-			cmd.Stdin, cmd.Stdout, cmd.Stderr = c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr()
-			cmd.Env = append(os.Environ(), "CAPSULECTL_PLUGIN_API="+pluginAPI)
-			if err := cmd.Run(); err != nil {
-				var exit *exec.ExitError
-				if errors.As(err, &exit) {
-					return exit
-				}
-				return fmt.Errorf("plugin %s failed: %w", info.Name, err)
-			}
-			return nil
+			return execPlugin(c, info, args)
 		},
 	}
 }

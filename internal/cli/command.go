@@ -71,6 +71,63 @@ func selected(c *cobra.Command) (Profile, error) {
 	return p, nil
 }
 
+// sealToFileCommand builds the seal/emit command shape: sign a request, prepare
+// and self-verify the resulting artifact.Record, and write it to a file --
+// never a database. `outputFlag` names the required output-path flag, so
+// `seal` and `emit` can share one implementation while each keeping the flag
+// name their own callers already expect.
+func sealToFileCommand(use, outputFlag, short string) *cobra.Command {
+	cmd := &cobra.Command{Use: use, Short: short, Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		p, e := selected(c)
+		if e != nil {
+			return e
+		}
+		request, _ := c.Flags().GetString("request")
+		path, _ := c.Flags().GetString(outputFlag)
+		if path == "" {
+			return inputError("--" + outputFlag + " is required")
+		}
+		raw, e := readInput(request)
+		if e != nil {
+			return e
+		}
+		r, e := parseRequest(raw)
+		if e != nil {
+			return e
+		}
+		key, e := privateKey(p.Signing)
+		if e != nil {
+			return e
+		}
+		record, e := seal(r, key)
+		if e != nil {
+			return e
+		}
+		record, e = artifact.Prepare(record)
+		if e != nil {
+			return e
+		}
+		public, ok := key.Public().(ed25519.PublicKey)
+		if !ok {
+			return inputError("invalid signing key")
+		}
+		if _, e = artifact.Verify(record, []ed25519.PublicKey{public}); e != nil {
+			return e
+		}
+		b, e := json.Marshal(record)
+		if e != nil {
+			return e
+		}
+		if e = atomicFile(path, b, false); e != nil {
+			return e
+		}
+		return output(c, map[string]string{"capsule_id": record.CapsuleID, "artifact": path})
+	}}
+	cmd.Flags().String("request", "", "capsule-seal-request/v1 JSON file")
+	cmd.Flags().String(outputFlag, "", "New artifact.Record JSON file, byte fields are base64")
+	return cmd
+}
+
 var ErrInput = errors.New("invalid input or profile configuration")
 
 func inputError(reason string) error { return errors.Join(ErrInput, errors.New(reason)) }
@@ -112,6 +169,7 @@ func output(c *cobra.Command, value any) error {
 func SafeError(err error) string {
 	var fileErr *inputFileError
 	var schemaErr *schemaLoadError
+	var pluginErr *pluginRequiredError
 	switch {
 	case errors.As(err, &fileErr):
 		// The path is caller-supplied via a flag, so surfacing it discloses
@@ -121,6 +179,11 @@ func SafeError(err error) string {
 	case errors.As(err, &schemaErr):
 		// --schema is likewise caller-typed, not a profile secret.
 		return schemaErr.Error()
+	case errors.As(err, &pluginErr):
+		// A fixed, static message naming no path, secret, or profile detail:
+		// `run` without the actionstate plugin must reach the operator
+		// verbatim, not collapse to the generic ErrInput text.
+		return pluginErr.Error()
 	case errors.Is(err, artifact.ErrUntrustedSigner):
 		return "producer is not authorized by the profile trusted_keys"
 	case errors.Is(err, ErrInput):
@@ -158,9 +221,13 @@ func ExitCode(err error) int {
 	}
 }
 
+// cliVersion is reported by both --version and `doctor`, so the two can never
+// silently drift apart.
+const cliVersion = "0.1.0-dev"
+
 // NewCommand returns a fresh tree: no shared flag/config state across invocations.
 func NewCommand() *cobra.Command {
-	root := &cobra.Command{Use: "capsulectl", Short: "Seal, store and publish AAC Capsules using named profiles", Version: "0.1.0-dev", SilenceUsage: true, SilenceErrors: true}
+	root := &cobra.Command{Use: "capsulectl", Short: "Seal, store and publish AAC Capsules using named profiles", Version: cliVersion, SilenceUsage: true, SilenceErrors: true}
 	root.PersistentFlags().String("profile", "", "Named target for commands that operate on a profile")
 	root.SetFlagErrorFunc(func(_ *cobra.Command, _ error) error { return ErrInput })
 	root.AddCommand(profileCommands())
@@ -183,55 +250,15 @@ func NewCommand() *cobra.Command {
 	}}
 	store.AddCommand(init)
 	root.AddCommand(store)
-	sealCmd := &cobra.Command{Use: "seal", Short: "Seal to an explicit private artifact file; no database connection", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
-		p, e := selected(c)
-		if e != nil {
-			return e
-		}
-		request, _ := c.Flags().GetString("request")
-		path, _ := c.Flags().GetString("output")
-		if path == "" {
-			return inputError("--output is required")
-		}
-		raw, e := readInput(request)
-		if e != nil {
-			return e
-		}
-		r, e := parseRequest(raw)
-		if e != nil {
-			return e
-		}
-		key, e := privateKey(p.Signing)
-		if e != nil {
-			return e
-		}
-		record, e := seal(r, key)
-		if e != nil {
-			return e
-		}
-		record, e = artifact.Prepare(record)
-		if e != nil {
-			return e
-		}
-		public, ok := key.Public().(ed25519.PublicKey)
-		if !ok {
-			return inputError("invalid signing key")
-		}
-		if _, e = artifact.Verify(record, []ed25519.PublicKey{public}); e != nil {
-			return e
-		}
-		b, e := json.Marshal(record)
-		if e != nil {
-			return e
-		}
-		if e = atomicFile(path, b, false); e != nil {
-			return e
-		}
-		return output(c, map[string]string{"capsule_id": record.CapsuleID, "artifact": path})
-	}}
-	sealCmd.Flags().String("request", "", "capsule-seal-request/v1 JSON file")
-	sealCmd.Flags().String("output", "", "New artifact.Record JSON file, byte fields are base64")
-	root.AddCommand(sealCmd)
+	root.AddCommand(sealToFileCommand("seal", "output", "Seal to an explicit private artifact file; no database connection"))
+	// `emit` is the v4 verb name for the same operation `seal` already performs
+	// (sign, prepare, self-verify, write an artifact.Record to disk -- no
+	// database). It shares sealToFileCommand's implementation rather than being
+	// rebuilt, and names its output flag `--seal-output` for parity with
+	// `discover`'s flag of the same name. `seal` is left in place, unchanged:
+	// it is already documented (README) and tested, and collapsing it into
+	// `emit` would be a breaking rename this task did not ask for.
+	root.AddCommand(sealToFileCommand("emit", "seal-output", "Emit a Capsule: seal to an explicit artifact file; no database connection"))
 	get := &cobra.Command{Use: "get", Short: "Read the artifact SDK record, not the CLL entry", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
 		if e != nil {
@@ -432,6 +459,9 @@ func NewCommand() *cobra.Command {
 	logs.AddCommand(appendCmd)
 	addCheckpointCommands(logs)
 	root.AddCommand(discoverCommand())
+	root.AddCommand(doctorCommand())
+	root.AddCommand(resultCommands())
+	root.AddCommand(runCommand())
 	addPluginCommands(root)
 	root.SetHelpCommand(&cobra.Command{Use: "help [command]", Short: "Help about any command", RunE: func(c *cobra.Command, args []string) error {
 		target, _, e := root.Find(args)

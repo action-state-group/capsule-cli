@@ -36,6 +36,7 @@ capsulectl profile show NAME
 capsulectl profile update --profile NAME [configuration flags]
 capsulectl store init --profile NAME
 capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
+capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsulectl verify --profile NAME --capsule ARTIFACT.json
 capsulectl publish --profile NAME --request INPUT.json
@@ -45,7 +46,23 @@ capsulectl cll verify --profile NAME --proof PROOF.json
 capsulectl cll checkpoint create --profile NAME
 capsulectl cll checkpoint publish --profile NAME --checkpoint MMR_SIZE
 capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
+capsulectl doctor [--profile NAME] [--check-witness]
+capsulectl result open FILE [--format text|json]
+capsulectl run [args passed to the actionstate plugin, e.g. --dry-run]
 ```
+
+`emit` is `seal`'s v4 name: the same seal/prepare/self-verify/write-to-file
+operation, offered under both names (`seal` stays for existing callers).
+`doctor` never opens a database connection or requires a profile; it reports
+plugin trust, profile presence, signing-key-file permissions, and (only with
+`--check-witness`) an unauthenticated reachability probe of the profile's
+checkpoint endpoint. `result open` validates and prints a Result v0
+document's aggregate/coverage statement as text (or `--format json`); the
+Result v0 schema is still DRAFT, so this is a structural check, not schema
+validation, and it stands in for the `capsule-viewer` build. `run` carries no
+flags or licence logic of its own: the base binary only dispatches to a
+discovered `actionstate` plugin, or refuses with an actionable message if
+that plugin is absent or unlicensed.
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.

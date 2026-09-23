@@ -163,7 +163,7 @@ func TestSQLiteProfileCreate(t *testing.T) {
 	assert.Empty(t, p2.Credentials.Username)
 }
 func TestRequiredProfileAndNoRuntimeOverrides(t *testing.T) {
-	for _, args := range [][]string{{"seal"}, {"get"}, {"verify"}, {"publish"}, {"store", "init"}, {"cll", "list"}, {"cll", "append"}, {"cll", "verify"}, {"cll", "checkpoint", "create"}, {"cll", "checkpoint", "publish"}, {"cll", "checkpoint", "status"}, {"profile", "show"}, {"profile", "update"}} {
+	for _, args := range [][]string{{"seal"}, {"emit"}, {"get"}, {"verify"}, {"publish"}, {"store", "init"}, {"cll", "list"}, {"cll", "append"}, {"cll", "verify"}, {"cll", "checkpoint", "create"}, {"cll", "checkpoint", "publish"}, {"cll", "checkpoint", "status"}, {"profile", "show"}, {"profile", "update"}} {
 		t.Run(strings.Join(args, "-"), func(t *testing.T) { _, e := invoke(t, "", args...); require.Error(t, e) })
 	}
 	_, e := invoke(t, "", "get", "--profile", "test", "--mysql-password", "should-not-be-accepted")
@@ -221,6 +221,31 @@ func TestSealVerifyExactOriginals(t *testing.T) {
 	require.NoError(t, saveProfile(p, true))
 	_, e = invoke(t, "", "verify", "--profile", p.Name, "--capsule", recordPath)
 	require.ErrorIs(t, e, ErrPartial)
+}
+
+// TestEmitVerifyExactOriginals proves `emit` is a real extension of `seal`'s
+// implementation, not a stub: the same round trip, through the v4 flag name.
+func TestEmitVerifyExactOriginals(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, _ := profileFixture(t)
+	require.NoError(t, saveProfile(p, false))
+	dir := t.TempDir()
+	request := filepath.Join(dir, "request.json")
+	recordPath := filepath.Join(dir, "capsule.json")
+	require.NoError(t, os.WriteFile(request, requestFixture(t), 0600))
+	_, e := invoke(t, "", "emit", "--profile", p.Name, "--request", request, "--seal-output", recordPath)
+	require.NoError(t, e)
+	record, e := readRecord(recordPath)
+	require.NoError(t, e)
+	require.Len(t, record.Artifacts, 2)
+	out, e := invoke(t, "", "verify", "--profile", p.Name, "--capsule", recordPath)
+	require.NoError(t, e)
+	assert.Contains(t, out, "passed")
+	// emit and seal are the same operation under two names: an emitted
+	// artifact.Record round-trips through the exact same verify path a
+	// sealed one does.
+	_, e = invoke(t, "", "emit", "--profile", p.Name, "--request", request, "--output", recordPath)
+	require.Error(t, e, "emit does not accept --output; it is --seal-output only")
 }
 func TestInputBoundsAndUnknownFields(t *testing.T) {
 	var r Request
@@ -428,7 +453,7 @@ func TestInputTaxonomyAcrossCommands(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
 	require.NoError(t, saveProfile(p, false))
-	for _, args := range [][]string{{"seal"}, {"seal", "--output", "unused"}, {"seal", "--request", "does-not-exist", "--output", "unused"}, {"get"}, {"publish"}, {"cll", "list", "--limit", "0"}, {"cll", "checkpoint", "publish"}, {"cll", "checkpoint", "publish", "--checkpoint", "1"}} {
+	for _, args := range [][]string{{"seal"}, {"seal", "--output", "unused"}, {"seal", "--request", "does-not-exist", "--output", "unused"}, {"emit"}, {"emit", "--seal-output", "unused"}, {"emit", "--request", "does-not-exist", "--seal-output", "unused"}, {"get"}, {"publish"}, {"cll", "list", "--limit", "0"}, {"cll", "checkpoint", "publish"}, {"cll", "checkpoint", "publish", "--checkpoint", "1"}} {
 		t.Run(strings.Join(args, "-"), func(t *testing.T) {
 			_, e := invoke(t, "", append(args, "--profile", p.Name)...)
 			require.Error(t, e)
