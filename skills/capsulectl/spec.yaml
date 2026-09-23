@@ -13,6 +13,32 @@
 # behaviors. Nothing here documents a verb capsulectl does not implement
 # today; growth happens in [batch5-capsulectl-gap-closure], not by guessing
 # ahead of the binary.
+#
+# Guardrails note: `may`/`must_never`/`approval_points`/`evidence_policy`
+# below are Steven's ruling of 2026-09-22 (replaces the earlier
+# `TBD-STEVEN` placeholder), quoted verbatim. `may`/`must_never` were
+# dictated as one semicolon-separated sentence per category; each array
+# item below is one clause of that sentence, split at the semicolons with
+# no word changed — the exact source sentence is quoted in a comment above
+# each field so the split can be checked against it. `approval_points` was
+# dictated as one sentence sharing a single "stop and ask a human" subject
+# across four "before/whenever" clauses; each array item restates that
+# shared subject against one clause, again with no word changed beyond the
+# repetition the shared subject requires. `evidence_policy` is quoted
+# whole, unsplit, because it is prose (a rule and its exception), not a
+# list.
+#
+# Ruling also fixed the scope this item's original brief left ambiguous:
+# capsule emission is for CONSEQUENTIAL actions only. `result open` (the
+# other Batch 5 item's verb) and local validation generally get no capsule.
+# Applied here as `emission_mode: not-consequential` on every verb in this
+# surface that only reads, checks or validates rather than durably writing
+# or persisting something (`verify`, `contract validate`, `plugin ls`,
+# `cll list`, `get`) — narrower than this file's first draft, which wrapped
+# all of them in a seal call. `discover` keeps `self-sealing` (the binary
+# itself requires `--seal-output`, unrelated to this skill's own choice)
+# and `publish`/`cll append` keep `primary-action` (a durable write is
+# exactly what "consequential" means here).
 spec_version: skill-spec/v0
 skill:
   name: capsulectl
@@ -20,12 +46,50 @@ skill:
     Call the capsulectl verb surface to inspect, validate and record Agent
     Action Capsules — never to reason about business meaning or invent a
     workflow beyond the verbs listed below.
+
+# Verbatim: "call only the verbs listed in this file; validate a contract;
+# run `discover` against a scope file supplied by the operator; request
+# evidence; verify a bundle; open a result."
 may:
-  - TBD-STEVEN
+  - call only the verbs listed in this file
+  - validate a contract
+  - "run `discover` against a scope file supplied by the operator"
+  - request evidence
+  - verify a bundle
+  - open a result
+
+# Verbatim: "create or modify a scope file, Evidence Contract, or licence;
+# invent a relationship between a requirement and an evidence source;
+# modify, summarize, reinterpret, or restate the output of `verify`;
+# describe self-attested evidence as witnessed, countersigned, or
+# independently verified; or transmit data off-machine without first
+# showing exactly what will be transmitted."
 must_never:
-  - TBD-STEVEN
+  - create or modify a scope file, Evidence Contract, or licence
+  - invent a relationship between a requirement and an evidence source
+  - "modify, summarize, reinterpret, or restate the output of `verify`"
+  - describe self-attested evidence as witnessed, countersigned, or independently verified
+  - transmit data off-machine without first showing exactly what will be transmitted
+
+# Verbatim (one sentence, shared subject "stop and ask a human" distributed
+# across four before/whenever clauses): "stop and ask a human before the
+# first witness registration from a new key; before any publish operation;
+# before `discover` traverses a root not already authorized by the scope
+# file; and whenever a command fails because of a licence, plugin, or
+# authorization requirement."
 approval_points:
-  - TBD-STEVEN
+  - Stop and ask a human before the first witness registration from a new key.
+  - Stop and ask a human before any publish operation.
+  - "Stop and ask a human before `discover` traverses a root not already authorized by the scope file."
+  - Stop and ask a human whenever a command fails because of a licence, plugin, or authorization requirement.
+
+# Verbatim.
+evidence_policy: >-
+  Every consequential action taken by this skill must produce an evidence
+  record. If evidence generation fails, report `evidence unavailable`, stop
+  before the next consequential action, and do not infer that the
+  underlying action failed to occur.
+
 verbs:
   - name: verify
     args:
@@ -35,8 +99,8 @@ verbs:
       Confirm a Capsule's identity, signature, trust and bound artifacts
       before treating it as authentic — including a record another verb in
       this same run just fetched with `get --raw`.
-    emits: skill-verify-report/v1
-    emission_mode: skill-wraps
+    emits: (no capsule — checking a bundle is local validation, not a consequential action)
+    emission_mode: not-consequential
 
   - name: contract validate
     args:
@@ -46,8 +110,8 @@ verbs:
       Check a caller-supplied document against a JSON Schema before
       accepting, forwarding or acting on it. capsulectl embeds no schema of
       its own; --schema always names the caller's.
-    emits: skill-contract-check/v1
-    emission_mode: skill-wraps
+    emits: (no capsule — this is the local validation the evidence policy names explicitly)
+    emission_mode: not-consequential
 
   - name: discover
     args:
@@ -66,8 +130,8 @@ verbs:
     when: >-
       List trusted, handshake-valid capsulectl-* plugins discovered on the
       trusted plugin roots before invoking one by name.
-    emits: skill-plugin-inventory/v1
-    emission_mode: skill-wraps
+    emits: (no capsule — listing what is discovered is local inspection, not a consequential action)
+    emission_mode: not-consequential
 
   - name: cll list
     args:
@@ -76,8 +140,8 @@ verbs:
     when: >-
       Read the profile's checkpointed log in sequence order — to find an
       entry, to page through a range, or to confirm an append landed.
-    emits: skill-cll-snapshot/v1
-    emission_mode: skill-wraps
+    emits: (no capsule — reading the log is local inspection, not a consequential action)
+    emission_mode: not-consequential
 
   - name: cll append
     args:
@@ -95,8 +159,8 @@ verbs:
     when: >-
       Read an existing artifact SDK record by capsule_id — plain for
       inspection, --raw when the exact bytes must be handed to verify.
-    emits: skill-get-report/v1
-    emission_mode: skill-wraps
+    emits: (no capsule — reading a record is local inspection, not a consequential action)
+    emission_mode: not-consequential
 
   - name: publish
     args:

@@ -2,14 +2,23 @@
 set -euo pipefail
 
 # Exercises every verb in ../spec.yaml against a throwaway jsonl profile in a
-# temp directory: one capsule sealed, chained (via Chain.ParentCapsuleID) to
-# the previous action, and independently verified, per action. This is the
-# proof-of-the-invariant DONE requires ("every skill-driven action emits a
-# capsule ... test with a scripted run"), and its total elapsed time --
-# printed at the end -- doubles as the item's fresh-environment timing check
-# (Do item 5: install through the first discover/contract-validate call,
-# target under an hour). It never touches a real profile, a real CLL, or any
-# path outside its own temp directory.
+# temp directory, proving the evidence policy from spec.yaml (Steven's
+# 2026-09-22 ruling), not just that capsules exist:
+#
+#   - the three CONSEQUENTIAL actions (discover, publish, cll append) each
+#     map to a capsule (sealed or persisted) and every one of those is
+#     independently verified;
+#   - the five NOT-CONSEQUENTIAL actions (verify, contract validate,
+#     plugin ls, cll list, get) run and produce no capsule at all — this
+#     script never calls `capsulectl seal` for any of them;
+#   - a failed evidence record fails closed (this skill's evidence policy:
+#     "report evidence unavailable, stop before the next consequential
+#     action") rather than silently continuing.
+#
+# Total elapsed time, printed at the end, doubles as the item's
+# fresh-environment timing check (install through the first discover /
+# contract-validate call, target under an hour). It never touches a real
+# profile, a real CLL, or any path outside its own temp directory.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 work="$(mktemp -d)"
@@ -35,38 +44,6 @@ store="$work/store"
   --trusted-key "$public_key" --signing-key-file "$seed" >/dev/null
 "$bin" store init --profile "$profile" >/dev/null
 
-capsules_file="$work/capsules.txt"
-: >"$capsules_file"
-parent=""
-
-# seal_step wraps a "skill-wraps" verb's own JSON result in a
-# capsule-seal-request/v1, chains it to $parent when one is set, seals it
-# with the base `seal` command (no store needed), verifies the result, and
-# records the new capsule_id as the parent for the next step.
-seal_step() {
-  local action_id="$1" payload="$2"
-  local req="$work/req.json" ts
-  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  jq -n --arg id "$action_id" --arg op "$profile" --arg dev "capsulectl-skill/v0" \
-    --arg ts "$ts" --arg parent "$parent" --slurpfile payload "$payload" '
-    {
-      spec_version: "capsule-seal-request/v1",
-      capsule: ({ActionID:$id, ActionType:"fyi", Operator:$op, Developer:$dev, Timestamp:$ts}
-                + (if $parent == "" then {} else {Chain:{ParentCapsuleID:$parent, Relation:"io.capsulectl.skill_step"}} end)),
-      payload: $payload[0]
-    }' >"$req"
-  local out="$work/out-$(echo "$action_id" | tr '/ ' '__').json"
-  "$bin" seal --profile "$profile" --request "$req" --output "$out" >"$work/seal-result.json"
-  local capsule_id
-  capsule_id=$(jq -r .capsule_id "$work/seal-result.json")
-  "$bin" verify --profile "$profile" --capsule "$out" >"$work/verify-result.json"
-  jq -e '.producer_signature_and_trust=="passed" and .capsule_identity=="passed"' "$work/verify-result.json" >/dev/null
-  echo "$capsule_id" >>"$capsules_file"
-  parent="$capsule_id"
-  echo "  sealed + verified: $action_id -> $capsule_id" >&2
-}
-
-echo "== 1/8 discover (self-sealing) ==" >&2
 scan_root="$work/scan-root"
 mkdir -p "$scan_root"
 cat >"$scan_root/otel-config.yaml" <<'EOF'
@@ -76,6 +53,34 @@ exporters:
 EOF
 scope="$work/scope.yaml"
 printf 'roots:\n  - %q\n' "$scan_root" >"$scope"
+
+echo "== 0/8 evidence-failure-fails-closed check (not a numbered action) ==" >&2
+# The evidence policy: "if evidence generation fails, report `evidence
+# unavailable`, stop before the next consequential action." Point
+# --seal-output at a directory this process cannot write to (it exists, so
+# MkdirAll is a no-op, but CreateTemp inside it fails on permission) and
+# confirm discover fails rather than silently proceeding without a record.
+unwritable="$work/unwritable"
+mkdir -p "$unwritable"
+chmod 0500 "$unwritable"
+set +e
+"$bin" discover --profile "$profile" --scope "$scope" --format json \
+  --seal-output "$unwritable/scan.json" >"$work/discover-fail-attempt.json" 2>&1
+fail_status=$?
+set -e
+chmod 0700 "$unwritable" # restore so the temp dir cleans up on trap
+if [[ "$fail_status" -eq 0 ]]; then
+  echo "FAIL: discover should have failed closed with an unwritable --seal-output, but exited 0" >&2
+  cat "$work/discover-fail-attempt.json" >&2
+  exit 1
+fi
+echo "  confirmed: a failing evidence record stops the run (exit $fail_status), never silently proceeds" >&2
+
+capsules_file="$work/capsules.txt"
+: >"$capsules_file"
+parent=""
+
+echo "== 1/8 discover (self-sealing; consequential) ==" >&2
 discover_out="$work/discover-scan.json"
 "$bin" discover --profile "$profile" --scope "$scope" --format json --seal-output "$discover_out" >"$work/discover-stdout.json"
 discover_capsule=$(jq -r .sealed.capsule_id "$work/discover-stdout.json")
@@ -85,7 +90,7 @@ echo "$discover_capsule" >>"$capsules_file"
 parent="$discover_capsule"
 echo "  self-sealed + verified: discover -> $discover_capsule" >&2
 
-echo "== 2/8 publish (primary action) ==" >&2
+echo "== 2/8 publish (primary action; consequential) ==" >&2
 ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 jq -n --arg op "$profile" --arg ts "$ts" --arg parent "$parent" '
   {spec_version:"capsule-seal-request/v1",
@@ -95,23 +100,23 @@ jq -n --arg op "$profile" --arg ts "$ts" --arg parent "$parent" '
 "$bin" publish --profile "$profile" --request "$work/publish-request.json" >"$work/publish-result.json"
 published_id=$(jq -r .capsule_id "$work/publish-result.json")
 echo "$published_id" >>"$capsules_file"
-parent="$published_id"
 echo "  published: publish -> $published_id" >&2
 
-echo "== 3/8 get (skill-wraps) ==" >&2
+echo "== 3/8 get (not-consequential; no capsule) ==" >&2
 "$bin" get --profile "$profile" --capsule-id "$published_id" >"$work/get-result.json"
-seal_step "skill-demo/get-1" "$work/get-result.json"
+echo "  ran, no seal call made — get is local inspection per the evidence policy" >&2
 
-echo "== 4/8 verify (skill-wraps; verify the raw record just fetched) ==" >&2
+echo "== 4/8 verify (not-consequential; no capsule) ==" >&2
 "$bin" get --profile "$profile" --capsule-id "$published_id" --raw --output "$work/published-raw.json" >"$work/get-raw-result.json"
 "$bin" verify --profile "$profile" --capsule "$work/published-raw.json" >"$work/verify-of-published.json"
-seal_step "skill-demo/verify-1" "$work/verify-of-published.json"
+jq -e '.producer_signature_and_trust=="passed" and .capsule_identity=="passed"' "$work/verify-of-published.json" >/dev/null
+echo "  ran + passed, no seal call made — checking a bundle is local validation per the evidence policy" >&2
 
-echo "== 5/8 cll list (skill-wraps) ==" >&2
+echo "== 5/8 cll list (not-consequential; no capsule) ==" >&2
 "$bin" cll list --profile "$profile" >"$work/cll-list-result.json"
-seal_step "skill-demo/cll-list-1" "$work/cll-list-result.json"
+echo "  ran, no seal call made — reading the log is local inspection per the evidence policy" >&2
 
-echo "== 6/8 contract validate (skill-wraps) ==" >&2
+echo "== 6/8 contract validate (not-consequential; no capsule) ==" >&2
 schema="$work/demo-schema.json"
 doc="$work/demo-doc.json"
 cat >"$schema" <<'EOF'
@@ -121,13 +126,13 @@ cat >"$doc" <<'EOF'
 {"hello":"world"}
 EOF
 "$bin" contract validate "$doc" --schema "$schema" --json >"$work/contract-result.json"
-seal_step "skill-demo/contract-validate-1" "$work/contract-result.json"
+echo "  ran, no seal call made — this is the local validation the evidence policy names explicitly" >&2
 
-echo "== 7/8 plugin ls (skill-wraps) ==" >&2
+echo "== 7/8 plugin ls (not-consequential; no capsule) ==" >&2
 "$bin" plugin ls >"$work/plugin-ls-result.json"
-seal_step "skill-demo/plugin-ls-1" "$work/plugin-ls-result.json"
+echo "  ran, no seal call made — listing discovered plugins is local inspection per the evidence policy" >&2
 
-echo "== 8/8 cll append (primary action; append an already-sealed capsule) ==" >&2
+echo "== 8/8 cll append (primary action; consequential) ==" >&2
 "$bin" cll append --profile "$profile" --capsule "$discover_out" >"$work/cll-append-result.json"
 appended_seq=$(jq -r .sequence "$work/cll-append-result.json")
 # append's own job is to persist an EXISTING capsule, not create a new one --
@@ -138,17 +143,22 @@ echo "  appended discover scan (capsule $discover_capsule) at CLL sequence $appe
 
 end_epoch=$(date +%s)
 elapsed=$((end_epoch - start_epoch))
-actions=$(wc -l <"$capsules_file" | tr -d ' ')
-distinct=$(sort -u "$capsules_file" | wc -l | tr -d ' ')
+consequential_actions=$(wc -l <"$capsules_file" | tr -d ' ')
+distinct_capsules=$(sort -u "$capsules_file" | wc -l | tr -d ' ')
 
 echo >&2
 echo "== summary ==" >&2
-echo "actions run: $actions (target: one capsule association per documented action = 8)" >&2
-echo "distinct capsules: $distinct (7 -- cll append's action maps onto discover's existing capsule, by design; it creates none of its own)" >&2
+echo "consequential actions (discover, publish, cll append): $consequential_actions capsule mappings (target: 3)" >&2
+echo "distinct capsules: $distinct_capsules (2 -- cll append's action maps onto discover's existing capsule, by design; it creates none of its own)" >&2
+echo "not-consequential actions (verify, contract validate, plugin ls, cll list, get): 5, ran, zero seal calls made for any of them" >&2
 echo "elapsed: ${elapsed}s from a fresh capsulectl build through the last verb (target: under 3600s)" >&2
 
-if [[ "$actions" -lt 8 ]]; then
-  echo "FAIL: expected 8 actions each mapped to a capsule, got $actions" >&2
+if [[ "$consequential_actions" -ne 3 ]]; then
+  echo "FAIL: expected exactly 3 consequential actions mapped to a capsule, got $consequential_actions" >&2
+  exit 1
+fi
+if [[ "$distinct_capsules" -ne 2 ]]; then
+  echo "FAIL: expected exactly 2 distinct capsules (discover + publish), got $distinct_capsules" >&2
   exit 1
 fi
 if [[ "$elapsed" -ge 3600 ]]; then

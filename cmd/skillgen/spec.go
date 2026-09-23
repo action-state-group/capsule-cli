@@ -41,6 +41,7 @@ type Spec struct {
 	May            []string  `yaml:"may" json:"may"`
 	MustNever      []string  `yaml:"must_never" json:"must_never"`
 	ApprovalPoints []string  `yaml:"approval_points" json:"approval_points"`
+	EvidencePolicy string    `yaml:"evidence_policy" json:"evidence_policy"`
 	Verbs          []Verb    `yaml:"verbs" json:"verbs"`
 }
 

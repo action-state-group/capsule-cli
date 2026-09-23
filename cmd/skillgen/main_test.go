@@ -20,12 +20,18 @@ skill:
 may: ["TBD-STEVEN"]
 must_never: ["TBD-STEVEN"]
 approval_points: []
+evidence_policy: "TBD-STEVEN"
 verbs:
   - name: verify
     args: ["--profile NAME", "--capsule FILE"]
     when: Confirm a Capsule before trusting it.
-    emits: skill-verify-report/v1
-    emission_mode: skill-wraps
+    emits: (no capsule — local validation)
+    emission_mode: not-consequential
+  - name: publish
+    args: ["--profile NAME --request FILE"]
+    when: Persist a sealed Capsule durably.
+    emits: (publish's own result IS the capsule)
+    emission_mode: primary-action
 `
 }
 
@@ -112,12 +118,12 @@ func TestSchemaRejectsUnknownFieldAndMissingVerb(t *testing.T) {
 	require.Error(t, err)
 
 	badVerb := filepath.Join(dir, "bad-verb.yaml")
-	require.NoError(t, os.WriteFile(badVerb, []byte(strings.Replace(minimalSpecYAML("d"), "emission_mode: skill-wraps", "", 1)), 0o600))
+	require.NoError(t, os.WriteFile(badVerb, []byte(strings.Replace(minimalSpecYAML("d"), "emission_mode: not-consequential", "", 1)), 0o600))
 	_, err = loadSpec(badVerb, fixtureSchemaPath)
 	require.Error(t, err)
 
 	badEnum := filepath.Join(dir, "bad-enum.yaml")
-	require.NoError(t, os.WriteFile(badEnum, []byte(strings.Replace(minimalSpecYAML("d"), "emission_mode: skill-wraps", "emission_mode: not-a-real-mode", 1)), 0o600))
+	require.NoError(t, os.WriteFile(badEnum, []byte(strings.Replace(minimalSpecYAML("d"), "emission_mode: not-consequential", "emission_mode: not-a-real-mode", 1)), 0o600))
 	_, err = loadSpec(badEnum, fixtureSchemaPath)
 	require.Error(t, err)
 }

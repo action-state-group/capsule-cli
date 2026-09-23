@@ -9,7 +9,7 @@ import (
 // generator renders is the thin, tool-calling shape (see skills/SKILL-SPEC.md),
 // so the boundary statement is identical for all of them and does not belong
 // in the per-skill spec.
-const boundaryPreamble = "This skill may call verbs, validate a contract, request evidence, verify a bundle, or inspect a result — nothing else. It never reasons about business meaning, and never invents a workflow beyond the verb surface below."
+const boundaryPreamble = "This skill may call verbs, validate a contract, request evidence, verify a bundle, or open a result — nothing else. It never reasons about business meaning, and never invents a workflow beyond the verb surface below."
 
 func escapeCell(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
@@ -38,6 +38,8 @@ func guardrailsSection(spec Spec) string {
 	b.WriteString(guardrailList("Must never", spec.MustNever))
 	b.WriteString("\n")
 	b.WriteString(guardrailList("Approval points", spec.ApprovalPoints))
+	b.WriteString("\n")
+	fmt.Fprintf(&b, "**Evidence policy:**\n\n%s\n", spec.EvidencePolicy)
 	return b.String()
 }
 
@@ -47,8 +49,8 @@ func emissionModeLabel(mode string) string {
 		return "self-sealing (`--seal-output`)"
 	case "primary-action":
 		return "primary action (running it *is* the record)"
-	case "skill-wraps":
-		return "skill wraps with `capsulectl seal`"
+	case "not-consequential":
+		return "not consequential — no capsule"
 	default:
 		return mode
 	}
@@ -74,37 +76,37 @@ func verbTable(verbs []Verb) string {
 }
 
 func emissionSection() string {
-	return `Every verb this skill calls leaves a capsule, by one of three mechanisms
-(the ` + "`emission_mode`" + ` column above says which applies):
+	return `**Capsules are for consequential actions only** (see Evidence policy
+under Guardrails, above). A capsule is never manufactured for ` + "`result open`" + `
+or any other local validation — reading, checking, validating or opening
+something is not a consequential action, and this skill produces no capsule
+for it. The ` + "`emission_mode`" + ` column above says which of the two real
+mechanisms applies to an actually-consequential verb:
 
-- **self-sealing** — the verb has its own ` + "`--seal-output`" + ` flag (` + "`discover`" + `).
-  Nothing further is needed.
-- **primary action** — the verb's entire job already is creating or chaining
+- **self-sealing** — the verb has its own ` + "`--seal-output`" + ` flag (` + "`discover`" + `,
+  mandated by the binary itself). Nothing further is needed.
+- **primary action** — the verb's entire job already is creating or persisting
   a capsule (` + "`publish`" + `, ` + "`cll append`" + `). Running it satisfies the
-  invariant by itself.
-- **skill wraps** — the verb only reads or checks something and has no seal of
-  its own. After running it, build a ` + "`capsule-seal-request/v1`" + ` whose
-  ` + "`payload`" + ` is the verb's own JSON result, add a ` + "`Chain`" + ` block pointing
-  at the previous action's ` + "`capsule_id`" + ` in this same run (when there is
-  one), and call:
+  invariant by itself; nothing wraps it.
 
-  ` + "```sh" + `
-  capsulectl seal --profile NAME --request REQUEST.json --output CAPSULE.json
-  ` + "```" + `
+Every other verb this skill calls (` + "`verify`" + `, ` + "`contract validate`" + `,
+` + "`plugin ls`" + `, ` + "`cll list`" + `, ` + "`get`" + `) is ` + "`not-consequential`" + `: it runs, and
+that is the end of it — **no wrapper seal, no synthetic evidence record.**
 
-  This needs no store connection and no CLL append; it produces a file
-  independently verifiable with ` + "`capsulectl verify`" + `. Append it to a CLL
-  later with ` + "`cll append`" + ` only when durable persistence is actually wanted.
-
-See [references/capsule-cli.md](references/capsule-cli.md) for the full
-request shape and the Chain/Relation fields.`
+See [references/capsule-cli.md](references/capsule-cli.md) for the ` + "`publish`" + `/
+` + "`cll append`" + ` request shape and the Chain/Relation fields, and for the bare
+` + "`capsulectl seal`" + ` command this skill does not use (it exists for a skill
+whose verb surface actually needs it — this one does not).`
 }
 
 func exerciseSection() string {
 	return `[scripts/run-scripted-demo.sh](scripts/run-scripted-demo.sh) runs every
-verb above against a throwaway jsonl profile in a temp directory, seals or
-publishes one capsule per action, verifies each one, and asserts the count
-matches the verb surface — the "fresh-environment" test this skill ships
+verb above against a throwaway jsonl profile in a temp directory: the
+consequential actions (` + "`discover`" + `, ` + "`publish`" + `, ` + "`cll append`" + `) each seal or
+persist a capsule and every one of those is verified; the not-consequential
+actions (` + "`verify`" + `, ` + "`contract validate`" + `, ` + "`plugin ls`" + `, ` + "`cll list`" + `, ` + "`get`" + `)
+run and produce no capsule at all — the script asserts both halves, not just
+that capsules exist. This is the "fresh-environment" test this skill ships
 with. It never touches a real profile or a real CLL. Run it after any change
 to the verb surface or the emission mechanism; it builds ` + "`capsulectl`" + ` from
 source, so its own elapsed time is also this skill's install-through-first-

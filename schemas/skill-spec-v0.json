@@ -5,7 +5,7 @@
   "description": "Vocabulary a thin, tool-calling skill's semantics render from: a closed verb surface, three guardrail lists, and a per-verb capsule-emission declaration. A skill validated against this schema is data a generator renders into host-specific shapes (a Claude Code SKILL.md, a Codex AGENTS.md, ...); it is never itself a place to write reasoning, prose justification, or anything the generator does not render.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["spec_version", "skill", "may", "must_never", "approval_points", "verbs"],
+  "required": ["spec_version", "skill", "may", "must_never", "approval_points", "evidence_policy", "verbs"],
   "properties": {
     "spec_version": { "const": "skill-spec/v0" },
     "skill": {
@@ -42,6 +42,11 @@
       "items": { "type": "string", "minLength": 1 },
       "description": "Moments where the skill must stop and get an explicit human go-ahead before continuing. May be empty when a skill has none, but the key itself is always present."
     },
+    "evidence_policy": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-authored, verbatim, alongside `may`/`must_never`/`approval_points`: the rule for when a capsule must exist and what to do when it cannot. Scopes capsule emission to CONSEQUENTIAL actions only (a durable effect: a write, a publish, a witness registration) — reading, checking, validating or opening something is not consequential and produces no capsule — and states the evidence-failure rule: a failed evidence record is reported, never treated as proof the underlying action did not happen."
+    },
     "verbs": {
       "type": "array",
       "minItems": 1,
@@ -76,8 +81,8 @@
           "description": "The capsule kind (or kinds) this verb's invocation results in, named well enough that a reader can find it in a CLL: e.g. a payload shape like `discover-scan/v1`, or a note that the verb's own result IS the capsule with no wrapper."
         },
         "emission_mode": {
-          "enum": ["self-sealing", "primary-action", "skill-wraps"],
-          "description": "How `emits` actually happens: `self-sealing` — the verb has its own `--seal-output` and needs nothing further; `primary-action` — the verb's entire job is to create or chain a capsule (e.g. `publish`, `cll append`), so running it already satisfies the invariant; `skill-wraps` — the verb only reads or checks something, so the skill must itself call the base `seal` command over the verb's JSON result to leave a record that the check happened."
+          "enum": ["self-sealing", "primary-action", "not-consequential"],
+          "description": "How `emits` actually happens, per `evidence_policy`'s consequential-actions-only scope: `self-sealing` — the verb has its own `--seal-output` and needs nothing further; `primary-action` — the verb's entire job is to create or persist a capsule (e.g. `publish`, `cll append`), so running it already satisfies the invariant; `not-consequential` — the verb only reads, checks, validates or opens something, so per `evidence_policy` it produces no capsule at all, not even a wrapper."
         }
       }
     }

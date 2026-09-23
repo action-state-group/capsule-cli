@@ -109,21 +109,28 @@ Pending/conflict is not success. Retry only the identical request, signer and
 profile target and reconcile existing publication; never regenerate a
 timestamp or signer after an uncertain append.
 
-## Seal without a database (skill-wraps mechanism)
+## Seal without a database
 
 ```sh
 capsulectl seal --profile NAME --request REQUEST.json --output CAPSULE.json
 ```
 
 Builds and signs a Capsule to a file — no store connection, no CLL append,
-no parent-existence check. This is the command a skill calls after a
-read-only verb (`verify`, `contract validate`, `plugin ls`, `cll list`, `get`)
-to leave a record that the check happened: build a `capsule-seal-request/v1`
-whose `payload` is the verb's own JSON result, add a `Chain` block pointing
-at the previous action's `capsule_id` in the same run (when there is one),
-and seal. The output file is independently verifiable with `capsulectl verify`
-with no store required; append it to a CLL later with `cll append` only if
-durable persistence is actually wanted.
+no parent-existence check. A `Chain` block in the request can point at a
+prior `capsule_id` the same way `publish` accepts one (see above); the
+output file is independently verifiable with `capsulectl verify` with no
+store required, and can be appended to a CLL later with `cll append` if
+durable persistence turns out to be wanted after all.
+
+**capsulectl's own skill (`skills/capsulectl/`) does not call this
+command.** Its evidence policy scopes capsule emission to consequential
+actions only — a durable write, not a read or a check — and every verb in
+its surface that only reads or checks (`verify`, `contract validate`,
+`plugin ls`, `cll list`, `get`) is `not-consequential`: it runs and nothing
+more, no wrapper capsule. `seal` exists here as a capability of the CLI
+itself, in case a different skill's evidence policy someday needs it for a
+verb that neither self-seals nor is a primary action; capsulectl's own
+skill has no such verb today.
 
 ## Validate a contract
 

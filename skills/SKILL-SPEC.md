@@ -16,9 +16,11 @@ tool it describes and cannot be validated. A schema-checked spec can be.
 A generated skill file may (and usually does) carry the standard prose a
 Claude Code `SKILL.md` or Codex `AGENTS.md` needs — a title, a reference link,
 worked examples. What this schema owns is narrower and load-bearing: the
-closed verb surface and the three guardrail lists. If those five fields are
-right, a skill cannot reason its way past its own boundary or call a command
-that does not exist; everything else is presentation.
+closed verb surface, the three guardrail lists, and the evidence policy that
+scopes capsule emission. If those fields are right, a skill cannot reason its
+way past its own boundary, call a command that does not exist, or manufacture
+a capsule for something that was never consequential; everything else is
+presentation.
 
 ## The boundary this format exists to enforce
 
@@ -39,13 +41,19 @@ correct for what it does, and wrong for a thin skill to imitate.
 `skill.name` / `skill.description` — become the rendered `SKILL.md`
 frontmatter. `name` is lowercase-hyphenated; `description` is one line.
 
-`may[]`, `must_never[]`, `approval_points[]` — the guardrail block, in the
-skill's own words. **Human-authored, not generator-authored.** A skill whose
-gate says guardrails are `HUMANS-WRITE-FIRST` ships these arrays holding the
-literal placeholder string `"TBD-STEVEN"` until the real wording arrives
-through the PM; the generator renders that placeholder verbatim rather than
-inventing text to fill the gap. `approval_points` may be an empty array (a
-skill can legitimately have none) but the key itself is always present.
+`may[]`, `must_never[]`, `approval_points[]`, `evidence_policy` — the
+guardrail block, in the skill's own words. **Human-authored, not
+generator-authored.** A skill whose gate says guardrails are
+`HUMANS-WRITE-FIRST` ships these fields holding the literal placeholder
+string `"TBD-STEVEN"` until the real wording arrives through the PM; the
+generator renders that placeholder verbatim rather than inventing text to
+fill the gap. `approval_points` may be an empty array (a skill can
+legitimately have none) but the key itself is always present.
+`evidence_policy` is prose, not a list: it states when a capsule must exist
+(scoped to **consequential actions** — a durable effect, never a read, a
+check, a validation, or an "open") and what to do when producing one fails
+(report the failure, stop, and never infer that the underlying action did
+not happen because its evidence record could not be made).
 
 `verbs[]` — the skill's entire action surface, one entry per command the
 underlying tool actually implements **today**. Each entry:
@@ -56,20 +64,24 @@ underlying tool actually implements **today**. Each entry:
 - `when` — the single condition under which the skill calls it. A directive
   ("confirm X before treating it as authentic"), not a rationale for why X
   matters.
-- `emits` — which capsule kind (or kinds) the invocation results in.
-- `emission_mode` — one of three values, because "every skill-driven action
-  emits a capsule" is satisfied three different ways depending on what the
-  verb already does:
+- `emits` — which capsule kind (or kinds) the invocation results in, or a
+  plain note that it produces none.
+- `emission_mode` — one of three values, because `evidence_policy`'s
+  consequential-actions-only rule is satisfied differently depending on what
+  the verb already does:
   - `self-sealing` — the verb has its own `--seal-output` flag; nothing more
     is needed.
-  - `primary-action` — the verb's entire job already is creating or chaining
-    a capsule (`publish`, `cll append`); running it satisfies the invariant
-    by itself.
-  - `skill-wraps` — the verb only reads or checks something and has no seal
-    of its own, so the skill's own steps must call the base `seal` command
-    over the verb's JSON result, chained (`Chain.ParentCapsuleID`) to the
-    previous action in the same run. This is what turns a run of read-only
-    commands into one verifiable chain with no database required.
+  - `primary-action` — the verb's entire job already is creating or
+    persisting a capsule (`publish`, `cll append`); running it satisfies the
+    invariant by itself.
+  - `not-consequential` — the verb only reads, checks, validates or opens
+    something. Per `evidence_policy` this produces **no capsule at all** —
+    not even a wrapper. An earlier draft of this format had a fourth mode
+    (`skill-wraps`) that sealed a wrapper capsule around every read-only
+    verb's result; Steven's 2026-09-22 ruling on the first real instance of
+    this format (`skills/capsulectl/`) corrected that — capsule emission is
+    for consequential actions only, and a thin skill must not manufacture
+    evidence for a local check just because it *can*.
 
 ## The regeneration contract
 
@@ -98,10 +110,16 @@ skill:
 may: ["TBD-STEVEN"]
 must_never: ["TBD-STEVEN"]
 approval_points: []
+evidence_policy: "TBD-STEVEN"
 verbs:
   - name: verify
     args: ["--profile NAME", "--capsule FILE"]
     when: Confirm a Capsule's identity, signature and bindings before trusting it.
-    emits: skill-verify-report/v1
-    emission_mode: skill-wraps
+    emits: (no capsule — checking a bundle is local validation)
+    emission_mode: not-consequential
+  - name: publish
+    args: ["--profile NAME --request FILE"]
+    when: Seal, persist and append a Capsule in one durable step.
+    emits: (publish's own result IS the capsule; no wrapper)
+    emission_mode: primary-action
 ```
