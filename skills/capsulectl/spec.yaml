@@ -1,0 +1,109 @@
+# Semantic spec for the capsulectl skill, validated against
+# ../../schemas/skill-spec-v0.json. Rendered (never hand-edited) into
+# SKILL.md (Claude Code shape) and AGENTS.md (Codex shape) by
+# `go run ../../cmd/skillgen`. Edit this file, then regenerate — see
+# ../SKILL-SPEC.md for the contract.
+#
+# Verb surface note: the batch brief names seven verbs as one flat list
+# (verify, contract validate, discover, plugin ls, cll, get, publish). `cll`
+# covers two distinct subcommands with different argument shapes and
+# different emission mechanics (`list` only reads; `append` itself creates
+# the durable record), so this spec documents them as two verb entries —
+# `cll list` and `cll append` — rather than force one entry to describe two
+# behaviors. Nothing here documents a verb capsulectl does not implement
+# today; growth happens in [batch5-capsulectl-gap-closure], not by guessing
+# ahead of the binary.
+spec_version: skill-spec/v0
+skill:
+  name: capsulectl
+  description: >-
+    Call the capsulectl verb surface to inspect, validate and record Agent
+    Action Capsules — never to reason about business meaning or invent a
+    workflow beyond the verbs listed below.
+may:
+  - TBD-STEVEN
+must_never:
+  - TBD-STEVEN
+approval_points:
+  - TBD-STEVEN
+verbs:
+  - name: verify
+    args:
+      - "--profile NAME"
+      - "--capsule FILE"
+    when: >-
+      Confirm a Capsule's identity, signature, trust and bound artifacts
+      before treating it as authentic — including a record another verb in
+      this same run just fetched with `get --raw`.
+    emits: skill-verify-report/v1
+    emission_mode: skill-wraps
+
+  - name: contract validate
+    args:
+      - "FILE --schema PATH_OR_URL"
+      - "FILE --schema PATH_OR_URL --json"
+    when: >-
+      Check a caller-supplied document against a JSON Schema before
+      accepting, forwarding or acting on it. capsulectl embeds no schema of
+      its own; --schema always names the caller's.
+    emits: skill-contract-check/v1
+    emission_mode: skill-wraps
+
+  - name: discover
+    args:
+      - "--profile NAME --scope FILE --seal-output FILE"
+      - "--profile NAME --scope FILE --effects --seal-output FILE"
+      - "--profile NAME --scope FILE --format table|json --seal-output FILE"
+    when: >-
+      Build a read-only inventory of OTel/MCP/gateway/CI/repo config (or, with
+      --effects, an effect-boundary map) strictly within the roots an operator
+      named in --scope. Never invents a scope; refuses to run without one.
+    emits: discover-scan/v1 (plain) or discover-effects-scan/v1 (--effects)
+    emission_mode: self-sealing
+
+  - name: plugin ls
+    args: []
+    when: >-
+      List trusted, handshake-valid capsulectl-* plugins discovered on the
+      trusted plugin roots before invoking one by name.
+    emits: skill-plugin-inventory/v1
+    emission_mode: skill-wraps
+
+  - name: cll list
+    args:
+      - "--profile NAME"
+      - "--profile NAME --after N --through N --limit N"
+    when: >-
+      Read the profile's checkpointed log in sequence order — to find an
+      entry, to page through a range, or to confirm an append landed.
+    emits: skill-cll-snapshot/v1
+    emission_mode: skill-wraps
+
+  - name: cll append
+    args:
+      - "--profile NAME --capsule FILE"
+    when: >-
+      Add an already-sealed, already-verified Capsule (one with no missing
+      original bindings) to the log as a new entry.
+    emits: (the appended Capsule itself is the record; no wrapper capsule)
+    emission_mode: primary-action
+
+  - name: get
+    args:
+      - "--profile NAME --capsule-id ID"
+      - "--profile NAME --capsule-id ID --raw --output FILE"
+    when: >-
+      Read an existing artifact SDK record by capsule_id — plain for
+      inspection, --raw when the exact bytes must be handed to verify.
+    emits: skill-get-report/v1
+    emission_mode: skill-wraps
+
+  - name: publish
+    args:
+      - "--profile NAME --request FILE"
+    when: >-
+      Seal a capsule-seal-request/v1, persist its artifacts, and append it to
+      the CLL in one step — the primary way the skill records that it took an
+      action with a real, durable effect.
+    emits: (publish's own result IS the capsule; no wrapper)
+    emission_mode: primary-action

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/schemas/skill-spec-v0.json",
+  "title": "skill-spec/v0",
+  "description": "Vocabulary a thin, tool-calling skill's semantics render from: a closed verb surface, three guardrail lists, and a per-verb capsule-emission declaration. A skill validated against this schema is data a generator renders into host-specific shapes (a Claude Code SKILL.md, a Codex AGENTS.md, ...); it is never itself a place to write reasoning, prose justification, or anything the generator does not render.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_version", "skill", "may", "must_never", "approval_points", "verbs"],
+  "properties": {
+    "spec_version": { "const": "skill-spec/v0" },
+    "skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Lowercase, hyphenated skill identifier; becomes the rendered SKILL.md frontmatter `name`."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One-line summary of what the skill does and when to use it; becomes the rendered SKILL.md frontmatter `description`."
+        }
+      }
+    },
+    "may": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "What the skill is authorized to do. Human-authored guardrail wording (see the item's HUMANS-WRITE-FIRST gate); a generator never invents or edits these strings, only renders them verbatim."
+    },
+    "must_never": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "What the skill is forbidden from doing, rendered verbatim alongside `may`."
+    },
+    "approval_points": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Moments where the skill must stop and get an explicit human go-ahead before continuing. May be empty when a skill has none, but the key itself is always present."
+    },
+    "verbs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/verb" },
+      "description": "The skill's entire action surface. A verb entry documents one command the underlying tool actually implements today; a spec must never carry a verb the tool does not implement, and a tool verb the spec omits is simply not available to the skill yet."
+    }
+  },
+  "$defs": {
+    "verb": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "args", "when", "emits", "emission_mode"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The command as the host agent types it, e.g. `contract validate` or `cll list`."
+        },
+        "args": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "One entry per accepted invocation shape, in the tool's own flag syntax. Empty when the verb takes no arguments."
+        },
+        "when": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The single condition under which the skill calls this verb. A directive, not a design rationale."
+        },
+        "emits": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The capsule kind (or kinds) this verb's invocation results in, named well enough that a reader can find it in a CLL: e.g. a payload shape like `discover-scan/v1`, or a note that the verb's own result IS the capsule with no wrapper."
+        },
+        "emission_mode": {
+          "enum": ["self-sealing", "primary-action", "skill-wraps"],
+          "description": "How `emits` actually happens: `self-sealing` — the verb has its own `--seal-output` and needs nothing further; `primary-action` — the verb's entire job is to create or chain a capsule (e.g. `publish`, `cll append`), so running it already satisfies the invariant; `skill-wraps` — the verb only reads or checks something, so the skill must itself call the base `seal` command over the verb's JSON result to leave a record that the check happened."
+        }
+      }
+    }
+  }
+}
