@@ -39,22 +39,27 @@ func asObjectList(t *testing.T, v any) []any {
 
 // -- cross-implementation parity ------------------------------------------
 
-// TestJSONDigestParityWithRetiredPythonJudgePin cross-checks canonical.JSONDigest
-// -- the exact primitive judgePinDigest is built on -- against
-// capsule_judge.capsules.judge_pin_digest (the code this verb ports and
-// retires). Fixtures were computed by hand at authoring time by running the
-// actual capsule_judge dependency:
+// TestJSONDigestParityWithRetiredPythonJudgePin cross-checks
+// canonical.JSONDigest -- the exact primitive judgePinDigest is built on --
+// against the ACTUAL capsule_judge.capsules.judge_pin_digest function (the
+// code this verb ports and retires), not a hand reconstruction of its
+// canonicalization. Fixtures were computed at authoring time by calling the
+// real, still-present dependency directly:
 //
-//	python3 -c "from agent_action_capsule.canonical import json_digest; \
-//	  print(json_digest({'model_id': ..., 'model_version': ..., \
-//	  'sampling_params': ..., 'prompt_digest': ...}))"
+//	cd capsule-judge && python3 -c "from capsule_judge.capsules import judge_pin_digest; \
+//	  print(judge_pin_digest(model_id=..., model_version=..., \
+//	  sampling_params=..., prompt_digest=...))"
 //
 // This is the parity test [capsulectl-book-verbs-v0] requires before the
-// Python original may be considered retired: the canonicalization judgePinDigest
-// relies on (map key ordering, None -> null, missing sampling_params -> {})
-// reproduces Python's json_digest byte for byte on the shape Python actually
-// used (model_id/model_version/sampling_params/prompt_digest -- axes_digest is
-// new to this port and has no Python precedent to check against).
+// Python original may be considered retired: it proves the Go
+// canonicalization (map key ordering, None -> null, missing
+// sampling_params -> {}) reproduces judge_pin_digest's OWN output byte for
+// byte on the 4-field shape it actually builds
+// (model_id/model_version/sampling_params/prompt_digest). It does not and
+// cannot cover axes_digest, which is new to this port and has no Python
+// precedent -- TestJudgePinDigestChangesWithEachReproducibleField below
+// covers axes_digest's own behavior (it moves the pin), just not against a
+// Python oracle that never had the field.
 func TestJSONDigestParityWithRetiredPythonJudgePin(t *testing.T) {
 	v2026 := "2026-09-01"
 	cases := []struct {
@@ -446,14 +451,26 @@ func TestCalibrationSummarizeRatingLabelComparedToVerdict(t *testing.T) {
 	assert.EqualValues(t, 1000000, pin["agreement_rate_micros"])
 }
 
+// TestCalibrationSummarizeScopedPerJudgePinDigest uses deliberately
+// asymmetric data per pin -- pin-a has 3 evaluated cases, only 2 rated, 1 of
+// those an agreement (partially rated: evaluated_count > rated_count > 0,
+// the case symmetric fixtures can't exercise); pin-b has 1 evaluated case,
+// fully rated, a disagreement. If a cross-attribution bug folded pin-b's
+// case into pin-a's tally (or vice versa), the counts below would not
+// match: a fixture where every pin has the same n/k could not tell the two
+// apart.
 func TestCalibrationSummarizeScopedPerJudgePinDigest(t *testing.T) {
 	reports := []map[string]any{
 		{"case_id": "case-1", "judge_pin_digest": "pin-a", "verdict": "met"},
-		{"case_id": "case-2", "judge_pin_digest": "pin-b", "verdict": "met"},
+		{"case_id": "case-2", "judge_pin_digest": "pin-a", "verdict": "met"},
+		{"case_id": "case-3", "judge_pin_digest": "pin-a", "verdict": "met"},
+		{"case_id": "case-4", "judge_pin_digest": "pin-b", "verdict": "met"},
 	}
 	ratings := []map[string]any{
 		{"case_id": "case-1", "agrees_with_judge": true},
-		{"case_id": "case-2", "agrees_with_judge": true},
+		{"case_id": "case-2", "agrees_with_judge": false},
+		// case-3 deliberately has no rating: pin-a is partially rated.
+		{"case_id": "case-4", "agrees_with_judge": false},
 	}
 	reportsPath := writeJSONFile(t, "reports.json", reports)
 	ratingsPath := writeJSONFile(t, "ratings.json", ratings)
@@ -463,8 +480,20 @@ func TestCalibrationSummarizeScopedPerJudgePinDigest(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(out), &result))
 	pins := asObjectList(t, result["pins"])
 	require.Len(t, pins, 2)
-	assert.Equal(t, "pin-a", asObject(t, pins[0])["judge_pin_digest"])
-	assert.Equal(t, "pin-b", asObject(t, pins[1])["judge_pin_digest"])
+
+	pinA := asObject(t, pins[0])
+	assert.Equal(t, "pin-a", pinA["judge_pin_digest"])
+	assert.EqualValues(t, 3, pinA["evaluated_count"])
+	assert.EqualValues(t, 2, pinA["rated_count"])
+	assert.EqualValues(t, 1, pinA["agreement_count"])
+	assert.EqualValues(t, 500000, pinA["agreement_rate_micros"])
+
+	pinB := asObject(t, pins[1])
+	assert.Equal(t, "pin-b", pinB["judge_pin_digest"])
+	assert.EqualValues(t, 1, pinB["evaluated_count"])
+	assert.EqualValues(t, 1, pinB["rated_count"])
+	assert.EqualValues(t, 0, pinB["agreement_count"])
+	assert.EqualValues(t, 0, pinB["agreement_rate_micros"])
 }
 
 func TestCalibrationSummarizeDeterministic(t *testing.T) {
