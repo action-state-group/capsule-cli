@@ -456,3 +456,29 @@ func TestCalibrationSummarizeDeterministic(t *testing.T) {
 	require.NoError(t, e)
 	assert.Equal(t, out1, out2)
 }
+
+func TestCalibrationSummarizeRejectsRatingWithNeitherField(t *testing.T) {
+	reports := []map[string]any{{"case_id": "case-1", "judge_pin_digest": "pin-a", "verdict": "met"}}
+	ratings := []map[string]any{{"case_id": "case-1"}}
+	reportsPath := writeJSONFile(t, "reports.json", reports)
+	ratingsPath := writeJSONFile(t, "ratings.json", ratings)
+	_, e := invoke(t, "", "calibration", "summarize", reportsPath, ratingsPath)
+	require.ErrorIs(t, e, ErrInput)
+}
+
+// TestCalibrationSummarizeRejectsDuplicateCaseIDInRatings mirrors
+// TestJudgeDriftReportsRejectsDuplicateCaseID: a second, silently
+// overwriting rating for the same case_id must be rejected, not resolved by
+// last-write-wins -- same discipline readReportSet already applies, now
+// matched in readHumanRatings.
+func TestCalibrationSummarizeRejectsDuplicateCaseIDInRatings(t *testing.T) {
+	reports := []map[string]any{{"case_id": "case-1", "judge_pin_digest": "pin-a", "verdict": "met"}}
+	ratings := []map[string]any{
+		{"case_id": "case-1", "agrees_with_judge": true},
+		{"case_id": "case-1", "agrees_with_judge": false},
+	}
+	reportsPath := writeJSONFile(t, "reports.json", reports)
+	ratingsPath := writeJSONFile(t, "ratings.json", ratings)
+	_, e := invoke(t, "", "calibration", "summarize", reportsPath, ratingsPath)
+	require.ErrorIs(t, e, ErrInput)
+}

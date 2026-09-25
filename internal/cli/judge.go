@@ -388,6 +388,7 @@ func readHumanRatings(path string) ([]humanRatingRecord, error) {
 	if e := decodeJSONPreserveNumbers(raw, &records); e != nil {
 		return nil, e
 	}
+	seen := make(map[string]bool, len(records))
 	for _, r := range records {
 		if r.CaseID == "" {
 			return nil, inputError("every human-rating record requires a non-empty case_id")
@@ -395,6 +396,14 @@ func readHumanRatings(path string) ([]humanRatingRecord, error) {
 		if r.AgreesWithJudge == nil && r.Rating == "" {
 			return nil, inputError("human-rating record " + r.CaseID + " needs either agrees_with_judge or rating")
 		}
+		// One canonical rating per case_id: a second, silently-overwriting
+		// rating for the same case is exactly the kind of dropped-without-a-
+		// trace input this codebase never accepts (same discipline as
+		// readReportSet's duplicate-case_id rejection).
+		if seen[r.CaseID] {
+			return nil, inputError("duplicate case_id in human-rating set: " + r.CaseID)
+		}
+		seen[r.CaseID] = true
 	}
 	return records, nil
 }
