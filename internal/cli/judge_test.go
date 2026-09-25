@@ -364,6 +364,28 @@ func TestJudgeDriftReportsRejectsDuplicateCaseID(t *testing.T) {
 	require.ErrorIs(t, e, ErrInput)
 }
 
+// TestJudgeDriftReportsRejectsMissingJudgePinDigest: an empty
+// judge_pin_digest on both sides must not be silently treated as a matching
+// pin ("" == "" would otherwise read as pin_matches=true for two reports
+// that never recorded a pin at all).
+func TestJudgeDriftReportsRejectsMissingJudgePinDigest(t *testing.T) {
+	a := []map[string]any{{"case_id": "case-1", "verdict": "met"}}
+	b := []map[string]any{{"case_id": "case-1", "judge_pin_digest": "pin-a", "verdict": "met"}}
+	pathA := writeJSONFile(t, "a.json", a)
+	pathB := writeJSONFile(t, "b.json", b)
+	_, e := invoke(t, "", "judge", "drift", "reports", pathA, pathB)
+	require.ErrorIs(t, e, ErrInput)
+}
+
+func TestJudgeDriftReportsRejectsMissingVerdict(t *testing.T) {
+	a := []map[string]any{{"case_id": "case-1", "judge_pin_digest": "pin-a"}}
+	b := []map[string]any{{"case_id": "case-1", "judge_pin_digest": "pin-a", "verdict": "met"}}
+	pathA := writeJSONFile(t, "a.json", a)
+	pathB := writeJSONFile(t, "b.json", b)
+	_, e := invoke(t, "", "judge", "drift", "reports", pathA, pathB)
+	require.ErrorIs(t, e, ErrInput)
+}
+
 // -- calibration summarize -------------------------------------------------
 
 func TestCalibrationSummarizeUnmeasuredIsNeverFabricatedZero(t *testing.T) {

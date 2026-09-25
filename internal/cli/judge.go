@@ -252,6 +252,12 @@ func readReportSet(path string) ([]evaluationReportRecord, error) {
 		if r.CaseID == "" {
 			return nil, inputError("every report record requires a non-empty case_id")
 		}
+		if r.JudgePinDigest == "" {
+			return nil, inputError("report record " + r.CaseID + " requires a non-empty judge_pin_digest")
+		}
+		if r.Verdict == "" {
+			return nil, inputError("report record " + r.CaseID + " requires a non-empty verdict")
+		}
 		if seen[r.CaseID] {
 			return nil, inputError("duplicate case_id in report set: " + r.CaseID)
 		}
