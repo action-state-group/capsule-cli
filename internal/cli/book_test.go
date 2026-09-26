@@ -594,7 +594,7 @@ func TestCloseSinceLastStartsAfterThePreviousClose(t *testing.T) {
 func TestRequestRespondRoundTrip(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	set := bookClock(t, day0)
-	bookProfile(t, "a")
+	a, _ := bookProfile(t, "a")
 	b, bKeys := bookProfile(t, "b")
 	appendHalves(t, b, half{"x1", "r1", "p1"})
 	set(day1)
@@ -619,7 +619,7 @@ func TestRequestRespondRoundTrip(t *testing.T) {
 		return r
 	}
 	record := func(sent requestResult, name string) requestResult {
-		out, err := invoke(t, "", "request", "--profile", "a", "--for", sent.RecordID, "--response", filepath.Join(dir, name+".response"), "--responder-key", hex.EncodeToString(bKeys.record))
+		out, err := invoke(t, "", "request", "--profile", "a", "--for", sent.RecordID, "--response", filepath.Join(dir, name+".response"), "--responder-key", hex.EncodeToString(bKeys.record), "--responder-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
 		require.NoError(t, err)
 		var r requestResult
 		require.NoError(t, json.Unmarshal([]byte(out), &r))
@@ -649,12 +649,60 @@ func TestRequestRespondRoundTrip(t *testing.T) {
 	assert.Equal(t, evidencebook.RecordTypeAbsence, absent.Outcome)
 	assert.Equal(t, sent.RequestDigest, absent.RequestDigest)
 
-	// A response under a key other than the pinned responder key is refused.
+	// A response is recorded only under both pinned responder keys. Without
+	// them it is refused before the book is touched; under another signing
+	// key the book refuses it and records nothing, so the real response can
+	// still be recorded afterwards: a refused message never forecloses.
 	sent = ask("pinned", `{"subject":{"kind":"full_history"},"coverage":{"min_freshness":{"size":1}}}`)
 	respond("pinned")
-	_, err = invoke(t, "", "request", "--profile", "a", "--for", sent.RecordID, "--response", filepath.Join(dir, "pinned.response"), "--responder-key", hex.EncodeToString(bKeys.checkpoint))
-	assert.ErrorIs(t, err, ErrInput)
-	assert.ErrorIs(t, err, evidencebook.ErrInvalid, "refused by the book's responder-key check")
+	pinned := filepath.Join(dir, "pinned.response")
+	size := bookSize(t, a)
+	for _, keys := range [][]string{
+		{},
+		{"--responder-key", hex.EncodeToString(bKeys.record)},
+		{"--responder-checkpoint-key", hex.EncodeToString(bKeys.checkpoint)},
+	} {
+		_, err = invoke(t, "", append([]string{"request", "--profile", "a", "--for", sent.RecordID, "--response", pinned}, keys...)...)
+		assert.ErrorIs(t, err, ErrInput, "%v", keys)
+		assert.ErrorContains(t, err, "--responder-checkpoint-key", "refused by the verb, before the book is opened: %v", keys)
+	}
+	_, err = invoke(t, "", "request", "--profile", "a", "--for", sent.RecordID, "--response", pinned, "--responder-key", hex.EncodeToString(bKeys.checkpoint), "--responder-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+	assert.ErrorIs(t, err, evidencebook.ErrInvalid, "refused by the book's pinned signer check")
+	assert.Equal(t, size, bookSize(t, a), "no refusal recorded anything")
+	assert.Equal(t, evidencebook.OutcomeArtifact, record(sent, "pinned").Outcome, "the real response is still recorded")
+}
+
+// A peer bundle carrying a member twice under keys that differ only by case
+// ("Disclosures" beside "disclosures") could have one copy verified and the
+// other read. The bundle verifier refuses it, so close --peer and reconcile
+// refuse it and seal nothing.
+func TestCaseVariantPeerBundleIsRefused(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	a, _ := bookProfile(t, "a")
+	b, bKeys := bookProfile(t, "b")
+	appendHalves(t, a, half{"x1", "r1", "p1"})
+	appendHalves(t, b, half{"x1", "r1", "p1"})
+	set(day1)
+	honest := peerBundle(t, "b")
+	raw, err := os.ReadFile(honest)
+	require.NoError(t, err)
+	_, err = invoke(t, "", "reconcile", "--profile", "a", "--period", "day", "--counterparty", "b", "--peer", honest, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+	require.NoError(t, err, "the honest bundle is accepted")
+	size := bookSize(t, a)
+	for name, member := range map[string]string{
+		"disclosures": `"Disclosures":{},`,
+		"checkpoint":  `"CHECKPOINT":{"root":"00","mmr_size":1},`,
+	} {
+		forged := filepath.Join(t.TempDir(), name+".json")
+		require.Equal(t, byte('{'), raw[0])
+		require.NoError(t, os.WriteFile(forged, append([]byte("{"+member), raw[1:]...), 0o600))
+		_, err = runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--peer", forged, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+		assert.ErrorIs(t, err, evidencebook.ErrInvalid, "%s: refused by the bundle verifier, not only by the key pin", name)
+		_, err = invoke(t, "", "reconcile", "--profile", "a", "--period", "day", "--counterparty", "b", "--peer", forged, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+		assert.ErrorIs(t, err, ErrInput, name)
+	}
+	assert.Equal(t, size, bookSize(t, a), "a refused bundle seals nothing")
 }
 
 func TestRequestModesAreExclusive(t *testing.T) {

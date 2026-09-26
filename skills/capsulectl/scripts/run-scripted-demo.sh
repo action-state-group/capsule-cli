@@ -244,7 +244,8 @@ record_of "$work/respond-result.json"
 jq -e '.outcome=="artifact"' "$work/respond-result.json" >/dev/null || {
   echo "FAIL: an identified requester asking for full history under the default policy should get an artifact" >&2; exit 1; }
 "$bin" request --profile "$profile" --for "$(jq -r .record_id "$work/request-result.json")" \
-  --response "$work/response.json" --responder-key "$peer_public_key" >"$work/response-recorded.json"
+  --response "$work/response.json" --responder-key "$peer_public_key" \
+  --responder-checkpoint-key "$peer_checkpoint_key" >"$work/response-recorded.json"
 record_of "$work/response-recorded.json"
 jq -e '.outcome=="artifact"' "$work/response-recorded.json" >/dev/null || {
   echo "FAIL: the requester did not record the verified artifact" >&2; exit 1; }

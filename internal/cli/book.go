@@ -639,7 +639,16 @@ func requestCommand() *cobra.Command {
 				return e
 			}
 		}
+		var responder evidencebook.ResponderKeys
 		if answer != "" {
+			// Both of the responder's keys are pinned by the caller, obtained
+			// independently: a response that does not verify under them is
+			// refused and never recorded, so it cannot foreclose the request.
+			responder.Signer, _ = c.Flags().GetString("responder-key")
+			responder.Checkpoint, _ = c.Flags().GetString("responder-checkpoint-key")
+			if keys, e := parseKeys([]string{responder.Signer, responder.Checkpoint}); e != nil || len(keys) != 2 {
+				return inputError("--response needs --responder-key and --responder-checkpoint-key, each a 32-byte Ed25519 public key in hex")
+			}
 			raw, e := readInput(answer)
 			if e != nil {
 				return e
@@ -670,8 +679,7 @@ func requestCommand() *cobra.Command {
 			}
 			return output(c, requestResult{RecordID: sent.RecordID, RequestDigest: sent.Digest, Output: path})
 		case answer != "":
-			key, _ := c.Flags().GetString("responder-key")
-			record, e := book.RecordResponse(c.Context(), forID, resp, key)
+			record, e := book.RecordResponse(c.Context(), forID, resp, responder)
 			if e != nil {
 				return bookError(e)
 			}
@@ -698,7 +706,8 @@ func requestCommand() *cobra.Command {
 	cmd.Flags().String("output", "", "Write the canonical request bytes to transmit")
 	cmd.Flags().String("for", "", "The request record id an answer or absence belongs to")
 	cmd.Flags().String("response", "", "The response JSON that came back")
-	cmd.Flags().String("responder-key", "", "Expected responder public key in hex; a response under any other key is refused")
+	cmd.Flags().String("responder-key", "", "Required with --response: the responder's signing public key in hex; a response under any other key is refused")
+	cmd.Flags().String("responder-checkpoint-key", "", "Required with --response: the responder's checkpoint public key in hex; an artifact anchored under any other key is refused")
 	cmd.Flags().String("absent-until", "", "RFC 3339 end of the window in which nothing arrived")
 	cmd.Flags().String("route", "", "Route the request was sent over (recorded with an absence)")
 	return cmd

@@ -230,7 +230,7 @@ verbs:
   - name: request
     args:
       - "--profile NAME --request FILE --responder NAME --output FILE"
-      - "--profile NAME --for RECORD_ID --response FILE --responder-key HEX"
+      - "--profile NAME --for RECORD_ID --response FILE --responder-key HEX --responder-checkpoint-key HEX"
       - "--profile NAME --for RECORD_ID --absent-until TIME"
     when: >-
       Ask a party for evidence (the request is recorded before it is sent),
