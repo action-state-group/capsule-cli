@@ -31,19 +31,25 @@ const (
 	recordTypeMigration  = "log_migration"
 )
 
-// publishedRecord returns the book record that holds capsuleID, if any: a
-// capsule published into the book, or one backfilled from the retired log.
+// publishedRecord returns the book record that carries capsuleID's capsule,
+// if any: one published into the book, or one backfilled from the retired
+// log with the capsule as its payloads. A backfilled entry without payloads
+// is a retired value only (it may be a disclosure digest), never a capsule.
 func publishedRecord(ctx context.Context, book *evidencebook.Book, capsuleID string) (evidencebook.Record, bool, error) {
 	records, err := book.Query(ctx, evidencebook.Filter{SubjectRef: capsuleID})
 	if err != nil {
 		return evidencebook.Record{}, false, err
 	}
 	for _, r := range records {
-		if r.Header.RecordType == recordTypePublished || r.Header.RecordType == recordTypeBackfilled {
+		if carriesCapsule(r.Header) {
 			return r, true, nil
 		}
 	}
 	return evidencebook.Record{}, false, nil
+}
+
+func carriesCapsule(h evidencebook.Header) bool {
+	return h.RecordType == recordTypePublished || (h.RecordType == recordTypeBackfilled && len(h.PayloadCommitments) > 0)
 }
 
 // appendPublished commits a verified, sealed capsule to the book once and
@@ -58,10 +64,21 @@ func appendPublished(ctx context.Context, book *evidencebook.Book, record artifa
 		SubjectRef: record.CapsuleID,
 		Payloads:   [][]byte{record.Capsule, record.ProducerEnvelope},
 	})
-	if err != nil && committed.RecordID == "" {
-		return 0, ErrPending
+	switch {
+	case err == nil:
+		return committed.Seq, nil
+	case committed.RecordID != "":
+		// Committed; only a later step (indexing, an automatic checkpoint)
+		// failed. The book says not to retry, and the next open rebuilds its
+		// indexes from the log, so the position stands.
+		return committed.Seq, nil
+	case errors.Is(err, evidencebook.ErrInvalid) || errors.Is(err, evidencebook.ErrNotFound):
+		return 0, bookError(err)
+	default:
+		// Stored but not yet committed: the book retries it first on its
+		// next open, so the same publish can be retried.
+		return 0, errors.Join(ErrPending, err)
 	}
-	return committed.Seq, err
 }
 
 // retiredLog is what a jsonl profile's pre-book cll.jsonl holds.
@@ -74,23 +91,45 @@ func retiredLogPath(p Profile) string {
 	return filepath.Join(p.Connection.Database, jsonlLogFile)
 }
 
-// readRetiredLog reads the profile's pre-book cll.jsonl, or nothing when
-// there is none. Opening it takes that file's lock, so no older binary is
-// writing it while it is read.
-func readRetiredLog(ctx context.Context, p Profile) (out retiredLog, err error) {
+// fingerprint commits to every retired entry (position, value, time) and
+// to the retired log's last signed checkpoint, so any later change to the
+// file -- an entry added or rewritten, or a new checkpoint cut by an older
+// binary -- is detected, not only a change in its length.
+func (r retiredLog) fingerprint() (entries, checkpoint string) {
+	h := sha256.New()
+	for _, e := range r.entries {
+		fmt.Fprintf(h, "%d:%x:%s\n", e.Seq, e.Value, e.AppendedAt.UTC().Format(time.RFC3339Nano))
+	}
+	entries = hex.EncodeToString(h.Sum(nil))
+	if r.checkpoint != nil {
+		digest := sha256.Sum256(r.checkpoint.Bytes)
+		checkpoint = hex.EncodeToString(digest[:])
+	}
+	return entries, checkpoint
+}
+
+// openRetiredLog reads the profile's pre-book cll.jsonl (nothing when there
+// is none) and holds that file's lock until release, so no older binary
+// writes it meanwhile.
+func openRetiredLog(ctx context.Context, p Profile) (out retiredLog, release func() error, err error) {
+	release = func() error { return nil }
 	path := retiredLogPath(p)
 	if _, err = os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return retiredLog{}, nil
+		return retiredLog{}, release, nil
 	}
 	log, err := clljsonl.Open(path)
 	if err != nil {
-		return retiredLog{}, err
+		return retiredLog{}, release, err
 	}
-	defer func() { err = errors.Join(err, log.Close()) }()
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, log.Close())
+		}
+	}()
 	for after := uint64(0); ; {
 		page, err := log.ScanEntries(ctx, after, cll.MaxScanLimit)
 		if err != nil {
-			return retiredLog{}, err
+			return retiredLog{}, release, err
 		}
 		if len(page) == 0 {
 			break
@@ -100,30 +139,46 @@ func readRetiredLog(ctx context.Context, p Profile) (out retiredLog, err error) 
 	}
 	state, err := log.LoadCLL(ctx)
 	if err != nil {
-		return retiredLog{}, err
+		return retiredLog{}, release, err
 	}
 	out.checkpoint = state.Checkpoint
-	return out, nil
+	return out, log.Close, nil
+}
+
+func readRetiredLog(ctx context.Context, p Profile) (retiredLog, error) {
+	out, release, err := openRetiredLog(ctx, p)
+	return out, errors.Join(err, release())
 }
 
 // migrationStatement is the body of the record `store migrate` seals once
-// every retired entry is in the book.
+// every retired entry is in the book. The two fingerprints are
+// retiredLog.fingerprint of the retired log as migrated.
 type migrationStatement struct {
-	RetiredLogID   string `json:"retired_log_id"`
-	RetiredEntries uint64 `json:"retired_entries"`
-	// The retired log's last signed checkpoint, when it had one: its MMR
-	// size and the SHA-256 of the signed statement.
-	RetiredCheckpointSize   uint64 `json:"retired_checkpoint_size,omitempty"`
-	RetiredCheckpointDigest string `json:"retired_checkpoint_digest,omitempty"`
+	RetiredLogID      string `json:"retired_log_id"`
+	RetiredEntries    uint64 `json:"retired_entries"`
+	EntriesDigest     string `json:"retired_entries_digest"`
+	CheckpointDigest  string `json:"retired_checkpoint_digest,omitempty"`
+	RetiredCheckpoint uint64 `json:"retired_checkpoint_size,omitempty"`
 }
+
+func (st migrationStatement) matches(r retiredLog) bool {
+	entries, checkpoint := r.fingerprint()
+	return st.RetiredEntries == uint64(len(r.entries)) && st.EntriesDigest == entries && st.CheckpointDigest == checkpoint
+}
+
+var errRetiredLogChanged = errors.Join(ErrConflict, errors.New("the retired cll.jsonl changed after it was migrated"))
 
 // backfillStatement is the body of one backfilled entry. provenance_mode
 // has the AAC shape: the retired log asserted the entry at appended_at, and
-// the book imported it later.
+// the book imported it later. source_ref.digest is the retired entry's
+// value, itself a SHA-256 digest: a capsule id, or a disclosure digest.
 type backfillStatement struct {
 	RetiredLogID   string             `json:"retired_log_id"`
 	RetiredSeq     uint64             `json:"retired_seq"`
 	ProvenanceMode backfillProvenance `json:"provenance_mode"`
+	// CapsuleOmitted says why a capsule the artifact store holds was not
+	// carried: it no longer verifies under the profile's trusted keys.
+	CapsuleOmitted string `json:"capsule_omitted,omitempty"`
 }
 
 type backfillProvenance struct {
@@ -142,15 +197,16 @@ type migrateResult struct {
 }
 
 // migrateStore moves a jsonl profile's pre-book cll.jsonl into its book,
-// once, in order, and resumably. A retired log that was ever checkpointed
-// needs a new log id: its signed checkpoints name its own tree under
-// (log_id, checkpoint key), and the book's different tree under the same
-// pair would read as a fork of it.
+// once, in order, and resumably, holding the retired log's lock throughout.
+// A retired log that was ever checkpointed needs a new log id: its signed
+// checkpoints name its own tree under (log_id, checkpoint key), and the
+// book's different tree under the same pair would read as a fork of it.
 func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time) (_ migrateResult, err error) {
-	retired, err := readRetiredLog(ctx, p)
+	retired, release, err := openRetiredLog(ctx, p)
 	if err != nil {
 		return migrateResult{}, err
 	}
+	defer func() { err = errors.Join(err, release()) }()
 	if len(retired.entries) == 0 {
 		return migrateResult{}, inputError("this profile's cll.jsonl holds no entries to migrate")
 	}
@@ -161,9 +217,6 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 		}
 		book.LogID = newLogID
 	}
-	if retired.checkpoint != nil && book.LogID == p.LogID {
-		return migrateResult{}, inputError("the retired log was checkpointed under this log_id; give a new --log-id")
-	}
 	var artifacts artifactStore
 	if p.Namespace != "" {
 		t, openErr := openTarget(ctx, p, useArtifacts)
@@ -173,18 +226,37 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 		defer func() { err = errors.Join(err, t.close()) }()
 		artifacts = t.artifacts
 	}
-	opened, err := openBookUnguarded(ctx, book, true)
-	if err != nil {
-		return migrateResult{}, err
-	}
-	defer func() { err = errors.Join(err, opened.release()) }()
 	result := migrateResult{LogID: book.LogID, RetiredLogID: p.LogID, Backfilled: uint64(len(retired.entries))}
-	if st, id, ok, err := migrationRecord(ctx, opened.book); err != nil || ok {
-		if err == nil && st.RetiredEntries != result.Backfilled {
-			err = errors.Join(ErrConflict, errors.New("the retired cll.jsonl changed after it was migrated"))
+	var opened openedBook
+	if _, statErr := os.Stat(filepath.Join(p.Connection.Database, "book", "log.jsonl")); statErr == nil {
+		if opened, err = openBookUnguarded(ctx, book, false); err != nil {
+			return migrateResult{}, err
 		}
-		result.Migration = id
-		return result, err
+		defer func() { err = errors.Join(err, opened.release()) }()
+		st, id, ok, err := migrationRecord(ctx, opened.book)
+		if err != nil {
+			return migrateResult{}, err
+		}
+		if ok {
+			// Already migrated: from this profile (an interrupted run whose
+			// profile save is finished below), or into it (a repeat). A book
+			// migrated under any other log id does not get this far: Open
+			// refuses records that name another book.
+			if !st.matches(retired) {
+				return migrateResult{}, errRetiredLogChanged
+			}
+			result.Migration, result.RetiredLogID = id, st.RetiredLogID
+			return result, finishMigration(p, book)
+		}
+	}
+	if retired.checkpoint != nil && book.LogID == p.LogID {
+		return migrateResult{}, inputError("the retired log was checkpointed under this log_id; give a new --log-id")
+	}
+	if opened.book == nil {
+		if opened, err = openBookUnguarded(ctx, book, true); err != nil {
+			return migrateResult{}, err
+		}
+		defer func() { err = errors.Join(err, opened.release()) }()
 	}
 	done, err := backfilledSoFar(ctx, opened.book, p.LogID, retired.entries)
 	if err != nil {
@@ -195,10 +267,10 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 			return migrateResult{}, err
 		}
 	}
-	st := migrationStatement{RetiredLogID: p.LogID, RetiredEntries: result.Backfilled}
+	entries, checkpoint := retired.fingerprint()
+	st := migrationStatement{RetiredLogID: p.LogID, RetiredEntries: result.Backfilled, EntriesDigest: entries, CheckpointDigest: checkpoint}
 	if retired.checkpoint != nil {
-		digest := sha256.Sum256(retired.checkpoint.Bytes)
-		st.RetiredCheckpointSize, st.RetiredCheckpointDigest = retired.checkpoint.Size, hex.EncodeToString(digest[:])
+		st.RetiredCheckpoint = retired.checkpoint.Size
 	}
 	body, err := json.Marshal(st)
 	if err != nil {
@@ -209,12 +281,17 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 		return migrateResult{}, err
 	}
 	result.Migration = record.RecordID
-	if book.LogID != p.LogID {
-		if err = saveProfile(book, true); err != nil {
-			return migrateResult{}, err
-		}
+	return result, finishMigration(p, book)
+}
+
+// finishMigration points the profile at the book's log, last. A migration
+// interrupted after its record but before this save finishes here when it
+// is re-run with the same --log-id.
+func finishMigration(p, book Profile) error {
+	if book.LogID == p.LogID {
+		return nil
 	}
-	return result, nil
+	return saveProfile(book, true)
 }
 
 // backfilledSoFar counts the retired entries an interrupted migration
@@ -248,22 +325,19 @@ func backfilledSoFar(ctx context.Context, book *evidencebook.Book, retiredLogID 
 
 func appendBackfilled(ctx context.Context, book *evidencebook.Book, artifacts artifactStore, retiredLogID string, entry cll.Entry, total int, now time.Time) error {
 	value := hex.EncodeToString(entry.Value)
-	body, err := json.Marshal(backfillStatement{
+	statement := backfillStatement{
 		RetiredLogID: retiredLogID, RetiredSeq: entry.Seq,
 		ProvenanceMode: backfillProvenance{
 			Mode:             "backfilled",
-			SourceRef:        map[string]string{"type": "x-retired-cll-entry", "digest_alg": "SHA-256", "digest": value},
+			SourceRef:        map[string]string{"type": "x-retired-cll-entry-value", "digest_alg": "SHA-256", "digest": value},
 			SourceAssertedAt: entry.AppendedAt.UTC().Format(time.RFC3339Nano),
 			ImportBatch:      fmt.Sprintf("%s@%d", retiredLogID, total),
 			ImportedAt:       now.UTC().Format(time.RFC3339Nano),
 		},
-	})
-	if err != nil {
-		return err
 	}
 	e := evidencebook.Entry{
 		RecordType: recordTypeBackfilled, EpistemicType: evidencebook.SystemOfRecordFact,
-		SubjectRef: value, EventTimeClaim: entry.AppendedAt, Statement: body,
+		SubjectRef: value, EventTimeClaim: entry.AppendedAt,
 	}
 	// A retired entry is a capsule this profile published, or (for a
 	// disclose act) a disclosure digest with no capsule behind it.
@@ -272,10 +346,17 @@ func appendBackfilled(ctx context.Context, book *evidencebook.Book, artifacts ar
 		switch {
 		case err == nil:
 			e.Payloads = [][]byte{record.Capsule, record.ProducerEnvelope}
+		case errors.Is(err, artifact.ErrUntrustedSigner):
+			statement.CapsuleOmitted = "untrusted_signer"
 		case !errors.Is(err, artifact.ErrNotFound):
 			return err
 		}
 	}
+	body, err := json.Marshal(statement)
+	if err != nil {
+		return err
+	}
+	e.Statement = body
 	_, err = book.Append(ctx, e)
 	return err
 }
@@ -293,14 +374,14 @@ func migrationRecord(ctx context.Context, book *evidencebook.Book) (migrationSta
 }
 
 // requireNoRetiredEntries keeps the profile to one log: a book opens only
-// when the profile's pre-book cll.jsonl holds nothing, or holds exactly the
-// entries `store migrate` moved into this book.
+// when the profile's pre-book cll.jsonl holds nothing, or is exactly the log
+// `store migrate` moved into this book -- same entries, same last checkpoint.
 func requireNoRetiredEntries(ctx context.Context, p Profile, book *evidencebook.Book) error {
 	retired, err := readRetiredLog(ctx, p)
 	if err != nil {
 		return err
 	}
-	if len(retired.entries) == 0 {
+	if len(retired.entries) == 0 && retired.checkpoint == nil {
 		return nil
 	}
 	migrated, _, ok, err := migrationRecord(ctx, book)
@@ -310,20 +391,22 @@ func requireNoRetiredEntries(ctx context.Context, p Profile, book *evidencebook.
 	if !ok {
 		return inputError("this profile's cll.jsonl holds entries not yet in its book; run 'store migrate'")
 	}
-	if migrated.RetiredEntries != uint64(len(retired.entries)) {
-		return errors.Join(ErrConflict, errors.New("the retired cll.jsonl changed after it was migrated"))
+	if !migrated.matches(retired) {
+		return errRetiredLogChanged
 	}
 	return nil
 }
 
 // bookEntry is one `cll list` item for a jsonl profile. capsule_id is the
-// log entry itself (the book record's capsule id); published_capsule_id is
-// the capsule a published or backfilled record holds.
+// log entry itself: the book record's own capsule id, not a published
+// capsule's. published_capsule_id is the capsule a record carries;
+// retired_value is a backfilled entry's value when no capsule is carried.
 type bookEntry struct {
 	Sequence           uint64 `json:"sequence"`
 	CapsuleID          string `json:"capsule_id"`
 	RecordType         string `json:"record_type"`
 	PublishedCapsuleID string `json:"published_capsule_id,omitempty"`
+	RetiredValue       string `json:"retired_value,omitempty"`
 	AppendedAt         string `json:"appended_at"`
 }
 
@@ -339,8 +422,11 @@ func listBook(ctx context.Context, book *evidencebook.Book, after, through uint6
 			break
 		}
 		item := bookEntry{Sequence: r.Seq, CapsuleID: r.RecordID, RecordType: r.Header.RecordType, AppendedAt: r.Header.CommittedAt}
-		if r.Header.RecordType == recordTypePublished || r.Header.RecordType == recordTypeBackfilled {
+		switch {
+		case carriesCapsule(r.Header):
 			item.PublishedCapsuleID = r.Header.SubjectRef
+		case r.Header.RecordType == recordTypeBackfilled:
+			item.RetiredValue = r.Header.SubjectRef
 		}
 		items = append(items, item)
 		next = r.Seq
@@ -469,6 +555,11 @@ func checkpointBook(ctx context.Context, p Profile, book *evidencebook.Book, ser
 // payloads --payloads names. A book record has no agent_output member, so
 // suppressing it is refused rather than silently meaning nothing.
 func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth int, payloads string, suppress map[string]bool, disclose bool) (evidencebook.Bundle, error) {
+	if depth < 1 {
+		// The book reads a zero depth as its default; it has no root-only
+		// closure, so a zero is refused rather than silently widened.
+		return evidencebook.Bundle{}, inputError("--closure-depth must be at least 1 on a jsonl profile")
+	}
 	request := evidencebook.BundleRequest{Root: root, ClosureDepth: depth}
 	if record, ok, err := publishedRecord(ctx, book, root); err != nil {
 		return evidencebook.Bundle{}, err

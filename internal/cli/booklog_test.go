@@ -246,6 +246,13 @@ func TestMigrateBackfillsTheRetiredLogInOrder(t *testing.T) {
 			assert.Empty(t, r.Header.PayloadCommitments, "a bare digest has no capsule behind it")
 		}
 	}
+	listedBackfill := map[string]bookEntry{}
+	for _, e := range listLog(t, "a").Entries {
+		listedBackfill[e.PublishedCapsuleID+e.RetiredValue] = e
+	}
+	digest := listedBackfill[hex.EncodeToString(entries[2].Value)]
+	assert.Empty(t, digest.PublishedCapsuleID, "a retired disclosure digest is never listed as a published capsule")
+	assert.Equal(t, hex.EncodeToString(entries[2].Value), digest.RetiredValue)
 
 	size := bookSize(t, p)
 	again, err := runMigrate(t)
@@ -292,8 +299,8 @@ func TestMigrateACheckpointedRetiredLogNeedsANewLogID(t *testing.T) {
 	st, _, ok, err := migrationRecord(t.Context(), opened.book)
 	require.NoError(t, err)
 	require.True(t, ok)
-	assert.Positive(t, st.RetiredCheckpointSize)
-	assert.Regexp(t, `^[0-9a-f]{64}$`, st.RetiredCheckpointDigest)
+	assert.Positive(t, st.RetiredCheckpoint)
+	assert.Regexp(t, `^[0-9a-f]{64}$`, st.CheckpointDigest)
 	cp, err := opened.book.Checkpoint(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, "a-book-v2", cp.LogID)
@@ -318,7 +325,7 @@ func TestMigrateResumesAndRefusesAForeignBook(t *testing.T) {
 	var backfilled []string
 	for _, e := range listed {
 		if e.RecordType == recordTypeBackfilled {
-			backfilled = append(backfilled, e.PublishedCapsuleID)
+			backfilled = append(backfilled, e.PublishedCapsuleID+e.RetiredValue)
 		}
 	}
 	assert.Equal(t, []string{hex.EncodeToString(entries[0].Value), hex.EncodeToString(entries[1].Value)}, backfilled)
@@ -409,4 +416,176 @@ func TestCountersignRootRefusesABookProfile(t *testing.T) {
 	published := publishFile(t, "a", sealRequestFile(t, "published-1"))
 	_, err := invoke(t, "", "countersign", "request", "--profile", "a", "--service", "https://countersign.example.invalid", "--window", "2026-09", "--root", published.CapsuleID, "--out", filepath.Join(t.TempDir(), "b.json"))
 	assert.ErrorIs(t, err, errBookProfile)
+}
+
+// After an uncheckpointed log is migrated under the same log_id, an older
+// binary cutting a checkpoint on the retired file would put two trees under
+// one (log_id, key). Every command then refuses the profile, so the book
+// never signs its tree under that pair.
+func TestRetiredCheckpointAfterMigrationIsRefused(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, _ := bookProfile(t, "a")
+	legacyLog(t, p, 1, 0, false)
+	_, err := runMigrate(t)
+	require.NoError(t, err)
+	_, err = invoke(t, "", "cll", "list", "--profile", "a")
+	require.NoError(t, err)
+
+	log, err := clljsonl.Open(retiredLogPath(p))
+	require.NoError(t, err)
+	key, err := privateKey(p.Checkpoint.Signing)
+	require.NoError(t, err)
+	signer, err := checkpoint.NewEd25519Signer(key)
+	require.NoError(t, err)
+	cfg := checkpoint.DefaultRunnerConfig(p.LogID)
+	cfg.Cadence.CadenceEntries = 1
+	runner, err := checkpoint.NewRunner(cfg, log, signer)
+	require.NoError(t, err)
+	_, err = runner.RunOnce(t.Context(), time.Now().UTC())
+	require.NoError(t, err)
+	require.NoError(t, log.Close())
+
+	for _, args := range [][]string{{"cll", "list", "--profile", "a"}, {"cll", "checkpoint", "create", "--profile", "a"}} {
+		_, err = invoke(t, "", args...)
+		assert.ErrorIs(t, err, ErrConflict, "%v", args)
+	}
+}
+
+func TestRetiredFingerprintSeesARewriteOfTheSameLength(t *testing.T) {
+	at := day0
+	a := retiredLog{entries: []cll.Entry{{Seq: 1, Value: bytes.Repeat([]byte{1}, 32), AppendedAt: at}}}
+	b := retiredLog{entries: []cll.Entry{{Seq: 1, Value: bytes.Repeat([]byte{2}, 32), AppendedAt: at}}}
+	entries, checkpoint := a.fingerprint()
+	st := migrationStatement{RetiredEntries: 1, EntriesDigest: entries, CheckpointDigest: checkpoint}
+	assert.True(t, st.matches(a))
+	assert.False(t, st.matches(b), "same length, different value")
+	a.checkpoint = &cll.CheckpointState{Bytes: []byte("statement"), Size: 1}
+	assert.False(t, st.matches(a), "a checkpoint that was not there at migration")
+}
+
+// A migration interrupted after its record but before the profile save is
+// finished by re-running it; a repeat after success changes nothing.
+func TestMigrateFinishesAnInterruptedProfileSave(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, _ := bookProfile(t, "a")
+	legacyLog(t, p, 1, 0, true)
+	first, err := runMigrate(t, "--log-id", "a-book-v2")
+	require.NoError(t, err)
+	require.NoError(t, saveProfile(p, true)) // the save that did not happen
+	_, err = invoke(t, "", "cll", "list", "--profile", "a")
+	require.Error(t, err, "the profile still names the retired log")
+
+	again, err := runMigrate(t, "--log-id", "a-book-v2")
+	require.NoError(t, err)
+	assert.Equal(t, first.Migration, again.Migration)
+	saved, err := loadProfile("a")
+	require.NoError(t, err)
+	assert.Equal(t, "a-book-v2", saved.LogID)
+	_, err = invoke(t, "", "cll", "list", "--profile", "a")
+	require.NoError(t, err)
+
+	size := bookSize(t, saved)
+	repeat, err := runMigrate(t)
+	require.NoError(t, err, "a plain repeat after success is a no-op")
+	assert.Equal(t, first.Migration, repeat.Migration)
+	assert.Equal(t, size, bookSize(t, saved))
+}
+
+// A book an earlier build checkpointed as "<log_id>/book" is refused when
+// opened, with its log id named, instead of failing at its next checkpoint.
+func TestBookCheckpointedUnderAnotherLogIDIsRefused(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, _ := bookProfile(t, "a")
+	// The layout the earlier build wrote: book id = log_id, log id suffixed.
+	dir := filepath.Join(p.Connection.Database, "book")
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	checkpointKey, err := privateKey(p.Checkpoint.Signing)
+	require.NoError(t, err)
+	recordKey, err := privateKey(p.Signing)
+	require.NoError(t, err)
+	substrate, err := evidencebook.OpenCLL(filepath.Join(dir, "log.jsonl"), p.LogID+"/book", checkpointKey)
+	require.NoError(t, err)
+	store, err := evidencebook.OpenFileStore(filepath.Join(dir, "records"))
+	require.NoError(t, err)
+	payloads, err := evidencebook.OpenPayloadDir(filepath.Join(dir, "payloads"))
+	require.NoError(t, err)
+	signer, err := evidencebook.NewEd25519Signer(recordKey)
+	require.NoError(t, err)
+	old, err := evidencebook.Open(t.Context(), evidencebook.Config{BookID: p.LogID, Operator: p.Operator, Store: store, Substrate: substrate, Payloads: payloads, Signer: signer})
+	require.NoError(t, err)
+	_, err = old.Append(t.Context(), evidencebook.Entry{RecordType: "exchange", EpistemicType: evidencebook.ObservedEvent})
+	require.NoError(t, err)
+	_, err = old.Checkpoint(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, old.Release())
+	_, err = openBook(t.Context(), p, false)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), p.LogID+"/book")
+}
+
+// A retired capsule the artifact store holds but no longer verifies under
+// the profile's trusted keys is recorded as omitted, not a migration stop.
+func TestMigrateRecordsACapsuleUnderARotatedKeyAsOmitted(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, _ := bookProfile(t, "a")
+	legacyLog(t, p, 1, 0, false)
+	public, private, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	p.Signing.Value = hex.EncodeToString(private.Seed())
+	p.TrustedKeys = []string{hex.EncodeToString(public)}
+	require.NoError(t, saveProfile(p, true))
+	_, err = runMigrate(t)
+	require.NoError(t, err)
+	opened, err := openBook(t.Context(), p, false)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, opened.release()) }()
+	records, err := opened.book.Query(t.Context(), evidencebook.Filter{RecordType: recordTypeBackfilled})
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	assert.Empty(t, records[0].Header.PayloadCommitments)
+	var st backfillStatement
+	require.NoError(t, json.Unmarshal(records[0].Header.Statement, &st))
+	assert.Equal(t, "untrusted_signer", st.CapsuleOmitted)
+}
+
+// A capsule backfilled without its bytes is not treated as already
+// carried: appending it commits a published record that carries it.
+func TestAppendAfterAPayloadlessBackfillCarriesTheCapsule(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, _ := bookProfile(t, "a")
+	entries := legacyLog(t, p, 1, 0, false)
+	opened, err := openBookUnguarded(t.Context(), p, true)
+	require.NoError(t, err)
+	require.NoError(t, appendBackfilled(t.Context(), opened.book, nil, p.LogID, entries[0], 1, day1))
+	require.NoError(t, opened.release())
+	_, err = runMigrate(t)
+	require.NoError(t, err)
+
+	id := hex.EncodeToString(entries[0].Value)
+	capsulePath := filepath.Join(t.TempDir(), "retired.json")
+	_, err = invoke(t, "", "get", "--profile", "a", "--capsule-id", id, "--raw", "--output", capsulePath)
+	require.NoError(t, err)
+	_, err = invoke(t, "", "cll", "append", "--profile", "a", "--capsule", capsulePath)
+	require.NoError(t, err)
+	var carried bookEntry
+	for _, e := range listLog(t, "a").Entries {
+		if e.PublishedCapsuleID == id {
+			carried = e
+		}
+	}
+	assert.Equal(t, recordTypePublished, carried.RecordType)
+}
+
+func TestBookBundleRefusesARootOnlyClosure(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	storedProfile(t, "a")
+	published := publishFile(t, "a", sealRequestFile(t, "published-1"))
+	_, err := invoke(t, "", "bundle", "--profile", "a", "--root", published.CapsuleID, "--closure-depth", "0")
+	assert.ErrorIs(t, err, ErrInput)
 }

@@ -135,6 +135,16 @@ func openBookUnguarded(ctx context.Context, p Profile, create bool) (openedBook,
 	if err = clock.refuseIfAhead(p); err != nil {
 		return openedBook{}, errors.Join(err, book.Release())
 	}
+	// A book an earlier capsulectl checkpointed under another log id (the
+	// "<log_id>/book" it once used) would fail at its next checkpoint; say so
+	// now instead of letting commands run until then.
+	checkpoints, err := book.Checkpoints(ctx)
+	if err == nil && len(checkpoints) > 0 && checkpoints[len(checkpoints)-1].LogID != p.LogID {
+		err = inputError(fmt.Sprintf("this book is checkpointed under log id %q, not the profile's log_id", checkpoints[len(checkpoints)-1].LogID))
+	}
+	if err != nil {
+		return openedBook{}, errors.Join(err, book.Release())
+	}
 	return openedBook{book: book, store: store, lastCommit: clock.floor}, nil
 }
 
