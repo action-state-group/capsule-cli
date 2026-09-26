@@ -74,11 +74,14 @@ func (s Secret) redact() Secret {
 }
 
 type Profile struct {
-	Name       string `yaml:"name" mapstructure:"name"`
-	Type       string `yaml:"type" mapstructure:"type"`
-	LogID      string `yaml:"log_id" mapstructure:"log_id"`
-	Namespace  string `yaml:"namespace" mapstructure:"namespace"`
-	ReadOnly   bool   `yaml:"read_only,omitempty" mapstructure:"read_only"`
+	Name      string `yaml:"name" mapstructure:"name"`
+	Type      string `yaml:"type" mapstructure:"type"`
+	LogID     string `yaml:"log_id" mapstructure:"log_id"`
+	Namespace string `yaml:"namespace" mapstructure:"namespace"`
+	ReadOnly  bool   `yaml:"read_only,omitempty" mapstructure:"read_only"`
+	// Operator is the AAC operator value the book verbs write into every
+	// record they seal. Only those verbs require it.
+	Operator   string `yaml:"operator,omitempty" mapstructure:"operator"`
 	Connection struct {
 		Host     string `yaml:"host" mapstructure:"host"`
 		Port     int    `yaml:"port" mapstructure:"port"`
@@ -324,7 +327,7 @@ func profileCommands() *cobra.Command {
 		f := c.Flags()
 		f.String("name", "", "New profile name")
 		f.Bool("interactive", false, "Ask for missing nonsecret connection fields")
-		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key"}
+		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator"}
 		for flag := range fields {
 			f.String(flag, "", "Profile setting")
 		}
