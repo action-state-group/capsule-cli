@@ -222,7 +222,13 @@ selects one with `--type`:
 
 - JSONL is an inspectable, single-writer append-only journal. `--jsonl-path`
   sets `connection.database` to a directory holding `artifacts.jsonl` and
-  `cll.jsonl`; no host, port, or TLS.
+  `book/`, the profile's evidence book, which is its one log: `publish`,
+  `cll append`, `cll list`, `cll checkpoint`, the bundle verbs and the book
+  verbs (`close`, `reconcile`, `request`, `respond`) all use it, and it needs
+  `--operator`. No host, port, or TLS. A JSONL store made by an earlier
+  capsulectl keeps its log in `cll.jsonl`; `store migrate` moves those entries
+  into the book once, in order, and every other command refuses the profile
+  until it has (a log that was ever checkpointed needs a new `--log-id`).
 - SQLite uses WAL transactions and supports multiple handles in one process.
   Artifact and CLL data share one file, set with `--sqlite-path`.
 - MySQL uses transactional row locking and supports multiple processes.

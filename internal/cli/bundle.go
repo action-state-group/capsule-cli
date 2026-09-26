@@ -520,11 +520,23 @@ func bundleCommands() []*cobra.Command {
 				return err
 			}
 			defer func() { err = errors.Join(err, target.close()) }()
-			value, err := AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink})
-			if err != nil {
+			var value map[string]interface{}
+			var encoded []byte
+			if target.book != nil {
+				// A jsonl profile's bundle comes from its book, which puts every
+				// bundle it builds on record as a disclosure record.
+				bundle, err := bookBundle(c.Context(), target.book.book, root, closureDepth, payloads, suppressSet, disclosure || permalink)
+				if err != nil {
+					return err
+				}
+				if value, err = decodeBundleJSON(bundle.JSON); err != nil {
+					return err
+				}
+				encoded = bundle.JSON
+			} else if value, err = AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink}); err != nil {
 				return err
 			}
-			if use == "disclose" {
+			if use == "disclose" && target.book == nil {
 				// Every disclose act goes on record: the CLL append must succeed
 				// before the bundle is emitted, not merely alongside it.
 				if _, err := appendDisclosureRecord(c.Context(), target.log, value); err != nil {
@@ -551,9 +563,10 @@ func bundleCommands() []*cobra.Command {
 				return err
 			}
 			out, _ := c.Flags().GetString("out")
-			encoded, err := json.Marshal(value)
-			if err != nil {
-				return err
+			if encoded == nil {
+				if encoded, err = json.Marshal(value); err != nil {
+					return err
+				}
 			}
 			if out != "" {
 				return atomicFile(out, encoded, false)

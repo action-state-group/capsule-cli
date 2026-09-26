@@ -30,8 +30,10 @@ specific one with `profile show NAME` (NAME is positional, not a `--profile`
 flag). Read `StoreID`, `Namespace` and `LogID` to freeze the target;
 `ReadOnly` describes write configuration. Do not save the entire profile or
 its credentials in the run or skill output. The store backend (`Type`) may be
-`mysql`, `sqlite` or `jsonl`; all three expose the identical CLL/get/verify/
-publish contract below, so nothing downstream depends on which is configured.
+`mysql`, `sqlite` or `jsonl`; all three expose the same CLL/get/verify/
+publish contract below. On `jsonl` the log is the profile's evidence book, so
+`cll list` entries also carry `record_type` and, for a published capsule,
+`published_capsule_id`.
 
 ## Enumerate
 

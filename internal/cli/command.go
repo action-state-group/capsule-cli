@@ -278,6 +278,23 @@ func NewCommand() *cobra.Command {
 		return output(c, map[string]string{"log_id": p.LogID, "status": "initialized"})
 	}}
 	store.AddCommand(init)
+	migrate := &cobra.Command{Use: "migrate", Short: "Move a jsonl profile's pre-book cll.jsonl into its evidence book, once, in order (signs)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		p, e := selected(c)
+		if e != nil {
+			return e
+		}
+		if p.Type != "jsonl" || p.ReadOnly {
+			return inputError("store migrate applies to a writable jsonl profile")
+		}
+		newLogID, _ := c.Flags().GetString("log-id")
+		result, e := migrateStore(c.Context(), p, newLogID, bookNow())
+		if e != nil {
+			return e
+		}
+		return output(c, result)
+	}}
+	migrate.Flags().String("log-id", "", "New log_id for the book; required when the retired log was ever checkpointed")
+	store.AddCommand(migrate)
 	root.AddCommand(store)
 	root.AddCommand(sealToFileCommand("seal", "output", "Seal to an explicit private artifact file; no database connection"))
 	// `emit` is the v4 verb name for the same operation `seal` already performs
@@ -425,6 +442,13 @@ func NewCommand() *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.close()) }()
+		if t.book != nil {
+			items, next, e := listBook(c.Context(), t.book.book, after, through, limit)
+			if e != nil {
+				return e
+			}
+			return output(c, map[string]any{"entries": items, "next_after": next, "log_id": p.LogID})
+		}
 		entries, e := t.log.ScanEntries(c.Context(), after, limit)
 		if e != nil {
 			return e
@@ -477,6 +501,13 @@ func NewCommand() *cobra.Command {
 			if e = t.artifacts.Put(c.Context(), r); e != nil {
 				return e
 			}
+		}
+		if t.book != nil {
+			seq, e := appendPublished(c.Context(), t.book.book, r)
+			if e != nil {
+				return e
+			}
+			return output(c, map[string]any{"capsule_id": r.CapsuleID, "sequence": seq, "log_id": p.LogID})
 		}
 		entry, e := appendRecord(c.Context(), t.log, r.CapsuleID)
 		if e != nil {

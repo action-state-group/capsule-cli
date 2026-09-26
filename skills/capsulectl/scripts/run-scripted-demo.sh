@@ -51,6 +51,16 @@ checkpoint_public_key=$(jq -r .public_key "$work/checkpoint-keygen.json")
   --trusted-key "$public_key" --signing-key-file "$seed" \
   --checkpoint-signing-key-file "$checkpoint_seed" --checkpoint-trusted-key "$checkpoint_public_key" >/dev/null
 "$bin" store init --profile "$profile" >/dev/null
+# This profile's one log is its evidence book. Yesterday's exchanges go in
+# first, before anything today: `close` refuses a period that has not ended,
+# and a log whose commit times go backwards cannot be closed at all.
+# bookdemo is a fixture helper, not part of capsulectl.
+bookdemo="$work/bookdemo"
+(cd "$repo_root" && go build -o "$bookdemo" ./skills/capsulectl/scripts/bookdemo)
+yesterday=$(date -u -v-1d +%Y-%m-%d 2>/dev/null || date -u -d yesterday +%Y-%m-%d)
+"$bookdemo" seed --store "$store" --log-id skill-demo --operator demo-operator \
+  --signing-key-file "$seed" --checkpoint-key-file "$checkpoint_seed" --at "${yesterday}T12:00:00Z" \
+  booking-1:req-1:confirmed booking-2:req-2:refunded
 
 scan_root="$work/scan-root"
 mkdir -p "$scan_root"
@@ -122,7 +132,11 @@ echo "  ran + passed, no seal call made — checking a bundle is local validatio
 
 echo "== 5/15 cll list (not-consequential; no capsule) ==" >&2
 "$bin" cll list --profile "$profile" >"$work/cll-list-result.json"
-echo "  ran, no seal call made — reading the log is local inspection per the evidence policy" >&2
+jq -e --arg id "$published_id" 'any(.entries[]; .record_type=="published_capsule" and .published_capsule_id==$id)' \
+  "$work/cll-list-result.json" >/dev/null || {
+  echo "FAIL: the capsule publish committed is not in the log cll list reads" >&2; exit 1; }
+[[ ! -e "$store/cll.jsonl" ]] || { echo "FAIL: a jsonl profile must have one log, but cll.jsonl exists" >&2; exit 1; }
+echo "  ran, no seal call made — the published capsule is in the profile's one log (its evidence book)" >&2
 
 echo "== 6/15 contract validate (not-consequential; no capsule) ==" >&2
 schema="$work/demo-schema.json"
@@ -200,8 +214,6 @@ echo "  ran, no seal call made — folding stats is local computation per the ev
 # second profile standing in for the counterparty. `close` refuses a period
 # that has not ended, so bookdemo (a fixture helper, not part of capsulectl)
 # seeds both books with yesterday's exchanges first.
-bookdemo="$work/bookdemo"
-(cd "$repo_root" && go build -o "$bookdemo" ./skills/capsulectl/scripts/bookdemo)
 peer=demo-peer
 peer_seed="$work/peer-signing.hex"
 peer_checkpoint_seed="$work/peer-checkpoint-signing.hex"
@@ -214,10 +226,6 @@ peer_store="$work/peer-store"
   --namespace demo --log-id skill-demo-peer --operator demo-peer-operator \
   --trusted-key "$peer_public_key" --signing-key-file "$peer_seed" \
   --checkpoint-signing-key-file "$peer_checkpoint_seed" --checkpoint-trusted-key "$peer_checkpoint_key" >/dev/null
-yesterday=$(date -u -v-1d +%Y-%m-%d 2>/dev/null || date -u -d yesterday +%Y-%m-%d)
-"$bookdemo" seed --store "$store" --log-id skill-demo --operator demo-operator \
-  --signing-key-file "$seed" --checkpoint-key-file "$checkpoint_seed" --at "${yesterday}T12:00:00Z" \
-  booking-1:req-1:confirmed booking-2:req-2:refunded
 "$bookdemo" seed --store "$peer_store" --log-id skill-demo-peer --operator demo-peer-operator \
   --signing-key-file "$peer_seed" --checkpoint-key-file "$peer_checkpoint_seed" --at "${yesterday}T12:00:00Z" \
   booking-1:req-1:confirmed booking-2:req-2:cancelled

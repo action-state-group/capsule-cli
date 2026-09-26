@@ -1,8 +1,8 @@
 // Package cli: the book verbs -- `close`, `reconcile`, `request`, `respond`
-// -- over a local evidencebook.Book. The book is opened from a jsonl
-// profile and lives in a `book/` directory beside that profile's
-// artifacts.jsonl and cll.jsonl; it keeps its own commitment log there and
-// never shares the profile's. Everything here goes through the evidencebook
+// -- over a local evidencebook.Book. A jsonl profile's evidence book is its
+// one log: it lives in a `book/` directory beside the profile's
+// artifacts.jsonl, and `publish`, `cll append` and `cll list` go through it
+// too (booklog.go). Everything here goes through the evidencebook
 // public API: no commitment-substrate type appears in a flag, an output, or
 // this file. The book composes every proof; these verbs choose windows,
 // read files, and write results.
@@ -54,18 +54,27 @@ func (o openedBook) refuseDisplacedClose() error {
 
 func (o openedBook) release() error { return o.book.Release() }
 
-// bookLogSuffix names the book's commitment log apart from the profile's
-// own CLL. Both are checkpointed with the profile's checkpoint key, and two
-// different trees under one (log_id, key) would read as equivocation.
-const bookLogSuffix = "/book"
-
 // openBook is the whole signing path of the book verbs. Records are signed
 // with the profile's signing key, which must be one of the profile's own
 // trusted_keys (so `verify` under that profile accepts them); the book's
 // checkpoints are signed with the profile's checkpoint signing key, which
-// must be one of its checkpoint trusted_keys. create is false for verbs that
-// only read: they refuse a book that does not exist rather than making one.
+// must be one of its checkpoint trusted_keys. The book's log is the
+// profile's log_id. create is true only for `store init`: every other verb
+// refuses a book that does not exist rather than making one.
 func openBook(ctx context.Context, p Profile, create bool) (openedBook, error) {
+	opened, err := openBookUnguarded(ctx, p, create)
+	if err != nil {
+		return opened, err
+	}
+	if err = requireNoRetiredEntries(ctx, p, opened.book); err != nil {
+		return openedBook{}, errors.Join(err, opened.release())
+	}
+	return opened, nil
+}
+
+// openBookUnguarded is openBook without the retired-log check; only
+// `store migrate`, which is what satisfies that check, calls it directly.
+func openBookUnguarded(ctx context.Context, p Profile, create bool) (openedBook, error) {
 	if p.Type != "jsonl" || p.LogID == "" || p.Operator == "" {
 		return openedBook{}, inputError("book verbs need a jsonl profile with log_id and operator set")
 	}
@@ -93,13 +102,13 @@ func openBook(ctx context.Context, p Profile, create bool) (openedBook, error) {
 	dir := filepath.Join(p.Connection.Database, "book")
 	if !create {
 		if _, err = os.Stat(filepath.Join(dir, "log.jsonl")); err != nil {
-			return openedBook{}, inputError("the profile has no book yet")
+			return openedBook{}, inputError("the profile has no book yet; run 'store init'")
 		}
 	}
 	if err = os.MkdirAll(dir, 0o700); err != nil {
 		return openedBook{}, err
 	}
-	substrate, err := evidencebook.OpenCLL(filepath.Join(dir, "log.jsonl"), p.LogID+bookLogSuffix, checkpointKey)
+	substrate, err := evidencebook.OpenCLL(filepath.Join(dir, "log.jsonl"), p.LogID, checkpointKey)
 	if err != nil {
 		return openedBook{}, err
 	}
@@ -626,7 +635,7 @@ func closeCommand() *cobra.Command {
 		if sinceLast && a.hasPeer {
 			return inputError("--since-last cannot be combined with --peer: the peer's window cannot be stretched to match")
 		}
-		opened, e := openBook(c.Context(), p, true)
+		opened, e := openBook(c.Context(), p, false)
 		if e != nil {
 			return e
 		}
@@ -847,7 +856,7 @@ func requestCommand() *cobra.Command {
 				return e
 			}
 		}
-		opened, e := openBook(c.Context(), p, true)
+		opened, e := openBook(c.Context(), p, false)
 		if e != nil {
 			return e
 		}
@@ -945,7 +954,7 @@ func respondCommand() *cobra.Command {
 			}
 		}
 		requester, _ := c.Flags().GetString("requester")
-		opened, e := openBook(c.Context(), p, true)
+		opened, e := openBook(c.Context(), p, false)
 		if e != nil {
 			return e
 		}

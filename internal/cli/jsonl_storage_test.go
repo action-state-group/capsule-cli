@@ -6,15 +6,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/action-state-group/agent-action-capsule/go/canonical"
+	"github.com/action-state-group/evidencebook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // TestJSONLSDKOnlyStorage exercises the file-based jsonl profile end to end:
-// store init creates the two files, publish persists an artifact and appends to
-// the CLL (idempotently), the record reads back, and a checkpoint can be cut —
-// proving the cll-go jsonl backend's witness/checkpoint methods are wired too.
+// store init creates the artifact file and the evidence book (the profile's
+// one log; no cll.jsonl), publish persists an artifact and commits it to the
+// book (idempotently), the record reads back, and a checkpoint of the book
+// verifies under the profile's own log_id.
 func TestJSONLSDKOnlyStorage(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, key := profileFixture(t)
@@ -27,7 +28,8 @@ func TestJSONLSDKOnlyStorage(t *testing.T) {
 	_, err := invoke(t, "", "store", "init", "--profile", p.Name)
 	require.NoError(t, err)
 	assert.FileExists(t, filepath.Join(dir, "artifacts.jsonl"))
-	assert.FileExists(t, filepath.Join(dir, "cll.jsonl"))
+	assert.FileExists(t, filepath.Join(dir, "book", "log.jsonl"))
+	assert.NoFileExists(t, filepath.Join(dir, "cll.jsonl"), "a jsonl profile has one log")
 
 	// publish: seal -> persist artifact -> append to CLL, idempotent on retry.
 	request, err := parseRequest(requestFixture(t))
@@ -55,9 +57,16 @@ func TestJSONLSDKOnlyStorage(t *testing.T) {
 	require.NoError(t, target.close())
 	assert.Equal(t, first.CapsuleID, got.CapsuleID)
 
-	// A checkpoint can be cut over the jsonl log (LoadCLL/CommitCLL wired).
-	_, err = invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
+	// A checkpoint of the book verifies under the profile's log_id.
+	out, err := invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
 	require.NoError(t, err)
+	var checkpointed struct {
+		LogID      string `json:"log_id"`
+		Checkpoint uint64 `json:"checkpoint"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &checkpointed))
+	assert.Equal(t, p.LogID, checkpointed.LogID)
+	assert.Positive(t, checkpointed.Checkpoint)
 }
 
 // TestJSONLMissingDirectoryFailsClosed verifies that a non-init command against
@@ -105,18 +114,16 @@ func TestJSONLProfileCreate(t *testing.T) {
 	assert.Empty(t, p.Connection.Host)
 }
 
-// TestJSONLDiscloseAppendsDisclosureRecordToLog exercises the disclose command
-// end to end over the jsonl backend: it must append a disclosure_record to the
-// CLL in addition to emitting the bundle, and a plain bundle (no disclosure)
-// over the same root must NOT grow the log further.
-func TestJSONLDiscloseAppendsDisclosureRecordToLog(t *testing.T) {
+// TestJSONLDiscloseIsOnTheBook exercises disclose and bundle over a jsonl
+// profile's book: disclose carries the published capsule itself as a payload
+// of its book record, and every bundle the book builds -- disclosing or not --
+// is put on record as a disclosure record in the same log.
+func TestJSONLDiscloseIsOnTheBook(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, key := profileFixture(t)
 	p.Type = "jsonl"
-	dir := filepath.Join(t.TempDir(), "store")
-	p.Connection.Database = dir
+	p.Connection.Database = filepath.Join(t.TempDir(), "store")
 	require.NoError(t, saveProfile(p, false))
-
 	_, err := invoke(t, "", "store", "init", "--profile", p.Name)
 	require.NoError(t, err)
 
@@ -126,57 +133,50 @@ func TestJSONLDiscloseAppendsDisclosureRecordToLog(t *testing.T) {
 	require.NoError(t, err)
 	published, err := target.publish(t.Context(), request, key)
 	require.NoError(t, err)
+	stored, err := target.artifacts.Get(t.Context(), published.CapsuleID)
+	require.NoError(t, err)
 	require.NoError(t, target.close())
 
-	_, err = invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
-	require.NoError(t, err)
+	disclosures := func() []evidencebook.Record {
+		opened, err := openBook(t.Context(), p, false)
+		require.NoError(t, err)
+		defer func() { require.NoError(t, opened.release()) }()
+		records, err := opened.book.Query(t.Context(), evidencebook.Filter{RecordType: evidencebook.RecordTypeDisclosure})
+		require.NoError(t, err)
+		return records
+	}
 
 	out, err := invoke(t, "", "disclose", "--profile", p.Name, "--root", published.CapsuleID)
 	require.NoError(t, err)
-	// UseNumber so the disclosed values decode as json.Number, matching what
-	// disclosureOverlay produced when the digest was first committed -- a plain
-	// Unmarshal into float64 would make canonical.JSONDigest reject the input.
-	var bundle map[string]interface{}
-	decoder := json.NewDecoder(strings.NewReader(out))
-	decoder.UseNumber()
-	require.NoError(t, decoder.Decode(&bundle))
-
-	listOut, err := invoke(t, "", "cll", "list", "--profile", p.Name)
+	verified, err := evidencebook.VerifyBundle([]byte(strings.TrimSpace(out)))
 	require.NoError(t, err)
-	var listed struct {
-		Entries []struct {
-			Sequence  uint64 `json:"sequence"`
-			CapsuleID string `json:"capsule_id"`
-		} `json:"entries"`
+	var root evidencebook.PeerRecord
+	for _, r := range verified.Records {
+		if r.Header != nil && r.Header.SubjectRef == published.CapsuleID {
+			root = r
+		}
 	}
-	require.NoError(t, json.Unmarshal([]byte(listOut), &listed))
-	require.Len(t, listed.Entries, 2, "disclose must seal a disclosure_record onto the log, not just emit the bundle file")
-	assert.Equal(t, published.CapsuleID, listed.Entries[0].CapsuleID)
+	require.True(t, root.HeaderVerified, "disclose discloses the published record's header")
+	assert.Equal(t, recordTypePublished, root.Header.RecordType)
+	require.Len(t, root.Header.PayloadCommitments, 2)
+	assert.Equal(t, stored.Capsule, verified.Payloads[root.Header.PayloadCommitments[0]], "the bundle carries the published capsule itself")
+	assert.Equal(t, stored.ProducerEnvelope, verified.Payloads[root.Header.PayloadCommitments[1]])
+	on := disclosures()
+	require.Len(t, on, 1, "disclose is on record in the book")
+	var statement evidencebook.DisclosureStatement
+	require.NoError(t, json.Unmarshal(on[0].Header.Statement, &statement))
+	assert.Equal(t, verified.Digest, statement.BundleDigest)
 
-	overlay := bundle["disclosures"].(map[string]interface{})
-	members := overlay[published.CapsuleID].(map[string]interface{})
-	inputDigest, err := canonical.JSONDigest(members["agent_input"])
+	out, err = invoke(t, "", "bundle", "--profile", p.Name, "--root", published.CapsuleID)
 	require.NoError(t, err)
-	outputDigest, err := canonical.JSONDigest(members["agent_output"])
+	verified, err = evidencebook.VerifyBundle([]byte(strings.TrimSpace(out)))
 	require.NoError(t, err)
-	expected := map[string]interface{}{
-		"type":              "disclosure_record",
-		"root":              published.CapsuleID,
-		"payloads_mode":     "all",
-		"suppressed_fields": []interface{}{},
-		"revealed": map[string]interface{}{
-			published.CapsuleID: map[string]interface{}{"agent_input": inputDigest, "agent_output": outputDigest},
-		},
+	for _, r := range verified.Records {
+		assert.Nil(t, r.Header, "a plain bundle discloses no header")
 	}
-	expectedDigest, err := canonical.JSONDigest(expected)
-	require.NoError(t, err)
-	assert.Equal(t, expectedDigest, listed.Entries[1].CapsuleID, "the second log entry must commit to exactly what disclose revealed")
+	assert.Empty(t, verified.Payloads, "a plain bundle discloses no payload")
+	assert.Len(t, disclosures(), 2, "the book puts every bundle it builds on record")
 
-	// A plain bundle (no disclosure) over the same root must not append again.
-	_, err = invoke(t, "", "bundle", "--profile", p.Name, "--root", published.CapsuleID)
-	require.NoError(t, err)
-	listOut, err = invoke(t, "", "cll", "list", "--profile", p.Name)
-	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal([]byte(listOut), &listed))
-	assert.Len(t, listed.Entries, 2, "a non-disclosing bundle must not seal a disclosure_record")
+	_, err = invoke(t, "", "disclose", "--profile", p.Name, "--root", published.CapsuleID, "--suppress", "agent_output")
+	assert.ErrorIs(t, err, ErrInput, "a book record has no agent_output member")
 }

@@ -100,9 +100,16 @@ type artifactStore interface {
 type target struct {
 	db        *sql.DB
 	artifacts artifactStore
-	log       cll.Backend
-	profile   Profile
+	// log is the CLL of a mysql or sqlite profile. A jsonl profile has no
+	// such log: its one log is the evidence book, and log stays nil.
+	log     cll.Backend
+	book    *openedBook
+	profile Profile
 }
+
+// errBookProfile refuses a CLL-only operation on a jsonl profile, whose one
+// log is its evidence book, rather than reaching for a second log.
+var errBookProfile = inputError("not available on a jsonl profile: its log is the evidence book")
 
 // targetUse names the actual dependencies instead of inferring artifact access
 // from whether a command also needs a log. CLL-only commands never build SDK
@@ -121,6 +128,9 @@ func (t *target) close() error {
 	var e error
 	if t.log != nil {
 		e = t.log.Close()
+	}
+	if t.book != nil {
+		e = errors.Join(e, t.book.release())
 	}
 	// The jsonl backend uses no *sql.DB, so t.db is nil for that profile type.
 	if t.db != nil {
@@ -260,7 +270,13 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 			return nil, err
 		}
 	}
-	if needsCLL {
+	if needsCLL && p.Type == "jsonl" {
+		book, err := openBook(ctx, p, use == useInitialization)
+		if err != nil {
+			return nil, err
+		}
+		t.book = &book
+	} else if needsCLL {
 		if use == useInitialization {
 			if err = initLog(ctx, p, dsn, p.LogID); err != nil {
 				return nil, err
@@ -319,6 +335,18 @@ func (t *target) publish(ctx context.Context, r Request, private ed25519.Private
 	result, err := t.preparePublication(ctx, r, private)
 	if err != nil {
 		return result, err
+	}
+	if t.book != nil {
+		record, err := t.artifacts.Get(ctx, result.CapsuleID)
+		if err != nil {
+			return result, err
+		}
+		seq, err := appendPublished(ctx, t.book.book, record)
+		if err != nil {
+			return result, err
+		}
+		result.Sequence, result.State = seq, "appended"
+		return result, nil
 	}
 	entry, err := appendRecord(ctx, t.log, result.CapsuleID)
 	if err != nil {

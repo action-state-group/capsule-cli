@@ -91,7 +91,7 @@ func seed(args []string) (err error) {
 	if err = os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	substrate, err := evidencebook.OpenCLL(filepath.Join(dir, "log.jsonl"), *logID+"/book", checkpointKey)
+	substrate, err := evidencebook.OpenCLL(filepath.Join(dir, "log.jsonl"), *logID, checkpointKey)
 	if err != nil {
 		return err
 	}

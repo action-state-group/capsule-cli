@@ -590,6 +590,11 @@ func countersignCommands() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if target.book != nil {
+				// A book bundle always carries a disclosures member, which this
+				// request refuses; build it elsewhere and pass --bundle.
+				return errors.Join(errBookProfile, target.close())
+			}
 			bundle, err = AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: "none"})
 			if closeErr := target.close(); closeErr != nil {
 				err = errors.Join(err, closeErr)
