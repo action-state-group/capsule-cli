@@ -10,10 +10,12 @@ package cli
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -36,11 +38,18 @@ type openedBook struct {
 
 func (o openedBook) release() error { return o.book.Release() }
 
+// bookLogSuffix names the book's commitment log apart from the profile's
+// own CLL. Both are checkpointed with the profile's checkpoint key, and two
+// different trees under one (log_id, key) would read as equivocation.
+const bookLogSuffix = "/book"
+
 // openBook is the whole signing path of the book verbs. Records are signed
 // with the profile's signing key, which must be one of the profile's own
 // trusted_keys (so `verify` under that profile accepts them); the book's
-// checkpoints are signed with the profile's checkpoint signing key.
-func openBook(ctx context.Context, p Profile) (openedBook, error) {
+// checkpoints are signed with the profile's checkpoint signing key, which
+// must be one of its checkpoint trusted_keys. create is false for verbs that
+// only read: they refuse a book that does not exist rather than making one.
+func openBook(ctx context.Context, p Profile, create bool) (openedBook, error) {
 	if p.Type != "jsonl" || p.LogID == "" || p.Operator == "" {
 		return openedBook{}, inputError("book verbs need a jsonl profile with log_id and operator set")
 	}
@@ -55,18 +64,32 @@ func openBook(ctx context.Context, p Profile) (openedBook, error) {
 	if err != nil {
 		return openedBook{}, err
 	}
+	if !checkpointSignerTrusted(p, hex.EncodeToString(checkpointKey.Public().(ed25519.PublicKey))) {
+		return openedBook{}, inputError("checkpoint signer must be explicitly trusted")
+	}
 	signer, err := evidencebook.NewEd25519Signer(recordKey)
 	if err != nil {
 		return openedBook{}, err
 	}
+	// The log is opened first: it takes an exclusive lock that a second
+	// process cannot, and the record store repairs a torn final line when it
+	// opens, which must never happen under another process's write.
 	dir := filepath.Join(p.Connection.Database, "book")
-	store, err := evidencebook.OpenFileStore(filepath.Join(dir, "records"))
+	if !create {
+		if _, err = os.Stat(filepath.Join(dir, "log.jsonl")); err != nil {
+			return openedBook{}, inputError("the profile has no book yet")
+		}
+	}
+	if err = os.MkdirAll(dir, 0o700); err != nil {
+		return openedBook{}, err
+	}
+	substrate, err := evidencebook.OpenCLL(filepath.Join(dir, "log.jsonl"), p.LogID+bookLogSuffix, checkpointKey)
 	if err != nil {
 		return openedBook{}, err
 	}
-	substrate, err := evidencebook.OpenCLL(filepath.Join(dir, "log.jsonl"), p.LogID, checkpointKey)
+	store, err := evidencebook.OpenFileStore(filepath.Join(dir, "records"))
 	if err != nil {
-		return openedBook{}, errors.Join(err, store.Release())
+		return openedBook{}, errors.Join(err, substrate.Release())
 	}
 	payloads, err := evidencebook.OpenPayloadDir(filepath.Join(dir, "payloads"))
 	if err != nil {
@@ -144,31 +167,37 @@ type placed struct {
 	at  time.Time
 }
 
-// seqWindow maps a period onto one log's positions. from is one past the
-// highest placed record committed before the period starts; to is one
-// before the lowest placed record committed at or after it ends, or last
-// when there is none. A record that cannot be placed (a withheld or
-// unverified header) between those bounds is therefore inside the window,
-// where it makes the account incomplete instead of silently falling out.
-// from > to is an empty window. to == 0 would read as an open end to the
-// book, so it is refused.
-func seqWindow(records []placed, p period, last uint64) (from, to uint64, err error) {
+// seqWindow maps a period onto one log's positions. records must be in log
+// order. from is one past the last placed record committed before the
+// period starts; to is one before the first placed record committed at or
+// after it ends. A record that cannot be placed (a withheld or unverified
+// header) between those bounds is therefore inside the window, where it
+// makes the account incomplete instead of silently falling out. from > to
+// is an empty window.
+//
+// ended reports whether a placed record shows the log continued past the
+// period's end; when none does, to is last and the caller decides what an
+// unproven end means. Commit times that go backwards in log order are
+// refused: no position then separates the period from its neighbours.
+// to == 0 would read as an open end to the log, so it is refused too.
+func seqWindow(records []placed, p period, last uint64) (from, to uint64, ended bool, err error) {
 	from, to = 1, last
+	var prev placed
 	for _, r := range records {
-		if r.seq == 0 {
-			continue
+		if r.seq <= prev.seq || r.at.Before(prev.at) {
+			return 0, 0, false, inputError(fmt.Sprintf("commit times go backwards at position %d; the period cannot be placed in this log", r.seq))
 		}
-		if r.at.Before(p.start) && r.seq+1 > from {
+		prev = r
+		if r.at.Before(p.start) {
 			from = r.seq + 1
-		}
-		if !r.at.Before(p.end) && r.seq-1 < to {
-			to = r.seq - 1
+		} else if !r.at.Before(p.end) && !ended {
+			to, ended = r.seq-1, true
 		}
 	}
 	if to == 0 {
-		return 0, 0, inputError("the log holds nothing committed before the period ends")
+		return 0, 0, false, inputError("the log holds nothing committed before the period ends")
 	}
-	return from, to, nil
+	return from, to, ended, nil
 }
 
 func committedAt(h evidencebook.Header) (time.Time, error) {
@@ -192,9 +221,14 @@ func ownWindow(ctx context.Context, book *evidencebook.Book, p period) (from, to
 		}
 		all = append(all, placed{seq: r.Seq, at: at})
 	}
-	return seqWindow(all, p, book.Size())
+	from, to, _, err = seqWindow(all, p, book.Size())
+	return from, to, err
 }
 
+// peerWindow maps the period onto the peer's positions. When no record the
+// peer disclosed shows its log continuing past the period's end, the bundle
+// may have been cut mid-period: the window then runs one position past the
+// bundle's interval, which the book reads as an incomplete account.
 func peerWindow(peer evidencebook.VerifiedBundle, p period) (from, to uint64, err error) {
 	var known []placed
 	for _, r := range peer.Records {
@@ -207,14 +241,24 @@ func peerWindow(peer evidencebook.VerifiedBundle, p period) (from, to uint64, er
 		}
 		known = append(known, placed{seq: r.Seq, at: at})
 	}
-	return seqWindow(known, p, peer.IntervalLast)
+	from, to, ended, err := seqWindow(known, p, peer.IntervalLast)
+	if err != nil {
+		return 0, 0, err
+	}
+	if !ended {
+		to = peer.IntervalLast + 1
+	}
+	return from, to, nil
 }
 
 // readPeer verifies a held peer bundle and pins its checkpoint key. The
 // bundle verifier authenticates the checkpoint under whatever key the bundle
 // names; only the caller knows which key is the peer's, so an unpinned or
 // mismatched key is refused rather than reconciled against.
-func readPeer(path, key string) (evidencebook.VerifiedBundle, error) {
+//
+// The bundle must also be the counterparty's: every record whose header
+// verified names --counterparty as its book, and at least one does.
+func readPeer(path, key, counterparty string) (evidencebook.VerifiedBundle, error) {
 	pinned, err := parseKeys([]string{key})
 	if err != nil || key == "" {
 		return evidencebook.VerifiedBundle{}, inputError("--peer needs --peer-checkpoint-key, a 32-byte Ed25519 public key in hex")
@@ -229,6 +273,19 @@ func readPeer(path, key string) (evidencebook.VerifiedBundle, error) {
 	}
 	if !peer.AnchorAuthenticated || peer.AnchorKeyID != hex.EncodeToString(pinned[0]) {
 		return evidencebook.VerifiedBundle{}, inputError("the peer bundle's checkpoint is not signed by --peer-checkpoint-key")
+	}
+	named := false
+	for _, r := range peer.Records {
+		if r.Header == nil || !r.HeaderVerified {
+			continue
+		}
+		if r.Header.BookID != counterparty {
+			return evidencebook.VerifiedBundle{}, inputError("the peer bundle holds records of a book other than --counterparty")
+		}
+		named = true
+	}
+	if !named {
+		return evidencebook.VerifiedBundle{}, inputError("the peer bundle discloses no header naming its book")
 	}
 	return peer, nil
 }
@@ -299,45 +356,59 @@ func reconcileInput(ctx context.Context, book *evidencebook.Book, p period, peer
 func periodFlags(c *cobra.Command) {
 	c.Flags().String("period", "", "day or week (UTC; weeks start Monday)")
 	c.Flags().String("date", "", "Any date inside the period, YYYY-MM-DD; default: the most recent period that has ended")
+	c.Flags().String("counterparty", "", "The counterparty's book id; a peer bundle must be from that book")
 	c.Flags().String("peer", "", "A held Evidence Bundle from the counterparty's book (never fetched)")
 	c.Flags().String("peer-checkpoint-key", "", "The counterparty's checkpoint public key in hex, obtained independently")
 }
 
-func periodAndPeer(c *cobra.Command) (period, evidencebook.VerifiedBundle, bool, error) {
+type periodArgs struct {
+	period       period
+	counterparty string
+	peer         evidencebook.VerifiedBundle
+	hasPeer      bool
+}
+
+func periodAndPeer(c *cobra.Command) (periodArgs, error) {
+	var a periodArgs
+	a.counterparty, _ = c.Flags().GetString("counterparty")
+	if a.counterparty == "" {
+		return a, inputError("--counterparty is required")
+	}
 	kind, _ := c.Flags().GetString("period")
 	date, _ := c.Flags().GetString("date")
-	p, err := parsePeriod(kind, date, bookNow())
-	if err != nil {
-		return period{}, evidencebook.VerifiedBundle{}, false, err
+	var err error
+	if a.period, err = parsePeriod(kind, date, bookNow()); err != nil {
+		return a, err
 	}
 	path, _ := c.Flags().GetString("peer")
 	if path == "" {
-		return p, evidencebook.VerifiedBundle{}, false, nil
+		return a, nil
 	}
 	key, _ := c.Flags().GetString("peer-checkpoint-key")
-	peer, err := readPeer(path, key)
-	return p, peer, err == nil, err
+	a.peer, err = readPeer(path, key, a.counterparty)
+	a.hasPeer = err == nil
+	return a, err
 }
 
 func reconcileCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "reconcile", Short: "Reconcile this book's period against a held peer bundle: six states, nothing written", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	cmd := &cobra.Command{Use: "reconcile", Short: "Reconcile a period against a held peer bundle as of this book's latest checkpoint; adds no record", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
 		if e != nil {
 			return e
 		}
-		per, peer, hasPeer, e := periodAndPeer(c)
+		a, e := periodAndPeer(c)
 		if e != nil {
 			return e
 		}
-		if !hasPeer {
+		if !a.hasPeer {
 			return inputError("--peer is required")
 		}
-		opened, e := openBook(c.Context(), p)
+		opened, e := openBook(c.Context(), p, false)
 		if e != nil {
 			return e
 		}
 		defer func() { err = errors.Join(err, opened.release()) }()
-		in, e := reconcileInput(c.Context(), opened.book, per, peer, true)
+		in, e := reconcileInput(c.Context(), opened.book, a.period, a.peer, true)
 		if e != nil {
 			return e
 		}
@@ -345,61 +416,76 @@ func reconcileCommand() *cobra.Command {
 		if e != nil {
 			return bookError(e)
 		}
-		return output(c, reconcileResult{Period: per.key, Comparator: closeComparator, Reconciliation: recon})
+		return output(c, reconcileResult{Period: a.period.key, Comparator: closeComparator, Reconciliation: recon})
 	}}
 	periodFlags(cmd)
 	return cmd
 }
 
+// sinceLastFrom moves a window's start back to just after the furthest
+// position any earlier Close with this counterparty reached, so an unclosed
+// day between two Closes is not skipped. A previous Close that already
+// reached into this window (a period closed out of order) is refused.
+func sinceLastFrom(statements []evidencebook.CloseStatement, from uint64) (uint64, error) {
+	var reached uint64
+	for _, st := range statements {
+		reached = max(reached, st.Reconciliation.ToSeq)
+	}
+	if reached >= from {
+		return 0, inputError("an earlier Close with this counterparty already reaches into this period; --since-last needs periods closed in order")
+	}
+	return reached + 1, nil
+}
+
 func closeCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "close", Short: "Seal the book's Close for one period and counterparty (signs; idempotent on the period)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	cmd := &cobra.Command{Use: "close", Short: "Seal the book's Close for one ended period and counterparty (signs; a repeat seals no second Close)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
 		if e != nil {
 			return e
 		}
-		counterparty, _ := c.Flags().GetString("counterparty")
-		if counterparty == "" {
-			return inputError("--counterparty is required")
-		}
-		per, peer, hasPeer, e := periodAndPeer(c)
+		a, e := periodAndPeer(c)
 		if e != nil {
 			return e
 		}
-		opened, e := openBook(c.Context(), p)
+		sinceLast, _ := c.Flags().GetBool("since-last")
+		if sinceLast && a.hasPeer {
+			return inputError("--since-last cannot be combined with --peer: the peer's window cannot be stretched to match")
+		}
+		opened, e := openBook(c.Context(), p, true)
 		if e != nil {
 			return e
 		}
 		defer func() { err = errors.Join(err, opened.release()) }()
 		book := opened.book
-		result := closeResult{Period: per.key, Counterparty: counterparty}
-		if hasPeer {
-			result.PeerBundle = peer.Digest
-		}
-		records, statements, e := priorCloses(c.Context(), book, counterparty)
+		result := closeResult{Period: a.period.key, Counterparty: a.counterparty}
+		records, statements, e := priorCloses(c.Context(), book, a.counterparty)
 		if e != nil {
 			return e
 		}
 		var sealed evidencebook.Record
 		for i, st := range statements {
-			if st.Profile == closeProfile(per) {
+			if st.Profile == closeProfile(a.period) {
 				sealed, result.AlreadyClosed, result.Reconciliation = records[i], true, st.Reconciliation
 				break
 			}
 		}
 		if !result.AlreadyClosed {
-			// Checkpoint first, so every own record in the window is covered
-			// and the book's own account of the period is complete.
-			if _, e = book.Checkpoint(c.Context()); e != nil {
-				return e
-			}
-			in, e := reconcileInput(c.Context(), book, per, peer, hasPeer)
+			// The window is fixed, and refused if it must be, before anything
+			// is written. Then a checkpoint covers every own record in it, so
+			// the book's own account of the period is complete.
+			in, e := reconcileInput(c.Context(), book, a.period, a.peer, a.hasPeer)
 			if e != nil {
 				return e
 			}
-			if sinceLast, _ := c.Flags().GetBool("since-last"); sinceLast && len(statements) > 0 {
-				in.FromSeq = statements[len(statements)-1].Reconciliation.ToSeq + 1
+			if sinceLast && len(statements) > 0 {
+				if in.FromSeq, e = sinceLastFrom(statements, in.FromSeq); e != nil {
+					return e
+				}
 			}
-			if sealed, e = book.Close(c.Context(), evidencebook.CloseInput{Reconcile: in, Counterparty: counterparty, Profile: closeProfile(per)}); e != nil {
+			if _, e = book.Checkpoint(c.Context()); e != nil {
+				return e
+			}
+			if sealed, e = book.Close(c.Context(), evidencebook.CloseInput{Reconcile: in, Counterparty: a.counterparty, Profile: closeProfile(a.period)}); e != nil {
 				return bookError(e)
 			}
 			var st evidencebook.CloseStatement
@@ -407,39 +493,52 @@ func closeCommand() *cobra.Command {
 				return e
 			}
 			result.Reconciliation = st.Reconciliation
+			if a.hasPeer {
+				result.PeerBundle = a.peer.Digest
+			}
 		}
 		result.RecordID, result.Seq = sealed.RecordID, sealed.Seq
-		if path, _ := c.Flags().GetString("capsule-out"); path != "" {
-			if e = exportRecord(c.Context(), opened.store, p, sealed.RecordID, path); e != nil {
-				return e
-			}
-			result.Capsule = path
-		}
-		if path, _ := c.Flags().GetString("bundle-out"); path != "" {
-			include, e := closeBundleRecords(c.Context(), book, result.Reconciliation.FromSeq, sealed.Seq)
-			if e != nil {
-				return e
-			}
-			bundle, e := book.Bundle(c.Context(), evidencebook.BundleRequest{Root: sealed.RecordID, Include: include, WithholdPayloads: true})
-			if e != nil {
-				return bookError(e)
-			}
-			if _, e = evidencebook.VerifyBundle(bundle.JSON); e != nil {
-				return e
-			}
-			if e = atomicFile(path, bundle.JSON, false); e != nil {
-				return e
-			}
-			result.Bundle, result.BundleDigest = path, bundle.Digest
+		// The Close is sealed from here on: a failure writing either file
+		// still reports its record_id, so the caller never loses it.
+		if e = closeOutputs(c, opened, p, &result, sealed); e != nil {
+			return errors.Join(e, output(c, result))
 		}
 		return output(c, result)
 	}}
 	periodFlags(cmd)
-	cmd.Flags().String("counterparty", "", "Who this Close is with, as the book names them")
-	cmd.Flags().Bool("since-last", false, "Start the window after the previous Close with this counterparty instead of at the period start")
+	cmd.Flags().Bool("since-last", false, "Start the window just after the furthest position an earlier Close with this counterparty reached")
 	cmd.Flags().String("capsule-out", "", "Also write the Close as an artifact.Record for `verify --capsule`")
-	cmd.Flags().String("bundle-out", "", "Also write an Evidence Bundle rooted at the Close (commits a disclosure record)")
+	cmd.Flags().String("bundle-out", "", "Also write an Evidence Bundle rooted at the Close (commits a disclosure record and a checkpoint)")
 	return cmd
+}
+
+func closeOutputs(c *cobra.Command, opened openedBook, p Profile, result *closeResult, sealed evidencebook.Record) error {
+	if path, _ := c.Flags().GetString("capsule-out"); path != "" {
+		if err := exportRecord(c.Context(), opened.store, p, sealed.RecordID, path); err != nil {
+			return err
+		}
+		result.Capsule = path
+	}
+	path, _ := c.Flags().GetString("bundle-out")
+	if path == "" {
+		return nil
+	}
+	include, err := closeBundleRecords(c.Context(), opened.book, result.Reconciliation.FromSeq, sealed.Seq)
+	if err != nil {
+		return err
+	}
+	bundle, err := opened.book.Bundle(c.Context(), evidencebook.BundleRequest{Root: sealed.RecordID, Include: include, WithholdPayloads: true})
+	if err != nil {
+		return bookError(err)
+	}
+	if _, err = evidencebook.VerifyBundle(bundle.JSON); err != nil {
+		return err
+	}
+	if err = atomicFile(path, bundle.JSON, false); err != nil {
+		return err
+	}
+	result.Bundle, result.BundleDigest = path, bundle.Digest
+	return nil
 }
 
 // closeBundleRecords selects what a Close's bundle discloses so that the
@@ -549,7 +648,7 @@ func requestCommand() *cobra.Command {
 				return e
 			}
 		}
-		opened, e := openBook(c.Context(), p)
+		opened, e := openBook(c.Context(), p, true)
 		if e != nil {
 			return e
 		}
@@ -640,7 +739,7 @@ func respondCommand() *cobra.Command {
 			}
 		}
 		requester, _ := c.Flags().GetString("requester")
-		opened, e := openBook(c.Context(), p)
+		opened, e := openBook(c.Context(), p, true)
 		if e != nil {
 			return e
 		}

@@ -12,9 +12,9 @@ set -euo pipefail
 #     plugin ls, cll list, get) run and produce no capsule at all — this
 #     script never calls `capsulectl seal` for any of them;
 #   - the book verbs (request, respond, close) each return the id of the
-#     signed book record that is their evidence, and reconcile writes
-#     nothing; the unilateral Close verifies with `verify` and its bundle
-#     with the neutral AAC bundle verifier;
+#     signed book record that is their evidence, and reconcile adds no
+#     record; the counterparty's Close verifies with `verify` and its
+#     bundle with the neutral AAC bundle verifier;
 #   - a failed evidence record fails closed (this skill's evidence policy:
 #     "report evidence unavailable, stop before the next consequential
 #     action") rather than silently continuing.
@@ -49,7 +49,7 @@ checkpoint_public_key=$(jq -r .public_key "$work/checkpoint-keygen.json")
 "$bin" profile create --name "$profile" --type jsonl --jsonl-path "$store" \
   --namespace demo --log-id skill-demo --operator demo-operator \
   --trusted-key "$public_key" --signing-key-file "$seed" \
-  --checkpoint-signing-key-file "$checkpoint_seed" >/dev/null
+  --checkpoint-signing-key-file "$checkpoint_seed" --checkpoint-trusted-key "$checkpoint_public_key" >/dev/null
 "$bin" store init --profile "$profile" >/dev/null
 
 scan_root="$work/scan-root"
@@ -213,7 +213,7 @@ peer_store="$work/peer-store"
 "$bin" profile create --name "$peer" --type jsonl --jsonl-path "$peer_store" \
   --namespace demo --log-id skill-demo-peer --operator demo-peer-operator \
   --trusted-key "$peer_public_key" --signing-key-file "$peer_seed" \
-  --checkpoint-signing-key-file "$peer_checkpoint_seed" >/dev/null
+  --checkpoint-signing-key-file "$peer_checkpoint_seed" --checkpoint-trusted-key "$peer_checkpoint_key" >/dev/null
 yesterday=$(date -u -v-1d +%Y-%m-%d 2>/dev/null || date -u -d yesterday +%Y-%m-%d)
 "$bookdemo" seed --store "$store" --log-id skill-demo --operator demo-operator \
   --signing-key-file "$seed" --checkpoint-key-file "$checkpoint_seed" --at "${yesterday}T12:00:00Z" \
@@ -250,29 +250,26 @@ jq -e '.outcome=="artifact"' "$work/response-recorded.json" >/dev/null || {
   echo "FAIL: the requester did not record the verified artifact" >&2; exit 1; }
 echo "  asked, answered, and recorded the answer: three book records" >&2
 
-echo "== 13/15 close, no peer bundle (primary action; signs) ==" >&2
-# A counterparty that has sent no bundle: the Close holds only this book's
-# account, so it can say nothing about the other side.
-silent=demo-silent-counterparty
-"$bin" close --profile "$profile" --period day --date "$yesterday" --counterparty "$silent" \
-  --capsule-out "$work/close.json" --bundle-out "$work/close-bundle.json" >"$work/close-result.json"
-record_of "$work/close-result.json"
+echo "== 13/15 the counterparty closes first, no peer bundle (primary action; signs) ==" >&2
+# A book's counterparty is named by its book id (the other profile's
+# log_id). The peer holds only its own account, so every exchange reads
+# INSUFFICIENT; its bundle is what it hands over.
+"$bin" close --profile "$peer" --period day --date "$yesterday" --counterparty skill-demo \
+  --capsule-out "$work/peer-close.json" --bundle-out "$work/peer-close-bundle.json" >"$work/peer-close-result.json"
+record_of "$work/peer-close-result.json"
 jq -e '.reconciliation.states.INSUFFICIENT==2 and .reconciliation.states.CONFLICTING==0 and .reconciliation.peer_complete==false' \
-  "$work/close-result.json" >/dev/null || {
+  "$work/peer-close-result.json" >/dev/null || {
   echo "FAIL: with no peer bundle each exchange must read INSUFFICIENT, never CONFLICTING" >&2; exit 1; }
-"$bin" verify --profile "$profile" --capsule "$work/close.json" >"$work/close-verify.json"
-"$bookdemo" aac-verify "$work/close-bundle.json" >"$work/close-bundle-verify.json"
-"$bin" close --profile "$profile" --period day --date "$yesterday" --counterparty "$silent" >"$work/close-again.json"
-jq -e --arg id "$(jq -r .record_id "$work/close-result.json")" '.already_closed==true and .record_id==$id' \
-  "$work/close-again.json" >/dev/null || {
-  echo "FAIL: a second close of the same period and counterparty must return the first, not sign another" >&2; exit 1; }
-echo "  sealed; verify accepts the Close; the AAC bundle verifier passes its bundle; a repeat signs nothing" >&2
+"$bin" verify --profile "$peer" --capsule "$work/peer-close.json" >"$work/peer-close-verify.json"
+"$bookdemo" aac-verify "$work/peer-close-bundle.json" >"$work/peer-close-bundle-verify.json"
+"$bin" close --profile "$peer" --period day --date "$yesterday" --counterparty skill-demo >"$work/peer-close-again.json"
+jq -e --arg id "$(jq -r .record_id "$work/peer-close-result.json")" '.already_closed==true and .record_id==$id' \
+  "$work/peer-close-again.json" >/dev/null || {
+  echo "FAIL: a second close of the same period and counterparty must return the first, not seal another" >&2; exit 1; }
+echo "  sealed; verify accepts the Close; the AAC bundle verifier passes its bundle; a repeat seals no second Close" >&2
 
 echo "== 14/15 close against the counterparty's held bundle (primary action; signs) ==" >&2
-"$bin" close --profile "$peer" --period day --date "$yesterday" --counterparty "$profile" \
-  --bundle-out "$work/peer-close-bundle.json" >"$work/peer-close-result.json"
-record_of "$work/peer-close-result.json"
-"$bin" close --profile "$profile" --period day --date "$yesterday" --counterparty "$peer" \
+"$bin" close --profile "$profile" --period day --date "$yesterday" --counterparty skill-demo-peer \
   --peer "$work/peer-close-bundle.json" --peer-checkpoint-key "$peer_checkpoint_key" >"$work/close-peer-result.json"
 record_of "$work/close-peer-result.json"
 jq -e '.reconciliation.peer_complete==true and .reconciliation.states.MATCHED==1 and .reconciliation.states.CONFLICTING==1' \
@@ -280,20 +277,24 @@ jq -e '.reconciliation.peer_complete==true and .reconciliation.states.MATCHED==1
   echo "FAIL: one matching and one differing exchange should reconcile MATCHED + CONFLICTING against a complete peer account" >&2; exit 1; }
 echo "  one exchange MATCHED, one CONFLICTING, from the held bundle alone" >&2
 
-echo "== 15/15 reconcile (not-consequential; nothing written) ==" >&2
-"$bin" reconcile --profile "$profile" --period day --date "$yesterday" \
+echo "== 15/15 reconcile (not-consequential; adds no record) ==" >&2
+"$bin" reconcile --profile "$profile" --period day --date "$yesterday" --counterparty skill-demo-peer \
   --peer "$work/peer-close-bundle.json" --peer-checkpoint-key "$peer_checkpoint_key" >"$work/reconcile-result.json"
 jq -e --slurpfile closed "$work/close-peer-result.json" '.reconciliation.states==$closed[0].reconciliation.states' \
   "$work/reconcile-result.json" >/dev/null || {
-  echo "FAIL: reconcile must compute what close sealed" >&2; exit 1; }
-set +e
-"$bin" reconcile --profile "$profile" --period day --date "$yesterday" \
-  --peer "$work/peer-close-bundle.json" --peer-checkpoint-key "$checkpoint_public_key" >/dev/null 2>&1
-wrong_key_status=$?
-set -e
-[[ "$wrong_key_status" -eq 2 ]] || {
-  echo "FAIL: a peer bundle under a key other than the pinned one must be refused (exit 2), got $wrong_key_status" >&2; exit 1; }
-echo "  same states as the sealed Close; a bundle under the wrong key is refused" >&2
+  echo "FAIL: reconcile after the Close must compute what the Close sealed" >&2; exit 1; }
+for wrong in "--peer-checkpoint-key $checkpoint_public_key --counterparty skill-demo-peer" \
+  "--peer-checkpoint-key $peer_checkpoint_key --counterparty someone-else"; do
+  set +e
+  # shellcheck disable=SC2086 # $wrong is two flag pairs by design
+  "$bin" reconcile --profile "$profile" --period day --date "$yesterday" \
+    --peer "$work/peer-close-bundle.json" $wrong >/dev/null 2>&1
+  wrong_status=$?
+  set -e
+  [[ "$wrong_status" -eq 2 ]] || {
+    echo "FAIL: a peer bundle under another key, or from another book, must be refused (exit 2), got $wrong_status" >&2; exit 1; }
+done
+echo "  same states as the sealed Close; a bundle under the wrong key or from another book is refused" >&2
 
 end_epoch=$(date +%s)
 elapsed=$((end_epoch - start_epoch))
@@ -306,8 +307,8 @@ echo "consequential actions (discover, publish, cll append): $consequential_acti
 echo "distinct capsules: $distinct_capsules (2 -- cll append's action maps onto discover's existing capsule, by design; it creates none of its own)" >&2
 echo "not-consequential actions (verify, contract validate, plugin ls, cll list, get, judge pin, judge drift pin, judge drift reports, calibration summarize): 9, ran, zero seal calls made for any of them" >&2
 book_records=$(wc -l <"$book_records_file" | tr -d ' ')
-echo "book records from consequential book verbs (request x2, respond, close x3): $book_records (target: 6)" >&2
-echo "not-consequential book verb (reconcile): ran, wrote nothing" >&2
+echo "book records from consequential book verbs (request x2, respond, close x2): $book_records (target: 5)" >&2
+echo "not-consequential book verb (reconcile): ran, added no record" >&2
 echo "elapsed: ${elapsed}s from a fresh capsulectl build through the last verb (target: under 3600s)" >&2
 
 if [[ "$consequential_actions" -ne 3 ]]; then
@@ -318,8 +319,8 @@ if [[ "$distinct_capsules" -ne 2 ]]; then
   echo "FAIL: expected exactly 2 distinct capsules (discover + publish), got $distinct_capsules" >&2
   exit 1
 fi
-if [[ "$book_records" -ne 6 ]]; then
-  echo "FAIL: expected exactly 6 book records from consequential book verbs, got $book_records" >&2
+if [[ "$book_records" -ne 5 ]]; then
+  echo "FAIL: expected exactly 5 book records from consequential book verbs, got $book_records" >&2
   exit 1
 fi
 if [[ "$elapsed" -ge 3600 ]]; then

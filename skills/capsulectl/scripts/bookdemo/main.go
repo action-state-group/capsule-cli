@@ -85,14 +85,19 @@ func seed(args []string) (err error) {
 	if err != nil {
 		return err
 	}
+	// Same layout, log id and open order as capsulectl: the log (and its
+	// lock) first.
 	dir := filepath.Join(*store, "book")
-	records, err := evidencebook.OpenFileStore(filepath.Join(dir, "records"))
+	if err = os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	substrate, err := evidencebook.OpenCLL(filepath.Join(dir, "log.jsonl"), *logID+"/book", checkpointKey)
 	if err != nil {
 		return err
 	}
-	substrate, err := evidencebook.OpenCLL(filepath.Join(dir, "log.jsonl"), *logID, checkpointKey)
+	records, err := evidencebook.OpenFileStore(filepath.Join(dir, "records"))
 	if err != nil {
-		return errors.Join(err, records.Release())
+		return errors.Join(err, substrate.Release())
 	}
 	payloads, err := evidencebook.OpenPayloadDir(filepath.Join(dir, "payloads"))
 	if err != nil {

@@ -39,7 +39,7 @@ func bookProfile(t *testing.T, name string) (Profile, bookKeys) {
 	require.NoError(t, err)
 	checkpointPub, checkpointKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	p := Profile{Name: name, Type: "jsonl", LogID: name + "-book", Namespace: "capsule", Operator: name + "-operator"}
+	p := Profile{Name: name, Type: "jsonl", LogID: name, Namespace: "capsule", Operator: name + "-operator"}
 	p.Connection.Database = filepath.Join(t.TempDir(), name)
 	p.Signing.Value = hex.EncodeToString(recordKey.Seed())
 	p.TrustedKeys = []string{hex.EncodeToString(recordPub)}
@@ -57,7 +57,7 @@ type half struct {
 
 func appendHalves(t *testing.T, p Profile, halves ...half) {
 	t.Helper()
-	opened, err := openBook(t.Context(), p)
+	opened, err := openBook(t.Context(), p, true)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, opened.release()) }()
 	for _, h := range halves {
@@ -72,7 +72,7 @@ func appendHalves(t *testing.T, p Profile, halves ...half) {
 
 func bookSize(t *testing.T, p Profile) uint64 {
 	t.Helper()
-	opened, err := openBook(t.Context(), p)
+	opened, err := openBook(t.Context(), p, true)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, opened.release()) }()
 	return opened.book.Size()
@@ -119,27 +119,25 @@ func TestParsePeriod(t *testing.T) {
 func TestSeqWindow(t *testing.T) {
 	p := period{start: day1, end: day1.AddDate(0, 0, 1)}
 	before, inside, after := day0, day1.Add(time.Hour), day1.AddDate(0, 0, 2)
+	window := func(records []placed, last uint64) [3]any {
+		from, to, ended, err := seqWindow(records, p, last)
+		require.NoError(t, err)
+		return [3]any{from, to, ended}
+	}
 
-	from, to, err := seqWindow([]placed{{1, before}, {2, inside}, {3, inside}, {4, after}}, p, 4)
-	require.NoError(t, err)
-	assert.Equal(t, [2]uint64{2, 3}, [2]uint64{from, to})
-
-	from, to, err = seqWindow([]placed{{1, before}, {2, inside}}, p, 2)
-	require.NoError(t, err)
-	assert.Equal(t, [2]uint64{2, 2}, [2]uint64{from, to}, "nothing after the period: the window runs to the last position")
-
-	from, to, err = seqWindow([]placed{{1, before}, {2, after}}, p, 2)
-	require.NoError(t, err)
-	assert.Greater(t, from, to, "no record in the period is an empty window, never an open one")
-
+	assert.Equal(t, [3]any{uint64(2), uint64(3), true}, window([]placed{{1, before}, {2, inside}, {3, inside}, {4, after}}, 4))
+	assert.Equal(t, [3]any{uint64(2), uint64(2), false}, window([]placed{{1, before}, {2, inside}}, 2),
+		"nothing placed after the period: the window runs to the last position and the end is unproven")
+	w := window([]placed{{1, before}, {2, after}}, 2)
+	assert.Greater(t, w[0], w[1], "no record in the period is an empty window, never an open one")
 	// Positions 2 and 3 are unplaceable (not in the list); both sit between
 	// the last record before and the first record after, so both are inside.
-	from, to, err = seqWindow([]placed{{1, before}, {4, after}}, p, 4)
-	require.NoError(t, err)
-	assert.Equal(t, [2]uint64{2, 3}, [2]uint64{from, to})
+	assert.Equal(t, [3]any{uint64(2), uint64(3), true}, window([]placed{{1, before}, {4, after}}, 4))
 
-	_, _, err = seqWindow([]placed{{1, after}}, p, 1)
+	_, _, _, err := seqWindow([]placed{{1, after}}, p, 1)
 	assert.ErrorIs(t, err, ErrInput, "to == 0 would read as an open end")
+	_, _, _, err = seqWindow([]placed{{1, before}, {2, inside}, {3, before.Add(-time.Hour)}, {4, after}}, p, 4)
+	assert.ErrorIs(t, err, ErrInput, "a commit time that goes backwards is refused, not mapped")
 }
 
 // TestCloseSigningPath is the line-review test for the only code that
@@ -201,6 +199,33 @@ func TestCloseRefusesASigningKeyTheProfileDoesNotTrust(t *testing.T) {
 	require.ErrorIs(t, err, ErrInput)
 	_, statErr := os.Stat(filepath.Join(p.Connection.Database, "book"))
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "refused before the book was opened")
+}
+
+// A second writer is refused by the log's lock before it touches the record
+// store, so it cannot repair away a line another process is still writing.
+func TestSecondBookWriterIsRefusedBeforeTouchingTheStore(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	holder, err := openBook(t.Context(), p, true)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, holder.release()) }()
+
+	journal := filepath.Join(p.Connection.Database, "book", "records", "records.jsonl")
+	f, err := os.OpenFile(journal, os.O_APPEND|os.O_WRONLY, 0)
+	require.NoError(t, err)
+	_, err = f.WriteString(`{"seq":2,"record_id":"in-flight`)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	before, err := os.ReadFile(journal)
+	require.NoError(t, err)
+
+	_, err = openBook(t.Context(), p, true)
+	require.Error(t, err)
+	after, err := os.ReadFile(journal)
+	require.NoError(t, err)
+	assert.Equal(t, before, after, "the refused writer left the other writer's in-flight line alone")
 }
 
 func TestCloseNeedsAnOperator(t *testing.T) {
@@ -286,7 +311,7 @@ func TestCloseAgainstPeerBundleClassifiesEveryExchange(t *testing.T) {
 		assert.NotEqual(t, "x0", pair.JoinKey, "records before the period are outside both windows")
 	}
 
-	out, err := invoke(t, "", "reconcile", "--profile", "a", "--period", "day", "--date", "2026-09-24", "--peer", bundle, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+	out, err := invoke(t, "", "reconcile", "--profile", "a", "--period", "day", "--date", "2026-09-24", "--counterparty", "b", "--peer", bundle, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
 	require.NoError(t, err)
 	var rec reconcileResult
 	require.NoError(t, json.Unmarshal([]byte(out), &rec))
@@ -306,7 +331,7 @@ func TestPeerBundleMustBeUnderThePinnedCheckpointKey(t *testing.T) {
 	for _, key := range []string{"", hex.EncodeToString(aKeys.checkpoint)} {
 		_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--peer", bundle, "--peer-checkpoint-key", key)
 		require.ErrorIs(t, err, ErrInput, "key %q", key)
-		_, err = invoke(t, "", "reconcile", "--profile", "a", "--period", "day", "--peer", bundle, "--peer-checkpoint-key", key)
+		_, err = invoke(t, "", "reconcile", "--profile", "a", "--period", "day", "--counterparty", "b", "--peer", bundle, "--peer-checkpoint-key", key)
 		require.ErrorIs(t, err, ErrInput, "key %q", key)
 	}
 	assert.Equal(t, size, bookSize(t, a), "a refused peer signs nothing")
@@ -331,11 +356,215 @@ func TestPeerWindowWithAnUnplaceableRecordIsIncomplete(t *testing.T) {
 	peer.Records[2].HeaderVerified = false
 	from, to, err = peerWindow(peer, p)
 	require.NoError(t, err)
-	assert.Equal(t, [2]uint64{2, 3}, [2]uint64{from, to}, "an unverified header is never used to place a record")
+	assert.Equal(t, [2]uint64{2, 4}, [2]uint64{from, to},
+		"an unverified header is never used to place a record, so the end is unproven: one past the interval")
 }
 
 // A record committed on a day nobody closed is picked up by the next
 // --since-last Close and missed by a Close of the period alone.
+// A bundle cut mid-period says nothing about the rest of the period: an
+// exchange the peer logged after the cut must read INSUFFICIENT, never
+// A_ONLY, and the peer's account must not read complete.
+func TestPeerBundleCutMidPeriodIsIncomplete(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0.Add(-48*time.Hour))
+	a, _ := bookProfile(t, "a")
+	b, bKeys := bookProfile(t, "b")
+	appendHalves(t, a, half{"x0", "r0", "p0"})
+	appendHalves(t, b, half{"x0", "r0", "p0"})
+	set(day0)
+	appendHalves(t, a, half{"early", "r1", "p1"})
+	appendHalves(t, b, half{"early", "r1", "p1"})
+
+	// b hands over a bundle cut here, before the day is over: every header
+	// in its interval disclosed, so the only gap is the missing end.
+	opened, err := openBook(t.Context(), b, true)
+	require.NoError(t, err)
+	anchor, err := opened.book.Checkpoint(t.Context())
+	require.NoError(t, err)
+	all, err := opened.book.Query(t.Context(), evidencebook.Filter{})
+	require.NoError(t, err)
+	var ids []string
+	for _, r := range all {
+		ids = append(ids, r.RecordID)
+	}
+	bundle, err := opened.book.Bundle(t.Context(), evidencebook.BundleRequest{Root: ids[len(ids)-1], Include: ids, WithholdPayloads: true, At: &anchor})
+	require.NoError(t, err)
+	require.NoError(t, opened.release())
+	path := filepath.Join(t.TempDir(), "cut.json")
+	require.NoError(t, os.WriteFile(path, bundle.JSON, 0o600))
+
+	set(day0.Add(2 * time.Hour))
+	appendHalves(t, a, half{"late", "r2", "p2"})
+	appendHalves(t, b, half{"late", "r2", "p2"})
+	set(day1)
+	result, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--peer", path, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+	require.NoError(t, err)
+	assert.False(t, result.Reconciliation.PeerComplete)
+	assert.Equal(t, evidencebook.Tallies{Matched: 1, Insufficient: 1}, result.Reconciliation.Tallies)
+}
+
+// A commit time that goes backwards leaves no position that separates the
+// period from its neighbours; close refuses instead of dropping records.
+func TestCloseRefusesCommitTimesThatGoBackwards(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0.Add(12*time.Hour))
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	set(day0.Add(-2 * time.Hour))
+	appendHalves(t, p, half{"x2", "r2", "p2"})
+	set(day1)
+	size := bookSize(t, p)
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Equal(t, size, bookSize(t, p), "nothing sealed")
+}
+
+func TestPeerBundleMustBeTheCounterpartysBook(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	a, _ := bookProfile(t, "a")
+	b, bKeys := bookProfile(t, "b")
+	appendHalves(t, a, half{"x1", "r1", "p1"})
+	appendHalves(t, b, half{"x1", "r1", "p1"})
+	set(day1)
+	bundle := peerBundle(t, "b")
+	size := bookSize(t, a)
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "c", "--peer", bundle, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Equal(t, size, bookSize(t, a))
+}
+
+// A repeat that brings a peer bundle returns the first Close and does not
+// report the bundle as if it had been applied.
+func TestAlreadyClosedDoesNotReportAnUnappliedPeerBundle(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	a, _ := bookProfile(t, "a")
+	b, bKeys := bookProfile(t, "b")
+	appendHalves(t, a, half{"x1", "r1", "p1"})
+	appendHalves(t, b, half{"x1", "r1", "p1"})
+	set(day1)
+	first, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b")
+	require.NoError(t, err)
+	bundle := peerBundle(t, "b")
+	again, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--peer", bundle, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+	require.NoError(t, err)
+	assert.True(t, again.AlreadyClosed)
+	assert.Equal(t, first.RecordID, again.RecordID)
+	assert.Empty(t, again.PeerBundle)
+	assert.Equal(t, first.Reconciliation, again.Reconciliation)
+}
+
+func TestCloseRefusesAnUntrustedCheckpointKey(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, keys := bookProfile(t, "a")
+	p.Checkpoint.TrustedKeys = []string{hex.EncodeToString(keys.record)}
+	require.NoError(t, saveProfile(p, true))
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b")
+	require.ErrorIs(t, err, ErrInput)
+	_, statErr := os.Stat(filepath.Join(p.Connection.Database, "book"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+// The book's log is checkpointed under its own log id, never the profile
+// CLL's, so one (log_id, key) never names two different trees.
+func TestBookLogIsNamedApartFromTheProfileLog(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	opened, err := openBook(t.Context(), p, true)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, opened.release()) }()
+	cp, err := opened.book.Checkpoint(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, p.LogID+"/book", cp.LogID)
+}
+
+func TestReconcileNeedsAnExistingBookAndCreatesNothing(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	a, _ := bookProfile(t, "a")
+	b, bKeys := bookProfile(t, "b")
+	appendHalves(t, b, half{"x1", "r1", "p1"})
+	set(day1)
+	bundle := peerBundle(t, "b")
+	_, err := invoke(t, "", "reconcile", "--profile", "a", "--period", "day", "--counterparty", "b", "--peer", bundle, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+	require.ErrorIs(t, err, ErrInput)
+	_, statErr := os.Stat(a.Connection.Database)
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "reconcile made no directory")
+}
+
+// Once the Close is sealed, a failure writing an output file still reports
+// the Close's record_id.
+func TestCloseReportsTheSealedRecordWhenAnOutputFails(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	set(day1)
+	taken := filepath.Join(t.TempDir(), "taken.json")
+	require.NoError(t, os.WriteFile(taken, []byte("{}"), 0o600))
+	out, err := invoke(t, "", "close", "--profile", "a", "--period", "day", "--counterparty", "b", "--bundle-out", taken)
+	require.Error(t, err)
+	var result closeResult
+	require.NoError(t, json.Unmarshal([]byte(out), &result))
+	assert.Regexp(t, `^[0-9a-f]{64}$`, result.RecordID)
+	again, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b")
+	require.NoError(t, err)
+	assert.Equal(t, result.RecordID, again.RecordID, "the reported record is the sealed Close")
+}
+
+func TestCloseSinceLastRefusesOutOfOrderAndPeer(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	a, _ := bookProfile(t, "a")
+	b, bKeys := bookProfile(t, "b")
+	appendHalves(t, a, half{"x1", "r1", "p1"})
+	appendHalves(t, b, half{"x1", "r1", "p1"})
+	set(day1)
+	appendHalves(t, a, half{"x2", "r2", "p2"})
+	set(day1.AddDate(0, 0, 1))
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--date", "2026-09-25")
+	require.NoError(t, err)
+	size := bookSize(t, a)
+	_, err = runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--date", "2026-09-24", "--since-last")
+	require.ErrorIs(t, err, ErrInput, "the later day's Close already reaches past this one")
+	bundle := peerBundle(t, "b")
+	_, err = runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--date", "2026-09-24", "--since-last", "--peer", bundle, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Equal(t, size, bookSize(t, a), "neither refusal sealed anything")
+}
+
+// In order, with a previous Close, --since-last would stretch only this
+// book's window; with a peer bundle that is refused.
+func TestCloseSinceLastWithPeerIsRefusedInOrder(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	a, _ := bookProfile(t, "a")
+	b, bKeys := bookProfile(t, "b")
+	appendHalves(t, a, half{"x1", "r1", "p1"})
+	appendHalves(t, b, half{"x1", "r1", "p1"})
+	set(day1)
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b")
+	require.NoError(t, err)
+	appendHalves(t, a, half{"x2", "r2", "p2"})
+	appendHalves(t, b, half{"x2", "r2", "p2"})
+	set(day1.AddDate(0, 0, 1))
+	bundle := filepath.Join(t.TempDir(), "b.json")
+	_, err = runClose(t, "--profile", "b", "--period", "day", "--counterparty", "a", "--bundle-out", bundle)
+	require.NoError(t, err)
+	size := bookSize(t, a)
+	_, err = runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--since-last", "--peer", bundle, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Equal(t, size, bookSize(t, a))
+	result, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--peer", bundle, "--peer-checkpoint-key", hex.EncodeToString(bKeys.checkpoint))
+	require.NoError(t, err, "the same close without --since-last is accepted")
+	assert.Equal(t, 1, result.Reconciliation.Tallies.Matched)
+}
+
 func TestCloseSinceLastStartsAfterThePreviousClose(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	set := bookClock(t, day0)
@@ -424,7 +653,8 @@ func TestRequestRespondRoundTrip(t *testing.T) {
 	sent = ask("pinned", `{"subject":{"kind":"full_history"},"coverage":{"min_freshness":{"size":1}}}`)
 	respond("pinned")
 	_, err = invoke(t, "", "request", "--profile", "a", "--for", sent.RecordID, "--response", filepath.Join(dir, "pinned.response"), "--responder-key", hex.EncodeToString(bKeys.checkpoint))
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInput)
+	assert.ErrorIs(t, err, evidencebook.ErrInvalid, "refused by the book's responder-key check")
 }
 
 func TestRequestModesAreExclusive(t *testing.T) {
