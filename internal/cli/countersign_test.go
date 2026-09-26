@@ -283,9 +283,8 @@ func TestCountersignVerifyUnknownTypeIsUnverifiedNotRejected(t *testing.T) {
 }
 
 // TestDefaultCountersignerDirectoryURLPointsAtCapsuleEmit pins the
-// --directory fallback to capsule-emit's witnesses.json, per Steven's
-// 2026-09-26 ratification (spec/inbox [bundle-countersignatures-entry-and-directory]
-// item 3 names capsule-emit as the directory's home, not checkpointed-local-log).
+// --directory fallback to capsule-emit's witnesses.json: capsule-emit is the
+// directory's home, not checkpointed-local-log.
 // A silent revert back to checkpointed-local-log must fail this test.
 func TestDefaultCountersignerDirectoryURLPointsAtCapsuleEmit(t *testing.T) {
 	resolved, err := validateDirectoryURL("")
