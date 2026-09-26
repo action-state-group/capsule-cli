@@ -53,14 +53,13 @@ const countersignAPI = "countersign/v1"
 
 // defaultCountersignerDirectoryURL is the one configurable default named in
 // the task brief ("URL configurable; ours is one value"). The directory
-// itself (checkpointed-local-log's witnesses.json, extended with a
-// countersigners[] array) is a separate, not-yet-shipped deliverable
-// (spec/inbox [bundle-countersignatures-entry-and-directory] item 3, and the
-// parked [witness-directory-v1] note both place it in checkpointed-local-log,
+// itself (capsule-emit's witnesses.json, extended with a countersigners[]
+// array) is a separate, not-yet-shipped deliverable (spec/inbox
+// [bundle-countersignatures-entry-and-directory] item 3 names capsule-emit,
 // never on the agentactioncapsule.org domain or inside capsule-anchor). This
 // default is a documented placeholder for that eventual location and MUST be
 // overridable via --directory until the file exists on that path.
-const defaultCountersignerDirectoryURL = "https://raw.githubusercontent.com/action-state-group/checkpointed-local-log/main/witnesses.json"
+const defaultCountersignerDirectoryURL = "https://raw.githubusercontent.com/action-state-group/capsule-emit/main/witnesses.json"
 
 // CountersignSigner identifies the party that made a countersignature.
 type CountersignSigner struct {
