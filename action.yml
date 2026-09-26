@@ -17,7 +17,7 @@ inputs:
       owner/repo. Composite action metadata cannot read the caller's `github`
       context on its own — the calling workflow must pass this (and every
       other pull_request-derived input below) explicitly via `with:`, e.g.
-      `repo: ${{ github.repository }}`. See the reference workflow.
+      `repo:` set to the `github.repository` context value. See the reference workflow.
     required: true
   pr-number:
     required: true
