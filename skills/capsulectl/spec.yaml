@@ -171,3 +171,51 @@ verbs:
       action with a real, durable effect.
     emits: (publish's own result IS the capsule; no wrapper)
     emission_mode: primary-action
+
+  # The four verbs below are [capsulectl-book-verbs-v0]'s no-book-required
+  # half: the deterministic remainder of the retired capsule-judge harness
+  # (judge_pin_digest, the drift check, the calibration fold), ported so the
+  # prompting/scoring half can stay a skill instead. None needs --profile;
+  # none produces a capsule of its own -- a caller wanting one of these
+  # values sealed into the book cites it as a field on whatever record it
+  # helped produce (an evaluation-report/v1's own judge_pin, for instance),
+  # never as a standalone wrapper.
+  - name: judge pin
+    args:
+      - "FILE"
+    when: >-
+      Compute a judge_pin_digest from a reproducible judge configuration
+      (model id, model version, sampling params, prompt digest, axes
+      digest) before citing it into an evaluation-report/v1 the skill is
+      about to seal.
+    emits: (no capsule — this is a pure computation over caller-supplied input)
+    emission_mode: not-consequential
+
+  - name: judge drift pin
+    args:
+      - "FILE_A FILE_B"
+    when: >-
+      Confirm two judge-pin inputs describe the same reproducible judge
+      configuration before treating their outputs as comparable.
+    emits: (no capsule — this is local comparison, not a consequential action)
+    emission_mode: not-consequential
+
+  - name: judge drift reports
+    args:
+      - "FILE_A FILE_B"
+    when: >-
+      Compare two evaluation-report/v1 sets by case_id and show drift as a
+      real delta (pin mismatch, label mismatch, or both) — never as a
+      silent disagreement the skill quietly drops.
+    emits: (no capsule — this is local comparison, not a consequential action)
+    emission_mode: not-consequential
+
+  - name: calibration summarize
+    args:
+      - "REPORTS_FILE RATINGS_FILE"
+    when: >-
+      Fold an evaluation-report/v1 set and a human-rating/v1 set into k-of-n
+      agreement per judge_pin_digest before citing the result into a
+      calibration-summary/v1 the skill is about to seal.
+    emits: (no capsule — this is a pure computation over caller-supplied input)
+    emission_mode: not-consequential
