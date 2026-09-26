@@ -282,6 +282,16 @@ func TestCountersignVerifyUnknownTypeIsUnverifiedNotRejected(t *testing.T) {
 	assert.Equal(t, "unverified", summary)
 }
 
+// TestDefaultCountersignerDirectoryURLPointsAtCapsuleEmit pins the
+// --directory fallback to capsule-emit's witnesses.json: capsule-emit is the
+// directory's home, not checkpointed-local-log.
+// A silent revert back to checkpointed-local-log must fail this test.
+func TestDefaultCountersignerDirectoryURLPointsAtCapsuleEmit(t *testing.T) {
+	resolved, err := validateDirectoryURL("")
+	require.NoError(t, err)
+	assert.Equal(t, "https://raw.githubusercontent.com/action-state-group/capsule-emit/main/witnesses.json", resolved)
+}
+
 func mustDigest(t *testing.T, bundle map[string]interface{}) string {
 	t.Helper()
 	digest, err := aacbundle.BundleDigest(bundle)

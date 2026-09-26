@@ -42,10 +42,8 @@ func decodeBundleJSON(raw []byte) (map[string]interface{}, error) {
 // reserves the countersignatures[] slot as future scope behind a registered
 // "type" field (initial registered value "cose-sign1"; a current verifier
 // MUST surface any entry as unverified). "countersign/v1" is this CLI's own
-// type, ahead of the richer entry-shape proposal's ratification
-// (action-state-ops/spec/inbox.md [bundle-countersignatures-entry-and-directory],
-// filed 2026-09-16, not yet merged into the spec text) -- running code ahead
-// of the posted draft, same as the bilateral mechanism before it. Any entry of
+// type, ahead of the richer countersignature entry shape landing in the
+// spec text -- running code ahead of the posted draft, same as the bilateral mechanism before it. Any entry of
 // a different type (including "cose-sign1") is reported "unverified" here,
 // never rejected: this core never claims authority over a type it does not
 // define.
@@ -53,14 +51,12 @@ const countersignAPI = "countersign/v1"
 
 // defaultCountersignerDirectoryURL is the one configurable default named in
 // the task brief ("URL configurable; ours is one value"). The directory
-// itself (checkpointed-local-log's witnesses.json, extended with a
-// countersigners[] array) is a separate, not-yet-shipped deliverable
-// (spec/inbox [bundle-countersignatures-entry-and-directory] item 3, and the
-// parked [witness-directory-v1] note both place it in checkpointed-local-log,
-// never on the agentactioncapsule.org domain or inside capsule-anchor). This
+// itself (capsule-emit's witnesses.json, extended with a countersigners[]
+// array) is a separate, not-yet-shipped deliverable (the directory's home is
+// capsule-emit, never on the agentactioncapsule.org domain or inside capsule-anchor). This
 // default is a documented placeholder for that eventual location and MUST be
 // overridable via --directory until the file exists on that path.
-const defaultCountersignerDirectoryURL = "https://raw.githubusercontent.com/action-state-group/checkpointed-local-log/main/witnesses.json"
+const defaultCountersignerDirectoryURL = "https://raw.githubusercontent.com/action-state-group/capsule-emit/main/witnesses.json"
 
 // CountersignSigner identifies the party that made a countersignature.
 type CountersignSigner struct {
@@ -98,7 +94,7 @@ type CountersignStatement struct {
 }
 
 // CountersignatureEntry is one element of bundle["countersignatures"], per
-// spec/inbox [bundle-countersignatures-entry-and-directory]: {signer, over,
+// the proposed countersignature entry shape: {signer, over,
 // statement, signature, receipt?}. The signature verifies over the bundle
 // digest (the "over" field, UTF-8 bytes of its 64-hex-character form) -- not
 // over the statement, which accompanies the signature but is not what is
@@ -138,7 +134,7 @@ type countersignSubmissionResponse struct {
 }
 
 // countersignerDirectoryRow is one entry of the countersigner directory's
-// countersigners[] array (spec/inbox item 3: operator, endpoint, key ids,
+// countersigners[] array (operator, endpoint, key ids,
 // statement types issued, since, independent_of[]).
 type countersignerDirectoryRow struct {
 	Name           string   `json:"name"`
