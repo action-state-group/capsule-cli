@@ -197,69 +197,16 @@ func addCheckpointCommands(logs *cobra.Command) {
 		if e != nil {
 			return e
 		}
-		key, e := privateKey(p.Checkpoint.Signing)
-		if e != nil {
-			return e
-		}
-		signer, e := checkpoint.NewEd25519Signer(key)
-		if e != nil {
-			return e
-		}
-		if !checkpointSignerTrusted(p, signer.KeyID()) {
-			return inputError("checkpoint signer must be explicitly trusted")
-		}
-		service, e := serviceID(p)
-		if e != nil {
-			return e
-		}
 		t, e := openTarget(c.Context(), p, useCLL)
 		if e != nil {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.close()) }()
-		config := checkpoint.DefaultRunnerConfig(p.LogID)
-		config.Cadence.CadenceEntries = 1
-		if service != "" {
-			config.WitnessIDs = []string{service}
-		}
-		runner, e := checkpoint.NewRunner(config, t.log, signer)
+		cp, e := cutCheckpoint(c.Context(), p, t.log)
 		if e != nil {
 			return e
 		}
-		// RunOnce indexes up to one cll ScanLimit batch and, with CadenceEntries=1,
-		// cuts a checkpoint at that tip; it reports no change once the log is fully
-		// caught up. Loop to drain a backlog, but bound the work: a log under
-		// continuous concurrent append never reaches "no change", so an unbounded
-		// loop could spin forever (the CLI context carries no deadline). The cap is
-		// a per-invocation work budget; reaching it returns ErrPending so the
-		// operator re-runs to continue. A single-writer log converges in the first
-		// couple of batches.
-		const maxCheckpointBatches = 10000
-		for batch := 0; batch < maxCheckpointBatches; batch++ {
-			changed, e := runner.RunOnce(c.Context(), time.Now().UTC())
-			if e != nil {
-				return e
-			}
-			if changed {
-				continue
-			}
-			state, e := t.log.LoadCLL(c.Context())
-			if e != nil {
-				return e
-			}
-			if state.Checkpoint == nil {
-				return inputError("log has no entries")
-			}
-			record, e := verifyCheckpoint(p, state.Checkpoint.Bytes)
-			if e != nil {
-				return e
-			}
-			if record.MMRSize != state.Checkpoint.Size {
-				return ErrConflict
-			}
-			return output(c, map[string]any{"checkpoint": state.Checkpoint.Size, "indexed_sequence": state.Checkpoint.IndexedSeq, "statement": state.Checkpoint.Bytes, "log_id": p.LogID})
-		}
-		return ErrPending
+		return output(c, map[string]any{"checkpoint": cp.Size, "indexed_sequence": cp.IndexedSeq, "statement": cp.Bytes, "log_id": p.LogID})
 	}}
 	group.AddCommand(create)
 	for _, publish := range []bool{false, true} {
@@ -304,31 +251,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 				return ErrConflict
 			}
 			if publish {
-				token, e := p.Checkpoint.Token.resolve()
-				if e != nil {
-					return e
-				}
-				client, e := witness.NewClient(p.Checkpoint.Endpoint, &http.Client{Transport: bearerTransport{token: token}, Timeout: 30 * time.Second}, 0)
-				if e != nil {
-					return e
-				}
-				keys, e := parseKeys([]string{p.Checkpoint.PublicKey})
-				if e != nil {
-					return e
-				}
-				verifier, e := witness.NewReceiptVerifier(keys[0])
-				if e != nil {
-					return e
-				}
-				runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: t.log, id: service, size: size}, map[string]witness.Submitter{service: safeSubmitter{client}}, map[string]witness.Verifier{service: verifier})
-				if e != nil {
-					return e
-				}
-				if _, e = runner.RunOnce(c.Context(), time.Now().UTC(), 1); e != nil {
-					return e
-				}
-				state, e = t.log.GetWitness(c.Context(), service, size)
-				if e != nil {
+				if state, e = deliverWitness(c.Context(), p, t.log, service, size); e != nil {
 					return e
 				}
 			}
@@ -349,4 +272,97 @@ func addCheckpointCommands(logs *cobra.Command) {
 		cmd.Flags().Uint64("checkpoint", 0, "CLL checkpoint MMR size (not entry count)")
 		group.AddCommand(cmd)
 	}
+}
+
+// cutCheckpoint signs a checkpoint at the current log tip and returns it after
+// re-verifying the stored statement. The checkpoint signer must be explicitly
+// trusted by the profile.
+func cutCheckpoint(ctx context.Context, p Profile, log cll.Backend) (*cll.CheckpointState, error) {
+	key, e := privateKey(p.Checkpoint.Signing)
+	if e != nil {
+		return nil, e
+	}
+	signer, e := checkpoint.NewEd25519Signer(key)
+	if e != nil {
+		return nil, e
+	}
+	if !checkpointSignerTrusted(p, signer.KeyID()) {
+		return nil, inputError("checkpoint signer must be explicitly trusted")
+	}
+	service, e := serviceID(p)
+	if e != nil {
+		return nil, e
+	}
+	config := checkpoint.DefaultRunnerConfig(p.LogID)
+	config.Cadence.CadenceEntries = 1
+	if service != "" {
+		config.WitnessIDs = []string{service}
+	}
+	runner, e := checkpoint.NewRunner(config, log, signer)
+	if e != nil {
+		return nil, e
+	}
+	// RunOnce indexes up to one cll ScanLimit batch and, with CadenceEntries=1,
+	// cuts a checkpoint at that tip; it reports no change once the log is fully
+	// caught up. Loop to drain a backlog, but bound the work: a log under
+	// continuous concurrent append never reaches "no change", so an unbounded
+	// loop could spin forever (the CLI context carries no deadline). The cap is
+	// a per-invocation work budget; reaching it returns ErrPending so the
+	// operator re-runs to continue. A single-writer log converges in the first
+	// couple of batches.
+	const maxCheckpointBatches = 10000
+	for batch := 0; batch < maxCheckpointBatches; batch++ {
+		changed, e := runner.RunOnce(ctx, time.Now().UTC())
+		if e != nil {
+			return nil, e
+		}
+		if changed {
+			continue
+		}
+		state, e := log.LoadCLL(ctx)
+		if e != nil {
+			return nil, e
+		}
+		if state.Checkpoint == nil {
+			return nil, inputError("log has no entries")
+		}
+		record, e := verifyCheckpoint(p, state.Checkpoint.Bytes)
+		if e != nil {
+			return nil, e
+		}
+		if record.MMRSize != state.Checkpoint.Size {
+			return nil, ErrConflict
+		}
+		return state.Checkpoint, nil
+	}
+	return nil, ErrPending
+}
+
+// deliverWitness makes one delivery attempt of the checkpoint at size to the
+// profile's witness service and returns the resulting persisted state.
+func deliverWitness(ctx context.Context, p Profile, log cll.Backend, service string, size uint64) (cll.WitnessState, error) {
+	token, e := p.Checkpoint.Token.resolve()
+	if e != nil {
+		return cll.WitnessState{}, e
+	}
+	client, e := witness.NewClient(p.Checkpoint.Endpoint, &http.Client{Transport: bearerTransport{token: token}, Timeout: 30 * time.Second}, 0)
+	if e != nil {
+		return cll.WitnessState{}, e
+	}
+	keys, e := parseKeys([]string{p.Checkpoint.PublicKey})
+	if e != nil {
+		return cll.WitnessState{}, e
+	}
+	verifier, e := witness.NewReceiptVerifier(keys[0])
+	if e != nil {
+		return cll.WitnessState{}, e
+	}
+	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: log, id: service, size: size}, map[string]witness.Submitter{service: safeSubmitter{client}}, map[string]witness.Verifier{service: verifier})
+	if e != nil {
+		return cll.WitnessState{}, e
+	}
+	if _, e = runner.RunOnce(ctx, time.Now().UTC(), 1); e != nil {
+		return cll.WitnessState{}, e
+	}
+	return log.GetWitness(ctx, service, size)
 }

@@ -101,6 +101,7 @@ capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
 capsulectl result open FILE [--format text|json]
 capsulectl run [args passed to the actionstate plugin, e.g. --dry-run]
+capsulectl deal init|open|note|check|close|report --profile NAME [...]
 ```
 
 `emit` is `seal`'s v4 name: the same seal/prepare/self-verify/write-to-file
@@ -115,6 +116,8 @@ validation, and it stands in for the `capsule-viewer` build. `run` carries no
 flags or licence logic of its own: the base binary only dispatches to a
 discovered `actionstate` plugin, or refuses with an actionable message if
 that plugin is absent or unlicensed.
+`deal` seals a deal's baseline and checks each point of no return (pay,
+commit, sign, share) against it; see [skills/deal](skills/deal/README.md).
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.

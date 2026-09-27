@@ -1,0 +1,7 @@
+{
+  "action": "pay",
+  "description": "$200 deposit to hold 2 jet skis on Saturday",
+  "amount_minor": 20000,
+  "who": {"payee": "M. Torres"},
+  "recourse": {"rail": "zelle", "refundable": false}
+}
