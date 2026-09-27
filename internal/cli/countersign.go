@@ -633,8 +633,11 @@ func countersignCommands() *cobra.Command {
 		if err := output(c, map[string]any{"bundle_digest": digest, "countersignatures": reports, "summary": summary}); err != nil {
 			return err
 		}
+		// Anything this CLI could not fully verify -- an entry of a type it
+		// does not define, a signer absent from the directory, a receipt that
+		// did not verify -- makes the command exit partial, never success.
 		for _, report := range reports {
-			if report.State == "unresolved_signer" || report.Receipt == receiptUnverified {
+			if report.State == "unverified" || report.State == "unresolved_signer" || report.Receipt == receiptUnverified {
 				return ErrPartial
 			}
 		}

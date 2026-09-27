@@ -513,3 +513,32 @@ func TestCountersignRequestRefusesFlippedResult(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "does not verify")
 }
+
+// invokeCountersignVerify writes bundle to a file and runs the real
+// `countersign verify` command against it under profile.
+func invokeCountersignVerify(t *testing.T, profile Profile, bundle map[string]interface{}) (map[string]interface{}, error) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	require.NoError(t, saveProfile(profile, false))
+	encoded, err := json.Marshal(bundle)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "bundle.json")
+	require.NoError(t, os.WriteFile(path, encoded, 0o600))
+	out, err := invoke(t, "", "countersign", "verify", "--profile", profile.Name, "--directory", "https://directory.invalid/witnesses.json", path)
+	var result map[string]interface{}
+	if out != "" {
+		_ = json.Unmarshal([]byte(out), &result)
+	}
+	return result, err
+}
+
+// TestCountersignVerifyUnknownTypeExitsPartial: an entry this CLI cannot
+// verify must not let the command report success.
+func TestCountersignVerifyUnknownTypeExitsPartial(t *testing.T) {
+	bundle, profile, _ := withheldBundleFixture(t)
+	bundle["countersignatures"] = []interface{}{map[string]interface{}{"type": "countersign/v2", "signer": map[string]interface{}{"id": "x", "key_id": "ab"}}}
+	result, err := invokeCountersignVerify(t, profile, bundle)
+	require.ErrorIs(t, err, ErrPartial)
+	assert.Equal(t, 3, ExitCode(err))
+	assert.Equal(t, "unverified", result["summary"])
+}
