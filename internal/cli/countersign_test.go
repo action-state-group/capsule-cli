@@ -377,7 +377,7 @@ print(json.dumps({
 // vector capsule-anchor generates and commits
 // (packages/tests/countersign/vectors/countersign-v1.json). The two copies
 // must stay byte-identical: regenerate there, copy here, update this pin.
-const countersignVectorSHA256 = "16831a85daefdfdbc16abcfa6d07ce27ab55ea52ecfb746e6b6a288821f2f722"
+const countersignVectorSHA256 = "3b278a3395ad47326f32987848de7b92eac08c6acbdfbebd71a237f94c197280"
 
 type countersignVector struct {
 	SignerPublicKeyHex   string                 `json:"signer_public_key_hex"`
@@ -479,10 +479,15 @@ func TestCountersignGoldenVectorNegatives(t *testing.T) {
 			require.Len(t, reports, 1)
 			assert.Equal(t, tc.Expect["receipt"], reports[0].Receipt)
 			assert.NotEmpty(t, reports[0].ReceiptDetail)
+			if tc.Name == "receipt-for-other-statement-no-entry-hash" {
+				// With no entry_hash to compare, the receipt must fail on
+				// the inclusion proof or the receipt signature itself.
+				assert.NotContains(t, reports[0].ReceiptDetail, "entry_hash")
+			}
 			assert.Equal(t, "resolved", reports[0].State, "an unverified receipt does not invalidate the entry")
 		})
 	}
-	for _, name := range []string{"flipped-result", "digest-only-signature", "receipt-for-other-statement"} {
+	for _, name := range []string{"flipped-result", "digest-only-signature", "receipt-for-other-statement", "receipt-for-other-statement-no-entry-hash"} {
 		assert.True(t, names[name], "golden vector is missing negative case %q", name)
 	}
 }
