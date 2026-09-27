@@ -221,13 +221,20 @@ func ExitCode(err error) int {
 	}
 }
 
-// cliVersion is reported by both --version and `doctor`, so the two can never
-// silently drift apart.
-const cliVersion = "0.1.0-dev"
+// cliVersion and cliCommit are reported by both --version and `doctor`, so the
+// two can never silently drift apart. Release builds set them with
+// -ldflags "-X github.com/action-state-group/capsule-cli/internal/cli.cliVersion=<tag>
+// -X github.com/action-state-group/capsule-cli/internal/cli.cliCommit=<sha>"
+// (.github/workflows/release.yml); a plain `go build` reports the defaults.
+var (
+	cliVersion = "0.1.0-dev"
+	cliCommit  = "unknown"
+)
 
 // NewCommand returns a fresh tree: no shared flag/config state across invocations.
 func NewCommand() *cobra.Command {
 	root := &cobra.Command{Use: "capsulectl", Short: "Seal, store and publish AAC Capsules using named profiles", Version: cliVersion, SilenceUsage: true, SilenceErrors: true}
+	root.SetVersionTemplate("capsulectl {{.Version}} (commit " + cliCommit + ")\n")
 	root.PersistentFlags().String("profile", "", "Named target for commands that operate on a profile")
 	root.SetFlagErrorFunc(func(_ *cobra.Command, _ error) error { return ErrInput })
 	root.AddCommand(profileCommands())

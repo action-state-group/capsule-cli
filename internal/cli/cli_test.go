@@ -171,8 +171,9 @@ func TestRequiredProfileAndNoRuntimeOverrides(t *testing.T) {
 	assert.NotContains(t, SafeError(e), "should-not-be-accepted")
 	_, e = invoke(t, "", "--help")
 	require.NoError(t, e)
-	_, e = invoke(t, "", "--version")
+	out, e := invoke(t, "", "--version")
 	require.NoError(t, e)
+	assert.Equal(t, "capsulectl "+cliVersion+" (commit "+cliCommit+")\n", out)
 }
 func TestSecretProtection(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "secret")

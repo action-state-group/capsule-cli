@@ -26,6 +26,7 @@ func TestDoctorWithoutProfile(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	report := doctorReport(t)
 	assert.Equal(t, cliVersion, report["binary_version"])
+	assert.Equal(t, cliCommit, report["binary_commit"])
 	profile, _ := report["profile"].(map[string]any)
 	assert.Equal(t, "", profile["selected"])
 	assert.Equal(t, false, profile["present"])
