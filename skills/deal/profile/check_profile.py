@@ -433,7 +433,8 @@ def check_chain(records):
     allowed_rels = {"evidence": {"about"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by"}, "outcome": {"observes"},
                     "close": {"outcome"}}
-    allowed = list(records[0]["body"]["intent"].get("allowed", []))
+    # Absent allowed = no restriction; present and empty = nothing allowed.
+    allowed = records[0]["body"]["intent"].get("allowed")
     used_approvals, verdict_for_check = set(), set()
     last_outcome = None
     unchecked = 0
@@ -501,7 +502,7 @@ def check_chain(records):
                 chk = records[by_digest[records[j]["x-deal-v0"]["refs"][0]["digest"]]]["body"]
                 if v["result"] != "pass":
                     fail(i, "a standing-intent approval needs a passing verdict; a pause needs the user's answer")
-                if allowed and chk["action"] not in allowed:
+                if allowed is not None and chk["action"] not in allowed:
                     fail(i, "standing-intent approval for an action the intent does not allow")
             elif v["result"] == "pause" and body["choice"] not in v["options"]:
                 fail(i, "the user's choice is not one of the verdict's options")

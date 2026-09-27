@@ -260,7 +260,7 @@ func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]i
 	if i.MaxTotalMinor != nil {
 		m["max_total_minor"] = *i.MaxTotalMinor
 	}
-	if len(i.Allowed) > 0 {
+	if i.Allowed != nil { // present and empty: nothing is allowed yet
 		m["allowed"] = i.Allowed
 	}
 	return m, nil

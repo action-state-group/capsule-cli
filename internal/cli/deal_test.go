@@ -280,3 +280,29 @@ func TestDealConcurrentWritersChainInOrder(t *testing.T) {
 	report := dealRun(t, "report", "--deal", dealID)
 	assert.Len(t, strings.Split(report["trail"].(string), "\n"), writers+1)
 }
+
+// B1: "show me options, don't book" is an empty allowed list, and booking
+// anyway (non-refundable) must pause.
+func TestDealOptionsOnlyIntentPausesABooking(t *testing.T) {
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--input", writeJSON(t, `{"type":"booking","channel":"web",
+		"intent":{"verbatim":"find me some hotel options in Tokyo for October 3, dont book yet","allowed":[]},
+		"who":{"name":"Example Hotel Shinjuku","domain":"hotel.example"},
+		"terms":{"item":"double room","price_minor":38000,"currency":"USD","when":"2026-10-03"},
+		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"commit","recourse":{"refundable":false}}`))
+	assert.Equal(t, "pause", check["verdict"])
+	assert.Equal(t, false, check["proceed"])
+	assert.Contains(t, check["card"], "You didn't ask for this: confirming a commitment")
+	assert.Contains(t, check["card"], "No longer refundable")
+	assert.Nil(t, check["approval_id"], "nothing is approved by standing intent")
+}
+
+// B1: a change of refundability from what was agreed is a difference.
+func TestDealRefundabilityChangePauses(t *testing.T) {
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"commit","terms":{"when":"2026-10-03","conditions":{"check_out":"2026-10-05"},"price_minor":38000},"recourse":{"refundable":false}}`))
+	assert.Equal(t, "pause", check["verdict"])
+	assert.Equal(t, "⚠️ No longer refundable (agreed as refundable) · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
+}

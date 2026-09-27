@@ -66,7 +66,9 @@ type dealIntent struct {
 	Verbatim      string    `json:"verbatim"`
 	Asked         dealTerms `json:"asked,omitempty"`
 	MaxTotalMinor *int64    `json:"max_total_minor,omitempty"`
-	Allowed       []string  `json:"allowed,omitempty"`
+	// Allowed absent (nil) means no restriction; present and empty means
+	// nothing is allowed yet ("show me options, don't book").
+	Allowed []string `json:"allowed"`
 }
 
 type dealOpen struct {
@@ -262,8 +264,11 @@ type dealState struct {
 	whoSource map[string]string
 	terms     dealTerms
 	recourse  dealRecourse
-	claims    []dealClaim
-	messages  []dealMessage
+	// agreedRecourse is the way back as agreed: the baseline's, updated only
+	// by an approved check.
+	agreedRecourse dealRecourse
+	claims         []dealClaim
+	messages       []dealMessage
 }
 
 func foldDeal(events []sealedEvent) (dealState, error) {
@@ -271,7 +276,7 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		return dealState{}, inputError("deal has no sealed baseline")
 	}
 	o := *events[0].Event.Open
-	s := dealState{open: o, intent: o.Intent, agreed: o.Terms, who: o.Who, terms: o.Terms, recourse: o.Recourse, claims: slices.Clone(o.Claims), whoSource: map[string]string{}}
+	s := dealState{open: o, intent: o.Intent, agreed: o.Terms, who: o.Who, terms: o.Terms, recourse: o.Recourse, agreedRecourse: o.Recourse, claims: slices.Clone(o.Claims), whoSource: map[string]string{}}
 	var lastSnapshot *dealSnapshot
 	for _, se := range events[1:] {
 		e := se.Event
@@ -316,6 +321,10 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 					s.agreed = overlayTerms(s.agreed, *lastSnapshot.Terms)
 				}
 				s.agreed = overlayTerms(s.agreed, s.terms)
+				s.agreedRecourse = overlayRecourse(s.agreedRecourse, s.recourse)
+				if lastSnapshot.Recourse != nil {
+					s.agreedRecourse = overlayRecourse(s.agreedRecourse, *lastSnapshot.Recourse)
+				}
 			}
 		}
 	}
@@ -556,7 +565,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 
 	// 1. Asked?
 	intent := s.intent
-	if len(intent.Allowed) > 0 && !slices.Contains(intent.Allowed, snap.Action) {
+	if intent.Allowed != nil && !slices.Contains(intent.Allowed, snap.Action) {
 		add("asked", "not_asked", "action", "You didn't ask for this: "+actionNames[snap.Action])
 	}
 	askedFields := map[string]bool{}
@@ -600,6 +609,35 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 		add("terms", "terms_changed", d.key, fmt.Sprintf("%s changed since it was agreed (%s → %s)", d.label, d.a, d.b))
 	}
 
+	// Same way back? Any change of rail or refundability from what was
+	// agreed is a difference, for every action. Rail and refundability read
+	// as one line on the card when both changed.
+	agreedRail := normRail(s.agreedRecourse.Rail)
+	railChanged := agreedRail != "" && rail != "" && agreedRail != rail
+	refundChanged := s.agreedRecourse.Refundable != nil && recourse.Refundable != nil && *s.agreedRecourse.Refundable != *recourse.Refundable
+	refundWord := func(r bool) string {
+		if r {
+			return "refundable"
+		}
+		return "not refundable"
+	}
+	if railChanged {
+		text := "Payment changed since it was agreed (" + railName(s.agreedRecourse.Rail) + " → " + railName(recourse.Rail)
+		if refundChanged {
+			text += ", " + refundWord(*recourse.Refundable)
+		}
+		add("recourse", "recourse_changed", "rail", text+")")
+	}
+	if refundChanged {
+		text := ""
+		if !railChanged && !*recourse.Refundable {
+			text = "No longer refundable (agreed as refundable)"
+		} else if !railChanged {
+			text = "Now refundable (agreed as not refundable)"
+		}
+		add("recourse", "recourse_changed", "refundable", text)
+	}
+
 	// Safety rules.
 	if snap.Action == "pay" && railsWithoutRecourse[rail] {
 		add("recourse", "irreversible_rail", "rail", railName(recourse.Rail)+" = no card protection")
@@ -634,7 +672,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 			r.Unverified = append(r.Unverified, c.Text)
 		}
 	}
-	if recourse.Refundable != nil && !*recourse.Refundable {
+	if recourse.Refundable != nil && !*recourse.Refundable && !refundChanged {
 		r.Notes = append(r.Notes, "not refundable")
 	}
 	settleCheck(&r, s)
@@ -665,7 +703,9 @@ func renderCard(r dealCheckResult, demo bool) string {
 	}
 	parts := make([]string, 0, len(r.Differences)+len(r.Notes)+1)
 	for _, d := range r.Differences {
-		parts = append(parts, d.Text)
+		if d.Text != "" { // a difference folded into another line
+			parts = append(parts, d.Text)
+		}
 	}
 	parts = append(parts, r.Notes...)
 	if len(r.Unverified) > 0 {

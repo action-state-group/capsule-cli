@@ -83,7 +83,7 @@ Twelve record types. The set is closed: an unknown `record_type` fails the schem
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
 | `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`), `pack_id` | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor`, `currency`, `seen_item`, `terms`, `recourse`, `pack_digest`. |
 | `verdict` | The answer to one check: pass, or pause with the differences. | `result` (`pass`\|`pause`), `pack_id`, `differences[]`, `options[]` | exactly one `checks` → a `check`; one verdict per check; `pack_id` equal to the check's. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. |
-| `approval` | What authorizes, or declines, the next step. | `choice` (`hold`\|`verify_contact`\|`proceed`), `proceed` (= `choice == "proceed"`), `approver` (`user`\|`standing_intent`) | exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment`, and on a pause the choice is one of the verdict's options. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (empty `allowed` = no restriction). |
+| `approval` | What authorizes, or declines, the next step. | `choice` (`hold`\|`verify_contact`\|`proceed`), `proceed` (= `choice == "proceed"`), `approver` (`user`\|`standing_intent`) | exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment`, and on a pause the choice is one of the verdict's options. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
 | `action` | A point-of-no-return step actually taken. | `action` | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). |
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. |
 | `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. |
@@ -100,8 +100,10 @@ Field details:
   pack's `rail` rule) and `refundable`.
 - **differences[]**: `{question, rule, field?}`. `question` is one of `asked`, `who`, `terms`,
   `recourse`, `safety`, `delivered`. `rule` is a rule id from the pack named by `pack_id`, or a
-  core rule (`not_asked`, `over_limit`, `terms_changed`, `credentials_requested`,
-  `not_delivered`, `delivered_differs`). The human card text contains raw values, so it is
+  core rule (`not_asked`, `over_limit`, `terms_changed`, `recourse_changed`,
+  `credentials_requested`, `not_delivered`, `delivered_differs`). Any change of
+  `recourse.rail` or `recourse.refundable` from what was agreed is a
+  `recourse_changed` difference, for every action. The human card text contains raw values, so it is
   **not** in the record. The verdict carries `card_commitment` instead, and the text stays
   local.
 - **pack_id**: `publisher/name/semver`. v0 uses `capsule/marketplace-rentals-safety/0.1.0`.
@@ -222,7 +224,8 @@ A verifier holding one deal's records in `seq` order checks:
      equal the checked ones.
    - One approval authorizes at most one action.
 6. **Standing intent.** `approver: "standing_intent"` is valid only on a passing verdict, and
-   only for an action in the current `allowed`. A pause always needs the user's own answer.
+   only for an action in the current `allowed`. An absent `allowed` places no restriction; a
+   present, empty `allowed` allows nothing. A pause always needs the user's own answer.
 7. **Close.** `close` references the latest `outcome` (if any), and its `outcome` equals that
    outcome's. Without an outcome record, the close is `open`. `unchecked_actions` equals the
    number of `unchecked_action` outcomes. A close with `completed` or `mismatch` is terminal. A

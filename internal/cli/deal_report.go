@@ -160,9 +160,11 @@ func dealStepLine(e dealEvent, showText bool) string {
 		if e.Check.Verdict == "pass" {
 			return "Check: no differences"
 		}
-		texts := make([]string, len(e.Check.Differences))
-		for i, d := range e.Check.Differences {
-			texts[i] = d.Text
+		var texts []string
+		for _, d := range e.Check.Differences {
+			if d.Text != "" {
+				texts = append(texts, d.Text)
+			}
 		}
 		return "Check paused: " + strings.Join(texts, " · ")
 	default:
