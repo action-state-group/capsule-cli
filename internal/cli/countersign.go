@@ -391,7 +391,9 @@ func resolveSigner(dir countersignerDirectory, keyHex string) (countersignerDire
 
 // countersignatureReport is one countersignatures[] entry's verify outcome:
 // the three named states (not_independent / resolved / the hollow "none" case
-// the caller renders when the list is empty), plus "unresolved_signer" for an
+// the caller renders when the list is empty), "invalid" for an entry whose
+// "over" or signature fails (Detail says which; its checks are never
+// reported), plus "unresolved_signer" for an
 // entry whose signer verifies but is absent from the directory, and
 // "unverified" for a wire type this CLI does not define (including the -00
 // spec's own reserved "cose-sign1"). Receipt is verified / unverified /
@@ -399,6 +401,7 @@ func resolveSigner(dir countersignerDirectory, keyHex string) (countersignerDire
 // ReceiptDetail naming why an unverified receipt did not verify.
 type countersignatureReport struct {
 	State         string             `json:"state"`
+	Detail        string             `json:"detail,omitempty"`
 	Receipt       string             `json:"receipt,omitempty"`
 	ReceiptDetail string             `json:"receipt_detail,omitempty"`
 	Signer        CountersignSigner  `json:"signer"`
@@ -414,9 +417,9 @@ type countersignatureReport struct {
 // self-countersignature as not independent by comparing against the bundle
 // producer's trusted keys, and resolves every other signer against the
 // countersigner directory. A tampered entry (bad signature, or an "over" that
-// does not match the recomputed digest) is a hard failure -- verification
-// must be able to fail, per the queue protocol's §7 rule -- so this returns an
-// error rather than a report for that entry.
+// does not match the recomputed digest) is reported "invalid", with none of
+// its checks, and the remaining entries are still verified; the verify
+// command then exits non-zero (see hasInvalidCountersignature).
 func verifyCountersignatures(ctx context.Context, client *http.Client, directoryURL string, bundle map[string]interface{}, trustedProducerKeys []ed25519.PublicKey) (string, []countersignatureReport, string, error) {
 	digest, err := aacbundle.BundleDigest(bundle)
 	if err != nil {
@@ -429,7 +432,7 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 	var directory *countersignerDirectory
 	var reports []countersignatureReport
 	summary := "none"
-	rank := map[string]int{"none": 0, "unverified": 1, "unresolved_signer": 2, "not_independent": 3, "resolved": 4}
+	rank := map[string]int{"none": 0, "invalid": 1, "unverified": 2, "unresolved_signer": 3, "not_independent": 4, "resolved": 5}
 	for i, raw := range rawEntries {
 		encoded, err := json.Marshal(raw)
 		if err != nil {
@@ -462,11 +465,13 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 		// cross-lane question for the spec desk (not decided here), so its
 		// absence must never reject an otherwise well-formed entry.
 		if entry.Over != digest {
-			return "", nil, "", fmt.Errorf("countersignatures[%d] signs a different bundle digest", i)
+			reports = append(reports, countersignatureReport{State: "invalid", Detail: "signs a different bundle digest", Signer: entry.Signer})
+			continue
 		}
 		signerKey, err := verifyCountersignSignature(entry.Signer.KeyID, digest, wire.Statement, entry.Type, entry.Signature)
 		if err != nil {
-			return "", nil, "", fmt.Errorf("countersignatures[%d]: %w", i, err)
+			reports = append(reports, countersignatureReport{State: "invalid", Detail: err.Error(), Signer: entry.Signer})
+			continue
 		}
 		receiptState, receiptErr := verifyCountersignReceipt(signerKey, wire.Statement, entry.Receipt)
 		independent := true
@@ -508,6 +513,17 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 		}
 	}
 	return digest, reports, summary, nil
+}
+
+// hasInvalidCountersignature returns an error naming the first invalid entry,
+// or nil when none is invalid.
+func hasInvalidCountersignature(reports []countersignatureReport) error {
+	for i, report := range reports {
+		if report.State == "invalid" {
+			return fmt.Errorf("countersignatures[%d] is invalid: %s", i, report.Detail)
+		}
+	}
+	return nil
 }
 
 func countersignCommands() *cobra.Command {
@@ -631,6 +647,9 @@ func countersignCommands() *cobra.Command {
 			return err
 		}
 		if err := output(c, map[string]any{"bundle_digest": digest, "countersignatures": reports, "summary": summary}); err != nil {
+			return err
+		}
+		if err := hasInvalidCountersignature(reports); err != nil {
 			return err
 		}
 		// Anything this CLI could not fully verify -- an entry of a type it

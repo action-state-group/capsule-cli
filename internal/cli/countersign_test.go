@@ -185,9 +185,13 @@ func TestCountersignVerifyTamperedEntryFails(t *testing.T) {
 	trusted, err := parseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
 	client := &http.Client{Timeout: 5 * time.Second}
-	_, _, _, err = verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
-	require.Error(t, err, "a tampered countersignature must fail verification, not pass silently")
-	assert.ErrorContains(t, err, "does not verify")
+	_, reports, summary, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+	require.NoError(t, err)
+	require.Len(t, reports, 1)
+	assert.Equal(t, "invalid", reports[0].State, "a tampered countersignature must fail verification, not pass silently")
+	assert.Contains(t, reports[0].Detail, "does not verify")
+	assert.Equal(t, "invalid", summary)
+	require.Error(t, hasInvalidCountersignature(reports))
 }
 
 // TestCountersignVerifyTamperedOverFails covers the other tamper vector: an
@@ -203,9 +207,12 @@ func TestCountersignVerifyTamperedOverFails(t *testing.T) {
 	trusted, err := parseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
 	client := &http.Client{Timeout: 5 * time.Second}
-	_, _, _, err = verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "different bundle digest")
+	_, reports, _, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+	require.NoError(t, err)
+	require.Len(t, reports, 1)
+	assert.Equal(t, "invalid", reports[0].State)
+	assert.Contains(t, reports[0].Detail, "different bundle digest")
+	require.Error(t, hasInvalidCountersignature(reports))
 }
 
 // TestCountersignVerifyUnresolvedSigner is the directory-miss case: a
@@ -469,13 +476,15 @@ func TestCountersignGoldenVectorNegatives(t *testing.T) {
 		names[tc.Name] = true
 		t.Run(tc.Name, func(t *testing.T) {
 			_, reports, _, err := verifyVectorEntry(t, vector, tc.Entry)
+			require.NoError(t, err)
 			if tc.Expect["signature"] == "invalid" {
-				require.Error(t, err, "a countersignature whose signing input was altered must fail verification")
-				assert.ErrorContains(t, err, "does not verify")
-				assert.Nil(t, reports, "checks of an invalid entry must never be displayed")
+				require.Len(t, reports, 1)
+				assert.Equal(t, "invalid", reports[0].State, "a countersignature whose signing input was altered must fail verification")
+				assert.Contains(t, reports[0].Detail, "does not verify")
+				assert.Nil(t, reports[0].Checks, "checks of an invalid entry must never be displayed")
+				require.Error(t, hasInvalidCountersignature(reports))
 				return
 			}
-			require.NoError(t, err)
 			require.Len(t, reports, 1)
 			assert.Equal(t, tc.Expect["receipt"], reports[0].Receipt)
 			assert.NotEmpty(t, reports[0].ReceiptDetail)
@@ -541,4 +550,60 @@ func TestCountersignVerifyUnknownTypeExitsPartial(t *testing.T) {
 	require.ErrorIs(t, err, ErrPartial)
 	assert.Equal(t, 3, ExitCode(err))
 	assert.Equal(t, "unverified", result["summary"])
+}
+
+// TestCountersignVerifyInvalidEntryIsReportedNotFatal: one tampered entry is
+// reported invalid with its checks hidden, and the other entries are still
+// verified and reported.
+func TestCountersignVerifyInvalidEntryIsReportedNotFatal(t *testing.T) {
+	bundle, profile, _ := withheldBundleFixture(t)
+	digest, err := aacbundle.BundleDigest(bundle)
+	require.NoError(t, err)
+	tampered, _ := countersignerEntry(t, digest, []CountersignCheck{{Name: "range membership", Result: "failed"}})
+	tampered.Statement.Checks[0].Result = "established"
+	good, goodKey := countersignerEntry(t, digest, []CountersignCheck{{Name: "cadence", Result: "established"}})
+	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{tampered, good}))
+
+	directory := countersignerDirectory{Countersigners: []countersignerDirectoryRow{{Name: "Countersign Test Operator", KeyIDs: []string{goodKey}}}}
+	dirServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(directory))
+	}))
+	defer dirServer.Close()
+	client := &http.Client{Transport: dirServer.Client().Transport, Timeout: 5 * time.Second}
+	trusted, err := parseKeys(profile.TrustedKeys)
+	require.NoError(t, err)
+
+	_, reports, summary, err := verifyCountersignatures(t.Context(), client, dirServer.URL, bundle, trusted)
+	require.NoError(t, err)
+	require.Len(t, reports, 2)
+	assert.Equal(t, "invalid", reports[0].State)
+	assert.Contains(t, reports[0].Detail, "does not verify")
+	assert.Nil(t, reports[0].Checks, "checks of an invalid entry must never be displayed")
+	assert.Nil(t, reports[0].Independent)
+	assert.Empty(t, reports[0].RecomputedAt)
+	assert.Equal(t, "resolved", reports[1].State)
+	assert.Equal(t, "resolved", summary)
+}
+
+// TestCountersignVerifyInvalidEntryFailsTheCommand: the command still exits
+// non-zero when any entry is invalid, after reporting every entry.
+func TestCountersignVerifyInvalidEntryFailsTheCommand(t *testing.T) {
+	bundle, profile, _ := withheldBundleFixture(t)
+	digest, err := aacbundle.BundleDigest(bundle)
+	require.NoError(t, err)
+	entry, _ := countersignerEntry(t, digest, []CountersignCheck{{Name: "range membership", Result: "failed"}})
+	entry.Statement.Checks[0].Result = "established"
+	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
+
+	result, err := invokeCountersignVerify(t, profile, bundle)
+	require.Error(t, err)
+	assert.Equal(t, 1, ExitCode(err))
+	assert.Equal(t, "invalid", result["summary"])
+	reports, ok := result["countersignatures"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, reports, 1)
+	report := reports[0].(map[string]interface{})
+	assert.Equal(t, "invalid", report["state"])
+	assert.NotContains(t, report, "checks")
 }
