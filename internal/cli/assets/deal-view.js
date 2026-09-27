@@ -65,8 +65,32 @@
   if (base.body.demo) host.append(el("span", "DEMO", "deal-demo"));
   host.append(el("h1", "Deal report"));
 
+  // The user's words are checked here against the baseline's sealed
+  // commitment: SHA-256 over JCS({"nonce","text"}). For two string members in
+  // this order, JSON.stringify escapes exactly as RFC 8785 does.
+  const opening = report.asked_opening || {};
+  let askedChecked = false;
+  if (typeof opening.nonce === "string" && typeof opening.text === "string") {
+    const jcs = `{"nonce":${JSON.stringify(opening.nonce)},"text":${JSON.stringify(opening.text)}}`;
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(jcs));
+    const hex = Array.from(new Uint8Array(digest), (x) => x.toString(16).padStart(2, "0")).join("");
+    askedChecked = hex === base.body.intent.verbatim_commitment;
+  }
   host.append(el("h2", "What you asked"));
-  host.append(item(`“${report.asked}”`, [report.asked_step]));
+  if (askedChecked) {
+    host.append(item(`“${opening.text}”`, [report.asked_step]));
+    host.append(el("p", "✓ These are the exact words sealed when the deal opened.", "deal-note"));
+  } else {
+    host.append(el("p", "⚠️ The words you asked could not be checked against the sealed record.", "deal-bad"));
+  }
+  host.append(
+    el(
+      "p",
+      "The summary lines below are written by capsulectl on this device and are not checked by this page. " +
+        "Open an item to see the steps it was read from; each step's record is checked.",
+      "deal-note",
+    ),
+  );
 
   host.append(el("h2", "What the agent did"));
   const did = report.did || [];

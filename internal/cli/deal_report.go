@@ -83,7 +83,10 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	b["extensions"] = map[string]interface{}{
 		"x-deal-v0": map[string]interface{}{
 			"deal_id": events[0].Event.DealID, "steps": steps, "asked": report.Asked, "asked_step": report.AskedStep,
-			"did": items(report.Did), "anomalies": items(report.Anomalies),
+			// The opening of the user's own words, so the page can check them
+			// against the baseline's sealed verbatim_commitment.
+			"asked_opening": map[string]interface{}{"nonce": events[0].Event.Nonces["verbatim"], "text": events[0].Event.Open.Intent.Verbatim},
+			"did":           items(report.Did), "anomalies": items(report.Anomalies),
 		},
 	}
 	if err = verifyProducedBundle(b, true); err != nil {

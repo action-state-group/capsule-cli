@@ -196,3 +196,25 @@ func TestVendoredVerifierMatchesRecordedDigest(t *testing.T) {
 	sum := sha256.Sum256(evidenceGraphIIFE)
 	assert.Equal(t, strings.TrimSpace(evidenceGraphIIFESHA256), hex.EncodeToString(sum[:]), "rebuild with scripts/build-evidence-graph-iife.sh; never hand-edit")
 }
+
+// SF2: the page can check "What you asked" against the baseline's sealed
+// commitment, and says plainly that the summary lines are not self-checked.
+func TestDealReportAskedIsCheckable(t *testing.T) {
+	dealFixture(t)
+	dealID := openJetSki(t)
+	page := filepath.Join(t.TempDir(), "report.html")
+	dealRun(t, "report", "--deal", dealID, "--html", page)
+	raw, err := os.ReadFile(page)
+	require.NoError(t, err)
+	b := embeddedBundle(t, string(raw))
+	ext := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
+	opening, ok := ext["asked_opening"].(map[string]interface{})
+	require.True(t, ok, "the report carries the opening of the user's words")
+	commitment, err := commitText(opening["nonce"].(string), opening["text"].(string))
+	require.NoError(t, err)
+	baseline := b["disclosures"].(map[string]interface{})[ext["asked_step"].(string)].(map[string]interface{})["agent_input"].(map[string]interface{})
+	intent := baseline["body"].(map[string]interface{})["intent"].(map[string]interface{})
+	assert.Equal(t, intent["verbatim_commitment"], commitment)
+	assert.Equal(t, "rent me 2 jet skis Saturday", opening["text"])
+	assert.Contains(t, string(raw), "not checked by this page")
+}
