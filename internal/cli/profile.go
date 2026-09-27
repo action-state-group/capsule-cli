@@ -84,10 +84,15 @@ type Profile struct {
 		Port     int    `yaml:"port" mapstructure:"port"`
 		Database string `yaml:"database" mapstructure:"database"`
 		TLS      string `yaml:"tls" mapstructure:"tls"`
+		// URL is the base address of a remote profile type's transport; the
+		// storage-backed types leave it empty.
+		URL string `yaml:"url,omitempty" mapstructure:"url"`
 	} `yaml:"connection" mapstructure:"connection"`
 	Credentials struct {
 		Username string `yaml:"username" mapstructure:"username"`
 		Password Secret `yaml:"password,omitempty" mapstructure:"password"`
+		// Token is an optional bearer token for a remote profile type's URL.
+		Token Secret `yaml:"token,omitempty" mapstructure:"token"`
 	} `yaml:"credentials" mapstructure:"credentials"`
 	Signing     Secret   `yaml:"signing,omitempty" mapstructure:"signing"`
 	TrustedKeys []string `yaml:"trusted_keys,omitempty" mapstructure:"trusted_keys"`
@@ -101,8 +106,8 @@ type Profile struct {
 }
 
 func (p Profile) validate() error {
-	if !profileName.MatchString(p.Name) || (p.Type != "mysql" && p.Type != "sqlite" && p.Type != "jsonl") {
-		return inputError("profile needs a valid name and mysql, sqlite, or jsonl type")
+	if !profileName.MatchString(p.Name) || (p.Type != "mysql" && p.Type != "sqlite" && p.Type != "jsonl" && p.Type != remoteProfileType) {
+		return inputError("profile needs a valid name and a mysql, sqlite, jsonl, or " + remoteProfileType + " type")
 	}
 	if (p.LogID != "" && !logName.MatchString(p.LogID)) || (p.Namespace != "" && !profileName.MatchString(p.Namespace)) {
 		return inputError("invalid log_id or namespace")
@@ -110,7 +115,11 @@ func (p Profile) validate() error {
 	if p.LogID == "" && p.Namespace == "" {
 		return inputError("configure an artifact namespace, a log_id, or both")
 	}
-	if p.Type == "sqlite" || p.Type == "jsonl" {
+	if p.Type == remoteProfileType {
+		if e := validateRemoteConnection(p); e != nil {
+			return e
+		}
+	} else if p.Type == "sqlite" || p.Type == "jsonl" {
 		// SQLite and JSONL are local backends: connection.database is a filesystem
 		// path (a file for sqlite; a directory holding artifacts.jsonl and
 		// cll.jsonl for jsonl) and no host/port/TLS applies.
@@ -125,7 +134,7 @@ func (p Profile) validate() error {
 			return inputError("mysql TLS must be true or false; insecure fallback is unsupported")
 		}
 	}
-	for _, s := range []Secret{p.Credentials.Password, p.Signing, p.Checkpoint.Signing, p.Checkpoint.Token} {
+	for _, s := range []Secret{p.Credentials.Password, p.Credentials.Token, p.Signing, p.Checkpoint.Signing, p.Checkpoint.Token} {
 		if e := s.validate(); e != nil {
 			return e
 		}
@@ -309,6 +318,7 @@ func profileCommands() *cobra.Command {
 			return errors.Join(ErrInput, e)
 		}
 		p.Credentials.Password = p.Credentials.Password.redact()
+		p.Credentials.Token = p.Credentials.Token.redact()
 		p.Signing = p.Signing.redact()
 		p.Checkpoint.Signing = p.Checkpoint.Signing.redact()
 		p.Checkpoint.Token = p.Checkpoint.Token.redact()
@@ -324,7 +334,7 @@ func profileCommands() *cobra.Command {
 		f := c.Flags()
 		f.String("name", "", "New profile name")
 		f.Bool("interactive", false, "Ask for missing nonsecret connection fields")
-		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key"}
+		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "url": "connection.url"}
 		for flag := range fields {
 			f.String(flag, "", "Profile setting")
 		}
@@ -334,7 +344,7 @@ func profileCommands() *cobra.Command {
 		f.Bool("read-only", false, "Reject operations requiring writes")
 		f.StringSlice("trusted-key", nil, "Trusted producer public key hex (repeatable)")
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
-		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token"}
+		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token", "token": "credentials.token"}
 		for flag := range secrets {
 			f.String(flag, "", "Literal secret; prefer file/env reference")
 			f.String(flag+"-file", "", "Owner-protected secret file")
@@ -406,6 +416,8 @@ func profileCommands() *cobra.Command {
 					prompts = append(prompts, prompt{"SQLite database file path", &p.Connection.Database})
 				case "jsonl":
 					prompts = append(prompts, prompt{"JSONL storage directory", &p.Connection.Database})
+				case remoteProfileType:
+					prompts = append(prompts, prompt{"Base URL", &p.Connection.URL})
 				default:
 					prompts = append(prompts, prompt{"MySQL host", &p.Connection.Host}, prompt{"Database", &p.Connection.Database})
 				}

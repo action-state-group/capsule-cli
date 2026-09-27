@@ -151,9 +151,9 @@ checkpoint:
 
 Each secret supports exactly one of `value`, `file`, or `env`. Flag parity:
 `--mysql-password[-file|-env]`, `--signing-key[-file|-env]`,
-`--checkpoint-signing-key[-file|-env]`, `--checkpoint-token[-file|-env]`.
+`--checkpoint-signing-key[-file|-env]`, `--checkpoint-token[-file|-env]`, `--token[-file|-env]`.
 Other configuration flags include `--trusted-key`, `--checkpoint-trusted-key`,
-`--checkpoint-endpoint`, `--checkpoint-public-key`, `--mysql-tls`, `--read-only`.
+`--checkpoint-endpoint`, `--checkpoint-public-key`, `--mysql-tls`, `--read-only`, `--url`.
 To change secret source on update, explicitly clear the previous source flag;
 conflicting sources are rejected instead of silently taking precedence.
 
@@ -162,6 +162,45 @@ MySQL, SQLite, and JSONL are peer backends; each profile selects one with
 single shared file for SQLite, via `--sqlite-path`). A JSONL profile sets
 `connection.database` (via `--jsonl-path`) to a directory holding `artifacts.jsonl`
 and `cll.jsonl`; it needs no host, port, or TLS and assumes a single writer.
+
+A `mesh-plugin` profile holds no storage. It points `--url` at a mesh node's
+management API (for example `http://127.0.0.1:3131`), and the read-only `book`
+verbs ask another party's book through that node's evidence-request/1 tool:
+
+```
+capsulectl profile create --name my-node --type mesh-plugin --url http://127.0.0.1:3131
+capsulectl book head    --profile my-node --party <peer-id> [--responder-checkpoint-key <hex>]
+capsulectl book get     --profile my-node --party <peer-id> --capsule-id <id>
+capsulectl book list    --profile my-node --party <peer-id> --selector <id1..id2> [--page-size N] [--page-token T]
+capsulectl book request --profile my-node --party <peer-id> --request request.json
+```
+
+Each verb sends the request in canonical form: sorted keys, compact,
+printable ASCII, 64-bit integers only. That is the form the party digests
+after the node re-encodes it; a request that cannot be sent that way is
+rejected before anything is sent. Each verb prints the party's answer
+(`response`, re-encoded compactly, so check its signed fields rather than
+hashing it) and the SHA-256 of the request it sent (`request_digest`), and
+classifies the answer:
+
+- An `artifact` must answer the subject kind that was asked. Its bundles are
+  carried, not verified: verify them with the party's keys before relying on
+  them. `book get` also checks the bundle's stated `capsule_id`.
+- A `refusal` is accepted only if its Ed25519 signature verifies offline and it
+  names that exact request. That proves the holder of its `signer` key refused
+  this request. It does not prove who that key belongs to: pass `--responder-key`
+  (the party's signing key, obtained independently) and a refusal under any other
+  key is rejected, and `signer_pinned` is true.
+
+`book head` verifies the signed statement of the newest checkpoint the party
+reports and checks every reported field against it. It cannot tell whether the
+party is withholding a newer one. With `--responder-checkpoint-key`, it rejects
+a head signed by any other key.
+
+An optional node token (`--token[-file|-env]`) is sent as a bearer token only
+over https or to a loopback address, and redirects are never followed.
+Profiles of this type cannot `store`, `publish` or list a log; those verbs
+reject them.
 Several profiles may share a physical database or reference the same log. The CLI
 does not bind a log to a single artifact namespace; callers must consistently
 select the intended namespace when writing and reading a log's artifacts.
