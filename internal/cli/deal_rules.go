@@ -17,8 +17,8 @@ import (
 // undone. `deal check` refuses any other action, so an agent cannot reach an
 // irreversible step through a name the rules do not cover.
 var dealPointsOfNoReturn = map[string][]string{
-	"purchase": {"pay", "share_contact", "share_credentials"},
-	"rental":   {"pay", "sign", "share_contact", "share_credentials"},
+	"purchase": {"pay", "commit", "share_contact", "share_credentials"},
+	"rental":   {"pay", "commit", "sign", "share_contact", "share_credentials"},
 	"booking":  {"pay", "commit", "cancel", "share_contact", "share_credentials"},
 	"service":  {"pay", "commit", "sign", "share_contact", "share_credentials"},
 }

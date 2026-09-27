@@ -44,13 +44,13 @@ Four questions are asked at every point of no return:
 
 | Deal type | Actions that must be checked first |
 |---|---|
-| `purchase` | `pay`, `share_contact`, `share_credentials` |
-| `rental` | `pay`, `sign`, `share_contact`, `share_credentials` |
+| `purchase` | `pay`, `commit`, `share_contact`, `share_credentials` |
+| `rental` | `pay`, `commit`, `sign`, `share_contact`, `share_credentials` |
 | `booking` | `pay`, `commit`, `cancel`, `share_contact`, `share_credentials` |
 | `service` | `pay`, `commit`, `sign`, `share_contact`, `share_credentials` |
 
 `commit` means sending a commitment (confirming a booking, accepting an
-offer). `deal check` refuses any other action name.
+offer, agreeing to buy). `deal check` refuses any other action name.
 
 ## Setup (once)
 

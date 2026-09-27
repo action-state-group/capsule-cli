@@ -383,3 +383,15 @@ func TestDealRecoversAStepThatNeverReachedTheLog(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// SF1: accepting an offer is a point of no return for a purchase or rental.
+func TestDealCommitIsCheckedForPurchasesAndRentals(t *testing.T) {
+	dealFixture(t)
+	for _, dealType := range []string{"purchase", "rental"} {
+		opened := dealRun(t, "open", "--input", writeJSON(t, `{"type":"`+dealType+`","intent":{"verbatim":"buy the bike if it is still $300"},
+			"who":{"name":"A Seller"},"terms":{"item":"bike","price_minor":30000,"currency":"USD"},"recourse":{"rail":"card","refundable":true}}`))
+		assert.Contains(t, opened["points_of_no_return"], "commit", dealType)
+		check := dealRun(t, "check", "--deal", opened["deal_id"].(string), "--input", writeJSON(t, `{"action":"commit","terms":{"price_minor":30000}}`))
+		assert.Equal(t, "pass", check["verdict"], dealType)
+	}
+}
