@@ -16,6 +16,8 @@ with, and shows the difference.
 | `deal note --kind approval --check ID --choice OPT` | Seals the user's answer to a check. Cuts a checkpoint. |
 | `deal note --kind act --input FILE` | Seals what the agent did and whether a passing check or approval covered it. |
 | `deal close --input FILE` | Compares what was delivered with what was agreed: `completed`, `mismatch` or `open`. Cuts a checkpoint. |
+| `deal note --kind intent --input FILE` | Seals a change to what the user asked or allowed. |
+| `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
 
 Each step is a Capsule in the profile's store. Each deal has its own
@@ -84,17 +86,37 @@ own log (every step, its membership proof, the chain back to the opening
 step, the signed checkpoint) and agent-action-capsule's own emitter and
 browser verifier, vendored unmodified in `internal/cli/assets/` (rebuild and
 compare with `scripts/build-evidence-graph-iife.sh`). Each item expands to
-its steps, and a step's content is shown only if the verifier matched it
-against the step's seal. If a byte was changed, the page says "This report
-did not verify" instead. Message text is withheld unless an anomaly cites that
-message.
+its steps, and a step's line is shown only if the verifier matched its record
+against the step's seal; the words shown come from this device's local
+store. If a byte was changed, the page says "This report did not verify"
+instead. Message text appears only when an anomaly cites that message.
 
-## Schema
+## Records: the x-deal-v0 profile
 
-[`schema/x-deal-v0.schema.json`](schema/x-deal-v0.schema.json) is the shape
-of one sealed step. It ships with the skill and is not registered anywhere.
-The tests validate every kind of sealed step against it. The Go side keeps
-the wire shape in one place, `internal/cli/deal_profile.go`.
+[`profile/`](profile/) is the deal record profile: `PROFILE.md` (normative),
+the JSON Schema, fixtures and `check_profile.py`. It ships with the skill and
+is not registered anywhere.
+
+- Each step is sealed as one x-deal-v0 record: `{"x-deal-v0": {...}, "body":
+  {...}}`, in JCS bytes, with `prev` and `baseline_ref` chaining the record
+  digests. Record types: `baseline`, `intent`, `message`, `claim`,
+  `evidence`, `detail_change`, `check`, `verdict`, `approval`, `action`,
+  `outcome`, `close`.
+- Counterparty identifiers are sealed only as per-deal HMAC fingerprints of
+  their normalized form; text (the user's words, messages, the card, notes)
+  only as salted commitments. The raw values, the per-deal keys, the store
+  secret and the nonces stay in the local store (`deal_steps`, `deal_keys`,
+  `deal_store` in the profile's SQLite file).
+- Every action cites a sealed approval. A passing check is approved by the
+  user's standing intent, sealed as its own step. An action without one is
+  sealed as an `unchecked_action` outcome.
+- Before sealing, each record is validated against the schema and scanned
+  for raw phone numbers, emails, local values and grading words; a hit
+  refuses the step. On every read, each local step is re-derived and must
+  equal the sealed record bytes.
+- `deal export --deal ID --output FILE` writes the sealed records as one JSON
+  array; `python3 profile/check_profile.py FILE` checks them. The Go code
+  that builds the records is `internal/cli/deal_profile.go`.
 
 ## Guarantee
 

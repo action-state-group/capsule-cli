@@ -59,7 +59,10 @@ capsulectl --profile deal deal init --dir ~/.local/share/capsule-deal
 ```
 
 This creates a local SQLite store and two signing seeds (mode 0600). Nothing
-leaves the machine. Tell the user, in one message, exactly what this does:
+leaves the machine. Raw names, numbers, addresses and message text stay in
+this local store: each sealed step is an x-deal-v0 record (see
+`profile/PROFILE.md`) that carries only fingerprints of identifiers and
+commitments to text. Tell the user, in one message, exactly what this does:
 their deal steps are sealed locally; nothing is sent anywhere unless they
 later turn on a witness (hashes only) or a remote checker (minimal deal
 fields, never message text). Ask once, up front, before turning either on.
@@ -81,8 +84,12 @@ asked for); `who` (every identifier you can see: `name`, `domain`, `phone`,
 `email`, `payee`, `relay_address`, `profile_id`); `terms` (`item`,
 `quantity`, `price_minor`, `deposit_minor`, `currency`, `when`, `place`,
 `conditions`); `claims` (each with `text` and its `source`); `recourse`
-(`rail` and `refundable`). Money is always an integer in minor units (cents).
-Keep the returned `deal_id`.
+(`rail` and `refundable`); `channel` (where you are talking: `marketplace`,
+`app_chat`, `sms`, `email`, `web`, ...). Money is always an integer in minor
+units (cents), and `currency` is a 3-letter code. A `source` is a short word
+(`seller_message`, `listing_photo`). Keep claim text free of names, phone
+numbers and emails: a step that would carry one is refused. Keep the
+returned `deal_id`.
 
 **2. Note** everything that happens, as it happens:
 
@@ -91,7 +98,12 @@ capsulectl --profile deal deal note --deal ID --kind message  --input m.json   #
 capsulectl --profile deal deal note --deal ID --kind claim    --input c.json   # {"text":"...","source":"..."}
 capsulectl --profile deal deal note --deal ID --kind evidence --input e.json   # {"about":"...","source":"...","verified":true}
 capsulectl --profile deal deal note --deal ID --kind change   --input d.json   # {"source":"...","who":{...},"terms":{...},"recourse":{...}}
+capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   # {"verbatim":"the user's new words","allowed":["pay","share_contact"]}
 ```
+
+Seal an `intent` whenever the user widens or changes what you may do (for
+example, "go ahead and share my number"). It replaces `allowed`, `asked` and
+the limit from then on.
 
 Record a `change` whenever the counterparty changes **any** detail: a new
 payee, a new payment method, a new phone, a new price. A change is never
@@ -107,7 +119,9 @@ capsulectl --profile deal deal check --deal ID --input snapshot.json
 `description`, `amount_minor`, and the `who`, `terms` and `recourse` you are
 about to use. For a purchase, add `seen_item` (true or false).
 
-- `"verdict": "pass"`, `"proceed": true`: go ahead. Say nothing extra.
+- `"verdict": "pass"`, `"proceed": true`: go ahead. Say nothing extra. The
+  pass is approved by what the user already allowed, and that approval is
+  sealed for you (`approval_id`).
 - `"verdict": "pause"`: show `card` verbatim with its `options`, then seal
   the answer:
 
@@ -124,8 +138,8 @@ the check again.
 capsulectl --profile deal deal note --deal ID --kind act --input act.json   # {"action":"pay","amount_minor":20000,"payee":"...","rail":"card","reference":"..."}
 ```
 
-An action with no passing check or sealed approval is still recorded, and is
-marked as a skipped check in the trail.
+An action with no sealed approval is still recorded, as an unchecked action,
+and it shows as an anomaly in the report. One approval covers one action.
 
 **5. Close** when the deal is over, or check back later:
 

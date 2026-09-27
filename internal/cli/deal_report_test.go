@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -71,7 +73,7 @@ func TestDealReportAgentAndCounterpartyAnomalies(t *testing.T) {
 		"counterparty/deadline_pressure: Pushed you to decide fast",
 		"counterparty/channel_hop: Asked to move off the platform",
 		"counterparty/code_request: Asked for a verification code",
-		"agent/asked_vs_did: Tried confirming a commitment: Not what you asked: dates 2026-10-03/2026-10-05 → 2026-10-03/2026-10-07 · Over your limit of $400.00 ($760.00)",
+		"agent/asked_vs_did: Tried confirming a commitment: Not what you asked: check_out 2026-10-05 → 2026-10-07 · Over your limit of $400.00 ($760.00)",
 		"agent/skipped_check: Skipped the check: pay $760.00 (no check before this action)",
 		"counterparty/unverified_claim: Unverified: free cancellation until October 1 (from booking page)",
 	}, reportTexts(t, report, "anomalies"))
@@ -101,26 +103,18 @@ func TestDealReportIsOneLocalVerifyingPage(t *testing.T) {
 	assert.Equal(t, "pass", v.IntervalCoverage.Status, v.IntervalCoverage.Findings)
 	assert.Equal(t, "pass", v.PerRecordMembership.Status, v.PerRecordMembership.Findings)
 	assert.Len(t, b["records"], 8, "exactly this deal's steps, nothing from any other deal")
-	ext := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
-	cited := map[string]bool{}
-	for _, a := range ext["anomalies"].([]interface{}) {
-		for _, id := range a.(map[string]interface{})["steps"].([]interface{}) {
-			cited[id.(string)] = true
-		}
-	}
-	kinds := map[string]string{}
-	for _, s := range ext["steps"].([]interface{}) {
-		step := s.(map[string]interface{})
-		kinds[step["capsule_id"].(string)] = step["kind"].(string)
-	}
 	for _, d := range v.Disclosures {
-		if kinds[d.CapsuleID] == "message" && !cited[d.CapsuleID] {
-			assert.Equal(t, "withheld", string(d.Status), "uncited message text stays on the machine")
-		} else {
-			assert.Equal(t, "disclosure_match", string(d.Status), kinds[d.CapsuleID])
-		}
+		assert.Equal(t, "disclosure_match", string(d.Status), "every step's record is disclosed: it carries no raw values")
 	}
-	assert.NotContains(t, html, "We take a $200 deposit", "an uncited message is not in the page")
+	for _, r := range b["records"].([]interface{}) {
+		_ = r
+	}
+	disclosed, err := json.Marshal(b["disclosures"])
+	require.NoError(t, err)
+	for _, private := range []string{"M. Torres", "Coastal Jet", "rent me 2 jet skis", "office line"} {
+		assert.NotContains(t, string(disclosed), private, "sealed records carry fingerprints and commitments only")
+	}
+	assert.NotContains(t, html, "We take a $200 deposit", "an uncited message's text is not in the page")
 }
 
 // embeddedBundle recovers the bundle the emitter embedded in the page.
@@ -143,40 +137,59 @@ func embeddedBundle(t *testing.T, html string) map[string]interface{} {
 	return b
 }
 
-// Every sealed step validates against the schema that ships in the skill.
-func TestDealRecordsMatchShippedSchema(t *testing.T) {
-	c := jsonschema.NewCompiler()
-	c.AssertFormat()
-	schema, err := c.Compile("../../skills/deal/schema/x-deal-v0.schema.json")
+// Every sealed step is an x-deal-v0 record that validates against the schema
+// shipped in the skill, and the whole deal passes the profile's own checker.
+func TestDealRecordsFollowTheProfile(t *testing.T) {
+	shipped, err := os.ReadFile(dealProfileDir + "/x-deal-v0.schema.json")
 	require.NoError(t, err)
-	dealFixture(t)
-	dealID := openJetSki(t)
-	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
-	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
-	dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"payee":"M. Torres","rail":"zelle","reference":"r1"}`))
-	dealRun(t, "note", "--deal", dealID, "--kind", "claim", "--input", writeJSON(t, `{"text":"skis are serviced","source":"seller message"}`))
-	dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received","delivered":{"quantity":1},"note":"one ski short"}`))
+	assert.Equal(t, string(shipped), string(dealProfileSchema), "internal/cli/assets copy must equal the skill's schema")
+	schema, err := compiledDealSchema()
+	require.NoError(t, err)
 
-	p, err := loadProfile("deal")
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","text":"We have your room. Text us anytime."}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "claim", "--input", writeJSON(t, `{"text":"breakfast is included","source":"hotel message"}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--input", writeJSON(t, `{"about":"breakfast is included","source":"booking page","verified":true,"detail":"listed under amenities"}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"go ahead and share my number with the hotel","allowed":["pay","commit","share_contact"]}`))
+	dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","description":"send my mobile number for check-in"}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"share_contact","description":"sent the number"}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","channel":"sms","text":"Card machine is down, pay M. Torres by Zelle.","who":{"phone":"+1 555 010 2044"}}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "change", "--input", writeJSON(t, `{"source":"hotel message","who":{"payee":"M. Torres","phone":"+1 555 010 2044"},"recourse":{"rail":"zelle","refundable":false}}`))
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":38000,"recourse":{"rail":"zelle","refundable":false}}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "hold", "--said", "hold on")
+	dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":38000,"payee":"M. Torres","rail":"zelle","reference":"zelle ref 7781"}`))
+	dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"not_received","note":"nobody at the front desk"}`))
+
+	export := filepath.Join(t.TempDir(), "deal.json")
+	out := dealRun(t, "export", "--deal", dealID, "--output", export)
+	raw, err := os.ReadFile(export)
 	require.NoError(t, err)
-	s, err := openDealSession(t.Context(), p)
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	require.NoError(t, err)
-	defer func() { require.NoError(t, s.close()) }()
-	require.NoError(t, s.useDeal(t.Context(), dealID, false))
-	events, err := s.load(t.Context(), dealID)
-	require.NoError(t, err)
-	seen := map[string]bool{}
-	for _, se := range events {
-		raw, err := encodeDealRecord(se.Event)
-		require.NoError(t, err)
-		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
-		require.NoError(t, err)
-		assert.NoError(t, schema.Validate(doc), "step %d (%s)", se.Event.N, se.Event.Kind)
-		seen[se.Event.Kind] = true
+	records := doc.([]interface{})
+	assert.Len(t, records, int(out["records"].(float64)))
+	types := map[string]bool{}
+	for i, r := range records {
+		assert.NoError(t, schema.Validate(r), "record %d", i+1)
+		types[r.(map[string]interface{})["x-deal-v0"].(map[string]interface{})["record_type"].(string)] = true
 	}
-	for _, kind := range []string{"open", "message", "claim", "evidence", "change", "snapshot", "check", "approval", "act", "close"} {
-		assert.True(t, seen[kind], "fixture covers %s", kind)
+	for _, rt := range []string{"baseline", "intent", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close"} {
+		assert.True(t, types[rt], "the run covers %s", rt)
 	}
+	for _, private := range []string{"M. Torres", "Example Hotel", "hotel.example", "+1 555 010 2044", "Book me a hotel", "Card machine", "nobody at the front desk", "hold on", "zelle ref 7781"} {
+		assert.NotContains(t, string(raw), private, "raw values stay on the device")
+	}
+
+	// The profile's own checker, when python3 is available.
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not available; the profile checker did not run")
+	}
+	cmd := exec.Command(python, dealProfileDir+"/check_profile.py", export)
+	result, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(result))
+	assert.Contains(t, string(result), "ALL OK")
 }
 
 func TestVendoredVerifierMatchesRecordedDigest(t *testing.T) {

@@ -1,0 +1,54 @@
+{
+  "fixture": "11-detail-change-payee.json",
+  "expect": "valid",
+  "story": "The counterparty switches payee, phone and rail after first contact (fingerprints only).",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "detail_change",
+      "seq": 11,
+      "at": "2026-10-01T18:41:20Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "d68643a7e8cfacb9268089712e4436d1ae286cadd3aab2ec9961e5ccda8c595b"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "payee": "9b1a281f73398f41d5adbb54228cd8e6648fdeaa85aa1505ed5b4634a8645dd1",
+          "phone": "d52dbcc1f50443821cd13e9c5ff8048ecc240e7f3a8d9a5d20a89d98feb0dd90"
+        }
+      },
+      "refs": [
+        {
+          "rel": "source",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "d68643a7e8cfacb9268089712e4436d1ae286cadd3aab2ec9961e5ccda8c595b"
+        }
+      ]
+    },
+    "body": {
+      "source": "counterparty",
+      "changed": [
+        "payee",
+        "phone",
+        "rail",
+        "refundable"
+      ],
+      "recourse": {
+        "rail": "zelle",
+        "refundable": false
+      }
+    }
+  },
+  "expected_digest": "8818c7efff63bd7014d420c9dacd8a8c4ae97f5250ab07a098e7908adb5ad406"
+}

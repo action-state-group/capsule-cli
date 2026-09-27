@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -36,14 +38,24 @@ import (
 // dealClock is the time source for sealed timestamps; tests replace it.
 var dealClock = func() time.Time { return time.Now().UTC() }
 
-const dealIndexSchema = `CREATE TABLE IF NOT EXISTS deal_events (
+// The local store, in the profile's SQLite file. It never leaves the device:
+// deal_steps.local holds each step's raw values and commitment nonces,
+// deal_keys each deal's key, and deal_store the store secret the keys derive
+// from. What is sealed is only the x-deal-v0 record derived from them.
+var dealIndexSchema = []string{
+	`CREATE TABLE IF NOT EXISTS deal_steps (
 	deal_id TEXT NOT NULL,
 	n INTEGER NOT NULL,
 	kind TEXT NOT NULL,
 	capsule_id TEXT NOT NULL,
 	cll_sequence INTEGER NOT NULL,
+	record_digest TEXT NOT NULL,
+	local TEXT NOT NULL,
 	PRIMARY KEY (deal_id, n)
-)`
+)`,
+	`CREATE TABLE IF NOT EXISTS deal_keys (deal_id TEXT PRIMARY KEY, deal_key BLOB NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS deal_store (id INTEGER PRIMARY KEY CHECK (id = 1), secret BLOB NOT NULL)`,
+}
 
 // dealSession holds the write lock, the index handle and the signing key for
 // one deal command, and the store opened for the one deal it acts on.
@@ -54,6 +66,8 @@ type dealSession struct {
 	t      *target
 	key    ed25519.PrivateKey
 	keys   []ed25519.PublicKey
+	secret []byte // the store secret
+	dkey   []byte // the current deal's key
 	unlock func() error
 }
 
@@ -102,8 +116,25 @@ func openDealSession(ctx context.Context, p Profile) (_ *dealSession, err error)
 	if s.db, _, err = sqliteConnection(p); err != nil {
 		return nil, err
 	}
-	if _, err = s.db.ExecContext(ctx, dealIndexSchema); err != nil {
+	for _, stmt := range dealIndexSchema {
+		if _, err = s.db.ExecContext(ctx, stmt); err != nil {
+			return nil, err
+		}
+	}
+	// The store secret: 32 CSPRNG bytes, made once, never written to a record.
+	err = s.db.QueryRowContext(ctx, `SELECT secret FROM deal_store WHERE id=1`).Scan(&s.secret)
+	if errors.Is(err, sql.ErrNoRows) {
+		s.secret = make([]byte, 32)
+		if _, err = rand.Read(s.secret); err != nil {
+			return nil, err
+		}
+		_, err = s.db.ExecContext(ctx, `INSERT INTO deal_store (id, secret) VALUES (1, ?)`, s.secret)
+	}
+	if err != nil {
 		return nil, err
+	}
+	if len(s.secret) != 32 {
+		return nil, ErrConflict
 	}
 	return s, nil
 }
@@ -114,13 +145,20 @@ func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) e
 	if !dealIDPattern.MatchString(dealID) {
 		return inputError("invalid deal id")
 	}
-	if !create {
-		var n int
-		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_events WHERE deal_id=?`, dealID).Scan(&n); err != nil {
+	if create {
+		// The deal key is stored at open, so rotating the store secret later
+		// cannot break a deal in progress.
+		s.dkey = dealKeyFor(s.secret, dealID)
+		if _, err := s.db.ExecContext(ctx, `INSERT INTO deal_keys (deal_id, deal_key) VALUES (?, ?)`, dealID, s.dkey); err != nil {
 			return err
 		}
-		if n == 0 {
+	} else {
+		err := s.db.QueryRowContext(ctx, `SELECT deal_key FROM deal_keys WHERE deal_id=?`, dealID).Scan(&s.dkey)
+		if errors.Is(err, sql.ErrNoRows) {
 			return inputError("unknown deal: " + dealID)
+		}
+		if err != nil {
+			return err
 		}
 	}
 	s.dp = s.p
@@ -148,24 +186,25 @@ func (s *dealSession) close() error {
 	return errors.Join(e, s.unlock())
 }
 
-// load reads a deal's steps back from the store and re-verifies each one: the
-// Capsule signature and trust, the payload binding, and the chain of prev
-// links. An index row that disagrees with its sealed payload is a conflict.
+// load reads a deal's steps back and re-verifies each one: the Capsule
+// signature and trust, the payload binding, the local step re-derived into
+// exactly the sealed record bytes, and the prev chain of record digests. Any
+// disagreement between the local store and what was sealed is a conflict.
 func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT n, kind, capsule_id, cll_sequence FROM deal_events WHERE deal_id=? ORDER BY n`, dealID)
+	rows, err := s.db.QueryContext(ctx, `SELECT n, kind, capsule_id, cll_sequence, record_digest, local FROM deal_steps WHERE deal_id=? ORDER BY n`, dealID)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	type row struct {
-		n        int64
-		kind, id string
-		seq      uint64
+		n                    int64
+		kind, id, digest, lo string
+		seq                  uint64
 	}
 	var index []row
 	for rows.Next() {
 		var r row
-		if err = rows.Scan(&r.n, &r.kind, &r.id, &r.seq); err != nil {
+		if err = rows.Scan(&r.n, &r.kind, &r.id, &r.seq, &r.digest, &r.lo); err != nil {
 			return nil, err
 		}
 		index = append(index, r)
@@ -173,8 +212,10 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
+	if len(index) == 0 {
+		return nil, inputError("unknown deal: " + dealID)
+	}
 	events := make([]sealedEvent, 0, len(index))
-	prev := ""
 	for i, r := range index {
 		record, err := s.t.artifacts.Get(ctx, r.id)
 		if err != nil {
@@ -193,53 +234,74 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 		if content == nil || !checks["payload"].Verified {
 			return nil, ErrConflict
 		}
-		ev, err := decodeDealRecord(content)
-		if err != nil {
+		var ev dealEvent
+		if err = decodeJSON([]byte(r.lo), &ev); err != nil {
 			return nil, ErrConflict
 		}
-		if ev.Spec != dealEventSpec || ev.DealID != dealID || ev.N != int64(i+1) || ev.N != r.n || ev.Kind != r.kind || ev.Prev != prev {
+		prev := ""
+		if i > 0 {
+			prev = events[i-1].Digest
+		}
+		if ev.DealID != dealID || ev.N != int64(i+1) || ev.N != r.n || ev.Kind != r.kind || ev.Prev != prev {
 			return nil, ErrConflict
 		}
-		events = append(events, sealedEvent{CapsuleID: r.id, Sequence: r.seq, Event: ev})
-		prev = r.id
+		payload, digest, err := encodeDealRecord(ev, events, s.dkey)
+		if err != nil || !bytes.Equal(payload, content) || digest != r.digest {
+			return nil, ErrConflict
+		}
+		events = append(events, sealedEvent{CapsuleID: r.id, Digest: digest, Sequence: r.seq, Event: ev})
 	}
 	return events, nil
 }
 
-// seal signs one step, persists it, appends it to the log and indexes it.
-// Any failure is returned: a step that is not sealed did not pass the choke
-// point.
+// seal derives the x-deal-v0 record for one step, refuses it if it fails the
+// profile schema or would carry a raw identifier, then signs it, persists it,
+// appends it to the deal's log and stores the local step. Any failure is
+// returned: a step that is not sealed did not pass the choke point.
 func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEvent, ev dealEvent) (sealedEvent, error) {
-	now := dealClock().Truncate(time.Second)
-	ev.Spec = dealEventSpec
+	now := dealClock().UTC().Truncate(time.Second)
 	ev.DealID = dealID
 	ev.N = int64(len(events) + 1)
-	ev.At = now.Format(time.RFC3339)
+	ev.At = now.Format("2006-01-02T15:04:05Z")
+	ev.Prev = ""
 	if len(events) > 0 {
-		ev.Prev = events[len(events)-1].CapsuleID
+		ev.Prev = events[len(events)-1].Digest
 	}
-	payload, err := encodeDealRecord(ev)
+	ev.Nonces = map[string]string{}
+	for name := range dealTexts(ev) {
+		nonce := make([]byte, 32)
+		if _, err := rand.Read(nonce); err != nil {
+			return sealedEvent{}, err
+		}
+		ev.Nonces[name] = hex.EncodeToString(nonce)
+	}
+	payload, digest, err := encodeDealRecord(ev, events, s.dkey)
+	if err != nil {
+		return sealedEvent{}, err
+	}
+	local, err := json.Marshal(ev)
 	if err != nil {
 		return sealedEvent{}, err
 	}
 	request := Request{
 		Version: "capsule-seal-request/v1",
-		Capsule: emit.Input{ActionID: fmt.Sprintf("%s/%d/%s", dealID, ev.N, ev.Kind), ActionType: emit.ActionTypeFYI, Operator: s.p.Name, Developer: "capsulectl-deal", Timestamp: now},
+		Capsule: emit.Input{ActionID: fmt.Sprintf("%s/%d", dealID, ev.N), ActionType: emit.ActionTypeFYI, Operator: s.p.Name, Developer: "capsulectl-deal", Timestamp: now},
 		Payload: payload,
 	}
-	// Each step cites the one before it, so the deal is a citation chain any
-	// Evidence Bundle verifier can close, not only a list in our index.
-	if ev.Prev != "" {
-		request.Capsule.Chain = &emit.Chain{ParentCapsuleID: ev.Prev, Relation: "follows"}
+	// Each step's Capsule follows the one before it (ordering only), so the
+	// deal is a citation chain any Evidence Bundle verifier can close.
+	if len(events) > 0 {
+		request.Capsule.Chain = &emit.Chain{ParentCapsuleID: events[len(events)-1].CapsuleID, Relation: "follows"}
 	}
 	pub, err := s.t.publish(ctx, request, s.key)
 	if err != nil {
 		return sealedEvent{}, err
 	}
-	if _, err = s.db.ExecContext(ctx, `INSERT INTO deal_events (deal_id, n, kind, capsule_id, cll_sequence) VALUES (?,?,?,?,?)`, dealID, ev.N, ev.Kind, pub.CapsuleID, pub.Sequence); err != nil {
+	if _, err = s.db.ExecContext(ctx, `INSERT INTO deal_steps (deal_id, n, kind, capsule_id, cll_sequence, record_digest, local) VALUES (?,?,?,?,?,?,?)`,
+		dealID, ev.N, ev.Kind, pub.CapsuleID, pub.Sequence, digest, string(local)); err != nil {
 		return sealedEvent{}, err
 	}
-	return sealedEvent{CapsuleID: pub.CapsuleID, Sequence: pub.Sequence, Event: ev}, nil
+	return sealedEvent{CapsuleID: pub.CapsuleID, Digest: digest, Sequence: pub.Sequence, Event: ev}, nil
 }
 
 // milestone cuts a signed checkpoint at a deal milestone (baseline, approval,
@@ -277,7 +339,7 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand())
 	return deal
 }
 
@@ -412,6 +474,9 @@ func dealOpenCommand() *cobra.Command {
 		if err = o.validate(); err != nil {
 			return err
 		}
+		if err = normalizeOpen(&o); err != nil {
+			return err
+		}
 		return runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
 			id := make([]byte, 8)
 			if _, err := rand.Read(id); err != nil {
@@ -459,7 +524,7 @@ func dealNoteCommand() *cobra.Command {
 		ev := dealEvent{Kind: kind}
 		var act dealActInput
 		switch kind {
-		case "message", "claim", "evidence", "change", "act":
+		case "message", "claim", "evidence", "change", "intent", "act":
 			path, _ := c.Flags().GetString("input")
 			raw, err := readInput(path)
 			if err != nil {
@@ -479,6 +544,9 @@ func dealNoteCommand() *cobra.Command {
 			case "change":
 				ev.Change = &dealChange{}
 				target = ev.Change
+			case "intent":
+				ev.Intent = &dealIntent{}
+				target = ev.Intent
 			case "act":
 				target = &act
 			}
@@ -492,9 +560,12 @@ func dealNoteCommand() *cobra.Command {
 			if check == "" || choice == "" {
 				return inputError("approval needs --check and --choice")
 			}
-			ev.Approval = &dealApproval{Check: check, Choice: choice, Said: said}
+			ev.Approval = &dealApproval{Check: check, Choice: choice, Approver: "user", Said: said}
 		default:
-			return inputError("--kind must be message, claim, evidence, change, approval or act")
+			return inputError("--kind must be message, claim, evidence, change, intent, approval or act")
+		}
+		if err := normalizeNote(&ev); err != nil {
+			return err
 		}
 		switch {
 		case ev.Message != nil && (!slices.Contains([]string{"counterparty", "user", "agent"}, ev.Message.From) || strings.TrimSpace(ev.Message.Text) == ""):
@@ -512,7 +583,18 @@ func dealNoteCommand() *cobra.Command {
 			if dealFinallyClosed(events) {
 				return inputError("deal is closed")
 			}
+			open := events[0].Event.Open
 			switch kind {
+			case "message":
+				if ev.Message.Channel == "" {
+					ev.Message.Channel = open.Channel
+				}
+			case "intent":
+				for _, a := range ev.Intent.Allowed {
+					if !slices.Contains(dealPointsOfNoReturn[open.Type], a) {
+						return inputError("intent.allowed names an action that is not a point of no return for this deal type: " + a)
+					}
+				}
 			case "approval":
 				if err := judgeApproval(events, ev.Approval); err != nil {
 					return err
@@ -522,7 +604,7 @@ func dealNoteCommand() *cobra.Command {
 					return inputError("act.action is not a point of no return for this deal type")
 				}
 				ev.Act = &dealAct{Action: act.Action, Description: act.Description, AmountMinor: act.AmountMinor, Currency: act.Currency, Payee: act.Payee, Rail: act.Rail, Reference: act.Reference}
-				ev.Act.AuthorizedBy, ev.Act.Reason = authorizeAct(events, *ev.Act)
+				ev.Act.AuthorizedBy, ev.Act.Reason, ev.Act.Rule = authorizeAct(events, *ev.Act)
 				ev.Act.Unchecked = ev.Act.AuthorizedBy == ""
 			}
 			se, err := s.seal(ctx, dealID, events, ev)
@@ -532,7 +614,7 @@ func dealNoteCommand() *cobra.Command {
 			out := stepOutput(dealID, se)
 			switch kind {
 			case "approval":
-				out["proceed"] = ev.Approval.Proceed
+				out["proceed"] = ev.Approval.Proceed && ev.Approval.Reason == ""
 				out["reason"] = ev.Approval.Reason
 				cp, err := s.milestone(ctx)
 				if err != nil {
@@ -548,8 +630,8 @@ func dealNoteCommand() *cobra.Command {
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
-	cmd.Flags().String("kind", "", "message, claim, evidence, change, approval or act")
-	cmd.Flags().String("input", "", "JSON body for message, claim, evidence, change or act")
+	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval or act")
+	cmd.Flags().String("input", "", "JSON body for message, claim, evidence, change, intent or act")
 	cmd.Flags().String("check", "", "approval: the check_id being answered")
 	cmd.Flags().String("choice", "", "approval: the option id the user chose")
 	cmd.Flags().String("said", "", "approval: the user's own words")
@@ -576,11 +658,13 @@ func judgeApproval(events []sealedEvent, a *dealApproval) error {
 		}
 		for _, later := range events[i+1:] {
 			switch later.Event.Kind {
-			case "change", "snapshot", "check":
+			case "change", "snapshot", "check", "intent":
 				a.Reason = "details changed after this check; check again"
 			}
 		}
-		a.Proceed = a.Choice == "proceed" && a.Reason == ""
+		// The record says what the user chose. A stale answer cannot authorize
+		// anything: the action rule requires no change after the check.
+		a.Proceed = a.Choice == "proceed"
 		return nil
 	}
 	return inputError("--check does not name a step of this deal")
@@ -604,6 +688,30 @@ func dealCheckCommand() *cobra.Command {
 			open := events[0].Event.Open
 			if !slices.Contains(dealPointsOfNoReturn[open.Type], snap.Action) {
 				return inputError("action is not a point of no return for a " + open.Type + " deal; use one of " + strings.Join(dealPointsOfNoReturn[open.Type], ", "))
+			}
+			if err := normalizeTerms(snap.Terms); err != nil {
+				return err
+			}
+			if snap.Who != nil && snap.Who.DomainAgeDays != nil {
+				return inputError("record the website's age as evidence, not in the check")
+			}
+			if snap.Action == "pay" {
+				// The check names the payee it is about, so an action can be
+				// held to the same payee.
+				state, err := foldDeal(events)
+				if err != nil {
+					return err
+				}
+				payee := state.who.Payee
+				if payee == "" {
+					payee = state.who.Name
+				}
+				if snap.Who == nil {
+					snap.Who = &dealWho{}
+				}
+				if snap.Who.Payee == "" {
+					snap.Who.Payee = payee
+				}
 			}
 			// snapshot -> seal
 			snapped, err := s.seal(ctx, dealID, events, dealEvent{Kind: "snapshot", Snapshot: &snap})
@@ -629,7 +737,19 @@ func dealCheckCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			events = append(events, checked)
 			out := stepOutput(dealID, checked)
+			// A passing check of an action the user already allowed is
+			// approved by that standing intent, sealed as its own step: every
+			// action cites a sealed approval.
+			if result.Verdict == "pass" {
+				approval := &dealApproval{Check: checked.CapsuleID, Choice: "proceed", Approver: "standing_intent", Proceed: true}
+				approved, err := s.seal(ctx, dealID, events, dealEvent{Kind: "approval", Approval: approval})
+				if err != nil {
+					return err
+				}
+				out["approval_id"] = approved.CapsuleID
+			}
 			out["check_id"] = checked.CapsuleID
 			out["snapshot_id"] = snapped.CapsuleID
 			out["verdict"] = result.Verdict
@@ -662,6 +782,9 @@ func dealCloseCommand() *cobra.Command {
 		if !slices.Contains([]string{"received", "pending", "not_received"}, in.Status) {
 			return inputError("status must be received, pending or not_received")
 		}
+		if err = normalizeTerms(in.Delivered); err != nil {
+			return err
+		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			if dealFinallyClosed(events) {
 				return inputError("deal is closed")
@@ -676,7 +799,14 @@ func dealCloseCommand() *cobra.Command {
 					result.UncheckedActions++
 				}
 			}
-			se, err := s.seal(ctx, dealID, events, dealEvent{Kind: "close", Close: &result})
+			observed, err := s.seal(ctx, dealID, events, dealEvent{Kind: "outcome", Outcome: &result})
+			if err != nil {
+				return err
+			}
+			events = append(events, observed)
+			closing := result
+			closing.Note = ""
+			se, err := s.seal(ctx, dealID, events, dealEvent{Kind: "close", Close: &closing})
 			if err != nil {
 				return err
 			}
@@ -733,5 +863,37 @@ func dealReportCommand() *cobra.Command {
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("html", "", "Write the report as one local, self-contained page to this new file")
+	return cmd
+}
+
+func dealExportCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "export", Short: "Write the deal's sealed x-deal-v0 records as one JSON array, in order (no raw values)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		path, _ := c.Flags().GetString("output")
+		if path == "" {
+			return inputError("--output is required")
+		}
+		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
+			records := make([]json.RawMessage, 0, len(events))
+			var before []sealedEvent
+			for _, se := range events {
+				payload, _, err := encodeDealRecord(se.Event, before, s.dkey)
+				if err != nil {
+					return err
+				}
+				records = append(records, payload)
+				before = append(before, se)
+			}
+			b, err := json.Marshal(records)
+			if err != nil {
+				return err
+			}
+			if err = atomicFile(path, b, false); err != nil {
+				return err
+			}
+			return output(c, map[string]any{"deal_id": dealID, "records": len(records), "output": path})
+		})
+	}}
+	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
+	cmd.Flags().String("output", "", "New file for the JSON array of records")
 	return cmd
 }

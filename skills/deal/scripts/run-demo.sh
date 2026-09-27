@@ -40,6 +40,12 @@ fi
 
 check_id=$(jq -r .check_id "$work/check.json")
 deal note --deal "$id" --kind approval --check "$check_id" --choice hold --said "hold" >/dev/null
+# The sealed records carry no raw values; check them against the profile.
+deal export --deal "$id" --output "$work/records.json" >/dev/null
+if command -v python3 >/dev/null; then
+  python3 "$skill_dir/profile/check_profile.py" "$work/records.json" | tail -1
+fi
+
 if [[ -n "${1:-}" ]]; then
   deal report --deal "$id" --html "$1" | jq -r .trail
   printf '\nreport: %s\n' "$1"

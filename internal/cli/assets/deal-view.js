@@ -1,8 +1,8 @@
 // deal-view.js: the page `capsulectl deal report --html` writes. Three parts:
 // what you asked, what the agent did, anomalies on either side. Each item
 // expands to its sealed steps. The vendored evidence-graph verifier checks the
-// whole bundle first; a step's content is shown only when the verifier matched
-// it against the step's seal, otherwise the step shows its capsule_id only.
+// whole bundle first; a step's line is shown only when the verifier matched
+// the step's sealed record, otherwise the step shows its capsule_id only.
 // All text is set with textContent; nothing from the bundle is parsed as HTML.
 (async () => {
   const host = document.getElementById("deal");
@@ -35,67 +35,22 @@
     verification.disclosures.filter((d) => d.status === "disclosure_match" && d.member === "agent_input").map((d) => d.capsuleId),
   );
   const report = (bundle.extensions || {})["x-deal-v0"] || {};
-  const kinds = new Map((report.steps || []).map((s) => [s.capsule_id, s.kind]));
-  const body = (id) => (matched.has(id) ? bundle.disclosures[id].agent_input : undefined);
-  const open = body(report.asked_step);
-  if (!open || !open.open) {
+  const byId = new Map((report.steps || []).map((s) => [s.capsule_id, s]));
+  const base = matched.has(report.asked_step) ? bundle.disclosures[report.asked_step].agent_input : undefined;
+  if (!base || !base["x-deal-v0"] || base["x-deal-v0"].record_type !== "baseline") {
     host.append(el("p", "⚠️ The deal's opening step is not in this report.", "deal-bad"));
     return;
   }
-  const currency = open.open.terms.currency;
-  const symbols = { USD: "$", EUR: "€", GBP: "£", CAD: "CA$", AUD: "A$" };
-  const money = (minor, cur) => {
-    if (typeof minor !== "number") return "";
-    const c = (cur || currency || "").toUpperCase();
-    const s = `${Math.floor(Math.abs(minor) / 100)}.${String(Math.abs(minor) % 100).padStart(2, "0")}`;
-    return (minor < 0 ? "-" : "") + (symbols[c] ? symbols[c] + s : c ? `${s} ${c}` : s);
-  };
-  const who = (w) => (w ? [w.payee && `pay ${w.payee}`, w.name, w.domain, w.phone, w.email, w.relay_address, w.profile_id].filter(Boolean).join(", ") : "");
-  const terms = (t) =>
-    t
-      ? [t.quantity && `${t.quantity} ×`, t.item, t.price_minor !== undefined && `price ${money(t.price_minor, t.currency)}`, t.deposit_minor !== undefined && `deposit ${money(t.deposit_minor, t.currency)}`, t.when, t.place]
-          .filter(Boolean)
-          .join(" ")
-      : "";
-  const recourse = (r) => (r && r.rail ? `by ${r.rail}${r.refundable === false ? ", not refundable" : r.refundable ? ", refundable" : ""}` : "");
-  const join = (...parts) => parts.filter(Boolean).join(" · ");
 
-  // One line of plain words per sealed step.
-  const stepText = (b) => {
-    switch (b.kind) {
-      case "open":
-        return join(`Opened: “${b.open.intent.verbatim}”`, who(b.open.who), terms(b.open.terms), recourse(b.open.recourse));
-      case "message":
-        return `${b.message.from}${b.message.channel ? ` (${b.message.channel})` : ""}: “${b.message.text}”`;
-      case "claim":
-        return `Claim (${b.claim.source}): ${b.claim.text}${b.claim.verified ? " · checked" : ""}`;
-      case "evidence":
-        return join(`Evidence (${b.evidence.source}): ${b.evidence.about}`, b.evidence.detail, b.evidence.verified ? "checked" : "");
-      case "change":
-        return join(`Changed (${b.change.source})`, who(b.change.who), terms(b.change.terms), recourse(b.change.recourse));
-      case "snapshot":
-        return join(`About to ${b.snapshot.action}`, b.snapshot.description, b.snapshot.amount_minor !== undefined && money(b.snapshot.amount_minor), who(b.snapshot.who), terms(b.snapshot.terms), recourse(b.snapshot.recourse));
-      case "check":
-        return b.check.verdict === "pass" ? "Check: no differences" : `Check paused: ${b.check.differences.map((d) => d.text).join(" · ")}`;
-      case "approval":
-        return `Your answer: ${b.approval.choice}${b.approval.said ? ` (“${b.approval.said}”)` : ""}${b.approval.reason ? ` · ${b.approval.reason}` : ""}`;
-      case "act":
-        return join(`Done: ${b.act.action}`, b.act.amount_minor !== undefined && money(b.act.amount_minor, b.act.currency), b.act.payee && `to ${b.act.payee}`, b.act.rail && `by ${b.act.rail}`, b.act.unchecked ? `⚠️ ${b.act.reason}` : "as checked");
-      case "close":
-        return join(`Closed: ${b.close.outcome}`, ...(b.close.differences || []).map((d) => d.text));
-      default:
-        return b.kind;
-    }
-  };
   const steps = (ids) => {
     const list = el("ol", undefined, "deal-steps");
     ids.forEach((id) => {
-      const b = body(id);
+      const step = byId.get(id);
       const li = el("li");
-      if (b) {
-        li.append(el("span", `${b.at} · `, "deal-at"), el("span", stepText(b)));
+      if (step && matched.has(id)) {
+        li.append(el("span", `${step.at} · `, "deal-at"), el("span", step.line));
       } else {
-        li.append(el("span", `${kinds.get(id) || "step"} (content withheld) `), el("code", id));
+        li.append(el("span", "step not verified in this report "), el("code", id));
       }
       list.append(li);
     });
@@ -107,11 +62,11 @@
     return d;
   };
 
-  if (open.open.demo) host.append(el("span", "DEMO", "deal-demo"));
+  if (base.body.demo) host.append(el("span", "DEMO", "deal-demo"));
   host.append(el("h1", "Deal report"));
 
   host.append(el("h2", "What you asked"));
-  host.append(item(`“${open.open.intent.verbatim}”`, [report.asked_step]));
+  host.append(item(`“${report.asked}”`, [report.asked_step]));
 
   host.append(el("h2", "What the agent did"));
   const did = report.did || [];
@@ -133,7 +88,8 @@
   host.append(
     el(
       "p",
-      "This page checked itself: every step's seal and its place in this deal's log. " +
+      "This page checked itself: every step's sealed record and its place in this deal's log. " +
+        "The records carry fingerprints, not names or numbers; the words shown come from this device. " +
         "The seal key is on the agent's machine, so this shows the record was not changed after it was made, not who made it.",
       "deal-note",
     ),

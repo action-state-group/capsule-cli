@@ -146,12 +146,16 @@ type dealCheckResult struct {
 	Remote      dealRemoteResult `json:"remote"`
 }
 
+// dealApproval answers one check (a verdict). Approver is "user" for the
+// user's own answer, or "standing_intent" when a passing check is covered by
+// what the user already allowed.
 type dealApproval struct {
-	Check   string `json:"check"`
-	Choice  string `json:"choice"`
-	Said    string `json:"said,omitempty"`
-	Proceed bool   `json:"proceed"`
-	Reason  string `json:"reason,omitempty"`
+	Check    string `json:"check"`
+	Choice   string `json:"choice"`
+	Approver string `json:"approver"`
+	Said     string `json:"said,omitempty"`
+	Proceed  bool   `json:"proceed"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 type dealAct struct {
@@ -165,6 +169,7 @@ type dealAct struct {
 	AuthorizedBy string `json:"authorized_by,omitempty"`
 	Unchecked    bool   `json:"unchecked"`
 	Reason       string `json:"reason,omitempty"`
+	Rule         string `json:"rule,omitempty"`
 }
 
 type dealCloseInput struct {
@@ -180,34 +185,37 @@ type dealCloseResult struct {
 	UncheckedActions int              `json:"unchecked_actions"`
 }
 
-// dealEvent is one sealed step. Exactly one body field is set, matching Kind.
-// Prev is the previous step's capsule_id, so the steps of a deal form a chain
-// inside the signed payloads as well as in the checkpointed log.
+// dealEvent is one step as the local store keeps it, with raw values. Exactly
+// one body field is set, matching Kind. What is sealed is the x-deal-v0 record
+// derived from it (deal_profile.go): fingerprints and commitments, never the
+// raw values. Prev is the previous step's record digest. Nonces are the
+// commitment nonces; they never leave the store.
 type dealEvent struct {
-	Spec     string           `json:"spec"`
-	DealID   string           `json:"deal_id"`
-	N        int64            `json:"n"`
-	Kind     string           `json:"kind"`
-	Prev     string           `json:"prev,omitempty"`
-	At       string           `json:"at"`
-	Open     *dealOpen        `json:"open,omitempty"`
-	Message  *dealMessage     `json:"message,omitempty"`
-	Claim    *dealClaim       `json:"claim,omitempty"`
-	Evidence *dealEvidence    `json:"evidence,omitempty"`
-	Change   *dealChange      `json:"change,omitempty"`
-	Snapshot *dealSnapshot    `json:"snapshot,omitempty"`
-	Check    *dealCheckResult `json:"check,omitempty"`
-	Approval *dealApproval    `json:"approval,omitempty"`
-	Act      *dealAct         `json:"act,omitempty"`
-	Close    *dealCloseResult `json:"close,omitempty"`
+	DealID   string            `json:"deal_id"`
+	N        int64             `json:"n"`
+	Kind     string            `json:"kind"`
+	Prev     string            `json:"prev,omitempty"`
+	At       string            `json:"at"`
+	Open     *dealOpen         `json:"open,omitempty"`
+	Intent   *dealIntent       `json:"intent,omitempty"`
+	Message  *dealMessage      `json:"message,omitempty"`
+	Claim    *dealClaim        `json:"claim,omitempty"`
+	Evidence *dealEvidence     `json:"evidence,omitempty"`
+	Change   *dealChange       `json:"change,omitempty"`
+	Snapshot *dealSnapshot     `json:"snapshot,omitempty"`
+	Check    *dealCheckResult  `json:"check,omitempty"`
+	Approval *dealApproval     `json:"approval,omitempty"`
+	Act      *dealAct          `json:"act,omitempty"`
+	Outcome  *dealCloseResult  `json:"outcome,omitempty"`
+	Close    *dealCloseResult  `json:"close,omitempty"`
+	Nonces   map[string]string `json:"nonces,omitempty"`
 }
-
-const dealEventSpec = "x-deal-v0"
 
 // sealedEvent is an event as read back from the store: the capsule that holds
 // it and its position in the log.
 type sealedEvent struct {
 	CapsuleID string
+	Digest    string // the x-deal-v0 record digest
 	Sequence  uint64
 	Event     dealEvent
 }
@@ -248,6 +256,7 @@ func (c dealClaim) validate() error {
 // dealState folds a deal's sealed steps into what a check compares.
 type dealState struct {
 	open      dealOpen
+	intent    dealIntent // the latest: the baseline's, or a later intent step
 	agreed    dealTerms
 	who       dealWho
 	whoSource map[string]string
@@ -262,11 +271,13 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		return dealState{}, inputError("deal has no sealed baseline")
 	}
 	o := *events[0].Event.Open
-	s := dealState{open: o, agreed: o.Terms, who: o.Who, terms: o.Terms, recourse: o.Recourse, claims: slices.Clone(o.Claims), whoSource: map[string]string{}}
+	s := dealState{open: o, intent: o.Intent, agreed: o.Terms, who: o.Who, terms: o.Terms, recourse: o.Recourse, claims: slices.Clone(o.Claims), whoSource: map[string]string{}}
 	var lastSnapshot *dealSnapshot
 	for _, se := range events[1:] {
 		e := se.Event
 		switch e.Kind {
+		case "intent":
+			s.intent = *e.Intent
 		case "message":
 			s.messages = append(s.messages, *e.Message)
 			if e.Message.Who != nil && e.Message.From == "counterparty" {
@@ -300,7 +311,7 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		case "approval":
 			// An approved proceed adopts the checked terms as the new agreement.
 			// Who is never adopted: it is always compared with first contact.
-			if e.Approval.Proceed && lastSnapshot != nil {
+			if e.Approval.Proceed && e.Approval.Reason == "" && lastSnapshot != nil {
 				if lastSnapshot.Terms != nil {
 					s.agreed = overlayTerms(s.agreed, *lastSnapshot.Terms)
 				}
@@ -544,7 +555,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	}
 
 	// 1. Asked?
-	intent := s.open.Intent
+	intent := s.intent
 	if len(intent.Allowed) > 0 && !slices.Contains(intent.Allowed, snap.Action) {
 		add("asked", "not_asked", "action", "You didn't ask for this: "+actionNames[snap.Action])
 	}
@@ -571,7 +582,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	}
 	for i, f := range whoFields(first) {
 		now := whoFields(who)[i].value
-		if f.value == "" || now == "" || strings.EqualFold(strings.TrimSpace(f.value), strings.TrimSpace(now)) {
+		if f.value == "" || now == "" || sameID(f.key, f.value, now) {
 			continue
 		}
 		detail := f.value + " → " + now
@@ -605,7 +616,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 			continue
 		}
 		askedCode = askedCode || codeRequest.MatchString(m.Text)
-		movedOff = movedOff || offPlatform.MatchString(m.Text) || (s.open.Channel != "" && m.Channel != "" && !strings.EqualFold(m.Channel, s.open.Channel))
+		movedOff = movedOff || offPlatform.MatchString(m.Text) || channelHop(s.open.Channel, m.Channel)
 	}
 	if askedCode {
 		add("safety", "verification_code_request", "", "They asked for a verification code — never share it")
@@ -671,38 +682,48 @@ func renderCard(r dealCheckResult, demo bool) string {
 	return card
 }
 
-// authorizeAct finds what authorized an action: the latest check of the same
-// action with no counterparty change sealed after it, and either a passing
-// verdict or a sealed proceed approval of that check. Anything else is an
-// unchecked action, which is sealed anyway and shown in the trail.
-func authorizeAct(events []sealedEvent, act dealAct) (string, string) {
+// authorizeAct finds the sealed approval that authorizes an action: the
+// latest check (verdict) of the same action with no detail change sealed
+// after it, answered by a proceed approval (the user's, or standing intent on
+// a pass) that has not already authorized an earlier action, and whose checked
+// amount, rail and payee match what was done. Anything else is an unchecked
+// action: it is sealed anyway, as an outcome, and shown in the report. rule is
+// the token the sealed outcome carries.
+func authorizeAct(events []sealedEvent, act dealAct) (approval, reason, rule string) {
+	used := map[string]bool{}
+	for _, se := range events {
+		if se.Event.Kind == "act" && !se.Event.Act.Unchecked {
+			used[se.Event.Act.AuthorizedBy] = true
+		}
+	}
 	for i := len(events) - 1; i >= 0; i-- {
 		e := events[i].Event
 		if e.Kind == "change" {
-			return "", "details changed after the last check"
+			return "", "details changed after the last check", "changed_after_check"
 		}
 		if e.Kind != "check" || e.Check.Action != act.Action {
 			continue
 		}
-		check := events[i]
-		if mismatch := actMismatch(events, check.Event.Check.Snapshot, act); mismatch != "" {
-			return "", mismatch
-		}
-		if e.Check.Verdict == "pass" {
-			return check.CapsuleID, ""
+		verdict := events[i]
+		if mismatch := actMismatch(events, verdict.Event.Check.Snapshot, act); mismatch != "" {
+			return "", mismatch, "differs_from_check"
 		}
 		for _, later := range events[i+1:] {
 			a := later.Event.Approval
-			if later.Event.Kind == "approval" && a.Check == check.CapsuleID {
-				if a.Proceed {
-					return later.CapsuleID, ""
-				}
-				return "", "the check paused and the answer was " + a.Choice
+			if later.Event.Kind != "approval" || a.Check != verdict.CapsuleID {
+				continue
 			}
+			if !a.Proceed {
+				return "", "the check paused and the answer was " + a.Choice, "answer_was_not_proceed"
+			}
+			if used[later.CapsuleID] {
+				return "", "that approval already covered an earlier action", "approval_already_used"
+			}
+			return later.CapsuleID, "", ""
 		}
-		return "", "the check paused and there is no sealed approval"
+		return "", "the check paused and there is no sealed approval", "no_sealed_approval"
 	}
-	return "", "no check before this action"
+	return "", "no check before this action", "no_check"
 }
 
 // actMismatch compares what was done with the snapshot that was checked.
@@ -715,7 +736,7 @@ func actMismatch(events []sealedEvent, snapshotID string, act dealAct) string {
 		if act.AmountMinor != nil && snap.AmountMinor != nil && *act.AmountMinor != *snap.AmountMinor {
 			return "the amount differs from the one checked"
 		}
-		if act.Payee != "" && snap.Who != nil && snap.Who.Payee != "" && !strings.EqualFold(act.Payee, snap.Who.Payee) {
+		if act.Payee != "" && snap.Who != nil && snap.Who.Payee != "" && !sameID("payee", act.Payee, snap.Who.Payee) {
 			return "the payee differs from the one checked"
 		}
 		if act.Rail != "" && snap.Recourse != nil && snap.Recourse.Rail != "" && normRail(act.Rail) != normRail(snap.Recourse.Rail) {
@@ -759,6 +780,8 @@ func trailLine(e dealEvent) string {
 			line = "DEMO · " + line
 		}
 		return line
+	case "intent":
+		return fmt.Sprintf("you changed what you asked: %q", e.Intent.Verbatim)
 	case "message":
 		return "message from " + e.Message.From
 	case "claim":
@@ -779,12 +802,17 @@ func trailLine(e dealEvent) string {
 		}
 		return "checked " + e.Check.Action + ": paused — " + e.Check.Card
 	case "approval":
+		if e.Approval.Approver == "standing_intent" {
+			return "went ahead on what you already allowed"
+		}
 		return "your answer: " + e.Approval.Choice
 	case "act":
 		if e.Act.Unchecked {
 			return "⚠️ SKIPPED CHECK: " + e.Act.Action + " done without a passing check or your approval (" + e.Act.Reason + ")"
 		}
 		return e.Act.Action + " done, as checked"
+	case "outcome":
+		return "observed: " + e.Outcome.Status + " (" + e.Outcome.Outcome + ")"
 	case "close":
 		return "closed: " + e.Close.Outcome
 	default:
@@ -873,7 +901,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 			if e.Message.Who != nil {
 				changedWho(*e.Message.Who, se.CapsuleID)
 			}
-			if open.Channel != "" && e.Message.Channel != "" && !strings.EqualFold(open.Channel, e.Message.Channel) {
+			if channelHop(open.Channel, e.Message.Channel) {
 				counterparty("channel_hop", fmt.Sprintf("Moved from %s to %s", open.Channel, e.Message.Channel), openID, se.CapsuleID)
 			} else if offPlatform.MatchString(e.Message.Text) {
 				counterparty("channel_hop", "Asked to move off the platform", se.CapsuleID)
@@ -911,7 +939,11 @@ func buildDealReport(events []sealedEvent) dealReport {
 		case "approval":
 			if i, ok := checkItem[e.Approval.Check]; ok {
 				r.Did[i].Steps = append(r.Did[i].Steps, se.CapsuleID)
-				r.Did[i].Text += "; you chose " + e.Approval.Choice
+				if e.Approval.Approver == "standing_intent" {
+					r.Did[i].Text += "; went ahead on what you already allowed"
+				} else {
+					r.Did[i].Text += "; you chose " + e.Approval.Choice
+				}
 			}
 		case "act":
 			a := e.Act
@@ -928,19 +960,20 @@ func buildDealReport(events []sealedEvent) dealReport {
 				continue
 			}
 			did := actText(*a, currency)
-			switch {
-			case strings.Contains(a.Reason, "differs") || strings.Contains(a.Reason, "missing"):
+			switch a.Rule {
+			case "differs_from_check":
 				agent("asked_vs_did", "Did something other than what was checked: "+did+" ("+a.Reason+")", se.CapsuleID)
-			case strings.HasPrefix(a.Reason, "the check paused"):
+			case "answer_was_not_proceed", "no_sealed_approval", "approval_already_used":
 				agent("unsealed_approval", "Went ahead without your approval: "+did+" ("+a.Reason+")", se.CapsuleID)
 			default:
 				agent("skipped_check", "Skipped the check: "+did+" ("+a.Reason+")", se.CapsuleID)
 			}
-		case "close":
-			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: "Closed: " + e.Close.Outcome, Steps: []string{se.CapsuleID}})
-			for _, d := range e.Close.Differences {
+		case "outcome":
+			for _, d := range e.Outcome.Differences {
 				counterparty("delivered_differs", d.Text, openID, se.CapsuleID)
 			}
+		case "close":
+			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: "Closed: " + e.Close.Outcome, Steps: []string{se.CapsuleID}})
 		}
 	}
 	// Unverified claims, as they stand at the end, each with where it came from.
@@ -955,7 +988,14 @@ func buildDealReport(events []sealedEvent) dealReport {
 				step = se.CapsuleID
 			}
 		}
-		counterparty("unverified_claim", "Unverified: "+c.Text+" (from "+c.Source+")", step)
+		counterparty("unverified_claim", "Unverified: "+c.Text+" (from "+strings.ReplaceAll(c.Source, "_", " ")+")", step)
 	}
 	return r
+}
+
+// channelHop reports a message on a different channel from first contact. An
+// unknown channel ("other", or none) is never a hop.
+func channelHop(first, now string) bool {
+	known := func(c string) bool { return c != "" && c != "other" }
+	return known(first) && known(now) && !strings.EqualFold(first, now)
 }

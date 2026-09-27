@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/profiles/x-deal-v0/record.schema.json",
+  "title": "x-deal-v0 deal record",
+  "description": "One sealed step of a deal: the x-deal-v0 extension block plus a body whose shape is fixed by record_type. Digest input is SHA-256 over the RFC 8785 (JCS) bytes of the whole record. Structural rules only; the sequence, reference and authorization rules in PROFILE.md section 6 are checked by check_profile.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["x-deal-v0", "body"],
+  "properties": {
+    "x-deal-v0": { "$ref": "#/$defs/block" },
+    "body": { "type": "object" }
+  },
+  "allOf": [
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "baseline" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_baseline" }, "x-deal-v0": { "required": ["channel", "counterparty"], "not": { "anyOf": [ { "required": ["baseline_ref"] }, { "required": ["prev"] } ] } } } },
+      "else": { "properties": { "x-deal-v0": { "required": ["baseline_ref", "prev"] } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "intent" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_intent" } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "message" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_message" }, "x-deal-v0": { "required": ["channel"] } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "claim" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_claim" } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "evidence" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_evidence" } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "detail_change" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_detail_change" } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "check" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_check" } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "verdict" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_verdict" } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "approval" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_approval" } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "action" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_action" } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "outcome" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_outcome" } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "close" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_close" } } } }
+  ],
+  "$defs": {
+    "hex64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "safe_uint": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "token": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+    "ns_token": {
+      "description": "A seeded bare token, or a namespaced one (reverse-DNS prefix, e.g. org.example.foo).",
+      "type": "string", "pattern": "^([a-z][a-z0-9_]{0,63}|[a-z0-9-]+(\\.[a-z0-9-]+)+\\.[a-z][a-z0-9_]{0,63})$"
+    },
+    "short_text": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "record_type": {
+      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close"]
+    },
+    "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials"] },
+    "outcome_value": { "enum": ["completed", "mismatch", "open"] },
+    "identifier_kind": { "enum": ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id"] },
+    "channel": {
+      "description": "Seeded: marketplace, web, sms, phone_call, email, app_chat, whatsapp, telegram, signal, in_person, other. Anything else MUST be namespaced.",
+      "anyOf": [
+        { "enum": ["marketplace", "web", "sms", "phone_call", "email", "app_chat", "whatsapp", "telegram", "signal", "in_person", "other"] },
+        { "type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+\\.[a-z][a-z0-9_]{0,63}$" }
+      ]
+    },
+    "digest_ref": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "digest_alg", "digest"],
+      "properties": {
+        "type": { "const": "deal-record" },
+        "digest_alg": { "const": "SHA-256" },
+        "digest": { "$ref": "#/$defs/hex64" }
+      }
+    },
+    "rel_ref": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rel", "type", "digest_alg", "digest"],
+      "properties": {
+        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome"] },
+        "type": { "const": "deal-record" },
+        "digest_alg": { "const": "SHA-256" },
+        "digest": { "$ref": "#/$defs/hex64" }
+      }
+    },
+    "counterparty": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fp_alg", "ids"],
+      "properties": {
+        "fp_alg": { "const": "hmac-sha256-deal-key" },
+        "ids": {
+          "type": "object", "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier_kind" },
+          "additionalProperties": { "$ref": "#/$defs/hex64" }
+        }
+      }
+    },
+    "block": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "canonicalization", "deal_id", "record_type", "seq", "at"],
+      "properties": {
+        "profile": { "const": "x-deal-v0" },
+        "canonicalization": { "const": "jcs" },
+        "deal_id": { "type": "string", "pattern": "^deal-[0-9a-f]{16,64}$" },
+        "record_type": { "$ref": "#/$defs/record_type" },
+        "seq": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+        "prev": { "$ref": "#/$defs/digest_ref" },
+        "baseline_ref": { "$ref": "#/$defs/digest_ref" },
+        "channel": { "$ref": "#/$defs/channel" },
+        "counterparty": { "$ref": "#/$defs/counterparty" },
+        "refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/rel_ref" } }
+      }
+    },
+    "terms": {
+      "type": "object", "additionalProperties": false, "minProperties": 1,
+      "properties": {
+        "item": { "$ref": "#/$defs/short_text" },
+        "quantity": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "price_minor": { "$ref": "#/$defs/safe_uint" },
+        "deposit_minor": { "$ref": "#/$defs/safe_uint" },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "when": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "place": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "conditions": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 200 }, "propertyNames": { "$ref": "#/$defs/token" } }
+      }
+    },
+    "recourse": {
+      "type": "object", "additionalProperties": false, "minProperties": 1,
+      "properties": {
+        "rail": { "$ref": "#/$defs/ns_token" },
+        "refundable": { "type": "boolean" }
+      }
+    },
+    "counterparty_facts": {
+      "type": "object", "additionalProperties": false, "minProperties": 1,
+      "properties": { "domain_age_days": { "$ref": "#/$defs/safe_uint" } }
+    },
+    "claim": {
+      "type": "object", "additionalProperties": false, "required": ["text", "source"],
+      "properties": { "text": { "$ref": "#/$defs/short_text" }, "source": { "$ref": "#/$defs/ns_token" } }
+    },
+    "difference": {
+      "type": "object", "additionalProperties": false, "required": ["question", "rule"],
+      "properties": {
+        "question": { "enum": ["asked", "who", "terms", "recourse", "safety", "delivered"] },
+        "rule": { "$ref": "#/$defs/ns_token" },
+        "field": { "type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)?$" }
+      }
+    },
+    "pack_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*/[0-9]+\\.[0-9]+\\.[0-9]+$" },
+
+    "body_baseline": {
+      "type": "object", "additionalProperties": false,
+      "required": ["deal_type", "intent", "terms", "recourse"],
+      "properties": {
+        "deal_type": { "enum": ["purchase", "rental", "booking", "service"] },
+        "demo": { "type": "boolean" },
+        "intent": { "$ref": "#/$defs/body_intent" },
+        "terms": { "$ref": "#/$defs/terms" },
+        "claims": { "type": "array", "items": { "$ref": "#/$defs/claim" } },
+        "recourse": { "type": "object", "allOf": [ { "$ref": "#/$defs/recourse" } ], "required": ["rail", "refundable"] },
+        "counterparty_facts": { "$ref": "#/$defs/counterparty_facts" }
+      }
+    },
+    "body_intent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["verbatim_commitment"],
+      "properties": {
+        "verbatim_commitment": { "$ref": "#/$defs/hex64" },
+        "asked": { "$ref": "#/$defs/terms" },
+        "max_total_minor": { "$ref": "#/$defs/safe_uint" },
+        "allowed": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/point_of_no_return" } }
+      }
+    },
+    "body_message": {
+      "type": "object", "additionalProperties": false,
+      "required": ["from", "content_commitment"],
+      "properties": {
+        "from": { "enum": ["counterparty", "user", "agent"] },
+        "content_commitment": { "$ref": "#/$defs/hex64" }
+      }
+    },
+    "body_claim": { "$ref": "#/$defs/claim" },
+    "body_evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "verified"],
+      "properties": {
+        "source": { "$ref": "#/$defs/ns_token" },
+        "verified": { "type": "boolean" },
+        "detail_commitment": { "$ref": "#/$defs/hex64" },
+        "counterparty_facts": { "$ref": "#/$defs/counterparty_facts" }
+      }
+    },
+    "body_detail_change": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "changed"],
+      "properties": {
+        "source": { "$ref": "#/$defs/ns_token" },
+        "changed": { "type": "array", "minItems": 1, "uniqueItems": true, "items": {
+          "enum": ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id", "item", "quantity", "price", "deposit", "currency", "when", "place", "conditions", "rail", "refundable"] } },
+        "terms": { "$ref": "#/$defs/terms" },
+        "recourse": { "$ref": "#/$defs/recourse" }
+      }
+    },
+    "body_check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action", "pack_id"],
+      "properties": {
+        "action": { "$ref": "#/$defs/point_of_no_return" },
+        "amount_minor": { "$ref": "#/$defs/safe_uint" },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "seen_item": { "type": "boolean" },
+        "terms": { "$ref": "#/$defs/terms" },
+        "recourse": { "$ref": "#/$defs/recourse" },
+        "description_commitment": { "$ref": "#/$defs/hex64" },
+        "pack_id": { "$ref": "#/$defs/pack_id" },
+        "pack_digest": { "$ref": "#/$defs/hex64" }
+      }
+    },
+    "body_verdict": {
+      "type": "object", "additionalProperties": false,
+      "required": ["result", "pack_id", "differences", "options"],
+      "properties": {
+        "result": { "enum": ["pass", "pause"] },
+        "pack_id": { "$ref": "#/$defs/pack_id" },
+        "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
+        "unverified": { "type": "array", "items": { "$ref": "#/$defs/short_text" } },
+        "notes": { "type": "array", "items": { "$ref": "#/$defs/token" } },
+        "options": { "type": "array", "uniqueItems": true, "items": { "enum": ["hold", "verify_contact", "proceed"] } },
+        "card_commitment": { "$ref": "#/$defs/hex64" },
+        "judge": {
+          "type": "object", "additionalProperties": false, "required": ["kind"],
+          "properties": {
+            "kind": { "enum": ["rules", "remote"] },
+            "status": { "$ref": "#/$defs/token" },
+            "response_digest": { "$ref": "#/$defs/hex64" }
+          }
+        }
+      },
+      "if": { "properties": { "result": { "const": "pause" } } },
+      "then": { "properties": { "differences": { "minItems": 1 }, "options": { "minItems": 1 } } },
+      "else": { "properties": { "options": { "maxItems": 0 } } }
+    },
+    "body_approval": {
+      "type": "object", "additionalProperties": false,
+      "required": ["choice", "proceed", "approver"],
+      "properties": {
+        "choice": { "enum": ["hold", "verify_contact", "proceed"] },
+        "proceed": { "type": "boolean" },
+        "approver": { "enum": ["user", "standing_intent"] },
+        "said_commitment": { "$ref": "#/$defs/hex64" }
+      },
+      "allOf": [
+        { "if": { "properties": { "choice": { "const": "proceed" } } },
+          "then": { "properties": { "proceed": { "const": true } } },
+          "else": { "properties": { "proceed": { "const": false } } } },
+        { "if": { "properties": { "approver": { "const": "user" } } },
+          "then": { "required": ["said_commitment"] },
+          "else": { "properties": { "choice": { "const": "proceed" } }, "not": { "required": ["said_commitment"] } } }
+      ]
+    },
+    "body_action": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action"],
+      "properties": {
+        "action": { "$ref": "#/$defs/point_of_no_return" },
+        "amount_minor": { "$ref": "#/$defs/safe_uint" },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "rail": { "$ref": "#/$defs/ns_token" },
+        "reference_commitment": { "$ref": "#/$defs/hex64" },
+        "description_commitment": { "$ref": "#/$defs/hex64" }
+      }
+    },
+    "body_outcome": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "outcome", "differences"],
+      "properties": {
+        "status": { "enum": ["received", "not_received", "pending", "unchecked_action", "reverted"] },
+        "outcome": { "$ref": "#/$defs/outcome_value" },
+        "delivered": { "$ref": "#/$defs/terms" },
+        "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
+        "unchecked": { "$ref": "#/$defs/body_action" },
+        "note_commitment": { "$ref": "#/$defs/hex64" }
+      },
+      "allOf": [
+        { "if": { "properties": { "status": { "const": "pending" } } }, "then": { "properties": { "outcome": { "const": "open" } } } },
+        { "if": { "properties": { "status": { "enum": ["not_received", "unchecked_action"] } } }, "then": { "properties": { "outcome": { "const": "mismatch" }, "differences": { "minItems": 1 } } } },
+        { "if": { "properties": { "status": { "const": "unchecked_action" } } }, "then": { "required": ["unchecked"] }, "else": { "not": { "required": ["unchecked"] } } },
+        { "if": { "properties": { "outcome": { "const": "completed" } } }, "then": { "properties": { "differences": { "maxItems": 0 }, "status": { "const": "received" } } } },
+        { "if": { "properties": { "status": { "const": "received" } }, "required": ["status"] },
+          "then": { "if": { "properties": { "differences": { "minItems": 1 } } }, "then": { "properties": { "outcome": { "const": "mismatch" } } }, "else": { "properties": { "outcome": { "const": "completed" } } } } }
+      ]
+    },
+    "body_close": {
+      "type": "object", "additionalProperties": false,
+      "required": ["outcome", "unchecked_actions"],
+      "properties": {
+        "outcome": { "$ref": "#/$defs/outcome_value" },
+        "unchecked_actions": { "$ref": "#/$defs/safe_uint" },
+        "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } }
+      }
+    }
+  }
+}

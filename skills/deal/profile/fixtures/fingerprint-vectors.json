@@ -1,0 +1,112 @@
+{
+  "note": "TEST-ONLY. Simulates a device's local store: the secret and raw values below never appear in a record. All names, numbers and domains are fictional (555-01xx, .example).",
+  "store_secret_hex": "fe97e8dba94984ff1fbdc35647d9cad779866e3abb4ff1cb690352c9cdc6b4fd",
+  "deal_id": "deal-3f9c2a7be4d15068",
+  "deal_key_hex": "51ae8a0c7171c887948afbda921733075b8f93e1df1ac5c222f218cd317cf6b6",
+  "vectors": [
+    {
+      "kind": "name",
+      "raw": "Coastal Jet Rentals LLC",
+      "normalized": "coastal jet rentals",
+      "fp": "1a5b274597d54ac1d873b03aa1d5d6e876bc6a762ee2a0503109b705ce791b8b"
+    },
+    {
+      "kind": "payee",
+      "raw": "Coastal Jet Rentals LLC",
+      "normalized": "coastal jet rentals",
+      "fp": "88c0199e48e2389d9d7f868dcee532dbca140f7cb82fa3906626d48e08a21f31"
+    },
+    {
+      "kind": "domain",
+      "raw": "https://Book.CoastalJetRentals.example:443/quote?id=7",
+      "normalized": "coastaljetrentals.example",
+      "fp": "9b67f2f0b50effd53669aec5374913d353592ddb15de0056d2492e7dd6a24a57"
+    },
+    {
+      "kind": "phone",
+      "raw": "(555) 010-2000",
+      "normalized": "+15550102000",
+      "fp": "974a09a76c7803ae94ee9080cbe199faa53223bc16f7f5186fc8c78f889f32ea"
+    },
+    {
+      "kind": "phone",
+      "raw": "+1 555-010-2044",
+      "normalized": "+15550102044",
+      "fp": "d52dbcc1f50443821cd13e9c5ff8048ecc240e7f3a8d9a5d20a89d98feb0dd90"
+    },
+    {
+      "kind": "payee",
+      "raw": "M. Torres",
+      "normalized": "m torres",
+      "fp": "9b1a281f73398f41d5adbb54228cd8e6648fdeaa85aa1505ed5b4634a8645dd1"
+    },
+    {
+      "kind": "email",
+      "raw": "  Bookings@CoastalJetRentals.example ",
+      "normalized": "bookings@coastaljetrentals.example",
+      "fp": "f7a6297525dcd844bb41a8deef63bd1cd92ed77a158eb1f6334e0398c4277583"
+    },
+    {
+      "kind": "relay_address",
+      "raw": " Reply-7f3@Relay.Marketplace.example",
+      "normalized": "reply-7f3@relay.marketplace.example",
+      "fp": "199a000c731d981c307a881488499fabe06e0bd97298616257ea1769b516c042"
+    },
+    {
+      "kind": "profile_id",
+      "raw": " mkt:seller:88213 ",
+      "normalized": "mkt:seller:88213",
+      "fp": "a381e08d9ae506a6dd3d2bdb6d8b3dbd088df2efa17fcfdcf7b924c1b43e398c"
+    },
+    {
+      "kind": "name",
+      "raw": "The Coastal Jet Rentals, Inc.",
+      "normalized": "coastal jet rentals",
+      "fp": "1a5b274597d54ac1d873b03aa1d5d6e876bc6a762ee2a0503109b705ce791b8b"
+    },
+    {
+      "kind": "payee",
+      "raw": "+1 (555) 010-2044",
+      "normalized": "+15550102044",
+      "fp": "27b44ee87bc61fd0fdd482712c8f5333637476f086b0cd28daf3afd0e9519220"
+    }
+  ],
+  "commitments": [
+    {
+      "label": "intent-1",
+      "nonce": "7173e6ec524d781a8bfd4f4c83442f563be7e6da93a0926a10e14f08fc1bfd24",
+      "text": "rent me 2 jet skis Saturday, under $450 all in",
+      "commitment": "09d1279ef2c77d2bc3c9b92b40a4f64741648fcee41ae1b1a26a39df2e9723b0"
+    },
+    {
+      "label": "message-1",
+      "nonce": "f60f241ed1988a0867e2253b1187519eacea57a74b26ea9d7c504e0a513ec926",
+      "text": "Hi! 2 skis for Saturday are $400 for the day, $200 deposit to hold them.",
+      "commitment": "822c9f3fbf713eaac6e91c7405d67c9f65ebaabbefbef96b688220542829fee0"
+    },
+    {
+      "label": "intent-2",
+      "nonce": "1c49cbe3d760f61fb5fcde0ccf2087af907292d7f124bc5e47a641b8f46e850c",
+      "text": "go ahead and share my number so they can text me pickup details",
+      "commitment": "df4f21e2ccf13a62c7c1369fc8403579d5b1dbd5bb957fc506af847bbc37b066"
+    },
+    {
+      "label": "message-2",
+      "nonce": "66e5fe4d99f01f08a47c5dbb32f9538ff53f71d97baec3e4ed12bd0a55949bd6",
+      "text": "Our office line is down. Text this number, and send the $200 deposit to M. Torres on Zelle today to keep the booking.",
+      "commitment": "6a4b8b8fa935fecb7fcb6fdc94199011c5997c96d7021260a78cddd4821d4329"
+    },
+    {
+      "label": "card-1",
+      "nonce": "8b10b92f52db914a2135f6e14a8316df41d6a849eceed51029cdf597e7d0ec14",
+      "text": "Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle) · Zelle to a business = no card protection · Site registered 3 weeks ago · unverified: has 2 jet skis available Saturday · [Hold] [Call the number I found] [Pay anyway]",
+      "commitment": "a477b69a5e48d437888ac6a8a06890ad333101bc7ad119ae03584b7d4448867e"
+    },
+    {
+      "label": "said-1",
+      "nonce": "3d4335b20ba6affbe4d2d52a2deac5d6b5f2e08c0bd4d1f64df21aa3c61285c6",
+      "text": "Hold",
+      "commitment": "3fbc987e92545ceeb991a7e258a9928b41022f35253a834f10bf05117b2bfaa1"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "fixture": "01-baseline.json",
+  "expect": "valid",
+  "story": "First contact sealed: rental of 2 jet skis Saturday from a business on the marketplace; who is four fingerprints, terms in minor units, card rail refundable; the user's words by commitment.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "baseline",
+      "seq": 1,
+      "at": "2026-10-01T16:00:00Z",
+      "channel": "marketplace",
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "payee": "88c0199e48e2389d9d7f868dcee532dbca140f7cb82fa3906626d48e08a21f31",
+          "name": "1a5b274597d54ac1d873b03aa1d5d6e876bc6a762ee2a0503109b705ce791b8b",
+          "domain": "9b67f2f0b50effd53669aec5374913d353592ddb15de0056d2492e7dd6a24a57",
+          "phone": "974a09a76c7803ae94ee9080cbe199faa53223bc16f7f5186fc8c78f889f32ea"
+        }
+      }
+    },
+    "body": {
+      "deal_type": "rental",
+      "demo": true,
+      "intent": {
+        "verbatim_commitment": "09d1279ef2c77d2bc3c9b92b40a4f64741648fcee41ae1b1a26a39df2e9723b0",
+        "asked": {
+          "item": "jet ski",
+          "quantity": 2,
+          "when": "2026-10-03"
+        },
+        "max_total_minor": 45000,
+        "allowed": [
+          "pay"
+        ]
+      },
+      "terms": {
+        "item": "jet ski",
+        "quantity": 2,
+        "price_minor": 40000,
+        "deposit_minor": 20000,
+        "currency": "USD",
+        "when": "2026-10-03",
+        "place": "lakeside marina"
+      },
+      "recourse": {
+        "rail": "card",
+        "refundable": true
+      },
+      "counterparty_facts": {
+        "domain_age_days": 21
+      }
+    }
+  },
+  "expected_digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+}

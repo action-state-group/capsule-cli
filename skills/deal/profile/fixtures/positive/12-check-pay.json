@@ -1,0 +1,44 @@
+{
+  "fixture": "12-check-pay.json",
+  "expect": "valid",
+  "story": "The agent runs the deal check before a point of no return; names the pack it runs.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "check",
+      "seq": 12,
+      "at": "2026-10-01T18:43:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "8818c7efff63bd7014d420c9dacd8a8c4ae97f5250ab07a098e7908adb5ad406"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "payee": "9b1a281f73398f41d5adbb54228cd8e6648fdeaa85aa1505ed5b4634a8645dd1"
+        }
+      }
+    },
+    "body": {
+      "action": "pay",
+      "amount_minor": 20000,
+      "currency": "USD",
+      "seen_item": false,
+      "recourse": {
+        "rail": "zelle",
+        "refundable": false
+      },
+      "pack_id": "capsule/marketplace-rentals-safety/0.1.0",
+      "pack_digest": "60a215d6447d3e6f6adb1f31a4219f3165874418742b7d2590733bce424c1aed"
+    }
+  },
+  "expected_digest": "4a2c37898a3d2765094c701996dea546b6258218ad144a3305d8ab8b4974a46f"
+}

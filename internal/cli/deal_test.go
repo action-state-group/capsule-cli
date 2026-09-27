@@ -119,7 +119,7 @@ func TestDealAskedVsDidBooking(t *testing.T) {
 	dealID := opened["deal_id"].(string)
 
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit.json"))
-	assert.Equal(t, "⚠️ Not what you asked: dates 2026-10-03/2026-10-05 → 2026-10-03/2026-10-07 · Over your limit of $400.00 ($760.00) · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
+	assert.Equal(t, "⚠️ Not what you asked: check_out 2026-10-05 → 2026-10-07 · Over your limit of $400.00 ($760.00) · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
 
 	cancel := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-cancel.json"))
 	assert.Equal(t, "⚠️ You didn't ask for this: cancelling · unverified: free cancellation until October 1 · [Hold] [Cancel anyway]", cancel["card"])
@@ -131,9 +131,9 @@ func TestDealAskedVsDidBooking(t *testing.T) {
 	assert.Equal(t, "", ok["card"])
 	act := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"commit","reference":"CONF-1"}`))
 	assert.Equal(t, false, act["unchecked"])
-	assert.Equal(t, ok["check_id"], act["authorized_by"])
+	assert.Equal(t, ok["approval_id"], act["authorized_by"], "a passing check is approved by standing intent, sealed as its own step")
 
-	closed := dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received","delivered":{"when":"2026-10-03/2026-10-05","price_minor":41000}}`))
+	closed := dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received","delivered":{"when":"2026-10-03","price_minor":41000}}`))
 	assert.Equal(t, "mismatch", closed["outcome"])
 	assert.Equal(t, "Price: agreed $380.00, delivered $410.00", closed["differences"].([]any)[0].(map[string]any)["text"])
 	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit-asked.json"))
@@ -149,7 +149,7 @@ func TestDealSkippedCheckIsVisible(t *testing.T) {
 	report := dealRun(t, "report", "--deal", dealID)
 	assert.Contains(t, reportTexts(t, report, "anomalies"), "agent/skipped_check: Skipped the check: pay $380.00 (no check before this action)")
 	assert.Contains(t, report["trail"], "2. 2026-09-27T18:00:00Z ⚠️ SKIPPED CHECK: pay done without a passing check or your approval (no check before this action)")
-	closed := dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received","delivered":{"when":"2026-10-03/2026-10-05"}}`))
+	closed := dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received","delivered":{"when":"2026-10-03"}}`))
 	assert.Equal(t, "completed", closed["outcome"])
 	assert.Equal(t, float64(1), closed["unchecked_actions"])
 }
@@ -204,9 +204,9 @@ func TestDealDetectsIndexTampering(t *testing.T) {
 	db, _, err := sqliteConnection(p)
 	require.NoError(t, err)
 	// Dropping a step (here: the payee change) breaks the prev chain.
-	_, err = db.Exec(`DELETE FROM deal_events WHERE deal_id=? AND kind='change'`, dealID)
+	_, err = db.Exec(`DELETE FROM deal_steps WHERE deal_id=? AND kind='change'`, dealID)
 	require.NoError(t, err)
-	_, err = db.Exec(`UPDATE deal_events SET n=n-1 WHERE deal_id=? AND n>4`, dealID)
+	_, err = db.Exec(`UPDATE deal_steps SET n=n-1 WHERE deal_id=? AND n>4`, dealID)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 	_, err = invoke(t, "", "--profile", "deal", "deal", "report", "--deal", dealID)

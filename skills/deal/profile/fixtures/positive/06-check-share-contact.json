@@ -1,0 +1,31 @@
+{
+  "fixture": "06-check-share-contact.json",
+  "expect": "valid",
+  "story": "The agent runs the deal check before a point of no return; names the pack it runs.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "check",
+      "seq": 6,
+      "at": "2026-10-01T16:20:05Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "4fbc10792652e166ed5cd8355a3269b87d596d5658fcd20a169986c6af04a944"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      }
+    },
+    "body": {
+      "action": "share_contact",
+      "pack_id": "capsule/marketplace-rentals-safety/0.1.0",
+      "pack_digest": "60a215d6447d3e6f6adb1f31a4219f3165874418742b7d2590733bce424c1aed"
+    }
+  },
+  "expected_digest": "b6043dc9480e71db9f786603b76f093f4eacb293ab4d42d4c8ffda7f1357076c"
+}

@@ -1,0 +1,36 @@
+{
+  "fixture": "neg-non-jcs-digest",
+  "expect": "invalid",
+  "description": "claimed_digest was computed over json.dumps(sort_keys=True) bytes (\\u escapes), not JCS.",
+  "expected_stage": "digest",
+  "expected_error_contains": "not SHA-256 over the JCS",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-message-quote.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "claim",
+      "seq": 3,
+      "at": "2026-10-01T16:02:40Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "eae933dad51adf75d5cc92e99a0f2da1b2c08dea2c92f124c9e7d94d9443cb60"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      }
+    },
+    "body": {
+      "text": "has 2 jet skis — lakeside dock",
+      "source": "counterparty"
+    }
+  },
+  "claimed_digest": "bb35691c78a5187e0d77f741a3555b3140472043dfc345ea5cb123a83a059ffb"
+}

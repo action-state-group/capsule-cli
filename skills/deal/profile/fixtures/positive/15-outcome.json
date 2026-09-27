@@ -1,0 +1,36 @@
+{
+  "fixture": "15-outcome.json",
+  "expect": "valid",
+  "story": "Saturday passes; nothing was delivered as agreed.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "outcome",
+      "seq": 15,
+      "at": "2026-10-04T09:00:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "99c936e70a24e98f3a4a90c7f516efc672ab65370e16a7bc7d73eba26171e9a9"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      }
+    },
+    "body": {
+      "status": "not_received",
+      "outcome": "mismatch",
+      "differences": [
+        {
+          "question": "delivered",
+          "rule": "not_delivered"
+        }
+      ]
+    }
+  },
+  "expected_digest": "46c5ff49d6f498ce4b351164bd56176c66a631a3c6ceac157cc8d9ab831691ad"
+}

@@ -25,10 +25,12 @@ var (
 
 // dealReportBundle builds the deal's Evidence Bundle: every step of the deal's
 // own log with membership proofs, the chain closed from the last step back to
-// the opening one, and every step's content disclosed except message text,
-// unless an anomaly cites that message. The three-part report rides along as
-// the x-deal-v0 extension; the page shows each item's steps only from
-// verified disclosures.
+// the opening one, and every step's x-deal-v0 record disclosed (records carry
+// fingerprints and commitments, never raw values). The three-part report and
+// one plain-words line per step, read from this device's local store, ride
+// along as the x-deal-v0 extension. The page shows a step's line only when
+// that step's record verified. Message text is in a line only when an
+// anomaly cites that message.
 func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent, report dealReport) (map[string]interface{}, error) {
 	if s.dp.Checkpoint.Signing == (Secret{}) {
 		return nil, inputError("a deal report needs the profile's checkpoint key (see `deal init`)")
@@ -48,13 +50,12 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 			cited[id] = true
 		}
 	}
-	overlay, _ := b["disclosures"].(map[string]interface{})
 	steps := make([]interface{}, len(events))
 	for i, se := range events {
-		if se.Event.Kind == "message" && !cited[se.CapsuleID] {
-			delete(overlay, se.CapsuleID)
+		steps[i] = map[string]interface{}{
+			"n": integer(uint64(se.Event.N)), "kind": se.Event.Kind, "capsule_id": se.CapsuleID, "at": se.Event.At,
+			"line": dealStepLine(se.Event, cited[se.CapsuleID]),
 		}
-		steps[i] = map[string]interface{}{"n": integer(uint64(se.Event.N)), "kind": se.Event.Kind, "capsule_id": se.CapsuleID}
 	}
 	items := func(list []dealReportItem) []interface{} {
 		out := make([]interface{}, len(list))
@@ -81,7 +82,7 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	cp["cose"] = base64.RawURLEncoding.EncodeToString(statement)
 	b["extensions"] = map[string]interface{}{
 		"x-deal-v0": map[string]interface{}{
-			"deal_id": events[0].Event.DealID, "steps": steps, "asked_step": report.AskedStep,
+			"deal_id": events[0].Event.DealID, "steps": steps, "asked": report.Asked, "asked_step": report.AskedStep,
 			"did": items(report.Did), "anomalies": items(report.Anomalies),
 		},
 	}
@@ -138,3 +139,34 @@ body { background: var(--bg); color: var(--fg); }
 #deal code { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
 #app { max-width: 760px; margin: 0 auto; padding: 0 16px 16px; overflow-wrap: anywhere; }
 `
+
+// dealStepLine is one step in plain words, from the local store.
+func dealStepLine(e dealEvent, showText bool) string {
+	switch e.Kind {
+	case "open":
+		return fmt.Sprintf("Opened: %q", e.Open.Intent.Verbatim)
+	case "message":
+		if showText {
+			return fmt.Sprintf("%s: %q", e.Message.From, e.Message.Text)
+		}
+		return "Message from " + e.Message.From + " (text kept on the device)"
+	case "snapshot":
+		line := "About to " + e.Snapshot.Action
+		if e.Snapshot.Description != "" {
+			line += ": " + e.Snapshot.Description
+		}
+		return line
+	case "check":
+		if e.Check.Verdict == "pass" {
+			return "Check: no differences"
+		}
+		texts := make([]string, len(e.Check.Differences))
+		for i, d := range e.Check.Differences {
+			texts[i] = d.Text
+		}
+		return "Check paused: " + strings.Join(texts, " · ")
+	default:
+		line := trailLine(e)
+		return strings.ToUpper(line[:1]) + line[1:]
+	}
+}

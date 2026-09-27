@@ -2,12 +2,41 @@
   "type": "booking",
   "intent": {
     "verbatim": "Book me a hotel in Tokyo for October 3 to 5, under $400 total",
-    "asked": {"place": "Tokyo", "when": "2026-10-03/2026-10-05"},
+    "asked": {
+      "place": "Tokyo",
+      "when": "2026-10-03",
+      "conditions": {
+        "check_out": "2026-10-05"
+      }
+    },
     "max_total_minor": 40000,
-    "allowed": ["pay", "commit"]
+    "allowed": [
+      "pay",
+      "commit"
+    ]
   },
-  "who": {"name": "Example Hotel Shinjuku", "domain": "hotel.example"},
-  "terms": {"item": "double room, 2 nights", "price_minor": 38000, "currency": "USD", "when": "2026-10-03/2026-10-05", "place": "Tokyo"},
-  "claims": [{"text": "free cancellation until October 1", "source": "booking page"}],
-  "recourse": {"rail": "card", "refundable": true}
+  "who": {
+    "name": "Example Hotel Shinjuku",
+    "domain": "hotel.example"
+  },
+  "terms": {
+    "item": "double room, 2 nights",
+    "price_minor": 38000,
+    "currency": "USD",
+    "when": "2026-10-03",
+    "place": "Tokyo",
+    "conditions": {
+      "check_out": "2026-10-05"
+    }
+  },
+  "claims": [
+    {
+      "text": "free cancellation until October 1",
+      "source": "booking page"
+    }
+  ],
+  "recourse": {
+    "rail": "card",
+    "refundable": true
+  }
 }
