@@ -80,6 +80,7 @@ func doctorCommand() *cobra.Command {
 			}
 			report := map[string]any{
 				"binary_version": cliVersion,
+				"binary_commit":  cliCommit,
 				"plugins": map[string]any{
 					"roots":      trustedPluginRoots(),
 					"discovered": pluginRows,

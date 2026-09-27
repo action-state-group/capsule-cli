@@ -5,6 +5,58 @@ artifact SDK, and `cll-go`. Applications import those libraries, not this CLI.
 No Alchemy/evaluation semantics, database migration tools, selective disclosure,
 or implicit login/default profile are included.
 
+## Prebuilt binaries
+
+Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
+darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
+The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
+`modernc.org/sqlite`), so they need no system libraries.
+
+```bash
+V=v0.1.0; OS=linux; ARCH=amd64   # or linux/arm64, darwin/arm64
+base=https://github.com/action-state-group/capsule-cli/releases/download/$V
+curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/SHA256SUMS"
+sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
+install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
+capsulectl --version                        # capsulectl v0.1.0 (commit <sha>)
+```
+
+Release builds are reproducible: `scripts/release-build.sh VERSION COMMIT OUTDIR`
+is the exact command the release workflow runs, so checking out a tag and running
+it with the Go version in `go.mod` gives byte-identical binaries.
+
+## Quickstart (no database server)
+
+A SQLite profile keeps everything in one local file. These are the exact
+commands (and outputs, with keys and IDs elided) from the v0.1.0 release check
+of the linux/amd64 binary on a clean `debian:stable-slim` container:
+
+```console
+$ capsulectl key generate --output producer.seed
+{"public_key":"<producer-public-key-hex>","signing_key_file":"producer.seed","spec_version":"capsule-cli-result/v1"}
+$ capsulectl key generate --output checkpoint.seed
+{"public_key":"<checkpoint-public-key-hex>","signing_key_file":"checkpoint.seed","spec_version":"capsule-cli-result/v1"}
+$ capsulectl profile create --name demo --type sqlite --sqlite-path /work/capsules.db \
+    --namespace demo --log-id demo-log \
+    --signing-key-file /work/producer.seed --trusted-key <producer-public-key-hex> \
+    --checkpoint-signing-key-file /work/checkpoint.seed --checkpoint-trusted-key <checkpoint-public-key-hex>
+{"profile":"demo","spec_version":"capsule-cli-result/v1","status":"saved"}
+$ capsulectl store init --profile demo
+{"log_id":"demo-log","spec_version":"capsule-cli-result/v1","status":"initialized"}
+$ cat request.json
+{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":"demo-1","ActionType":"fyi","Operator":"example-operator","Developer":"example-developer","Timestamp":"2026-09-27T12:00:00Z"},"payload":{"case":1}}
+$ capsulectl seal --profile demo --request request.json --output artifact.json
+{"artifact":"artifact.json","capsule_id":"<capsule-id>","spec_version":"capsule-cli-result/v1"}
+$ capsulectl cll append --profile demo --capsule artifact.json
+{"capsule_id":"<capsule-id>","log_id":"demo-log","sequence":1,"spec_version":"capsule-cli-result/v1"}
+$ capsulectl cll checkpoint create --profile demo
+{"checkpoint":1,"indexed_sequence":1,"log_id":"demo-log","spec_version":"capsule-cli-result/v1","statement":"<base64 checkpoint>"}
+```
+
+`key generate` prints the public key for each seed; pass it to `--trusted-key` /
+`--checkpoint-trusted-key`. For a JSONL store use `--type jsonl --jsonl-path DIR`
+instead of the SQLite flags; for MySQL see [Profile setup](#profile-setup).
+
 ## Build from source
 
 ```bash
@@ -77,13 +129,15 @@ These identifiers select different layers:
 | Setting | Meaning |
 | --- | --- |
 | `--name` | Local profile name. Commands that operate on a configured target select it with `--profile`; `profile show` takes it positionally. |
-| `--mysql-database` | MySQL database containing the storage tables. |
-| `--namespace` | Artifact SDK logical grouping within `capsule_store_capsules` and `capsule_store_artifacts`. Records are addressed by namespace and Capsule ID. Not a MySQL database/schema or an authorization boundary. |
+| `--type` | Storage backend: `jsonl`, `sqlite` or `mysql`. The three are peers: each holds both the artifact store and the CLL. |
+| `--jsonl-path` / `--sqlite-path` / `--mysql-database` | Where the storage lives for the selected type: a JSONL directory, a SQLite database file, or a MySQL database. |
+| `--namespace` | Artifact SDK logical grouping within `capsule_store_capsules` and `capsule_store_artifacts`. Records are addressed by namespace and Capsule ID. Not a database/schema or an authorization boundary. |
 | `--log-id` | CLL log within shared `cll_*` tables, not a table name. |
 | `--trusted-key` | Independently provisioned Ed25519 producer public key used to verify Capsule signatures. Not a password or a private signing key. Never trust a key merely because the artifact supplies it. |
 
-One MySQL database can contain both `alchemy` and `evaluations` namespaces in
-the same artifact tables. Database permissions, not namespace names, control access.
+One store (a JSONL directory, a SQLite file or a MySQL database) can contain both
+`alchemy` and `evaluations` namespaces in the same artifact tables. Storage
+permissions (database grants, file modes), not namespace names, control access.
 
 For profile `alchemy`, the default file is
 `~/.config/capsule/profiles/alchemy.yaml`, or
@@ -99,6 +153,9 @@ Profiles live in `$XDG_CONFIG_HOME/capsule/profiles/NAME.yaml`, falling back to
 Profile show redacts literal secrets. Use protected file or explicitly named
 environment references instead of literal secret flags, which may leak through
 shell history and process listings.
+
+A SQLite or JSONL profile needs no server (see the
+[quickstart](#quickstart-no-database-server)). A MySQL profile:
 
 ```bash
 capsulectl profile create --name evaluations \
@@ -118,7 +175,9 @@ rejects a missing pin before connecting. Offline seal does not require a pin.
 Checkpoint signing and trust
 are separate from producer signing and trust.
 
-Equivalent profile before store initialization:
+Equivalent MySQL profile before store initialization (a SQLite or JSONL profile
+has `type: sqlite` or `type: jsonl` and only `connection.database`, set to the file
+or directory path):
 
 ```yaml
 name: evaluations
@@ -157,19 +216,27 @@ Other configuration flags include `--trusted-key`, `--checkpoint-trusted-key`,
 To change secret source on update, explicitly clear the previous source flag;
 conflicting sources are rejected instead of silently taking precedence.
 
-MySQL, SQLite, and JSONL are peer backends; each profile selects one with
-`--type`. MySQL and SQLite keep the artifact and CLL data in one database (a
-single shared file for SQLite, via `--sqlite-path`). A JSONL profile sets
-`connection.database` (via `--jsonl-path`) to a directory holding `artifacts.jsonl`
-and `cll.jsonl`; it needs no host, port, or TLS and assumes a single writer.
+JSONL, SQLite, and MySQL are peer backends (the same three
+[cll-go](https://github.com/action-state-group/cll-go) provides); each profile
+selects one with `--type`:
+
+- JSONL is an inspectable, single-writer append-only journal. `--jsonl-path`
+  sets `connection.database` to a directory holding `artifacts.jsonl` and
+  `cll.jsonl`; no host, port, or TLS.
+- SQLite uses WAL transactions and supports multiple handles in one process.
+  Artifact and CLL data share one file, set with `--sqlite-path`.
+- MySQL uses transactional row locking and supports multiple processes.
+  Artifact and CLL data share one database.
+
 Several profiles may share a physical database or reference the same log. The CLI
 does not bind a log to a single artifact namespace; callers must consistently
 select the intended namespace when writing and reading a log's artifacts.
 Log IDs are restricted to lowercase ASCII letters/digits and `._:/-`, starting
 with a letter/digit (maximum 191 bytes): this avoids collation aliases in the
 current CLL MySQL schema. Namespace and profile names use letters/digits, `_`,
-and `-`, maximum 64 characters. TLS defaults to verified TLS (`true`); explicit
-`false` is intended only for isolated local development. No insecure TLS fallback.
+and `-`, maximum 64 characters. For MySQL, TLS defaults to verified TLS (`true`);
+explicit `false` is intended only for isolated local development. No insecure TLS
+fallback. SQLite and JSONL profiles are local files and take no TLS setting.
 
 `store init` provisions only the configured artifact SDK and CLL schemas.
 Initialization is idempotent. The CLI owns no database tables. Profiles select
@@ -212,7 +279,7 @@ sealed bytes and exact originals. It is **not** raw Capsule JSON alone. CLL entr
 contain only the decoded 32-byte Capsule ID and ordered position/time.
 
 `get` uses the SDK directly, including signature trust, inventory integrity and
-bound-original verification. Reading artifacts requires only SELECT access to artifact SDK tables.
+bound-original verification. Reading artifacts requires only read access to the store (SELECT on the artifact SDK tables for MySQL; read permission on the file or directory for SQLite and JSONL).
 It does not open CLL or require private signing keys.
 `--output` writes readable JSON by default, or the exact-byte SDK record with `--raw`; stdout adds `spec_version` alongside the selected representation's fields. Artifact ordering is not meaningful: use names.
 Unbound attachments are explicitly not producer-authenticated original content.
@@ -593,7 +660,8 @@ facilities. `publish` requires both, and `store init` initializes only the
 configured facilities. `seal` and offline verification do not open storage.
 
 ```bash
-# Add your MySQL host/database/credential flags to each create command.
+# Add your storage flags to each create command: --type sqlite --sqlite-path FILE,
+# --type jsonl --jsonl-path DIR, or --type mysql with its host/database/credential flags.
 capsulectl profile create --name artifacts --namespace alchemy --log-id '' ...
 capsulectl profile create --name ledger --namespace '' --log-id investigations ...
 ```
