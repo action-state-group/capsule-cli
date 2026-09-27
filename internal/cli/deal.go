@@ -698,39 +698,27 @@ func dealCloseCommand() *cobra.Command {
 }
 
 func dealReportCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "report", Short: "Write the deal's receipt: one self-contained, offline-verifying HTML page, plus a link fragment", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "report", Short: "Report the deal in three parts (what you asked, what the agent did, anomalies); --html writes one local page", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		htmlPath, _ := c.Flags().GetString("html")
-		locations, _ := c.Flags().GetStringSlice("location")
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
-			steps := make([]map[string]any, 0, len(events))
+			report := buildDealReport(events)
 			lines := make([]string, 0, len(events))
-			unchecked := 0
 			outcome := "open"
 			for _, se := range events {
-				e := se.Event
-				line := trailLine(e)
-				if e.Kind == "act" && e.Act.Unchecked {
-					unchecked++
+				if se.Event.Kind == "close" {
+					outcome = se.Event.Close.Outcome
 				}
-				if e.Kind == "close" {
-					outcome = e.Close.Outcome
-				}
-				steps = append(steps, map[string]any{"step": e.N, "kind": e.Kind, "at": e.At, "capsule_id": se.CapsuleID, "sequence": se.Sequence, "line": line})
-				lines = append(lines, fmt.Sprintf("%d. %s %s", e.N, e.At, line))
-			}
-			b, err := s.dealReportBundle(ctx, events)
-			if err != nil {
-				return err
-			}
-			kind, fragment, digest, err := dealReportFragment(b, locations)
-			if err != nil {
-				return err
+				lines = append(lines, fmt.Sprintf("%d. %s %s", se.Event.N, se.Event.At, trailLine(se.Event)))
 			}
 			out := map[string]any{
-				"deal_id": dealID, "demo": events[0].Event.Open.Demo, "outcome": outcome, "unchecked_actions": unchecked,
-				"steps": steps, "text": strings.Join(lines, "\n"), "bundle_digest": digest, "fragment_kind": kind, "fragment": fragment,
+				"deal_id": dealID, "demo": events[0].Event.Open.Demo, "outcome": outcome,
+				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "trail": strings.Join(lines, "\n"),
 			}
 			if htmlPath != "" {
+				b, err := s.dealReportBundle(ctx, events, report)
+				if err != nil {
+					return err
+				}
 				page, err := dealReportHTML(b)
 				if err != nil {
 					return err
@@ -744,7 +732,6 @@ func dealReportCommand() *cobra.Command {
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
-	cmd.Flags().String("html", "", "Write the receipt page to this new file")
-	cmd.Flags().StringSlice("location", nil, "Where the bundle can be fetched, for a receipt too large to inline in a link (repeatable)")
+	cmd.Flags().String("html", "", "Write the report as one local, self-contained page to this new file")
 	return cmd
 }

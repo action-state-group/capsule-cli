@@ -104,9 +104,9 @@ func TestDealJetSkiPayeeSwitch(t *testing.T) {
 	assert.Equal(t, "the check paused and the answer was hold", act["reason"])
 
 	report := dealRun(t, "report", "--deal", dealID)
-	assert.Equal(t, float64(1), report["unchecked_actions"])
-	assert.Contains(t, report["text"], "⚠️ SKIPPED CHECK: pay")
-	assert.Contains(t, report["text"], "your answer: hold")
+	assert.Contains(t, reportTexts(t, report, "anomalies"), "agent/unsealed_approval: Went ahead without your approval: pay $200.00 to M. Torres by Zelle (the check paused and the answer was hold)")
+	assert.Contains(t, report["trail"], "⚠️ SKIPPED CHECK: pay")
+	assert.Contains(t, report["trail"], "your answer: hold")
 
 	closed := dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"pending"}`))
 	assert.Equal(t, "open", closed["outcome"])
@@ -147,7 +147,8 @@ func TestDealSkippedCheckIsVisible(t *testing.T) {
 	assert.Equal(t, true, act["unchecked"])
 	assert.Equal(t, "no check before this action", act["reason"])
 	report := dealRun(t, "report", "--deal", dealID)
-	assert.Contains(t, report["text"], "2. 2026-09-27T18:00:00Z ⚠️ SKIPPED CHECK: pay done without a passing check or your approval (no check before this action)")
+	assert.Contains(t, reportTexts(t, report, "anomalies"), "agent/skipped_check: Skipped the check: pay $380.00 (no check before this action)")
+	assert.Contains(t, report["trail"], "2. 2026-09-27T18:00:00Z ⚠️ SKIPPED CHECK: pay done without a passing check or your approval (no check before this action)")
 	closed := dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received","delivered":{"when":"2026-10-03/2026-10-05"}}`))
 	assert.Equal(t, "completed", closed["outcome"])
 	assert.Equal(t, float64(1), closed["unchecked_actions"])
@@ -277,5 +278,5 @@ func TestDealConcurrentWritersChainInOrder(t *testing.T) {
 		require.NoError(t, <-errs)
 	}
 	report := dealRun(t, "report", "--deal", dealID)
-	assert.Len(t, report["steps"], writers+1)
+	assert.Len(t, strings.Split(report["trail"].(string), "\n"), writers+1)
 }

@@ -5,7 +5,7 @@ set -euo pipefail
 # open -> two seller messages -> the payee switch -> a domain lookup -> the
 # check before paying the deposit -> the user holds -> the report.
 # Prints the difference card and fails if it is not the expected one.
-# Writes the receipt page to $1 when given. Uses CAPSULECTL if set (a
+# Writes the report page to $1 when given. Uses CAPSULECTL if set (a
 # downloaded release binary), else builds from source.
 # Touches nothing outside its own temp directory. No real people or money.
 
@@ -41,8 +41,8 @@ fi
 check_id=$(jq -r .check_id "$work/check.json")
 deal note --deal "$id" --kind approval --check "$check_id" --choice hold --said "hold" >/dev/null
 if [[ -n "${1:-}" ]]; then
-  deal report --deal "$id" --html "$1" | jq -r .text
-  printf '\nreceipt: %s\n' "$1"
+  deal report --deal "$id" --html "$1" | jq -r .trail
+  printf '\nreport: %s\n' "$1"
 else
-  deal report --deal "$id" | jq -r .text
+  deal report --deal "$id" | jq -r .trail
 fi

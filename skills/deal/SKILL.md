@@ -136,20 +136,24 @@ capsulectl --profile deal deal close --deal ID --input close.json   # {"status":
 `status` is `received`, `pending` (outcome stays `open`) or `not_received`.
 The outcome is `completed`, `mismatch` or `open`.
 
-**6. Receipt**, whenever the user wants one:
+**6. Report**, when the user asks for one:
 
 ```sh
-capsulectl --profile deal deal report --deal ID --html receipt.html
+capsulectl --profile deal deal report --deal ID --html deal-report.html
 ```
 
-`receipt.html` is one self-contained page. It opens and checks itself with
-no network. It shows what the user asked, then one block per check (asked,
-agreed, about to happen, the differences, their answer, what was done), with
-paused checks and skipped checks expanded. Message text is left out; those
-steps show only their fingerprint. The output also carries a `fragment` for a
-share link: `inline` when small, otherwise `pointer (draft)`, which needs a
-`--location URL` where the receipt file will be hosted. Attach or share the
-page only when the user asks.
+This builds one local page on this machine, in three parts: **what you
+asked** (the user's exact words), **what the agent did** (every check and
+action, in order), and **anomalies** on either side: agent side (tried
+something not asked, skipped a check, went ahead without the user's sealed
+answer) and counterparty side (changed payee or contact, moved channels,
+pushed a deadline, asked for a code, a new website, unverified claims,
+delivered differently). Each item expands to its sealed steps. The page
+checks itself with no network. Message text is left out unless an anomaly
+points at that message.
+
+Attach the file or hand it over when the user asks. Never upload or host it
+anywhere.
 
 ## Try it: the demo (2 minutes, no real money)
 

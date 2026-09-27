@@ -16,7 +16,7 @@ with, and shows the difference.
 | `deal note --kind approval --check ID --choice OPT` | Seals the user's answer to a check. Cuts a checkpoint. |
 | `deal note --kind act --input FILE` | Seals what the agent did and whether a passing check or approval covered it. |
 | `deal close --input FILE` | Compares what was delivered with what was agreed: `completed`, `mismatch` or `open`. Cuts a checkpoint. |
-| `deal report [--html FILE] [--location URL]` | Prints the trail, and writes the receipt: one self-contained page that verifies itself offline. |
+| `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
 
 Each step is a Capsule in the profile's store. Each deal has its own
 checkpointed log (`deal/<deal_id>`) in the same SQLite file, and each step
@@ -62,27 +62,39 @@ Nothing, by default.
   local pause, and after 2 seconds, or on any error, the local rules decide
   alone.
 
-## Receipt
+## Report
 
-`deal report --html FILE` builds an AAC Evidence Bundle of the deal's own log:
-every step, its membership proof, the chain closed back to the opening step,
-and a signed checkpoint (`checkpoint.cose`) so the page can authenticate it.
-Every step's content is disclosed except `message` steps, which stay
-withheld (shown as their `capsule_id` only). The page is written with
-agent-action-capsule's own emitter and browser verifier, vendored unmodified
-in `internal/cli/assets/` (rebuild and compare with
-`scripts/build-evidence-graph-iife.sh`). The deal section renders only after
-that verifier passes, and shows only content it matched against the seal; a
-changed byte shows "This receipt did not verify" instead.
+`deal report` reads the sealed steps into three parts:
 
-The report also prints a link `fragment` in the Evidence Bundle fragment
-codec. Up to 1 MiB it is the whole bundle (`inline`); above that it is a
-pointer `{"bundle_ref":{"digest","root","locations"}}` (`pointer (draft)`:
-that shape is not yet in the published Evidence Bundle draft), with
-locations from `--location`.
+1. **What you asked**: the user's exact words, from the opening step.
+2. **What the agent did**: every check (and the user's answer to it), every
+   action and the close, in order.
+3. **Anomalies**, on either side:
+   - agent side: `asked_vs_did` (tried something not asked, or did something
+     other than what was checked), `skipped_check`, `unsealed_approval`
+     (went ahead without a sealed proceed);
+   - counterparty side: `changed_identifier`, `channel_hop`,
+     `deadline_pressure`, `code_request`, `domain_recent`,
+     `unverified_claim`, `delivered_differs`.
 
-The sealed record shape lives in one place, `internal/cli/deal_profile.go`,
-so it can follow the deal record profile when that is published.
+Every item lists the steps it was read from. `--html FILE` writes the report
+as one local, self-contained page, built on this machine: nothing is hosted
+and no link is minted. The page embeds an AAC Evidence Bundle of the deal's
+own log (every step, its membership proof, the chain back to the opening
+step, the signed checkpoint) and agent-action-capsule's own emitter and
+browser verifier, vendored unmodified in `internal/cli/assets/` (rebuild and
+compare with `scripts/build-evidence-graph-iife.sh`). Each item expands to
+its steps, and a step's content is shown only if the verifier matched it
+against the step's seal. If a byte was changed, the page says "This report
+did not verify" instead. Message text is withheld unless an anomaly cites that
+message.
+
+## Schema
+
+[`schema/x-deal-v0.schema.json`](schema/x-deal-v0.schema.json) is the shape
+of one sealed step. It ships with the skill and is not registered anywhere.
+The tests validate every kind of sealed step against it. The Go side keeps
+the wire shape in one place, `internal/cli/deal_profile.go`.
 
 ## Guarantee
 
@@ -94,6 +106,6 @@ something.
 ## Demo
 
 `demo/jet-ski/` is a scripted DEMO rental with a payee switch to Zelle. Run
-`scripts/run-demo.sh [receipt.html]` (set `CAPSULECTL` to use a release
+`scripts/run-demo.sh [report.html]` (set `CAPSULECTL` to use a release
 binary instead of building from source). The card it must produce is in
 `demo/jet-ski/expected-card.txt`; the Go tests assert the same card.

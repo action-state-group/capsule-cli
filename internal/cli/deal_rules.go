@@ -202,7 +202,7 @@ type dealEvent struct {
 	Close    *dealCloseResult `json:"close,omitempty"`
 }
 
-const dealEventSpec = "deal-event/v0"
+const dealEventSpec = "x-deal-v0"
 
 // sealedEvent is an event as read back from the store: the capsule that holds
 // it and its position in the log.
@@ -790,4 +790,172 @@ func trailLine(e dealEvent) string {
 	default:
 		return e.Kind
 	}
+}
+
+// deadlinePressure matches a counterparty pushing the user to act fast.
+var deadlinePressure = regexp.MustCompile(`(?i)\b(today only|right now|asap|urgent(ly)?|last chance|expires?|deadline|within (the |an |\d+ )?(hour|hours|minutes)|before (it'?s|they'?re) gone|someone else (is|wants)|other buyers?|first come)\b`)
+
+// dealReportItem is one line of the report. Steps are the capsule_ids it
+// expands to, in log order.
+type dealReportItem struct {
+	Side  string   `json:"side,omitempty"`
+	Kind  string   `json:"kind"`
+	Text  string   `json:"text"`
+	Steps []string `json:"steps"`
+}
+
+// dealReport is the three-part report: what the user asked, what the agent
+// did, and the anomalies on either side.
+type dealReport struct {
+	Asked     string           `json:"asked"`
+	AskedStep string           `json:"asked_step"`
+	Did       []dealReportItem `json:"did"`
+	Anomalies []dealReportItem `json:"anomalies"`
+}
+
+func actText(a dealAct, currency string) string {
+	text := a.Action
+	if a.AmountMinor != nil {
+		cur := a.Currency
+		if cur == "" {
+			cur = currency
+		}
+		text += " " + formatMoney(*a.AmountMinor, cur)
+	}
+	if a.Payee != "" {
+		text += " to " + a.Payee
+	}
+	if a.Rail != "" {
+		text += " by " + railName(a.Rail)
+	}
+	return text
+}
+
+// buildDealReport reads the sealed steps into the three parts. It invents
+// nothing: every item points at the steps it was read from.
+func buildDealReport(events []sealedEvent) dealReport {
+	open := events[0].Event.Open
+	openID := events[0].CapsuleID
+	currency := open.Terms.Currency
+	r := dealReport{Asked: open.Intent.Verbatim, AskedStep: openID, Did: []dealReportItem{}, Anomalies: []dealReportItem{}}
+	checkItem := map[string]int{}
+	agent := func(kind, text string, steps ...string) {
+		r.Anomalies = append(r.Anomalies, dealReportItem{Side: "agent", Kind: kind, Text: text, Steps: steps})
+	}
+	counterparty := func(kind, text string, steps ...string) {
+		r.Anomalies = append(r.Anomalies, dealReportItem{Side: "counterparty", Kind: kind, Text: text, Steps: steps})
+	}
+	first := open.Who
+	if first.Payee == "" {
+		first.Payee = first.Name
+	}
+	young := false
+	changedWho := func(w dealWho, step string) {
+		if !young && w.DomainAgeDays != nil && *w.DomainAgeDays < recentDomainDays {
+			young = true
+			counterparty("domain_recent", "Website registered "+ageText(*w.DomainAgeDays), step)
+		}
+		now := whoFields(w)
+		for i, f := range whoFields(first) {
+			if f.value != "" && now[i].value != "" && !strings.EqualFold(strings.TrimSpace(f.value), strings.TrimSpace(now[i].value)) {
+				counterparty("changed_identifier", fmt.Sprintf("%s changed: %s → %s", f.label, f.value, now[i].value), openID, step)
+			}
+		}
+	}
+	changedWho(open.Who, openID)
+	for _, se := range events {
+		e := se.Event
+		switch e.Kind {
+		case "message":
+			if e.Message.From != "counterparty" {
+				continue
+			}
+			if e.Message.Who != nil {
+				changedWho(*e.Message.Who, se.CapsuleID)
+			}
+			if open.Channel != "" && e.Message.Channel != "" && !strings.EqualFold(open.Channel, e.Message.Channel) {
+				counterparty("channel_hop", fmt.Sprintf("Moved from %s to %s", open.Channel, e.Message.Channel), openID, se.CapsuleID)
+			} else if offPlatform.MatchString(e.Message.Text) {
+				counterparty("channel_hop", "Asked to move off the platform", se.CapsuleID)
+			}
+			if deadlinePressure.MatchString(e.Message.Text) {
+				counterparty("deadline_pressure", "Pushed you to decide fast", se.CapsuleID)
+			}
+			if codeRequest.MatchString(e.Message.Text) {
+				counterparty("code_request", "Asked for a verification code", se.CapsuleID)
+			}
+		case "change":
+			if e.Change.Who != nil {
+				changedWho(*e.Change.Who, se.CapsuleID)
+			}
+		case "evidence":
+			if e.Evidence.Who != nil {
+				changedWho(*e.Evidence.Who, se.CapsuleID)
+			}
+		case "check":
+			verdict := "no differences"
+			if e.Check.Verdict == "pause" {
+				verdict = "paused"
+			}
+			checkItem[se.CapsuleID] = len(r.Did)
+			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: fmt.Sprintf("Checked before %s: %s", actionNames[e.Check.Action], verdict), Steps: []string{e.Check.Snapshot, se.CapsuleID}})
+			var asked []string
+			for _, d := range e.Check.Differences {
+				if d.Question == "asked" {
+					asked = append(asked, d.Text)
+				}
+			}
+			if len(asked) > 0 {
+				agent("asked_vs_did", fmt.Sprintf("Tried %s: %s", actionNames[e.Check.Action], strings.Join(asked, " · ")), openID, e.Check.Snapshot, se.CapsuleID)
+			}
+		case "approval":
+			if i, ok := checkItem[e.Approval.Check]; ok {
+				r.Did[i].Steps = append(r.Did[i].Steps, se.CapsuleID)
+				r.Did[i].Text += "; you chose " + e.Approval.Choice
+			}
+		case "act":
+			a := e.Act
+			steps := []string{se.CapsuleID}
+			if a.AuthorizedBy != "" {
+				steps = append([]string{a.AuthorizedBy}, steps...)
+			}
+			text := "Did: " + actText(*a, currency)
+			if a.Unchecked {
+				text += " ⚠️"
+			}
+			r.Did = append(r.Did, dealReportItem{Kind: "act", Text: text, Steps: steps})
+			if !a.Unchecked {
+				continue
+			}
+			did := actText(*a, currency)
+			switch {
+			case strings.Contains(a.Reason, "differs") || strings.Contains(a.Reason, "missing"):
+				agent("asked_vs_did", "Did something other than what was checked: "+did+" ("+a.Reason+")", se.CapsuleID)
+			case strings.HasPrefix(a.Reason, "the check paused"):
+				agent("unsealed_approval", "Went ahead without your approval: "+did+" ("+a.Reason+")", se.CapsuleID)
+			default:
+				agent("skipped_check", "Skipped the check: "+did+" ("+a.Reason+")", se.CapsuleID)
+			}
+		case "close":
+			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: "Closed: " + e.Close.Outcome, Steps: []string{se.CapsuleID}})
+			for _, d := range e.Close.Differences {
+				counterparty("delivered_differs", d.Text, openID, se.CapsuleID)
+			}
+		}
+	}
+	// Unverified claims, as they stand at the end, each with where it came from.
+	state, _ := foldDeal(events)
+	for _, c := range state.claims {
+		if c.Verified {
+			continue
+		}
+		step := openID
+		for _, se := range events {
+			if se.Event.Kind == "claim" && se.Event.Claim.Text == c.Text {
+				step = se.CapsuleID
+			}
+		}
+		counterparty("unverified_claim", "Unverified: "+c.Text+" (from "+c.Source+")", step)
+	}
+	return r
 }

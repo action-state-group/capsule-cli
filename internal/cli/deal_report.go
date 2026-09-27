@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 
-	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/emitter"
 )
 
@@ -24,19 +23,13 @@ var (
 	dealViewJS string
 )
 
-// maxInlineFragment is the largest fragment carried inline in a link. Above
-// it, the link carries a pointer to the bundle instead: a multi-megabyte URL
-// does not open reliably.
-var maxInlineFragment = 1 << 20
-
-// dealWithheldKinds are the steps whose content a report withholds (shown as
-// their capsule_id only): message text stays on the machine.
-var dealWithheldKinds = map[string]bool{"message": true}
-
 // dealReportBundle builds the deal's Evidence Bundle: every step of the deal's
 // own log with membership proofs, the chain closed from the last step back to
-// the opening one, and every step's content disclosed except messages.
-func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent) (map[string]interface{}, error) {
+// the opening one, and every step's content disclosed except message text,
+// unless an anomaly cites that message. The three-part report rides along as
+// the x-deal-v0 extension; the page shows each item's steps only from
+// verified disclosures.
+func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent, report dealReport) (map[string]interface{}, error) {
 	if s.dp.Checkpoint.Signing == (Secret{}) {
 		return nil, inputError("a deal report needs the profile's checkpoint key (see `deal init`)")
 	}
@@ -49,13 +42,34 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	if err != nil {
 		return nil, err
 	}
+	cited := map[string]bool{}
+	for _, item := range report.Anomalies {
+		for _, id := range item.Steps {
+			cited[id] = true
+		}
+	}
 	overlay, _ := b["disclosures"].(map[string]interface{})
 	steps := make([]interface{}, len(events))
 	for i, se := range events {
-		if dealWithheldKinds[se.Event.Kind] {
+		if se.Event.Kind == "message" && !cited[se.CapsuleID] {
 			delete(overlay, se.CapsuleID)
 		}
 		steps[i] = map[string]interface{}{"n": integer(uint64(se.Event.N)), "kind": se.Event.Kind, "capsule_id": se.CapsuleID}
+	}
+	items := func(list []dealReportItem) []interface{} {
+		out := make([]interface{}, len(list))
+		for i, item := range list {
+			ids := make([]interface{}, len(item.Steps))
+			for j, id := range item.Steps {
+				ids[j] = id
+			}
+			m := map[string]interface{}{"kind": item.Kind, "text": item.Text, "steps": ids}
+			if item.Side != "" {
+				m["side"] = item.Side
+			}
+			out[i] = m
+		}
+		return out
 	}
 	// The portable checkpoint signature lets a verifier authenticate the
 	// checkpoint in the page instead of labelling it producer-asserted.
@@ -66,7 +80,10 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	}
 	cp["cose"] = base64.RawURLEncoding.EncodeToString(statement)
 	b["extensions"] = map[string]interface{}{
-		"x-deal-v0": map[string]interface{}{"deal_id": events[0].Event.DealID, "steps": steps},
+		"x-deal-v0": map[string]interface{}{
+			"deal_id": events[0].Event.DealID, "steps": steps, "asked_step": report.AskedStep,
+			"did": items(report.Did), "anomalies": items(report.Anomalies),
+		},
 	}
 	if err = verifyProducedBundle(b, true); err != nil {
 		return nil, err
@@ -74,8 +91,9 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	return b, nil
 }
 
-// dealReportHTML renders one self-contained page: the bundle, the vendored
-// verifier and the deal view. It needs no network to open or to verify.
+// dealReportHTML renders one local, self-contained page: the bundle, the
+// vendored verifier and the deal view. It needs no network to open or verify,
+// and nothing is hosted: the agent attaches or hands over the file.
 func dealReportHTML(b map[string]interface{}) (string, error) {
 	page, err := emitter.EmitEvidenceGraphHTML(b, evidenceGraphIIFE)
 	if err != nil {
@@ -87,7 +105,7 @@ func dealReportHTML(b map[string]interface{}) (string, error) {
 		}
 		return strings.Replace(page, old, replacement, 1), nil
 	}
-	if page, err = replaceOnce(page, "<title>Evidence Graph</title>", "<title>Deal receipt</title>\n    <style>"+dealViewCSS+"</style>"); err != nil {
+	if page, err = replaceOnce(page, "<title>Evidence Graph</title>", "<title>Deal report</title>\n    <style>"+dealViewCSS+"</style>"); err != nil {
 		return "", err
 	}
 	if page, err = replaceOnce(page, `<div id="app"></div>`, `<div id="deal"></div>`+"\n    "+`<div id="app"></div>`); err != nil {
@@ -100,46 +118,23 @@ func dealReportHTML(b map[string]interface{}) (string, error) {
 	return page[:end] + "<script>" + dealViewJS + "</script>\n  " + page[end:], nil
 }
 
-// dealReportFragment encodes the bundle as a link fragment with the Evidence
-// Bundle fragment codec. A bundle over maxInlineFragment is replaced by a
-// pointer (its digest, root and where it can be fetched); that pointer shape
-// is a draft and is labelled so in the output.
-func dealReportFragment(b map[string]interface{}, locations []string) (kind, fragment, digest string, err error) {
-	if digest, err = aacbundle.BundleDigest(b); err != nil {
-		return "", "", "", err
-	}
-	if fragment, err = aacbundle.EncodeFragment(b); err != nil {
-		return "", "", "", err
-	}
-	if len(fragment) <= maxInlineFragment {
-		return "inline", fragment, digest, nil
-	}
-	where := make([]interface{}, len(locations))
-	for i, l := range locations {
-		where[i] = l
-	}
-	fragment, err = aacbundle.EncodeFragment(map[string]interface{}{
-		"bundle_ref": map[string]interface{}{"digest": digest, "root": b["root"], "locations": where},
-	})
-	return "pointer (draft)", fragment, digest, err
-}
-
 const dealViewCSS = `
 :root { --fg: #1b1b1f; --muted: #5d5d66; --bg: #ffffff; --line: #d9d9e0; --warn: #9a3b00; --ok: #1d6b35; }
 @media (prefers-color-scheme: dark) { :root { --fg: #ececf1; --muted: #a3a3ad; --bg: #16161a; --line: #34343c; --warn: #ffb07a; --ok: #7fd49a; } }
 body { background: var(--bg); color: var(--fg); }
 #deal { max-width: 760px; margin: 0 auto; padding: 16px; line-height: 1.45; }
 #deal h1 { font-size: 1.5rem; margin: 0.2rem 0; }
-#deal h2 { font-size: 1.1rem; margin-top: 1.5rem; }
-#deal .deal-ask { font-size: 1.1rem; }
+#deal h2 { font-size: 1.15rem; margin-top: 1.6rem; }
+#deal h3 { font-size: 0.95rem; color: var(--muted); margin: 1rem 0 0.3rem; }
+#deal .deal-flag summary { color: var(--warn); }
+#deal .deal-steps { margin: 8px 0 0; padding-left: 1.4rem; }
+#deal .deal-steps li { margin: 4px 0; overflow-wrap: anywhere; }
+#deal .deal-at { color: var(--muted); font-size: 0.85rem; }
 #deal .deal-note { color: var(--muted); font-size: 0.9rem; }
 #deal .deal-demo { display: inline-block; border: 1px solid var(--warn); color: var(--warn); padding: 0 6px; border-radius: 4px; font-size: 0.8rem; }
 #deal .deal-bad { color: var(--warn); font-weight: 600; }
 #deal details { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
 #deal summary { cursor: pointer; font-weight: 600; }
-#deal table { border-collapse: collapse; width: 100%; margin-top: 8px; }
-#deal th { text-align: left; vertical-align: top; color: var(--muted); font-weight: 500; padding: 4px 12px 4px 0; width: 9rem; }
-#deal td { padding: 4px 0; overflow-wrap: anywhere; }
 #deal code { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
 #app { max-width: 760px; margin: 0 auto; padding: 0 16px 16px; overflow-wrap: anywhere; }
 `
