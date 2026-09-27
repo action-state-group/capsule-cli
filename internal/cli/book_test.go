@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -404,20 +405,79 @@ func TestPeerBundleCutMidPeriodIsIncomplete(t *testing.T) {
 	assert.Equal(t, evidencebook.Tallies{Matched: 1, Insufficient: 1}, result.Reconciliation.Tallies)
 }
 
-// A commit time that goes backwards leaves no position that separates the
-// period from its neighbours; close refuses instead of dropping records.
-func TestCloseRefusesCommitTimesThatGoBackwards(t *testing.T) {
+// A wall clock that steps back 30 hours between two appends (NTP, a
+// resumed VM, a store shared between machines) must not leave the day
+// unclosable: the book's commit clock never goes below its last record.
+func TestCloseSurvivesAClockThatStepsBack(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	set := bookClock(t, day0.Add(12*time.Hour))
 	p, _ := bookProfile(t, "a")
 	appendHalves(t, p, half{"x1", "r1", "p1"})
-	set(day0.Add(-2 * time.Hour))
+	set(day0.Add(-18 * time.Hour))
 	appendHalves(t, p, half{"x2", "r2", "p2"})
+	set(day1)
+	result, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b")
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Reconciliation.Tallies.Insufficient, "both exchanges are in the day's Close")
+}
+
+// appendEntries appends arbitrary entries, for records a helper above does
+// not cover (a counterparty named, no correlation).
+func appendEntries(t *testing.T, p Profile, entries ...evidencebook.Entry) {
+	t.Helper()
+	opened, err := openBook(t.Context(), p, true)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, opened.release()) }()
+	for _, e := range entries {
+		_, err := opened.book.Append(t.Context(), e)
+		require.NoError(t, err)
+	}
+}
+
+// The book cannot limit a Close to one counterparty's exchanges, so a window
+// holding an exchange named for another counterparty is refused.
+func TestCloseRefusesAWindowWithAnotherCounterpartysExchange(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	p, _ := bookProfile(t, "a")
+	appendEntries(t, p,
+		evidencebook.Entry{RecordType: "exchange", EpistemicType: evidencebook.ObservedEvent, CounterpartyRef: "b", Correlation: evidencebook.Correlation{ExchangeID: "with-b"}, Payloads: [][]byte{[]byte("p1")}},
+		evidencebook.Entry{RecordType: "exchange", EpistemicType: evidencebook.ObservedEvent, CounterpartyRef: "c", Correlation: evidencebook.Correlation{ExchangeID: "with-c"}, Payloads: [][]byte{[]byte("p2")}},
+	)
 	set(day1)
 	size := bookSize(t, p)
 	_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b")
 	require.ErrorIs(t, err, ErrInput)
 	assert.Equal(t, size, bookSize(t, p), "nothing sealed")
+}
+
+// A Close's bundle discloses only what the counterparty needs: nothing named
+// for another counterparty, and nothing committed after the record that
+// places the window's end.
+func TestCloseBundleDisclosesOnlyTheWindow(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	set(day1.Add(time.Hour))
+	appendEntries(t, p,
+		evidencebook.Entry{RecordType: "note", EpistemicType: evidencebook.ProducerClaim, CounterpartyRef: "c", SubjectRef: "for-c-only"},
+		evidencebook.Entry{RecordType: "note", EpistemicType: evidencebook.ProducerClaim, SubjectRef: "later-today"},
+	)
+	path := filepath.Join(t.TempDir(), "bundle.json")
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--date", "2026-09-24", "--bundle-out", path)
+	require.NoError(t, err)
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	verified, err := evidencebook.VerifyBundle(raw)
+	require.NoError(t, err)
+	for _, r := range verified.Records {
+		if r.Header == nil {
+			continue
+		}
+		assert.NotEqual(t, "c", r.Header.CounterpartyRef, "another counterparty's record is never disclosed")
+		assert.NotEqual(t, "later-today", r.Header.SubjectRef, "nothing past the window's end is disclosed")
+	}
 }
 
 func TestPeerBundleMustBeTheCounterpartysBook(t *testing.T) {
@@ -717,4 +777,79 @@ func TestRequestModesAreExclusive(t *testing.T) {
 		_, err := invoke(t, "", append([]string{"request", "--profile", "a"}, args...)...)
 		assert.ErrorIs(t, err, ErrInput, "%v", args)
 	}
+}
+
+// Key ids are compared as lowercase hex: an uppercase pin of the right keys
+// must record the genuine artifact, not a failed verification.
+func TestUppercaseResponderKeysRecordTheArtifact(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	a, _ := bookProfile(t, "a")
+	b, bKeys := bookProfile(t, "b")
+	appendHalves(t, a, half{"x0", "r0", "p0"})
+	appendHalves(t, b, half{"x1", "r1", "p1"})
+	set(day1)
+	dir := t.TempDir()
+	body := filepath.Join(dir, "ask.json")
+	require.NoError(t, os.WriteFile(body, []byte(`{"subject":{"kind":"full_history"},"coverage":{"min_freshness":{"size":1}}}`), 0o600))
+	out, err := invoke(t, "", "request", "--profile", "a", "--request", body, "--responder", "b", "--output", filepath.Join(dir, "ask.sent"))
+	require.NoError(t, err)
+	var sent requestResult
+	require.NoError(t, json.Unmarshal([]byte(out), &sent))
+	_, err = invoke(t, "", "respond", "--profile", "b", "--request", filepath.Join(dir, "ask.sent"), "--requester", "a", "--output", filepath.Join(dir, "ask.response"))
+	require.NoError(t, err)
+	out, err = invoke(t, "", "request", "--profile", "a", "--for", sent.RecordID, "--response", filepath.Join(dir, "ask.response"),
+		"--responder-key", strings.ToUpper(hex.EncodeToString(bKeys.record)), "--responder-checkpoint-key", strings.ToUpper(hex.EncodeToString(bKeys.checkpoint)))
+	require.NoError(t, err)
+	var got requestResult
+	require.NoError(t, json.Unmarshal([]byte(out), &got))
+	assert.Equal(t, evidencebook.OutcomeArtifact, got.Outcome)
+}
+
+// Once request or respond has committed its record, a failed --output write
+// still reports the record and the bytes that should have been written.
+func TestRequestAndRespondReportTheirRecordWhenOutputFails(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	a, _ := bookProfile(t, "a")
+	b, _ := bookProfile(t, "b")
+	appendHalves(t, a, half{"x0", "r0", "p0"})
+	appendHalves(t, b, half{"x1", "r1", "p1"})
+	set(day1)
+	dir := t.TempDir()
+	taken := filepath.Join(dir, "taken")
+	require.NoError(t, os.WriteFile(taken, []byte("x"), 0o600))
+	body := filepath.Join(dir, "ask.json")
+	require.NoError(t, os.WriteFile(body, []byte(`{"subject":{"kind":"full_history"},"coverage":{"min_freshness":{"size":1}}}`), 0o600))
+
+	size := bookSize(t, a)
+	out, err := invoke(t, "", "request", "--profile", "a", "--request", body, "--responder", "b", "--output", taken)
+	require.Error(t, err)
+	var asked requestResult
+	require.NoError(t, json.Unmarshal([]byte(out), &asked))
+	assert.Regexp(t, `^[0-9a-f]{64}$`, asked.RecordID)
+	assert.NotEmpty(t, asked.Request, "the request bytes to send are not lost")
+	assert.Equal(t, size+1, bookSize(t, a), "the request is on record")
+
+	sent := filepath.Join(dir, "ask.sent")
+	require.NoError(t, os.WriteFile(sent, asked.Request, 0o600))
+	out, err = invoke(t, "", "respond", "--profile", "b", "--request", sent, "--requester", "a", "--output", taken)
+	require.Error(t, err)
+	var answered respondResult
+	require.NoError(t, json.Unmarshal([]byte(out), &answered))
+	assert.Regexp(t, `^[0-9a-f]{64}$`, answered.RecordID)
+	var response evidencebook.Response
+	require.NoError(t, json.Unmarshal(answered.Response, &response))
+	require.NotNil(t, response.Artifact, "the signed response is not lost")
+	require.NoError(t, response.Artifact.Verify())
+}
+
+func TestPeerCheckpointKeyWithoutPeerIsRefused(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x1", "r1", "p1"}) // a closable day: only the flag can refuse
+	set(day1)
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--peer-checkpoint-key", strings.Repeat("ab", 32))
+	assert.ErrorIs(t, err, ErrInput)
 }

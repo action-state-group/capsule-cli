@@ -95,15 +95,57 @@ func openBook(ctx context.Context, p Profile, create bool) (openedBook, error) {
 	if err != nil {
 		return openedBook{}, errors.Join(err, store.Release(), substrate.Release())
 	}
+	clock := &monotonicClock{}
 	book, err := evidencebook.Open(ctx, evidencebook.Config{
 		BookID: p.LogID, Operator: p.Operator,
 		Store: store, Substrate: substrate, Payloads: payloads, Signer: signer,
-		Now: bookNow,
+		Now: clock.now,
 	})
 	if err != nil {
 		return openedBook{}, errors.Join(bookError(err), store.Release(), substrate.Release())
 	}
+	if err = clock.floorAtLastRecord(ctx, book); err != nil {
+		return openedBook{}, errors.Join(err, book.Release())
+	}
 	return openedBook{book: book, store: store}, nil
+}
+
+// monotonicClock is the book's commit clock: bookNow, never earlier than the
+// last record's committed_at. A wall clock that steps back (NTP, a resumed
+// VM, a store shared between machines) would otherwise commit a record
+// "before" its predecessor, and no period containing it could ever be mapped
+// onto log positions again. Held at the floor, the time still says when the
+// record was committed at the latest.
+type monotonicClock struct {
+	floor time.Time
+}
+
+func (c *monotonicClock) now() time.Time {
+	t := bookNow().UTC()
+	if t.Before(c.floor) {
+		t = c.floor
+	}
+	c.floor = t
+	return t
+}
+
+func (c *monotonicClock) floorAtLastRecord(ctx context.Context, book *evidencebook.Book) error {
+	size := book.Size()
+	if size == 0 {
+		return nil
+	}
+	last, err := book.Query(ctx, evidencebook.Filter{FromSeq: size, ToSeq: size})
+	if err != nil || len(last) == 0 {
+		return err
+	}
+	at, err := committedAt(last[0].Header)
+	if err != nil {
+		return err
+	}
+	if at.After(c.floor) {
+		c.floor = at
+	}
+	return nil
 }
 
 // bookError keeps the book's own input classes on exit code 2.
@@ -339,10 +381,27 @@ func priorCloses(ctx context.Context, book *evidencebook.Book, counterparty stri
 // reconcileInput builds the windows both verbs share. A zero peer (no
 // --peer) is an account that proves nothing, so every own exchange in the
 // window reads INSUFFICIENT: one half unavailable is never disagreement.
-func reconcileInput(ctx context.Context, book *evidencebook.Book, p period, peer evidencebook.VerifiedBundle, hasPeer bool) (evidencebook.ReconcileInput, error) {
+//
+// The book reconciles every correlated record in the window; it cannot
+// select one counterparty's. So a window holding an exchange that names a
+// different counterparty is refused: counting it would report A_ONLY to a
+// party that never saw it and link the Close to it. An exchange that names
+// no counterparty is counted in every Close.
+func reconcileInput(ctx context.Context, book *evidencebook.Book, p period, counterparty string, peer evidencebook.VerifiedBundle, hasPeer bool) (evidencebook.ReconcileInput, error) {
 	from, to, err := ownWindow(ctx, book, p)
 	if err != nil {
 		return evidencebook.ReconcileInput{}, err
+	}
+	if from <= to {
+		window, err := book.Query(ctx, evidencebook.Filter{FromSeq: from, ToSeq: to})
+		if err != nil {
+			return evidencebook.ReconcileInput{}, err
+		}
+		for _, r := range window {
+			if r.Header.Correlation != nil && r.Header.CounterpartyRef != "" && r.Header.CounterpartyRef != counterparty {
+				return evidencebook.ReconcileInput{}, inputError(fmt.Sprintf("the window holds an exchange with another counterparty (position %d); a Close cannot yet be limited to one counterparty's exchanges", r.Seq))
+			}
+		}
 	}
 	in := evidencebook.ReconcileInput{Peer: peer, FromSeq: from, ToSeq: to, Compare: evidencebook.SamePayloadCommitments}
 	if hasPeer {
@@ -381,10 +440,13 @@ func periodAndPeer(c *cobra.Command) (periodArgs, error) {
 		return a, err
 	}
 	path, _ := c.Flags().GetString("peer")
+	key, _ := c.Flags().GetString("peer-checkpoint-key")
 	if path == "" {
+		if key != "" {
+			return a, inputError("--peer-checkpoint-key given without --peer")
+		}
 		return a, nil
 	}
-	key, _ := c.Flags().GetString("peer-checkpoint-key")
 	a.peer, err = readPeer(path, key, a.counterparty)
 	a.hasPeer = err == nil
 	return a, err
@@ -408,7 +470,7 @@ func reconcileCommand() *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, opened.release()) }()
-		in, e := reconcileInput(c.Context(), opened.book, a.period, a.peer, true)
+		in, e := reconcileInput(c.Context(), opened.book, a.period, a.counterparty, a.peer, true)
 		if e != nil {
 			return e
 		}
@@ -473,7 +535,7 @@ func closeCommand() *cobra.Command {
 			// The window is fixed, and refused if it must be, before anything
 			// is written. Then a checkpoint covers every own record in it, so
 			// the book's own account of the period is complete.
-			in, e := reconcileInput(c.Context(), book, a.period, a.peer, a.hasPeer)
+			in, e := reconcileInput(c.Context(), book, a.period, a.counterparty, a.peer, a.hasPeer)
 			if e != nil {
 				return e
 			}
@@ -523,7 +585,7 @@ func closeOutputs(c *cobra.Command, opened openedBook, p Profile, result *closeR
 	if path == "" {
 		return nil
 	}
-	include, err := closeBundleRecords(c.Context(), opened.book, result.Reconciliation.FromSeq, sealed.Seq)
+	include, err := closeBundleRecords(c.Context(), opened.book, result.Counterparty, result.Reconciliation, sealed.RecordID)
 	if err != nil {
 		return err
 	}
@@ -542,20 +604,23 @@ func closeOutputs(c *cobra.Command, opened openedBook, p Profile, result *closeR
 }
 
 // closeBundleRecords selects what a Close's bundle discloses so that the
-// counterparty can reconcile against it: the header of every record from
-// the one just before the Close's window through the Close itself. The
-// record before the window places the window's start in time; the records
-// between the window's end and the Close (the checkpoint's index roots)
-// place its end. The bundle withholds every payload; reconciliation compares
-// the payload commitments the headers carry.
-func closeBundleRecords(ctx context.Context, book *evidencebook.Book, from, through uint64) ([]string, error) {
-	records, err := book.Query(ctx, evidencebook.Filter{FromSeq: max(from, 2) - 1, ToSeq: through})
+// counterparty can reconcile against it, and nothing more: the header of the
+// record just before the Close's window (placing its start), every record in
+// the window, the record just after it (placing its end), and the Close. A
+// record that names a different counterparty is never disclosed; if it sits
+// at either edge, the counterparty reads that edge as unproven, which is
+// safe. The bundle withholds every payload; reconciliation compares the
+// payload commitments the headers carry.
+func closeBundleRecords(ctx context.Context, book *evidencebook.Book, counterparty string, window evidencebook.Reconciliation, closeID string) ([]string, error) {
+	records, err := book.Query(ctx, evidencebook.Filter{FromSeq: max(window.FromSeq, 2) - 1, ToSeq: window.ToSeq + 1})
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]string, len(records))
-	for i, r := range records {
-		ids[i] = r.RecordID
+	ids := []string{closeID}
+	for _, r := range records {
+		if r.RecordID != closeID && (r.Header.CounterpartyRef == "" || r.Header.CounterpartyRef == counterparty) {
+			ids = append(ids, r.RecordID)
+		}
 	}
 	return ids, nil
 }
@@ -593,11 +658,14 @@ func exportRecord(ctx context.Context, store *evidencebook.FileStore, p Profile,
 // -- request and respond ---------------------------------------------------
 
 type requestResult struct {
-	RecordID      string `json:"record_id"`
-	RequestDigest string `json:"request_digest,omitempty"`
-	Output        string `json:"output,omitempty"`
-	Outcome       string `json:"outcome,omitempty"`
-	Reason        string `json:"reason,omitempty"`
+	// Request carries the canonical request bytes only when --output could
+	// not be written.
+	Request       json.RawMessage `json:"request,omitempty"`
+	RecordID      string          `json:"record_id"`
+	RequestDigest string          `json:"request_digest,omitempty"`
+	Output        string          `json:"output,omitempty"`
+	Outcome       string          `json:"outcome,omitempty"`
+	Reason        string          `json:"reason,omitempty"`
 }
 
 // requestCommand has three modes, one per flag: ask (--request), record
@@ -646,9 +714,12 @@ func requestCommand() *cobra.Command {
 			// refused and never recorded, so it cannot foreclose the request.
 			responder.Signer, _ = c.Flags().GetString("responder-key")
 			responder.Checkpoint, _ = c.Flags().GetString("responder-checkpoint-key")
-			if keys, e := parseKeys([]string{responder.Signer, responder.Checkpoint}); e != nil || len(keys) != 2 {
+			keys, e := parseKeys([]string{responder.Signer, responder.Checkpoint})
+			if e != nil || len(keys) != 2 {
 				return inputError("--response needs --responder-key and --responder-checkpoint-key, each a 32-byte Ed25519 public key in hex")
 			}
+			// The book compares key ids as lowercase hex strings.
+			responder.Signer, responder.Checkpoint = hex.EncodeToString(keys[0]), hex.EncodeToString(keys[1])
 			raw, e := readInput(answer)
 			if e != nil {
 				return e
@@ -674,10 +745,14 @@ func requestCommand() *cobra.Command {
 			if e != nil {
 				return bookError(e)
 			}
+			result := requestResult{RecordID: sent.RecordID, RequestDigest: sent.Digest, Output: path}
 			if e = atomicFile(path, sent.Bytes, false); e != nil {
-				return e
+				// The request is on record already: report it, and the
+				// bytes to send, rather than lose them with the file.
+				result.Output, result.Request = "", sent.Bytes
+				return errors.Join(e, output(c, result))
 			}
-			return output(c, requestResult{RecordID: sent.RecordID, RequestDigest: sent.Digest, Output: path})
+			return output(c, result)
 		case answer != "":
 			record, e := book.RecordResponse(c.Context(), forID, resp, responder)
 			if e != nil {
@@ -714,12 +789,15 @@ func requestCommand() *cobra.Command {
 }
 
 type respondResult struct {
-	RecordID      string `json:"record_id"`
-	RequestDigest string `json:"request_digest"`
-	Outcome       string `json:"outcome"`
-	Reason        string `json:"reason,omitempty"`
-	Relationship  string `json:"relationship"`
-	Output        string `json:"output"`
+	// Response carries the signed response only when --output could not be
+	// written.
+	Response      json.RawMessage `json:"response,omitempty"`
+	RecordID      string          `json:"record_id"`
+	RequestDigest string          `json:"request_digest"`
+	Outcome       string          `json:"outcome"`
+	Reason        string          `json:"reason,omitempty"`
+	Relationship  string          `json:"relationship"`
+	Output        string          `json:"output"`
 }
 
 func respondCommand() *cobra.Command {
@@ -761,14 +839,18 @@ func respondCommand() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		if e = atomicFile(path, encoded, false); e != nil {
-			return e
-		}
 		var st evidencebook.AnsweredStatement
 		if e = json.Unmarshal(record.Header.Statement, &st); e != nil {
 			return e
 		}
-		return output(c, respondResult{RecordID: record.RecordID, RequestDigest: st.RequestDigest, Outcome: st.Outcome, Reason: st.Reason, Relationship: st.Relationship, Output: path})
+		result := respondResult{RecordID: record.RecordID, RequestDigest: st.RequestDigest, Outcome: st.Outcome, Reason: st.Reason, Relationship: st.Relationship, Output: path}
+		if e = atomicFile(path, encoded, false); e != nil {
+			// The answer is on record and signed already: report both
+			// rather than lose the response with the file.
+			result.Output, result.Response = "", encoded
+			return errors.Join(e, output(c, result))
+		}
+		return output(c, result)
 	}}
 	cmd.Flags().String("request", "", "The request bytes as received")
 	cmd.Flags().String("requester", "", "The requester's identity as the transport supplied it (not authenticated here)")

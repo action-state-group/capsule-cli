@@ -226,7 +226,8 @@ verbs:
   # profile trusts, and a checkpoint signing key it trusts. A counterparty is
   # named by its book id (its profile's log_id), and a peer bundle must come
   # from that book under the checkpoint key given for it. A Close covers every
-  # correlated exchange in its window, whichever counterparty it was with.
+  # correlated exchange in its window that names no counterparty or this one;
+  # a window holding an exchange named for another counterparty is refused.
   - name: request
     args:
       - "--profile NAME --request FILE --responder NAME --output FILE"
