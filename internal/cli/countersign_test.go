@@ -607,3 +607,27 @@ func TestCountersignVerifyInvalidEntryFailsTheCommand(t *testing.T) {
 	assert.Equal(t, "invalid", report["state"])
 	assert.NotContains(t, report, "checks")
 }
+
+// TestCountersignVerifyNonArrayCountersignaturesIsAnError: a present
+// countersignatures member that is not an array is malformed, never "none".
+func TestCountersignVerifyNonArrayCountersignaturesIsAnError(t *testing.T) {
+	for name, value := range map[string]interface{}{
+		"object": map[string]interface{}{"type": "countersign/v1"},
+		"string": "countersigned",
+		"null":   nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			bundle, profile, _ := withheldBundleFixture(t)
+			bundle["countersignatures"] = value
+			trusted, err := parseKeys(profile.TrustedKeys)
+			require.NoError(t, err)
+			client := &http.Client{Timeout: 5 * time.Second}
+			_, _, summary, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+			require.Error(t, err, "a non-array countersignatures member must not be reported as %q", summary)
+			assert.ErrorIs(t, err, ErrInput)
+
+			_, err = invokeCountersignVerify(t, profile, bundle)
+			assert.Equal(t, 2, ExitCode(err))
+		})
+	}
+}

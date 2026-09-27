@@ -425,7 +425,14 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 	if err != nil {
 		return "", nil, "", err
 	}
-	rawEntries, _ := bundle["countersignatures"].([]interface{})
+	var rawEntries []interface{}
+	if member, present := bundle["countersignatures"]; present {
+		entries, ok := member.([]interface{})
+		if !ok {
+			return "", nil, "", inputError("bundle countersignatures member is not an array")
+		}
+		rawEntries = entries
+	}
 	if len(rawEntries) == 0 {
 		return digest, nil, "none", nil
 	}
