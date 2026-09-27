@@ -196,6 +196,8 @@ func SafeError(err error) string {
 		return ErrReadOnlyCLL.Error()
 	case errors.Is(err, ErrPartial):
 		return ErrPartial.Error()
+	case errors.Is(err, ErrNoAnswer):
+		return ErrNoAnswer.Error()
 	case errors.Is(err, ErrSchemaInvalid):
 		// The detailed per-issue report was already printed by `contract
 		// validate` itself; this is only the trailing summary line.
@@ -237,6 +239,7 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(contractCommands())
 	root.AddCommand(judgeCommands())
 	root.AddCommand(calibrationCommands())
+	root.AddCommand(bookCommands())
 	store := &cobra.Command{Use: "store", Short: "Initialize and verify the profile's artifact and CLL store"}
 	init := &cobra.Command{Use: "init", Short: "Initialize the store and pin its store_id into the profile", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
