@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -44,15 +45,24 @@ const dealIndexSchema = `CREATE TABLE IF NOT EXISTS deal_events (
 	PRIMARY KEY (deal_id, n)
 )`
 
-// dealSession holds the write lock, the opened store and the signing key for
-// one deal command.
+// dealSession holds the write lock, the index handle and the signing key for
+// one deal command, and the store opened for the one deal it acts on.
 type dealSession struct {
 	p      Profile
+	dp     Profile // p with the deal's own log selected
+	db     *sql.DB
 	t      *target
 	key    ed25519.PrivateKey
 	keys   []ed25519.PublicKey
 	unlock func() error
 }
+
+var dealIDPattern = regexp.MustCompile(`^deal-[0-9a-f]{16}$`)
+
+// dealLogID names a deal's own checkpointed log. Each deal is its own log in
+// the profile's SQLite file, so a report proves exactly one deal's steps and
+// discloses nothing about any other deal.
+func dealLogID(dealID string) string { return "deal/" + dealID }
 
 func openDealSession(ctx context.Context, p Profile) (_ *dealSession, err error) {
 	if p.Type != "sqlite" {
@@ -89,19 +99,51 @@ func openDealSession(ctx context.Context, p Profile) (_ *dealSession, err error)
 			err = errors.Join(err, s.close())
 		}
 	}()
-	if s.t, err = openTarget(ctx, p, usePublication); err != nil {
+	if s.db, _, err = sqliteConnection(p); err != nil {
 		return nil, err
 	}
-	if _, err = s.t.db.ExecContext(ctx, dealIndexSchema); err != nil {
+	if _, err = s.db.ExecContext(ctx, dealIndexSchema); err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// useDeal opens the store with the deal's own log, creating the log for a new
+// deal. An existing deal must already have indexed steps.
+func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) error {
+	if !dealIDPattern.MatchString(dealID) {
+		return inputError("invalid deal id")
+	}
+	if !create {
+		var n int
+		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_events WHERE deal_id=?`, dealID).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			return inputError("unknown deal: " + dealID)
+		}
+	}
+	s.dp = s.p
+	s.dp.LogID = dealLogID(dealID)
+	use := usePublication
+	if create {
+		use = useInitialization
+	}
+	t, err := openTarget(ctx, s.dp, use)
+	if err != nil {
+		return err
+	}
+	s.t = t
+	return nil
 }
 
 func (s *dealSession) close() error {
 	var e error
 	if s.t != nil {
 		e = s.t.close()
+	}
+	if s.db != nil {
+		e = errors.Join(e, s.db.Close())
 	}
 	return errors.Join(e, s.unlock())
 }
@@ -110,7 +152,7 @@ func (s *dealSession) close() error {
 // Capsule signature and trust, the payload binding, and the chain of prev
 // links. An index row that disagrees with its sealed payload is a conflict.
 func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent, err error) {
-	rows, err := s.t.db.QueryContext(ctx, `SELECT n, kind, capsule_id, cll_sequence FROM deal_events WHERE deal_id=? ORDER BY n`, dealID)
+	rows, err := s.db.QueryContext(ctx, `SELECT n, kind, capsule_id, cll_sequence FROM deal_events WHERE deal_id=? ORDER BY n`, dealID)
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +193,8 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 		if content == nil || !checks["payload"].Verified {
 			return nil, ErrConflict
 		}
-		var ev dealEvent
-		if err = decodeJSON(content, &ev); err != nil {
+		ev, err := decodeDealRecord(content)
+		if err != nil {
 			return nil, ErrConflict
 		}
 		if ev.Spec != dealEventSpec || ev.DealID != dealID || ev.N != int64(i+1) || ev.N != r.n || ev.Kind != r.kind || ev.Prev != prev {
@@ -176,20 +218,25 @@ func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEv
 	if len(events) > 0 {
 		ev.Prev = events[len(events)-1].CapsuleID
 	}
-	payload, err := json.Marshal(ev)
+	payload, err := encodeDealRecord(ev)
 	if err != nil {
 		return sealedEvent{}, err
 	}
 	request := Request{
 		Version: "capsule-seal-request/v1",
-		Capsule: emit.Input{ActionID: fmt.Sprintf("%s/%d", dealID, ev.N), ActionType: emit.ActionTypeFYI, Operator: s.p.Name, Developer: "capsulectl-deal", Timestamp: now},
+		Capsule: emit.Input{ActionID: fmt.Sprintf("%s/%d/%s", dealID, ev.N, ev.Kind), ActionType: emit.ActionTypeFYI, Operator: s.p.Name, Developer: "capsulectl-deal", Timestamp: now},
 		Payload: payload,
+	}
+	// Each step cites the one before it, so the deal is a citation chain any
+	// Evidence Bundle verifier can close, not only a list in our index.
+	if ev.Prev != "" {
+		request.Capsule.Chain = &emit.Chain{ParentCapsuleID: ev.Prev, Relation: "follows"}
 	}
 	pub, err := s.t.publish(ctx, request, s.key)
 	if err != nil {
 		return sealedEvent{}, err
 	}
-	if _, err = s.t.db.ExecContext(ctx, `INSERT INTO deal_events (deal_id, n, kind, capsule_id, cll_sequence) VALUES (?,?,?,?,?)`, dealID, ev.N, ev.Kind, pub.CapsuleID, pub.Sequence); err != nil {
+	if _, err = s.db.ExecContext(ctx, `INSERT INTO deal_events (deal_id, n, kind, capsule_id, cll_sequence) VALUES (?,?,?,?,?)`, dealID, ev.N, ev.Kind, pub.CapsuleID, pub.Sequence); err != nil {
 		return sealedEvent{}, err
 	}
 	return sealedEvent{CapsuleID: pub.CapsuleID, Sequence: pub.Sequence, Event: ev}, nil
@@ -204,24 +251,24 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 	if s.p.Checkpoint.Signing == (Secret{}) {
 		return map[string]any{"state": "not_configured"}, nil
 	}
-	cp, err := cutCheckpoint(ctx, s.p, s.t.log)
+	cp, err := cutCheckpoint(ctx, s.dp, s.t.log)
 	if err != nil {
 		return nil, err
 	}
 	out := map[string]any{"state": "signed", "checkpoint": cp.Size, "witness": "not_configured"}
-	service, err := serviceID(s.p)
+	service, err := serviceID(s.dp)
 	if err != nil {
 		return nil, err
 	}
 	if service == "" {
 		return out, nil
 	}
-	state, err := deliverWitness(ctx, s.p, s.t.log, service, cp.Size)
+	state, err := deliverWitness(ctx, s.dp, s.t.log, service, cp.Size)
 	if err != nil {
 		out["witness"] = "pending"
 		return out, nil
 	}
-	if err = verifyWitness(s.p, state); err != nil {
+	if err = verifyWitness(s.dp, state); err != nil {
 		return nil, err
 	}
 	out["witness"] = witnessResult(state)["state"]
@@ -256,11 +303,11 @@ func runDeal(c *cobra.Command, needDeal bool, fn func(ctx context.Context, s *de
 	defer func() { err = errors.Join(err, s.close()) }()
 	var events []sealedEvent
 	if needDeal {
-		if events, err = s.load(ctx, dealID); err != nil {
+		if err = s.useDeal(ctx, dealID, false); err != nil {
 			return err
 		}
-		if len(events) == 0 {
-			return inputError("unknown deal: " + dealID)
+		if events, err = s.load(ctx, dealID); err != nil {
+			return err
 		}
 	}
 	return fn(ctx, s, dealID, events)
@@ -322,7 +369,8 @@ func dealInitCommand() *cobra.Command {
 			return err
 		}
 		public := hex.EncodeToString(signing.Public().(ed25519.PublicKey))
-		p := Profile{Name: name, Type: "sqlite", LogID: "deal", Namespace: "deal"}
+		// No profile-wide log: each deal gets its own (see dealLogID).
+		p := Profile{Name: name, Type: "sqlite", Namespace: "deal"}
 		p.Connection.Database = filepath.Join(dir, "deal.db")
 		p.Signing.File = filepath.Join(dir, "signing.seed")
 		p.TrustedKeys = []string{public}
@@ -370,6 +418,9 @@ func dealOpenCommand() *cobra.Command {
 				return err
 			}
 			dealID := "deal-" + hex.EncodeToString(id)
+			if err := s.useDeal(ctx, dealID, true); err != nil {
+				return err
+			}
 			se, err := s.seal(ctx, dealID, nil, dealEvent{Kind: "open", Open: &o})
 			if err != nil {
 				return err
@@ -647,8 +698,10 @@ func dealCloseCommand() *cobra.Command {
 }
 
 func dealReportCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "report", Short: "Print the deal's sealed trail in plain words (the offline HTML receipt is not built yet)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
-		return runDeal(c, true, func(_ context.Context, _ *dealSession, dealID string, events []sealedEvent) error {
+	cmd := &cobra.Command{Use: "report", Short: "Write the deal's receipt: one self-contained, offline-verifying HTML page, plus a link fragment", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		htmlPath, _ := c.Flags().GetString("html")
+		locations, _ := c.Flags().GetStringSlice("location")
+		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			steps := make([]map[string]any, 0, len(events))
 			lines := make([]string, 0, len(events))
 			unchecked := 0
@@ -665,12 +718,33 @@ func dealReportCommand() *cobra.Command {
 				steps = append(steps, map[string]any{"step": e.N, "kind": e.Kind, "at": e.At, "capsule_id": se.CapsuleID, "sequence": se.Sequence, "line": line})
 				lines = append(lines, fmt.Sprintf("%d. %s %s", e.N, e.At, line))
 			}
-			return output(c, map[string]any{
+			b, err := s.dealReportBundle(ctx, events)
+			if err != nil {
+				return err
+			}
+			kind, fragment, digest, err := dealReportFragment(b, locations)
+			if err != nil {
+				return err
+			}
+			out := map[string]any{
 				"deal_id": dealID, "demo": events[0].Event.Open.Demo, "outcome": outcome, "unchecked_actions": unchecked,
-				"steps": steps, "text": strings.Join(lines, "\n"), "receipt": "not_available",
-			})
+				"steps": steps, "text": strings.Join(lines, "\n"), "bundle_digest": digest, "fragment_kind": kind, "fragment": fragment,
+			}
+			if htmlPath != "" {
+				page, err := dealReportHTML(b)
+				if err != nil {
+					return err
+				}
+				if err = atomicFile(htmlPath, []byte(page), false); err != nil {
+					return err
+				}
+				out["html"] = htmlPath
+			}
+			return output(c, out)
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
+	cmd.Flags().String("html", "", "Write the receipt page to this new file")
+	cmd.Flags().StringSlice("location", nil, "Where the bundle can be fetched, for a receipt too large to inline in a link (repeatable)")
 	return cmd
 }

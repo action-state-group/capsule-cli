@@ -16,12 +16,13 @@ with, and shows the difference.
 | `deal note --kind approval --check ID --choice OPT` | Seals the user's answer to a check. Cuts a checkpoint. |
 | `deal note --kind act --input FILE` | Seals what the agent did and whether a passing check or approval covered it. |
 | `deal close --input FILE` | Compares what was delivered with what was agreed: `completed`, `mismatch` or `open`. Cuts a checkpoint. |
-| `deal report` | Prints the sealed trail in plain words. The offline HTML receipt is a later release. |
+| `deal report [--html FILE] [--location URL]` | Prints the trail, and writes the receipt: one self-contained page that verifies itself offline. |
 
-Each step is a Capsule in the profile's store, appended to its checkpointed
-log, and carries the previous step's `capsule_id`. On every read, each step's
-signature, payload binding and chain link are verified again, so a dropped
-or edited step is reported as a conflict.
+Each step is a Capsule in the profile's store. Each deal has its own
+checkpointed log (`deal/<deal_id>`) in the same SQLite file, and each step
+cites the one before it (`chain.parent_capsule_id`, relation `follows`). On
+every read, each step's signature, payload binding and chain link are
+verified again, so a dropped or edited step is reported as a conflict.
 
 Concurrent writers (sub-agents) are serialized by a lock file beside the
 store. `deal` commands run on Linux and macOS.
@@ -61,6 +62,28 @@ Nothing, by default.
   local pause, and after 2 seconds, or on any error, the local rules decide
   alone.
 
+## Receipt
+
+`deal report --html FILE` builds an AAC Evidence Bundle of the deal's own log:
+every step, its membership proof, the chain closed back to the opening step,
+and a signed checkpoint (`checkpoint.cose`) so the page can authenticate it.
+Every step's content is disclosed except `message` steps, which stay
+withheld (shown as their `capsule_id` only). The page is written with
+agent-action-capsule's own emitter and browser verifier, vendored unmodified
+in `internal/cli/assets/` (rebuild and compare with
+`scripts/build-evidence-graph-iife.sh`). The deal section renders only after
+that verifier passes, and shows only content it matched against the seal; a
+changed byte shows "This receipt did not verify" instead.
+
+The report also prints a link `fragment` in the Evidence Bundle fragment
+codec. Up to 1 MiB it is the whole bundle (`inline`); above that it is a
+pointer `{"bundle_ref":{"digest","root","locations"}}` (`pointer (draft)`:
+that shape is not yet in the published Evidence Bundle draft), with
+locations from `--location`.
+
+The sealed record shape lives in one place, `internal/cli/deal_profile.go`,
+so it can follow the deal record profile when that is published.
+
 ## Guarantee
 
 **Tamper-evident, not non-repudiation.** The signing seed is a 0600 file on
@@ -71,6 +94,6 @@ something.
 ## Demo
 
 `demo/jet-ski/` is a scripted DEMO rental with a payee switch to Zelle. Run
-`scripts/run-demo.sh` (set `CAPSULECTL` to use a release binary instead of
-building from source). The card it must produce is in
+`scripts/run-demo.sh [receipt.html]` (set `CAPSULECTL` to use a release
+binary instead of building from source). The card it must produce is in
 `demo/jet-ski/expected-card.txt`; the Go tests assert the same card.

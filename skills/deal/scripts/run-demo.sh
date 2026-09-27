@@ -5,7 +5,8 @@ set -euo pipefail
 # open -> two seller messages -> the payee switch -> a domain lookup -> the
 # check before paying the deposit -> the user holds -> the report.
 # Prints the difference card and fails if it is not the expected one.
-# Uses CAPSULECTL if set (a downloaded release binary), else builds from source.
+# Writes the receipt page to $1 when given. Uses CAPSULECTL if set (a
+# downloaded release binary), else builds from source.
 # Touches nothing outside its own temp directory. No real people or money.
 
 skill_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -39,4 +40,9 @@ fi
 
 check_id=$(jq -r .check_id "$work/check.json")
 deal note --deal "$id" --kind approval --check "$check_id" --choice hold --said "hold" >/dev/null
-deal report --deal "$id" | jq -r .text
+if [[ -n "${1:-}" ]]; then
+  deal report --deal "$id" --html "$1" | jq -r .text
+  printf '\nreceipt: %s\n' "$1"
+else
+  deal report --deal "$id" | jq -r .text
+fi

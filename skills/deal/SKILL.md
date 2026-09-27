@@ -136,8 +136,20 @@ capsulectl --profile deal deal close --deal ID --input close.json   # {"status":
 `status` is `received`, `pending` (outcome stays `open`) or `not_received`.
 The outcome is `completed`, `mismatch` or `open`.
 
-**6. Report**: `capsulectl --profile deal deal report --deal ID` prints the
-sealed trail in plain words, including any skipped check.
+**6. Receipt**, whenever the user wants one:
+
+```sh
+capsulectl --profile deal deal report --deal ID --html receipt.html
+```
+
+`receipt.html` is one self-contained page. It opens and checks itself with
+no network. It shows what the user asked, then one block per check (asked,
+agreed, about to happen, the differences, their answer, what was done), with
+paused checks and skipped checks expanded. Message text is left out; those
+steps show only their fingerprint. The output also carries a `fragment` for a
+share link: `inline` when small, otherwise `pointer (draft)`, which needs a
+`--location URL` where the receipt file will be hosted. Attach or share the
+page only when the user asks.
 
 ## Try it: the demo (2 minutes, no real money)
 
