@@ -54,8 +54,53 @@ $ capsulectl cll checkpoint create --profile demo
 ```
 
 `key generate` prints the public key for each seed; pass it to `--trusted-key` /
-`--checkpoint-trusted-key`. For a JSONL store use `--type jsonl --jsonl-path DIR`
-instead of the SQLite flags; for MySQL see [Profile setup](#profile-setup).
+`--checkpoint-trusted-key`. For MySQL see [Profile setup](#profile-setup).
+
+### JSONL: a directory and its evidence book
+
+A JSONL profile keeps its artifacts in `artifacts.jsonl` and its one log in
+`book/`, the profile's evidence book; it also names the `--operator` the book
+writes into every record. These commands were run as written against this
+branch's `capsulectl` (outputs with keys, IDs and the statement elided):
+
+```console
+$ capsulectl profile create --name demo --type jsonl --jsonl-path /work/store \
+    --namespace demo --log-id demo-log --operator example-operator \
+    --signing-key-file /work/producer.seed --trusted-key <producer-public-key-hex> \
+    --checkpoint-signing-key-file /work/checkpoint.seed --checkpoint-trusted-key <checkpoint-public-key-hex>
+{"profile":"demo","spec_version":"capsule-cli-result/v1","status":"saved"}
+$ capsulectl store init --profile demo
+{"log_id":"demo-log","spec_version":"capsule-cli-result/v1","status":"initialized"}
+$ capsulectl seal --profile demo --request request.json --output artifact.json
+{"artifact":"artifact.json","capsule_id":"<capsule-id>","spec_version":"capsule-cli-result/v1"}
+$ capsulectl cll append --profile demo --capsule artifact.json
+{"capsule_id":"<capsule-id>","log_id":"demo-log","sequence":1,"spec_version":"capsule-cli-result/v1"}
+$ capsulectl cll list --profile demo
+{"entries":[{"sequence":1,"capsule_id":"<capsule-id>","appended_at":"<time>","record_type":"published_capsule","record_id":"<book-record-id>","capsule_carried":true}],"log_id":"demo-log","next_after":1,"spec_version":"capsule-cli-result/v1"}
+$ capsulectl cll checkpoint create --profile demo
+{"checkpoint":4,"indexed_sequence":3,"log_id":"demo-log","spec_version":"capsule-cli-result/v1","statement":"<base64 checkpoint>"}
+$ ls /work/store /work/store/book
+/work/store:
+artifacts.jsonl  book
+
+/work/store/book:
+log.jsonl  payloads  records
+```
+
+The keys and `request.json` are the ones from the SQLite example above. The
+checkpoint covers three positions because the book's log also holds its own
+records (here, the two index roots it commits before checkpointing); `cll list`
+shows only entries that record a capsule unless given `--all`. A JSONL store
+made by an earlier capsulectl, with its log in `cll.jsonl`, is refused until it
+is migrated: give its profile an operator, then move the log into the book under
+a new log id (checked the same way against a store written by the previous
+release):
+
+```console
+$ capsulectl profile update --profile demo --operator example-operator
+$ capsulectl store migrate --profile demo --log-id <new-log-id>
+{"backfilled":1,"log_id":"<new-log-id>","migration_record_id":"<record-id>","retired_log_id":"demo-log","spec_version":"capsule-cli-result/v1"}
+```
 
 ## Build from source
 
@@ -129,7 +174,7 @@ These identifiers select different layers:
 | Setting | Meaning |
 | --- | --- |
 | `--name` | Local profile name. Commands that operate on a configured target select it with `--profile`; `profile show` takes it positionally. |
-| `--type` | Storage backend: `jsonl`, `sqlite` or `mysql`. The three are peers: each holds both the artifact store and the CLL. |
+| `--type` | Storage backend: `jsonl`, `sqlite` or `mysql`. The three are peers: each holds both the artifact store and the log (for `jsonl`, the log is the profile's evidence book). |
 | `--jsonl-path` / `--sqlite-path` / `--mysql-database` | Where the storage lives for the selected type: a JSONL directory, a SQLite database file, or a MySQL database. |
 | `--namespace` | Artifact SDK logical grouping within `capsule_store_capsules` and `capsule_store_artifacts`. Records are addressed by namespace and Capsule ID. Not a database/schema or an authorization boundary. |
 | `--log-id` | CLL log within shared `cll_*` tables, not a table name. |
@@ -231,8 +276,8 @@ selects one with `--type`:
   `cll checkpoint status` read the book's files without opening it, so a
   read-only profile needs no signing secret. A JSONL store made by an earlier
   capsulectl keeps its log in `cll.jsonl`; `store migrate` moves those entries
-  into the book once, in order, and every other command refuses the profile
-  until it has (a log that was ever checkpointed needs a new `--log-id`).
+  into the book once, in order, always under a new `--log-id`, and every other
+  command refuses the profile until it has.
 - SQLite uses WAL transactions and supports multiple handles in one process.
   Artifact and CLL data share one file, set with `--sqlite-path`.
 - MySQL uses transactional row locking and supports multiple processes.
