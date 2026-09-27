@@ -20,6 +20,7 @@ import (
 	emit "github.com/action-state-group/capsule-emit-go"
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	"github.com/action-state-group/cll-go/checkpoint"
+	"github.com/action-state-group/cll-go/cll"
 	"github.com/spf13/cobra"
 )
 
@@ -186,10 +187,30 @@ func (s *dealSession) close() error {
 	return errors.Join(e, s.unlock())
 }
 
-// load reads a deal's steps back and re-verifies each one: the Capsule
-// signature and trust, the payload binding, the local step re-derived into
-// exactly the sealed record bytes, and the prev chain of record digests. Any
-// disagreement between the local store and what was sealed is a conflict.
+// logEntries reads the deal's whole log, in order.
+func (s *dealSession) logEntries(ctx context.Context) ([]cll.Entry, error) {
+	var out []cll.Entry
+	for after := uint64(0); ; {
+		batch, err := s.t.log.ScanEntries(ctx, after, cll.MaxScanLimit)
+		if err != nil {
+			return nil, err
+		}
+		if len(batch) == 0 {
+			return out, nil
+		}
+		out = append(out, batch...)
+		after = batch[len(batch)-1].Seq
+	}
+}
+
+// load reads a deal's steps back and re-verifies each one against the deal's
+// own log: the log must hold exactly one entry per indexed step, in order,
+// so a lost or deleted step is a conflict, never a silently shorter deal.
+// Then, per step: the Capsule signature and trust, the payload binding, the
+// local step re-derived into exactly the sealed record bytes, and the prev
+// chain of record digests. A last step that was indexed but never reached
+// the log (a crash between the two writes) is recovered by publishing it
+// from the stored step; its Capsule must come out identical.
 func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent, err error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT n, kind, capsule_id, cll_sequence, record_digest, local FROM deal_steps WHERE deal_id=? ORDER BY n`, dealID)
 	if err != nil {
@@ -212,11 +233,40 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	if len(index) == 0 {
+	entries, err := s.logEntries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case len(entries) > len(index), len(index) > len(entries)+1:
+		return nil, ErrConflict
+	case len(index) == 0:
 		return nil, inputError("unknown deal: " + dealID)
 	}
 	events := make([]sealedEvent, 0, len(index))
 	for i, r := range index {
+		var ev dealEvent
+		if err = decodeJSON([]byte(r.lo), &ev); err != nil {
+			return nil, ErrConflict
+		}
+		prev := ""
+		if i > 0 {
+			prev = events[i-1].Digest
+		}
+		if ev.DealID != dealID || ev.N != int64(i+1) || ev.N != r.n || ev.Kind != r.kind || ev.Prev != prev {
+			return nil, ErrConflict
+		}
+		if i == len(entries) {
+			se, err := s.recoverStep(ctx, events, ev, r.id)
+			if err != nil {
+				return nil, err
+			}
+			events = append(events, se)
+			continue
+		}
+		if hex.EncodeToString(entries[i].Value) != r.id {
+			return nil, ErrConflict
+		}
 		record, err := s.t.artifacts.Get(ctx, r.id)
 		if err != nil {
 			return nil, err
@@ -234,31 +284,45 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 		if content == nil || !checks["payload"].Verified {
 			return nil, ErrConflict
 		}
-		var ev dealEvent
-		if err = decodeJSON([]byte(r.lo), &ev); err != nil {
-			return nil, ErrConflict
-		}
-		prev := ""
-		if i > 0 {
-			prev = events[i-1].Digest
-		}
-		if ev.DealID != dealID || ev.N != int64(i+1) || ev.N != r.n || ev.Kind != r.kind || ev.Prev != prev {
-			return nil, ErrConflict
-		}
 		payload, digest, err := encodeDealRecord(ev, events, s.dkey)
 		if err != nil || !bytes.Equal(payload, content) || digest != r.digest {
 			return nil, ErrConflict
 		}
-		events = append(events, sealedEvent{CapsuleID: r.id, Digest: digest, Sequence: r.seq, Event: ev})
+		events = append(events, sealedEvent{CapsuleID: r.id, Digest: digest, Sequence: entries[i].Seq, Event: ev})
 	}
 	return events, nil
 }
 
-// seal derives the x-deal-v0 record for one step, refuses it if it fails the
-// profile schema or would carry a raw identifier, then signs it, persists it,
-// appends it to the deal's log and stores the local step. Any failure is
-// returned: a step that is not sealed did not pass the choke point.
-func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEvent, ev dealEvent) (sealedEvent, error) {
+// stepRequest is the frozen seal request for a step: rebuilt from the stored
+// step it gives the same Capsule, which is what makes recovery possible.
+func (s *dealSession) stepRequest(events []sealedEvent, ev dealEvent) (Request, string, error) {
+	payload, digest, err := encodeDealRecord(ev, events, s.dkey)
+	if err != nil {
+		return Request{}, "", err
+	}
+	at, err := time.Parse("2006-01-02T15:04:05Z", ev.At)
+	if err != nil {
+		return Request{}, "", ErrConflict
+	}
+	request := Request{
+		Version: "capsule-seal-request/v1",
+		Capsule: emit.Input{ActionID: fmt.Sprintf("%s/%d", ev.DealID, ev.N), ActionType: emit.ActionTypeFYI, Operator: s.p.Name, Developer: "capsulectl-deal", Timestamp: at.UTC()},
+		Payload: payload,
+	}
+	// Each step's Capsule follows the one before it (ordering only), so the
+	// deal is a citation chain any Evidence Bundle verifier can close.
+	if len(events) > 0 {
+		request.Capsule.Chain = &emit.Chain{ParentCapsuleID: events[len(events)-1].CapsuleID, Relation: "follows"}
+	}
+	return request, digest, nil
+}
+
+// prepareStep fixes a step's time, chain and nonces, derives its record
+// (refusing one that fails the profile schema or would carry a raw
+// identifier), and writes its index row with the local step BEFORE anything
+// reaches the log, so a crash can never leave a logged step with no local
+// record of it.
+func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []sealedEvent, ev dealEvent) (Request, sealedEvent, error) {
 	now := dealClock().UTC().Truncate(time.Second)
 	ev.DealID = dealID
 	ev.N = int64(len(events) + 1)
@@ -271,37 +335,71 @@ func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEv
 	for name := range dealTexts(ev) {
 		nonce := make([]byte, 32)
 		if _, err := rand.Read(nonce); err != nil {
-			return sealedEvent{}, err
+			return Request{}, sealedEvent{}, err
 		}
 		ev.Nonces[name] = hex.EncodeToString(nonce)
 	}
-	payload, digest, err := encodeDealRecord(ev, events, s.dkey)
+	request, digest, err := s.stepRequest(events, ev)
 	if err != nil {
-		return sealedEvent{}, err
+		return Request{}, sealedEvent{}, err
+	}
+	record, err := seal(request, s.key)
+	if err != nil {
+		return Request{}, sealedEvent{}, err
 	}
 	local, err := json.Marshal(ev)
 	if err != nil {
-		return sealedEvent{}, err
+		return Request{}, sealedEvent{}, err
 	}
-	request := Request{
-		Version: "capsule-seal-request/v1",
-		Capsule: emit.Input{ActionID: fmt.Sprintf("%s/%d", dealID, ev.N), ActionType: emit.ActionTypeFYI, Operator: s.p.Name, Developer: "capsulectl-deal", Timestamp: now},
-		Payload: payload,
+	if _, err = s.db.ExecContext(ctx, `INSERT INTO deal_steps (deal_id, n, kind, capsule_id, cll_sequence, record_digest, local) VALUES (?,?,?,?,0,?,?)`,
+		dealID, ev.N, ev.Kind, record.CapsuleID, digest, string(local)); err != nil {
+		return Request{}, sealedEvent{}, err
 	}
-	// Each step's Capsule follows the one before it (ordering only), so the
-	// deal is a citation chain any Evidence Bundle verifier can close.
-	if len(events) > 0 {
-		request.Capsule.Chain = &emit.Chain{ParentCapsuleID: events[len(events)-1].CapsuleID, Relation: "follows"}
-	}
+	return request, sealedEvent{CapsuleID: record.CapsuleID, Digest: digest, Event: ev}, nil
+}
+
+// publishStep persists and appends a prepared step and records its log
+// position.
+func (s *dealSession) publishStep(ctx context.Context, request Request, se sealedEvent) (sealedEvent, error) {
 	pub, err := s.t.publish(ctx, request, s.key)
 	if err != nil {
 		return sealedEvent{}, err
 	}
-	if _, err = s.db.ExecContext(ctx, `INSERT INTO deal_steps (deal_id, n, kind, capsule_id, cll_sequence, record_digest, local) VALUES (?,?,?,?,?,?,?)`,
-		dealID, ev.N, ev.Kind, pub.CapsuleID, pub.Sequence, digest, string(local)); err != nil {
+	if pub.CapsuleID != se.CapsuleID {
+		return sealedEvent{}, ErrConflict
+	}
+	if _, err = s.db.ExecContext(ctx, `UPDATE deal_steps SET cll_sequence=? WHERE deal_id=? AND n=?`, pub.Sequence, se.Event.DealID, se.Event.N); err != nil {
 		return sealedEvent{}, err
 	}
-	return sealedEvent{CapsuleID: pub.CapsuleID, Digest: digest, Sequence: pub.Sequence, Event: ev}, nil
+	se.Sequence = pub.Sequence
+	return se, nil
+}
+
+func (s *dealSession) recoverStep(ctx context.Context, events []sealedEvent, ev dealEvent, capsuleID string) (sealedEvent, error) {
+	request, digest, err := s.stepRequest(events, ev)
+	if err != nil {
+		return sealedEvent{}, ErrConflict
+	}
+	return s.publishStep(ctx, request, sealedEvent{CapsuleID: capsuleID, Digest: digest, Event: ev})
+}
+
+// seal prepares and publishes one step. Any failure is returned: a step
+// that is not sealed did not pass the choke point. If the step never reached
+// the log, its index row is withdrawn; if it did, the next read recovers it.
+func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEvent, ev dealEvent) (sealedEvent, error) {
+	request, se, err := s.prepareStep(ctx, dealID, events, ev)
+	if err != nil {
+		return sealedEvent{}, err
+	}
+	published, err := s.publishStep(ctx, request, se)
+	if err != nil {
+		if entries, scanErr := s.logEntries(ctx); scanErr == nil && int64(len(entries)) < se.Event.N {
+			_, delErr := s.db.ExecContext(ctx, `DELETE FROM deal_steps WHERE deal_id=? AND n=?`, dealID, se.Event.N)
+			err = errors.Join(err, delErr)
+		}
+		return sealedEvent{}, err
+	}
+	return published, nil
 }
 
 // milestone cuts a signed checkpoint at a deal milestone (baseline, approval,

@@ -338,3 +338,48 @@ func TestDealIdentityEvidenceAfterAPassingCheckRefusesTheAct(t *testing.T) {
 	assert.Equal(t, true, act["unchecked"])
 	assert.Equal(t, "details changed after the last check", act["reason"])
 }
+
+// B3: deleting the LAST index row (here a skipped check) must not make the
+// step disappear: the deal's log still has it, so report and close refuse.
+func TestDealDroppedLastStepIsAConflict(t *testing.T) {
+	dir := dealFixture(t)
+	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	act := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":38000}`))
+	require.Equal(t, true, act["unchecked"])
+	var p Profile
+	p.Connection.Database = filepath.Join(dir, "deal.db")
+	db, _, err := sqliteConnection(p)
+	require.NoError(t, err)
+	_, err = db.Exec(`DELETE FROM deal_steps WHERE deal_id=? AND n=2`, dealID)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	_, err = invoke(t, "", "--profile", "deal", "deal", "report", "--deal", dealID)
+	require.ErrorIs(t, err, ErrConflict)
+	_, err = invoke(t, "", "--profile", "deal", "deal", "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received"}`))
+	require.ErrorIs(t, err, ErrConflict)
+}
+
+// B3: a step whose index row was written but whose Capsule never reached the
+// log (a crash in between) is recovered on the next read, not lost.
+func TestDealRecoversAStepThatNeverReachedTheLog(t *testing.T) {
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	require.NoError(t, s.useDeal(t.Context(), dealID, false))
+	events, err := s.load(t.Context(), dealID)
+	require.NoError(t, err)
+	act := &dealAct{Action: "pay", AmountMinor: ptr(int64(38000))}
+	act.AuthorizedBy, act.Reason, act.Rule = authorizeAct(events, *act)
+	act.Unchecked = true
+	_, _, err = s.prepareStep(t.Context(), dealID, events, dealEvent{Kind: "act", Act: act})
+	require.NoError(t, err)
+	require.NoError(t, s.close())
+
+	report := dealRun(t, "report", "--deal", dealID)
+	assert.Contains(t, reportTexts(t, report, "anomalies"), "agent/skipped_check: Skipped the check: pay $380.00 (no check before this action)")
+}
+
+func ptr[T any](v T) *T { return &v }
