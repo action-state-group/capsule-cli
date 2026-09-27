@@ -3,8 +3,8 @@ module github.com/action-state-group/capsule-cli
 go 1.27.0
 
 require (
-	github.com/action-state-group/agent-action-capsule/go v0.0.0-20260915155341-70948effe945
-	github.com/action-state-group/capsule-emit-go v0.1.0
+	github.com/action-state-group/agent-action-capsule/go v0.5.2-0.20260926235627-439dc02c05d1
+	github.com/action-state-group/capsule-emit-go v0.2.0
 	github.com/action-state-group/cll-go v0.0.0-20260915155019-7a077913a24c
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1
