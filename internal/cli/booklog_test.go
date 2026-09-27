@@ -527,7 +527,7 @@ func TestBookCheckpointedUnderAnotherLogIDIsRefused(t *testing.T) {
 	require.NoError(t, err)
 	signer, err := evidencebook.NewEd25519Signer(recordKey)
 	require.NoError(t, err)
-	old, err := evidencebook.Open(t.Context(), evidencebook.Config{BookID: p.LogID, Operator: p.Operator, Store: store, Substrate: substrate, Payloads: payloads, Signer: signer})
+	old, err := evidencebook.Open(t.Context(), evidencebook.Config{BookID: p.LogID, Operator: p.Operator, Store: store, Substrate: substrate, Payloads: payloads, Signer: signer, Now: bookNow})
 	require.NoError(t, err)
 	_, err = old.Append(t.Context(), evidencebook.Entry{RecordType: "exchange", EpistemicType: evidencebook.ObservedEvent})
 	require.NoError(t, err)
@@ -924,4 +924,23 @@ func TestMigrateOfAStrippedTamperedLogStillNeedsANewLogID(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(p.Connection.Database, "book", "log.jsonl"))
 	_, err = runMigrate(t, "--log-id", p.LogID)
 	require.ErrorIs(t, err, ErrInput, "the retired log's own id is not a new one")
+}
+
+// store init signs nothing, so a jsonl profile that only verifies other
+// producers' capsules -- no signing key, its trusted keys all someone
+// else's -- can initialize its store; its first write is what needs keys.
+func TestStoreInitOnJSONLNeedsNoKey(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	other, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	p := Profile{Name: "verifier", Type: "jsonl", LogID: "verifier-log", Namespace: "capsule"}
+	p.Connection.Database = filepath.Join(t.TempDir(), "store")
+	p.TrustedKeys = []string{hex.EncodeToString(other)}
+	require.NoError(t, saveProfile(p, false))
+	_, err = invoke(t, "", "store", "init", "--profile", "verifier")
+	require.NoError(t, err)
+	assert.FileExists(t, filepath.Join(p.Connection.Database, "book", "log.jsonl"))
+	listLog(t, "verifier")
+	_, err = invoke(t, "", "publish", "--profile", "verifier", "--request", sealRequestFile(t, "needs-keys"))
+	assert.ErrorIs(t, err, ErrInput, "writing is what needs the keys")
 }

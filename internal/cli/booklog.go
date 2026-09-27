@@ -645,6 +645,29 @@ func completeLines(path string) ([][]byte, error) {
 	return bytes.Split(raw, []byte("\n")), nil
 }
 
+// initBookFiles is `store init` on a jsonl profile: it creates the book's
+// directory and an empty log journal, which is all a book is before its
+// first record. It opens no book, so it needs no key: a profile that only
+// verifies other producers' capsules can initialize its store. The first
+// command that writes opens the book and checks its keys. A pre-book
+// cll.jsonl that is not migrated is refused here too.
+func initBookFiles(ctx context.Context, p Profile) error {
+	dir := filepath.Join(p.Connection.Database, "book")
+	path := filepath.Join(dir, "log.jsonl")
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		if err = os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+		if err = clljsonl.Init(path); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	_, _, err := listBookFiles(ctx, p, 0, 0, 1, true)
+	return err
+}
+
 // listBookFiles is `cll list` on a jsonl profile.
 func listBookFiles(ctx context.Context, p Profile, after, through uint64, limit int, all bool) ([]bookEntry, uint64, error) {
 	records, err := readBookFiles(p)

@@ -273,8 +273,14 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 	if needsCLL && p.Type == "jsonl" && use == useCLLRead {
 		// Reads (cll list, checkpoint status) never open the book: that
 		// needs its signing keys and takes its writer lock.
+	} else if needsCLL && p.Type == "jsonl" && use == useInitialization {
+		// store init signs nothing, so it creates the book's files without
+		// opening the book: no signing or checkpoint key, no trust check.
+		if err = initBookFiles(ctx, p); err != nil {
+			return nil, err
+		}
 	} else if needsCLL && p.Type == "jsonl" {
-		book, err := openBook(ctx, p, use == useInitialization)
+		book, err := openBook(ctx, p, false)
 		if err != nil {
 			return nil, err
 		}
