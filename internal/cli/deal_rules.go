@@ -738,7 +738,7 @@ func authorizeAct(events []sealedEvent, act dealAct) (approval, reason, rule str
 	}
 	for i := len(events) - 1; i >= 0; i-- {
 		e := events[i].Event
-		if e.Kind == "change" {
+		if changesDetails(e) {
 			return "", "details changed after the last check", "changed_after_check"
 		}
 		if e.Kind != "check" || e.Check.Action != act.Action {
@@ -1038,4 +1038,20 @@ func buildDealReport(events []sealedEvent) dealReport {
 func channelHop(first, now string) bool {
 	known := func(c string) bool { return c != "" && c != "other" }
 	return known(first) && known(now) && !strings.EqualFold(first, now)
+}
+
+// changesDetails reports a step that can change what a check compared: a
+// detail change, or a message or evidence step carrying counterparty
+// identifiers or facts (a new payee in a message is still a new payee). A
+// check sealed before such a step no longer covers an action.
+func changesDetails(e dealEvent) bool {
+	switch e.Kind {
+	case "change":
+		return true
+	case "message":
+		return e.Message.Who != nil
+	case "evidence":
+		return e.Evidence.Who != nil
+	}
+	return false
 }

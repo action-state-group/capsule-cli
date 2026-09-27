@@ -218,8 +218,9 @@ A verifier holding one deal's records in `seq` order checks:
 5. **Never act on an unsealed approval.** An `action` MUST carry exactly one `authorized_by` →
    a sealed `approval` with `proceed: true`. That approval `approves` a `verdict`, which `checks`
    a `check` whose `action` equals the action's. Also:
-   - No `detail_change` is sealed between that check and the action. A change after the check
-     requires a new check.
+   - No `detail_change`, and no `message` or `evidence` carrying `counterparty` identifiers or
+     `counterparty_facts`, is sealed between that check and the action. Such a step after the
+     check requires a new check (a new payee in a message is still a new payee).
    - `amount_minor`, `currency`, `rail` and the payee fingerprint, where both sides carry them,
      equal the checked ones.
    - One approval authorizes at most one action.

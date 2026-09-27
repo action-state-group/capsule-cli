@@ -306,3 +306,35 @@ func TestDealRefundabilityChangePauses(t *testing.T) {
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Equal(t, "⚠️ No longer refundable (agreed as refundable) · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
 }
+
+// B2: a payee change carried in a counterparty message, after the check,
+// makes the user's approval of that check stale; the act must be refused
+// and a new check shows the change.
+func TestDealPayeeChangeInAMessageMakesTheApprovalStale(t *testing.T) {
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--input", filepath.Join(jetSkiDemo, "01-open.json"))["deal_id"].(string)
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"recourse":{"rail":"zelle"}}`))
+	require.Equal(t, "pause", check["verdict"])
+	require.NotContains(t, check["card"], "Payee changed")
+	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","text":"send it to M. Torres","who":{"payee":"M. Torres"}}`))
+	answer := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok pay")
+	assert.Equal(t, false, answer["proceed"], "the answer is to a check that no longer shows who is being paid")
+	act := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"payee":"M. Torres","rail":"zelle"}`))
+	assert.Equal(t, true, act["unchecked"])
+	assert.Equal(t, "details changed after the last check", act["reason"])
+	again := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"recourse":{"rail":"zelle"}}`))
+	assert.Contains(t, again["card"], "Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle)")
+}
+
+// B2: the same after a passing check approved by standing intent, and for
+// evidence carrying who.
+func TestDealIdentityEvidenceAfterAPassingCheckRefusesTheAct(t *testing.T) {
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	ok := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit-asked.json"))
+	require.Equal(t, "pass", ok["verdict"])
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--input", writeJSON(t, `{"about":"booking site","source":"domain_lookup","who":{"domain":"hotel-bookings-secure.example"}}`))
+	act := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"commit"}`))
+	assert.Equal(t, true, act["unchecked"])
+	assert.Equal(t, "details changed after the last check", act["reason"])
+}

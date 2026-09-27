@@ -657,8 +657,8 @@ func judgeApproval(events []sealedEvent, a *dealApproval) error {
 			return inputError("--choice is not one of the options the check offered")
 		}
 		for _, later := range events[i+1:] {
-			switch later.Event.Kind {
-			case "change", "snapshot", "check", "intent":
+			switch k := later.Event.Kind; {
+			case changesDetails(later.Event), k == "snapshot", k == "check", k == "intent":
 				a.Reason = "details changed after this check; check again"
 			}
 		}

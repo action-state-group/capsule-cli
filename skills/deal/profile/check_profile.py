@@ -522,7 +522,10 @@ def check_chain(records):
             if chk["body"]["action"] != body["action"]:
                 fail(i, "the action differs from the one checked")
             for k in range(jc + 1, i):
-                if records[k]["x-deal-v0"]["record_type"] == "detail_change":
+                kb = records[k]["x-deal-v0"]
+                identity = kb["record_type"] in ("message", "evidence") and (
+                    "counterparty" in kb or "counterparty_facts" in records[k]["body"])
+                if kb["record_type"] == "detail_change" or identity:
                     fail(i, "details changed after the check; the action needs a new check")
             cb = chk["body"]
             if "amount_minor" in body and "amount_minor" in cb and body["amount_minor"] != cb["amount_minor"]:
