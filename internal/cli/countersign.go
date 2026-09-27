@@ -39,13 +39,9 @@ func decodeBundleJSON(raw []byte) (map[string]interface{}, error) {
 }
 
 // countersignAPI names the wire type of the countersignatures[] entries this
-// CLI produces and verifies. The base Evidence Bundle draft (-00, merged)
-// reserves the countersignatures[] slot as future scope behind a registered
-// "type" field (initial registered value "cose-sign1"; a current verifier
-// MUST surface any entry as unverified). "countersign/v1" is this CLI's own
-// type, ahead of the richer countersignature entry shape landing in the
-// spec text -- running code ahead of the posted draft, same as the bilateral mechanism before it. Any entry of
-// a different type (including "cose-sign1") is reported "unverified" here,
+// CLI requests and verifies: {type, signer, over, statement, signature,
+// receipt?}, signed over UTF8(JCS({over, statement, type})). Any entry of a
+// different type (including "cose-sign1") is reported "unverified" here,
 // never rejected: this core never claims authority over a type it does not
 // define.
 const countersignAPI = "countersign/v1"
@@ -478,11 +474,8 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 			reports = append(reports, countersignatureReport{State: "unverified", Signer: entry.Signer})
 			continue
 		}
-		// entry.Type == "" (absent) is treated as spec-shaped -- the base
-		// Evidence Bundle draft's countersignatures[] entry shape has no
-		// "type" field at all; whether one belongs there is an open
-		// cross-lane question for the spec desk (not decided here), so its
-		// absence must never reject an otherwise well-formed entry.
+		// An entry with no "type" is tolerated and verified as
+		// countersign/v1, with "countersign/v1" in its signing input.
 		if entry.Over != digest {
 			reports = append(reports, countersignatureReport{State: "invalid", Detail: "signs a different bundle digest", Signer: entry.Signer})
 			continue

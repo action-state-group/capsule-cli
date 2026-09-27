@@ -660,3 +660,22 @@ func TestCountersignVerifyRequiresLowercaseHex(t *testing.T) {
 		})
 	}
 }
+
+// TestCountersignVerifyMissingTypeIsVerifiedAsV1 pins the tolerance for an
+// entry with an empty "type": it is verified as countersign/v1, over a
+// signing input carrying "type": "countersign/v1".
+func TestCountersignVerifyMissingTypeIsVerifiedAsV1(t *testing.T) {
+	bundle, profile, _ := withheldBundleFixture(t)
+	digest, err := aacbundle.BundleDigest(bundle)
+	require.NoError(t, err)
+	entry, _ := countersignerEntry(t, digest, []CountersignCheck{{Name: "cadence", Result: "established"}})
+	entry.Type = ""
+	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
+	trusted, err := parseKeys(profile.TrustedKeys)
+	require.NoError(t, err)
+	client := &http.Client{Timeout: 5 * time.Second}
+	_, _, _, err = verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+	// Valid and independent, so verify goes on to fetch the (unreachable)
+	// directory: the signature itself was accepted.
+	require.ErrorContains(t, err, "countersigner directory")
+}
