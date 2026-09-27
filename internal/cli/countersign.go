@@ -40,7 +40,7 @@ func decodeBundleJSON(raw []byte) (map[string]interface{}, error) {
 
 // countersignAPI names the wire type of the countersignatures[] entries this
 // CLI requests and verifies: {type, signer, over, statement, signature,
-// receipt?}, signed over UTF8(JCS({over, statement, type})). Any entry of a
+// receipt?}, signed over UTF8(JCS({over, signer, statement, type})). Any entry of a
 // different type (including "cose-sign1") is reported "unverified" here,
 // never rejected: this core never claims authority over a type it does not
 // define.
@@ -92,9 +92,10 @@ type CountersignStatement struct {
 
 // CountersignatureEntry is one element of bundle["countersignatures"]:
 // {type, signer, over, statement, signature, receipt?}. The signature
-// verifies over UTF8(JCS({"over": over, "statement": statement, "type":
-// type})) (see countersignSigningInput): it binds both the bundle digest and
-// every check result, so a rewritten result fails verification. "independent" is never
+// verifies over UTF8(JCS({"over": over, "signer": signer, "statement":
+// statement, "type": type})) (see countersignSigningInput): it binds the
+// bundle digest, the signer and every check result, so a rewritten result or
+// signer.id fails verification. "independent" is never
 // TRUSTED off the wire: a self-countersignature is well-formed and it is the
 // verifier's job to render it as not independent by comparing the signer's
 // key against the bundle producer's trusted keys, never the countersigner's
@@ -146,18 +147,18 @@ type countersignerDirectory struct {
 }
 
 // countersignSigningInput returns the bytes a countersign/v1 signature
-// covers: UTF8(JCS({"over": over, "statement": statement, "type": type})).
-// statement must be the entry's statement member as decoded from the wire
-// (with json.Number for numbers), never a re-encoding of the Go struct: a
-// member the struct does not declare is still signed, and dropping it would
-// change the bytes. An entry with no type (tolerated, see
+// covers: UTF8(JCS({"over": over, "signer": signer, "statement": statement,
+// "type": type})). signer and statement must be the entry's members as
+// decoded from the wire (with json.Number for numbers), never re-encodings of
+// the Go structs: every member of each is signed, including any the structs
+// do not declare, and dropping one would change the bytes. An entry with no type (tolerated, see
 // verifyCountersignatures) is verified as countersign/v1, the only type this
 // path handles.
-func countersignSigningInput(over string, statement interface{}, entryType string) ([]byte, error) {
+func countersignSigningInput(over string, signer, statement interface{}, entryType string) ([]byte, error) {
 	if entryType == "" {
 		entryType = countersignAPI
 	}
-	return canonical.JCS(map[string]interface{}{"over": over, "statement": statement, "type": entryType})
+	return canonical.JCS(map[string]interface{}{"over": over, "signer": signer, "statement": statement, "type": entryType})
 }
 
 // jsonValue re-decodes v as a generic JSON value with json.Number, the form
@@ -200,10 +201,10 @@ func isLowerHex(s string) bool {
 
 // verifyCountersignSignature checks a countersign/v1 entry's Ed25519
 // signature (hex) by its signer key (hex) over the signing input built from
-// over, statement and type, and returns the signer key. Every failure is
+// over, signer, statement and type, and returns the signer key. Every failure is
 // reported distinctly so a caller can tell a malformed key from a malformed
 // signature from a genuine verification failure.
-func verifyCountersignSignature(signerKeyHex, over string, statement interface{}, entryType, signatureHex string) (ed25519.PublicKey, error) {
+func verifyCountersignSignature(signerKeyHex, over string, signer, statement interface{}, entryType, signatureHex string) (ed25519.PublicKey, error) {
 	key, err := hex.DecodeString(signerKeyHex)
 	if err != nil || len(key) != ed25519.PublicKeySize || !isLowerHex(signerKeyHex) {
 		return nil, errors.New("signer key_id is not a 32-byte Ed25519 public key in lowercase hex")
@@ -212,12 +213,12 @@ func verifyCountersignSignature(signerKeyHex, over string, statement interface{}
 	if err != nil || len(signature) != ed25519.SignatureSize || !isLowerHex(signatureHex) {
 		return nil, errors.New("signature is not a 64-byte Ed25519 signature in lowercase hex")
 	}
-	message, err := countersignSigningInput(over, statement, entryType)
+	message, err := countersignSigningInput(over, signer, statement, entryType)
 	if err != nil {
 		return nil, fmt.Errorf("signing input cannot be canonicalized: %w", err)
 	}
 	if !ed25519.Verify(ed25519.PublicKey(key), message, signature) {
-		return nil, errors.New("signature does not verify over the bundle digest and statement")
+		return nil, errors.New("signature does not verify over the bundle digest, signer and statement")
 	}
 	return ed25519.PublicKey(key), nil
 }
@@ -334,8 +335,8 @@ func buildCountersignSubmission(bundle map[string]interface{}, window, requester
 // to verify over the submitted digest and its own statement -- a response
 // entry that does not verify, or that names a different digest, is refused
 // here rather than attached to the bundle file. The response was decoded
-// strictly (no unknown fields), so the struct's statement is the whole
-// statement the service sent.
+// strictly (no unknown fields), so the structs' signer and statement are the
+// whole members the service sent.
 func requestCountersignatures(ctx context.Context, client *http.Client, service string, submission countersignSubmission, digest string) ([]CountersignatureEntry, error) {
 	var response countersignSubmissionResponse
 	if err := postJSON(ctx, client, service, submission, &response); err != nil {
@@ -352,7 +353,11 @@ func requestCountersignatures(ctx context.Context, client *http.Client, service 
 		if err != nil {
 			return nil, fmt.Errorf("countersignatures[%d] statement is malformed: %w", i, err)
 		}
-		if _, err := verifyCountersignSignature(entry.Signer.KeyID, digest, statement, entry.Type, entry.Signature); err != nil {
+		signer, err := jsonValue(entry.Signer)
+		if err != nil {
+			return nil, fmt.Errorf("countersignatures[%d] signer is malformed: %w", i, err)
+		}
+		if _, err := verifyCountersignSignature(entry.Signer.KeyID, digest, signer, statement, entry.Type, entry.Signature); err != nil {
 			return nil, fmt.Errorf("countersignatures[%d]: %w", i, err)
 		}
 	}
@@ -457,9 +462,11 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 		if err := json.Unmarshal(encoded, &entry); err != nil {
 			return "", nil, "", fmt.Errorf("countersignatures[%d] is malformed: %w", i, err)
 		}
-		// The signing input and the receipt are computed over the statement
-		// exactly as it appears on the wire, never over the struct above.
+		// The signing input and the receipt are computed over the signer
+		// and statement exactly as they appear on the wire, never over the
+		// structs above.
 		var wire struct {
+			Signer    interface{} `json:"signer"`
 			Statement interface{} `json:"statement"`
 		}
 		decoder := json.NewDecoder(bytes.NewReader(encoded))
@@ -480,7 +487,7 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 			reports = append(reports, countersignatureReport{State: "invalid", Detail: "signs a different bundle digest", Signer: entry.Signer})
 			continue
 		}
-		signerKey, err := verifyCountersignSignature(entry.Signer.KeyID, digest, wire.Statement, entry.Type, entry.Signature)
+		signerKey, err := verifyCountersignSignature(entry.Signer.KeyID, digest, wire.Signer, wire.Statement, entry.Type, entry.Signature)
 		if err != nil {
 			reports = append(reports, countersignatureReport{State: "invalid", Detail: err.Error(), Signer: entry.Signer})
 			continue

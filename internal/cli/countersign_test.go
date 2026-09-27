@@ -61,7 +61,9 @@ func signCountersignEntry(t *testing.T, key ed25519.PrivateKey, entry *Countersi
 	t.Helper()
 	statement, err := jsonValue(entry.Statement)
 	require.NoError(t, err)
-	message, err := countersignSigningInput(entry.Over, statement, entry.Type)
+	signer, err := jsonValue(entry.Signer)
+	require.NoError(t, err)
+	message, err := countersignSigningInput(entry.Over, signer, statement, entry.Type)
 	require.NoError(t, err)
 	entry.Signature = hex.EncodeToString(ed25519.Sign(key, message))
 }
@@ -385,7 +387,7 @@ print(json.dumps({
 // vector capsule-anchor generates and commits
 // (packages/tests/countersign/vectors/countersign-v1.json). The two copies
 // must stay byte-identical: regenerate there, copy here, update this pin.
-const countersignVectorSHA256 = "3b278a3395ad47326f32987848de7b92eac08c6acbdfbebd71a237f94c197280"
+const countersignVectorSHA256 = "d057691c3e20f92b815dc47780493f83b594424d8cfb9db13f3782049b3155fb"
 
 type countersignVector struct {
 	SignerPublicKeyHex   string                 `json:"signer_public_key_hex"`
@@ -436,14 +438,15 @@ func verifyVectorEntry(t *testing.T, vector countersignVector, entry interface{}
 }
 
 // TestCountersignGoldenVectorSigningInput checks this CLI builds exactly the
-// vector's signing input, UTF8(JCS({over, statement, type})), from the entry.
+// vector's signing input, UTF8(JCS({over, signer, statement, type})), from
+// the entry.
 func TestCountersignGoldenVectorSigningInput(t *testing.T) {
 	vector := loadCountersignVector(t)
 	entry, ok := vector.Entry.(map[string]interface{})
 	require.True(t, ok)
 	over, _ := entry["over"].(string)
 	entryType, _ := entry["type"].(string)
-	message, err := countersignSigningInput(over, entry["statement"], entryType)
+	message, err := countersignSigningInput(over, entry["signer"], entry["statement"], entryType)
 	require.NoError(t, err)
 	assert.Equal(t, vector.SigningInput, string(message))
 }
@@ -497,7 +500,7 @@ func TestCountersignGoldenVectorNegatives(t *testing.T) {
 			assert.Equal(t, "resolved", reports[0].State, "an unverified receipt does not invalidate the entry")
 		})
 	}
-	for _, name := range []string{"flipped-result", "digest-only-signature", "receipt-for-other-statement", "receipt-for-other-statement-no-entry-hash"} {
+	for _, name := range []string{"flipped-result", "digest-only-signature", "spoofed-signer-id", "signature-without-signer", "receipt-for-other-statement", "receipt-for-other-statement-no-entry-hash"} {
 		assert.True(t, names[name], "golden vector is missing negative case %q", name)
 	}
 }
@@ -678,4 +681,36 @@ func TestCountersignVerifyMissingTypeIsVerifiedAsV1(t *testing.T) {
 	// Valid and independent, so verify goes on to fetch the (unreachable)
 	// directory: the signature itself was accepted.
 	require.ErrorContains(t, err, "countersigner directory")
+}
+
+// TestCountersignVerifySpoofedSignerIDIsInvalid: signer is inside the signing
+// input, so rewriting signer.id after signing (to borrow another
+// countersigner's name) makes the entry invalid, and the request path
+// refuses it.
+func TestCountersignVerifySpoofedSignerIDIsInvalid(t *testing.T) {
+	bundle, profile, key := withheldBundleFixture(t)
+	digest, err := aacbundle.BundleDigest(bundle)
+	require.NoError(t, err)
+	entry, _ := countersignerEntry(t, digest, []CountersignCheck{{Name: "cadence", Result: "established"}})
+	entry.Signer.ID = "did:web:someone-else.example"
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(countersignSubmissionResponse{Countersignatures: []CountersignatureEntry{entry}}))
+	}))
+	defer server.Close()
+	client := &http.Client{Transport: server.Client().Transport, Timeout: 5 * time.Second}
+	submission, gotDigest, err := buildCountersignSubmission(bundle, "30d", profile.LogID, key)
+	require.NoError(t, err)
+	_, err = requestCountersignatures(t.Context(), client, server.URL, submission, gotDigest)
+	require.ErrorContains(t, err, "does not verify")
+
+	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
+	trusted, err := parseKeys(profile.TrustedKeys)
+	require.NoError(t, err)
+	_, reports, _, err := verifyCountersignatures(t.Context(), &http.Client{Timeout: 5 * time.Second}, "https://directory.invalid/witnesses.json", bundle, trusted)
+	require.NoError(t, err)
+	require.Len(t, reports, 1)
+	assert.Equal(t, "invalid", reports[0].State)
+	assert.Nil(t, reports[0].Checks)
 }
