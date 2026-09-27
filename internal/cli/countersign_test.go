@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -628,6 +629,34 @@ func TestCountersignVerifyNonArrayCountersignaturesIsAnError(t *testing.T) {
 
 			_, err = invokeCountersignVerify(t, profile, bundle)
 			assert.Equal(t, 2, ExitCode(err))
+		})
+	}
+}
+
+// TestCountersignVerifyRequiresLowercaseHex: signature and signer.key_id are
+// lowercase hexadecimal on the wire; an otherwise-valid entry spelled in
+// uppercase is invalid.
+func TestCountersignVerifyRequiresLowercaseHex(t *testing.T) {
+	for _, field := range []string{"signature", "key_id"} {
+		t.Run(field, func(t *testing.T) {
+			bundle, profile, _ := withheldBundleFixture(t)
+			digest, err := aacbundle.BundleDigest(bundle)
+			require.NoError(t, err)
+			entry, _ := countersignerEntry(t, digest, []CountersignCheck{{Name: "cadence", Result: "established"}})
+			if field == "signature" {
+				entry.Signature = strings.ToUpper(entry.Signature)
+			} else {
+				entry.Signer.KeyID = strings.ToUpper(entry.Signer.KeyID)
+			}
+			require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
+			trusted, err := parseKeys(profile.TrustedKeys)
+			require.NoError(t, err)
+			client := &http.Client{Timeout: 5 * time.Second}
+			_, reports, _, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+			require.NoError(t, err)
+			require.Len(t, reports, 1)
+			assert.Equal(t, "invalid", reports[0].State)
+			assert.Contains(t, reports[0].Detail, "lowercase")
 		})
 	}
 }

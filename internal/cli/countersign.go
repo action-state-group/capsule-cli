@@ -190,6 +190,18 @@ func signBundleDigest(key ed25519.PrivateKey, digestHex string) string {
 	return hex.EncodeToString(ed25519.Sign(key, []byte(digestHex)))
 }
 
+// isLowerHex reports whether s holds only lowercase hexadecimal digits: the
+// countersign/v1 wire spells signature and signer.key_id that way, and one
+// spelling per value keeps key comparisons exact.
+func isLowerHex(s string) bool {
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 // verifyCountersignSignature checks a countersign/v1 entry's Ed25519
 // signature (hex) by its signer key (hex) over the signing input built from
 // over, statement and type, and returns the signer key. Every failure is
@@ -197,12 +209,12 @@ func signBundleDigest(key ed25519.PrivateKey, digestHex string) string {
 // signature from a genuine verification failure.
 func verifyCountersignSignature(signerKeyHex, over string, statement interface{}, entryType, signatureHex string) (ed25519.PublicKey, error) {
 	key, err := hex.DecodeString(signerKeyHex)
-	if err != nil || len(key) != ed25519.PublicKeySize {
-		return nil, errors.New("signer key_id is not a 32-byte Ed25519 public key in hex")
+	if err != nil || len(key) != ed25519.PublicKeySize || !isLowerHex(signerKeyHex) {
+		return nil, errors.New("signer key_id is not a 32-byte Ed25519 public key in lowercase hex")
 	}
 	signature, err := hex.DecodeString(signatureHex)
-	if err != nil || len(signature) != ed25519.SignatureSize {
-		return nil, errors.New("signature is not a 64-byte Ed25519 signature in hex")
+	if err != nil || len(signature) != ed25519.SignatureSize || !isLowerHex(signatureHex) {
+		return nil, errors.New("signature is not a 64-byte Ed25519 signature in lowercase hex")
 	}
 	message, err := countersignSigningInput(over, statement, entryType)
 	if err != nil {
