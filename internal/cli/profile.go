@@ -81,8 +81,12 @@ type Profile struct {
 	ReadOnly  bool   `yaml:"read_only,omitempty" mapstructure:"read_only"`
 	// Operator is the AAC operator value the book verbs write into every
 	// record they seal. Only those verbs require it.
-	Operator   string `yaml:"operator,omitempty" mapstructure:"operator"`
-	Connection struct {
+	Operator string `yaml:"operator,omitempty" mapstructure:"operator"`
+	// ClockTolerance (a Go duration, default 5m) is how far the book's last
+	// commit time may sit ahead of this machine's clock before the book
+	// verbs refuse to write.
+	ClockTolerance string `yaml:"clock_tolerance,omitempty" mapstructure:"clock_tolerance"`
+	Connection     struct {
 		Host     string `yaml:"host" mapstructure:"host"`
 		Port     int    `yaml:"port" mapstructure:"port"`
 		Database string `yaml:"database" mapstructure:"database"`
@@ -104,6 +108,9 @@ type Profile struct {
 }
 
 func (p Profile) validate() error {
+	if _, err := p.clockTolerance(); err != nil {
+		return err
+	}
 	if !profileName.MatchString(p.Name) || (p.Type != "mysql" && p.Type != "sqlite" && p.Type != "jsonl") {
 		return inputError("profile needs a valid name and mysql, sqlite, or jsonl type")
 	}
@@ -327,7 +334,7 @@ func profileCommands() *cobra.Command {
 		f := c.Flags()
 		f.String("name", "", "New profile name")
 		f.Bool("interactive", false, "Ask for missing nonsecret connection fields")
-		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator"}
+		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator", "clock-tolerance": "clock_tolerance"}
 		for flag := range fields {
 			f.String(flag, "", "Profile setting")
 		}

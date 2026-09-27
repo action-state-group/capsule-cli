@@ -107,6 +107,9 @@ func openBook(ctx context.Context, p Profile, create bool) (openedBook, error) {
 	if err = clock.floorAtLastRecord(ctx, book); err != nil {
 		return openedBook{}, errors.Join(err, book.Release())
 	}
+	if err = clock.refuseIfAhead(p); err != nil {
+		return openedBook{}, errors.Join(err, book.Release())
+	}
 	return openedBook{book: book, store: store}, nil
 }
 
@@ -116,6 +119,13 @@ func openBook(ctx context.Context, p Profile, create bool) (openedBook, error) {
 // "before" its predecessor, and no period containing it could ever be mapped
 // onto log positions again. Held at the floor, the time still says when the
 // record was committed at the latest.
+//
+// The floor has an upper bound: a book whose last record is dated more than
+// the profile's clock tolerance ahead of this clock (one forward jump of a
+// wall clock, since stepped back) is refused for writing. Otherwise every
+// later record would be pinned to that future time, and every real period
+// before it would close as empty -- a signed "nothing happened" that cannot
+// be redone. Every verb that signs, Close included, opens the book this way.
 type monotonicClock struct {
 	floor time.Time
 }
@@ -127,6 +137,17 @@ func (c *monotonicClock) now() time.Time {
 	}
 	c.floor = t
 	return t
+}
+
+func (c *monotonicClock) refuseIfAhead(p Profile) error {
+	tolerance, err := p.clockTolerance()
+	if err != nil {
+		return err
+	}
+	if now := bookNow().UTC(); c.floor.Sub(now) > tolerance {
+		return inputError(fmt.Sprintf("the book's last record is committed at %s, %s ahead of this clock (tolerance %s): fix the clock before writing to this book", c.floor.Format(time.RFC3339), c.floor.Sub(now).Round(time.Second), tolerance))
+	}
+	return nil
 }
 
 func (c *monotonicClock) floorAtLastRecord(ctx context.Context, book *evidencebook.Book) error {
@@ -146,6 +167,21 @@ func (c *monotonicClock) floorAtLastRecord(ctx context.Context, book *evidencebo
 		c.floor = at
 	}
 	return nil
+}
+
+// defaultClockTolerance is how far ahead of this clock a book's last commit
+// time may be before the book is refused for writing.
+const defaultClockTolerance = 5 * time.Minute
+
+func (p Profile) clockTolerance() (time.Duration, error) {
+	if p.ClockTolerance == "" {
+		return defaultClockTolerance, nil
+	}
+	d, err := time.ParseDuration(p.ClockTolerance)
+	if err != nil || d < 0 {
+		return 0, inputError("clock_tolerance must be a non-negative duration such as 5m")
+	}
+	return d, nil
 }
 
 // bookError keeps the book's own input classes on exit code 2.

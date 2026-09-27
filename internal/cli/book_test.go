@@ -405,20 +405,28 @@ func TestPeerBundleCutMidPeriodIsIncomplete(t *testing.T) {
 	assert.Equal(t, evidencebook.Tallies{Matched: 1, Insufficient: 1}, result.Reconciliation.Tallies)
 }
 
-// A wall clock that steps back 30 hours between two appends (NTP, a
-// resumed VM, a store shared between machines) must not leave the day
-// unclosable: the book's commit clock never goes below its last record.
+// A wall clock that steps back never leaves a day unclosable. A small step
+// (inside the clock tolerance) is absorbed: the record is committed at its
+// predecessor's time. A large one (30 hours) is refused for writing until
+// the clock is right again, and then the day closes with every exchange.
 func TestCloseSurvivesAClockThatStepsBack(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	set := bookClock(t, day0.Add(12*time.Hour))
 	p, _ := bookProfile(t, "a")
 	appendHalves(t, p, half{"x1", "r1", "p1"})
-	set(day0.Add(-18 * time.Hour))
+	set(day0.Add(12*time.Hour - 3*time.Minute))
 	appendHalves(t, p, half{"x2", "r2", "p2"})
+
+	set(day0.Add(-18 * time.Hour))
+	_, err := openBook(t.Context(), p, true)
+	require.ErrorIs(t, err, ErrInput, "30 hours behind the book: refused, not recorded out of order")
+	set(day0.Add(13 * time.Hour))
+	appendHalves(t, p, half{"x3", "r3", "p3"})
+
 	set(day1)
 	result, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b")
 	require.NoError(t, err)
-	assert.Equal(t, 2, result.Reconciliation.Tallies.Insufficient, "both exchanges are in the day's Close")
+	assert.Equal(t, 3, result.Reconciliation.Tallies.Insufficient, "every exchange is in the day's Close")
 }
 
 // appendEntries appends arbitrary entries, for records a helper above does
@@ -852,4 +860,36 @@ func TestPeerCheckpointKeyWithoutPeerIsRefused(t *testing.T) {
 	set(day1)
 	_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--peer-checkpoint-key", strings.Repeat("ab", 32))
 	assert.ErrorIs(t, err, ErrInput)
+}
+
+// One forward jump of the wall clock (to 2099 for one append, then back)
+// must not pin every later record to 2099 and let a real period close as
+// an empty, all-zero Close: the book is refused for writing -- Close
+// included -- while its last record is dated beyond the clock tolerance.
+func TestAForwardClockJumpIsRefusedNotSealedAsEmpty(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	set(time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC))
+	appendHalves(t, p, half{"x2", "r2", "p2"})
+	set(day1)
+
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-24", "--counterparty", "b")
+	require.ErrorIs(t, err, ErrInput, "no empty Close is sealed for the real day")
+	assert.ErrorContains(t, err, "ahead of this clock")
+	_, err = openBook(t.Context(), p, true)
+	require.ErrorIs(t, err, ErrInput, "no writer opens the book")
+
+	// A few minutes of skew is not a jump.
+	q, _ := bookProfile(t, "q")
+	set(day1.Add(3 * time.Minute))
+	appendHalves(t, q, half{"y1", "r1", "p1"})
+	set(day1)
+	appendHalves(t, q, half{"y2", "r2", "p2"})
+
+	// An operator who accepts the displaced time raises the tolerance.
+	p.ClockTolerance = "700000h"
+	require.NoError(t, saveProfile(p, true))
+	appendHalves(t, p, half{"x3", "r3", "p3"})
 }
