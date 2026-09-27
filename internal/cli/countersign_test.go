@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -52,8 +54,19 @@ func withheldBundleFixture(t *testing.T) (map[string]interface{}, Profile, ed255
 	return bundle, profile, key
 }
 
-// countersignerEntry signs a bundle digest with a fresh countersigner key and
-// returns the wire entry plus that key's hex public key.
+// signCountersignEntry sets entry.Signature to key's signature over the
+// entry's countersign/v1 signing input.
+func signCountersignEntry(t *testing.T, key ed25519.PrivateKey, entry *CountersignatureEntry) {
+	t.Helper()
+	statement, err := jsonValue(entry.Statement)
+	require.NoError(t, err)
+	message, err := countersignSigningInput(entry.Over, statement, entry.Type)
+	require.NoError(t, err)
+	entry.Signature = hex.EncodeToString(ed25519.Sign(key, message))
+}
+
+// countersignerEntry signs a bundle digest and statement with a fresh
+// countersigner key and returns the wire entry plus that key's hex public key.
 func countersignerEntry(t *testing.T, digest string, checks []CountersignCheck) (CountersignatureEntry, string) {
 	t.Helper()
 	public, private, err := ed25519.GenerateKey(rand.Reader)
@@ -63,8 +76,8 @@ func countersignerEntry(t *testing.T, digest string, checks []CountersignCheck) 
 		Signer:    CountersignSigner{ID: "countersign.example", KeyID: hex.EncodeToString(public)},
 		Over:      digest,
 		Statement: CountersignStatement{Checks: checks, RecomputedAt: "2026-09-16T00:00:00Z", Scope: CountersignScope{LedgerID: "test-log", ClosureDepth: json.Number("2")}},
-		Signature: signBundleDigest(private, digest),
 	}
+	signCountersignEntry(t, private, &entry)
 	return entry, hex.EncodeToString(public)
 }
 
@@ -151,6 +164,7 @@ func TestCountersignRequestAgainstMockService(t *testing.T) {
 	assert.Equal(t, "Countersign Test Operator", reports[0].SignerName)
 	assert.Equal(t, "resolved", summary)
 	assert.True(t, *reports[0].Independent)
+	assert.Equal(t, receiptAbsent, reports[0].Receipt, "an entry without a receipt is still valid; its receipt is reported absent")
 }
 
 // TestCountersignVerifyTamperedEntryFails is the mutant-catching negative:
@@ -237,8 +251,8 @@ func TestCountersignVerifySelfSignatureNotIndependent(t *testing.T) {
 		Signer:    CountersignSigner{ID: profile.LogID, KeyID: hex.EncodeToString(public)},
 		Over:      digest,
 		Statement: CountersignStatement{RecomputedAt: "2026-09-16T00:00:00Z", Scope: CountersignScope{LedgerID: profile.LogID}},
-		Signature: signBundleDigest(key, digest),
 	}
+	signCountersignEntry(t, key, &entry)
 	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
 
 	trusted, err := parseKeys(profile.TrustedKeys)
@@ -359,57 +373,138 @@ print(json.dumps({
 	assert.Equal(t, "pass", pyResult.PerRecordMembership)
 }
 
-// TestCountersignAnchorEntryInterop is the wire-shape reconciliation's
-// acceptance proof: a countersignatures[] entry PRODUCED by the real
-// capsule-anchor countersign engine (Python) VERIFIES GREEN here and
-// resolves against the countersigner directory -- a genuine cross-language
-// round trip, not a same-language self-check. The fixture is COMMITTED
-// (testdata/countersign_anchor_interop.json, generated once from the real
-// capsule_anchor.countersign package after the reconciliation fixes: sign
-// over the bundle digest, not the statement; key_id is the full 64-hex
-// Ed25519 public key, not a truncated hash) rather than invoked live at test
-// time -- capsule-anchor is a separate, unpublished repo this CLI's CI has
-// no toolchain for, so a live invocation would only ever skip, exactly the
-// failure mode that let the two implementations diverge unnoticed (see the
-// wire-shape reconciliation brief). Regenerate the fixture whenever the
-// anchor's countersign wire shape changes.
-func TestCountersignAnchorEntryInterop(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("testdata", "countersign_anchor_interop.json"))
-	require.NoError(t, err)
-	fixture, err := decodeBundleJSON(raw)
-	require.NoError(t, err)
+// countersignVectorSHA256 pins testdata/countersign-v1.json to the golden
+// vector capsule-anchor generates and commits
+// (packages/tests/countersign/vectors/countersign-v1.json). The two copies
+// must stay byte-identical: regenerate there, copy here, update this pin.
+const countersignVectorSHA256 = "16831a85daefdfdbc16abcfa6d07ce27ab55ea52ecfb746e6b6a288821f2f722"
 
-	bundle, ok := fixture["bundle_for_digest"].(map[string]interface{})
+type countersignVector struct {
+	SignerPublicKeyHex   string                 `json:"signer_public_key_hex"`
+	ProducerPublicKeyHex string                 `json:"producer_public_key_hex"`
+	Directory            json.RawMessage        `json:"directory"`
+	Bundle               map[string]interface{} `json:"bundle"`
+	BundleDigest         string                 `json:"bundle_digest"`
+	SigningInput         string                 `json:"signing_input"`
+	Entry                interface{}            `json:"entry"`
+	Negative             []struct {
+		Name   string            `json:"name"`
+		Entry  interface{}       `json:"entry"`
+		Expect map[string]string `json:"expect"`
+	} `json:"negative"`
+}
+
+func loadCountersignVector(t *testing.T) countersignVector {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "countersign-v1.json"))
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
+	require.Equal(t, countersignVectorSHA256, hex.EncodeToString(sum[:]), "testdata/countersign-v1.json drifted from the pinned golden vector")
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var vector countersignVector
+	require.NoError(t, decoder.Decode(&vector))
+	return vector
+}
+
+// verifyVectorEntry attaches entry to a copy of the vector's bundle and runs
+// the real countersign verify core against the vector's directory.
+func verifyVectorEntry(t *testing.T, vector countersignVector, entry interface{}) (string, []countersignatureReport, string, error) {
+	t.Helper()
+	bundle, err := jsonValue(vector.Bundle)
+	require.NoError(t, err)
+	bundleMap, ok := bundle.(map[string]interface{})
 	require.True(t, ok)
-	bundle["countersignatures"] = []interface{}{fixture["countersignature_entry"]}
-
-	expectedDigest, ok := fixture["bundle_digest"].(string)
-	require.True(t, ok)
-	gotDigest, err := aacbundle.BundleDigest(bundle)
-	require.NoError(t, err, "Go's JCS canonicalization must agree with the anchor's own digest over the same content")
-	require.Equal(t, expectedDigest, gotDigest)
-
-	directoryRaw, err := json.Marshal(fixture["directory"])
-	require.NoError(t, err)
+	bundleMap["countersignatures"] = []interface{}{entry}
 	dirServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(directoryRaw)
+		_, _ = w.Write(vector.Directory)
 	}))
-	defer dirServer.Close()
+	t.Cleanup(dirServer.Close)
 	client := &http.Client{Transport: dirServer.Client().Transport, Timeout: 5 * time.Second}
-
-	producerPubkeyHex, ok := fixture["producer_pubkey_hex"].(string)
-	require.True(t, ok)
-	trusted, err := parseKeys([]string{producerPubkeyHex})
+	trusted, err := parseKeys([]string{vector.ProducerPublicKeyHex})
 	require.NoError(t, err)
+	return verifyCountersignatures(t.Context(), client, dirServer.URL, bundleMap, trusted)
+}
 
-	digest, reports, summary, err := verifyCountersignatures(t.Context(), client, dirServer.URL, bundle, trusted)
-	require.NoError(t, err, "a genuine anchor-produced countersignature must verify without error")
-	assert.Equal(t, expectedDigest, digest)
+// TestCountersignGoldenVectorSigningInput checks this CLI builds exactly the
+// vector's signing input, UTF8(JCS({over, statement, type})), from the entry.
+func TestCountersignGoldenVectorSigningInput(t *testing.T) {
+	vector := loadCountersignVector(t)
+	entry, ok := vector.Entry.(map[string]interface{})
+	require.True(t, ok)
+	over, _ := entry["over"].(string)
+	entryType, _ := entry["type"].(string)
+	message, err := countersignSigningInput(over, entry["statement"], entryType)
+	require.NoError(t, err)
+	assert.Equal(t, vector.SigningInput, string(message))
+}
+
+// TestCountersignGoldenVectorVerifies is the cross-language acceptance proof:
+// an entry produced by capsule-anchor's real signer and log verifies here,
+// signature and receipt, and resolves against the directory.
+func TestCountersignGoldenVectorVerifies(t *testing.T) {
+	vector := loadCountersignVector(t)
+	digest, reports, summary, err := verifyVectorEntry(t, vector, vector.Entry)
+	require.NoError(t, err, "the anchor-produced golden entry must verify")
+	assert.Equal(t, vector.BundleDigest, digest)
 	require.Len(t, reports, 1)
 	assert.Equal(t, "resolved", reports[0].State)
 	assert.Equal(t, "Countersign Test Operator", reports[0].SignerName)
+	assert.Equal(t, receiptVerified, reports[0].Receipt, reports[0].ReceiptDetail)
 	require.NotNil(t, reports[0].Independent)
 	assert.True(t, *reports[0].Independent)
 	assert.Equal(t, "resolved", summary)
+	require.Len(t, reports[0].Checks, 5)
+	assert.Equal(t, CountersignCheck{Name: "range membership", Result: "failed"}, reports[0].Checks[1])
+}
+
+// TestCountersignGoldenVectorNegatives runs every negative case in the
+// vector. flipped-result is the one this fix exists for: the genuine
+// signature with one result rewritten "failed" -> "established" must fail.
+func TestCountersignGoldenVectorNegatives(t *testing.T) {
+	vector := loadCountersignVector(t)
+	names := map[string]bool{}
+	for _, tc := range vector.Negative {
+		names[tc.Name] = true
+		t.Run(tc.Name, func(t *testing.T) {
+			_, reports, _, err := verifyVectorEntry(t, vector, tc.Entry)
+			if tc.Expect["signature"] == "invalid" {
+				require.Error(t, err, "a countersignature whose signing input was altered must fail verification")
+				assert.ErrorContains(t, err, "does not verify")
+				assert.Nil(t, reports, "checks of an invalid entry must never be displayed")
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, reports, 1)
+			assert.Equal(t, tc.Expect["receipt"], reports[0].Receipt)
+			assert.NotEmpty(t, reports[0].ReceiptDetail)
+			assert.Equal(t, "resolved", reports[0].State, "an unverified receipt does not invalidate the entry")
+		})
+	}
+	for _, name := range []string{"flipped-result", "digest-only-signature", "receipt-for-other-statement"} {
+		assert.True(t, names[name], "golden vector is missing negative case %q", name)
+	}
+}
+
+// TestCountersignRequestRefusesFlippedResult covers the request path: a
+// service response whose statement was altered after signing is refused
+// before it is ever attached to the bundle file.
+func TestCountersignRequestRefusesFlippedResult(t *testing.T) {
+	bundle, profile, key := withheldBundleFixture(t)
+	digest, err := aacbundle.BundleDigest(bundle)
+	require.NoError(t, err)
+	entry, _ := countersignerEntry(t, digest, []CountersignCheck{{Name: "range membership", Result: "failed"}})
+	entry.Statement.Checks[0].Result = "established"
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(countersignSubmissionResponse{Countersignatures: []CountersignatureEntry{entry}}))
+	}))
+	defer server.Close()
+	client := &http.Client{Transport: server.Client().Transport, Timeout: 5 * time.Second}
+	submission, gotDigest, err := buildCountersignSubmission(bundle, "30d", profile.LogID, key)
+	require.NoError(t, err)
+	_, err = requestCountersignatures(t.Context(), client, server.URL, submission, gotDigest)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "does not verify")
 }

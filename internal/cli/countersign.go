@@ -19,6 +19,7 @@ import (
 	"time"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/spf13/cobra"
 )
 
@@ -93,12 +94,11 @@ type CountersignStatement struct {
 	Scope        CountersignScope   `json:"scope"`
 }
 
-// CountersignatureEntry is one element of bundle["countersignatures"], per
-// the proposed countersignature entry shape: {signer, over,
-// statement, signature, receipt?}. The signature verifies over the bundle
-// digest (the "over" field, UTF-8 bytes of its 64-hex-character form) -- not
-// over the statement, which accompanies the signature but is not what is
-// signed (the entry shape's own definition sentence). "independent" is never
+// CountersignatureEntry is one element of bundle["countersignatures"]:
+// {type, signer, over, statement, signature, receipt?}. The signature
+// verifies over UTF8(JCS({"over": over, "statement": statement, "type":
+// type})) (see countersignSigningInput): it binds both the bundle digest and
+// every check result, so a rewritten result fails verification. "independent" is never
 // TRUSTED off the wire: a self-countersignature is well-formed and it is the
 // verifier's job to render it as not independent by comparing the signer's
 // key against the bundle producer's trusted keys, never the countersigner's
@@ -149,6 +149,37 @@ type countersignerDirectory struct {
 	Countersigners []countersignerDirectoryRow `json:"countersigners"`
 }
 
+// countersignSigningInput returns the bytes a countersign/v1 signature
+// covers: UTF8(JCS({"over": over, "statement": statement, "type": type})).
+// statement must be the entry's statement member as decoded from the wire
+// (with json.Number for numbers), never a re-encoding of the Go struct: a
+// member the struct does not declare is still signed, and dropping it would
+// change the bytes. An entry with no type (tolerated, see
+// verifyCountersignatures) is verified as countersign/v1, the only type this
+// path handles.
+func countersignSigningInput(over string, statement interface{}, entryType string) ([]byte, error) {
+	if entryType == "" {
+		entryType = countersignAPI
+	}
+	return canonical.JCS(map[string]interface{}{"over": over, "statement": statement, "type": entryType})
+}
+
+// jsonValue re-decodes v as a generic JSON value with json.Number, the form
+// canonical.JCS accepts.
+func jsonValue(v any) (interface{}, error) {
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.UseNumber()
+	var value interface{}
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
 // signBundleDigest signs the UTF-8 bytes of a bundle digest (a 64-lowercase-
 // hex-character string) with an Ed25519 key. AGENTS.md asks that AAC
 // digest/signature rules not be reimplemented; this is not one of those --
@@ -159,23 +190,28 @@ func signBundleDigest(key ed25519.PrivateKey, digestHex string) string {
 	return hex.EncodeToString(ed25519.Sign(key, []byte(digestHex)))
 }
 
-// verifyDigestSignature checks an Ed25519 signature (hex) by a signer key
-// (hex) over a bundle digest (hex). Every failure is reported distinctly so a
-// caller can tell a malformed key from a malformed signature from a genuine
-// verification failure.
-func verifyDigestSignature(signerKeyHex, digestHex, signatureHex string) error {
+// verifyCountersignSignature checks a countersign/v1 entry's Ed25519
+// signature (hex) by its signer key (hex) over the signing input built from
+// over, statement and type, and returns the signer key. Every failure is
+// reported distinctly so a caller can tell a malformed key from a malformed
+// signature from a genuine verification failure.
+func verifyCountersignSignature(signerKeyHex, over string, statement interface{}, entryType, signatureHex string) (ed25519.PublicKey, error) {
 	key, err := hex.DecodeString(signerKeyHex)
 	if err != nil || len(key) != ed25519.PublicKeySize {
-		return errors.New("signer key_id is not a 32-byte Ed25519 public key in hex")
+		return nil, errors.New("signer key_id is not a 32-byte Ed25519 public key in hex")
 	}
 	signature, err := hex.DecodeString(signatureHex)
 	if err != nil || len(signature) != ed25519.SignatureSize {
-		return errors.New("signature is not a 64-byte Ed25519 signature in hex")
+		return nil, errors.New("signature is not a 64-byte Ed25519 signature in hex")
 	}
-	if !ed25519.Verify(ed25519.PublicKey(key), []byte(digestHex), signature) {
-		return errors.New("signature does not verify over the bundle digest")
+	message, err := countersignSigningInput(over, statement, entryType)
+	if err != nil {
+		return nil, fmt.Errorf("signing input cannot be canonicalized: %w", err)
 	}
-	return nil
+	if !ed25519.Verify(ed25519.PublicKey(key), message, signature) {
+		return nil, errors.New("signature does not verify over the bundle digest and statement")
+	}
+	return ed25519.PublicKey(key), nil
 }
 
 // validateServiceURL requires an absolute HTTPS URL without embedded
@@ -287,9 +323,11 @@ func buildCountersignSubmission(bundle map[string]interface{}, window, requester
 
 // requestCountersignatures submits a signed submission to a countersign
 // service and returns its countersignatures[] entries, each already checked
-// to verify over the submitted digest -- a response entry that does not
-// verify, or that names a different digest, is refused here rather than
-// attached to the bundle file.
+// to verify over the submitted digest and its own statement -- a response
+// entry that does not verify, or that names a different digest, is refused
+// here rather than attached to the bundle file. The response was decoded
+// strictly (no unknown fields), so the struct's statement is the whole
+// statement the service sent.
 func requestCountersignatures(ctx context.Context, client *http.Client, service string, submission countersignSubmission, digest string) ([]CountersignatureEntry, error) {
 	var response countersignSubmissionResponse
 	if err := postJSON(ctx, client, service, submission, &response); err != nil {
@@ -302,7 +340,11 @@ func requestCountersignatures(ctx context.Context, client *http.Client, service 
 		if entry.Over != digest {
 			return nil, fmt.Errorf("countersignatures[%d] signs a different bundle digest", i)
 		}
-		if err := verifyDigestSignature(entry.Signer.KeyID, digest, entry.Signature); err != nil {
+		statement, err := jsonValue(entry.Statement)
+		if err != nil {
+			return nil, fmt.Errorf("countersignatures[%d] statement is malformed: %w", i, err)
+		}
+		if _, err := verifyCountersignSignature(entry.Signer.KeyID, digest, statement, entry.Type, entry.Signature); err != nil {
 			return nil, fmt.Errorf("countersignatures[%d]: %w", i, err)
 		}
 	}
@@ -314,12 +356,8 @@ func requestCountersignatures(ctx context.Context, client *http.Client, service 
 func attachCountersignatures(bundle map[string]interface{}, entries []CountersignatureEntry) error {
 	existing, _ := bundle["countersignatures"].([]interface{})
 	for _, entry := range entries {
-		raw, err := json.Marshal(entry)
+		value, err := jsonValue(entry)
 		if err != nil {
-			return err
-		}
-		var value interface{}
-		if err := json.Unmarshal(raw, &value); err != nil {
 			return err
 		}
 		existing = append(existing, value)
@@ -356,18 +394,23 @@ func resolveSigner(dir countersignerDirectory, keyHex string) (countersignerDire
 // the caller renders when the list is empty), plus "unresolved_signer" for an
 // entry whose signer verifies but is absent from the directory, and
 // "unverified" for a wire type this CLI does not define (including the -00
-// spec's own reserved "cose-sign1").
+// spec's own reserved "cose-sign1"). Receipt is verified / unverified /
+// absent for a countersign/v1 entry (see verifyCountersignReceipt), with
+// ReceiptDetail naming why an unverified receipt did not verify.
 type countersignatureReport struct {
-	State        string             `json:"state"`
-	Signer       CountersignSigner  `json:"signer"`
-	Independent  *bool              `json:"independent,omitempty"`
-	SignerName   string             `json:"signer_name,omitempty"`
-	Checks       []CountersignCheck `json:"checks,omitempty"`
-	RecomputedAt string             `json:"recomputed_at,omitempty"`
+	State         string             `json:"state"`
+	Receipt       string             `json:"receipt,omitempty"`
+	ReceiptDetail string             `json:"receipt_detail,omitempty"`
+	Signer        CountersignSigner  `json:"signer"`
+	Independent   *bool              `json:"independent,omitempty"`
+	SignerName    string             `json:"signer_name,omitempty"`
+	Checks        []CountersignCheck `json:"checks,omitempty"`
+	RecomputedAt  string             `json:"recomputed_at,omitempty"`
 }
 
 // verifyCountersignatures is countersign verify's testable core: it verifies
-// every countersignatures[] entry's signature over the bundle digest, flags a
+// every countersignatures[] entry's signature over the bundle digest and its
+// statement, checks the entry's receipt when one is present, flags a
 // self-countersignature as not independent by comparing against the bundle
 // producer's trusted keys, and resolves every other signer against the
 // countersigner directory. A tampered entry (bad signature, or an "over" that
@@ -396,6 +439,16 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 		if err := json.Unmarshal(encoded, &entry); err != nil {
 			return "", nil, "", fmt.Errorf("countersignatures[%d] is malformed: %w", i, err)
 		}
+		// The signing input and the receipt are computed over the statement
+		// exactly as it appears on the wire, never over the struct above.
+		var wire struct {
+			Statement interface{} `json:"statement"`
+		}
+		decoder := json.NewDecoder(bytes.NewReader(encoded))
+		decoder.UseNumber()
+		if err := decoder.Decode(&wire); err != nil {
+			return "", nil, "", fmt.Errorf("countersignatures[%d] is malformed: %w", i, err)
+		}
 		if entry.Type != "" && entry.Type != countersignAPI {
 			// A reserved slot this core does not define: report it, verify
 			// nothing about it, never fail the bundle for it (the -00 spec's
@@ -411,9 +464,11 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 		if entry.Over != digest {
 			return "", nil, "", fmt.Errorf("countersignatures[%d] signs a different bundle digest", i)
 		}
-		if err := verifyDigestSignature(entry.Signer.KeyID, digest, entry.Signature); err != nil {
+		signerKey, err := verifyCountersignSignature(entry.Signer.KeyID, digest, wire.Statement, entry.Type, entry.Signature)
+		if err != nil {
 			return "", nil, "", fmt.Errorf("countersignatures[%d]: %w", i, err)
 		}
+		receiptState, receiptErr := verifyCountersignReceipt(signerKey, wire.Statement, entry.Receipt)
 		independent := true
 		for _, key := range trustedProducerKeys {
 			if strings.EqualFold(hex.EncodeToString(key), entry.Signer.KeyID) {
@@ -421,7 +476,10 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 				break
 			}
 		}
-		report := countersignatureReport{Signer: entry.Signer, Independent: &independent, Checks: entry.Statement.Checks, RecomputedAt: entry.Statement.RecomputedAt}
+		report := countersignatureReport{Signer: entry.Signer, Independent: &independent, Checks: entry.Statement.Checks, RecomputedAt: entry.Statement.RecomputedAt, Receipt: receiptState}
+		if receiptErr != nil {
+			report.ReceiptDetail = receiptErr.Error()
+		}
 		if !independent {
 			report.State = "not_independent"
 			reports = append(reports, report)
@@ -545,7 +603,7 @@ func countersignCommands() *cobra.Command {
 	request.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root (when building a fresh bundle)")
 	group.AddCommand(request)
 
-	verify := &cobra.Command{Use: "verify BUNDLE", Short: "Verify every countersignatures[] entry's signature over the bundle digest and resolve its signer", Args: oneArg, RunE: func(c *cobra.Command, args []string) error {
+	verify := &cobra.Command{Use: "verify BUNDLE", Short: "Verify every countersignatures[] entry's signature over the bundle digest and statement, check its receipt, and resolve its signer", Args: oneArg, RunE: func(c *cobra.Command, args []string) error {
 		profile, err := selected(c)
 		if err != nil {
 			return err
@@ -576,7 +634,7 @@ func countersignCommands() *cobra.Command {
 			return err
 		}
 		for _, report := range reports {
-			if report.State == "unresolved_signer" {
+			if report.State == "unresolved_signer" || report.Receipt == receiptUnverified {
 				return ErrPartial
 			}
 		}
