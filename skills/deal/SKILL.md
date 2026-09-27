@@ -80,7 +80,7 @@ capsulectl --profile deal deal open --input open.json
 `open.json` carries: `type`; `intent.verbatim` (**the user's exact words**,
 copied, never paraphrased); `intent.asked` (the parts of the request you can
 make exact), `intent.max_total_minor`, `intent.allowed` (the actions the user
-asked for); `who` (every identifier you can see: `name`, `domain`, `phone`,
+asked for: see below); `who` (every identifier you can see: `name`, `domain`, `phone`,
 `email`, `payee`, `relay_address`, `profile_id`); `terms` (`item`,
 `quantity`, `price_minor`, `deposit_minor`, `currency`, `when`, `place`,
 `conditions`); `claims` (each with `text` and its `source`); `recourse`
@@ -90,6 +90,16 @@ units (cents), and `currency` is a 3-letter code. A `source` is a short word
 (`seller_message`, `listing_photo`). Keep claim text free of names, phone
 numbers and emails: a step that would carry one is refused. Keep the
 returned `deal_id`.
+
+`intent.allowed` decides what the user has already said yes to:
+
+- When the user asks only for options, or says not to act yet ("find me
+  some hotels, don't book"), send `"allowed": []`. Nothing is allowed, so
+  every point of no return pauses for the user's own answer.
+- When the user asks you to act, list those actions, for example
+  `"allowed": ["pay"]`.
+- Leaving `allowed` out means no restriction. Leave it out only when the
+  user has clearly asked you to handle the whole deal.
 
 **2. Note** everything that happens, as it happens:
 
