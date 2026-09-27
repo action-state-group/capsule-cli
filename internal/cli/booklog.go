@@ -152,9 +152,56 @@ func openRetiredLog(ctx context.Context, p Profile) (out retiredLog, release fun
 	return out, log.Close, nil
 }
 
-func readRetiredLog(ctx context.Context, p Profile) (retiredLog, error) {
-	out, release, err := openRetiredLog(ctx, p)
-	return out, errors.Join(err, release())
+// scanRetiredLog reads the retired cll.jsonl the way readBookFiles reads the
+// book: read-only, no lock, an incomplete final line ignored. Every command
+// that only needs to check the retired log uses it, so a read-only file, an
+// older binary holding the file's lock, or another reader never stands in a
+// command's way (and a check never stands in theirs). Only `store migrate`,
+// which must keep an older binary out while it copies, takes the lock.
+func scanRetiredLog(p Profile) (retiredLog, error) {
+	lines, err := completeLines(retiredLogPath(p))
+	if errors.Is(err, os.ErrNotExist) {
+		return retiredLog{}, nil
+	}
+	if err != nil {
+		return retiredLog{}, err
+	}
+	var out retiredLog
+	for _, line := range lines {
+		var event struct {
+			Type  string `json:"type"`
+			Entry *struct {
+				Seq        string `json:"seq"`
+				Value      string `json:"value"`
+				AppendedAt string `json:"appendedAt"`
+			} `json:"entry"`
+			State *struct {
+				Checkpoint     *string `json:"checkpoint"`
+				CheckpointSize *string `json:"checkpointSize"`
+			} `json:"state"`
+		}
+		if err = json.Unmarshal(line, &event); err != nil {
+			return retiredLog{}, errors.Join(cll.ErrCorrupt, err)
+		}
+		switch {
+		case event.Type == "entry.append" && event.Entry != nil:
+			seq, err := strconv.ParseUint(event.Entry.Seq, 10, 64)
+			value, valueErr := base64.StdEncoding.DecodeString(event.Entry.Value)
+			at, timeErr := time.Parse(time.RFC3339Nano, event.Entry.AppendedAt)
+			if err != nil || valueErr != nil || timeErr != nil || seq != uint64(len(out.entries)+1) {
+				return retiredLog{}, errors.Join(cll.ErrCorrupt, errors.New("the retired cll.jsonl is not a dense sequence of entries"))
+			}
+			out.entries = append(out.entries, cll.Entry{Seq: seq, Value: value, AppendedAt: at.UTC()})
+		case event.Type == "cll.commit" && event.State != nil && event.State.Checkpoint != nil && event.State.CheckpointSize != nil:
+			statement, err := base64.StdEncoding.DecodeString(*event.State.Checkpoint)
+			size, sizeErr := strconv.ParseUint(*event.State.CheckpointSize, 10, 64)
+			if err != nil || sizeErr != nil {
+				return retiredLog{}, errors.Join(cll.ErrCorrupt, errors.New("the retired cll.jsonl holds a malformed checkpoint"))
+			}
+			out.checkpoint = &cll.CheckpointState{Bytes: statement, Size: size}
+		}
+	}
+	return out, nil
 }
 
 // migrationStatement is the body of the record `store migrate` seals once
@@ -187,8 +234,10 @@ type backfillStatement struct {
 	RetiredSeq   uint64 `json:"retired_seq"`
 	// Anchored is true when the retired log's checkpoint, verified under
 	// the profile's trusted checkpoint key with its root recomputed from the
-	// retired entries, commits this entry; false for an entry past that
-	// checkpoint or from a log that was never checkpointed.
+	// retired entries, commits this entry's value at its position; false for
+	// an entry past that checkpoint or from a log that was never
+	// checkpointed. It never covers the entry's time: the MMR commits values
+	// only, so source_asserted_at is the retired log's own unsigned claim.
 	Anchored       bool               `json:"anchored"`
 	ProvenanceMode backfillProvenance `json:"provenance_mode"`
 	// CapsuleOmitted says why a capsule the artifact store holds was not
@@ -213,9 +262,9 @@ type migrateResult struct {
 
 // migrateStore moves a jsonl profile's pre-book cll.jsonl into its book,
 // once, in order, and resumably, holding the retired log's lock throughout.
-// A retired log that was ever checkpointed needs a new log id: its signed
-// checkpoints name its own tree under (log_id, checkpoint key), and the
-// book's different tree under the same pair would read as a fork of it.
+// The book always gets a new log id: any checkpoint the retired log ever
+// signed names its own tree under (log_id, checkpoint key), and the book's
+// different tree under the same pair would read as a fork of it.
 func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time) (_ migrateResult, err error) {
 	retired, release, err := openRetiredLog(ctx, p)
 	if err != nil {
@@ -245,8 +294,13 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 	var opened openedBook
 	if _, statErr := os.Stat(filepath.Join(p.Connection.Database, "book", "log.jsonl")); statErr == nil {
 		if opened, err = openBookUnguarded(ctx, book, false); err != nil {
-			if errors.Is(err, evidencebook.ErrCorrupt) && newLogID == "" {
-				err = errors.Join(err, inputError("this book may belong to a migration to a new log id that was interrupted; re-run 'store migrate' with that --log-id"))
+			if errors.Is(err, evidencebook.ErrCorrupt) {
+				// The book's records name another log id.
+				hint := "this book may belong to a migration to a new log id that was interrupted; re-run 'store migrate' with that --log-id"
+				if newLogID != "" {
+					hint = "this profile's book/ holds records of another log id: if a migration to a different --log-id was interrupted, re-run it with that one; otherwise move the book/ directory aside (keep it) and re-run"
+				}
+				err = errors.Join(err, inputError(hint))
 			}
 			return migrateResult{}, err
 		}
@@ -267,8 +321,12 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 			return result, finishMigration(p, book)
 		}
 	}
-	if retired.checkpoint != nil && book.LogID == p.LogID {
-		return migrateResult{}, inputError("the retired log was checkpointed under this log_id; give a new --log-id")
+	// Always a new log id: the retired log's tree and the book's tree must
+	// never share (log_id, checkpoint key). Whether the retired log was ever
+	// checkpointed or witnessed cannot be read reliably from the file itself
+	// (a stripped commit line reads as "never checkpointed").
+	if book.LogID == p.LogID {
+		return migrateResult{}, inputError("store migrate needs --log-id with a new log id: the book's log must never share the retired log's")
 	}
 	// Nothing is appended until the retired log's own checkpoint is shown to
 	// commit the entries being carried over.
@@ -365,7 +423,7 @@ func backfilledSoFar(ctx context.Context, book *evidencebook.Book, retiredLogID 
 			continue
 		case recordTypeBackfilled:
 		default:
-			return 0, inputError("this profile's book already holds records; migration must come first")
+			return 0, inputError("this profile's book already holds records; migration must come first: move the book/ directory aside (keep it), run 'store migrate --log-id NEW' into a fresh book, then decide what to do with the set-aside records")
 		}
 		var st backfillStatement
 		if err = json.Unmarshal(r.Header.Statement, &st); err != nil {
@@ -445,7 +503,7 @@ func requireNoRetiredEntries(ctx context.Context, p Profile, book *evidencebook.
 // book's migration record, so the read-only listing applies the same rule
 // without opening the book.
 func requireRetiredMigrated(ctx context.Context, p Profile, migration func() (migrationStatement, bool, error)) error {
-	retired, err := readRetiredLog(ctx, p)
+	retired, err := scanRetiredLog(p)
 	if err != nil {
 		return err
 	}

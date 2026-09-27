@@ -220,10 +220,15 @@ func TestMigrateBackfillsTheRetiredLogInOrder(t *testing.T) {
 	p, _ := bookProfile(t, "a")
 	entries := legacyLog(t, p, 2, 1, false)
 
-	result, err := runMigrate(t)
+	_, err := runMigrate(t)
+	require.ErrorIs(t, err, ErrInput, "a migration always needs a new --log-id")
+	result, err := runMigrate(t, "--log-id", "a-book-v2")
 	require.NoError(t, err)
 	assert.Equal(t, uint64(3), result.Backfilled)
-	assert.Equal(t, p.LogID, result.LogID, "an uncheckpointed retired log keeps its log_id")
+	assert.Equal(t, "a-book-v2", result.LogID)
+	retiredLogID := p.LogID
+	p, err = loadProfile("a")
+	require.NoError(t, err)
 
 	opened, err := openBook(t.Context(), p, false)
 	require.NoError(t, err)
@@ -236,6 +241,7 @@ func TestMigrateBackfillsTheRetiredLogInOrder(t *testing.T) {
 		var st backfillStatement
 		require.NoError(t, json.Unmarshal(r.Header.Statement, &st))
 		assert.Equal(t, entries[i].Seq, st.RetiredSeq)
+		assert.Equal(t, retiredLogID, st.RetiredLogID)
 		assert.Equal(t, "backfilled", st.ProvenanceMode.Mode)
 		assert.Equal(t, entries[i].AppendedAt.UTC().Format(time.RFC3339Nano), st.ProvenanceMode.SourceAssertedAt)
 		assert.Equal(t, now.UTC().Format(time.RFC3339Nano), st.ProvenanceMode.ImportedAt)
@@ -313,12 +319,14 @@ func TestMigrateResumesAndRefusesAForeignBook(t *testing.T) {
 	bookClock(t, day1)
 	p, _ := bookProfile(t, "a")
 	entries := legacyLog(t, p, 2, 0, false)
-	opened, err := openBookUnguarded(t.Context(), p, true)
+	target := p
+	target.LogID = "a-book-v2"
+	opened, err := openBookUnguarded(t.Context(), target, true)
 	require.NoError(t, err)
 	require.NoError(t, appendBackfilled(t.Context(), opened.book, nil, p.LogID, entries[0], false, len(entries), day1))
 	require.NoError(t, opened.release())
 
-	result, err := runMigrate(t)
+	result, err := runMigrate(t, "--log-id", "a-book-v2")
 	require.NoError(t, err)
 	assert.Equal(t, uint64(2), result.Backfilled)
 	listed := listLog(t, "a").Entries
@@ -333,11 +341,13 @@ func TestMigrateResumesAndRefusesAForeignBook(t *testing.T) {
 	// A book whose backfilled history is out of the retired order is refused.
 	o, _ := bookProfile(t, "o")
 	out := legacyLog(t, o, 2, 0, false)
-	wrong, err := openBookUnguarded(t.Context(), o, true)
+	oTarget := o
+	oTarget.LogID = "o-book-v2"
+	wrong, err := openBookUnguarded(t.Context(), oTarget, true)
 	require.NoError(t, err)
 	require.NoError(t, appendBackfilled(t.Context(), wrong.book, nil, o.LogID, out[1], false, len(out), day1))
 	require.NoError(t, wrong.release())
-	_, err = invoke(t, "", "store", "migrate", "--profile", "o")
+	_, err = invoke(t, "", "store", "migrate", "--profile", "o", "--log-id", "o-book-v2")
 	assert.ErrorIs(t, err, ErrConflict)
 
 	q, _ := bookProfile(t, "q")
@@ -347,8 +357,9 @@ func TestMigrateResumesAndRefusesAForeignBook(t *testing.T) {
 	_, err = foreign.book.Append(t.Context(), evidencebook.Entry{RecordType: "exchange", EpistemicType: evidencebook.ObservedEvent})
 	require.NoError(t, err)
 	require.NoError(t, foreign.release())
-	_, err = invoke(t, "", "store", "migrate", "--profile", "q")
+	_, err = invoke(t, "", "store", "migrate", "--profile", "q", "--log-id", "q-book-v2")
 	assert.ErrorIs(t, err, ErrInput, "migration must come first in a book")
+	assert.ErrorContains(t, err, "move the book/ directory aside")
 }
 
 func TestBookWitnessStoreCompareAndSet(t *testing.T) {
@@ -418,16 +429,15 @@ func TestCountersignRootRefusesABookProfile(t *testing.T) {
 	assert.ErrorIs(t, err, errBookProfile)
 }
 
-// After an uncheckpointed log is migrated under the same log_id, an older
-// binary cutting a checkpoint on the retired file would put two trees under
-// one (log_id, key). Every command then refuses the profile, so the book
-// never signs its tree under that pair.
+// After a migration, an older binary cutting a checkpoint on the retired
+// file changes it from what was migrated; every command then refuses the
+// profile rather than carrying on beside a moving retired log.
 func TestRetiredCheckpointAfterMigrationIsRefused(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	bookClock(t, day1)
 	p, _ := bookProfile(t, "a")
 	legacyLog(t, p, 1, 0, false)
-	_, err := runMigrate(t)
+	_, err := runMigrate(t, "--log-id", "a-book-v2")
 	require.NoError(t, err)
 	_, err = invoke(t, "", "cll", "list", "--profile", "a")
 	require.NoError(t, err)
@@ -541,7 +551,9 @@ func TestMigrateRecordsACapsuleUnderARotatedKeyAsOmitted(t *testing.T) {
 	p.Signing.Value = hex.EncodeToString(private.Seed())
 	p.TrustedKeys = []string{hex.EncodeToString(public)}
 	require.NoError(t, saveProfile(p, true))
-	_, err = runMigrate(t)
+	_, err = runMigrate(t, "--log-id", "a-book-v2")
+	require.NoError(t, err)
+	p, err = loadProfile("a")
 	require.NoError(t, err)
 	opened, err := openBook(t.Context(), p, false)
 	require.NoError(t, err)
@@ -562,11 +574,13 @@ func TestAppendAfterAPayloadlessBackfillCarriesTheCapsule(t *testing.T) {
 	bookClock(t, day1)
 	p, _ := bookProfile(t, "a")
 	entries := legacyLog(t, p, 1, 0, false)
-	opened, err := openBookUnguarded(t.Context(), p, true)
+	target := p
+	target.LogID = "a-book-v2"
+	opened, err := openBookUnguarded(t.Context(), target, true)
 	require.NoError(t, err)
 	require.NoError(t, appendBackfilled(t.Context(), opened.book, nil, p.LogID, entries[0], false, 1, day1))
 	require.NoError(t, opened.release())
-	_, err = runMigrate(t)
+	_, err = runMigrate(t, "--log-id", "a-book-v2")
 	require.NoError(t, err)
 
 	id := hex.EncodeToString(entries[0].Value)
@@ -828,4 +842,86 @@ func TestBookFileListingRefusesAJournalThatDisagreesWithTheLog(t *testing.T) {
 	require.NoError(t, os.WriteFile(journal, append(bytes.Join(lines, []byte("\n")), '\n'), 0o600))
 	_, err = invoke(t, "", "cll", "list", "--profile", "a")
 	assert.ErrorIs(t, err, cll.ErrCorrupt)
+}
+
+// stripRetiredCommits removes every signed cll.commit line from a retired
+// cll.jsonl, so it reads as a log that was never checkpointed.
+func stripRetiredCommits(t *testing.T, p Profile) {
+	t.Helper()
+	raw, err := os.ReadFile(retiredLogPath(p))
+	require.NoError(t, err)
+	var kept [][]byte
+	for _, line := range bytes.Split(bytes.TrimRight(raw, "\n"), []byte("\n")) {
+		if !bytes.Contains(line, []byte(`"type":"cll.commit"`)) {
+			kept = append(kept, line)
+		}
+	}
+	require.NoError(t, os.WriteFile(retiredLogPath(p), append(bytes.Join(kept, []byte("\n")), '\n'), 0o600))
+}
+
+// S4 residual: on a migrated profile, checking the retired cll.jsonl takes
+// no lock and needs no write access. A 0444 file, or an older binary holding
+// the file's lock, stops neither a reader's list nor a writer's publish.
+func TestRetiredLogCheckTakesNoLockAndNoWriteAccess(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, _ := bookProfile(t, "a")
+	legacyLog(t, p, 1, 0, false)
+	_, err := runMigrate(t, "--log-id", "a-book-v2")
+	require.NoError(t, err)
+
+	require.NoError(t, os.Chmod(retiredLogPath(p), 0o444))
+	listLog(t, "a")
+	publishFile(t, "a", sealRequestFile(t, "while-read-only"))
+	require.NoError(t, os.Chmod(retiredLogPath(p), 0o600))
+
+	holder, err := clljsonl.Open(retiredLogPath(p))
+	require.NoError(t, err, "an older binary holds the retired file's lock")
+	defer func() { require.NoError(t, holder.Close()) }()
+	listLog(t, "a")
+	publishFile(t, "a", sealRequestFile(t, "while-locked"))
+}
+
+// The lock-free scan and the locked read agree, fingerprint for
+// fingerprint, on a checkpointed retired log with entries past it.
+func TestRetiredLogScanAgreesWithTheLockedRead(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, _ := bookProfile(t, "a")
+	legacyLog(t, p, 2, 1, true)
+	log, err := clljsonl.Open(retiredLogPath(p))
+	require.NoError(t, err)
+	_, err = log.Append(t.Context(), cll.AppendInput{Value: bytes.Repeat([]byte{0xab}, 32), AppendedAt: day0})
+	require.NoError(t, err)
+	require.NoError(t, log.Close())
+
+	scanned, err := scanRetiredLog(p)
+	require.NoError(t, err)
+	locked, release, err := openRetiredLog(t.Context(), p)
+	require.NoError(t, err)
+	require.NoError(t, release())
+	require.Len(t, scanned.entries, 4)
+	require.NotNil(t, scanned.checkpoint)
+	assert.Equal(t, locked.checkpoint.Size, scanned.checkpoint.Size)
+	se, sc := scanned.fingerprint()
+	le, lc := locked.fingerprint()
+	assert.Equal(t, le, se)
+	assert.Equal(t, lc, sc)
+}
+
+// B1 residual: stripping the signed commit line from a tampered checkpointed
+// log makes it read as never checkpointed. Migration still needs a new log
+// id, so the forged history can never share the retired log's (log_id, key).
+func TestMigrateOfAStrippedTamperedLogStillNeedsANewLogID(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, _ := bookProfile(t, "a")
+	legacyLog(t, p, 2, 1, true)
+	tamperRetiredEntry(t, p, 2)
+	stripRetiredCommits(t, p)
+	_, err := runMigrate(t)
+	require.ErrorIs(t, err, ErrInput)
+	assert.NoFileExists(t, filepath.Join(p.Connection.Database, "book", "log.jsonl"))
+	_, err = runMigrate(t, "--log-id", p.LogID)
+	require.ErrorIs(t, err, ErrInput, "the retired log's own id is not a new one")
 }
