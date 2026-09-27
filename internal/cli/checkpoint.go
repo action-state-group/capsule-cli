@@ -300,7 +300,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 			}
 			defer func() { err = errors.Join(err, t.close()) }()
 			var store cll.WitnessStateStore = t.log
-			if t.book != nil {
+			if p.Type == "jsonl" {
 				store = newBookWitnessStore(p)
 			}
 			state, e := store.GetWitness(c.Context(), service, size)

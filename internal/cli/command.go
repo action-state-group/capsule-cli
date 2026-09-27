@@ -442,8 +442,9 @@ func NewCommand() *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.close()) }()
-		if t.book != nil {
-			items, next, e := listBook(c.Context(), t.book.book, after, through, limit)
+		if p.Type == "jsonl" {
+			all, _ := c.Flags().GetBool("all")
+			items, next, e := listBookFiles(c.Context(), p, after, through, limit, all)
 			if e != nil {
 				return e
 			}
@@ -467,6 +468,7 @@ func NewCommand() *cobra.Command {
 	list.Flags().Uint64("after", 0, "Exclusive sequence lower bound")
 	list.Flags().Uint64("through", 0, "Inclusive sequence upper bound (0 unbounded)")
 	list.Flags().Int("limit", 100, "Page limit, at most 1000")
+	list.Flags().Bool("all", false, "jsonl profiles: also list the evidence book's internal records")
 	logs.AddCommand(list)
 	appendCmd := &cobra.Command{Use: "append", Short: "Append a Capsule ID to the CLL as a new entry", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
@@ -503,11 +505,15 @@ func NewCommand() *cobra.Command {
 			}
 		}
 		if t.book != nil {
-			seq, e := appendPublished(c.Context(), t.book.book, r)
+			seq, warning, e := appendPublished(c.Context(), t.book.book, r)
 			if e != nil {
 				return e
 			}
-			return output(c, map[string]any{"capsule_id": r.CapsuleID, "sequence": seq, "log_id": p.LogID})
+			result := map[string]any{"capsule_id": r.CapsuleID, "sequence": seq, "log_id": p.LogID}
+			if warning != "" {
+				result["warning"] = warning
+			}
+			return output(c, result)
 		}
 		entry, e := appendRecord(c.Context(), t.log, r.CapsuleID)
 		if e != nil {

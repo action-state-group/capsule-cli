@@ -79,7 +79,7 @@ func TestPublishedCapsuleIsClosedAndBundled(t *testing.T) {
 	listed := listLog(t, "a")
 	var found bookEntry
 	for _, e := range listed.Entries {
-		if e.PublishedCapsuleID == published.CapsuleID {
+		if e.CapsuleID == published.CapsuleID {
 			found = e
 		}
 	}
@@ -248,11 +248,11 @@ func TestMigrateBackfillsTheRetiredLogInOrder(t *testing.T) {
 	}
 	listedBackfill := map[string]bookEntry{}
 	for _, e := range listLog(t, "a").Entries {
-		listedBackfill[e.PublishedCapsuleID+e.RetiredValue] = e
+		listedBackfill[e.CapsuleID] = e
 	}
 	digest := listedBackfill[hex.EncodeToString(entries[2].Value)]
-	assert.Empty(t, digest.PublishedCapsuleID, "a retired disclosure digest is never listed as a published capsule")
-	assert.Equal(t, hex.EncodeToString(entries[2].Value), digest.RetiredValue)
+	assert.False(t, digest.CapsuleCarried, "a retired disclosure digest is never listed as a carried capsule")
+	assert.Equal(t, recordTypeBackfilled, digest.RecordType)
 
 	size := bookSize(t, p)
 	again, err := runMigrate(t)
@@ -263,7 +263,7 @@ func TestMigrateBackfillsTheRetiredLogInOrder(t *testing.T) {
 	published := publishFile(t, "a", sealRequestFile(t, "after-migration"))
 	assert.Greater(t, published.Sequence, records[2].Seq)
 	legacy := listLog(t, "a").Entries
-	assert.Equal(t, hex.EncodeToString(entries[0].Value), legacy[0].PublishedCapsuleID)
+	assert.Equal(t, hex.EncodeToString(entries[0].Value), legacy[0].CapsuleID)
 
 	// An older binary appending to the retired log afterwards is caught.
 	log, err := clljsonl.Open(retiredLogPath(p))
@@ -315,7 +315,7 @@ func TestMigrateResumesAndRefusesAForeignBook(t *testing.T) {
 	entries := legacyLog(t, p, 2, 0, false)
 	opened, err := openBookUnguarded(t.Context(), p, true)
 	require.NoError(t, err)
-	require.NoError(t, appendBackfilled(t.Context(), opened.book, nil, p.LogID, entries[0], len(entries), day1))
+	require.NoError(t, appendBackfilled(t.Context(), opened.book, nil, p.LogID, entries[0], false, len(entries), day1))
 	require.NoError(t, opened.release())
 
 	result, err := runMigrate(t)
@@ -325,7 +325,7 @@ func TestMigrateResumesAndRefusesAForeignBook(t *testing.T) {
 	var backfilled []string
 	for _, e := range listed {
 		if e.RecordType == recordTypeBackfilled {
-			backfilled = append(backfilled, e.PublishedCapsuleID+e.RetiredValue)
+			backfilled = append(backfilled, e.CapsuleID)
 		}
 	}
 	assert.Equal(t, []string{hex.EncodeToString(entries[0].Value), hex.EncodeToString(entries[1].Value)}, backfilled)
@@ -335,7 +335,7 @@ func TestMigrateResumesAndRefusesAForeignBook(t *testing.T) {
 	out := legacyLog(t, o, 2, 0, false)
 	wrong, err := openBookUnguarded(t.Context(), o, true)
 	require.NoError(t, err)
-	require.NoError(t, appendBackfilled(t.Context(), wrong.book, nil, o.LogID, out[1], len(out), day1))
+	require.NoError(t, appendBackfilled(t.Context(), wrong.book, nil, o.LogID, out[1], false, len(out), day1))
 	require.NoError(t, wrong.release())
 	_, err = invoke(t, "", "store", "migrate", "--profile", "o")
 	assert.ErrorIs(t, err, ErrConflict)
@@ -477,6 +477,9 @@ func TestMigrateFinishesAnInterruptedProfileSave(t *testing.T) {
 	_, err = invoke(t, "", "cll", "list", "--profile", "a")
 	require.Error(t, err, "the profile still names the retired log")
 
+	_, err = runMigrate(t)
+	assert.ErrorContains(t, err, "re-run 'store migrate' with that --log-id", "a re-run without the --log-id says what to do")
+
 	again, err := runMigrate(t, "--log-id", "a-book-v2")
 	require.NoError(t, err)
 	assert.Equal(t, first.Migration, again.Migration)
@@ -561,7 +564,7 @@ func TestAppendAfterAPayloadlessBackfillCarriesTheCapsule(t *testing.T) {
 	entries := legacyLog(t, p, 1, 0, false)
 	opened, err := openBookUnguarded(t.Context(), p, true)
 	require.NoError(t, err)
-	require.NoError(t, appendBackfilled(t.Context(), opened.book, nil, p.LogID, entries[0], 1, day1))
+	require.NoError(t, appendBackfilled(t.Context(), opened.book, nil, p.LogID, entries[0], false, 1, day1))
 	require.NoError(t, opened.release())
 	_, err = runMigrate(t)
 	require.NoError(t, err)
@@ -574,7 +577,7 @@ func TestAppendAfterAPayloadlessBackfillCarriesTheCapsule(t *testing.T) {
 	require.NoError(t, err)
 	var carried bookEntry
 	for _, e := range listLog(t, "a").Entries {
-		if e.PublishedCapsuleID == id {
+		if e.CapsuleID == id && e.CapsuleCarried {
 			carried = e
 		}
 	}
@@ -588,4 +591,241 @@ func TestBookBundleRefusesARootOnlyClosure(t *testing.T) {
 	published := publishFile(t, "a", sealRequestFile(t, "published-1"))
 	_, err := invoke(t, "", "bundle", "--profile", "a", "--root", published.CapsuleID, "--closure-depth", "0")
 	assert.ErrorIs(t, err, ErrInput)
+}
+
+// tamperRetiredEntry rewrites one entry's value in a retired cll.jsonl the
+// way an attacker with write access to the store directory could.
+func tamperRetiredEntry(t *testing.T, p Profile, seq uint64) {
+	t.Helper()
+	path := retiredLogPath(p)
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	lines := bytes.Split(bytes.TrimRight(raw, "\n"), []byte("\n"))
+	tampered := false
+	for i, line := range lines {
+		var event map[string]any
+		require.NoError(t, json.Unmarshal(line, &event))
+		entry, ok := event["entry"].(map[string]any)
+		if event["type"] != "entry.append" || !ok || fmt.Sprint(entry["seq"]) != fmt.Sprint(seq) {
+			continue
+		}
+		value, ok := entry["value"].(string)
+		require.True(t, ok, "entry value is a string")
+		// Swap the first character for another one of the same alphabet,
+		// so the value stays well-formed and only its meaning changes.
+		forged := []byte(value)
+		if forged[0] == 'A' {
+			forged[0] = 'B'
+		} else {
+			forged[0] = 'A'
+		}
+		entry["value"] = string(forged)
+		lines[i], err = json.Marshal(event)
+		require.NoError(t, err)
+		tampered = true
+	}
+	require.True(t, tampered, "entry %d found", seq)
+	require.NoError(t, os.WriteFile(path, append(bytes.Join(lines, []byte("\n")), '\n'), 0o600))
+}
+
+// B1: a checkpointed retired log whose entries no longer rebuild the root
+// its checkpoint signed is refused before anything is carried into the
+// book; so is one whose checkpoint does not verify under a trusted key.
+func TestMigrateRefusesATamperedCheckpointedRetiredLog(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, _ := bookProfile(t, "a")
+	legacyLog(t, p, 2, 1, true)
+	tamperRetiredEntry(t, p, 2)
+	_, err := runMigrate(t, "--log-id", "a-book-v2")
+	require.ErrorIs(t, err, ErrConflict)
+	assert.NoFileExists(t, filepath.Join(p.Connection.Database, "book", "log.jsonl"), "nothing was carried into a book")
+	saved, err := loadProfile("a")
+	require.NoError(t, err)
+	assert.Equal(t, p.LogID, saved.LogID, "the profile is not repointed")
+
+	// The retired checkpoint was signed with the checkpoint key this profile
+	// has since rotated away from: it no longer verifies under a trusted key.
+	q, _ := bookProfile(t, "q")
+	legacyLog(t, q, 1, 0, true)
+	public, private, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	q.Checkpoint.Signing.Value = hex.EncodeToString(private.Seed())
+	q.Checkpoint.TrustedKeys = []string{hex.EncodeToString(public)}
+	require.NoError(t, saveProfile(q, true))
+	_, err = invoke(t, "", "store", "migrate", "--profile", "q", "--log-id", "q-book-v2")
+	require.ErrorIs(t, err, ErrConflict)
+	assert.NoFileExists(t, filepath.Join(q.Connection.Database, "book", "log.jsonl"))
+}
+
+// A checkpointed retired log that verifies marks exactly the entries its
+// checkpoint commits as anchored; an entry appended after it is not.
+func TestMigrateMarksWhichEntriesTheRetiredCheckpointAnchors(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day1)
+	p, _ := bookProfile(t, "a")
+	legacyLog(t, p, 2, 0, true)
+	log, err := clljsonl.Open(retiredLogPath(p))
+	require.NoError(t, err)
+	_, err = log.Append(t.Context(), cll.AppendInput{Value: bytes.Repeat([]byte{0xab}, 32), AppendedAt: day0})
+	require.NoError(t, err)
+	require.NoError(t, log.Close())
+
+	_, err = runMigrate(t, "--log-id", "a-book-v2")
+	require.NoError(t, err)
+	saved, err := loadProfile("a")
+	require.NoError(t, err)
+	opened, err := openBook(t.Context(), saved, false)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, opened.release()) }()
+	records, err := opened.book.Query(t.Context(), evidencebook.Filter{RecordType: recordTypeBackfilled})
+	require.NoError(t, err)
+	require.Len(t, records, 3)
+	var anchored []bool
+	for _, r := range records {
+		var st backfillStatement
+		require.NoError(t, json.Unmarshal(r.Header.Statement, &st))
+		anchored = append(anchored, st.Anchored)
+		assert.Equal(t, string(evidencebook.ProducerClaim), string(r.Header.EpistemicType))
+	}
+	assert.Equal(t, []bool{true, true, false}, anchored)
+	st, _, _, err := migrationRecord(t.Context(), opened.book)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(2), st.AnchoredEntries)
+}
+
+// S4: a read-only jsonl profile holding no signing or checkpoint secret can
+// list its log and read witness status, even while a writer holds the book,
+// and reading never writes: a torn line a writer is still appending stays.
+func TestReadOnlyJSONLProfileReadsWithoutSecretsOrTheWriterLock(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	p, _ := storedProfile(t, "a")
+	witnessKey, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	p.Checkpoint.Endpoint = "https://witness.example.invalid"
+	p.Checkpoint.PublicKey = hex.EncodeToString(witnessKey)
+	require.NoError(t, saveProfile(p, true))
+	published := publishFile(t, "a", sealRequestFile(t, "published-1"))
+	out, err := invoke(t, "", "cll", "checkpoint", "create", "--profile", "a")
+	require.NoError(t, err)
+	var created struct {
+		Checkpoint uint64 `json:"checkpoint"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &created))
+
+	reader := p
+	reader.Name, reader.ReadOnly = "reader", true
+	reader.Signing, reader.Checkpoint.Signing = Secret{}, Secret{}
+	require.NoError(t, saveProfile(reader, false))
+
+	writer, err := openBook(t.Context(), p, false)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, writer.release()) }()
+	journal := filepath.Join(p.Connection.Database, "book", "records", "records.jsonl")
+	f, err := os.OpenFile(journal, os.O_APPEND|os.O_WRONLY, 0)
+	require.NoError(t, err)
+	_, err = f.WriteString(`{"seq":99,"record_id":"in-flight`)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	before, err := os.ReadFile(journal)
+	require.NoError(t, err)
+
+	listed := listLog(t, "reader")
+	require.NotEmpty(t, listed.Entries)
+	assert.Equal(t, published.CapsuleID, listed.Entries[0].CapsuleID)
+	_, err = invoke(t, "", "cll", "checkpoint", "status", "--profile", "reader", "--checkpoint", fmt.Sprint(created.Checkpoint))
+	require.NoError(t, err)
+	after, err := os.ReadFile(journal)
+	require.NoError(t, err)
+	assert.Equal(t, before, after, "reading repaired nothing")
+}
+
+// S5: cll list keeps the contract every backend shares -- capsule_id is the
+// published capsule, usable with get -- and lists only log entries that
+// record a capsule unless --all asks for the book's internal records.
+func TestCllListKeepsTheCapsuleContract(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	storedProfile(t, "a")
+	published := publishFile(t, "a", sealRequestFile(t, "published-1"))
+	_, err := invoke(t, "", "cll", "checkpoint", "create", "--profile", "a")
+	require.NoError(t, err)
+	set(day1)
+	_, err = runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b")
+	require.NoError(t, err)
+
+	listed := listLog(t, "a").Entries
+	require.Len(t, listed, 1, "only the published capsule by default")
+	assert.Equal(t, published.CapsuleID, listed[0].CapsuleID)
+	assert.True(t, listed[0].CapsuleCarried)
+	_, err = invoke(t, "", "get", "--profile", "a", "--capsule-id", listed[0].CapsuleID)
+	require.NoError(t, err, "capsule_id feeds get --capsule-id, as on every backend")
+
+	out, err := invoke(t, "", "cll", "list", "--profile", "a", "--all", "--limit", "1000")
+	require.NoError(t, err)
+	var all listedOut
+	require.NoError(t, json.Unmarshal([]byte(out), &all))
+	kinds := map[string]bool{}
+	for _, e := range all.Entries {
+		kinds[e.RecordType] = true
+		if e.RecordType != recordTypePublished && e.RecordType != recordTypeBackfilled {
+			assert.Empty(t, e.CapsuleID, "an internal record names no capsule")
+		}
+	}
+	assert.True(t, kinds[evidencebook.RecordTypeIndexRoot] && kinds[evidencebook.RecordTypeClose], "--all lists the internal records")
+}
+
+// The file listing must agree with the book's own query, record for record,
+// on a history holding every kind of record this CLI writes.
+func TestBookFileListingAgreesWithTheBook(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	p, _ := storedProfile(t, "a")
+	publishFile(t, "a", sealRequestFile(t, "published-1"))
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	set(day1)
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--counterparty", "b", "--bundle-out", filepath.Join(t.TempDir(), "b.json"))
+	require.NoError(t, err)
+
+	fromFiles, err := readBookFiles(p)
+	require.NoError(t, err)
+	opened, err := openBook(t.Context(), p, false)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, opened.release()) }()
+	fromBook, err := opened.book.Query(t.Context(), evidencebook.Filter{})
+	require.NoError(t, err)
+	require.Equal(t, len(fromBook), len(fromFiles))
+	for i := range fromBook {
+		assert.Equal(t, fromBook[i].RecordID, fromFiles[i].RecordID)
+		assert.Equal(t, fromBook[i].Seq, fromFiles[i].Seq)
+		assert.Equal(t, fromBook[i].Header.RecordType, fromFiles[i].Header.RecordType)
+		assert.Equal(t, fromBook[i].Header.SubjectRef, fromFiles[i].Header.SubjectRef)
+		assert.Equal(t, fromBook[i].Header.CommittedAt, fromFiles[i].Header.CommittedAt)
+	}
+}
+
+// The read-only listing takes order from the log and refuses a record
+// journal whose header puts a record at a different position.
+func TestBookFileListingRefusesAJournalThatDisagreesWithTheLog(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	p, _ := storedProfile(t, "a")
+	publishFile(t, "a", sealRequestFile(t, "published-1"))
+	journal := filepath.Join(p.Connection.Database, "book", "records", "records.jsonl")
+	raw, err := os.ReadFile(journal)
+	require.NoError(t, err)
+	lines := bytes.Split(bytes.TrimRight(raw, "\n"), []byte("\n"))
+	var stored evidencebook.StoredRecord
+	require.NoError(t, json.Unmarshal(lines[0], &stored))
+	var header map[string]any
+	require.NoError(t, json.Unmarshal(stored.Header, &header))
+	header["seq"] = 7
+	stored.Header, err = json.Marshal(header)
+	require.NoError(t, err)
+	lines[0], err = json.Marshal(stored)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(journal, append(bytes.Join(lines, []byte("\n")), '\n'), 0o600))
+	_, err = invoke(t, "", "cll", "list", "--profile", "a")
+	assert.ErrorIs(t, err, cll.ErrCorrupt)
 }

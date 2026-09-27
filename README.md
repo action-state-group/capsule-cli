@@ -225,7 +225,11 @@ selects one with `--type`:
   `book/`, the profile's evidence book, which is its one log: `publish`,
   `cll append`, `cll list`, `cll checkpoint`, the bundle verbs and the book
   verbs (`close`, `reconcile`, `request`, `respond`) all use it, and it needs
-  `--operator`. No host, port, or TLS. A JSONL store made by an earlier
+  `--operator`. No host, port, or TLS. `cll list` keeps the same fields
+  (`capsule_id` is the published capsule) and lists only entries that record a
+  capsule; `--all` also lists the book's internal records. `cll list` and
+  `cll checkpoint status` read the book's files without opening it, so a
+  read-only profile needs no signing secret. A JSONL store made by an earlier
   capsulectl keeps its log in `cll.jsonl`; `store migrate` moves those entries
   into the book once, in order, and every other command refuses the profile
   until it has (a log that was ever checkpointed needs a new `--log-id`).

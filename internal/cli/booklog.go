@@ -4,16 +4,19 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	"github.com/action-state-group/cll-go/cll"
+	"github.com/action-state-group/cll-go/mmr"
 	clljsonl "github.com/action-state-group/cll-go/store/jsonl"
 	"github.com/action-state-group/evidencebook"
 )
@@ -52,12 +55,19 @@ func carriesCapsule(h evidencebook.Header) bool {
 	return h.RecordType == recordTypePublished || (h.RecordType == recordTypeBackfilled && len(h.PayloadCommitments) > 0)
 }
 
+// publishedCommitWarning is reported when a capsule's record committed but a
+// later step of the append (indexing, an automatic checkpoint) failed. The
+// position stands and must not be retried; the next open of the book
+// rebuilds its indexes from the log.
+const publishedCommitWarning = "committed; a later indexing or checkpoint step failed and is redone when the book is next opened"
+
 // appendPublished commits a verified, sealed capsule to the book once and
 // returns its position; publishing the same capsule again returns the
-// position it already has.
-func appendPublished(ctx context.Context, book *evidencebook.Book, record artifact.Record) (uint64, error) {
+// position it already has. warning is non-empty only when the record
+// committed but a later step failed.
+func appendPublished(ctx context.Context, book *evidencebook.Book, record artifact.Record) (seq uint64, warning string, err error) {
 	if existing, ok, err := publishedRecord(ctx, book, record.CapsuleID); err != nil || ok {
-		return existing.Seq, err
+		return existing.Seq, "", err
 	}
 	committed, err := book.Append(ctx, evidencebook.Entry{
 		RecordType: recordTypePublished, EpistemicType: evidencebook.ProducerClaim,
@@ -66,18 +76,15 @@ func appendPublished(ctx context.Context, book *evidencebook.Book, record artifa
 	})
 	switch {
 	case err == nil:
-		return committed.Seq, nil
+		return committed.Seq, "", nil
 	case committed.RecordID != "":
-		// Committed; only a later step (indexing, an automatic checkpoint)
-		// failed. The book says not to retry, and the next open rebuilds its
-		// indexes from the log, so the position stands.
-		return committed.Seq, nil
+		return committed.Seq, publishedCommitWarning, nil
 	case errors.Is(err, evidencebook.ErrInvalid) || errors.Is(err, evidencebook.ErrNotFound):
-		return 0, bookError(err)
+		return 0, "", bookError(err)
 	default:
 		// Stored but not yet committed: the book retries it first on its
 		// next open, so the same publish can be retried.
-		return 0, errors.Join(ErrPending, err)
+		return 0, "", errors.Join(ErrPending, err)
 	}
 }
 
@@ -159,6 +166,9 @@ type migrationStatement struct {
 	EntriesDigest     string `json:"retired_entries_digest"`
 	CheckpointDigest  string `json:"retired_checkpoint_digest,omitempty"`
 	RetiredCheckpoint uint64 `json:"retired_checkpoint_size,omitempty"`
+	// AnchoredEntries is how many retired entries, from the first, the
+	// retired log's verified checkpoint commits.
+	AnchoredEntries uint64 `json:"anchored_entries"`
 }
 
 func (st migrationStatement) matches(r retiredLog) bool {
@@ -173,8 +183,13 @@ var errRetiredLogChanged = errors.Join(ErrConflict, errors.New("the retired cll.
 // the book imported it later. source_ref.digest is the retired entry's
 // value, itself a SHA-256 digest: a capsule id, or a disclosure digest.
 type backfillStatement struct {
-	RetiredLogID   string             `json:"retired_log_id"`
-	RetiredSeq     uint64             `json:"retired_seq"`
+	RetiredLogID string `json:"retired_log_id"`
+	RetiredSeq   uint64 `json:"retired_seq"`
+	// Anchored is true when the retired log's checkpoint, verified under
+	// the profile's trusted checkpoint key with its root recomputed from the
+	// retired entries, commits this entry; false for an entry past that
+	// checkpoint or from a log that was never checkpointed.
+	Anchored       bool               `json:"anchored"`
 	ProvenanceMode backfillProvenance `json:"provenance_mode"`
 	// CapsuleOmitted says why a capsule the artifact store holds was not
 	// carried: it no longer verifies under the profile's trusted keys.
@@ -230,6 +245,9 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 	var opened openedBook
 	if _, statErr := os.Stat(filepath.Join(p.Connection.Database, "book", "log.jsonl")); statErr == nil {
 		if opened, err = openBookUnguarded(ctx, book, false); err != nil {
+			if errors.Is(err, evidencebook.ErrCorrupt) && newLogID == "" {
+				err = errors.Join(err, inputError("this book may belong to a migration to a new log id that was interrupted; re-run 'store migrate' with that --log-id"))
+			}
 			return migrateResult{}, err
 		}
 		defer func() { err = errors.Join(err, opened.release()) }()
@@ -252,6 +270,12 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 	if retired.checkpoint != nil && book.LogID == p.LogID {
 		return migrateResult{}, inputError("the retired log was checkpointed under this log_id; give a new --log-id")
 	}
+	// Nothing is appended until the retired log's own checkpoint is shown to
+	// commit the entries being carried over.
+	anchored, err := anchorRetiredLog(p, retired)
+	if err != nil {
+		return migrateResult{}, err
+	}
 	if opened.book == nil {
 		if opened, err = openBookUnguarded(ctx, book, true); err != nil {
 			return migrateResult{}, err
@@ -262,13 +286,13 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 	if err != nil {
 		return migrateResult{}, err
 	}
-	for _, entry := range retired.entries[done:] {
-		if err = appendBackfilled(ctx, opened.book, artifacts, p.LogID, entry, len(retired.entries), now); err != nil {
+	for i, entry := range retired.entries[done:] {
+		if err = appendBackfilled(ctx, opened.book, artifacts, p.LogID, entry, done+i < anchored, len(retired.entries), now); err != nil {
 			return migrateResult{}, err
 		}
 	}
 	entries, checkpoint := retired.fingerprint()
-	st := migrationStatement{RetiredLogID: p.LogID, RetiredEntries: result.Backfilled, EntriesDigest: entries, CheckpointDigest: checkpoint}
+	st := migrationStatement{RetiredLogID: p.LogID, RetiredEntries: result.Backfilled, EntriesDigest: entries, CheckpointDigest: checkpoint, AnchoredEntries: uint64(anchored)}
 	if retired.checkpoint != nil {
 		st.RetiredCheckpoint = retired.checkpoint.Size
 	}
@@ -292,6 +316,38 @@ func finishMigration(p, book Profile) error {
 		return nil
 	}
 	return saveProfile(book, true)
+}
+
+// anchorRetiredLog checks the retired log's last checkpoint before anything
+// from that log is carried into the book: the statement must verify under
+// the profile's trusted checkpoint key and name the retired log_id, and the
+// retired entries must rebuild exactly the root it signed at its size. It
+// returns how many entries, from the first, that checkpoint commits. A log
+// that was never checkpointed anchors none.
+func anchorRetiredLog(p Profile, retired retiredLog) (int, error) {
+	if retired.checkpoint == nil {
+		return 0, nil
+	}
+	record, err := verifyCheckpoint(p, retired.checkpoint.Bytes)
+	if err != nil {
+		return 0, errors.Join(ErrConflict, fmt.Errorf("the retired log's checkpoint does not verify: %w", err))
+	}
+	tree, err := mmr.New(nil)
+	if err != nil {
+		return 0, err
+	}
+	anchored := 0
+	for anchored < len(retired.entries) && tree.Size() < record.MMRSize {
+		if _, err = tree.Append(retired.entries[anchored].Value); err != nil {
+			return 0, err
+		}
+		anchored++
+	}
+	root, err := tree.Root()
+	if err != nil || tree.Size() != record.MMRSize || hex.EncodeToString(root) != record.Root {
+		return 0, errors.Join(ErrConflict, errors.New("the retired entries do not rebuild the root the retired log's checkpoint signed"))
+	}
+	return anchored, nil
 }
 
 // backfilledSoFar counts the retired entries an interrupted migration
@@ -323,10 +379,10 @@ func backfilledSoFar(ctx context.Context, book *evidencebook.Book, retiredLogID 
 	return done, nil
 }
 
-func appendBackfilled(ctx context.Context, book *evidencebook.Book, artifacts artifactStore, retiredLogID string, entry cll.Entry, total int, now time.Time) error {
+func appendBackfilled(ctx context.Context, book *evidencebook.Book, artifacts artifactStore, retiredLogID string, entry cll.Entry, anchored bool, total int, now time.Time) error {
 	value := hex.EncodeToString(entry.Value)
 	statement := backfillStatement{
-		RetiredLogID: retiredLogID, RetiredSeq: entry.Seq,
+		RetiredLogID: retiredLogID, RetiredSeq: entry.Seq, Anchored: anchored,
 		ProvenanceMode: backfillProvenance{
 			Mode:             "backfilled",
 			SourceRef:        map[string]string{"type": "x-retired-cll-entry-value", "digest_alg": "SHA-256", "digest": value},
@@ -336,7 +392,9 @@ func appendBackfilled(ctx context.Context, book *evidencebook.Book, artifacts ar
 		},
 	}
 	e := evidencebook.Entry{
-		RecordType: recordTypeBackfilled, EpistemicType: evidencebook.SystemOfRecordFact,
+		// The retired entry is this producer's own earlier claim, carried over;
+		// only `anchored` says whether a verified checkpoint commits it.
+		RecordType: recordTypeBackfilled, EpistemicType: evidencebook.ProducerClaim,
 		SubjectRef: value, EventTimeClaim: entry.AppendedAt,
 	}
 	// A retired entry is a capsule this profile published, or (for a
@@ -377,6 +435,16 @@ func migrationRecord(ctx context.Context, book *evidencebook.Book) (migrationSta
 // when the profile's pre-book cll.jsonl holds nothing, or is exactly the log
 // `store migrate` moved into this book -- same entries, same last checkpoint.
 func requireNoRetiredEntries(ctx context.Context, p Profile, book *evidencebook.Book) error {
+	return requireRetiredMigrated(ctx, p, func() (migrationStatement, bool, error) {
+		st, _, ok, err := migrationRecord(ctx, book)
+		return st, ok, err
+	})
+}
+
+// requireRetiredMigrated is requireNoRetiredEntries over any source of the
+// book's migration record, so the read-only listing applies the same rule
+// without opening the book.
+func requireRetiredMigrated(ctx context.Context, p Profile, migration func() (migrationStatement, bool, error)) error {
 	retired, err := readRetiredLog(ctx, p)
 	if err != nil {
 		return err
@@ -384,7 +452,7 @@ func requireNoRetiredEntries(ctx context.Context, p Profile, book *evidencebook.
 	if len(retired.entries) == 0 && retired.checkpoint == nil {
 		return nil
 	}
-	migrated, _, ok, err := migrationRecord(ctx, book)
+	migrated, ok, err := migration()
 	if err != nil {
 		return err
 	}
@@ -397,40 +465,147 @@ func requireNoRetiredEntries(ctx context.Context, p Profile, book *evidencebook.
 	return nil
 }
 
-// bookEntry is one `cll list` item for a jsonl profile. capsule_id is the
-// log entry itself: the book record's own capsule id, not a published
-// capsule's. published_capsule_id is the capsule a record carries;
-// retired_value is a backfilled entry's value when no capsule is carried.
+// bookEntry is one `cll list` item for a jsonl profile, in the same
+// contract as a mysql or sqlite profile's: capsule_id is the capsule the log
+// entry records (a published capsule, or a retired entry's value), and
+// appended_at is when the book committed it. record_type, record_id (the
+// book record's own id) and capsule_carried (whether the record carries the
+// capsule's bytes) are additions. Book-internal records (checkpoint index
+// roots, Closes, disclosures, requests, the migration record) are listed
+// only with --all, and carry no capsule_id.
 type bookEntry struct {
-	Sequence           uint64 `json:"sequence"`
-	CapsuleID          string `json:"capsule_id"`
-	RecordType         string `json:"record_type"`
-	PublishedCapsuleID string `json:"published_capsule_id,omitempty"`
-	RetiredValue       string `json:"retired_value,omitempty"`
-	AppendedAt         string `json:"appended_at"`
+	Sequence       uint64 `json:"sequence"`
+	CapsuleID      string `json:"capsule_id,omitempty"`
+	AppendedAt     string `json:"appended_at"`
+	RecordType     string `json:"record_type"`
+	RecordID       string `json:"record_id"`
+	CapsuleCarried bool   `json:"capsule_carried"`
 }
 
-func listBook(ctx context.Context, book *evidencebook.Book, after, through uint64, limit int) ([]bookEntry, uint64, error) {
-	records, err := book.Query(ctx, evidencebook.Filter{FromSeq: after + 1, ToSeq: through})
-	if err != nil {
-		return nil, 0, err
-	}
+func listEntries(records []evidencebook.Record, after, through uint64, limit int, all bool) ([]bookEntry, uint64) {
 	items := make([]bookEntry, 0, min(len(records), limit))
 	next := after
 	for _, r := range records {
+		if r.Seq <= after || (through != 0 && r.Seq > through) {
+			continue
+		}
 		if len(items) == limit {
 			break
 		}
-		item := bookEntry{Sequence: r.Seq, CapsuleID: r.RecordID, RecordType: r.Header.RecordType, AppendedAt: r.Header.CommittedAt}
-		switch {
-		case carriesCapsule(r.Header):
-			item.PublishedCapsuleID = r.Header.SubjectRef
-		case r.Header.RecordType == recordTypeBackfilled:
-			item.RetiredValue = r.Header.SubjectRef
+		next = r.Seq
+		published := r.Header.RecordType == recordTypePublished || r.Header.RecordType == recordTypeBackfilled
+		if !published && !all {
+			continue
+		}
+		item := bookEntry{Sequence: r.Seq, AppendedAt: r.Header.CommittedAt, RecordType: r.Header.RecordType, RecordID: r.RecordID, CapsuleCarried: carriesCapsule(r.Header)}
+		if published {
+			item.CapsuleID = r.Header.SubjectRef
 		}
 		items = append(items, item)
-		next = r.Seq
 	}
+	return items, next
+}
+
+// readBookFiles reads a jsonl profile's committed book records without
+// opening the book: no signing key, no lock, and no repair of a torn line,
+// so it is safe beside a live writer and on a read-only profile. The order
+// and membership come from the log's own entry.append events (the records
+// the book committed, in position order); each record's header comes from
+// the record journal. An incomplete final line in either file (a write in
+// progress) is ignored. It is a local listing, not a proof.
+func readBookFiles(p Profile) ([]evidencebook.Record, error) {
+	dir := filepath.Join(p.Connection.Database, "book")
+	logLines, err := completeLines(filepath.Join(dir, "log.jsonl"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, inputError("the profile has no book yet; run 'store init'")
+	}
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, line := range logLines {
+		var event struct {
+			Type  string `json:"type"`
+			Entry *struct {
+				Seq   string `json:"seq"`
+				Value string `json:"value"`
+			} `json:"entry"`
+		}
+		if err = json.Unmarshal(line, &event); err != nil {
+			return nil, errors.Join(cll.ErrCorrupt, err)
+		}
+		if event.Type != "entry.append" || event.Entry == nil {
+			continue
+		}
+		value, err := base64.StdEncoding.DecodeString(event.Entry.Value)
+		if err != nil || event.Entry.Seq != strconv.Itoa(len(ids)+1) {
+			return nil, errors.Join(cll.ErrCorrupt, errors.New("the book's log is not a dense sequence of record ids"))
+		}
+		ids = append(ids, hex.EncodeToString(value))
+	}
+	recordLines, err := completeLines(filepath.Join(dir, "records", "records.jsonl"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	headers := make(map[string]evidencebook.Header, len(recordLines))
+	for _, line := range recordLines {
+		var stored evidencebook.StoredRecord
+		if err = json.Unmarshal(line, &stored); err != nil {
+			return nil, errors.Join(cll.ErrCorrupt, err)
+		}
+		var header evidencebook.Header
+		if err = json.Unmarshal(stored.Header, &header); err != nil {
+			return nil, errors.Join(cll.ErrCorrupt, err)
+		}
+		headers[stored.RecordID] = header
+	}
+	records := make([]evidencebook.Record, len(ids))
+	for i, id := range ids {
+		header, ok := headers[id]
+		if !ok || header.Seq != uint64(i+1) {
+			return nil, errors.Join(cll.ErrCorrupt, fmt.Errorf("the book's log commits record %s at position %d, which its record journal does not hold there", id, i+1))
+		}
+		if header.BookID != p.LogID {
+			return nil, inputError(fmt.Sprintf("this book belongs to log id %q, not the profile's log_id; if a 'store migrate --log-id %s' was interrupted, re-run it", header.BookID, header.BookID))
+		}
+		records[i] = evidencebook.Record{RecordID: id, Seq: uint64(i + 1), Header: header}
+	}
+	return records, nil
+}
+
+// completeLines returns a journal's newline-terminated lines.
+func completeLines(path string) ([][]byte, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if i := bytes.LastIndexByte(raw, '\n'); i >= 0 {
+		raw = raw[:i]
+	} else {
+		return nil, nil
+	}
+	return bytes.Split(raw, []byte("\n")), nil
+}
+
+// listBookFiles is `cll list` on a jsonl profile.
+func listBookFiles(ctx context.Context, p Profile, after, through uint64, limit int, all bool) ([]bookEntry, uint64, error) {
+	records, err := readBookFiles(p)
+	if err != nil {
+		return nil, 0, err
+	}
+	err = requireRetiredMigrated(ctx, p, func() (migrationStatement, bool, error) {
+		for _, r := range records {
+			if r.Header.RecordType == recordTypeMigration {
+				var st migrationStatement
+				return st, true, json.Unmarshal(r.Header.Statement, &st)
+			}
+		}
+		return migrationStatement{}, false, nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	items, next := listEntries(records, after, through, limit, all)
 	return items, next, nil
 }
 

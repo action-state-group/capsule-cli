@@ -270,7 +270,10 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 			return nil, err
 		}
 	}
-	if needsCLL && p.Type == "jsonl" {
+	if needsCLL && p.Type == "jsonl" && use == useCLLRead {
+		// Reads (cll list, checkpoint status) never open the book: that
+		// needs its signing keys and takes its writer lock.
+	} else if needsCLL && p.Type == "jsonl" {
 		book, err := openBook(ctx, p, use == useInitialization)
 		if err != nil {
 			return nil, err
@@ -297,6 +300,9 @@ type Publication struct {
 	CapsuleID string `json:"capsule_id"`
 	Sequence  uint64 `json:"sequence,omitempty"`
 	State     string `json:"state"`
+	// Warning is set when the record committed but a later step of the
+	// append failed (jsonl profiles); the position stands.
+	Warning string `json:"warning,omitempty"`
 }
 
 func requirePublisherKey(p Profile, private ed25519.PrivateKey) error {
@@ -341,11 +347,11 @@ func (t *target) publish(ctx context.Context, r Request, private ed25519.Private
 		if err != nil {
 			return result, err
 		}
-		seq, err := appendPublished(ctx, t.book.book, record)
+		seq, warning, err := appendPublished(ctx, t.book.book, record)
 		if err != nil {
 			return result, err
 		}
-		result.Sequence, result.State = seq, "appended"
+		result.Sequence, result.State, result.Warning = seq, "appended", warning
 		return result, nil
 	}
 	entry, err := appendRecord(ctx, t.log, result.CapsuleID)

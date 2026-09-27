@@ -132,7 +132,7 @@ echo "  ran + passed, no seal call made — checking a bundle is local validatio
 
 echo "== 5/15 cll list (not-consequential; no capsule) ==" >&2
 "$bin" cll list --profile "$profile" >"$work/cll-list-result.json"
-jq -e --arg id "$published_id" 'any(.entries[]; .record_type=="published_capsule" and .published_capsule_id==$id)' \
+jq -e --arg id "$published_id" 'any(.entries[]; .record_type=="published_capsule" and .capsule_id==$id and .capsule_carried)' \
   "$work/cll-list-result.json" >/dev/null || {
   echo "FAIL: the capsule publish committed is not in the log cll list reads" >&2; exit 1; }
 [[ ! -e "$store/cll.jsonl" ]] || { echo "FAIL: a jsonl profile must have one log, but cll.jsonl exists" >&2; exit 1; }

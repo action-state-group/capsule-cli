@@ -140,7 +140,7 @@ func openBookUnguarded(ctx context.Context, p Profile, create bool) (openedBook,
 	// now instead of letting commands run until then.
 	checkpoints, err := book.Checkpoints(ctx)
 	if err == nil && len(checkpoints) > 0 && checkpoints[len(checkpoints)-1].LogID != p.LogID {
-		err = inputError(fmt.Sprintf("this book is checkpointed under log id %q, not the profile's log_id", checkpoints[len(checkpoints)-1].LogID))
+		err = inputError(fmt.Sprintf("this book is checkpointed under log id %q, not the profile's log_id: an earlier capsulectl made it; move the book/ directory aside, then run 'store init' (or 'store migrate' if cll.jsonl holds entries)", checkpoints[len(checkpoints)-1].LogID))
 	}
 	if err != nil {
 		return openedBook{}, errors.Join(err, book.Release())
