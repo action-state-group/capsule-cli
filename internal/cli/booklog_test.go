@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -642,7 +643,7 @@ func tamperRetiredEntry(t *testing.T, p Profile, seq uint64) {
 	require.NoError(t, os.WriteFile(path, append(bytes.Join(lines, []byte("\n")), '\n'), 0o600))
 }
 
-// B1: a checkpointed retired log whose entries no longer rebuild the root
+// A checkpointed retired log whose entries no longer rebuild the root
 // its checkpoint signed is refused before anything is carried into the
 // book; so is one whose checkpoint does not verify under a trusted key.
 func TestMigrateRefusesATamperedCheckpointedRetiredLog(t *testing.T) {
@@ -708,7 +709,7 @@ func TestMigrateMarksWhichEntriesTheRetiredCheckpointAnchors(t *testing.T) {
 	assert.Equal(t, uint64(2), st.AnchoredEntries)
 }
 
-// S4: a read-only jsonl profile holding no signing or checkpoint secret can
+// A read-only jsonl profile holding no signing or checkpoint secret can
 // list its log and read witness status, even while a writer holds the book,
 // and reading never writes: a torn line a writer is still appending stays.
 func TestReadOnlyJSONLProfileReadsWithoutSecretsOrTheWriterLock(t *testing.T) {
@@ -755,7 +756,7 @@ func TestReadOnlyJSONLProfileReadsWithoutSecretsOrTheWriterLock(t *testing.T) {
 	assert.Equal(t, before, after, "reading repaired nothing")
 }
 
-// S5: cll list keeps the contract every backend shares -- capsule_id is the
+// cll list keeps the contract every backend shares -- capsule_id is the
 // published capsule, usable with get -- and lists only log entries that
 // record a capsule unless --all asks for the book's internal records.
 func TestCllListKeepsTheCapsuleContract(t *testing.T) {
@@ -859,7 +860,7 @@ func stripRetiredCommits(t *testing.T, p Profile) {
 	require.NoError(t, os.WriteFile(retiredLogPath(p), append(bytes.Join(kept, []byte("\n")), '\n'), 0o600))
 }
 
-// S4 residual: on a migrated profile, checking the retired cll.jsonl takes
+// On a migrated profile, checking the retired cll.jsonl takes
 // no lock and needs no write access. A 0444 file, or an older binary holding
 // the file's lock, stops neither a reader's list nor a writer's publish.
 func TestRetiredLogCheckTakesNoLockAndNoWriteAccess(t *testing.T) {
@@ -909,7 +910,7 @@ func TestRetiredLogScanAgreesWithTheLockedRead(t *testing.T) {
 	assert.Equal(t, lc, sc)
 }
 
-// B1 residual: stripping the signed commit line from a tampered checkpointed
+// Stripping the signed commit line from a tampered checkpointed
 // log makes it read as never checkpointed. Migration still needs a new log
 // id, so the forged history can never share the retired log's (log_id, key).
 func TestMigrateOfAStrippedTamperedLogStillNeedsANewLogID(t *testing.T) {
@@ -943,4 +944,58 @@ func TestStoreInitOnJSONLNeedsNoKey(t *testing.T) {
 	listLog(t, "verifier")
 	_, err = invoke(t, "", "publish", "--profile", "verifier", "--request", sealRequestFile(t, "needs-keys"))
 	assert.ErrorIs(t, err, ErrInput, "writing is what needs the keys")
+}
+
+// The one-log refusals tell the operator what to do; the binary must print
+// those instructions, not only the error class.
+func TestOneLogRefusalsReachStderr(t *testing.T) {
+	config := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", config)
+	bookClock(t, day1)
+	bin := capsulectlBinary(t)
+	run := func(args ...string) (string, int) {
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+config)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		var exit *exec.ExitError
+		require.ErrorAs(t, err, &exit, "expected a refusal from %v", args)
+		return stderr.String(), exit.ExitCode()
+	}
+
+	p, _ := bookProfile(t, "a")
+	legacyLog(t, p, 1, 0, false)
+	stderr, code := run("cll", "list", "--profile", "a")
+	assert.Equal(t, 2, code)
+	assert.Contains(t, stderr, "holds entries not yet in its book; run 'store migrate --log-id <new-log-id>'")
+	stderr, code = run("store", "migrate", "--profile", "a")
+	assert.Equal(t, 2, code)
+	assert.Contains(t, stderr, "store migrate needs --log-id with a new log id")
+
+	q, _ := bookProfile(t, "q")
+	legacyLog(t, q, 1, 0, false)
+	target := q
+	target.LogID = "q-book-v2"
+	foreign, err := openBookUnguarded(t.Context(), target, true)
+	require.NoError(t, err)
+	_, err = foreign.book.Append(t.Context(), evidencebook.Entry{RecordType: "exchange", EpistemicType: evidencebook.ObservedEvent})
+	require.NoError(t, err)
+	require.NoError(t, foreign.release())
+	stderr, code = run("store", "migrate", "--profile", "q", "--log-id", "q-book-v2")
+	assert.Equal(t, 2, code)
+	assert.Contains(t, stderr, "move the book/ directory aside (keep it)")
+
+	r, _ := bookProfile(t, "r")
+	legacyLog(t, r, 1, 0, false)
+	_, err = invoke(t, "", "store", "migrate", "--profile", "r", "--log-id", "r-book-v2")
+	require.NoError(t, err)
+	log, err := clljsonl.Open(retiredLogPath(r))
+	require.NoError(t, err)
+	_, err = log.Append(t.Context(), cll.AppendInput{Value: bytes.Repeat([]byte{0xee}, 32), AppendedAt: day1})
+	require.NoError(t, err)
+	require.NoError(t, log.Close())
+	stderr, code = run("cll", "list", "--profile", "r")
+	assert.Equal(t, 5, code)
+	assert.Contains(t, stderr, "the retired cll.jsonl changed after it was migrated")
 }

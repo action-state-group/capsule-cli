@@ -88,9 +88,11 @@ log.jsonl  payloads  records
 ```
 
 The keys and `request.json` are the ones from the SQLite example above. The
-checkpoint covers three positions because the book's log also holds its own
-records (here, the two index roots it commits before checkpointing); `cll list`
-shows only entries that record a capsule unless given `--all`. A JSONL store
+checkpoint covers three log entries (`indexed_sequence`: the published capsule
+plus the two index roots the book commits before checkpointing); `checkpoint`
+is the MMR size over those three entries, 4, the value
+`cll checkpoint status --checkpoint` takes. `cll list` shows only entries that
+record a capsule unless given `--all`. A JSONL store
 made by an earlier capsulectl, with its log in `cll.jsonl`, is refused until it
 is migrated: give its profile an operator, then move the log into the book under
 a new log id (checked the same way against a store written by the previous

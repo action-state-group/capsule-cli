@@ -223,7 +223,7 @@ func (st migrationStatement) matches(r retiredLog) bool {
 	return st.RetiredEntries == uint64(len(r.entries)) && st.EntriesDigest == entries && st.CheckpointDigest == checkpoint
 }
 
-var errRetiredLogChanged = errors.Join(ErrConflict, errors.New("the retired cll.jsonl changed after it was migrated"))
+var errRetiredLogChanged = hint(ErrConflict, "the retired cll.jsonl changed after it was migrated: something wrote it after the migration (an older capsulectl?). Restore it to what was migrated, from a backup, before using this profile again")
 
 // backfillStatement is the body of one backfilled entry. provenance_mode
 // has the AAC shape: the retired log asserted the entry at appended_at, and
@@ -272,12 +272,12 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 	}
 	defer func() { err = errors.Join(err, release()) }()
 	if len(retired.entries) == 0 {
-		return migrateResult{}, inputError("this profile's cll.jsonl holds no entries to migrate")
+		return migrateResult{}, hint(ErrInput, "this profile's cll.jsonl holds no entries to migrate")
 	}
 	book := p
 	if newLogID != "" {
 		if !logName.MatchString(newLogID) {
-			return migrateResult{}, inputError("invalid --log-id")
+			return migrateResult{}, hint(ErrInput, "invalid --log-id")
 		}
 		book.LogID = newLogID
 	}
@@ -296,11 +296,11 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 		if opened, err = openBookUnguarded(ctx, book, false); err != nil {
 			if errors.Is(err, evidencebook.ErrCorrupt) {
 				// The book's records name another log id.
-				hint := "this book may belong to a migration to a new log id that was interrupted; re-run 'store migrate' with that --log-id"
+				advice := "this book may belong to a migration to a new log id that was interrupted; re-run 'store migrate' with that --log-id"
 				if newLogID != "" {
-					hint = "this profile's book/ holds records of another log id: if a migration to a different --log-id was interrupted, re-run it with that one; otherwise move the book/ directory aside (keep it) and re-run"
+					advice = "this profile's book/ holds records of another log id: if a migration to a different --log-id was interrupted, re-run it with that one; otherwise move the book/ directory aside (keep it) and re-run"
 				}
-				err = errors.Join(err, inputError(hint))
+				err = errors.Join(hint(ErrInput, advice), err)
 			}
 			return migrateResult{}, err
 		}
@@ -326,7 +326,7 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 	// checkpointed or witnessed cannot be read reliably from the file itself
 	// (a stripped commit line reads as "never checkpointed").
 	if book.LogID == p.LogID {
-		return migrateResult{}, inputError("store migrate needs --log-id with a new log id: the book's log must never share the retired log's")
+		return migrateResult{}, hint(ErrInput, "store migrate needs --log-id with a new log id: the book's log must never share the retired log's")
 	}
 	// Nothing is appended until the retired log's own checkpoint is shown to
 	// commit the entries being carried over.
@@ -388,7 +388,7 @@ func anchorRetiredLog(p Profile, retired retiredLog) (int, error) {
 	}
 	record, err := verifyCheckpoint(p, retired.checkpoint.Bytes)
 	if err != nil {
-		return 0, errors.Join(ErrConflict, fmt.Errorf("the retired log's checkpoint does not verify: %w", err))
+		return 0, hint(ErrConflict, "the retired log's checkpoint does not verify under the profile's trusted checkpoint keys ("+err.Error()+"); nothing was migrated")
 	}
 	tree, err := mmr.New(nil)
 	if err != nil {
@@ -403,7 +403,7 @@ func anchorRetiredLog(p Profile, retired retiredLog) (int, error) {
 	}
 	root, err := tree.Root()
 	if err != nil || tree.Size() != record.MMRSize || hex.EncodeToString(root) != record.Root {
-		return 0, errors.Join(ErrConflict, errors.New("the retired entries do not rebuild the root the retired log's checkpoint signed"))
+		return 0, hint(ErrConflict, "the retired entries do not rebuild the root the retired log's checkpoint signed: cll.jsonl was altered after it was checkpointed; nothing was migrated")
 	}
 	return anchored, nil
 }
@@ -423,14 +423,14 @@ func backfilledSoFar(ctx context.Context, book *evidencebook.Book, retiredLogID 
 			continue
 		case recordTypeBackfilled:
 		default:
-			return 0, inputError("this profile's book already holds records; migration must come first: move the book/ directory aside (keep it), run 'store migrate --log-id NEW' into a fresh book, then decide what to do with the set-aside records")
+			return 0, hint(ErrInput, "this profile's book already holds records; migration must come first: move the book/ directory aside (keep it), run 'store migrate --log-id NEW' into a fresh book, then decide what to do with the set-aside records")
 		}
 		var st backfillStatement
 		if err = json.Unmarshal(r.Header.Statement, &st); err != nil {
 			return 0, err
 		}
 		if done >= len(entries) || st.RetiredLogID != retiredLogID || st.RetiredSeq != entries[done].Seq || r.Header.SubjectRef != hex.EncodeToString(entries[done].Value) {
-			return 0, errors.Join(ErrConflict, errors.New("the book's backfilled entries do not match the retired log"))
+			return 0, hint(ErrConflict, "the book's backfilled entries do not match the retired log: move the book/ directory aside (keep it) and re-run store migrate into a fresh book")
 		}
 		done++
 	}
@@ -515,7 +515,7 @@ func requireRetiredMigrated(ctx context.Context, p Profile, migration func() (mi
 		return err
 	}
 	if !ok {
-		return inputError("this profile's cll.jsonl holds entries not yet in its book; run 'store migrate'")
+		return hint(ErrInput, "this profile's cll.jsonl holds entries not yet in its book; run 'store migrate --log-id <new-log-id>'")
 	}
 	if !migrated.matches(retired) {
 		return errRetiredLogChanged
@@ -575,7 +575,7 @@ func readBookFiles(p Profile) ([]evidencebook.Record, error) {
 	dir := filepath.Join(p.Connection.Database, "book")
 	logLines, err := completeLines(filepath.Join(dir, "log.jsonl"))
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, inputError("the profile has no book yet; run 'store init'")
+		return nil, noBookError(p)
 	}
 	if err != nil {
 		return nil, err
@@ -624,11 +624,21 @@ func readBookFiles(p Profile) ([]evidencebook.Record, error) {
 			return nil, errors.Join(cll.ErrCorrupt, fmt.Errorf("the book's log commits record %s at position %d, which its record journal does not hold there", id, i+1))
 		}
 		if header.BookID != p.LogID {
-			return nil, inputError(fmt.Sprintf("this book belongs to log id %q, not the profile's log_id; if a 'store migrate --log-id %s' was interrupted, re-run it", header.BookID, header.BookID))
+			return nil, hint(ErrInput, fmt.Sprintf("this book belongs to log id %q, not the profile's log_id; if a 'store migrate --log-id %s' was interrupted, re-run it", header.BookID, header.BookID))
 		}
 		records[i] = evidencebook.Record{RecordID: id, Seq: uint64(i + 1), Header: header}
 	}
 	return records, nil
+}
+
+// noBookError says what a profile without a book needs: `store migrate` when
+// its pre-book cll.jsonl holds entries (store init would refuse it), and
+// `store init` otherwise.
+func noBookError(p Profile) error {
+	if retired, err := scanRetiredLog(p); err == nil && (len(retired.entries) > 0 || retired.checkpoint != nil) {
+		return hint(ErrInput, "this profile's cll.jsonl holds entries not yet in its book; run 'store migrate --log-id <new-log-id>'")
+	}
+	return hint(ErrInput, "the profile has no book yet; run 'store init'")
 }
 
 // completeLines returns a journal's newline-terminated lines.
@@ -814,7 +824,7 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth
 	if depth < 1 {
 		// The book reads a zero depth as its default; it has no root-only
 		// closure, so a zero is refused rather than silently widened.
-		return evidencebook.Bundle{}, inputError("--closure-depth must be at least 1 on a jsonl profile")
+		return evidencebook.Bundle{}, hint(ErrInput, "--closure-depth must be at least 1 on a jsonl profile")
 	}
 	request := evidencebook.BundleRequest{Root: root, ClosureDepth: depth}
 	if record, ok, err := publishedRecord(ctx, book, root); err != nil {
@@ -831,10 +841,10 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth
 		case "selected":
 			request.Payloads = evidencebook.PayloadsSelected
 		default:
-			return evidencebook.Bundle{}, inputError("--payloads must be all or selected")
+			return evidencebook.Bundle{}, hint(ErrInput, "--payloads must be all or selected")
 		}
 		if suppress["agent_output"] {
-			return evidencebook.Bundle{}, inputError("a book record has no agent_output member to suppress")
+			return evidencebook.Bundle{}, hint(ErrInput, "a book record has no agent_output member to suppress")
 		}
 		if suppress["agent_input"] {
 			request.Suppress = []string{evidencebook.HeaderMember}
