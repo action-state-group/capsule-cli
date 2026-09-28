@@ -278,6 +278,23 @@ func NewCommand() *cobra.Command {
 		return output(c, map[string]string{"log_id": p.LogID, "status": "initialized"})
 	}}
 	store.AddCommand(init)
+	migrate := &cobra.Command{Use: "migrate", Short: "Move a jsonl profile's pre-book cll.jsonl into its evidence book, once, in order (signs)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		p, e := selected(c)
+		if e != nil {
+			return e
+		}
+		if p.Type != "jsonl" || p.ReadOnly {
+			return inputError("store migrate applies to a writable jsonl profile")
+		}
+		newLogID, _ := c.Flags().GetString("log-id")
+		result, e := migrateStore(c.Context(), p, newLogID, bookNow())
+		if e != nil {
+			return e
+		}
+		return output(c, result)
+	}}
+	migrate.Flags().String("log-id", "", "New log_id for the book; required when the retired log was ever checkpointed")
+	store.AddCommand(migrate)
 	root.AddCommand(store)
 	root.AddCommand(sealToFileCommand("seal", "output", "Seal to an explicit private artifact file; no database connection"))
 	// `emit` is the v4 verb name for the same operation `seal` already performs
@@ -425,6 +442,14 @@ func NewCommand() *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.close()) }()
+		if p.Type == "jsonl" {
+			all, _ := c.Flags().GetBool("all")
+			items, next, e := listBookFiles(c.Context(), p, after, through, limit, all)
+			if e != nil {
+				return e
+			}
+			return output(c, map[string]any{"entries": items, "next_after": next, "log_id": p.LogID})
+		}
 		entries, e := t.log.ScanEntries(c.Context(), after, limit)
 		if e != nil {
 			return e
@@ -443,6 +468,7 @@ func NewCommand() *cobra.Command {
 	list.Flags().Uint64("after", 0, "Exclusive sequence lower bound")
 	list.Flags().Uint64("through", 0, "Inclusive sequence upper bound (0 unbounded)")
 	list.Flags().Int("limit", 100, "Page limit, at most 1000")
+	list.Flags().Bool("all", false, "jsonl profiles: also list the evidence book's internal records")
 	logs.AddCommand(list)
 	appendCmd := &cobra.Command{Use: "append", Short: "Append a Capsule ID to the CLL as a new entry", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
@@ -477,6 +503,17 @@ func NewCommand() *cobra.Command {
 			if e = t.artifacts.Put(c.Context(), r); e != nil {
 				return e
 			}
+		}
+		if t.book != nil {
+			seq, warning, e := appendPublished(c.Context(), t.book.book, r)
+			if e != nil {
+				return e
+			}
+			result := map[string]any{"capsule_id": r.CapsuleID, "sequence": seq, "log_id": p.LogID}
+			if warning != "" {
+				result["warning"] = warning
+			}
+			return output(c, result)
 		}
 		entry, e := appendRecord(c.Context(), t.log, r.CapsuleID)
 		if e != nil {

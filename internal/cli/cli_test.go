@@ -26,7 +26,7 @@ func profileFixture(t *testing.T) (Profile, ed25519.PrivateKey) {
 	t.Helper()
 	public, private, e := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, e)
-	p := Profile{Name: "test", Type: "mysql", LogID: "test-log", Namespace: "capsule"}
+	p := Profile{Name: "test", Type: "mysql", LogID: "test-log", Namespace: "capsule", Operator: "test-operator"}
 	p.Connection.Host = "127.0.0.1"
 	p.Connection.Port = 3306
 	p.Connection.Database = "capsule_cli_test"

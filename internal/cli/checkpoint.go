@@ -217,6 +217,13 @@ func addCheckpointCommands(logs *cobra.Command) {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.close()) }()
+		if t.book != nil {
+			result, e := checkpointBook(c.Context(), p, t.book.book, service)
+			if e != nil {
+				return e
+			}
+			return output(c, result)
+		}
 		config := checkpoint.DefaultRunnerConfig(p.LogID)
 		config.Cadence.CadenceEntries = 1
 		if service != "" {
@@ -292,7 +299,11 @@ func addCheckpointCommands(logs *cobra.Command) {
 				return e
 			}
 			defer func() { err = errors.Join(err, t.close()) }()
-			state, e := t.log.GetWitness(c.Context(), service, size)
+			var store cll.WitnessStateStore = t.log
+			if p.Type == "jsonl" {
+				store = newBookWitnessStore(p)
+			}
+			state, e := store.GetWitness(c.Context(), service, size)
 			if e != nil {
 				return e
 			}
@@ -320,14 +331,14 @@ func addCheckpointCommands(logs *cobra.Command) {
 				if e != nil {
 					return e
 				}
-				runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: t.log, id: service, size: size}, map[string]witness.Submitter{service: safeSubmitter{client}}, map[string]witness.Verifier{service: verifier})
+				runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: safeSubmitter{client}}, map[string]witness.Verifier{service: verifier})
 				if e != nil {
 					return e
 				}
 				if _, e = runner.RunOnce(c.Context(), time.Now().UTC(), 1); e != nil {
 					return e
 				}
-				state, e = t.log.GetWitness(c.Context(), service, size)
+				state, e = store.GetWitness(c.Context(), service, size)
 				if e != nil {
 					return e
 				}

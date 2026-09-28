@@ -220,9 +220,9 @@ verbs:
     emits: (no capsule — this is a pure computation over caller-supplied input)
     emission_mode: not-consequential
 
-  # The four verbs below run over a local evidence book: a `book/`
-  # directory beside the jsonl profile's own store, with its own commitment
-  # log. They need a jsonl profile with log_id, operator, a signing key the
+  # The four verbs below run over a jsonl profile's evidence book, the
+  # `book/` directory in its store and the profile's one log (publish and
+  # cll use it too). They need a jsonl profile with log_id, operator, a signing key the
   # profile trusts, and a checkpoint signing key it trusts. A counterparty is
   # named by its book id (its profile's log_id), and a peer bundle must come
   # from that book under the checkpoint key given for it. A Close covers every

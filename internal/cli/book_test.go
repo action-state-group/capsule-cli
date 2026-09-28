@@ -73,6 +73,14 @@ func appendHalves(t *testing.T, p Profile, halves ...half) {
 	}
 }
 
+// initBook creates a profile's book, as `store init` does.
+func initBook(t *testing.T, p Profile) {
+	t.Helper()
+	opened, err := openBook(t.Context(), p, true)
+	require.NoError(t, err)
+	require.NoError(t, opened.release())
+}
+
 func bookSize(t *testing.T, p Profile) uint64 {
 	t.Helper()
 	opened, err := openBook(t.Context(), p, true)
@@ -538,9 +546,9 @@ func TestCloseRefusesAnUntrustedCheckpointKey(t *testing.T) {
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
-// The book's log is checkpointed under its own log id, never the profile
-// CLL's, so one (log_id, key) never names two different trees.
-func TestBookLogIsNamedApartFromTheProfileLog(t *testing.T) {
+// The book is the profile's one log, so it is checkpointed under the
+// profile's own log_id.
+func TestBookLogIsTheProfileLog(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	bookClock(t, day0)
 	p, _ := bookProfile(t, "a")
@@ -550,7 +558,7 @@ func TestBookLogIsNamedApartFromTheProfileLog(t *testing.T) {
 	defer func() { require.NoError(t, opened.release()) }()
 	cp, err := opened.book.Checkpoint(t.Context())
 	require.NoError(t, err)
-	assert.Equal(t, p.LogID+"/book", cp.LogID)
+	assert.Equal(t, p.LogID, cp.LogID)
 }
 
 func TestReconcileNeedsAnExistingBookAndCreatesNothing(t *testing.T) {
@@ -665,6 +673,7 @@ func TestRequestRespondRoundTrip(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	set := bookClock(t, day0)
 	a, _ := bookProfile(t, "a")
+	initBook(t, a)
 	b, bKeys := bookProfile(t, "b")
 	appendHalves(t, b, half{"x1", "r1", "p1"})
 	set(day1)
