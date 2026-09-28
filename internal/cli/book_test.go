@@ -890,37 +890,78 @@ func TestAForwardClockJumpIsRefusedNotSealedAsEmpty(t *testing.T) {
 	set(day1)
 	appendHalves(t, q, half{"y2", "r2", "p2"})
 
-	// An operator who accepts the displaced time raises the tolerance.
+	// Raising the tolerance is not a way through: it is capped at an hour,
+	// and the refusal names the real recoveries.
 	p.ClockTolerance = "700000h"
+	err = saveProfile(p, true)
+	require.ErrorIs(t, err, ErrInput)
+	assert.ErrorContains(t, err, "from 0 to 1h0m0s")
+	p.ClockTolerance = "1h"
 	require.NoError(t, saveProfile(p, true))
-	appendHalves(t, p, half{"x3", "r3", "p3"})
+	_, err = openBook(t.Context(), p, true)
+	require.ErrorIs(t, err, ErrInput)
+	assert.ErrorContains(t, err, "start a new log")
+	assert.ErrorContains(t, err, "capsulectl store init --profile a")
+	assert.NotContains(t, err.Error(), "raise")
 }
 
-// A clock that jumped forward and back leaves records dated in the future,
-// and a raised clock_tolerance lets writing continue with every new record
-// pinned to that date. No period may then be closed: day1 would close empty
-// though x3 happened on it, and day0 would close without x2. Closing waits
-// until the clock passes the book's last record.
+// Inside the clock tolerance a record can sit ahead of the clock -- here 40
+// minutes, with a 1h tolerance. While it does, no period may be closed: a
+// record written meanwhile is pinned to that time. Once the clock passes it,
+// the period closes with its record.
 func TestNoCloseWhileTheBooksTimesAreDisplaced(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	set := bookClock(t, day0)
 	p, _ := bookProfile(t, "a")
-	appendHalves(t, p, half{"x1", "r1", "p1"})
-	set(time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC))
-	appendHalves(t, p, half{"x2", "r2", "p2"})
-	set(day1)
-	p.ClockTolerance = "700000h"
+	p.ClockTolerance = "1h"
 	require.NoError(t, saveProfile(p, true))
-	appendHalves(t, p, half{"x3", "r3", "p3"}) // committed at 2099: pinned
-	set(day1.AddDate(0, 0, 1))
+	appendHalves(t, p, half{"x0", "r0", "p0"})
+	noon := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	set(noon.Add(40 * time.Minute))
+	appendHalves(t, p, half{"x2", "r2", "p2"})
+	set(noon.Add(5 * time.Minute))
+	appendHalves(t, p, half{"x3", "r3", "p3"}) // pinned to 12:40
 
 	size := bookSize(t, p)
-	for _, date := range []string{"2026-09-25", "2026-09-24"} {
-		_, err := runClose(t, "--profile", "a", "--period", "day", "--date", date, "--counterparty", "b")
-		require.ErrorIs(t, err, ErrInput, date)
-		assert.ErrorContains(t, err, "no period can be closed or reconciled until this clock passes", date)
-	}
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-24", "--counterparty", "b")
+	require.ErrorIs(t, err, ErrInput)
+	assert.ErrorContains(t, err, "no period can be closed or reconciled until this clock passes")
 	assert.Equal(t, size, bookSize(t, p), "no Close was sealed")
+
+	set(noon.Add(time.Hour))
+	result, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-24", "--counterparty", "b")
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Reconciliation.Tallies.Insufficient, "the day closes with its record")
+}
+
+// Raising the tolerance used to let writing continue through a clock jump,
+// pinning every new record to the jump's time; once the clock caught up, the
+// day those records really belonged to closed as all zeros. The tolerance is
+// capped at an hour, so those writes are refused instead, and the day closes
+// with the records it did get.
+func TestACaughtUpClockNeverClosesADayAsEmpty(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, time.Date(2026, 9, 23, 11, 0, 0, 0, time.UTC))
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x0", "r0", "p0"})
+	set(time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC))
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	set(time.Date(2026, 9, 25, 11, 0, 0, 0, time.UTC))
+	appendHalves(t, p, half{"x2", "r2", "p2"})
+	set(time.Date(2026, 9, 24, 11, 0, 0, 0, time.UTC))
+
+	p.ClockTolerance = "200h"
+	require.ErrorIs(t, saveProfile(p, true), ErrInput, "the tolerance cannot be raised past an hour")
+	p.ClockTolerance = "1h"
+	require.NoError(t, saveProfile(p, true))
+	_, err := openBook(t.Context(), p, true)
+	require.ErrorIs(t, err, ErrInput, "x3 and x4 cannot be written pinned to 09-25")
+
+	set(time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC))
+	result, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-24", "--counterparty", "b")
+	require.NoError(t, err)
+	assert.LessOrEqual(t, result.Reconciliation.FromSeq, result.Reconciliation.ToSeq, "not an empty window")
+	assert.Equal(t, 1, result.Reconciliation.Tallies.Insufficient, "09-24 closes with x1, not all zeros")
 }
 
 // A quiet day is not a displaced one: a day with no records, followed by a
@@ -957,7 +998,7 @@ func TestClockRefusalsReachStderr(t *testing.T) {
 	config := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", config)
 	p, _ := bookProfile(t, "a")
-	future := time.Now().UTC().Add(time.Hour)
+	future := time.Now().UTC().Add(30 * time.Minute)
 	previous := bookNow
 	bookNow = func() time.Time { return future }
 	appendHalves(t, p, half{"x1", "r1", "p1"})
@@ -977,9 +1018,10 @@ func TestClockRefusalsReachStderr(t *testing.T) {
 	stderr, code := run("close", "--profile", "a", "--period", "day", "--counterparty", "b")
 	assert.Equal(t, 2, code)
 	assert.Contains(t, stderr, "invalid input or profile configuration: the book's last record is committed at")
-	assert.Contains(t, stderr, "raise clock_tolerance")
+	assert.Contains(t, stderr, "start a new log")
+	assert.NotContains(t, stderr, "raise")
 
-	p.ClockTolerance = "2h"
+	p.ClockTolerance = "1h"
 	require.NoError(t, saveProfile(p, true))
 	stderr, code = run("close", "--profile", "a", "--period", "day", "--counterparty", "b")
 	assert.Equal(t, 2, code)

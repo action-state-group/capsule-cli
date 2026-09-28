@@ -39,15 +39,15 @@ type openedBook struct {
 }
 
 // refuseDisplacedClose keeps a Close from being sealed over times that
-// cannot be placed. A record dated after this clock was committed while the
-// clock was ahead (a forward jump, perhaps written with a raised
-// clock_tolerance); every record after it was pinned to that time. Any
-// period before it would close without the records whose real time falls
-// in it -- an empty or short Close that cannot be redone. So closing (and
-// reconciling) waits until this clock is past the book's last record.
+// cannot be placed. A record dated after this clock (at most the clock
+// tolerance, an hour at most, ahead of it) was committed while the clock was
+// ahead; a record written since was pinned to that time. A period ending
+// before it would close without the records whose real time falls in it.
+// So closing (and reconciling) waits until this clock is past the book's
+// last record.
 func (o openedBook) refuseDisplacedClose() error {
 	if now := bookNow().UTC(); o.lastCommit.After(now) {
-		return hint(ErrInput, fmt.Sprintf("the book's last record is committed at %s, after this clock (%s): its records' times are displaced, so no period can be closed or reconciled until this clock passes %s. Writes can continue meanwhile only by raising clock_tolerance; closes stay refused either way", o.lastCommit.Format(time.RFC3339), now.Format(time.RFC3339), o.lastCommit.Format(time.RFC3339)))
+		return hint(ErrInput, fmt.Sprintf("the book's last record is committed at %s, after this clock (%s): no period can be closed or reconciled until this clock passes %s; wait until then", o.lastCommit.Format(time.RFC3339), now.Format(time.RFC3339), o.lastCommit.Format(time.RFC3339)))
 	}
 	return nil
 }
@@ -161,7 +161,7 @@ func (c *monotonicClock) refuseIfAhead(p Profile) error {
 		return err
 	}
 	if now := bookNow().UTC(); c.floor.Sub(now) > tolerance {
-		return hint(ErrInput, fmt.Sprintf("the book's last record is committed at %s, %s ahead of this clock (tolerance %s). If this clock is wrong, fix it. If the clock jumped forward and back, the book's times are displaced: wait until this clock passes %s, or raise clock_tolerance in the profile to keep writing meanwhile (closing stays refused until this clock passes that time)", c.floor.Format(time.RFC3339), c.floor.Sub(now).Round(time.Second), tolerance, c.floor.Format(time.RFC3339)))
+		return hint(ErrInput, fmt.Sprintf("the book's last record is committed at %s, %s ahead of this clock (tolerance %s). If this clock is wrong, fix it. If the clock jumped forward and back: wait until this clock passes %s if that is hours away; otherwise start a new log -- move the profile's book/ directory aside (keep it), then run 'capsulectl profile update --profile %s --log-id <new-log-id>' and 'capsulectl store init --profile %s'", c.floor.Format(time.RFC3339), c.floor.Sub(now).Round(time.Second), tolerance, c.floor.Format(time.RFC3339), p.Name, p.Name))
 	}
 	return nil
 }
@@ -186,16 +186,22 @@ func (c *monotonicClock) floorAtLastRecord(ctx context.Context, book *evidencebo
 }
 
 // defaultClockTolerance is how far ahead of this clock a book's last commit
-// time may be before the book is refused for writing.
-const defaultClockTolerance = 5 * time.Minute
+// time may be before the book is refused for writing. maxClockTolerance
+// caps it: while the last record is ahead of the clock, every new record is
+// pinned to its time, so the tolerance bounds how long a span of records can
+// be pinned -- at an hour, never a whole day's worth.
+const (
+	defaultClockTolerance = 5 * time.Minute
+	maxClockTolerance     = time.Hour
+)
 
 func (p Profile) clockTolerance() (time.Duration, error) {
 	if p.ClockTolerance == "" {
 		return defaultClockTolerance, nil
 	}
 	d, err := time.ParseDuration(p.ClockTolerance)
-	if err != nil || d < 0 {
-		return 0, inputError("clock_tolerance must be a non-negative duration such as 5m")
+	if err != nil || d < 0 || d > maxClockTolerance {
+		return 0, hint(ErrInput, fmt.Sprintf("clock_tolerance must be a duration from 0 to %s, such as 5m; it bounds how long a span of records can be pinned to one time, so it is not a way to keep writing through a clock jump", maxClockTolerance))
 	}
 	return d, nil
 }
@@ -289,7 +295,7 @@ func seqWindow(records []placed, p period, last uint64) (from, to uint64, ended 
 		}
 	}
 	if to == 0 {
-		return 0, 0, false, inputError("the log holds nothing committed before the period ends")
+		return 0, 0, false, hint(ErrInput, "the log holds nothing committed before the period ends; there is nothing to close for it")
 	}
 	return from, to, ended, nil
 }

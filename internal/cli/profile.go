@@ -82,9 +82,9 @@ type Profile struct {
 	// Operator is the AAC operator value the book verbs write into every
 	// record they seal. Only those verbs require it.
 	Operator string `yaml:"operator,omitempty" mapstructure:"operator"`
-	// ClockTolerance (a Go duration, default 5m) is how far the book's last
-	// commit time may sit ahead of this machine's clock before the book
-	// verbs refuse to write.
+	// ClockTolerance (a Go duration, default 5m, at most 1h) is how far the
+	// book's last commit time may sit ahead of this machine's clock before
+	// the book verbs refuse to write.
 	ClockTolerance string `yaml:"clock_tolerance,omitempty" mapstructure:"clock_tolerance"`
 	Connection     struct {
 		Host     string `yaml:"host" mapstructure:"host"`
