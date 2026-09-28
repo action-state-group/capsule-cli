@@ -137,11 +137,13 @@ func openBook(ctx context.Context, p Profile, create bool) (openedBook, error) {
 // record was committed at the latest.
 //
 // The floor has an upper bound: a book whose last record is dated more than
-// the profile's clock tolerance ahead of this clock (one forward jump of a
-// wall clock, since stepped back) is refused for writing. Otherwise every
-// later record would be pinned to that future time, and every real period
-// before it would close as empty -- a signed "nothing happened" that cannot
-// be redone. Every verb that signs, Close included, opens the book this way.
+// the profile's clock tolerance (at most an hour) ahead of this clock is
+// refused for writing. Records written while the last record is ahead of the
+// clock by less than that are pinned to its time, so a record appended up to
+// an hour before a period ends can be committed after it: a Close counts it
+// in the next period, and a period left empty by such pins is refused
+// (refuseEmptyWindowWithPinnedTail). Every verb that signs, Close included,
+// opens the book this way.
 type monotonicClock struct {
 	floor time.Time
 }
@@ -188,8 +190,8 @@ func (c *monotonicClock) floorAtLastRecord(ctx context.Context, book *evidencebo
 // defaultClockTolerance is how far ahead of this clock a book's last commit
 // time may be before the book is refused for writing. maxClockTolerance
 // caps it: while the last record is ahead of the clock, every new record is
-// pinned to its time, so the tolerance bounds how long a span of records can
-// be pinned -- at an hour, never a whole day's worth.
+// pinned to its time, so the tolerance bounds how far a record can be pinned
+// -- at most an hour, which can still carry a record across a period's end.
 const (
 	defaultClockTolerance = 5 * time.Minute
 	maxClockTolerance     = time.Hour
@@ -545,6 +547,43 @@ func reconcileCommand() *cobra.Command {
 	return cmd
 }
 
+// refuseEmptyWindowWithPinnedTail keeps a period from closing as all zeros
+// when its records were pinned out of it. While the book's last record was
+// ahead of the clock, each record written was committed at that same time:
+// its committed_at equals its predecessor's, to the microsecond, which two
+// appends made at their own time do not produce. A pinned record committed
+// within the clock ceiling after the period's end may have been appended
+// during the period. For an empty window that is the whole period's account,
+// so the Close is refused; a window with records closes, and a pinned record
+// near its end may be counted in the next period (see the README).
+func refuseEmptyWindowWithPinnedTail(ctx context.Context, book *evidencebook.Book, p period, windowEnd uint64) error {
+	records, err := book.Query(ctx, evidencebook.Filter{FromSeq: windowEnd})
+	if err != nil {
+		return err
+	}
+	var previous time.Time
+	pinned := 0
+	for i, r := range records {
+		at, err := committedAt(r.Header)
+		if err != nil {
+			return err
+		}
+		if i > 0 {
+			if at.Sub(p.end) > maxClockTolerance {
+				break
+			}
+			if at.Equal(previous) {
+				pinned++
+			}
+		}
+		previous = at
+	}
+	if pinned > 0 {
+		return hint(ErrInput, fmt.Sprintf("%d record(s) committed within an hour after this period ends were pinned there while the clock was behind the book (clock skew): they may have been appended during the period, so it is not closed as empty. Waiting does not change that; start a new log to close periods exactly from here on", pinned))
+	}
+	return nil
+}
+
 // sinceLastFrom moves a window's start back to just after the furthest
 // position any earlier Close with this counterparty reached, so an unclosed
 // day between two Closes is not skipped. A previous Close that already
@@ -605,6 +644,11 @@ func closeCommand() *cobra.Command {
 			}
 			if sinceLast && len(statements) > 0 {
 				if in.FromSeq, e = sinceLastFrom(statements, in.FromSeq); e != nil {
+					return e
+				}
+			}
+			if in.FromSeq > in.ToSeq {
+				if e = refuseEmptyWindowWithPinnedTail(c.Context(), book, a.period, in.ToSeq); e != nil {
 					return e
 				}
 			}

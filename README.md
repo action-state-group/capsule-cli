@@ -476,6 +476,15 @@ is an error, never a reason to initialize implicitly.
 The pinned CLL dependency allows unrelated application tables to coexist.
 It still validates actual CLL state and does not migrate or remove old tables.
 
+The book verbs place records in a period by the book's commit time, which
+never goes backwards. When this machine's clock falls behind the book's last
+record by less than the profile's `clock_tolerance` (default 5m, at most 1h),
+new records are committed at that last time instead, so a record appended up
+to an hour before a period ends can be counted in the next period's Close. A
+period that such records would leave empty is refused rather than closed as
+empty. A larger gap refuses writing until the clock passes the book's last
+record, or until a new log is started.
+
 Checkpoint service success conformance, broad fault-injection coverage and peer
 review status are tracked in the implementation handoff, not implied by compilation.
 Automated tests use isolated local services, never production.

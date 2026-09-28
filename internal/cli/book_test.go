@@ -1027,3 +1027,70 @@ func TestClockRefusalsReachStderr(t *testing.T) {
 	assert.Equal(t, 2, code)
 	assert.Contains(t, stderr, "no period can be closed or reconciled until this clock passes")
 }
+
+// jumpAndPin reproduces a 59-minute forward jump at 23:05 on 09-24: b is
+// written at 00:04 on 09-25, then the clock goes back to 23:10 and the
+// given records are written, pinned to 00:04.
+func jumpAndPin(t *testing.T, set func(time.Time), p Profile, pinned ...half) {
+	t.Helper()
+	set(time.Date(2026, 9, 25, 0, 4, 0, 0, time.UTC))
+	appendHalves(t, p, half{"b", "rb", "pb"})
+	set(time.Date(2026, 9, 24, 23, 10, 0, 0, time.UTC))
+	appendHalves(t, p, pinned...)
+}
+
+// Every record of 09-24 was pinned into 09-25: closing 09-24 as empty would
+// sign that nothing happened on a day three records were appended.
+func TestADayEmptiedByPinnedRecordsIsNotClosed(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC))
+	p, _ := bookProfile(t, "a")
+	p.ClockTolerance = "1h"
+	require.NoError(t, saveProfile(p, true))
+	appendHalves(t, p, half{"x0", "r0", "p0"})
+	jumpAndPin(t, set, p, half{"c", "rc", "pc"}, half{"c2", "rc2", "pc2"})
+	set(time.Date(2026, 9, 26, 1, 0, 0, 0, time.UTC))
+
+	size := bookSize(t, p)
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-24", "--counterparty", "b")
+	require.ErrorIs(t, err, ErrInput)
+	assert.ErrorContains(t, err, "2 record(s) committed within an hour after this period ends were pinned there")
+	assert.Equal(t, size, bookSize(t, p), "no Close was sealed")
+}
+
+// A quiet day followed by an ordinary record early the next day closes
+// empty: an unpinned record is where its time says.
+func TestAQuietDayBeforeAnEarlyRecordStillCloses(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC))
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x0", "r0", "p0"})
+	set(time.Date(2026, 9, 25, 0, 4, 0, 0, time.UTC))
+	appendHalves(t, p, half{"b", "rb", "pb"})
+	set(time.Date(2026, 9, 26, 1, 0, 0, 0, time.UTC))
+	result, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-24", "--counterparty", "b")
+	require.NoError(t, err)
+	assert.Equal(t, evidencebook.Tallies{}, result.Reconciliation.Tallies)
+}
+
+// A day with its own records closes even when a record appended in its last
+// hour was pinned into the next day; that record is counted there (the
+// README states this).
+func TestADayWithRecordsClosesDespiteAPinnedTail(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC))
+	p, _ := bookProfile(t, "a")
+	p.ClockTolerance = "1h"
+	require.NoError(t, saveProfile(p, true))
+	appendHalves(t, p, half{"x0", "r0", "p0"})
+	set(time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC))
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	jumpAndPin(t, set, p, half{"c", "rc", "pc"})
+	set(time.Date(2026, 9, 26, 1, 0, 0, 0, time.UTC))
+	result, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-24", "--counterparty", "b")
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Reconciliation.Tallies.Insufficient, "x1 is in 09-24; c is counted in 09-25")
+	next, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-25", "--counterparty", "b")
+	require.NoError(t, err)
+	assert.Equal(t, 2, next.Reconciliation.Tallies.Insufficient, "b and the pinned c close in 09-25")
+}

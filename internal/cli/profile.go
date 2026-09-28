@@ -84,7 +84,10 @@ type Profile struct {
 	Operator string `yaml:"operator,omitempty" mapstructure:"operator"`
 	// ClockTolerance (a Go duration, default 5m, at most 1h) is how far the
 	// book's last commit time may sit ahead of this machine's clock before
-	// the book verbs refuse to write.
+	// the book verbs refuse to write. Within it, a record written while the
+	// clock is behind the book is committed at the book's last time, so a
+	// record appended up to that long before a period ends may be counted in
+	// the next period.
 	ClockTolerance string `yaml:"clock_tolerance,omitempty" mapstructure:"clock_tolerance"`
 	Connection     struct {
 		Host     string `yaml:"host" mapstructure:"host"`
