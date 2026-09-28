@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -141,7 +143,7 @@ func TestSeqWindow(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInput, "a commit time that goes backwards is refused, not mapped")
 }
 
-// TestCloseSigningPath is the line-review test for the only code that
+// TestCloseSigningPath covers the only code that
 // chooses keys: the Close record is signed by the profile's signing key and
 // by nothing else, `verify` accepts it under that profile, the Close's
 // bundle verifies with the neutral AAC bundle verifier, and its checkpoint is
@@ -892,4 +894,94 @@ func TestAForwardClockJumpIsRefusedNotSealedAsEmpty(t *testing.T) {
 	p.ClockTolerance = "700000h"
 	require.NoError(t, saveProfile(p, true))
 	appendHalves(t, p, half{"x3", "r3", "p3"})
+}
+
+// A clock that jumped forward and back leaves records dated in the future,
+// and a raised clock_tolerance lets writing continue with every new record
+// pinned to that date. No period may then be closed: day1 would close empty
+// though x3 happened on it, and day0 would close without x2. Closing waits
+// until the clock passes the book's last record.
+func TestNoCloseWhileTheBooksTimesAreDisplaced(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	set(time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC))
+	appendHalves(t, p, half{"x2", "r2", "p2"})
+	set(day1)
+	p.ClockTolerance = "700000h"
+	require.NoError(t, saveProfile(p, true))
+	appendHalves(t, p, half{"x3", "r3", "p3"}) // committed at 2099: pinned
+	set(day1.AddDate(0, 0, 1))
+
+	size := bookSize(t, p)
+	for _, date := range []string{"2026-09-25", "2026-09-24"} {
+		_, err := runClose(t, "--profile", "a", "--period", "day", "--date", date, "--counterparty", "b")
+		require.ErrorIs(t, err, ErrInput, date)
+		assert.ErrorContains(t, err, "no period can be closed or reconciled until this clock passes", date)
+	}
+	assert.Equal(t, size, bookSize(t, p), "no Close was sealed")
+}
+
+// A quiet day is not a displaced one: a day with no records, followed by a
+// day with some, closes (and closes empty) once it has ended.
+func TestAQuietDayStillCloses(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, day0)
+	p, _ := bookProfile(t, "a")
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	set(day1.AddDate(0, 0, 1))
+	appendHalves(t, p, half{"x2", "r2", "p2"})
+	set(day1.AddDate(0, 0, 2))
+	result, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-25", "--counterparty", "b")
+	require.NoError(t, err)
+	assert.Equal(t, evidencebook.Tallies{}, result.Reconciliation.Tallies)
+}
+
+// capsulectlBinary builds the real binary once, so a test can read what an
+// operator reads: its stderr and its exit code.
+func capsulectlBinary(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "capsulectl")
+	cmd := exec.Command("go", "build", "-o", path, "./cmd/capsulectl")
+	cmd.Dir = filepath.Join("..", "..")
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	return path
+}
+
+// The clock refusals are only useful if they reach the operator: the binary
+// prints each hint after its error class, not the class alone.
+func TestClockRefusalsReachStderr(t *testing.T) {
+	config := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", config)
+	p, _ := bookProfile(t, "a")
+	future := time.Now().UTC().Add(time.Hour)
+	previous := bookNow
+	bookNow = func() time.Time { return future }
+	appendHalves(t, p, half{"x1", "r1", "p1"})
+	bookNow = previous
+	bin := capsulectlBinary(t)
+	run := func(args ...string) (string, int) {
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+config)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		var exit *exec.ExitError
+		require.ErrorAs(t, err, &exit)
+		return stderr.String(), exit.ExitCode()
+	}
+
+	stderr, code := run("close", "--profile", "a", "--period", "day", "--counterparty", "b")
+	assert.Equal(t, 2, code)
+	assert.Contains(t, stderr, "invalid input or profile configuration: the book's last record is committed at")
+	assert.Contains(t, stderr, "raise clock_tolerance")
+
+	p.ClockTolerance = "2h"
+	require.NoError(t, saveProfile(p, true))
+	stderr, code = run("close", "--profile", "a", "--period", "day", "--counterparty", "b")
+	assert.Equal(t, 2, code)
+	assert.Contains(t, stderr, "no period can be closed or reconciled until this clock passes")
 }

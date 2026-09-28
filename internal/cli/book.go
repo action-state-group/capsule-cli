@@ -34,6 +34,22 @@ var bookNow = time.Now
 type openedBook struct {
 	book  *evidencebook.Book
 	store *evidencebook.FileStore
+	// lastCommit is the committed_at of the book's last record.
+	lastCommit time.Time
+}
+
+// refuseDisplacedClose keeps a Close from being sealed over times that
+// cannot be placed. A record dated after this clock was committed while the
+// clock was ahead (a forward jump, perhaps written with a raised
+// clock_tolerance); every record after it was pinned to that time. Any
+// period before it would close without the records whose real time falls
+// in it -- an empty or short Close that cannot be redone. So closing (and
+// reconciling) waits until this clock is past the book's last record.
+func (o openedBook) refuseDisplacedClose() error {
+	if now := bookNow().UTC(); o.lastCommit.After(now) {
+		return hint(ErrInput, fmt.Sprintf("the book's last record is committed at %s, after this clock (%s): its records' times are displaced, so no period can be closed or reconciled until this clock passes %s. Writes can continue meanwhile only by raising clock_tolerance; closes stay refused either way", o.lastCommit.Format(time.RFC3339), now.Format(time.RFC3339), o.lastCommit.Format(time.RFC3339)))
+	}
+	return nil
 }
 
 func (o openedBook) release() error { return o.book.Release() }
@@ -110,7 +126,7 @@ func openBook(ctx context.Context, p Profile, create bool) (openedBook, error) {
 	if err = clock.refuseIfAhead(p); err != nil {
 		return openedBook{}, errors.Join(err, book.Release())
 	}
-	return openedBook{book: book, store: store}, nil
+	return openedBook{book: book, store: store, lastCommit: clock.floor}, nil
 }
 
 // monotonicClock is the book's commit clock: bookNow, never earlier than the
@@ -145,7 +161,7 @@ func (c *monotonicClock) refuseIfAhead(p Profile) error {
 		return err
 	}
 	if now := bookNow().UTC(); c.floor.Sub(now) > tolerance {
-		return inputError(fmt.Sprintf("the book's last record is committed at %s, %s ahead of this clock (tolerance %s): fix the clock before writing to this book", c.floor.Format(time.RFC3339), c.floor.Sub(now).Round(time.Second), tolerance))
+		return hint(ErrInput, fmt.Sprintf("the book's last record is committed at %s, %s ahead of this clock (tolerance %s). If this clock is wrong, fix it. If the clock jumped forward and back, the book's times are displaced: wait until this clock passes %s, or raise clock_tolerance in the profile to keep writing meanwhile (closing stays refused until this clock passes that time)", c.floor.Format(time.RFC3339), c.floor.Sub(now).Round(time.Second), tolerance, c.floor.Format(time.RFC3339)))
 	}
 	return nil
 }
@@ -506,6 +522,9 @@ func reconcileCommand() *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, opened.release()) }()
+		if e = opened.refuseDisplacedClose(); e != nil {
+			return e
+		}
 		in, e := reconcileInput(c.Context(), opened.book, a.period, a.counterparty, a.peer, true)
 		if e != nil {
 			return e
@@ -554,6 +573,9 @@ func closeCommand() *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, opened.release()) }()
+		if e = opened.refuseDisplacedClose(); e != nil {
+			return e
+		}
 		book := opened.book
 		result := closeResult{Period: a.period.key, Counterparty: a.counterparty}
 		records, statements, e := priorCloses(c.Context(), book, a.counterparty)
