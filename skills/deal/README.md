@@ -79,6 +79,14 @@ Nothing, by default.
      `deadline_pressure`, `code_request`, `domain_recent`,
      `unverified_claim`, `delivered_differs`.
 
+   Every cause a check paused on is an anomaly, in the card's own words
+   (read from the check's sealed differences, the same source as the card):
+   besides the kinds above, `terms_changed`, `recourse_changed` (payment
+   method or refundability changed since agreed), `irreversible_rail`, and
+   on the agent side `pay_before_seeing` and `credentials_requested`. When a
+   check restates an item read from an earlier step (a changed payee, a
+   code request), the two are one item that expands to both steps.
+
 Every item lists the steps it was read from. `--html FILE` writes the report
 as one local, self-contained page, built on this machine: nothing is hosted
 and no link is minted. The page embeds an AAC Evidence Bundle of the deal's

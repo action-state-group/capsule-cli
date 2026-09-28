@@ -913,6 +913,18 @@ func buildDealReport(events []sealedEvent) dealReport {
 	counterparty := func(kind, text string, steps ...string) {
 		r.Anomalies = append(r.Anomalies, dealReportItem{Side: "counterparty", Kind: kind, Text: text, Steps: steps})
 	}
+	// A paused check lists every cause of the pause in the card's own words
+	// (its sealed differences), so the card and the anomalies cannot diverge.
+	// An item read from an earlier step that the check states again folds
+	// into the check's item: pending holds those items by the check rule that
+	// covers them; folded marks them for removal.
+	pending := map[string][]int{}
+	folded := map[int]bool{}
+	causes := map[string]int{}
+	watch := func(rule, field string) {
+		key := rule + "/" + field
+		pending[key] = append(pending[key], len(r.Anomalies)-1)
+	}
 	first := open.Who
 	if first.Payee == "" {
 		first.Payee = first.Name
@@ -922,11 +934,13 @@ func buildDealReport(events []sealedEvent) dealReport {
 		if !young && w.DomainAgeDays != nil && *w.DomainAgeDays < recentDomainDays {
 			young = true
 			counterparty("domain_recent", "Website registered "+ageText(*w.DomainAgeDays), step)
+			watch("domain_recent", "domain")
 		}
 		now := whoFields(w)
 		for i, f := range whoFields(first) {
 			if f.value != "" && now[i].value != "" && !strings.EqualFold(strings.TrimSpace(f.value), strings.TrimSpace(now[i].value)) {
 				counterparty("changed_identifier", fmt.Sprintf("%s changed: %s → %s", f.label, f.value, now[i].value), openID, step)
+				watch("payee_or_contact_changed", f.key)
 			}
 		}
 	}
@@ -943,14 +957,17 @@ func buildDealReport(events []sealedEvent) dealReport {
 			}
 			if channelHop(open.Channel, e.Message.Channel) {
 				counterparty("channel_hop", fmt.Sprintf("Moved from %s to %s", open.Channel, e.Message.Channel), openID, se.CapsuleID)
+				watch("off_platform_early", "")
 			} else if offPlatform.MatchString(e.Message.Text) {
 				counterparty("channel_hop", "Asked to move off the platform", se.CapsuleID)
+				watch("off_platform_early", "")
 			}
 			if deadlinePressure.MatchString(e.Message.Text) {
 				counterparty("deadline_pressure", "Pushed you to decide fast", se.CapsuleID)
 			}
 			if codeRequest.MatchString(e.Message.Text) {
 				counterparty("code_request", "Asked for a verification code", se.CapsuleID)
+				watch("verification_code_request", "")
 			}
 		case "change":
 			if e.Change.Who != nil {
@@ -975,6 +992,26 @@ func buildDealReport(events []sealedEvent) dealReport {
 			}
 			if len(asked) > 0 {
 				agent("asked_vs_did", fmt.Sprintf("Tried %s: %s", actionNames[e.Check.Action], strings.Join(asked, " · ")), openID, e.Check.Snapshot, se.CapsuleID)
+			}
+			for _, d := range e.Check.Differences {
+				if d.Question == "asked" || d.Text == "" {
+					continue
+				}
+				var steps []string
+				key := d.Rule + "/" + d.Field
+				for _, i := range pending[key] {
+					steps = append(steps, r.Anomalies[i].Steps...)
+					folded[i] = true
+				}
+				delete(pending, key)
+				steps = append(steps, e.Check.Snapshot, se.CapsuleID)
+				if i, ok := causes[d.Text]; ok {
+					r.Anomalies[i].Steps = appendNew(r.Anomalies[i].Steps, steps...)
+					continue
+				}
+				causes[d.Text] = len(r.Anomalies)
+				side, kind := pauseCauseKind(d.Rule)
+				r.Anomalies = append(r.Anomalies, dealReportItem{Side: side, Kind: kind, Text: d.Text, Steps: appendNew(nil, steps...)})
 			}
 		case "approval":
 			if i, ok := checkItem[e.Approval.Check]; ok {
@@ -1016,6 +1053,13 @@ func buildDealReport(events []sealedEvent) dealReport {
 			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: "Closed: " + e.Close.Outcome, Steps: []string{se.CapsuleID}})
 		}
 	}
+	kept := r.Anomalies[:0]
+	for i, item := range r.Anomalies {
+		if !folded[i] {
+			kept = append(kept, item)
+		}
+	}
+	r.Anomalies = kept
 	// Unverified claims, as they stand at the end, each with where it came from.
 	state, _ := foldDeal(events)
 	for _, c := range state.claims {
@@ -1031,6 +1075,33 @@ func buildDealReport(events []sealedEvent) dealReport {
 		counterparty("unverified_claim", "Unverified: "+c.Text+" (from "+strings.ReplaceAll(c.Source, "_", " ")+")", step)
 	}
 	return r
+}
+
+// pauseCauseKind names a check rule as a report anomaly: the rules that match
+// an anomaly read from the steps keep that anomaly's kind; a check stopping
+// something the agent was about to do is on the agent side.
+func pauseCauseKind(rule string) (side, kind string) {
+	switch rule {
+	case "payee_or_contact_changed":
+		return "counterparty", "changed_identifier"
+	case "verification_code_request":
+		return "counterparty", "code_request"
+	case "off_platform_early":
+		return "counterparty", "channel_hop"
+	case "pay_before_seeing", "credentials_requested":
+		return "agent", rule
+	}
+	return "counterparty", rule
+}
+
+// appendNew appends the steps not already in list, keeping order.
+func appendNew(list []string, steps ...string) []string {
+	for _, s := range steps {
+		if !slices.Contains(list, s) {
+			list = append(list, s)
+		}
+	}
+	return list
 }
 
 // channelHop reports a message on a different channel from first contact. An

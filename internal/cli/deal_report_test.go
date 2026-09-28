@@ -48,8 +48,10 @@ func TestDealReportThreeParts(t *testing.T) {
 		"act: Did: pay $200.00 to M. Torres by Zelle ⚠️",
 	}, reportTexts(t, report, "did"))
 	assert.Equal(t, []string{
-		"counterparty/changed_identifier: Payee changed: Coastal Jet Rentals LLC → M. Torres",
-		"counterparty/domain_recent: Website registered 3 weeks ago",
+		"counterparty/changed_identifier: Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle)",
+		"counterparty/recourse_changed: Payment changed since it was agreed (card → Zelle, not refundable)",
+		"counterparty/irreversible_rail: Zelle = no card protection",
+		"counterparty/domain_recent: Site registered 3 weeks ago",
 		"agent/unsealed_approval: Went ahead without your approval: pay $200.00 to M. Torres by Zelle (the check paused and the answer was hold)",
 		"counterparty/unverified_claim: Unverified: they have 2 jet skis for Saturday (from seller message)",
 	}, reportTexts(t, report, "anomalies"))
@@ -58,12 +60,13 @@ func TestDealReportThreeParts(t *testing.T) {
 func TestDealReportAgentAndCounterpartyAnomalies(t *testing.T) {
 	dealFixture(t)
 	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	var messages []string
 	for _, m := range []string{
 		`{"from":"counterparty","channel":"email","text":"Rate is only good today only, book right now."}`,
 		`{"from":"counterparty","text":"Easier to sort this on WhatsApp."}`,
 		`{"from":"counterparty","text":"Please send me the verification code we sent you."}`,
 	} {
-		dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, m))
+		messages = append(messages, dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, m))["capsule_id"].(string))
 	}
 	dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit.json"))
 	dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":76000}`))
@@ -71,12 +74,16 @@ func TestDealReportAgentAndCounterpartyAnomalies(t *testing.T) {
 	report := dealRun(t, "report", "--deal", dealID)
 	assert.Equal(t, []string{
 		"counterparty/deadline_pressure: Pushed you to decide fast",
-		"counterparty/channel_hop: Asked to move off the platform",
-		"counterparty/code_request: Asked for a verification code",
 		"agent/asked_vs_did: Tried confirming a commitment: Not what you asked: check_out 2026-10-05 → 2026-10-07 · Over your limit of $400.00 ($760.00)",
+		"counterparty/code_request: They asked for a verification code — never share it",
+		"counterparty/channel_hop: They asked to move off the platform",
 		"agent/skipped_check: Skipped the check: pay $760.00 (no check before this action)",
 		"counterparty/unverified_claim: Unverified: free cancellation until October 1 (from booking page)",
 	}, reportTexts(t, report, "anomalies"))
+	// A cause the check states again still expands to the message it came from.
+	anomalies := report["anomalies"].([]any)
+	assert.Contains(t, anomalies[2].(map[string]any)["steps"], messages[2])
+	assert.Contains(t, anomalies[3].(map[string]any)["steps"], messages[1])
 }
 
 func TestDealReportIsOneLocalVerifyingPage(t *testing.T) {
@@ -217,4 +224,40 @@ func TestDealReportAskedIsCheckable(t *testing.T) {
 	assert.Equal(t, intent["verbatim_commitment"], commitment)
 	assert.Equal(t, "rent me 2 jet skis Saturday", opening["text"])
 	assert.Contains(t, string(raw), "not checked by this page")
+}
+
+// assertEveryPauseCauseListed checks that each difference a paused check
+// showed on its card is an anomaly in the report, in the card's own words.
+func assertEveryPauseCauseListed(t *testing.T, report map[string]any, checks ...map[string]any) {
+	t.Helper()
+	anomalies := strings.Join(reportTexts(t, report, "anomalies"), "\n")
+	for _, check := range checks {
+		require.Equal(t, "pause", check["verdict"])
+		for _, raw := range check["differences"].([]any) {
+			text := raw.(map[string]any)["text"].(string)
+			assert.Contains(t, check["card"], text)
+			assert.Contains(t, anomalies, text, "a cause of the pause is missing from the report's anomalies")
+		}
+	}
+}
+
+func TestDealReportListsEveryPauseCause(t *testing.T) {
+	t.Run("jet ski", func(t *testing.T) {
+		dealFixture(t)
+		dealID := openJetSki(t)
+		check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
+		dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "hold")
+		report := dealRun(t, "report", "--deal", dealID)
+		assertEveryPauseCauseListed(t, report, check)
+		assert.Contains(t, reportTexts(t, report, "anomalies"), "counterparty/recourse_changed: Payment changed since it was agreed (card → Zelle, not refundable)")
+	})
+	t.Run("booking", func(t *testing.T) {
+		dealFixture(t)
+		dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+		dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","text":"Please send me the verification code we sent you."}`))
+		commit := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit.json"))
+		refund := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"commit","terms":{"when":"2026-10-03","conditions":{"check_out":"2026-10-05"},"price_minor":38000},"recourse":{"refundable":false}}`))
+		report := dealRun(t, "report", "--deal", dealID)
+		assertEveryPauseCauseListed(t, report, commit, refund)
+	})
 }
