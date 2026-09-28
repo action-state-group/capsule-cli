@@ -31,10 +31,14 @@ deal note --deal "$id" --kind change --input "$demo/04-change.json" >/dev/null
 deal note --deal "$id" --kind evidence --input "$demo/05-evidence-domain.json" >/dev/null
 deal check --deal "$id" --input "$demo/06-check-pay.json" >"$work/check.json"
 
-card=$(jq -r .card "$work/check.json")
+# Trailing whitespace is not part of the card: a saved file may end in a
+# newline, spaces or CRLF. $(...) drops the trailing newlines.
+trim_end() { sed -e 's/[[:space:]]*$//'; }
+card=$(jq -r .card "$work/check.json" | trim_end)
+expected=$(trim_end <"$demo/expected-card.txt")
 printf '%s\n\n' "$card"
-if [[ "$card" != "$(cat "$demo/expected-card.txt")" ]]; then
-  printf 'unexpected card; expected:\n%s\n' "$(cat "$demo/expected-card.txt")" >&2
+if [[ "$card" != "$expected" ]]; then
+  printf 'unexpected card; expected:\n%s\n' "$expected" >&2
   exit 1
 fi
 

@@ -187,7 +187,8 @@ play the DEMO seller from the fixture files in order: open with
 `01-open.json`, note `02-message-quote.json` (the $400 quote, $200 deposit),
 `03-message-switch.json` and `04-change.json` (the payee switch to Zelle),
 `05-evidence-domain.json` (the site is 3 weeks old), then check
-`06-check-pay.json`. The card must match `expected-card.txt`.
+`06-check-pay.json`. The card must match `expected-card.txt`, ignoring
+trailing whitespace (the file ends in a newline; the card does not).
 `scripts/run-demo.sh` runs the same steps unattended.
 
 ## What this is, honestly

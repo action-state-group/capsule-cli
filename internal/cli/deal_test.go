@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -426,4 +427,49 @@ func TestDealPayAnywayThenTermsChangeAgain(t *testing.T) {
 	paid := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":30000,"payee":"M. Torres","rail":"zelle"}`))
 	assert.Equal(t, false, paid["unchecked"])
 	assert.Equal(t, ok["capsule_id"], paid["authorized_by"])
+}
+
+// The demo script compares the card with expected-card.txt ignoring trailing
+// whitespace: a file saved with an extra newline, trailing spaces or CRLF
+// line endings is the same card.
+func TestDealDemoScriptIgnoresTrailingWhitespace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds capsulectl and runs the demo script")
+	}
+	for _, tool := range []string{"bash", "jq"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skip(tool + " not installed")
+		}
+	}
+	work := t.TempDir()
+	bin := filepath.Join(work, "capsulectl")
+	build := exec.Command("go", "build", "-o", bin, "../../cmd/capsulectl")
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	skill := filepath.Join(work, "deal")
+	for _, dir := range []string{"scripts", "demo/jet-ski", "profile"} {
+		require.NoError(t, os.CopyFS(filepath.Join(skill, dir), os.DirFS(filepath.Join("../../skills/deal", dir))))
+	}
+	want, err := os.ReadFile(filepath.Join(jetSkiDemo, "expected-card.txt"))
+	require.NoError(t, err)
+	padded := strings.TrimRight(string(want), "\n") + "  \r\n\n"
+	require.NoError(t, os.WriteFile(filepath.Join(skill, "demo/jet-ski/expected-card.txt"), []byte(padded), 0o600))
+
+	demo := func() (string, error) {
+		run := exec.Command("bash", filepath.Join(skill, "scripts/run-demo.sh"))
+		run.Env = append(os.Environ(), "CAPSULECTL="+bin)
+		out, err := run.CombinedOutput()
+		return string(out), err
+	}
+	got, err := demo()
+	require.NoError(t, err, got)
+	assert.Contains(t, got, strings.TrimSpace(string(want)))
+
+	// A card that differs in anything but trailing whitespace still fails.
+	other := strings.Replace(padded, "3 weeks ago", "4 weeks ago", 1)
+	require.NoError(t, os.WriteFile(filepath.Join(skill, "demo/jet-ski/expected-card.txt"), []byte(other), 0o600))
+	got, err = demo()
+	require.Error(t, err, got)
+	assert.Contains(t, got, "unexpected card")
 }
