@@ -671,6 +671,7 @@ func TestMigrateRefusesATamperedCheckpointedRetiredLog(t *testing.T) {
 	_, err = invoke(t, "", "store", "migrate", "--profile", "q", "--log-id", "q-book-v2")
 	require.ErrorIs(t, err, ErrConflict)
 	assert.NoFileExists(t, filepath.Join(q.Connection.Database, "book", "log.jsonl"))
+	assert.Equal(t, ErrConflict.Error()+": the retired log's checkpoint does not verify: its signature, its log_id, or its signer (which must be one of the profile's checkpoint trusted_keys); nothing was migrated", SafeError(err), "the operator sees fixed text, not the verifier's error")
 }
 
 // A checkpointed retired log that verifies marks exactly the entries its

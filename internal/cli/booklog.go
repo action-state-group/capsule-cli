@@ -388,7 +388,9 @@ func anchorRetiredLog(p Profile, retired retiredLog) (int, error) {
 	}
 	record, err := verifyCheckpoint(p, retired.checkpoint.Bytes)
 	if err != nil {
-		return 0, hint(ErrConflict, "the retired log's checkpoint does not verify under the profile's trusted checkpoint keys ("+err.Error()+"); nothing was migrated")
+		// Fixed text: the verifier's own error may name more than the operator
+		// needs, and the hint is shown verbatim. err stays in the chain.
+		return 0, errors.Join(hint(ErrConflict, "the retired log's checkpoint does not verify: its signature, its log_id, or its signer (which must be one of the profile's checkpoint trusted_keys); nothing was migrated"), err)
 	}
 	tree, err := mmr.New(nil)
 	if err != nil {
