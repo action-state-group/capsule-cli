@@ -473,3 +473,35 @@ func TestDealDemoScriptIgnoresTrailingWhitespace(t *testing.T) {
 	require.Error(t, err, got)
 	assert.Contains(t, got, "unexpected card")
 }
+
+// "Call the number I found": the choice is sealed as the answer (it does not
+// proceed), the call's result is noted as evidence, and the check runs again.
+// The old check is answered and cannot be answered again; the new card shows
+// what the call verified.
+func TestDealCallTheNumberThenCheckAgain(t *testing.T) {
+	dealFixture(t)
+	dealID := openJetSki(t)
+	pay := filepath.Join(jetSkiDemo, "06-check-pay.json")
+	check := dealRun(t, "check", "--deal", dealID, "--input", pay)
+	call := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "verify_contact", "--said", "call them")
+	assert.Equal(t, false, call["proceed"])
+
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--input", writeJSON(t, `{"about":"they have 2 jet skis for Saturday","source":"phone call to the number found at first contact","verified":true}`))
+
+	late := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "pay anyway")
+	assert.Equal(t, false, late["proceed"], "a check takes one answer; after the call, check again")
+	assert.Equal(t, "this check was already answered; check again", late["reason"])
+
+	again := dealRun(t, "check", "--deal", dealID, "--input", pay)
+	assert.NotEqual(t, check["check_id"], again["check_id"])
+	assert.Equal(t, "pause", again["verdict"], "the payee is still compared with first contact")
+	assert.NotContains(t, again["card"], "unverified:")
+	report := dealRun(t, "report", "--deal", dealID)
+	assert.Contains(t, report["trail"], "your answer: verify_contact")
+	assert.Contains(t, report["trail"], "evidence (phone_call_to_the_number_found_at_first_contact), checked: they have 2 jet skis for Saturday")
+
+	skill, err := os.ReadFile("../../skills/deal/SKILL.md")
+	require.NoError(t, err)
+	assert.Contains(t, string(skill), "--choice verify_contact")
+	assert.Contains(t, string(skill), "--kind evidence")
+}

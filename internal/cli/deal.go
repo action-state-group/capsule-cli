@@ -737,8 +737,9 @@ func dealNoteCommand() *cobra.Command {
 }
 
 // judgeApproval binds an answer to one sealed check. It proceeds only when the
-// user chose proceed and nothing was sealed since that check that could
-// change what they were shown.
+// user chose proceed, the check has no earlier answer (the first answer is
+// the one an action is held to), and nothing was sealed since that check that
+// could change what they were shown.
 func judgeApproval(events []sealedEvent, a *dealApproval) error {
 	for i, se := range events {
 		if se.CapsuleID != a.Check {
@@ -754,11 +755,20 @@ func judgeApproval(events []sealedEvent, a *dealApproval) error {
 		if !slices.ContainsFunc(check.Options, func(o dealOption) bool { return o.ID == a.Choice }) {
 			return inputError("--choice is not one of the options the check offered")
 		}
+		var answered, changed bool
 		for _, later := range events[i+1:] {
 			switch k := later.Event.Kind; {
+			case k == "approval" && later.Event.Approval.Check == a.Check:
+				answered = true
 			case changesDetails(later.Event), k == "snapshot", k == "check", k == "intent":
-				a.Reason = "details changed after this check; check again"
+				changed = true
 			}
+		}
+		switch {
+		case answered:
+			a.Reason = "this check was already answered; check again"
+		case changed:
+			a.Reason = "details changed after this check; check again"
 		}
 		// The record says what the user chose. A stale answer cannot authorize
 		// anything: the action rule requires no change after the check.

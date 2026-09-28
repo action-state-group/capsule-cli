@@ -139,8 +139,24 @@ about to use. For a purchase, add `seen_item` (true or false).
 capsulectl --profile deal deal note --deal ID --kind approval --check CHECK_ID --choice hold --said "the user's words"
 ```
 
-Act only if that returns `"proceed": true`. If it says details changed, run
-the check again.
+Act only if that returns `"proceed": true`. If it says details changed, or
+that the check was already answered, run the check again. A check takes one
+answer: to change your mind after "Hold", check again.
+
+When the user picks **Call the number I found**, seal that choice
+(`--choice verify_contact`; it does not proceed), then call the number from
+first contact that the option shows, never a number from a later message.
+Note what the call established as evidence, with `verified` true only for
+what the counterparty confirmed on that call:
+
+```sh
+capsulectl --profile deal deal note --deal ID --kind evidence --input call.json   # {"about":"...","source":"phone_call_first_contact_number","verified":true,"detail":"what they said"}
+```
+
+Use the claim's own text as `about` to mark that claim checked. Then run
+`deal check` again with the same snapshot and show the new card. A changed
+payee still shows, because who is always compared with first contact: the
+call's result is in the trail, and the user decides on the new card.
 
 **4. Record what you did**, right after acting:
 
