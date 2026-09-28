@@ -225,7 +225,9 @@ A verifier holding one deal's records in `seq` order checks:
      equal the checked ones.
    - One approval authorizes at most one action.
    - It is the verdict's first `approval`. A later answer to the same verdict never authorizes:
-     changing the answer ("Hold", then "Pay anyway") requires a new check.
+     changing the answer ("Hold", then "Pay anyway") requires a new check. The later answer is
+     still sealed as the user gave it (`proceed` records the choice, as for every approval); no
+     `action` may cite it.
 6. **Standing intent.** `approver: "standing_intent"` is valid only on a passing verdict, and
    only for an action in the current `allowed`. An absent `allowed` places no restriction; a
    present, empty `allowed` allows nothing. A pause always needs the user's own answer.

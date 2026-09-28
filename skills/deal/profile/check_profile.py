@@ -436,6 +436,7 @@ def check_chain(records):
     # Absent allowed = no restriction; present and empty = nothing allowed.
     allowed = records[0]["body"]["intent"].get("allowed")
     used_approvals, verdict_for_check = set(), set()
+    first_answer = {}  # verdict index -> index of its first approval
     last_outcome = None
     unchecked = 0
     closed_final = False
@@ -497,6 +498,7 @@ def check_chain(records):
                 fail(i, "verdict pack_id differs from the check's")
         elif t == "approval":
             j = one("approves", ("verdict",))
+            first_answer.setdefault(j, i)
             v = records[j]["body"]
             if body["approver"] == "standing_intent":
                 chk = records[by_digest[records[j]["x-deal-v0"]["refs"][0]["digest"]]]["body"]
@@ -517,6 +519,8 @@ def check_chain(records):
                 fail(i, "an approval authorizes at most one action")
             used_approvals.add(ja)
             jv = by_digest[appr["x-deal-v0"]["refs"][0]["digest"]]
+            if first_answer.get(jv) != ja:
+                fail(i, "an action is held to the verdict's first answer; a later answer needs a new check")
             jc = by_digest[records[jv]["x-deal-v0"]["refs"][0]["digest"]]
             chk = records[jc]
             if chk["body"]["action"] != body["action"]:
@@ -628,6 +632,7 @@ def run_fixtures() -> int:
     for p in sorted((FIX / "negative").glob("*.json")):
         f = load(p)
         prefix = [load(FIX / "positive" / n)["record"] for n in f.get("chain_prefix", [])]
+        prefix += f.get("chain_between", [])
         got = None
         try:
             check_record(f["record"], store)
@@ -847,6 +852,20 @@ def regen(pack_path: Path | None):
     r["x-deal-v0"]["prev"] = _ref(record_digest(records[13]))
     neg("neg-action-on-hold", "chain", "did not approve proceeding", r, 14,
         "A pay action citing the user's Hold answer.")
+
+    # The user holds, then answers the same verdict again with "Pay anyway": the second answer is
+    # sealed (it records what the user chose), but an action is held to the verdict's first answer.
+    again = copy.deepcopy(records[13])
+    again["body"] = {"choice": "proceed", "proceed": True, "approver": "user",
+                     "said_commitment": commitment(nonce("said-2"), "Pay anyway")}
+    again["x-deal-v0"].update(seq=15, at="2026-10-01T18:44:50Z", prev=_ref(record_digest(records[13])))
+    r = {"x-deal-v0": {**copy.deepcopy(records[8]["x-deal-v0"]), "seq": 16, "at": "2026-10-01T18:45:00Z",
+                       "prev": _ref(record_digest(again)), "counterparty": cp(("payee", "second")),
+                       "refs": [{"rel": "authorized_by", **_ref(record_digest(again))}]},
+         "body": {"action": "pay", "amount_minor": 20000, "currency": "USD", "rail": "zelle"}}
+    neg("neg-action-on-second-answer", "chain", "first answer", r, 14,
+        "After Hold, a second answer to the same verdict (Pay anyway) is cited by a pay action.",
+        chain_between=[again])
 
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["canonicalization"] = "jcs-n"
     neg("neg-wrong-canonicalization", "canonicalization", "must be exactly", r, 2,

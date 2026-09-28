@@ -165,7 +165,11 @@ func TestDealRecordsFollowTheProfile(t *testing.T) {
 	dealRun(t, "note", "--deal", dealID, "--kind", "change", "--input", writeJSON(t, `{"source":"hotel message","who":{"payee":"M. Torres","phone":"+1 555 010 2044"},"recourse":{"rail":"zelle","refundable":false}}`))
 	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":38000,"recourse":{"rail":"zelle","refundable":false}}`))
 	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "hold", "--said", "hold on")
-	dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":38000,"payee":"M. Torres","rail":"zelle","reference":"zelle ref 7781"}`))
+	// A second answer to the same check is sealed as said, but authorizes nothing.
+	late := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "pay anyway")
+	require.Equal(t, false, late["proceed"])
+	paid := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":38000,"payee":"M. Torres","rail":"zelle","reference":"zelle ref 7781"}`))
+	require.Equal(t, true, paid["unchecked"])
 	dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"not_received","note":"nobody at the front desk"}`))
 
 	export := filepath.Join(t.TempDir(), "deal.json")
@@ -184,7 +188,7 @@ func TestDealRecordsFollowTheProfile(t *testing.T) {
 	for _, rt := range []string{"baseline", "intent", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close"} {
 		assert.True(t, types[rt], "the run covers %s", rt)
 	}
-	for _, private := range []string{"M. Torres", "Example Hotel", "hotel.example", "+1 555 010 2044", "Book me a hotel", "Card machine", "nobody at the front desk", "hold on", "zelle ref 7781"} {
+	for _, private := range []string{"M. Torres", "Example Hotel", "hotel.example", "+1 555 010 2044", "Book me a hotel", "Card machine", "nobody at the front desk", "hold on", "pay anyway", "zelle ref 7781"} {
 		assert.NotContains(t, string(raw), private, "raw values stay on the device")
 	}
 
