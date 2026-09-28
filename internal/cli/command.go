@@ -132,6 +132,21 @@ var ErrInput = errors.New("invalid input or profile configuration")
 
 func inputError(reason string) error { return errors.Join(ErrInput, errors.New(reason)) }
 
+// hintError is an error whose message tells the operator what to do next.
+// It holds no secret -- no key, credential, DSN or record content -- so
+// SafeError prints it after its class instead of the class alone.
+type hintError struct {
+	class   error
+	message string
+}
+
+func (h *hintError) Error() string { return h.message }
+func (h *hintError) Unwrap() error { return h.class }
+
+// hint wraps a non-secret, actionable message under an error class (ErrInput
+// or ErrConflict), which still decides the exit code.
+func hint(class error, message string) error { return &hintError{class: class, message: message} }
+
 func noArgs(_ *cobra.Command, args []string) error {
 	if len(args) != 0 {
 		return ErrInput
@@ -170,7 +185,11 @@ func SafeError(err error) string {
 	var fileErr *inputFileError
 	var schemaErr *schemaLoadError
 	var pluginErr *pluginRequiredError
+	var hintErr *hintError
 	switch {
+	case errors.As(err, &hintErr):
+		// Written to be shown: the class, then what to do about it.
+		return hintErr.class.Error() + ": " + hintErr.message
 	case errors.As(err, &fileErr):
 		// The path is caller-supplied via a flag, so surfacing it discloses
 		// nothing sensitive and distinguishes a missing input file from a
@@ -244,6 +263,7 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(contractCommands())
 	root.AddCommand(judgeCommands())
 	root.AddCommand(calibrationCommands())
+	root.AddCommand(closeCommand(), reconcileCommand(), requestCommand(), respondCommand())
 	store := &cobra.Command{Use: "store", Short: "Initialize and verify the profile's artifact and CLL store"}
 	init := &cobra.Command{Use: "init", Short: "Initialize the store and pin its store_id into the profile", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)

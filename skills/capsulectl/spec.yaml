@@ -219,3 +219,63 @@ verbs:
       calibration-summary/v1 the skill is about to seal.
     emits: (no capsule — this is a pure computation over caller-supplied input)
     emission_mode: not-consequential
+
+  # The four verbs below run over a local evidence book: a `book/`
+  # directory beside the jsonl profile's own store, with its own commitment
+  # log. They need a jsonl profile with log_id, operator, a signing key the
+  # profile trusts, and a checkpoint signing key it trusts. A counterparty is
+  # named by its book id (its profile's log_id), and a peer bundle must come
+  # from that book under the checkpoint key given for it. A Close covers every
+  # correlated exchange in its window that names no counterparty or this one;
+  # a window holding an exchange named for another counterparty is refused.
+  - name: request
+    args:
+      - "--profile NAME --request FILE --responder NAME --output FILE"
+      - "--profile NAME --for RECORD_ID --response FILE --responder-key HEX --responder-checkpoint-key HEX"
+      - "--profile NAME --for RECORD_ID --absent-until TIME"
+    when: >-
+      Ask a party for evidence (the request is recorded before it is sent),
+      then record exactly one outcome for it: the answer that came back, or
+      that nothing came back in the window. The output file is what to
+      transmit; this verb transmits nothing itself.
+    emits: (each mode's own book record is the evidence; no wrapper capsule)
+    emission_mode: primary-action
+
+  - name: respond
+    args:
+      - "--profile NAME --request FILE --requester ID --output FILE"
+      - "--profile NAME --request FILE --requester ID --policy FILE --output FILE"
+    when: >-
+      Answer a received evidence request with a signed artifact or a signed
+      refusal, under the share policy, and record that it was answered. The
+      output file is what to send back; this verb transmits nothing itself.
+    emits: (the book's record of the answered request is the evidence; no wrapper capsule)
+    emission_mode: primary-action
+
+  - name: close
+    args:
+      - "--profile NAME --period day|week --counterparty ID"
+      - "--profile NAME --period day|week --date YYYY-MM-DD --counterparty ID --since-last"
+      - "--profile NAME --period day|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX"
+      - "--profile NAME --period day|week --counterparty ID --capsule-out FILE --bundle-out FILE"
+    when: >-
+      Seal the book's Close for a period that has ended, for one
+      counterparty. Without a held peer bundle every exchange reads
+      INSUFFICIENT: the Close states only this book's account. Repeating it
+      for the same period and counterparty returns the first Close and seals
+      no second one; the peer bundle and --since-last of a repeat are not
+      applied.
+    emits: (the Close record itself; --capsule-out writes it for verify)
+    emission_mode: primary-action
+
+  - name: reconcile
+    args:
+      - "--profile NAME --period day|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX"
+    when: >-
+      Compare this book's period with a counterparty's held bundle, showing
+      each exchange in one of six states, as of this book's latest
+      checkpoint: an own exchange not yet checkpointed reads INSUFFICIENT
+      until `close` checkpoints it. It never queries the counterparty and
+      adds no record.
+    emits: (no capsule — comparing held records is local comparison, not a consequential action)
+    emission_mode: not-consequential

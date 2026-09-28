@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	emit "github.com/action-state-group/capsule-emit-go"
 
+	"github.com/action-state-group/agent-action-capsule/go/verify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -241,4 +243,48 @@ func TestBackfilledSealRequestPublishesAgainstJSONLProfile(t *testing.T) {
 	out, err := invoke(t, "", "publish", "--profile", p.Name, "--request", path)
 	require.NoError(t, err)
 	assert.Contains(t, out, posBackfilledCapsuleIDV05)
+}
+
+// TestProvenanceModeTimingNegativesHaveExactlyTheirCheck9Finding: the pinned
+// capsule_ids above prove the committed bytes; this proves what the neutral
+// verifier says about them. Each timing-negative vector must produce exactly
+// the one check 9 finding its expected.json names -- no other check 9
+// finding, and not none.
+func TestProvenanceModeTimingNegativesHaveExactlyTheirCheck9Finding(t *testing.T) {
+	for name, id := range map[string]string{
+		"neg-provenance-mode-time-rung-overclaim": negTimeRungOverclaimID,
+		"neg-provenance-mode-time-laundering":     negTimeLaunderingID,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := filepath.Join(emitModuleDir(t), provenanceModeVectorDir, name)
+			raw, err := os.ReadFile(filepath.Join(dir, "input.json"))
+			require.NoError(t, err)
+			capsule, err := verify.DecodeCapsuleJSON(raw)
+			require.NoError(t, err)
+			var expected struct {
+				OK       bool `json:"ok"`
+				Findings []struct {
+					Check int    `json:"check"`
+					Code  string `json:"code"`
+				} `json:"findings"`
+			}
+			raw, err = os.ReadFile(filepath.Join(dir, "expected.json"))
+			require.NoError(t, err)
+			require.NoError(t, json.Unmarshal(raw, &expected))
+			require.Len(t, expected.Findings, 1)
+			require.Equal(t, 9, expected.Findings[0].Check)
+
+			result := verify.Verify(capsule, nil, nil)
+			require.NotNil(t, result.CapsuleID)
+			assert.Equal(t, id, *result.CapsuleID)
+			assert.Equal(t, expected.OK, result.OK)
+			var check9 []string
+			for _, f := range result.Findings {
+				if f.Check != nil && *f.Check == 9 {
+					check9 = append(check9, f.Code)
+				}
+			}
+			assert.Equal(t, []string{expected.Findings[0].Code}, check9)
+		})
+	}
 }
