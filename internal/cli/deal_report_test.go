@@ -249,7 +249,8 @@ func TestDealReportListsEveryPauseCause(t *testing.T) {
 		dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "hold")
 		report := dealRun(t, "report", "--deal", dealID)
 		assertEveryPauseCauseListed(t, report, check)
-		assert.Contains(t, reportTexts(t, report, "anomalies"), "counterparty/recourse_changed: Payment changed since it was agreed (card → Zelle, not refundable)")
+		anomalies := reportTexts(t, report, "anomalies")
+		assert.Contains(t, anomalies, "counterparty/recourse_changed: Payment changed since it was agreed (card → Zelle, not refundable)")
 	})
 	t.Run("booking", func(t *testing.T) {
 		dealFixture(t)
