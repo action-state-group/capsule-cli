@@ -395,3 +395,35 @@ func TestDealCommitIsCheckedForPurchasesAndRentals(t *testing.T) {
 		assert.Equal(t, "pass", check["verdict"], dealType)
 	}
 }
+
+// The user answers "pay anyway", then the counterparty changes the terms
+// again before the agent pays: the approval no longer covers the payment,
+// a second "pay anyway" on the same check is refused, and only a new check,
+// which shows the new change, can be approved.
+func TestDealPayAnywayThenTermsChangeAgain(t *testing.T) {
+	dealFixture(t)
+	dealID := openJetSki(t)
+	pay := filepath.Join(jetSkiDemo, "06-check-pay.json")
+	check := dealRun(t, "check", "--deal", dealID, "--input", pay)
+	require.Equal(t, "pause", check["verdict"])
+	yes := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "pay anyway")
+	require.Equal(t, true, yes["proceed"])
+
+	dealRun(t, "note", "--deal", dealID, "--kind", "change", "--input", filepath.Join("testdata/deal/stale-approval", "change-again.json"))
+
+	act := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"payee":"M. Torres","rail":"zelle"}`))
+	assert.Equal(t, true, act["unchecked"])
+	assert.Equal(t, "details changed after the last check", act["reason"])
+	again := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "pay anyway")
+	assert.Equal(t, false, again["proceed"])
+	assert.NotEmpty(t, again["reason"])
+
+	recheck := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":30000,"who":{"payee":"M. Torres"},"recourse":{"rail":"zelle","refundable":false}}`))
+	assert.Equal(t, "pause", recheck["verdict"])
+	assert.Contains(t, recheck["card"], "Deposit changed since it was agreed ($200.00 → $300.00)")
+	ok := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", recheck["check_id"].(string), "--choice", "proceed", "--said", "pay the new deposit")
+	require.Equal(t, true, ok["proceed"])
+	paid := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":30000,"payee":"M. Torres","rail":"zelle"}`))
+	assert.Equal(t, false, paid["unchecked"])
+	assert.Equal(t, ok["capsule_id"], paid["authorized_by"])
+}
