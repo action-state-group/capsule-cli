@@ -1094,3 +1094,56 @@ func TestADayWithRecordsClosesDespiteAPinnedTail(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, next.Reconciliation.Tallies.Insufficient, "b and the pinned c close in 09-25")
 }
+
+// The daily workflow closes yesterday each morning, so the day being closed
+// holds that Close and its checkpoint records. Those are not exchanges: a
+// day whose only exchanges were pinned out of it is still refused, and the
+// refusal points at --since-last, which then counts them in the next day.
+func TestAMorningCloseDoesNotHidePinnedExchanges(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC))
+	p, _ := bookProfile(t, "a")
+	p.ClockTolerance = "1h"
+	require.NoError(t, saveProfile(p, true))
+	appendHalves(t, p, half{"x0", "r0", "p0"})
+	set(time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC))
+	_, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-23", "--counterparty", "b")
+	require.NoError(t, err)
+	jumpAndPin(t, set, p, half{"c", "rc", "pc"}, half{"c2", "rc2", "pc2"})
+	set(time.Date(2026, 9, 26, 1, 0, 0, 0, time.UTC))
+
+	size := bookSize(t, p)
+	_, err = runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-24", "--counterparty", "b")
+	require.ErrorIs(t, err, ErrInput, "the day's window holds a Close and a checkpoint, and no exchange")
+	assert.ErrorContains(t, err, "2 record(s) committed within an hour after this period ends were pinned there")
+	assert.ErrorContains(t, err, "--since-last")
+	assert.Equal(t, size, bookSize(t, p), "no Close was sealed")
+
+	next, err := runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-25", "--counterparty", "b", "--since-last")
+	require.NoError(t, err)
+	assert.Equal(t, 3, next.Reconciliation.Tallies.Insufficient, "b, c and c2 are counted by the --since-last Close")
+}
+
+// A window holding only the book's checkpoint records is no different.
+func TestACheckpointOnlyWindowDoesNotHidePinnedExchanges(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	set := bookClock(t, time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC))
+	p, _ := bookProfile(t, "a")
+	p.ClockTolerance = "1h"
+	require.NoError(t, saveProfile(p, true))
+	appendHalves(t, p, half{"x0", "r0", "p0"})
+	set(time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC))
+	opened, err := openBook(t.Context(), p, true)
+	require.NoError(t, err)
+	_, err = opened.book.Checkpoint(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, opened.release())
+	jumpAndPin(t, set, p, half{"c", "rc", "pc"})
+	set(time.Date(2026, 9, 26, 1, 0, 0, 0, time.UTC))
+
+	size := bookSize(t, p)
+	_, err = runClose(t, "--profile", "a", "--period", "day", "--date", "2026-09-24", "--counterparty", "b")
+	require.ErrorIs(t, err, ErrInput)
+	assert.ErrorContains(t, err, "--since-last")
+	assert.Equal(t, size, bookSize(t, p))
+}

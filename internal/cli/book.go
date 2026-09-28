@@ -141,9 +141,9 @@ func openBook(ctx context.Context, p Profile, create bool) (openedBook, error) {
 // refused for writing. Records written while the last record is ahead of the
 // clock by less than that are pinned to its time, so a record appended up to
 // an hour before a period ends can be committed after it: a Close counts it
-// in the next period, and a period left empty by such pins is refused
-// (refuseEmptyWindowWithPinnedTail). Every verb that signs, Close included,
-// opens the book this way.
+// in the next period, and a period left without an exchange by such pins is
+// refused (refuseExchangelessWindowWithPinnedTail). Every verb that signs,
+// Close included, opens the book this way.
 type monotonicClock struct {
 	floor time.Time
 }
@@ -547,17 +547,30 @@ func reconcileCommand() *cobra.Command {
 	return cmd
 }
 
-// refuseEmptyWindowWithPinnedTail keeps a period from closing as all zeros
-// when its records were pinned out of it. While the book's last record was
-// ahead of the clock, each record written was committed at that same time:
-// its committed_at equals its predecessor's, to the microsecond, which two
-// appends made at their own time do not produce. A pinned record committed
-// within the clock ceiling after the period's end may have been appended
-// during the period. For an empty window that is the whole period's account,
-// so the Close is refused; a window with records closes, and a pinned record
-// near its end may be counted in the next period (see the README).
-func refuseEmptyWindowWithPinnedTail(ctx context.Context, book *evidencebook.Book, p period, windowEnd uint64) error {
-	records, err := book.Query(ctx, evidencebook.Filter{FromSeq: windowEnd})
+// refuseExchangelessWindowWithPinnedTail keeps a period from closing as all
+// zeros when its exchanges were pinned out of it. While the book's last
+// record was ahead of the clock, each record written was committed at that
+// same time: its committed_at equals its predecessor's, to the microsecond,
+// which two appends made at their own time do not produce. A pinned record
+// committed within the clock ceiling after the period's end may have been
+// appended during the period. When the window holds no exchange -- it is
+// empty, or holds only the book's own records such as checkpoint index roots
+// and earlier Closes -- that is the whole period's account, so the Close is
+// refused. A window with exchanges closes, and a pinned record near its end
+// may be counted in the next period (see the README).
+func refuseExchangelessWindowWithPinnedTail(ctx context.Context, book *evidencebook.Book, p period, in evidencebook.ReconcileInput) error {
+	if in.FromSeq <= in.ToSeq {
+		window, err := book.Query(ctx, evidencebook.Filter{FromSeq: in.FromSeq, ToSeq: in.ToSeq})
+		if err != nil {
+			return err
+		}
+		for _, r := range window {
+			if r.Header.Correlation != nil {
+				return nil
+			}
+		}
+	}
+	records, err := book.Query(ctx, evidencebook.Filter{FromSeq: in.ToSeq})
 	if err != nil {
 		return err
 	}
@@ -579,7 +592,7 @@ func refuseEmptyWindowWithPinnedTail(ctx context.Context, book *evidencebook.Boo
 		previous = at
 	}
 	if pinned > 0 {
-		return hint(ErrInput, fmt.Sprintf("%d record(s) committed within an hour after this period ends were pinned there while the clock was behind the book (clock skew): they may have been appended during the period, so it is not closed as empty. Waiting does not change that; start a new log to close periods exactly from here on", pinned))
+		return hint(ErrInput, fmt.Sprintf("%d record(s) committed within an hour after this period ends were pinned there while the clock was behind the book (clock skew): they may have been appended during the period, so it is not closed without exchanges. Waiting does not change that. Close the next period with --since-last instead (its window starts after the previous Close, so it covers these records), or start a new log to close periods exactly from here on", pinned))
 	}
 	return nil
 }
@@ -647,10 +660,8 @@ func closeCommand() *cobra.Command {
 					return e
 				}
 			}
-			if in.FromSeq > in.ToSeq {
-				if e = refuseEmptyWindowWithPinnedTail(c.Context(), book, a.period, in.ToSeq); e != nil {
-					return e
-				}
+			if e = refuseExchangelessWindowWithPinnedTail(c.Context(), book, a.period, in); e != nil {
+				return e
 			}
 			if _, e = book.Checkpoint(c.Context()); e != nil {
 				return e

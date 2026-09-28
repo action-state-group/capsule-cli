@@ -481,8 +481,9 @@ never goes backwards. When this machine's clock falls behind the book's last
 record by less than the profile's `clock_tolerance` (default 5m, at most 1h),
 new records are committed at that last time instead, so a record appended up
 to an hour before a period ends can be counted in the next period's Close. A
-period that such records would leave empty is refused rather than closed as
-empty. A larger gap refuses writing until the clock passes the book's last
+period that such records would leave without any exchange is refused rather
+than closed with zero tallies; close the next period with `--since-last` to
+count them. A larger gap refuses writing until the clock passes the book's last
 record, or until a new log is started.
 
 Checkpoint service success conformance, broad fault-injection coverage and peer
