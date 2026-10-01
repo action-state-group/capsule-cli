@@ -1,0 +1,42 @@
+{
+  "id": "diff-ext-tier",
+  "kind": "diff",
+  "rationale": "tier is ranked only on the native shape; an extension tier has no direction",
+  "a": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "quality",
+        "statement": "s",
+        "tier": "must_have"
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "quality",
+        "statement": "s",
+        "tier": "informational"
+      }
+    ]
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[r1]/tier",
+        "kind": "changed"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

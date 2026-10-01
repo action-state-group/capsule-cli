@@ -1,7 +1,7 @@
 {
-  "id": "diff-requirement-removed",
+  "id": "diff-freshness-year-as-months",
   "kind": "diff",
-  "rationale": "a claim against A that cites a removed requirement no longer resolves in B",
+  "rationale": "a year is exactly twelve months: P1Y to P12M is a respelling",
   "a": {
     "id": "ec:example-fixture:2026-09-30",
     "version": "1",
@@ -25,7 +25,7 @@
           "minimum_assurance": [
             "witnessed"
           ],
-          "freshness": "P7D"
+          "freshness": "P1Y"
         },
         "adjudication": {
           "mode": "deterministic"
@@ -92,7 +92,7 @@
           "minimum_assurance": [
             "witnessed"
           ],
-          "freshness": "P7D"
+          "freshness": "P12M"
         },
         "adjudication": {
           "mode": "deterministic"
@@ -101,6 +101,20 @@
           "on_missing": "insufficient",
           "on_conflict": "contradicted"
         }
+      },
+      {
+        "id": "req-b",
+        "profile": "process",
+        "statement": "a review step preceded the change",
+        "required_sequence": [
+          "requested",
+          "approved",
+          "applied"
+        ],
+        "approvals": [
+          "one reviewer who is not the author"
+        ],
+        "escalation_path": "queue-one"
       },
       {
         "id": "req-c",
@@ -123,11 +137,11 @@
     }
   },
   "expect": {
-    "breaking": true,
+    "breaking": false,
     "changes": [
       {
-        "path": "requirements[req-b]",
-        "kind": "requirement_removed"
+        "path": "requirements[req-a]/evidence_requirements/freshness",
+        "kind": "editorial"
       },
       {
         "path": "version",

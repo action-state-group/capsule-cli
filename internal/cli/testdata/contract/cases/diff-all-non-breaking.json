@@ -92,7 +92,7 @@
           "minimum_assurance": [
             "witnessed"
           ],
-          "freshness": "P7D"
+          "freshness": "P30D"
         },
         "adjudication": {
           "mode": "deterministic"
@@ -115,6 +115,17 @@
           "one reviewer who is not the author"
         ],
         "escalation_path": "queue-two"
+      },
+      {
+        "id": "req-c",
+        "profile": "obligation",
+        "statement": "the example policy's review control was evidenced",
+        "clause_ref": "example-policy/section-1/v1",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "OBSERVED_EVENT"
+          ]
+        }
       }
     ],
     "temporal": {
@@ -129,16 +140,16 @@
     "breaking": false,
     "changes": [
       {
+        "path": "requirements[req-a]/evidence_requirements/freshness",
+        "kind": "loosened"
+      },
+      {
         "path": "requirements[req-a]/statement",
         "kind": "editorial"
       },
       {
         "path": "requirements[req-b]/escalation_path",
         "kind": "editorial"
-      },
-      {
-        "path": "requirements[req-c]",
-        "kind": "requirement_removed"
       },
       {
         "path": "version",

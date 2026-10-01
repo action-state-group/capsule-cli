@@ -1,0 +1,56 @@
+{
+  "id": "diff-shape-changed-generic-to-native",
+  "kind": "diff",
+  "rationale": "moving a requirement between shapes compares fields with no rule",
+  "a": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "s"
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "s",
+        "evidence_rule": "e",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "tier": "informational"
+      }
+    ]
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[r1]/backward_verdict",
+        "kind": "changed"
+      },
+      {
+        "path": "requirements[r1]/evidence_rule",
+        "kind": "changed"
+      },
+      {
+        "path": "requirements[r1]/forward_verdict",
+        "kind": "changed"
+      },
+      {
+        "path": "requirements[r1]/tier",
+        "kind": "changed"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

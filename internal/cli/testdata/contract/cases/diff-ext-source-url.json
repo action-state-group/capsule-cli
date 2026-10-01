@@ -1,0 +1,42 @@
+{
+  "id": "diff-ext-source-url",
+  "kind": "diff",
+  "rationale": "source_url is editorial only inside a native clause, not as an extension field",
+  "a": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "quality",
+        "statement": "s",
+        "source_url": "x"
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "quality",
+        "statement": "s",
+        "source_url": "y"
+      }
+    ]
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[r1]/source_url",
+        "kind": "changed"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

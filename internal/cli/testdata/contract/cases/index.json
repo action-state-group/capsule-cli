@@ -723,9 +723,9 @@
     "id": "diff-requirement-removed",
     "kind": "diff",
     "file": "diff-requirement-removed.json",
-    "negative": false,
-    "outcome": "non-breaking",
-    "rationale": "removing a requirement asks for nothing new (reported: assurance drops)"
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a claim against A that cites a removed requirement no longer resolves in B"
   },
   {
     "id": "diff-requirement-reid",
@@ -958,6 +958,70 @@
     "negative": true,
     "outcome": "breaking",
     "rationale": "a time designator with no time component is not a duration"
+  },
+  {
+    "id": "diff-freshness-month-vs-days",
+    "kind": "diff",
+    "file": "diff-freshness-month-vs-days.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a month is not a fixed number of days: P1M to P30D is not comparable"
+  },
+  {
+    "id": "diff-freshness-month-vs-one-day",
+    "kind": "diff",
+    "file": "diff-freshness-month-vs-one-day.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "months and days are never ordered against each other, even when obvious"
+  },
+  {
+    "id": "diff-freshness-year-as-months",
+    "kind": "diff",
+    "file": "diff-freshness-year-as-months.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "a year is exactly twelve months: P1Y to P12M is a respelling"
+  },
+  {
+    "id": "diff-freshness-months-lengthened",
+    "kind": "diff",
+    "file": "diff-freshness-months-lengthened.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "months compare with months: P1M to P2M is longer"
+  },
+  {
+    "id": "diff-freshness-month-plus-hours",
+    "kind": "diff",
+    "file": "diff-freshness-month-plus-hours.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "same months and more hours is longer in one part and equal in the other"
+  },
+  {
+    "id": "diff-freshness-mixed-opposite",
+    "kind": "diff",
+    "file": "diff-freshness-mixed-opposite.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "longer in months but shorter in days cannot be ordered"
+  },
+  {
+    "id": "diff-freshness-month-from-unbounded",
+    "kind": "diff",
+    "file": "diff-freshness-month-from-unbounded.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "any limit where there was none tightens, months included"
+  },
+  {
+    "id": "diff-native-window-days-to-month",
+    "kind": "diff",
+    "file": "diff-native-window-days-to-month.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a window in days replaced by one in months is not comparable"
   },
   {
     "id": "diff-freshness-dropped",
@@ -1262,6 +1326,94 @@
     "negative": false,
     "outcome": "non-breaking",
     "rationale": "loosenings and editorial changes together stay non-breaking"
+  },
+  {
+    "id": "diff-requirement-removed-among-loosenings",
+    "kind": "diff",
+    "file": "diff-requirement-removed-among-loosenings.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "one removed requirement makes an otherwise loosening diff breaking"
+  },
+  {
+    "id": "diff-ext-window-extra-field",
+    "kind": "diff",
+    "file": "diff-ext-window-extra-field.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "an unknown member inside an extension window is still a change, not dropped"
+  },
+  {
+    "id": "diff-ext-window-string",
+    "kind": "diff",
+    "file": "diff-ext-window-string.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "an extension window that is not an object has no rule: breaking, never a crash"
+  },
+  {
+    "id": "diff-ext-window-shortened",
+    "kind": "diff",
+    "file": "diff-ext-window-shortened.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "the window rule is the native shape's; on quality a shorter window is just a change"
+  },
+  {
+    "id": "diff-ext-source-url",
+    "kind": "diff",
+    "file": "diff-ext-source-url.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "source_url is editorial only inside a native clause, not as an extension field"
+  },
+  {
+    "id": "diff-ext-tier",
+    "kind": "diff",
+    "file": "diff-ext-tier.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "tier is ranked only on the native shape; an extension tier has no direction"
+  },
+  {
+    "id": "diff-ext-escalation-path-on-human-role",
+    "kind": "diff",
+    "file": "diff-ext-escalation-path-on-human-role.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "escalation_path is editorial on process, not as a human_role extension"
+  },
+  {
+    "id": "diff-ext-evidence-requirements-on-quality",
+    "kind": "diff",
+    "file": "diff-ext-evidence-requirements-on-quality.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "quality defines no evidence_requirements; its freshness has no rule"
+  },
+  {
+    "id": "diff-ext-adjudication-on-process",
+    "kind": "diff",
+    "file": "diff-ext-adjudication-on-process.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "an extension adjudication cannot make a process statement editorial"
+  },
+  {
+    "id": "diff-process-sequence-rule-still-applies",
+    "kind": "diff",
+    "file": "diff-process-sequence-rule-still-applies.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "on process, required_sequence is defined and keeps its rule"
+  },
+  {
+    "id": "diff-shape-changed-generic-to-native",
+    "kind": "diff",
+    "file": "diff-shape-changed-generic-to-native.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "moving a requirement between shapes compares fields with no rule"
   },
   {
     "id": "diff-bad-a-invalid",

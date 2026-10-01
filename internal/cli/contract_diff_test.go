@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -17,8 +19,57 @@ import (
 // there by scripts/generate_contract_cases.py, which also holds the
 // reference implementation of the diff rules). Every case must come out the
 // same here as it does there: that is what keeps the two implementations of
-// `contract diff` and the contract digest from drifting.
+// `contract diff` and the contract digest from drifting. SOURCE.json pins the
+// engine commit the copy was taken from and the digest of its SHA256SUMS;
+// TestContractCaseLibraryMatchesPinnedSource fails if the copy is edited, or
+// re-copied without updating the pin.
 const casesDir = "testdata/contract/cases"
+
+func sha256Hex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+func TestContractCaseLibraryMatchesPinnedSource(t *testing.T) {
+	var source struct {
+		Repo             string `json:"repo"`
+		Commit           string `json:"commit"`
+		SHA256SUMSDigest string `json:"sha256sums_digest"`
+	}
+	raw, e := os.ReadFile(filepath.Join(casesDir, "SOURCE.json"))
+	require.NoError(t, e)
+	require.NoError(t, json.Unmarshal(raw, &source))
+	require.Len(t, source.Commit, 40, "SOURCE.json must pin a full engine commit")
+
+	sums, e := os.ReadFile(filepath.Join(casesDir, "SHA256SUMS"))
+	require.NoError(t, e)
+	require.Equal(t, source.SHA256SUMSDigest, sha256Hex(sums), "SHA256SUMS is not the one pinned in SOURCE.json")
+
+	listed := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSuffix(string(sums), "\n"), "\n") {
+		digest, name, ok := strings.Cut(line, "  ")
+		require.True(t, ok, line)
+		listed[name] = digest
+	}
+	entries, e := os.ReadDir(casesDir)
+	require.NoError(t, e)
+	actual := map[string]string{}
+	for _, entry := range entries {
+		if name := entry.Name(); name != "SHA256SUMS" && name != "SOURCE.json" {
+			b, e := os.ReadFile(filepath.Join(casesDir, name))
+			require.NoError(t, e)
+			actual[name] = sha256Hex(b)
+		}
+	}
+	assert.Equal(t, listed, actual, "the copied library differs from the pinned SHA256SUMS")
+
+	// Optional: compare directly against a capsule-engine checkout.
+	if dir := os.Getenv("CAPSULE_ENGINE_CONTRACT_CASES"); dir != "" {
+		upstream, e := os.ReadFile(filepath.Join(dir, "SHA256SUMS"))
+		require.NoError(t, e)
+		assert.Equal(t, string(upstream), string(sums), "the copy differs from %s", dir)
+	}
+}
 
 type caseIndexEntry struct {
 	ID       string `json:"id"`

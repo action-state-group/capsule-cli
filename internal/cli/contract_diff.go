@@ -24,9 +24,11 @@ import (
 //
 // A change from A to B is non-breaking only when every evidence set that
 // satisfied A still satisfies B and every claim made against A still names a
-// requirement of B. Tightening, identity changes (id, profile, clause) and
-// changes whose direction cannot be determined are breaking; loosening is
-// non-breaking but reported. A field with no rule here is breaking.
+// requirement of B. Removing a requirement, tightening, identity changes (id,
+// profile, clause) and changes whose direction cannot be determined are
+// breaking; loosening is non-breaking but reported. A field rule applies only
+// where the schema defines the field for the requirement's shape, and a field
+// with no rule is breaking.
 
 // ErrBreaking reports that `contract diff` found at least one breaking change
 // -- an ordinary, expected outcome (exit code 1), like ErrSchemaInvalid.
@@ -42,7 +44,7 @@ var changeSeverity = map[string]string{
 	"version_reused":         severityBreaking,
 	"version_changed":        severityNonBreaking,
 	"requirement_added":      severityBreaking,
-	"requirement_removed":    severityNonBreaking,
+	"requirement_removed":    severityBreaking,
 	"requirement_reid":       severityBreaking,
 	"requirements_reordered": severityNonBreaking,
 	"tightened":              severityBreaking,
@@ -255,58 +257,103 @@ func compareGrades(path string, a, b any) []contractChange {
 // Each component is at most 9 digits so the comparison fits an int64; a
 // longer component does not parse. RE2 has no lookahead, so the two shapes
 // the pattern alone admits -- a bare "P" and a "T" with no time component --
-// are rejected in durationSeconds.
+// are rejected in durationParts.
 var durationPattern = regexp.MustCompile(`^P(?:(\d{1,9})Y)?(?:(\d{1,9})M)?(?:(\d{1,9})W)?(?:(\d{1,9})D)?(?:T(?:(\d{1,9})H)?(?:(\d{1,9})M)?(?:(\d{1,9})S)?)?$`)
 
-// Calendar units at their nominal length: comparison only, never date arithmetic.
-var durationUnitSeconds = []int64{365 * 86400, 30 * 86400, 7 * 86400, 86400, 3600, 60, 1}
+// duration is (months, seconds): years and months are calendar units of
+// varying length, so they are never converted into seconds.
+type duration struct {
+	unbounded       bool
+	months, seconds int64
+}
 
-const unbounded = int64(1<<63 - 1)
+var (
+	unboundedDuration = duration{unbounded: true}
+	zeroDuration      = duration{}
+)
 
-func durationSeconds(v any) (int64, bool) {
+func durationParts(v any) (duration, bool) {
 	s, ok := v.(string)
 	if !ok || s == "P" || strings.HasSuffix(s, "T") {
-		return 0, false
+		return duration{}, false
 	}
 	m := durationPattern.FindStringSubmatch(s)
 	if m == nil {
-		return 0, false
+		return duration{}, false
 	}
-	var total int64
+	var n [7]int64
 	for i, g := range m[1:] {
 		if g == "" {
 			continue
 		}
-		n, e := strconv.ParseInt(g, 10, 64)
+		x, e := strconv.ParseInt(g, 10, 64)
 		if e != nil {
-			return 0, false
+			return duration{}, false
 		}
-		total += n * durationUnitSeconds[i]
+		n[i] = x
 	}
-	return total, true
+	y, mo, w, d, h, mi, sec := n[0], n[1], n[2], n[3], n[4], n[5], n[6]
+	return duration{months: 12*y + mo, seconds: (((7*w+d)*24+h)*60+mi)*60 + sec}, true
 }
 
-// compareDurations: a longer duration is looser. absent is the length an
-// absent (or null) value stands for: unbounded for a limit, 0 for a grace.
-func compareDurations(absent int64, what string) fieldRule {
+func sign(n int64) int {
+	switch {
+	case n > 0:
+		return 1
+	case n < 0:
+		return -1
+	}
+	return 0
+}
+
+// order: -1 if b is shorter, 0 if equal, 1 if longer; ok=false if the two
+// cannot be ordered (one longer in months, the other in seconds).
+func order(a, b duration) (int, bool) {
+	if a.unbounded || b.unbounded {
+		switch {
+		case a.unbounded && b.unbounded:
+			return 0, true
+		case b.unbounded:
+			return 1, true
+		default:
+			return -1, true
+		}
+	}
+	dm, ds := sign(b.months-a.months), sign(b.seconds-a.seconds)
+	switch {
+	case dm == 0:
+		return ds, true
+	case ds == 0, dm == ds:
+		return dm, true
+	}
+	return 0, false
+}
+
+// compareDurations: a longer duration is looser. absent is what an absent
+// (or null) value stands for: unbounded for a limit, zero for a grace.
+func compareDurations(absent duration, what string) fieldRule {
 	return func(path string, a, b any) []contractChange {
 		if same(a, b) {
 			return nil
 		}
-		length := func(v any) (int64, bool) {
+		parts := func(v any) (duration, bool) {
 			if v == missing || v == nil {
 				return absent, true
 			}
-			return durationSeconds(v)
+			return durationParts(v)
 		}
-		da, okA := length(a)
-		db, okB := length(b)
-		switch {
-		case !okA || !okB:
+		da, okA := parts(a)
+		db, okB := parts(b)
+		if !okA || !okB {
 			return one(path, "changed", what+": not an ISO-8601 duration; direction cannot be determined")
-		case da == db:
+		}
+		o, ok := order(da, db)
+		switch {
+		case !ok:
+			return one(path, "changed", what+": months and days are not exactly comparable")
+		case o == 0:
 			return one(path, "editorial", what+": same length, spelled differently")
-		case db < da:
+		case o < 0:
 			return one(path, "tightened", what+": shortened")
 		default:
 			return one(path, "loosened", what+": lengthened")
@@ -329,9 +376,12 @@ func compareWindow(path string, a, b any) []contractChange {
 	if !okA || !okB {
 		return one(path, "changed", "value changed; no rule says this is safe")
 	}
-	out := compareDurations(unbounded, "window duration")(path+"/duration", member(wa, "duration"), member(wb, "duration"))
+	out := compareDurations(unboundedDuration, "window duration")(path+"/duration", member(wa, "duration"), member(wb, "duration"))
 	for _, key := range []string{"cure", "grace"} {
-		out = append(out, compareDurations(0, "window "+key)(path+"/"+key, member(wa, key), member(wb, key))...)
+		out = append(out, compareDurations(zeroDuration, "window "+key)(path+"/"+key, member(wa, key), member(wb, key))...)
+	}
+	for _, key := range sortedUnion(wa, wb, "duration", "cure", "grace") {
+		out = append(out, compareField(path+"/"+key, key, member(wa, key), member(wb, key), nil)...)
 	}
 	return out
 }
@@ -395,18 +445,51 @@ func editorial(path string, a, b any) []contractChange {
 	return one(path, "editorial", "not read when sufficiency is decided")
 }
 
-var fieldRules = map[string]fieldRule{
-	"accepted_epistemic_types": compareSets(false, "accepted epistemic types"),
-	"required_sources":         compareSets(true, "required sources"),
-	"approvals":                compareSets(true, "approvals"),
-	"minimum_assurance":        compareGrades,
-	"required_assurance_grade": compareGrades,
-	"freshness":                compareDurations(unbounded, "freshness"),
-	"window":                   compareWindow,
-	"tier":                     compareTier,
-	"required_sequence":        compareSequence,
-	"escalation_path":          editorial,
-	"source_url":               editorial,
+// withEvidenceRequirements returns extra plus the rules for the closed
+// evidence_requirements block, which the abstract outcome and obligation
+// shapes, process and human_role all define.
+func withEvidenceRequirements(extra map[string]fieldRule) map[string]fieldRule {
+	rules := map[string]fieldRule{
+		"evidence_requirements/accepted_epistemic_types": compareSets(false, "accepted epistemic types"),
+		"evidence_requirements/required_sources":         compareSets(true, "required sources"),
+		"evidence_requirements/minimum_assurance":        compareGrades,
+		"evidence_requirements/freshness":                compareDurations(unboundedDuration, "freshness"),
+	}
+	for k, v := range extra {
+		rules[k] = v
+	}
+	return rules
+}
+
+// shapeRules holds the field rules by requirement shape, keyed by the path
+// relative to the requirement: a rule applies only where the schema defines
+// that field. An extension field on an open profile that shares a rule's
+// name gets no rule, so any change to it is breaking.
+var shapeRules = map[string]map[string]fieldRule{
+	"native": {
+		"window":                   compareWindow,
+		"tier":                     compareTier,
+		"required_assurance_grade": compareGrades,
+		"clause/source_url":        editorial,
+	},
+	"outcome":    withEvidenceRequirements(map[string]fieldRule{"authority/escalation_path": editorial}),
+	"obligation": withEvidenceRequirements(nil),
+	"process": withEvidenceRequirements(map[string]fieldRule{
+		"required_sequence": compareSequence,
+		"approvals":         compareSets(true, "approvals"),
+		"escalation_path":   editorial,
+	}),
+	"human_role": withEvidenceRequirements(nil),
+}
+
+// shape is "native" for the pack-declared shape (outcome or obligation with
+// an evidence_rule), otherwise the profile ("" when there is none).
+func shape(req map[string]any) string {
+	profile, _ := req["profile"].(string)
+	if _, native := req["evidence_rule"]; native && (profile == "" || profile == "outcome" || profile == "obligation") {
+		return "native"
+	}
+	return profile
 }
 
 func sortedUnion(a, b map[string]any, skip ...string) []string {
@@ -427,8 +510,10 @@ func sortedUnion(a, b map[string]any, skip ...string) []string {
 	return keys
 }
 
-func compareField(path, key string, a, b any) []contractChange {
-	if rule, ok := fieldRules[key]; ok {
+// compareField compares one member. rel is path relative to the requirement
+// (or the root): the key rules is looked up by.
+func compareField(path, rel string, a, b any, rules map[string]fieldRule) []contractChange {
+	if rule, ok := rules[rel]; ok {
 		return rule(path, a, b)
 	}
 	if same(a, b) {
@@ -439,7 +524,7 @@ func compareField(path, key string, a, b any) []contractChange {
 	if okA && okB {
 		var out []contractChange
 		for _, k := range sortedUnion(ma, mb) {
-			out = append(out, compareField(path+"/"+k, k, member(ma, k), member(mb, k))...)
+			out = append(out, compareField(path+"/"+k, rel+"/"+k, member(ma, k), member(mb, k), rules)...)
 		}
 		return out
 	}
@@ -456,10 +541,11 @@ func compareField(path, key string, a, b any) []contractChange {
 // deterministic: positively evaluated without a judge -- the only case where
 // rewording the statement cannot move a result.
 func deterministic(req map[string]any) bool {
-	if adjudication, ok := req["adjudication"].(map[string]any); ok {
-		return adjudication["mode"] == "deterministic"
-	}
-	if _, ok := req["evidence_rule"]; ok {
+	switch shape(req) {
+	case "outcome":
+		adjudication, ok := req["adjudication"].(map[string]any)
+		return ok && adjudication["mode"] == "deterministic"
+	case "native":
 		return req["backward_verdict"] == "DETERMINISTIC" && req["mode"] != "judged"
 	}
 	return false
@@ -467,6 +553,10 @@ func deterministic(req map[string]any) bool {
 
 func compareRequirement(rid string, a, b map[string]any) []contractChange {
 	base := "requirements[" + rid + "]"
+	var rules map[string]fieldRule
+	if s := shape(a); s != "" && s == shape(b) {
+		rules = shapeRules[s]
+	}
 	var out []contractChange
 	for _, key := range sortedUnion(a, b, "id") {
 		va, vb := member(a, key), member(b, key)
@@ -481,7 +571,7 @@ func compareRequirement(rid string, a, b map[string]any) []contractChange {
 		case key == "profile" && !same(va, vb):
 			out = append(out, one(path, "changed", "profile changed: a different kind of requirement")...)
 		default:
-			out = append(out, compareField(path, key, va, vb)...)
+			out = append(out, compareField(path, key, va, vb, rules)...)
 		}
 	}
 	return out
@@ -553,7 +643,7 @@ func diffContracts(a, b map[string]any) (contractDiff, error) {
 		add(one("version", "version_changed", fmt.Sprintf("version %v -> %v", a["version"], b["version"])))
 	}
 	for _, key := range sortedUnion(a, b, "id", "version", "requirements") {
-		add(compareField(key, key, member(a, key), member(b, key)))
+		add(compareField(key, key, member(a, key), member(b, key), nil))
 	}
 
 	var removed, added []string
@@ -585,7 +675,7 @@ func diffContracts(a, b map[string]any) (contractDiff, error) {
 		add(one("requirements["+old+"]", "requirement_reid", fmt.Sprintf("re-identified as %s; claims citing %s no longer resolve", nw, old)))
 	}
 	for _, rid := range stillRemoved {
-		add(one("requirements["+rid+"]", "requirement_removed", "no longer required; assurance this contract gives is lower"))
+		add(one("requirements["+rid+"]", "requirement_removed", "no longer required: claims against A that cite it do not resolve in B"))
 	}
 	for _, rid := range added {
 		add(one("requirements["+rid+"]", "requirement_added", "new requirement: evidence that satisfied A says nothing about it"))
