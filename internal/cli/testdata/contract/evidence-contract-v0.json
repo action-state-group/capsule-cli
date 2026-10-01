@@ -7,7 +7,7 @@
   "$defs": {
     "epistemicType": {
       "type": "string",
-      "description": "Owned by EvidenceBook's EvidenceRecordHeader (spec-evidencebook-v3.md §3), mirrored here -- see schemas/vendor/epistemic-types.json for the vendored source and tests/test_evidence_contract_schema.py for the cross-repo parity test against capsule_engine.packs.schema.EPISTEMIC_TYPE_VALUES.",
+      "description": "The closed set of epistemic types a piece of evidence can carry. Owned by EvidenceBook's record header (its `epistemic_type` field), mirrored here -- see schemas/vendor/epistemic-types.json for the vendored source and tests/test_evidence_contract_schema.py for the cross-repo parity test against capsule_engine.packs.schema.EPISTEMIC_TYPE_VALUES.",
       "enum": [
         "OBSERVED_EVENT",
         "SYSTEM_OF_RECORD_FACT",
@@ -21,7 +21,7 @@
     },
     "bundleAssertionStatus": {
       "type": "string",
-      "description": "Per-requirement bundle assertion status (spec §5.1, fabric v3 §9.1) -- the result of evaluating ONE requirement against evidence. This is never a field a contract declares about itself; it is published here so a schema consumer (e.g. a report renderer or `capsulectl contract validate`) has one fixed vocabulary to render a Bundle's per-requirement result against. See contractResult for the derived four-value projection.",
+      "description": "Per-requirement bundle assertion status -- the result of evaluating ONE requirement against evidence. This is never a field a contract declares about itself; it is published here so a schema consumer (e.g. a report renderer or `capsulectl contract validate`) has one fixed vocabulary to render a Bundle's per-requirement result against. See contractResult for the derived four-value projection.",
       "enum": [
         "SATISFIED",
         "INSUFFICIENT",
@@ -35,12 +35,12 @@
     },
     "contractResult": {
       "type": "string",
-      "description": "Derived mechanically from bundleAssertionStatus (spec §5.2), never a single opaque confidence score: SATISFIED->SATISFIED; NOT_FOUND|NOT_COMMITTED|WITHHELD->GAP; CONTRADICTED->GAP (with a conflict flag set, out of scope here); INSUFFICIENT->INSUFFICIENT; NOT_APPLICABLE->excluded from the evaluated population (never itself a contract result); UNKNOWN->UNKNOWN.",
+      "description": "Derived mechanically from bundleAssertionStatus, never a single opaque confidence score: SATISFIED->SATISFIED; NOT_FOUND|NOT_COMMITTED|WITHHELD->GAP; CONTRADICTED->GAP (with a conflict flag set, out of scope here); INSUFFICIENT->INSUFFICIENT; NOT_APPLICABLE->excluded from the evaluated population (never itself a contract result); UNKNOWN->UNKNOWN.",
       "enum": ["SATISFIED", "GAP", "INSUFFICIENT", "UNKNOWN"]
     },
     "verdict": {
       "type": "string",
-      "description": "The three-bucket judged-outcome vocabulary (spec §8), a DIFFERENT axis from bundleAssertionStatus/contractResult: verdict is about the judged outcome once evidence sufficiency allows a determination at all. A fold MUST NOT render met/not_met when the underlying contractResult is anything but SATISFIED; NOT_APPLICABLE is a distinct requirement-level exclusion, never spelled not_evaluable.",
+      "description": "The three-bucket judged-outcome vocabulary, a DIFFERENT axis from bundleAssertionStatus/contractResult: verdict is about the judged outcome once evidence sufficiency allows a determination at all. A fold MUST NOT render met/not_met when the underlying contractResult is anything but SATISFIED; NOT_APPLICABLE is a distinct requirement-level exclusion, never spelled not_evaluable.",
       "enum": ["met", "not_met", "not_evaluable"]
     },
     "window": {
@@ -137,7 +137,7 @@
         "principal_ref": {
           "type": "string",
           "pattern": "^[a-z0-9_-]+:.+$",
-          "description": "profile-defined scheme:value, e.g. nostr-pubkey:<hex> (spec §3.1). Key control is never taken as authority; this field cites a principal, it does not itself grant, verify, or interpret authority."
+          "description": "profile-defined scheme:value, e.g. nostr-pubkey:<hex>. Key control is never taken as authority; this field cites a principal, it does not itself grant, verify, or interpret authority."
         },
         "authority_context": { "type": "array", "items": { "type": "string" } }
       }
@@ -167,7 +167,7 @@
       }
     },
     "requirementNativeBase": {
-      "description": "capsule-engine's own EvidenceContract.canonical_dict() shape (spec §3.2/§3.3: 'field-for-field' for outcome, reused unchanged for obligation) -- the outcome and obligation profiles are the only two that reuse this flat dataclass shape in real code today.",
+      "description": "capsule-engine's own EvidenceContract.canonical_dict() shape (field-for-field for outcome, reused unchanged for obligation) -- the outcome and obligation profiles are the only two that reuse this flat dataclass shape in real code today.",
       "type": "object",
       "required": ["id", "statement", "evidence_rule", "forward_verdict", "backward_verdict"],
       "additionalProperties": false,
@@ -224,7 +224,7 @@
       ]
     },
     "requirementOutcomeGeneric": {
-      "description": "The abstract root-object-model shape for an outcome requirement (spec §3.1/Appendix A.1), as an alternative to requirementOutcomeNative.",
+      "description": "The abstract root-object-model shape for an outcome requirement, as an alternative to requirementOutcomeNative.",
       "type": "object",
       "required": ["id", "profile", "statement"],
       "additionalProperties": false,
@@ -242,7 +242,7 @@
       }
     },
     "requirementObligationGeneric": {
-      "description": "spec §3.3 sketch: a versioned obligation reference bound to evidence requirements.",
+      "description": "A sketch: a versioned obligation reference bound to evidence requirements.",
       "type": "object",
       "required": ["id", "profile", "statement", "clause_ref"],
       "additionalProperties": false,
@@ -260,7 +260,7 @@
       }
     },
     "requirementProcess": {
-      "description": "Typed stub (spec §3.4) -- fields sketched, not exhaustively normative; open to extension pending Evidence Contract v3's full pass on this profile.",
+      "description": "Typed stub -- fields sketched, not exhaustively normative; open to extension pending a full normative pass on this profile.",
       "type": "object",
       "required": ["id", "profile", "statement"],
       "additionalProperties": true,
@@ -281,7 +281,7 @@
       }
     },
     "requirementQuality": {
-      "description": "Typed stub (spec §3.5) -- fields sketched, not exhaustively normative.",
+      "description": "Typed stub -- fields sketched, not exhaustively normative.",
       "type": "object",
       "required": ["id", "profile", "statement"],
       "additionalProperties": true,
@@ -301,7 +301,7 @@
       }
     },
     "requirementHumanRole": {
-      "description": "Typed stub (spec §3.6) -- fields sketched, not exhaustively normative. Human experience measures MUST remain typed as HUMAN_REPORT evidence or derived metrics over it, never bare (spec §3.6/v2 §7); this schema does not mechanically enforce that cross-field rule, only the shape.",
+      "description": "Typed stub -- fields sketched, not exhaustively normative. Human experience measures MUST remain typed as HUMAN_REPORT evidence or derived metrics over it, never bare; this schema does not mechanically enforce that cross-field rule, only the shape.",
       "type": "object",
       "required": ["id", "profile", "statement"],
       "additionalProperties": true,
@@ -321,7 +321,7 @@
       }
     },
     "requirementAttribution": {
-      "description": "Typed stub (spec §3.7): the root accepts this profile value today but carries only a ref -- provenance path, utilization, incremental contribution, eligible population, and reversal/refund rules are not yet normative.",
+      "description": "Typed stub: the root accepts this profile value today but carries only a ref -- provenance path, utilization, incremental contribution, eligible population, and reversal/refund rules are not yet normative.",
       "type": "object",
       "required": ["id", "profile", "ref"],
       "additionalProperties": false,
@@ -334,7 +334,7 @@
       }
     },
     "requirementSettlement": {
-      "description": "Typed stub (spec §3.7): the root accepts this profile value today but carries only a ref -- eligible-population and settlement rules are not yet normative.",
+      "description": "Typed stub: the root accepts this profile value today but carries only a ref -- eligible-population and settlement rules are not yet normative.",
       "type": "object",
       "required": ["id", "profile", "ref"],
       "additionalProperties": false,
