@@ -1,0 +1,19 @@
+{
+  "id": "validate-ok-minimal",
+  "kind": "validate",
+  "rationale": "the smallest valid contract: id, version and one requirement",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "attribution",
+        "ref": "example-attribution-v1"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

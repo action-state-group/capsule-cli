@@ -48,10 +48,10 @@ func (e *schemaLoadError) Error() string {
 func (e *schemaLoadError) Unwrap() error { return e.err }
 
 func contractCommands() *cobra.Command {
-	contract := &cobra.Command{Use: "contract", Short: "Validate documents against a JSON Schema the caller supplies"}
+	contract := &cobra.Command{Use: "contract", Short: "Validate documents against a JSON Schema the caller supplies, and diff two Evidence Contract versions"}
 	validate := &cobra.Command{
 		Use:   "validate FILE",
-		Short: "Validate FILE against --schema (a path or URL); capsulectl embeds no schema of its own",
+		Short: "Validate FILE against --schema (a path or URL); validate uses no built-in schema",
 		Args:  oneArg,
 		RunE: func(c *cobra.Command, args []string) error {
 			schemaLoc, _ := c.Flags().GetString("schema")
@@ -91,7 +91,7 @@ func contractCommands() *cobra.Command {
 	}
 	validate.Flags().String("schema", "", "Path or URL to the JSON Schema to validate against (required)")
 	validate.Flags().Bool("json", false, "Emit a capsule-cli-result/v1 report instead of readable text")
-	contract.AddCommand(validate)
+	contract.AddCommand(validate, contractDiffCommand())
 	return contract
 }
 
@@ -171,7 +171,20 @@ func explainProfileOneOf(e *jsonschema.ValidationError, doc any, discriminator [
 	path := pathString(e.InstanceLocation)
 	value, present := obj["profile"]
 	if !present {
-		return contractIssue{Path: path, Message: fmt.Sprintf("missing required property \"profile\" (expected one of: %s)", strings.Join(discriminator, ", "))}, true
+		// Some branches (the native shape) do not require `profile`. When one
+		// of them fails for a reason other than a missing property, the
+		// requirement is in that shape and its real violation is reported;
+		// otherwise the missing discriminator is the clearest explanation.
+		var shaped []*jsonschema.ValidationError
+		for _, cause := range e.Causes {
+			if !missingProperty(cause) {
+				shaped = append(shaped, cause)
+			}
+		}
+		if len(shaped) == 0 {
+			return contractIssue{Path: path, Message: fmt.Sprintf("missing required property \"profile\" (expected one of: %s)", strings.Join(discriminator, ", "))}, true
+		}
+		return contractIssue{Path: path, Message: describeBranch(shaped, "")}, true
 	}
 	name, ok := value.(string)
 	if !ok {
@@ -187,6 +200,12 @@ func explainProfileOneOf(e *jsonschema.ValidationError, doc any, discriminator [
 	if len(candidates) == 0 {
 		return contractIssue{Path: path, Message: fmt.Sprintf("unknown profile %q (expected one of: %s)", name, strings.Join(discriminator, ", "))}, true
 	}
+	return contractIssue{Path: path, Message: describeBranch(candidates, name)}, true
+}
+
+// describeBranch explains the candidate branch with the fewest leaf failures,
+// prefixed with the profile it was selected by when there is one.
+func describeBranch(candidates []*jsonschema.ValidationError, profile string) string {
 	best := leaves(candidates[0])
 	for _, c := range candidates[1:] {
 		if l := leaves(c); len(l) < len(best) {
@@ -197,7 +216,25 @@ func explainProfileOneOf(e *jsonschema.ValidationError, doc any, discriminator [
 	for i, leaf := range best {
 		parts[i] = fmt.Sprintf("at %s: %s", pathString(leaf.InstanceLocation), describeLeaf(leaf.ErrorKind))
 	}
-	return contractIssue{Path: path, Message: fmt.Sprintf("profile %q: %s", name, strings.Join(parts, "; "))}, true
+	if profile == "" {
+		return strings.Join(parts, "; ")
+	}
+	return fmt.Sprintf("profile %q: %s", profile, strings.Join(parts, "; "))
+}
+
+// missingProperty reports whether e's subtree contains a missing-required-
+// property failure: the sign that the instance was not written in this
+// branch's shape at all.
+func missingProperty(e *jsonschema.ValidationError) bool {
+	if _, ok := e.ErrorKind.(*kind.Required); ok {
+		return true
+	}
+	for _, cause := range e.Causes {
+		if missingProperty(cause) {
+			return true
+		}
+	}
+	return false
 }
 
 // profileMismatch reports whether e's subtree contains a failure of the
@@ -367,8 +404,9 @@ func schemaIsURL(loc string) bool {
 // loadSchema reads the schema twice by design: once as a plain generic
 // document (discriminatorValues has no use for a compiled *Schema), and once
 // through the compiler (which needs to resolve internal $refs). Never reads
-// from a path or URL other than the one the caller supplied in --schema --
-// capsulectl embeds no schema of its own.
+// from a path or URL other than the one the caller supplied in --schema (the
+// one built-in schema, for `contract diff`, is loaded by
+// loadEmbeddedContractSchema instead).
 func loadSchema(loc string) (*jsonschema.Schema, any, error) {
 	raw, e := fetchSchemaBytes(loc)
 	if e != nil {

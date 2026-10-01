@@ -1,0 +1,19 @@
+{
+  "id": "validate-ok-profile-settlement",
+  "kind": "validate",
+  "rationale": "settlement carries only a ref at the root",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "settlement",
+        "ref": "example-settlement-v1"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

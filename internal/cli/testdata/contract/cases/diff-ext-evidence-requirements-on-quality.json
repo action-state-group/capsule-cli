@@ -1,0 +1,46 @@
+{
+  "id": "diff-ext-evidence-requirements-on-quality",
+  "kind": "diff",
+  "rationale": "quality defines no evidence_requirements; its freshness has no rule",
+  "a": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "quality",
+        "statement": "s",
+        "evidence_requirements": {
+          "freshness": "P7D"
+        }
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "quality",
+        "statement": "s",
+        "evidence_requirements": {
+          "freshness": "P30D"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[r1]/evidence_requirements/freshness",
+        "kind": "changed"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

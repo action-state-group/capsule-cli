@@ -1,0 +1,24 @@
+{
+  "id": "validate-bad-status-on-attribution",
+  "kind": "validate",
+  "rationale": "the self-declaration ban holds even on a ref-only stub",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "attribution",
+        "ref": "a",
+        "status": "SATISFIED"
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0/status",
+      "keyword": "false"
+    }
+  }
+}

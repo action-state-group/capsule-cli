@@ -1,0 +1,19 @@
+{
+  "id": "validate-ok-profile-outcome-generic",
+  "kind": "validate",
+  "rationale": "outcome in the abstract shape needs only id, profile and statement",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "s"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "validate-ok-unicode-statement",
+  "kind": "validate",
+  "rationale": "statements may be any non-empty Unicode text",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "Prüfung vor Freigabe — 審査済み ✓"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

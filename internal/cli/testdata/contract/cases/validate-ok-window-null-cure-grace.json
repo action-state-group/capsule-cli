@@ -1,0 +1,26 @@
+{
+  "id": "validate-ok-window-null-cure-grace",
+  "kind": "validate",
+  "rationale": "a window's cure and grace may be null",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "statement": "s",
+        "evidence_rule": "e",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "window": {
+          "duration": "P1D",
+          "cure": null,
+          "grace": null
+        }
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

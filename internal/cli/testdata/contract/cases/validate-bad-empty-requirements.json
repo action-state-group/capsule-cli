@@ -1,0 +1,28 @@
+{
+  "id": "validate-bad-empty-requirements",
+  "kind": "validate",
+  "rationale": "a contract with zero requirements establishes nothing",
+  "contract": {
+    "id": "ec:example-fixture:2026-09-30",
+    "version": "1",
+    "subject": {
+      "job_type": "example-job",
+      "population_selector": "every job in evaluation_period"
+    },
+    "requirements": [],
+    "temporal": {
+      "evaluation_period": "2026-09"
+    },
+    "consequence": {
+      "class": "report",
+      "rule_ref": "example-report-v1"
+    }
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements",
+      "keyword": "minItems"
+    }
+  }
+}

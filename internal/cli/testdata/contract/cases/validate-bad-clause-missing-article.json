@@ -1,0 +1,46 @@
+{
+  "id": "validate-bad-clause-missing-article",
+  "kind": "validate",
+  "rationale": "a clause must name its article",
+  "contract": {
+    "id": "ec:example-native:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "req-n",
+        "profile": "outcome",
+        "statement": "the refund was confirmed by the system of record",
+        "evidence_rule": "refund record chained to the request, status confirmed",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "window": {
+          "duration": "P7D",
+          "cure": null,
+          "grace": null
+        },
+        "tier": "informational",
+        "required_assurance_grade": "witnessed",
+        "mode": "structural"
+      },
+      {
+        "id": "req-o",
+        "profile": "obligation",
+        "statement": "the retention control was evidenced",
+        "evidence_rule": "retention record chained to the clause",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "clause": {
+          "instrument": "Example Instrument",
+          "source_url": "https://example.org/a1"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/1/clause",
+      "keyword": "required"
+    }
+  }
+}

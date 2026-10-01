@@ -1,0 +1,30 @@
+{
+  "id": "validate-bad-requirements-not-array",
+  "kind": "validate",
+  "rationale": "requirements must be an array",
+  "contract": {
+    "id": "ec:example-fixture:2026-09-30",
+    "version": "1",
+    "subject": {
+      "job_type": "example-job",
+      "population_selector": "every job in evaluation_period"
+    },
+    "requirements": {
+      "req-a": {}
+    },
+    "temporal": {
+      "evaluation_period": "2026-09"
+    },
+    "consequence": {
+      "class": "report",
+      "rule_ref": "example-report-v1"
+    }
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements",
+      "keyword": "type"
+    }
+  }
+}

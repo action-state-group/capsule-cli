@@ -1,0 +1,42 @@
+{
+  "id": "diff-ext-escalation-path-on-human-role",
+  "kind": "diff",
+  "rationale": "escalation_path is editorial on process, not as a human_role extension",
+  "a": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "human_role",
+        "statement": "s",
+        "escalation_path": "q1"
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "human_role",
+        "statement": "s",
+        "escalation_path": "q2"
+      }
+    ]
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[r1]/escalation_path",
+        "kind": "changed"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

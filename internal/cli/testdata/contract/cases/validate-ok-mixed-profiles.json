@@ -1,0 +1,50 @@
+{
+  "id": "validate-ok-mixed-profiles",
+  "kind": "validate",
+  "rationale": "one contract may mix all seven profiles across its requirements",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "s"
+      },
+      {
+        "id": "r2",
+        "profile": "obligation",
+        "statement": "s",
+        "clause_ref": "p/1"
+      },
+      {
+        "id": "r3",
+        "profile": "process",
+        "statement": "s"
+      },
+      {
+        "id": "r4",
+        "profile": "quality",
+        "statement": "s"
+      },
+      {
+        "id": "r5",
+        "profile": "human_role",
+        "statement": "s"
+      },
+      {
+        "id": "r6",
+        "profile": "attribution",
+        "ref": "a"
+      },
+      {
+        "id": "r7",
+        "profile": "settlement",
+        "ref": "s"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

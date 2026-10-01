@@ -1,0 +1,20 @@
+{
+  "id": "validate-ok-empty-evidence-requirements",
+  "kind": "validate",
+  "rationale": "an empty evidence_requirements block is valid and constrains nothing",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "s",
+        "evidence_requirements": {}
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

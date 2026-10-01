@@ -1,0 +1,23 @@
+{
+  "id": "validate-ok-obligation-refs-on-outcome",
+  "kind": "validate",
+  "rationale": "an outcome may cite the obligations it is traced to",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "s",
+        "obligation_refs": [
+          "p/1",
+          "p/2"
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

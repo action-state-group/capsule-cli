@@ -1,0 +1,23 @@
+{
+  "id": "validate-bad-empty-requirement-id",
+  "kind": "validate",
+  "rationale": "an empty requirement id cannot be cited by a claim",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "",
+        "profile": "outcome",
+        "statement": "s"
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0/id",
+      "keyword": "minLength"
+    }
+  }
+}

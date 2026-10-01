@@ -1,0 +1,47 @@
+{
+  "id": "validate-bad-native-unknown-tier",
+  "kind": "validate",
+  "rationale": "tier is must_have or informational",
+  "contract": {
+    "id": "ec:example-native:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "req-n",
+        "profile": "outcome",
+        "statement": "the refund was confirmed by the system of record",
+        "evidence_rule": "refund record chained to the request, status confirmed",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "window": {
+          "duration": "P7D",
+          "cure": null,
+          "grace": null
+        },
+        "tier": "critical",
+        "required_assurance_grade": "witnessed",
+        "mode": "structural"
+      },
+      {
+        "id": "req-o",
+        "profile": "obligation",
+        "statement": "the retention control was evidenced",
+        "evidence_rule": "retention record chained to the clause",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "clause": {
+          "instrument": "Example Instrument",
+          "article": "Article 1",
+          "source_url": "https://example.org/a1"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0/tier",
+      "keyword": "enum"
+    }
+  }
+}

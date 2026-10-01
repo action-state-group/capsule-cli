@@ -194,6 +194,7 @@ capsulectl run [args passed to the actionstate plugin, e.g. --dry-run]
 capsulectl plugin ls
 capsulectl store migrate --profile NAME [--log-id NEW_LOG_ID]
 capsulectl contract validate FILE --schema PATH_OR_URL [--json]
+capsulectl contract diff A B [--schema PATH_OR_URL] [--json]
 capsulectl discover --profile NAME --scope SCOPE.yaml --seal-output SCAN.json [--effects] [--format table|json]
 capsulectl map CONTRACT --schema PATH_OR_URL --discover EFFECTS.json [--format text|json]
 capsulectl bundle --profile NAME --root CAPSULE_ID --out BUNDLE.json [--closure-depth 2]

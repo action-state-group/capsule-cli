@@ -1,0 +1,48 @@
+{
+  "id": "diff-ext-window-extra-field",
+  "kind": "diff",
+  "rationale": "an unknown member inside an extension window is still a change, not dropped",
+  "a": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "quality",
+        "statement": "s",
+        "window": {
+          "duration": "P7D",
+          "anchor": "start"
+        }
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "quality",
+        "statement": "s",
+        "window": {
+          "duration": "P7D",
+          "anchor": "end"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[r1]/window/anchor",
+        "kind": "changed"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

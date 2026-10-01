@@ -1,0 +1,31 @@
+{
+  "id": "validate-ok-all-epistemic-types",
+  "kind": "validate",
+  "rationale": "all eight epistemic types may be accepted at once",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "s",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "OBSERVED_EVENT",
+            "SYSTEM_OF_RECORD_FACT",
+            "PRODUCER_CLAIM",
+            "HUMAN_REPORT",
+            "SEMANTIC_JUDGMENT",
+            "DERIVED_METRIC",
+            "ADJUDICATION",
+            "OBLIGATION_REFERENCE"
+          ]
+        }
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

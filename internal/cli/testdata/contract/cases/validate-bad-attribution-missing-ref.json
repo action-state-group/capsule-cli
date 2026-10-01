@@ -1,0 +1,22 @@
+{
+  "id": "validate-bad-attribution-missing-ref",
+  "kind": "validate",
+  "rationale": "a ref-only stub must carry its ref",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "attribution"
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0",
+      "keyword": "required"
+    }
+  }
+}

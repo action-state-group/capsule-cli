@@ -1,0 +1,26 @@
+{
+  "id": "validate-ok-human-role-blocks",
+  "kind": "validate",
+  "rationale": "human_role review/override/escalation are open objects",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "human_role",
+        "statement": "s",
+        "review": {
+          "by": "role"
+        },
+        "override": {},
+        "escalation": {
+          "to": "role"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}
