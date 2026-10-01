@@ -1,6 +1,6 @@
 {
   "repo": "action-state-group/capsule-engine",
   "path": "tests/fixtures/contract-cases",
-  "commit": "5ccbdcefa36d8b1320d1fa6c7bc33a5db697c45b",
-  "sha256sums_digest": "de3301f4973bf13ff8a9939df07c4159fe8ba97e2b5c4622fbceb561119e5c05"
+  "commit": "77ec8008a0f2ed6c135cceca3494ceb4e2f889dd",
+  "sha256sums_digest": "0f8a524caa31ee4ddffdacd326d1d27b05accd103161df0ac64a98295ef16459"
 }

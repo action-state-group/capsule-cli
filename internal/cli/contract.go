@@ -48,10 +48,10 @@ func (e *schemaLoadError) Error() string {
 func (e *schemaLoadError) Unwrap() error { return e.err }
 
 func contractCommands() *cobra.Command {
-	contract := &cobra.Command{Use: "contract", Short: "Validate Evidence Contracts against a JSON Schema the caller supplies, and diff two versions"}
+	contract := &cobra.Command{Use: "contract", Short: "Validate documents against a JSON Schema the caller supplies, and diff two Evidence Contract versions"}
 	validate := &cobra.Command{
 		Use:   "validate FILE",
-		Short: "Validate FILE against --schema (a path or URL); capsulectl embeds no schema of its own",
+		Short: "Validate FILE against --schema (a path or URL); validate uses no built-in schema",
 		Args:  oneArg,
 		RunE: func(c *cobra.Command, args []string) error {
 			schemaLoc, _ := c.Flags().GetString("schema")
@@ -404,8 +404,9 @@ func schemaIsURL(loc string) bool {
 // loadSchema reads the schema twice by design: once as a plain generic
 // document (discriminatorValues has no use for a compiled *Schema), and once
 // through the compiler (which needs to resolve internal $refs). Never reads
-// from a path or URL other than the one the caller supplied in --schema --
-// capsulectl embeds no schema of its own.
+// from a path or URL other than the one the caller supplied in --schema (the
+// one built-in schema, for `contract diff`, is loaded by
+// loadEmbeddedContractSchema instead).
 func loadSchema(loc string) (*jsonschema.Schema, any, error) {
 	raw, e := fetchSchemaBytes(loc)
 	if e != nil {

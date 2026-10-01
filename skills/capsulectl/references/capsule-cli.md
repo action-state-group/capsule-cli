@@ -143,7 +143,7 @@ capsulectl contract validate FILE --schema PATH_OR_URL --json
 ```
 
 Validates FILE (JSON) against `--schema` (a JSON Schema, given as a path or an
-`http(s)` URL) — capsulectl embeds no schema of its own; `--schema` always
+`http(s)` URL) — `contract validate` uses no built-in schema; `--schema` always
 names the caller's. Default output is human-readable (`FILE: valid` or
 `FILE: INVALID` plus one line per issue); `--json` instead emits a
 `capsule-cli-result/v1` report with `file`, `schema`, `valid` and a
@@ -167,9 +167,13 @@ Classifies every change from Evidence Contract A to B as `breaking` or
 evidence that satisfied A still satisfies B and every claim against A still
 names a requirement of B; a field with no rule is breaking. Both contracts are
 named by `<id>@<version>` and the SHA-256 of their RFC 8785 (JCS) bytes --
-how a result names the exact contract it was evaluated against. With
-`--schema`, both are validated first. Exit 0: identical or non-breaking; 1:
-breaking; 2: an input is unreadable or invalid.
+how a result names the exact contract it was evaluated against. Both are
+validated first: against the Evidence Contract v0 schema embedded in
+capsulectl (a byte-for-byte copy of capsule-engine's), or against `--schema`
+when given. Unlike `contract validate`, which always takes `--schema`, `contract
+diff` needs a schema to be safe: an invalid input is refused, never diffed.
+Exit 0: identical or non-breaking; 1: breaking; 2: an input is unreadable or
+invalid.
 
 ## Discover (read-only inventory)
 

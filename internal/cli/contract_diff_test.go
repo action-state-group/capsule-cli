@@ -86,6 +86,14 @@ type contractCase struct {
 	Expect   struct {
 		Valid *bool `json:"valid"`
 		Error any   `json:"error"`
+		// diff of invalid input, run without validation
+		Unvalidated *struct {
+			Breaking bool `json:"breaking"`
+			Changes  []struct {
+				Path string `json:"path"`
+				Kind string `json:"kind"`
+			} `json:"changes"`
+		} `json:"unvalidated"`
 		// diff
 		Breaking *bool `json:"breaking"`
 		Changes  []struct {
@@ -199,6 +207,19 @@ func runDiffCase(t *testing.T, tc contractCase) {
 		if code == "duplicate_requirement_id" {
 			assert.ErrorIs(t, e, errDuplicateRequirementID)
 		}
+		if u := tc.Expect.Unvalidated; u != nil {
+			d, e := diffContracts(decodeNumbers(t, tc.A), decodeNumbers(t, tc.B))
+			require.NoError(t, e)
+			assert.Equal(t, u.Breaking, d.breaking())
+			got := make([]struct {
+				Path string `json:"path"`
+				Kind string `json:"kind"`
+			}, len(d.Changes))
+			for i, ch := range d.Changes {
+				got[i].Path, got[i].Kind = ch.Path, ch.Kind
+			}
+			assert.Equal(t, u.Changes, got)
+		}
 		return
 	}
 	require.NotNil(t, tc.Expect.Breaking)
@@ -266,6 +287,15 @@ func TestContractDiffJSONNamesBothContractsByRefAndDigest(t *testing.T) {
 	}}, report["changes"])
 }
 
+func TestEmbeddedContractSchemaMatchesTestdata(t *testing.T) {
+	testdata, e := os.ReadFile(testSchema)
+	require.NoError(t, e)
+	assert.Equal(t, string(testdata), string(embeddedContractSchema),
+		"internal/cli/schemas/evidence-contract-v0.json and the testdata copy must stay byte-identical")
+	_, _, e = loadEmbeddedContractSchema()
+	require.NoError(t, e)
+}
+
 func TestContractDiffUsageErrors(t *testing.T) {
 	tc := caseFile(t, "diff-identical")
 	a := writeTemp(t, "a.json", tc.A)
@@ -283,11 +313,17 @@ func TestContractDiffUsageErrors(t *testing.T) {
 		assert.Equal(t, 2, ExitCode(e))
 		assert.Contains(t, SafeError(e), "malformed JSON")
 	})
-	t.Run("invalid without --schema is still refused when unmatchable", func(t *testing.T) {
+	t.Run("invalid without --schema is refused by the embedded schema", func(t *testing.T) {
 		noReqs := writeTemp(t, "b.json", json.RawMessage(`{"id":"x","version":"1"}`))
 		_, e := invoke(t, "", "contract", "diff", a, noReqs)
 		assert.Equal(t, 2, ExitCode(e))
-		assert.Contains(t, SafeError(e), "no requirements array")
+		assert.Contains(t, SafeError(e), "is not a valid contract under the embedded Evidence Contract v0 schema")
+	})
+	t.Run("a type change without --schema is refused, not loosened", func(t *testing.T) {
+		bad := caseFile(t, "diff-bad-approvals-not-a-list")
+		out, e := invoke(t, "", "contract", "diff", writeTemp(t, "a.json", bad.A), writeTemp(t, "b.json", bad.B))
+		assert.Equal(t, 2, ExitCode(e))
+		assert.Contains(t, out, "INVALID")
 	})
 	t.Run("invalid under --schema names the file", func(t *testing.T) {
 		bad := caseFile(t, "diff-bad-b-invalid")

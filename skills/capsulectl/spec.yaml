@@ -108,8 +108,8 @@ verbs:
       - "FILE --schema PATH_OR_URL --json"
     when: >-
       Check a caller-supplied document against a JSON Schema before
-      accepting, forwarding or acting on it. capsulectl embeds no schema of
-      its own; --schema always names the caller's.
+      accepting, forwarding or acting on it. `contract validate` uses no
+      built-in schema; --schema always names the caller's.
     emits: (no capsule — this is the local validation the evidence policy names explicitly)
     emission_mode: not-consequential
 

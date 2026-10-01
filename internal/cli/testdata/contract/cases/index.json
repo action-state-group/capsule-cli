@@ -1448,6 +1448,70 @@
     "rationale": "a contract that self-declares a status is refused, not diffed"
   },
   {
+    "id": "diff-bad-approvals-not-a-list",
+    "kind": "diff",
+    "file": "diff-bad-approvals-not-a-list.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "approvals turned from a list into a string is refused, never 'loosened'"
+  },
+  {
+    "id": "diff-bad-required-sources-not-a-list",
+    "kind": "diff",
+    "file": "diff-bad-required-sources-not-a-list.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "required_sources as a string is refused, never 'loosened'"
+  },
+  {
+    "id": "diff-bad-epistemic-types-not-a-list",
+    "kind": "diff",
+    "file": "diff-bad-epistemic-types-not-a-list.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "accepted types as a string is refused, never ranked"
+  },
+  {
+    "id": "diff-bad-sequence-not-a-list",
+    "kind": "diff",
+    "file": "diff-bad-sequence-not-a-list.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "a required sequence as a string is refused, never ranked"
+  },
+  {
+    "id": "diff-bad-escalation-path-null",
+    "kind": "diff",
+    "file": "diff-bad-escalation-path-null.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "a null escalation path is refused; unvalidated it is a change, not editorial"
+  },
+  {
+    "id": "diff-bad-assurance-not-a-list",
+    "kind": "diff",
+    "file": "diff-bad-assurance-not-a-list.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "a minimum assurance that is a number is refused, never ranked"
+  },
+  {
+    "id": "diff-bad-native-tier-not-a-string",
+    "kind": "diff",
+    "file": "diff-bad-native-tier-not-a-string.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "a tier that is a list is refused; unvalidated it is a change, never a crash"
+  },
+  {
+    "id": "diff-bad-unknown-epistemic-type-added",
+    "kind": "diff",
+    "file": "diff-bad-unknown-epistemic-type-added.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "adding a type outside the closed set is refused, not 'loosened'"
+  },
+  {
     "id": "pin-base",
     "kind": "pin",
     "file": "pin-base.json",

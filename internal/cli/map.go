@@ -203,7 +203,7 @@ func mapCommand() *cobra.Command {
 			return e
 		},
 	}
-	cmd.Flags().String("schema", "", "Path or URL to the JSON Schema the contract must satisfy (required; capsulectl embeds no schema of its own)")
+	cmd.Flags().String("schema", "", "Path or URL to the JSON Schema the contract must satisfy (required; map uses no built-in schema)")
 	cmd.Flags().String("discover", "", "discover --effects --format json output file (required)")
 	cmd.Flags().String("format", "text", "Output format: text or json")
 	return cmd

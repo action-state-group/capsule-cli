@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,52 @@ import (
 // breaking; loosening is non-breaking but reported. A field rule applies only
 // where the schema defines the field for the requirement's shape, and a field
 // with no rule is breaking.
+
+// embeddedContractSchema is capsule-engine's schemas/evidence-contract-v0.json,
+// byte for byte (TestEmbeddedContractSchemaMatchesTestdata keeps it equal to
+// the testdata copy the contract tests use). `contract diff` validates both
+// inputs against it unless --schema names another; `contract validate` still
+// embeds nothing and always takes --schema.
+//
+//go:embed schemas/evidence-contract-v0.json
+var embeddedContractSchema []byte
+
+const embeddedContractSchemaURL = "capsulectl-embedded:evidence-contract-v0.json"
+
+func loadEmbeddedContractSchema() (*jsonschema.Schema, any, error) {
+	var schemaRaw any
+	if e := json.Unmarshal(embeddedContractSchema, &schemaRaw); e != nil {
+		return nil, nil, e
+	}
+	doc, e := jsonschema.UnmarshalJSON(bytes.NewReader(embeddedContractSchema))
+	if e != nil {
+		return nil, nil, e
+	}
+	compiler := jsonschema.NewCompiler()
+	if e := compiler.AddResource(embeddedContractSchemaURL, doc); e != nil {
+		return nil, nil, e
+	}
+	sch, e := compiler.Compile(embeddedContractSchemaURL)
+	if e != nil {
+		return nil, nil, e
+	}
+	return sch, schemaRaw, nil
+}
+
+// notA reports whether any present value fails isType: defence in depth for
+// a diff of unvalidated input, where a value of the wrong JSON type is never
+// ranked, only reported as changed.
+func notA(isType func(any) bool, values ...any) bool {
+	for _, v := range values {
+		if v != missing && !isType(v) {
+			return true
+		}
+	}
+	return false
+}
+
+func isList(v any) bool   { _, ok := v.([]any); return ok }
+func isString(v any) bool { _, ok := v.(string); return ok }
 
 // ErrBreaking reports that `contract diff` found at least one breaking change
 // -- an ordinary, expected outcome (exit code 1), like ErrSchemaInvalid.
@@ -163,6 +210,9 @@ func setMinus(a, b map[string]bool) map[string]bool {
 
 func compareSets(moreIsTighter bool, what string) fieldRule {
 	return func(path string, a, b any) []contractChange {
+		if notA(isList, a, b) {
+			return one(path, "changed", what+": not a list; direction cannot be determined")
+		}
 		sa, sb := stringSet(a), stringSet(b)
 		if moreIsTighter {
 			if sa == nil {
@@ -425,6 +475,9 @@ func isSubsequence(short, long []any) bool {
 }
 
 func compareSequence(path string, a, b any) []contractChange {
+	if !same(a, b) && notA(isList, a, b) {
+		return one(path, "changed", "required sequence is not a list; direction cannot be determined")
+	}
 	la, _ := a.([]any)
 	lb, _ := b.([]any)
 	if len(la) == len(lb) && (len(la) == 0 || same(la, lb)) {
@@ -443,6 +496,9 @@ func compareSequence(path string, a, b any) []contractChange {
 func editorial(path string, a, b any) []contractChange {
 	if same(a, b) {
 		return nil
+	}
+	if notA(isString, a, b) {
+		return one(path, "changed", "not a string; no rule says this is safe")
 	}
 	return one(path, "editorial", "not read when sufficiency is decided")
 }
@@ -736,8 +792,9 @@ func contractDiffCommand() *cobra.Command {
 		Use:   "diff A B",
 		Short: "Classify every change from contract A to contract B as breaking or non-breaking",
 		Long: "Classify every change from Evidence Contract A to B as breaking or non-breaking, with a reason,\n" +
-			"and name both by <id>@<version> and the SHA-256 of their JCS bytes. With --schema, both are\n" +
-			"validated first. Exit 0: identical or non-breaking; 1: breaking; 2: an input is unreadable or invalid.",
+			"and name both by <id>@<version> and the SHA-256 of their JCS bytes. Both are validated first, against\n" +
+			"the embedded Evidence Contract v0 schema or --schema. Exit 0: identical or non-breaking; 1: breaking;\n" +
+			"2: an input is unreadable or invalid.",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) != 2 {
 				return ErrInput
@@ -755,18 +812,24 @@ func contractDiffCommand() *cobra.Command {
 			if e != nil {
 				return e
 			}
+			schema, schemaRaw, e := loadEmbeddedContractSchema()
+			against := "the embedded Evidence Contract v0 schema"
 			if schemaLoc != "" {
-				schema, schemaRaw, e := loadSchema(schemaLoc)
+				schema, schemaRaw, e = loadSchema(schemaLoc)
+				against = "--schema"
 				if e != nil {
 					return errors.Join(ErrInput, &schemaLoadError{loc: schemaLoc, err: e})
 				}
-				for i, generic := range []any{genericA, genericB} {
-					if report := validateContract(schema, schemaRaw, generic); !report.valid {
-						if !asJSON {
-							printReport(c, args[i], report)
-						}
-						return hint(ErrInput, args[i]+" is not a valid contract under --schema")
+			}
+			if e != nil {
+				return e
+			}
+			for i, generic := range []any{genericA, genericB} {
+				if report := validateContract(schema, schemaRaw, generic); !report.valid {
+					if !asJSON {
+						printReport(c, args[i], report)
 					}
+					return hint(ErrInput, args[i]+" is not a valid contract under "+against)
 				}
 			}
 			d, e := diffContracts(docA, docB)
@@ -790,7 +853,7 @@ func contractDiffCommand() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().String("schema", "", "Path or URL to the Evidence Contract JSON Schema; when set, both contracts are validated first")
+	cmd.Flags().String("schema", "", "Path or URL to a JSON Schema to validate both contracts against instead of the embedded Evidence Contract v0 schema")
 	cmd.Flags().Bool("json", false, "Emit a capsule-cli-result/v1 report instead of readable text")
 	return cmd
 }
