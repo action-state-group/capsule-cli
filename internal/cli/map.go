@@ -145,7 +145,7 @@ func mapResultRows(results []mapRequirementResult) []map[string]any {
 	return rows
 }
 
-// mapCommand implements Steven's 2026-09-22 ruling: a deterministic,
+// mapCommand implements the 2026-09-22 ruling: a deterministic,
 // read-only join of a validated Evidence Contract to a discover inventory.
 // It emits nothing (no --seal-output; unlike discover, a map run leaves no
 // capsule) and is never licence-gated -- only execution capabilities

@@ -1,7 +1,7 @@
 // Package cli: countersign verbs work against any countersigning service and
 // carry no account logic -- the wire contract they speak (countersignAPI, the
 // submission body, the directory shape) is documented here so a third party
-// can interoperate without reading capsule-engine (or any other private repo).
+// can interoperate without reading capsule-engine (or any other repository).
 package cli
 
 import (

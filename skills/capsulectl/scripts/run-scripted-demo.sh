@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Exercises every verb in ../spec.yaml against a throwaway jsonl profile in a
-# temp directory, proving the evidence policy from spec.yaml (Steven's
+# temp directory, proving the evidence policy from spec.yaml (the
 # 2026-09-22 ruling), not just that capsules exist:
 #
 #   - the three CONSEQUENTIAL actions (discover, publish, cll append) each

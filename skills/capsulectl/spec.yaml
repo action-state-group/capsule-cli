@@ -15,8 +15,8 @@
 # it.
 #
 # Guardrails note: `may`/`must_never`/`approval_points`/`evidence_policy`
-# below are Steven's ruling of 2026-09-22 (replaces the earlier
-# `TBD-STEVEN` placeholder), quoted verbatim. `may`/`must_never` were
+# below are the ruling of 2026-09-22 (replaces an earlier placeholder),
+# quoted verbatim. `may`/`must_never` were
 # dictated as one semicolon-separated sentence per category; each array
 # item below is one clause of that sentence, split at the semicolons with
 # no word changed — the exact source sentence is quoted in a comment above
