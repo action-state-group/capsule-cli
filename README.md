@@ -17,13 +17,49 @@ V=v0.1.0; OS=linux; ARCH=amd64   # or linux/arm64, darwin/arm64
 base=https://github.com/action-state-group/capsule-cli/releases/download/$V
 curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
-install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
+sudo install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
 capsulectl --version                        # capsulectl v0.1.0 (commit <sha>)
 ```
+
+Writing to `/usr/local/bin` needs `sudo`. Without it, install into a directory
+you own that is on your `PATH`, for example
+`install -D -m 0755 "capsulectl-$V-$OS-$ARCH" ~/.local/bin/capsulectl`.
 
 Release builds are reproducible: `scripts/release-build.sh VERSION COMMIT OUTDIR`
 is the exact command the release workflow runs, so checking out a tag and running
 it with the Go version in `go.mod` gives byte-identical binaries.
+
+## Agent skill (Claude Code and Codex)
+
+`skills/capsulectl/` is one skill in two renderings with the same content:
+`SKILL.md` for Claude Code and `AGENTS.md` for Codex, both generated from
+`spec.yaml` (see [skills/SKILL-SPEC.md](skills/SKILL-SPEC.md)). The skill calls
+an installed `capsulectl`; it does not install one. Take the skill from the same
+tag as your binary, so that every verb it lists exists in that binary
+(`capsulectl <verb> --help` confirms one).
+
+```bash
+V=v0.1.0   # the tag of the binary you installed
+git clone --depth 1 --branch "$V" https://github.com/action-state-group/capsule-cli.git
+
+# Claude Code: a personal skill (or .claude/skills/ inside one project)
+mkdir -p ~/.claude/skills && cp -r capsule-cli/skills/capsulectl ~/.claude/skills/
+
+# Codex: copy the directory into the project, then point the project's
+# AGENTS.md at it (this appends; it never overwrites an existing AGENTS.md)
+cp -r capsule-cli/skills/capsulectl /path/to/project/capsulectl-skill
+echo 'Before calling capsulectl, read and follow capsulectl-skill/AGENTS.md.' >> /path/to/project/AGENTS.md
+```
+
+Verbs that take `--profile` (`discover`, `publish`, `cll append`, `get`, and
+the others) need a profile and an initialized store first; the
+[Quickstart](#quickstart-no-database-server) below makes one in four commands.
+The skill never writes a scope file or a schema for you: `discover --scope`
+and `contract validate --schema` always name files you supply.
+
+`skills/capsulectl/scripts/run-scripted-demo.sh` is a contributor check, not an
+install step: it builds `capsulectl` from a source checkout, so it needs Go and
+this repository, and you do not need it to use the skill.
 
 ## Quickstart (no database server)
 
@@ -148,7 +184,29 @@ capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
 capsulectl result open FILE [--format text|json]
 capsulectl run [args passed to the actionstate plugin, e.g. --dry-run]
+capsulectl plugin ls
+capsulectl store migrate --profile NAME [--log-id NEW_LOG_ID]
+capsulectl contract validate FILE --schema PATH_OR_URL [--json]
+capsulectl discover --profile NAME --scope SCOPE.yaml --seal-output SCAN.json [--effects] [--format table|json]
+capsulectl map CONTRACT --schema PATH_OR_URL --discover EFFECTS.json [--format text|json]
+capsulectl bundle --profile NAME --root CAPSULE_ID --out BUNDLE.json [--closure-depth 2]
+capsulectl disclose --profile NAME --root CAPSULE_ID --out BUNDLE.json [--payloads all|selected] [--suppress agent_input|agent_output]
+capsulectl permalink --profile NAME --root CAPSULE_ID [--payloads all|selected] [--suppress ...] [--base-url URL]
+capsulectl countersign request --profile NAME --service URL (--bundle BUNDLE.json | --root CAPSULE_ID) [--out FILE] [--window LABEL]
+capsulectl countersign verify BUNDLE.json [--directory URL]
+capsulectl request --profile NAME --request FILE --responder NAME --output FILE
+capsulectl request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX | --absent-until TIME)
+capsulectl respond --profile NAME --request FILE --requester ID [--policy FILE] --output FILE
+capsulectl close --profile NAME --period day|week --counterparty ID [--date YYYY-MM-DD] [--since-last] [--peer FILE --peer-checkpoint-key HEX]
+capsulectl reconcile --profile NAME --period day|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX
+capsulectl judge pin FILE
+capsulectl judge drift pin FILE_A FILE_B
+capsulectl judge drift reports FILE_A FILE_B
+capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
 ```
+
+`capsulectl <command> --help` gives every flag; this list is the shape of each
+command, not its full flag set.
 
 `emit` is `seal`'s v4 name: the same seal/prepare/self-verify/write-to-file
 operation, offered under both names (`seal` stays for existing callers).
