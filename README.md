@@ -6,6 +6,15 @@ No application-specific (investigation/evaluation) semantics, database
 migration tools, selective disclosure, or implicit login/default profile are
 included.
 
+## The outcome report: zero to a verified report
+
+A pack-driven nightly skill judges a day's conversations against a rubric you
+edit and recompile, and seals the result into an **outcome report**: a
+self-contained `report.html` and a permalink, over the same bytes.
+[docs/OUTCOME-REPORT-QUICKSTART.md](docs/OUTCOME-REPORT-QUICKSTART.md) takes
+you from nothing to that report. Read its "Current status" section first: the
+verbs and the card it needs are not in a release yet.
+
 ## Prebuilt binaries
 
 Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
