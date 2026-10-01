@@ -287,9 +287,8 @@ func jsonDisplay(v any) string {
 }
 
 // pathString renders an instance location as a readable JSON Pointer,
-// `<root>` for the document itself -- the same convention the ledger lane's
-// Python validator (`contract_validate.py`) uses, so a report reads the same
-// from either implementation.
+// `<root>` for the document itself, so a report reads the same as one from
+// any other validator that follows this convention.
 func pathString(loc []string) string {
 	if len(loc) == 0 {
 		return "<root>"

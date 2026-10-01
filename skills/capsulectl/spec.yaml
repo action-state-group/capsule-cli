@@ -11,8 +11,8 @@
 # the durable record), so this spec documents them as two verb entries —
 # `cll list` and `cll append` — rather than force one entry to describe two
 # behaviors. Nothing here documents a verb capsulectl does not implement
-# today; growth happens in [batch5-capsulectl-gap-closure], not by guessing
-# ahead of the binary.
+# today; the spec grows when the binary does, never by guessing ahead of
+# it.
 #
 # Guardrails note: `may`/`must_never`/`approval_points`/`evidence_policy`
 # below are Steven's ruling of 2026-09-22 (replaces the earlier
