@@ -87,11 +87,11 @@ consequential actions (`discover`, `publish`, `cll append`) each seal or
 persist a capsule and every one of those is verified; the not-consequential
 actions (`verify`, `contract validate`, `plugin ls`, `cll list`, `get`)
 run and produce no capsule at all — the script asserts both halves, not just
-that capsules exist. This is the "fresh-environment" test this skill ships
-with. It never touches a real profile or a real CLL. Run it after any change
-to the verb surface or the emission mechanism; it builds `capsulectl` from
-source, so its own elapsed time is also this skill's install-through-first-
-use timing.
+that capsules exist. It never touches a real profile or a real CLL. It is a
+contributor check, run after any change to the verb surface or the emission
+mechanism: it builds `capsulectl` from a source checkout, so it needs Go
+and this repository. Using the skill needs neither: install a release binary
+and this skill from the same tag (the repository README, "Agent skill").
 
 ## Reference
 
