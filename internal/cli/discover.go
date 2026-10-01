@@ -21,9 +21,8 @@ import (
 )
 
 // discoverScope is the human-authored "may / may not touch" list --
-// discover refuses to run without one (see the boundary note on
-// [batch3-connector-interface-and-discover]: humans write this list first,
-// the tool never invents it). Roots are the only directories discover may
+// discover refuses to run without one (humans write this list first; the
+// tool never invents it). Roots are the only directories discover may
 // descend into; Deny adds operator-specific exclusions on top of the
 // built-in credential/secret deny-list, which always applies regardless of
 // what Scope says.
@@ -54,8 +53,7 @@ func loadScope(path string) (discoverScope, error) {
 
 // discoveredFile is one row of the inventory: `discover` never records raw
 // file content, only what classifyFile decided and, for a scanned file, a
-// digest -- see [batch3-connector-interface-and-discover]'s boundary line
-// ("MUST NOT read payloads, secrets or credentials").
+// digest (it MUST NOT read payloads, secrets or credentials).
 type discoveredFile struct {
 	Root        string `json:"root"`
 	Path        string `json:"path"`
