@@ -15,8 +15,8 @@
         },
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "OBSERVED_EVENT",
-            "SYSTEM_OF_RECORD_FACT"
+            "observed_event",
+            "system_of_record_fact"
           ],
           "freshness": "P7D",
           "minimum_assurance": [
@@ -52,7 +52,7 @@
         "clause_ref": "example-policy/section-1/v1",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "OBSERVED_EVENT"
+            "observed_event"
           ]
         },
         "id": "req-c",
@@ -73,7 +73,7 @@
     "contract_ref": "ec:example-fixture:2026-09-30@1",
     "contract_digest": {
       "digest_alg": "SHA-256",
-      "digest": "f9aa63e80d03321195a7978081f98f00aa8a2a18c2c85c9c3a86e7c1a6fdc613"
+      "digest": "3aae34fe763202a245e000a8eca524426a83930c55b6f747d56288e9d7d35c54"
     }
   }
 }

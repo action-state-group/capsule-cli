@@ -440,12 +440,12 @@
     "rationale": "epistemic types are a closed set of eight"
   },
   {
-    "id": "validate-bad-lowercase-epistemic-type",
+    "id": "validate-bad-uppercase-epistemic-type",
     "kind": "validate",
-    "file": "validate-bad-lowercase-epistemic-type.json",
+    "file": "validate-bad-uppercase-epistemic-type.json",
     "negative": true,
     "outcome": "invalid: enum at requirements/0/evidence_requirements/accepted_epistemic_types/0",
-    "rationale": "epistemic type values are upper-case"
+    "rationale": "epistemic type values are lower-case, as the owning record header spells them"
   },
   {
     "id": "validate-bad-empty-epistemic-types",
@@ -1430,6 +1430,14 @@
     "negative": true,
     "outcome": "error: invalid_contract",
     "rationale": "both sides are validated, not just the first"
+  },
+  {
+    "id": "diff-bad-b-uppercase-epistemic-type",
+    "kind": "diff",
+    "file": "diff-bad-b-uppercase-epistemic-type.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "an upper-case epistemic type is not the lower-case one: the contract is refused, not diffed"
   },
   {
     "id": "diff-bad-duplicate-requirement-id",

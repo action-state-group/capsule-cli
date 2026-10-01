@@ -9,14 +9,14 @@
       "type": "string",
       "description": "The closed set of epistemic types a piece of evidence can carry. Owned by EvidenceBook's record header (its `epistemic_type` field), mirrored here -- see schemas/vendor/epistemic-types.json for the vendored source and tests/test_evidence_contract_schema.py for the cross-repo parity test against capsule_engine.packs.schema.EPISTEMIC_TYPE_VALUES.",
       "enum": [
-        "OBSERVED_EVENT",
-        "SYSTEM_OF_RECORD_FACT",
-        "PRODUCER_CLAIM",
-        "HUMAN_REPORT",
-        "SEMANTIC_JUDGMENT",
-        "DERIVED_METRIC",
-        "ADJUDICATION",
-        "OBLIGATION_REFERENCE"
+        "observed_event",
+        "system_of_record_fact",
+        "producer_claim",
+        "human_report",
+        "semantic_judgment",
+        "derived_metric",
+        "adjudication",
+        "obligation_reference"
       ]
     },
     "bundleAssertionStatus": {
@@ -301,7 +301,7 @@
       }
     },
     "requirementHumanRole": {
-      "description": "Typed stub -- fields sketched, not exhaustively normative. Human experience measures MUST remain typed as HUMAN_REPORT evidence or derived metrics over it, never bare; this schema does not mechanically enforce that cross-field rule, only the shape.",
+      "description": "Typed stub -- fields sketched, not exhaustively normative. Human experience measures MUST remain typed as human_report evidence or derived metrics over it, never bare; this schema does not mechanically enforce that cross-field rule, only the shape.",
       "type": "object",
       "required": ["id", "profile", "statement"],
       "additionalProperties": true,
