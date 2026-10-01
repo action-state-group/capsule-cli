@@ -12,16 +12,14 @@ import (
 )
 
 // resultShapeNote explains why `result open` only does a structural
-// best-effort check rather than schema validation: Result v0
-// (batch4-evidence-result-schema-v0, spec lane) is still DRAFT pending
-// Steven's sign-off on its semantics section, so no frozen schema exists yet
-// to validate against. This command checks for the one shape that item's own
-// text already commits to regardless of the open questions -- a mandatory
+// best-effort check rather than schema validation: the Result v0 schema is
+// still DRAFT, so no frozen schema exists yet to validate against. This
+// command checks for the one shape the draft already commits to regardless
+// of its open questions -- a mandatory
 // `aggregate.coverage` statement ("an aggregate without coverage fails
-// validation") -- and nothing more. It also stands in for the real viewer
-// (`[batch4-capsule-viewer-three-buckets]`, not yet built) by printing the
-// aggregate and coverage as text.
-const resultShapeNote = "Result v0 schema is still DRAFT (batch4-evidence-result-schema-v0, spec lane); this is a best-effort structural check, not schema validation"
+// validation") -- and nothing more. It also stands in for a result viewer,
+// which does not exist yet, by printing the aggregate and coverage as text.
+const resultShapeNote = "Result v0 schema is still DRAFT; this is a best-effort structural check, not schema validation"
 
 func decodeResultDocument(raw []byte) (map[string]interface{}, error) {
 	if len(raw) > maxInput {
@@ -79,14 +77,14 @@ func renderResultText(aggregate, coverage map[string]interface{}) string {
 	return b.String()
 }
 
-// resultCommands implements `result open`, text mode at minimum: until
-// capsule-viewer exists, this validates the one settled shape requirement and
+// resultCommands implements `result open`, text mode at minimum: until a
+// result viewer exists, this validates the one settled shape requirement and
 // prints the aggregate/coverage statement itself rather than rendering it.
 func resultCommands() *cobra.Command {
 	group := &cobra.Command{Use: "result", Short: "Inspect a Result v0 document"}
 	open := &cobra.Command{
 		Use:   "open FILE",
-		Short: "Validate + print a Result v0's aggregate and coverage statement (text mode: capsule-viewer not yet built, batch4-capsule-viewer-three-buckets)",
+		Short: "Validate + print a Result v0's aggregate and coverage statement (text mode)",
 		Args:  oneArg,
 		RunE: func(c *cobra.Command, args []string) error {
 			format, _ := c.Flags().GetString("format")

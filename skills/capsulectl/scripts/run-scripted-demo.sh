@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Exercises every verb in ../spec.yaml against a throwaway jsonl profile in a
-# temp directory, proving the evidence policy from spec.yaml (Steven's
+# temp directory, proving the evidence policy from spec.yaml (the
 # 2026-09-22 ruling), not just that capsules exist:
 #
 #   - the three CONSEQUENTIAL actions (discover, publish, cll append) each
@@ -19,10 +19,11 @@ set -euo pipefail
 #     "report evidence unavailable, stop before the next consequential
 #     action") rather than silently continuing.
 #
-# Total elapsed time, printed at the end, doubles as the item's
-# fresh-environment timing check (install through the first discover /
-# contract-validate call, target under an hour). It never touches a real
-# profile, a real CLL, or any path outside its own temp directory.
+# A contributor check: it builds capsulectl from this checkout, so it needs
+# Go and the repository. It is not an install test; a user installs a
+# release binary and the skill from the same tag (README, "Agent skill").
+# It never touches a real profile, a real CLL, or any path outside its own
+# temp directory.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 work="$(mktemp -d)"
