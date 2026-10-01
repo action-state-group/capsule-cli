@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,9 +21,11 @@ import (
 // reference implementation of the diff rules). Every case must come out the
 // same here as it does there: that is what keeps the two implementations of
 // `contract diff` and the contract digest from drifting. SOURCE.json pins the
-// engine commit the copy was taken from and the digest of its SHA256SUMS;
+// engine commit the copy was taken from, the digest of its SHA256SUMS and the
+// sha256 of the engine's contract schema at that commit;
 // TestContractCaseLibraryMatchesPinnedSource fails if the copy is edited, or
-// re-copied without updating the pin.
+// re-copied without updating the pin, and TestEmbeddedContractSchemaMatchesPin
+// fails if the embedded schema is not the pinned one.
 const casesDir = "testdata/contract/cases"
 
 func sha256Hex(b []byte) string {
@@ -30,16 +33,55 @@ func sha256Hex(b []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func TestContractCaseLibraryMatchesPinnedSource(t *testing.T) {
-	var source struct {
-		Repo             string `json:"repo"`
-		Commit           string `json:"commit"`
-		SHA256SUMSDigest string `json:"sha256sums_digest"`
-	}
+type casesSource struct {
+	Repo                 string `json:"repo"`
+	Path                 string `json:"path"`
+	Commit               string `json:"commit"`
+	SHA256SUMSDigest     string `json:"sha256sums_digest"`
+	ContractSchemaPath   string `json:"contract_schema_path"`
+	ContractSchemaSHA256 string `json:"contract_schema_sha256"`
+}
+
+func loadCasesSource(t *testing.T) casesSource {
+	t.Helper()
+	var source casesSource
 	raw, e := os.ReadFile(filepath.Join(casesDir, "SOURCE.json"))
 	require.NoError(t, e)
 	require.NoError(t, json.Unmarshal(raw, &source))
 	require.Len(t, source.Commit, 40, "SOURCE.json must pin a full engine commit")
+	return source
+}
+
+func TestEmbeddedContractSchemaMatchesPin(t *testing.T) {
+	source := loadCasesSource(t)
+	require.Len(t, source.ContractSchemaSHA256, 64)
+	assert.Equal(t, source.ContractSchemaSHA256, sha256Hex(embeddedContractSchema),
+		"the embedded contract schema is not the one pinned in SOURCE.json")
+}
+
+// TestContractSourcePinMatchesEngineCommit checks both pins against the
+// engine repository itself, at the pinned commit: its contract schema and
+// its case library's SHA256SUMS. It needs a capsule-engine clone that has
+// that commit, named by CAPSULE_ENGINE_REPO, and is skipped otherwise.
+func TestContractSourcePinMatchesEngineCommit(t *testing.T) {
+	repo := os.Getenv("CAPSULE_ENGINE_REPO")
+	if repo == "" {
+		t.Skip("set CAPSULE_ENGINE_REPO to a capsule-engine clone to check the pins against the engine commit")
+	}
+	source := loadCasesSource(t)
+	show := func(path string) []byte {
+		out, e := exec.Command("git", "-C", repo, "show", source.Commit+":"+path).Output()
+		require.NoError(t, e, "git show %s:%s", source.Commit, path)
+		return out
+	}
+	assert.Equal(t, source.ContractSchemaSHA256, sha256Hex(show(source.ContractSchemaPath)),
+		"the pinned schema digest is not the engine's schema at the pinned commit")
+	assert.Equal(t, source.SHA256SUMSDigest, sha256Hex(show(source.Path+"/SHA256SUMS")),
+		"the pinned SHA256SUMS digest is not the engine's at the pinned commit")
+}
+
+func TestContractCaseLibraryMatchesPinnedSource(t *testing.T) {
+	source := loadCasesSource(t)
 
 	sums, e := os.ReadFile(filepath.Join(casesDir, "SHA256SUMS"))
 	require.NoError(t, e)
