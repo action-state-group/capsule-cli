@@ -2,8 +2,9 @@
 
 Standalone Go executable `capsulectl`, wrapping `capsule-emit-go`, its optional
 artifact SDK, and `cll-go`. Applications import those libraries, not this CLI.
-No Alchemy/evaluation semantics, database migration tools, selective disclosure,
-or implicit login/default profile are included.
+No application-specific (investigation/evaluation) semantics, database
+migration tools, selective disclosure, or implicit login/default profile are
+included.
 
 ## Prebuilt binaries
 
@@ -248,13 +249,13 @@ These identifiers select different layers:
 | `--trusted-key` | Independently provisioned Ed25519 producer public key used to verify Capsule signatures. Not a password or a private signing key. Never trust a key merely because the artifact supplies it. |
 
 One store (a JSONL directory, a SQLite file or a MySQL database) can contain both
-`alchemy` and `evaluations` namespaces in the same artifact tables. Storage
+`example-investigation` and `evaluations` namespaces in the same artifact tables. Storage
 permissions (database grants, file modes), not namespace names, control access.
 
-For profile `alchemy`, the default file is
-`~/.config/capsule/profiles/alchemy.yaml`, or
-`$XDG_CONFIG_HOME/capsule/profiles/alchemy.yaml` when `XDG_CONFIG_HOME` is set.
-Use `capsulectl profile show alchemy` to inspect it with secrets redacted.
+For profile `example-investigation`, the default file is
+`~/.config/capsule/profiles/example-investigation.yaml`, or
+`$XDG_CONFIG_HOME/capsule/profiles/example-investigation.yaml` when `XDG_CONFIG_HOME` is set.
+Use `capsulectl profile show example-investigation` to inspect it with secrets redacted.
 Use `capsulectl profile list` to list configured profile names without reading
 or displaying their contents. Listing discovers filenames only; `profile show`
 validates the selected file and its owner-only permissions.
@@ -419,41 +420,41 @@ a round-trip format for signed bytes. `seal --output` remains an exact-byte
 SDK export. No stored bytes, digests, or Capsule IDs change.
 
 ```bash
-capsulectl get --profile alchemy --capsule-id <capsule-id> | jq '.capsule'
-capsulectl get --profile alchemy --capsule-id <capsule-id> |
+capsulectl get --profile example-investigation --capsule-id <capsule-id> | jq '.capsule'
+capsulectl get --profile example-investigation --capsule-id <capsule-id> |
   jq '.artifacts[] | select(.name == "payload") | .content'
 ```
 
-## Example: read an Alchemy investigation
+## Example: read a deployment's investigation records
 
 Replace the placeholders with the deployment's database connection, configured
 `aac.log-id`, and independently obtained producer public key. The artifact
 namespace must match the writer's namespace. This does not trigger an investigation.
 
 ```bash
-chmod 600 /protected/alchemy-db-password
+chmod 600 /protected/example-investigation-db-password
 
 ./capsulectl profile create \
-  --name alchemy \
+  --name example-investigation \
   --type mysql \
-  --namespace alchemy \
-  --log-id <alchemy-log-id> \
-  --mysql-host <alchemy-db-host> \
-  --mysql-database alchemy \
+  --namespace example-investigation \
+  --log-id <investigation-log-id> \
+  --mysql-host <investigation-db-host> \
+  --mysql-database example_investigation \
   --mysql-user <read-only-db-user> \
-  --mysql-password-file /protected/alchemy-db-password \
+  --mysql-password-file /protected/example-investigation-db-password \
   --trusted-key <producer-public-key-hex> \
   --read-only
 
-./capsulectl profile show alchemy
+./capsulectl profile show example-investigation
 
 ./capsulectl get \
-  --profile alchemy \
+  --profile example-investigation \
   --capsule-id <capsule-id> \
   --raw --output investigation-artifact.json
 
 ./capsulectl verify \
-  --profile alchemy \
+  --profile example-investigation \
   --capsule investigation-artifact.json
 
 jq -r '.artifacts[] | select(.name == "payload") | .content' \
@@ -794,7 +795,7 @@ configured facilities. `seal` and offline verification do not open storage.
 ```bash
 # Add your storage flags to each create command: --type sqlite --sqlite-path FILE,
 # --type jsonl --jsonl-path DIR, or --type mysql with its host/database/credential flags.
-capsulectl profile create --name artifacts --namespace alchemy --log-id '' ...
+capsulectl profile create --name artifacts --namespace example-investigation --log-id '' ...
 capsulectl profile create --name ledger --namespace '' --log-id investigations ...
 ```
 

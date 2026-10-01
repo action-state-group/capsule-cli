@@ -217,7 +217,7 @@
       ]
     },
     "requirementObligationNative": {
-      "description": "profile=='obligation' additionally requires clause -- capsule_engine/packs/loader.py's missing_obligation_clause rule ([evidence-obligation-profile-scaffold]).",
+      "description": "profile=='obligation' additionally requires clause -- capsule_engine/packs/loader.py's missing_obligation_clause rule.",
       "allOf": [
         { "$ref": "#/$defs/requirementNativeBase" },
         { "required": ["profile", "clause"], "properties": { "profile": { "const": "obligation" } } }
