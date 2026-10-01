@@ -9,21 +9,27 @@ or implicit login/default profile are included.
 
 Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
 darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
+The current release is the pre-release `v0.1.0-rc2`; there is no final `v0.1.0`
+yet, so GitHub's "latest release" link does not resolve.
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
 `modernc.org/sqlite`), so they need no system libraries.
 
 ```bash
-V=v0.1.0; OS=linux; ARCH=amd64   # or linux/arm64, darwin/arm64
+V=v0.1.0-rc2; OS=linux; ARCH=amd64   # pre-release; or linux/arm64, darwin/arm64
 base=https://github.com/action-state-group/capsule-cli/releases/download/$V
 curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
 sudo install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
-capsulectl --version                        # capsulectl v0.1.0 (commit <sha>)
+capsulectl --version                        # capsulectl v0.1.0-rc2 (commit <sha>)
 ```
 
 Writing to `/usr/local/bin` needs `sudo`. Without it, install into a directory
-you own that is on your `PATH`, for example
-`install -D -m 0755 "capsulectl-$V-$OS-$ARCH" ~/.local/bin/capsulectl`.
+you own and put that directory on your `PATH`:
+
+```bash
+mkdir -p ~/.local/bin && install -m 0755 "capsulectl-$V-$OS-$ARCH" ~/.local/bin/capsulectl
+export PATH="$HOME/.local/bin:$PATH"   # add this line to ~/.bashrc or ~/.zshrc to keep it
+```
 
 Release builds are reproducible: `scripts/release-build.sh VERSION COMMIT OUTDIR`
 is the exact command the release workflow runs, so checking out a tag and running
@@ -39,7 +45,7 @@ tag as your binary, so that every verb it lists exists in that binary
 (`capsulectl <verb> --help` confirms one).
 
 ```bash
-V=v0.1.0   # the tag of the binary you installed
+V=v0.1.0-rc2   # the same tag as the binary you installed (a pre-release)
 git clone --depth 1 --branch "$V" https://github.com/action-state-group/capsule-cli.git
 
 # Claude Code: a personal skill (or .claude/skills/ inside one project)
