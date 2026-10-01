@@ -1,7 +1,7 @@
 {
   "id": "diff-assurance-same-floor",
   "kind": "diff",
-  "rationale": "listing a higher grade beside the same floor does not move the floor",
+  "rationale": "a multi-grade list is undefined, so changing its members at the same floor is breaking",
   "a": {
     "id": "ec:example-fixture:2026-09-30",
     "version": "1",
@@ -138,11 +138,11 @@
     }
   },
   "expect": {
-    "breaking": false,
+    "breaking": true,
     "changes": [
       {
         "path": "requirements[req-a]/evidence_requirements/minimum_assurance",
-        "kind": "editorial"
+        "kind": "changed"
       },
       {
         "path": "version",

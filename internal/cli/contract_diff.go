@@ -246,7 +246,9 @@ func compareGrades(path string, a, b any) []contractChange {
 	case !okA || !okB:
 		return one(path, "changed", "assurance grade not on the ladder; direction cannot be determined")
 	case fa == fb:
-		return one(path, "editorial", "same assurance floor, spelled differently")
+		// What a list of several grades means is not yet defined, so a change
+		// in its members at the same floor is not known to be safe.
+		return one(path, "changed", "grades listed changed at the same floor; multi-grade lists are not yet defined")
 	case fb > fa:
 		return one(path, "tightened", "assurance floor raised")
 	default:
