@@ -172,3 +172,14 @@ func TestPathString(t *testing.T) {
 	assert.Equal(t, "requirements/0/profile", pathString([]string{"requirements", "0", "profile"}))
 	assert.Equal(t, "a~1b", pathString([]string{"a/b"}))
 }
+
+// TestContractValidateNativeShapeWithoutProfile: the native requirement shape
+// does not require `profile`, so a native requirement that omits it must be
+// explained by its real violation, not as a missing profile.
+func TestContractValidateNativeShapeWithoutProfile(t *testing.T) {
+	tc := caseFile(t, "validate-bad-status-on-native")
+	out, e := invoke(t, "", "contract", "validate", writeTemp(t, "contract.json", tc.Contract), "--schema", testSchema)
+	require.ErrorIs(t, e, ErrSchemaInvalid)
+	assert.Contains(t, out, "at requirements/0: at requirements/0/status: field is not permitted here")
+	assert.NotContains(t, out, `missing required property "profile"`)
+}

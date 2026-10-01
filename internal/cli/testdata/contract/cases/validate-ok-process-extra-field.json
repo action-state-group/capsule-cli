@@ -1,0 +1,22 @@
+{
+  "id": "validate-ok-process-extra-field",
+  "kind": "validate",
+  "rationale": "the process stub stays open to extension: an unknown field is accepted",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "process",
+        "statement": "s",
+        "x_example_extension": {
+          "k": 1
+        }
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

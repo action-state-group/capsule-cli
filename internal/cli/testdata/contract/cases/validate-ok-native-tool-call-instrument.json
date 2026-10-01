@@ -1,0 +1,25 @@
+{
+  "id": "validate-ok-native-tool-call-instrument",
+  "kind": "validate",
+  "rationale": "a native requirement may name a tool call as its instrument",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "statement": "s",
+        "evidence_rule": "e",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "evidence_instrument": {
+          "kind": "tool_call_name",
+          "name": "t"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

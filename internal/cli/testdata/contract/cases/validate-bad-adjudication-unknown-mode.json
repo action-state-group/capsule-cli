@@ -1,0 +1,79 @@
+{
+  "id": "validate-bad-adjudication-unknown-mode",
+  "kind": "validate",
+  "rationale": "adjudication mode is closed at four values",
+  "contract": {
+    "id": "ec:example-fixture:2026-09-30",
+    "version": "1",
+    "subject": {
+      "job_type": "example-job",
+      "population_selector": "every job in evaluation_period"
+    },
+    "requirements": [
+      {
+        "id": "req-a",
+        "profile": "outcome",
+        "statement": "the record was written before the action was dispatched",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "OBSERVED_EVENT",
+            "SYSTEM_OF_RECORD_FACT"
+          ],
+          "required_sources": [
+            "source-one"
+          ],
+          "minimum_assurance": [
+            "witnessed"
+          ],
+          "freshness": "P7D"
+        },
+        "adjudication": {
+          "mode": "vibes"
+        },
+        "uncertainty": {
+          "on_missing": "insufficient",
+          "on_conflict": "contradicted"
+        }
+      },
+      {
+        "id": "req-b",
+        "profile": "process",
+        "statement": "a review step preceded the change",
+        "required_sequence": [
+          "requested",
+          "approved",
+          "applied"
+        ],
+        "approvals": [
+          "one reviewer who is not the author"
+        ],
+        "escalation_path": "queue-one"
+      },
+      {
+        "id": "req-c",
+        "profile": "obligation",
+        "statement": "the example policy's review control was evidenced",
+        "clause_ref": "example-policy/section-1/v1",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "OBSERVED_EVENT"
+          ]
+        }
+      }
+    ],
+    "temporal": {
+      "evaluation_period": "2026-09"
+    },
+    "consequence": {
+      "class": "report",
+      "rule_ref": "example-report-v1"
+    }
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0/adjudication/mode",
+      "keyword": "enum"
+    }
+  }
+}

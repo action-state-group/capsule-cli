@@ -1,0 +1,21 @@
+{
+  "id": "validate-ok-native-without-profile",
+  "kind": "validate",
+  "rationale": "the native shape treats profile as optional (an outcome by default)",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "statement": "s",
+        "evidence_rule": "e",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

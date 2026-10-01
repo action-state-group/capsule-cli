@@ -1,0 +1,24 @@
+{
+  "id": "validate-bad-settlement-extra-field",
+  "kind": "validate",
+  "rationale": "settlement logic never enters the root: the stub is closed",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "settlement",
+        "ref": "s",
+        "amount": 10
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0",
+      "keyword": "additionalProperties"
+    }
+  }
+}

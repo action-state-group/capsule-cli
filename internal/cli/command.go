@@ -215,6 +215,9 @@ func SafeError(err error) string {
 		return ErrReadOnlyCLL.Error()
 	case errors.Is(err, ErrPartial):
 		return ErrPartial.Error()
+	case errors.Is(err, ErrBreaking):
+		// Like ErrSchemaInvalid: `contract diff` already printed the changes.
+		return ErrBreaking.Error()
 	case errors.Is(err, ErrSchemaInvalid):
 		// The detailed per-issue report was already printed by `contract
 		// validate` itself; this is only the trailing summary line.

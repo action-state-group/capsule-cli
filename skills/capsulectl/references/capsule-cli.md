@@ -12,8 +12,8 @@ verification, 4 publication pending, 5 conflict. Never suppress errors with an
 empty-list fallback.
 
 This document extends the reference `evaluation-compiler` carried
-(`references/capsule-cli.md` there) with the three verbs it never needed:
-`contract validate`, `discover`, and `plugin ls`. Everything below reflects
+(`references/capsule-cli.md` there) with the verbs it never needed:
+`contract validate`, `contract diff`, `discover`, and `plugin ls`. Everything below reflects
 the profile/get/verify/publish/cll contract as-is; nothing in those sections
 was changed for this skill.
 
@@ -151,6 +151,25 @@ structured `issues[]` (each `{path, message}`, `path` a JSON Pointer,
 `<root>` for the document itself). Exit code 1 on an invalid document
 (`ErrSchemaInvalid`), not a crash — treat exit 1 with a populated `issues[]`
 as the validator working correctly, not as an operational failure.
+
+## Diff two contract versions
+
+```sh
+capsulectl contract diff A B
+capsulectl contract diff A B --schema PATH_OR_URL --json
+```
+
+Classifies every change from Evidence Contract A to B as `breaking` or
+`non_breaking`, each with a `kind` (`requirement_added`, `requirement_removed`,
+`requirement_reid`, `tightened`, `loosened`, `changed`, `editorial`,
+`version_changed`, `version_reused`, `contract_id_changed`,
+`requirements_reordered`) and a reason. A change is non-breaking only when
+evidence that satisfied A still satisfies B and every claim against A still
+names a requirement of B; a field with no rule is breaking. Both contracts are
+named by `<id>@<version>` and the SHA-256 of their RFC 8785 (JCS) bytes --
+how a result names the exact contract it was evaluated against. With
+`--schema`, both are validated first. Exit 0: identical or non-breaking; 1:
+breaking; 2: an input is unreadable or invalid.
 
 ## Discover (read-only inventory)
 

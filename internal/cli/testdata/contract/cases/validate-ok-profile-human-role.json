@@ -1,0 +1,19 @@
+{
+  "id": "validate-ok-profile-human-role",
+  "kind": "validate",
+  "rationale": "human_role stub needs only id, profile and statement",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "human_role",
+        "statement": "s"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

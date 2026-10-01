@@ -1,0 +1,35 @@
+{
+  "id": "validate-ok-clause-all-fields",
+  "kind": "validate",
+  "rationale": "a clause may carry every optional field",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "obligation",
+        "statement": "s",
+        "evidence_rule": "e",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "MANUAL",
+        "clause": {
+          "instrument": "Example Instrument",
+          "article": "Article 2",
+          "paragraph": "3",
+          "as_amended_by": [
+            "Example Instrument, revision 2"
+          ],
+          "jurisdiction": "example",
+          "text_snapshot_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+          "effective_from": "2026-01-01",
+          "source_url": "https://example.org/a2",
+          "contested": true
+        }
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

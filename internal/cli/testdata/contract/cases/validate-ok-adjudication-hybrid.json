@@ -1,0 +1,23 @@
+{
+  "id": "validate-ok-adjudication-hybrid",
+  "kind": "validate",
+  "rationale": "adjudication mode hybrid with a policy reference",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "s",
+        "adjudication": {
+          "mode": "hybrid",
+          "policy_ref": "example-policy"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

@@ -113,6 +113,18 @@ verbs:
     emits: (no capsule — this is the local validation the evidence policy names explicitly)
     emission_mode: not-consequential
 
+  - name: contract diff
+    args:
+      - "A B"
+      - "A B --schema PATH_OR_URL --json"
+    when: >-
+      Before adopting a new version of an Evidence Contract, see whether the
+      change is breaking (evidence that satisfied A may not satisfy B, or a
+      claim against A no longer names a requirement of B) and why. Exit 1
+      means breaking; results evaluated against A must be re-evaluated.
+    emits: (no capsule — comparing two local files is a check, not a consequential action)
+    emission_mode: not-consequential
+
   - name: discover
     args:
       - "--profile NAME --scope FILE --seal-output FILE"

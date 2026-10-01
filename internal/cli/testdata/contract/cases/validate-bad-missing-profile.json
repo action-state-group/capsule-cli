@@ -1,0 +1,22 @@
+{
+  "id": "validate-bad-missing-profile",
+  "kind": "validate",
+  "rationale": "an abstract-shape requirement must name its profile",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "statement": "s"
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0",
+      "keyword": "required"
+    }
+  }
+}

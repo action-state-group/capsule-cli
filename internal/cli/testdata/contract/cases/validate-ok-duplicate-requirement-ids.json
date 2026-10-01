@@ -1,0 +1,24 @@
+{
+  "id": "validate-ok-duplicate-requirement-ids",
+  "kind": "validate",
+  "rationale": "the schema does not enforce unique requirement ids (contract diff does)",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "s"
+      },
+      {
+        "id": "r1",
+        "profile": "process",
+        "statement": "t"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

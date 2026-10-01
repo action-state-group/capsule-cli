@@ -1,0 +1,23 @@
+{
+  "id": "pin-unicode",
+  "kind": "pin",
+  "rationale": "non-ASCII text is digested as UTF-8 per JCS",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "réq 1/α",
+        "profile": "outcome",
+        "statement": "Prüfung vor Freigabe — 審査済み ✓"
+      }
+    ]
+  },
+  "expect": {
+    "contract_ref": "ec:example-minimal:2026-09-30@1",
+    "contract_digest": {
+      "digest_alg": "SHA-256",
+      "digest": "a348fbb77c3285f94679459ec9cf5d79b6ce4cf6e2b3f63fc32a60b1f7ead5bf"
+    }
+  }
+}

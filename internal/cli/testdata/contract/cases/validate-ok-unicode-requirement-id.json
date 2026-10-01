@@ -1,0 +1,19 @@
+{
+  "id": "validate-ok-unicode-requirement-id",
+  "kind": "validate",
+  "rationale": "requirement ids are any non-empty string",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "réq 1/α",
+        "profile": "outcome",
+        "statement": "s"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}
