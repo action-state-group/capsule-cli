@@ -58,6 +58,8 @@ Every consequential action taken by this skill must produce an evidence record. 
 | `respond` | `--profile NAME --request FILE --requester ID --output FILE`<br>`--profile NAME --request FILE --requester ID --policy FILE --output FILE` | Answer a received evidence request with a signed artifact or a signed refusal, under the share policy, and record that it was answered. The output file is what to send back; this verb transmits nothing itself. | (the book's record of the answered request is the evidence; no wrapper capsule) | primary action (running it *is* the record) |
 | `close` | `--profile NAME --period day\|week --counterparty ID`<br>`--profile NAME --period day\|week --date YYYY-MM-DD --counterparty ID --since-last`<br>`--profile NAME --period day\|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX`<br>`--profile NAME --period day\|week --counterparty ID --capsule-out FILE --bundle-out FILE` | Seal the book's Close for a period that has ended, for one counterparty. Without a held peer bundle every exchange reads INSUFFICIENT: the Close states only this book's account. Repeating it for the same period and counterparty returns the first Close and seals no second one; the peer bundle and --since-last of a repeat are not applied. | (the Close record itself; --capsule-out writes it for verify) | primary action (running it *is* the record) |
 | `reconcile` | `--profile NAME --period day\|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX` | Compare this book's period with a counterparty's held bundle, showing each exchange in one of six states, as of this book's latest checkpoint: an own exchange not yet checkpointed reads INSUFFICIENT until `close` checkpoints it. It never queries the counterparty and adds no record. | (no capsule — comparing held records is local comparison, not a consequential action) | not consequential — no capsule |
+| `result build` | `--profile NAME --result FILE --out FILE`<br>`--profile NAME --result FILE --contract REF --out FILE --capsule-out FILE` | Seal a caller-supplied, schema-valid Evidence Result v0 into the book as the record a report is rooted on, citing every record its claims name. Refuses a document whose headline values do not recompute from its claims, that cites anything the book does not hold, or whose close_state or tallies differ from what the cited Close's links and statement read. A repeat of the same document seals no second record. | (the evidence_result record itself; --capsule-out writes it for verify) | primary action (running it *is* the record) |
+| `report build` | `--bundle FILE --card attribution\|human_role\|obligation\|outcome\|process\|quality\|settlement --out FILE`<br>`--bundle FILE --card CARD --presentation FILE --out FILE --permalink`<br>`--bundle FILE --card CARD --out FILE --dry-run` | Render a held, disclosed Evidence Bundle whose root is a sealed Result v0 into an offline report.html (and, with --permalink, a viewer permalink) after verifying it; never for a bundle that does not verify or whose root is not a Result. --dry-run writes the page marked draft and mints no permalink. | (no capsule -- rendering a held bundle is local; the disclose act that produced the bundle is already on record) | not consequential — no capsule |
 
 ## Capsule emission
 
@@ -71,11 +73,13 @@ mechanisms applies to an actually-consequential verb:
 - **self-sealing** — the verb has its own `--seal-output` flag (`discover`,
   mandated by the binary itself). Nothing further is needed.
 - **primary action** — the verb's entire job already is creating or persisting
-  a capsule (`publish`, `cll append`). Running it satisfies the
-  invariant by itself; nothing wraps it.
+  a capsule (`publish`, `cll append`) or a signed book record
+  (`request`, `respond`, `close`, `result build`). Running it
+  satisfies the invariant by itself; nothing wraps it.
 
 Every other verb this skill calls (`verify`, `contract validate`,
-`plugin ls`, `cll list`, `get`) is `not-consequential`: it runs, and
+`plugin ls`, `cll list`, `get`, the `judge` and `calibration`
+computations, `reconcile`, `report build`) is `not-consequential`: it runs, and
 that is the end of it — **no wrapper seal, no synthetic evidence record.**
 
 See [references/capsule-cli.md](references/capsule-cli.md) for the `publish`/
@@ -88,8 +92,11 @@ whose verb surface actually needs it — this one does not).
 [scripts/run-scripted-demo.sh](scripts/run-scripted-demo.sh) runs every
 verb above against a throwaway jsonl profile in a temp directory: the
 consequential actions (`discover`, `publish`, `cll append`) each seal or
-persist a capsule and every one of those is verified; the not-consequential
-actions (`verify`, `contract validate`, `plugin ls`, `cll list`, `get`)
+persist a capsule and every one of those is verified, and the consequential
+book verbs (`request`, `respond`, `close`, `result build`) each
+return the signed book record that is their evidence; the not-consequential
+actions (`verify`, `contract validate`, `plugin ls`, `cll list`, `get`,
+`judge`, `calibration`, `reconcile`, `report build`)
 run and produce no capsule at all — the script asserts both halves, not just
 that capsules exist. It never touches a real profile or a real CLL. It is a
 contributor check, run after any change to the verb surface or the emission

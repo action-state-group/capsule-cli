@@ -480,15 +480,6 @@ func appendDisclosureRecord(ctx context.Context, log cll.Backend, bundle map[str
 	return result.Entry, nil
 }
 
-// htmlEmitterStubMessage names the unmet dependency explicitly rather than
-// silently ignoring --html: agent-action-capsule PR #102 ("evidence-graph
-// emitter", branch evidence-graph-emitter) is not yet merged to go/emitter on
-// main, so there is no library to render report.html from. TODO: once #102
-// merges, wire its Go emitter here to write the offline report.html carrier
-// (the bundle embedded + inline verifier); the permalink carrier (codec B,
-// aacbundle.EncodeFragment/DecodeFragment) is already wired below.
-const htmlEmitterStubMessage = "--html requires the agent-action-capsule #102 evidence-graph emitter (branch evidence-graph-emitter), not yet merged to go/emitter on main; not wired"
-
 func bundleCommands() []*cobra.Command {
 	shortFor := map[string]string{
 		"bundle":    "Assemble a self-verifying Evidence Bundle from the root's citation closure",
@@ -497,9 +488,6 @@ func bundleCommands() []*cobra.Command {
 	}
 	makeCommand := func(use string, disclosure bool, permalink bool) *cobra.Command {
 		command := &cobra.Command{Use: use, Short: shortFor[use], Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
-			if html, _ := c.Flags().GetBool("html"); html {
-				return inputError(htmlEmitterStubMessage)
-			}
 			profile, err := selected(c)
 			if err != nil {
 				return err
@@ -576,7 +564,6 @@ func bundleCommands() []*cobra.Command {
 		}}
 		command.Flags().String("root", "", "Root Capsule ID")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
-		command.Flags().Bool("html", false, "Also render an offline report.html carrier (not yet wired; see docs)")
 		if disclosure || permalink {
 			command.Flags().String("payloads", "all", "Disclosure mode: all or selected")
 			command.Flags().StringSlice("suppress", nil, "Disclosed member to withhold (agent_input or agent_output)")

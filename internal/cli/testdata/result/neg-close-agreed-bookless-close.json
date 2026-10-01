@@ -1,0 +1,115 @@
+{
+  "aggregate": {
+    "buckets": {
+      "met": [
+        "claim-1",
+        "close-1"
+      ],
+      "not_evaluable": [],
+      "not_met": []
+    },
+    "coverage": {
+      "evaluated_population": 2,
+      "excluded_not_applicable": 0,
+      "unknown_count": 0
+    }
+  },
+  "claims": [
+    {
+      "contract_ref": "ec:oo-claims-eval:2026-09-22@1",
+      "evidence": [
+        {
+          "digest": "7d43bd0d5cfbb6e5cd4b8cf2ef54d694c6a8ca8385356091fd0ba261bbb4bfe9",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "grade": "witnessed",
+      "id": "claim-1",
+      "presentation": {
+        "evidence": [
+          {
+            "digest": "7d43bd0d5cfbb6e5cd4b8cf2ef54d694c6a8ca8385356091fd0ba261bbb4bfe9",
+            "digest_alg": "SHA-256"
+          }
+        ],
+        "kind": "disclosure",
+        "status": "SATISFIED"
+      },
+      "proofs": [
+        {
+          "digest": "8a0ae4a911001fef6bff81865780f5c6494b83e92460e8d170af4e7387a36a52",
+          "digest_alg": "SHA-256",
+          "kind": "inclusion_proof"
+        }
+      ],
+      "requirement_ref": "req-claim-1",
+      "sufficiency": "SATISFIED",
+      "tier": "recomputed",
+      "verdict": "met"
+    },
+    {
+      "close": {
+        "close_ref": {
+          "digest": "d78085f038f792be31e5ad7871dd9aa77e29bed067bce675b4de90e47b149f82",
+          "digest_alg": "SHA-256"
+        },
+        "close_state": "AGREED",
+        "peer": "oo-sor",
+        "peer_close_ref": {
+          "digest": "22224e977316f4f30fd6f3e0327e58b24394be71ed7cf5931b54650891c786a6",
+          "digest_alg": "SHA-256"
+        },
+        "period": {
+          "end": "2026-09-02T00:00:00Z",
+          "start": "2026-09-01T00:00:00Z"
+        }
+      },
+      "contract_ref": "ec:oo-outcomes-reconcile:2026-09-25@1",
+      "evidence": [
+        {
+          "digest": "d78085f038f792be31e5ad7871dd9aa77e29bed067bce675b4de90e47b149f82",
+          "digest_alg": "SHA-256"
+        },
+        {
+          "digest": "22224e977316f4f30fd6f3e0327e58b24394be71ed7cf5931b54650891c786a6",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "grade": "self-attested",
+      "id": "close-1",
+      "presentation": {
+        "evidence": [
+          {
+            "digest": "d78085f038f792be31e5ad7871dd9aa77e29bed067bce675b4de90e47b149f82",
+            "digest_alg": "SHA-256"
+          },
+          {
+            "digest": "22224e977316f4f30fd6f3e0327e58b24394be71ed7cf5931b54650891c786a6",
+            "digest_alg": "SHA-256"
+          }
+        ],
+        "kind": "disclosure",
+        "status": "SATISFIED"
+      },
+      "proofs": [
+        {
+          "digest": "7ce0ed129e98202532ac95393c83202e02081ed3c59602499fd7ef2c020057e0",
+          "digest_alg": "SHA-256",
+          "kind": "inclusion_proof"
+        }
+      ],
+      "requirement_ref": "close",
+      "sufficiency": "SATISFIED",
+      "tier": "recomputed",
+      "type": "close",
+      "verdict": "met"
+    }
+  ],
+  "generated_at": "2026-09-22T00:00:00Z",
+  "result_version": "evidence-result-v0",
+  "view": {
+    "producer_name": "OO",
+    "spec_version": "presentation/v1",
+    "title": "OO Close -- 2026-09-01 (agreed, but the Close names no book)"
+  }
+}

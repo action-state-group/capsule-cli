@@ -291,3 +291,38 @@ verbs:
       adds no record.
     emits: (no capsule — comparing held records is local comparison, not a consequential action)
     emission_mode: not-consequential
+
+  # The two verbs below are the report lane (Steven, 2026-09-26: the Result
+  # is sealed into the book as a record that cites the daily reports and
+  # closes by digest; `bundle --disclose` roots on it; `report build` takes
+  # one bundle plus the presentation profile and writes report.html and a
+  # permalink -- Go twin, no Node at render time). `result build` runs over
+  # the same jsonl profile's book as the four verbs above; `report build`
+  # reads a held bundle file and needs no profile at all.
+  - name: result build
+    args:
+      - "--profile NAME --result FILE --out FILE"
+      - "--profile NAME --result FILE --contract REF --out FILE --capsule-out FILE"
+    when: >-
+      Seal a caller-supplied, schema-valid Evidence Result v0 into the book
+      as the record a report is rooted on, citing every record its claims
+      name. Refuses a document whose headline values do not recompute from
+      its claims, that cites anything the book does not hold, or whose
+      close_state or tallies differ from what the cited Close's links and
+      statement read. A repeat of the same document seals no second record.
+    emits: (the evidence_result record itself; --capsule-out writes it for verify)
+    emission_mode: primary-action
+
+  - name: report build
+    args:
+      - "--bundle FILE --card attribution|human_role|obligation|outcome|process|quality|settlement --out FILE"
+      - "--bundle FILE --card CARD --presentation FILE --out FILE --permalink"
+      - "--bundle FILE --card CARD --out FILE --dry-run"
+    when: >-
+      Render a held, disclosed Evidence Bundle whose root is a sealed Result
+      v0 into an offline report.html (and, with --permalink, a viewer
+      permalink) after verifying it; never for a bundle that does not verify
+      or whose root is not a Result. --dry-run writes the page marked draft
+      and mints no permalink.
+    emits: (no capsule -- rendering a held bundle is local; the disclose act that produced the bundle is already on record)
+    emission_mode: not-consequential

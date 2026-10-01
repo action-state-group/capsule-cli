@@ -217,3 +217,69 @@ vendor, version, plugin_api, subcommands, path}, ...]}`). There is
 deliberately no install/enable/disable here — the core never mutates plugin
 state; a plugin is installed onto a trusted root as a separate operator step,
 outside this skill's authority.
+
+## Seal a Result into the book
+
+```sh
+capsulectl result build --profile NAME --result RESULT.json --out SEALED.json [--contract REF] [--capsule-out RECORD.json]
+```
+
+Requires a jsonl profile with `log_id`, `operator`, a signing key the
+profile trusts and a checkpoint signing key it trusts (the same footing as
+`close`). RESULT is an Evidence Result v0 document (agent-action-capsule
+`schemas/evidence-result-v0.json`, vendored in the binary with its digest
+pinned); the skill never writes one -- it seals what a judging step
+produced. The verb refuses, in one sentence each: a document outside the
+schema; buckets that do not partition the claims under their own verdicts,
+or coverage counts that do not add up; a claim naming a contract other than
+`--contract`; a cited digest (`claims[].evidence`, a disclosure carrier's
+evidence, `close.peer_close_ref`) the book holds neither as a published
+capsule nor as a record; a claim citing nothing; a close claim whose
+`close_ref` (or `peer_close_ref`, when present) is not among its own
+`evidence[]`, or does not name a Close; a close claim whose `close_state` is
+not what the COUNTERPARTY's links to the cited Close read (`rebuts` ->
+CONTESTED, `acknowledges` -> AGREED, neither -> UNILATERAL), where a link
+counts only from a record of another book than the Close's, that book the
+claim's named `peer`, signed under another key than the Close -- every
+record in this book is this book's own, so a link held here never counts --
+or whose `peer_close_ref` is not the record whose link decided it; a Close,
+or a record linking to it, whose Producer Envelope does not verify under its
+`key_id` (the signer is verified, never read as stated); a reconcile
+claim whose tallies are not what the cited Close sealed. On success one
+`evidence_result` record is appended -- its statement is the document, its
+`cites` links name every resolved record -- and a checkpoint covers it.
+Output: `record_id`, `seq`, `contract_refs`, `claims`, `cites`,
+`statement_digest` (SHA-256 of `--out`, the document's canonical form),
+`already_built`. A repeat of the same document returns the existing record
+and, with the same `--out`/`--capsule-out`, rewrites nothing (the files
+already hold those bytes); a file holding anything else at either path is
+refused by name, nothing overwritten.
+`disclose --profile NAME --root RECORD_ID --payloads selected --out B.json`
+then builds the bundle a report is rendered from; it refuses `--suppress
+agent_input` on that root, because the header is the Result.
+
+## Render a report
+
+```sh
+capsulectl report build --bundle B.json --card CARD --out report.html [--presentation P.json] [--permalink] [--base-url URL] [--dry-run]
+```
+
+Read-only over a held file; no profile, no store, no record. The bundle is
+verified first (graph, interval, membership; no disclosure mismatch), then
+its root must be a sealed Result v0 -- a disclosed member that is the
+document, or an `evidence_result` record header whose `statement` is the
+document (a book bundle; its header is then also checked by the evidence-
+book verifier) -- and the document must pass the same schema and
+cross-checks `result build` applies. CARD is one of the Evidence Contract's
+profiles (`attribution`, `human_role`, `obligation`, `outcome`, `process`,
+`quality`, `settlement`) and is recorded in the page's `report-card/v1`
+block; P.json carries at most `producer_display_name`, `logo_data_url`
+(inline `data:image/` only) and `title`, recorded as `presentation/v1`. A
+bundle already carrying a different block of either kind is refused.
+Output: `root`, `form` (`payload` or `book`), `card`, `claims`,
+`unsupported_claims` (claims citing evidence the bundle does not hold; the
+viewer renders them unsupported, never met), `report`, `bundle_digest`,
+`verification: pass`, and `permalink` when asked. `--dry-run` writes the
+page with `draft: true` in its card block and mints no permalink. The page
+is self-contained: the bundle and the browser runtime are inline and nothing
+is loaded from the network.

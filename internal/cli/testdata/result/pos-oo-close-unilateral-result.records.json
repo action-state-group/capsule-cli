@@ -1,0 +1,25 @@
+[
+  {
+    "book_id": "oo",
+    "committed_at": "2026-09-02T00:05:00Z",
+    "epistemic_type": "producer_claim",
+    "event_time_claim": "2026-09-02T00:00:00Z",
+    "links": [
+      {
+        "target": "c722adb6334d81954324e2a7f5c848d6a32d43b8182f07cf111915f069b5934e",
+        "type": "closes"
+      }
+    ],
+    "record_type": "close",
+    "seq": 41,
+    "statement": {
+      "note": "OO own Close record for 2026-09-01, v0 placeholder",
+      "period": {
+        "end": "2026-09-02T00:00:00Z",
+        "start": "2026-09-01T00:00:00Z"
+      }
+    },
+    "subject_ref": "ec:oo-outcomes-reconcile:2026-09-25@1",
+    "v": 1
+  }
+]

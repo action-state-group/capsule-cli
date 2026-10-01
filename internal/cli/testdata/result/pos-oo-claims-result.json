@@ -1,0 +1,120 @@
+{
+  "aggregate": {
+    "buckets": {
+      "met": [
+        "claim-1"
+      ],
+      "not_evaluable": [
+        "claim-3"
+      ],
+      "not_met": [
+        "claim-2"
+      ]
+    },
+    "coverage": {
+      "evaluated_population": 3,
+      "excluded_not_applicable": 1,
+      "unknown_count": 0
+    }
+  },
+  "claims": [
+    {
+      "contract_ref": "ec:oo-claims-eval:2026-09-22@1",
+      "evidence": [
+        {
+          "digest": "7d43bd0d5cfbb6e5cd4b8cf2ef54d694c6a8ca8385356091fd0ba261bbb4bfe9",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "grade": "witnessed",
+      "id": "claim-1",
+      "presentation": {
+        "evidence": [
+          {
+            "digest": "7d43bd0d5cfbb6e5cd4b8cf2ef54d694c6a8ca8385356091fd0ba261bbb4bfe9",
+            "digest_alg": "SHA-256"
+          }
+        ],
+        "kind": "disclosure",
+        "status": "SATISFIED"
+      },
+      "proofs": [
+        {
+          "digest": "8a0ae4a911001fef6bff81865780f5c6494b83e92460e8d170af4e7387a36a52",
+          "digest_alg": "SHA-256",
+          "kind": "inclusion_proof"
+        }
+      ],
+      "requirement_ref": "req-claim-1",
+      "sufficiency": "SATISFIED",
+      "tier": "recomputed",
+      "verdict": "met"
+    },
+    {
+      "contract_ref": "ec:oo-claims-eval:2026-09-22@1",
+      "evidence": [
+        {
+          "digest": "46e7fed7a7f623a03bebddc1f2efaebbf9251ab6f249d380d4b06494b0580192",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "grade": "self-attested",
+      "id": "claim-2",
+      "presentation": {
+        "evidence": [
+          {
+            "digest": "46e7fed7a7f623a03bebddc1f2efaebbf9251ab6f249d380d4b06494b0580192",
+            "digest_alg": "SHA-256"
+          }
+        ],
+        "kind": "disclosure",
+        "status": "SATISFIED"
+      },
+      "proofs": [
+        {
+          "digest": "424a166fa3c1468e40c4db83ff83baadbd4749d0666e595a7843465518b8771c",
+          "digest_alg": "SHA-256",
+          "kind": "receipt"
+        }
+      ],
+      "requirement_ref": "req-claim-2",
+      "sufficiency": "SATISFIED",
+      "tier": "judged",
+      "verdict": "not_met"
+    },
+    {
+      "contract_ref": "ec:oo-claims-eval:2026-09-22@1",
+      "evidence": [
+        {
+          "digest": "d507fbe020cde31044909c4839884e1c6937e999c545f6851a5e67345150cd1f",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "grade": "countersigned",
+      "id": "claim-3",
+      "presentation": {
+        "kind": "analysis",
+        "status": "WITHHELD",
+        "summary": "OO counterparty confirmed the evidence exists but declined disclosure under its own policy; adjudicator could not verify the underlying content."
+      },
+      "proofs": [
+        {
+          "digest": "b741df34ce7ff0eafb02275dcfcf4aa2588823f01eb3c427308e92163715a79a",
+          "digest_alg": "SHA-256",
+          "kind": "inclusion_proof"
+        }
+      ],
+      "requirement_ref": "req-claim-3",
+      "sufficiency": "GAP",
+      "tier": "recomputed",
+      "verdict": "not_evaluable"
+    }
+  ],
+  "generated_at": "2026-09-22T00:00:00Z",
+  "result_version": "evidence-result-v0",
+  "view": {
+    "producer_name": "OO",
+    "spec_version": "presentation/v1",
+    "title": "OO Claims Result -- Round 0"
+  }
+}
