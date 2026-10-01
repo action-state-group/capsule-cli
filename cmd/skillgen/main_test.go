@@ -17,10 +17,10 @@ func minimalSpecYAML(description string) string {
 skill:
   name: example
   description: ` + description + `
-may: ["TBD-STEVEN"]
-must_never: ["TBD-STEVEN"]
+may: ["TBD-HUMAN"]
+must_never: ["TBD-HUMAN"]
 approval_points: []
-evidence_policy: "TBD-STEVEN"
+evidence_policy: "TBD-HUMAN"
 verbs:
   - name: verify
     args: ["--profile NAME", "--capsule FILE"]
