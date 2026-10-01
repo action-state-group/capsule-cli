@@ -168,7 +168,7 @@ func TestResultSchemaIsPinned(t *testing.T) {
 var walkNegatives = map[string]string{
 	"neg-close-agreed-relabelled-contested.json": "states close_state AGREED, but the counterparty's links to Close",
 	"neg-close-agreed-self-acknowledged.json":    "is from this book, the Close's own",
-	"neg-close-agreed-third-book.json":           `is not the claim's named peer "oo-sor"`,
+	"neg-close-agreed-third-book.json":           `is not the claim's named peer "example-org-sor"`,
 	"neg-close-agreed-bookless-close.json":       "the Close names no book, so nothing can be its counterparty",
 	"neg-close-ref-not-in-evidence.json":         "close.close_ref",
 	"neg-close-peer-ref-not-in-evidence.json":    "close.peer_close_ref",
@@ -569,7 +569,7 @@ func TestResultBuildReadsCloseStateFromLinks(t *testing.T) {
 	assert.Contains(t, SafeError(err), "record, not a Close")
 }
 
-// #140's walk rules (maintainer's second pass): close_ref, and
+// #140's walk rules: close_ref, and
 // peer_close_ref when present, are among the claim's evidence[].
 func TestResultBuildRefsResolveInsideEvidence(t *testing.T) {
 	b := newResultBook(t)
@@ -597,7 +597,7 @@ func TestResultBuildRefsResolveInsideEvidence(t *testing.T) {
 	assert.Equal(t, before, bookSize(t, b.profile), "nothing is sealed")
 }
 
-// Maintainer's third pass: a link makes a state only from the named peer's
+// The counterparty rule: a link makes a state only from the named peer's
 // book under a different key. Every record in this book carries this
 // book's book_id, so an acknowledgement or rebuttal held here is the
 // Close's own book agreeing with itself -- it never makes AGREED or
@@ -652,7 +652,7 @@ func (s stubStore) GetRecord(context.Context, string) (evidencebook.StoredRecord
 	return s.record, nil
 }
 
-// Maintainer's fourth pass: the CLI sees the signer, so it VERIFIES the
+// Key verification: the CLI sees the signer, so it VERIFIES the
 // Producer Envelope under key_id; an unverifiable signer is refused.
 func TestVerifiedKeyIDVerifiesTheEnvelope(t *testing.T) {
 	b := newResultBook(t)

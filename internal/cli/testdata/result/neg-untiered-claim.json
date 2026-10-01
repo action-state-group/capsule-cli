@@ -19,10 +19,10 @@
   },
   "claims": [
     {
-      "contract_ref": "ec:oo-claims-eval:2026-09-22@1",
+      "contract_ref": "ec:example-org-claims-eval:2026-09-22@1",
       "evidence": [
         {
-          "digest": "7d43bd0d5cfbb6e5cd4b8cf2ef54d694c6a8ca8385356091fd0ba261bbb4bfe9",
+          "digest": "087f64cf513c5007850428f20b7cd483877c46d549e28972ffcff465492ecd14",
           "digest_alg": "SHA-256"
         }
       ],
@@ -31,7 +31,7 @@
       "presentation": {
         "evidence": [
           {
-            "digest": "7d43bd0d5cfbb6e5cd4b8cf2ef54d694c6a8ca8385356091fd0ba261bbb4bfe9",
+            "digest": "087f64cf513c5007850428f20b7cd483877c46d549e28972ffcff465492ecd14",
             "digest_alg": "SHA-256"
           }
         ],
@@ -40,7 +40,7 @@
       },
       "proofs": [
         {
-          "digest": "8a0ae4a911001fef6bff81865780f5c6494b83e92460e8d170af4e7387a36a52",
+          "digest": "5c6575f42edc922190df6f50077e10911611995aa53655826987e3ab081017f9",
           "digest_alg": "SHA-256",
           "kind": "inclusion_proof"
         }
@@ -50,10 +50,10 @@
       "verdict": "met"
     },
     {
-      "contract_ref": "ec:oo-claims-eval:2026-09-22@1",
+      "contract_ref": "ec:example-org-claims-eval:2026-09-22@1",
       "evidence": [
         {
-          "digest": "46e7fed7a7f623a03bebddc1f2efaebbf9251ab6f249d380d4b06494b0580192",
+          "digest": "cfd3f745cc8da13cfb750bafd6cbaf23413ee80eb8258f5b1e86115d04999b2c",
           "digest_alg": "SHA-256"
         }
       ],
@@ -62,7 +62,7 @@
       "presentation": {
         "evidence": [
           {
-            "digest": "46e7fed7a7f623a03bebddc1f2efaebbf9251ab6f249d380d4b06494b0580192",
+            "digest": "cfd3f745cc8da13cfb750bafd6cbaf23413ee80eb8258f5b1e86115d04999b2c",
             "digest_alg": "SHA-256"
           }
         ],
@@ -71,7 +71,7 @@
       },
       "proofs": [
         {
-          "digest": "424a166fa3c1468e40c4db83ff83baadbd4749d0666e595a7843465518b8771c",
+          "digest": "19d9408c32f6f2f08ff932c7c445ff935eba93f248a807864efde7390acc34ac",
           "digest_alg": "SHA-256",
           "kind": "receipt"
         }
@@ -82,10 +82,10 @@
       "verdict": "not_met"
     },
     {
-      "contract_ref": "ec:oo-claims-eval:2026-09-22@1",
+      "contract_ref": "ec:example-org-claims-eval:2026-09-22@1",
       "evidence": [
         {
-          "digest": "d507fbe020cde31044909c4839884e1c6937e999c545f6851a5e67345150cd1f",
+          "digest": "d405f27ff65be6899ae4746d3bfac30242cb6efdaaf61516e49ba479e8a62fe2",
           "digest_alg": "SHA-256"
         }
       ],
@@ -94,11 +94,11 @@
       "presentation": {
         "kind": "analysis",
         "status": "WITHHELD",
-        "summary": "OO counterparty confirmed the evidence exists but declined disclosure under its own policy; adjudicator could not verify the underlying content."
+        "summary": "EXAMPLE-ORG counterparty confirmed the evidence exists but declined disclosure under its own policy; adjudicator could not verify the underlying content."
       },
       "proofs": [
         {
-          "digest": "b741df34ce7ff0eafb02275dcfcf4aa2588823f01eb3c427308e92163715a79a",
+          "digest": "1f7c7b00c4cada364ff9f8288748c35f139096fd8a3e372269ed5025db366ad8",
           "digest_alg": "SHA-256",
           "kind": "inclusion_proof"
         }
@@ -112,8 +112,8 @@
   "generated_at": "2026-09-22T00:00:00Z",
   "result_version": "evidence-result-v0",
   "view": {
-    "producer_name": "OO",
+    "producer_name": "EXAMPLE-ORG",
     "spec_version": "presentation/v1",
-    "title": "OO Claims Result -- Round 0"
+    "title": "EXAMPLE-ORG Claims Result -- Round 0"
   }
 }

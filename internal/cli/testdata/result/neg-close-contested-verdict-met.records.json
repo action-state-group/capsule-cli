@@ -1,52 +1,52 @@
 [
   {
-    "book_id": "oo",
+    "book_id": "example-org",
     "committed_at": "2026-09-02T00:05:00Z",
     "epistemic_type": "producer_claim",
     "event_time_claim": "2026-09-02T00:00:00Z",
     "links": [
       {
-        "target": "c722adb6334d81954324e2a7f5c848d6a32d43b8182f07cf111915f069b5934e",
+        "target": "5653a61b4ed088f818552f3e386bfdbc0c4272f99d8fc5084ce38b86e7f4398b",
         "type": "closes"
       }
     ],
     "record_type": "close",
     "seq": 41,
     "statement": {
-      "note": "OO own Close record for 2026-09-01, v0 placeholder",
+      "note": "EXAMPLE-ORG own Close record for 2026-09-01, v0 placeholder",
       "period": {
         "end": "2026-09-02T00:00:00Z",
         "start": "2026-09-01T00:00:00Z"
       }
     },
-    "subject_ref": "ec:oo-outcomes-reconcile:2026-09-25@1",
+    "subject_ref": "ec:example-org-outcomes-reconcile:2026-09-25@1",
     "v": 1
   },
   {
-    "book_id": "oo-sor",
+    "book_id": "example-org-sor",
     "committed_at": "2026-09-02T01:00:00Z",
     "epistemic_type": "producer_claim",
     "event_time_claim": "2026-09-02T00:00:00Z",
     "links": [
       {
-        "target": "185144278e6188290ff8e09840518d45fead28546a31572fd7dd82249cde29a1",
+        "target": "090f837b3e131ec037c3f10d5c66d1d790bb4e700338e995448607f252f1decf",
         "type": "closes"
       },
       {
-        "target": "96d4eaee8c5957d488159dac6d5f40a1789aa9ee5190ed7f1131b22fa6c39c48",
+        "target": "761923a4e7b90174ee1a8a5b8bd878b33c3316da8fa348c6f77d37a47c2a9b0d",
         "type": "rebuts"
       }
     ],
     "record_type": "close",
     "seq": 18,
     "statement": {
-      "note": "OO peer (oo-sor) record for 2026-09-01 rebutting OO's Close, v0 placeholder",
+      "note": "EXAMPLE-ORG peer (example-org-sor) record for 2026-09-01 rebutting EXAMPLE-ORG's Close, v0 placeholder",
       "period": {
         "end": "2026-09-02T00:00:00Z",
         "start": "2026-09-01T00:00:00Z"
       }
     },
-    "subject_ref": "ec:oo-outcomes-reconcile:2026-09-25@1",
+    "subject_ref": "ec:example-org-outcomes-reconcile:2026-09-25@1",
     "v": 1
   }
 ]

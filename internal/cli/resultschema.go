@@ -21,7 +21,7 @@ import (
 // whatever --schema the caller names. The copy is agent-action-capsule's
 // schemas/evidence-result-v0.json at the commit resultSchemaSource names --
 // the one carrying the optional claim `type` (requirement / reconcile /
-// close) Steven ruled on 2026-09-28; the pinned aac Go module does not
+// close) of the 2026-09-25 ruling; the pinned aac Go module does not
 // ship the schema (it lives outside the module's go/ directory), which is
 // why a copy is here at all. Refresh it by replacing the file and the
 // digest together; TestResultSchemaIsPinned keeps them in step.
@@ -34,9 +34,9 @@ const (
 	resultRecordType = "evidence_result"
 	resultSchemaID   = "https://agentactioncapsule.org/schemas/evidence-result-v0.json"
 	// resultSchemaDigest is the SHA-256 of schema/evidence-result-v0.json.
-	resultSchemaDigest = "1ac000c31ff0c3234141514a9da3e0f93b4c945d4c3291a54bc10e4dbdd9d088"
+	resultSchemaDigest = "9c49bfbead577dc1fed5e3b626511253adc9a9c87b32d15d948997af42cbd033"
 	// resultSchemaSource names where the vendored copy came from.
-	resultSchemaSource = "agent-action-capsule main@eabc4adf271f6ed7b08ed4d276adff426c4196f0 schemas/evidence-result-v0.json"
+	resultSchemaSource = "agent-action-capsule main@ee7888df15f1db7eecfe9da62626d290eeabcce6 schemas/evidence-result-v0.json"
 
 	claimTypeRequirement = "requirement"
 	claimTypeReconcile   = "reconcile"

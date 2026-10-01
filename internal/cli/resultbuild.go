@@ -17,7 +17,7 @@ import (
 )
 
 // `result build` seals a caller-supplied Evidence Result v0 into the
-// profile's book as one record the report is rooted on (Steven, 2026-09-26:
+// profile's book as one record the report is rooted on (2026-09-26:
 // the Result is sealed into the book as a record that cites the daily
 // reports and closes by digest; `bundle --disclose` roots on it). The book
 // has no judging engine, so v0 seals what it can check and refuses what it
@@ -69,7 +69,7 @@ type recordStore interface {
 var errUnverifiedSigner = errors.New("producer envelope does not verify under its key_id")
 
 // verifiedKeyID is the key a book record is signed under, VERIFIED
-// (maintainer's fourth pass, 2026-09-29: "verify the signature under
+// (2026-09-29: "verify the signature under
 // key_id ... and don't let it pass the check"). The CLI holds the record's
 // Producer Envelope, so it checks it: the sealed capsule recomputes to the
 // record id (canonical.ComputeCapsuleID drops the local-only signature and
@@ -99,7 +99,7 @@ func verifiedKeyID(ctx context.Context, store recordStore, recordID string) (str
 }
 
 // counterpartyReason says why a record linking to a Close is NOT its
-// counterparty, or "" when it is (maintainer's third pass, 2026-09-29:
+// counterparty, or "" when it is (2026-09-29:
 // "neither book_id nor signer alone is enough, since a producer can mint a
 // second book or a second key equally easily"). A link counts only when
 // the linking record (1) is from another book than the Close's, (2) that

@@ -292,7 +292,7 @@ verbs:
     emits: (no capsule — comparing held records is local comparison, not a consequential action)
     emission_mode: not-consequential
 
-  # The two verbs below are the report lane (Steven, 2026-09-26: the Result
+  # The two verbs below are the report lane (2026-09-26: the Result
   # is sealed into the book as a record that cites the daily reports and
   # closes by digest; `bundle --disclose` roots on it; `report build` takes
   # one bundle plus the presentation profile and writes report.html and a

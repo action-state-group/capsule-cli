@@ -18,7 +18,7 @@ import (
 )
 
 // `report build` renders a held, disclosed Evidence Bundle whose root is a
-// sealed Evidence Result v0 into an offline report.html (Steven, 2026-09-26:
+// sealed Evidence Result v0 into an offline report.html (2026-09-26:
 // one bundle plus the presentation profile; Go twin, no Node at render
 // time; the card selects the renderer, presentation feeds the header only).
 // It verifies before it renders and refuses a bundle that does not verify
@@ -40,7 +40,7 @@ const (
 	evidenceGraphIIFEDigest = "12cb62afd6c3bcdea2cfdec80190d6bd2600982e682fab561f2941642848c336"
 	// evidenceGraphIIFESource names the aac commit and build the vendored
 	// IIFE came from (aac main, after #140 and #141 merged).
-	evidenceGraphIIFESource = "agent-action-capsule main@eabc4adf271f6ed7b08ed4d276adff426c4196f0 ts: npm run emitter:iife (esbuild 0.28.2)"
+	evidenceGraphIIFESource = "agent-action-capsule main@ee7888df15f1db7eecfe9da62626d290eeabcce6 ts: npm run emitter:iife (esbuild 0.28.2)"
 
 	// cardExtension records which card the report was built for. There is
 	// no card registry yet: every card renders the one Result page today,

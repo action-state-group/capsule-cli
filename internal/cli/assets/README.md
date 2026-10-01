@@ -11,7 +11,7 @@ to render a report.
 
 | | |
 |---|---|
-| source | agent-action-capsule `main` @ `eabc4adf271f6ed7b08ed4d276adff426c4196f0` (after #140 as `35de60c` and #141 as `dbadc74` merged; byte-identical to the earlier `desk/report-result-root` @ `173497d` build) |
+| source | agent-action-capsule `main` @ `ee7888df15f1db7eecfe9da62626d290eeabcce6` (the Result-root viewer of #141; byte-identical to the build at `eabc4ad`) |
 | build | `cd ts && npm ci && npm run emitter:iife`, esbuild 0.28.2 |
 | sha256 | `12cb62afd6c3bcdea2cfdec80190d6bd2600982e682fab561f2941642848c336` |
 
