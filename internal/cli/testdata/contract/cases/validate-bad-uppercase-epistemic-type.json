@@ -1,7 +1,7 @@
 {
-  "id": "validate-bad-lowercase-epistemic-type",
+  "id": "validate-bad-uppercase-epistemic-type",
   "kind": "validate",
-  "rationale": "epistemic type values are upper-case",
+  "rationale": "epistemic type values are lower-case, as the owning record header spells them",
   "contract": {
     "id": "ec:example-fixture:2026-09-30",
     "version": "1",
@@ -16,7 +16,7 @@
         "statement": "the record was written before the action was dispatched",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "observed_event"
+            "OBSERVED_EVENT"
           ],
           "required_sources": [
             "source-one"
@@ -55,7 +55,7 @@
         "clause_ref": "example-policy/section-1/v1",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "OBSERVED_EVENT"
+            "observed_event"
           ]
         }
       }

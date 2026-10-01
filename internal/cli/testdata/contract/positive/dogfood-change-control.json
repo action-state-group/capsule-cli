@@ -13,7 +13,7 @@
       "required_sequence": ["review-requested", "review-approved", "merged"],
       "approvals": ["at least one non-author reviewer"],
       "evidence_requirements": {
-        "accepted_epistemic_types": ["OBSERVED_EVENT", "SYSTEM_OF_RECORD_FACT"],
+        "accepted_epistemic_types": ["observed_event", "system_of_record_fact"],
         "required_sources": ["vcs-events"],
         "coverage": "every merge commit in population"
       }
@@ -24,7 +24,7 @@
       "statement": "the internal change-control policy's review-before-merge control was evidenced",
       "clause_ref": "internal-change-control-policy/section-3/v2",
       "evidence_requirements": {
-        "accepted_epistemic_types": ["OBSERVED_EVENT"],
+        "accepted_epistemic_types": ["observed_event"],
         "required_sources": ["vcs-events"]
       },
       "retention_check": "review events retained for evaluation_period + P1Y"

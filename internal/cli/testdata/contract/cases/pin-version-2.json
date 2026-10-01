@@ -16,8 +16,8 @@
         "statement": "the record was written before the action was dispatched",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "OBSERVED_EVENT",
-            "SYSTEM_OF_RECORD_FACT"
+            "observed_event",
+            "system_of_record_fact"
           ],
           "required_sources": [
             "source-one"
@@ -56,7 +56,7 @@
         "clause_ref": "example-policy/section-1/v1",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "OBSERVED_EVENT"
+            "observed_event"
           ]
         }
       }
@@ -73,7 +73,7 @@
     "contract_ref": "ec:example-fixture:2026-09-30@2",
     "contract_digest": {
       "digest_alg": "SHA-256",
-      "digest": "29e4027028705d8d2699ba5dd1b88f1cf08dd6ac6df7e8775bcfa35369b7175b"
+      "digest": "4ee814eff2aed5ee5cb06f55ea98406ca68fca0a307523cab78a2ce987ace07e"
     }
   }
 }

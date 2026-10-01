@@ -53,7 +53,7 @@
         "clause_ref": "example-policy/section-1/v1",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "OBSERVED_EVENT"
+            "observed_event"
           ]
         }
       }

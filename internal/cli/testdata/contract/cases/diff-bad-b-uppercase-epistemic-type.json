@@ -1,7 +1,7 @@
 {
-  "id": "diff-statement-semantic",
+  "id": "diff-bad-b-uppercase-epistemic-type",
   "kind": "diff",
-  "rationale": "under semantic adjudication the statement is what is judged",
+  "rationale": "an upper-case epistemic type is not the lower-case one: the contract is refused, not diffed",
   "a": {
     "id": "ec:example-fixture:2026-09-30",
     "version": "1",
@@ -28,7 +28,7 @@
           "freshness": "P7D"
         },
         "adjudication": {
-          "mode": "semantic"
+          "mode": "deterministic"
         },
         "uncertainty": {
           "on_missing": "insufficient",
@@ -71,7 +71,7 @@
   },
   "b": {
     "id": "ec:example-fixture:2026-09-30",
-    "version": "2",
+    "version": "1",
     "subject": {
       "job_type": "example-job",
       "population_selector": "every job in evaluation_period"
@@ -80,11 +80,11 @@
       {
         "id": "req-a",
         "profile": "outcome",
-        "statement": "reworded",
+        "statement": "the record was written before the action was dispatched",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "observed_event",
-            "system_of_record_fact"
+            "OBSERVED_EVENT",
+            "SYSTEM_OF_RECORD_FACT"
           ],
           "required_sources": [
             "source-one"
@@ -95,7 +95,7 @@
           "freshness": "P7D"
         },
         "adjudication": {
-          "mode": "semantic"
+          "mode": "deterministic"
         },
         "uncertainty": {
           "on_missing": "insufficient",
@@ -137,16 +137,6 @@
     }
   },
   "expect": {
-    "breaking": true,
-    "changes": [
-      {
-        "path": "requirements[req-a]/statement",
-        "kind": "changed"
-      },
-      {
-        "path": "version",
-        "kind": "version_changed"
-      }
-    ]
+    "error": "invalid_contract"
   }
 }

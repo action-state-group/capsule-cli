@@ -16,8 +16,8 @@
         "statement": "the record was written before the action was dispatched",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "OBSERVED_EVENT",
-            "SYSTEM_OF_RECORD_FACT"
+            "observed_event",
+            "system_of_record_fact"
           ],
           "required_sources": [
             "source-one"
@@ -56,7 +56,7 @@
         "clause_ref": "example-policy/section-1/v1",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "OBSERVED_EVENT"
+            "observed_event"
           ]
         }
       }
@@ -83,8 +83,8 @@
         "statement": "other",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "OBSERVED_EVENT",
-            "SYSTEM_OF_RECORD_FACT"
+            "observed_event",
+            "system_of_record_fact"
           ],
           "required_sources": [
             "source-one"
@@ -123,7 +123,7 @@
         "clause_ref": "example-policy/section-1/v1",
         "evidence_requirements": {
           "accepted_epistemic_types": [
-            "OBSERVED_EVENT"
+            "observed_event"
           ]
         }
       }
