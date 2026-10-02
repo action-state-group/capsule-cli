@@ -20,3 +20,8 @@ checked by `TestIIFEIsPinned`; `scripts/iife-sync.sh <aac checkout>` rebuilds
 and replaces the file, and `make iife-check AAC=<aac checkout>` diffs the
 vendored copy against a fresh build. Refresh the file, the digest here and
 the constants in `report.go` together.
+
+The file bundles agent-action-capsule's runtime (BSD-3-Clause) with cborg
+and @action-state-group/cll (both Apache-2.0); their license texts are in
+`THIRD_PARTY_NOTICES.md` beside it. CI runs `make iife-check` against the
+pinned commit on every pull request.
