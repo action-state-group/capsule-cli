@@ -201,7 +201,7 @@ capsulectl bundle --profile NAME --root CAPSULE_ID --out BUNDLE.json [--closure-
 capsulectl disclose --profile NAME --root CAPSULE_ID --out BUNDLE.json [--payloads all|selected] [--suppress agent_input|agent_output] [--producer-key HEX]
 capsulectl permalink --profile NAME --root CAPSULE_ID [--payloads all|selected] [--suppress ...] [--base-url URL]
 capsulectl countersign request --profile NAME --service URL (--bundle BUNDLE.json | --root CAPSULE_ID [--producer-key HEX]) [--out FILE] [--window LABEL]
-capsulectl countersign verify BUNDLE.json [--directory URL]
+capsulectl countersign verify --profile NAME --directory URL_OR_FILE BUNDLE.json
 capsulectl request --profile NAME --request FILE --responder NAME --output FILE
 capsulectl request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX | --absent-until TIME)
 capsulectl respond --profile NAME --request FILE --requester ID [--policy FILE] --output FILE
@@ -238,6 +238,13 @@ different key of its own. The extension is covered by the bundle digest, so it
 is fixed before anyone countersigns. A viewer, and `countersign verify`, reports
 a countersignature by the declared key as not independent. A profile with no
 signing key declares none.
+
+`countersign verify` resolves each signer against the countersigner directory
+named by `--directory`, which is required. It takes an HTTPS URL or a local
+file, holding either a bare array of rows (`[{"name": ..., "key_ids": [...]}]`)
+or an object with a `countersigners` array. The CLI privileges no list: you
+choose the one you trust. A signer the directory does not list is reported as an
+unresolved signer, and the command exits partial (3).
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.

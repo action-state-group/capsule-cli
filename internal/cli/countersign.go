@@ -46,14 +46,9 @@ func decodeBundleJSON(raw []byte) (map[string]interface{}, error) {
 // define.
 const countersignAPI = "countersign/v1"
 
-// defaultCountersignerDirectoryURL is the one configurable default named in
-// the task brief ("URL configurable; ours is one value"). The directory
-// itself (capsule-emit's witnesses.json, extended with a countersigners[]
-// array) is a separate, not-yet-shipped deliverable (the directory's home is
-// capsule-emit, never on the agentactioncapsule.org domain or inside capsule-anchor). This
-// default is a documented placeholder for that eventual location and MUST be
-// overridable via --directory until the file exists on that path.
-const defaultCountersignerDirectoryURL = "https://raw.githubusercontent.com/action-state-group/capsule-emit/main/witnesses.json"
+// There is no default countersigner directory: `countersign verify` takes
+// --directory (an HTTPS URL or a local file) naming the list a verifier
+// chooses to resolve signers against. No list is privileged by the CLI.
 
 // CountersignSigner identifies the party that made a countersignature.
 type CountersignSigner struct {
@@ -239,16 +234,19 @@ func validateServiceURL(raw string) (string, error) {
 	return raw, nil
 }
 
-// validateDirectoryURL applies the same HTTPS-only rule to the countersigner
-// directory fetch: it is a second outbound network call this CLI makes, and
-// there is no reason to hold it to a weaker bar than --service.
-func validateDirectoryURL(raw string) (string, error) {
+// validateDirectory checks --directory: an absolute HTTPS URL, held to the
+// same bar as --service (no embedded credentials, no fragment), or a path to
+// a local file. It is required: no countersigner list is privileged.
+func validateDirectory(raw string) (string, error) {
 	if raw == "" {
-		raw = defaultCountersignerDirectoryURL
+		return "", hint(ErrInput, "--directory is required: name the countersigner directory to resolve signers against, an HTTPS URL or a file ([{name, key_ids}] or {countersigners: [...]})")
+	}
+	if !strings.Contains(raw, "://") {
+		return raw, nil
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
-		return "", inputError("--directory must be an absolute HTTPS URL without embedded credentials or a fragment")
+		return "", hint(ErrInput, "--directory must be an absolute HTTPS URL without embedded credentials or a fragment, or a file path")
 	}
 	return raw, nil
 }
@@ -379,12 +377,51 @@ func attachCountersignatures(bundle map[string]interface{}, entries []Countersig
 	return nil
 }
 
-// fetchCountersignerDirectory retrieves and parses the countersigner
-// directory from --directory (or the default).
-func fetchCountersignerDirectory(ctx context.Context, client *http.Client, directoryURL string) (countersignerDirectory, error) {
+// fetchCountersignerDirectory reads the countersigner directory --directory
+// names: fetched when it is an HTTPS URL, read when it is a file.
+func fetchCountersignerDirectory(ctx context.Context, client *http.Client, source string) (countersignerDirectory, error) {
+	var raw json.RawMessage
+	if strings.Contains(source, "://") {
+		if err := getJSON(ctx, client, source, &raw); err != nil {
+			return countersignerDirectory{}, fmt.Errorf("fetching countersigner directory: %w", err)
+		}
+	} else {
+		file, err := readInput(source)
+		if err != nil {
+			return countersignerDirectory{}, err
+		}
+		raw = file
+	}
+	dir, err := decodeCountersignerDirectory(raw)
+	if err != nil {
+		return countersignerDirectory{}, fmt.Errorf("reading countersigner directory: %w", err)
+	}
+	return dir, nil
+}
+
+// decodeCountersignerDirectory accepts both published shapes: a bare array
+// of rows ([{name, key_ids}, ...]) and an object carrying a countersigners[]
+// array beside whatever else the file publishes (e.g. witnesses[]). Every
+// row is decoded strictly: a row with a field this CLI does not define is
+// rejected, never read past.
+func decodeCountersignerDirectory(raw []byte) (countersignerDirectory, error) {
+	trimmed := bytes.TrimLeft(raw, " \t\r\n")
+	var rows json.RawMessage
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		rows = trimmed
+	} else {
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(trimmed, &object); err != nil {
+			return countersignerDirectory{}, hint(ErrInput, "the countersigner directory is not a JSON array or object")
+		}
+		var present bool
+		if rows, present = object["countersigners"]; !present {
+			return countersignerDirectory{}, hint(ErrInput, "the countersigner directory object has no countersigners array")
+		}
+	}
 	var dir countersignerDirectory
-	if err := getJSON(ctx, client, directoryURL, &dir); err != nil {
-		return countersignerDirectory{}, fmt.Errorf("fetching countersigner directory: %w", err)
+	if err := decodeJSON(rows, &dir.Countersigners); err != nil {
+		return countersignerDirectory{}, err
 	}
 	return dir, nil
 }
@@ -671,7 +708,7 @@ func countersignCommands() *cobra.Command {
 			return err
 		}
 		rawDirectory, _ := c.Flags().GetString("directory")
-		directoryURL, err := validateDirectoryURL(rawDirectory)
+		directoryURL, err := validateDirectory(rawDirectory)
 		if err != nil {
 			return err
 		}
@@ -700,7 +737,7 @@ func countersignCommands() *cobra.Command {
 		}
 		return nil
 	}}
-	verify.Flags().String("directory", "", "Countersigner directory URL (default: "+defaultCountersignerDirectoryURL+")")
+	verify.Flags().String("directory", "", "Countersigner directory to resolve signers against (required): an HTTPS URL or a file; a bare [{name, key_ids}] array or {countersigners: [...]}")
 	group.AddCommand(verify)
 
 	return group

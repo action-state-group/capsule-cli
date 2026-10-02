@@ -306,14 +306,118 @@ func TestCountersignVerifyUnknownTypeIsUnverifiedNotRejected(t *testing.T) {
 	assert.Equal(t, "unverified", summary)
 }
 
-// TestDefaultCountersignerDirectoryURLPointsAtCapsuleEmit pins the
-// --directory fallback to capsule-emit's witnesses.json: capsule-emit is the
-// directory's home, not checkpointed-local-log.
-// A silent revert back to checkpointed-local-log must fail this test.
-func TestDefaultCountersignerDirectoryURLPointsAtCapsuleEmit(t *testing.T) {
-	resolved, err := validateDirectoryURL("")
+// TestCountersignVerifyRequiresADirectory: no countersigner list is
+// privileged by the CLI, so verify names one or refuses (exit 2).
+func TestCountersignVerifyRequiresADirectory(t *testing.T) {
+	bundle, profile, _ := withheldBundleFixture(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	require.NoError(t, saveProfile(profile, false))
+	encoded, err := json.Marshal(bundle)
 	require.NoError(t, err)
-	assert.Equal(t, "https://raw.githubusercontent.com/action-state-group/capsule-emit/main/witnesses.json", resolved)
+	path := filepath.Join(t.TempDir(), "bundle.json")
+	require.NoError(t, os.WriteFile(path, encoded, 0o600))
+	_, err = invoke(t, "", "countersign", "verify", "--profile", profile.Name, path)
+	assert.Equal(t, 2, ExitCode(err))
+	// What the operator sees says what to do, not only "invalid input".
+	assert.Contains(t, SafeError(err), "--directory is required")
+}
+
+func TestValidateDirectoryTakesAnHTTPSURLOrAFile(t *testing.T) {
+	for _, ok := range []string{"https://example.org/countersigners.json", "countersigners.json", "/tmp/dir/list.json"} {
+		got, err := validateDirectory(ok)
+		require.NoError(t, err, ok)
+		assert.Equal(t, ok, got)
+	}
+	for _, refused := range []string{"", "http://example.org/list.json", "https://user:pw@example.org/list.json", "https://example.org/list.json#frag", "file:///tmp/list.json"} {
+		_, err := validateDirectory(refused)
+		assert.ErrorIs(t, err, ErrInput, refused)
+		assert.Contains(t, SafeError(err), "--directory", refused)
+	}
+}
+
+func TestDecodeCountersignerDirectoryAcceptsBothShapes(t *testing.T) {
+	bare, err := decodeCountersignerDirectory([]byte(`[{"name":"A","key_ids":["aa"]}]`))
+	require.NoError(t, err)
+	assert.Equal(t, []countersignerDirectoryRow{{Name: "A", KeyIDs: []string{"aa"}}}, bare.Countersigners)
+
+	object, err := decodeCountersignerDirectory([]byte(`{"witnesses":[{"name":"W"}],"countersigners":[{"name":"A","key_ids":["aa"],"endpoint":"https://a.example"}]}`))
+	require.NoError(t, err)
+	assert.Equal(t, "https://a.example", object.Countersigners[0].Endpoint)
+
+	_, err = decodeCountersignerDirectory([]byte(`{"witnesses":[]}`))
+	assert.ErrorIs(t, err, ErrInput, "an object with no countersigners array")
+	assert.Contains(t, SafeError(err), "no countersigners array")
+	_, err = decodeCountersignerDirectory([]byte(`[{"name":"A","key_ids":["aa"],"score":5}]`))
+	assert.ErrorIs(t, err, ErrInput, "a row with a field this CLI does not define")
+	_, err = decodeCountersignerDirectory([]byte(`"not a directory"`))
+	assert.ErrorIs(t, err, ErrInput)
+}
+
+// liveDirectorySHA256 pins testdata/countersigners-bare-array.json: a saved,
+// byte-for-byte copy of a live countersigner's published list, in the bare
+// [{name, key_ids}] shape.
+const liveDirectorySHA256 = "199116ee61c452a848da4ccff030d2f484326bb36bd2d05d0800e700ec9830bb"
+
+func TestASavedLiveCountersignerListResolvesItsKey(t *testing.T) {
+	path := filepath.Join("testdata", "countersigners-bare-array.json")
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	sum := sha256.Sum256(raw)
+	require.Equal(t, liveDirectorySHA256, hex.EncodeToString(sum[:]), "the saved list drifted from the copy it was taken as")
+
+	dir, err := fetchCountersignerDirectory(t.Context(), nil, path)
+	require.NoError(t, err)
+	require.Len(t, dir.Countersigners, 1)
+	row, found := resolveSigner(dir, strings.ToUpper("26305f8760045f56ed4e8833ba502410cd6a2bdacfb52382c070140cbfa2f4fd"))
+	require.True(t, found)
+	assert.Equal(t, "Action State Group", row.Name)
+	_, found = resolveSigner(dir, strings.Repeat("ab", 32))
+	assert.False(t, found)
+}
+
+// TestCountersignVerifyResolvesAgainstADirectoryFile runs the real command
+// with --directory naming a local bare-array file: a countersigner the file
+// lists is resolved; one it does not list is an unresolved signer.
+func TestCountersignVerifyResolvesAgainstADirectoryFile(t *testing.T) {
+	bundle, profile, _ := withheldBundleFixture(t)
+	digest, err := aacbundle.BundleDigest(bundle)
+	require.NoError(t, err)
+	entry, signerKey := countersignerEntry(t, digest, []CountersignCheck{{Name: "range membership", Result: "established"}})
+	encodedEntry, err := json.Marshal(entry)
+	require.NoError(t, err)
+	var rawEntry interface{}
+	require.NoError(t, json.Unmarshal(encodedEntry, &rawEntry))
+	bundle["countersignatures"] = []interface{}{rawEntry}
+
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	require.NoError(t, saveProfile(profile, false))
+	encoded, err := json.Marshal(bundle)
+	require.NoError(t, err)
+	dir := t.TempDir()
+	bundlePath := filepath.Join(dir, "bundle.json")
+	require.NoError(t, os.WriteFile(bundlePath, encoded, 0o600))
+
+	for _, tc := range []struct {
+		list  string
+		state string
+	}{
+		{`[{"name":"Countersign Test Operator","key_ids":["` + signerKey + `"]}]`, "resolved"},
+		{`[{"name":"Someone Else","key_ids":["` + strings.Repeat("cd", 32) + `"]}]`, "unresolved_signer"},
+	} {
+		listPath := filepath.Join(dir, "countersigners.json")
+		require.NoError(t, os.WriteFile(listPath, []byte(tc.list), 0o600))
+		out, err := invoke(t, "", "countersign", "verify", "--profile", profile.Name, "--directory", listPath, bundlePath)
+		var result map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(out), &result), out)
+		reports := result["countersignatures"].([]interface{})
+		require.Len(t, reports, 1)
+		assert.Equal(t, tc.state, reports[0].(map[string]interface{})["state"], tc.list)
+		if tc.state == "resolved" {
+			assert.NoError(t, err)
+		} else {
+			assert.ErrorIs(t, err, ErrPartial)
+		}
+	}
 }
 
 func mustDigest(t *testing.T, bundle map[string]interface{}) string {
