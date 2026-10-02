@@ -278,6 +278,18 @@ yet (a follow-up).
 then builds the bundle a report is rendered from; it refuses `--suppress
 agent_input` on that root, because the header is the Result.
 
+The book stores digests, never text: a published capsule's record commits
+the capsule and its producer envelope only. When a report should show what
+the cited capsules were given, add `--attach-input-originals` to `disclose`
+(jsonl profiles): each published capsule in the bundle whose agent_input
+original the artifact store retains rides in the bundle extension
+`capsulectl/agent-input-originals/v1` (capsule id to base64url bytes), after
+its JSON-DIGEST is checked against the capsule's `agent_input_digest`; the
+disclosure record commits to that bundle. It cannot be combined with
+`--suppress agent_input`. A record an earlier build wrote with the original
+as a committed payload has those bytes withheld by `--suppress agent_input`
+(which then needs `--payloads selected`).
+
 ## Render a report
 
 ```sh
