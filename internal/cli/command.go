@@ -215,6 +215,8 @@ func SafeError(err error) string {
 		return ErrReadOnlyCLL.Error()
 	case errors.Is(err, ErrPartial):
 		return ErrPartial.Error()
+	case errors.Is(err, ErrBundleInvalid):
+		return ErrBundleInvalid.Error()
 	case errors.Is(err, ErrBreaking):
 		// Like ErrSchemaInvalid: `contract diff` already printed the changes.
 		return ErrBreaking.Error()
@@ -345,7 +347,10 @@ func NewCommand() *cobra.Command {
 	get.Flags().Bool("raw", false, "Preserve SDK byte fields as base64 for exact-byte export and verify")
 	get.Flags().String("output", "", "Write readable JSON to a file; use --raw for a verifiable artifact.Record")
 	root.AddCommand(get)
-	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts, or an Evidence Bundle offline", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		if bundlePath, _ := c.Flags().GetString("bundle"); bundlePath != "" {
+			return verifyBundleFile(c, bundlePath)
+		}
 		p, e := selected(c)
 		if e != nil {
 			return e
@@ -387,6 +392,8 @@ func NewCommand() *cobra.Command {
 		return nil
 	}}
 	verify.Flags().String("capsule", "", "artifact.Record JSON file")
+	verify.Flags().String("bundle", "", "Evidence Bundle (evidence-bundle/v2) JSON file, verified offline from the file alone")
+	verify.MarkFlagsMutuallyExclusive("capsule", "bundle")
 	root.AddCommand(verify)
 	publish := &cobra.Command{Use: "publish", Short: "Seal, persist artifacts, and append to CLL", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)

@@ -181,6 +181,7 @@ capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsulectl verify --profile NAME --capsule ARTIFACT.json
+capsulectl verify --bundle BUNDLE.json
 capsulectl publish --profile NAME --request INPUT.json
 capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100]
 capsulectl cll append --profile NAME --capsule ARTIFACT.json
@@ -530,6 +531,33 @@ are available without a configured witness.
 the profile's expected log, trusted signer, embedded consistency proof and optional
 inclusion through cll-go. It does not prove producer signatures or business truth.
 No trusted external prefix/time is inferred merely from a self-consistent checkpoint.
+
+`verify --bundle BUNDLE.json` checks an Evidence Bundle (`evidence-bundle/v2`,
+draft-mih-zhang-agent-disclosure-bundle-00) offline, from the file alone. No
+profile and no network are used. It checks:
+
+- every record's identity;
+- every record's producer signature (`signature`: the hex producer envelope;
+  `key_id`: the signer's key);
+- citation closure to the declared depth;
+- the checkpoint: `checkpoint.cose` must verify, and every signed field the
+  file states (`log_id`, `mmr_size`, `root`, `key_id`, `timestamp`,
+  `prev_size`, `prev_root`) must equal its signed value;
+- interval coverage and each record's inclusion under that checkpoint;
+- disclosures.
+
+It prints each claim's status and the bundle digest, and lists extensions and
+countersignatures it carried but did not check. Exit codes:
+
+- 0: every claim passed;
+- 3: nothing failed, but something is not shown (no checkpoint signature, an
+  unsigned record, declared-missing citations);
+- 1: a claim failed (an edited record, a signature that does not verify, a
+  checkpoint field that differs from its signature).
+
+Its verdicts agree with capsule-emit's offline bundle verifier. Bundles from
+`capsulectl bundle` carry the checkpoint's signed fields and `checkpoint.cose`,
+and each record's producer signature inline.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
 
