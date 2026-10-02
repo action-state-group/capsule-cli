@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -822,7 +823,7 @@ func checkpointBook(ctx context.Context, p Profile, book *evidencebook.Book, ser
 // header and no payload; `disclose` and `permalink` disclose headers and the
 // payloads --payloads names. A book record has no agent_output member, so
 // suppressing it is refused rather than silently meaning nothing.
-func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth int, payloads string, suppress map[string]bool, disclose bool) (evidencebook.Bundle, error) {
+func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth int, payloads string, suppress map[string]bool, disclose bool, producerKey ed25519.PublicKey) (evidencebook.Bundle, error) {
 	if depth < 1 {
 		// The book reads a zero depth as its default; it has no root-only
 		// closure, so a zero is refused rather than silently widened.
@@ -850,6 +851,20 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth
 		}
 		if suppress["agent_input"] {
 			request.Suppress = []string{evidencebook.HeaderMember}
+		}
+	}
+	if producerKey != nil {
+		// Passed to the book, not added afterwards: the book digests the
+		// bundle (extensions included) into its disclosure record.
+		extensions, err := producerKeyExtension(producerKey)
+		if err != nil {
+			return evidencebook.Bundle{}, err
+		}
+		request.Extensions = make(map[string]json.RawMessage, len(extensions))
+		for kind, block := range extensions {
+			if request.Extensions[kind], err = json.Marshal(block); err != nil {
+				return evidencebook.Bundle{}, err
+			}
 		}
 	}
 	bundle, err := book.Bundle(ctx, request)

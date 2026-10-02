@@ -197,10 +197,10 @@ capsulectl contract validate FILE --schema PATH_OR_URL [--json]
 capsulectl contract diff A B [--schema PATH_OR_URL] [--json]
 capsulectl discover --profile NAME --scope SCOPE.yaml --seal-output SCAN.json [--effects] [--format table|json]
 capsulectl map CONTRACT --schema PATH_OR_URL --discover EFFECTS.json [--format text|json]
-capsulectl bundle --profile NAME --root CAPSULE_ID --out BUNDLE.json [--closure-depth 2]
-capsulectl disclose --profile NAME --root CAPSULE_ID --out BUNDLE.json [--payloads all|selected] [--suppress agent_input|agent_output]
+capsulectl bundle --profile NAME --root CAPSULE_ID --out BUNDLE.json [--closure-depth 2] [--producer-key HEX]
+capsulectl disclose --profile NAME --root CAPSULE_ID --out BUNDLE.json [--payloads all|selected] [--suppress agent_input|agent_output] [--producer-key HEX]
 capsulectl permalink --profile NAME --root CAPSULE_ID [--payloads all|selected] [--suppress ...] [--base-url URL]
-capsulectl countersign request --profile NAME --service URL (--bundle BUNDLE.json | --root CAPSULE_ID) [--out FILE] [--window LABEL]
+capsulectl countersign request --profile NAME --service URL (--bundle BUNDLE.json | --root CAPSULE_ID [--producer-key HEX]) [--out FILE] [--window LABEL]
 capsulectl countersign verify BUNDLE.json [--directory URL]
 capsulectl request --profile NAME --request FILE --responder NAME --output FILE
 capsulectl request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX | --absent-until TIME)
@@ -228,6 +228,16 @@ validation, and it stands in for the `capsule-viewer` build. `run` carries no
 flags or licence logic of its own: the base binary only dispatches to a
 discovered `actionstate` plugin, or refuses with an actionable message if
 that plugin is absent or unlicensed.
+
+Every bundle `bundle`, `disclose`, `permalink` and `countersign request --root`
+build declares the producer's own Ed25519 key in the `producer-key/v1` bundle
+extension, `{"extensions": {"producer-key/v1": {"public_key": "<64 lowercase hex>"}}}`:
+by default the public half of the profile's signing key (the key that sealed
+its records), or `--producer-key HEX` when the operator countersigns with a
+different key of its own. The extension is covered by the bundle digest, so it
+is fixed before anyone countersigns. A viewer, and `countersign verify`, reports
+a countersignature by the declared key as not independent. A profile with no
+signing key declares none.
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.

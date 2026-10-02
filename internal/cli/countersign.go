@@ -428,7 +428,8 @@ type countersignatureReport struct {
 // every countersignatures[] entry's signature over the bundle digest and its
 // statement, checks the entry's receipt when one is present, flags a
 // self-countersignature as not independent by comparing against the bundle
-// producer's trusted keys, and resolves every other signer against the
+// producer's trusted keys and the key the bundle's producer-key/v1 extension
+// declares, and resolves every other signer against the
 // countersigner directory. A tampered entry (bad signature, or an "over" that
 // does not match the recomputed digest) is reported "invalid", with none of
 // its checks, and the remaining entries are still verified; the verify
@@ -448,6 +449,14 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 	}
 	if len(rawEntries) == 0 {
 		return digest, nil, "none", nil
+	}
+	// The bundle's own producer-key/v1 declaration is digest-covered and can
+	// only mark a signer as the producer, so it joins the profile's trusted
+	// producer keys: a countersignature by the declared key is never
+	// reported independent, whoever verifies it.
+	producerKeys := trustedProducerKeys
+	if declared, ok := declaredProducerKey(bundle); ok {
+		producerKeys = append(append([]ed25519.PublicKey(nil), trustedProducerKeys...), declared)
 	}
 	var directory *countersignerDirectory
 	var reports []countersignatureReport
@@ -494,7 +503,7 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 		}
 		receiptState, receiptErr := verifyCountersignReceipt(signerKey, wire.Statement, entry.Receipt)
 		independent := true
-		for _, key := range trustedProducerKeys {
+		for _, key := range producerKeys {
 			if strings.EqualFold(hex.EncodeToString(key), entry.Signer.KeyID) {
 				independent = false
 				break
@@ -586,6 +595,10 @@ func countersignCommands() *cobra.Command {
 				return inputError("--root is required to build a bundle when --bundle is not given")
 			}
 			closureDepth, _ := c.Flags().GetInt("closure-depth")
+			producerKey, err := bundleProducerKey(c, profile)
+			if err != nil {
+				return err
+			}
 			target, err := openTarget(c.Context(), profile, usePublication)
 			if err != nil {
 				return err
@@ -595,7 +608,7 @@ func countersignCommands() *cobra.Command {
 				// request refuses; build it elsewhere and pass --bundle.
 				return errors.Join(errBookProfile, target.close())
 			}
-			bundle, err = AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: "none"})
+			bundle, err = AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: "none", ProducerKey: producerKey})
 			if closeErr := target.close(); closeErr != nil {
 				err = errors.Join(err, closeErr)
 			}
@@ -641,6 +654,7 @@ func countersignCommands() *cobra.Command {
 	request.Flags().String("out", "", "Where to write the updated bundle (defaults to --bundle, updated in place)")
 	request.Flags().String("root", "", "Root Capsule ID (when building a fresh bundle)")
 	request.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root (when building a fresh bundle)")
+	request.Flags().String("producer-key", "", producerKeyFlagUsage+" (when building a fresh bundle)")
 	group.AddCommand(request)
 
 	verify := &cobra.Command{Use: "verify BUNDLE", Short: "Verify every countersignatures[] entry's signature over the bundle digest and statement, check its receipt, and resolve its signer", Args: oneArg, RunE: func(c *cobra.Command, args []string) error {
