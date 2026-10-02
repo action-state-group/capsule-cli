@@ -181,6 +181,7 @@ capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsulectl verify --profile NAME --capsule ARTIFACT.json
+capsulectl verify --bundle BUNDLE.json
 capsulectl publish --profile NAME --request INPUT.json
 capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100]
 capsulectl cll append --profile NAME --capsule ARTIFACT.json
@@ -523,6 +524,27 @@ are available without a configured witness.
 the profile's expected log, trusted signer, embedded consistency proof and optional
 inclusion through cll-go. It does not prove producer signatures or business truth.
 No trusted external prefix/time is inferred merely from a self-consistent checkpoint.
+
+`verify --bundle BUNDLE.json` checks an Evidence Bundle (`evidence-bundle/v2`,
+draft-mih-zhang-agent-disclosure-bundle-00) offline, from the file alone. No
+profile and no network are used. It checks:
+
+- every record's identity;
+- citation closure to the declared depth;
+- interval coverage and each record's inclusion under the checkpoint, with the
+  checkpoint authenticated from `checkpoint.cose`;
+- disclosures.
+
+It prints each claim's status and the bundle digest, and lists extensions and
+countersignatures it carried but did not check. It does not check records'
+producer signatures. Exit codes:
+
+- 0: every claim passed;
+- 3: nothing failed, but something is not shown (for example, no checkpoint
+  signature);
+- 1: a claim failed.
+
+Bundles from `capsulectl bundle` carry `checkpoint.cose`.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
 

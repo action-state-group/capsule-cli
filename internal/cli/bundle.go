@@ -255,7 +255,14 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 			"range_proof":  map[string]interface{}{"from_seq": integer(1), "to_seq": integer(checkpointSeq), "size": integer(checkpointSize), "from_index": integer(0), "to_index": integer(checkpointSeq - 1), "witness": witnessJSON},
 			"memberships":  memberships,
 		},
-		"checkpoint":   map[string]interface{}{"root": hex.EncodeToString(rangeRoot), "mmr_size": integer(checkpointSize), "statement": base64.StdEncoding.EncodeToString(state.Checkpoint.Bytes)},
+		// cose is the draft's portable checkpoint authenticator (unpadded
+		// base64url CLL COSE checkpoint), which bundle verifiers check;
+		// statement carries the same bytes for readers of the earlier shape.
+		"checkpoint": map[string]interface{}{
+			"root": hex.EncodeToString(rangeRoot), "mmr_size": integer(checkpointSize),
+			"cose":      base64.RawURLEncoding.EncodeToString(state.Checkpoint.Bytes),
+			"statement": base64.StdEncoding.EncodeToString(state.Checkpoint.Bytes),
+		},
 		"verification": map[string]interface{}{"producer": "capsulectl", "checks": []interface{}{"graph_closure", "interval_coverage", "per_record_membership"}},
 	}
 	if options.WithDisclosure {
