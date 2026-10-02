@@ -285,7 +285,9 @@ capsulectl report build --bundle B.json --card CARD --out report.html [--present
 ```
 
 Read-only over a held file; no profile, no store, no record. The bundle is
-verified first (graph, interval, membership; no disclosure mismatch), then
+verified first (interval and membership must pass, no disclosed member may
+mismatch; a graph closure the bundle declares incomplete is accepted as
+withheld), then
 its root must be a sealed Result v0 -- a disclosed member that is the
 document, or an `evidence_result` record header whose `statement` is the
 document (a book bundle; its header is then also checked by the evidence-
@@ -299,7 +301,9 @@ bundle already carrying a different block of either kind is refused.
 Output: `root`, `form` (`payload` or `book`), `card`, `claims`,
 `unsupported_claims` (claims citing evidence the bundle does not hold; the
 viewer renders them unsupported, never met), `report`, `bundle_digest`,
-`verification: pass`, and `permalink` when asked. `--dry-run` writes the
+`verification` (`pass`, or `graph_closure withheld` when the bundle declares
+records of its closure missing -- the claims citing them count as
+unsupported), and `permalink` when asked. `--dry-run` writes the
 page with `draft: true` in its card block and mints no permalink. The page
 is self-contained: the bundle and the browser runtime are inline and nothing
 is loaded from the network.
