@@ -690,8 +690,14 @@ func TestVerifiedKeyIDVerifiesTheEnvelope(t *testing.T) {
 	assert.ErrorIs(t, err, errUnverifiedSigner, "another record's valid envelope does not sign this capsule")
 }
 
+// reconcileClaim builds a reconcile claim whose sufficiency is the one its
+// tallies derive (INSUFFICIENT > 0 is GAP, so the verdict is not_evaluable).
 func reconcileClaim(id, peer string, tallies map[string]any, digests ...string) map[string]any {
-	c := claim(id, "met", digests...)
+	verdict := "met"
+	if n, _ := tallies["insufficient"].(int); n > 0 {
+		verdict = "not_evaluable"
+	}
+	c := claim(id, verdict, digests...)
 	c["type"] = claimTypeReconcile
 	c["reconcile"] = map[string]any{
 		"join_key": "exchange_id", "peer": peer, "state_of_record": "none",
@@ -770,4 +776,280 @@ func TestDiscloseRootsOnTheResult(t *testing.T) {
 	_, err = invoke(t, "", "disclose", "--profile", p.Name, "--root", result.RecordID, "--suppress", "agent_input")
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "evidence_result record, whose agent_input carries the Result itself")
+}
+
+// A count the tool recomputes is compared only as an integer literal. The
+// schema accepts 2.0 and 2e0 as integers, so the cross-check records any
+// other spelling as a finding instead of skipping the comparison.
+func TestResultCrossChecksRefuseNonIntegerCounts(t *testing.T) {
+	a, b := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	raw, err := json.Marshal(resultDoc(claim("c1", "met", a), claim("c2", "not_met", b)))
+	require.NoError(t, err)
+	for _, spelling := range []string{"2.0", "2e0", "3.0"} {
+		mutated := strings.Replace(string(raw), `"evaluated_population":2`, `"evaluated_population":`+spelling, 1)
+		require.NotEqual(t, string(raw), mutated)
+		_, err := checkResult(decodeJSONNumber(t, []byte(mutated)), "")
+		require.ErrorIs(t, err, ErrInput, spelling)
+		assert.Contains(t, SafeError(err), "aggregate.coverage.evaluated_population is "+spelling+", not an integer literal")
+	}
+	mutated := strings.Replace(string(raw), `"unknown_count":0`, `"unknown_count":0e0`, 1)
+	_, err = checkResult(decodeJSONNumber(t, []byte(mutated)), "")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "aggregate.coverage.unknown_count is 0e0, not an integer literal")
+
+	tallies := map[string]any{"matched": 1, "a_only": 0, "b_only": 0, "conflicting": 0, "insufficient": 0, "unresolved": 0}
+	raw, err = json.Marshal(resultDoc(reconcileClaim("r1", "peer-b", tallies, a)))
+	require.NoError(t, err)
+	mutated = strings.Replace(string(raw), `"matched":1`, `"matched":1.0`, 1)
+	_, err = checkResult(decodeJSONNumber(t, []byte(mutated)), "")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "claims[0].reconcile.tallies.matched is 1.0, not an integer literal")
+}
+
+// End to end: result build refuses the float before the book is opened. The
+// book cannot seal one (its canonical form rejects a non-integer number), and
+// neither can a verified payload-form bundle carry one, so report build's own
+// gate -- checkResult over the root's document, the call report build makes --
+// is pinned on the fixture's document with a count respelled.
+func TestResultAndReportBuildRefuseANonIntegerHeadline(t *testing.T) {
+	b := newResultBook(t)
+	p := b.profile
+	raw, err := json.Marshal(resultDoc(claim("claim-1", "met", b.capsules[0])))
+	require.NoError(t, err)
+	float := []byte(strings.Replace(string(raw), `"evaluated_population":1`, `"evaluated_population":1.0`, 1))
+	input := filepath.Join(t.TempDir(), "input.json")
+	require.NoError(t, os.WriteFile(input, float, 0o600))
+	before := bookSize(t, p)
+	_, err = invoke(t, "", "result", "build", "--profile", p.Name, "--result", input, "--out", filepath.Join(t.TempDir(), "o.json"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Equal(t, 2, ExitCode(err))
+	assert.Contains(t, SafeError(err), "evaluated_population is 1.0, not an integer literal")
+	assert.Equal(t, before, bookSize(t, p), "nothing sealed")
+
+	bundle, err := os.ReadFile(sealedResultFixture)
+	require.NoError(t, err)
+	value, err := decodeBundleJSON(bundle)
+	require.NoError(t, err)
+	root, err := resultRootOf(value)
+	require.NoError(t, err)
+	_, err = checkResult(root.document, "")
+	require.NoError(t, err, "the fixture's Result cross-checks as sealed")
+	coverage := root.document["aggregate"].(map[string]interface{})["coverage"].(map[string]interface{})
+	coverage["evaluated_population"] = json.Number(coverage["evaluated_population"].(json.Number).String() + ".0")
+	_, err = checkResult(root.document, "")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "not an integer literal")
+}
+
+func recordOfCapsuleIn(t *testing.T, book *evidencebook.Book, capsuleID string) string {
+	t.Helper()
+	record, ok, err := publishedRecord(t.Context(), book, capsuleID)
+	require.NoError(t, err)
+	require.True(t, ok)
+	return record.RecordID
+}
+
+// A run that sealed the record and then failed before its checkpoint leaves
+// the record uncovered; the repeat finds the record (already_built) and
+// checkpoints it, and a further repeat checkpoints nothing.
+func TestResultBuildCheckpointsARepeatTheFirstRunLeftUncovered(t *testing.T) {
+	b := newResultBook(t)
+	p := b.profile
+	doc := resultDoc(claim("claim-1", "met", b.capsules[0]))
+	raw, err := json.Marshal(doc)
+	require.NoError(t, err)
+	var seq uint64
+	withBook(t, p, func(book *evidencebook.Book) {
+		record, err := book.Append(t.Context(), evidencebook.Entry{
+			RecordType: resultRecordType, EpistemicType: evidencebook.DerivedMetric, SubjectRef: testContract,
+			Links:     []evidencebook.Link{{Type: evidencebook.Cites, Target: recordOfCapsuleIn(t, book, b.capsules[0])}},
+			Statement: json.RawMessage(raw),
+		})
+		require.NoError(t, err)
+		seq = record.Seq
+		covered, err := checkpointCovers(t.Context(), book, seq)
+		require.NoError(t, err)
+		require.False(t, covered, "the interrupted run left the record uncovered")
+	})
+
+	again, _, err := runResultBuild(t, p, doc)
+	require.NoError(t, err)
+	assert.True(t, again.AlreadyBuilt)
+	assert.Equal(t, seq, again.Seq)
+	assert.Positive(t, again.Checkpoint, "the repeat checkpoints the uncovered record")
+	withBook(t, p, func(book *evidencebook.Book) {
+		covered, err := checkpointCovers(t.Context(), book, seq)
+		require.NoError(t, err)
+		assert.True(t, covered)
+	})
+
+	third, _, err := runResultBuild(t, p, doc)
+	require.NoError(t, err)
+	assert.True(t, third.AlreadyBuilt)
+	assert.Zero(t, third.Checkpoint, "already covered: no further checkpoint")
+}
+
+// A claim's period is the window its Close sealed, read back from the
+// Close's profile; a reconcile claim's sufficiency is the one the Close's
+// tallies derive.
+func TestResultBuildChecksPeriodAndSufficiencyAgainstTheClose(t *testing.T) {
+	b := newResultBook(t)
+	closeID := closeFixture(t, b)
+	p := b.profile
+	before := bookSize(t, p)
+
+	wrongPeriod := closeClaim("close-1", "UNILATERAL", "peer-b", "", closeID)
+	wrongPeriod["close"].(map[string]any)["period"] = map[string]any{"start": "2026-09-23T00:00:00Z", "end": "2026-09-24T00:00:00Z"}
+	_, _, err := runResultBuild(t, p, resultDoc(wrongPeriod))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "states close.period 2026-09-23T00:00:00Z to 2026-09-24T00:00:00Z, but Close "+closeID+" was sealed for 2026-09-24T00:00:00Z to 2026-09-25T00:00:00Z")
+
+	sealed := map[string]any{"matched": 0, "a_only": 0, "b_only": 0, "conflicting": 0, "insufficient": 1, "unresolved": 0}
+	recon := reconcileClaim("rec-1", "peer-b", sealed, closeID)
+	recon["reconcile"].(map[string]any)["period"] = map[string]any{"start": "2026-09-24T00:00:00Z", "end": "2026-09-26T00:00:00Z"}
+	_, _, err = runResultBuild(t, p, resultDoc(recon))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "states reconcile.period 2026-09-24T00:00:00Z to 2026-09-26T00:00:00Z, but Close "+closeID)
+
+	satisfied := reconcileClaim("rec-1", "peer-b", sealed, closeID)
+	satisfied["sufficiency"], satisfied["verdict"] = "SATISFIED", "met"
+	doc := resultDoc(satisfied)
+	_, _, err = runResultBuild(t, p, doc)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "states sufficiency SATISFIED, but Close "+closeID+"'s tallies make it GAP")
+	assert.Equal(t, before, bookSize(t, p), "nothing sealed")
+
+	// The same instants in another offset are the same period.
+	offset := closeClaim("close-1", "UNILATERAL", "peer-b", "", closeID)
+	offset["close"].(map[string]any)["period"] = map[string]any{"start": "2026-09-23T17:00:00-07:00", "end": "2026-09-24T17:00:00-07:00"}
+	_, _, err = runResultBuild(t, p, resultDoc(offset))
+	require.NoError(t, err)
+}
+
+// closeProfilePeriod inverts closeProfile for both period kinds, across a
+// year boundary, and declines a profile it did not write.
+func TestCloseProfilePeriodInvertsCloseProfile(t *testing.T) {
+	now := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct{ kind, date string }{{"day", "2026-09-24"}, {"week", "2026-09-24"}, {"week", "2026-01-01"}, {"week", "2027-01-03"}, {"day", "2026-12-31"}} {
+		p, err := parsePeriod(tc.kind, tc.date, now)
+		require.NoError(t, err)
+		start, end, ok := closeProfilePeriod(closeProfile(p))
+		require.True(t, ok, closeProfile(p))
+		assert.True(t, start.Equal(p.start) && end.Equal(p.end), "%s %s: %s..%s, want %s..%s", tc.kind, tc.date, start, end, p.start, p.end)
+	}
+	for _, profile := range []string{"", "other-close/v1 day:2026-09-24", "capsulectl-close/v1 month:2026-09", "capsulectl-close/v1 day:24-09-2026"} {
+		_, _, ok := closeProfilePeriod(profile)
+		assert.False(t, ok, profile)
+	}
+}
+
+// What result build can seal for a close claim today is UNILATERAL only: a
+// book holds only its own records, and a link from the Close's own book
+// never makes a state, so AGREED and CONTESTED -- which need the named
+// peer's acknowledging or rebutting record -- are unreachable end to end
+// until a peer record can be brought into the book. The help says so.
+func TestResultBuildSealsOnlyUnilateralClosesToday(t *testing.T) {
+	b := newResultBook(t)
+	closeID := closeFixture(t, b)
+	p := b.profile
+	var ackID, rebutID string
+	withBook(t, p, func(book *evidencebook.Book) {
+		ack, err := book.Acknowledge(t.Context(), closeID, "peer-b")
+		require.NoError(t, err)
+		rebut, err := book.Rebut(t.Context(), closeID, "peer-b", json.RawMessage(`{"reason":"disputed"}`))
+		require.NoError(t, err)
+		ackID, rebutID = ack.RecordID, rebut.RecordID
+	})
+	for state, linker := range map[string]string{"AGREED": ackID, "CONTESTED": rebutID} {
+		_, _, err := runResultBuild(t, p, resultDoc(closeClaim("close-1", state, "peer-b", linker, closeID)))
+		require.ErrorIs(t, err, ErrInput, state)
+		assert.Contains(t, SafeError(err), "read UNILATERAL", state)
+	}
+	_, _, err := runResultBuild(t, p, resultDoc(closeClaim("close-1", "UNILATERAL", "peer-b", "", closeID)))
+	require.NoError(t, err)
+
+	help, err := invoke(t, "", "result", "build", "--help")
+	require.NoError(t, err)
+	assert.Contains(t, help, "Only UNILATERAL close claims can be sealed end to end today")
+	assert.Contains(t, help, "Producer-asserted")
+}
+
+// tamperedStore serves the book's records with the Producer Envelope of the
+// named records corrupted, so a signer that does not verify reaches the walk
+// through the same functions result build runs.
+type tamperedStore struct {
+	recordStore
+	bad map[string]bool
+}
+
+func (s tamperedStore) GetRecord(ctx context.Context, id string) (evidencebook.StoredRecord, error) {
+	stored, err := s.recordStore.GetRecord(ctx, id)
+	if err == nil && s.bad[id] {
+		stored.Envelope = append([]byte(nil), stored.Envelope...)
+		stored.Envelope[len(stored.Envelope)-1] ^= 1
+	}
+	return stored, err
+}
+
+func TestResultCitationsRefuseAnUnverifiedCloseOrLinker(t *testing.T) {
+	b := newResultBook(t)
+	closeID := closeFixture(t, b)
+	p := b.profile
+	var ackID string
+	withBook(t, p, func(book *evidencebook.Book) {
+		ack, err := book.Acknowledge(t.Context(), closeID, "peer-b")
+		require.NoError(t, err)
+		ackID = ack.RecordID
+	})
+	raw, err := json.Marshal(resultDoc(closeClaim("close-1", "UNILATERAL", "peer-b", "", closeID)))
+	require.NoError(t, err)
+	checked, err := checkResult(decodeJSONNumber(t, raw), "")
+	require.NoError(t, err)
+
+	opened, err := openBook(t.Context(), p, false)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, opened.release()) }()
+	_, err = resolveResultCitations(t.Context(), opened.book, opened.store, checked)
+	require.NoError(t, err, "every signer verifies: the walk reads UNILATERAL")
+
+	_, err = resolveResultCitations(t.Context(), opened.book, tamperedStore{opened.store, map[string]bool{closeID: true}}, checked)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "Close "+closeID+"'s Producer Envelope does not verify under its key_id")
+
+	_, err = resolveResultCitations(t.Context(), opened.book, tamperedStore{opened.store, map[string]bool{ackID: true}}, checked)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "record "+ackID+" acknowledges Close "+closeID+", but its Producer Envelope does not verify under its key_id")
+}
+
+// peer_close_ref must name the record whose link decided the state. Through
+// the book this branch is unreachable today (no counterparty record is ever
+// in the book; see TestResultBuildSealsOnlyUnilateralClosesToday), so it is
+// pinned on the walk the book path and the vectors share.
+func TestCheckCloseStateRefusesAPeerCloseRefThatDidNotDecide(t *testing.T) {
+	keyA, keyB := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	linkers := []closeLinkRecord{{recordID: "peer-ack", link: evidencebook.Acknowledges, book: "peer-b", key: keyB}}
+	state, linker, ignored := readCloseState("book-a", keyA, "peer-b", linkers)
+	require.Equal(t, string(evidencebook.Agreed), state)
+	require.Equal(t, "peer-ack", linker)
+	claim := resultClaim{index: 0, id: "close-1", closeState: "AGREED", closePeerRef: "some-other-record"}
+	err := checkCloseState(claim, "close-a", state, linker, ignored)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "cites peer_close_ref some-other-record, but the record whose link makes Close close-a AGREED is peer-ack")
+	claim.closePeerRef = "peer-ack"
+	assert.NoError(t, checkCloseState(claim, "close-a", state, linker, ignored))
+}
+
+// A reconcile claim reports exactly one Close: citing two is refused.
+func TestResultBuildRefusesAReconcileClaimCitingTwoCloses(t *testing.T) {
+	b := newResultBook(t)
+	first := closeFixture(t, b)
+	second, err := runClose(t, "--profile", b.profile.Name, "--period", "day", "--counterparty", "peer-c")
+	require.NoError(t, err)
+	require.NotEqual(t, first, second.RecordID)
+	sealed := map[string]any{"matched": 0, "a_only": 0, "b_only": 0, "conflicting": 0, "insufficient": 1, "unresolved": 0}
+	before := bookSize(t, b.profile)
+	_, _, err = runResultBuild(t, b.profile, resultDoc(reconcileClaim("rec-1", "peer-b", sealed, first, second.RecordID)))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), `claim "rec-1" (claims[0]) cites 2 Close records; a reconcile claim reports exactly one Close`)
+	assert.Equal(t, before, bookSize(t, b.profile))
 }

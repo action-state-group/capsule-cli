@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/envelope"
@@ -303,11 +305,77 @@ func checkCloseClaim(ctx context.Context, book *evidencebook.Book, store recordS
 	if err != nil {
 		return err
 	}
+	statement, err := closeStatementOf(closeRecord)
+	if err != nil {
+		return err
+	}
+	if err := checkClaimPeriod(claim, "close", closeRecord.RecordID, statement); err != nil {
+		return err
+	}
 	state, linker, ignored, err := closeStateInBook(ctx, book, store, closeRecord, closeKey, claim.closePeer)
 	if err != nil {
 		return err
 	}
 	return checkCloseState(claim, closeRecord.RecordID, state, linker, ignored)
+}
+
+func closeStatementOf(closeRecord evidencebook.Record) (evidencebook.CloseStatement, error) {
+	var statement evidencebook.CloseStatement
+	if err := json.Unmarshal(closeRecord.Header.Statement, &statement); err != nil {
+		return statement, fmt.Errorf("close %s: statement: %w", closeRecord.RecordID, err)
+	}
+	return statement, nil
+}
+
+// closeProfilePeriod reads the period back out of a Close this tool sealed:
+// `close` states its profile as closeProfile(p) -- "capsulectl-close/v1
+// day:YYYY-MM-DD ..." or "... week:YYYY-Www ..." -- so the window the Close
+// reconciled is derivable from the Close itself. ok is false for a Close
+// whose profile is not in that form (another producer's); its period cannot
+// be derived here, and the claim's is then producer-asserted.
+func closeProfilePeriod(profile string) (start, end time.Time, ok bool) {
+	fields := strings.Fields(profile)
+	if len(fields) < 2 || fields[0] != "capsulectl-close/v1" {
+		return start, end, false
+	}
+	kind, value, found := strings.Cut(fields[1], ":")
+	if !found {
+		return start, end, false
+	}
+	switch kind {
+	case "day":
+		day, err := time.Parse(time.DateOnly, value)
+		if err != nil {
+			return start, end, false
+		}
+		return day, day.AddDate(0, 0, 1), true
+	case "week":
+		var year, week int
+		if n, err := fmt.Sscanf(value, "%04d-W%02d", &year, &week); err != nil || n != 2 {
+			return start, end, false
+		}
+		// ISO week 1 holds January 4th; its Monday starts the week.
+		jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.UTC)
+		monday := jan4.AddDate(0, 0, -((int(jan4.Weekday()) + 6) % 7))
+		start = monday.AddDate(0, 0, 7*(week-1))
+		return start, start.AddDate(0, 0, 7), true
+	}
+	return start, end, false
+}
+
+// checkClaimPeriod: a claim's period is the window the cited Close sealed,
+// whenever that window is derivable from the Close (closeProfilePeriod).
+func checkClaimPeriod(claim resultClaim, body, closeID string, statement evidencebook.CloseStatement) error {
+	start, end, ok := closeProfilePeriod(statement.Profile)
+	if !ok {
+		return nil
+	}
+	claimStart, errStart := time.Parse(time.RFC3339, claim.periodStart)
+	claimEnd, errEnd := time.Parse(time.RFC3339, claim.periodEnd)
+	if errStart != nil || errEnd != nil || !claimStart.Equal(start) || !claimEnd.Equal(end) {
+		return hint(ErrInput, fmt.Sprintf("%s states %s.period %s to %s, but Close %s was sealed for %s to %s; a claim reports the period its Close sealed", claim.label(), body, claim.periodStart, claim.periodEnd, closeID, start.Format(time.RFC3339), end.Format(time.RFC3339)))
+	}
+	return nil
 }
 
 // checkCloseRefs: close_ref -- and peer_close_ref, when present -- is among
@@ -366,9 +434,12 @@ func checkReconcileClaim(claim resultClaim, resolved map[string]evidencebook.Rec
 	if closeRecord.Header.CounterpartyRef != claim.reconcilePeer {
 		return hint(ErrInput, fmt.Sprintf("%s names peer %q, but Close %s was sealed against counterparty %q", claim.label(), claim.reconcilePeer, closeRecord.RecordID, closeRecord.Header.CounterpartyRef))
 	}
-	var statement evidencebook.CloseStatement
-	if err := json.Unmarshal(closeRecord.Header.Statement, &statement); err != nil {
-		return fmt.Errorf("close %s: statement: %w", closeRecord.RecordID, err)
+	statement, err := closeStatementOf(closeRecord)
+	if err != nil {
+		return err
+	}
+	if err := checkClaimPeriod(claim, "reconcile", closeRecord.RecordID, statement); err != nil {
+		return err
 	}
 	var sealed map[string]int64
 	raw, err := json.Marshal(statement.Reconciliation.Tallies)
@@ -382,6 +453,19 @@ func checkReconcileClaim(claim resultClaim, resolved map[string]evidencebook.Rec
 		if claim.reconcileTallies[key.claim] != sealed[key.close] {
 			return hint(ErrInput, fmt.Sprintf("%s tallies %s=%d, but Close %s recorded %s=%d; tallies are what the Close sealed, never restated", claim.label(), key.claim, claim.reconcileTallies[key.claim], closeRecord.RecordID, key.close, sealed[key.close]))
 		}
+	}
+	// Sufficiency on a reconcile claim is derived from the two non-finding
+	// counts only (Result v0 section 4): INSUFFICIENT > 0 is GAP, else
+	// UNRESOLVED > 0 is UNKNOWN, else SATISFIED.
+	want := "SATISFIED"
+	switch {
+	case sealed["INSUFFICIENT"] > 0:
+		want = "GAP"
+	case sealed["UNRESOLVED"] > 0:
+		want = "UNKNOWN"
+	}
+	if claim.sufficiency != want {
+		return hint(ErrInput, fmt.Sprintf("%s states sufficiency %s, but Close %s's tallies make it %s (INSUFFICIENT > 0 is GAP, else UNRESOLVED > 0 is UNKNOWN, else SATISFIED)", claim.label(), claim.sufficiency, closeRecord.RecordID, want))
 	}
 	return nil
 }
@@ -421,8 +505,40 @@ func priorResult(ctx context.Context, book *evidencebook.Book, digest string) (e
 	return evidencebook.Record{}, false, nil
 }
 
+// resultBuildLong is the verb's help: what it checks, what it takes as
+// stated, and what it cannot reach yet.
+const resultBuildLong = `Seal a caller-supplied Evidence Result v0 into the profile's book as one
+evidence_result record, after checking it. Nothing is sealed when a check fails.
+
+Checked: the vendored evidence-result-v0 schema; every headline count
+recomputes from the claims (counts must be integer literals: 7, not 7.0 or
+7e0); every cited digest resolves to a record in this book; a close claim's
+close_state is read from the links to its Close (#140 section 4.1) and every
+signer is verified; a reconcile claim's tallies equal what its Close sealed,
+and its sufficiency is the one those tallies derive; a close or reconcile
+claim's period equals the window its Close sealed, when the Close was sealed
+by this tool's close verb (capsulectl-close/v1 profile).
+
+Producer-asserted (sealed as stated, not checked): reconcile join_key and
+state_of_record; the period of a claim whose Close another producer sealed;
+a close claim's verdict and sufficiency beyond the schema's rule that a
+CONTESTED Close is never met; requirement claims' verdicts, which are judged
+against the contract outside this tool.
+
+Only UNILATERAL close claims can be sealed end to end today. A link makes a
+Close AGREED or CONTESTED only from the named peer's book under another
+verified key, and a book holds only its own records: its own Acknowledge or
+Rebut of its Close is ignored (a producer cannot agree with itself), where
+evidencebook's own status reading would count it. Sealing AGREED or
+CONTESTED needs the peer's record in this book, which no verb imports yet.
+
+A repeat with the same document returns the existing record; if that record
+is not yet under a checkpoint, the repeat checkpoints it. --out and
+--capsule-out are left alone when they already hold the same bytes, and
+refused when they hold anything else.`
+
 func resultBuildCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "build", Short: "Seal a validated Evidence Result v0 into the book as the record a report is rooted on (signs; a repeat seals no second record)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	cmd := &cobra.Command{Use: "build", Short: "Seal a validated Evidence Result v0 into the book as the record a report is rooted on (signs; a repeat seals no second record)", Long: resultBuildLong, Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
 		if e != nil {
 			return e
@@ -452,7 +568,7 @@ func resultBuildCommand() *cobra.Command {
 		}
 		encoded, digest, e := statementDigest(doc)
 		if e != nil {
-			return e
+			return hint(ErrInput, "the Result cannot be put in canonical (JCS) form: "+e.Error())
 		}
 		opened, e := openBook(c.Context(), p, false)
 		if e != nil {
@@ -484,14 +600,22 @@ func resultBuildCommand() *cobra.Command {
 			}); e != nil {
 				return bookError(e)
 			}
+		}
+		result.RecordID, result.Seq = sealed.RecordID, sealed.Seq
+		// A checkpoint covers the record whenever none does yet: on the first
+		// build, and on a repeat whose earlier run sealed the record but
+		// failed before its checkpoint.
+		covered, e := checkpointCovers(c.Context(), book, sealed.Seq)
+		if e != nil {
+			return errors.Join(e, output(c, result))
+		}
+		if !covered {
 			checkpoint, e := book.Checkpoint(c.Context())
 			if e != nil {
-				result.RecordID, result.Seq = sealed.RecordID, sealed.Seq
 				return errors.Join(e, output(c, result))
 			}
 			result.Checkpoint = checkpoint.Entries
 		}
-		result.RecordID, result.Seq = sealed.RecordID, sealed.Seq
 		// The record is sealed from here on: a failure writing either file
 		// still reports its record_id, so the caller never loses it. A
 		// repeat with the same flags finds both files already holding these
@@ -508,6 +632,15 @@ func resultBuildCommand() *cobra.Command {
 	return cmd
 }
 
+// checkpointCovers reports whether the book's latest checkpoint covers seq.
+func checkpointCovers(ctx context.Context, book *evidencebook.Book, seq uint64) (bool, error) {
+	checkpoints, err := book.Checkpoints(ctx)
+	if err != nil || len(checkpoints) == 0 {
+		return false, err
+	}
+	return checkpoints[len(checkpoints)-1].Covers(seq), nil
+}
+
 // writeOutput writes data at path as a new file, or leaves alone a regular
 // file already holding exactly these bytes, so a repeat of the verb with the
 // same output flags is the no-op it reports. Anything else at the path is
@@ -518,7 +651,12 @@ func writeOutput(flag, path string, data []byte) error {
 	info, err := os.Lstat(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		return atomicFile(path, data, false)
+		if err := atomicFile(path, data, false); errors.Is(err, os.ErrExist) {
+			return hint(ErrInput, fmt.Sprintf("%s %s was created by another process while this one ran; nothing was overwritten (the record is sealed: see record_id); repeat to compare it, or pass another path", flag, path))
+		} else if err != nil {
+			return err
+		}
+		return nil
 	case err != nil:
 		return err
 	case !info.Mode().IsRegular():

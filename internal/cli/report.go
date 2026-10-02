@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 
@@ -100,17 +101,30 @@ func readPresentation(path string) (map[string]interface{}, error) {
 
 // verifyHeldBundle runs the neutral verifier with the acceptance the
 // bundle verbs apply to what they produce, in one sentence when it fails.
-func verifyHeldBundle(value map[string]interface{}) (aacbundle.VerificationResult, error) {
-	result := aacbundle.VerifyBundle(value)
-	if result.GraphClosure.Status == "fail" || result.IntervalCoverage.Status != "pass" || result.PerRecordMembership.Status != "pass" {
-		return result, hint(ErrInput, fmt.Sprintf("the bundle does not verify (graph_closure=%s, interval_coverage=%s, per_record_membership=%s); nothing was rendered", result.GraphClosure.Status, result.IntervalCoverage.Status, result.PerRecordMembership.Status))
+// It returns the verification label the output reports.
+func verifyHeldBundle(value map[string]interface{}) (string, error) {
+	return acceptHeldVerification(aacbundle.VerifyBundle(value))
+}
+
+// acceptHeldVerification is the acceptance rule: interval coverage and
+// per-record membership must pass, and no disclosed member may mismatch;
+// graph_closure may be withheld (the bundle declares records of its closure
+// missing -- the claims citing them then count as unsupported, never met),
+// and the label says so. Anything else refuses.
+func acceptHeldVerification(result aacbundle.VerificationResult) (string, error) {
+	graph := result.GraphClosure.Status
+	if (graph != "pass" && graph != "withheld") || result.IntervalCoverage.Status != "pass" || result.PerRecordMembership.Status != "pass" {
+		return "", hint(ErrInput, fmt.Sprintf("the bundle does not verify (graph_closure=%s, interval_coverage=%s, per_record_membership=%s); nothing was rendered", graph, result.IntervalCoverage.Status, result.PerRecordMembership.Status))
 	}
 	for _, d := range result.Disclosures {
 		if d.Status == disclosure.Mismatch || d.Status == disclosure.Ineligible || d.Status == disclosure.NoCommittedDigest {
-			return result, hint(ErrInput, fmt.Sprintf("the bundle does not verify: disclosed %s of %s is %s; nothing was rendered", d.Member, d.CapsuleID, d.Status))
+			return "", hint(ErrInput, fmt.Sprintf("the bundle does not verify: disclosed %s of %s is %s; nothing was rendered", d.Member, d.CapsuleID, d.Status))
 		}
 	}
-	return result, nil
+	if graph == "withheld" {
+		return "graph_closure withheld", nil
+	}
+	return "pass", nil
 }
 
 // resultRoot is what the root gate establishes: which disclosed member of
@@ -310,7 +324,8 @@ func reportCommands() *cobra.Command {
 		}
 		// Verify first, then gate the root, then decorate, then render:
 		// nothing is written until everything before it has passed.
-		if _, err = verifyHeldBundle(value); err != nil {
+		verification, err := verifyHeldBundle(value)
+		if err != nil {
 			return err
 		}
 		root, err := resultRootOf(value)
@@ -352,14 +367,13 @@ func reportCommands() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if err = atomicFile(out, []byte(html), false); err != nil {
-			return err
-		}
+		// Everything the output reports is computed before the page is
+		// written, so a failure here leaves nothing on disk.
 		digest, err := aacbundle.BundleDigest(value)
 		if err != nil {
 			return err
 		}
-		result := reportBuildResult{Root: root.id, Form: root.form, Member: root.member, Card: card, Claims: len(checked.claims), UnsupportedClaims: unsupportedClaims(value, checked), ContractRefs: checked.contracts, Report: out, BundleDigest: digest, Verification: "pass", Draft: dryRun}
+		result := reportBuildResult{Root: root.id, Form: root.form, Member: root.member, Card: card, Claims: len(checked.claims), UnsupportedClaims: unsupportedClaims(value, checked), ContractRefs: checked.contracts, Report: out, BundleDigest: digest, Verification: verification, Draft: dryRun}
 		if permalink && !dryRun {
 			// Over the same map the page embeds, so both carriers hold
 			// identical bytes.
@@ -379,6 +393,11 @@ func reportCommands() *cobra.Command {
 				base = defaultBundleURL
 			}
 			result.Permalink = strings.TrimRight(base, "#") + "#" + fragment
+		}
+		if err = atomicFile(out, []byte(html), false); errors.Is(err, os.ErrExist) {
+			return hint(ErrInput, fmt.Sprintf("--out %s already exists (or was created by another process while this one ran); nothing was overwritten; pass another path", out))
+		} else if err != nil {
+			return err
 		}
 		return output(c, result)
 	}}

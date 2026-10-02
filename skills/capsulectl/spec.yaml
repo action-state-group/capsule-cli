@@ -310,6 +310,9 @@ verbs:
       its claims, that cites anything the book does not hold, or whose
       close_state or tallies differ from what the cited Close's links and
       statement read. A repeat of the same document seals no second record.
+      Only UNILATERAL close claims are reachable today (a book holds only its
+      own records; its own links to its Close never count); reconcile
+      join_key and state_of_record are sealed as the producer states them.
     emits: (the evidence_result record itself; --capsule-out writes it for verify)
     emission_mode: primary-action
 

@@ -124,6 +124,8 @@ type resultClaim struct {
 	// reconcile members, when typ is reconcile.
 	reconcilePeer    string
 	reconcileTallies map[string]int64
+	// period is close.period or reconcile.period, as stated.
+	periodStart, periodEnd string
 }
 
 // resultDocument is what the cross-checks establish about a schema-valid
@@ -137,6 +139,10 @@ type resultDocument struct {
 	claims      []resultClaim
 	byID        map[string]*resultClaim
 	unknown     int
+	// nonInteger lists every count the document writes as something other
+	// than an integer literal (7.0, 7e0): a headline count is never read
+	// leniently, so each is a finding.
+	nonInteger []string
 }
 
 func (c resultClaim) label() string {
@@ -161,6 +167,29 @@ func readInteger(value interface{}) (int64, bool) {
 	}
 	n, err := number.Int64()
 	return n, err == nil
+}
+
+// readCount reads a count member the schema requires to be an integer. The
+// schema accepts 7.0 and 7e0 as integers (JSON Schema compares values, not
+// spellings), but a count this tool recomputes is compared only when it is
+// an integer literal: anything else is recorded as a finding at path, never
+// skipped, so no check fails open on a spelling.
+func readCount(value interface{}, path string, nonInteger *[]string) (int64, bool) {
+	if value == nil {
+		return 0, false
+	}
+	n, ok := readInteger(value)
+	if !ok {
+		*nonInteger = append(*nonInteger, fmt.Sprintf("%s is %v, not an integer literal; counts are written as integers (7, not 7.0 or 7e0)", path, value))
+	}
+	return n, ok
+}
+
+func readPeriod(body map[string]interface{}) (start, end string) {
+	period, _ := body["period"].(map[string]interface{})
+	start, _ = period["start"].(string)
+	end, _ = period["end"].(string)
+	return start, end
 }
 
 // readResult turns a schema-valid document into resultClaims. It is
@@ -192,15 +221,22 @@ func readResult(doc map[string]interface{}) resultDocument {
 			if ref, ok := closeBody["peer_close_ref"].(map[string]interface{}); ok {
 				claim.closePeerRef, _ = ref["digest"].(string)
 			}
+			claim.periodStart, claim.periodEnd = readPeriod(closeBody)
 		}
 		if reconcile, ok := object["reconcile"].(map[string]interface{}); ok {
 			claim.reconcilePeer, _ = reconcile["peer"].(string)
 			if tallies, ok := reconcile["tallies"].(map[string]interface{}); ok {
 				claim.reconcileTallies = make(map[string]int64, len(tallies))
-				for state, value := range tallies {
-					claim.reconcileTallies[state], _ = readInteger(value)
+				states := make([]string, 0, len(tallies))
+				for state := range tallies {
+					states = append(states, state)
+				}
+				sort.Strings(states)
+				for _, state := range states {
+					claim.reconcileTallies[state], _ = readCount(tallies[state], fmt.Sprintf("claims[%d].reconcile.tallies.%s", i, state), &out.nonInteger)
 				}
 			}
+			claim.periodStart, claim.periodEnd = readPeriod(reconcile)
 		}
 		if claim.sufficiency == "UNKNOWN" {
 			out.unknown++
@@ -275,12 +311,14 @@ func crossCheckResult(doc map[string]interface{}, contract string) (resultDocume
 			findings = append(findings, fmt.Sprintf("%s is in no bucket; the three buckets must partition the claims", claim.label()))
 		}
 	}
-	if population, ok := readInteger(coverage["evaluated_population"]); ok && population != int64(len(result.claims)) {
+	if population, ok := readCount(coverage["evaluated_population"], "aggregate.coverage.evaluated_population", &result.nonInteger); ok && population != int64(len(result.claims)) {
 		findings = append(findings, fmt.Sprintf("aggregate.coverage.evaluated_population is %d, but the Result carries %d claims", population, len(result.claims)))
 	}
-	if unknown, ok := readInteger(coverage["unknown_count"]); ok && unknown != int64(result.unknown) {
+	if unknown, ok := readCount(coverage["unknown_count"], "aggregate.coverage.unknown_count", &result.nonInteger); ok && unknown != int64(result.unknown) {
 		findings = append(findings, fmt.Sprintf("aggregate.coverage.unknown_count is %d, but %d claims have sufficiency UNKNOWN", unknown, result.unknown))
 	}
+	readCount(coverage["excluded_not_applicable"], "aggregate.coverage.excluded_not_applicable", &result.nonInteger)
+	findings = append(findings, result.nonInteger...)
 	if len(findings) > 0 {
 		return result, hint(ErrInput, "the Result's headline values do not cross-check: "+strings.Join(findings, "; "))
 	}

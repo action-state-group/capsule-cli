@@ -245,7 +245,13 @@ record in this book is this book's own, so a link held here never counts --
 or whose `peer_close_ref` is not the record whose link decided it; a Close,
 or a record linking to it, whose Producer Envelope does not verify under its
 `key_id` (the signer is verified, never read as stated); a reconcile
-claim whose tallies are not what the cited Close sealed. On success one
+claim whose tallies are not what the cited Close sealed, or whose
+`sufficiency` is not the one those tallies derive (`INSUFFICIENT > 0` is GAP,
+else `UNRESOLVED > 0` is UNKNOWN, else SATISFIED); a close or reconcile
+claim whose `period` is not the window its Close sealed, when this tool's
+`close` sealed it (its `capsulectl-close/v1` profile names the period); any
+headline count or tally written as other than an integer literal (`7.0`,
+`7e0`). On success one
 `evidence_result` record is appended -- its statement is the document, its
 `cites` links name every resolved record -- and a checkpoint covers it.
 Output: `record_id`, `seq`, `contract_refs`, `claims`, `cites`,
@@ -253,7 +259,21 @@ Output: `record_id`, `seq`, `contract_refs`, `claims`, `cites`,
 `already_built`. A repeat of the same document returns the existing record
 and, with the same `--out`/`--capsule-out`, rewrites nothing (the files
 already hold those bytes); a file holding anything else at either path is
-refused by name, nothing overwritten.
+refused by name, nothing overwritten. A repeat whose record is not yet under
+a checkpoint (an earlier run sealed it, then failed) checkpoints it.
+
+Sealed as the producer states them, not checked: a reconcile claim's
+`join_key` and `state_of_record`; the `period` of a claim whose Close
+another producer sealed; a close claim's `verdict` and `sufficiency` beyond
+the schema's rule that a CONTESTED Close is never met.
+
+**Only UNILATERAL close claims can be sealed end to end today.** A link
+makes a Close AGREED or CONTESTED only from the named peer's book under
+another verified key, and a book holds only its own records, so the book's
+own `Acknowledge` / `Rebut` of its Close is ignored -- where evidencebook's
+own status reading would count it. Sealing AGREED or CONTESTED needs the
+peer's acknowledging or rebutting record in the book; no verb imports one
+yet (a follow-up).
 `disclose --profile NAME --root RECORD_ID --payloads selected --out B.json`
 then builds the bundle a report is rendered from; it refuses `--suppress
 agent_input` on that root, because the header is the Result.

@@ -358,3 +358,38 @@ func TestReportBuildRefusesABadCardOrPresentation(t *testing.T) {
 	_, _, err = runReportBuild(t, filepath.Join(t.TempDir(), "missing.json"), "--card", "outcome")
 	assert.Contains(t, SafeError(err), "input file not found")
 }
+
+// graph_closure withheld (the bundle declares records of its closure
+// missing) is accepted, and said so in the output; fail is refused, as is
+// anything but pass on interval coverage or per-record membership. A sealed
+// fixture cannot be withheld and still pass membership (its certificate
+// covers every record), so the acceptance rule is pinned on the verdicts.
+func TestHeldBundleAcceptanceNamesAWithheldClosure(t *testing.T) {
+	verdict := func(graph, interval, membership string) aacbundle.VerificationResult {
+		return aacbundle.VerificationResult{GraphClosure: aacbundle.ClaimResult{Status: graph}, IntervalCoverage: aacbundle.ClaimResult{Status: interval}, PerRecordMembership: aacbundle.ClaimResult{Status: membership}}
+	}
+	label, err := acceptHeldVerification(verdict("pass", "pass", "pass"))
+	require.NoError(t, err)
+	assert.Equal(t, "pass", label)
+	label, err = acceptHeldVerification(verdict("withheld", "pass", "pass"))
+	require.NoError(t, err)
+	assert.Equal(t, "graph_closure withheld", label)
+	for _, v := range []aacbundle.VerificationResult{verdict("fail", "pass", "pass"), verdict("pass", "withheld", "pass"), verdict("pass", "pass", "fail"), verdict("withheld", "pass", "withheld")} {
+		_, err = acceptHeldVerification(v)
+		require.ErrorIs(t, err, ErrInput, "%+v", v)
+		assert.Contains(t, SafeError(err), "nothing was rendered")
+	}
+}
+
+// --out is create-only: an existing file is refused in one sentence and
+// left alone, and the digest is computed before anything is written.
+func TestReportBuildRefusesAnExistingOut(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "report.html")
+	require.NoError(t, os.WriteFile(out, []byte("keep"), 0o600))
+	_, err := invoke(t, "", "report", "build", "--bundle", sealedResultFixture, "--card", "outcome", "--out", out)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "--out "+out+" already exists")
+	kept, err := os.ReadFile(out)
+	require.NoError(t, err)
+	assert.Equal(t, "keep", string(kept))
+}

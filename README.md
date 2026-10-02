@@ -235,6 +235,9 @@ in code), refuses headline values that do not recompute from the claims, a
 citation the book does not hold, or a close/reconcile claim whose state or
 tallies differ from what the cited Close's links and statement read, and
 then checkpoints so `disclose --root <record id>` can build a bundle on it.
+Only UNILATERAL close claims can be sealed end to end today: a book holds
+only its own records, and its own links to its Close never count, so AGREED
+and CONTESTED wait on a way to bring the peer's record into the book.
 `report build` verifies a held, disclosed bundle whose root is a sealed
 Result (either carrier: the document itself, or the book record header
 whose statement is the document), records `--card` and the optional
