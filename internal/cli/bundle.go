@@ -15,7 +15,9 @@ import (
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
+	"github.com/action-state-group/agent-action-capsule/go/envelope"
 	"github.com/action-state-group/capsule-emit-go/artifact"
+	"github.com/action-state-group/cll-go/checkpoint"
 	"github.com/action-state-group/cll-go/cll"
 	"github.com/action-state-group/cll-go/mmr"
 	"github.com/spf13/cobra"
@@ -240,6 +242,10 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 	if len(missing) != 0 {
 		mode = "declared_incomplete"
 	}
+	checkpointObject, err := bundleCheckpoint(state.Checkpoint.Bytes, rangeRoot, checkpointSize)
+	if err != nil {
+		return nil, err
+	}
 	bundle := map[string]interface{}{
 		"bundle_version": "2",
 		"bundle_kind":    "evidence-bundle/v2",
@@ -255,14 +261,7 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 			"range_proof":  map[string]interface{}{"from_seq": integer(1), "to_seq": integer(checkpointSeq), "size": integer(checkpointSize), "from_index": integer(0), "to_index": integer(checkpointSeq - 1), "witness": witnessJSON},
 			"memberships":  memberships,
 		},
-		// cose is the draft's portable checkpoint authenticator (unpadded
-		// base64url CLL COSE checkpoint), which bundle verifiers check;
-		// statement carries the same bytes for readers of the earlier shape.
-		"checkpoint": map[string]interface{}{
-			"root": hex.EncodeToString(rangeRoot), "mmr_size": integer(checkpointSize),
-			"cose":      base64.RawURLEncoding.EncodeToString(state.Checkpoint.Bytes),
-			"statement": base64.StdEncoding.EncodeToString(state.Checkpoint.Bytes),
-		},
+		"checkpoint":   checkpointObject,
 		"verification": map[string]interface{}{"producer": "capsulectl", "checks": []interface{}{"graph_closure", "interval_coverage", "per_record_membership"}},
 	}
 	if options.WithDisclosure {
@@ -334,7 +333,46 @@ func getCapsule(ctx context.Context, artifacts bundleArtifacts, id string) (map[
 	if capsule["capsule_id"] != id {
 		return nil, errors.New("artifact capsule identity does not match requested id")
 	}
+	// The record carries its producer signature inline (signature: the hex
+	// COSE_Sign1 producer envelope; key_id: the signer's raw public key), the
+	// form bundle verifiers check. Both sit outside the capsule_id preimage.
+	if len(record.ProducerEnvelope) != 0 {
+		signed := envelope.Verify(id, record.ProducerEnvelope)
+		if !signed.OK {
+			return nil, fmt.Errorf("stored producer envelope for %s does not verify", id)
+		}
+		capsule["signature"] = hex.EncodeToString(record.ProducerEnvelope)
+		capsule["key_id"] = hex.EncodeToString(signed.PublicKey)
+	}
 	return capsule, nil
+}
+
+// bundleCheckpoint is the bundle's checkpoint object: the signed checkpoint's
+// own fields (log_id, mmr_size, root, prev_size, prev_root, key_id,
+// timestamp, as the COSE statement signs them), plus the statement itself as
+// cose (the draft's portable authenticator, unpadded base64url) and as
+// statement (the same bytes, for readers of the earlier shape).
+func bundleCheckpoint(statement, rangeRoot []byte, checkpointSize uint64) (map[string]interface{}, error) {
+	record, err := checkpoint.ParseRecord(statement)
+	if err != nil {
+		return nil, fmt.Errorf("parse checkpoint statement: %w", err)
+	}
+	projection, err := record.Payload().CanonicalJSON()
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(projection)))
+	decoder.UseNumber()
+	var object map[string]interface{}
+	if err := decoder.Decode(&object); err != nil {
+		return nil, err
+	}
+	if object["root"] != hex.EncodeToString(rangeRoot) || fmt.Sprint(object["mmr_size"]) != fmt.Sprint(checkpointSize) {
+		return nil, errors.New("checkpoint statement does not sign the bundle's range root and size")
+	}
+	object["cose"] = base64.RawURLEncoding.EncodeToString(statement)
+	object["statement"] = base64.StdEncoding.EncodeToString(statement)
+	return object, nil
 }
 
 func citationClosure(ctx context.Context, artifacts bundleArtifacts, root map[string]interface{}, depth int) (map[string]map[string]interface{}, []string, error) {

@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -101,4 +104,113 @@ func TestVerifyBundleRefusesAFileThatIsNotABundle(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte(`{"schema":"some-pane-export/1"}`), 0o600))
 	_, err := invoke(t, "", "verify", "--bundle", path)
 	assert.Equal(t, 2, ExitCode(err))
+}
+
+func TestProducedBundleCarriesTheSignedCheckpointFieldsAndRecordSignatures(t *testing.T) {
+	raw, err := os.ReadFile(producedBundle(t, nil))
+	require.NoError(t, err)
+	bundle, err := decodeBundleJSON(raw)
+	require.NoError(t, err)
+	cp := bundle["checkpoint"].(map[string]interface{})
+	for _, field := range []string{"log_id", "key_id", "timestamp", "prev_size", "prev_root", "cose"} {
+		assert.Contains(t, cp, field)
+	}
+	record := bundle["records"].([]interface{})[0].(map[string]interface{})
+	assert.Contains(t, record, "signature")
+	assert.Contains(t, record, "key_id")
+}
+
+func TestVerifyBundleHoldsEveryCheckpointFieldToItsSignature(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	for _, field := range []string{"key_id", "timestamp", "log_id", "prev_root", "prev_size"} {
+		path := producedBundle(t, func(b map[string]interface{}) {
+			cp := b["checkpoint"].(map[string]interface{})
+			if field == "prev_size" {
+				cp[field] = json.Number("99")
+			} else {
+				cp[field] = "edited"
+			}
+		})
+		result, err := verifyBundleOutput(t, path)
+		assert.ErrorIs(t, err, ErrBundleInvalid, field)
+		assert.Equal(t, "INVALID", result["verdict"], field)
+		assert.Contains(t, result["checkpoint"].(map[string]interface{})["findings"], "checkpoint_field_mismatch:"+field)
+	}
+	path := producedBundle(t, func(b map[string]interface{}) {
+		delete(b["checkpoint"].(map[string]interface{}), "log_id")
+	})
+	result, err := verifyBundleOutput(t, path)
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Contains(t, result["checkpoint"].(map[string]interface{})["findings"], "checkpoint_field_missing:log_id")
+}
+
+func TestVerifyBundleChecksProducerSignatures(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	record := func(b map[string]interface{}) map[string]interface{} {
+		return b["records"].([]interface{})[0].(map[string]interface{})
+	}
+	unsigned := producedBundle(t, func(b map[string]interface{}) {
+		delete(record(b), "signature")
+		delete(record(b), "key_id")
+	})
+	result, err := verifyBundleOutput(t, unsigned)
+	assert.ErrorIs(t, err, ErrPartial)
+	assert.Equal(t, "INCOMPLETE", result["verdict"])
+	assert.Equal(t, "withheld", status(result, "producer_signatures"))
+
+	for name, edit := range map[string]func(map[string]interface{}){
+		"a signature byte flipped": func(b map[string]interface{}) {
+			sig, err := hex.DecodeString(record(b)["signature"].(string))
+			require.NoError(t, err)
+			sig[len(sig)-1] ^= 0x01
+			record(b)["signature"] = hex.EncodeToString(sig)
+		},
+		"only a signature": func(b map[string]interface{}) { delete(record(b), "key_id") },
+	} {
+		result, err := verifyBundleOutput(t, producedBundle(t, edit))
+		assert.ErrorIs(t, err, ErrBundleInvalid, name)
+		assert.Equal(t, "fail", status(result, "producer_signatures"), name)
+	}
+}
+
+// TestVerifyBundleAgreesWithThePythonVerifier: a bundle this CLI produces,
+// and the same bundle unsigned, unanchored or edited, get the same verdict
+// from capsule-emit's offline verifier (capsule_emit.evidence_file) as from
+// verify --bundle. Runs where that verifier is importable
+// (CAPSULECTL_TEST_PYTHON, else python3 on PATH); skipped otherwise.
+func TestVerifyBundleAgreesWithThePythonVerifier(t *testing.T) {
+	pythonPath := os.Getenv("CAPSULECTL_TEST_PYTHON")
+	if pythonPath == "" {
+		var err error
+		if pythonPath, err = exec.LookPath("python3"); err != nil {
+			t.Skip("python3 not on PATH; skipping the Python cross-check")
+		}
+	}
+	if err := exec.Command(pythonPath, "-c", "import capsule_emit.evidence_file").Run(); err != nil {
+		t.Skip("capsule_emit.evidence_file not importable; skipping the Python cross-check")
+	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	script := `import json, sys
+from capsule_emit.evidence_file import check_evidence_file
+print(check_evidence_file(json.load(open(sys.argv[1]))).verdict)`
+	cases := map[string]func(map[string]interface{}){
+		"produced": nil,
+		"unsigned": func(b map[string]interface{}) {
+			r := b["records"].([]interface{})[0].(map[string]interface{})
+			delete(r, "signature")
+			delete(r, "key_id")
+		},
+		"unanchored": func(b map[string]interface{}) { delete(b["checkpoint"].(map[string]interface{}), "cose") },
+		"edited record": func(b map[string]interface{}) {
+			b["records"].([]interface{})[0].(map[string]interface{})["operator"] = "x"
+		},
+		"edited key_id": func(b map[string]interface{}) { b["checkpoint"].(map[string]interface{})["key_id"] = "edited" },
+	}
+	for name, edit := range cases {
+		path := producedBundle(t, edit)
+		goResult, _ := verifyBundleOutput(t, path)
+		out, err := exec.Command(pythonPath, "-c", script, path).Output()
+		require.NoError(t, err, name)
+		assert.Equal(t, goResult["verdict"], strings.TrimSpace(string(out)), name)
+	}
 }

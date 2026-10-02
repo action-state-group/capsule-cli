@@ -1,12 +1,116 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	"github.com/action-state-group/agent-action-capsule/go/envelope"
+	"github.com/action-state-group/cll-go/checkpoint"
 	"github.com/spf13/cobra"
 )
+
+// signedCheckpointFields are the checkpoint fields a COSE checkpoint signs;
+// a bundle's JSON copy of any of them must equal the signed value.
+var signedCheckpointFields = []string{"log_id", "mmr_size", "root", "key_id", "timestamp", "prev_size", "prev_root"}
+
+// checkpointClaim holds the bundle's checkpoint to its signature: the COSE
+// checkpoint must verify, and every signed field the JSON copy carries must
+// equal the signed value (log_id, mmr_size and root must be carried). A
+// bundle with no checkpoint.cose is not shown ("withheld").
+func checkpointClaim(value map[string]interface{}) aacbundle.ClaimResult {
+	stated, _ := value["checkpoint"].(map[string]interface{})
+	encoded, present := stated["cose"].(string)
+	if !present {
+		return aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_signature_absent"}}
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_malformed"}}
+	}
+	record, err := checkpoint.ParseRecord(raw)
+	if err != nil || record.VerifySignature() != nil {
+		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_invalid"}}
+	}
+	projection, err := record.Payload().CanonicalJSON()
+	if err != nil {
+		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_invalid"}}
+	}
+	decoder := json.NewDecoder(bytes.NewReader(projection))
+	decoder.UseNumber()
+	var signed map[string]interface{}
+	if err := decoder.Decode(&signed); err != nil {
+		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_invalid"}}
+	}
+	var findings []string
+	for _, field := range signedCheckpointFields {
+		got, carried := stated[field]
+		if !carried {
+			if field == "log_id" || field == "mmr_size" || field == "root" {
+				findings = append(findings, "checkpoint_field_missing:"+field)
+			}
+			continue
+		}
+		if fmt.Sprint(got) != fmt.Sprint(signed[field]) {
+			findings = append(findings, "checkpoint_field_mismatch:"+field)
+		}
+	}
+	if len(findings) != 0 {
+		return aacbundle.ClaimResult{Status: "fail", Findings: findings}
+	}
+	return aacbundle.ClaimResult{Status: "pass"}
+}
+
+// producerSignatureClaim checks each record's inline producer signature
+// (signature: hex COSE_Sign1 producer envelope over the capsule_id; key_id:
+// the signer's raw public key). A record with neither is unsigned (not
+// shown); one with only one of them, or whose envelope does not verify under
+// its key_id, fails. Returns the claim and each record's state.
+func producerSignatureClaim(records []interface{}) (aacbundle.ClaimResult, map[string]string) {
+	states := map[string]string{}
+	var findings []string
+	unsigned := false
+	failed := false
+	for _, raw := range records {
+		record, _ := raw.(map[string]interface{})
+		id, _ := record["capsule_id"].(string)
+		sig, hasSig := record["signature"].(string)
+		key, hasKey := record["key_id"].(string)
+		switch {
+		case !hasSig && !hasKey:
+			states[id] = "unclaimed"
+			unsigned = true
+			findings = append(findings, "producer_signature_unclaimed:"+id)
+			continue
+		case hasSig != hasKey:
+			states[id] = "invalid"
+		default:
+			envelopeBytes, sigErr := hex.DecodeString(sig)
+			keyBytes, keyErr := hex.DecodeString(key)
+			result := envelope.Verify(id, envelopeBytes)
+			if sigErr == nil && keyErr == nil && result.OK && bytes.Equal(result.PublicKey, keyBytes) {
+				states[id] = "authored"
+				continue
+			}
+			states[id] = "invalid"
+		}
+		failed = true
+		findings = append(findings, "producer_signature_invalid:"+id)
+	}
+	switch {
+	case failed || len(records) == 0:
+		return aacbundle.ClaimResult{Status: "fail", Findings: findings}, states
+	case unsigned:
+		return aacbundle.ClaimResult{Status: "withheld", Findings: findings}, states
+	default:
+		return aacbundle.ClaimResult{Status: "pass"}, states
+	}
+}
 
 // ErrBundleInvalid is a failed Evidence Bundle check: the result was printed,
 // and at least one claim failed.
@@ -75,7 +179,10 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 		countersignatures = append(countersignatures, s.Status)
 	}
 
-	claims := []aacbundle.ClaimResult{result.GraphClosure, result.IntervalCoverage, result.PerRecordMembership}
+	rawRecords, _ := value["records"].([]interface{})
+	signatures, signatureStates := producerSignatureClaim(rawRecords)
+	signedCheckpoint := checkpointClaim(value)
+	claims := []aacbundle.ClaimResult{result.GraphClosure, signedCheckpoint, result.IntervalCoverage, result.PerRecordMembership, signatures}
 	verdict := "VALID"
 	for _, r := range claims {
 		if r.Status == "fail" {
@@ -102,7 +209,9 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 		"disclosures":           disclosures,
 		"extensions":            extensions,
 		"countersignatures":     countersignatures,
-		"producer_signatures":   "not_performed: records' producer signatures are not checked by verify --bundle",
+		"checkpoint":            claim(signedCheckpoint),
+		"producer_signatures":   claim(signatures),
+		"record_signatures":     signatureStates,
 	}); err != nil {
 		return err
 	}

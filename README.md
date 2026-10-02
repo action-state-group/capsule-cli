@@ -530,21 +530,27 @@ draft-mih-zhang-agent-disclosure-bundle-00) offline, from the file alone. No
 profile and no network are used. It checks:
 
 - every record's identity;
+- every record's producer signature (`signature`: the hex producer envelope;
+  `key_id`: the signer's key);
 - citation closure to the declared depth;
-- interval coverage and each record's inclusion under the checkpoint, with the
-  checkpoint authenticated from `checkpoint.cose`;
+- the checkpoint: `checkpoint.cose` must verify, and every signed field the
+  file states (`log_id`, `mmr_size`, `root`, `key_id`, `timestamp`,
+  `prev_size`, `prev_root`) must equal its signed value;
+- interval coverage and each record's inclusion under that checkpoint;
 - disclosures.
 
 It prints each claim's status and the bundle digest, and lists extensions and
-countersignatures it carried but did not check. It does not check records'
-producer signatures. Exit codes:
+countersignatures it carried but did not check. Exit codes:
 
 - 0: every claim passed;
-- 3: nothing failed, but something is not shown (for example, no checkpoint
-  signature);
-- 1: a claim failed.
+- 3: nothing failed, but something is not shown (no checkpoint signature, an
+  unsigned record, declared-missing citations);
+- 1: a claim failed (an edited record, a signature that does not verify, a
+  checkpoint field that differs from its signature).
 
-Bundles from `capsulectl bundle` carry `checkpoint.cose`.
+Its verdicts agree with capsule-emit's offline bundle verifier. Bundles from
+`capsulectl bundle` carry the checkpoint's signed fields and `checkpoint.cose`,
+and each record's producer signature inline.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
 
