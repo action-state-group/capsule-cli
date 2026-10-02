@@ -849,6 +849,12 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth
 			return evidencebook.Bundle{}, hint(ErrInput, "a book record has no agent_output member to suppress")
 		}
 		if suppress["agent_input"] {
+			// An evidence_result record carries the Result as its header's
+			// statement: suppressing the header would withhold the very
+			// document the bundle is rooted on.
+			if root, err := book.Get(ctx, request.Root); err == nil && root.Header.RecordType == resultRecordType {
+				return evidencebook.Bundle{}, hint(ErrInput, "the root is an evidence_result record, whose agent_input carries the Result itself; it cannot be suppressed")
+			}
 			request.Suppress = []string{evidencebook.HeaderMember}
 		}
 	}

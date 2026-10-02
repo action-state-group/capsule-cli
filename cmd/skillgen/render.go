@@ -86,11 +86,13 @@ mechanisms applies to an actually-consequential verb:
 - **self-sealing** — the verb has its own ` + "`--seal-output`" + ` flag (` + "`discover`" + `,
   mandated by the binary itself). Nothing further is needed.
 - **primary action** — the verb's entire job already is creating or persisting
-  a capsule (` + "`publish`" + `, ` + "`cll append`" + `). Running it satisfies the
-  invariant by itself; nothing wraps it.
+  a capsule (` + "`publish`" + `, ` + "`cll append`" + `) or a signed book record
+  (` + "`request`" + `, ` + "`respond`" + `, ` + "`close`" + `, ` + "`result build`" + `). Running it
+  satisfies the invariant by itself; nothing wraps it.
 
 Every other verb this skill calls (` + "`verify`" + `, ` + "`contract validate`" + `,
-` + "`plugin ls`" + `, ` + "`cll list`" + `, ` + "`get`" + `) is ` + "`not-consequential`" + `: it runs, and
+` + "`plugin ls`" + `, ` + "`cll list`" + `, ` + "`get`" + `, the ` + "`judge`" + ` and ` + "`calibration`" + `
+computations, ` + "`reconcile`" + `, ` + "`report build`" + `) is ` + "`not-consequential`" + `: it runs, and
 that is the end of it — **no wrapper seal, no synthetic evidence record.**
 
 See [references/capsule-cli.md](references/capsule-cli.md) for the ` + "`publish`" + `/
@@ -103,8 +105,11 @@ func exerciseSection() string {
 	return `[scripts/run-scripted-demo.sh](scripts/run-scripted-demo.sh) runs every
 verb above against a throwaway jsonl profile in a temp directory: the
 consequential actions (` + "`discover`" + `, ` + "`publish`" + `, ` + "`cll append`" + `) each seal or
-persist a capsule and every one of those is verified; the not-consequential
-actions (` + "`verify`" + `, ` + "`contract validate`" + `, ` + "`plugin ls`" + `, ` + "`cll list`" + `, ` + "`get`" + `)
+persist a capsule and every one of those is verified, and the consequential
+book verbs (` + "`request`" + `, ` + "`respond`" + `, ` + "`close`" + `, ` + "`result build`" + `) each
+return the signed book record that is their evidence; the not-consequential
+actions (` + "`verify`" + `, ` + "`contract validate`" + `, ` + "`plugin ls`" + `, ` + "`cll list`" + `, ` + "`get`" + `,
+` + "`judge`" + `, ` + "`calibration`" + `, ` + "`reconcile`" + `, ` + "`report build`" + `)
 run and produce no capsule at all — the script asserts both halves, not just
 that capsules exist. It never touches a real profile or a real CLL. It is a
 contributor check, run after any change to the verb surface or the emission

@@ -29,8 +29,9 @@ import (
 var bookNow = time.Now
 
 // openedBook is a book plus the record store it was opened over. The store
-// is kept only so `close --capsule-out` can export a record's sealed capsule
-// and envelope for `verify`; nothing else reads it directly.
+// is kept only so `close --capsule-out` and `result build --capsule-out` can
+// export a record's sealed capsule and envelope for `verify` (exportRecord);
+// nothing else reads it directly.
 type openedBook struct {
 	book  *evidencebook.Book
 	store *evidencebook.FileStore
@@ -707,7 +708,7 @@ func closeCommand() *cobra.Command {
 	}}
 	periodFlags(cmd)
 	cmd.Flags().Bool("since-last", false, "Start the window just after the furthest position an earlier Close with this counterparty reached")
-	cmd.Flags().String("capsule-out", "", "Also write the Close as an artifact.Record for `verify --capsule`")
+	cmd.Flags().String("capsule-out", "", "Also write the Close as an artifact.Record for `verify --capsule`; a file already holding exactly those bytes is left alone (a repeat is a no-op), any other file there is refused")
 	cmd.Flags().String("bundle-out", "", "Also write an Evidence Bundle rooted at the Close (commits a disclosure record and a checkpoint)")
 	return cmd
 }
@@ -790,7 +791,7 @@ func exportRecord(ctx context.Context, store *evidencebook.FileStore, p Profile,
 	if err != nil {
 		return err
 	}
-	return atomicFile(path, encoded, false)
+	return writeOutput("--capsule-out", path, encoded)
 }
 
 // -- request and respond ---------------------------------------------------

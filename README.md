@@ -190,6 +190,8 @@ capsulectl cll checkpoint publish --profile NAME --checkpoint MMR_SIZE
 capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
 capsulectl result open FILE [--format text|json]
+capsulectl result build --profile NAME --result RESULT.json --out SEALED.json [--contract REF] [--capsule-out RECORD.json]
+capsulectl report build --bundle BUNDLE.json --card CARD --out report.html [--presentation P.json] [--permalink] [--base-url URL] [--dry-run]
 capsulectl run [args passed to the actionstate plugin, e.g. --dry-run]
 capsulectl plugin ls
 capsulectl store migrate --profile NAME [--log-id NEW_LOG_ID]
@@ -224,7 +226,26 @@ plugin trust, profile presence, signing-key-file permissions, and (only with
 checkpoint endpoint. `result open` validates and prints a Result v0
 document's aggregate/coverage statement as text (or `--format json`); the
 Result v0 schema is still DRAFT, so this is a structural check, not schema
-validation, and it stands in for the `capsule-viewer` build. `run` carries no
+validation, and it stands in for the `capsule-viewer` build. `result build`
+seals a caller-supplied Result v0 into a jsonl profile's evidence book as an
+`evidence_result` record whose statement is the document and whose `cites`
+links name every book record the claims cite: it validates against the
+vendored `evidence-result-v0` schema (`internal/cli/schema/`, digest pinned
+in code), refuses headline values that do not recompute from the claims, a
+citation the book does not hold, or a close/reconcile claim whose state or
+tallies differ from what the cited Close's links and statement read, and
+then checkpoints so `disclose --root <record id>` can build a bundle on it.
+Only UNILATERAL close claims can be sealed end to end today: a book holds
+only its own records, and its own links to its Close never count, so AGREED
+and CONTESTED wait on a way to bring the peer's record into the book.
+`report build` verifies a held, disclosed bundle whose root is a sealed
+Result (either carrier: the document itself, or the book record header
+whose statement is the document), records `--card` and the optional
+`presentation/v1` header in the embedded copy, and renders an offline
+`report.html` through agent-action-capsule's Go emitter with the vendored
+browser runtime (`internal/cli/assets/`, digest pinned; refresh with
+`scripts/iife-sync.sh`); `--permalink` mints the viewer fragment over the
+same bytes and `--dry-run` writes the page marked draft. `run` carries no
 flags or licence logic of its own: the base binary only dispatches to a
 discovered `actionstate` plugin, or refuses with an actionable message if
 that plugin is absent or unlicensed.

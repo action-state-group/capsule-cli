@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/schemas/evidence-result-v0.json",
+  "title": "Evidence Result v0",
+  "description": "Companion schema for spec/evidence-result-v0.md. Sections 1-3 of the companion document (result semantics, disclosure policy, aggregate/coverage) carry the 2026-09-22 ruling (quoted verbatim there); this schema encodes that ruling and is no longer DRAFT. The root schema validates an Evidence Result document.",
+  "$ref": "#/$defs/EvidenceResult",
+  "$defs": {
+    "HexDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "DigestRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest_alg", "digest"],
+      "properties": {
+        "digest_alg": { "const": "SHA-256" },
+        "digest": { "$ref": "#/$defs/HexDigest" }
+      }
+    },
+    "ContractRef": {
+      "description": "Compact versioned Evidence Contract reference: <contract_id>@<version>. Same convention as evidence-plan-ir-v0.json's ContractRef -- a claim never carries a bare, unversioned contract id.",
+      "type": "string",
+      "pattern": "^[^@\\s]+@[^@\\s]+$"
+    },
+    "Tier": {
+      "description": "spec/evidence-result-v0.md section 1 -- mirrored from evidence-plan-ir-v0.md section 4.2, not redefined here.",
+      "enum": ["recomputed", "judged"]
+    },
+    "Grade": {
+      "description": "The three-value assurance grade owned elsewhere in the spec; mirrored here, never redefined.",
+      "enum": ["self-attested", "witnessed", "countersigned"]
+    },
+    "Sufficiency": {
+      "description": "The four-value Evidence Contract sufficiency result: whether enough of the right evidence was found, committed, and disclosed to make a determination on the requirement at all. Owned by the Evidence Contract, mirrored here, never redefined.",
+      "enum": ["SATISFIED", "GAP", "INSUFFICIENT", "UNKNOWN"]
+    },
+    "Verdict": {
+      "description": "The three-value judged-outcome vocabulary of the Evidence Contract: met or not_met only when sufficiency is SATISFIED, otherwise not_evaluable. Owned by the Evidence Contract, mirrored here, never redefined.",
+      "enum": ["met", "not_met", "not_evaluable"]
+    },
+    "EvidenceStatus": {
+      "description": "The eight-value per-requirement bundle assertion status of the Evidence Contract, the same closed set evidence-plan-ir-v0.json's ResultEnvelope.status mirrors. Owned by the Evidence Contract, mirrored here for the same reason: the disclosure policy (spec section 2) needs the WITHHELD/NOT_COMMITTED distinction that the Sufficiency projection collapses into GAP.",
+      "enum": [
+        "SATISFIED", "INSUFFICIENT", "NOT_FOUND", "NOT_COMMITTED",
+        "WITHHELD", "CONTRADICTED", "NOT_APPLICABLE", "UNKNOWN"
+      ]
+    },
+    "DisclosedStatus": {
+      "description": "EvidenceStatus minus the two statuses the disclosure policy (spec section 2) reserves for the analysis/story carriers: WITHHELD and NOT_COMMITTED.",
+      "enum": [
+        "SATISFIED", "INSUFFICIENT", "NOT_FOUND",
+        "CONTRADICTED", "NOT_APPLICABLE", "UNKNOWN"
+      ]
+    },
+    "ProofRef": {
+      "description": "An inclusion proof or receipt ref, by digest only -- never inline bytes (spec section 5).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "digest_alg", "digest"],
+      "properties": {
+        "kind": { "enum": ["inclusion_proof", "receipt"] },
+        "digest_alg": { "const": "SHA-256" },
+        "digest": { "$ref": "#/$defs/HexDigest" }
+      }
+    },
+    "DisclosureCarrier": {
+      "description": "spec section 2 -- the full carrier. Legal only when status is not WITHHELD/NOT_COMMITTED. Never carries payload bytes: evidence is by digest only, identical in shape to Claim.evidence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "status", "evidence"],
+      "properties": {
+        "kind": { "const": "disclosure" },
+        "status": { "$ref": "#/$defs/DisclosedStatus" },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DigestRef" }
+        }
+      }
+    },
+    "AnalysisCarrier": {
+      "description": "spec section 2 -- a derived characterization of evidence that is not (fully) disclosed. summary MUST NOT quote or closely paraphrase the underlying payload -- it characterizes, it does not disclose.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "status", "summary"],
+      "properties": {
+        "kind": { "const": "analysis" },
+        "status": { "$ref": "#/$defs/EvidenceStatus" },
+        "summary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "StoryCarrier": {
+      "description": "spec section 2 -- narrative-only, the weakest carrier, for claims with no derived characterization to share. narrative describes the process, never the withheld content itself.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "status", "narrative"],
+      "properties": {
+        "kind": { "const": "story" },
+        "status": { "$ref": "#/$defs/EvidenceStatus" },
+        "narrative": { "type": "string", "minLength": 1 }
+      }
+    },
+    "Presentation": {
+      "oneOf": [
+        { "$ref": "#/$defs/DisclosureCarrier" },
+        { "$ref": "#/$defs/AnalysisCarrier" },
+        { "$ref": "#/$defs/StoryCarrier" }
+      ]
+    },
+    "ClaimType": {
+      "description": "PROPOSED discriminator, encoding the 2026-09-25 ruling: 'close + reconcile as claim types in result v0, so they feed the same result.' Absent means `requirement` -- the pre-existing one-requirement-evaluated-once claim (spec section 1) -- so every Result that validated before this field existed validates unchanged. Closed-world: a value outside this enum fails validation here. A viewer that meets a type it does not recognize MUST render the row labelled 'unrecognized' with the raw type and the claim's contract_ref, never drop it (ruled 2026-09-25); that behaviour and its fixture are owned by capsule-viewer, not by this schema.",
+      "enum": ["requirement", "reconcile", "close"]
+    },
+    "Period": {
+      "description": "The concrete half-open window [start, end), RFC 3339, that a reconcile or close claim covers. The contract's `close.period` token (day / week / month) names a cadence; a Result names the actual window, so a monthly Result can carry each day's Close as its own claim without ambiguity.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ReconcileState": {
+      "description": "The six reconcile states over one join key between two books (evidencebook-skills-design 2026-09-25, section 4). A = this Result's own book; B = the peer named by ReconcileClaim.peer. MATCHED: present on both sides, equal. A_ONLY: this book has the row, the peer does not. B_ONLY: the peer has the row, this book does not. CONFLICTING: present on both sides, values differ. INSUFFICIENT: the evidence needed to compare was missing (e.g. a connector gap). UNRESOLVED: compared but not resolvable to any other state within the period. Ruled 2026-09-25: 'one side missing isn't a finding; both sides disagreeing is' -- A_ONLY and B_ONLY MUST never render like CONFLICTING.",
+      "enum": ["MATCHED", "A_ONLY", "B_ONLY", "CONFLICTING", "INSUFFICIENT", "UNRESOLVED"]
+    },
+    "ReconcileTallies": {
+      "description": "Tallies over exactly the six ReconcileState values, keyed exactly as schemas/judge/close-v1.json's ReconcileTallies keys them (lowercase: matched, a_only, b_only, conflicting, insufficient, unresolved) so a claim can be built from a close/v1 record's reconcile.tallies without a mapping table; the state names themselves (ReconcileState) keep the Evidence Layer's uppercase spelling. Every key is REQUIRED even when zero -- an absent key is never an implied zero, and a producer cannot hide a state by omitting it. Each value is a non-negative integer: a count, never a ratio or a percentage (spec section 3's 'never a single number' rule applies per row).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["matched", "a_only", "b_only", "conflicting", "insufficient", "unresolved"],
+      "properties": {
+        "matched": { "type": "integer", "minimum": 0 },
+        "a_only": { "type": "integer", "minimum": 0 },
+        "b_only": { "type": "integer", "minimum": 0 },
+        "conflicting": { "type": "integer", "minimum": 0 },
+        "insufficient": { "type": "integer", "minimum": 0 },
+        "unresolved": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "StateOfRecord": {
+      "description": "Which side the contract names as the state of record for the joined rows: A (this book), B (the peer), or none (peer-to-peer, neither authoritative). Rules: (1) it is declared by the contract's counterparty stanza and copied here, never inferred from the counts; (2) it never changes a count -- a CONFLICTING row stays CONFLICTING whichever side is of record, it only says whose value a reader should treat as standing while the conflict is open; (3) A_ONLY and B_ONLY are 'one side missing' regardless of which side is of record, and are never promoted to a finding by it.",
+      "enum": ["A", "B", "none"]
+    },
+    "ReconcileClaim": {
+      "description": "The type-specific body of a `type: reconcile` claim: the six-state tally of one join between this book and one peer over one period, against one contract clause (requirement_ref). The claim's base fields keep their section 1 semantics unchanged. Sufficiency derivation rule (documented here, NOT schema-enforced in v0): sufficiency is derived from the two non-finding tallies only -- tallies.insufficient > 0 => GAP (the design's own example: `change-lands` GAP on 3 INSUFFICIENT days); otherwise tallies.unresolved > 0 => UNKNOWN; otherwise SATISFIED. MATCHED / A_ONLY / B_ONLY / CONFLICTING never move sufficiency; they are what the verdict is judged over, and the verdict stays the contract clause's projection (section 1) -- never derived from a ratio of these tallies.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["join_key", "peer", "period", "tallies", "state_of_record"],
+      "properties": {
+        "join_key": {
+          "description": "The field both books are joined on (e.g. reservation_id, exchange_id).",
+          "type": "string",
+          "minLength": 1
+        },
+        "peer": {
+          "description": "The peer book / book-profile id (side B).",
+          "type": "string",
+          "minLength": 1
+        },
+        "period": { "$ref": "#/$defs/Period" },
+        "tallies": { "$ref": "#/$defs/ReconcileTallies" },
+        "state_of_record": { "$ref": "#/$defs/StateOfRecord" }
+      }
+    },
+    "CloseState": {
+      "description": "The three Close states of the Evidence Layer (draft-mih-agent-evidence-layer-00, section 'Reconcile and Close'), the same three values schemas/judge/close-v1.json's reconcile.status carries. AGREED: this Close is acknowledged by the named peer's book under a different key -- a record whose `book_id` is the claim's `peer` (and not the Close's own), signed under a key other than the Close's, carries an `acknowledges` link to it; not 'acknowledged by an independent party', until the contract pins the peer's key (2026-09-29). CONTESTED: such a counterparty record carries a `rebuts` link to this Close. UNILATERAL: neither -- no corresponding `acknowledges` link exists yet, and nothing rebuts it. Per the owning document, Close status 'is read from the links other records make to it, not from a field the Close itself sets'; here those links are read only from a record in the counterparty's (named peer's) book. NORMATIVE (2026-09-28): the value here is DERIVABLE, never asserted -- it MUST equal the state read from the inbound links of the Close the claim cites (CloseClaim.close_ref) in the bundle the Result is verified against: a counterparty record -- a record in the COUNTERPARTY's book, the book the claim names as `peer` (see COUNTERPARTY below), never any record in the bundle -- carrying a `rebuts` link to that Close => CONTESTED; otherwise such a counterparty record carrying an `acknowledges` link => AGREED; neither => UNILATERAL. A verifier MUST recompute the state from the bundle's records and MUST fail the claim on mismatch; it never trusts this field (the same 'reporting convenience, not the authoritative source' posture close-v1.json takes for reconcile.status). A producer that relabels a rebutted Close AGREED has emitted a malformed claim, not a reporting choice: vectors/evidence-result/neg-close-agreed-relabelled-contested.json is schema-valid and is rejected by the checker's link walk over its .records.json. COUNTERPARTY (neither book_id nor signer alone is enough, since a producer can mint a second book or a second key equally easily): an `acknowledges` or `rebuts` link makes a state only when the linking record satisfies ALL of (1) its `book_id` (the store identity the evidence-book record header carries; draft-mih-agent-evidence-layer-00's header names no store field, and its `principal_ref` is opaque and host-defined) is present and differs from the cited Close's `book_id`; (2) its `book_id` equals the claim's named `peer`; (3) it is signed under a different key than the Close. (1) and (2) are checked by schemas/check_evidence_result_examples.py's link walk; (3) needs the signer, which the record header does not carry, so neither this schema nor its checker checks it. Until the contract pins the peer's key, a second book named as the peer and signed under a second key still passes this check. A Close with no `book_id` accepts no linker at all (UNILATERAL at best). A link from the Close's own book, from a record with no `book_id`, or from a book that is not the named peer is ignored by the walk: a producer cannot agree with itself, and a third book is not the peer. neg-close-agreed-self-acknowledged.json (the acknowledging record from book `example-org`, the Close's own), neg-close-agreed-third-book.json (from `example-org-audit`, not the named peer `example-org-sor`) and neg-close-agreed-bookless-close.json (the Close names no book) each assert AGREED, are schema-valid, and are rejected by the walk as UNILATERAL. Ruled 2026-09-25: UNILATERAL MUST never render like AGREED; CONTESTED is its own state and MUST render as neither.",
+      "enum": ["UNILATERAL", "AGREED", "CONTESTED"]
+    },
+    "CloseClaim": {
+      "description": "The type-specific body of a `type: close` claim: one sealed Close for one period, cited by digest (`close_ref`, REQUIRED), with close_state DERIVED from that Close's inbound links (see CloseState) -- a verifier recomputes it from the bundle and fails the claim on mismatch; the field is a reporting convenience, never the source. `peer` and `peer_close_ref` (the peer's record that acknowledges or rebuts this Close, by digest) are REQUIRED when close_state is AGREED or CONTESTED -- both states exist only because a peer record links to this Close, and the claim must cite that record: `peer_close_ref` MUST be the digest of a counterparty record in the bundle -- one from the named peer's book (`book_id` == `peer`, != the Close's), under a different key than the Close -- that carries the `acknowledges` (AGREED) or `rebuts` (CONTESTED) link to `close_ref`, and a verifier checks that too (see CloseState's COUNTERPARTY rule, 2026-09-29). When UNILATERAL both are OPTIONAL, never forbidden: a party may name the peer it closed unilaterally against, and may cite the peer's Close it reconciled with, which does not (yet) link back. This follows schemas/judge/close-v1.json, whose Reconcile carries `peer_close` unconditionally (a `reconciles_with` citation, present whether status is AGREED, UNILATERAL, or CONTESTED), and draft-mih-agent-evidence-layer-00, which defines UNILATERAL only as 'no corresponding `acknowledges` link exists yet' -- naming the peer is not agreeing with it. That a UNILATERAL close never READS as agreement is a renderer's obligation (it shows no agreed affordance whatever the row names), pinned by capsule-viewer's tests, not a schema rule. The claim's base fields keep their section 1 semantics unchanged, with three bindings the checker enforces because JSON Schema cannot compare sibling values or see across records: (0) the counterparty rule -- a link makes a state only from a record whose `book_id` differs from the Close's AND equals this claim's `peer` (and signed under a different key -- which the record header cannot show, so the schema checker does not check it; until the contract pins the peer's key, a second book named as the peer and signed under a second key still passes this check); a Close with no `book_id` accepts no linker (neg-close-agreed-self-acknowledged.json, neg-close-agreed-third-book.json, neg-close-agreed-bookless-close.json: schema-valid, checker-rejected); (1) `close_ref.digest` and, when present, `peer_close_ref.digest` MUST each also appear among the claim's `evidence[]` digests -- a claim cannot report on a Close, or cite the record that makes its state, that it does not put in evidence (neg-close-ref-not-in-evidence.json, neg-close-peer-ref-not-in-evidence.json: schema-valid, checker-rejected); (2) a CONTESTED Close never counts as met -- see Claim's allOf rule: `verdict` MUST NOT be `met` when close_state is CONTESTED (neg-close-contested-verdict-met.json, schema-rejected).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["period", "close_state", "close_ref"],
+      "properties": {
+        "period": { "$ref": "#/$defs/Period" },
+        "close_state": { "$ref": "#/$defs/CloseState" },
+        "close_ref": {
+          "description": "The Close record this claim reports on, by digest only (its record digest / capsule_id) -- never inline. REQUIRED on every close claim: it names WHICH cited record is the Close whose inbound links a verifier walks to recompute close_state. Its digest MUST also be an entry of the claim's evidence[] digests -- required, not customary: a claim cannot report on a Close it does not put in evidence (checker-enforced, since JSON Schema cannot compare sibling values; neg-close-ref-not-in-evidence.json).",
+          "$ref": "#/$defs/DigestRef"
+        },
+        "peer": {
+          "description": "The named peer: the peer book / book-profile id whose records alone can make this Close's state. A verifier counts an `acknowledges` / `rebuts` link only from a record whose `book_id` equals this value (and differs from the Close's, and -- where the signer is visible -- is under a different key); a link from any other book, including a third book, is ignored. AGREED = acknowledged by this peer's book under a different key; CONTESTED = rebutted by it; UNILATERAL = the peer this Close was reconciled against, which has not (yet) linked back. REQUIRED when close_state is AGREED or CONTESTED; OPTIONAL when UNILATERAL (close-v1's peer_close is unconditional).",
+          "type": "string",
+          "minLength": 1
+        },
+        "peer_close_ref": {
+          "description": "The named peer's record, by digest only (its capsule_id) -- never inline: the acknowledging Close when AGREED, the rebutting record when CONTESTED, or, when UNILATERAL, the peer's Close this one reconciled with (close-v1's `reconciles_with` citation), which carries no link back. When AGREED or CONTESTED it MUST be a counterparty record -- `book_id` == `peer` and != the Close's, under a different key than the Close -- carrying that link; a record from the Close's own book or from a third book never qualifies (2026-09-29). REQUIRED when close_state is AGREED or CONTESTED; OPTIONAL when UNILATERAL.",
+          "$ref": "#/$defs/DigestRef"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "close_state": { "enum": ["AGREED", "CONTESTED"] } }, "required": ["close_state"] },
+          "then": { "required": ["peer", "peer_close_ref"] }
+        }
+      ]
+    },
+    "Claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "contract_ref", "requirement_ref", "tier", "grade",
+        "sufficiency", "verdict", "evidence", "proofs", "presentation"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "$ref": "#/$defs/ClaimType" },
+        "contract_ref": { "$ref": "#/$defs/ContractRef" },
+        "requirement_ref": { "type": "string", "minLength": 1 },
+        "tier": { "$ref": "#/$defs/Tier" },
+        "grade": { "$ref": "#/$defs/Grade" },
+        "sufficiency": { "$ref": "#/$defs/Sufficiency" },
+        "verdict": { "$ref": "#/$defs/Verdict" },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DigestRef" }
+        },
+        "proofs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ProofRef" }
+        },
+        "presentation": { "$ref": "#/$defs/Presentation" },
+        "reconcile": { "$ref": "#/$defs/ReconcileClaim" },
+        "close": { "$ref": "#/$defs/CloseClaim" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "sufficiency": { "const": "SATISFIED" } } },
+          "then": { "properties": { "verdict": { "enum": ["met", "not_met"] } } },
+          "else": { "properties": { "verdict": { "const": "not_evaluable" } } }
+        },
+        {
+          "description": "Type <-> body binding: a reconcile claim carries exactly `reconcile`, a close claim exactly `close`, and a requirement claim (type absent or `requirement`) carries neither.",
+          "if": { "properties": { "type": { "const": "reconcile" } }, "required": ["type"] },
+          "then": { "required": ["reconcile"], "not": { "required": ["close"] } },
+          "else": {
+            "if": { "properties": { "type": { "const": "close" } }, "required": ["type"] },
+            "then": { "required": ["close"], "not": { "required": ["reconcile"] } },
+            "else": { "not": { "anyOf": [ { "required": ["reconcile"] }, { "required": ["close"] } ] } }
+          }
+        },
+        {
+          "description": "A CONTESTED Close is never met. While a peer's `rebuts` link stands, the clause the claim reports on is at best `not_met` (sufficiency SATISFIED: the Close and the rebuttal are both in evidence) or `not_evaluable` (a sufficiency gap). `met` under CONTESTED fails validation; the checker's link walk applies the same rule to the RECOMPUTED state, so a Close relabelled out of CONTESTED to keep `met` fails there.",
+          "if": { "properties": { "close": { "properties": { "close_state": { "const": "CONTESTED" } }, "required": ["close_state"] } }, "required": ["close"] },
+          "then": { "properties": { "verdict": { "enum": ["not_met", "not_evaluable"] } } }
+        }
+      ]
+    },
+    "Coverage": {
+      "description": "spec section 3 -- MANDATORY on every aggregate. An aggregate without this fails validation.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluated_population", "excluded_not_applicable", "unknown_count"],
+      "properties": {
+        "evaluated_population": { "type": "integer", "minimum": 0 },
+        "excluded_not_applicable": { "type": "integer", "minimum": 0 },
+        "unknown_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Buckets": {
+      "description": "spec section 3 -- every evaluated claim, grouped by verdict. Always three keys, never a single number; an empty bucket is an empty array, not an absent key.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["met", "not_met", "not_evaluable"],
+      "properties": {
+        "met": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "not_met": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "not_evaluable": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "Aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coverage", "buckets"],
+      "properties": {
+        "coverage": { "$ref": "#/$defs/Coverage" },
+        "buckets": { "$ref": "#/$defs/Buckets" }
+      }
+    },
+    "View": {
+      "description": "spec section 8 -- presentation hints only, never data. presentation/v1 header fields: producer name, logo data URL, title.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spec_version"],
+      "properties": {
+        "spec_version": { "const": "presentation/v1" },
+        "producer_name": { "type": "string", "minLength": 1 },
+        "logo_data_url": { "type": "string", "pattern": "^data:" },
+        "title": { "type": "string", "minLength": 1 }
+      }
+    },
+    "EvidenceResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result_version", "generated_at", "claims", "aggregate"],
+      "properties": {
+        "result_version": { "const": "evidence-result-v0" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "claims": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Claim" }
+        },
+        "aggregate": { "$ref": "#/$defs/Aggregate" },
+        "view": { "$ref": "#/$defs/View" }
+      }
+    }
+  }
+}
