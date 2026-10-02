@@ -38,10 +38,11 @@ var evidenceGraphIIFE []byte
 
 const (
 	// evidenceGraphIIFEDigest is the SHA-256 of assets/evidence-graph.iife.js.
-	evidenceGraphIIFEDigest = "ba89c0b1dff0b1383ab628502e87c7e04487dae1aa2f7b3dd68ace2ac1e223ee"
+	evidenceGraphIIFEDigest = "fa4e4f4cb40ebb4f11dfbdabc5da5f9e77451701378920da5905b3cbe696a41c"
 	// evidenceGraphIIFESource names the aac commit and build the vendored
-	// IIFE came from: the head of agent-action-capsule #160, until it merges.
-	evidenceGraphIIFESource = "agent-action-capsule pr@0dde0c25b8ec063548500792daf17681887b876f ts: npm run emitter:iife (esbuild 0.28.2)"
+	// IIFE came from: the obligations card stacked on agent-action-capsule
+	// #160, until both merge.
+	evidenceGraphIIFESource = "agent-action-capsule pr@65318f582f22c81d79259ba9a5b2795a15856ef5 ts: npm run emitter:iife (esbuild 0.28.2)"
 
 	// cardExtension records which card the report was built for. There is
 	// no card registry yet: every card renders the one Result page today,
