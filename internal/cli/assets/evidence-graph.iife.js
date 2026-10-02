@@ -2263,14 +2263,14 @@ var EvidenceGraph = (() => {
     return true;
   }
   function rangeWitnesses(nodes, pos, height, leafStart, lo, hi, out) {
-    const span = 2 ** height, leafEnd = leafStart + span - 1;
+    const span2 = 2 ** height, leafEnd = leafStart + span2 - 1;
     if (leafEnd < lo || leafStart > hi) {
       out.push(toHex(nodes[pos]));
       return;
     }
     if (leafStart >= lo && leafEnd <= hi) return;
     const half = 2 ** (height - 1);
-    rangeWitnesses(nodes, pos - span, height - 1, leafStart, lo, hi, out);
+    rangeWitnesses(nodes, pos - span2, height - 1, leafStart, lo, hi, out);
     rangeWitnesses(nodes, pos - 1, height - 1, leafStart + half, lo, hi, out);
   }
   async function rangeProof(tree, fromIndex, toIndex, size = tree.size) {
@@ -2316,7 +2316,7 @@ var EvidenceGraph = (() => {
       }
       const s = shape(Number(leaves)), lo = Number(fromIndex), hi = Number(toIndex), cursor = { index: 0 };
       const reconstruct = async (pos, height, leafStart2) => {
-        const span = 2 ** height, leafEnd = leafStart2 + span - 1;
+        const span2 = 2 ** height, leafEnd = leafStart2 + span2 - 1;
         if (leafEnd < lo || leafStart2 > hi) {
           const w = witnessBytes[cursor.index];
           if (!w) throw new RangeError("range proof witness exhausted");
@@ -2325,7 +2325,7 @@ var EvidenceGraph = (() => {
         }
         if (height === 0)
           return hash2(Uint8Array.of(0), bodyDigests[leafStart2 - lo]);
-        const half = 2 ** (height - 1), left = await reconstruct(pos - span, height - 1, leafStart2), right = await reconstruct(pos - 1, height - 1, leafStart2 + half);
+        const half = 2 ** (height - 1), left = await reconstruct(pos - span2, height - 1, leafStart2), right = await reconstruct(pos - 1, height - 1, leafStart2 + half);
         return parent(hash2, left, right, pos);
       };
       const reconstructedPeaks = [];
@@ -2533,6 +2533,8 @@ var EvidenceGraph = (() => {
   var browser_exports2 = {};
   __export(browser_exports2, {
     ACCEPTED_SPEC_VERSIONS: () => ACCEPTED_SPEC_VERSIONS,
+    AGENT_INPUT_ORIGINALS_EXTENSION: () => AGENT_INPUT_ORIGINALS_EXTENSION,
+    BOOK_PAYLOADS_EXTENSION: () => BOOK_PAYLOADS_EXTENSION,
     CLAIM_REQUIRED: () => CLAIM_REQUIRED,
     CLOSE_CLAIM: () => CLOSE_CLAIM,
     CLOSE_LINK_TYPES: () => CLOSE_LINK_TYPES,
@@ -2551,6 +2553,7 @@ var EvidenceGraph = (() => {
     JcsUnsafeIntegerError: () => JcsUnsafeIntegerError,
     JsonNumber: () => JsonNumber,
     PROOF_KINDS: () => PROOF_KINDS,
+    PUBLISHED_CAPSULE_RECORD_TYPE: () => PUBLISHED_CAPSULE_RECORD_TYPE,
     REQUIREMENT_CLAIM: () => REQUIREMENT_CLAIM,
     RESULT_MEMBERS: () => RESULT_MEMBERS,
     RESULT_RECORD_TYPE: () => RESULT_RECORD_TYPE,
@@ -2565,6 +2568,7 @@ var EvidenceGraph = (() => {
     buildResultRoot: () => buildResultRoot,
     buildVerificationPageModel: () => buildVerificationPageModel,
     bundleDigest: () => bundleDigest,
+    carriedCapsuleCommitment: () => carriedCapsuleCommitment,
     classifyCountersignatures: () => classifyCountersignatures,
     computeCapsuleId: () => computeCapsuleId,
     counterpartyLinks: () => counterpartyLinks,
@@ -2588,6 +2592,8 @@ var EvidenceGraph = (() => {
     recomputeCounts: () => recomputeCounts,
     registries: () => registries,
     renderEvidenceGraph: () => renderEvidenceGraph,
+    renderOutcomeReportPage: () => renderOutcomeReportPage,
+    resolveCarriedInput: () => resolveCarriedInput,
     sealCapsule: () => sealCapsule,
     sha256Hex: () => sha256Hex,
     unboundRecordIds: () => unboundRecordIds,
@@ -2634,51 +2640,51 @@ var EvidenceGraph = (() => {
     return typeof value === "string" && /^[0-9a-f]{64}$/u.test(value);
   }
   function decodeStrictJson(input) {
-    let text2;
+    let text3;
     try {
-      text2 = typeof input === "string" ? input : utf8.decode(input);
+      text3 = typeof input === "string" ? input : utf8.decode(input);
     } catch (error) {
       throw new SyntaxError(`invalid UTF-8: ${String(error)}`);
     }
     let offset = 0;
     const ws = () => {
-      while (text2[offset] === " " || text2[offset] === "	" || text2[offset] === "\n" || text2[offset] === "\r")
+      while (text3[offset] === " " || text3[offset] === "	" || text3[offset] === "\n" || text3[offset] === "\r")
         offset += 1;
     };
     const parse = (depth) => {
       if (depth > MAX_DEPTH)
         throw new SyntaxError(`JSON nesting exceeds ${MAX_DEPTH}`);
       ws();
-      const c = text2[offset];
+      const c = text3[offset];
       if (c === '"') return parseString();
       if (c === "{") {
         offset += 1;
         const value2 = {};
         const seen = /* @__PURE__ */ new Set();
         ws();
-        if (text2[offset] === "}") {
+        if (text3[offset] === "}") {
           offset += 1;
           return value2;
         }
         while (true) {
           ws();
-          if (text2[offset] !== '"')
+          if (text3[offset] !== '"')
             throw new SyntaxError(`object name expected at byte ${offset}`);
           const key = parseString();
           if (seen.has(key))
             throw new SyntaxError(`duplicate object name ${JSON.stringify(key)}`);
           seen.add(key);
           ws();
-          if (text2[offset] !== ":")
+          if (text3[offset] !== ":")
             throw new SyntaxError(`':' expected at byte ${offset}`);
           offset += 1;
           value2[key] = parse(depth + 1);
           ws();
-          if (text2[offset] === "}") {
+          if (text3[offset] === "}") {
             offset += 1;
             return value2;
           }
-          if (text2[offset] !== ",")
+          if (text3[offset] !== ",")
             throw new SyntaxError(`',' expected at byte ${offset}`);
           offset += 1;
         }
@@ -2687,18 +2693,18 @@ var EvidenceGraph = (() => {
         offset += 1;
         const value2 = [];
         ws();
-        if (text2[offset] === "]") {
+        if (text3[offset] === "]") {
           offset += 1;
           return value2;
         }
         while (true) {
           value2.push(parse(depth + 1));
           ws();
-          if (text2[offset] === "]") {
+          if (text3[offset] === "]") {
             offset += 1;
             return value2;
           }
-          if (text2[offset] !== ",")
+          if (text3[offset] !== ",")
             throw new SyntaxError(`',' expected at byte ${offset}`);
           offset += 1;
         }
@@ -2708,12 +2714,12 @@ var EvidenceGraph = (() => {
         ["false", false],
         ["null", null]
       ]) {
-        if (text2.startsWith(token, offset)) {
+        if (text3.startsWith(token, offset)) {
           offset += token.length;
           return value2;
         }
       }
-      const match = numberToken.exec(text2.slice(offset));
+      const match = numberToken.exec(text3.slice(offset));
       if (match !== null) {
         offset += match[0].length;
         return new JsonNumber(match[0]);
@@ -2723,11 +2729,11 @@ var EvidenceGraph = (() => {
     const parseString = () => {
       const start = offset;
       offset += 1;
-      while (offset < text2.length) {
-        const c = text2[offset];
+      while (offset < text3.length) {
+        const c = text3[offset];
         if (c === '"') {
           offset += 1;
-          const value2 = JSON.parse(text2.slice(start, offset));
+          const value2 = JSON.parse(text3.slice(start, offset));
           for (let i = 0; i < value2.length; i += 1) {
             const unit = value2.charCodeAt(i);
             if (unit >= 55296 && unit <= 56319) {
@@ -2751,7 +2757,7 @@ var EvidenceGraph = (() => {
     };
     const value = parse(0);
     ws();
-    if (offset !== text2.length)
+    if (offset !== text3.length)
       throw new SyntaxError(`trailing data at byte ${offset}`);
     return value;
   }
@@ -4771,6 +4777,14 @@ var EvidenceGraph = (() => {
     "rebuts"
   ]);
   var UNVERIFIED_KEY_LABEL = "stated key_id (not verified)";
+  function statedTimes(capsule) {
+    const timestamp = asString(capsule.timestamp);
+    const provenanceMode = isObject(capsule.provenance_mode) ? capsule.provenance_mode : void 0;
+    return {
+      ...timestamp === void 0 ? {} : { timestamp },
+      ...provenanceMode === void 0 ? {} : { provenanceMode }
+    };
+  }
   var oneOf = (values, value) => typeof value === "string" && values.includes(value);
   var nonEmptyString2 = (value) => typeof value === "string" && value.length > 0;
   var CONTRACT_REF = /^[^@\s]+@[^@\s]+$/u;
@@ -5074,6 +5088,101 @@ var EvidenceGraph = (() => {
     );
     return record !== void 0 && await resultDocument(record, bundle.disclosures) !== void 0;
   }
+  var BOOK_PAYLOADS_EXTENSION = "evidencebook/payloads";
+  var AGENT_INPUT_ORIGINALS_EXTENSION = "capsulectl/agent-input-originals/v1";
+  var PUBLISHED_CAPSULE_RECORD_TYPE = "published_capsule";
+  var utf82 = new TextDecoder("utf-8", { fatal: true });
+  function base64UrlBytes(value) {
+    if (!/^[A-Za-z0-9_-]*$/u.test(value)) return void 0;
+    try {
+      const padded = `${value}${"=".repeat((4 - value.length % 4) % 4)}`;
+      const binary = atob(padded.replaceAll("-", "+").replaceAll("_", "/"));
+      return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    } catch {
+      return void 0;
+    }
+  }
+  async function verifiedBookPayload(payloads, digest) {
+    const encoded = asString(payloads[digest]);
+    if (encoded === void 0) return void 0;
+    const bytes = base64UrlBytes(encoded);
+    if (bytes === void 0) return void 0;
+    return await sha256Hex(bytes) === digest ? bytes : void 0;
+  }
+  async function carriedCapsuleCommitment(header, payloads) {
+    if (!isObject(header) || header.record_type !== PUBLISHED_CAPSULE_RECORD_TYPE)
+      return void 0;
+    const commitments = Array.isArray(header.payload_commitments) ? header.payload_commitments.filter(isHex64) : [];
+    const capsuleDigest = commitments[0];
+    if (capsuleDigest === void 0) return void 0;
+    const capsuleBytes = await verifiedBookPayload(payloads, capsuleDigest);
+    if (capsuleBytes === void 0) return void 0;
+    try {
+      const capsule = decodeCapsuleJson(capsuleBytes);
+      const id = await computeCapsuleId(capsule);
+      if (id !== capsule.capsule_id || id !== header.subject_ref)
+        return void 0;
+      const committed = committedDigest(
+        capsule,
+        "agent_input"
+      );
+      return isHex64(committed) ? {
+        capsuleId: id,
+        inputDigest: committed,
+        stated: statedTimes(capsule)
+      } : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  async function resolveCarriedInput(header, payloads, originals = {}) {
+    if (!isObject(header) || header.record_type !== PUBLISHED_CAPSULE_RECORD_TYPE)
+      return void 0;
+    const commitments = Array.isArray(header.payload_commitments) ? header.payload_commitments.filter(isHex64) : [];
+    const capsuleDigest = commitments[0];
+    if (capsuleDigest === void 0) return { state: "withheld" };
+    const capsuleBytes = await verifiedBookPayload(payloads, capsuleDigest);
+    if (capsuleBytes === void 0) return { state: "withheld" };
+    let committed;
+    let capsuleId;
+    try {
+      const capsule = decodeCapsuleJson(capsuleBytes);
+      const id = await computeCapsuleId(capsule);
+      if (id !== capsule.capsule_id || id !== header.subject_ref)
+        return { state: "disclosure_mismatch" };
+      capsuleId = id;
+      committed = committedDigest(
+        capsule,
+        "agent_input"
+      );
+    } catch {
+      return { state: "disclosure_mismatch" };
+    }
+    if (!isHex64(committed)) return { state: "withheld" };
+    for (const digest of commitments.slice(1)) {
+      const bytes = await verifiedBookPayload(payloads, digest);
+      if (bytes === void 0) continue;
+      try {
+        const value = JSON.parse(utf82.decode(bytes));
+        if (await jsonDigest(value) === committed)
+          return { state: "disclosed", payload: value };
+      } catch {
+      }
+    }
+    const attached = asString(originals[capsuleId]);
+    if (attached !== void 0) {
+      const bytes = base64UrlBytes(attached);
+      if (bytes === void 0) return { state: "disclosure_mismatch" };
+      try {
+        const value = JSON.parse(utf82.decode(bytes));
+        if (await jsonDigest(value) === committed)
+          return { state: "disclosed", payload: value };
+      } catch {
+      }
+      return { state: "disclosure_mismatch" };
+    }
+    return { state: "withheld" };
+  }
   async function buildResultRoot(bundle) {
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures))
       throw new EvidenceGraphError("bundle must contain records and disclosures");
@@ -5117,18 +5226,59 @@ var EvidenceGraph = (() => {
     const recordsById = new Map(
       records.map((record) => [record.capsule_id, record])
     );
+    const bookPayloads = isObject(bundle.extensions) && isObject(bundle.extensions[BOOK_PAYLOADS_EXTENSION]) ? bundle.extensions[BOOK_PAYLOADS_EXTENSION] : {};
+    const inputOriginals = isObject(bundle.extensions) && isObject(bundle.extensions[AGENT_INPUT_ORIGINALS_EXTENSION]) ? bundle.extensions[AGENT_INPUT_ORIGINALS_EXTENSION] : {};
+    let carriersById;
+    const bookCarrier = async (id) => {
+      if (carriersById === void 0) {
+        carriersById = /* @__PURE__ */ new Map();
+        for (const record of records) {
+          const entry = disclosures2[record.capsule_id];
+          if (!isObject(entry) || !isObject(entry.agent_input) || entry.agent_input.record_type !== PUBLISHED_CAPSULE_RECORD_TYPE)
+            continue;
+          const header = await resolveDisclosure(
+            record,
+            disclosures2,
+            "agent_input"
+          );
+          if (header.state !== "disclosed" || !isObject(header.payload)) continue;
+          const subject = header.payload.subject_ref;
+          if (isHex64(subject) && !recordsById.has(subject))
+            carriersById.set(subject, record);
+        }
+      }
+      return carriersById.get(id);
+    };
     const cited = /* @__PURE__ */ new Map();
-    const resolveRecord = async (id) => {
+    const resolveRecord = async (id, carrier) => {
       if (cited.has(id)) return;
-      const record = recordsById.get(id);
+      const record = carrier ?? recordsById.get(id);
       if (record === void 0) return;
       const cites = actedOnReferences2(record);
-      const coordinates = logCoordinates(memberships2, id);
+      const coordinates = logCoordinates(memberships2, record.capsule_id);
       const agentInputDigest = committedDigest(record, "agent_input");
       const agentOutputDigest = committedDigest(record, "agent_output");
+      const agentInput = await resolveDisclosure(
+        record,
+        disclosures2,
+        "agent_input"
+      );
+      const carriedInput = agentInput.state === "disclosed" ? await resolveCarriedInput(
+        agentInput.payload,
+        bookPayloads,
+        inputOriginals
+      ) : void 0;
+      const carriedCapsule = agentInput.state === "disclosed" ? await carriedCapsuleCommitment(agentInput.payload, bookPayloads) : void 0;
       cited.set(id, {
         capsuleId: id,
-        agentInput: await resolveDisclosure(record, disclosures2, "agent_input"),
+        ...record.capsule_id === id ? {} : { bookRecordId: record.capsule_id },
+        agentInput,
+        ...carriedInput === void 0 ? {} : { carriedInput },
+        ...carriedCapsule === void 0 ? {} : {
+          carriedCapsuleId: carriedCapsule.capsuleId,
+          carriedInputDigest: carriedCapsule.inputDigest
+        },
+        ...carriedCapsule !== void 0 ? { stated: carriedCapsule.stated } : agentInput.state === "disclosed" && isObject(agentInput.payload) && agentInput.payload.record_type === PUBLISHED_CAPSULE_RECORD_TYPE ? {} : { stated: statedTimes(record) },
         agentOutput: await resolveDisclosure(record, disclosures2, "agent_output"),
         ...agentInputDigest === void 0 ? {} : { agentInputDigest },
         ...agentOutputDigest === void 0 ? {} : { agentOutputDigest },
@@ -5147,9 +5297,10 @@ var EvidenceGraph = (() => {
       const evidence = [];
       for (const ref of raw.evidence) {
         const digest = ref.digest;
-        const resolved = recordsById.has(digest);
+        const carrier = recordsById.has(digest) ? void 0 : await bookCarrier(digest);
+        const resolved = recordsById.has(digest) || carrier !== void 0;
         evidence.push({ digest, resolved });
-        if (resolved) await resolveRecord(digest);
+        if (resolved) await resolveRecord(digest, carrier);
       }
       const missing = evidence.filter((ref) => !ref.resolved).map((ref) => ref.digest);
       const type = Object.hasOwn(raw, "type") ? typeof raw.type === "string" ? raw.type : JSON.stringify(raw.type) : REQUIREMENT_CLAIM;
@@ -5437,6 +5588,1868 @@ var EvidenceGraph = (() => {
     };
   }
 
+  // src/outcome-report.ts
+  var NOT_STATED = "not stated";
+  var RESOLUTION_RULE = "A conversation resolves only when every criterion judged for it is met or does not apply, and at least one is met.";
+  function readableId(id) {
+    const words = id.replaceAll("_", " ").replaceAll("-", " ").trim();
+    return words.length === 0 ? id : words[0].toUpperCase() + words.slice(1);
+  }
+  var CLAIM_ID_SEPARATOR = "::";
+  function parseJudgeProbabilities(rationale) {
+    if (rationale === void 0) return {};
+    const out = {};
+    const block = /probabilities=\{([^}]*)\}/u.exec(rationale);
+    if (block !== null) {
+      const probabilities = {};
+      for (const match of block[1].matchAll(
+        /'([a-z_]+)':\s*([0-9]+(?:\.[0-9]+)?(?:[eE]-?[0-9]+)?)/gu
+      )) {
+        const value = Number(match[2]);
+        if (Number.isFinite(value)) probabilities[match[1]] = value;
+      }
+      if (Object.keys(probabilities).length > 0)
+        out.probabilities = probabilities;
+    }
+    const confidence = /confidence=([0-9]+(?:\.[0-9]+)?)/u.exec(rationale);
+    if (confidence !== null) {
+      const value = Number(confidence[1]);
+      if (Number.isFinite(value)) out.confidence = value;
+    }
+    return out;
+  }
+  function parseClaimGrouping(claim) {
+    const sep = claim.id.indexOf(CLAIM_ID_SEPARATOR);
+    if (sep === -1) return void 0;
+    const conversationId = claim.id.slice(0, sep);
+    const dot = claim.requirementRef.indexOf(".");
+    if (dot === -1) return void 0;
+    return {
+      conversationId,
+      checkId: claim.requirementRef.slice(0, dot),
+      criterionId: claim.requirementRef.slice(dot + 1)
+    };
+  }
+  function drawnVerdict(claim) {
+    if (claim.failed) return "failed";
+    if (claim.support === "unsupported") return "unsupported";
+    return claim.verdict;
+  }
+  function reportPayload(records, claim) {
+    const digest = claim.evidence[0]?.digest;
+    if (digest === void 0) return void 0;
+    const record = records.get(digest);
+    if (record === void 0) return void 0;
+    const input = record.carriedInput ?? record.agentInput;
+    if (input.state !== "disclosed") return void 0;
+    return isObject(input.payload) ? input.payload : void 0;
+  }
+  function dayOf(payload) {
+    const period = asString(payload?.period);
+    if (period === void 0) return "unknown";
+    const colon = period.indexOf(":");
+    return colon === -1 ? period : period.slice(colon + 1);
+  }
+  var STATED_DAY = /^(\d{4}-\d{2}-\d{2})/u;
+  function caseRecord(result, claims, sourceCapsuleId) {
+    if (sourceCapsuleId === void 0) return void 0;
+    for (const claim of claims)
+      for (const ref of claim.evidence) {
+        const record = result.records.get(ref.digest);
+        if (record === void 0 || record.stated === void 0) continue;
+        if (record.carriedCapsuleId === sourceCapsuleId || record.carriedCapsuleId === void 0 && record.bookRecordId === void 0 && record.capsuleId === sourceCapsuleId)
+          return record;
+      }
+    return void 0;
+  }
+  function conversationDate(record, judgedDay) {
+    const judged = { basis: "judged", date: judgedDay };
+    const stated = record?.stated;
+    if (stated === void 0) return judged;
+    const mode = stated.provenanceMode;
+    if (asString(mode?.mode) === "backfilled") {
+      const source = asString(mode?.source_asserted_at);
+      const day2 = source === void 0 ? void 0 : STATED_DAY.exec(source)?.[1];
+      if (source === void 0 || day2 === void 0) return judged;
+      const importedAt = asString(mode?.imported_at);
+      return {
+        basis: "source",
+        date: day2,
+        stated: source,
+        zone: zoneStatement(source),
+        ...importedAt === void 0 ? {} : { importedAt }
+      };
+    }
+    const timestamp = stated.timestamp;
+    const day = timestamp === void 0 ? void 0 : STATED_DAY.exec(timestamp)?.[1];
+    if (timestamp === void 0 || day === void 0) return judged;
+    return {
+      basis: "record",
+      date: day,
+      stated: timestamp,
+      zone: zoneStatement(timestamp)
+    };
+  }
+  function checksById(terms) {
+    return new Map(terms.checks.map((check) => [check.id, check]));
+  }
+  function rollUp(verdicts) {
+    if (verdicts.length === 0) return "not_evaluable";
+    if (verdicts.some(
+      (v) => v === "not_met" || v === "failed" || v === "unsupported"
+    ))
+      return "not_met";
+    if (verdicts.some((v) => v === "not_evaluable")) return "not_evaluable";
+    if (!verdicts.some((v) => v === "met")) return "not_evaluable";
+    return "met";
+  }
+  function sealedCaseId(payload) {
+    const c = isObject(payload.case) ? payload.case : void 0;
+    if (c === void 0) return void 0;
+    const parts = [c.benchmark, c.domain, c.task_id, c.trial].map(
+      (v) => typeof v === "string" || typeof v === "number" ? String(v) : void 0
+    );
+    if (parts.some((v) => v === void 0)) return void 0;
+    return `${parts[0]}:${parts[1]}:task-${parts[2]}:trial-${parts[3]}`;
+  }
+  function transcriptTurns(payload) {
+    const interaction = isObject(payload.agent_interaction) ? payload.agent_interaction : void 0;
+    if (interaction === void 0 || !Array.isArray(interaction.messages))
+      return void 0;
+    return interaction.messages.flatMap((m) => {
+      if (!isObject(m)) return [];
+      const role = asString(m.role) ?? "unknown";
+      const content = asString(m.content);
+      const calls = Array.isArray(m.tool_calls) ? m.tool_calls : [];
+      return [
+        {
+          role,
+          ...content === void 0 ? {} : { content },
+          toolCalls: calls.flatMap(
+            (call) => isObject(call) ? [
+              {
+                name: asString(call.name) ?? "unnamed",
+                arguments: JSON.stringify(call.arguments ?? null)
+              }
+            ] : []
+          )
+        }
+      ];
+    });
+  }
+  function findTranscript(result, conversationId, claims, sourceCapsuleId) {
+    const records = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const claim of claims)
+      for (const ref of claim.evidence.slice(1)) {
+        if (seen.has(ref.digest)) continue;
+        seen.add(ref.digest);
+        const record = result.records.get(ref.digest);
+        if (record !== void 0) records.push(record);
+      }
+    const carriers = records.filter(
+      (r) => r.carriedInput?.state === "disclosed" && isObject(r.carriedInput.payload) && transcriptTurns(r.carriedInput.payload) !== void 0
+    );
+    if (carriers.length === 0) return { state: "absent" };
+    if (sourceCapsuleId === void 0)
+      return {
+        state: "mismatch",
+        reason: "the reports do not agree on one case record"
+      };
+    const caseRecord2 = records.find(
+      (r) => r.carriedCapsuleId === sourceCapsuleId
+    );
+    if (caseRecord2?.carriedInputDigest === void 0)
+      return {
+        state: "mismatch",
+        reason: `the case record the reports name (${sourceCapsuleId}) is not cited, so the transcript cannot be tied to it`
+      };
+    for (const carrier of carriers) {
+      const payload = carrier.carriedInput.state === "disclosed" ? carrier.carriedInput.payload : void 0;
+      if (payload === void 0) continue;
+      if (carrier.carriedInputDigest === caseRecord2.carriedInputDigest && sealedCaseId(payload) === conversationId)
+        return {
+          state: "verified",
+          turns: transcriptTurns(payload),
+          transcriptRecordId: carrier.capsuleId,
+          caseRecordId: caseRecord2.capsuleId,
+          inputDigest: caseRecord2.carriedInputDigest
+        };
+    }
+    return {
+      state: "mismatch",
+      reason: "a cited transcript does not commit to the same input as the case record the judge read"
+    };
+  }
+  function groupClaims(result, terms) {
+    const order = checksById(terms);
+    const byConversation = /* @__PURE__ */ new Map();
+    for (const claim of result.claims) {
+      if (claim.type !== REQUIREMENT_CLAIM) continue;
+      const grouping = parseClaimGrouping(claim);
+      if (grouping === void 0 || !order.has(grouping.checkId)) continue;
+      const list = byConversation.get(grouping.conversationId) ?? [];
+      list.push(claim);
+      byConversation.set(grouping.conversationId, list);
+    }
+    const conversations = [];
+    const byDay = /* @__PURE__ */ new Map();
+    for (const [conversationId, claims] of byConversation) {
+      const criteria = [];
+      for (const check of terms.checks) {
+        for (const criterion of check.criteria) {
+          const claim = claims.find(
+            (candidate) => candidate.requirementRef === `${check.id}.${criterion.id}`
+          );
+          if (claim === void 0) {
+            criteria.push({
+              checkId: check.id,
+              criterionId: criterion.id,
+              verdict: "not_applicable"
+            });
+            continue;
+          }
+          const judgment = reportPayload(result.records, claim);
+          const rationale = judgment ? asString(judgment.rationale) : void 0;
+          const reasonCode = judgment ? asString(judgment.reason_code) : void 0;
+          const sourceCapsuleId = judgment ? asString(judgment.source_capsule_id) : void 0;
+          const clauseClaim = judgment !== void 0 && asString(judgment.clause_id) === `${check.id}.${criterion.id}` ? asString(judgment.clause_claim) : void 0;
+          const { probabilities, confidence } = parseJudgeProbabilities(rationale);
+          const cited = claim.evidence[0]?.digest;
+          const record = cited === void 0 ? void 0 : result.records.get(cited);
+          criteria.push({
+            checkId: check.id,
+            criterionId: criterion.id,
+            claim,
+            verdict: drawnVerdict(claim),
+            ...rationale === void 0 ? {} : { rationale },
+            ...reasonCode === void 0 ? {} : { reasonCode },
+            ...probabilities === void 0 ? {} : { probabilities },
+            ...confidence === void 0 ? {} : { confidence },
+            ...cited === void 0 ? {} : { reportCapsuleId: cited },
+            ...record?.bookRecordId === void 0 ? {} : { reportRecordId: record.bookRecordId },
+            ...sourceCapsuleId === void 0 ? {} : { sourceCapsuleId },
+            ...clauseClaim === void 0 || clauseClaim.trim() === "" ? {} : { clauseClaim }
+          });
+        }
+      }
+      const firstClaim = criteria.find((c) => c.claim !== void 0)?.claim;
+      const judgedDay = dayOf(
+        firstClaim === void 0 ? void 0 : reportPayload(result.records, firstClaim)
+      );
+      const checkVerdicts = /* @__PURE__ */ new Map();
+      for (const check of terms.checks) {
+        const forCheck = criteria.filter((c) => c.checkId === check.id);
+        checkVerdicts.set(check.id, rollUp(forCheck.map((c) => c.verdict)));
+      }
+      const sources = new Set(
+        criteria.flatMap(
+          (c) => c.sourceCapsuleId === void 0 ? [] : [c.sourceCapsuleId]
+        )
+      );
+      const dated = conversationDate(
+        caseRecord(
+          result,
+          claims,
+          sources.size === 1 ? [...sources][0] : void 0
+        ),
+        judgedDay
+      );
+      const date = dated.date;
+      const conversation = {
+        conversationId,
+        transcript: findTranscript(
+          result,
+          conversationId,
+          claims,
+          sources.size === 1 ? [...sources][0] : void 0
+        ),
+        ...sources.size === 1 ? { sourceCapsuleId: [...sources][0] } : {},
+        day: date,
+        dated,
+        judgedDay,
+        criteria,
+        checkVerdicts,
+        verdict: rollUp(criteria.map((c) => c.verdict))
+      };
+      conversations.push(conversation);
+      const dayList = byDay.get(date) ?? [];
+      dayList.push(conversation);
+      byDay.set(date, dayList);
+    }
+    conversations.sort(
+      (a, b) => a.day === b.day ? a.conversationId.localeCompare(b.conversationId) : a.day.localeCompare(b.day)
+    );
+    return { conversations, days: byDay };
+  }
+  function criterionTiers(terms, conversations) {
+    const tiers = /* @__PURE__ */ new Map();
+    for (const check of terms.checks) {
+      for (const criterion of check.criteria) {
+        const ref = `${check.id}.${criterion.id}`;
+        const seen = /* @__PURE__ */ new Set();
+        for (const conversation of conversations)
+          for (const c of conversation.criteria)
+            if (c.checkId === check.id && c.criterionId === criterion.id && c.claim !== void 0)
+              seen.add(c.claim.tier);
+        tiers.set(
+          ref,
+          seen.size === 0 ? "unknown" : seen.size === 1 ? [...seen][0] : "mixed"
+        );
+      }
+    }
+    return tiers;
+  }
+  function pinComponents(value) {
+    if (!isObject(value)) return void 0;
+    const modelId = asString(value.model_id);
+    const promptDigest = asString(value.prompt_digest);
+    const axesDigest = asString(value.axes_digest);
+    if (modelId === void 0 || promptDigest === void 0 || axesDigest === void 0)
+      return void 0;
+    const modelVersion = asString(value.model_version);
+    return {
+      modelId,
+      ...modelVersion === void 0 ? {} : { modelVersion },
+      promptDigest,
+      axesDigest,
+      ...isObject(value.sampling_params) ? { samplingParams: value.sampling_params } : {}
+    };
+  }
+  function pinPreimage(pin) {
+    return {
+      model_id: pin.modelId,
+      model_version: pin.modelVersion ?? null,
+      sampling_params: pin.samplingParams ?? null,
+      prompt_digest: pin.promptDigest,
+      axes_digest: pin.axesDigest
+    };
+  }
+  function buildRunInfo(result, conversations) {
+    const claimContracts = /* @__PURE__ */ new Set();
+    const reportContracts = /* @__PURE__ */ new Set();
+    const pins = /* @__PURE__ */ new Set();
+    const components = /* @__PURE__ */ new Map();
+    for (const conversation of conversations) {
+      for (const criterion of conversation.criteria) {
+        const claim = criterion.claim;
+        if (claim === void 0) continue;
+        claimContracts.add(claim.contractRef);
+        const payload = reportPayload(result.records, claim);
+        const contract = asString(payload?.contract_ref) ?? asString(payload?.contract);
+        if (contract !== void 0) reportContracts.add(contract);
+        const pin = asString(payload?.judge_pin_digest);
+        if (pin !== void 0) pins.add(pin);
+        const parts = pinComponents(payload?.judge_pin);
+        if (parts !== void 0)
+          components.set(JSON.stringify(pinPreimage(parts)), parts);
+      }
+    }
+    const contracts = claimContracts.size > 0 ? claimContracts : reportContracts;
+    const pinned = contracts.size <= 1 && pins.size <= 1 && components.size <= 1;
+    return {
+      ...contracts.size === 1 ? { contract: [...contracts][0] } : {},
+      ...pins.size === 1 ? { judgePinDigest: [...pins][0] } : {},
+      ...pins.size === 1 && components.size === 1 ? { judgePin: [...components.values()][0] } : {},
+      pinned
+    };
+  }
+  async function verifyJudgePin(runInfo) {
+    if (runInfo.judgePin === void 0 || runInfo.judgePinDigest === void 0)
+      return runInfo;
+    let recomputes = false;
+    try {
+      recomputes = await jsonDigest(pinPreimage(runInfo.judgePin)) === runInfo.judgePinDigest;
+    } catch {
+      recomputes = false;
+    }
+    return { ...runInfo, judgePinRecomputes: recomputes };
+  }
+  function buildCalibration(result) {
+    const weeks = [];
+    for (const claim of result.claims) {
+      if (claim.type !== "calibration") continue;
+      const payload = reportPayload(result.records, claim);
+      if (payload === void 0) continue;
+      const weekId = asString(payload.week);
+      if (weekId === void 0) continue;
+      const sample = (Array.isArray(payload.sample) ? payload.sample : []).flatMap((entry) => {
+        if (!isObject(entry)) return [];
+        const conversationId = asString(entry.conversation_id);
+        const aiVerdict = asString(entry.ai_verdict);
+        const humanVerdict = asString(entry.human_verdict);
+        if (conversationId === void 0 || aiVerdict === void 0 || humanVerdict === void 0)
+          return [];
+        const note = asString(entry.note);
+        return [
+          {
+            conversationId,
+            aiVerdict,
+            humanVerdict,
+            ...note === void 0 ? {} : { note },
+            agrees: aiVerdict === humanVerdict
+          }
+        ];
+      });
+      const k = sample.filter((entry) => entry.agrees).length;
+      const n = sample.length;
+      const from = asString(payload.from);
+      const to = asString(payload.to);
+      weeks.push({
+        weekId,
+        ...from === void 0 ? {} : { from },
+        ...to === void 0 ? {} : { to },
+        k,
+        n,
+        sample,
+        claim
+      });
+    }
+    weeks.sort((a, b) => a.weekId.localeCompare(b.weekId));
+    return weeks;
+  }
+  function heldAndAdded(weeks) {
+    let held = 0, added = 0;
+    for (const week of weeks)
+      for (const sample of week.sample) {
+        if (sample.aiVerdict === "met" && sample.humanVerdict !== "met")
+          held += 1;
+        else if (sample.aiVerdict !== "met" && sample.humanVerdict === "met")
+          added += 1;
+      }
+    return { held, added };
+  }
+  function missedReasonGroups(terms, conversations) {
+    const labelOf = (checkId, criterionId) => {
+      const check = terms.checks.find((c) => c.id === checkId);
+      const criterion = check?.criteria.find((c) => c.id === criterionId);
+      return criterion === void 0 ? `${checkId}.${criterionId}` : `${criterion.label} (${check.question})`;
+    };
+    const labelledReasonCode = (code) => code === void 0 ? void 0 : terms.reasonCodes[code];
+    const groups = /* @__PURE__ */ new Map();
+    const structured = /* @__PURE__ */ new Map();
+    const labels = /* @__PURE__ */ new Map();
+    for (const conversation of conversations) {
+      if (conversation.verdict === "met") continue;
+      const failing = conversation.criteria.filter(
+        (c) => c.verdict === "not_met" || c.verdict === "failed" || c.verdict === "unsupported"
+      );
+      const notEvaluable = conversation.criteria.filter(
+        (c) => c.verdict === "not_evaluable"
+      );
+      const first = failing[0] ?? notEvaluable[0];
+      if (first === void 0) continue;
+      const label = labelledReasonCode(first.reasonCode);
+      const key = label !== void 0 ? first.reasonCode : `${first.checkId}.${first.criterionId}`;
+      const list = groups.get(key) ?? [];
+      list.push(conversation);
+      groups.set(key, list);
+      structured.set(key, label !== void 0);
+      labels.set(key, label ?? labelOf(first.checkId, first.criterionId));
+    }
+    return [...groups.entries()].map(([key, convos]) => ({
+      key,
+      label: labels.get(key),
+      structured: structured.get(key),
+      conversations: convos
+    })).sort((a, b) => b.conversations.length - a.conversations.length);
+  }
+  function criterionWordings(terms, conversations) {
+    const out = /* @__PURE__ */ new Map();
+    for (const check of terms.checks) {
+      for (const criterion of check.criteria) {
+        const sealed = /* @__PURE__ */ new Set();
+        for (const conversation of conversations)
+          for (const c of conversation.criteria)
+            if (c.checkId === check.id && c.criterionId === criterion.id && c.clauseClaim !== void 0)
+              sealed.add(c.clauseClaim);
+        const ref = `${check.id}.${criterion.id}`;
+        if (sealed.size === 1)
+          out.set(ref, { text: [...sealed][0], source: "sealed" });
+        else
+          out.set(ref, {
+            text: NOT_STATED,
+            source: sealed.size === 0 ? "unstated" : "mixed"
+          });
+      }
+    }
+    return out;
+  }
+  function citedContract(result, contractRef) {
+    for (const record of result.records.values()) {
+      const input = record.carriedInput ?? record.agentInput;
+      if (input.state !== "disclosed" || !isObject(input.payload)) continue;
+      const doc = input.payload;
+      const id = asString(doc.id);
+      const version = asString(doc.version);
+      if (id !== void 0 && version !== void 0 && Array.isArray(doc.requirements) && `${id}@${version}` === contractRef)
+        return doc;
+    }
+    return void 0;
+  }
+  function readOutcomeReportTerms(result) {
+    const checks = /* @__PURE__ */ new Map();
+    const contracts = /* @__PURE__ */ new Set();
+    for (const claim of result.claims) {
+      if (claim.type !== REQUIREMENT_CLAIM) continue;
+      const grouping = parseClaimGrouping(claim);
+      if (grouping === void 0) continue;
+      contracts.add(claim.contractRef);
+      const criteria = checks.get(grouping.checkId) ?? [];
+      if (!criteria.includes(grouping.criterionId))
+        criteria.push(grouping.criterionId);
+      checks.set(grouping.checkId, criteria);
+    }
+    const contractRef = contracts.size === 1 ? [...contracts][0] : void 0;
+    const at = contractRef?.lastIndexOf("@") ?? -1;
+    const contract = contractRef === void 0 ? void 0 : citedContract(result, contractRef);
+    const outcome = Array.isArray(contract?.requirements) ? contract.requirements.find(
+      (r) => isObject(r) && r.profile === "outcome" && asString(r.statement) !== void 0
+    ) : void 0;
+    return {
+      pack: {
+        id: contractRef === void 0 || at <= 0 ? NOT_STATED : contractRef.slice(0, at),
+        version: contractRef === void 0 || at <= 0 || at === contractRef.length - 1 ? NOT_STATED : contractRef.slice(at + 1),
+        outcomeStatement: asString(outcome?.statement) ?? NOT_STATED,
+        locked: NOT_STATED,
+        agreement: NOT_STATED,
+        resolutionRule: RESOLUTION_RULE
+      },
+      checks: [...checks.entries()].map(([id, criteria]) => ({
+        id,
+        question: readableId(id),
+        description: NOT_STATED,
+        icon: "check",
+        criteria: criteria.map((criterionId) => ({
+          id: criterionId,
+          label: readableId(criterionId),
+          text: NOT_STATED
+        }))
+      })),
+      reasonCodes: {}
+    };
+  }
+  function buildDating(conversations) {
+    const counts = { source: 0, record: 0, judged: 0 };
+    for (const c of conversations) counts[c.dated.basis] += 1;
+    const used = Object.keys(counts).filter(
+      (basis) => counts[basis] > 0
+    );
+    return {
+      basis: used.length === 1 ? used[0] : used.length === 0 ? "judged" : "mixed",
+      counts,
+      judgedDays: [...new Set(conversations.map((c) => c.judgedDay))].sort(),
+      zoneNotStated: conversations.filter((c) => c.dated.zone === "not-stated").length
+    };
+  }
+  function buildOutcomeReportModel(result, options) {
+    const terms = readOutcomeReportTerms(result);
+    const { conversations, days } = groupClaims(result, terms);
+    const dayList = [...days.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, convos]) => ({
+      date,
+      // No evaluation-report/v1 record carries a day-level policy-change
+      // flag (that was a property of v1's invented day wrapper, which this
+      // real data shape has no analogue for) -- absent is never pass, so
+      // this reads null until a real day-summary record exists to cite.
+      policyChanged: null,
+      conversations: convos,
+      resolvedCount: convos.filter((c) => c.verdict === "met").length,
+      judgedDays: [...new Set(convos.map((c) => c.judgedDay))].sort()
+    }));
+    const calibration = buildCalibration(result);
+    const { held, added } = heldAndAdded(calibration);
+    const checkPassCounts = /* @__PURE__ */ new Map();
+    for (const check of terms.checks)
+      checkPassCounts.set(
+        check.id,
+        conversations.filter((c) => c.checkVerdicts.get(check.id) === "met").length
+      );
+    const resolvedCount = conversations.filter((c) => c.verdict === "met").length;
+    const notApplicableCount = conversations.reduce(
+      (sum, c) => sum + c.criteria.filter((cr) => cr.verdict === "not_applicable").length,
+      0
+    );
+    return {
+      terms,
+      options,
+      days: dayList,
+      dating: buildDating(conversations),
+      conversations,
+      runInfo: buildRunInfo(result, conversations),
+      calibration,
+      checkPassCounts,
+      missedReasons: missedReasonGroups(terms, conversations),
+      criterionTiers: criterionTiers(terms, conversations),
+      criterionWording: criterionWordings(terms, conversations),
+      resolvedCount,
+      missedCount: conversations.length - resolvedCount,
+      totalCount: conversations.length,
+      heldCount: held,
+      addedCount: added,
+      notApplicableCount,
+      capsuleId: result.capsuleId
+    };
+  }
+
+  // src/outcome-report-styles.ts
+  var OUTCOME_REPORT_CSS = `
+.oi{--navy:#232F42;--gold:#E8A33D;--gold-l:#FBEFD9;--cream:#F6F2EA;--line:#E3DED3;--slate:#6B7482;--ink:#1F2733;--ok:#2E7D5B;--ok-l:#E3F1EA;--bad:#B5462F;--bad-l:#F8E6E1;--person:#5B4BA0;--person-l:#ECE8F7;--r:14px;
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;color:var(--ink);background:#EEF0F3;display:block}
+.oi *{box-sizing:border-box}
+.oi h1,.oi h2,.oi h3{font-family:Georgia,"Iowan Old Style",Cambria,serif;color:var(--navy);margin:0}
+.oi a{color:var(--navy)}
+.oi .sheet{background:#fff;max-width:1080px;margin:26px auto;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 10px 30px rgba(0,0,0,.06);position:relative;overflow:hidden}
+.oi .sheet .pad{padding:64px 72px 56px}
+.oi .ih-row{display:flex;justify-content:space-between;align-items:flex-start;gap:40px;margin-bottom:48px}
+.oi .ih-title{text-align:right}
+.oi .ih-title .inv-title{font-size:28px}
+.oi .inv-title{font-family:Georgia,serif;font-size:30px;color:var(--navy);margin:0}
+.oi .inv-sub{color:var(--slate);font-size:14px;margin-top:4px}
+.oi .party .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);margin-bottom:6px;font-weight:700;color:var(--navy)}
+.oi .party .v{font-weight:600;color:var(--navy);font-size:16px}
+.oi .party .d{font-size:14px;color:var(--slate);line-height:1.7;margin-top:4px}
+.oi .meta{width:320px;flex:none;font-size:14px}
+.oi .meta div{display:grid;grid-template-columns:130px 1fr}
+.oi .meta span:first-child{color:var(--slate)}
+.oi .meta span:last-child{text-align:right;word-break:break-all;min-width:0}
+.oi .meta code{font-size:12.5px}
+.oi table.lines{width:100%;border-collapse:collapse;margin-top:40px;font-size:14.5px}
+.oi table.lines th{text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:2px solid var(--navy);padding:8px 10px}
+.oi table.lines td{border-bottom:1px solid var(--line);padding:16px 10px;vertical-align:top}
+.oi table.lines td.n,.oi table.lines th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.oi table.lines .desc b{color:var(--navy)}
+.oi table.lines .desc small{display:block;color:var(--slate);font-size:12.5px}
+.oi table.lines .src{font-size:11.5px;color:var(--slate);white-space:normal}
+.oi .notes{font-size:13px;color:var(--slate);margin-top:44px;max-width:640px}
+.oi .notes p{margin:0 0 8px;font-size:14px;color:var(--ink)}
+.oi .notes .nh{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin-bottom:6px}
+.oi .stamps.inl{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;margin-top:24px;gap:14px}
+.oi .stamp{border:3px solid;border-radius:8px;padding:6px 12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:13px;transform:rotate(-6deg)}
+.oi .stamp.rec{color:var(--ok);border-color:var(--ok)}
+.oi .stamp.hollow{color:#9AA1AC;border:3px dashed #BFC4CC;transform:rotate(-3deg);font-size:11.5px}
+.oi .stamp small{display:block;font-weight:600;letter-spacing:0;text-transform:none;font-size:11px}
+.oi .tamper-note{margin-top:24px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#FAF8F4;font-size:13.5px;color:var(--slate)}
+.oi .sec{background:#fff;max-width:1080px;margin:0 auto 22px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:30px 42px}
+.oi .sec h2{font-size:22px}
+.oi .sec .lede{color:var(--slate);margin:6px 0 16px}
+.oi .cal{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.oi .day{border:1px solid var(--line);border-radius:10px;padding:8px 9px;min-height:84px;background:#fff;position:relative}
+.oi .day .dn{font-size:12px;color:var(--slate)}
+.oi .day .v{font-weight:700;font-size:17px;color:var(--navy);font-variant-numeric:tabular-nums}
+.oi .day .v small{font-weight:400;color:var(--slate);font-size:12px}
+.oi .day .amt{font-size:11px;color:var(--slate);font-variant-numeric:tabular-nums}
+.oi .mini{height:6px;border-radius:99px;background:var(--bad-l);overflow:hidden;margin-top:6px}
+.oi .mini i{display:block;height:100%;background:var(--ok)}
+.oi .day .sealed{font-size:11px;color:var(--slate);margin-top:6px}
+.oi .day .src-says{display:inline-block;font-size:10.5px;font-weight:700;color:var(--navy);background:var(--gold-l);border:1px solid var(--gold);border-radius:999px;padding:0 6px;margin-top:2px}
+.oi .day .tz{font-size:11px;color:var(--bad);margin-top:2px}
+.oi p.date-note{font-size:13.5px;color:var(--ink);background:#FAF8F4;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:8px;padding:10px 14px;margin:14px 0 0}
+.oi .sec p.date-note{margin:0 0 14px}
+.oi .flag{position:absolute;top:7px;right:8px;font-size:11px;color:var(--gold)}
+.oi .flag:before{content:"";display:inline-block;width:6px;height:6px;margin-right:5px;background:var(--gold);transform:rotate(45deg);vertical-align:1px}
+.oi .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--slate);margin-top:12px}
+.oi .legend span i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.oi .hc-top{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.oi .hc-top div{padding:12px 14px;border-right:1px solid var(--line)}
+.oi .hc-top div:last-child{border-right:0}
+.oi .hc-top b{display:block;font-size:22px;color:var(--navy);font-variant-numeric:tabular-nums}
+.oi .hc-top span{font-size:12.5px;color:var(--slate)}
+.oi table.hct{width:100%;border-collapse:collapse;font-size:14px}
+.oi table.hct th{text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:2px solid var(--navy);padding:7px 10px}
+.oi table.hct td{padding:9px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.oi table.hct .n{text-align:right}
+.oi .bars{display:grid;gap:12px;margin-bottom:26px}
+.oi .bar{display:grid;grid-template-columns:260px 1fr 190px;gap:16px;align-items:center;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.oi .bar .nm{font-weight:600;color:var(--navy)}
+.oi .track{height:14px;background:var(--bad-l);border-radius:99px;overflow:hidden}
+.oi .track i{display:block;height:100%;background:var(--ok);border-radius:99px}
+.oi .bar .num{text-align:right;font-variant-numeric:tabular-nums;font-size:15px}
+.oi .reasons{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.oi .rsn{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;background:var(--bad-l);border-radius:10px;font-size:15px}
+.oi .rsn .c{font-weight:700;color:var(--bad);font-variant-numeric:tabular-nums}
+.oi h3{font-size:19px;margin:26px 0 12px}
+.oi .pack{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.oi .pk{padding:10px 14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.oi .pk:nth-child(3n){border-right:0}
+.oi .pk .k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate)}
+.oi .pk .v{color:var(--navy);font-weight:600;font-size:14px}
+.oi .outcome{border:2px solid var(--navy);border-radius:var(--r);padding:18px 20px;margin-bottom:14px;display:flex;gap:16px;align-items:center}
+.oi .outcome .t{font-size:13px;color:var(--slate);text-transform:uppercase;letter-spacing:.06em}
+.oi .outcome .v{font-family:Georgia,Cambria,serif;font-size:22px;color:var(--navy)}
+.oi .checks{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.oi .check{border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;background:#fff}
+.oi .check .ic{width:34px;height:34px;border-radius:10px;background:var(--gold-l);color:var(--navy);display:grid;place-items:center;margin-bottom:8px}
+.oi .outcome .oic{width:40px;height:40px;flex:none;border-radius:10px;background:var(--gold-l);color:var(--navy);display:grid;place-items:center}
+.oi svg{display:block}
+.oi .check .q{font-weight:700;color:var(--navy);font-size:17px}
+.oi .check .d{color:var(--slate);font-size:14px;margin-top:4px}
+.oi ul.subs{list-style:none;padding:0;margin:10px 0 0;border-top:1px solid var(--line)}
+.oi ul.subs li{padding:6px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.oi ul.subs li b{display:block;color:var(--navy);font-size:13px}
+.oi ul.subs li b:before{content:"";display:inline-block;width:5px;height:5px;margin-right:6px;border:1.5px solid var(--gold);border-radius:50%;vertical-align:2px}
+.oi ul.subs li span{color:var(--slate)}
+.oi .rule{margin-top:14px;font-size:14px;color:var(--slate)}
+.oi .rule b{color:var(--ink)}
+.oi .ran{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.oi .ran .it{background:var(--cream);border-radius:12px;padding:12px 14px}
+.oi .ran .k{font-size:13px;color:var(--slate)}
+.oi .ran .v{font-weight:600;color:var(--navy);word-break:break-word}
+.oi .ran .v code{font-size:13px}
+.oi .lock{margin-top:12px;font-size:14px;color:var(--slate)}
+.oi .tech{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;margin-top:12px;font-size:13px}
+.oi .tech .k{color:var(--slate)}
+.oi .tech .v{font-family:ui-monospace,Menlo,monospace;word-break:break-all;min-width:0}
+.oi .note{font-size:13px;color:var(--slate);margin-top:12px}
+.oi.oi-banner{max-width:1080px;margin:26px auto 0;padding:12px 18px;border-radius:6px;font-weight:700;font-size:15px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.oi.oi-banner-ok{background:var(--ok-l);color:var(--ok);border:1px solid var(--ok)}
+.oi.oi-banner-failed{background:var(--bad-l);color:var(--bad);border:1px solid var(--bad)}
+.oi.oi-vp{padding:0 0 26px}
+.oi.oi-vp .sec{margin-bottom:0}
+.oi.oi-vp h4{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin:22px 0 8px;padding-top:14px;border-top:1px solid var(--line)}
+.oi.oi-vp h2 + dl{margin-top:14px}
+.oi.oi-vp dl{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;margin:0;font-size:13px}
+.oi.oi-vp dt{color:var(--slate)}
+.oi.oi-vp dd{margin:0;font-family:ui-monospace,Menlo,monospace;word-break:break-all;color:var(--navy)}
+.oi.oi-vp p{font-size:14px;margin:6px 0}
+.oi.oi-vp ul,.oi.oi-vp ol{margin:6px 0;padding-left:22px;font-size:14px}
+.oi.oi-vp li{padding:2px 0}
+.oi.oi-vp ol li strong{color:var(--navy)}
+.oi.oi-vp [data-check-status="pass"] span,.oi.oi-vp [data-check-status="passed"] span{color:var(--ok)}
+.oi.oi-vp details{margin-top:8px;font-size:13px}
+.oi.oi-vp summary{cursor:pointer;color:var(--navy);font-weight:600}
+.oi.oi-vp details ul{font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;max-height:420px;overflow:auto}
+.oi.oi-vp .seal-checkpointed{color:var(--ok)}
+.oi.oi-vp .seal-uncheckpointed,.oi.oi-vp .seal-membership_invalid{color:var(--bad)}
+.oi.oi-vp > .sec > p:last-child{margin-top:18px;padding:12px 14px;border-radius:10px;background:var(--cream);color:var(--slate)}
+.oi details.drill{margin-top:8px}
+.oi details.drill > summary{cursor:pointer;color:var(--navy);font-size:13px;font-weight:600;list-style:none}
+.oi details.drill > summary::-webkit-details-marker,.oi summary.rsn::-webkit-details-marker,.oi summary.conv-s::-webkit-details-marker{display:none}
+.oi details.drill[open] > summary{margin-bottom:8px}
+.oi .reasons details.rsn-d[open]{grid-column:1/-1}
+.oi summary.rsn{cursor:pointer;list-style:none}
+.oi summary.rsn .c{white-space:nowrap}
+.oi details.rsn-d > .convs{margin-top:8px}
+.oi .convs{display:grid;gap:6px}
+.oi details.conv{border:1px solid var(--line);border-radius:10px;background:#fff}
+.oi details.conv[open]{border-color:var(--navy);box-shadow:0 1px 6px rgba(0,0,0,.06)}
+.oi summary.conv-s{cursor:pointer;list-style:none;display:grid;grid-template-columns:76px 86px 1fr auto;gap:10px;align-items:center;padding:8px 12px;font-size:13.5px;font-weight:400}
+.oi summary.conv-s .cid{font-weight:700;color:var(--navy)}
+.oi summary.conv-s .cwhy{color:var(--slate)}
+.oi summary.conv-s .go{color:var(--navy);font-weight:600;white-space:nowrap}
+.oi .pill{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;text-align:center}
+.oi .pill.ok{background:var(--ok-l);color:var(--ok)}
+.oi .pill.bad{background:var(--bad-l);color:var(--bad)}
+.oi .pill.na{background:#EEF0F3;color:var(--slate);border:1px dashed #BFC4CC}
+.oi .pill.ne{background:var(--gold-l);color:#8A5A12}
+.oi .conv-b{padding:4px 16px 16px;border-top:1px solid var(--line);font-size:13.5px;font-weight:400;color:var(--ink)}
+.oi .conv-b h4{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);margin:16px 0 6px}
+.oi .conv-b .small{font-size:12.5px;color:var(--slate);margin:6px 0}
+.oi .conv-b .muted{color:var(--slate)}
+.oi .conv-b .absent{margin:0;padding:10px 12px;border:1px dashed #BFC4CC;border-radius:10px;background:#FAF8F4;color:var(--slate);word-break:break-word}
+.oi .tscroll{overflow-x:auto}
+.oi table.crit{width:100%;border-collapse:collapse;margin:0;font-size:12.5px}
+.oi table.lines table.crit th,.oi table.crit th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);border-bottom:1px solid var(--navy);padding:5px 8px}
+.oi table.lines table.crit td,.oi table.crit td{border-bottom:1px solid var(--line);padding:7px 8px;vertical-align:top}
+.oi table.crit td.cn{width:30%}
+.oi table.crit td.cn b{display:block;color:var(--navy);font-size:13px}
+.oi table.crit td.cn small{display:block;color:var(--slate);font-size:11.5px}
+.oi small.wsrc{display:block;font-style:italic;color:var(--slate);font-size:11px;margin-top:2px}
+.oi .pnote{max-width:1080px;margin:26px auto 0;box-sizing:border-box;background:var(--gold-l);border:1px solid var(--gold);border-left:6px solid var(--gold);border-radius:6px;padding:18px 26px}
+.oi .pnote .pn-k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);font-weight:700}
+.oi .pnote .pn-t{font-size:20px;color:var(--navy);margin:4px 0 8px}
+.oi .pnote .pn-l{margin:0;padding-left:20px;font-size:14.5px;line-height:1.55}
+.oi .pnote .pn-l li{margin:4px 0}
+.oi .pnote .pn-src{font-size:12px;color:var(--slate);margin:10px 0 0;font-style:italic}
+.oi span.edited{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:999px;background:var(--gold-l);border:1px solid var(--gold);color:var(--navy);font-size:10.5px;font-weight:700;letter-spacing:.03em;vertical-align:1px;white-space:nowrap}
+.oi p[data-wording-note]{font-size:12.5px;color:var(--slate);margin:10px 0}
+.oi table.crit td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.oi table.crit td.rat code{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--slate);word-break:break-word;white-space:normal}
+.oi ul.why{margin:0;padding-left:20px}
+.oi ul.why li{padding:2px 0}
+.oi dl.chk{display:grid;grid-template-columns:190px 1fr;gap:4px 12px;margin:0;font-size:12px}
+.oi dl.chk dt{color:var(--slate)}
+.oi dl.chk dd{margin:0;font-family:ui-monospace,Menlo,monospace;word-break:break-all;color:var(--navy)}
+.oi ol.turns{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px;max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px;background:#FAF8F4}
+.oi li.turn{border-radius:10px;padding:6px 10px;max-width:88%;background:#fff;border:1px solid var(--line)}
+.oi li.turn.user{justify-self:end;background:var(--person-l);border-color:transparent}
+.oi li.turn.assistant{justify-self:start}
+.oi li.turn.tool{justify-self:center;max-width:96%;border-style:dashed}
+.oi li.turn .who{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate)}
+.oi li.turn .say{white-space:pre-wrap;word-break:break-word}
+.oi li.turn pre{margin:4px 0 0;font-family:ui-monospace,Menlo,monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:160px;overflow:auto;color:var(--slate)}
+.oi li.turn pre.call{color:var(--navy);background:var(--gold-l);padding:3px 6px;border-radius:6px}
+@media (max-width:820px){
+  .oi .ih-row{grid-template-columns:1fr}
+  .oi .ih-title{text-align:left}
+  .oi .meta{width:100%}
+  .oi .sheet .pad,.oi .sec{padding:22px}
+  .oi .hc-top{grid-template-columns:1fr 1fr}
+}
+@media (max-width:760px){
+  .oi .checks,.oi .ran,.oi .reasons{grid-template-columns:1fr}
+  .oi .bar{grid-template-columns:1fr}
+  .oi .bar .num{text-align:left}
+  .oi .cal{grid-template-columns:repeat(7,1fr)}
+  .oi .day{min-height:64px;padding:6px}
+  .oi .day .v{font-size:14px}
+  .oi .tech,.oi.oi-vp dl,.oi dl.chk{grid-template-columns:1fr}
+  .oi summary.conv-s{grid-template-columns:1fr auto}
+}
+@media print{
+  .oi{background:#fff}
+  .oi .sheet,.oi .sec{box-shadow:none;margin:0 0 12px}
+}
+`;
+
+  // src/outcome-report-view.ts
+  function element(tag, text3) {
+    const value = document.createElement(tag);
+    if (text3 !== void 0) value.textContent = text3;
+    return value;
+  }
+  function el(tag, className, text3) {
+    const value = element(tag, text3);
+    value.className = className;
+    return value;
+  }
+  var SVG_NS = ["http", "://www.w3.org/2000/svg"].join("");
+  var ICON_PATHS = {
+    // an open rulebook
+    book: [
+      "M4 5.5C4 4.7 4.7 4 5.5 4H11v15H5.5C4.7 19 4 18.3 4 17.5Z",
+      "M20 5.5C20 4.7 19.3 4 18.5 4H13v15h5.5c.8 0 1.5-.7 1.5-1.5Z",
+      "M6.5 8h2.5M6.5 11h2.5M15 8h2.5M15 11h2.5"
+    ],
+    // a ticked circle
+    check: ["M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18Z", "M7.5 12.5l3 3l6-6.5"],
+    // a receipt with a torn foot
+    receipt: [
+      "M6 3h12v18l-2-1.5l-2 1.5l-2-1.5l-2 1.5l-2-1.5L6 21Z",
+      "M9 8h6M9 11.5h6M9 15h4"
+    ],
+    // a target
+    target: [
+      "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18Z",
+      "M12 7a5 5 0 1 0 0 10a5 5 0 1 0 0-10Z",
+      "M12 11a1 1 0 1 0 0 2a1 1 0 1 0 0-2Z"
+    ]
+  };
+  function icon(name) {
+    const paths = ICON_PATHS[name];
+    if (paths === void 0) return void 0;
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "20");
+    svg.setAttribute("height", "20");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.6");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    svg.dataset.icon = name;
+    for (const d of paths) {
+      const path2 = document.createElementNS(SVG_NS, "path");
+      path2.setAttribute("d", d);
+      svg.append(path2);
+    }
+    return svg;
+  }
+  var fmtCount = (n) => n.toLocaleString();
+  function fmtShare(count, total, percentages) {
+    if (percentages)
+      return total === 0 ? "\u2013" : `${Math.round(count / total * 100)}%`;
+    return `${fmtCount(count)} of ${fmtCount(total)}`;
+  }
+  var TIER_LABEL = {
+    judged: "judged",
+    recomputed: "recomputed",
+    unknown: "tier unknown \u2014 no claims observed",
+    mixed: "tier differs across conversations"
+  };
+  var VERDICT_TEXT = {
+    met: "met",
+    not_met: "not met",
+    not_evaluable: "not evaluable",
+    failed: "failed verification",
+    unsupported: "unsupported",
+    not_applicable: "not applicable"
+  };
+  function caseLabel(conversationId) {
+    const match = /task-([0-9]+)/u.exec(conversationId);
+    return match === null ? conversationId : `task ${match[1]}`;
+  }
+  function criterionLabel(model, checkId, criterionId) {
+    const check = model.terms.checks.find((c) => c.id === checkId);
+    const criterion = check?.criteria.find((c) => c.id === criterionId);
+    const wording = model.criterionWording.get(`${checkId}.${criterionId}`);
+    return {
+      label: criterion?.label ?? `${checkId}.${criterionId}`,
+      text: wording?.text ?? criterion?.text ?? "",
+      question: check?.question ?? checkId,
+      source: wording?.source ?? "unstated"
+    };
+  }
+  var WORDING_FALLBACK_LABEL = {
+    sealed: "",
+    unstated: "Wording not stated: no report in this bundle states it.",
+    mixed: "Wording not shown: the reports in this bundle state different wordings."
+  };
+  function wordingNote(model) {
+    const sources = new Set(
+      [...model.criterionWording.values()].map((w) => w.source)
+    );
+    if (sources.size === 1 && sources.has("sealed"))
+      return "Rule wording as sealed in the judge's reports (the text the judge was given).";
+    if (!sources.has("sealed"))
+      return "Rule wording not stated: the reports in this bundle do not state it.";
+    return "Rule wording as sealed in the judge's reports; where the reports do not state it (or disagree), marked as such.";
+  }
+  function editedBadge(model, ref) {
+    const edited = model.options.editedCriteria?.find((e) => e.criterion === ref);
+    if (edited === void 0) return void 0;
+    const badge = el("span", "edited", edited.badge);
+    badge.dataset.edited = ref;
+    badge.title = "Producer's note (presentation extension), not evidence";
+    return badge;
+  }
+  function renderProducerNote(host, model) {
+    const note = model.options.producerNote;
+    if (note === void 0) return;
+    const box = el("aside", "pnote");
+    box.dataset.producerNote = "true";
+    box.append(
+      el("div", "pn-k", "Producer's note \xB7 presentation text, not evidence")
+    );
+    box.append(el("h2", "pn-t", note.title));
+    const list = el("ul", "pn-l");
+    for (const line of note.lines) list.append(element("li", line));
+    box.append(list);
+    box.append(
+      el(
+        "p",
+        "pn-src",
+        "Carried on this bundle's outcome-report/v1 presentation extension, outside the signed records: no claim backs this note and no number on this page is computed from it. Everything below is drawn only from the verified bundle."
+      )
+    );
+    host.append(box);
+  }
+  function isMiss(verdict2) {
+    return verdict2 === "not_met" || verdict2 === "failed" || verdict2 === "unsupported";
+  }
+  function pill(verdict2) {
+    const text3 = verdict2 === "resolved" ? "resolved" : verdict2 === "missed" ? "missed" : VERDICT_TEXT[verdict2];
+    const tone = verdict2 === "met" || verdict2 === "resolved" ? "ok" : verdict2 === "not_applicable" ? "na" : verdict2 === "not_evaluable" ? "ne" : "bad";
+    const value = el("span", `pill ${tone}`, text3);
+    value.dataset.pill = verdict2;
+    return value;
+  }
+  var fmtP = (p) => p.toFixed(2);
+  function verdictProbability(criterion) {
+    const probs = criterion.probabilities;
+    if (probs === void 0) return void 0;
+    const key = criterion.claim?.verdict ?? criterion.verdict;
+    return probs[key];
+  }
+  function renderConversation(conversation, model, runInfo) {
+    const resolved = conversation.verdict === "met";
+    const details = el("details", "conv");
+    details.dataset.conversation = conversation.conversationId;
+    details.dataset.conversationVerdict = conversation.verdict;
+    const misses = conversation.criteria.filter((c) => isMiss(c.verdict));
+    const unjudged = conversation.criteria.filter(
+      (c) => c.verdict === "not_evaluable"
+    );
+    const na = conversation.criteria.filter(
+      (c) => c.verdict === "not_applicable"
+    );
+    const summary = el("summary", "conv-s");
+    summary.append(el("span", "cid", caseLabel(conversation.conversationId)));
+    summary.append(pill(resolved ? "resolved" : "missed"));
+    summary.append(
+      el(
+        "span",
+        "cwhy",
+        resolved ? `all nine criteria met or not applicable${na.length > 0 ? ` (${na.length} not applicable)` : ""}` : `missed on: ${[...misses, ...misses.length === 0 ? unjudged : []].map((c) => criterionLabel(model, c.checkId, c.criterionId).label).join(", ")}`
+      )
+    );
+    summary.append(el("span", "go", "open \u203A"));
+    details.append(summary);
+    let built = false;
+    details.addEventListener("toggle", () => {
+      if (built || !details.open) return;
+      built = true;
+      details.append(
+        conversationBody(conversation, model, runInfo, {
+          resolved,
+          misses,
+          unjudged,
+          na
+        })
+      );
+    });
+    return details;
+  }
+  function renderTranscript(conversation) {
+    const t = conversation.transcript;
+    const wrap = el("div", "tx");
+    wrap.dataset.transcript = t.state;
+    if (t.state !== "verified") {
+      wrap.append(
+        el(
+          "p",
+          "absent",
+          t.state === "absent" ? `Not in this bundle. The conversation and its tool calls are sealed in the case record ${conversation.sourceCapsuleId ?? "(not stated by the reports)"}, which this Result does not cite, so this page cannot show them and does not vouch for them.` : `Not shown: ${t.reason ?? "the cited transcript does not check"}.`
+        )
+      );
+      return wrap;
+    }
+    wrap.append(
+      el(
+        "p",
+        "small",
+        `Sealed in record ${t.transcriptRecordId}. Its content digest equals what the judged case capsule ${conversation.sourceCapsuleId} committed to (${t.inputDigest}), checked on this page: this is the conversation the judge read. ${t.turns.length} messages, in order.`
+      )
+    );
+    const list = el("ol", "turns");
+    t.turns.forEach((turn, index) => {
+      const item = el(
+        "li",
+        `turn ${turn.role === "user" || turn.role === "assistant" || turn.role === "tool" ? turn.role : "other"}`
+      );
+      item.dataset.turn = String(index);
+      item.dataset.role = turn.role;
+      const head2 = el("div", "who", `msg[${index}] ${turn.role}`);
+      item.append(head2);
+      if (turn.content !== void 0 && turn.content.length > 0)
+        item.append(
+          el(turn.role === "tool" ? "pre" : "div", "say", turn.content)
+        );
+      for (const call of turn.toolCalls) {
+        const callEl = el("pre", "call", `${call.name}(${call.arguments})`);
+        callEl.dataset.toolCall = call.name;
+        item.append(callEl);
+      }
+      list.append(item);
+    });
+    wrap.append(list);
+    return wrap;
+  }
+  function conversationBody(conversation, model, runInfo, parts) {
+    const { resolved, misses, unjudged, na } = parts;
+    const body = el("div", "conv-b");
+    body.append(el("h4", "", "What the agent did"));
+    body.append(renderTranscript(conversation));
+    body.append(el("h4", "", "The criteria"));
+    const contractRefs = new Set(
+      conversation.criteria.flatMap(
+        (c) => c.claim === void 0 ? [] : [c.claim.contractRef]
+      )
+    );
+    body.append(
+      el(
+        "p",
+        "small",
+        `Judged under ${[...contractRefs].join(", ") || "no stated contract"}. ${wordingNote(model)} P is the probability the judge gave the verdict it returned.`
+      )
+    );
+    const table = el("table", "crit");
+    table.dataset.criteriaTable = conversation.conversationId;
+    const head2 = element("thead");
+    const headRow = element("tr");
+    headRow.append(
+      element("th", "Criterion"),
+      element("th", "Verdict"),
+      el("th", "n", "P"),
+      element("th", "Rationale, as sealed")
+    );
+    head2.append(headRow);
+    table.append(head2);
+    const tbody = element("tbody");
+    for (const criterion of conversation.criteria) {
+      const tr = element("tr");
+      tr.dataset.crit = `${criterion.checkId}.${criterion.criterionId}`;
+      tr.dataset.critVerdict = criterion.verdict;
+      const names = criterionLabel(
+        model,
+        criterion.checkId,
+        criterion.criterionId
+      );
+      const nameCell = el("td", "cn");
+      nameCell.append(el("b", "", names.label));
+      const rowBadge = editedBadge(
+        model,
+        `${criterion.checkId}.${criterion.criterionId}`
+      );
+      if (rowBadge !== void 0) nameCell.append(rowBadge);
+      const wordingCell = el("small", "", names.text);
+      wordingCell.dataset.wording = names.source;
+      nameCell.append(wordingCell);
+      if (names.source !== "sealed")
+        nameCell.append(
+          el("small", "wsrc", WORDING_FALLBACK_LABEL[names.source])
+        );
+      tr.append(nameCell);
+      const verdictCell = element("td");
+      verdictCell.append(pill(criterion.verdict));
+      tr.append(verdictCell);
+      const p = verdictProbability(criterion);
+      const pCell = el("td", "n", p === void 0 ? "\u2013" : fmtP(p));
+      if (p !== void 0) pCell.dataset.p = fmtP(p);
+      tr.append(pCell);
+      const rationaleCell = el("td", "rat");
+      if (criterion.verdict === "not_applicable") {
+        rationaleCell.append(
+          el(
+            "span",
+            "muted",
+            "No claim: Result v0 excludes a not-applicable judgment from its claims, so this bundle cites no report for it."
+          )
+        );
+      } else if (criterion.rationale !== void 0) {
+        const sealed = el("code", "sealed", criterion.rationale);
+        sealed.dataset.rationale = "sealed";
+        rationaleCell.append(sealed);
+      } else {
+        rationaleCell.append(
+          el("span", "muted", "no rationale in the cited report")
+        );
+      }
+      tr.append(rationaleCell);
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    const scroll = el("div", "tscroll");
+    scroll.append(table);
+    body.append(scroll);
+    const honest = el(
+      "p",
+      "small",
+      "Rationale: derived from the judge's probabilities; the judge returns no free-text reasoning."
+    );
+    honest.dataset.rationaleLabel = "derived";
+    body.append(honest);
+    body.append(el("h4", "", "Why"));
+    const why = el("ul", "why");
+    why.dataset.why = resolved ? "resolved" : "missed";
+    if (resolved) {
+      const met = conversation.criteria.filter((c) => c.verdict === "met").length;
+      why.append(
+        element(
+          "li",
+          `Resolved: ${met} criteria met and ${na.length} not applicable. The rule bills a conversation only when all nine pass, and not applicable counts as passing.`
+        )
+      );
+    } else {
+      for (const criterion of misses.length > 0 ? misses : unjudged) {
+        const names = criterionLabel(
+          model,
+          criterion.checkId,
+          criterion.criterionId
+        );
+        const p = verdictProbability(criterion);
+        const item = element(
+          "li",
+          `${names.label} (${names.question}): ${VERDICT_TEXT[criterion.verdict]}${p === void 0 ? "" : `, P ${fmtP(p)}`}${criterion.confidence === void 0 ? "" : `, confidence ${fmtP(criterion.confidence)}`}.`
+        );
+        item.dataset.whyCriterion = `${criterion.checkId}.${criterion.criterionId}`;
+        why.append(item);
+      }
+    }
+    why.append(
+      el(
+        "li",
+        "muted",
+        "Turns cited: none. The judge returns a verdict and probabilities per criterion, with no reference to any turn of the conversation."
+      )
+    );
+    body.append(why);
+    body.append(el("h4", "", "Check it"));
+    const check = el("dl", "chk");
+    check.dataset.checkIt = conversation.conversationId;
+    const row = (label, value) => {
+      check.append(element("dt", label), element("dd", value));
+    };
+    row("Case", conversation.conversationId);
+    row(
+      "Case record",
+      conversation.sourceCapsuleId ?? "not stated by the reports"
+    );
+    const dated = conversation.dated;
+    if (dated.basis !== "judged") {
+      row(
+        "Dated by",
+        `${dated.stated ?? dated.date}${dated.zone === "not-stated" ? " (timezone not stated)" : ""}: ${BASIS_TEXT[dated.basis]}`
+      );
+      check.lastElementChild.setAttribute("data-dated", dated.basis);
+      if (dated.importedAt !== void 0) row("Imported", dated.importedAt);
+      row("Judged and sealed", conversation.judgedDay);
+    }
+    row("Result capsule", model.capsuleId);
+    if (conversation.transcript.state === "verified") {
+      row("Transcript record", conversation.transcript.transcriptRecordId);
+      row("Case input digest", conversation.transcript.inputDigest);
+    }
+    row(
+      "Judge pin",
+      runInfo.judgePinDigest === void 0 ? "not stated" : `${runInfo.judgePinDigest}${runInfo.judgePinRecomputes === true && runInfo.judgePin !== void 0 ? ` = ${runInfo.judgePin.modelId}, prompt ${runInfo.judgePin.promptDigest}, axes ${runInfo.judgePin.axesDigest} (recomputed on this page)` : ""}`
+    );
+    for (const criterion of conversation.criteria) {
+      if (criterion.claim === void 0) continue;
+      row(
+        `Report: ${criterionLabel(model, criterion.checkId, criterion.criterionId).label}`,
+        `${criterion.reportCapsuleId ?? "not cited"}${criterion.reportRecordId === void 0 ? "" : ` (book record ${criterion.reportRecordId})`}`
+      );
+    }
+    body.append(check);
+    body.append(
+      el(
+        "p",
+        "small",
+        "To recompute: read each report above from the book, check its digest, and take the AND of the nine verdicts (not applicable passes). To re-judge, run the pinned judge on the case record and compare."
+      )
+    );
+    return body;
+  }
+  function renderConversationList(conversations, model, runInfo, key) {
+    const list = el("div", "convs");
+    list.dataset.conversationsFor = key;
+    list.dataset.conversationCount = String(conversations.length);
+    if (conversations.length === 0)
+      list.append(el("p", "small", "no conversations"));
+    for (const conversation of conversations)
+      list.append(renderConversation(conversation, model, runInfo));
+    return list;
+  }
+  function drill(label, conversations, model, runInfo, key) {
+    const details = el("details", "drill");
+    details.dataset.drill = key;
+    details.append(el("summary", "", label));
+    details.append(renderConversationList(conversations, model, runInfo, key));
+    return details;
+  }
+  function packLine(model) {
+    const { id, version } = model.terms.pack;
+    return id === NOT_STATED ? NOT_STATED : `${id} v${version}`;
+  }
+  function span(days) {
+    const first = days[0];
+    const last = days[days.length - 1];
+    if (first === void 0 || last === void 0) return "unknown";
+    return first === last ? first : `${first} \u2013 ${last}`;
+  }
+  var BASIS_TEXT = {
+    source: "source says (backfilled record; the source's own timestamp, self-attested)",
+    record: "the case record's own timestamp",
+    judged: "the day the judgments were sealed (no case record date to read)"
+  };
+  function datingNote(model) {
+    const { basis, counts, judgedDays, zoneNotStated } = model.dating;
+    if (basis === "judged") return void 0;
+    const sealed = `Sealed ${span(judgedDays)}.`;
+    const parts = [];
+    if (basis === "source")
+      parts.push(
+        `Dates are the source's own timestamps for backfilled records ("source says"), as given, not when the records were sealed.`
+      );
+    else if (basis === "record")
+      parts.push(
+        "Dates are each conversation's own record date (the time its case record states), as given, not when the judgments were sealed."
+      );
+    else {
+      parts.push(
+        "Dates are each conversation's own date, as given, not when the judgments were sealed:"
+      );
+      if (counts.source > 0)
+        parts.push(
+          `${counts.source} backfilled by the source's own timestamp ("source says");`
+        );
+      if (counts.record > 0)
+        parts.push(`${counts.record} by the case record's own timestamp;`);
+      if (counts.judged > 0)
+        parts.push(
+          `${counts.judged} with no case record date to read, by the day they were judged.`
+        );
+    }
+    parts.push(sealed);
+    if (counts.source > 0)
+      parts.push(
+        "A backfilled record's source time is self-attested: carrying it does not make it witnessed."
+      );
+    if (zoneNotStated > 0)
+      parts.push(
+        `Timezone not stated on ${zoneNotStated} of ${model.totalCount}; no zone is assumed.`
+      );
+    return parts.join(" ");
+  }
+  function renderMeta(host, model) {
+    const section = el("section", "");
+    section.dataset.section = "meta";
+    const row1 = el("div", "ih-row");
+    const bill = el("div", "party");
+    bill.append(el("div", "k", "Outcomes pack"));
+    bill.append(el("div", "v", packLine(model)));
+    row1.append(bill);
+    const title = el("div", "ih-title");
+    title.append(el("h1", "inv-title", "Outcome report"));
+    title.append(
+      el("div", "inv-sub", `Terms locked: ${model.terms.pack.locked}`)
+    );
+    row1.append(title);
+    section.append(row1);
+    const row2 = el("div", "ih-row");
+    const details = el("div", "meta");
+    const first = model.days[0]?.date;
+    const last = model.days[model.days.length - 1]?.date;
+    const metaRow = (label, value) => {
+      const line = element("div");
+      line.append(element("span", label), element("span", value));
+      details.append(line);
+    };
+    metaRow(
+      "Period",
+      first === void 0 || last === void 0 ? "no conversations" : `${first} \u2013 ${last}`
+    );
+    const note = datingNote(model);
+    if (note !== void 0) {
+      metaRow("Sealed", span(model.dating.judgedDays));
+      details.lastElementChild.setAttribute("data-sealed", "");
+    }
+    metaRow("Conversations", fmtCount(model.totalCount));
+    metaRow("Result capsule", model.capsuleId);
+    row2.append(el("div", "party"), details);
+    section.append(row2);
+    if (note !== void 0) {
+      const label = el("p", "date-note", note);
+      label.dataset.dateNote = model.dating.basis;
+      section.append(label);
+    }
+    host.append(section);
+  }
+  function renderLines(host, model, runInfo) {
+    const section = el("section", "");
+    section.dataset.section = "lines";
+    const table = document.createElement("table");
+    table.className = "lines";
+    table.dataset.rows = "report-lines";
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    headRow.append(element("th", "Description"), element("th", "Count"));
+    thead.append(headRow);
+    table.append(thead);
+    const tbody = document.createElement("tbody");
+    const lines = [
+      [
+        "resolved",
+        "Conversations resolved correctly",
+        model.resolvedCount,
+        fmtShare(
+          model.resolvedCount,
+          model.totalCount,
+          model.options.percentages
+        )
+      ],
+      [
+        "missed",
+        "Conversations missed",
+        model.missedCount,
+        fmtShare(model.missedCount, model.totalCount, model.options.percentages)
+      ],
+      [
+        "held",
+        "Held pending adjudication",
+        model.heldCount,
+        fmtCount(model.heldCount)
+      ],
+      [
+        "added",
+        "Added after adjudication",
+        model.addedCount,
+        fmtCount(model.addedCount)
+      ],
+      [
+        "not-applicable",
+        "Criterion judgments not applicable",
+        model.notApplicableCount,
+        fmtCount(model.notApplicableCount)
+      ]
+    ];
+    for (const [key, label, count, shown] of lines) {
+      const tr = document.createElement("tr");
+      tr.dataset.line = key;
+      tr.dataset.count = String(count);
+      const desc = el("td", "desc");
+      desc.append(el("b", "", label));
+      const behind = key === "resolved" ? model.conversations.filter((c) => c.verdict === "met") : key === "missed" ? model.conversations.filter((c) => c.verdict !== "met") : key === "not-applicable" ? model.conversations.filter(
+        (c) => c.criteria.some((cr) => cr.verdict === "not_applicable")
+      ) : void 0;
+      if (behind !== void 0 && behind.length > 0)
+        desc.append(
+          drill(
+            `open \u203A ${fmtCount(behind.length)} conversation${behind.length === 1 ? "" : "s"}`,
+            behind,
+            model,
+            runInfo,
+            key
+          )
+        );
+      tr.append(desc, el("td", "n", shown));
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    section.append(table);
+    host.append(section);
+    const stamps = el("div", "stamps inl");
+    const stamp = el(
+      "div",
+      "stamp rec",
+      "Verified \xB7 recomputed from the sealed bundle"
+    );
+    stamp.append(
+      el(
+        "small",
+        "",
+        "every count and share above is recomputed from result.claims and the records they cite, never read from a stated total"
+      )
+    );
+    stamps.append(stamp);
+    host.append(stamps);
+    const tamper = el(
+      "p",
+      "tamper-note",
+      'This card only ever renders a bundle that already verified: there is no interactive "try tampering" control here, because this viewer never shows content first and checks second. Tamper with any claim, record, or checkpoint in the underlying bundle and the whole page \u2014 this card included \u2014 is replaced by the verification-failed banner, before anything here is drawn.'
+    );
+    tamper.dataset.tamperNote = "verify-first";
+    host.append(tamper);
+  }
+  function renderCalendar(host, model) {
+    const section = el("section", "sec");
+    section.dataset.section = "calendar";
+    section.append(el("h2", "", "Day by day"));
+    const note = datingNote(model);
+    section.append(
+      el(
+        "p",
+        "lede",
+        note === void 0 ? "Resolved conversations per day, cited by this bundle's claims." : "Resolved conversations per day, by each conversation's own date, cited by this bundle's claims."
+      )
+    );
+    if (note !== void 0) {
+      const label = el("p", "date-note", note);
+      label.dataset.dateNote = model.dating.basis;
+      section.append(label);
+    }
+    const list = el("div", "cal");
+    list.dataset.days = String(model.days.length);
+    for (const day of model.days) {
+      const item = el("div", "day");
+      item.dataset.day = day.date;
+      item.dataset.resolved = String(day.resolvedCount);
+      item.dataset.total = String(day.conversations.length);
+      item.append(el("div", "dn", day.date));
+      if (note !== void 0) {
+        const bases = new Set(day.conversations.map((c) => c.dated.basis));
+        if (bases.has("source")) {
+          const chip = el("div", "src-says", "source says");
+          chip.dataset.sourceSays = String(
+            day.conversations.filter((c) => c.dated.basis === "source").length
+          );
+          item.append(chip);
+        }
+        const notStated = day.conversations.filter(
+          (c) => c.dated.zone === "not-stated"
+        ).length;
+        if (notStated > 0) {
+          const tz = el("div", "tz", "timezone not stated");
+          tz.dataset.tzMarker = "not-stated";
+          item.append(tz);
+        }
+      }
+      item.append(
+        el(
+          "div",
+          "v",
+          fmtShare(
+            day.resolvedCount,
+            day.conversations.length,
+            model.options.percentages
+          )
+        )
+      );
+      const mini = el("div", "mini");
+      const share = day.conversations.length === 0 ? 0 : day.resolvedCount / day.conversations.length;
+      const fill = element("i");
+      fill.style.width = `${Math.round(share * 100)}%`;
+      mini.append(fill);
+      item.append(mini);
+      if (note !== void 0) {
+        const sealed = el("div", "sealed", `sealed ${span(day.judgedDays)}`);
+        sealed.dataset.sealed = day.judgedDays.join(" ");
+        item.append(sealed);
+      }
+      if (day.policyChanged !== null) {
+        const flag = el("div", "flag", "policy changed");
+        flag.dataset.policyChanged = day.policyChanged;
+        item.append(flag);
+      }
+      list.append(item);
+    }
+    section.append(list);
+    host.append(section);
+  }
+  function renderHumanChecks(host, calibration) {
+    const section = el("section", "sec");
+    section.dataset.section = "human-checks";
+    section.append(el("h2", "", "Human spot checks"));
+    section.append(
+      el(
+        "p",
+        "lede",
+        "Weekly blind re-grades by a person. Disagreements are held."
+      )
+    );
+    if (calibration.length === 0) {
+      section.append(el("p", "", "no calibration-summary/v1 records cited"));
+      host.append(section);
+      return;
+    }
+    const table = document.createElement("table");
+    table.className = "hct";
+    table.dataset.weeks = String(calibration.length);
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    headRow.append(
+      element("th", "Week"),
+      el("th", "n", "Agreed"),
+      el("th", "n", "Held"),
+      el("th", "n", "Added")
+    );
+    thead.append(headRow);
+    table.append(thead);
+    const tbody = document.createElement("tbody");
+    for (const week of calibration) {
+      const tr = document.createElement("tr");
+      tr.dataset.week = week.weekId;
+      tr.dataset.k = String(week.k);
+      tr.dataset.n = String(week.n);
+      tr.append(el("td", "", week.weekId));
+      tr.append(el("td", "n", `${week.k} of ${week.n}`));
+      const held = week.sample.filter(
+        (s) => s.aiVerdict === "met" && s.humanVerdict !== "met"
+      ).length;
+      const added = week.sample.filter(
+        (s) => s.aiVerdict !== "met" && s.humanVerdict === "met"
+      ).length;
+      const heldCell = el("td", "n", String(held));
+      heldCell.dataset.held = String(held);
+      const addedCell = el("td", "n", String(added));
+      addedCell.dataset.added = String(added);
+      tr.append(heldCell, addedCell);
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    section.append(table);
+    host.append(section);
+  }
+  function renderWhyMissed(host, model, runInfo) {
+    const section = el("section", "sec");
+    section.dataset.section = "why-missed";
+    section.append(el("h2", "", "Why conversations missed"));
+    const bars = el("div", "bars");
+    bars.dataset.checkBars = "true";
+    for (const check of model.terms.checks) {
+      const count = model.checkPassCounts.get(check.id) ?? 0;
+      const item = el("div", "bar");
+      item.dataset.checkId = check.id;
+      item.dataset.passCount = String(count);
+      const nm = el("div", "nm", check.question);
+      const track = el("div", "track");
+      const share = model.totalCount === 0 ? 0 : count / model.totalCount;
+      const fill = element("i");
+      fill.style.width = `${Math.round(share * 100)}%`;
+      track.append(fill);
+      const num = el(
+        "div",
+        "num",
+        fmtShare(count, model.totalCount, model.options.percentages)
+      );
+      item.append(nm, track, num);
+      bars.append(item);
+    }
+    section.append(bars);
+    const reasons = el("div", "reasons");
+    reasons.dataset.reasons = String(model.missedReasons.length);
+    for (const group of model.missedReasons) {
+      const item = el("details", "rsn-d");
+      item.dataset.reasonKey = group.key;
+      item.dataset.reasonStructured = String(group.structured);
+      item.dataset.count = String(group.conversations.length);
+      const row = el("summary", "rsn");
+      row.append(
+        element("span", group.label),
+        el("span", "c", `${fmtCount(group.conversations.length)} \xB7 see them \u203A`)
+      );
+      item.append(row);
+      item.append(
+        renderConversationList(
+          group.conversations,
+          model,
+          runInfo,
+          `reason:${group.key}`
+        )
+      );
+      reasons.append(item);
+    }
+    section.append(reasons);
+    host.append(section);
+  }
+  function renderTerms(host, model) {
+    const section = el("section", "sec");
+    section.dataset.section = "terms";
+    section.append(el("h2", "", "The terms: what counts as resolved"));
+    const lede = el(
+      "p",
+      "lede",
+      `Agreed with the counterparty: ${model.terms.pack.agreement}. Locked: ${model.terms.pack.locked}. Every term below is read from the sealed claims and reports in this bundle, or marked "${NOT_STATED}".`
+    );
+    lede.dataset.termsSource = "bundle";
+    section.append(lede);
+    const pack = el("div", "pack");
+    const packField = (label, value) => {
+      const box = el("div", "pk");
+      box.append(el("div", "k", label), el("div", "v", value));
+      pack.append(box);
+    };
+    packField("Outcomes pack", model.terms.pack.id);
+    packField(
+      "Version",
+      model.terms.pack.version === NOT_STATED ? NOT_STATED : `${model.terms.pack.version} (from the claims' contract_ref)`
+    );
+    packField("Locked", model.terms.pack.locked);
+    section.append(pack);
+    const outcome = el("div", "outcome");
+    const outcomeIcon = el("div", "oic");
+    const target = icon("target");
+    if (target !== void 0) outcomeIcon.append(target);
+    outcome.append(outcomeIcon);
+    const outcomeBody = element("div");
+    outcomeBody.append(el("div", "t", "The outcome"));
+    outcomeBody.append(el("div", "v", model.terms.pack.outcomeStatement));
+    outcome.append(outcomeBody);
+    section.append(outcome);
+    const checks = el("div", "checks");
+    checks.dataset.checks = String(model.terms.checks.length);
+    for (const check of model.terms.checks) {
+      const card = el("section", "check");
+      card.dataset.checkId = check.id;
+      const checkIcon = el("div", "ic");
+      const drawn = icon(check.icon);
+      if (drawn !== void 0) checkIcon.append(drawn);
+      card.append(checkIcon);
+      card.append(el("div", "q", check.question));
+      card.append(el("div", "d", check.description));
+      const criteria = el("ul", "subs");
+      for (const criterion of check.criteria) {
+        const ref = `${check.id}.${criterion.id}`;
+        const tier = model.criterionTiers.get(ref) ?? "unknown";
+        const item = element("li");
+        item.dataset.criterionId = criterion.id;
+        item.dataset.tier = tier;
+        const wording = model.criterionWording.get(ref) ?? {
+          text: criterion.text,
+          source: "unstated"
+        };
+        item.dataset.wording = wording.source;
+        const label = el("b", "", criterion.label);
+        const termsBadge = editedBadge(model, ref);
+        if (termsBadge !== void 0) label.append(termsBadge);
+        item.append(label);
+        item.append(element("span", `${wording.text} (${TIER_LABEL[tier]})`));
+        if (wording.source !== "sealed")
+          item.append(
+            el("small", "wsrc", WORDING_FALLBACK_LABEL[wording.source])
+          );
+        criteria.append(item);
+      }
+      card.append(criteria);
+      checks.append(card);
+    }
+    section.append(checks);
+    const note = el("p", "small", wordingNote(model));
+    note.dataset.wordingNote = "true";
+    section.append(note);
+    section.append(el("div", "rule", model.terms.pack.resolutionRule));
+    host.append(section);
+  }
+  function renderWhatRan(host, runInfo) {
+    const section = el("section", "sec");
+    section.dataset.section = "what-ran";
+    section.append(el("h2", "", "What ran"));
+    const ran = el("div", "ran");
+    ran.dataset.pinned = String(runInfo.pinned);
+    if (runInfo.judgePinRecomputes !== void 0)
+      ran.dataset.pinRecomputes = String(runInfo.judgePinRecomputes);
+    const box = (label, value, key) => {
+      const item = el("div", "it");
+      item.dataset.ran = key;
+      item.append(el("div", "k", label));
+      item.append(el("div", "v", value));
+      ran.append(item);
+    };
+    const pin = runInfo.judgePinRecomputes === true ? runInfo.judgePin : void 0;
+    box("Contract", runInfo.contract ?? "not stated", "contract");
+    box(
+      "Judge model",
+      pin === void 0 ? "not stated" : pin.modelVersion === void 0 ? pin.modelId : `${pin.modelId} ${pin.modelVersion}`,
+      "judge-model"
+    );
+    box(
+      "Judge pin digest",
+      runInfo.judgePinDigest === void 0 ? "not stated" : pin === void 0 ? runInfo.judgePinDigest : `${runInfo.judgePinDigest} (recomputed from the model, prompt, axes and sampling params shown here)`,
+      "judge-pin-digest"
+    );
+    box(
+      "Judge prompt digest",
+      pin?.promptDigest ?? "not stated",
+      "judge-prompt-digest"
+    );
+    box(
+      "Judge axes digest",
+      pin?.axesDigest ?? "not stated",
+      "judge-axes-digest"
+    );
+    box(
+      "Agent / test suite / human-check protocol",
+      "not stated \u2014 this evaluation-report/v1 shape carries none of these fields",
+      "agent"
+    );
+    section.append(ran);
+    if (runInfo.judgePinRecomputes === false) {
+      const warning = el(
+        "p",
+        "",
+        "the judge pin components the reports carry do not recompute to the sealed judge pin digest \u2014 they are not shown"
+      );
+      warning.dataset.pinComponentsMismatch = "true";
+      section.append(warning);
+    }
+    const lock = el(
+      "div",
+      "lock",
+      "The judge pin digest covers model id, judge prompt and axes, and sampling params (capsulectl judge pin). It does not cover the human-check protocol name: this bundle seals no method lock, and this card never implies one exists."
+    );
+    section.append(lock);
+    if (!runInfo.pinned) {
+      const warning = el(
+        "p",
+        "",
+        "what ran varies across the cited reports \u2014 the values above are drawn only when every one agrees, and are omitted ('not stated') here because they do not"
+      );
+      warning.dataset.pinMismatch = "true";
+      section.append(warning);
+    }
+    host.append(section);
+  }
+  function renderVerificationDetails(host, bundle, verified) {
+    const section = el("section", "sec");
+    section.dataset.section = "verification-details";
+    section.append(el("h2", "", "Verification details"));
+    section.append(
+      el("p", "lede", "Repeat offline with the open-source verifier.")
+    );
+    const model = buildVerificationPageModel(bundle, verified);
+    const tech = el("div", "tech");
+    const field = (label, value) => {
+      tech.append(el("div", "k", label), el("div", "v", value));
+    };
+    field("Bundle digest", model.bundleDigest ?? "uncomputable");
+    field("Checkpoint root", model.checkpointRoot ?? "absent");
+    field("Checkpoint size", String(model.checkpointSize ?? "absent"));
+    section.append(tech);
+    const note = el(
+      "p",
+      "note",
+      "This bundle's own checkpoint \u2014 an append-only Merkle Mountain Range over the sealed records \u2014 not a month-level RFC 6962 tree computed in the browser. Repeat this check offline with the open-source verifier."
+    );
+    note.dataset.checkpointKind = "mmr";
+    section.append(note);
+    host.append(section);
+  }
+  async function renderOutcomeReportPage(result, options, bundle, verified, root) {
+    const model = buildOutcomeReportModel(result, options);
+    const runInfo = await verifyJudgePin(model.runInfo);
+    const wrapper = el("section", "oi");
+    wrapper.dataset.page = "outcome-report";
+    const style = document.createElement("style");
+    style.textContent = OUTCOME_REPORT_CSS;
+    wrapper.append(style);
+    renderProducerNote(wrapper, model);
+    const sheet = el("div", "sheet");
+    const pad = el("div", "pad");
+    renderMeta(pad, model);
+    renderLines(pad, model, runInfo);
+    sheet.append(pad);
+    wrapper.append(sheet);
+    renderCalendar(wrapper, model);
+    renderHumanChecks(wrapper, model.calibration);
+    renderWhyMissed(wrapper, model, runInfo);
+    renderTerms(wrapper, model);
+    renderWhatRan(wrapper, runInfo);
+    renderVerificationDetails(wrapper, bundle, verified);
+    root.append(wrapper);
+  }
+
+  // src/outcome-report-presentation.ts
+  function object6(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  }
+  var CRITERION_REF = /^[a-z0-9_]+\.[a-z0-9_]+$/u;
+  var MAX_NOTE_LINES = 12;
+  var MAX_NOTE_LINE = 600;
+  var MAX_NOTE_TITLE = 120;
+  var MAX_BADGE = 40;
+  function text2(value, max) {
+    return typeof value === "string" && value.trim().length > 0 && value.length <= max ? value : void 0;
+  }
+  function readProducerNote(value) {
+    const note = object6(value);
+    if (note === void 0 || !Array.isArray(note.lines)) return void 0;
+    const raw = note.lines;
+    if (raw.length === 0 || raw.length > MAX_NOTE_LINES) return void 0;
+    const lines = raw.map((line) => text2(line, MAX_NOTE_LINE));
+    if (lines.some((line) => line === void 0)) return void 0;
+    return {
+      title: text2(note.title, MAX_NOTE_TITLE) ?? "Producer's note",
+      lines
+    };
+  }
+  function readEditedCriteria(value) {
+    if (!Array.isArray(value)) return void 0;
+    const entries = value;
+    const edited = entries.flatMap((entry) => {
+      const item = object6(entry);
+      const criterion = typeof item?.criterion === "string" && CRITERION_REF.test(item.criterion) ? item.criterion : void 0;
+      const badge = text2(item?.badge, MAX_BADGE);
+      return criterion === void 0 || badge === void 0 ? [] : [{ criterion, badge }];
+    });
+    return edited.length === 0 ? void 0 : edited;
+  }
+  function readOutcomeReportPresentation(bundle) {
+    const top = object6(bundle);
+    const extensions2 = object6(top?.extensions);
+    const block = object6(extensions2?.["outcome-report/v1"]);
+    if (block === void 0 || block.enabled !== true) return void 0;
+    const percentages = block.percentages === true;
+    const producerNote = readProducerNote(block.producer_note);
+    const editedCriteria = readEditedCriteria(block.edited_criteria);
+    return {
+      enabled: true,
+      percentages,
+      ...producerNote === void 0 ? {} : { producerNote },
+      ...editedCriteria === void 0 ? {} : { editedCriteria }
+    };
+  }
+
   // src/report-rows.ts
   var rowCitationDigests = (row) => Array.isArray(row.references) ? row.references.flatMap(
     (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" ? asString(reference.digest) === void 0 ? [] : [asString(reference.digest)] : []
@@ -5513,9 +7526,9 @@ var EvidenceGraph = (() => {
   }
 
   // src/evidence-graph-view.ts
-  function element(tag, text2) {
+  function element2(tag, text3) {
     const value = document.createElement(tag);
-    if (text2 !== void 0) value.textContent = text2;
+    if (text3 !== void 0) value.textContent = text3;
     return value;
   }
   function display(value) {
@@ -5526,23 +7539,23 @@ var EvidenceGraph = (() => {
     }
   }
   function appendValue(parent2, label, value) {
-    parent2.append(element("dt", label));
-    parent2.append(element("dd", display(value)));
+    parent2.append(element2("dt", label));
+    parent2.append(element2("dd", display(value)));
   }
   function renderTime(value) {
     const zone = zoneStatement(value);
-    const time = element("span", value);
+    const time = element2("span", value);
     time.dataset.tz = zone;
     if (zone === "not-stated") {
-      const marker = element("span", " (timezone not stated)");
+      const marker = element2("span", " (timezone not stated)");
       marker.dataset.tzMarker = "not-stated";
       time.append(marker);
     }
     return time;
   }
   function appendTime(parent2, label, value, absent) {
-    parent2.append(element("dt", label));
-    const cell = element("dd");
+    parent2.append(element2("dt", label));
+    const cell = element2("dd");
     if (value === void 0) {
       cell.textContent = absent;
       cell.dataset.time = "not-stated";
@@ -5560,16 +7573,18 @@ var EvidenceGraph = (() => {
     );
   }
   var recordsWord = (count) => `${count} ${count === 1 ? "record" : "records"}`;
-  function renderVerificationBanner(root, verified, coverage) {
-    const banner = element(
+  function renderVerificationBanner(root, verified, coverage, styled = false) {
+    const banner = element2(
       "p",
       verified ? coverage.uncheckpointed === 0 ? "Bundle verification passed" : `Bundle verification passed; ${coverage.uncheckpointed} of ${recordsWord(coverage.total)} uncheckpointed` : "Bundle verification failed"
     );
     banner.dataset.verify = verified ? "verified" : "failed";
     banner.dataset.uncheckpointed = String(coverage.uncheckpointed);
+    if (styled)
+      banner.className = `oi oi-banner ${verified ? "oi-banner-ok" : "oi-banner-failed"}`;
     root.append(banner);
     if (verified) return;
-    const refusal = element(
+    const refusal = element2(
       "p",
       "This bundle did not verify. Its records, rows and payloads are not shown; the verification page below lists which checks failed."
     );
@@ -5579,7 +7594,7 @@ var EvidenceGraph = (() => {
   function renderPresentationHeader(root, bundle) {
     const presentation = readPresentationBlock(bundle);
     if (presentation === void 0) return;
-    const header = element("header");
+    const header = element2("header");
     header.dataset.presentation = "header";
     if (presentation.logoDataUrl !== void 0) {
       const logo = document.createElement("img");
@@ -5588,20 +7603,20 @@ var EvidenceGraph = (() => {
       header.append(logo);
     }
     if (presentation.producerDisplayName !== void 0) {
-      const name = element("span", presentation.producerDisplayName);
+      const name = element2("span", presentation.producerDisplayName);
       name.dataset.presentationField = "producer-display-name";
       header.append(name);
     }
     if (presentation.title !== void 0) {
-      const title = element("strong", presentation.title);
+      const title = element2("strong", presentation.title);
       title.dataset.presentationField = "title";
       header.append(title);
     }
     root.append(header);
   }
   function producerPublicKeys(bundle) {
-    const extensions2 = object6(object6(bundle).extensions);
-    const block = object6(extensions2["producer-key/v1"]);
+    const extensions2 = object7(object7(bundle).extensions);
+    const block = object7(extensions2["producer-key/v1"]);
     const publicKey = block.public_key;
     return typeof publicKey === "string" && /^[0-9a-f]{64}$/u.test(publicKey) ? [publicKey] : [];
   }
@@ -5622,18 +7637,18 @@ var EvidenceGraph = (() => {
     }
   }
   function renderSignerStatement(item, signer, statement) {
-    const label = element("p", `${signer}'s statement of what it recomputed:`);
+    const label = element2("p", `${signer}'s statement of what it recomputed:`);
     item.append(label);
-    const checks = element("ul");
+    const checks = element2("ul");
     checks.dataset.countersignStatement = "checks";
     statement.checks.forEach((check) => {
-      const row = element("li", `${check.name}: ${check.result}`);
+      const row = element2("li", `${check.name}: ${check.result}`);
       row.dataset.checkResult = check.result;
       checks.append(row);
     });
     item.append(checks);
     if (statement.receipt === "unverified") {
-      const receipt = element(
+      const receipt = element2(
         "p",
         "receipt present, not verified by this viewer"
       );
@@ -5642,12 +7657,12 @@ var EvidenceGraph = (() => {
     }
   }
   function renderStamps(host, stamps) {
-    host.append(element("h4", "Countersignatures"));
-    const list = element("ul");
+    host.append(element2("h4", "Countersignatures"));
+    const list = element2("ul");
     stamps.forEach((stamp) => {
-      const item = element("li");
+      const item = element2("li");
       item.dataset.stampKind = stamp.kind;
-      item.append(element("span", stampText(stamp)));
+      item.append(element2("span", stampText(stamp)));
       if (stamp.kind === "resolved") {
         renderSignerStatement(item, stamp.name, stamp.statement);
       } else if (stamp.kind === "not-independent") {
@@ -5660,14 +7675,14 @@ var EvidenceGraph = (() => {
     host.append(list);
   }
   function renderReceipts(host, receipts2) {
-    host.append(element("h4", "Receipts"));
+    host.append(element2("h4", "Receipts"));
     if (receipts2.length === 0) {
-      host.append(element("p", "no receipts disclosed"));
+      host.append(element2("p", "no receipts disclosed"));
       return;
     }
-    const list = element("ul");
+    const list = element2("ul");
     receipts2.forEach((receipt) => {
-      const item = element("li", `${receipt.witness} \xB7 ${receipt.grade} \xB7 `);
+      const item = element2("li", `${receipt.witness} \xB7 ${receipt.grade} \xB7 `);
       item.append(renderTime(receipt.time));
       list.append(item);
     });
@@ -5680,9 +7695,9 @@ var EvidenceGraph = (() => {
     unverified: "membership unverified"
   });
   function renderCheckpointCoverage(host, records, uncheckpointed, coverage) {
-    host.append(element("h4", "Checkpoint coverage"));
+    host.append(element2("h4", "Checkpoint coverage"));
     if (coverage.status === "established") {
-      const count = element(
+      const count = element2(
         "p",
         `${recordsWord(uncheckpointed)} uncheckpointed of ${recordsWord(records.length)} supplied`
       );
@@ -5690,28 +7705,57 @@ var EvidenceGraph = (() => {
       count.dataset.count = String(uncheckpointed);
       host.append(count);
     } else {
-      const line = element("p", `coverage not established: ${coverage.reason}`);
+      const line = element2("p", `coverage not established: ${coverage.reason}`);
       line.dataset.coverage = "not-established";
       line.dataset.claim = coverage.status;
       host.append(line);
       if (coverage.status === "withheld") return;
     }
-    const list = element("ul");
+    host.append(renderCoverageStatusCounts(records));
+    const details = element2("details");
+    details.dataset.records = "coverage-detail";
+    const summary = element2(
+      "summary",
+      `${recordsWord(records.length)}, by capsule id`
+    );
+    details.append(summary);
+    const list = element2("ul");
     list.dataset.records = "coverage";
     for (const record of records) {
-      const item = element("li", `${record.capsuleId} \xB7 `);
-      const status2 = element("span", COVERAGE_LABEL[record.status]);
+      const item = element2("li", `${record.capsuleId} \xB7 `);
+      const status2 = element2("span", COVERAGE_LABEL[record.status]);
       status2.dataset.recordStatus = record.status;
       status2.className = `seal-${record.status}`;
       item.dataset.capsuleId = record.capsuleId;
       item.append(status2);
       list.append(item);
     }
-    host.append(list);
+    details.append(list);
+    host.append(details);
+  }
+  function renderCoverageStatusCounts(records) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const record of records) {
+      counts.set(record.status, (counts.get(record.status) ?? 0) + 1);
+    }
+    const list = element2("ul");
+    list.dataset.records = "coverage-summary";
+    for (const status2 of Object.keys(COVERAGE_LABEL)) {
+      const count = counts.get(status2) ?? 0;
+      if (count === 0) continue;
+      const item = element2(
+        "li",
+        `${recordsWord(count)} ${COVERAGE_LABEL[status2]}`
+      );
+      item.dataset.coverageStatus = status2;
+      item.dataset.count = String(count);
+      list.append(item);
+    }
+    return list;
   }
   function renderCompletenessStatement(host, completeness2) {
-    host.append(element("h4", "Completeness statement"));
-    const details = element("dl");
+    host.append(element2("h4", "Completeness statement"));
+    const details = element2("dl");
     appendValue(
       details,
       "closure depth",
@@ -5731,30 +7775,37 @@ var EvidenceGraph = (() => {
     host.append(details);
   }
   function renderChecks(host, checks) {
-    host.append(element("h4", "The ten checks"));
-    const list = element("ol");
+    host.append(element2("h4", "The ten checks"));
+    const list = element2("ol");
     checks.forEach((check) => {
-      const item = element("li");
+      const item = element2("li");
       item.dataset.checkStatus = check.status;
-      item.append(element("strong", check.name));
-      item.append(element("span", `: ${check.result}`));
+      item.append(element2("strong", check.name));
+      item.append(element2("span", `: ${check.result}`));
       list.append(item);
     });
     host.append(list);
   }
-  async function renderVerificationPage(root, bundle, verified, countersigners) {
-    const page = element("section");
-    page.dataset.page = "verification";
-    page.append(element("h2", "Verification"));
+  async function renderVerificationPage(root, bundle, verified, countersigners, styled = false) {
+    const section = element2("section");
+    section.dataset.page = "verification";
+    let page = section;
+    if (styled) {
+      section.className = "oi oi-vp";
+      page = element2("div");
+      page.className = "sec";
+      section.append(page);
+    }
+    page.append(element2("h2", "Verification"));
     const model = buildVerificationPageModel(bundle, verified);
-    const summary = element("dl");
+    const summary = element2("dl");
     appendValue(summary, "bundle digest", model.bundleDigest ?? "uncomputable");
     appendValue(summary, "checkpoint root", model.checkpointRoot ?? "absent");
     appendValue(summary, "checkpoint size", model.checkpointSize ?? "absent");
     page.append(summary);
     renderReceipts(page, model.receipts);
     if (model.selfWitnessed) {
-      const witness = element(
+      const witness = element2(
         "p",
         "self-witnessed: no transparency-service receipt"
       );
@@ -5767,7 +7818,7 @@ var EvidenceGraph = (() => {
       model.uncheckpointedCount,
       model.coverage
     );
-    const countersignatures = object6(bundle).countersignatures;
+    const countersignatures = object7(bundle).countersignatures;
     const stamps = await classifyCountersignatures(
       Array.isArray(countersignatures) ? countersignatures : [],
       verified.bundleDigest,
@@ -5777,8 +7828,8 @@ var EvidenceGraph = (() => {
     renderStamps(page, stamps);
     renderCompletenessStatement(page, model.completeness);
     renderChecks(page, model.checks);
-    page.append(element("p", model.verifyIndependentlyLine));
-    root.append(page);
+    page.append(element2("p", model.verifyIndependentlyLine));
+    root.append(section);
   }
   function metRate(report) {
     const required = report.outcomes.filter(
@@ -5791,13 +7842,13 @@ var EvidenceGraph = (() => {
     return `met rate ${passed}/${required.length}`;
   }
   function renderCalibration(calibration) {
-    const section = element("section");
-    section.append(element("h2", "Human check"));
+    const section = element2("section");
+    section.append(element2("h2", "Human check"));
     if (calibration === void 0) {
-      section.append(element("p", "no human-check data"));
+      section.append(element2("p", "no human-check data"));
       return section;
     }
-    const details = element("dl");
+    const details = element2("dl");
     appendValue(details, "confusion matrix", calibration.confusion);
     appendCount(details, "agreement", calibration.agreement);
     appendCount(details, "corrected rate", calibration.correctedRate);
@@ -5806,8 +7857,8 @@ var EvidenceGraph = (() => {
     return section;
   }
   function appendCount(parent2, label, count) {
-    parent2.append(element("dt", label));
-    const cell = element("dd");
+    parent2.append(element2("dt", label));
+    const cell = element2("dd");
     if (count === void 0) {
       cell.textContent = "not stated";
       cell.dataset.count = "not-stated";
@@ -5822,9 +7873,9 @@ var EvidenceGraph = (() => {
     parent2.append(cell);
   }
   function renderProvenance(capsuleId, coordinates, times) {
-    const panel = element("section");
-    panel.append(element("h4", "Provenance"));
-    const details = element("dl");
+    const panel = element2("section");
+    panel.append(element2("h4", "Provenance"));
+    const details = element2("dl");
     appendValue(details, "capsule ID", capsuleId);
     if (times.provenanceMode !== void 0)
       appendValue(details, "provenance", times.provenanceMode);
@@ -5835,8 +7886,8 @@ var EvidenceGraph = (() => {
       "action time not stated"
     );
     appendTime(details, "seal time", times.sealTime, "seal time not stated");
-    details.append(element("dt", "seal status"));
-    const seal = element(
+    details.append(element2("dt", "seal status"));
+    const seal = element2(
       "dd",
       coordinates === void 0 ? "uncheckpointed" : "checkpointed"
     );
@@ -5852,35 +7903,35 @@ var EvidenceGraph = (() => {
     return panel;
   }
   function renderJudgment(judgment) {
-    const item = element("li");
-    item.append(element("strong", `${judgment.axisId}: ${judgment.status}`));
-    item.append(element("p", judgment.rationale));
-    item.append(element("p", `evidence: ${judgment.evidenceIds.join(", ")}`));
+    const item = element2("li");
+    item.append(element2("strong", `${judgment.axisId}: ${judgment.status}`));
+    item.append(element2("p", judgment.rationale));
+    item.append(element2("p", `evidence: ${judgment.evidenceIds.join(", ")}`));
     return item;
   }
   function renderAct(act) {
-    const section = element("section");
-    section.append(element("h4", `Turn ${act.turnIdx}`));
+    const section = element2("section");
+    section.append(element2("h4", `Turn ${act.turnIdx}`));
     if (act.agentInput !== void 0)
-      section.append(element("pre", display(act.agentInput)));
+      section.append(element2("pre", display(act.agentInput)));
     if (act.agentOutput !== void 0)
-      section.append(element("pre", display(act.agentOutput)));
+      section.append(element2("pre", display(act.agentOutput)));
     section.append(renderProvenance(act.capsuleId, act.logCoordinates, act));
     return section;
   }
-  function object6(value) {
+  function object7(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
   }
   function renderWithheldActs(acts, host) {
     for (const act of acts) {
       if (act.agentInput !== void 0 && act.agentOutput !== void 0) continue;
-      const committed = object6({
+      const committed = object7({
         agent_input_digest: act.agentInputDigest,
         agent_output_digest: act.agentOutputDigest
       });
-      const evidence = element("section");
-      evidence.append(element("h4", "Undisclosed payload evidence"));
-      const details = element("dl");
+      const evidence = element2("section");
+      evidence.append(element2("h4", "Undisclosed payload evidence"));
+      const details = element2("dl");
       appendValue(details, "capsule ID", act.capsuleId);
       for (const field of ["agent_input_digest", "agent_output_digest"]) {
         if (typeof committed[field] === "string")
@@ -5892,7 +7943,7 @@ var EvidenceGraph = (() => {
         ["agent_output", act.agentOutputDisclosure]
       ]) {
         if (state !== "disclosure_mismatch") continue;
-        const note = element(
+        const note = element2(
           "p",
           `${field}: the disclosed value does not match the committed digest and is withheld`
         );
@@ -5904,36 +7955,36 @@ var EvidenceGraph = (() => {
   }
   function renderCase(caseNode, host) {
     host.replaceChildren();
-    host.append(element("h3", `Case ${caseNode.caseId}`));
-    const judgments = element("ul");
+    host.append(element2("h3", `Case ${caseNode.caseId}`));
+    const judgments = element2("ul");
     caseNode.judgments.forEach(
       (judgment) => judgments.append(renderJudgment(judgment))
     );
-    host.append(element("h4", "Axis judgments"), judgments);
-    host.append(element("h4", "Disclosed transcript"));
+    host.append(element2("h4", "Axis judgments"), judgments);
+    host.append(element2("h4", "Disclosed transcript"));
     caseNode.acts.forEach((act) => host.append(renderAct(act)));
     renderWithheldActs(caseNode.acts, host);
   }
   function renderReport(report, host, _records) {
     host.replaceChildren();
-    const heading = element("h2", "Cases for ");
+    const heading = element2("h2", "Cases for ");
     heading.append(renderTime(report.date));
     host.append(heading);
-    const outcomes = element("ul");
+    const outcomes = element2("ul");
     report.outcomes.forEach((outcome) => {
       outcomes.append(
-        element(
+        element2(
           "li",
           `${outcome.outcomeId} (${outcome.role}): ${outcome.aggregate ?? "unrated"}`
         )
       );
     });
-    host.append(element("h3", "Outcome rollup"), outcomes);
+    host.append(element2("h3", "Outcome rollup"), outcomes);
     renderWithheldActs(report.withheldActs, host);
-    const cases = element("section");
-    const detail = element("section");
+    const cases = element2("section");
+    const detail = element2("section");
     report.cases.forEach((caseNode) => {
-      const item = element(
+      const item = element2(
         "button",
         `${caseNode.taskId}, trial ${caseNode.trial}: ${caseNode.aggregate ?? "unrated"}`
       );
@@ -5949,14 +8000,14 @@ var EvidenceGraph = (() => {
     );
   }
   function renderCitation(citation) {
-    const section = element("section");
+    const section = element2("section");
     section.append(
       renderProvenance(citation.capsuleId, citation.logCoordinates, citation)
     );
     if (citation.disclosure === "disclosed") {
-      section.append(element("pre", display(citation.disclosedPayload)));
+      section.append(element2("pre", display(citation.disclosedPayload)));
     } else {
-      const note = element(
+      const note = element2(
         "p",
         citation.disclosure === "disclosure_mismatch" ? "withheld: the disclosed value does not match the committed digest" : "withheld"
       );
@@ -5967,33 +8018,33 @@ var EvidenceGraph = (() => {
   }
   function renderReportRow(row, host) {
     host.replaceChildren();
-    host.append(element("h3", row.label));
-    const status2 = element("p", row.status.replaceAll("_", " "));
+    host.append(element2("h3", row.label));
+    const status2 = element2("p", row.status.replaceAll("_", " "));
     status2.dataset.rowStatus = row.status;
     host.append(status2);
-    if (row.reason !== void 0) host.append(element("p", row.reason));
-    host.append(element("h4", "Evidence"));
+    if (row.reason !== void 0) host.append(element2("p", row.reason));
+    host.append(element2("h4", "Evidence"));
     if (row.citations.length === 0) {
-      host.append(element("p", "no citation"));
+      host.append(element2("p", "no citation"));
     } else {
       row.citations.forEach((citation) => host.append(renderCitation(citation)));
     }
   }
   function renderReportRowsTable(reportRows, root) {
-    const section = element("section");
+    const section = element2("section");
     section.dataset.page = "report-rows";
-    section.append(element("h1", reportRows.title ?? "Report"));
+    section.append(element2("h1", reportRows.title ?? "Report"));
     const table = document.createElement("table");
-    const detail = element("section");
+    const detail = element2("section");
     reportRows.rows.forEach((row) => {
       const tr = document.createElement("tr");
       const labelCell = document.createElement("td");
-      const button = element("button", row.label);
+      const button = element2("button", row.label);
       button.setAttribute("type", "button");
       button.dataset.rowId = row.rowId;
       button.addEventListener("click", () => renderReportRow(row, detail));
       labelCell.append(button);
-      const statusCell = element("td", row.status.replaceAll("_", " "));
+      const statusCell = element2("td", row.status.replaceAll("_", " "));
       statusCell.dataset.rowStatus = row.status;
       tr.append(labelCell, statusCell);
       table.append(tr);
@@ -6011,12 +8062,12 @@ var EvidenceGraph = (() => {
   }
   function renderCitedMember(host, field, resolution, committed) {
     if (resolution.state !== "disclosed" && committed === void 0) return;
-    host.append(element("h5", field));
+    host.append(element2("h5", field));
     if (resolution.state === "disclosed") {
-      host.append(element("pre", display(resolution.payload)));
+      host.append(element2("pre", display(resolution.payload)));
       return;
     }
-    const note = element(
+    const note = element2(
       "p",
       resolution.state === "disclosure_mismatch" ? `withheld \xB7 ${committed}: the disclosed value does not match the committed digest` : `withheld \xB7 ${committed}`
     );
@@ -6024,7 +8075,7 @@ var EvidenceGraph = (() => {
     host.append(note);
   }
   function renderCitedRecord(record, records, host) {
-    const section = element("section");
+    const section = element2("section");
     section.dataset.citedRecord = record.capsuleId;
     section.append(
       renderProvenance(record.capsuleId, record.logCoordinates, record)
@@ -6042,22 +8093,22 @@ var EvidenceGraph = (() => {
       record.agentOutputDigest
     );
     if (record.cites.length > 0) {
-      section.append(element("h5", "Cites"));
+      section.append(element2("h5", "Cites"));
       renderCitationList(record.cites, records, section);
     }
     host.append(section);
   }
   function renderCitationList(ids, records, host) {
-    const list = element("ul");
-    const detail = element("section");
+    const list = element2("ul");
+    const detail = element2("section");
     for (const id of ids) {
-      const item = element("li");
+      const item = element2("li");
       const target = records.get(id);
       if (target === void 0) {
         item.textContent = `${id} \xB7 not in this bundle`;
         item.dataset.citation = "missing";
       } else {
-        const button = element("button", id);
+        const button = element2("button", id);
         button.setAttribute("type", "button");
         button.dataset.citedId = id;
         button.addEventListener("click", () => {
@@ -6077,30 +8128,30 @@ var EvidenceGraph = (() => {
       (entry) => entry.field === field
     );
     if (mismatch === void 0) return void 0;
-    const marker = element("span", "count mismatch");
+    const marker = element2("span", "count mismatch");
     marker.dataset.countMismatch = field;
     marker.dataset.stated = String(mismatch.stated);
     marker.dataset.recomputed = String(mismatch.recomputed);
     return marker;
   }
   function appendCloseState(parent2, close, tag) {
-    const cell = element(tag, close.state);
+    const cell = element2(tag, close.state);
     cell.dataset.closeState = close.state;
     cell.dataset.closeDerivation = close.derivation;
     cell.dataset.assertedState = close.asserted;
     if (close.stateMismatch) {
-      const marker = element("span", "state mismatch");
+      const marker = element2("span", "state mismatch");
       marker.dataset.stateMismatch = "close_state";
       marker.dataset.asserted = close.asserted;
       marker.dataset.recomputed = close.state;
       cell.append(" ", marker);
     } else if (close.derivation === "producer-asserted") {
-      const marker = element("span", "producer-asserted");
+      const marker = element2("span", "producer-asserted");
       marker.dataset.producerAsserted = "close_state";
       cell.append(" ", marker);
     }
     if (close.peerRefMismatch) {
-      const marker = element("span", "peer_close_ref carries no such link");
+      const marker = element2("span", "peer_close_ref carries no such link");
       marker.dataset.peerRefMismatch = "peer_close_ref";
       cell.append(" ", marker);
     }
@@ -6108,18 +8159,18 @@ var EvidenceGraph = (() => {
     return cell;
   }
   function renderClose(close, result, host) {
-    host.append(element("h4", "Close"));
-    const details = element("dl");
+    host.append(element2("h4", "Close"));
+    const details = element2("dl");
     if (close.period !== void 0)
       appendValue(
         details,
         "period",
         `${close.period.start} \u2192 ${close.period.end}`
       );
-    details.append(element("dt", "state"));
+    details.append(element2("dt", "state"));
     appendCloseState(details, close, "dd");
-    details.append(element("dt", "derivation"));
-    const derivation = element(
+    details.append(element2("dt", "derivation"));
+    const derivation = element2(
       "dd",
       close.derivation === "recomputed" ? `recomputed from ${close.links.length} counterparty ${close.links.length === 1 ? "link" : "links"} to the cited Close in this bundle${close.ignored.length === 0 ? "" : ` (${close.ignored.length} other ${close.ignored.length === 1 ? "link" : "links"} ignored)`}` : "producer-asserted: the cited Close is not a record in this bundle, so its links could not be read"
     );
@@ -6128,8 +8179,8 @@ var EvidenceGraph = (() => {
     if (close.peer !== void 0) appendValue(details, "peer", close.peer);
     if (close.bookId !== void 0) appendValue(details, "book", close.bookId);
     if (close.keyId !== void 0) {
-      details.append(element("dt", "signer"));
-      const signer = element(
+      details.append(element2("dt", "signer"));
+      const signer = element2(
         "dd",
         close.keyVerified === true ? `${close.keyId} (verified)` : `${close.keyId} \xB7 ${UNVERIFIED_KEY_LABEL}`
       );
@@ -6137,17 +8188,17 @@ var EvidenceGraph = (() => {
       details.append(signer);
     }
     host.append(details);
-    host.append(element("h5", "Cited Close"));
+    host.append(element2("h5", "Cited Close"));
     renderCitationList([close.closeRef], result.records, host);
     if (close.peerCloseRef !== void 0) {
-      host.append(element("h5", "Peer record"));
+      host.append(element2("h5", "Peer record"));
       renderCitationList([close.peerCloseRef], result.records, host);
     }
     if (close.links.length > 0) {
-      host.append(element("h5", "Links to the cited Close"));
-      const list = element("ul");
+      host.append(element2("h5", "Links to the cited Close"));
+      const list = element2("ul");
       for (const link of close.links) {
-        const item = element(
+        const item = element2(
           "li",
           `${link.type} \xB7 ${link.recordId} \xB7 signer ${link.keyId} (verified)`
         );
@@ -6158,10 +8209,10 @@ var EvidenceGraph = (() => {
       host.append(list);
     }
     if (close.ignored.length > 0) {
-      host.append(element("h5", "Links ignored (not from the counterparty)"));
-      const list = element("ul");
+      host.append(element2("h5", "Links ignored (not from the counterparty)"));
+      const list = element2("ul");
       for (const link of close.ignored) {
-        const item = element(
+        const item = element2(
           "li",
           `${link.type} \xB7 ${link.recordId} \xB7 ${link.reason}`
         );
@@ -6174,7 +8225,7 @@ var EvidenceGraph = (() => {
   }
   function appendVerdict(parent2, claim) {
     const shown = claim.failed ? "failed" : claim.support === "supported" ? claim.verdict : "unsupported";
-    const cell = element(parent2.tagName === "TR" ? "td" : "dd", shown);
+    const cell = element2(parent2.tagName === "TR" ? "td" : "dd", shown);
     cell.dataset.verdict = shown;
     cell.dataset.support = claim.support;
     if (claim.failed) {
@@ -6187,7 +8238,7 @@ var EvidenceGraph = (() => {
   }
   function appendSufficiency(parent2, claim) {
     const shown = claim.failed ? "failed" : claim.sufficiency;
-    const cell = element(parent2.tagName === "TR" ? "td" : "dd", shown);
+    const cell = element2(parent2.tagName === "TR" ? "td" : "dd", shown);
     cell.dataset.sufficiency = shown;
     if (claim.failed) {
       cell.dataset.statedSufficiency = claim.sufficiency;
@@ -6198,24 +8249,24 @@ var EvidenceGraph = (() => {
   }
   function renderClaim(claim, result, host) {
     host.replaceChildren();
-    host.append(element("h3", `Claim ${claim.id}`));
-    const details = element("dl");
+    host.append(element2("h3", `Claim ${claim.id}`));
+    const details = element2("dl");
     appendValue(details, "contract", claim.contractRef);
     appendValue(details, "requirement", claim.requirementRef);
-    details.append(element("dt", "type"));
-    const type = element("dd", CLAIM_TYPE_LABEL(claim));
+    details.append(element2("dt", "type"));
+    const type = element2("dd", CLAIM_TYPE_LABEL(claim));
     type.dataset.claimType = claim.recognized ? claim.type : "unrecognized";
     if (!claim.recognized) type.className = "claim-unrecognized";
     details.append(type);
     appendValue(details, "tier", claim.tier);
     appendValue(details, "grade", claim.grade);
-    details.append(element("dt", "sufficiency"));
+    details.append(element2("dt", "sufficiency"));
     appendSufficiency(details, claim);
-    details.append(element("dt", "verdict"));
+    details.append(element2("dt", "verdict"));
     appendVerdict(details, claim);
     host.append(details);
     if (claim.failed) {
-      const note = element(
+      const note = element2(
         "p",
         `failed: ${claim.failure ?? "verification failed"}; sufficiency and verdict withheld`
       );
@@ -6224,15 +8275,15 @@ var EvidenceGraph = (() => {
     }
     if (claim.close !== void 0) renderClose(claim.close, result, host);
     if (claim.support === "unsupported") {
-      const note = element(
+      const note = element2(
         "p",
         claim.missing.length === 0 ? "unsupported: this claim cites no evidence" : `unsupported: cited evidence not in this bundle: ${claim.missing.join(", ")}`
       );
       note.dataset.claimMissing = String(claim.missing.length);
       host.append(note);
     }
-    host.append(element("h4", "Presentation"));
-    const carrier = element("dl");
+    host.append(element2("h4", "Presentation"));
+    const carrier = element2("dl");
     appendValue(carrier, "carrier", claim.presentation.kind);
     appendValue(carrier, "status", claim.presentation.status);
     if (claim.presentation.summary !== void 0)
@@ -6241,7 +8292,7 @@ var EvidenceGraph = (() => {
       appendValue(carrier, "narrative", claim.presentation.narrative);
     host.append(carrier);
     if (claim.presentation.evidence !== void 0) {
-      host.append(element("h5", "Carrier evidence"));
+      host.append(element2("h5", "Carrier evidence"));
       const list = renderCitationList(
         claim.presentation.evidence,
         result.records,
@@ -6249,22 +8300,22 @@ var EvidenceGraph = (() => {
       );
       list.dataset.carrierEvidence = String(claim.presentation.evidence.length);
     }
-    host.append(element("h4", "Proofs"));
+    host.append(element2("h4", "Proofs"));
     if (claim.proofs.length === 0) {
-      host.append(element("p", "no proof cited"));
+      host.append(element2("p", "no proof cited"));
     } else {
-      const proofs = element("ul");
+      const proofs = element2("ul");
       for (const proof of claim.proofs)
         proofs.append(
-          element("li", `${proof.kind} \xB7 ${proof.digest} \xB7 not resolved here`)
+          element2("li", `${proof.kind} \xB7 ${proof.digest} \xB7 not resolved here`)
         );
       host.append(proofs);
     }
-    host.append(element("h4", "Evidence"));
+    host.append(element2("h4", "Evidence"));
     for (const ref of claim.evidence) {
       const record = result.records.get(ref.digest);
       if (record === void 0) {
-        const missing = element("p", `${ref.digest} \xB7 not in this bundle`);
+        const missing = element2("p", `${ref.digest} \xB7 not in this bundle`);
         missing.dataset.evidence = "missing";
         host.append(missing);
       } else {
@@ -6278,10 +8329,10 @@ var EvidenceGraph = (() => {
     ["notEvaluable", "not evaluable"]
   ];
   function renderResultPage(result, root) {
-    const section = element("section");
+    const section = element2("section");
     section.dataset.page = "result";
-    section.append(element("h1", "Evidence result"));
-    const coverage = element("p");
+    section.append(element2("h1", "Evidence result"));
+    const coverage = element2("p");
     coverage.append(
       `coverage: ${result.coverage.evaluatedPopulation} requirements evaluated`
     );
@@ -6299,12 +8350,12 @@ var EvidenceGraph = (() => {
     coverage.dataset.unknown = String(result.coverage.unknownCount);
     section.append(coverage);
     const byId = new Map(result.claims.map((claim) => [claim.id, claim]));
-    const buckets = element("section");
+    const buckets = element2("section");
     buckets.dataset.buckets = "verdict";
-    buckets.append(element("h2", "Claims by verdict"));
+    buckets.append(element2("h2", "Claims by verdict"));
     for (const [key, label] of BUCKETS) {
       const count = result.bucketCounts[key];
-      const heading = element("h3", `${label}: ${count === 0 ? "none" : count}`);
+      const heading = element2("h3", `${label}: ${count === 0 ? "none" : count}`);
       heading.dataset.bucketCount = String(count);
       heading.dataset.bucketOf = key;
       const marker = countMismatchMarker(
@@ -6315,14 +8366,14 @@ var EvidenceGraph = (() => {
       buckets.append(heading);
       const ids = result.buckets[key];
       if (ids.length === 0) {
-        buckets.append(element("p", "none"));
+        buckets.append(element2("p", "none"));
         continue;
       }
-      const list = element("ul");
+      const list = element2("ul");
       list.dataset.bucket = key;
       for (const id of ids) {
         const claim = byId.get(id);
-        const item = element(
+        const item = element2(
           "li",
           claim?.failed ? `${id} \xB7 failed` : claim?.support === "unsupported" ? `${id} \xB7 unsupported` : id
         );
@@ -6334,7 +8385,7 @@ var EvidenceGraph = (() => {
       }
       buckets.append(list);
     }
-    const failedHeading = element(
+    const failedHeading = element2(
       "h3",
       `failed: ${result.bucketCounts.failed === 0 ? "none" : result.bucketCounts.failed}`
     );
@@ -6342,12 +8393,12 @@ var EvidenceGraph = (() => {
     failedHeading.dataset.bucketOf = "failed";
     buckets.append(failedHeading);
     const failedIds = result.claims.filter((claim) => claim.failed).map((claim) => claim.id);
-    if (failedIds.length === 0) buckets.append(element("p", "none"));
+    if (failedIds.length === 0) buckets.append(element2("p", "none"));
     else {
-      const list = element("ul");
+      const list = element2("ul");
       list.dataset.bucket = "failed";
       for (const id of failedIds) {
-        const item = element("li", id);
+        const item = element2("li", id);
         item.dataset.claimRef = id;
         item.className = "claim-failed";
         list.append(item);
@@ -6357,7 +8408,7 @@ var EvidenceGraph = (() => {
     section.append(buckets);
     const table = document.createElement("table");
     table.dataset.claims = "rows";
-    const detail = element("section");
+    const detail = element2("section");
     for (const claim of result.claims) {
       const tr = document.createElement("tr");
       tr.dataset.claimRow = claim.id;
@@ -6368,19 +8419,19 @@ var EvidenceGraph = (() => {
         tr.dataset.failed = claim.failedOn ?? "close_state";
       }
       const idCell = document.createElement("td");
-      const button = element("button", claim.id);
+      const button = element2("button", claim.id);
       button.setAttribute("type", "button");
       button.dataset.claimId = claim.id;
       button.addEventListener("click", () => renderClaim(claim, result, detail));
       idCell.append(button);
-      tr.append(idCell, element("td", claim.requirementRef));
+      tr.append(idCell, element2("td", claim.requirementRef));
       appendSufficiency(tr, claim);
       appendVerdict(tr, claim);
-      const tier = element("td", claim.tier);
+      const tier = element2("td", claim.tier);
       tier.dataset.tier = claim.tier;
-      const grade = element("td", claim.grade);
+      const grade = element2("td", claim.grade);
       grade.dataset.grade = claim.grade;
-      const type = element("td", CLAIM_TYPE_LABEL(claim));
+      const type = element2("td", CLAIM_TYPE_LABEL(claim));
       type.dataset.claimType = claim.recognized ? claim.type : "unrecognized";
       if (!claim.recognized) type.className = "claim-unrecognized";
       if (claim.close !== void 0) {
@@ -6398,18 +8449,18 @@ var EvidenceGraph = (() => {
     root.append(section);
   }
   function renderGraph(graph2, root, records) {
-    const aggregate = element("section");
-    aggregate.append(element("h1", "Evidence graph"));
-    const metrics = element("dl");
+    const aggregate = element2("section");
+    aggregate.append(element2("h1", "Evidence graph"));
+    const metrics = element2("dl");
     appendValue(metrics, "per-axis", graph2.aggregate.perAxis);
     appendValue(metrics, "counts", graph2.aggregate.counts);
     aggregate.append(metrics);
     root.append(aggregate, renderCalibration(graph2.calibration));
-    const calendar = element("section");
-    calendar.append(element("h2", "Daily reports"));
-    const detail = element("section");
+    const calendar = element2("section");
+    calendar.append(element2("h2", "Daily reports"));
+    const detail = element2("section");
     [...graph2.reports].sort((left, right) => left.date.localeCompare(right.date)).forEach((report) => {
-      const tile = element("button");
+      const tile = element2("button");
       tile.append(renderTime(report.date), `: ${metRate(report)}`);
       tile.setAttribute("type", "button");
       tile.dataset.reportDate = report.date;
@@ -6427,21 +8478,42 @@ var EvidenceGraph = (() => {
     const reportRows = verified ? await buildReportRows(bundle) : void 0;
     const result = verified && reportRows === void 0 && await isResultRoot(bundle) ? await buildResultRoot(bundle) : void 0;
     const graph2 = verified && reportRows === void 0 && result === void 0 ? await buildEvidenceGraph(bundle) : void 0;
-    const records = object6(bundle).records;
+    const records = object7(bundle).records;
+    const outcomeReport = result !== void 0 ? readOutcomeReportPresentation(bundle) : void 0;
+    const styled = result !== void 0 && outcomeReport !== void 0;
     root.replaceChildren();
     renderPresentationHeader(root, bundle);
-    renderVerificationBanner(root, verified, {
-      uncheckpointed: unboundRecordIds(verification).length,
-      total: Array.isArray(records) ? records.length : 0
-    });
+    renderVerificationBanner(
+      root,
+      verified,
+      {
+        uncheckpointed: unboundRecordIds(verification).length,
+        total: Array.isArray(records) ? records.length : 0
+      },
+      styled
+    );
     if (reportRows !== void 0) {
       renderReportRowsTable(reportRows, root);
+    } else if (result !== void 0 && outcomeReport !== void 0) {
+      await renderOutcomeReportPage(
+        result,
+        outcomeReport,
+        bundle,
+        verification,
+        root
+      );
     } else if (result !== void 0) {
       renderResultPage(result, root);
     } else if (graph2 !== void 0) {
       renderGraph(graph2, root, Array.isArray(records) ? records : []);
     }
-    await renderVerificationPage(root, bundle, verification, countersigners);
+    await renderVerificationPage(
+      root,
+      bundle,
+      verification,
+      countersigners,
+      styled
+    );
   }
   return __toCommonJS(browser_exports2);
 })();

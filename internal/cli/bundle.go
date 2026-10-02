@@ -513,7 +513,11 @@ func bundleCommands() []*cobra.Command {
 			if target.book != nil {
 				// A jsonl profile's bundle comes from its book, which puts every
 				// bundle it builds on record as a disclosure record.
-				bundle, err := bookBundle(c.Context(), target.book.book, root, closureDepth, payloads, suppressSet, disclosure || permalink)
+				attach := false
+				if disclosure || permalink {
+					attach, _ = c.Flags().GetBool("attach-input-originals")
+				}
+				bundle, err := bookBundle(c.Context(), target.book.book, target.artifacts, root, closureDepth, payloads, suppressSet, disclosure || permalink, attach)
 				if err != nil {
 					return err
 				}
@@ -567,6 +571,7 @@ func bundleCommands() []*cobra.Command {
 		if disclosure || permalink {
 			command.Flags().String("payloads", "all", "Disclosure mode: all or selected")
 			command.Flags().StringSlice("suppress", nil, "Disclosed member to withhold (agent_input or agent_output)")
+			command.Flags().Bool("attach-input-originals", false, "jsonl profiles: also carry each published capsule's retained agent_input original in the bundle (extension "+inputOriginalsExtension+"), checked against its agent_input_digest; the book itself never stores originals")
 		}
 		if !permalink {
 			command.Flags().String("out", "", "Write the Evidence Bundle JSON to a new file")
