@@ -217,6 +217,41 @@ print(check_evidence_file(json.load(open(sys.argv[1]))).verdict)`
 		require.NoError(t, err, name)
 		assert.Equal(t, goResult["verdict"], strings.TrimSpace(string(out)), name)
 	}
+	fractional := filepath.Join("testdata", "bundle-fractional-issued-at.json")
+	goResult, _ := verifyBundleOutput(t, fractional)
+	out, err := exec.Command(pythonPath, "-c", script, fractional).Output()
+	require.NoError(t, err, "fractional issued_at")
+	assert.Equal(t, goResult["verdict"], strings.TrimSpace(string(out)), "fractional issued_at")
+}
+
+// TestVerifyBundleComparesTheTimestampAsSigned: a checkpoint signed with a
+// fractional issued_at ("…:00.000Z", as another log implementation writes
+// it) states that exact text as its timestamp. The file is one such
+// implementation's bundle, unchanged; it is VALID, and a timestamp naming the
+// same instant in other text is not what was signed.
+func TestVerifyBundleComparesTheTimestampAsSigned(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path := filepath.Join("testdata", "bundle-fractional-issued-at.json")
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	bundle, err := decodeBundleJSON(raw)
+	require.NoError(t, err)
+	stated := bundle["checkpoint"].(map[string]interface{})["timestamp"].(string)
+	require.True(t, strings.HasSuffix(stated, ".000Z"), "the fixture is signed with a fractional issued_at")
+
+	result, err := verifyBundleOutput(t, path)
+	require.NoError(t, err)
+	assert.Equal(t, "VALID", result["verdict"])
+
+	renormalized := strings.TrimSuffix(stated, ".000Z") + "Z"
+	edited := filepath.Join(t.TempDir(), "bundle.json")
+	bundle["checkpoint"].(map[string]interface{})["timestamp"] = renormalized
+	data, err := json.Marshal(bundle)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(edited, data, 0o600))
+	result, err = verifyBundleOutput(t, edited)
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Contains(t, result["checkpoint"].(map[string]interface{})["findings"], "checkpoint_field_mismatch:timestamp")
 }
 
 // TestVerifyBundleCheckpointFieldsKeepTheirJSONType: a number stated as a

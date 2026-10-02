@@ -11,7 +11,6 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/envelope"
-	"github.com/action-state-group/cll-go/checkpoint"
 	"github.com/spf13/cobra"
 )
 
@@ -33,18 +32,8 @@ func checkpointClaim(value map[string]interface{}) aacbundle.ClaimResult {
 	if err != nil {
 		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_malformed"}}
 	}
-	record, err := checkpoint.ParseRecord(raw)
-	if err != nil || record.VerifySignature() != nil {
-		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_invalid"}}
-	}
-	projection, err := record.Payload().CanonicalJSON()
+	signed, err := signedCheckpoint(raw)
 	if err != nil {
-		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_invalid"}}
-	}
-	decoder := json.NewDecoder(bytes.NewReader(projection))
-	decoder.UseNumber()
-	var signed map[string]interface{}
-	if err := decoder.Decode(&signed); err != nil {
 		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_invalid"}}
 	}
 	var findings []string
