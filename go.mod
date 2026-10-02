@@ -3,7 +3,7 @@ module github.com/action-state-group/capsule-cli
 go 1.27.0
 
 require (
-	github.com/action-state-group/agent-action-capsule/go v0.6.1-0.20261002001307-0dde0c25b8ec
+	github.com/action-state-group/agent-action-capsule/go v0.6.1-0.20261002005037-65318f582f22
 	github.com/action-state-group/capsule-emit-go v0.2.0
 	github.com/action-state-group/cll-go v0.0.0-20260926202724-9741da3d4ace
 	github.com/action-state-group/evidencebook v0.1.0

@@ -193,18 +193,18 @@ var EvidenceGraph = (() => {
     }
     return 0;
   }
-  function utf8ToBytes(str) {
+  function utf8ToBytes(str2) {
     const out = [];
     let p = 0;
-    for (let i = 0; i < str.length; i++) {
-      let c = str.charCodeAt(i);
+    for (let i = 0; i < str2.length; i++) {
+      let c = str2.charCodeAt(i);
       if (c < 128) {
         out[p++] = c;
       } else if (c < 2048) {
         out[p++] = c >> 6 | 192;
         out[p++] = c & 63 | 128;
-      } else if ((c & 64512) === 55296 && i + 1 < str.length && (str.charCodeAt(i + 1) & 64512) === 56320) {
-        c = 65536 + ((c & 1023) << 10) + (str.charCodeAt(++i) & 1023);
+      } else if ((c & 64512) === 55296 && i + 1 < str2.length && (str2.charCodeAt(i + 1) & 64512) === 56320) {
+        c = 65536 + ((c & 1023) << 10) + (str2.charCodeAt(++i) & 1023);
         out[p++] = c >> 18 | 240;
         out[p++] = c >> 12 & 63 | 128;
         out[p++] = c >> 6 & 63 | 128;
@@ -749,15 +749,15 @@ var EvidenceGraph = (() => {
   function toStr(bytes, start, end) {
     const len = end - start;
     if (len < ASCII_THRESHOLD) {
-      let str = "";
+      let str2 = "";
       for (let i = start; i < end; i++) {
         const c = bytes[i];
         if (c & 128) {
           return textDecoder.decode(bytes.subarray(start, end));
         }
-        str += String.fromCharCode(c);
+        str2 += String.fromCharCode(c);
       }
-      return str;
+      return str2;
     }
     return textDecoder.decode(bytes.subarray(start, end));
   }
@@ -2591,6 +2591,7 @@ var EvidenceGraph = (() => {
     readPresentationBlock: () => readPresentationBlock,
     recomputeCounts: () => recomputeCounts,
     registries: () => registries,
+    renderCompliancePage: () => renderCompliancePage,
     renderEvidenceGraph: () => renderEvidenceGraph,
     renderOutcomeReportPage: () => renderOutcomeReportPage,
     resolveCarriedInput: () => resolveCarriedInput,
@@ -7450,6 +7451,856 @@ var EvidenceGraph = (() => {
     };
   }
 
+  // src/compliance.ts
+  var CLAIM_ID_SEPARATOR2 = "::";
+  function drawnVerdict2(claim) {
+    if (claim.failed) return "failed";
+    if (claim.support === "unsupported") return "unsupported";
+    return claim.verdict;
+  }
+  function reportPayload2(records, claim) {
+    const digest = claim.evidence[0]?.digest;
+    if (digest === void 0) return void 0;
+    const record = records.get(digest);
+    if (record === void 0) return void 0;
+    const input = record.carriedInput ?? record.agentInput;
+    if (input.state !== "disclosed") return void 0;
+    return isObject(input.payload) ? input.payload : void 0;
+  }
+  function dayOf2(payload) {
+    const period = asString(payload?.period);
+    if (period === void 0) return NOT_STATED;
+    const colon = period.indexOf(":");
+    return colon === -1 ? period : period.slice(colon + 1);
+  }
+  function sealedTier(payload) {
+    const type = asString(payload?.epistemic_type);
+    if (type === "semantic_judgment") return "judged";
+    if (type === "recomputed_determination") return "recomputed";
+    return "not stated";
+  }
+  function agree(values, none, mixed) {
+    const distinct = new Set(values.filter((v) => v !== none));
+    if (distinct.size === 0) return none;
+    return distinct.size === 1 ? [...distinct][0] : mixed;
+  }
+  function parseClaim(claim) {
+    if (claim.type !== REQUIREMENT_CLAIM) return void 0;
+    const sep = claim.id.indexOf(CLAIM_ID_SEPARATOR2);
+    if (sep <= 0) return void 0;
+    const dot = claim.requirementRef.indexOf(".");
+    if (dot <= 0 || dot === claim.requirementRef.length - 1) return void 0;
+    return {
+      claim,
+      conversationId: claim.id.slice(0, sep),
+      obligationKey: claim.requirementRef.slice(0, dot)
+    };
+  }
+  function countedClaims(result, presentation) {
+    const parsed = result.claims.flatMap((c) => {
+      const p = parseClaim(c);
+      return p === void 0 ? [] : [p];
+    });
+    const refs = new Set(parsed.map((p) => p.claim.contractRef));
+    if (refs.size === 1) {
+      const ref = [...refs][0];
+      const at = ref.lastIndexOf("@");
+      return {
+        claims: parsed,
+        pack: {
+          id: at <= 0 ? NOT_STATED : ref.slice(0, at),
+          version: at <= 0 || at === ref.length - 1 ? NOT_STATED : ref.slice(at + 1)
+        }
+      };
+    }
+    const mapped = new Set(
+      presentation.obligations.flatMap((o) => o.rows.map((r) => r.criterionId))
+    );
+    return {
+      claims: parsed.filter((p) => mapped.has(p.claim.requirementRef)),
+      pack: { id: NOT_STATED, version: NOT_STATED }
+    };
+  }
+  function buildSessions(result, claims, testIds) {
+    const byConversation = /* @__PURE__ */ new Map();
+    for (const p of claims) {
+      const list = byConversation.get(p.conversationId) ?? [];
+      list.push(p.claim);
+      byConversation.set(p.conversationId, list);
+    }
+    const sessions = [];
+    for (const [conversationId, conversationClaims] of byConversation) {
+      const tests = [];
+      const sources = /* @__PURE__ */ new Set();
+      let day = NOT_STATED;
+      for (const criterionId of testIds) {
+        const claim = conversationClaims.find(
+          (c) => c.requirementRef === criterionId
+        );
+        if (claim === void 0) {
+          tests.push({
+            criterionId,
+            verdict: "not_applicable",
+            tier: "not stated"
+          });
+          continue;
+        }
+        const payload = reportPayload2(result.records, claim);
+        const rationale = asString(payload?.rationale);
+        const contract = claim.contractRef || asString(payload?.contract_ref) || asString(payload?.contract);
+        const judgePinDigest = asString(payload?.judge_pin_digest);
+        const source = asString(payload?.source_capsule_id);
+        if (source !== void 0) sources.add(source);
+        if (day === NOT_STATED) day = dayOf2(payload);
+        const reportDigest = claim.evidence[0]?.digest;
+        tests.push({
+          criterionId,
+          verdict: drawnVerdict2(claim),
+          tier: sealedTier(payload),
+          claim,
+          ...reportDigest === void 0 ? {} : { reportDigest },
+          ...rationale === void 0 ? {} : { rationale },
+          ...contract === void 0 ? {} : { contract },
+          ...judgePinDigest === void 0 ? {} : { judgePinDigest }
+        });
+      }
+      const sourceCapsuleId = sources.size === 1 ? [...sources][0] : void 0;
+      sessions.push({
+        conversationId,
+        day,
+        tests,
+        ...sourceCapsuleId === void 0 ? {} : { sourceCapsuleId },
+        transcript: findTranscript(
+          result,
+          conversationId,
+          conversationClaims,
+          sourceCapsuleId
+        )
+      });
+    }
+    sessions.sort(
+      (a, b) => a.day === b.day ? a.conversationId.localeCompare(b.conversationId) : a.day.localeCompare(b.day)
+    );
+    return sessions;
+  }
+  function sealedWording(result, claims, criterionId) {
+    const texts = /* @__PURE__ */ new Set();
+    for (const p of claims) {
+      if (p.claim.requirementRef !== criterionId) continue;
+      const text3 = asString(reportPayload2(result.records, p.claim)?.clause_claim);
+      if (text3 !== void 0) texts.add(text3);
+    }
+    if (texts.size === 1) return { text: [...texts][0], source: "sealed" };
+    return { text: NOT_STATED, source: texts.size === 0 ? "unstated" : "mixed" };
+  }
+  function buildRow(criterionId, mapping, wording, sessions) {
+    const byVerdict = /* @__PURE__ */ new Map([
+      ["met", []],
+      ["not_met", []],
+      ["not_evaluable", []],
+      ["not_applicable", []]
+    ]);
+    const tiers = [];
+    for (const session of sessions) {
+      const test = session.tests.find((t) => t.criterionId === criterionId);
+      if (test === void 0) continue;
+      tiers.push(test.tier);
+      const bucket = test.verdict === "failed" || test.verdict === "unsupported" ? "not_met" : test.verdict;
+      byVerdict.get(bucket).push(session.conversationId);
+    }
+    return {
+      criterionId,
+      name: mapping?.name ?? readableId(criterionId.slice(criterionId.indexOf(".") + 1)),
+      wording,
+      tier: agree(tiers, "not stated", "mixed"),
+      ...mapping?.notEvaluableNote === void 0 ? {} : { notEvaluableNote: mapping.notEvaluableNote },
+      ...mapping?.finding === void 0 ? {} : { finding: mapping.finding },
+      metCount: byVerdict.get("met").length,
+      notMetCount: byVerdict.get("not_met").length,
+      notEvaluableCount: byVerdict.get("not_evaluable").length,
+      notApplicableCount: byVerdict.get("not_applicable").length,
+      sessionsByVerdict: byVerdict
+    };
+  }
+  function buildObligation(key, mapping, rows) {
+    if (mapping === void 0)
+      return {
+        key,
+        mapped: false,
+        article: NOT_STATED,
+        title: readableId(key),
+        plain: NOT_STATED,
+        judgedTerms: [],
+        applicability: { status: "not stated", note: NOT_STATED },
+        method: NOT_STATED,
+        rows
+      };
+    return {
+      key,
+      mapped: true,
+      article: mapping.article,
+      title: mapping.title,
+      plain: mapping.plain,
+      judgedTerms: mapping.judgedTerms,
+      applicability: mapping.applicability,
+      method: mapping.method,
+      rows
+    };
+  }
+  function buildRunInfo2(sessions) {
+    const contracts = /* @__PURE__ */ new Set();
+    const pins = /* @__PURE__ */ new Set();
+    for (const session of sessions)
+      for (const test of session.tests) {
+        if (test.contract !== void 0) contracts.add(test.contract);
+        if (test.judgePinDigest !== void 0) pins.add(test.judgePinDigest);
+      }
+    return {
+      ...contracts.size === 1 ? { contract: [...contracts][0] } : {},
+      ...pins.size === 1 ? { judgePinDigest: [...pins][0] } : {},
+      pinned: contracts.size <= 1 && pins.size <= 1
+    };
+  }
+  function buildFindings(obligations) {
+    const findings = [];
+    for (const obligation of obligations)
+      for (const row of obligation.rows) {
+        if (row.finding === void 0 || row.notMetCount === 0) continue;
+        findings.push({
+          id: row.finding.id,
+          criterionId: row.criterionId,
+          obligationKey: obligation.key,
+          article: obligation.article,
+          testName: row.name,
+          severity: row.finding.severity,
+          recommendation: row.finding.recommendation,
+          ownerDue: row.finding.ownerDue,
+          sessionIds: row.sessionsByVerdict.get("not_met") ?? []
+        });
+      }
+    return findings;
+  }
+  function buildComplianceModel(result, presentation) {
+    const { claims, pack } = countedClaims(result, presentation);
+    const tests = /* @__PURE__ */ new Map();
+    for (const p of claims) {
+      const list = tests.get(p.obligationKey) ?? [];
+      if (!list.includes(p.claim.requirementRef))
+        list.push(p.claim.requirementRef);
+      tests.set(p.obligationKey, list);
+    }
+    const testIds = [...tests.values()].flat();
+    const sessions = buildSessions(result, claims, testIds);
+    const mappings = new Map(presentation.obligations.map((o) => [o.key, o]));
+    const obligations = [...tests.entries()].map(([key, ids]) => {
+      const mapping = mappings.get(key);
+      const rowMappings = new Map(
+        (mapping?.rows ?? []).map((r) => [r.criterionId, r])
+      );
+      return buildObligation(
+        key,
+        mapping,
+        ids.map(
+          (id) => buildRow(
+            id,
+            rowMappings.get(id),
+            sealedWording(result, claims, id),
+            sessions
+          )
+        )
+      );
+    });
+    return {
+      regulation: presentation.regulation,
+      pack,
+      obligations,
+      sessions,
+      findings: buildFindings(obligations),
+      totalSessions: sessions.length,
+      runInfo: buildRunInfo2(sessions),
+      qualityProtocol: presentation.qualityProtocol,
+      capsuleId: result.capsuleId
+    };
+  }
+
+  // src/compliance-styles.ts
+  var COMPLIANCE_CSS = `
+.cc{--navy:#232F42;--gold:#E8A33D;--gold-l:#FBEFD9;--cream:#F6F2EA;--line:#E3DED3;--slate:#6B7482;--ink:#1F2733;--ok:#2E7D5B;--ok-l:#E3F1EA;--bad:#B5462F;--bad-l:#F8E6E1;--person:#5B4BA0;--person-l:#ECE8F7;--r:14px;
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;color:var(--ink);background:#fff;display:block;max-width:1080px;margin:26px auto;padding:0 28px}
+.cc *{box-sizing:border-box}
+.cc h1,.cc h2,.cc h3{font-family:Georgia,"Iowan Old Style",Cambria,serif;color:var(--navy);margin:0}
+.cc a{color:var(--navy);cursor:pointer}
+.cc .hd{background:var(--navy);color:#fff;padding:28px 32px;border-radius:var(--r) var(--r) 0 0;margin-top:20px}
+.cc .hd .kicker{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#C9CED6}
+.cc .hd h1{color:#fff;font-size:28px;margin:6px 0 4px}
+.cc .hd .sub{color:#DDE1E7;font-size:15px}
+.cc section{padding:28px 32px;border:1px solid var(--line);border-top:0}
+.cc section h2{font-size:21px;margin-bottom:10px}
+.cc .lede{color:var(--slate);margin:0 0 16px;max-width:760px}
+.cc table.grid{width:100%;border-collapse:collapse;font-size:14.5px}
+.cc table.grid th{text-align:left;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--slate);border-bottom:2px solid var(--navy);padding:8px 10px}
+.cc table.grid td{border-bottom:1px solid var(--line);padding:10px;vertical-align:top}
+.cc table.grid td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cc .kind{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.03em}
+.cc .kind.judged{background:var(--person-l);color:var(--person)}
+.cc .kind.recomputed{background:#E6EEF6;color:#2B5A85}
+.cc .kind.unstated{background:var(--cream);color:var(--slate)}
+.cc .tx{margin:8px 0 4px;font-size:13px}
+.cc .tx .turn{padding:3px 0;border-top:1px solid var(--line);white-space:pre-wrap}
+.cc .tx code{font-size:12px;color:var(--slate)}
+.cc .hd .na{color:var(--ink)}
+.cc .st{font-weight:700;font-size:13px}
+.cc .st.ok{color:var(--ok)}.cc .st.exc{color:var(--bad)}.cc .st.ne{color:#8A93A6}.cc .st.future{color:var(--gold)}
+.cc .fnd{border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:12px}
+.cc .fnd .fh{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.cc .fnd .fh b{color:var(--navy)}
+.cc .sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;text-transform:uppercase}
+.cc .sev.high{background:var(--bad-l);color:var(--bad)}
+.cc .sev.medium{background:var(--gold-l);color:#8A6A2F}
+.cc .sev.low{background:var(--ok-l);color:var(--ok)}
+.cc .fnd table.fk{width:100%;font-size:14px}
+.cc .fnd table.fk th{text-align:left;color:var(--slate);font-weight:600;width:140px;vertical-align:top;padding:4px 0}
+.cc .fnd table.fk td{padding:4px 0}
+.cc details{margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px 14px}
+.cc details > summary{cursor:pointer;color:var(--navy);font-weight:600;font-size:14px}
+.cc details.session{margin:8px 0 0 16px}
+.cc .sessrow{display:flex;gap:10px;align-items:center;padding:6px 0;font-size:14px}
+.cc .sessrow code{font-size:12px;color:var(--slate)}
+.cc .tk{display:inline-block;width:20px;height:20px;border-radius:6px;text-align:center;line-height:20px;font-size:12px;margin-left:3px}
+.cc .tk.y{background:var(--ok-l);color:var(--ok)}.cc .tk.n{background:var(--bad-l);color:var(--bad)}.cc .tk.ne{background:#EDEFF2;color:#8A93A6}
+.cc .ck{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:14px}
+.cc .ck .h{display:flex;gap:8px;align-items:center;font-weight:700;color:var(--navy)}
+.cc .ck .why{margin-top:4px;color:var(--ink)}
+.cc .ck .ev{margin-top:4px;font-size:12px;color:var(--slate)}
+.cc .ck .ev code{background:var(--cream);padding:1px 6px;border-radius:5px;margin-right:4px}
+.cc .na{margin-top:16px;font-size:13px;color:var(--slate);background:var(--cream);border-radius:10px;padding:10px 14px}
+.cc .ran{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.cc .ran .it{background:var(--cream);border-radius:10px;padding:10px 12px}
+.cc .ran .k{font-size:12.5px;color:var(--slate)}
+.cc .ran .v{font-weight:600;color:var(--navy);word-break:break-word;font-size:13.5px}
+.cc .applic{font-size:13px;color:var(--slate)}
+@media (max-width:760px){.cc .ran{grid-template-columns:1fr}}
+`;
+
+  // src/compliance-view.ts
+  function element2(tag, text3) {
+    const value = document.createElement(tag);
+    if (text3 !== void 0) value.textContent = text3;
+    return value;
+  }
+  function el2(tag, className, text3) {
+    const value = element2(tag, text3);
+    value.className = className;
+    return value;
+  }
+  var fmt = (n) => n.toLocaleString();
+  var SEVERITY_CLASS = {
+    High: "high",
+    Medium: "medium",
+    Low: "low"
+  };
+  function severityPill(severity) {
+    const cls = SEVERITY_CLASS[severity] ?? "medium";
+    return el2("span", `sev ${cls}`, severity);
+  }
+  function tierBadge(tier) {
+    const text3 = tier === "judged" ? "judged" : tier === "recomputed" ? "recomputed" : tier === "mixed" ? "tier differs across reports" : "tier not stated";
+    const badge = el2(
+      "span",
+      `kind ${tier === "judged" || tier === "recomputed" ? tier : "unstated"}`,
+      text3
+    );
+    badge.dataset.tier = tier;
+    return badge;
+  }
+  function statusPill(statusClass, text3) {
+    return el2("span", `st ${statusClass}`, text3);
+  }
+  function renderHeader(host, model) {
+    const hd = el2("div", "hd");
+    hd.dataset.section = "header";
+    hd.append(el2("div", "kicker", "EU AI Act obligations report"));
+    hd.append(el2("h1", "", model.regulation));
+    const pack = model.pack.id === NOT_STATED ? `Pack ${NOT_STATED}` : `Pack ${model.pack.id} v${model.pack.version}`;
+    hd.append(
+      el2(
+        "div",
+        "sub",
+        `${pack} \xB7 ${fmt(model.obligations.length)} obligations \xB7 ${fmt(model.totalSessions)} sessions \xB7 Result capsule ${model.capsuleId}`
+      )
+    );
+    const basis = el2(
+      "p",
+      "na",
+      `Counts, verdicts, test wording, tiers and the pack are read from the sealed claims and reports in this bundle, or marked "${NOT_STATED}". The article, applicability, method and finding recommendations are the producer's mapping, carried on this bundle's eu-ai-act-compliance/v1 extension outside the signed records.`
+    );
+    basis.dataset.basis = "terms";
+    hd.append(basis);
+    host.append(hd);
+  }
+  function obligationStatus(obligation) {
+    const exceptions = obligation.rows.reduce((sum, r) => sum + r.notMetCount, 0);
+    if (obligation.applicability.status === "not stated")
+      return exceptions > 0 ? { cls: "exc", text: `Exceptions noted (${fmt(exceptions)})` } : { cls: "ok", text: "No exceptions" };
+    if (obligation.applicability.status === "future")
+      return exceptions > 0 ? {
+        cls: "future",
+        text: `Not yet applicable \xB7 ${fmt(exceptions)} exceptions (readiness)`
+      } : { cls: "future", text: "Not yet applicable \xB7 no exceptions" };
+    return exceptions > 0 ? { cls: "exc", text: `Exceptions noted (${fmt(exceptions)})` } : { cls: "ok", text: "No exceptions" };
+  }
+  function renderSummary(host, model) {
+    const section = el2("section", "");
+    section.dataset.section = "summary";
+    section.append(el2("h2", "", "1. Summary"));
+    section.append(
+      el2(
+        "p",
+        "lede",
+        "Results are stated as counts of sessions; no overall compliance percentage is given."
+      )
+    );
+    const table = document.createElement("table");
+    table.className = "grid";
+    table.dataset.rows = "summary";
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    headRow.append(
+      element2("th", "Article"),
+      element2("th", "Obligation"),
+      element2("th", "Applicability"),
+      element2("th", "Status")
+    );
+    thead.append(headRow);
+    table.append(thead);
+    const tbody = document.createElement("tbody");
+    for (const obligation of model.obligations) {
+      const row = document.createElement("tr");
+      row.dataset.obligation = obligation.key;
+      const status2 = obligationStatus(obligation);
+      row.append(
+        el2("td", "b", obligation.article),
+        element2("td", obligation.title),
+        element2("td", obligation.applicability.note)
+      );
+      const statusCell = document.createElement("td");
+      statusCell.append(statusPill(status2.cls, status2.text));
+      row.append(statusCell);
+      tbody.append(row);
+    }
+    table.append(tbody);
+    section.append(table);
+    host.append(section);
+  }
+  function checkItBlock(test) {
+    const box = el2("div", "ck");
+    box.dataset.crit = test.criterionId;
+    box.dataset.critVerdict = test.verdict;
+    const head2 = el2("div", "h");
+    const label = test.verdict === "met" ? "\u2713 met" : test.verdict === "not_met" ? "\u2717 not met" : test.verdict === "not_applicable" ? "\u2014 not applicable" : test.verdict === "failed" ? "\u2717 failed verification (counted as an exception)" : test.verdict === "unsupported" ? "\u2717 unsupported: its evidence is not in this bundle (counted as an exception)" : "\u2013 not evaluable";
+    head2.append(element2("span", label));
+    head2.append(tierBadge(test.tier));
+    box.append(head2);
+    if (test.rationale !== void 0)
+      box.append(el2("div", "why", test.rationale));
+    const ev = el2("div", "ev");
+    ev.append(element2("span", "Evidence: "));
+    if (test.reportDigest !== void 0)
+      ev.append(element2("code", test.reportDigest));
+    if (test.contract !== void 0) ev.append(element2("code", test.contract));
+    if (test.judgePinDigest !== void 0)
+      ev.append(element2("code", test.judgePinDigest));
+    if (test.reportDigest === void 0) ev.append(element2("span", "absent"));
+    box.append(ev);
+    return box;
+  }
+  function renderTranscript2(session) {
+    const t = session.transcript;
+    const wrap = el2("div", "tx");
+    wrap.dataset.transcript = t.state;
+    if (t.state !== "verified") {
+      wrap.append(
+        el2(
+          "div",
+          "ev",
+          t.state === "absent" ? `Transcript: not in this bundle. The conversation is sealed in the case record ${session.sourceCapsuleId ?? "(not stated by the reports)"}; this page cannot show it and does not vouch for it.` : `Transcript: not shown: ${t.reason ?? "the cited transcript does not check"}.`
+        )
+      );
+      return wrap;
+    }
+    wrap.append(
+      el2(
+        "div",
+        "ev",
+        `Transcript: sealed in record ${t.transcriptRecordId}; its digest equals what the judged case capsule committed to (${t.inputDigest}), checked on this page. ${t.turns.length} messages, in order.`
+      )
+    );
+    for (const turn of t.turns) {
+      const line = el2("div", `turn ${turn.role}`);
+      line.append(el2("b", "", `${turn.role}: `));
+      if (turn.content !== void 0) line.append(element2("span", turn.content));
+      for (const call of turn.toolCalls)
+        line.append(el2("code", "", ` ${call.name}(${call.arguments})`));
+      wrap.append(line);
+    }
+    return wrap;
+  }
+  function renderSessionDetails(session) {
+    const details = document.createElement("details");
+    details.className = "session";
+    details.dataset.session = session.conversationId;
+    const summary = document.createElement("summary");
+    summary.textContent = `${session.conversationId} \xB7 ${session.day}`;
+    details.append(summary);
+    for (const test of session.tests) details.append(checkItBlock(test));
+    details.append(renderTranscript2(session));
+    return details;
+  }
+  function renderSessionList(host, conversationIds, sessions) {
+    const byId = new Map(sessions.map((s) => [s.conversationId, s]));
+    const details = document.createElement("details");
+    details.dataset.records = "sessions";
+    const summary = document.createElement("summary");
+    summary.textContent = `${fmt(conversationIds.length)} sessions`;
+    details.append(summary);
+    for (const id of conversationIds) {
+      const session = byId.get(id);
+      if (session !== void 0) details.append(renderSessionDetails(session));
+    }
+    host.append(details);
+  }
+  function renderTests(host, model) {
+    const section = el2("section", "");
+    section.dataset.section = "tests";
+    section.append(el2("h2", "", "2. Test results"));
+    section.append(
+      el2(
+        "p",
+        "lede",
+        "Population is the sessions a test has a sealed result for; a session with none for a test is not applicable to it and is not counted. Recomputed tests are deterministic checks anyone can repeat from the records. Judged tests apply a frozen rubric with a pinned model."
+      )
+    );
+    const table = document.createElement("table");
+    table.className = "grid";
+    table.dataset.rows = "tests";
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    headRow.append(
+      element2("th", "Test"),
+      element2("th", "Requirement"),
+      element2("th", "Type"),
+      el2("th", "n", "Population"),
+      el2("th", "n", "Exceptions"),
+      el2("th", "n", "Not evaluable"),
+      element2("th", "Result")
+    );
+    thead.append(headRow);
+    table.append(thead);
+    const tbody = document.createElement("tbody");
+    for (const obligation of model.obligations)
+      for (const row of obligation.rows) {
+        const tr = document.createElement("tr");
+        tr.dataset.criterion = row.criterionId;
+        const typeCell = document.createElement("td");
+        typeCell.append(tierBadge(row.tier));
+        const resultCell = document.createElement("td");
+        const population = model.totalSessions - row.notApplicableCount;
+        if (population > 0 && row.notEvaluableCount === population && row.notMetCount === 0 && row.metCount === 0) {
+          resultCell.append(statusPill("ne", "Not evaluable"));
+          if (row.notEvaluableNote !== void 0)
+            resultCell.append(el2("div", "applic", row.notEvaluableNote));
+        } else {
+          resultCell.append(
+            statusPill(
+              row.notMetCount > 0 ? "exc" : "ok",
+              row.notMetCount > 0 ? "Exceptions" : "No exceptions"
+            )
+          );
+        }
+        tr.append(
+          el2("td", "b", `${obligation.article}`),
+          element2("td", row.name),
+          typeCell,
+          el2("td", "n", fmt(population)),
+          el2("td", "n", fmt(row.notMetCount)),
+          el2("td", "n", fmt(row.notEvaluableCount)),
+          resultCell
+        );
+        tbody.append(tr);
+        const drill2 = document.createElement("tr");
+        const drillCell = document.createElement("td");
+        drillCell.colSpan = 7;
+        const sessionIds = [
+          ...row.sessionsByVerdict.get("not_met") ?? [],
+          ...row.sessionsByVerdict.get("not_evaluable") ?? []
+        ];
+        if (sessionIds.length > 0)
+          renderSessionList(drillCell, sessionIds, model.sessions);
+        drill2.append(drillCell);
+        tbody.append(drill2);
+      }
+    table.append(tbody);
+    section.append(table);
+    host.append(section);
+  }
+  function renderFindings(host, model) {
+    const section = el2("section", "");
+    section.dataset.section = "findings";
+    section.append(el2("h2", "", "3. Findings"));
+    if (model.findings.length === 0) {
+      section.append(
+        el2(
+          "p",
+          "lede",
+          "No findings: every test with a not-met session count above zero would have produced one."
+        )
+      );
+      host.append(section);
+      return;
+    }
+    for (const finding of model.findings) {
+      const box = el2("div", "fnd");
+      box.dataset.finding = finding.id;
+      const fh = el2("div", "fh");
+      fh.append(
+        el2("b", "", finding.id),
+        severityPill(finding.severity),
+        element2("span", finding.article),
+        el2("span", "", finding.testName)
+      );
+      box.append(fh);
+      const table = document.createElement("table");
+      table.className = "fk";
+      const evRow = document.createElement("tr");
+      evRow.append(
+        element2("th", "Evidence"),
+        element2("td", `${fmt(finding.sessionIds.length)} sessions`)
+      );
+      const recRow = document.createElement("tr");
+      recRow.append(
+        element2("th", "Recommendation"),
+        el2("td", "", finding.recommendation)
+      );
+      const ownerRow = document.createElement("tr");
+      ownerRow.append(
+        element2("th", "Owner \xB7 due"),
+        element2("td", finding.ownerDue)
+      );
+      table.append(evRow, recRow, ownerRow);
+      box.append(table);
+      renderSessionList(box, finding.sessionIds, model.sessions);
+      section.append(box);
+    }
+    host.append(section);
+  }
+  function renderQuality(host, model) {
+    const section = el2("section", "");
+    section.dataset.section = "quality";
+    section.append(el2("h2", "", "4. Quality of judged results"));
+    const protocol = model.qualityProtocol;
+    if (protocol === void 0) {
+      section.append(
+        el2("p", "lede", "No quality protocol declared in this pack.")
+      );
+      host.append(section);
+      return;
+    }
+    section.append(
+      el2(
+        "p",
+        "lede",
+        `Protocol ${protocol.protocol ?? "unspecified"}${protocol.cadence === void 0 ? "" : `, ${protocol.cadence}`}. Recomputed tests are not sampled.`
+      )
+    );
+    if (protocol.note !== void 0) section.append(el2("p", "na", protocol.note));
+    host.append(section);
+  }
+  function renderWhatRan2(host, model) {
+    const section = el2("section", "");
+    section.dataset.section = "methodology";
+    section.append(el2("h2", "", "5. Methodology"));
+    const ran = el2("div", "ran");
+    const field = (label, value) => {
+      const it = el2("div", "it");
+      it.append(el2("div", "k", label), el2("div", "v", value));
+      ran.append(it);
+    };
+    field(
+      "Contract",
+      model.runInfo.contract ?? (model.runInfo.pinned ? "no conversations" : "disagrees across sessions")
+    );
+    field(
+      "Judge pin digest",
+      model.runInfo.judgePinDigest ?? (model.runInfo.pinned ? "no judged sessions cited" : "disagrees across sessions")
+    );
+    field("Sessions", fmt(model.totalSessions));
+    section.append(ran);
+    host.append(section);
+  }
+  function renderObligationDetail(host, obligation) {
+    const details = document.createElement("details");
+    details.dataset.obligationDetail = obligation.key;
+    const summary = document.createElement("summary");
+    summary.textContent = `${obligation.article} \xB7 ${obligation.title}`;
+    details.append(summary);
+    details.dataset.mapped = String(obligation.mapped);
+    details.append(
+      el2(
+        "p",
+        "na",
+        obligation.mapped ? "Article, summary and method: the producer's mapping, not a sealed record." : `The producer's extension does not map this obligation: article, summary and method ${NOT_STATED}.`
+      )
+    );
+    details.append(el2("p", "", obligation.plain));
+    if (obligation.judgedTerms.length > 0)
+      details.append(
+        el2("p", "applic", `Judged terms: ${obligation.judgedTerms.join(", ")}`)
+      );
+    details.append(el2("p", "", obligation.method));
+    for (const row of obligation.rows) {
+      const rowBox = el2("div", "ck");
+      rowBox.dataset.wording = row.wording.source;
+      const h = el2("div", "h");
+      h.append(element2("span", row.name), tierBadge(row.tier));
+      rowBox.append(h);
+      rowBox.append(
+        el2(
+          "div",
+          "why",
+          row.wording.source === "sealed" ? `Wording run (sealed): ${row.wording.text}` : row.wording.source === "mixed" ? `Wording ${NOT_STATED}: the cited reports state different wordings.` : `Wording ${NOT_STATED}: no cited report states it.`
+        )
+      );
+      if (row.notEvaluableNote !== void 0)
+        rowBox.append(el2("div", "ev", row.notEvaluableNote));
+      details.append(rowBox);
+    }
+    host.append(details);
+  }
+  function renderObligationDetails(host, model) {
+    const section = el2("section", "");
+    section.dataset.section = "obligation-detail";
+    section.append(el2("h2", "", "Obligation detail"));
+    for (const obligation of model.obligations)
+      renderObligationDetail(section, obligation);
+    host.append(section);
+  }
+  function renderCompliancePage(result, presentation, _bundle, _verified, root) {
+    const model = buildComplianceModel(result, presentation);
+    const wrapper = el2("div", "cc");
+    wrapper.dataset.page = "compliance";
+    const style = document.createElement("style");
+    style.textContent = COMPLIANCE_CSS;
+    wrapper.append(style);
+    renderHeader(wrapper, model);
+    renderSummary(wrapper, model);
+    renderObligationDetails(wrapper, model);
+    renderTests(wrapper, model);
+    renderFindings(wrapper, model);
+    renderQuality(wrapper, model);
+    renderWhatRan2(wrapper, model);
+    root.append(wrapper);
+  }
+
+  // src/compliance-presentation.ts
+  function object7(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  }
+  function str(value) {
+    return typeof value === "string" ? value : void 0;
+  }
+  function strArray(value) {
+    return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
+  }
+  function readFinding(value) {
+    const obj = object7(value);
+    const id = str(obj?.id);
+    const severity = str(obj?.severity);
+    const recommendation = str(obj?.recommendation);
+    const ownerDue = str(obj?.owner_due);
+    if (id === void 0 || severity === void 0 || recommendation === void 0 || ownerDue === void 0)
+      return void 0;
+    return { id, severity, recommendation, ownerDue };
+  }
+  function readRow(value) {
+    const obj = object7(value);
+    const criterionId = str(obj?.criterion_id);
+    const name = str(obj?.name);
+    if (criterionId === void 0 || name === void 0) return void 0;
+    const notEvaluableNote = str(obj?.not_evaluable_note);
+    const finding = obj?.finding === void 0 ? void 0 : readFinding(obj.finding);
+    return {
+      criterionId,
+      name,
+      ...notEvaluableNote === void 0 ? {} : { notEvaluableNote },
+      ...finding === void 0 ? {} : { finding }
+    };
+  }
+  function readApplicability(value) {
+    const obj = object7(value);
+    const status2 = obj?.status === "in_force" || obj?.status === "future" ? obj.status : void 0;
+    const note = str(obj?.note);
+    if (status2 === void 0 || note === void 0) return void 0;
+    return { status: status2, note };
+  }
+  function readObligation(value) {
+    const obj = object7(value);
+    const key = str(obj?.key);
+    const article = str(obj?.article);
+    const title = str(obj?.title);
+    const plain = str(obj?.plain);
+    const method = str(obj?.method);
+    const applicability = readApplicability(obj?.applicability);
+    if (key === void 0 || article === void 0 || title === void 0 || plain === void 0 || method === void 0 || applicability === void 0)
+      return void 0;
+    const rows = Array.isArray(obj?.rows) ? obj.rows.flatMap((r) => {
+      const row = readRow(r);
+      return row === void 0 ? [] : [row];
+    }) : [];
+    return {
+      key,
+      article,
+      title,
+      plain,
+      judgedTerms: strArray(obj?.judged_terms),
+      applicability,
+      method,
+      rows
+    };
+  }
+  function readQualityProtocol(value) {
+    const obj = object7(value);
+    if (obj === void 0) return void 0;
+    const protocol = str(obj.protocol);
+    const cadence = str(obj.cadence);
+    const note = str(obj.note);
+    if (protocol === void 0 && cadence === void 0 && note === void 0)
+      return void 0;
+    return {
+      ...protocol === void 0 ? {} : { protocol },
+      ...cadence === void 0 ? {} : { cadence },
+      ...note === void 0 ? {} : { note }
+    };
+  }
+  function readCompliancePresentation(bundle) {
+    const top = object7(bundle);
+    const extensions2 = object7(top?.extensions);
+    const block = object7(extensions2?.["eu-ai-act-compliance/v1"]);
+    if (block === void 0 || block.enabled !== true) return void 0;
+    const regulation = str(block.regulation) ?? "Regulation (EU) 2024/1689";
+    const obligations = Array.isArray(block.obligations) ? block.obligations.flatMap((o) => {
+      const obligation = readObligation(o);
+      return obligation === void 0 ? [] : [obligation];
+    }) : [];
+    if (obligations.length === 0) return void 0;
+    const qualityProtocol = readQualityProtocol(block.quality_protocol);
+    return {
+      enabled: true,
+      regulation,
+      obligations,
+      ...qualityProtocol === void 0 ? {} : { qualityProtocol }
+    };
+  }
+
   // src/report-rows.ts
   var rowCitationDigests = (row) => Array.isArray(row.references) ? row.references.flatMap(
     (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" ? asString(reference.digest) === void 0 ? [] : [asString(reference.digest)] : []
@@ -7526,7 +8377,7 @@ var EvidenceGraph = (() => {
   }
 
   // src/evidence-graph-view.ts
-  function element2(tag, text3) {
+  function element3(tag, text3) {
     const value = document.createElement(tag);
     if (text3 !== void 0) value.textContent = text3;
     return value;
@@ -7539,23 +8390,23 @@ var EvidenceGraph = (() => {
     }
   }
   function appendValue(parent2, label, value) {
-    parent2.append(element2("dt", label));
-    parent2.append(element2("dd", display(value)));
+    parent2.append(element3("dt", label));
+    parent2.append(element3("dd", display(value)));
   }
   function renderTime(value) {
     const zone = zoneStatement(value);
-    const time = element2("span", value);
+    const time = element3("span", value);
     time.dataset.tz = zone;
     if (zone === "not-stated") {
-      const marker = element2("span", " (timezone not stated)");
+      const marker = element3("span", " (timezone not stated)");
       marker.dataset.tzMarker = "not-stated";
       time.append(marker);
     }
     return time;
   }
   function appendTime(parent2, label, value, absent) {
-    parent2.append(element2("dt", label));
-    const cell = element2("dd");
+    parent2.append(element3("dt", label));
+    const cell = element3("dd");
     if (value === void 0) {
       cell.textContent = absent;
       cell.dataset.time = "not-stated";
@@ -7574,7 +8425,7 @@ var EvidenceGraph = (() => {
   }
   var recordsWord = (count) => `${count} ${count === 1 ? "record" : "records"}`;
   function renderVerificationBanner(root, verified, coverage, styled = false) {
-    const banner = element2(
+    const banner = element3(
       "p",
       verified ? coverage.uncheckpointed === 0 ? "Bundle verification passed" : `Bundle verification passed; ${coverage.uncheckpointed} of ${recordsWord(coverage.total)} uncheckpointed` : "Bundle verification failed"
     );
@@ -7584,7 +8435,7 @@ var EvidenceGraph = (() => {
       banner.className = `oi oi-banner ${verified ? "oi-banner-ok" : "oi-banner-failed"}`;
     root.append(banner);
     if (verified) return;
-    const refusal = element2(
+    const refusal = element3(
       "p",
       "This bundle did not verify. Its records, rows and payloads are not shown; the verification page below lists which checks failed."
     );
@@ -7594,7 +8445,7 @@ var EvidenceGraph = (() => {
   function renderPresentationHeader(root, bundle) {
     const presentation = readPresentationBlock(bundle);
     if (presentation === void 0) return;
-    const header = element2("header");
+    const header = element3("header");
     header.dataset.presentation = "header";
     if (presentation.logoDataUrl !== void 0) {
       const logo = document.createElement("img");
@@ -7603,20 +8454,20 @@ var EvidenceGraph = (() => {
       header.append(logo);
     }
     if (presentation.producerDisplayName !== void 0) {
-      const name = element2("span", presentation.producerDisplayName);
+      const name = element3("span", presentation.producerDisplayName);
       name.dataset.presentationField = "producer-display-name";
       header.append(name);
     }
     if (presentation.title !== void 0) {
-      const title = element2("strong", presentation.title);
+      const title = element3("strong", presentation.title);
       title.dataset.presentationField = "title";
       header.append(title);
     }
     root.append(header);
   }
   function producerPublicKeys(bundle) {
-    const extensions2 = object7(object7(bundle).extensions);
-    const block = object7(extensions2["producer-key/v1"]);
+    const extensions2 = object8(object8(bundle).extensions);
+    const block = object8(extensions2["producer-key/v1"]);
     const publicKey = block.public_key;
     return typeof publicKey === "string" && /^[0-9a-f]{64}$/u.test(publicKey) ? [publicKey] : [];
   }
@@ -7637,18 +8488,18 @@ var EvidenceGraph = (() => {
     }
   }
   function renderSignerStatement(item, signer, statement) {
-    const label = element2("p", `${signer}'s statement of what it recomputed:`);
+    const label = element3("p", `${signer}'s statement of what it recomputed:`);
     item.append(label);
-    const checks = element2("ul");
+    const checks = element3("ul");
     checks.dataset.countersignStatement = "checks";
     statement.checks.forEach((check) => {
-      const row = element2("li", `${check.name}: ${check.result}`);
+      const row = element3("li", `${check.name}: ${check.result}`);
       row.dataset.checkResult = check.result;
       checks.append(row);
     });
     item.append(checks);
     if (statement.receipt === "unverified") {
-      const receipt = element2(
+      const receipt = element3(
         "p",
         "receipt present, not verified by this viewer"
       );
@@ -7657,12 +8508,12 @@ var EvidenceGraph = (() => {
     }
   }
   function renderStamps(host, stamps) {
-    host.append(element2("h4", "Countersignatures"));
-    const list = element2("ul");
+    host.append(element3("h4", "Countersignatures"));
+    const list = element3("ul");
     stamps.forEach((stamp) => {
-      const item = element2("li");
+      const item = element3("li");
       item.dataset.stampKind = stamp.kind;
-      item.append(element2("span", stampText(stamp)));
+      item.append(element3("span", stampText(stamp)));
       if (stamp.kind === "resolved") {
         renderSignerStatement(item, stamp.name, stamp.statement);
       } else if (stamp.kind === "not-independent") {
@@ -7675,14 +8526,14 @@ var EvidenceGraph = (() => {
     host.append(list);
   }
   function renderReceipts(host, receipts2) {
-    host.append(element2("h4", "Receipts"));
+    host.append(element3("h4", "Receipts"));
     if (receipts2.length === 0) {
-      host.append(element2("p", "no receipts disclosed"));
+      host.append(element3("p", "no receipts disclosed"));
       return;
     }
-    const list = element2("ul");
+    const list = element3("ul");
     receipts2.forEach((receipt) => {
-      const item = element2("li", `${receipt.witness} \xB7 ${receipt.grade} \xB7 `);
+      const item = element3("li", `${receipt.witness} \xB7 ${receipt.grade} \xB7 `);
       item.append(renderTime(receipt.time));
       list.append(item);
     });
@@ -7695,9 +8546,9 @@ var EvidenceGraph = (() => {
     unverified: "membership unverified"
   });
   function renderCheckpointCoverage(host, records, uncheckpointed, coverage) {
-    host.append(element2("h4", "Checkpoint coverage"));
+    host.append(element3("h4", "Checkpoint coverage"));
     if (coverage.status === "established") {
-      const count = element2(
+      const count = element3(
         "p",
         `${recordsWord(uncheckpointed)} uncheckpointed of ${recordsWord(records.length)} supplied`
       );
@@ -7705,25 +8556,25 @@ var EvidenceGraph = (() => {
       count.dataset.count = String(uncheckpointed);
       host.append(count);
     } else {
-      const line = element2("p", `coverage not established: ${coverage.reason}`);
+      const line = element3("p", `coverage not established: ${coverage.reason}`);
       line.dataset.coverage = "not-established";
       line.dataset.claim = coverage.status;
       host.append(line);
       if (coverage.status === "withheld") return;
     }
     host.append(renderCoverageStatusCounts(records));
-    const details = element2("details");
+    const details = element3("details");
     details.dataset.records = "coverage-detail";
-    const summary = element2(
+    const summary = element3(
       "summary",
       `${recordsWord(records.length)}, by capsule id`
     );
     details.append(summary);
-    const list = element2("ul");
+    const list = element3("ul");
     list.dataset.records = "coverage";
     for (const record of records) {
-      const item = element2("li", `${record.capsuleId} \xB7 `);
-      const status2 = element2("span", COVERAGE_LABEL[record.status]);
+      const item = element3("li", `${record.capsuleId} \xB7 `);
+      const status2 = element3("span", COVERAGE_LABEL[record.status]);
       status2.dataset.recordStatus = record.status;
       status2.className = `seal-${record.status}`;
       item.dataset.capsuleId = record.capsuleId;
@@ -7738,12 +8589,12 @@ var EvidenceGraph = (() => {
     for (const record of records) {
       counts.set(record.status, (counts.get(record.status) ?? 0) + 1);
     }
-    const list = element2("ul");
+    const list = element3("ul");
     list.dataset.records = "coverage-summary";
     for (const status2 of Object.keys(COVERAGE_LABEL)) {
       const count = counts.get(status2) ?? 0;
       if (count === 0) continue;
-      const item = element2(
+      const item = element3(
         "li",
         `${recordsWord(count)} ${COVERAGE_LABEL[status2]}`
       );
@@ -7754,8 +8605,8 @@ var EvidenceGraph = (() => {
     return list;
   }
   function renderCompletenessStatement(host, completeness2) {
-    host.append(element2("h4", "Completeness statement"));
-    const details = element2("dl");
+    host.append(element3("h4", "Completeness statement"));
+    const details = element3("dl");
     appendValue(
       details,
       "closure depth",
@@ -7775,37 +8626,37 @@ var EvidenceGraph = (() => {
     host.append(details);
   }
   function renderChecks(host, checks) {
-    host.append(element2("h4", "The ten checks"));
-    const list = element2("ol");
+    host.append(element3("h4", "The ten checks"));
+    const list = element3("ol");
     checks.forEach((check) => {
-      const item = element2("li");
+      const item = element3("li");
       item.dataset.checkStatus = check.status;
-      item.append(element2("strong", check.name));
-      item.append(element2("span", `: ${check.result}`));
+      item.append(element3("strong", check.name));
+      item.append(element3("span", `: ${check.result}`));
       list.append(item);
     });
     host.append(list);
   }
   async function renderVerificationPage(root, bundle, verified, countersigners, styled = false) {
-    const section = element2("section");
+    const section = element3("section");
     section.dataset.page = "verification";
     let page = section;
     if (styled) {
       section.className = "oi oi-vp";
-      page = element2("div");
+      page = element3("div");
       page.className = "sec";
       section.append(page);
     }
-    page.append(element2("h2", "Verification"));
+    page.append(element3("h2", "Verification"));
     const model = buildVerificationPageModel(bundle, verified);
-    const summary = element2("dl");
+    const summary = element3("dl");
     appendValue(summary, "bundle digest", model.bundleDigest ?? "uncomputable");
     appendValue(summary, "checkpoint root", model.checkpointRoot ?? "absent");
     appendValue(summary, "checkpoint size", model.checkpointSize ?? "absent");
     page.append(summary);
     renderReceipts(page, model.receipts);
     if (model.selfWitnessed) {
-      const witness = element2(
+      const witness = element3(
         "p",
         "self-witnessed: no transparency-service receipt"
       );
@@ -7818,7 +8669,7 @@ var EvidenceGraph = (() => {
       model.uncheckpointedCount,
       model.coverage
     );
-    const countersignatures = object7(bundle).countersignatures;
+    const countersignatures = object8(bundle).countersignatures;
     const stamps = await classifyCountersignatures(
       Array.isArray(countersignatures) ? countersignatures : [],
       verified.bundleDigest,
@@ -7828,7 +8679,7 @@ var EvidenceGraph = (() => {
     renderStamps(page, stamps);
     renderCompletenessStatement(page, model.completeness);
     renderChecks(page, model.checks);
-    page.append(element2("p", model.verifyIndependentlyLine));
+    page.append(element3("p", model.verifyIndependentlyLine));
     root.append(section);
   }
   function metRate(report) {
@@ -7842,13 +8693,13 @@ var EvidenceGraph = (() => {
     return `met rate ${passed}/${required.length}`;
   }
   function renderCalibration(calibration) {
-    const section = element2("section");
-    section.append(element2("h2", "Human check"));
+    const section = element3("section");
+    section.append(element3("h2", "Human check"));
     if (calibration === void 0) {
-      section.append(element2("p", "no human-check data"));
+      section.append(element3("p", "no human-check data"));
       return section;
     }
-    const details = element2("dl");
+    const details = element3("dl");
     appendValue(details, "confusion matrix", calibration.confusion);
     appendCount(details, "agreement", calibration.agreement);
     appendCount(details, "corrected rate", calibration.correctedRate);
@@ -7857,8 +8708,8 @@ var EvidenceGraph = (() => {
     return section;
   }
   function appendCount(parent2, label, count) {
-    parent2.append(element2("dt", label));
-    const cell = element2("dd");
+    parent2.append(element3("dt", label));
+    const cell = element3("dd");
     if (count === void 0) {
       cell.textContent = "not stated";
       cell.dataset.count = "not-stated";
@@ -7873,9 +8724,9 @@ var EvidenceGraph = (() => {
     parent2.append(cell);
   }
   function renderProvenance(capsuleId, coordinates, times) {
-    const panel = element2("section");
-    panel.append(element2("h4", "Provenance"));
-    const details = element2("dl");
+    const panel = element3("section");
+    panel.append(element3("h4", "Provenance"));
+    const details = element3("dl");
     appendValue(details, "capsule ID", capsuleId);
     if (times.provenanceMode !== void 0)
       appendValue(details, "provenance", times.provenanceMode);
@@ -7886,8 +8737,8 @@ var EvidenceGraph = (() => {
       "action time not stated"
     );
     appendTime(details, "seal time", times.sealTime, "seal time not stated");
-    details.append(element2("dt", "seal status"));
-    const seal = element2(
+    details.append(element3("dt", "seal status"));
+    const seal = element3(
       "dd",
       coordinates === void 0 ? "uncheckpointed" : "checkpointed"
     );
@@ -7903,35 +8754,35 @@ var EvidenceGraph = (() => {
     return panel;
   }
   function renderJudgment(judgment) {
-    const item = element2("li");
-    item.append(element2("strong", `${judgment.axisId}: ${judgment.status}`));
-    item.append(element2("p", judgment.rationale));
-    item.append(element2("p", `evidence: ${judgment.evidenceIds.join(", ")}`));
+    const item = element3("li");
+    item.append(element3("strong", `${judgment.axisId}: ${judgment.status}`));
+    item.append(element3("p", judgment.rationale));
+    item.append(element3("p", `evidence: ${judgment.evidenceIds.join(", ")}`));
     return item;
   }
   function renderAct(act) {
-    const section = element2("section");
-    section.append(element2("h4", `Turn ${act.turnIdx}`));
+    const section = element3("section");
+    section.append(element3("h4", `Turn ${act.turnIdx}`));
     if (act.agentInput !== void 0)
-      section.append(element2("pre", display(act.agentInput)));
+      section.append(element3("pre", display(act.agentInput)));
     if (act.agentOutput !== void 0)
-      section.append(element2("pre", display(act.agentOutput)));
+      section.append(element3("pre", display(act.agentOutput)));
     section.append(renderProvenance(act.capsuleId, act.logCoordinates, act));
     return section;
   }
-  function object7(value) {
+  function object8(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
   }
   function renderWithheldActs(acts, host) {
     for (const act of acts) {
       if (act.agentInput !== void 0 && act.agentOutput !== void 0) continue;
-      const committed = object7({
+      const committed = object8({
         agent_input_digest: act.agentInputDigest,
         agent_output_digest: act.agentOutputDigest
       });
-      const evidence = element2("section");
-      evidence.append(element2("h4", "Undisclosed payload evidence"));
-      const details = element2("dl");
+      const evidence = element3("section");
+      evidence.append(element3("h4", "Undisclosed payload evidence"));
+      const details = element3("dl");
       appendValue(details, "capsule ID", act.capsuleId);
       for (const field of ["agent_input_digest", "agent_output_digest"]) {
         if (typeof committed[field] === "string")
@@ -7943,7 +8794,7 @@ var EvidenceGraph = (() => {
         ["agent_output", act.agentOutputDisclosure]
       ]) {
         if (state !== "disclosure_mismatch") continue;
-        const note = element2(
+        const note = element3(
           "p",
           `${field}: the disclosed value does not match the committed digest and is withheld`
         );
@@ -7955,36 +8806,36 @@ var EvidenceGraph = (() => {
   }
   function renderCase(caseNode, host) {
     host.replaceChildren();
-    host.append(element2("h3", `Case ${caseNode.caseId}`));
-    const judgments = element2("ul");
+    host.append(element3("h3", `Case ${caseNode.caseId}`));
+    const judgments = element3("ul");
     caseNode.judgments.forEach(
       (judgment) => judgments.append(renderJudgment(judgment))
     );
-    host.append(element2("h4", "Axis judgments"), judgments);
-    host.append(element2("h4", "Disclosed transcript"));
+    host.append(element3("h4", "Axis judgments"), judgments);
+    host.append(element3("h4", "Disclosed transcript"));
     caseNode.acts.forEach((act) => host.append(renderAct(act)));
     renderWithheldActs(caseNode.acts, host);
   }
   function renderReport(report, host, _records) {
     host.replaceChildren();
-    const heading = element2("h2", "Cases for ");
+    const heading = element3("h2", "Cases for ");
     heading.append(renderTime(report.date));
     host.append(heading);
-    const outcomes = element2("ul");
+    const outcomes = element3("ul");
     report.outcomes.forEach((outcome) => {
       outcomes.append(
-        element2(
+        element3(
           "li",
           `${outcome.outcomeId} (${outcome.role}): ${outcome.aggregate ?? "unrated"}`
         )
       );
     });
-    host.append(element2("h3", "Outcome rollup"), outcomes);
+    host.append(element3("h3", "Outcome rollup"), outcomes);
     renderWithheldActs(report.withheldActs, host);
-    const cases = element2("section");
-    const detail = element2("section");
+    const cases = element3("section");
+    const detail = element3("section");
     report.cases.forEach((caseNode) => {
-      const item = element2(
+      const item = element3(
         "button",
         `${caseNode.taskId}, trial ${caseNode.trial}: ${caseNode.aggregate ?? "unrated"}`
       );
@@ -8000,14 +8851,14 @@ var EvidenceGraph = (() => {
     );
   }
   function renderCitation(citation) {
-    const section = element2("section");
+    const section = element3("section");
     section.append(
       renderProvenance(citation.capsuleId, citation.logCoordinates, citation)
     );
     if (citation.disclosure === "disclosed") {
-      section.append(element2("pre", display(citation.disclosedPayload)));
+      section.append(element3("pre", display(citation.disclosedPayload)));
     } else {
-      const note = element2(
+      const note = element3(
         "p",
         citation.disclosure === "disclosure_mismatch" ? "withheld: the disclosed value does not match the committed digest" : "withheld"
       );
@@ -8018,33 +8869,33 @@ var EvidenceGraph = (() => {
   }
   function renderReportRow(row, host) {
     host.replaceChildren();
-    host.append(element2("h3", row.label));
-    const status2 = element2("p", row.status.replaceAll("_", " "));
+    host.append(element3("h3", row.label));
+    const status2 = element3("p", row.status.replaceAll("_", " "));
     status2.dataset.rowStatus = row.status;
     host.append(status2);
-    if (row.reason !== void 0) host.append(element2("p", row.reason));
-    host.append(element2("h4", "Evidence"));
+    if (row.reason !== void 0) host.append(element3("p", row.reason));
+    host.append(element3("h4", "Evidence"));
     if (row.citations.length === 0) {
-      host.append(element2("p", "no citation"));
+      host.append(element3("p", "no citation"));
     } else {
       row.citations.forEach((citation) => host.append(renderCitation(citation)));
     }
   }
   function renderReportRowsTable(reportRows, root) {
-    const section = element2("section");
+    const section = element3("section");
     section.dataset.page = "report-rows";
-    section.append(element2("h1", reportRows.title ?? "Report"));
+    section.append(element3("h1", reportRows.title ?? "Report"));
     const table = document.createElement("table");
-    const detail = element2("section");
+    const detail = element3("section");
     reportRows.rows.forEach((row) => {
       const tr = document.createElement("tr");
       const labelCell = document.createElement("td");
-      const button = element2("button", row.label);
+      const button = element3("button", row.label);
       button.setAttribute("type", "button");
       button.dataset.rowId = row.rowId;
       button.addEventListener("click", () => renderReportRow(row, detail));
       labelCell.append(button);
-      const statusCell = element2("td", row.status.replaceAll("_", " "));
+      const statusCell = element3("td", row.status.replaceAll("_", " "));
       statusCell.dataset.rowStatus = row.status;
       tr.append(labelCell, statusCell);
       table.append(tr);
@@ -8062,12 +8913,12 @@ var EvidenceGraph = (() => {
   }
   function renderCitedMember(host, field, resolution, committed) {
     if (resolution.state !== "disclosed" && committed === void 0) return;
-    host.append(element2("h5", field));
+    host.append(element3("h5", field));
     if (resolution.state === "disclosed") {
-      host.append(element2("pre", display(resolution.payload)));
+      host.append(element3("pre", display(resolution.payload)));
       return;
     }
-    const note = element2(
+    const note = element3(
       "p",
       resolution.state === "disclosure_mismatch" ? `withheld \xB7 ${committed}: the disclosed value does not match the committed digest` : `withheld \xB7 ${committed}`
     );
@@ -8075,7 +8926,7 @@ var EvidenceGraph = (() => {
     host.append(note);
   }
   function renderCitedRecord(record, records, host) {
-    const section = element2("section");
+    const section = element3("section");
     section.dataset.citedRecord = record.capsuleId;
     section.append(
       renderProvenance(record.capsuleId, record.logCoordinates, record)
@@ -8093,22 +8944,22 @@ var EvidenceGraph = (() => {
       record.agentOutputDigest
     );
     if (record.cites.length > 0) {
-      section.append(element2("h5", "Cites"));
+      section.append(element3("h5", "Cites"));
       renderCitationList(record.cites, records, section);
     }
     host.append(section);
   }
   function renderCitationList(ids, records, host) {
-    const list = element2("ul");
-    const detail = element2("section");
+    const list = element3("ul");
+    const detail = element3("section");
     for (const id of ids) {
-      const item = element2("li");
+      const item = element3("li");
       const target = records.get(id);
       if (target === void 0) {
         item.textContent = `${id} \xB7 not in this bundle`;
         item.dataset.citation = "missing";
       } else {
-        const button = element2("button", id);
+        const button = element3("button", id);
         button.setAttribute("type", "button");
         button.dataset.citedId = id;
         button.addEventListener("click", () => {
@@ -8128,30 +8979,30 @@ var EvidenceGraph = (() => {
       (entry) => entry.field === field
     );
     if (mismatch === void 0) return void 0;
-    const marker = element2("span", "count mismatch");
+    const marker = element3("span", "count mismatch");
     marker.dataset.countMismatch = field;
     marker.dataset.stated = String(mismatch.stated);
     marker.dataset.recomputed = String(mismatch.recomputed);
     return marker;
   }
   function appendCloseState(parent2, close, tag) {
-    const cell = element2(tag, close.state);
+    const cell = element3(tag, close.state);
     cell.dataset.closeState = close.state;
     cell.dataset.closeDerivation = close.derivation;
     cell.dataset.assertedState = close.asserted;
     if (close.stateMismatch) {
-      const marker = element2("span", "state mismatch");
+      const marker = element3("span", "state mismatch");
       marker.dataset.stateMismatch = "close_state";
       marker.dataset.asserted = close.asserted;
       marker.dataset.recomputed = close.state;
       cell.append(" ", marker);
     } else if (close.derivation === "producer-asserted") {
-      const marker = element2("span", "producer-asserted");
+      const marker = element3("span", "producer-asserted");
       marker.dataset.producerAsserted = "close_state";
       cell.append(" ", marker);
     }
     if (close.peerRefMismatch) {
-      const marker = element2("span", "peer_close_ref carries no such link");
+      const marker = element3("span", "peer_close_ref carries no such link");
       marker.dataset.peerRefMismatch = "peer_close_ref";
       cell.append(" ", marker);
     }
@@ -8159,18 +9010,18 @@ var EvidenceGraph = (() => {
     return cell;
   }
   function renderClose(close, result, host) {
-    host.append(element2("h4", "Close"));
-    const details = element2("dl");
+    host.append(element3("h4", "Close"));
+    const details = element3("dl");
     if (close.period !== void 0)
       appendValue(
         details,
         "period",
         `${close.period.start} \u2192 ${close.period.end}`
       );
-    details.append(element2("dt", "state"));
+    details.append(element3("dt", "state"));
     appendCloseState(details, close, "dd");
-    details.append(element2("dt", "derivation"));
-    const derivation = element2(
+    details.append(element3("dt", "derivation"));
+    const derivation = element3(
       "dd",
       close.derivation === "recomputed" ? `recomputed from ${close.links.length} counterparty ${close.links.length === 1 ? "link" : "links"} to the cited Close in this bundle${close.ignored.length === 0 ? "" : ` (${close.ignored.length} other ${close.ignored.length === 1 ? "link" : "links"} ignored)`}` : "producer-asserted: the cited Close is not a record in this bundle, so its links could not be read"
     );
@@ -8179,8 +9030,8 @@ var EvidenceGraph = (() => {
     if (close.peer !== void 0) appendValue(details, "peer", close.peer);
     if (close.bookId !== void 0) appendValue(details, "book", close.bookId);
     if (close.keyId !== void 0) {
-      details.append(element2("dt", "signer"));
-      const signer = element2(
+      details.append(element3("dt", "signer"));
+      const signer = element3(
         "dd",
         close.keyVerified === true ? `${close.keyId} (verified)` : `${close.keyId} \xB7 ${UNVERIFIED_KEY_LABEL}`
       );
@@ -8188,17 +9039,17 @@ var EvidenceGraph = (() => {
       details.append(signer);
     }
     host.append(details);
-    host.append(element2("h5", "Cited Close"));
+    host.append(element3("h5", "Cited Close"));
     renderCitationList([close.closeRef], result.records, host);
     if (close.peerCloseRef !== void 0) {
-      host.append(element2("h5", "Peer record"));
+      host.append(element3("h5", "Peer record"));
       renderCitationList([close.peerCloseRef], result.records, host);
     }
     if (close.links.length > 0) {
-      host.append(element2("h5", "Links to the cited Close"));
-      const list = element2("ul");
+      host.append(element3("h5", "Links to the cited Close"));
+      const list = element3("ul");
       for (const link of close.links) {
-        const item = element2(
+        const item = element3(
           "li",
           `${link.type} \xB7 ${link.recordId} \xB7 signer ${link.keyId} (verified)`
         );
@@ -8209,10 +9060,10 @@ var EvidenceGraph = (() => {
       host.append(list);
     }
     if (close.ignored.length > 0) {
-      host.append(element2("h5", "Links ignored (not from the counterparty)"));
-      const list = element2("ul");
+      host.append(element3("h5", "Links ignored (not from the counterparty)"));
+      const list = element3("ul");
       for (const link of close.ignored) {
-        const item = element2(
+        const item = element3(
           "li",
           `${link.type} \xB7 ${link.recordId} \xB7 ${link.reason}`
         );
@@ -8225,7 +9076,7 @@ var EvidenceGraph = (() => {
   }
   function appendVerdict(parent2, claim) {
     const shown = claim.failed ? "failed" : claim.support === "supported" ? claim.verdict : "unsupported";
-    const cell = element2(parent2.tagName === "TR" ? "td" : "dd", shown);
+    const cell = element3(parent2.tagName === "TR" ? "td" : "dd", shown);
     cell.dataset.verdict = shown;
     cell.dataset.support = claim.support;
     if (claim.failed) {
@@ -8238,7 +9089,7 @@ var EvidenceGraph = (() => {
   }
   function appendSufficiency(parent2, claim) {
     const shown = claim.failed ? "failed" : claim.sufficiency;
-    const cell = element2(parent2.tagName === "TR" ? "td" : "dd", shown);
+    const cell = element3(parent2.tagName === "TR" ? "td" : "dd", shown);
     cell.dataset.sufficiency = shown;
     if (claim.failed) {
       cell.dataset.statedSufficiency = claim.sufficiency;
@@ -8249,24 +9100,24 @@ var EvidenceGraph = (() => {
   }
   function renderClaim(claim, result, host) {
     host.replaceChildren();
-    host.append(element2("h3", `Claim ${claim.id}`));
-    const details = element2("dl");
+    host.append(element3("h3", `Claim ${claim.id}`));
+    const details = element3("dl");
     appendValue(details, "contract", claim.contractRef);
     appendValue(details, "requirement", claim.requirementRef);
-    details.append(element2("dt", "type"));
-    const type = element2("dd", CLAIM_TYPE_LABEL(claim));
+    details.append(element3("dt", "type"));
+    const type = element3("dd", CLAIM_TYPE_LABEL(claim));
     type.dataset.claimType = claim.recognized ? claim.type : "unrecognized";
     if (!claim.recognized) type.className = "claim-unrecognized";
     details.append(type);
     appendValue(details, "tier", claim.tier);
     appendValue(details, "grade", claim.grade);
-    details.append(element2("dt", "sufficiency"));
+    details.append(element3("dt", "sufficiency"));
     appendSufficiency(details, claim);
-    details.append(element2("dt", "verdict"));
+    details.append(element3("dt", "verdict"));
     appendVerdict(details, claim);
     host.append(details);
     if (claim.failed) {
-      const note = element2(
+      const note = element3(
         "p",
         `failed: ${claim.failure ?? "verification failed"}; sufficiency and verdict withheld`
       );
@@ -8275,15 +9126,15 @@ var EvidenceGraph = (() => {
     }
     if (claim.close !== void 0) renderClose(claim.close, result, host);
     if (claim.support === "unsupported") {
-      const note = element2(
+      const note = element3(
         "p",
         claim.missing.length === 0 ? "unsupported: this claim cites no evidence" : `unsupported: cited evidence not in this bundle: ${claim.missing.join(", ")}`
       );
       note.dataset.claimMissing = String(claim.missing.length);
       host.append(note);
     }
-    host.append(element2("h4", "Presentation"));
-    const carrier = element2("dl");
+    host.append(element3("h4", "Presentation"));
+    const carrier = element3("dl");
     appendValue(carrier, "carrier", claim.presentation.kind);
     appendValue(carrier, "status", claim.presentation.status);
     if (claim.presentation.summary !== void 0)
@@ -8292,7 +9143,7 @@ var EvidenceGraph = (() => {
       appendValue(carrier, "narrative", claim.presentation.narrative);
     host.append(carrier);
     if (claim.presentation.evidence !== void 0) {
-      host.append(element2("h5", "Carrier evidence"));
+      host.append(element3("h5", "Carrier evidence"));
       const list = renderCitationList(
         claim.presentation.evidence,
         result.records,
@@ -8300,22 +9151,22 @@ var EvidenceGraph = (() => {
       );
       list.dataset.carrierEvidence = String(claim.presentation.evidence.length);
     }
-    host.append(element2("h4", "Proofs"));
+    host.append(element3("h4", "Proofs"));
     if (claim.proofs.length === 0) {
-      host.append(element2("p", "no proof cited"));
+      host.append(element3("p", "no proof cited"));
     } else {
-      const proofs = element2("ul");
+      const proofs = element3("ul");
       for (const proof of claim.proofs)
         proofs.append(
-          element2("li", `${proof.kind} \xB7 ${proof.digest} \xB7 not resolved here`)
+          element3("li", `${proof.kind} \xB7 ${proof.digest} \xB7 not resolved here`)
         );
       host.append(proofs);
     }
-    host.append(element2("h4", "Evidence"));
+    host.append(element3("h4", "Evidence"));
     for (const ref of claim.evidence) {
       const record = result.records.get(ref.digest);
       if (record === void 0) {
-        const missing = element2("p", `${ref.digest} \xB7 not in this bundle`);
+        const missing = element3("p", `${ref.digest} \xB7 not in this bundle`);
         missing.dataset.evidence = "missing";
         host.append(missing);
       } else {
@@ -8329,10 +9180,10 @@ var EvidenceGraph = (() => {
     ["notEvaluable", "not evaluable"]
   ];
   function renderResultPage(result, root) {
-    const section = element2("section");
+    const section = element3("section");
     section.dataset.page = "result";
-    section.append(element2("h1", "Evidence result"));
-    const coverage = element2("p");
+    section.append(element3("h1", "Evidence result"));
+    const coverage = element3("p");
     coverage.append(
       `coverage: ${result.coverage.evaluatedPopulation} requirements evaluated`
     );
@@ -8350,12 +9201,12 @@ var EvidenceGraph = (() => {
     coverage.dataset.unknown = String(result.coverage.unknownCount);
     section.append(coverage);
     const byId = new Map(result.claims.map((claim) => [claim.id, claim]));
-    const buckets = element2("section");
+    const buckets = element3("section");
     buckets.dataset.buckets = "verdict";
-    buckets.append(element2("h2", "Claims by verdict"));
+    buckets.append(element3("h2", "Claims by verdict"));
     for (const [key, label] of BUCKETS) {
       const count = result.bucketCounts[key];
-      const heading = element2("h3", `${label}: ${count === 0 ? "none" : count}`);
+      const heading = element3("h3", `${label}: ${count === 0 ? "none" : count}`);
       heading.dataset.bucketCount = String(count);
       heading.dataset.bucketOf = key;
       const marker = countMismatchMarker(
@@ -8366,14 +9217,14 @@ var EvidenceGraph = (() => {
       buckets.append(heading);
       const ids = result.buckets[key];
       if (ids.length === 0) {
-        buckets.append(element2("p", "none"));
+        buckets.append(element3("p", "none"));
         continue;
       }
-      const list = element2("ul");
+      const list = element3("ul");
       list.dataset.bucket = key;
       for (const id of ids) {
         const claim = byId.get(id);
-        const item = element2(
+        const item = element3(
           "li",
           claim?.failed ? `${id} \xB7 failed` : claim?.support === "unsupported" ? `${id} \xB7 unsupported` : id
         );
@@ -8385,7 +9236,7 @@ var EvidenceGraph = (() => {
       }
       buckets.append(list);
     }
-    const failedHeading = element2(
+    const failedHeading = element3(
       "h3",
       `failed: ${result.bucketCounts.failed === 0 ? "none" : result.bucketCounts.failed}`
     );
@@ -8393,12 +9244,12 @@ var EvidenceGraph = (() => {
     failedHeading.dataset.bucketOf = "failed";
     buckets.append(failedHeading);
     const failedIds = result.claims.filter((claim) => claim.failed).map((claim) => claim.id);
-    if (failedIds.length === 0) buckets.append(element2("p", "none"));
+    if (failedIds.length === 0) buckets.append(element3("p", "none"));
     else {
-      const list = element2("ul");
+      const list = element3("ul");
       list.dataset.bucket = "failed";
       for (const id of failedIds) {
-        const item = element2("li", id);
+        const item = element3("li", id);
         item.dataset.claimRef = id;
         item.className = "claim-failed";
         list.append(item);
@@ -8408,7 +9259,7 @@ var EvidenceGraph = (() => {
     section.append(buckets);
     const table = document.createElement("table");
     table.dataset.claims = "rows";
-    const detail = element2("section");
+    const detail = element3("section");
     for (const claim of result.claims) {
       const tr = document.createElement("tr");
       tr.dataset.claimRow = claim.id;
@@ -8419,19 +9270,19 @@ var EvidenceGraph = (() => {
         tr.dataset.failed = claim.failedOn ?? "close_state";
       }
       const idCell = document.createElement("td");
-      const button = element2("button", claim.id);
+      const button = element3("button", claim.id);
       button.setAttribute("type", "button");
       button.dataset.claimId = claim.id;
       button.addEventListener("click", () => renderClaim(claim, result, detail));
       idCell.append(button);
-      tr.append(idCell, element2("td", claim.requirementRef));
+      tr.append(idCell, element3("td", claim.requirementRef));
       appendSufficiency(tr, claim);
       appendVerdict(tr, claim);
-      const tier = element2("td", claim.tier);
+      const tier = element3("td", claim.tier);
       tier.dataset.tier = claim.tier;
-      const grade = element2("td", claim.grade);
+      const grade = element3("td", claim.grade);
       grade.dataset.grade = claim.grade;
-      const type = element2("td", CLAIM_TYPE_LABEL(claim));
+      const type = element3("td", CLAIM_TYPE_LABEL(claim));
       type.dataset.claimType = claim.recognized ? claim.type : "unrecognized";
       if (!claim.recognized) type.className = "claim-unrecognized";
       if (claim.close !== void 0) {
@@ -8449,18 +9300,18 @@ var EvidenceGraph = (() => {
     root.append(section);
   }
   function renderGraph(graph2, root, records) {
-    const aggregate = element2("section");
-    aggregate.append(element2("h1", "Evidence graph"));
-    const metrics = element2("dl");
+    const aggregate = element3("section");
+    aggregate.append(element3("h1", "Evidence graph"));
+    const metrics = element3("dl");
     appendValue(metrics, "per-axis", graph2.aggregate.perAxis);
     appendValue(metrics, "counts", graph2.aggregate.counts);
     aggregate.append(metrics);
     root.append(aggregate, renderCalibration(graph2.calibration));
-    const calendar = element2("section");
-    calendar.append(element2("h2", "Daily reports"));
-    const detail = element2("section");
+    const calendar = element3("section");
+    calendar.append(element3("h2", "Daily reports"));
+    const detail = element3("section");
     [...graph2.reports].sort((left, right) => left.date.localeCompare(right.date)).forEach((report) => {
-      const tile = element2("button");
+      const tile = element3("button");
       tile.append(renderTime(report.date), `: ${metRate(report)}`);
       tile.setAttribute("type", "button");
       tile.dataset.reportDate = report.date;
@@ -8478,7 +9329,7 @@ var EvidenceGraph = (() => {
     const reportRows = verified ? await buildReportRows(bundle) : void 0;
     const result = verified && reportRows === void 0 && await isResultRoot(bundle) ? await buildResultRoot(bundle) : void 0;
     const graph2 = verified && reportRows === void 0 && result === void 0 ? await buildEvidenceGraph(bundle) : void 0;
-    const records = object7(bundle).records;
+    const records = object8(bundle).records;
     const outcomeReport = result !== void 0 ? readOutcomeReportPresentation(bundle) : void 0;
     const styled = result !== void 0 && outcomeReport !== void 0;
     root.replaceChildren();
@@ -8492,6 +9343,7 @@ var EvidenceGraph = (() => {
       },
       styled
     );
+    const compliance = result !== void 0 && outcomeReport === void 0 ? readCompliancePresentation(bundle) : void 0;
     if (reportRows !== void 0) {
       renderReportRowsTable(reportRows, root);
     } else if (result !== void 0 && outcomeReport !== void 0) {
@@ -8502,6 +9354,8 @@ var EvidenceGraph = (() => {
         verification,
         root
       );
+    } else if (result !== void 0 && compliance !== void 0) {
+      renderCompliancePage(result, compliance, bundle, verification, root);
     } else if (result !== void 0) {
       renderResultPage(result, root);
     } else if (graph2 !== void 0) {
