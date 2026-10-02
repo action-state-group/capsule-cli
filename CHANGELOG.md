@@ -237,10 +237,17 @@ external-check schema free of one.
 - `report build` verifies a held, disclosed bundle rooted at a sealed Result v0 and renders an
   offline `report.html` (and, with `--permalink`, a viewer fragment over the same bytes), through
   the same vendored evidence-graph viewer `deal report` embeds.
+- `disclose` / `permalink --attach-input-originals` (jsonl profiles): carry each published
+  capsule's retained agent_input original in the bundle, in the
+  `capsulectl/agent-input-originals/v1` extension, checked against the capsule's
+  `agent_input_digest`. Opt-in at disclose time; the book never stores an original.
 - **Changed:** `close --capsule-out`: a file already holding exactly the Close's bytes is now left
   alone, so a repeat with the same flags succeeds as a no-op; a file holding anything else is
   refused by name and nothing is overwritten. Before, any existing file at that path failed the
   command.
+- **Changed:** `disclose --suppress agent_input` also withholds an agent_input original a book
+  record commits as a payload (records written by a pre-release build that stored originals in
+  the book); under `--payloads all` it refuses instead, since that mode cannot withhold a payload.
 - **Removed:** the `--html` flag on `bundle`, `disclose` and `permalink`. It was a stub that never
   rendered a page; `report build` replaces it.
 
