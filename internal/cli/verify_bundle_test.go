@@ -205,6 +205,10 @@ print(check_evidence_file(json.load(open(sys.argv[1]))).verdict)`
 			b["records"].([]interface{})[0].(map[string]interface{})["operator"] = "x"
 		},
 		"edited key_id": func(b map[string]interface{}) { b["checkpoint"].(map[string]interface{})["key_id"] = "edited" },
+		"mmr_size as a string": func(b map[string]interface{}) {
+			cp := b["checkpoint"].(map[string]interface{})
+			cp["mmr_size"] = cp["mmr_size"].(json.Number).String()
+		},
 	}
 	for name, edit := range cases {
 		path := producedBundle(t, edit)
@@ -213,4 +217,34 @@ print(check_evidence_file(json.load(open(sys.argv[1]))).verdict)`
 		require.NoError(t, err, name)
 		assert.Equal(t, goResult["verdict"], strings.TrimSpace(string(out)), name)
 	}
+}
+
+// TestVerifyBundleCheckpointFieldsKeepTheirJSONType: a number stated as a
+// string (or a string stated as a number) is a different value, as it is
+// to capsule-emit's verifier.
+func TestVerifyBundleCheckpointFieldsKeepTheirJSONType(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	for field, retype := range map[string]func(interface{}) interface{}{
+		"mmr_size":  func(v interface{}) interface{} { return v.(json.Number).String() },
+		"prev_size": func(v interface{}) interface{} { return v.(json.Number).String() },
+		"root":      func(v interface{}) interface{} { return json.Number("5") },
+	} {
+		path := producedBundle(t, func(b map[string]interface{}) {
+			cp := b["checkpoint"].(map[string]interface{})
+			cp[field] = retype(cp[field])
+		})
+		result, err := verifyBundleOutput(t, path)
+		assert.ErrorIs(t, err, ErrBundleInvalid, field)
+		assert.Contains(t, result["checkpoint"].(map[string]interface{})["findings"], "checkpoint_field_mismatch:"+field)
+	}
+}
+
+func TestSameJSONValue(t *testing.T) {
+	assert.True(t, sameJSONValue(json.Number("5"), json.Number("5")))
+	assert.True(t, sameJSONValue(json.Number("5"), json.Number("5.0")))
+	assert.False(t, sameJSONValue("5", json.Number("5")))
+	assert.False(t, sameJSONValue(json.Number("5"), "5"))
+	assert.True(t, sameJSONValue("a", "a"))
+	assert.False(t, sameJSONValue("a", "b"))
+	assert.False(t, sameJSONValue(nil, ""))
 }

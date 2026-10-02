@@ -56,7 +56,7 @@ func checkpointClaim(value map[string]interface{}) aacbundle.ClaimResult {
 			}
 			continue
 		}
-		if fmt.Sprint(got) != fmt.Sprint(signed[field]) {
+		if !sameJSONValue(got, signed[field]) {
 			findings = append(findings, "checkpoint_field_mismatch:"+field)
 		}
 	}
@@ -222,5 +222,32 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 		return ErrPartial
 	default:
 		return ErrBundleInvalid
+	}
+}
+
+// sameJSONValue is JSON equality with the type kept, as Python's == on the
+// decoded values: a string never equals a number ("5" is not 5); two numbers
+// are equal when their values are (5 equals 5.0); strings compare exactly.
+// Values come from decoders using UseNumber, so numbers are json.Number.
+func sameJSONValue(a, b interface{}) bool {
+	switch x := a.(type) {
+	case json.Number:
+		y, ok := b.(json.Number)
+		if !ok {
+			return false
+		}
+		if xi, err := x.Int64(); err == nil {
+			if yi, err := y.Int64(); err == nil {
+				return xi == yi
+			}
+		}
+		xf, errX := x.Float64()
+		yf, errY := y.Float64()
+		return errX == nil && errY == nil && xf == yf
+	case string:
+		y, ok := b.(string)
+		return ok && x == y
+	default:
+		return fmt.Sprintf("%T:%v", a, a) == fmt.Sprintf("%T:%v", b, b)
 	}
 }
