@@ -239,14 +239,14 @@ func validateServiceURL(raw string) (string, error) {
 // a local file. It is required: no countersigner list is privileged.
 func validateDirectory(raw string) (string, error) {
 	if raw == "" {
-		return "", inputError("--directory is required: a countersigner directory HTTPS URL or file")
+		return "", hint(ErrInput, "--directory is required: name the countersigner directory to resolve signers against, an HTTPS URL or a file ([{name, key_ids}] or {countersigners: [...]})")
 	}
 	if !strings.Contains(raw, "://") {
 		return raw, nil
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
-		return "", inputError("--directory must be an absolute HTTPS URL without embedded credentials or a fragment, or a file path")
+		return "", hint(ErrInput, "--directory must be an absolute HTTPS URL without embedded credentials or a fragment, or a file path")
 	}
 	return raw, nil
 }
@@ -412,11 +412,11 @@ func decodeCountersignerDirectory(raw []byte) (countersignerDirectory, error) {
 	} else {
 		var object map[string]json.RawMessage
 		if err := json.Unmarshal(trimmed, &object); err != nil {
-			return countersignerDirectory{}, inputError("countersigner directory is not a JSON array or object")
+			return countersignerDirectory{}, hint(ErrInput, "the countersigner directory is not a JSON array or object")
 		}
 		var present bool
 		if rows, present = object["countersigners"]; !present {
-			return countersignerDirectory{}, inputError("countersigner directory object has no countersigners array")
+			return countersignerDirectory{}, hint(ErrInput, "the countersigner directory object has no countersigners array")
 		}
 	}
 	var dir countersignerDirectory

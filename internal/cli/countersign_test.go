@@ -318,6 +318,8 @@ func TestCountersignVerifyRequiresADirectory(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, encoded, 0o600))
 	_, err = invoke(t, "", "countersign", "verify", "--profile", profile.Name, path)
 	assert.Equal(t, 2, ExitCode(err))
+	// What the operator sees says what to do, not only "invalid input".
+	assert.Contains(t, SafeError(err), "--directory is required")
 }
 
 func TestValidateDirectoryTakesAnHTTPSURLOrAFile(t *testing.T) {
@@ -329,6 +331,7 @@ func TestValidateDirectoryTakesAnHTTPSURLOrAFile(t *testing.T) {
 	for _, refused := range []string{"", "http://example.org/list.json", "https://user:pw@example.org/list.json", "https://example.org/list.json#frag", "file:///tmp/list.json"} {
 		_, err := validateDirectory(refused)
 		assert.ErrorIs(t, err, ErrInput, refused)
+		assert.Contains(t, SafeError(err), "--directory", refused)
 	}
 }
 
@@ -343,6 +346,7 @@ func TestDecodeCountersignerDirectoryAcceptsBothShapes(t *testing.T) {
 
 	_, err = decodeCountersignerDirectory([]byte(`{"witnesses":[]}`))
 	assert.ErrorIs(t, err, ErrInput, "an object with no countersigners array")
+	assert.Contains(t, SafeError(err), "no countersigners array")
 	_, err = decodeCountersignerDirectory([]byte(`[{"name":"A","key_ids":["aa"],"score":5}]`))
 	assert.ErrorIs(t, err, ErrInput, "a row with a field this CLI does not define")
 	_, err = decodeCountersignerDirectory([]byte(`"not a directory"`))
