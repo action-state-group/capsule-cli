@@ -1,0 +1,526 @@
+{
+  "bundle_version": "2",
+  "bundle_kind": "evidence-bundle/v2",
+  "root": "881123eefd18371d11287d2ae64dbdbf4b554225dfd7fefb0d612d20b77645c1",
+  "records": [
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "capsule_id": "36d9351e387e46ff37d80753d74b1b761e016628e6875ede6e3cdd3a2e48c55c",
+      "canonicalization_id": "jcs",
+      "action_id": "mesh-poc/capsule-emit-mesh-integration/6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+      "action_type": "decide",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.0",
+      "timestamp": "2026-10-02T09:35:00.000Z",
+      "domain": "action",
+      "provenance": "collector",
+      "model_attestation": {
+        "model_id": "m",
+        "provider": "mesh-llm",
+        "compute_attestation": {
+          "agent_input_digest": "6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+          "agent_output_digest": "a8461110d26a1ceb91765128a3f8a648e86238810f4bdf27a330deb8681f9d87",
+          "runtime": {
+            "name": "capsule-emit-mesh/mesh-llm-host-runtime",
+            "runtime_digest": "95eeef4b1760007c63e9420b50a63c26172562fe9a8f3cae0d9239dd91173bd4",
+            "measurement_class": "os_measured",
+            "platform_integrity": {
+              "sip_enabled": true,
+              "source": {
+                "sip_enabled": "os_reported"
+              }
+            }
+          },
+          "attestation_refs": [],
+          "invocation": {
+            "requested_model_id": "m",
+            "resolved_model_id": "m",
+            "source": {
+              "requested_model_id": "self_reported",
+              "resolved_model_id": "self_reported"
+            }
+          },
+          "epistemic_type": "producer_claim",
+          "x-mesh-poc-v1": {
+            "client_nonce": "n",
+            "client_nonce_source": "client_supplied",
+            "model_name_digest": "62c66a7a5dd70c3146618063c344e531e6d4b59e379808443ce962b3abd63c5a",
+            "serving_provenance": {
+              "served_by_node_id": "unknown",
+              "dispatch_path": null,
+              "requesting_party": "party-1",
+              "exchange_id": "e-1",
+              "quantization": "unknown",
+              "model": {
+                "architecture": null,
+                "context_length": null,
+                "parameter_size": null,
+                "layer_count": null,
+                "identity_hash": null,
+                "weights_digest": null,
+                "canonical_ref": null,
+                "revision": null
+              },
+              "hardware": {
+                "gpu": null,
+                "vram_bytes": null,
+                "device": null,
+                "is_soc": null
+              },
+              "usage": null,
+              "seq": 3,
+              "prev_seq": 2,
+              "peer_capsule_id": null,
+              "peer_capsule_id_provenance": null
+            },
+            "role": "served",
+            "observation_point": null,
+            "generation_parameters": {},
+            "latency_ms": "100.000",
+            "evidence_refs": {
+              "statistical_fingerprint": {
+                "type": "statistical_fingerprint",
+                "digest": null,
+                "context": null
+              },
+              "tee_attestation": {
+                "type": "tee_attestation",
+                "measurement_class": null,
+                "digest": null,
+                "context": "no TEE quote measured (no TDX hardware on this host, or the producer leg has not run here); recorded absent, never fabricated"
+              },
+              "binary_attestation": {
+                "type": "binary_attestation",
+                "measurement_class": "os_measured",
+                "digest": "95eeef4b1760007c63e9420b50a63c26172562fe9a8f3cae0d9239dd91173bd4",
+                "digest_alg": "sha256",
+                "binary_path": "capsule_emit_mesh-e6767b5b421a69bd",
+                "binary_size_bytes": 48031584,
+                "signature": "dc15d4ed5e06b0e5f869ae2af41e1e7cfe89154c57de45cef0f45f99fee35cec57b25cb92250474947cbb6edabde2da4f78a10f18b92fea3413f0a160c68f406",
+                "signature_algorithm": "ed25519",
+                "signer_key_id": "89fa58024780ed14",
+                "measured_at": "2026-10-02T09:35:00.000Z",
+                "code_directory_hash": "c72130e1e70dc24257e109374981551eb884ff23",
+                "cdhash_source": "csops(CS_OPS_CDHASH)",
+                "kernel_valid": true,
+                "kernel_signed": true,
+                "platform_binary": false,
+                "ad_hoc_signature": true,
+                "signing_authority": "unknown_local_or_ad_hoc",
+                "sip_enabled": true,
+                "context": "os_measured: the KERNEL (AMFI) reported this process's code-directory hash (cdhash) at exec time via csops(2) CS_OPS_CDHASH — an independent measurer beneath the process, so a compromised process cannot repoint this hash at a decoy file the way self-measurement can; the signature also binds this cdhash to the self-measured digest, so tampering with either after signing breaks verification. Trustworthy only up to: SIP enabled, a NON-ROOT attacker (root can disable SIP / bypass AMFI), and this binary's signing strength — signing_authority=unknown_local_or_ad_hoc, ad-hoc signed (no Developer-ID / notarization / library validation). Does NOT prove hardware-rooted measurement: no TEE and no hardware register are involved, so this is NOT tee_measured. A root attacker with SIP disabled is the named residual, closed only by tee_measured (out of scope here)."
+              }
+            }
+          },
+          "store_nonce": "16f3e3c8a4d718fc42b15b299e4f23d8c5748005db17760913d5abc738974e36"
+        }
+      },
+      "effect": {
+        "status": "confirmed",
+        "type": "inference_completion",
+        "effect_attestation": "gate_executed",
+        "request_digest": "6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+        "response_digest": "a8461110d26a1ceb91765128a3f8a648e86238810f4bdf27a330deb8681f9d87"
+      },
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "confirmed",
+        "ledger_mode": "chained"
+      },
+      "disposition": {
+        "decision": "accept",
+        "approver": "policy",
+        "human_disposed": false,
+        "verdict_class": "executed"
+      },
+      "chain": {
+        "parent_capsule_id": "873a2a9e91280eeec232135f6696d822f13fe6bf6cc4b1010f4c17c4e8281206",
+        "relation": "follows"
+      },
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820660b0ac992155d06097d6e89fce21118e447e77f9a92e569bf8aabaf38f2a09da0582036d9351e387e46ff37d80753d74b1b761e016628e6875ede6e3cdd3a2e48c55c58405f9b0a1d9976d9fac9179807df45d2cebfeeb708b7ec4824afa9b40171aa2a200959087c033a92aed2f20f73e5ba70bffbe843928d0d7551820511c33ae3c50d",
+      "key_id": "660b0ac992155d06097d6e89fce21118e447e77f9a92e569bf8aabaf38f2a09d"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "capsule_id": "2c563e910dd770935a7dd7c842a310f757034b3c67e5bb5f6fa73cb57615758a",
+      "canonicalization_id": "jcs",
+      "action_id": "mesh-poc/capsule-emit-mesh-integration/6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+      "action_type": "decide",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.0",
+      "timestamp": "2026-10-02T09:35:00.000Z",
+      "domain": "action",
+      "provenance": "collector",
+      "model_attestation": {
+        "model_id": "m",
+        "provider": "mesh-llm",
+        "compute_attestation": {
+          "agent_input_digest": "6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+          "agent_output_digest": "a8461110d26a1ceb91765128a3f8a648e86238810f4bdf27a330deb8681f9d87",
+          "runtime": {
+            "name": "capsule-emit-mesh/mesh-llm-host-runtime",
+            "runtime_digest": "95eeef4b1760007c63e9420b50a63c26172562fe9a8f3cae0d9239dd91173bd4",
+            "measurement_class": "os_measured",
+            "platform_integrity": {
+              "sip_enabled": true,
+              "source": {
+                "sip_enabled": "os_reported"
+              }
+            }
+          },
+          "attestation_refs": [],
+          "invocation": {
+            "requested_model_id": "m",
+            "resolved_model_id": "m",
+            "source": {
+              "requested_model_id": "self_reported",
+              "resolved_model_id": "self_reported"
+            }
+          },
+          "epistemic_type": "producer_claim",
+          "x-mesh-poc-v1": {
+            "client_nonce": "n",
+            "client_nonce_source": "client_supplied",
+            "model_name_digest": "62c66a7a5dd70c3146618063c344e531e6d4b59e379808443ce962b3abd63c5a",
+            "serving_provenance": {
+              "served_by_node_id": "unknown",
+              "dispatch_path": null,
+              "requesting_party": "party-1",
+              "exchange_id": "e-1",
+              "quantization": "unknown",
+              "model": {
+                "architecture": null,
+                "context_length": null,
+                "parameter_size": null,
+                "layer_count": null,
+                "identity_hash": null,
+                "weights_digest": null,
+                "canonical_ref": null,
+                "revision": null
+              },
+              "hardware": {
+                "gpu": null,
+                "vram_bytes": null,
+                "device": null,
+                "is_soc": null
+              },
+              "usage": null,
+              "seq": 4,
+              "prev_seq": 3,
+              "peer_capsule_id": null,
+              "peer_capsule_id_provenance": null
+            },
+            "role": "served",
+            "observation_point": null,
+            "generation_parameters": {},
+            "latency_ms": "100.000",
+            "evidence_refs": {
+              "statistical_fingerprint": {
+                "type": "statistical_fingerprint",
+                "digest": null,
+                "context": null
+              },
+              "tee_attestation": {
+                "type": "tee_attestation",
+                "measurement_class": null,
+                "digest": null,
+                "context": "no TEE quote measured (no TDX hardware on this host, or the producer leg has not run here); recorded absent, never fabricated"
+              },
+              "binary_attestation": {
+                "type": "binary_attestation",
+                "measurement_class": "os_measured",
+                "digest": "95eeef4b1760007c63e9420b50a63c26172562fe9a8f3cae0d9239dd91173bd4",
+                "digest_alg": "sha256",
+                "binary_path": "capsule_emit_mesh-e6767b5b421a69bd",
+                "binary_size_bytes": 48031584,
+                "signature": "dc15d4ed5e06b0e5f869ae2af41e1e7cfe89154c57de45cef0f45f99fee35cec57b25cb92250474947cbb6edabde2da4f78a10f18b92fea3413f0a160c68f406",
+                "signature_algorithm": "ed25519",
+                "signer_key_id": "89fa58024780ed14",
+                "measured_at": "2026-10-02T09:35:00.000Z",
+                "code_directory_hash": "c72130e1e70dc24257e109374981551eb884ff23",
+                "cdhash_source": "csops(CS_OPS_CDHASH)",
+                "kernel_valid": true,
+                "kernel_signed": true,
+                "platform_binary": false,
+                "ad_hoc_signature": true,
+                "signing_authority": "unknown_local_or_ad_hoc",
+                "sip_enabled": true,
+                "context": "os_measured: the KERNEL (AMFI) reported this process's code-directory hash (cdhash) at exec time via csops(2) CS_OPS_CDHASH — an independent measurer beneath the process, so a compromised process cannot repoint this hash at a decoy file the way self-measurement can; the signature also binds this cdhash to the self-measured digest, so tampering with either after signing breaks verification. Trustworthy only up to: SIP enabled, a NON-ROOT attacker (root can disable SIP / bypass AMFI), and this binary's signing strength — signing_authority=unknown_local_or_ad_hoc, ad-hoc signed (no Developer-ID / notarization / library validation). Does NOT prove hardware-rooted measurement: no TEE and no hardware register are involved, so this is NOT tee_measured. A root attacker with SIP disabled is the named residual, closed only by tee_measured (out of scope here)."
+              }
+            }
+          },
+          "store_nonce": "81ab7f4e81f0fe5bf324024872a23040c69bf2c3c63e5da4d9d8b90d27d23ad1"
+        }
+      },
+      "effect": {
+        "status": "confirmed",
+        "type": "inference_completion",
+        "effect_attestation": "gate_executed",
+        "request_digest": "6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+        "response_digest": "a8461110d26a1ceb91765128a3f8a648e86238810f4bdf27a330deb8681f9d87"
+      },
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "confirmed",
+        "ledger_mode": "chained"
+      },
+      "disposition": {
+        "decision": "accept",
+        "approver": "policy",
+        "human_disposed": false,
+        "verdict_class": "executed"
+      },
+      "chain": {
+        "parent_capsule_id": "36d9351e387e46ff37d80753d74b1b761e016628e6875ede6e3cdd3a2e48c55c",
+        "relation": "follows"
+      },
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820660b0ac992155d06097d6e89fce21118e447e77f9a92e569bf8aabaf38f2a09da058202c563e910dd770935a7dd7c842a310f757034b3c67e5bb5f6fa73cb57615758a584008ffdd35cefbe503f752751762e14ea9f016613f5dccb7279266114e805f42f0ee67e51738413dad44209faf359b64830246e3bf23ba5fd881081d4560524b06",
+      "key_id": "660b0ac992155d06097d6e89fce21118e447e77f9a92e569bf8aabaf38f2a09d"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "format_version": "4",
+      "capsule_id": "881123eefd18371d11287d2ae64dbdbf4b554225dfd7fefb0d612d20b77645c1",
+      "canonicalization_id": "jcs",
+      "action_id": "mesh-poc/capsule-emit-mesh-integration/6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+      "action_type": "decide",
+      "operator": "capsule-emit-mesh-poc-rust",
+      "developer": "capsule-emit-mesh/0.1.0",
+      "timestamp": "2026-10-02T09:36:00.000Z",
+      "domain": "action",
+      "provenance": "collector",
+      "model_attestation": {
+        "model_id": "m",
+        "provider": "mesh-llm",
+        "compute_attestation": {
+          "agent_input_digest": "6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+          "agent_output_digest": "a8461110d26a1ceb91765128a3f8a648e86238810f4bdf27a330deb8681f9d87",
+          "runtime": {
+            "name": "capsule-emit-mesh/mesh-llm-host-runtime",
+            "runtime_digest": "95eeef4b1760007c63e9420b50a63c26172562fe9a8f3cae0d9239dd91173bd4",
+            "measurement_class": "os_measured",
+            "platform_integrity": {
+              "sip_enabled": true,
+              "source": {
+                "sip_enabled": "os_reported"
+              }
+            }
+          },
+          "attestation_refs": [],
+          "invocation": {
+            "requested_model_id": "m",
+            "resolved_model_id": "m",
+            "source": {
+              "requested_model_id": "self_reported",
+              "resolved_model_id": "self_reported"
+            }
+          },
+          "epistemic_type": "producer_claim",
+          "x-mesh-poc-v1": {
+            "client_nonce": "n",
+            "client_nonce_source": "client_supplied",
+            "model_name_digest": "62c66a7a5dd70c3146618063c344e531e6d4b59e379808443ce962b3abd63c5a",
+            "serving_provenance": {
+              "served_by_node_id": "unknown",
+              "dispatch_path": null,
+              "requesting_party": "party-1",
+              "exchange_id": "e-1",
+              "quantization": "unknown",
+              "model": {
+                "architecture": null,
+                "context_length": null,
+                "parameter_size": null,
+                "layer_count": null,
+                "identity_hash": null,
+                "weights_digest": null,
+                "canonical_ref": null,
+                "revision": null
+              },
+              "hardware": {
+                "gpu": null,
+                "vram_bytes": null,
+                "device": null,
+                "is_soc": null
+              },
+              "usage": null,
+              "seq": 5,
+              "prev_seq": 4,
+              "peer_capsule_id": null,
+              "peer_capsule_id_provenance": null
+            },
+            "role": "served",
+            "observation_point": null,
+            "generation_parameters": {},
+            "latency_ms": "100.000",
+            "evidence_refs": {
+              "statistical_fingerprint": {
+                "type": "statistical_fingerprint",
+                "digest": null,
+                "context": null
+              },
+              "tee_attestation": {
+                "type": "tee_attestation",
+                "measurement_class": null,
+                "digest": null,
+                "context": "no TEE quote measured (no TDX hardware on this host, or the producer leg has not run here); recorded absent, never fabricated"
+              },
+              "binary_attestation": {
+                "type": "binary_attestation",
+                "measurement_class": "os_measured",
+                "digest": "95eeef4b1760007c63e9420b50a63c26172562fe9a8f3cae0d9239dd91173bd4",
+                "digest_alg": "sha256",
+                "binary_path": "capsule_emit_mesh-e6767b5b421a69bd",
+                "binary_size_bytes": 48031584,
+                "signature": "dc15d4ed5e06b0e5f869ae2af41e1e7cfe89154c57de45cef0f45f99fee35cec57b25cb92250474947cbb6edabde2da4f78a10f18b92fea3413f0a160c68f406",
+                "signature_algorithm": "ed25519",
+                "signer_key_id": "89fa58024780ed14",
+                "measured_at": "2026-10-02T09:35:00.000Z",
+                "code_directory_hash": "c72130e1e70dc24257e109374981551eb884ff23",
+                "cdhash_source": "csops(CS_OPS_CDHASH)",
+                "kernel_valid": true,
+                "kernel_signed": true,
+                "platform_binary": false,
+                "ad_hoc_signature": true,
+                "signing_authority": "unknown_local_or_ad_hoc",
+                "sip_enabled": true,
+                "context": "os_measured: the KERNEL (AMFI) reported this process's code-directory hash (cdhash) at exec time via csops(2) CS_OPS_CDHASH — an independent measurer beneath the process, so a compromised process cannot repoint this hash at a decoy file the way self-measurement can; the signature also binds this cdhash to the self-measured digest, so tampering with either after signing breaks verification. Trustworthy only up to: SIP enabled, a NON-ROOT attacker (root can disable SIP / bypass AMFI), and this binary's signing strength — signing_authority=unknown_local_or_ad_hoc, ad-hoc signed (no Developer-ID / notarization / library validation). Does NOT prove hardware-rooted measurement: no TEE and no hardware register are involved, so this is NOT tee_measured. A root attacker with SIP disabled is the named residual, closed only by tee_measured (out of scope here)."
+              }
+            }
+          },
+          "store_nonce": "c0d8bbe4deaa049e7fc0d2a979742d9f23c42a57b8c105c8af1216a44fabbb84"
+        }
+      },
+      "effect": {
+        "status": "confirmed",
+        "type": "inference_completion",
+        "effect_attestation": "gate_executed",
+        "request_digest": "6d139f1403cd84518768857efed6c375c0e3fe1af3f250cd3a5c59ea87a0323c",
+        "response_digest": "a8461110d26a1ceb91765128a3f8a648e86238810f4bdf27a330deb8681f9d87"
+      },
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "confirmed",
+        "ledger_mode": "chained"
+      },
+      "disposition": {
+        "decision": "accept",
+        "approver": "policy",
+        "human_disposed": false,
+        "verdict_class": "executed"
+      },
+      "chain": {
+        "parent_capsule_id": "2c563e910dd770935a7dd7c842a310f757034b3c67e5bb5f6fa73cb57615758a",
+        "relation": "follows"
+      },
+      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820660b0ac992155d06097d6e89fce21118e447e77f9a92e569bf8aabaf38f2a09da05820881123eefd18371d11287d2ae64dbdbf4b554225dfd7fefb0d612d20b77645c158407bb89d2baacace886ee87825764174d2d81826557dc7f889a0324c839a6013743075e974d1340caab541ba50cc8966fbef74c285baebf1f72e70e91cc4d7f404",
+      "key_id": "660b0ac992155d06097d6e89fce21118e447e77f9a92e569bf8aabaf38f2a09d"
+    }
+  ],
+  "completeness": {
+    "closure_depth": 2,
+    "records_mode": "complete",
+    "payloads_mode": "selected",
+    "suppressed_fields": []
+  },
+  "completeness_certificate": {
+    "log_id": "rust-node",
+    "range_root": "2c0ea74874fff87c3122565b20353db47ddd3425e366c910061f3084b113edc4",
+    "first_seq": 5,
+    "last_seq": 7,
+    "body_digests": [
+      "36d9351e387e46ff37d80753d74b1b761e016628e6875ede6e3cdd3a2e48c55c",
+      "2c563e910dd770935a7dd7c842a310f757034b3c67e5bb5f6fa73cb57615758a",
+      "881123eefd18371d11287d2ae64dbdbf4b554225dfd7fefb0d612d20b77645c1"
+    ],
+    "range_proof": {
+      "from_seq": 5,
+      "to_seq": 7,
+      "size": 11,
+      "from_index": 4,
+      "to_index": 6,
+      "witness": [
+        "804dfea2fe777cb3161c7d36b287dd0df300a2da7c1eafa0d5791e813863fc22"
+      ]
+    },
+    "memberships": {
+      "36d9351e387e46ff37d80753d74b1b761e016628e6875ede6e3cdd3a2e48c55c": {
+        "log_coordinates": {
+          "log_id": "rust-node",
+          "seq": 5,
+          "leaf_index": 4
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 11,
+          "leaf_index": 4,
+          "witness": [
+            "b004fbe27fff1fc7621f9b41a7c2eb97afd4dbfa44a82ed4735da91b2a36a5e5"
+          ],
+          "peaks_left": [
+            "804dfea2fe777cb3161c7d36b287dd0df300a2da7c1eafa0d5791e813863fc22"
+          ],
+          "peaks_right": [
+            "23e68955e96134c1f20ba5399d9651295466c1725f8fe678c215af3aac3159f1"
+          ]
+        }
+      },
+      "2c563e910dd770935a7dd7c842a310f757034b3c67e5bb5f6fa73cb57615758a": {
+        "log_coordinates": {
+          "log_id": "rust-node",
+          "seq": 6,
+          "leaf_index": 5
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 11,
+          "leaf_index": 5,
+          "witness": [
+            "1b6dabcd269dc7d9256d476ab2d1fb05d3227c0b231bb6815fda9ff241bd3ef3"
+          ],
+          "peaks_left": [
+            "804dfea2fe777cb3161c7d36b287dd0df300a2da7c1eafa0d5791e813863fc22"
+          ],
+          "peaks_right": [
+            "23e68955e96134c1f20ba5399d9651295466c1725f8fe678c215af3aac3159f1"
+          ]
+        }
+      },
+      "881123eefd18371d11287d2ae64dbdbf4b554225dfd7fefb0d612d20b77645c1": {
+        "log_coordinates": {
+          "log_id": "rust-node",
+          "seq": 7,
+          "leaf_index": 6
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 11,
+          "leaf_index": 6,
+          "witness": [],
+          "peaks_left": [
+            "804dfea2fe777cb3161c7d36b287dd0df300a2da7c1eafa0d5791e813863fc22",
+            "9b9fdbf136b97fd5a2f080479083575a03d377dec9977cf8e8c8a5519e59d171"
+          ],
+          "peaks_right": []
+        }
+      }
+    }
+  },
+  "checkpoint": {
+    "v": 1,
+    "kind": "mmr_checkpoint",
+    "log_id": "rust-node",
+    "mmr_size": 11,
+    "root": "2c0ea74874fff87c3122565b20353db47ddd3425e366c910061f3084b113edc4",
+    "prev_size": 0,
+    "prev_root": "",
+    "key_id": "660b0ac992155d06097d6e89fce21118e447e77f9a92e569bf8aabaf38f2a09d",
+    "timestamp": "2026-10-02T09:36:00.000Z",
+    "signature": "35df478107e7b8ecd8dbd2133bd71872e476442adc84be0970b5847cd97fe483444cd704df148909120c1bf89e84f2dde11be993250e3cdc483a2b824cf4350e",
+    "cose": "0oRYY6QBJwN4H2FwcGxpY2F0aW9uL2NsbC1jaGVja3BvaW50K2Nib3IEWCBmCwrJkhVdBgl9bon84hEY5Efnf5qS5Wm_iquvOPKgnQ-iAWlydXN0LW5vZGUCbHJ1c3Qtbm9kZSMxMaBY06Zka2luZG5jbGwtY2hlY2twb2ludGhsb2dfc2l6ZQtpaXNzdWVkX2F0eBgyMDI2LTEwLTAyVDA5OjM2OjAwLjAwMFppcHJldl9zaXplAGpjb21taXRtZW50WGeDWCCATf6i_nd8sxYcfTayh90N8wCi2nwer6DVeR6BOGP8Ilggm5_b8Ta5f9Wi8IBHkINXWgPTd97Jl3z46MilUZ5Z0XFYICPmiVXpYTTB8gulOZ2WUSlUZsFyX4_meMIVrzqsMVnxb3ByZXZfY29tbWl0bWVudEBYQBIB8jzaq-7uKCy0z4muLgs492dNSy-OKNvogw7yHMSX5Sm7jXSJgbS3Et3nqbEKc53vb2bUTv1TWuYE2EpTXQE"
+  }
+}

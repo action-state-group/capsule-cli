@@ -17,7 +17,6 @@ import (
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
 	"github.com/action-state-group/agent-action-capsule/go/envelope"
 	"github.com/action-state-group/capsule-emit-go/artifact"
-	"github.com/action-state-group/cll-go/checkpoint"
 	"github.com/action-state-group/cll-go/cll"
 	"github.com/action-state-group/cll-go/mmr"
 	"github.com/spf13/cobra"
@@ -353,19 +352,9 @@ func getCapsule(ctx context.Context, artifacts bundleArtifacts, id string) (map[
 // cose (the draft's portable authenticator, unpadded base64url) and as
 // statement (the same bytes, for readers of the earlier shape).
 func bundleCheckpoint(statement, rangeRoot []byte, checkpointSize uint64) (map[string]interface{}, error) {
-	record, err := checkpoint.ParseRecord(statement)
+	object, err := signedCheckpoint(statement)
 	if err != nil {
 		return nil, fmt.Errorf("parse checkpoint statement: %w", err)
-	}
-	projection, err := record.Payload().CanonicalJSON()
-	if err != nil {
-		return nil, err
-	}
-	decoder := json.NewDecoder(strings.NewReader(string(projection)))
-	decoder.UseNumber()
-	var object map[string]interface{}
-	if err := decoder.Decode(&object); err != nil {
-		return nil, err
 	}
 	if object["root"] != hex.EncodeToString(rangeRoot) || fmt.Sprint(object["mmr_size"]) != fmt.Sprint(checkpointSize) {
 		return nil, errors.New("checkpoint statement does not sign the bundle's range root and size")
