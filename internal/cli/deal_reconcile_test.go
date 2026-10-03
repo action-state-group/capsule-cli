@@ -62,8 +62,9 @@ func TestDealProceduresEndInTheFinalReview(t *testing.T) {
 				assert.Contains(t, step, "`deal open`", name)
 				assert.Contains(t, step, "`deal check`", name)
 			}
-			if strings.HasPrefix(step, "On `\"proceed\": true`") {
+			if strings.Contains(step, "On `\"proceed\": true`") {
 				act = i
+				assert.Contains(t, step, "`approval_text`", "%s asks with the check's own text", name)
 			}
 		}
 		require.NotEqual(t, -1, review, "%s has a final review step", name)
@@ -114,6 +115,10 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 			check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(retailDemo, "check-pay.json"))
 			assert.Equal(t, "pass", check["verdict"], "a known merchant at the agreed price passes quietly")
 			assert.Equal(t, "", check["card"])
+			assert.Equal(t, "DEMO · Pay: Place order: 1 cat sticker, $6.27 total, saved card · $6.27 · to Example Stickers (stickers.example) · by card · refundable\n"+
+				"Deal check: no differences.\n"+
+				"Checked at 2026-09-27T18:00:00Z. Stale after 15 minutes (2026-09-27T18:15:00Z): check again before acting later than that.", check["approval_text"])
+			assert.Equal(t, "2026-09-27T18:00:00Z", check["checked_at"])
 			proceed = check["proceed"] == true
 		case strings.Contains(step, "place the order"):
 			require.True(t, proceed, "the order is placed only after the final review")
@@ -140,8 +145,33 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 	assert.Equal(t, float64(3), result["records_read"])
 	assert.True(t, strings.HasPrefix(result["summary"].(string), "0 of 1 consequential actions have no deal record"))
 	assert.Contains(t, result["summary"], "cannot prove that nothing else happened")
-	gaps := result["coverage"].(map[string]any)["cannot_see"].([]any)
-	assert.Len(t, gaps, len(dealCoverageGaps))
+	coverage := result["coverage"].(map[string]any)
+	assert.Equal(t, map[string]any{"available": false, "read": float64(0)}, coverage["host_approvals"])
+	gaps := coverage["cannot_see"].([]any)
+	assert.Len(t, gaps, len(dealCoverageGaps)+1)
+	assert.Contains(t, gaps, dealNoApprovalsGap, "the output says when approvals were not available")
+	assert.NotContains(t, recorded[0].(map[string]any), "host_approval")
+
+	approvals := filepath.Join(t.TempDir(), "approvals.jsonl")
+	require.NoError(t, os.WriteFile(approvals, []byte(`{"id":"a1","at":"2026-09-27T18:00:00Z","task":"t-browser","amount_minor":627,"currency":"USD","decision":"approved"}`+"\n"), 0o600))
+	result, err = reconcileRun(t, "--executions", path, "--approvals", approvals, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
+	require.NoError(t, err)
+	coverage = result["coverage"].(map[string]any)
+	assert.Equal(t, map[string]any{"available": true, "read": float64(1)}, coverage["host_approvals"])
+	assert.NotContains(t, coverage["cannot_see"], dealNoApprovalsGap)
+	assert.Equal(t, map[string]any{"id": "a1", "at": "2026-09-27T18:00:00Z", "decision": "approved"}, result["recorded"].([]any)[0].(map[string]any)["host_approval"])
+}
+
+func TestDealCheckApprovalTextCarriesTheFindingAndWhenItGoesStale(t *testing.T) {
+	dealFixture(t)
+	dealID := openJetSki(t)
+	check := dealRun(t, "check", "--deal", dealID, "--stale-after", "5m", "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
+	assert.Equal(t, "DEMO · Pay: $200 deposit to hold 2 jet skis on Saturday · $200.00 · to M. Torres (coastal-jet-rentals.example) · by Zelle · not refundable\n"+
+		"Deal check: flagged: Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle) · Payment changed since it was agreed (card → Zelle, not refundable) · Zelle = no card protection · Site registered 3 weeks ago. Unverified: they have 2 jet skis for Saturday.\n"+
+		"Checked at 2026-09-27T18:00:00Z. Stale after 5 minutes (2026-09-27T18:05:00Z): check again before acting later than that.", check["approval_text"])
+	assert.Equal(t, float64(5), check["stale_after_minutes"])
+	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--stale-after", "10s", "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
+	require.ErrorIs(t, err, ErrInput)
 }
 
 func TestDealReconcileListsAPaymentWithNoDeal(t *testing.T) {

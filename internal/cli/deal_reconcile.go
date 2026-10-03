@@ -86,6 +86,82 @@ func (r jsonlExecutionReader) Read(_ context.Context) ([]dealExecutionRecord, er
 	return out, nil
 }
 
+// dealHostApproval is one approval request the agent host raised (its own
+// approval card, often raised by a sub-task's spend approval), as the host
+// recorded it. A host may not keep, or document, its history of resolved
+// approvals, so this input is optional and the output says when it is absent.
+type dealHostApproval struct {
+	ID             string `json:"id"`
+	At             string `json:"at"`
+	Task           string `json:"task,omitempty"`
+	ExecutionID    string `json:"execution_id,omitempty"`
+	AmountMinor    *int64 `json:"amount_minor,omitempty"`
+	Currency       string `json:"currency,omitempty"`
+	MerchantDomain string `json:"merchant_domain,omitempty"`
+	Decision       string `json:"decision"`
+
+	at time.Time
+}
+
+func readHostApprovals(path string) ([]dealHostApproval, error) {
+	raw, err := readInput(path)
+	if err != nil {
+		return nil, err
+	}
+	var out []dealHostApproval
+	sc := bufio.NewScanner(bytes.NewReader(raw))
+	sc.Buffer(make([]byte, 0, 64<<10), maxInput)
+	for line := 1; sc.Scan(); line++ {
+		text := bytes.TrimSpace(sc.Bytes())
+		if len(text) == 0 {
+			continue
+		}
+		var a dealHostApproval
+		if err := decodeJSON(text, &a); err != nil {
+			return nil, inputError(fmt.Sprintf("approval record on line %d: invalid JSON or unknown field", line))
+		}
+		at, err := time.Parse(time.RFC3339, a.At)
+		if err != nil {
+			return nil, inputError(fmt.Sprintf("approval record on line %d: at must be an RFC 3339 time", line))
+		}
+		a.at = at.UTC()
+		if !slices.Contains([]string{"approved", "denied", "unknown"}, a.Decision) {
+			return nil, inputError(fmt.Sprintf("approval record on line %d: decision must be approved, denied or unknown", line))
+		}
+		out = append(out, a)
+	}
+	if err := sc.Err(); err != nil {
+		return nil, inputError("approval records: " + err.Error())
+	}
+	return out, nil
+}
+
+// hostApprovalFor finds the host approval raised for rec: one that names its
+// execution id, or else one before it within window, in the same task when
+// both name one, with the same amount, currency and merchant domain wherever
+// both carry one.
+func hostApprovalFor(rec dealExecutionRecord, approvals []dealHostApproval, window time.Duration) *dealHostApproval {
+	for i := range approvals {
+		if approvals[i].ExecutionID != "" && approvals[i].ExecutionID == rec.ID {
+			return &approvals[i]
+		}
+	}
+	for i := range approvals {
+		a := &approvals[i]
+		d := rec.at.Sub(a.at)
+		switch {
+		case a.ExecutionID != "", d < 0 || d > window:
+		case a.Task != "" && rec.Task != "" && a.Task != rec.Task:
+		case a.AmountMinor != nil && rec.AmountMinor != nil && *a.AmountMinor != *rec.AmountMinor:
+		case a.Currency != "" && rec.Currency != "" && !strings.EqualFold(a.Currency, rec.Currency):
+		case a.MerchantDomain != "" && rec.MerchantDomain != "" && normalDomain(a.MerchantDomain) != normalDomain(rec.MerchantDomain):
+		default:
+			return a
+		}
+	}
+	return nil
+}
+
 // dealConsequentialActions is the mechanical trigger: every point of no return
 // of any deal type. Whether an action is consequential depends only on what it
 // does, never on who the other side is.
@@ -132,6 +208,9 @@ var dealCoverageGaps = []string{
 	"Matching uses the deal id, or the action, amount, currency, merchant domain and time; it does not see the merchant's or the payment provider's records.",
 	"It runs on the agent's own machine, over the agent host's own records: it can list actions that have no deal record, but it cannot prove that nothing else happened.",
 }
+
+// dealNoApprovalsGap is added when no approval history was given.
+const dealNoApprovalsGap = "The agent host's history of approvals was not available, so whether the user approved each action on the host is not shown."
 
 // dealCoverStep is a sealed step that can account for an executed action: an
 // act noted after it, or a check made before it.
@@ -225,7 +304,8 @@ func (rec dealExecutionRecord) row() map[string]any {
 
 // reconcileDeals matches the period's consequential records to sealed steps.
 // Acts are preferred to checks, and each step accounts for one action.
-func reconcileDeals(records []dealExecutionRecord, steps []*dealCoverStep, from, to time.Time, window time.Duration) map[string]any {
+// approvals is nil when the host's approval history was not given.
+func reconcileDeals(records []dealExecutionRecord, approvals []dealHostApproval, steps []*dealCoverStep, from, to time.Time, window time.Duration) map[string]any {
 	sort.SliceStable(records, func(i, j int) bool { return records[i].at.Before(records[j].at) })
 	recorded, unrecorded, failed := []map[string]any{}, []map[string]any{}, []map[string]any{}
 	read, outside, other := 0, 0, 0
@@ -243,6 +323,13 @@ func reconcileDeals(records []dealExecutionRecord, steps []*dealCoverStep, from,
 			failed = append(failed, rec.row())
 			continue
 		}
+		row := rec.row()
+		if approvals != nil {
+			row["host_approval"] = nil
+			if a := hostApprovalFor(rec, approvals, window); a != nil {
+				row["host_approval"] = map[string]any{"id": a.ID, "at": a.At, "decision": a.Decision}
+			}
+		}
 		var match *dealCoverStep
 		for _, kind := range []string{"act", "check"} {
 			for _, step := range steps {
@@ -255,7 +342,6 @@ func reconcileDeals(records []dealExecutionRecord, steps []*dealCoverStep, from,
 				break
 			}
 		}
-		row := rec.row()
 		if match == nil {
 			unrecorded = append(unrecorded, row)
 			continue
@@ -265,6 +351,11 @@ func reconcileDeals(records []dealExecutionRecord, steps []*dealCoverStep, from,
 		recorded = append(recorded, row)
 	}
 	consequential := len(recorded) + len(unrecorded)
+	gaps := dealCoverageGaps
+	hostApprovals := map[string]any{"available": approvals != nil, "read": len(approvals)}
+	if approvals == nil {
+		gaps = append(slices.Clone(gaps), dealNoApprovalsGap)
+	}
 	summary := fmt.Sprintf("%d of %d consequential actions have no deal record (%d execution records read for %s to %s). This lists what is missing from the records read; it cannot prove that nothing else happened.",
 		len(unrecorded), consequential, read, from.Format(time.RFC3339), to.Format(time.RFC3339))
 	return map[string]any{
@@ -277,13 +368,14 @@ func reconcileDeals(records []dealExecutionRecord, steps []*dealCoverStep, from,
 		"recorded":          recorded,
 		"unrecorded":        unrecorded,
 		"failed_attempts":   failed,
-		"coverage":          map[string]any{"reads": "the agent host's execution records (tool calls of the agent and its sub-tasks), not the conversation", "cannot_see": dealCoverageGaps},
+		"coverage":          map[string]any{"reads": "the agent host's execution records (tool calls of the agent and its sub-tasks), not the conversation", "host_approvals": hostApprovals, "cannot_see": gaps},
 	}
 }
 
 func dealReconcileCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "reconcile", Short: "List consequential actions in the agent host's execution records that have no deal record; seals nothing", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		path, _ := c.Flags().GetString("executions")
+		approvalsPath, _ := c.Flags().GetString("approvals")
 		window, _ := c.Flags().GetDuration("window")
 		if window <= 0 {
 			return inputError("--window must be positive")
@@ -311,13 +403,22 @@ func dealReconcileCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		var approvals []dealHostApproval
+		if approvalsPath != "" {
+			if approvals, err = readHostApprovals(approvalsPath); err != nil {
+				return err
+			}
+			if approvals == nil {
+				approvals = []dealHostApproval{}
+			}
+		}
 		var result map[string]any
 		err = runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
 			steps, err := s.allCoverSteps(ctx)
 			if err != nil {
 				return err
 			}
-			result = reconcileDeals(records, steps, from, to, window)
+			result = reconcileDeals(records, approvals, steps, from, to, window)
 			return nil
 		})
 		if err != nil {
@@ -332,6 +433,7 @@ func dealReconcileCommand() *cobra.Command {
 		return nil
 	}}
 	cmd.Flags().String("executions", "", "deal-execution-record/v0 JSONL file of the agent host's executed tool calls (see skills/deal/RECONCILE.md)")
+	cmd.Flags().String("approvals", "", "Optional deal-host-approval-record/v0 JSONL file of the approvals the agent host raised; without it the output says approvals were not available")
 	cmd.Flags().String("from", "", "Start of the period, RFC 3339 (default: 24 hours before --to)")
 	cmd.Flags().String("to", "", "End of the period, RFC 3339, exclusive (default: now)")
 	cmd.Flags().Duration("window", 30*time.Minute, "How far apart an action and its deal step may be when the record names no deal")

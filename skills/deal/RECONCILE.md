@@ -63,6 +63,31 @@ Example (a parent agent that starts a browser task, which pays):
 {"id":"c3","at":"2026-09-27T18:01:00Z","task":"t-browser","parent_task":"t-main","tool":"make_payment","action":"pay","amount_minor":627,"currency":"USD","merchant_domain":"stickers.example","reference":"ORDER-1001","status":"succeeded"}
 ```
 
+## Optional input: the host's approvals
+
+`--approvals FILE` adds the approval requests the agent host raised (its own
+approval card, often raised by a sub-task's spend approval). Many hosts can
+list pending approvals but keep no documented history of resolved ones, so
+this input is optional. Format, deal-host-approval-record/v0, one JSON object
+per line:
+
+| Field | Required | Meaning |
+|---|---|---|
+| `id` | yes | The host's id for the approval request. |
+| `at` | yes | When it was raised, RFC 3339. |
+| `task` | no | The task or sub-task that raised it. |
+| `execution_id` | no | The execution record it approved, when the host links them. |
+| `amount_minor`, `currency`, `merchant_domain` | no | As in an execution record. |
+| `decision` | yes | `approved`, `denied` or `unknown`. |
+
+An approval belongs to the execution record it names, or else to a
+consequential record within `--window` after it, in the same task when both
+name one, with the same amount, currency and merchant domain wherever both
+carry one. Each consequential row then carries `host_approval` (or `null`
+when none was found). Without `--approvals`, rows carry no `host_approval`,
+`coverage.host_approvals.available` is `false`, and `cannot_see` says the
+host's approval history was not available.
+
 ## Matching
 
 A consequential record (any action except `other`) counts as recorded when
@@ -104,6 +129,8 @@ One JSON object:
   - which tool calls are consequential is decided by the reader; a call it
     mapped to `other` is not checked;
   - matching does not see the merchant's or the payment provider's records;
+  - when no approval history was given, that whether the user approved
+    each action on the host is not shown;
   - it runs on the agent's own machine, over the host's own records: it can
     list actions that have no deal record, but it cannot prove that nothing
     else happened.
