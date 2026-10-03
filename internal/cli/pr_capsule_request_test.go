@@ -245,28 +245,44 @@ func runPRCapsuleRequestFails(t *testing.T, env map[string]string) string {
 	return string(out)
 }
 
-// TestPRCapsuleReviewDigest pins the profile's review_digest: the logins are
-// committed only as a digest, the API's ordering does not change it, and the
-// recompute documented in docs/PR-CAPSULE-PROFILE.md reproduces it.
+// prDecisionEnv is the closed-event environment: a merge decided by a User.
+func prDecisionEnv(dir, base, head string) map[string]string {
+	env := prCapsuleBaseEnv(dir, base, head)
+	env["CAPSULE_PR_MERGE_DECISION"] = "merged"
+	env["CAPSULE_PR_DECIDED_AT"] = "2026-10-02T11:00:00Z"
+	env["CAPSULE_PR_DECIDED_BY_TYPE"] = "User"
+	return env
+}
+
+// TestPRCapsuleReviewDigest pins the profile's review_digest on the decision
+// capsule: the logins are committed only as a digest, the API's ordering
+// does not change it, only reviews submitted by the decision count (a later
+// review and a pending one do not), and the recompute documented in
+// docs/PR-CAPSULE-PROFILE.md reproduces it.
 func TestPRCapsuleReviewDigest(t *testing.T) {
 	dir, base, head := gitRepoWithTwoCommits(t)
-	reviews := `[{"reviewer":"reviewer-b","state":"APPROVED","commit_id":"` + head + `","submitted_at":"2026-10-02T10:05:00Z"},` +
-		`{"reviewer":"reviewer-a","state":"COMMENTED","commit_id":"` + head + `","submitted_at":"2026-10-02T10:00:00Z"}]`
-	reordered := `[{"submitted_at":"2026-10-02T10:00:00Z","commit_id":"` + head + `","state":"COMMENTED","reviewer":"reviewer-a"},` +
-		`{"reviewer":"reviewer-b","state":"APPROVED","commit_id":"` + head + `","submitted_at":"2026-10-02T10:05:00Z"}]`
+	approved := `{"reviewer":"reviewer-b","state":"APPROVED","commit_id":"` + head + `","submitted_at":"2026-10-02T10:05:00Z"}`
+	commented := `{"reviewer":"reviewer-a","state":"COMMENTED","commit_id":"` + head + `","submitted_at":"2026-10-02T10:00:00Z"}`
+	reordered := `{"submitted_at":"2026-10-02T10:00:00Z","commit_id":"` + head + `","state":"COMMENTED","reviewer":"reviewer-a"}`
+	afterMerge := `{"reviewer":"reviewer-c","state":"COMMENTED","commit_id":"` + head + `","submitted_at":"2026-10-02T12:00:00Z"}`
+	pending := `{"reviewer":"reviewer-d","state":"PENDING","commit_id":"` + head + `","submitted_at":null}`
 
-	env := prCapsuleBaseEnv(dir, base, head)
-	env["CAPSULE_PR_REVIEWS_JSON"] = reviews
-	raw := runPRCapsuleRequest(t, env)
+	sealWith := func(reviews string) (string, map[string]any, []byte) {
+		env := prDecisionEnv(dir, base, head)
+		env["CAPSULE_PR_REVIEWS_JSON"] = reviews
+		raw := runPRCapsuleRequest(t, env)
+		id, payload := sealPRCapsuleRequest(t, raw)
+		return id, payload, raw
+	}
+	id, payload, raw := sealWith("[" + approved + "," + commented + "]")
 	assert.NotContains(t, string(raw), "reviewer-a", "a reviewer's login must enter the request only as a digest")
-	id, payload := sealPRCapsuleRequest(t, raw)
 	digest := referenceDigest(t, payload, "review_digest")
 	require.Regexp(t, `^[0-9a-f]{64}$`, digest)
 
-	env = prCapsuleBaseEnv(dir, base, head)
-	env["CAPSULE_PR_REVIEWS_JSON"] = reordered
-	reorderedID, _ := sealPRCapsuleRequest(t, runPRCapsuleRequest(t, env))
+	reorderedID, _, _ := sealWith("[" + reordered + "," + approved + "]")
 	assert.Equal(t, id, reorderedID, "the order reviews arrive in must not change the capsule")
+	laterID, _, _ := sealWith("[" + approved + "," + afterMerge + "," + pending + "," + commented + "]")
+	assert.Equal(t, id, laterID, "a review after the decision, or a pending one, must not change the capsule")
 
 	canonical := `[{"commit_id":"` + head + `","reviewer":"reviewer-a","state":"COMMENTED","submitted_at":"2026-10-02T10:00:00Z"},` +
 		`{"commit_id":"` + head + `","reviewer":"reviewer-b","state":"APPROVED","submitted_at":"2026-10-02T10:05:00Z"}]` + "\n"
@@ -288,6 +304,7 @@ func TestPRCapsuleMergeDecision(t *testing.T) {
 		{"merged", "User", "accept", "executed", "human", true},
 		{"merged", "Bot", "accept", "executed", "policy", false},
 		{"closed", "User", "reject", "denied", "human", true},
+		{"closed", "Bot", "reject", "denied", "policy", false},
 	}
 	for _, c := range cases {
 		t.Run(c.decision+"-"+c.byType, func(t *testing.T) {
@@ -315,8 +332,8 @@ func TestPRCapsuleMergeDecision(t *testing.T) {
 
 // TestPRCapsuleMergeDecisionRejectsBadInput keeps the script's own checks: a
 // decision outside the profile, a missing decided-at, an unknown account type,
-// a malformed parent id, and a parent id on a head capsule all fail before a
-// request is written.
+// a malformed parent id, and a parent id or reviews on a head capsule all
+// fail before a request is written.
 func TestPRCapsuleMergeDecisionRejectsBadInput(t *testing.T) {
 	dir, base, head := gitRepoWithTwoCommits(t)
 	parent := hex.EncodeToString(make([]byte, 32))
@@ -337,6 +354,9 @@ func TestPRCapsuleMergeDecisionRejectsBadInput(t *testing.T) {
 	env := prCapsuleBaseEnv(dir, base, head)
 	env["CAPSULE_PR_PARENT_CAPSULE_ID"] = parent
 	assert.Contains(t, runPRCapsuleRequestFails(t, env), "only with CAPSULE_PR_MERGE_DECISION")
+	env = prCapsuleBaseEnv(dir, base, head)
+	env["CAPSULE_PR_REVIEWS_JSON"] = "[]"
+	assert.Contains(t, runPRCapsuleRequestFails(t, env), "CAPSULE_PR_REVIEWS_JSON applies only with CAPSULE_PR_MERGE_DECISION")
 }
 
 // TestPRCapsuleIDIsSignerIndependent pins what lets a PR capsule sealed in CI

@@ -60,7 +60,6 @@ jobs:
           pr-author: ${{ github.event.pull_request.user.login }}
           pr-body: ${{ github.event.pull_request.body }}
           ci-jobs-json: ${{ format('{{"your_existing_ci_job":"{0}"}}', needs.your_existing_ci_job.result) }}
-          record-reviews: 'true'
           producer-signing-key: ${{ secrets.CAPSULE_PRODUCER_SIGNING_KEY }}
           producer-trusted-key: ${{ vars.CAPSULE_PRODUCER_TRUSTED_KEY }}
           checkpoint-signing-key: ${{ secrets.CAPSULE_CHECKPOINT_SIGNING_KEY }}
@@ -85,10 +84,13 @@ jobs:
           fetch-depth: 0
 
       # The CI conclusions the head commit carried when the PR closed, in the
-      # same job name -> conclusion shape the head capsule digested, and the
-      # head capsule this decision confirms: the capsule id the action's own
-      # comment last named. Both are conveniences; a verifier rechecks them
-      # (docs/PR-CAPSULE-PROFILE.md, "How a verifier checks it").
+      # same job name -> conclusion shape the head capsule digested (the
+      # latest completed run of each job wins), and the head capsule this
+      # decision confirms: the one the action's head-capsule comment names for
+      # this head SHA. The decision capsule's own comment starts differently,
+      # so a re-run of this job never picks it up as its parent. Both are
+      # conveniences; a verifier rechecks them (docs/PR-CAPSULE-PROFILE.md,
+      # "How a verifier checks it").
       - id: prior
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -97,11 +99,12 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          ci=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/check-runs" \
-            --jq '[.check_runs[] | select(.name == "your_existing_ci_job") | {(.name): .conclusion}] | add // {}')
+          ci=$(gh api --paginate "repos/${REPO}/commits/${HEAD_SHA}/check-runs" \
+            --jq '.check_runs[] | select(.name == "your_existing_ci_job") | {name, conclusion, completed_at}' \
+            | jq -s -c 'sort_by(.completed_at) | map({(.name): .conclusion}) | add // {}')
           parent=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("Sealed [Agent Action Capsule]"))) | .body' \
-            | grep -oE '`[0-9a-f]{64}`' | tail -n1 | tr -d '`' || true)
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("Sealed [Agent Action Capsule]")) and (.body | contains("for head `" + env.HEAD_SHA + "`"))) | .body' \
+            | grep -oE '^Sealed \[Agent Action Capsule\]\([^)]*\) `[0-9a-f]{64}`' | grep -oE '[0-9a-f]{64}' | tail -n1 || true)
           {
             echo "ci-jobs-json=${ci}"
             echo "parent-capsule-id=${parent}"

@@ -8,8 +8,8 @@ A PR yields two capsules:
 
 | Capsule | Event | `action_type` | Records |
 |---|---|---|---|
-| Head capsule | `pull_request` opened / synchronize / reopened | `fyi` | the PR at one head commit: diff, CI, reviews |
-| Decision capsule | `pull_request` closed | `decide` | the merge decision for that head, chained to the head capsule |
+| Head capsule | `pull_request` opened / synchronize / reopened | `fyi` | the PR at one head commit: diff, CI |
+| Decision capsule | `pull_request` closed | `decide` | the merge decision for that head, the reviews it was decided on, chained to the head capsule |
 
 Each is an ordinary Agent Action Capsule, sealed from a `capsule-seal-request/v1` request by
 `scripts/pr-capsule-request.sh` and anchored by `scripts/pr-capsule-seal.sh`. The profile adds no
@@ -37,6 +37,7 @@ PR comment.
 | `disposition` | absent | see [The merge decision](#the-merge-decision) |
 | `chain` | absent | `{parent_capsule_id: <head capsule id>, relation: confirms}`, when the head capsule id is known |
 | `model_attestation` | only if the PR body declares one (self-attested) | absent |
+| `review_digest` reference | absent: a head capsule is sealed before most reviews exist | the reviews submitted at or before the decision, when recorded |
 
 References, each `{type, digest_alg: sha256, digest, citation_purpose}`:
 
@@ -44,7 +45,7 @@ References, each `{type, digest_alg: sha256, digest, citation_purpose}`:
 |---|---|---|---|
 | `diff_digest` | `text/x-diff` | `git diff --no-color <base>...<head>` | always |
 | `ci_result_digest` | `application/json` | the CI job name → conclusion object | always |
-| `review_digest` | `application/json` | the PR's reviews | when reviews are recorded (`record-reviews: 'true'`) |
+| `review_digest` | `application/json` | the PR's reviews submitted at or before the decision | decision capsule only, when reviews are recorded (`record-reviews: 'true'`) |
 | `prompt_digest` | `text/plain` | a prompt the PR author declared and digested themselves | only if declared |
 
 Timestamps come from git and GitHub, never the wall clock. A re-run over the same head, CI outcome
@@ -57,6 +58,7 @@ and reviews is the same request and the same `capsule_id`, so it is a retry, not
 | merged | `accept` | `executed` | a `User` account | `human` | `true` |
 | merged | `accept` | `executed` | a `Bot` account (merge queue, auto-merge app) | `policy` | `false` |
 | closed without merge | `reject` | `denied` | a `User` account | `human` | `true` |
+| closed without merge | `reject` | `denied` | a `Bot` account | `policy` | `false` |
 
 "Decided by" is `merged_by.type` for a merge and `sender.type` for a close.
 
@@ -67,8 +69,10 @@ and reviews is the same request and the same `capsule_id`, so it is a retry, not
 
 - CI: the object as given, e.g. `{"quality":"success","test":"success"}`.
 - Reviews: an array of `{commit_id, reviewer, state, submitted_at}`, one entry per review the
-  reviews API returns (every review, not only the latest per reviewer), sorted by `submitted_at`,
-  then `reviewer`, `commit_id` and `state`. `reviewer` is the review's `user.login`.
+  reviews API returns with `submitted_at` at or before the decision capsule's `timestamp` (every
+  such review, not only the latest per reviewer, on any commit; a pending review has no
+  `submitted_at` and is left out). Sorted by `submitted_at`, then `reviewer`, `commit_id` and
+  `state`. `reviewer` is the review's `user.login`.
 
 ## How a verifier checks it
 
@@ -83,19 +87,32 @@ You need the capsule (`capsule.json`, or the artifact record) and read access to
    ```bash
    git diff --no-color "$BASE...$HEAD" | sha256sum                                          # diff_digest
    jq -S -c . <<<'{"quality":"success","test":"success"}' | sha256sum                        # ci_result_digest
+   # review_digest (decision capsule): DECIDED_AT is the capsule's timestamp
    gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
      --jq '.[] | {reviewer: .user.login, state, commit_id, submitted_at}' | jq -s -c . \
-     | jq -S -c 'sort_by(.submitted_at, .reviewer, .commit_id, .state)' | sha256sum        # review_digest
+     | jq -S -c --arg decided "$DECIDED_AT" 'map(select(.submitted_at != null and
+         (.submitted_at | fromdateiso8601) <= ($decided | fromdateiso8601)))
+         | sort_by(.submitted_at, .reviewer, .commit_id, .state)' | sha256sum
    ```
    For the CI digest, take the conclusions from the head commit's check runs, under the job names
    the producer recorded.
+
+   The time filter makes reviews left after the decision irrelevant. One change still breaks the
+   recompute: **dismissing a review rewrites its `state` to `DISMISSED`**, after the fact and under
+   the same `submitted_at`. A `review_digest` that no longer matches, where the reviews API shows a
+   dismissed review, is that case: the digest records the state the review had when the PR was
+   decided.
 4. **Decision capsule.** Check these against GitHub's own record of the PR:
    - its `disposition` matches the PR's state and who decided it;
    - its `timestamp` equals `merged_at` / `closed_at`;
    - its `chain.parent_capsule_id` names a head capsule whose `action_id` carries the same head SHA.
 
    A decision capsule chained to an older head's capsule is a finding: the merged head was not the
-   one the head capsule records.
+   one the head capsule records. So is one chained to another decision capsule.
+
+   The two capsules sit in different ephemeral logs (see [Limits](#limits)). They are one producer
+   stream because they are signed under the same producer key, and that key, not the log, is what
+   the `chain` link joins.
 
 ## In a report
 
@@ -114,7 +131,7 @@ cites both capsule ids in `evidence[]`, e.g. "merged only after review and green
 ```json
 {
   "id": "pr-45-merge-review",
-  "contract_ref": { "...": "the contract this requirement is in" },
+  "contract_ref": "ec:example-repo-merge-policy:2026-10-01@1",
   "requirement_ref": "r-merge-after-review",
   "tier": "recomputed",
   "grade": "...",
@@ -145,6 +162,12 @@ renders any other evidence; the PR profile needs no card of its own.
   space. Anyone who can guess them can confirm a guess against `review_digest`. The digest keeps
   the logins out of the capsule's text; it is not confidentiality.
 - **The decision capsule's parent is found, not given.** The example workflow reads it from the
-  action's last PR comment. A verifier checks it as in step 4 and does not trust the comment.
+  action's head-capsule comment for the merged head SHA. The decision capsule's own comment starts
+  differently ("Sealed the merge decision …"), so re-running the closed job finds the same parent
+  and reproduces the same capsule. A verifier checks the parent as in step 4 and does not trust the
+  comment.
+- **Auto-merge reads as a human decision.** When a user enables auto-merge, `merged_by` is that
+  user, so the decision capsule records `approver: human`, `human_disposed: true`: a person enabled
+  the merge, though GitHub performed it.
 - **One ephemeral log per run.** Each capsule is anchored in its own size-one log. A durable,
   continuously appended record is the book you publish the requests into ([In a report](#in-a-report)).

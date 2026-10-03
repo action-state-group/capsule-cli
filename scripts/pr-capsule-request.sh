@@ -30,8 +30,11 @@
 #                         author's own claim, carried through as declared.
 #   CAPSULE_PR_REVIEWS_JSON  compact JSON array of the PR's reviews, each
 #                         {"reviewer","state","commit_id","submitted_at"}.
-#                         Digested (review_digest); the logins never enter the
-#                         capsule as text. Absent means reviews are not recorded.
+#                         Only with CAPSULE_PR_MERGE_DECISION: the decision
+#                         capsule records the reviews submitted at or before
+#                         CAPSULE_PR_DECIDED_AT. Digested (review_digest); the
+#                         logins never enter the capsule as text. Absent means
+#                         reviews are not recorded.
 #   CAPSULE_PR_MERGE_DECISION  merged | closed. Set only on the PR's closed
 #                         event: seals the decide capsule recording the merge
 #                         decision instead of the head capsule. Requires:
@@ -79,6 +82,12 @@ if [[ -n "$merge_decision" ]]; then
     Bot) approver=policy ;;
     *) printf 'pr-capsule-request: CAPSULE_PR_DECIDED_BY_TYPE must be User or Bot; got %s\n' "$CAPSULE_PR_DECIDED_BY_TYPE" >&2; exit 2 ;;
   esac
+elif [[ -n "$reviews_json" ]]; then
+  # A head capsule is sealed before most reviews exist, so a digest of the
+  # reviews at that point stops matching the PR's reviews once anyone
+  # reviews. The decision is what reviews gate; it records them.
+  printf 'pr-capsule-request: CAPSULE_PR_REVIEWS_JSON applies only with CAPSULE_PR_MERGE_DECISION\n' >&2
+  exit 2
 elif [[ -n "$parent_capsule_id" ]]; then
   printf 'pr-capsule-request: CAPSULE_PR_PARENT_CAPSULE_ID applies only with CAPSULE_PR_MERGE_DECISION\n' >&2
   exit 2
@@ -98,10 +107,15 @@ diff_digest=$(git -C "$repo_dir" diff --no-color "${CAPSULE_PR_BASE_SHA}...${CAP
 ci_result_digest=$(jq -S -c . <<<"$CAPSULE_CI_JOBS_JSON" | sha256sum | cut -d' ' -f1)
 
 # Review digest: the same canonical form, with the array also sorted so the
-# order the API returned the reviews in never changes the digest.
+# order the API returned the reviews in never changes the digest. Only the
+# reviews submitted at or before the decision count, so a review left after
+# the merge never changes the decision capsule; a pending review (no
+# submitted_at) is not a review yet.
 review_digest=""
 if [[ -n "$reviews_json" ]]; then
-  review_digest=$(jq -S -c 'map({reviewer, state, commit_id, submitted_at}) | sort_by(.submitted_at, .reviewer, .commit_id, .state)' <<<"$reviews_json" | sha256sum | cut -d' ' -f1)
+  review_digest=$(jq -S -c --arg decided "$CAPSULE_PR_DECIDED_AT" \
+    'map(select(.submitted_at != null and (.submitted_at | fromdateiso8601) <= ($decided | fromdateiso8601)) | {reviewer, state, commit_id, submitted_at}) | sort_by(.submitted_at, .reviewer, .commit_id, .state)' \
+    <<<"$reviews_json" | sha256sum | cut -d' ' -f1)
 fi
 
 # Self-attested agent/model declaration: parsed only from an explicit

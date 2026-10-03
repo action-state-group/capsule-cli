@@ -65,10 +65,11 @@ inputs:
     default: ''
   record-reviews:
     description: >-
-      Record the PR's reviews as review_digest: each review's reviewer login,
-      state, commit and submission time, read with github-token (needs
-      pull-requests: read) and digested on the runner. The logins never enter
-      the capsule as text. See docs/PR-CAPSULE-PROFILE.md.
+      With merge-decision only: record the reviews submitted at or before
+      decided-at as review_digest. Each review's reviewer login, state, commit
+      and submission time is read with github-token (needs pull-requests:
+      read) and digested on the runner; the logins never enter the capsule as
+      text. See docs/PR-CAPSULE-PROFILE.md.
     required: false
     default: 'false'
   merge-decision:
@@ -209,11 +210,21 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         CAPSULE_ID: ${{ steps.seal.outputs.capsule-id }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        MERGE_DECISION: ${{ inputs.merge-decision }}
         CHECKPOINT_STATE: ${{ steps.seal.outputs.checkpoint-state }}
         REPO: ${{ inputs.repo }}
         PR_NUMBER: ${{ inputs.pr-number }}
       run: |
         set -euo pipefail
-        body=$(printf 'Sealed [Agent Action Capsule](https://github.com/action-state-group/agent-action-capsule) `%s`\n\nWitness checkpoint: **%s** at `%s`\n\nVerify with `agent-action-capsule verify` — see README.md, "Verifying a PR capsule".\n' \
-          "$CAPSULE_ID" "$CHECKPOINT_STATE" "https://witness.agentactioncapsule.org")
+        # The two capsules' comments differ in their first words, and both
+        # name the head: a closed-job re-run looks up its parent by the head
+        # capsule's prefix and head SHA, never by "the last comment".
+        if [[ -n "$MERGE_DECISION" ]]; then
+          lead="Sealed the merge decision ($MERGE_DECISION) as an"
+        else
+          lead="Sealed"
+        fi
+        body=$(printf '%s [Agent Action Capsule](https://github.com/action-state-group/agent-action-capsule) `%s` for head `%s`\n\nWitness checkpoint: **%s** at `%s`\n\nVerify with `agent-action-capsule verify` — see README.md, "Verifying a PR capsule".\n' \
+          "$lead" "$CAPSULE_ID" "$HEAD_SHA" "$CHECKPOINT_STATE" "https://witness.agentactioncapsule.org")
         gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" -f body="$body" >/dev/null
