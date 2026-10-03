@@ -191,7 +191,7 @@ capsulectl cll checkpoint publish --profile NAME --checkpoint MMR_SIZE
 capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
 capsulectl result open FILE [--format text|json]
-capsulectl run [args passed to the actionstate plugin, e.g. --dry-run]
+capsulectl run [args passed to the plugin]   # only in a build with -tags actionstate
 capsulectl plugin ls
 capsulectl store migrate --profile NAME [--log-id NEW_LOG_ID]
 capsulectl contract validate FILE --schema PATH_OR_URL [--json]
@@ -225,10 +225,12 @@ plugin trust, profile presence, signing-key-file permissions, and (only with
 checkpoint endpoint. `result open` validates and prints a Result v0
 document's aggregate/coverage statement as text (or `--format json`); the
 Result v0 schema is still DRAFT, so this is a structural check, not schema
-validation, and it stands in for the `capsule-viewer` build. `run` carries no
-flags or licence logic of its own: the base binary only dispatches to a
-discovered `actionstate` plugin, or refuses with an actionable message if
-that plugin is absent or unlicensed.
+validation, and it stands in for the `capsule-viewer` build. `run` exists
+only in a build made with `-tags actionstate`, where it carries no flags or
+licence logic of its own: it dispatches to a discovered `actionstate` plugin,
+or refuses with an actionable message if that plugin is absent or unlicensed.
+The default build, and the release binaries, carry no plugin dispatch: there
+`run` is hidden and answers "run is not available in this build".
 
 Every bundle `bundle`, `disclose`, `permalink` and `countersign request --root`
 build declares the producer's own Ed25519 key in the `producer-key/v1` bundle

@@ -1,10 +1,8 @@
+//go:build actionstate
+
 package cli
 
-import (
-	"errors"
-
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 // actionstatePluginName is the plugin `run` dispatches to. The base binary
 // carries no licence logic of its own (PLUGINS.md rule, restated by this
@@ -16,22 +14,10 @@ import (
 // both causes without the base binary ever inspecting a licence itself.
 const actionstatePluginName = "actionstate"
 
-// pluginRequiredError names a required plugin that discovery did not find.
-// Its message is a fixed, static string carrying no path, secret, or profile
-// detail -- like inputFileError and schemaLoadError, SafeError surfaces it in
-// full instead of collapsing it to the generic ErrInput text, because this is
-// the one case the task requires to reach the operator verbatim.
-type pluginRequiredError struct{ message string }
-
-func (e *pluginRequiredError) Error() string { return e.message }
-
-func pluginRequiredErr(message string) error {
-	return errors.Join(ErrInput, &pluginRequiredError{message: message})
-}
-
 // runCommand is a reserved base-binary command name (registered before
-// addPluginCommands, so it is never shadowed by a discovered launcher): the
-// base binary ships ONLY this dispatch. `--dry-run` and every other flag
+// addPluginCommands, so it is never shadowed by a discovered launcher): a build
+// with the actionstate tag ships ONLY this dispatch. The default build carries
+// run_default.go instead. `--dry-run` and every other flag
 // belong to the actionstate plugin, never parsed here.
 func runCommand() *cobra.Command {
 	return &cobra.Command{
