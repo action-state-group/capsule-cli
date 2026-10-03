@@ -1,0 +1,29 @@
+{
+  "type": "purchase",
+  "demo": true,
+  "channel": "web",
+  "intent": {
+    "verbatim": "Order the cat sticker in my cart at Example Stickers",
+    "asked": {
+      "item": "cat sticker",
+      "quantity": 1
+    },
+    "allowed": [
+      "pay"
+    ]
+  },
+  "who": {
+    "name": "Example Stickers",
+    "domain": "stickers.example"
+  },
+  "terms": {
+    "item": "cat sticker",
+    "quantity": 1,
+    "price_minor": 627,
+    "currency": "USD"
+  },
+  "recourse": {
+    "rail": "card",
+    "refundable": true
+  }
+}

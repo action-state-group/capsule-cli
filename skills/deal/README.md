@@ -1,14 +1,19 @@
 # deal skill
 
 An agent skill ([SKILL.md](SKILL.md)) and the `capsulectl deal` command group
-behind it. Before an agent pays, books, signs or shares on a user's behalf, it
-checks the step against what the user asked and who they are really dealing
-with, and shows the difference.
+behind it. The skill is written as procedures (purchase, booking, signature,
+disclosure) whose final-review step is `deal open` plus `deal check`: before
+an agent pays, books, signs or shares on a user's behalf, it checks the step
+against what the user asked and who they are really dealing with, and shows
+the difference. The trigger is the action, never the counterparty: a retail
+checkout from a known merchant at a fixed price is in scope.
 
-The check is advisory. It seals what was asked, proposed, approved and done,
-and the host elects to call it; its `pause` verdict is advice to the host,
-not a lock. It holds an action only where the host runs `deal check` from a
-pre-action hook. Without one, a skipped check still shows in the report.
+Invocation is advisory, not enforced. The check seals what was asked,
+proposed, approved and done, and the host elects to call it; its `pause`
+verdict is advice to the host, not a lock. It holds an action only where the
+host runs `deal check` from a pre-action hook. Without one, a skipped check
+still shows in the report, and an action with no deal at all shows in
+`deal reconcile` ([RECONCILE.md](RECONCILE.md)).
 
 ## Commands
 
@@ -24,6 +29,7 @@ pre-action hook. Without one, a skipped check still shows in the report.
 | `deal note --kind intent --input FILE` | Seals a change to what the user asked or allowed. |
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
+| `deal reconcile --executions FILE [--from T] [--to T]` | Reads the agent host's execution records (tool calls of the agent and its sub-tasks, in the format in [RECONCILE.md](RECONCILE.md)) and lists each consequential action that has no deal record, with what the pass cannot see. Seals nothing; exits 3 when anything is unrecorded. |
 
 Each step is a Capsule in the profile's store. Each deal has its own
 checkpointed log (`deal/<deal_id>`) in the same SQLite file, and each step
@@ -144,3 +150,10 @@ something.
 `scripts/run-demo.sh [report.html]` (set `CAPSULECTL` to use a release
 binary instead of building from source). The card it must produce is in
 `demo/jet-ski/expected-card.txt`; the Go tests assert the same card.
+
+`demo/retail-checkout/` is a DEMO retail order from a known merchant at a
+fixed price, where nothing differs. The user's request does not name the
+skill. The Go tests walk the Purchase procedure in SKILL.md step by step
+against it: its final-review step seals the deal, the check passes quietly,
+and a `deal reconcile` over the host's execution records for the same period
+lists no unrecorded action.
