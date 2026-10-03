@@ -303,6 +303,25 @@ points at that message.
 Attach the file or hand it over when the user asks. Never upload or host it
 anywhere.
 
+**7. Deliver the receipt by email**, when the deal closes or the user asks:
+
+```sh
+capsulectl --profile deal deal report --deal ID --email receipt.eml
+```
+
+This writes a ready-to-send message with no sender or recipient: a short
+body (what was asked, what the agent did, anomalies, the assurance rung,
+and the command to check it), the same report as a plain HTML body that
+reads on a phone with nothing to download, and `receipt.html` plus
+`bundle.json` attached. The output also carries `subject`, `text` and
+`html` for an email tool that takes fields instead of a file. Send it with
+the agent host's own email tool to the user's own address. Never send it
+through any other service, and never paste its contents anywhere else. The
+assurance line says "Sealed by my agent" unless a configured witness signed
+a receipt for the deal's checkpoint, and then "Witnessed". The email copy
+cannot check itself; the attached page and `capsulectl verify --bundle
+bundle.json` can.
+
 ## Daily reconciliation
 
 Once a day (a scheduled task on the host is enough), run:

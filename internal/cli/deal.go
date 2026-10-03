@@ -948,6 +948,8 @@ func dealCloseCommand() *cobra.Command {
 func dealReportCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "report", Short: "Report the deal in three parts (what you asked, what the agent did, anomalies); --html writes one local page", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		htmlPath, _ := c.Flags().GetString("html")
+		emailPath, _ := c.Flags().GetString("email")
+		bundlePath, _ := c.Flags().GetString("bundle")
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			report := buildDealReport(events)
 			lines := make([]string, 0, len(events))
@@ -962,25 +964,56 @@ func dealReportCommand() *cobra.Command {
 				"deal_id": dealID, "demo": events[0].Event.Open.Demo, "outcome": outcome,
 				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "trail": strings.Join(lines, "\n"),
 			}
+			if htmlPath == "" && emailPath == "" && bundlePath == "" {
+				return output(c, out)
+			}
+			b, err := s.dealReportBundle(ctx, events, report)
+			if err != nil {
+				return err
+			}
+			page, err := dealReportHTML(b)
+			if err != nil {
+				return err
+			}
+			bundle, err := json.Marshal(b)
+			if err != nil {
+				return err
+			}
+			assurance, err := s.dealAssurance(ctx, b)
+			if err != nil {
+				return err
+			}
+			out["assurance"] = assurance
 			if htmlPath != "" {
-				b, err := s.dealReportBundle(ctx, events, report)
-				if err != nil {
-					return err
-				}
-				page, err := dealReportHTML(b)
-				if err != nil {
-					return err
-				}
 				if err = atomicFile(htmlPath, []byte(page), false); err != nil {
 					return err
 				}
 				out["html"] = htmlPath
+			}
+			if bundlePath != "" {
+				if err = atomicFile(bundlePath, bundle, false); err != nil {
+					return err
+				}
+				out["bundle"] = bundlePath
+			}
+			if emailPath != "" {
+				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Did: report.Did, Anomalies: report.Anomalies, Steps: len(events)}
+				eml, subject, text, htmlBody, err := dealEmail(view, []byte(page), bundle, dealClock())
+				if err != nil {
+					return err
+				}
+				if err = atomicFile(emailPath, eml, false); err != nil {
+					return err
+				}
+				out["email"] = map[string]any{"eml": emailPath, "subject": subject, "text": text, "html": htmlBody, "attachments": []string{"receipt.html", "bundle.json"}}
 			}
 			return output(c, out)
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("html", "", "Write the report as one local, self-contained page to this new file")
+	cmd.Flags().String("email", "", "Write the receipt as a ready-to-send email (.eml, no sender or recipient) to this new file, for the agent host's own email tool to send")
+	cmd.Flags().String("bundle", "", "Write the deal's Evidence Bundle (for `capsulectl verify --bundle`) to this new file")
 	return cmd
 }
 
