@@ -43,9 +43,18 @@ script outside this repository that writes these lines.
 | `amount_minor` | no | Integer minor units (cents). |
 | `currency` | no | 3-letter code. |
 | `merchant_domain` | no | The site the action was on. |
-| `reference` | no | Order or confirmation reference. |
+| `reference_sha256` | no | SHA-256 (64 lowercase hex) of the order or confirmation reference, never the reference itself. |
 | `status` | yes | `succeeded`, `failed` or `unknown` (the host cannot tell). |
 | `deal_id` | no | The deal the agent said this belongs to, when the host recorded it. |
+
+**Metadata and digests only.** A reader passes what a tool call *was*, never
+what it carried: no form bodies, no card or payment fields, no verification
+codes, no message text. There is no field for any of them, and unknown fields
+refuse the file. `id`, `task`, `parent_task` and `tool` must look like
+identifiers (letters, digits and `._:@/+-`, no spaces), and `merchant_domain`
+like a host name; a value with a card-number-like run of digits is refused.
+The refusal names the line and the field, never the value. The pass reads
+the file and writes nothing to the store.
 
 `action` is a mechanical mapping the reader makes from the tool call alone:
 what it does, never who the other side is. A payment call, a submit on a
@@ -60,7 +69,7 @@ Example (a parent agent that starts a browser task, which pays):
 ```json
 {"id":"c1","at":"2026-09-27T18:00:00Z","task":"t-main","tool":"spawn_task","action":"other","status":"succeeded"}
 {"id":"c2","at":"2026-09-27T18:00:30Z","task":"t-browser","parent_task":"t-main","tool":"fill_form","action":"other","status":"succeeded"}
-{"id":"c3","at":"2026-09-27T18:01:00Z","task":"t-browser","parent_task":"t-main","tool":"make_payment","action":"pay","amount_minor":627,"currency":"USD","merchant_domain":"stickers.example","reference":"ORDER-1001","status":"succeeded"}
+{"id":"c3","at":"2026-09-27T18:01:00Z","task":"t-browser","parent_task":"t-main","tool":"make_payment","action":"pay","amount_minor":627,"currency":"USD","merchant_domain":"stickers.example","reference_sha256":"71c270b6a6356140ce4d74549522926ab8c7f3f5f2a65d0589f99364bb823ab0","status":"succeeded"}
 ```
 
 ## Optional input: the host's approvals
@@ -73,7 +82,7 @@ per line:
 
 | Field | Required | Meaning |
 |---|---|---|
-| `id` | yes | The host's id for the approval request. |
+| `id` | yes | The host's id for the approval request (an identifier, as above). |
 | `at` | yes | When it was raised, RFC 3339. |
 | `task` | no | The task or sub-task that raised it. |
 | `execution_id` | no | The execution record it approved, when the host links them. |

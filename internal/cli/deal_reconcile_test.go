@@ -122,7 +122,7 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 			proceed = check["proceed"] == true
 		case strings.Contains(step, "place the order"):
 			require.True(t, proceed, "the order is placed only after the final review")
-			host("c3", "t-browser", "make_payment", "pay", `,"amount_minor":627,"currency":"USD","merchant_domain":"stickers.example","reference":"ORDER-1001"`)
+			host("c3", "t-browser", "make_payment", "pay", `,"amount_minor":627,"currency":"USD","merchant_domain":"stickers.example","reference_sha256":"71c270b6a6356140ce4d74549522926ab8c7f3f5f2a65d0589f99364bb823ab0"`)
 		case strings.Contains(step, "`deal note --kind act`"):
 			act := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", filepath.Join(retailDemo, "act-pay.json"))
 			assert.Equal(t, false, act["unchecked"])
@@ -212,4 +212,46 @@ func TestDealReconcileMatchesAChecksDealAndRefusesBadRecords(t *testing.T) {
 		_, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", writeJSON(t, bad))
 		require.ErrorIs(t, err, ErrInput, bad)
 	}
+}
+
+// The reader takes metadata and digests only. A card number, a code or form
+// content in an execution or approval record is refused, and never reaches
+// the output, the error, or the store.
+func TestDealReconcileNeverCarriesACardNumber(t *testing.T) {
+	dir := dealFixture(t)
+	const pan = "4111111111111111"
+	spaced := "4111 1111 1111 1111"
+	good := `{"id":"c1","at":"2026-09-27T18:05:00Z","task":"t-browser","tool":"make_payment","action":"pay","amount_minor":627,"currency":"USD","status":"succeeded"`
+	for _, bad := range []string{
+		`{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","status":"succeeded","card_number":"` + pan + `"}`,
+		`{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","status":"succeeded","form_body":{"card":"` + spaced + `","cvc":"123"}}`,
+		`{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","status":"succeeded","verification_code":"482913"}`,
+		`{"id":"` + pan + `","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","status":"succeeded"}`,
+		`{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment card ` + spaced + `","action":"pay","status":"succeeded"}`,
+		`{"id":"c1","at":"2026-09-27T18:05:00Z","task":"t-` + pan + `","tool":"make_payment","action":"pay","status":"succeeded"}`,
+		`{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","status":"succeeded","merchant_domain":"pay.example/` + pan + `"}`,
+		`{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","status":"succeeded","reference_sha256":"` + pan + `"}`,
+	} {
+		out, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", writeJSON(t, good+"}\n"+bad))
+		require.ErrorIs(t, err, ErrInput, bad)
+		assert.NotContains(t, out, pan, bad)
+		assert.NotContains(t, out, spaced, bad)
+		assert.NotContains(t, SafeError(err), pan, bad)
+		assert.NotContains(t, err.Error(), pan, bad)
+		assert.NotContains(t, err.Error(), "482913", bad)
+	}
+	for _, bad := range []string{
+		`{"id":"a1","at":"2026-09-27T18:00:00Z","execution_id":"` + pan + `","decision":"approved"}`,
+		`{"id":"a1","at":"2026-09-27T18:00:00Z","decision":"approved","card_last4":"1111","card":"` + pan + `"}`,
+	} {
+		out, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", writeJSON(t, good+"}"), "--approvals", writeJSON(t, bad))
+		require.ErrorIs(t, err, ErrInput, bad)
+		assert.NotContains(t, out, pan, bad)
+		assert.NotContains(t, err.Error(), pan, bad)
+	}
+	// Nothing was written to the store either: reconcile seals nothing.
+	raw, err := os.ReadFile(filepath.Join(dir, "deal.db"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), pan)
+	assert.NotContains(t, string(raw), spaced)
 }

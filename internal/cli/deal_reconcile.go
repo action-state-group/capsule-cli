@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -27,22 +28,25 @@ import (
 // host-specific code: a host's tool-call and execution tables are turned into
 // that format outside this repository, and the tests use fixture files.
 
-// dealExecutionRecord is one executed tool call, as the agent host recorded it.
-// Action is the reader's mechanical mapping of the call to a point of no
-// return, or "other".
+// dealExecutionRecord is one executed tool call, as the agent host recorded it:
+// metadata and digests only. Action is the reader's mechanical mapping of the
+// call to a point of no return, or "other". There is no field for a form
+// body, a card or payment detail, or a code; unknown fields are refused, and
+// the identifier fields must look like identifiers (see guardMetadata), so
+// such content cannot ride in on them either.
 type dealExecutionRecord struct {
-	ID             string `json:"id"`
-	At             string `json:"at"`
-	Task           string `json:"task,omitempty"`
-	ParentTask     string `json:"parent_task,omitempty"`
-	Tool           string `json:"tool"`
-	Action         string `json:"action"`
-	AmountMinor    *int64 `json:"amount_minor,omitempty"`
-	Currency       string `json:"currency,omitempty"`
-	MerchantDomain string `json:"merchant_domain,omitempty"`
-	Reference      string `json:"reference,omitempty"`
-	Status         string `json:"status"`
-	DealID         string `json:"deal_id,omitempty"`
+	ID              string `json:"id"`
+	At              string `json:"at"`
+	Task            string `json:"task,omitempty"`
+	ParentTask      string `json:"parent_task,omitempty"`
+	Tool            string `json:"tool"`
+	Action          string `json:"action"`
+	AmountMinor     *int64 `json:"amount_minor,omitempty"`
+	Currency        string `json:"currency,omitempty"`
+	MerchantDomain  string `json:"merchant_domain,omitempty"`
+	ReferenceSHA256 string `json:"reference_sha256,omitempty"`
+	Status          string `json:"status"`
+	DealID          string `json:"deal_id,omitempty"`
 
 	at time.Time
 }
@@ -125,6 +129,12 @@ func readHostApprovals(path string) ([]dealHostApproval, error) {
 			return nil, inputError(fmt.Sprintf("approval record on line %d: at must be an RFC 3339 time", line))
 		}
 		a.at = at.UTC()
+		if err := guardMetadata(map[string]string{"id": a.ID, "task": a.Task, "execution_id": a.ExecutionID, "merchant_domain": a.MerchantDomain}, "merchant_domain"); err != nil {
+			return nil, inputError(fmt.Sprintf("approval record on line %d: %s", line, err))
+		}
+		if a.ID == "" {
+			return nil, inputError(fmt.Sprintf("approval record on line %d: id is required", line))
+		}
 		if !slices.Contains([]string{"approved", "denied", "unknown"}, a.Decision) {
 			return nil, inputError(fmt.Sprintf("approval record on line %d: decision must be approved, denied or unknown", line))
 		}
@@ -178,7 +188,46 @@ var dealConsequentialActions = func() []string {
 	return all
 }()
 
+var (
+	metadataToken       = regexp.MustCompile(`^[A-Za-z0-9._:@/+-]{1,200}$`)
+	metadataHost        = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
+	panLike             = regexp.MustCompile(`\d(?:[ -]?\d){12,18}`)
+	execReferenceSHA256 = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	currencyCode        = regexp.MustCompile(`^[A-Za-z]{3}$`)
+)
+
+// guardMetadata refuses an identifier field that is not shaped like one, or
+// that carries a card-number-like run of digits. The refusal names the field,
+// never the value.
+func guardMetadata(fields map[string]string, hosts ...string) error {
+	for name, v := range fields {
+		if v == "" {
+			continue
+		}
+		shape := metadataToken
+		if slices.Contains(hosts, name) {
+			shape = metadataHost
+		}
+		if !shape.MatchString(v) || panLike.MatchString(v) {
+			return errors.New(name + " must be an identifier (metadata only: no card numbers, codes or form content)")
+		}
+	}
+	return nil
+}
+
 func (r *dealExecutionRecord) validate() error {
+	if err := guardMetadata(map[string]string{"id": r.ID, "task": r.Task, "parent_task": r.ParentTask, "tool": r.Tool, "merchant_domain": r.MerchantDomain}, "merchant_domain"); err != nil {
+		return err
+	}
+	if r.ID == "" {
+		return errors.New("id is required")
+	}
+	if r.ReferenceSHA256 != "" && !execReferenceSHA256.MatchString(r.ReferenceSHA256) {
+		return errors.New("reference_sha256 must be 64 lowercase hex digits")
+	}
+	if r.Currency != "" && !currencyCode.MatchString(r.Currency) {
+		return errors.New("currency must be a 3-letter code")
+	}
 	at, err := time.Parse(time.RFC3339, r.At)
 	if err != nil {
 		return errors.New("at must be an RFC 3339 time")
@@ -291,7 +340,7 @@ func (step *dealCoverStep) covers(rec dealExecutionRecord, window time.Duration)
 
 func (rec dealExecutionRecord) row() map[string]any {
 	m := map[string]any{"id": rec.ID, "at": rec.At, "tool": rec.Tool, "action": rec.Action, "status": rec.Status}
-	for k, v := range map[string]string{"task": rec.Task, "parent_task": rec.ParentTask, "currency": rec.Currency, "merchant_domain": rec.MerchantDomain, "reference": rec.Reference, "deal_id": rec.DealID} {
+	for k, v := range map[string]string{"task": rec.Task, "parent_task": rec.ParentTask, "currency": rec.Currency, "merchant_domain": rec.MerchantDomain, "reference_sha256": rec.ReferenceSHA256, "deal_id": rec.DealID} {
 		if v != "" {
 			m[k] = v
 		}

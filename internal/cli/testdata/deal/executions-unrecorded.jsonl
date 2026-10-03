@@ -1,7 +1,7 @@
 {"id":"c1","at":"2026-09-27T17:10:00Z","task":"t-main","tool":"spawn_task","action":"other","status":"succeeded"}
 {"id":"c2","at":"2026-09-27T17:11:00Z","task":"t-main","tool":"steer_task","action":"other","status":"succeeded"}
 {"id":"c3","at":"2026-09-27T17:12:00Z","task":"t-browser","parent_task":"t-main","tool":"fill_form","action":"other","status":"succeeded"}
-{"id":"c4","at":"2026-09-27T17:13:00Z","task":"t-browser","parent_task":"t-main","tool":"make_payment","action":"pay","amount_minor":627,"currency":"USD","merchant_domain":"stickers.example","reference":"ORDER-1001","status":"succeeded"}
+{"id":"c4","at":"2026-09-27T17:13:00Z","task":"t-browser","parent_task":"t-main","tool":"make_payment","action":"pay","amount_minor":627,"currency":"USD","merchant_domain":"stickers.example","reference_sha256":"71c270b6a6356140ce4d74549522926ab8c7f3f5f2a65d0589f99364bb823ab0","status":"succeeded"}
 
 {"id":"c5","at":"2026-09-27T17:20:00Z","task":"t-browser-2","parent_task":"t-main","tool":"make_payment","action":"pay","amount_minor":1500,"currency":"USD","merchant_domain":"cards.example","status":"failed"}
 {"id":"c6","at":"2026-09-25T09:00:00Z","task":"t-old","tool":"make_payment","action":"pay","amount_minor":900,"currency":"USD","status":"succeeded"}
