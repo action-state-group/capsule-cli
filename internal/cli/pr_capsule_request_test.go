@@ -3,6 +3,7 @@ package cli
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -187,4 +188,165 @@ func TestPRCapsuleRequestRejectsMalformedPromptDigest(t *testing.T) {
 	require.NoError(t, json.Unmarshal(record.Capsule, &payload))
 	refs, _ := payload["references"].([]any)
 	assert.Len(t, refs, 2, "the malformed prompt digest must be dropped, leaving only diff_digest and ci_result_digest")
+}
+
+// prCapsuleBaseEnv is the head-capsule environment every profile test starts
+// from; each test adds the variables its case is about.
+func prCapsuleBaseEnv(dir, base, head string) map[string]string {
+	return map[string]string{
+		"CAPSULE_PR_REPO":      "octo-org/example-repo",
+		"CAPSULE_PR_NUMBER":    "45",
+		"CAPSULE_PR_HEAD_SHA":  head,
+		"CAPSULE_PR_BASE_SHA":  base,
+		"CAPSULE_PR_AUTHOR":    "octocat",
+		"CAPSULE_CI_JOBS_JSON": `{"quality":"success","test":"success"}`,
+		"CAPSULE_PR_REPO_DIR":  dir,
+	}
+}
+
+// sealPRCapsuleRequest decodes and seals a request with capsule-cli's own
+// parseRequest/seal and returns the sealed payload.
+func sealPRCapsuleRequest(t *testing.T, raw []byte) (string, map[string]any) {
+	t.Helper()
+	r, e := parseRequest(raw)
+	require.NoError(t, e)
+	_, private, e := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, e)
+	record, e := seal(r, private)
+	require.NoError(t, e)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(record.Capsule, &payload))
+	return record.CapsuleID, payload
+}
+
+func referenceDigest(t *testing.T, payload map[string]any, purpose string) string {
+	t.Helper()
+	refs, _ := payload["references"].([]any)
+	for _, ref := range refs {
+		m, _ := ref.(map[string]any)
+		if m["citation_purpose"] == purpose {
+			digest, _ := m["digest"].(string)
+			return digest
+		}
+	}
+	return ""
+}
+
+func runPRCapsuleRequestFails(t *testing.T, env map[string]string) string {
+	t.Helper()
+	cmd := exec.Command("bash", filepath.Join(repoRoot(t), "scripts", "pr-capsule-request.sh"))
+	cmd.Env = os.Environ()
+	env["CAPSULE_REQUEST_OUTPUT"] = filepath.Join(t.TempDir(), "request.json")
+	for k, v := range env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	out, e := cmd.CombinedOutput()
+	require.Error(t, e, "pr-capsule-request.sh accepted an invalid request: %s", out)
+	return string(out)
+}
+
+// TestPRCapsuleReviewDigest pins the profile's review_digest: the logins are
+// committed only as a digest, the API's ordering does not change it, and the
+// recompute documented in docs/PR-CAPSULE-PROFILE.md reproduces it.
+func TestPRCapsuleReviewDigest(t *testing.T) {
+	dir, base, head := gitRepoWithTwoCommits(t)
+	reviews := `[{"reviewer":"reviewer-b","state":"APPROVED","commit_id":"` + head + `","submitted_at":"2026-10-02T10:05:00Z"},` +
+		`{"reviewer":"reviewer-a","state":"COMMENTED","commit_id":"` + head + `","submitted_at":"2026-10-02T10:00:00Z"}]`
+	reordered := `[{"submitted_at":"2026-10-02T10:00:00Z","commit_id":"` + head + `","state":"COMMENTED","reviewer":"reviewer-a"},` +
+		`{"reviewer":"reviewer-b","state":"APPROVED","commit_id":"` + head + `","submitted_at":"2026-10-02T10:05:00Z"}]`
+
+	env := prCapsuleBaseEnv(dir, base, head)
+	env["CAPSULE_PR_REVIEWS_JSON"] = reviews
+	raw := runPRCapsuleRequest(t, env)
+	assert.NotContains(t, string(raw), "reviewer-a", "a reviewer's login must enter the request only as a digest")
+	id, payload := sealPRCapsuleRequest(t, raw)
+	digest := referenceDigest(t, payload, "review_digest")
+	require.Regexp(t, `^[0-9a-f]{64}$`, digest)
+
+	env = prCapsuleBaseEnv(dir, base, head)
+	env["CAPSULE_PR_REVIEWS_JSON"] = reordered
+	reorderedID, _ := sealPRCapsuleRequest(t, runPRCapsuleRequest(t, env))
+	assert.Equal(t, id, reorderedID, "the order reviews arrive in must not change the capsule")
+
+	canonical := `[{"commit_id":"` + head + `","reviewer":"reviewer-a","state":"COMMENTED","submitted_at":"2026-10-02T10:00:00Z"},` +
+		`{"commit_id":"` + head + `","reviewer":"reviewer-b","state":"APPROVED","submitted_at":"2026-10-02T10:05:00Z"}]` + "\n"
+	sum := sha256.Sum256([]byte(canonical))
+	assert.Equal(t, hex.EncodeToString(sum[:]), digest, "the documented canonical form must reproduce review_digest")
+}
+
+// TestPRCapsuleMergeDecision seals the closed-event capsule: decide, the
+// disposition mapped from the decision and the deciding account's type, and
+// a confirms chain to the head capsule.
+func TestPRCapsuleMergeDecision(t *testing.T) {
+	dir, base, head := gitRepoWithTwoCommits(t)
+	parentID, _ := sealPRCapsuleRequest(t, runPRCapsuleRequest(t, prCapsuleBaseEnv(dir, base, head)))
+
+	cases := []struct {
+		decision, byType, wantDecision, wantVerdict, wantApprover string
+		wantHuman                                                 bool
+	}{
+		{"merged", "User", "accept", "executed", "human", true},
+		{"merged", "Bot", "accept", "executed", "policy", false},
+		{"closed", "User", "reject", "denied", "human", true},
+	}
+	for _, c := range cases {
+		t.Run(c.decision+"-"+c.byType, func(t *testing.T) {
+			env := prCapsuleBaseEnv(dir, base, head)
+			env["CAPSULE_PR_MERGE_DECISION"] = c.decision
+			env["CAPSULE_PR_DECIDED_AT"] = "2026-10-02T11:00:00Z"
+			env["CAPSULE_PR_DECIDED_BY_TYPE"] = c.byType
+			env["CAPSULE_PR_PARENT_CAPSULE_ID"] = parentID
+			id, payload := sealPRCapsuleRequest(t, runPRCapsuleRequest(t, env))
+			assert.NotEqual(t, parentID, id)
+			assert.Equal(t, "decide", payload["action_type"])
+			disposition, _ := payload["disposition"].(map[string]any)
+			assert.Equal(t, c.wantDecision, disposition["decision"])
+			assert.Equal(t, c.wantVerdict, disposition["verdict_class"])
+			assert.Equal(t, c.wantApprover, disposition["approver"])
+			assert.Equal(t, c.wantHuman, disposition["human_disposed"])
+			chain, _ := payload["chain"].(map[string]any)
+			assert.Equal(t, parentID, chain["parent_capsule_id"])
+			assert.Equal(t, "confirms", chain["relation"])
+			assurance, _ := payload["assurance"].(map[string]any)
+			assert.Equal(t, "chained", assurance["ledger_mode"])
+		})
+	}
+}
+
+// TestPRCapsuleMergeDecisionRejectsBadInput keeps the script's own checks: a
+// decision outside the profile, a missing decided-at, an unknown account type,
+// a malformed parent id, and a parent id on a head capsule all fail before a
+// request is written.
+func TestPRCapsuleMergeDecisionRejectsBadInput(t *testing.T) {
+	dir, base, head := gitRepoWithTwoCommits(t)
+	parent := hex.EncodeToString(make([]byte, 32))
+	decided := func(extra map[string]string) map[string]string {
+		env := prCapsuleBaseEnv(dir, base, head)
+		env["CAPSULE_PR_MERGE_DECISION"] = "merged"
+		env["CAPSULE_PR_DECIDED_AT"] = "2026-10-02T11:00:00Z"
+		env["CAPSULE_PR_DECIDED_BY_TYPE"] = "User"
+		for k, v := range extra {
+			env[k] = v
+		}
+		return env
+	}
+	assert.Contains(t, runPRCapsuleRequestFails(t, decided(map[string]string{"CAPSULE_PR_MERGE_DECISION": "approved"})), "merged or closed")
+	assert.Contains(t, runPRCapsuleRequestFails(t, decided(map[string]string{"CAPSULE_PR_DECIDED_AT": ""})), "CAPSULE_PR_DECIDED_AT")
+	assert.Contains(t, runPRCapsuleRequestFails(t, decided(map[string]string{"CAPSULE_PR_DECIDED_BY_TYPE": "Organization"})), "User or Bot")
+	assert.Contains(t, runPRCapsuleRequestFails(t, decided(map[string]string{"CAPSULE_PR_PARENT_CAPSULE_ID": "not-hex"})), "64 lowercase hex")
+	env := prCapsuleBaseEnv(dir, base, head)
+	env["CAPSULE_PR_PARENT_CAPSULE_ID"] = parent
+	assert.Contains(t, runPRCapsuleRequestFails(t, env), "only with CAPSULE_PR_MERGE_DECISION")
+}
+
+// TestPRCapsuleIDIsSignerIndependent pins what lets a PR capsule sealed in CI
+// be cited from another book: the capsule_id commits the payload, not the
+// signing key, so publishing the same request under the book's own key gives
+// the id the PR comment named.
+func TestPRCapsuleIDIsSignerIndependent(t *testing.T) {
+	dir, base, head := gitRepoWithTwoCommits(t)
+	raw := runPRCapsuleRequest(t, prCapsuleBaseEnv(dir, base, head))
+	first, _ := sealPRCapsuleRequest(t, raw)
+	second, _ := sealPRCapsuleRequest(t, raw)
+	assert.Equal(t, first, second)
 }

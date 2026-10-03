@@ -24,18 +24,21 @@ name: Seal PR Capsule
 
 on:
   pull_request:
+    # closed seals the merge-decision capsule (docs/PR-CAPSULE-PROFILE.md).
+    types: [opened, synchronize, reopened, closed]
 
 permissions:
   contents: read
 
 jobs:
   your_existing_ci_job:
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - run: echo "replace with your repo's real build/test steps"
 
   seal-pr-capsule:
-    if: always() && github.event.pull_request.head.repo.full_name == github.repository
+    if: always() && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     needs: [your_existing_ci_job]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -57,6 +60,67 @@ jobs:
           pr-author: ${{ github.event.pull_request.user.login }}
           pr-body: ${{ github.event.pull_request.body }}
           ci-jobs-json: ${{ format('{{"your_existing_ci_job":"{0}"}}', needs.your_existing_ci_job.result) }}
+          record-reviews: 'true'
+          producer-signing-key: ${{ secrets.CAPSULE_PRODUCER_SIGNING_KEY }}
+          producer-trusted-key: ${{ vars.CAPSULE_PRODUCER_TRUSTED_KEY }}
+          checkpoint-signing-key: ${{ secrets.CAPSULE_CHECKPOINT_SIGNING_KEY }}
+          checkpoint-trusted-key: ${{ vars.CAPSULE_CHECKPOINT_TRUSTED_KEY }}
+          witness-public-key: ${{ vars.CAPSULE_WITNESS_PUBLIC_KEY }}
+
+  # The merge decision. Same-repo PRs only, for the same reason as above: a
+  # fork PR's closed event carries no repository secrets either. Do not move
+  # this to pull_request_target to reach forks; that event runs with secrets
+  # in the base repository's context.
+  seal-pr-decision:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The CI conclusions the head commit carried when the PR closed, in the
+      # same job name -> conclusion shape the head capsule digested, and the
+      # head capsule this decision confirms: the capsule id the action's own
+      # comment last named. Both are conveniences; a verifier rechecks them
+      # (docs/PR-CAPSULE-PROFILE.md, "How a verifier checks it").
+      - id: prior
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          ci=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/check-runs" \
+            --jq '[.check_runs[] | select(.name == "your_existing_ci_job") | {(.name): .conclusion}] | add // {}')
+          parent=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("Sealed [Agent Action Capsule]"))) | .body' \
+            | grep -oE '`[0-9a-f]{64}`' | tail -n1 | tr -d '`' || true)
+          {
+            echo "ci-jobs-json=${ci}"
+            echo "parent-capsule-id=${parent}"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: action-state-group/capsule-cli@REPLACE_WITH_PINNED_TAG_OR_SHA
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repo: ${{ github.repository }}
+          pr-number: ${{ github.event.pull_request.number }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          pr-author: ${{ github.event.pull_request.user.login }}
+          ci-jobs-json: ${{ steps.prior.outputs.ci-jobs-json }}
+          record-reviews: 'true'
+          merge-decision: ${{ github.event.pull_request.merged && 'merged' || 'closed' }}
+          decided-at: ${{ github.event.pull_request.merged && github.event.pull_request.merged_at || github.event.pull_request.closed_at }}
+          decided-by-type: ${{ github.event.pull_request.merged && github.event.pull_request.merged_by.type || github.event.sender.type }}
+          parent-capsule-id: ${{ steps.prior.outputs.parent-capsule-id }}
           producer-signing-key: ${{ secrets.CAPSULE_PRODUCER_SIGNING_KEY }}
           producer-trusted-key: ${{ vars.CAPSULE_PRODUCER_TRUSTED_KEY }}
           checkpoint-signing-key: ${{ secrets.CAPSULE_CHECKPOINT_SIGNING_KEY }}

@@ -2,7 +2,9 @@ name: 'Seal PR Capsule'
 description: >-
   Seals one Agent Action Capsule per pull request — repo, PR number, head SHA,
   declared author, self-attested agent/model if declared, and sha256 digests
-  of the diff/prompt/CI result — anchors it to the free public witness, and
+  of the diff/prompt/CI result/reviews — and, on the closed event, a second
+  capsule recording the merge decision (docs/PR-CAPSULE-PROFILE.md). Anchors
+  each to the free public witness, and
   posts the capsule_id as a PR comment. The diff, prompt, and CI output are
   digested on the runner; only the digests are ever written to the capsule,
   the witness, or the comment.
@@ -61,6 +63,33 @@ inputs:
     description: 'Bearer token, only needed for an enrolled (non-free) submitter'
     required: false
     default: ''
+  record-reviews:
+    description: >-
+      Record the PR's reviews as review_digest: each review's reviewer login,
+      state, commit and submission time, read with github-token (needs
+      pull-requests: read) and digested on the runner. The logins never enter
+      the capsule as text. See docs/PR-CAPSULE-PROFILE.md.
+    required: false
+    default: 'false'
+  merge-decision:
+    description: >-
+      Set only on the pull_request closed event: merged | closed. Seals the
+      decision capsule (action_type decide) instead of the head capsule.
+      Pass the event's merged flag mapped to these two values.
+    required: false
+    default: ''
+  decided-at:
+    description: 'With merge-decision: the event''s merged_at (merged) or closed_at (closed). It is the decision capsule''s timestamp.'
+    required: false
+    default: ''
+  decided-by-type:
+    description: 'With merge-decision: the deciding account''s type, User or Bot (merged_by.type, or sender.type for a close). A Bot decides under policy, not as a human.'
+    required: false
+    default: ''
+  parent-capsule-id:
+    description: 'With merge-decision, optional: the head capsule this decision confirms (64 hex). Recorded as a confirms chain.'
+    required: false
+    default: ''
   post-comment:
     description: 'Post the capsule_id as a PR comment'
     required: false
@@ -79,6 +108,13 @@ outputs:
   artifact-path:
     description: 'Path to the full artifact.Record JSON (input for `capsulectl verify`)'
     value: ${{ steps.seal.outputs.artifact-path }}
+  request-path:
+    description: >-
+      Path to the capsule-seal-request/v1 JSON the capsule was sealed from
+      (digests only). Publishing it into a durable evidence book with
+      `capsulectl publish --request` yields the same capsule_id; see
+      docs/PR-CAPSULE-PROFILE.md, "In a report".
+    value: ${{ steps.seal.outputs.request-path }}
 
 runs:
   using: composite
@@ -108,7 +144,22 @@ runs:
         CAPSULE_CI_JOBS_JSON: ${{ inputs.ci-jobs-json }}
         CAPSULE_PR_REPO_DIR: ${{ github.workspace }}
         CAPSULE_REQUEST_OUTPUT: ${{ runner.temp }}/pr-capsule-request.json
-      run: ${{ github.action_path }}/scripts/pr-capsule-request.sh
+        CAPSULE_PR_MERGE_DECISION: ${{ inputs.merge-decision }}
+        CAPSULE_PR_DECIDED_AT: ${{ inputs.decided-at }}
+        CAPSULE_PR_DECIDED_BY_TYPE: ${{ inputs.decided-by-type }}
+        CAPSULE_PR_PARENT_CAPSULE_ID: ${{ inputs.parent-capsule-id }}
+        RECORD_REVIEWS: ${{ inputs.record-reviews }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        # The reviews are read into the environment of the script only; the
+        # script digests them and never writes the logins out.
+        if [[ "$RECORD_REVIEWS" == "true" ]]; then
+          CAPSULE_PR_REVIEWS_JSON=$(gh api --paginate "repos/${CAPSULE_PR_REPO}/pulls/${CAPSULE_PR_NUMBER}/reviews" \
+            --jq '.[] | {reviewer: .user.login, state, commit_id, submitted_at}' | jq -s -c .)
+          export CAPSULE_PR_REVIEWS_JSON
+        fi
+        "${{ github.action_path }}/scripts/pr-capsule-request.sh"
 
     - name: Seal, publish, and anchor to the free witness
       id: seal
@@ -125,6 +176,7 @@ runs:
         CAPSULE_LOG_REPO: ${{ inputs.repo }}
         CAPSULE_LOG_PR_NUMBER: ${{ inputs.pr-number }}
         CAPSULE_LOG_HEAD_SHA: ${{ inputs.head-sha }}
+        CAPSULE_LOG_DECISION: ${{ inputs.merge-decision }}
         CAPSULE_STORE_DIR: ${{ runner.temp }}/pr-capsule-store
         CAPSULE_PROFILE_HOME: ${{ runner.temp }}/pr-capsule-profile-home
         CAPSULE_OUTPUT_DIR: ${{ runner.temp }}/pr-capsule-out
@@ -138,7 +190,7 @@ runs:
         # hard-truncate after normalizing rather than merely lowercasing and
         # hoping the result fits.
         short_sha="${CAPSULE_LOG_HEAD_SHA:0:12}"
-        raw_log_id="gh-pr-capsule.${CAPSULE_LOG_REPO}.pr${CAPSULE_LOG_PR_NUMBER}.${short_sha}"
+        raw_log_id="gh-pr-capsule.${CAPSULE_LOG_REPO}.pr${CAPSULE_LOG_PR_NUMBER}.${short_sha}${CAPSULE_LOG_DECISION:+.$CAPSULE_LOG_DECISION}"
         CAPSULE_LOG_ID=$(printf '%s' "$raw_log_id" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9._:/-' '-')
         CAPSULE_LOG_ID="${CAPSULE_LOG_ID:0:191}"
         export CAPSULE_LOG_ID
@@ -148,6 +200,7 @@ runs:
           echo "checkpoint-state=$(cat "$CAPSULE_OUTPUT_DIR/checkpoint_state")"
           echo "capsule-path=$CAPSULE_OUTPUT_DIR/capsule.json"
           echo "artifact-path=$CAPSULE_OUTPUT_DIR/artifact.json"
+          echo "request-path=$CAPSULE_REQUEST_FILE"
         } >> "$GITHUB_OUTPUT"
 
     - name: Post capsule_id as a PR comment
