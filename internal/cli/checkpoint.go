@@ -197,11 +197,33 @@ func addCheckpointCommands(logs *cobra.Command) {
 		if e != nil {
 			return e
 		}
+		key, e := privateKey(p.Checkpoint.Signing)
+		if e != nil {
+			return e
+		}
+		signer, e := checkpoint.NewEd25519Signer(key)
+		if e != nil {
+			return e
+		}
+		if !checkpointSignerTrusted(p, signer.KeyID()) {
+			return inputError("checkpoint signer must be explicitly trusted")
+		}
+		service, e := serviceID(p)
+		if e != nil {
+			return e
+		}
 		t, e := openTarget(c.Context(), p, useCLL)
 		if e != nil {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.close()) }()
+		if t.book != nil {
+			result, e := checkpointBook(c.Context(), p, t.book.book, service)
+			if e != nil {
+				return e
+			}
+			return output(c, result)
+		}
 		cp, e := cutCheckpoint(c.Context(), p, t.log)
 		if e != nil {
 			return e
@@ -239,7 +261,11 @@ func addCheckpointCommands(logs *cobra.Command) {
 				return e
 			}
 			defer func() { err = errors.Join(err, t.close()) }()
-			state, e := t.log.GetWitness(c.Context(), service, size)
+			var store cll.WitnessStateStore = t.log
+			if p.Type == "jsonl" {
+				store = newBookWitnessStore(p)
+			}
+			state, e := store.GetWitness(c.Context(), service, size)
 			if e != nil {
 				return e
 			}
@@ -251,7 +277,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 				return ErrConflict
 			}
 			if publish {
-				if state, e = deliverWitness(c.Context(), p, t.log, service, size); e != nil {
+				if state, e = deliverWitness(c.Context(), p, store, service, size); e != nil {
 					return e
 				}
 			}
@@ -340,7 +366,7 @@ func cutCheckpoint(ctx context.Context, p Profile, log cll.Backend) (*cll.Checkp
 
 // deliverWitness makes one delivery attempt of the checkpoint at size to the
 // profile's witness service and returns the resulting persisted state.
-func deliverWitness(ctx context.Context, p Profile, log cll.Backend, service string, size uint64) (cll.WitnessState, error) {
+func deliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore, service string, size uint64) (cll.WitnessState, error) {
 	token, e := p.Checkpoint.Token.resolve()
 	if e != nil {
 		return cll.WitnessState{}, e
@@ -357,12 +383,12 @@ func deliverWitness(ctx context.Context, p Profile, log cll.Backend, service str
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: log, id: service, size: size}, map[string]witness.Submitter{service: safeSubmitter{client}}, map[string]witness.Verifier{service: verifier})
+	runner, e := witness.NewDeliveryRunner(witness.DefaultDeliveryConfig(), selectedWitness{WitnessStateStore: store, id: service, size: size}, map[string]witness.Submitter{service: safeSubmitter{client}}, map[string]witness.Verifier{service: verifier})
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
 	if _, e = runner.RunOnce(ctx, time.Now().UTC(), 1); e != nil {
 		return cll.WitnessState{}, e
 	}
-	return log.GetWitness(ctx, service, size)
+	return store.GetWitness(ctx, service, size)
 }

@@ -1,0 +1,88 @@
+{
+  "id": "diff-native-tier-raised",
+  "kind": "diff",
+  "rationale": "informational to must_have now gates the result",
+  "a": {
+    "id": "ec:example-native:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "req-n",
+        "profile": "outcome",
+        "statement": "the refund was confirmed by the system of record",
+        "evidence_rule": "refund record chained to the request, status confirmed",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "window": {
+          "duration": "P7D",
+          "cure": null,
+          "grace": null
+        },
+        "tier": "informational",
+        "required_assurance_grade": "witnessed",
+        "mode": "structural"
+      },
+      {
+        "id": "req-o",
+        "profile": "obligation",
+        "statement": "the retention control was evidenced",
+        "evidence_rule": "retention record chained to the clause",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "clause": {
+          "instrument": "Example Instrument",
+          "article": "Article 1",
+          "source_url": "https://example.org/a1"
+        }
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-native:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "req-n",
+        "profile": "outcome",
+        "statement": "the refund was confirmed by the system of record",
+        "evidence_rule": "refund record chained to the request, status confirmed",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "window": {
+          "duration": "P7D",
+          "cure": null,
+          "grace": null
+        },
+        "tier": "must_have",
+        "required_assurance_grade": "witnessed",
+        "mode": "structural"
+      },
+      {
+        "id": "req-o",
+        "profile": "obligation",
+        "statement": "the retention control was evidenced",
+        "evidence_rule": "retention record chained to the clause",
+        "forward_verdict": "DETERMINISTIC",
+        "backward_verdict": "DETERMINISTIC",
+        "clause": {
+          "instrument": "Example Instrument",
+          "article": "Article 1",
+          "source_url": "https://example.org/a1"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[req-n]/tier",
+        "kind": "tightened"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "validate-bad-empty-statement",
+  "kind": "validate",
+  "rationale": "an empty statement states nothing",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": ""
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0/statement",
+      "keyword": "minLength"
+    }
+  }
+}

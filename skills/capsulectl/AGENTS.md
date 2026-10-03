@@ -39,7 +39,8 @@ Every consequential action taken by this skill must produce an evidence record. 
 | Verb | Args | When | Emits | How |
 |---|---|---|---|---|
 | `verify` | `--profile NAME`<br>`--capsule FILE` | Confirm a Capsule's identity, signature, trust and bound artifacts before treating it as authentic — including a record another verb in this same run just fetched with `get --raw`. | (no capsule — checking a bundle is local validation, not a consequential action) | not consequential — no capsule |
-| `contract validate` | `FILE --schema PATH_OR_URL`<br>`FILE --schema PATH_OR_URL --json` | Check a caller-supplied document against a JSON Schema before accepting, forwarding or acting on it. capsulectl embeds no schema of its own; --schema always names the caller's. | (no capsule — this is the local validation the evidence policy names explicitly) | not consequential — no capsule |
+| `contract validate` | `FILE --schema PATH_OR_URL`<br>`FILE --schema PATH_OR_URL --json` | Check a caller-supplied document against a JSON Schema before accepting, forwarding or acting on it. `contract validate` uses no built-in schema; --schema always names the caller's. | (no capsule — this is the local validation the evidence policy names explicitly) | not consequential — no capsule |
+| `contract diff` | `A B`<br>`A B --schema PATH_OR_URL --json` | Before adopting a new version of an Evidence Contract, see whether the change is breaking (evidence that satisfied A may not satisfy B, or a claim against A no longer names a requirement of B) and why. Exit 1 means breaking; results evaluated against A must be re-evaluated. | (no capsule — comparing two local files is a check, not a consequential action) | not consequential — no capsule |
 | `discover` | `--profile NAME --scope FILE --seal-output FILE`<br>`--profile NAME --scope FILE --effects --seal-output FILE`<br>`--profile NAME --scope FILE --format table\|json --seal-output FILE` | Build a read-only inventory of OTel/MCP/gateway/CI/repo config (or, with --effects, an effect-boundary map) strictly within the roots an operator named in --scope. Never invents a scope; refuses to run without one. | discover-scan/v1 (plain) or discover-effects-scan/v1 (--effects) | self-sealing (`--seal-output`) |
 | `plugin ls` | _(none)_ | List trusted, handshake-valid capsulectl-* plugins discovered on the trusted plugin roots before invoking one by name. | (no capsule — listing what is discovered is local inspection, not a consequential action) | not consequential — no capsule |
 | `cll list` | `--profile NAME`<br>`--profile NAME --after N --through N --limit N` | Read the profile's checkpointed log in sequence order — to find an entry, to page through a range, or to confirm an append landed. | (no capsule — reading the log is local inspection, not a consequential action) | not consequential — no capsule |
@@ -50,6 +51,10 @@ Every consequential action taken by this skill must produce an evidence record. 
 | `judge drift pin` | `FILE_A FILE_B` | Confirm two judge-pin inputs describe the same reproducible judge configuration before treating their outputs as comparable. | (no capsule — this is local comparison, not a consequential action) | not consequential — no capsule |
 | `judge drift reports` | `FILE_A FILE_B` | Compare two evaluation-report/v1 sets by case_id and show drift as a real delta (pin mismatch, label mismatch, or both) — never as a silent disagreement the skill quietly drops. | (no capsule — this is local comparison, not a consequential action) | not consequential — no capsule |
 | `calibration summarize` | `REPORTS_FILE RATINGS_FILE` | Fold an evaluation-report/v1 set and a human-rating/v1 set into k-of-n agreement per judge_pin_digest before citing the result into a calibration-summary/v1 the skill is about to seal. | (no capsule — this is a pure computation over caller-supplied input) | not consequential — no capsule |
+| `request` | `--profile NAME --request FILE --responder NAME --output FILE`<br>`--profile NAME --for RECORD_ID --response FILE --responder-key HEX --responder-checkpoint-key HEX`<br>`--profile NAME --for RECORD_ID --absent-until TIME` | Ask a party for evidence (the request is recorded before it is sent), then record exactly one outcome for it: the answer that came back, or that nothing came back in the window. The output file is what to transmit; this verb transmits nothing itself. | (each mode's own book record is the evidence; no wrapper capsule) | primary action (running it *is* the record) |
+| `respond` | `--profile NAME --request FILE --requester ID --output FILE`<br>`--profile NAME --request FILE --requester ID --policy FILE --output FILE` | Answer a received evidence request with a signed artifact or a signed refusal, under the share policy, and record that it was answered. The output file is what to send back; this verb transmits nothing itself. | (the book's record of the answered request is the evidence; no wrapper capsule) | primary action (running it *is* the record) |
+| `close` | `--profile NAME --period day\|week --counterparty ID`<br>`--profile NAME --period day\|week --date YYYY-MM-DD --counterparty ID --since-last`<br>`--profile NAME --period day\|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX`<br>`--profile NAME --period day\|week --counterparty ID --capsule-out FILE --bundle-out FILE` | Seal the book's Close for a period that has ended, for one counterparty. Without a held peer bundle every exchange reads INSUFFICIENT: the Close states only this book's account. Repeating it for the same period and counterparty returns the first Close and seals no second one; the peer bundle and --since-last of a repeat are not applied. | (the Close record itself; --capsule-out writes it for verify) | primary action (running it *is* the record) |
+| `reconcile` | `--profile NAME --period day\|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX` | Compare this book's period with a counterparty's held bundle, showing each exchange in one of six states, as of this book's latest checkpoint: an own exchange not yet checkpointed reads INSUFFICIENT until `close` checkpoints it. It never queries the counterparty and adds no record. | (no capsule — comparing held records is local comparison, not a consequential action) | not consequential — no capsule |
 
 ## Capsule emission
 
@@ -83,11 +88,11 @@ consequential actions (`discover`, `publish`, `cll append`) each seal or
 persist a capsule and every one of those is verified; the not-consequential
 actions (`verify`, `contract validate`, `plugin ls`, `cll list`, `get`)
 run and produce no capsule at all — the script asserts both halves, not just
-that capsules exist. This is the "fresh-environment" test this skill ships
-with. It never touches a real profile or a real CLL. Run it after any change
-to the verb surface or the emission mechanism; it builds `capsulectl` from
-source, so its own elapsed time is also this skill's install-through-first-
-use timing.
+that capsules exist. It never touches a real profile or a real CLL. It is a
+contributor check, run after any change to the verb surface or the emission
+mechanism: it builds `capsulectl` from a source checkout, so it needs Go
+and this repository. Using the skill needs neither: install a release binary
+and this skill from the same tag (the repository README, "Agent skill").
 
 ## Reference
 

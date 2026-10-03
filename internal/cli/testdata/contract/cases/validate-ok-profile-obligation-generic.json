@@ -1,0 +1,20 @@
+{
+  "id": "validate-ok-profile-obligation-generic",
+  "kind": "validate",
+  "rationale": "obligation in the abstract shape needs a clause_ref",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "obligation",
+        "statement": "s",
+        "clause_ref": "p/1"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

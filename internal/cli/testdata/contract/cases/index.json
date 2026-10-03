@@ -1,0 +1,1570 @@
+[
+  {
+    "id": "validate-ok-minimal",
+    "kind": "validate",
+    "file": "validate-ok-minimal.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "the smallest valid contract: id, version and one requirement"
+  },
+  {
+    "id": "validate-ok-base",
+    "kind": "validate",
+    "file": "validate-ok-base.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "the base contract every diff case starts from validates"
+  },
+  {
+    "id": "validate-ok-native-base",
+    "kind": "validate",
+    "file": "validate-ok-native-base.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "the native-shape base contract validates"
+  },
+  {
+    "id": "validate-ok-profile-outcome-generic",
+    "kind": "validate",
+    "file": "validate-ok-profile-outcome-generic.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "outcome in the abstract shape needs only id, profile and statement"
+  },
+  {
+    "id": "validate-ok-profile-obligation-generic",
+    "kind": "validate",
+    "file": "validate-ok-profile-obligation-generic.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "obligation in the abstract shape needs a clause_ref"
+  },
+  {
+    "id": "validate-ok-profile-process",
+    "kind": "validate",
+    "file": "validate-ok-profile-process.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "process stub needs only id, profile and statement"
+  },
+  {
+    "id": "validate-ok-profile-quality",
+    "kind": "validate",
+    "file": "validate-ok-profile-quality.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "quality stub needs only id, profile and statement"
+  },
+  {
+    "id": "validate-ok-profile-human-role",
+    "kind": "validate",
+    "file": "validate-ok-profile-human-role.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "human_role stub needs only id, profile and statement"
+  },
+  {
+    "id": "validate-ok-profile-settlement",
+    "kind": "validate",
+    "file": "validate-ok-profile-settlement.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "settlement carries only a ref at the root"
+  },
+  {
+    "id": "validate-ok-native-without-profile",
+    "kind": "validate",
+    "file": "validate-ok-native-without-profile.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "the native shape treats profile as optional (an outcome by default)"
+  },
+  {
+    "id": "validate-ok-mixed-profiles",
+    "kind": "validate",
+    "file": "validate-ok-mixed-profiles.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "one contract may mix all seven profiles across its requirements"
+  },
+  {
+    "id": "validate-ok-all-epistemic-types",
+    "kind": "validate",
+    "file": "validate-ok-all-epistemic-types.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "all eight epistemic types may be accepted at once"
+  },
+  {
+    "id": "validate-ok-empty-evidence-requirements",
+    "kind": "validate",
+    "file": "validate-ok-empty-evidence-requirements.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "an empty evidence_requirements block is valid and constrains nothing"
+  },
+  {
+    "id": "validate-ok-principal-nostr",
+    "kind": "validate",
+    "file": "validate-ok-principal-nostr.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "a principal_ref is scheme:value; the scheme is profile-defined"
+  },
+  {
+    "id": "validate-ok-principal-authority-context",
+    "kind": "validate",
+    "file": "validate-ok-principal-authority-context.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "authority_context is a free list of citations, not a grant"
+  },
+  {
+    "id": "validate-ok-process-extra-field",
+    "kind": "validate",
+    "file": "validate-ok-process-extra-field.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "the process stub stays open to extension: an unknown field is accepted"
+  },
+  {
+    "id": "validate-ok-quality-free-fields",
+    "kind": "validate",
+    "file": "validate-ok-quality-free-fields.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "quality's sketched fields accept any value"
+  },
+  {
+    "id": "validate-ok-human-role-blocks",
+    "kind": "validate",
+    "file": "validate-ok-human-role-blocks.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "human_role review/override/escalation are open objects"
+  },
+  {
+    "id": "validate-ok-unicode-statement",
+    "kind": "validate",
+    "file": "validate-ok-unicode-statement.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "statements may be any non-empty Unicode text"
+  },
+  {
+    "id": "validate-ok-unicode-requirement-id",
+    "kind": "validate",
+    "file": "validate-ok-unicode-requirement-id.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "requirement ids are any non-empty string"
+  },
+  {
+    "id": "validate-ok-non-numeric-version",
+    "kind": "validate",
+    "file": "validate-ok-non-numeric-version.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "version is an opaque label, not a number"
+  },
+  {
+    "id": "validate-ok-no-subject",
+    "kind": "validate",
+    "file": "validate-ok-no-subject.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "subject is optional"
+  },
+  {
+    "id": "validate-ok-window-null-cure-grace",
+    "kind": "validate",
+    "file": "validate-ok-window-null-cure-grace.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "a window's cure and grace may be null"
+  },
+  {
+    "id": "validate-ok-clause-all-fields",
+    "kind": "validate",
+    "file": "validate-ok-clause-all-fields.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "a clause may carry every optional field"
+  },
+  {
+    "id": "validate-ok-consequence-settlement",
+    "kind": "validate",
+    "file": "validate-ok-consequence-settlement.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "consequence.class settlement carries only a reference at the root"
+  },
+  {
+    "id": "validate-ok-adjudication-hybrid",
+    "kind": "validate",
+    "file": "validate-ok-adjudication-hybrid.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "adjudication mode hybrid with a policy reference"
+  },
+  {
+    "id": "validate-ok-uncertainty-escalate",
+    "kind": "validate",
+    "file": "validate-ok-uncertainty-escalate.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "uncertainty may escalate on both missing and conflicting evidence"
+  },
+  {
+    "id": "validate-ok-native-tool-call-instrument",
+    "kind": "validate",
+    "file": "validate-ok-native-tool-call-instrument.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "a native requirement may name a tool call as its instrument"
+  },
+  {
+    "id": "validate-ok-native-refused",
+    "kind": "validate",
+    "file": "validate-ok-native-refused.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "a refused requirement states why it cannot be measured"
+  },
+  {
+    "id": "validate-ok-native-fold-cohort",
+    "kind": "validate",
+    "file": "validate-ok-native-fold-cohort.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "native fold modes and the informational tier are valid"
+  },
+  {
+    "id": "validate-ok-fifty-requirements",
+    "kind": "validate",
+    "file": "validate-ok-fifty-requirements.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "a contract may carry many requirements"
+  },
+  {
+    "id": "validate-ok-duplicate-requirement-ids",
+    "kind": "validate",
+    "file": "validate-ok-duplicate-requirement-ids.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "the schema does not enforce unique requirement ids (contract diff does)"
+  },
+  {
+    "id": "validate-ok-obligation-refs-on-outcome",
+    "kind": "validate",
+    "file": "validate-ok-obligation-refs-on-outcome.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "an outcome may cite the obligations it is traced to"
+  },
+  {
+    "id": "validate-ok-temporal-and-disclosure",
+    "kind": "validate",
+    "file": "validate-ok-temporal-and-disclosure.json",
+    "negative": false,
+    "outcome": "valid",
+    "rationale": "temporal.reversal_window and disclosure.policy_ref are optional references"
+  },
+  {
+    "id": "validate-bad-missing-id",
+    "kind": "validate",
+    "file": "validate-bad-missing-id.json",
+    "negative": true,
+    "outcome": "invalid: required at <root>",
+    "rationale": "a contract without an id cannot be referenced by a Result"
+  },
+  {
+    "id": "validate-bad-missing-version",
+    "kind": "validate",
+    "file": "validate-bad-missing-version.json",
+    "negative": true,
+    "outcome": "invalid: required at <root>",
+    "rationale": "a contract without a version cannot be pinned"
+  },
+  {
+    "id": "validate-bad-missing-requirements",
+    "kind": "validate",
+    "file": "validate-bad-missing-requirements.json",
+    "negative": true,
+    "outcome": "invalid: required at <root>",
+    "rationale": "a contract must say what must be established"
+  },
+  {
+    "id": "validate-bad-empty-requirements",
+    "kind": "validate",
+    "file": "validate-bad-empty-requirements.json",
+    "negative": true,
+    "outcome": "invalid: minItems at requirements",
+    "rationale": "a contract with zero requirements establishes nothing"
+  },
+  {
+    "id": "validate-bad-empty-id",
+    "kind": "validate",
+    "file": "validate-bad-empty-id.json",
+    "negative": true,
+    "outcome": "invalid: minLength at id",
+    "rationale": "an empty id is no id"
+  },
+  {
+    "id": "validate-bad-empty-version",
+    "kind": "validate",
+    "file": "validate-bad-empty-version.json",
+    "negative": true,
+    "outcome": "invalid: minLength at version",
+    "rationale": "an empty version label cannot name a version"
+  },
+  {
+    "id": "validate-bad-numeric-version",
+    "kind": "validate",
+    "file": "validate-bad-numeric-version.json",
+    "negative": true,
+    "outcome": "invalid: type at version",
+    "rationale": "version is a string label; a JSON number is rejected"
+  },
+  {
+    "id": "validate-bad-unknown-root-field",
+    "kind": "validate",
+    "file": "validate-bad-unknown-root-field.json",
+    "negative": true,
+    "outcome": "invalid: additionalProperties at <root>",
+    "rationale": "the root is closed: an unknown field is rejected, not ignored"
+  },
+  {
+    "id": "validate-bad-requirements-not-array",
+    "kind": "validate",
+    "file": "validate-bad-requirements-not-array.json",
+    "negative": true,
+    "outcome": "invalid: type at requirements",
+    "rationale": "requirements must be an array"
+  },
+  {
+    "id": "validate-bad-requirement-not-object",
+    "kind": "validate",
+    "file": "validate-bad-requirement-not-object.json",
+    "negative": true,
+    "outcome": "invalid: type at requirements/0",
+    "rationale": "each requirement must be an object"
+  },
+  {
+    "id": "validate-bad-missing-profile",
+    "kind": "validate",
+    "file": "validate-bad-missing-profile.json",
+    "negative": true,
+    "outcome": "invalid: required at requirements/0",
+    "rationale": "an abstract-shape requirement must name its profile"
+  },
+  {
+    "id": "validate-bad-unknown-profile",
+    "kind": "validate",
+    "file": "validate-bad-unknown-profile.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/profile",
+    "rationale": "profile is closed at seven values"
+  },
+  {
+    "id": "validate-bad-profile-wrong-case",
+    "kind": "validate",
+    "file": "validate-bad-profile-wrong-case.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/profile",
+    "rationale": "profile values are case-sensitive"
+  },
+  {
+    "id": "validate-bad-profile-number",
+    "kind": "validate",
+    "file": "validate-bad-profile-number.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/profile",
+    "rationale": "profile must be a string"
+  },
+  {
+    "id": "validate-bad-status-on-outcome",
+    "kind": "validate",
+    "file": "validate-bad-status-on-outcome.json",
+    "negative": true,
+    "outcome": "invalid: false at requirements/0/status",
+    "rationale": "a requirement never self-declares its status"
+  },
+  {
+    "id": "validate-bad-result-on-process",
+    "kind": "validate",
+    "file": "validate-bad-result-on-process.json",
+    "negative": true,
+    "outcome": "invalid: false at requirements/1/result",
+    "rationale": "a requirement never self-declares its result"
+  },
+  {
+    "id": "validate-bad-status-on-attribution",
+    "kind": "validate",
+    "file": "validate-bad-status-on-attribution.json",
+    "negative": true,
+    "outcome": "invalid: false at requirements/0/status",
+    "rationale": "the self-declaration ban holds even on a ref-only stub"
+  },
+  {
+    "id": "validate-bad-status-on-native",
+    "kind": "validate",
+    "file": "validate-bad-status-on-native.json",
+    "negative": true,
+    "outcome": "invalid: false at requirements/0/status",
+    "rationale": "the self-declaration ban holds on the native shape"
+  },
+  {
+    "id": "validate-bad-obligation-missing-clause-ref",
+    "kind": "validate",
+    "file": "validate-bad-obligation-missing-clause-ref.json",
+    "negative": true,
+    "outcome": "invalid: required at requirements/0",
+    "rationale": "an abstract obligation must cite its clause"
+  },
+  {
+    "id": "validate-bad-native-obligation-missing-clause",
+    "kind": "validate",
+    "file": "validate-bad-native-obligation-missing-clause.json",
+    "negative": true,
+    "outcome": "invalid: required at requirements/0",
+    "rationale": "a native obligation must carry its clause"
+  },
+  {
+    "id": "validate-bad-unknown-epistemic-type",
+    "kind": "validate",
+    "file": "validate-bad-unknown-epistemic-type.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/evidence_requirements/accepted_epistemic_types/0",
+    "rationale": "epistemic types are a closed set of eight"
+  },
+  {
+    "id": "validate-bad-uppercase-epistemic-type",
+    "kind": "validate",
+    "file": "validate-bad-uppercase-epistemic-type.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/evidence_requirements/accepted_epistemic_types/0",
+    "rationale": "epistemic type values are lower-case, as the owning record header spells them"
+  },
+  {
+    "id": "validate-bad-empty-epistemic-types",
+    "kind": "validate",
+    "file": "validate-bad-empty-epistemic-types.json",
+    "negative": true,
+    "outcome": "invalid: minItems at requirements/0/evidence_requirements/accepted_epistemic_types",
+    "rationale": "an empty accepted list would accept nothing; omit the field instead"
+  },
+  {
+    "id": "validate-bad-evidence-requirements-unknown-field",
+    "kind": "validate",
+    "file": "validate-bad-evidence-requirements-unknown-field.json",
+    "negative": true,
+    "outcome": "invalid: additionalProperties at requirements/0/evidence_requirements",
+    "rationale": "evidence_requirements is closed"
+  },
+  {
+    "id": "validate-bad-empty-required-source",
+    "kind": "validate",
+    "file": "validate-bad-empty-required-source.json",
+    "negative": true,
+    "outcome": "invalid: minLength at requirements/0/evidence_requirements/required_sources/0",
+    "rationale": "a required source must be named"
+  },
+  {
+    "id": "validate-bad-adjudication-unknown-mode",
+    "kind": "validate",
+    "file": "validate-bad-adjudication-unknown-mode.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/adjudication/mode",
+    "rationale": "adjudication mode is closed at four values"
+  },
+  {
+    "id": "validate-bad-adjudication-missing-mode",
+    "kind": "validate",
+    "file": "validate-bad-adjudication-missing-mode.json",
+    "negative": true,
+    "outcome": "invalid: required at requirements/0/adjudication",
+    "rationale": "an adjudication block must name its mode"
+  },
+  {
+    "id": "validate-bad-uncertainty-unknown-on-missing",
+    "kind": "validate",
+    "file": "validate-bad-uncertainty-unknown-on-missing.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/uncertainty/on_missing",
+    "rationale": "on_missing is closed at three values"
+  },
+  {
+    "id": "validate-bad-principal-uppercase-scheme",
+    "kind": "validate",
+    "file": "validate-bad-principal-uppercase-scheme.json",
+    "negative": true,
+    "outcome": "invalid: pattern at principal/principal_ref",
+    "rationale": "a principal_ref scheme is lower-case"
+  },
+  {
+    "id": "validate-bad-principal-missing-ref",
+    "kind": "validate",
+    "file": "validate-bad-principal-missing-ref.json",
+    "negative": true,
+    "outcome": "invalid: required at principal",
+    "rationale": "a principal block must cite a principal"
+  },
+  {
+    "id": "validate-bad-subject-missing-job-type",
+    "kind": "validate",
+    "file": "validate-bad-subject-missing-job-type.json",
+    "negative": true,
+    "outcome": "invalid: required at subject",
+    "rationale": "a subject must name its job type"
+  },
+  {
+    "id": "validate-bad-subject-empty-job-type",
+    "kind": "validate",
+    "file": "validate-bad-subject-empty-job-type.json",
+    "negative": true,
+    "outcome": "invalid: minLength at subject/job_type",
+    "rationale": "an empty job type names nothing"
+  },
+  {
+    "id": "validate-bad-consequence-unknown-class",
+    "kind": "validate",
+    "file": "validate-bad-consequence-unknown-class.json",
+    "negative": true,
+    "outcome": "invalid: enum at consequence/class",
+    "rationale": "consequence class is closed"
+  },
+  {
+    "id": "validate-bad-consequence-missing-class",
+    "kind": "validate",
+    "file": "validate-bad-consequence-missing-class.json",
+    "negative": true,
+    "outcome": "invalid: required at consequence",
+    "rationale": "a consequence must name its class"
+  },
+  {
+    "id": "validate-bad-temporal-unknown-field",
+    "kind": "validate",
+    "file": "validate-bad-temporal-unknown-field.json",
+    "negative": true,
+    "outcome": "invalid: additionalProperties at temporal",
+    "rationale": "temporal is closed"
+  },
+  {
+    "id": "validate-bad-disclosure-unknown-field",
+    "kind": "validate",
+    "file": "validate-bad-disclosure-unknown-field.json",
+    "negative": true,
+    "outcome": "invalid: additionalProperties at disclosure",
+    "rationale": "disclosure is closed"
+  },
+  {
+    "id": "validate-bad-clause-missing-article",
+    "kind": "validate",
+    "file": "validate-bad-clause-missing-article.json",
+    "negative": true,
+    "outcome": "invalid: required at requirements/1/clause",
+    "rationale": "a clause must name its article"
+  },
+  {
+    "id": "validate-bad-clause-uppercase-digest",
+    "kind": "validate",
+    "file": "validate-bad-clause-uppercase-digest.json",
+    "negative": true,
+    "outcome": "invalid: pattern at requirements/1/clause/text_snapshot_digest",
+    "rationale": "a clause text digest is lower-case hex"
+  },
+  {
+    "id": "validate-bad-clause-bad-effective-date",
+    "kind": "validate",
+    "file": "validate-bad-clause-bad-effective-date.json",
+    "negative": true,
+    "outcome": "invalid: pattern at requirements/1/clause/effective_from",
+    "rationale": "effective_from is a calendar date"
+  },
+  {
+    "id": "validate-bad-native-unknown-forward-verdict",
+    "kind": "validate",
+    "file": "validate-bad-native-unknown-forward-verdict.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/forward_verdict",
+    "rationale": "forward_verdict is closed"
+  },
+  {
+    "id": "validate-bad-native-window-missing-duration",
+    "kind": "validate",
+    "file": "validate-bad-native-window-missing-duration.json",
+    "negative": true,
+    "outcome": "invalid: required at requirements/0/window",
+    "rationale": "a window must have a duration"
+  },
+  {
+    "id": "validate-bad-native-window-unknown-field",
+    "kind": "validate",
+    "file": "validate-bad-native-window-unknown-field.json",
+    "negative": true,
+    "outcome": "invalid: additionalProperties at requirements/0/window",
+    "rationale": "a window is closed"
+  },
+  {
+    "id": "validate-bad-native-unknown-tier",
+    "kind": "validate",
+    "file": "validate-bad-native-unknown-tier.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/tier",
+    "rationale": "tier is must_have or informational"
+  },
+  {
+    "id": "validate-bad-native-unknown-mode",
+    "kind": "validate",
+    "file": "validate-bad-native-unknown-mode.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/mode",
+    "rationale": "native evaluation mode is closed"
+  },
+  {
+    "id": "validate-bad-native-unknown-instrument-kind",
+    "kind": "validate",
+    "file": "validate-bad-native-unknown-instrument-kind.json",
+    "negative": true,
+    "outcome": "invalid: enum at requirements/0/evidence_instrument/kind",
+    "rationale": "evidence instrument kind is closed"
+  },
+  {
+    "id": "validate-bad-attribution-missing-ref",
+    "kind": "validate",
+    "file": "validate-bad-attribution-missing-ref.json",
+    "negative": true,
+    "outcome": "invalid: required at requirements/0",
+    "rationale": "a ref-only stub must carry its ref"
+  },
+  {
+    "id": "validate-bad-settlement-extra-field",
+    "kind": "validate",
+    "file": "validate-bad-settlement-extra-field.json",
+    "negative": true,
+    "outcome": "invalid: additionalProperties at requirements/0",
+    "rationale": "settlement logic never enters the root: the stub is closed"
+  },
+  {
+    "id": "validate-bad-outcome-generic-extra-field",
+    "kind": "validate",
+    "file": "validate-bad-outcome-generic-extra-field.json",
+    "negative": true,
+    "outcome": "invalid: additionalProperties at requirements/0",
+    "rationale": "the abstract outcome shape is closed"
+  },
+  {
+    "id": "validate-bad-empty-statement",
+    "kind": "validate",
+    "file": "validate-bad-empty-statement.json",
+    "negative": true,
+    "outcome": "invalid: minLength at requirements/0/statement",
+    "rationale": "an empty statement states nothing"
+  },
+  {
+    "id": "validate-bad-empty-requirement-id",
+    "kind": "validate",
+    "file": "validate-bad-empty-requirement-id.json",
+    "negative": true,
+    "outcome": "invalid: minLength at requirements/0/id",
+    "rationale": "an empty requirement id cannot be cited by a claim"
+  },
+  {
+    "id": "diff-identical",
+    "kind": "diff",
+    "file": "diff-identical.json",
+    "negative": false,
+    "outcome": "identical",
+    "rationale": "a contract diffed against itself has no changes"
+  },
+  {
+    "id": "diff-key-order-only",
+    "kind": "diff",
+    "file": "diff-key-order-only.json",
+    "negative": false,
+    "outcome": "identical",
+    "rationale": "member order is not content: same JCS bytes, no changes"
+  },
+  {
+    "id": "diff-version-bump-only",
+    "kind": "diff",
+    "file": "diff-version-bump-only.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "a new version label with no other change is non-breaking"
+  },
+  {
+    "id": "diff-version-reused",
+    "kind": "diff",
+    "file": "diff-version-reused.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "one version label must never name two different contracts"
+  },
+  {
+    "id": "diff-contract-id-changed",
+    "kind": "diff",
+    "file": "diff-contract-id-changed.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "claims name their contract by id; a new id is a different contract"
+  },
+  {
+    "id": "diff-requirement-added",
+    "kind": "diff",
+    "file": "diff-requirement-added.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a new requirement owes new evidence"
+  },
+  {
+    "id": "diff-requirement-removed",
+    "kind": "diff",
+    "file": "diff-requirement-removed.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a claim against A that cites a removed requirement no longer resolves in B"
+  },
+  {
+    "id": "diff-requirement-reid",
+    "kind": "diff",
+    "file": "diff-requirement-reid.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "re-identifying a requirement orphans every claim that cites the old id"
+  },
+  {
+    "id": "diff-requirement-reid-with-change",
+    "kind": "diff",
+    "file": "diff-requirement-reid-with-change.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a new id with different content is a removal plus an addition"
+  },
+  {
+    "id": "diff-requirements-reordered",
+    "kind": "diff",
+    "file": "diff-requirements-reordered.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "requirements are keyed by id; order carries no meaning"
+  },
+  {
+    "id": "diff-statement-deterministic",
+    "kind": "diff",
+    "file": "diff-statement-deterministic.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "rewording a deterministically evaluated requirement is editorial"
+  },
+  {
+    "id": "diff-statement-process",
+    "kind": "diff",
+    "file": "diff-statement-process.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a process requirement with no deterministic adjudication may be judged on its wording"
+  },
+  {
+    "id": "diff-statement-semantic",
+    "kind": "diff",
+    "file": "diff-statement-semantic.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "under semantic adjudication the statement is what is judged"
+  },
+  {
+    "id": "diff-statement-becomes-judged",
+    "kind": "diff",
+    "file": "diff-statement-becomes-judged.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a statement reworded while adjudication moves off deterministic is breaking twice"
+  },
+  {
+    "id": "diff-epistemic-narrowed",
+    "kind": "diff",
+    "file": "diff-epistemic-narrowed.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "accepting fewer epistemic types tightens the requirement"
+  },
+  {
+    "id": "diff-epistemic-widened",
+    "kind": "diff",
+    "file": "diff-epistemic-widened.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "accepting more epistemic types loosens the requirement"
+  },
+  {
+    "id": "diff-epistemic-swapped",
+    "kind": "diff",
+    "file": "diff-epistemic-swapped.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "swapping an accepted type may orphan evidence of the old type"
+  },
+  {
+    "id": "diff-epistemic-reordered",
+    "kind": "diff",
+    "file": "diff-epistemic-reordered.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "accepted types are a set: reordering them is no change"
+  },
+  {
+    "id": "diff-epistemic-dropped",
+    "kind": "diff",
+    "file": "diff-epistemic-dropped.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "dropping the accepted list accepts every type"
+  },
+  {
+    "id": "diff-epistemic-introduced",
+    "kind": "diff",
+    "file": "diff-epistemic-introduced.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "introducing an accepted list where there was none restricts types"
+  },
+  {
+    "id": "diff-source-added",
+    "kind": "diff",
+    "file": "diff-source-added.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "requiring one more source tightens the requirement"
+  },
+  {
+    "id": "diff-source-removed",
+    "kind": "diff",
+    "file": "diff-source-removed.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "requiring fewer sources loosens the requirement"
+  },
+  {
+    "id": "diff-source-changed",
+    "kind": "diff",
+    "file": "diff-source-changed.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "replacing a source is breaking: evidence from the old source no longer counts"
+  },
+  {
+    "id": "diff-source-list-dropped",
+    "kind": "diff",
+    "file": "diff-source-list-dropped.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "dropping required_sources entirely requires no particular source"
+  },
+  {
+    "id": "diff-assurance-raised",
+    "kind": "diff",
+    "file": "diff-assurance-raised.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a higher assurance floor tightens the requirement"
+  },
+  {
+    "id": "diff-assurance-lowered",
+    "kind": "diff",
+    "file": "diff-assurance-lowered.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "a lower assurance floor loosens the requirement"
+  },
+  {
+    "id": "diff-assurance-same-floor",
+    "kind": "diff",
+    "file": "diff-assurance-same-floor.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a multi-grade list is undefined, so changing its members at the same floor is breaking"
+  },
+  {
+    "id": "diff-assurance-unknown-grade",
+    "kind": "diff",
+    "file": "diff-assurance-unknown-grade.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a grade off the ladder has no direction: breaking"
+  },
+  {
+    "id": "diff-assurance-introduced",
+    "kind": "diff",
+    "file": "diff-assurance-introduced.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "introducing an assurance floor where there was none tightens"
+  },
+  {
+    "id": "diff-freshness-shortened",
+    "kind": "diff",
+    "file": "diff-freshness-shortened.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "evidence must be newer: tightened"
+  },
+  {
+    "id": "diff-freshness-lengthened",
+    "kind": "diff",
+    "file": "diff-freshness-lengthened.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "older evidence now counts: loosened"
+  },
+  {
+    "id": "diff-freshness-respelled",
+    "kind": "diff",
+    "file": "diff-freshness-respelled.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "P7D and P1W are the same length: editorial"
+  },
+  {
+    "id": "diff-freshness-time-units",
+    "kind": "diff",
+    "file": "diff-freshness-time-units.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "durations compare by length across units: PT167H is an hour short of P7D"
+  },
+  {
+    "id": "diff-freshness-unparseable",
+    "kind": "diff",
+    "file": "diff-freshness-unparseable.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a freshness that is not an ISO-8601 duration has no direction"
+  },
+  {
+    "id": "diff-freshness-overlong-component",
+    "kind": "diff",
+    "file": "diff-freshness-overlong-component.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a duration component over nine digits does not parse, so has no direction"
+  },
+  {
+    "id": "diff-freshness-dangling-t",
+    "kind": "diff",
+    "file": "diff-freshness-dangling-t.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a time designator with no time component is not a duration"
+  },
+  {
+    "id": "diff-freshness-month-vs-days",
+    "kind": "diff",
+    "file": "diff-freshness-month-vs-days.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a month is not a fixed number of days: P1M to P30D is not comparable"
+  },
+  {
+    "id": "diff-freshness-month-vs-one-day",
+    "kind": "diff",
+    "file": "diff-freshness-month-vs-one-day.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "months and days are never ordered against each other, even when obvious"
+  },
+  {
+    "id": "diff-freshness-year-as-months",
+    "kind": "diff",
+    "file": "diff-freshness-year-as-months.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "a year is exactly twelve months: P1Y to P12M is a respelling"
+  },
+  {
+    "id": "diff-freshness-months-lengthened",
+    "kind": "diff",
+    "file": "diff-freshness-months-lengthened.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "months compare with months: P1M to P2M is longer"
+  },
+  {
+    "id": "diff-freshness-month-plus-hours",
+    "kind": "diff",
+    "file": "diff-freshness-month-plus-hours.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "same months and more hours is longer in one part and equal in the other"
+  },
+  {
+    "id": "diff-freshness-mixed-opposite",
+    "kind": "diff",
+    "file": "diff-freshness-mixed-opposite.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "longer in months but shorter in days cannot be ordered"
+  },
+  {
+    "id": "diff-freshness-month-from-unbounded",
+    "kind": "diff",
+    "file": "diff-freshness-month-from-unbounded.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "any limit where there was none tightens, months included"
+  },
+  {
+    "id": "diff-native-window-days-to-month",
+    "kind": "diff",
+    "file": "diff-native-window-days-to-month.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a window in days replaced by one in months is not comparable"
+  },
+  {
+    "id": "diff-freshness-dropped",
+    "kind": "diff",
+    "file": "diff-freshness-dropped.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "no freshness limit at all is the loosest"
+  },
+  {
+    "id": "diff-independence-changed",
+    "kind": "diff",
+    "file": "diff-independence-changed.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "independence is an opaque predicate: any change is breaking"
+  },
+  {
+    "id": "diff-coverage-changed",
+    "kind": "diff",
+    "file": "diff-coverage-changed.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "coverage is an opaque predicate: any change is breaking"
+  },
+  {
+    "id": "diff-adjudication-mode",
+    "kind": "diff",
+    "file": "diff-adjudication-mode.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a different adjudication mode evaluates differently"
+  },
+  {
+    "id": "diff-uncertainty-on-missing",
+    "kind": "diff",
+    "file": "diff-uncertainty-on-missing.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "how missing evidence resolves changes every gap"
+  },
+  {
+    "id": "diff-approval-added",
+    "kind": "diff",
+    "file": "diff-approval-added.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "one more approval owed tightens"
+  },
+  {
+    "id": "diff-approval-removed",
+    "kind": "diff",
+    "file": "diff-approval-removed.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "fewer approvals owed loosens"
+  },
+  {
+    "id": "diff-sequence-step-added",
+    "kind": "diff",
+    "file": "diff-sequence-step-added.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "one more required step tightens"
+  },
+  {
+    "id": "diff-sequence-step-removed",
+    "kind": "diff",
+    "file": "diff-sequence-step-removed.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "dropping a required step loosens"
+  },
+  {
+    "id": "diff-sequence-reordered",
+    "kind": "diff",
+    "file": "diff-sequence-reordered.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "reordering required steps is neither tighter nor looser"
+  },
+  {
+    "id": "diff-escalation-path",
+    "kind": "diff",
+    "file": "diff-escalation-path.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "where an escalation goes is not read when sufficiency is decided"
+  },
+  {
+    "id": "diff-process-extension-field",
+    "kind": "diff",
+    "file": "diff-process-extension-field.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "an extension field on an open stub has no rule: breaking"
+  },
+  {
+    "id": "diff-profile-changed",
+    "kind": "diff",
+    "file": "diff-profile-changed.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a different profile is a different kind of requirement"
+  },
+  {
+    "id": "diff-clause-ref-changed",
+    "kind": "diff",
+    "file": "diff-clause-ref-changed.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "citing a different clause changes which obligation is evidenced"
+  },
+  {
+    "id": "diff-obligation-refs-added",
+    "kind": "diff",
+    "file": "diff-obligation-refs-added.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "the obligation trace changes what a result is cited for"
+  },
+  {
+    "id": "diff-population-changed",
+    "kind": "diff",
+    "file": "diff-population-changed.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a different population selector evaluates different jobs"
+  },
+  {
+    "id": "diff-consequence-class",
+    "kind": "diff",
+    "file": "diff-consequence-class.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a different consequence class changes what a result triggers"
+  },
+  {
+    "id": "diff-evaluation-period",
+    "kind": "diff",
+    "file": "diff-evaluation-period.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a different evaluation period is a different window of evidence"
+  },
+  {
+    "id": "diff-principal-added",
+    "kind": "diff",
+    "file": "diff-principal-added.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "naming a principal where none was named changes who the contract is about"
+  },
+  {
+    "id": "diff-native-window-shortened",
+    "kind": "diff",
+    "file": "diff-native-window-shortened.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a shorter window tightens"
+  },
+  {
+    "id": "diff-native-window-lengthened",
+    "kind": "diff",
+    "file": "diff-native-window-lengthened.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "a longer window loosens"
+  },
+  {
+    "id": "diff-native-cure-added",
+    "kind": "diff",
+    "file": "diff-native-cure-added.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "a cure period where there was none loosens"
+  },
+  {
+    "id": "diff-native-grace-dropped-to-null",
+    "kind": "diff",
+    "file": "diff-native-grace-dropped-to-null.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "null grace is zero grace: removing a grace period tightens"
+  },
+  {
+    "id": "diff-native-window-removed",
+    "kind": "diff",
+    "file": "diff-native-window-removed.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "no window at all is the loosest"
+  },
+  {
+    "id": "diff-native-window-added",
+    "kind": "diff",
+    "file": "diff-native-window-added.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a window where there was none tightens"
+  },
+  {
+    "id": "diff-native-tier-raised",
+    "kind": "diff",
+    "file": "diff-native-tier-raised.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "informational to must_have now gates the result"
+  },
+  {
+    "id": "diff-native-tier-defaulted",
+    "kind": "diff",
+    "file": "diff-native-tier-defaulted.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "an explicit informational tier and an absent tier are the same"
+  },
+  {
+    "id": "diff-native-tier-lowered",
+    "kind": "diff",
+    "file": "diff-native-tier-lowered.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "must_have to absent (informational) no longer gates the result"
+  },
+  {
+    "id": "diff-native-grade-raised",
+    "kind": "diff",
+    "file": "diff-native-grade-raised.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a higher required grade tightens"
+  },
+  {
+    "id": "diff-native-evidence-rule",
+    "kind": "diff",
+    "file": "diff-native-evidence-rule.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "the evidence rule is the predicate: any change is breaking"
+  },
+  {
+    "id": "diff-native-statement-deterministic",
+    "kind": "diff",
+    "file": "diff-native-statement-deterministic.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "a deterministic native requirement may be reworded"
+  },
+  {
+    "id": "diff-native-statement-manual",
+    "kind": "diff",
+    "file": "diff-native-statement-manual.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a manually checked requirement is checked against its wording"
+  },
+  {
+    "id": "diff-native-statement-judged-mode",
+    "kind": "diff",
+    "file": "diff-native-statement-judged-mode.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a judged-mode requirement is judged against its wording"
+  },
+  {
+    "id": "diff-native-forward-verdict",
+    "kind": "diff",
+    "file": "diff-native-forward-verdict.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a different forward verdict is a different evaluation"
+  },
+  {
+    "id": "diff-clause-source-url",
+    "kind": "diff",
+    "file": "diff-clause-source-url.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "where the clause text is published is not read when sufficiency is decided"
+  },
+  {
+    "id": "diff-clause-article",
+    "kind": "diff",
+    "file": "diff-clause-article.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "a different article is a different obligation"
+  },
+  {
+    "id": "diff-mixed-tighten-and-loosen",
+    "kind": "diff",
+    "file": "diff-mixed-tighten-and-loosen.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "one tightening makes the whole diff breaking, however much else loosens"
+  },
+  {
+    "id": "diff-all-non-breaking",
+    "kind": "diff",
+    "file": "diff-all-non-breaking.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "loosenings and editorial changes together stay non-breaking"
+  },
+  {
+    "id": "diff-requirement-removed-among-loosenings",
+    "kind": "diff",
+    "file": "diff-requirement-removed-among-loosenings.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "one removed requirement makes an otherwise loosening diff breaking"
+  },
+  {
+    "id": "diff-ext-window-extra-field",
+    "kind": "diff",
+    "file": "diff-ext-window-extra-field.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "an unknown member inside an extension window is still a change, not dropped"
+  },
+  {
+    "id": "diff-ext-window-string",
+    "kind": "diff",
+    "file": "diff-ext-window-string.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "an extension window that is not an object has no rule: breaking, never a crash"
+  },
+  {
+    "id": "diff-ext-window-shortened",
+    "kind": "diff",
+    "file": "diff-ext-window-shortened.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "the window rule is the native shape's; on quality a shorter window is just a change"
+  },
+  {
+    "id": "diff-ext-source-url",
+    "kind": "diff",
+    "file": "diff-ext-source-url.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "source_url is editorial only inside a native clause, not as an extension field"
+  },
+  {
+    "id": "diff-ext-tier",
+    "kind": "diff",
+    "file": "diff-ext-tier.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "tier is ranked only on the native shape; an extension tier has no direction"
+  },
+  {
+    "id": "diff-ext-escalation-path-on-human-role",
+    "kind": "diff",
+    "file": "diff-ext-escalation-path-on-human-role.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "escalation_path is editorial on process, not as a human_role extension"
+  },
+  {
+    "id": "diff-ext-evidence-requirements-on-quality",
+    "kind": "diff",
+    "file": "diff-ext-evidence-requirements-on-quality.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "quality defines no evidence_requirements; its freshness has no rule"
+  },
+  {
+    "id": "diff-ext-adjudication-on-process",
+    "kind": "diff",
+    "file": "diff-ext-adjudication-on-process.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "an extension adjudication cannot make a process statement editorial"
+  },
+  {
+    "id": "diff-process-sequence-rule-still-applies",
+    "kind": "diff",
+    "file": "diff-process-sequence-rule-still-applies.json",
+    "negative": false,
+    "outcome": "non-breaking",
+    "rationale": "on process, required_sequence is defined and keeps its rule"
+  },
+  {
+    "id": "diff-shape-changed-generic-to-native",
+    "kind": "diff",
+    "file": "diff-shape-changed-generic-to-native.json",
+    "negative": true,
+    "outcome": "breaking",
+    "rationale": "moving a requirement between shapes compares fields with no rule"
+  },
+  {
+    "id": "diff-bad-a-invalid",
+    "kind": "diff",
+    "file": "diff-bad-a-invalid.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "an invalid contract is refused before any diffing"
+  },
+  {
+    "id": "diff-bad-b-invalid",
+    "kind": "diff",
+    "file": "diff-bad-b-invalid.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "both sides are validated, not just the first"
+  },
+  {
+    "id": "diff-bad-b-uppercase-epistemic-type",
+    "kind": "diff",
+    "file": "diff-bad-b-uppercase-epistemic-type.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "an upper-case epistemic type is not the lower-case one: the contract is refused, not diffed"
+  },
+  {
+    "id": "diff-bad-duplicate-requirement-id",
+    "kind": "diff",
+    "file": "diff-bad-duplicate-requirement-id.json",
+    "negative": true,
+    "outcome": "error: duplicate_requirement_id",
+    "rationale": "two requirements with one id cannot be matched to claims"
+  },
+  {
+    "id": "diff-bad-b-self-declared-status",
+    "kind": "diff",
+    "file": "diff-bad-b-self-declared-status.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "a contract that self-declares a status is refused, not diffed"
+  },
+  {
+    "id": "diff-bad-approvals-not-a-list",
+    "kind": "diff",
+    "file": "diff-bad-approvals-not-a-list.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "approvals turned from a list into a string is refused, never 'loosened'"
+  },
+  {
+    "id": "diff-bad-required-sources-not-a-list",
+    "kind": "diff",
+    "file": "diff-bad-required-sources-not-a-list.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "required_sources as a string is refused, never 'loosened'"
+  },
+  {
+    "id": "diff-bad-epistemic-types-not-a-list",
+    "kind": "diff",
+    "file": "diff-bad-epistemic-types-not-a-list.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "accepted types as a string is refused, never ranked"
+  },
+  {
+    "id": "diff-bad-sequence-not-a-list",
+    "kind": "diff",
+    "file": "diff-bad-sequence-not-a-list.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "a required sequence as a string is refused, never ranked"
+  },
+  {
+    "id": "diff-bad-escalation-path-null",
+    "kind": "diff",
+    "file": "diff-bad-escalation-path-null.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "a null escalation path is refused; unvalidated it is a change, not editorial"
+  },
+  {
+    "id": "diff-bad-assurance-not-a-list",
+    "kind": "diff",
+    "file": "diff-bad-assurance-not-a-list.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "a minimum assurance that is a number is refused, never ranked"
+  },
+  {
+    "id": "diff-bad-native-tier-not-a-string",
+    "kind": "diff",
+    "file": "diff-bad-native-tier-not-a-string.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "a tier that is a list is refused; unvalidated it is a change, never a crash"
+  },
+  {
+    "id": "diff-bad-unknown-epistemic-type-added",
+    "kind": "diff",
+    "file": "diff-bad-unknown-epistemic-type-added.json",
+    "negative": true,
+    "outcome": "error: invalid_contract",
+    "rationale": "adding a type outside the closed set is refused, not 'loosened'"
+  },
+  {
+    "id": "pin-base",
+    "kind": "pin",
+    "file": "pin-base.json",
+    "negative": false,
+    "outcome": "digest",
+    "rationale": "a Result names the base contract by reference and JCS digest"
+  },
+  {
+    "id": "pin-base-key-order",
+    "kind": "pin",
+    "file": "pin-base-key-order.json",
+    "negative": false,
+    "outcome": "digest",
+    "rationale": "member order does not change the digest (same value as pin-base)"
+  },
+  {
+    "id": "pin-version-2",
+    "kind": "pin",
+    "file": "pin-version-2.json",
+    "negative": false,
+    "outcome": "digest",
+    "rationale": "a new version label changes the digest"
+  },
+  {
+    "id": "pin-unicode",
+    "kind": "pin",
+    "file": "pin-unicode.json",
+    "negative": false,
+    "outcome": "digest",
+    "rationale": "non-ASCII text is digested as UTF-8 per JCS"
+  },
+  {
+    "id": "pin-escapes",
+    "kind": "pin",
+    "file": "pin-escapes.json",
+    "negative": false,
+    "outcome": "digest",
+    "rationale": "control characters and quotes use JCS escapes"
+  },
+  {
+    "id": "pin-native-nulls",
+    "kind": "pin",
+    "file": "pin-native-nulls.json",
+    "negative": false,
+    "outcome": "digest",
+    "rationale": "explicit nulls are digested, not dropped"
+  }
+]

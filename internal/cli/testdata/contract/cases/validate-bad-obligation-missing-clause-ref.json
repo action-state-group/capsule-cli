@@ -1,0 +1,23 @@
+{
+  "id": "validate-bad-obligation-missing-clause-ref",
+  "kind": "validate",
+  "rationale": "an abstract obligation must cite its clause",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "obligation",
+        "statement": "s"
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0",
+      "keyword": "required"
+    }
+  }
+}

@@ -45,7 +45,7 @@ frontmatter. `name` is lowercase-hyphenated; `description` is one line.
 guardrail block, in the skill's own words. **Human-authored, not
 generator-authored.** A skill whose gate says guardrails are
 `HUMANS-WRITE-FIRST` ships these fields holding the literal placeholder
-string `"TBD-STEVEN"` until the real wording arrives through the PM; the
+string `"TBD-HUMAN"` until a person writes the real wording; the
 generator renders that placeholder verbatim rather than inventing text to
 fill the gap. `approval_points` may be an empty array (a skill can
 legitimately have none) but the key itself is always present.
@@ -78,7 +78,7 @@ underlying tool actually implements **today**. Each entry:
     something. Per `evidence_policy` this produces **no capsule at all** —
     not even a wrapper. An earlier draft of this format had a fourth mode
     (`skill-wraps`) that sealed a wrapper capsule around every read-only
-    verb's result; Steven's 2026-09-22 ruling on the first real instance of
+    verb's result; the 2026-09-22 ruling on the first real instance of
     this format (`skills/capsulectl/`) corrected that — capsule emission is
     for consequential actions only, and a thin skill must not manufacture
     evidence for a local check just because it *can*.
@@ -107,10 +107,10 @@ spec_version: skill-spec/v0
 skill:
   name: example
   description: One line describing what this skill does and when to use it.
-may: ["TBD-STEVEN"]
-must_never: ["TBD-STEVEN"]
+may: ["TBD-HUMAN"]
+must_never: ["TBD-HUMAN"]
 approval_points: []
-evidence_policy: "TBD-STEVEN"
+evidence_policy: "TBD-HUMAN"
 verbs:
   - name: verify
     args: ["--profile NAME", "--capsule FILE"]

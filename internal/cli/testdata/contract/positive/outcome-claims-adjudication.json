@@ -11,7 +11,7 @@
       "profile": "outcome",
       "statement": "the claim was adjudicated to a final disposition within policy SLA",
       "evidence_requirements": {
-        "accepted_epistemic_types": ["SYSTEM_OF_RECORD_FACT", "OBSERVED_EVENT"],
+        "accepted_epistemic_types": ["system_of_record_fact", "observed_event"],
         "required_sources": ["claims-system-of-record"],
         "minimum_assurance": ["witnessed"],
         "freshness": "P1D",

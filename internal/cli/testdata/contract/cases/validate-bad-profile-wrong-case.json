@@ -1,0 +1,23 @@
+{
+  "id": "validate-bad-profile-wrong-case",
+  "kind": "validate",
+  "rationale": "profile values are case-sensitive",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "Outcome",
+        "statement": "s"
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0/profile",
+      "keyword": "enum"
+    }
+  }
+}

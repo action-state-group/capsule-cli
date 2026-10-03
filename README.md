@@ -2,28 +2,71 @@
 
 Standalone Go executable `capsulectl`, wrapping `capsule-emit-go`, its optional
 artifact SDK, and `cll-go`. Applications import those libraries, not this CLI.
-No Alchemy/evaluation semantics, database migration tools, selective disclosure,
-or implicit login/default profile are included.
+No application-specific (investigation/evaluation) semantics, database
+migration tools, selective disclosure, or implicit login/default profile are
+included.
 
 ## Prebuilt binaries
 
 Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
 darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
+The current release is the pre-release `v0.1.0-rc2`; there is no final `v0.1.0`
+yet, so GitHub's "latest release" link does not resolve.
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
 `modernc.org/sqlite`), so they need no system libraries.
 
 ```bash
-V=v0.1.0; OS=linux; ARCH=amd64   # or linux/arm64, darwin/arm64
+V=v0.1.0-rc2; OS=linux; ARCH=amd64   # pre-release; or linux/arm64, darwin/arm64
 base=https://github.com/action-state-group/capsule-cli/releases/download/$V
 curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
-install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
-capsulectl --version                        # capsulectl v0.1.0 (commit <sha>)
+sudo install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
+capsulectl --version                        # capsulectl v0.1.0-rc2 (commit <sha>)
+```
+
+Writing to `/usr/local/bin` needs `sudo`. Without it, install into a directory
+you own and put that directory on your `PATH`:
+
+```bash
+mkdir -p ~/.local/bin && install -m 0755 "capsulectl-$V-$OS-$ARCH" ~/.local/bin/capsulectl
+export PATH="$HOME/.local/bin:$PATH"   # add this line to ~/.bashrc or ~/.zshrc to keep it
 ```
 
 Release builds are reproducible: `scripts/release-build.sh VERSION COMMIT OUTDIR`
 is the exact command the release workflow runs, so checking out a tag and running
 it with the Go version in `go.mod` gives byte-identical binaries.
+
+## Agent skill (Claude Code and Codex)
+
+`skills/capsulectl/` is one skill in two renderings with the same content:
+`SKILL.md` for Claude Code and `AGENTS.md` for Codex, both generated from
+`spec.yaml` (see [skills/SKILL-SPEC.md](skills/SKILL-SPEC.md)). The skill calls
+an installed `capsulectl`; it does not install one. Take the skill from the same
+tag as your binary, so that every verb it lists exists in that binary
+(`capsulectl <verb> --help` confirms one).
+
+```bash
+V=v0.1.0-rc2   # the same tag as the binary you installed (a pre-release)
+git clone --depth 1 --branch "$V" https://github.com/action-state-group/capsule-cli.git
+
+# Claude Code: a personal skill (or .claude/skills/ inside one project)
+mkdir -p ~/.claude/skills && cp -r capsule-cli/skills/capsulectl ~/.claude/skills/
+
+# Codex: copy the directory into the project, then point the project's
+# AGENTS.md at it (this appends; it never overwrites an existing AGENTS.md)
+cp -r capsule-cli/skills/capsulectl /path/to/project/capsulectl-skill
+echo 'Before calling capsulectl, read and follow capsulectl-skill/AGENTS.md.' >> /path/to/project/AGENTS.md
+```
+
+Verbs that take `--profile` (`discover`, `publish`, `cll append`, `get`, and
+the others) need a profile and an initialized store first; the
+[Quickstart](#quickstart-no-database-server) below makes one in four commands.
+The skill never writes a scope file or a schema for you: `discover --scope`
+and `contract validate --schema` always name files you supply.
+
+`skills/capsulectl/scripts/run-scripted-demo.sh` is a contributor check, not an
+install step: it builds `capsulectl` from a source checkout, so it needs Go and
+this repository, and you do not need it to use the skill.
 
 ## Quickstart (no database server)
 
@@ -54,8 +97,55 @@ $ capsulectl cll checkpoint create --profile demo
 ```
 
 `key generate` prints the public key for each seed; pass it to `--trusted-key` /
-`--checkpoint-trusted-key`. For a JSONL store use `--type jsonl --jsonl-path DIR`
-instead of the SQLite flags; for MySQL see [Profile setup](#profile-setup).
+`--checkpoint-trusted-key`. For MySQL see [Profile setup](#profile-setup).
+
+### JSONL: a directory and its evidence book
+
+A JSONL profile keeps its artifacts in `artifacts.jsonl` and its one log in
+`book/`, the profile's evidence book; it also names the `--operator` the book
+writes into every record. These commands were run as written against this
+branch's `capsulectl` (outputs with keys, IDs and the statement elided):
+
+```console
+$ capsulectl profile create --name demo --type jsonl --jsonl-path /work/store \
+    --namespace demo --log-id demo-log --operator example-operator \
+    --signing-key-file /work/producer.seed --trusted-key <producer-public-key-hex> \
+    --checkpoint-signing-key-file /work/checkpoint.seed --checkpoint-trusted-key <checkpoint-public-key-hex>
+{"profile":"demo","spec_version":"capsule-cli-result/v1","status":"saved"}
+$ capsulectl store init --profile demo
+{"log_id":"demo-log","spec_version":"capsule-cli-result/v1","status":"initialized"}
+$ capsulectl seal --profile demo --request request.json --output artifact.json
+{"artifact":"artifact.json","capsule_id":"<capsule-id>","spec_version":"capsule-cli-result/v1"}
+$ capsulectl cll append --profile demo --capsule artifact.json
+{"capsule_id":"<capsule-id>","log_id":"demo-log","sequence":1,"spec_version":"capsule-cli-result/v1"}
+$ capsulectl cll list --profile demo
+{"entries":[{"sequence":1,"capsule_id":"<capsule-id>","appended_at":"<time>","record_type":"published_capsule","record_id":"<book-record-id>","capsule_carried":true}],"log_id":"demo-log","next_after":1,"spec_version":"capsule-cli-result/v1"}
+$ capsulectl cll checkpoint create --profile demo
+{"checkpoint":4,"indexed_sequence":3,"log_id":"demo-log","spec_version":"capsule-cli-result/v1","statement":"<base64 checkpoint>"}
+$ ls /work/store /work/store/book
+/work/store:
+artifacts.jsonl  book
+
+/work/store/book:
+log.jsonl  payloads  records
+```
+
+The keys and `request.json` are the ones from the SQLite example above. The
+checkpoint covers three log entries (`indexed_sequence`: the published capsule
+plus the two index roots the book commits before checkpointing); `checkpoint`
+is the MMR size over those three entries, 4, the value
+`cll checkpoint status --checkpoint` takes. `cll list` shows only entries that
+record a capsule unless given `--all`. A JSONL store
+made by an earlier capsulectl, with its log in `cll.jsonl`, is refused until it
+is migrated: give its profile an operator, then move the log into the book under
+a new log id (checked the same way against a store written by the previous
+release):
+
+```console
+$ capsulectl profile update --profile demo --operator example-operator
+$ capsulectl store migrate --profile demo --log-id <new-log-id>
+{"backfilled":1,"log_id":"<new-log-id>","migration_record_id":"<record-id>","retired_log_id":"demo-log","spec_version":"capsule-cli-result/v1"}
+```
 
 ## Build from source
 
@@ -91,6 +181,7 @@ capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsulectl verify --profile NAME --capsule ARTIFACT.json
+capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl publish --profile NAME --request INPUT.json
 capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100]
 capsulectl cll append --profile NAME --capsule ARTIFACT.json
@@ -100,9 +191,32 @@ capsulectl cll checkpoint publish --profile NAME --checkpoint MMR_SIZE
 capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
 capsulectl result open FILE [--format text|json]
-capsulectl run [args passed to the actionstate plugin, e.g. --dry-run]
+capsulectl run [args passed to the plugin]   # only in a build with -tags actionstate
+capsulectl plugin ls
+capsulectl store migrate --profile NAME [--log-id NEW_LOG_ID]
+capsulectl contract validate FILE --schema PATH_OR_URL [--json]
+capsulectl contract diff A B [--schema PATH_OR_URL] [--json]
+capsulectl discover --profile NAME --scope SCOPE.yaml --seal-output SCAN.json [--effects] [--format table|json]
+capsulectl map CONTRACT --schema PATH_OR_URL --discover EFFECTS.json [--format text|json]
+capsulectl bundle --profile NAME --root CAPSULE_ID --out BUNDLE.json [--closure-depth 2] [--producer-key HEX]
+capsulectl disclose --profile NAME --root CAPSULE_ID --out BUNDLE.json [--payloads all|selected] [--suppress agent_input|agent_output] [--producer-key HEX]
+capsulectl permalink --profile NAME --root CAPSULE_ID [--payloads all|selected] [--suppress ...] [--base-url URL]
+capsulectl countersign request --profile NAME --service URL (--bundle BUNDLE.json | --root CAPSULE_ID [--producer-key HEX]) [--out FILE] [--window LABEL]
+capsulectl countersign verify --profile NAME --directory URL_OR_FILE BUNDLE.json
+capsulectl request --profile NAME --request FILE --responder NAME --output FILE
+capsulectl request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX | --absent-until TIME)
+capsulectl respond --profile NAME --request FILE --requester ID [--policy FILE] --output FILE
+capsulectl close --profile NAME --period day|week --counterparty ID [--date YYYY-MM-DD] [--since-last] [--peer FILE --peer-checkpoint-key HEX]
+capsulectl reconcile --profile NAME --period day|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX
+capsulectl judge pin FILE
+capsulectl judge drift pin FILE_A FILE_B
+capsulectl judge drift reports FILE_A FILE_B
+capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
 capsulectl deal init|open|note|check|close|report --profile NAME [...]
 ```
+
+`capsulectl <command> --help` gives every flag; this list is the shape of each
+command, not its full flag set.
 
 `emit` is `seal`'s v4 name: the same seal/prepare/self-verify/write-to-file
 operation, offered under both names (`seal` stays for existing callers).
@@ -112,10 +226,30 @@ plugin trust, profile presence, signing-key-file permissions, and (only with
 checkpoint endpoint. `result open` validates and prints a Result v0
 document's aggregate/coverage statement as text (or `--format json`); the
 Result v0 schema is still DRAFT, so this is a structural check, not schema
-validation, and it stands in for the `capsule-viewer` build. `run` carries no
-flags or licence logic of its own: the base binary only dispatches to a
-discovered `actionstate` plugin, or refuses with an actionable message if
-that plugin is absent or unlicensed.
+validation, and it stands in for the `capsule-viewer` build. `run` exists
+only in a build made with `-tags actionstate`, where it carries no flags or
+licence logic of its own: it dispatches to a discovered `actionstate` plugin,
+or refuses with an actionable message if that plugin is absent or unlicensed.
+The default build, and the release binaries, carry no plugin dispatch: there
+`run` is hidden and answers "run is not available in this build".
+
+Every bundle `bundle`, `disclose`, `permalink` and `countersign request --root`
+build declares the producer's own Ed25519 key in the `producer-key/v1` bundle
+extension, `{"extensions": {"producer-key/v1": {"public_key": "<64 lowercase hex>"}}}`:
+by default the public half of the profile's signing key (the key that sealed
+its records), or `--producer-key HEX` when the operator countersigns with a
+different key of its own. The extension is covered by the bundle digest, so it
+is fixed before anyone countersigns. A viewer, and `countersign verify`, reports
+a countersignature by the declared key as not independent. A profile with no
+signing key declares none.
+
+`countersign verify` resolves each signer against the countersigner directory
+named by `--directory`, which is required. It takes an HTTPS URL or a local
+file, holding either a bare array of rows (`[{"name": ..., "key_ids": [...]}]`)
+or an object with a `countersigners` array. The CLI privileges no list: you
+choose the one you trust. A signer the directory does not list is reported as an
+unresolved signer, and the command exits partial (3).
+
 `deal` seals a deal's baseline and checks each point of no return (pay,
 commit, sign, share) against it; see [skills/deal](skills/deal/README.md).
 
@@ -132,20 +266,20 @@ These identifiers select different layers:
 | Setting | Meaning |
 | --- | --- |
 | `--name` | Local profile name. Commands that operate on a configured target select it with `--profile`; `profile show` takes it positionally. |
-| `--type` | Storage backend: `jsonl`, `sqlite` or `mysql`. The three are peers: each holds both the artifact store and the CLL. |
+| `--type` | Storage backend: `jsonl`, `sqlite` or `mysql`. The three are peers: each holds both the artifact store and the log (for `jsonl`, the log is the profile's evidence book). |
 | `--jsonl-path` / `--sqlite-path` / `--mysql-database` | Where the storage lives for the selected type: a JSONL directory, a SQLite database file, or a MySQL database. |
 | `--namespace` | Artifact SDK logical grouping within `capsule_store_capsules` and `capsule_store_artifacts`. Records are addressed by namespace and Capsule ID. Not a database/schema or an authorization boundary. |
 | `--log-id` | CLL log within shared `cll_*` tables, not a table name. |
 | `--trusted-key` | Independently provisioned Ed25519 producer public key used to verify Capsule signatures. Not a password or a private signing key. Never trust a key merely because the artifact supplies it. |
 
 One store (a JSONL directory, a SQLite file or a MySQL database) can contain both
-`alchemy` and `evaluations` namespaces in the same artifact tables. Storage
+`example-investigation` and `evaluations` namespaces in the same artifact tables. Storage
 permissions (database grants, file modes), not namespace names, control access.
 
-For profile `alchemy`, the default file is
-`~/.config/capsule/profiles/alchemy.yaml`, or
-`$XDG_CONFIG_HOME/capsule/profiles/alchemy.yaml` when `XDG_CONFIG_HOME` is set.
-Use `capsulectl profile show alchemy` to inspect it with secrets redacted.
+For profile `example-investigation`, the default file is
+`~/.config/capsule/profiles/example-investigation.yaml`, or
+`$XDG_CONFIG_HOME/capsule/profiles/example-investigation.yaml` when `XDG_CONFIG_HOME` is set.
+Use `capsulectl profile show example-investigation` to inspect it with secrets redacted.
 Use `capsulectl profile list` to list configured profile names without reading
 or displaying their contents. Listing discovers filenames only; `profile show`
 validates the selected file and its owner-only permissions.
@@ -225,7 +359,17 @@ selects one with `--type`:
 
 - JSONL is an inspectable, single-writer append-only journal. `--jsonl-path`
   sets `connection.database` to a directory holding `artifacts.jsonl` and
-  `cll.jsonl`; no host, port, or TLS.
+  `book/`, the profile's evidence book, which is its one log: `publish`,
+  `cll append`, `cll list`, `cll checkpoint`, the bundle verbs and the book
+  verbs (`close`, `reconcile`, `request`, `respond`) all use it, and it needs
+  `--operator`. No host, port, or TLS. `cll list` keeps the same fields
+  (`capsule_id` is the published capsule) and lists only entries that record a
+  capsule; `--all` also lists the book's internal records. `cll list` and
+  `cll checkpoint status` read the book's files without opening it, so a
+  read-only profile needs no signing secret. A JSONL store made by an earlier
+  capsulectl keeps its log in `cll.jsonl`; `store migrate` moves those entries
+  into the book once, in order, always under a new `--log-id`, and every other
+  command refuses the profile until it has.
 - SQLite uses WAL transactions and supports multiple handles in one process.
   Artifact and CLL data share one file, set with `--sqlite-path`.
 - MySQL uses transactional row locking and supports multiple processes.
@@ -300,41 +444,41 @@ a round-trip format for signed bytes. `seal --output` remains an exact-byte
 SDK export. No stored bytes, digests, or Capsule IDs change.
 
 ```bash
-capsulectl get --profile alchemy --capsule-id <capsule-id> | jq '.capsule'
-capsulectl get --profile alchemy --capsule-id <capsule-id> |
+capsulectl get --profile example-investigation --capsule-id <capsule-id> | jq '.capsule'
+capsulectl get --profile example-investigation --capsule-id <capsule-id> |
   jq '.artifacts[] | select(.name == "payload") | .content'
 ```
 
-## Example: read an Alchemy investigation
+## Example: read a deployment's investigation records
 
 Replace the placeholders with the deployment's database connection, configured
 `aac.log-id`, and independently obtained producer public key. The artifact
 namespace must match the writer's namespace. This does not trigger an investigation.
 
 ```bash
-chmod 600 /protected/alchemy-db-password
+chmod 600 /protected/example-investigation-db-password
 
 ./capsulectl profile create \
-  --name alchemy \
+  --name example-investigation \
   --type mysql \
-  --namespace alchemy \
-  --log-id <alchemy-log-id> \
-  --mysql-host <alchemy-db-host> \
-  --mysql-database alchemy \
+  --namespace example-investigation \
+  --log-id <investigation-log-id> \
+  --mysql-host <investigation-db-host> \
+  --mysql-database example_investigation \
   --mysql-user <read-only-db-user> \
-  --mysql-password-file /protected/alchemy-db-password \
+  --mysql-password-file /protected/example-investigation-db-password \
   --trusted-key <producer-public-key-hex> \
   --read-only
 
-./capsulectl profile show alchemy
+./capsulectl profile show example-investigation
 
 ./capsulectl get \
-  --profile alchemy \
+  --profile example-investigation \
   --capsule-id <capsule-id> \
   --raw --output investigation-artifact.json
 
 ./capsulectl verify \
-  --profile alchemy \
+  --profile example-investigation \
   --capsule investigation-artifact.json
 
 jq -r '.artifacts[] | select(.name == "payload") | .content' \
@@ -393,6 +537,56 @@ are available without a configured witness.
 the profile's expected log, trusted signer, embedded consistency proof and optional
 inclusion through cll-go. It does not prove producer signatures or business truth.
 No trusted external prefix/time is inferred merely from a self-consistent checkpoint.
+
+`verify --bundle BUNDLE.json` checks an Evidence Bundle (`evidence-bundle/v2`,
+draft-mih-zhang-agent-disclosure-bundle-00) offline, from the file alone. No
+profile and no network are used. It checks:
+
+- every record's identity;
+- every record's producer signature (`signature`: the hex producer envelope;
+  `key_id`: the signer's key);
+- citation closure to the declared depth;
+- the checkpoint: `checkpoint.cose` must verify, and every signed field the
+  file states (`log_id`, `mmr_size`, `root`, `key_id`, `timestamp`,
+  `prev_size`, `prev_root`) must equal its signed value;
+- interval coverage and each record's inclusion under that checkpoint;
+- disclosures.
+
+It prints each claim's status and the bundle digest, and lists extensions and
+countersignatures it carried but did not check. Exit codes:
+
+- 0: every claim passed;
+- 3: nothing failed, but something is not shown (no checkpoint signature, an
+  unsigned record, declared-missing citations);
+- 1: a claim failed (an edited record, a signature that does not verify, a
+  checkpoint field that differs from its signature).
+
+**Witness receipts.** A checkpoint can carry witness receipts
+(`checkpoint.witnesses`). With `--witness-directory WITNESSES.json` (capsule-emit's
+`witnesses.json` format: each row names a witness endpoint and its keys), each
+receipt is checked against the signed checkpoint under its witness's row, and
+reported under `witnesses`:
+
+- `pass`: it verifies under a key in the directory;
+- `withheld`: the file carries none, the directory has no row or no key for its
+  witness, the row's binding isn't `cll`, or the checkpoint itself did not
+  verify;
+- `fail`: it does not verify, or is malformed.
+
+The CLI privileges no witness. Without `--witness-directory` no receipt is
+checked, so receipts are `withheld`.
+
+capsulectl checks receipts from `cll` witnesses only. A receipt whose row is a
+`rekor` or `scrapi` binding is `withheld` here. capsule-emit's verifier checks
+those too, so the two can differ on such a file: there it can pass, or fail
+and make the file INVALID, where capsulectl reports it as not checked. The bundle draft defines no witness member,
+so only a failing receipt changes the verdict; a file without one is judged as
+before.
+
+Its verdicts agree with capsule-emit's offline bundle verifier, given the same
+witness directory and no `rekor` or `scrapi` receipts. Bundles from `capsulectl bundle` carry the checkpoint's
+signed fields and `checkpoint.cose`, and each record's producer signature
+inline.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
 
@@ -478,6 +672,16 @@ is an error, never a reason to initialize implicitly.
 
 The pinned CLL dependency allows unrelated application tables to coexist.
 It still validates actual CLL state and does not migrate or remove old tables.
+
+The book verbs place records in a period by the book's commit time, which
+never goes backwards. When this machine's clock falls behind the book's last
+record by less than the profile's `clock_tolerance` (default 5m, at most 1h),
+new records are committed at that last time instead, so a record appended up
+to an hour before a period ends can be counted in the next period's Close. A
+period that such records would leave without any exchange is refused rather
+than closed with zero tallies; close the next period with `--since-last` to
+count them. A larger gap refuses writing until the clock passes the book's last
+record, or until a new log is started.
 
 Checkpoint service success conformance, broad fault-injection coverage and peer
 review status are tracked in the implementation handoff, not implied by compilation.
@@ -665,7 +869,7 @@ configured facilities. `seal` and offline verification do not open storage.
 ```bash
 # Add your storage flags to each create command: --type sqlite --sqlite-path FILE,
 # --type jsonl --jsonl-path DIR, or --type mysql with its host/database/credential flags.
-capsulectl profile create --name artifacts --namespace alchemy --log-id '' ...
+capsulectl profile create --name artifacts --namespace example-investigation --log-id '' ...
 capsulectl profile create --name ledger --namespace '' --log-id investigations ...
 ```
 

@@ -1,0 +1,159 @@
+{
+  "id": "diff-mixed-tighten-and-loosen",
+  "kind": "diff",
+  "rationale": "one tightening makes the whole diff breaking, however much else loosens",
+  "a": {
+    "id": "ec:example-fixture:2026-09-30",
+    "version": "1",
+    "subject": {
+      "job_type": "example-job",
+      "population_selector": "every job in evaluation_period"
+    },
+    "requirements": [
+      {
+        "id": "req-a",
+        "profile": "outcome",
+        "statement": "the record was written before the action was dispatched",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "observed_event",
+            "system_of_record_fact"
+          ],
+          "required_sources": [
+            "source-one"
+          ],
+          "minimum_assurance": [
+            "witnessed"
+          ],
+          "freshness": "P7D"
+        },
+        "adjudication": {
+          "mode": "deterministic"
+        },
+        "uncertainty": {
+          "on_missing": "insufficient",
+          "on_conflict": "contradicted"
+        }
+      },
+      {
+        "id": "req-b",
+        "profile": "process",
+        "statement": "a review step preceded the change",
+        "required_sequence": [
+          "requested",
+          "approved",
+          "applied"
+        ],
+        "approvals": [
+          "one reviewer who is not the author"
+        ],
+        "escalation_path": "queue-one"
+      },
+      {
+        "id": "req-c",
+        "profile": "obligation",
+        "statement": "the example policy's review control was evidenced",
+        "clause_ref": "example-policy/section-1/v1",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "observed_event"
+          ]
+        }
+      }
+    ],
+    "temporal": {
+      "evaluation_period": "2026-09"
+    },
+    "consequence": {
+      "class": "report",
+      "rule_ref": "example-report-v1"
+    }
+  },
+  "b": {
+    "id": "ec:example-fixture:2026-09-30",
+    "version": "2",
+    "subject": {
+      "job_type": "example-job",
+      "population_selector": "every job in evaluation_period"
+    },
+    "requirements": [
+      {
+        "id": "req-a",
+        "profile": "outcome",
+        "statement": "the record was written before the action was dispatched",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "observed_event",
+            "system_of_record_fact"
+          ],
+          "required_sources": [],
+          "minimum_assurance": [
+            "witnessed"
+          ],
+          "freshness": "P30D"
+        },
+        "adjudication": {
+          "mode": "deterministic"
+        },
+        "uncertainty": {
+          "on_missing": "insufficient",
+          "on_conflict": "contradicted"
+        }
+      },
+      {
+        "id": "req-b",
+        "profile": "process",
+        "statement": "a review step preceded the change",
+        "required_sequence": [
+          "requested",
+          "approved",
+          "applied"
+        ],
+        "approvals": [
+          "one reviewer who is not the author",
+          "a second reviewer"
+        ],
+        "escalation_path": "queue-one"
+      },
+      {
+        "id": "req-c",
+        "profile": "obligation",
+        "statement": "the example policy's review control was evidenced",
+        "clause_ref": "example-policy/section-1/v1",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "observed_event"
+          ]
+        }
+      }
+    ],
+    "temporal": {
+      "evaluation_period": "2026-09"
+    },
+    "consequence": {
+      "class": "report",
+      "rule_ref": "example-report-v1"
+    }
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[req-a]/evidence_requirements/freshness",
+        "kind": "loosened"
+      },
+      {
+        "path": "requirements[req-a]/evidence_requirements/required_sources",
+        "kind": "loosened"
+      },
+      {
+        "path": "requirements[req-b]/approvals",
+        "kind": "tightened"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

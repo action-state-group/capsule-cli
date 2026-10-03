@@ -1,0 +1,23 @@
+{
+  "id": "validate-bad-profile-number",
+  "kind": "validate",
+  "rationale": "profile must be a string",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": 1,
+        "statement": "s"
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0/profile",
+      "keyword": "enum"
+    }
+  }
+}

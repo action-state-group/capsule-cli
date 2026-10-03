@@ -1,0 +1,23 @@
+{
+  "id": "validate-bad-unknown-profile",
+  "kind": "validate",
+  "rationale": "profile is closed at seven values",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "warranty",
+        "statement": "s"
+      }
+    ]
+  },
+  "expect": {
+    "valid": false,
+    "error": {
+      "path": "requirements/0/profile",
+      "keyword": "enum"
+    }
+  }
+}

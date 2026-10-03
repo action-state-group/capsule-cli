@@ -1,3 +1,5 @@
+//go:build actionstate
+
 package cli
 
 import (

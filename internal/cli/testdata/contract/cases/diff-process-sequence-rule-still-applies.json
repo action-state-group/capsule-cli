@@ -1,0 +1,47 @@
+{
+  "id": "diff-process-sequence-rule-still-applies",
+  "kind": "diff",
+  "rationale": "on process, required_sequence is defined and keeps its rule",
+  "a": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "process",
+        "statement": "s",
+        "required_sequence": [
+          "a",
+          "b"
+        ]
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "process",
+        "statement": "s",
+        "required_sequence": [
+          "a"
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "breaking": false,
+    "changes": [
+      {
+        "path": "requirements[r1]/required_sequence",
+        "kind": "loosened"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

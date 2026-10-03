@@ -1,0 +1,264 @@
+{
+  "id": "validate-ok-fifty-requirements",
+  "kind": "validate",
+  "rationale": "a contract may carry many requirements",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r00",
+        "profile": "outcome",
+        "statement": "s0"
+      },
+      {
+        "id": "r01",
+        "profile": "outcome",
+        "statement": "s1"
+      },
+      {
+        "id": "r02",
+        "profile": "outcome",
+        "statement": "s2"
+      },
+      {
+        "id": "r03",
+        "profile": "outcome",
+        "statement": "s3"
+      },
+      {
+        "id": "r04",
+        "profile": "outcome",
+        "statement": "s4"
+      },
+      {
+        "id": "r05",
+        "profile": "outcome",
+        "statement": "s5"
+      },
+      {
+        "id": "r06",
+        "profile": "outcome",
+        "statement": "s6"
+      },
+      {
+        "id": "r07",
+        "profile": "outcome",
+        "statement": "s7"
+      },
+      {
+        "id": "r08",
+        "profile": "outcome",
+        "statement": "s8"
+      },
+      {
+        "id": "r09",
+        "profile": "outcome",
+        "statement": "s9"
+      },
+      {
+        "id": "r10",
+        "profile": "outcome",
+        "statement": "s10"
+      },
+      {
+        "id": "r11",
+        "profile": "outcome",
+        "statement": "s11"
+      },
+      {
+        "id": "r12",
+        "profile": "outcome",
+        "statement": "s12"
+      },
+      {
+        "id": "r13",
+        "profile": "outcome",
+        "statement": "s13"
+      },
+      {
+        "id": "r14",
+        "profile": "outcome",
+        "statement": "s14"
+      },
+      {
+        "id": "r15",
+        "profile": "outcome",
+        "statement": "s15"
+      },
+      {
+        "id": "r16",
+        "profile": "outcome",
+        "statement": "s16"
+      },
+      {
+        "id": "r17",
+        "profile": "outcome",
+        "statement": "s17"
+      },
+      {
+        "id": "r18",
+        "profile": "outcome",
+        "statement": "s18"
+      },
+      {
+        "id": "r19",
+        "profile": "outcome",
+        "statement": "s19"
+      },
+      {
+        "id": "r20",
+        "profile": "outcome",
+        "statement": "s20"
+      },
+      {
+        "id": "r21",
+        "profile": "outcome",
+        "statement": "s21"
+      },
+      {
+        "id": "r22",
+        "profile": "outcome",
+        "statement": "s22"
+      },
+      {
+        "id": "r23",
+        "profile": "outcome",
+        "statement": "s23"
+      },
+      {
+        "id": "r24",
+        "profile": "outcome",
+        "statement": "s24"
+      },
+      {
+        "id": "r25",
+        "profile": "outcome",
+        "statement": "s25"
+      },
+      {
+        "id": "r26",
+        "profile": "outcome",
+        "statement": "s26"
+      },
+      {
+        "id": "r27",
+        "profile": "outcome",
+        "statement": "s27"
+      },
+      {
+        "id": "r28",
+        "profile": "outcome",
+        "statement": "s28"
+      },
+      {
+        "id": "r29",
+        "profile": "outcome",
+        "statement": "s29"
+      },
+      {
+        "id": "r30",
+        "profile": "outcome",
+        "statement": "s30"
+      },
+      {
+        "id": "r31",
+        "profile": "outcome",
+        "statement": "s31"
+      },
+      {
+        "id": "r32",
+        "profile": "outcome",
+        "statement": "s32"
+      },
+      {
+        "id": "r33",
+        "profile": "outcome",
+        "statement": "s33"
+      },
+      {
+        "id": "r34",
+        "profile": "outcome",
+        "statement": "s34"
+      },
+      {
+        "id": "r35",
+        "profile": "outcome",
+        "statement": "s35"
+      },
+      {
+        "id": "r36",
+        "profile": "outcome",
+        "statement": "s36"
+      },
+      {
+        "id": "r37",
+        "profile": "outcome",
+        "statement": "s37"
+      },
+      {
+        "id": "r38",
+        "profile": "outcome",
+        "statement": "s38"
+      },
+      {
+        "id": "r39",
+        "profile": "outcome",
+        "statement": "s39"
+      },
+      {
+        "id": "r40",
+        "profile": "outcome",
+        "statement": "s40"
+      },
+      {
+        "id": "r41",
+        "profile": "outcome",
+        "statement": "s41"
+      },
+      {
+        "id": "r42",
+        "profile": "outcome",
+        "statement": "s42"
+      },
+      {
+        "id": "r43",
+        "profile": "outcome",
+        "statement": "s43"
+      },
+      {
+        "id": "r44",
+        "profile": "outcome",
+        "statement": "s44"
+      },
+      {
+        "id": "r45",
+        "profile": "outcome",
+        "statement": "s45"
+      },
+      {
+        "id": "r46",
+        "profile": "outcome",
+        "statement": "s46"
+      },
+      {
+        "id": "r47",
+        "profile": "outcome",
+        "statement": "s47"
+      },
+      {
+        "id": "r48",
+        "profile": "outcome",
+        "statement": "s48"
+      },
+      {
+        "id": "r49",
+        "profile": "outcome",
+        "statement": "s49"
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

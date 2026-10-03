@@ -12,8 +12,8 @@ verification, 4 publication pending, 5 conflict. Never suppress errors with an
 empty-list fallback.
 
 This document extends the reference `evaluation-compiler` carried
-(`references/capsule-cli.md` there) with the three verbs it never needed:
-`contract validate`, `discover`, and `plugin ls`. Everything below reflects
+(`references/capsule-cli.md` there) with the verbs it never needed:
+`contract validate`, `contract diff`, `discover`, and `plugin ls`. Everything below reflects
 the profile/get/verify/publish/cll contract as-is; nothing in those sections
 was changed for this skill.
 
@@ -30,8 +30,11 @@ specific one with `profile show NAME` (NAME is positional, not a `--profile`
 flag). Read `StoreID`, `Namespace` and `LogID` to freeze the target;
 `ReadOnly` describes write configuration. Do not save the entire profile or
 its credentials in the run or skill output. The store backend (`Type`) may be
-`mysql`, `sqlite` or `jsonl`; all three expose the identical CLL/get/verify/
-publish contract below, so nothing downstream depends on which is configured.
+`mysql`, `sqlite` or `jsonl`; all three expose the same CLL/get/verify/
+publish contract below. On `jsonl` the log is the profile's evidence book;
+`cll list` keeps the same fields (`capsule_id` is the published capsule) and
+adds `record_type`, `record_id` and `capsule_carried`. Its internal records
+are listed only with `--all`.
 
 ## Enumerate
 
@@ -52,6 +55,7 @@ when excluded from downstream work.
 capsulectl get --profile NAME --capsule-id ID
 capsulectl get --profile NAME --capsule-id ID --raw --output RECORD.json
 capsulectl verify --profile NAME --capsule RECORD.json
+capsulectl verify --bundle BUNDLE.json   # an Evidence Bundle, offline, no profile
 ```
 
 Readable `get` exposes capsule_id, capsule, producer_envelope, artifacts at
@@ -140,7 +144,7 @@ capsulectl contract validate FILE --schema PATH_OR_URL --json
 ```
 
 Validates FILE (JSON) against `--schema` (a JSON Schema, given as a path or an
-`http(s)` URL) — capsulectl embeds no schema of its own; `--schema` always
+`http(s)` URL) — `contract validate` uses no built-in schema; `--schema` always
 names the caller's. Default output is human-readable (`FILE: valid` or
 `FILE: INVALID` plus one line per issue); `--json` instead emits a
 `capsule-cli-result/v1` report with `file`, `schema`, `valid` and a
@@ -148,6 +152,29 @@ structured `issues[]` (each `{path, message}`, `path` a JSON Pointer,
 `<root>` for the document itself). Exit code 1 on an invalid document
 (`ErrSchemaInvalid`), not a crash — treat exit 1 with a populated `issues[]`
 as the validator working correctly, not as an operational failure.
+
+## Diff two contract versions
+
+```sh
+capsulectl contract diff A B
+capsulectl contract diff A B --schema PATH_OR_URL --json
+```
+
+Classifies every change from Evidence Contract A to B as `breaking` or
+`non_breaking`, each with a `kind` (`requirement_added`, `requirement_removed`,
+`requirement_reid`, `tightened`, `loosened`, `changed`, `editorial`,
+`version_changed`, `version_reused`, `contract_id_changed`,
+`requirements_reordered`) and a reason. A change is non-breaking only when
+evidence that satisfied A still satisfies B and every claim against A still
+names a requirement of B; a field with no rule is breaking. Both contracts are
+named by `<id>@<version>` and the SHA-256 of their RFC 8785 (JCS) bytes --
+how a result names the exact contract it was evaluated against. Both are
+validated first: against the Evidence Contract v0 schema embedded in
+capsulectl (a byte-for-byte copy of capsule-engine's), or against `--schema`
+when given. Unlike `contract validate`, which always takes `--schema`, `contract
+diff` needs a schema to be safe: an invalid input is refused, never diffed.
+Exit 0: identical or non-breaking; 1: breaking; 2: an input is unreadable or
+invalid.
 
 ## Discover (read-only inventory)
 

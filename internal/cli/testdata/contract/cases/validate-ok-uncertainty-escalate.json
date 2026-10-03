@@ -1,0 +1,23 @@
+{
+  "id": "validate-ok-uncertainty-escalate",
+  "kind": "validate",
+  "rationale": "uncertainty may escalate on both missing and conflicting evidence",
+  "contract": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "outcome",
+        "statement": "s",
+        "uncertainty": {
+          "on_missing": "escalate",
+          "on_conflict": "escalate"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "valid": true
+  }
+}

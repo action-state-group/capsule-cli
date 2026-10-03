@@ -32,8 +32,12 @@ jobs:
           git diff --exit-code -- go.mod go.sum
       - name: Vet
         run: go vet ./...
+      - name: Vet with the plugin-dispatch tag
+        run: go vet -tags actionstate ./...
       - name: Build CLI
         run: make build
+      - name: Build CLI with the plugin-dispatch tag
+        run: go build -tags actionstate -o capsulectl-actionstate ./cmd/capsulectl
 
   test:
     runs-on: ubuntu-latest
@@ -64,6 +68,8 @@ jobs:
           cache: true
       - name: Unit and MySQL integration tests with race detector
         run: make test
+      - name: Tests of the build with the plugin-dispatch tag
+        run: go test -tags actionstate -race -count=1 -timeout=15m ./...
 
   seal-pr-capsule:
     # Same-repo PRs only: a fork PR's pull_request event carries no repository

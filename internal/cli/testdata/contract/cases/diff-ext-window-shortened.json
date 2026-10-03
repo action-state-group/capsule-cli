@@ -1,0 +1,46 @@
+{
+  "id": "diff-ext-window-shortened",
+  "kind": "diff",
+  "rationale": "the window rule is the native shape's; on quality a shorter window is just a change",
+  "a": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "quality",
+        "statement": "s",
+        "window": {
+          "duration": "P7D"
+        }
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "quality",
+        "statement": "s",
+        "window": {
+          "duration": "P14D"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[r1]/window/duration",
+        "kind": "changed"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

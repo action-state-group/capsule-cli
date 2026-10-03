@@ -145,7 +145,7 @@ func mapResultRows(results []mapRequirementResult) []map[string]any {
 	return rows
 }
 
-// mapCommand implements Steven's 2026-09-22 ruling: a deterministic,
+// mapCommand implements the 2026-09-22 ruling: a deterministic,
 // read-only join of a validated Evidence Contract to a discover inventory.
 // It emits nothing (no --seal-output; unlike discover, a map run leaves no
 // capsule) and is never licence-gated -- only execution capabilities
@@ -203,7 +203,7 @@ func mapCommand() *cobra.Command {
 			return e
 		},
 	}
-	cmd.Flags().String("schema", "", "Path or URL to the JSON Schema the contract must satisfy (required; capsulectl embeds no schema of its own)")
+	cmd.Flags().String("schema", "", "Path or URL to the JSON Schema the contract must satisfy (required; map uses no built-in schema)")
 	cmd.Flags().String("discover", "", "discover --effects --format json output file (required)")
 	cmd.Flags().String("format", "text", "Output format: text or json")
 	return cmd

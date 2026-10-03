@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
+	"github.com/action-state-group/agent-action-capsule/go/envelope"
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	"github.com/action-state-group/cll-go/cll"
 	"github.com/action-state-group/cll-go/mmr"
@@ -33,6 +35,77 @@ type BundleOptions struct {
 	Payloads       string
 	Suppress       map[string]bool
 	WithDisclosure bool
+	// ProducerKey, when set, is declared in the bundle's producer-key/v1
+	// extension (see producerKeyExtension). Nil emits no extension.
+	ProducerKey ed25519.PublicKey
+}
+
+// producerKeyExtensionKind is the Evidence Bundle extension the AAC viewer
+// reads to learn the producer's own Ed25519 key, so that a countersignature
+// made with that key renders "not independent". Its exact shape is the one the
+// viewer parses (agent-action-capsule ts/src/evidence-graph-view.ts,
+// producerPublicKeys): extensions["producer-key/v1"].public_key, one Ed25519
+// public key as 64 lowercase hex characters. Extensions are covered by the
+// bundle digest (draft-mih-zhang-agent-disclosure-bundle, "Typed
+// Extensions"), so the declaration is fixed before any countersignature is
+// made over that digest. It can only make a countersignature look less
+// independent, never more: a viewer treats the declared key as the
+// producer's own.
+const producerKeyExtensionKind = "producer-key/v1"
+
+// producerKeyExtension returns the extensions member declaring key as the
+// producer's: {"producer-key/v1": {"public_key": "<64 lowercase hex>"}}.
+func producerKeyExtension(key ed25519.PublicKey) (map[string]interface{}, error) {
+	if len(key) != ed25519.PublicKeySize {
+		return nil, inputError("producer key must be a 32-byte Ed25519 public key")
+	}
+	return map[string]interface{}{producerKeyExtensionKind: map[string]interface{}{"public_key": hex.EncodeToString(key)}}, nil
+}
+
+// declaredProducerKey reads a bundle's producer-key/v1 public_key, accepting
+// only the form the AAC viewer accepts (64 lowercase hex). Anything else is
+// treated as no declaration.
+func declaredProducerKey(bundle map[string]interface{}) (ed25519.PublicKey, bool) {
+	extensions, _ := bundle["extensions"].(map[string]interface{})
+	block, _ := extensions[producerKeyExtensionKind].(map[string]interface{})
+	value, _ := block["public_key"].(string)
+	if len(value) != 2*ed25519.PublicKeySize || !isLowerHex(value) {
+		return nil, false
+	}
+	key, err := hex.DecodeString(value)
+	if err != nil {
+		return nil, false
+	}
+	return ed25519.PublicKey(key), true
+}
+
+// bundleProducerKey chooses the key a bundle declares as the producer's:
+// --producer-key when given (an operator whose countersigning key differs
+// from its ledger key declares the one a self-countersignature would carry),
+// otherwise the public half of the profile's signing key -- the key that
+// sealed the profile's records. A profile with no signing key declares none.
+func bundleProducerKey(c *cobra.Command, profile Profile) (ed25519.PublicKey, error) {
+	if c.Flags().Lookup("producer-key") != nil {
+		if value, _ := c.Flags().GetString("producer-key"); value != "" {
+			keys, err := parseKeys([]string{value})
+			if err != nil {
+				return nil, inputError("--producer-key must be a 32-byte Ed25519 public key in hex")
+			}
+			return keys[0], nil
+		}
+	}
+	if profile.Signing == (Secret{}) {
+		return nil, nil
+	}
+	key, err := privateKey(profile.Signing)
+	if err != nil {
+		return nil, err
+	}
+	public, ok := key.Public().(ed25519.PublicKey)
+	if !ok {
+		return nil, inputError("invalid signing key")
+	}
+	return public, nil
 }
 
 func integer(value uint64) json.Number { return json.Number(fmt.Sprintf("%d", value)) }
@@ -168,6 +241,10 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 	if len(missing) != 0 {
 		mode = "declared_incomplete"
 	}
+	checkpointObject, err := bundleCheckpoint(state.Checkpoint.Bytes, rangeRoot, checkpointSize)
+	if err != nil {
+		return nil, err
+	}
 	bundle := map[string]interface{}{
 		"bundle_version": "2",
 		"bundle_kind":    "evidence-bundle/v2",
@@ -183,7 +260,7 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 			"range_proof":  map[string]interface{}{"from_seq": integer(1), "to_seq": integer(checkpointSeq), "size": integer(checkpointSize), "from_index": integer(0), "to_index": integer(checkpointSeq - 1), "witness": witnessJSON},
 			"memberships":  memberships,
 		},
-		"checkpoint":   map[string]interface{}{"root": hex.EncodeToString(rangeRoot), "mmr_size": integer(checkpointSize), "statement": base64.StdEncoding.EncodeToString(state.Checkpoint.Bytes)},
+		"checkpoint":   checkpointObject,
 		"verification": map[string]interface{}{"producer": "capsulectl", "checks": []interface{}{"graph_closure", "interval_coverage", "per_record_membership"}},
 	}
 	if options.WithDisclosure {
@@ -211,6 +288,13 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 			}
 		}
 		bundle["disclosures"] = overlay
+	}
+	if options.ProducerKey != nil {
+		extensions, err := producerKeyExtension(options.ProducerKey)
+		if err != nil {
+			return nil, err
+		}
+		bundle["extensions"] = extensions
 	}
 	if err := verifyProducedBundle(bundle, options.WithDisclosure); err != nil {
 		return nil, err
@@ -248,7 +332,36 @@ func getCapsule(ctx context.Context, artifacts bundleArtifacts, id string) (map[
 	if capsule["capsule_id"] != id {
 		return nil, errors.New("artifact capsule identity does not match requested id")
 	}
+	// The record carries its producer signature inline (signature: the hex
+	// COSE_Sign1 producer envelope; key_id: the signer's raw public key), the
+	// form bundle verifiers check. Both sit outside the capsule_id preimage.
+	if len(record.ProducerEnvelope) != 0 {
+		signed := envelope.Verify(id, record.ProducerEnvelope)
+		if !signed.OK {
+			return nil, fmt.Errorf("stored producer envelope for %s does not verify", id)
+		}
+		capsule["signature"] = hex.EncodeToString(record.ProducerEnvelope)
+		capsule["key_id"] = hex.EncodeToString(signed.PublicKey)
+	}
 	return capsule, nil
+}
+
+// bundleCheckpoint is the bundle's checkpoint object: the signed checkpoint's
+// own fields (log_id, mmr_size, root, prev_size, prev_root, key_id,
+// timestamp, as the COSE statement signs them), plus the statement itself as
+// cose (the draft's portable authenticator, unpadded base64url) and as
+// statement (the same bytes, for readers of the earlier shape).
+func bundleCheckpoint(statement, rangeRoot []byte, checkpointSize uint64) (map[string]interface{}, error) {
+	object, err := signedCheckpoint(statement)
+	if err != nil {
+		return nil, fmt.Errorf("parse checkpoint statement: %w", err)
+	}
+	if object["root"] != hex.EncodeToString(rangeRoot) || fmt.Sprint(object["mmr_size"]) != fmt.Sprint(checkpointSize) {
+		return nil, errors.New("checkpoint statement does not sign the bundle's range root and size")
+	}
+	object["cose"] = base64.RawURLEncoding.EncodeToString(statement)
+	object["statement"] = base64.StdEncoding.EncodeToString(statement)
+	return object, nil
 }
 
 func citationClosure(ctx context.Context, artifacts bundleArtifacts, root map[string]interface{}, depth int) (map[string]map[string]interface{}, []string, error) {
@@ -489,6 +602,8 @@ func appendDisclosureRecord(ctx context.Context, log cll.Backend, bundle map[str
 // aacbundle.EncodeFragment/DecodeFragment) is already wired below.
 const htmlEmitterStubMessage = "--html requires the agent-action-capsule #102 evidence-graph emitter (branch evidence-graph-emitter), not yet merged to go/emitter on main; not wired"
 
+const producerKeyFlagUsage = "Ed25519 public key (hex) to declare in the producer-key/v1 extension (default: the profile's signing key)"
+
 func bundleCommands() []*cobra.Command {
 	shortFor := map[string]string{
 		"bundle":    "Assemble a self-verifying Evidence Bundle from the root's citation closure",
@@ -515,16 +630,32 @@ func bundleCommands() []*cobra.Command {
 				}
 				suppressSet[name] = true
 			}
+			producerKey, err := bundleProducerKey(c, profile)
+			if err != nil {
+				return err
+			}
 			target, err := openTarget(c.Context(), profile, usePublication)
 			if err != nil {
 				return err
 			}
 			defer func() { err = errors.Join(err, target.close()) }()
-			value, err := AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink})
-			if err != nil {
+			var value map[string]interface{}
+			var encoded []byte
+			if target.book != nil {
+				// A jsonl profile's bundle comes from its book, which puts every
+				// bundle it builds on record as a disclosure record.
+				bundle, err := bookBundle(c.Context(), target.book.book, root, closureDepth, payloads, suppressSet, disclosure || permalink, producerKey)
+				if err != nil {
+					return err
+				}
+				if value, err = decodeBundleJSON(bundle.JSON); err != nil {
+					return err
+				}
+				encoded = bundle.JSON
+			} else if value, err = AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink, ProducerKey: producerKey}); err != nil {
 				return err
 			}
-			if use == "disclose" {
+			if use == "disclose" && target.book == nil {
 				// Every disclose act goes on record: the CLL append must succeed
 				// before the bundle is emitted, not merely alongside it.
 				if _, err := appendDisclosureRecord(c.Context(), target.log, value); err != nil {
@@ -551,9 +682,10 @@ func bundleCommands() []*cobra.Command {
 				return err
 			}
 			out, _ := c.Flags().GetString("out")
-			encoded, err := json.Marshal(value)
-			if err != nil {
-				return err
+			if encoded == nil {
+				if encoded, err = json.Marshal(value); err != nil {
+					return err
+				}
 			}
 			if out != "" {
 				return atomicFile(out, encoded, false)
@@ -563,6 +695,7 @@ func bundleCommands() []*cobra.Command {
 		}}
 		command.Flags().String("root", "", "Root Capsule ID")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
+		command.Flags().String("producer-key", "", producerKeyFlagUsage)
 		command.Flags().Bool("html", false, "Also render an offline report.html carrier (not yet wired; see docs)")
 		if disclosure || permalink {
 			command.Flags().String("payloads", "all", "Disclosure mode: all or selected")

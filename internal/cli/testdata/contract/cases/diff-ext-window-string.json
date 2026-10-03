@@ -1,0 +1,42 @@
+{
+  "id": "diff-ext-window-string",
+  "kind": "diff",
+  "rationale": "an extension window that is not an object has no rule: breaking, never a crash",
+  "a": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "process",
+        "statement": "s",
+        "window": "P7D"
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "process",
+        "statement": "s",
+        "window": "P1D"
+      }
+    ]
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[r1]/window",
+        "kind": "changed"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

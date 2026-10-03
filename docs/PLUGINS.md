@@ -1,7 +1,7 @@
 # capsulectl plugins: the `cli-plugin/v1` contract
 
 This document is the whole contract. A third party writing a `capsulectl`
-plugin needs nothing else -- not `capsule-engine`, not any private repo. The
+plugin needs nothing else -- not `capsule-engine`, not any other repository. The
 plugin boundary is deliberately narrow: **base verbs work against any
 service, carry no account logic, and a plugin can extend the surface but can
 never change what a core verb -- especially `verify` -- says.**
@@ -151,5 +151,5 @@ Everything above is the whole contract: name your executable
 matching your filename, and implement whatever subcommands you want under
 that one top-level verb. `capsulectl` never inspects your plugin's
 behavior beyond the handshake -- there is nothing else it will call into,
-and nothing in `capsule-engine` (or any other private repository) that this
+and nothing in `capsule-engine` (or any other repository) that this
 contract depends on.

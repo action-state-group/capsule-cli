@@ -132,6 +132,21 @@ var ErrInput = errors.New("invalid input or profile configuration")
 
 func inputError(reason string) error { return errors.Join(ErrInput, errors.New(reason)) }
 
+// hintError is an error whose message tells the operator what to do next.
+// It holds no secret -- no key, credential, DSN or record content -- so
+// SafeError prints it after its class instead of the class alone.
+type hintError struct {
+	class   error
+	message string
+}
+
+func (h *hintError) Error() string { return h.message }
+func (h *hintError) Unwrap() error { return h.class }
+
+// hint wraps a non-secret, actionable message under an error class (ErrInput
+// or ErrConflict), which still decides the exit code.
+func hint(class error, message string) error { return &hintError{class: class, message: message} }
+
 func noArgs(_ *cobra.Command, args []string) error {
 	if len(args) != 0 {
 		return ErrInput
@@ -170,7 +185,11 @@ func SafeError(err error) string {
 	var fileErr *inputFileError
 	var schemaErr *schemaLoadError
 	var pluginErr *pluginRequiredError
+	var hintErr *hintError
 	switch {
+	case errors.As(err, &hintErr):
+		// Written to be shown: the class, then what to do about it.
+		return hintErr.class.Error() + ": " + hintErr.message
 	case errors.As(err, &fileErr):
 		// The path is caller-supplied via a flag, so surfacing it discloses
 		// nothing sensitive and distinguishes a missing input file from a
@@ -181,7 +200,7 @@ func SafeError(err error) string {
 		return schemaErr.Error()
 	case errors.As(err, &pluginErr):
 		// A fixed, static message naming no path, secret, or profile detail:
-		// `run` without the actionstate plugin must reach the operator
+		// a command refusing for lack of what it needs must reach the operator
 		// verbatim, not collapse to the generic ErrInput text.
 		return pluginErr.Error()
 	case errors.Is(err, artifact.ErrUntrustedSigner):
@@ -196,6 +215,11 @@ func SafeError(err error) string {
 		return ErrReadOnlyCLL.Error()
 	case errors.Is(err, ErrPartial):
 		return ErrPartial.Error()
+	case errors.Is(err, ErrBundleInvalid):
+		return ErrBundleInvalid.Error()
+	case errors.Is(err, ErrBreaking):
+		// Like ErrSchemaInvalid: `contract diff` already printed the changes.
+		return ErrBreaking.Error()
 	case errors.Is(err, ErrSchemaInvalid):
 		// The detailed per-issue report was already printed by `contract
 		// validate` itself; this is only the trailing summary line.
@@ -245,6 +269,7 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(judgeCommands())
 	root.AddCommand(calibrationCommands())
 	root.AddCommand(dealCommands())
+	root.AddCommand(closeCommand(), reconcileCommand(), requestCommand(), respondCommand())
 	store := &cobra.Command{Use: "store", Short: "Initialize and verify the profile's artifact and CLL store"}
 	init := &cobra.Command{Use: "init", Short: "Initialize the store and pin its store_id into the profile", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
@@ -259,6 +284,23 @@ func NewCommand() *cobra.Command {
 		return output(c, map[string]string{"log_id": p.LogID, "status": "initialized"})
 	}}
 	store.AddCommand(init)
+	migrate := &cobra.Command{Use: "migrate", Short: "Move a jsonl profile's pre-book cll.jsonl into its evidence book, once, in order (signs)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		p, e := selected(c)
+		if e != nil {
+			return e
+		}
+		if p.Type != "jsonl" || p.ReadOnly {
+			return inputError("store migrate applies to a writable jsonl profile")
+		}
+		newLogID, _ := c.Flags().GetString("log-id")
+		result, e := migrateStore(c.Context(), p, newLogID, bookNow())
+		if e != nil {
+			return e
+		}
+		return output(c, result)
+	}}
+	migrate.Flags().String("log-id", "", "New log_id for the book; required when the retired log was ever checkpointed")
+	store.AddCommand(migrate)
 	root.AddCommand(store)
 	root.AddCommand(sealToFileCommand("seal", "output", "Seal to an explicit private artifact file; no database connection"))
 	// `emit` is the v4 verb name for the same operation `seal` already performs
@@ -306,7 +348,10 @@ func NewCommand() *cobra.Command {
 	get.Flags().Bool("raw", false, "Preserve SDK byte fields as base64 for exact-byte export and verify")
 	get.Flags().String("output", "", "Write readable JSON to a file; use --raw for a verifiable artifact.Record")
 	root.AddCommand(get)
-	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts, or an Evidence Bundle offline", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		if bundlePath, _ := c.Flags().GetString("bundle"); bundlePath != "" {
+			return verifyBundleFile(c, bundlePath)
+		}
 		p, e := selected(c)
 		if e != nil {
 			return e
@@ -348,6 +393,9 @@ func NewCommand() *cobra.Command {
 		return nil
 	}}
 	verify.Flags().String("capsule", "", "artifact.Record JSON file")
+	verify.Flags().String("bundle", "", "Evidence Bundle (evidence-bundle/v2) JSON file, verified offline from the file alone")
+	verify.Flags().String("witness-directory", "", "With --bundle: a witness directory (witnesses.json format) naming the witnesses and keys whose receipts to check; without it no receipt is checked")
+	verify.MarkFlagsMutuallyExclusive("capsule", "bundle")
 	root.AddCommand(verify)
 	publish := &cobra.Command{Use: "publish", Short: "Seal, persist artifacts, and append to CLL", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
@@ -406,6 +454,14 @@ func NewCommand() *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, t.close()) }()
+		if p.Type == "jsonl" {
+			all, _ := c.Flags().GetBool("all")
+			items, next, e := listBookFiles(c.Context(), p, after, through, limit, all)
+			if e != nil {
+				return e
+			}
+			return output(c, map[string]any{"entries": items, "next_after": next, "log_id": p.LogID})
+		}
 		entries, e := t.log.ScanEntries(c.Context(), after, limit)
 		if e != nil {
 			return e
@@ -424,6 +480,7 @@ func NewCommand() *cobra.Command {
 	list.Flags().Uint64("after", 0, "Exclusive sequence lower bound")
 	list.Flags().Uint64("through", 0, "Inclusive sequence upper bound (0 unbounded)")
 	list.Flags().Int("limit", 100, "Page limit, at most 1000")
+	list.Flags().Bool("all", false, "jsonl profiles: also list the evidence book's internal records")
 	logs.AddCommand(list)
 	appendCmd := &cobra.Command{Use: "append", Short: "Append a Capsule ID to the CLL as a new entry", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
@@ -458,6 +515,17 @@ func NewCommand() *cobra.Command {
 			if e = t.artifacts.Put(c.Context(), r); e != nil {
 				return e
 			}
+		}
+		if t.book != nil {
+			seq, warning, e := appendPublished(c.Context(), t.book.book, r)
+			if e != nil {
+				return e
+			}
+			result := map[string]any{"capsule_id": r.CapsuleID, "sequence": seq, "log_id": p.LogID}
+			if warning != "" {
+				result["warning"] = warning
+			}
+			return output(c, result)
 		}
 		entry, e := appendRecord(c.Context(), t.log, r.CapsuleID)
 		if e != nil {

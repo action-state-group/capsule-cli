@@ -11,7 +11,7 @@
       "profile": "human_role",
       "statement": "qualified human oversight was assigned",
       "evidence_requirements": {
-        "accepted_epistemic_types": ["SYSTEM_OF_RECORD_FACT", "OBLIGATION_REFERENCE"],
+        "accepted_epistemic_types": ["system_of_record_fact", "obligation_reference"],
         "required_sources": ["role-assignment-record", "authority-competence-record"]
       },
       "obligation_refs": ["eu-ai-act:article-14"]
@@ -22,7 +22,7 @@
       "statement": "the reviewer could interpret the system's output",
       "review": { "events": ["review-interaction-record"] },
       "evidence_requirements": {
-        "accepted_epistemic_types": ["OBSERVED_EVENT", "HUMAN_REPORT"],
+        "accepted_epistemic_types": ["observed_event", "human_report"],
         "required_sources": ["ui-explanation-capability-record", "review-interaction-records"]
       },
       "obligation_refs": ["eu-ai-act:article-14"]
@@ -34,7 +34,7 @@
       "review": { "rate": "population_ref:eligible-cases" },
       "escalation": { "events": ["override-events", "exception-events"] },
       "evidence_requirements": {
-        "accepted_epistemic_types": ["OBSERVED_EVENT", "SYSTEM_OF_RECORD_FACT"],
+        "accepted_epistemic_types": ["observed_event", "system_of_record_fact"],
         "required_sources": ["review-events", "override-events", "exception-events"]
       },
       "obligation_refs": ["eu-ai-act:article-14"]

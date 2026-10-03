@@ -1,0 +1,46 @@
+{
+  "id": "diff-ext-adjudication-on-process",
+  "kind": "diff",
+  "rationale": "an extension adjudication cannot make a process statement editorial",
+  "a": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "1",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "process",
+        "statement": "s",
+        "adjudication": {
+          "mode": "deterministic"
+        }
+      }
+    ]
+  },
+  "b": {
+    "id": "ec:example-minimal:2026-09-30",
+    "version": "2",
+    "requirements": [
+      {
+        "id": "r1",
+        "profile": "process",
+        "statement": "t",
+        "adjudication": {
+          "mode": "deterministic"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "breaking": true,
+    "changes": [
+      {
+        "path": "requirements[r1]/statement",
+        "kind": "changed"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}

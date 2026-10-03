@@ -1,0 +1,152 @@
+{
+  "id": "diff-freshness-year-as-months",
+  "kind": "diff",
+  "rationale": "a year is exactly twelve months: P1Y to P12M is a respelling",
+  "a": {
+    "id": "ec:example-fixture:2026-09-30",
+    "version": "1",
+    "subject": {
+      "job_type": "example-job",
+      "population_selector": "every job in evaluation_period"
+    },
+    "requirements": [
+      {
+        "id": "req-a",
+        "profile": "outcome",
+        "statement": "the record was written before the action was dispatched",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "observed_event",
+            "system_of_record_fact"
+          ],
+          "required_sources": [
+            "source-one"
+          ],
+          "minimum_assurance": [
+            "witnessed"
+          ],
+          "freshness": "P1Y"
+        },
+        "adjudication": {
+          "mode": "deterministic"
+        },
+        "uncertainty": {
+          "on_missing": "insufficient",
+          "on_conflict": "contradicted"
+        }
+      },
+      {
+        "id": "req-b",
+        "profile": "process",
+        "statement": "a review step preceded the change",
+        "required_sequence": [
+          "requested",
+          "approved",
+          "applied"
+        ],
+        "approvals": [
+          "one reviewer who is not the author"
+        ],
+        "escalation_path": "queue-one"
+      },
+      {
+        "id": "req-c",
+        "profile": "obligation",
+        "statement": "the example policy's review control was evidenced",
+        "clause_ref": "example-policy/section-1/v1",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "observed_event"
+          ]
+        }
+      }
+    ],
+    "temporal": {
+      "evaluation_period": "2026-09"
+    },
+    "consequence": {
+      "class": "report",
+      "rule_ref": "example-report-v1"
+    }
+  },
+  "b": {
+    "id": "ec:example-fixture:2026-09-30",
+    "version": "2",
+    "subject": {
+      "job_type": "example-job",
+      "population_selector": "every job in evaluation_period"
+    },
+    "requirements": [
+      {
+        "id": "req-a",
+        "profile": "outcome",
+        "statement": "the record was written before the action was dispatched",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "observed_event",
+            "system_of_record_fact"
+          ],
+          "required_sources": [
+            "source-one"
+          ],
+          "minimum_assurance": [
+            "witnessed"
+          ],
+          "freshness": "P12M"
+        },
+        "adjudication": {
+          "mode": "deterministic"
+        },
+        "uncertainty": {
+          "on_missing": "insufficient",
+          "on_conflict": "contradicted"
+        }
+      },
+      {
+        "id": "req-b",
+        "profile": "process",
+        "statement": "a review step preceded the change",
+        "required_sequence": [
+          "requested",
+          "approved",
+          "applied"
+        ],
+        "approvals": [
+          "one reviewer who is not the author"
+        ],
+        "escalation_path": "queue-one"
+      },
+      {
+        "id": "req-c",
+        "profile": "obligation",
+        "statement": "the example policy's review control was evidenced",
+        "clause_ref": "example-policy/section-1/v1",
+        "evidence_requirements": {
+          "accepted_epistemic_types": [
+            "observed_event"
+          ]
+        }
+      }
+    ],
+    "temporal": {
+      "evaluation_period": "2026-09"
+    },
+    "consequence": {
+      "class": "report",
+      "rule_ref": "example-report-v1"
+    }
+  },
+  "expect": {
+    "breaking": false,
+    "changes": [
+      {
+        "path": "requirements[req-a]/evidence_requirements/freshness",
+        "kind": "editorial"
+      },
+      {
+        "path": "version",
+        "kind": "version_changed"
+      }
+    ]
+  }
+}
