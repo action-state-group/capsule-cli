@@ -393,6 +393,7 @@ func NewCommand() *cobra.Command {
 	}}
 	verify.Flags().String("capsule", "", "artifact.Record JSON file")
 	verify.Flags().String("bundle", "", "Evidence Bundle (evidence-bundle/v2) JSON file, verified offline from the file alone")
+	verify.Flags().String("witness-directory", "", "With --bundle: a witness directory (witnesses.json format) naming the witnesses and keys whose receipts to check; without it no receipt is checked")
 	verify.MarkFlagsMutuallyExclusive("capsule", "bundle")
 	root.AddCommand(verify)
 	publish := &cobra.Command{Use: "publish", Short: "Seal, persist artifacts, and append to CLL", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
