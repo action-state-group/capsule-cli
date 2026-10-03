@@ -41,9 +41,11 @@ script outside this repository that writes these lines.
 | `tool` | yes | The host's tool name, as the host records it. |
 | `action` | yes | `pay`, `commit`, `sign`, `cancel`, `share_contact`, `share_credentials`, or `other`. |
 | `amount_minor` | no | Integer minor units (cents). |
+| `amount_kind` | no | `charged` (the default) or `ceiling`: the most a spend was approved for, when the host records only that. |
 | `currency` | no | 3-letter code. |
 | `merchant_domain` | no | The site the action was on. |
 | `reference_sha256` | no | SHA-256 (64 lowercase hex) of the order or confirmation reference, never the reference itself. |
+| `observed` | no | `action` (the default) or `approval`: the record is the host's approval of a spend for a task, not the payment itself, when the host records no payment action. |
 | `status` | yes | `succeeded`, `failed` or `unknown` (the host cannot tell). |
 | `deal_id` | no | The deal the agent said this belongs to, when the host recorded it. |
 
@@ -51,8 +53,12 @@ script outside this repository that writes these lines.
 what it carried: no form bodies, no card or payment fields, no verification
 codes, no message text. There is no field for any of them, and unknown fields
 refuse the file. `id`, `task`, `parent_task` and `tool` must look like
-identifiers (letters, digits and `._:@/+-`, no spaces), and `merchant_domain`
-like a host name; a value with a card-number-like run of digits is refused.
+identifiers (letters, digits and `._:/+-`; no spaces and no `@`), and
+`merchant_domain` like a host name. A value with a card-number-like run of
+digits, or that starts like a phone number (`+` and a digit), is refused.
+A host's worker rows can hold filled form values (an email, a street
+address, a phone number) in cleartext: a reader selects only ids, tool
+names, timestamps, the merchant's domain and amounts, never a row's text.
 The refusal names the line and the field, never the value. The pass reads
 the file and writes nothing to the store.
 
@@ -106,7 +112,8 @@ a sealed step of a deal in the profile accounts for it:
 2. a `deal check` step made before it,
 
 with the same action, and the same amount, currency and merchant domain
-wherever both sides carry one. When the record names a `deal_id`, the step
+wherever both sides carry one. A `ceiling` amount covers a step for that
+amount or less. When the record names a `deal_id`, the step
 must be in that deal. Otherwise an act must be within `--window` of the
 record, and a check within `--window` before it. Each step accounts for one
 action. Every deal is verified as `deal report` verifies it before its steps
@@ -142,6 +149,9 @@ One JSON object:
   - matching does not see the merchant's or the payment provider's records;
   - when no approval history was given, that whether the user approved
     each action on the host is not shown;
+  - when any amount is a `ceiling`, that the charged amount is not shown;
+  - when any record is `observed: approval`, that whether and when the
+    payment itself was made is not shown;
   - it runs on the agent's own machine, over the host's own records: it can
     list actions that have no deal record, but it cannot prove that nothing
     else happened.

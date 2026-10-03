@@ -156,3 +156,56 @@ func TestDealReceiptsStateTheirScope(t *testing.T) {
 		}
 	}
 }
+
+// A host that records only a spend approval with a ceiling, not the payment
+// or the charged amount: the deal still accounts for it, and the output says
+// on its face what the source cannot show.
+func TestDealReconcileSaysWhatASpendApprovalCannotShow(t *testing.T) {
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))["deal_id"].(string)
+	dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(retailDemo, "check-pay.json"))
+	path := filepath.Join(bookingFixture, "..", "executions-spend-approval.jsonl")
+	result, err := reconcileRun(t, "--executions", path, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
+	require.NoError(t, err)
+	recorded := result["recorded"].([]any)
+	require.Len(t, recorded, 1, "a $10.00 ceiling covers the $6.27 the deal checked")
+	row := recorded[0].(map[string]any)
+	assert.Equal(t, "ceiling", row["amount_kind"])
+	assert.Equal(t, "approval", row["observed"])
+	gaps := result["coverage"].(map[string]any)["cannot_see"].([]any)
+	assert.Contains(t, gaps, dealCeilingGap)
+	assert.Contains(t, gaps, dealApprovalOnlyGap)
+	assert.Contains(t, gaps, dealNoApprovalsGap, "the user's authority is not shown without the host's approval history")
+
+	// A ceiling below what the deal checked does not cover it.
+	low := writeJSON(t, `{"id":"spend-2","at":"2026-09-27T18:00:40Z","tool":"spend_request","action":"pay","amount_minor":500,"amount_kind":"ceiling","currency":"USD","observed":"approval","status":"unknown"}`)
+	_, err = reconcileRun(t, "--executions", low, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
+	require.ErrorIs(t, err, ErrPartial)
+}
+
+// Worker rows can hold filled form values in cleartext. None of it may reach
+// reconcile's output, its errors, or the store, wherever a reader puts it.
+func TestDealReconcileNeverCarriesPersonalDetails(t *testing.T) {
+	dir := dealFixture(t)
+	const email, phone, street = "jane.doe@example.com", "+15550100123", "12 Main Street"
+	good := `{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"other","status":"succeeded"}`
+	for _, bad := range []string{
+		`{"id":"c2","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"other","status":"succeeded","text_content":"email ` + email + ` phone ` + phone + ` address ` + street + `"}`,
+		`{"id":"c2","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"other","status":"succeeded","form_values":{"email":"` + email + `","phone":"` + phone + `","street":"` + street + `"}}`,
+		`{"id":"` + email + `","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"other","status":"succeeded"}`,
+		`{"id":"c2","at":"2026-09-27T18:05:00Z","task":"` + phone + `","tool":"browser_automation","action":"other","status":"succeeded"}`,
+		`{"id":"c2","at":"2026-09-27T18:05:00Z","tool":"` + street + `","action":"other","status":"succeeded"}`,
+		`{"id":"c2","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"pay","status":"unknown","merchant_domain":"` + email + `"}`,
+	} {
+		out, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", writeJSON(t, good+"\n"+bad))
+		require.ErrorIs(t, err, ErrInput, bad)
+		for _, secret := range []string{email, phone, street, "jane.doe"} {
+			assert.NotContains(t, out, secret, bad)
+			assert.NotContains(t, err.Error(), secret, bad)
+		}
+	}
+	raw := string(mustRead(t, filepath.Join(dir, "deal.db")))
+	for _, secret := range []string{email, phone, street} {
+		assert.NotContains(t, raw, secret)
+	}
+}

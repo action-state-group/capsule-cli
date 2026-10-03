@@ -35,13 +35,19 @@ import (
 // the identifier fields must look like identifiers (see guardMetadata), so
 // such content cannot ride in on them either.
 type dealExecutionRecord struct {
-	ID              string `json:"id"`
-	At              string `json:"at"`
-	Task            string `json:"task,omitempty"`
-	ParentTask      string `json:"parent_task,omitempty"`
-	Tool            string `json:"tool"`
-	Action          string `json:"action"`
-	AmountMinor     *int64 `json:"amount_minor,omitempty"`
+	ID          string `json:"id"`
+	At          string `json:"at"`
+	Task        string `json:"task,omitempty"`
+	ParentTask  string `json:"parent_task,omitempty"`
+	Tool        string `json:"tool"`
+	Action      string `json:"action"`
+	AmountMinor *int64 `json:"amount_minor,omitempty"`
+	// AmountKind is "charged" (the default) or "ceiling": a host may record
+	// only the most a spend was approved for, not what was charged.
+	AmountKind string `json:"amount_kind,omitempty"`
+	// Observed is "action" (the default) or "approval": a host may record
+	// only that a spend was approved for a task, not the payment itself.
+	Observed        string `json:"observed,omitempty"`
 	Currency        string `json:"currency,omitempty"`
 	MerchantDomain  string `json:"merchant_domain,omitempty"`
 	ReferenceSHA256 string `json:"reference_sha256,omitempty"`
@@ -189,7 +195,8 @@ var dealConsequentialActions = func() []string {
 }()
 
 var (
-	metadataToken       = regexp.MustCompile(`^[A-Za-z0-9._:@/+-]{1,200}$`)
+	metadataToken       = regexp.MustCompile(`^[A-Za-z0-9._:/+-]{1,200}$`)
+	phoneLike           = regexp.MustCompile(`^\+\d`)
 	metadataHost        = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
 	panLike             = regexp.MustCompile(`\d(?:[ -]?\d){12,18}`)
 	execReferenceSHA256 = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -208,7 +215,7 @@ func guardMetadata(fields map[string]string, hosts ...string) error {
 		if slices.Contains(hosts, name) {
 			shape = metadataHost
 		}
-		if !shape.MatchString(v) || panLike.MatchString(v) {
+		if !shape.MatchString(v) || panLike.MatchString(v) || phoneLike.MatchString(v) {
 			return errors.New(name + " must be an identifier (metadata only: no card numbers, codes or form content)")
 		}
 	}
@@ -221,6 +228,12 @@ func (r *dealExecutionRecord) validate() error {
 	}
 	if r.ID == "" {
 		return errors.New("id is required")
+	}
+	if !slices.Contains([]string{"", "charged", "ceiling"}, r.AmountKind) {
+		return errors.New("amount_kind must be charged or ceiling")
+	}
+	if !slices.Contains([]string{"", "action", "approval"}, r.Observed) {
+		return errors.New("observed must be action or approval")
 	}
 	if r.ReferenceSHA256 != "" && !execReferenceSHA256.MatchString(r.ReferenceSHA256) {
 		return errors.New("reference_sha256 must be 64 lowercase hex digits")
@@ -260,6 +273,12 @@ var dealCoverageGaps = []string{
 
 // dealReconcileScope is printed with every result: what this pass is about.
 const dealReconcileScope = "This pass covers the execution records it was given, for this period. It is not a record of everything the agent did."
+
+// Added when the records say so: what the source itself cannot show.
+const (
+	dealCeilingGap      = "Some amounts are approval ceilings, the most a spend was approved for, not what was charged; the charged amount is not shown."
+	dealApprovalOnlyGap = "Some records are the host's spend approvals, not the payment itself; whether and when the payment was made is not shown."
+)
 
 // dealNoApprovalsGap is added when no approval history was given.
 const dealNoApprovalsGap = "The agent host's history of approvals was not available, so whether the user approved each action on the host is not shown."
@@ -322,8 +341,15 @@ func (step *dealCoverStep) covers(rec dealExecutionRecord, window time.Duration)
 	if step.used || step.action != rec.Action {
 		return false
 	}
-	if rec.AmountMinor != nil && step.amount != nil && *rec.AmountMinor != *step.amount {
-		return false
+	if rec.AmountMinor != nil && step.amount != nil {
+		// A ceiling is the most that could be charged: it covers a step
+		// for that amount or less.
+		if rec.AmountKind == "ceiling" && *step.amount > *rec.AmountMinor {
+			return false
+		}
+		if rec.AmountKind != "ceiling" && *rec.AmountMinor != *step.amount {
+			return false
+		}
 	}
 	if rec.Currency != "" && step.currency != "" && !strings.EqualFold(rec.Currency, step.currency) {
 		return false
@@ -350,6 +376,13 @@ func (rec dealExecutionRecord) row() map[string]any {
 	}
 	if rec.AmountMinor != nil {
 		m["amount_minor"] = *rec.AmountMinor
+		m["amount_kind"] = "charged"
+		if rec.AmountKind == "ceiling" {
+			m["amount_kind"] = "ceiling"
+		}
+	}
+	if rec.Observed == "approval" {
+		m["observed"] = "approval"
 	}
 	return m
 }
@@ -403,10 +436,21 @@ func reconcileDeals(records []dealExecutionRecord, approvals []dealHostApproval,
 		recorded = append(recorded, row)
 	}
 	consequential := len(recorded) + len(unrecorded)
-	gaps := dealCoverageGaps
+	gaps := slices.Clone(dealCoverageGaps)
+	ceiling, approvalOnly := false, false
+	for _, rec := range records {
+		ceiling = ceiling || rec.AmountKind == "ceiling"
+		approvalOnly = approvalOnly || rec.Observed == "approval"
+	}
+	if ceiling {
+		gaps = append(gaps, dealCeilingGap)
+	}
+	if approvalOnly {
+		gaps = append(gaps, dealApprovalOnlyGap)
+	}
 	hostApprovals := map[string]any{"available": approvals != nil, "read": len(approvals)}
 	if approvals == nil {
-		gaps = append(slices.Clone(gaps), dealNoApprovalsGap)
+		gaps = append(gaps, dealNoApprovalsGap)
 	}
 	summary := fmt.Sprintf("%d of %d consequential actions have no deal record (%d execution records read for %s to %s). This lists what is missing from the records read; it cannot prove that nothing else happened.",
 		len(unrecorded), consequential, read, from.Format(time.RFC3339), to.Format(time.RFC3339))
