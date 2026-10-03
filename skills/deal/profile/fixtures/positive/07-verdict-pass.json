@@ -1,0 +1,43 @@
+{
+  "fixture": "07-verdict-pass.json",
+  "expect": "valid",
+  "story": "The deal check's answer to the check it references.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "verdict",
+      "seq": 7,
+      "at": "2026-10-01T16:20:06Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "b6043dc9480e71db9f786603b76f093f4eacb293ab4d42d4c8ffda7f1357076c"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "refs": [
+        {
+          "rel": "checks",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "b6043dc9480e71db9f786603b76f093f4eacb293ab4d42d4c8ffda7f1357076c"
+        }
+      ]
+    },
+    "body": {
+      "result": "pass",
+      "pack_id": "capsule/marketplace-rentals-safety/0.1.0",
+      "differences": [],
+      "options": [],
+      "judge": {
+        "kind": "rules"
+      }
+    }
+  },
+  "expected_digest": "48f9387b0f9a3e8e85922c79dc670e3e40607c1e19ae68739e176a0d280775e9"
+}

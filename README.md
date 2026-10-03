@@ -212,6 +212,7 @@ capsulectl judge pin FILE
 capsulectl judge drift pin FILE_A FILE_B
 capsulectl judge drift reports FILE_A FILE_B
 capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
+capsulectl deal init|open|note|check|close|report --profile NAME [...]
 ```
 
 `capsulectl <command> --help` gives every flag; this list is the shape of each
@@ -248,6 +249,11 @@ file, holding either a bare array of rows (`[{"name": ..., "key_ids": [...]}]`)
 or an object with a `countersigners` array. The CLI privileges no list: you
 choose the one you trust. A signer the directory does not list is reported as an
 unresolved signer, and the command exits partial (3).
+
+`deal` seals a deal's baseline and, when the host calls it, checks each point
+of no return (pay, commit, sign, share) against it. The check is advisory: it
+holds an action only where the host runs it from a pre-action hook; see
+[skills/deal](skills/deal/README.md).
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.

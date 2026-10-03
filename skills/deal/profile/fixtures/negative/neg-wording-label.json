@@ -1,0 +1,90 @@
+{
+  "fixture": "neg-wording-label",
+  "expect": "invalid",
+  "description": "A difference rule that labels the counterparty.",
+  "expected_stage": "wording",
+  "expected_error_contains": "prohibited word",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-message-quote.json",
+    "03-claim.json",
+    "04-evidence.json",
+    "05-intent.json",
+    "06-check-share-contact.json",
+    "07-verdict-pass.json",
+    "08-approval-standing.json",
+    "09-action-share-contact.json",
+    "10-message-switch.json",
+    "11-detail-change-payee.json",
+    "12-check-pay.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "verdict",
+      "seq": 13,
+      "at": "2026-10-01T18:43:01Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "4a2c37898a3d2765094c701996dea546b6258218ad144a3305d8ab8b4974a46f"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "refs": [
+        {
+          "rel": "checks",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "4a2c37898a3d2765094c701996dea546b6258218ad144a3305d8ab8b4974a46f"
+        }
+      ]
+    },
+    "body": {
+      "result": "pause",
+      "pack_id": "capsule/marketplace-rentals-safety/0.1.0",
+      "differences": [
+        {
+          "question": "who",
+          "rule": "payee_or_contact_changed",
+          "field": "payee"
+        },
+        {
+          "question": "who",
+          "rule": "payee_or_contact_changed",
+          "field": "phone"
+        },
+        {
+          "question": "recourse",
+          "rule": "likely_scam",
+          "field": "rail"
+        },
+        {
+          "question": "safety",
+          "rule": "domain_recent",
+          "field": "domain"
+        }
+      ],
+      "unverified": [
+        "has 2 jet skis available Saturday"
+      ],
+      "notes": [
+        "not_refundable"
+      ],
+      "options": [
+        "hold",
+        "verify_contact",
+        "proceed"
+      ],
+      "card_commitment": "a477b69a5e48d437888ac6a8a06890ad333101bc7ad119ae03584b7d4448867e",
+      "judge": {
+        "kind": "rules"
+      }
+    }
+  }
+}

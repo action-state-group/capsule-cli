@@ -1,0 +1,40 @@
+{
+  "fixture": "14-approval-hold.json",
+  "expect": "valid",
+  "story": "What authorizes the next step: a standing intent on a pass, or the user's own answer.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "approval",
+      "seq": 14,
+      "at": "2026-10-01T18:44:30Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "d59c30d6cf935bf3cef8f23378a1466fdd4ba5414fe0810fd8cafc668d2917b2"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "refs": [
+        {
+          "rel": "approves",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "d59c30d6cf935bf3cef8f23378a1466fdd4ba5414fe0810fd8cafc668d2917b2"
+        }
+      ]
+    },
+    "body": {
+      "choice": "hold",
+      "proceed": false,
+      "approver": "user",
+      "said_commitment": "3fbc987e92545ceeb991a7e258a9928b41022f35253a834f10bf05117b2bfaa1"
+    }
+  },
+  "expected_digest": "99c936e70a24e98f3a4a90c7f516efc672ab65370e16a7bc7d73eba26171e9a9"
+}

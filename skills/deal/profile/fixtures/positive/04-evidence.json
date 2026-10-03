@@ -1,0 +1,38 @@
+{
+  "fixture": "04-evidence.json",
+  "expect": "valid",
+  "story": "The listing photo does not establish the claim; it stays unverified.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "evidence",
+      "seq": 4,
+      "at": "2026-10-01T16:05:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "0b8da1e86f1b43480bc082f2d6d7f887f64e8ffe1fddd468a48a975ad6cdaa09"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "refs": [
+        {
+          "rel": "about",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "0b8da1e86f1b43480bc082f2d6d7f887f64e8ffe1fddd468a48a975ad6cdaa09"
+        }
+      ]
+    },
+    "body": {
+      "source": "listing_photo",
+      "verified": false
+    }
+  },
+  "expected_digest": "6322d259c9270a1214076c2a7c4eafb741dc4374a9c85b401710785ff3d38cce"
+}

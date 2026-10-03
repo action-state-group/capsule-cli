@@ -1,0 +1,27 @@
+{
+  "type": "rental",
+  "demo": true,
+  "channel": "messenger",
+  "intent": {
+    "verbatim": "rent me 2 jet skis Saturday",
+    "asked": {"item": "jet ski rental", "quantity": 2, "when": "Saturday"}
+  },
+  "who": {
+    "name": "Coastal Jet Rentals LLC",
+    "domain": "coastal-jet-rentals.example",
+    "phone": "+1 555 0100",
+    "profile_id": "demo-coastal-jet-rentals"
+  },
+  "terms": {
+    "item": "jet ski rental",
+    "quantity": 2,
+    "price_minor": 40000,
+    "deposit_minor": 20000,
+    "currency": "USD",
+    "when": "Saturday"
+  },
+  "claims": [
+    {"text": "they have 2 jet skis for Saturday", "source": "seller message"}
+  ],
+  "recourse": {"rail": "card", "refundable": true}
+}

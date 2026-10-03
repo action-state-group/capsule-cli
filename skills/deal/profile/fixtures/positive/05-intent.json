@@ -1,0 +1,33 @@
+{
+  "fixture": "05-intent.json",
+  "expect": "valid",
+  "story": "The user widens what the agent may do: sharing the user's own number is now allowed.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "intent",
+      "seq": 5,
+      "at": "2026-10-01T16:20:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "6322d259c9270a1214076c2a7c4eafb741dc4374a9c85b401710785ff3d38cce"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      }
+    },
+    "body": {
+      "verbatim_commitment": "df4f21e2ccf13a62c7c1369fc8403579d5b1dbd5bb957fc506af847bbc37b066",
+      "allowed": [
+        "pay",
+        "share_contact"
+      ]
+    }
+  },
+  "expected_digest": "4fbc10792652e166ed5cd8355a3269b87d596d5658fcd20a169986c6af04a944"
+}

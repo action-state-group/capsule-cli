@@ -1,0 +1,11 @@
+{
+  "action": "commit",
+  "description": "confirm the booking",
+  "terms": {
+    "when": "2026-10-03",
+    "conditions": {
+      "check_out": "2026-10-07"
+    },
+    "price_minor": 76000
+  }
+}
