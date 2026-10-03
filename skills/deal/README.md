@@ -5,6 +5,11 @@ behind it. Before an agent pays, books, signs or shares on a user's behalf, it
 checks the step against what the user asked and who they are really dealing
 with, and shows the difference.
 
+The check is advisory. It seals what was asked, proposed, approved and done,
+and the host elects to call it; its `pause` verdict is advice to the host,
+not a lock. It holds an action only where the host runs `deal check` from a
+pre-action hook. Without one, a skipped check still shows in the report.
+
 ## Commands
 
 | Command | What it does |
@@ -34,7 +39,7 @@ store. `deal` commands run on Linux and macOS.
 The four questions (asked, same who, same terms, claims and recourse) plus
 these fixed safety rules:
 
-| Rule | Pauses when |
+| Rule | The verdict is `pause` when |
 |---|---|
 | `payee_or_contact_changed` | a payee, name, website, phone, email, reply address or profile differs from first contact |
 | `irreversible_rail` | paying by Zelle, wire, gift card, crypto, or another rail with no chargeback |
@@ -44,8 +49,8 @@ these fixed safety rules:
 | `domain_recent` | the counterparty's website is under 90 days old |
 | `credentials_requested` | the action is sharing a login or code |
 
-Unverified claims and non-refundable terms are listed on a pause card but do
-not pause on their own.
+Unverified claims and non-refundable terms are listed on the card but do not
+make the verdict `pause` on their own.
 
 ## What leaves the machine
 
@@ -61,7 +66,7 @@ Nothing, by default.
   local rule ids that fired. Never message text, names, contact details or
   card numbers. `CAPSULE_DEAL_CHECK_TOKEN`, if set, is sent as a bearer
   token. The checker can only add differences. A remote pass never clears a
-  local pause, and after 2 seconds, or on any error, the local rules decide
+  local `pause`, and after 2 seconds, or on any error, the local rules decide
   alone.
 
 ## Report
@@ -79,7 +84,7 @@ Nothing, by default.
      `deadline_pressure`, `code_request`, `domain_recent`,
      `unverified_claim`, `delivered_differs`.
 
-   Every cause a check paused on is an anomaly, in the card's own words
+   Every cause a check flagged is an anomaly, in the card's own words
    (read from the check's sealed differences, the same source as the card):
    besides the kinds above, `terms_changed`, `recourse_changed` (payment
    method or refundability changed since agreed), `irreversible_rail`, and

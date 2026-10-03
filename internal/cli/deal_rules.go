@@ -840,7 +840,7 @@ func trailLine(e dealEvent) string {
 		if e.Check.Verdict == "pass" {
 			return "checked " + e.Check.Action + ": no differences"
 		}
-		return "checked " + e.Check.Action + ": paused — " + e.Check.Card
+		return "checked " + e.Check.Action + ": flagged — " + e.Check.Card
 	case "approval":
 		if e.Approval.Approver == "standing_intent" {
 			return "went ahead on what you already allowed"
@@ -980,7 +980,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 		case "check":
 			verdict := "no differences"
 			if e.Check.Verdict == "pause" {
-				verdict = "paused"
+				verdict = "flagged"
 			}
 			checkItem[se.CapsuleID] = len(r.Did)
 			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: fmt.Sprintf("Checked before %s: %s", actionNames[e.Check.Action], verdict), Steps: []string{e.Check.Snapshot, se.CapsuleID}})

@@ -21,20 +21,20 @@ Four questions are asked at every point of no return:
 
 ## Rules (never break these)
 
-- **`capsulectl deal` is the only way through.** You and every sub-agent you
-  start use it, with the same `--profile`. Never pay, book, sign, cancel or
-  share contact details or credentials any other way.
+- **Check before every point of no return.** You and every sub-agent you
+  start call `capsulectl deal`, with the same `--profile`, before you pay,
+  book, sign, cancel or share contact details or credentials.
 - **Fixed order:** snapshot → seal → diff → show → approval → seal approval →
   act. `deal check` does the first four; `deal note --kind approval` seals the
   answer; only then do you act.
 - **Never act on an unsealed approval.** Act only when `deal check` returned
   `"proceed": true`, or `deal note --kind approval` returned `"proceed": true`.
-- **Fail closed.** If any `capsulectl` command exits non-zero, do not act.
-  Tell the user what happened and hold.
-- **Show the card, not a summary.** When a check pauses, show the `card` text
-  exactly as returned and offer exactly its `options`. Do not reword it,
+- **On an error, hold.** If any `capsulectl` command exits non-zero, do not
+  act. Tell the user what happened and hold.
+- **Show the card, not a summary.** When a check returns `pause`, show the
+  `card` text exactly as returned and offer exactly its `options`. Do not reword it,
   soften it, or add your own reassurance.
-- **Never block silently.** A pause always goes to the user with the card.
+- **Never hold silently.** A `pause` always goes to the user with the card.
 - **This upgrades your host's own confirmation; it never replaces it or
   bypasses it.**
 - Use plain words with the user: "checked", "changed", "unverified",
@@ -95,7 +95,8 @@ returned `deal_id`.
 
 - When the user asks only for options, or says not to act yet ("find me
   some hotels, don't book"), send `"allowed": []`. Nothing is allowed, so
-  every point of no return pauses for the user's own answer.
+  every check at a point of no return returns `pause` and asks for the user's
+  own answer.
 - When the user asks you to act, list those actions, for example
   `"allowed": ["pay"]`.
 - Leaving `allowed` out means no restriction. Leave it out only when the
@@ -213,8 +214,11 @@ trailing whitespace (the file ends in a newline; the card does not).
   it is on this machine, so a later edit or deletion is detectable, but the
   trail does not prove it was the user, rather than the machine, who said
   something.
-- The choke point is a rule plus a single command, not a physical guarantee.
-  The backstop is detection: skipped checks show in the trail.
+- **The check is advisory.** It seals what was asked, proposed, approved and
+  done; the host elects to call it, and a `pause` is advice to the host. It
+  holds an action only where the host runs `deal check` from a pre-action
+  hook. Without one, the backstop is detection: a skipped check shows in the
+  trail.
 - It checks the agreement, not the settlement: it cannot see the payment rail
   unless you record it.
 - Say "flags the warning signs before you pay" and "a record you can check

@@ -24,8 +24,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// `capsulectl deal` is the single choke point an agent goes through before it
-// pays, books, signs or shares on a user's behalf. Every step is sealed as a
+// `capsulectl deal` is the check an agent's host calls before the agent pays,
+// books, signs or shares on a user's behalf. It is advisory: it holds an
+// action only where the host runs it from a pre-action hook; otherwise a
+// skipped check shows in the report. Every step is sealed as a
 // Capsule in the profile's SQLite store and appended to its checkpointed log
 // before anything is compared or shown:
 //
@@ -384,7 +386,7 @@ func (s *dealSession) recoverStep(ctx context.Context, events []sealedEvent, ev 
 }
 
 // seal prepares and publishes one step. Any failure is returned: a step
-// that is not sealed did not pass the choke point. If the step never reached
+// that is not sealed was not checked. If the step never reached
 // the log, its index row is withdrawn; if it did, the next read recovers it.
 func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEvent, ev dealEvent) (sealedEvent, error) {
 	request, se, err := s.prepareStep(ctx, dealID, events, ev)

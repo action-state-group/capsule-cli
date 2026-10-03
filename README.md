@@ -250,8 +250,10 @@ or an object with a `countersigners` array. The CLI privileges no list: you
 choose the one you trust. A signer the directory does not list is reported as an
 unresolved signer, and the command exits partial (3).
 
-`deal` seals a deal's baseline and checks each point of no return (pay,
-commit, sign, share) against it; see [skills/deal](skills/deal/README.md).
+`deal` seals a deal's baseline and, when the host calls it, checks each point
+of no return (pay, commit, sign, share) against it. The check is advisory: it
+holds an action only where the host runs it from a pre-action hook; see
+[skills/deal](skills/deal/README.md).
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.

@@ -169,7 +169,7 @@ func dealStepLine(e dealEvent, showText bool) string {
 				texts = append(texts, d.Text)
 			}
 		}
-		return "Check paused: " + strings.Join(texts, " · ")
+		return "Check flagged: " + strings.Join(texts, " · ")
 	default:
 		line := trailLine(e)
 		return strings.ToUpper(line[:1]) + line[1:]
