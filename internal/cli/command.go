@@ -200,7 +200,7 @@ func SafeError(err error) string {
 		return schemaErr.Error()
 	case errors.As(err, &pluginErr):
 		// A fixed, static message naming no path, secret, or profile detail:
-		// `run` without the actionstate plugin must reach the operator
+		// a command refusing for lack of what it needs must reach the operator
 		// verbatim, not collapse to the generic ErrInput text.
 		return pluginErr.Error()
 	case errors.Is(err, artifact.ErrUntrustedSigner):
