@@ -55,6 +55,17 @@ func (s *dealSession) heldWitnessReceipt(ctx context.Context, statement []byte) 
 	return entry, nil
 }
 
+// dealScopeLine is printed on the face of every receipt, report page and
+// email: a receipt is about one deal, never about the agent's whole activity.
+const dealScopeLine = "This receipt covers this one deal. It is not a record of everything the agent did."
+
+// dealDidLine says what kind of evidence the "did" part is. What was asked,
+// proposed and approved happened in the conversation on the agent's device,
+// so a seal there is the right record of it; what the agent did happened
+// elsewhere, so the seal is the agent's own report until an independent
+// source (such as the merchant's own email) is attached.
+const dealDidLine = "What you asked, what was proposed and what you approved are sealed on the agent's device, where they happened. What the agent did is the agent's own report: no independent source, such as the merchant's own email, is attached."
+
 // dealAssurance names the rung the report stands on, from the bundle itself:
 // "witnessed" when it carries a witness receipt (added only after it
 // re-verified under the pinned witness key), otherwise sealed by the agent's
@@ -63,7 +74,7 @@ func dealAssurance(b map[string]interface{}) map[string]any {
 	cp, _ := b["checkpoint"].(map[string]interface{})
 	witnesses, _ := cp["witnesses"].([]interface{})
 	if len(witnesses) == 0 {
-		return map[string]any{"rung": "sealed", "text": "Sealed by my agent: tamper-evident, not non-repudiation. The key that sealed it is on the agent's own device."}
+		return map[string]any{"rung": "sealed", "text": "Sealed by my agent: tamper-evident, not non-repudiation. The key that sealed it is on the agent's own device. " + dealDidLine}
 	}
 	entry, _ := witnesses[0].(map[string]interface{})
 	host := fmt.Sprint(entry["ts_url"])
@@ -71,11 +82,12 @@ func dealAssurance(b map[string]interface{}) map[string]any {
 		host = u.Host
 	}
 	return map[string]any{"rung": "witnessed", "witness": host, "text": fmt.Sprintf(
-		"Witnessed: %s, an independent log, signed a receipt for the checkpoint covering these steps. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust.", host)}
+		"Witnessed: %s, an independent log, signed a receipt for the checkpoint covering these steps: the record existed, unchanged, by then. It does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s", host, dealDidLine)}
 }
 
 type dealEmailView struct {
 	Demo        bool
+	Scope       string
 	Asked       string
 	Outcome     string
 	Assurance   string
@@ -100,6 +112,7 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <body style="margin:0;padding:16px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a;background:#ffffff;">
 <div style="max-width:640px;margin:0 auto;">
 <h1 style="font-size:20px;margin:0 0 8px;">Deal receipt{{if .Demo}} <span style="font-size:13px;border:1px solid #b45309;color:#b45309;padding:0 6px;border-radius:4px;">DEMO</span>{{end}}</h1>
+<p style="margin:0 0 8px;font-weight:600;">{{.Scope}}</p>
 <p style="margin:0 0 16px;color:#444;">{{.Assurance}}</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">What you asked</h2>
 <p style="margin:0;">&ldquo;{{.Asked}}&rdquo;</p>
@@ -119,6 +132,7 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 // dealEmail builds the receipt message. It has no From or To: the agent
 // host's email tool addresses and sends it.
 func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byte, subject, text, htmlBody string, err error) {
+	view.Scope = dealScopeLine
 	view.VerifyLine = dealEmailVerify
 	view.NotClaimed = dealEmailNotClaimed
 	view.CheckedNote = "This copy cannot check itself: mail apps do not run scripts. Open the attached receipt.html in a browser, where it checks every sealed step offline, or save bundle.json and run:"
@@ -134,7 +148,7 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 	if view.Demo {
 		tb.WriteString("DEMO\n\n")
 	}
-	fmt.Fprintf(&tb, "What you asked: \"%s\"\n\n%s\n\nWhat the agent did:\n", view.Asked, view.Assurance)
+	fmt.Fprintf(&tb, "%s\n\nWhat you asked: \"%s\"\n\n%s\n\nWhat the agent did:\n", view.Scope, view.Asked, view.Assurance)
 	if len(view.Did) == 0 {
 		tb.WriteString("- Nothing yet.\n")
 	}

@@ -258,6 +258,9 @@ var dealCoverageGaps = []string{
 	"It runs on the agent's own machine, over the agent host's own records: it can list actions that have no deal record, but it cannot prove that nothing else happened.",
 }
 
+// dealReconcileScope is printed with every result: what this pass is about.
+const dealReconcileScope = "This pass covers the execution records it was given, for this period. It is not a record of everything the agent did."
+
 // dealNoApprovalsGap is added when no approval history was given.
 const dealNoApprovalsGap = "The agent host's history of approvals was not available, so whether the user approved each action on the host is not shown."
 
@@ -408,6 +411,7 @@ func reconcileDeals(records []dealExecutionRecord, approvals []dealHostApproval,
 	summary := fmt.Sprintf("%d of %d consequential actions have no deal record (%d execution records read for %s to %s). This lists what is missing from the records read; it cannot prove that nothing else happened.",
 		len(unrecorded), consequential, read, from.Format(time.RFC3339), to.Format(time.RFC3339))
 	return map[string]any{
+		"scope":             dealReconcileScope,
 		"period":            map[string]any{"from": from.Format(time.RFC3339), "to": to.Format(time.RFC3339)},
 		"summary":           summary,
 		"records_read":      read,

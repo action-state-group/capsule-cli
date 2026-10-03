@@ -324,6 +324,14 @@ rides in `bundle.json`, where `capsulectl verify --bundle bundle.json
 the reader chooses. The email copy cannot check itself; the attached page and
 `capsulectl verify --bundle bundle.json` can.
 
+Every receipt, page and email states its own scope on its face: "This
+receipt covers this one deal. It is not a record of everything the agent
+did." Never describe a receipt as complete. What was asked, proposed and
+approved is sealed where it happened, in the conversation. What the agent
+did is the agent's own report until an independent source, such as the
+merchant's own email, is attached. A witness shows the record existed
+unchanged; it does not confirm what the agent did.
+
 ## Daily reconciliation
 
 Once a day (a scheduled task on the host is enough), run:

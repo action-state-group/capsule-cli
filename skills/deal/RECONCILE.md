@@ -120,6 +120,8 @@ failed attempt can still have had an effect, so it is shown for review. An
 
 One JSON object:
 
+- `scope`: always "This pass covers the execution records it was given, for
+  this period. It is not a record of everything the agent did."
 - `summary`: one plain line, for example "0 of 1 consequential actions have
   no deal record (3 execution records read for ... to ...). This lists what
   is missing from the records read; it cannot prove that nothing else

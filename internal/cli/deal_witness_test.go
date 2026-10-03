@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"html"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,4 +118,41 @@ func mustRead(t *testing.T, path string) []byte {
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	return raw
+}
+
+// Every receipt states its own scope on its face, and nothing claims to be a
+// complete record.
+func TestDealReceiptsStateTheirScope(t *testing.T) {
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))["deal_id"].(string)
+	dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(retailDemo, "check-pay.json"))
+	dir := t.TempDir()
+	page, eml := filepath.Join(dir, "receipt.html"), filepath.Join(dir, "receipt.eml")
+	dealRun(t, "report", "--deal", dealID, "--html", page, "--email", eml)
+
+	const scope = "This receipt covers this one deal. It is not a record of everything the agent did."
+	assert.Equal(t, scope, dealScopeLine)
+	assert.Contains(t, string(mustRead(t, page)), scope, "the receipt page header")
+	_, bodies, _ := emailParts(t, mustRead(t, eml))
+	require.Len(t, bodies, 2)
+	for kind, body := range bodies {
+		assert.Contains(t, strings.ReplaceAll(body, "\r\n", "\n"), scope, kind)
+		assert.Contains(t, html.UnescapeString(body), "What the agent did is the agent's own report", kind)
+	}
+
+	path := writeJSON(t, `{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","amount_minor":627,"currency":"USD","status":"succeeded"}`)
+	result, err := reconcileRun(t, "--executions", path, "--to", "2026-09-28T00:00:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, "This pass covers the execution records it was given, for this period. It is not a record of everything the agent did.", result["scope"])
+
+	for _, text := range append([]string{string(mustRead(t, page)), fmt.Sprint(result)}, bodies["text/plain"], bodies["text/html"]) {
+		lower := strings.ToLower(text)
+		for _, claim := range []string{"all activity", "complete history", "complete record", "full history", "everything the agent did."} {
+			if claim == "everything the agent did." {
+				assert.NotContains(t, strings.ReplaceAll(lower, "not a record of everything the agent did.", ""), claim)
+				continue
+			}
+			assert.NotContains(t, lower, claim)
+		}
+	}
 }
