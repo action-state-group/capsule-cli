@@ -318,9 +318,11 @@ reads on a phone with nothing to download, and `receipt.html` plus
 the agent host's own email tool to the user's own address. Never send it
 through any other service, and never paste its contents anywhere else. The
 assurance line says "Sealed by my agent" unless a configured witness signed
-a receipt for the deal's checkpoint, and then "Witnessed". The email copy
-cannot check itself; the attached page and `capsulectl verify --bundle
-bundle.json` can.
+a receipt for the deal's checkpoint, and then "Witnessed". The receipt
+rides in `bundle.json`, where `capsulectl verify --bundle bundle.json
+--witness-directory DIRECTORY.json` checks it against a witness directory
+the reader chooses. The email copy cannot check itself; the attached page and
+`capsulectl verify --bundle bundle.json` can.
 
 ## Daily reconciliation
 

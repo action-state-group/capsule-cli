@@ -121,6 +121,14 @@ against the step's seal; the words shown come from this device's local
 store. If a byte was changed, the page says "This report did not verify"
 instead. Message text appears only when an anomaly cites that message.
 
+When the profile's witness signed a receipt for the checkpoint the report
+carries (re-checked against the pinned witness key when the report is made),
+the receipt rides in the bundle's `checkpoint.witnesses`, and the page and
+the email say "Witnessed" instead of "Sealed by my agent". The page does not
+check the receipt itself and says so; `capsulectl verify --bundle FILE
+--witness-directory DIRECTORY.json` does, against a witness directory the
+reader chooses. Making a report never contacts the witness.
+
 ## Records: the x-deal-v0 profile
 
 [`profile/`](profile/) is the deal record profile: `PROFILE.md` (normative),

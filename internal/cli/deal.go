@@ -979,10 +979,7 @@ func dealReportCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			assurance, err := s.dealAssurance(ctx, b)
-			if err != nil {
-				return err
-			}
+			assurance := dealAssurance(b)
 			out["assurance"] = assurance
 			if htmlPath != "" {
 				if err = atomicFile(htmlPath, []byte(page), false); err != nil {

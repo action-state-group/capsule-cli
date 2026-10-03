@@ -24,19 +24,13 @@ import (
 // receipt page as an attachment, and the Evidence Bundle so anyone can check
 // it with `capsulectl verify --bundle`.
 
-// dealAssurance names the rung the report stands on. "witnessed" needs a
-// receipt, re-verified now against the profile's pinned witness key, for the
-// checkpoint the bundle carries; otherwise the record is sealed by the agent's
-// own device and nothing more is claimed.
-func (s *dealSession) dealAssurance(ctx context.Context, b map[string]interface{}) (map[string]any, error) {
-	sealed := map[string]any{"rung": "sealed", "text": "Sealed by my agent: tamper-evident, not non-repudiation. The key that sealed it is on the agent's own device."}
+// heldWitnessReceipt returns the checkpoint.witnesses entry for the witness
+// receipt this device holds for the signed checkpoint statement, or nil when
+// no witness is configured, none was received, or it does not verify under
+// the profile's pinned witness key.
+func (s *dealSession) heldWitnessReceipt(ctx context.Context, statement []byte) (map[string]interface{}, error) {
 	service, err := serviceID(s.dp)
 	if err != nil || service == "" {
-		return sealed, err
-	}
-	cp, _ := b["checkpoint"].(map[string]interface{})
-	statement, err := base64.StdEncoding.DecodeString(fmt.Sprint(cp["statement"]))
-	if err != nil {
 		return nil, err
 	}
 	record, err := verifyCheckpoint(s.dp, statement)
@@ -45,14 +39,39 @@ func (s *dealSession) dealAssurance(ctx context.Context, b map[string]interface{
 	}
 	state, err := s.t.log.GetWitness(ctx, service, record.MMRSize)
 	if err != nil || state.Receipt == nil || verifyWitness(s.dp, state) != nil {
-		return sealed, nil
+		return nil, nil
 	}
-	host := s.dp.Checkpoint.Endpoint
+	entry := map[string]interface{}{
+		"ts_url":      strings.TrimRight(s.dp.Checkpoint.Endpoint, "/"),
+		"entry_hash":  state.Receipt.EntryHash,
+		"receipt_b64": base64.StdEncoding.EncodeToString(state.Receipt.Bytes),
+	}
+	if state.Receipt.LeafIndex != nil {
+		entry["leaf_index"] = integer(uint64(*state.Receipt.LeafIndex))
+	}
+	if state.Receipt.TreeSize != nil {
+		entry["tree_size"] = integer(uint64(*state.Receipt.TreeSize))
+	}
+	return entry, nil
+}
+
+// dealAssurance names the rung the report stands on, from the bundle itself:
+// "witnessed" when it carries a witness receipt (added only after it
+// re-verified under the pinned witness key), otherwise sealed by the agent's
+// own device and nothing more is claimed.
+func dealAssurance(b map[string]interface{}) map[string]any {
+	cp, _ := b["checkpoint"].(map[string]interface{})
+	witnesses, _ := cp["witnesses"].([]interface{})
+	if len(witnesses) == 0 {
+		return map[string]any{"rung": "sealed", "text": "Sealed by my agent: tamper-evident, not non-repudiation. The key that sealed it is on the agent's own device."}
+	}
+	entry, _ := witnesses[0].(map[string]interface{})
+	host := fmt.Sprint(entry["ts_url"])
 	if u, err := url.Parse(host); err == nil && u.Host != "" {
 		host = u.Host
 	}
 	return map[string]any{"rung": "witnessed", "witness": host, "text": fmt.Sprintf(
-		"Witnessed: %s, an independent log, signed a receipt for the checkpoint covering these steps. The witness receipt is kept on the agent's device; the attached bundle does not carry it.", host)}, nil
+		"Witnessed: %s, an independent log, signed a receipt for the checkpoint covering these steps. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust.", host)}
 }
 
 type dealEmailView struct {

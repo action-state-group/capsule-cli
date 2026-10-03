@@ -80,6 +80,17 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 		return nil, err
 	}
 	cp["cose"] = base64.RawURLEncoding.EncodeToString(statement)
+	// A witness receipt already held for this checkpoint, re-verified now
+	// under the profile's pinned witness key, rides in checkpoint.witnesses,
+	// where `capsulectl verify --bundle --witness-directory` checks it. The
+	// report itself never contacts the witness.
+	entry, err := s.heldWitnessReceipt(ctx, statement)
+	if err != nil {
+		return nil, err
+	}
+	if entry != nil {
+		cp["witnesses"] = []interface{}{entry}
+	}
 	b["extensions"] = map[string]interface{}{
 		"x-deal-v0": map[string]interface{}{
 			"deal_id": events[0].Event.DealID, "steps": steps, "asked": report.Asked, "asked_step": report.AskedStep,
@@ -135,6 +146,7 @@ body { background: var(--bg); color: var(--fg); }
 #deal .deal-steps li { margin: 4px 0; overflow-wrap: anywhere; }
 #deal .deal-at { color: var(--muted); font-size: 0.85rem; }
 #deal .deal-note { color: var(--muted); font-size: 0.9rem; }
+#deal .deal-rung { font-weight: 600; margin: 4px 0; }
 #deal .deal-demo { display: inline-block; border: 1px solid var(--warn); color: var(--warn); padding: 0 6px; border-radius: 4px; font-size: 0.8rem; }
 #deal .deal-bad { color: var(--warn); font-weight: 600; }
 #deal details { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
