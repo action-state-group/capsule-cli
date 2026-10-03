@@ -1,19 +1,29 @@
 # deal skill
 
 An agent skill ([SKILL.md](SKILL.md)) and the `capsulectl deal` command group
-behind it. The skill is written as procedures (purchase, booking, signature,
-disclosure) whose final-review step is `deal open` plus `deal check`: before
-an agent pays, books, signs or shares on a user's behalf, it checks the step
-against what the user asked and who they are really dealing with, and shows
-the difference. The trigger is the action, never the counterparty: a retail
-checkout from a known merchant at a fixed price is in scope.
+behind it. Before an agent pays, books, signs or shares on a user's behalf, it
+checks the step against what the user asked and who they are really dealing
+with, and shows the difference.
 
 Invocation is advisory, not enforced. The check seals what was asked,
 proposed, approved and done, and the host elects to call it; its `pause`
 verdict is advice to the host, not a lock. It holds an action only where the
-host runs `deal check` from a pre-action hook. Without one, a skipped check
-still shows in the report, and an action with no deal at all shows in
-`deal reconcile` ([RECONCILE.md](RECONCILE.md)).
+host runs `deal check` from a pre-action hook. Without one:
+
+- **`deal reconcile`** ([RECONCILE.md](RECONCILE.md)) reads the host's own
+  execution records, the tool calls of the agent and of every sub-task it
+  started, and lists each consequential action that has no deal record, with
+  what it cannot see printed on its face. It does not depend on the agent
+  remembering anything.
+- **`deal check` writes the approval text.** Every check returns
+  `approval_text`: what, who, the amount, the rail, what the check found, the
+  check time and when it goes stale. An agent that asks the user with that
+  text has run the check.
+- **The skill is written as procedures** (purchase, booking, signature,
+  disclosure) whose final-review step is `deal open` plus `deal check`. The
+  trigger is the action, never the counterparty: a retail checkout from a
+  known merchant at a fixed price is in scope. This helps once the skill is
+  in use; it does not make the host invoke it.
 
 ## Commands
 
@@ -22,14 +32,14 @@ still shows in the report, and an action with no deal at all shows in
 | `deal init --dir DIR` | Creates a SQLite deal profile: store plus signing and checkpoint seeds, each mode 0600. |
 | `deal open --input FILE` | Seals the baseline: the user's verbatim words, who, terms, claims (each with its source) and recourse. Cuts a checkpoint. |
 | `deal note --kind message\|claim\|evidence\|change --input FILE` | Seals what happened. |
-| `deal check --input FILE` | Seals a snapshot of what is about to happen, asks the four questions, seals the result, returns the difference card. |
+| `deal check --input FILE [--stale-after 15m]` | Seals a snapshot of what is about to happen, asks the four questions, seals the result, returns the difference card and the `approval_text` (with the check time and when it goes stale). |
 | `deal note --kind approval --check ID --choice OPT` | Seals the user's answer to a check. Cuts a checkpoint. |
 | `deal note --kind act --input FILE` | Seals what the agent did and whether a passing check or approval covered it. |
 | `deal close --input FILE` | Compares what was delivered with what was agreed: `completed`, `mismatch` or `open`. Cuts a checkpoint. |
 | `deal note --kind intent --input FILE` | Seals a change to what the user asked or allowed. |
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
-| `deal reconcile --executions FILE [--from T] [--to T]` | Reads the agent host's execution records (tool calls of the agent and its sub-tasks, in the format in [RECONCILE.md](RECONCILE.md)) and lists each consequential action that has no deal record, with what the pass cannot see. Seals nothing; exits 3 when anything is unrecorded. |
+| `deal reconcile --executions FILE [--approvals FILE] [--from T] [--to T]` | Reads the agent host's execution records (tool calls of the agent and its sub-tasks, in the format in [RECONCILE.md](RECONCILE.md)) and lists each consequential action that has no deal record, with what the pass cannot see. Seals nothing; exits 3 when anything is unrecorded. |
 
 Each step is a Capsule in the profile's store. Each deal has its own
 checkpointed log (`deal/<deal_id>`) in the same SQLite file, and each step

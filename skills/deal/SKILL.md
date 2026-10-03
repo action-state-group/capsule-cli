@@ -43,7 +43,9 @@ still made.
 
 Each procedure below is the whole flow. Its final-review step is `deal open`
 plus `deal check`; this replaces "show the user the totals". Skipping it
-skips a step of the flow you are already running.
+skips a step of the flow you are already running. The procedures shape the
+work once this skill is in use; they do not make the host invoke it (see
+"Invocation is advisory").
 
 ### Purchase
 
@@ -53,7 +55,7 @@ subscription, an in-app purchase.
 1. Find what the user asked for, and keep their exact words.
 2. Fill the cart and the checkout form up to the last screen before the order is placed. Do not press the final button.
 3. **Final review:** `deal open` (once per deal: the merchant as `who`, the cart as `terms`, `"allowed": ["pay"]` when the user asked you to buy), then `deal check` with `"action": "pay"` and the exact total about to be charged.
-4. On `"proceed": true`, place the order. On `pause`, show the card, seal the user's answer, and place the order only if that returns `"proceed": true`.
+4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, place the order. On `pause`, show the card, seal the user's answer, and place the order only if that returns `"proceed": true`.
 5. Right after placing it: `deal note --kind act` with the amount, payee, rail and order reference.
 6. `deal close` when the item arrives, or does not.
 
@@ -64,7 +66,7 @@ A hotel, flight, table, appointment, rental or ticket.
 1. Find options that match what the user asked for, and keep their exact words.
 2. Fill the booking form up to the last screen before it is confirmed. Do not press the final button.
 3. **Final review:** `deal open` (once per deal, type `booking` or `rental`), then `deal check` with `"action": "commit"`, or `"pay"` when the confirmation charges a card.
-4. On `"proceed": true`, confirm. On `pause`, show the card, seal the user's answer, and confirm only if that returns `"proceed": true`.
+4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, confirm. On `pause`, show the card, seal the user's answer, and confirm only if that returns `"proceed": true`.
 5. Right after confirming: `deal note --kind act` with the amount and the confirmation reference.
 6. `deal close` after the stay, trip or appointment.
 
@@ -75,7 +77,7 @@ A contract, a lease, a rental agreement, a service order, any e-signature.
 1. Read the document, and keep the user's exact words about what they want signed.
 2. Fill it up to the signature, without signing.
 3. **Final review:** `deal open` (once per deal, type `service` or `rental`, the document's terms as `terms`), then `deal check` with `"action": "sign"`.
-4. On `"proceed": true`, sign. On `pause`, show the card, seal the user's answer, and sign only if that returns `"proceed": true`.
+4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, sign. On `pause`, show the card, seal the user's answer, and sign only if that returns `"proceed": true`.
 5. Right after signing: `deal note --kind act` with the document's reference.
 6. `deal close` when the agreement is done.
 
@@ -86,7 +88,7 @@ Sending the user's phone, email, address, a login, or a code to anyone.
 1. Note who is asking and what for, and keep the user's exact words about it.
 2. Fill the form or message up to the point of sending, without sending.
 3. **Final review:** `deal open` (once per deal, with the deal type the disclosure belongs to, or `service`), then `deal check` with `"action": "share_contact"` or `"share_credentials"`.
-4. On `"proceed": true`, send. On `pause`, show the card, seal the user's answer, and send only if that returns `"proceed": true`.
+4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, send. On `pause`, show the card, seal the user's answer, and send only if that returns `"proceed": true`.
 5. Right after sending: `deal note --kind act` saying what was shared.
 6. `deal close` when the exchange is over.
 
@@ -129,6 +131,12 @@ The final review asks four questions:
   `card` text exactly as returned and offer exactly its `options`. Do not reword it,
   soften it, or add your own reassurance.
 - **Never hold silently.** A `pause` always goes to the user with the card.
+- **Ask with the check's own text.** Every `deal check` returns
+  `approval_text`: what, who, the amount, how it is paid, what the check
+  found, when it was checked, and when the check goes stale (15 minutes by
+  default, `--stale-after`). When you ask the user to go ahead, in your own
+  message or ahead of the host's approval card, show that text as it is. If
+  the action happens after the stale time, check again first.
 - **This upgrades your host's own confirmation; it never replaces it or
   bypasses it.**
 - Use plain words with the user: "checked", "changed", "unverified",
@@ -224,6 +232,10 @@ capsulectl --profile deal deal check --deal ID --input snapshot.json
 `description`, `amount_minor`, and the `who`, `terms` and `recourse` you are
 about to use. For an item from a private seller, add `seen_item` (true or
 false); leave it out for a retail order.
+
+Every check also returns `approval_text` (a short, paste-ready summary with
+the check time and when it goes stale), `checked_at` and
+`stale_after_minutes`.
 
 - `"verdict": "pass"`, `"proceed": true`: go ahead. Say nothing extra. The
   pass is approved by what the user already allowed, and that approval is

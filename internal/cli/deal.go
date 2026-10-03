@@ -791,6 +791,10 @@ func dealCheckCommand() *cobra.Command {
 		if err = decodeJSON(raw, &snap); err != nil {
 			return err
 		}
+		staleAfter, _ := c.Flags().GetDuration("stale-after")
+		if staleAfter < time.Minute {
+			return inputError("--stale-after must be at least one minute")
+		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			if dealFinallyClosed(events) {
 				return inputError("deal is closed")
@@ -870,11 +874,15 @@ func dealCheckCommand() *cobra.Command {
 			out["unverified"] = result.Unverified
 			out["remote"] = result.Remote.Status
 			out["demo"] = open.Demo
+			out["checked_at"] = checked.Event.At
+			out["stale_after_minutes"] = int(staleAfter / time.Minute)
+			out["approval_text"] = dealApprovalText(state, snap, result, checked.Event.At, staleAfter)
 			return output(c, out)
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("input", "", "Snapshot JSON: the action and exactly what is about to happen")
+	cmd.Flags().Duration("stale-after", 15*time.Minute, "How long the check stays current; the approval text says when it goes stale")
 	return cmd
 }
 
