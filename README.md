@@ -818,6 +818,34 @@ countersignatures it carried but did not check. Exit codes:
 - 1: a claim failed (an edited record, a signature that does not verify, a
   checkpoint field that differs from its signature).
 
+**composed/v1.** A bundle carrying the `composed/v1` extension
+(draft-mih-zhang-agent-disclosure-bundle-01 §7.2: one evidence set built from
+several responders' answers to Evidence Requests) is checked too, through the
+agent-action-capsule Go library (v0.7.0). Its `extensions` entry has `status`
+(`pass`, `withheld` or `fail`) and a `composed` object reporting, separately:
+
+- `composed_digest`: the digest recomputed from the block's declarations, the
+  declared one, and whether they match;
+- `members`: each member's `outcome` (`artifact`, `refusal` or `absence`),
+  `body` (`carried`, `declared_missing` or `absent`), `digest` (`reproduced`,
+  `mismatch` or `not_shown`), and, for a carried member bundle, `bundle`: that
+  bundle's own full report (its own verdict and claims, never merged with the
+  containing bundle's). A refusal's signature is checked when it carries
+  `key_id` and `signature` (`ed25519-jcs`: Ed25519 over the JCS of the refusal
+  without `signature`); any other refusal is `signature_unverified`, not failed;
+- `composition_closure`: `pass`, `withheld` (`declared_incomplete`) or `fail`;
+- `joins`: each join's `declared` and re-`derived` state and `result`
+  (`derived_matches`, `join_state_mismatch` or `not_derivable`), with each
+  member's value at each differing pointer on a derived mismatch;
+- `corroboration`: per join, `redundant` (with `reason`: same observer, custody
+  domain or key) and the report "redundant, not corroborating", `corroborating`
+  (qualified `custody_declared`), or `not_applicable`.
+
+A failed block or member bundle makes the verdict `INVALID`; a declared-missing
+member, a non-derivable join or an unverified refusal signature makes it
+`INCOMPLETE`. Composition closure covers the declared members only; it is not
+completeness of participation.
+
 **Witness receipts.** A checkpoint can carry witness receipts
 (`checkpoint.witnesses`). With `--witness-directory WITNESSES.json` (capsule-emit's
 `witnesses.json` format: each row names a witness endpoint and its keys), each

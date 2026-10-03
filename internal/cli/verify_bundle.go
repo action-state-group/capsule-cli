@@ -156,8 +156,10 @@ func claim(result aacbundle.ClaimResult) claimOutput {
 // verifyBundleFile checks an Evidence Bundle (evidence-bundle/v2) offline, from
 // the file alone: every record's identity, citation closure, interval
 // coverage and per-record membership under the checkpoint (authenticated
-// when the bundle carries checkpoint.cose), disclosures, and which extensions
-// and countersignatures were carried but not verified here. No profile, no
+// when the bundle carries checkpoint.cose), disclosures, a composed/v1
+// extension (bundle -01 §7.2, with each member bundle assessed as its own
+// Evidence Bundle), and which other extensions and countersignatures were
+// carried but not verified here. No profile, no
 // network. Exit 0 when every claim passes, 3 (ErrPartial) when nothing failed
 // but something is not shown, 1 (ErrBundleInvalid) when a claim failed.
 func verifyBundleFile(c *cobra.Command, path string) error {
@@ -183,8 +185,27 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if value["bundle_kind"] != "evidence-bundle/v2" || value["bundle_version"] != "2" {
 		return inputError("--bundle is not an evidence-bundle/v2 file (bundle_kind \"evidence-bundle/v2\", bundle_version \"2\")")
 	}
-	result := aacbundle.VerifyBundle(value)
+	result := aacbundle.VerifyBundleWithOptions(value, aacbundle.Options{RefusalSignature: verifyRefusalSignature})
+	report, verdict := assessBundle(value, result, directory)
+	if err := output(c, report); err != nil {
+		return err
+	}
+	switch verdict {
+	case "VALID":
+		return nil
+	case "INCOMPLETE":
+		return ErrPartial
+	default:
+		return ErrBundleInvalid
+	}
+}
 
+// assessBundle reports one Evidence Bundle's claims and its verdict. A
+// composed/v1 block's member bundles are assessed the same way and reported
+// on their member; their claims are never merged into the containing
+// Bundle's, but a failed member or block fails the verdict, and one with
+// something not shown makes it INCOMPLETE.
+func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, directory []witnessRow) (map[string]any, string) {
 	records := map[string]string{}
 	ids := make([]string, 0, len(result.CapsuleResults))
 	for id := range result.CapsuleResults {
@@ -212,10 +233,6 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 			disclosuresOK = false
 		}
 	}
-	extensions := make([]map[string]string, 0, len(result.Extensions))
-	for _, x := range result.Extensions {
-		extensions = append(extensions, map[string]string{"kind": x.Kind, "status": x.Status})
-	}
 	countersignatures := make([]string, 0, len(result.Countersignatures))
 	for _, s := range result.Countersignatures {
 		countersignatures = append(countersignatures, s.Status)
@@ -237,6 +254,19 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if witnesses.Status == "fail" {
 		claims = append(claims, witnesses)
 	}
+	extensions := make([]map[string]any, 0, len(result.Extensions))
+	for _, x := range result.Extensions {
+		entry := map[string]any{"kind": x.Kind, "status": x.Status}
+		if x.Composed != nil {
+			composed, memberVerdicts := composedOutput(value, x.Composed, directory)
+			entry["composed"] = composed
+			claims = append(claims, aacbundle.ClaimResult{Status: x.Composed.Status, Findings: x.Composed.Findings})
+			for _, memberVerdict := range memberVerdicts {
+				claims = append(claims, verdictClaim(memberVerdict))
+			}
+		}
+		extensions = append(extensions, entry)
+	}
 	verdict := "VALID"
 	for _, r := range claims {
 		if r.Status == "fail" {
@@ -253,7 +283,7 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if result.BundleDigest != nil {
 		digest = *result.BundleDigest
 	}
-	if err := output(c, map[string]any{
+	return map[string]any{
 		"verdict":               verdict,
 		"bundle_digest":         digest,
 		"record_identity":       records,
@@ -267,16 +297,18 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 		"producer_signatures":   claim(signatures),
 		"record_signatures":     signatureStates,
 		"witnesses":             map[string]any{"status": witnesses.Status, "findings": nonNilStrings(witnesses.Findings), "receipts": witnessReceipts},
-	}); err != nil {
-		return err
-	}
+	}, verdict
+}
+
+// verdictClaim folds a member bundle's verdict into the containing verdict.
+func verdictClaim(verdict string) aacbundle.ClaimResult {
 	switch verdict {
 	case "VALID":
-		return nil
+		return aacbundle.ClaimResult{Status: "pass"}
 	case "INCOMPLETE":
-		return ErrPartial
+		return aacbundle.ClaimResult{Status: "withheld"}
 	default:
-		return ErrBundleInvalid
+		return aacbundle.ClaimResult{Status: "fail"}
 	}
 }
 
