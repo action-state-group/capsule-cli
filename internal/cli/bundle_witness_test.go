@@ -242,11 +242,20 @@ func TestVerifyBundleWitnessVerdictsAgreeWithThePythonVerifier(t *testing.T) {
 from capsule_emit.evidence_file import check_evidence_file
 c = check_evidence_file(json.load(open(sys.argv[1])), witness_directory=json.load(open(sys.argv[2])))
 print(c.verdict, c.witness.status)`
-	for name, edit := range map[string]func(map[string]interface{}){
-		"witnessed":   witnessed(t, private),
-		"another key": witnessed(t, otherKey),
-		"no receipt":  nil,
+	emptyKeyRow := rawKeyRow(testWitness, public)
+	emptyKeyRow["key_ids"] = []string{}
+	type crossCase struct {
+		edit      func(map[string]interface{})
+		directory string
+	}
+	for name, tc := range map[string]crossCase{
+		"witnessed":         {witnessed(t, private), directory},
+		"another key":       {witnessed(t, otherKey), directory},
+		"no receipt":        {nil, directory},
+		"no row for it":     {witnessed(t, private), writeDirectory(t, rawKeyRow("https://other.example", public))},
+		"a row with no key": {witnessed(t, private), writeDirectory(t, emptyKeyRow)},
 	} {
+		edit, directory := tc.edit, tc.directory
 		path := producedBundle(t, edit)
 		goResult, _ := verifyWithDirectory(t, path, directory)
 		goState, _ := bundleWitnesses(goResult)
