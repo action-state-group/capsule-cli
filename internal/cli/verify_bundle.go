@@ -21,20 +21,21 @@ var signedCheckpointFields = []string{"log_id", "mmr_size", "root", "key_id", "t
 // checkpointClaim holds the bundle's checkpoint to its signature: the COSE
 // checkpoint must verify, and every signed field the JSON copy carries must
 // equal the signed value (log_id, mmr_size and root must be carried). A
-// bundle with no checkpoint.cose is not shown ("withheld").
-func checkpointClaim(value map[string]interface{}) aacbundle.ClaimResult {
+// bundle with no checkpoint.cose is not shown ("withheld"). The verified
+// statement's bytes are returned when the claim passes, else nil.
+func checkpointClaim(value map[string]interface{}) (aacbundle.ClaimResult, []byte) {
 	stated, _ := value["checkpoint"].(map[string]interface{})
 	encoded, present := stated["cose"].(string)
 	if !present {
-		return aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_signature_absent"}}
+		return aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_signature_absent"}}, nil
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_malformed"}}
+		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_malformed"}}, nil
 	}
 	signed, err := signedCheckpoint(raw)
 	if err != nil {
-		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_invalid"}}
+		return aacbundle.ClaimResult{Status: "fail", Findings: []string{"checkpoint_signature_invalid"}}, nil
 	}
 	var findings []string
 	for _, field := range signedCheckpointFields {
@@ -50,9 +51,9 @@ func checkpointClaim(value map[string]interface{}) aacbundle.ClaimResult {
 		}
 	}
 	if len(findings) != 0 {
-		return aacbundle.ClaimResult{Status: "fail", Findings: findings}
+		return aacbundle.ClaimResult{Status: "fail", Findings: findings}, nil
 	}
-	return aacbundle.ClaimResult{Status: "pass"}
+	return aacbundle.ClaimResult{Status: "pass"}, raw
 }
 
 // producerSignatureClaim checks each record's inline producer signature
@@ -127,6 +128,14 @@ func claim(result aacbundle.ClaimResult) claimOutput {
 // network. Exit 0 when every claim passes, 3 (ErrPartial) when nothing failed
 // but something is not shown, 1 (ErrBundleInvalid) when a claim failed.
 func verifyBundleFile(c *cobra.Command, path string) error {
+	var directory []witnessRow
+	if directoryPath, _ := c.Flags().GetString("witness-directory"); directoryPath != "" {
+		rows, err := loadWitnessDirectory(directoryPath)
+		if err != nil {
+			return err
+		}
+		directory = rows
+	}
 	raw, err := readInput(path)
 	if err != nil {
 		return err
@@ -170,8 +179,14 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 
 	rawRecords, _ := value["records"].([]interface{})
 	signatures, signatureStates := producerSignatureClaim(rawRecords)
-	signedCheckpoint := checkpointClaim(value)
+	signedCheckpoint, statement := checkpointClaim(value)
+	witnesses, witnessReceipts := witnessClaim(value, statement, directory)
 	claims := []aacbundle.ClaimResult{result.GraphClosure, signedCheckpoint, result.IntervalCoverage, result.PerRecordMembership, signatures}
+	// The bundle draft defines no witness member: only a failing receipt
+	// changes the verdict, and a file without one is judged as before.
+	if witnesses.Status == "fail" {
+		claims = append(claims, witnesses)
+	}
 	verdict := "VALID"
 	for _, r := range claims {
 		if r.Status == "fail" {
@@ -201,6 +216,7 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 		"checkpoint":            claim(signedCheckpoint),
 		"producer_signatures":   claim(signatures),
 		"record_signatures":     signatureStates,
+		"witnesses":             map[string]any{"status": witnesses.Status, "findings": nonNilStrings(witnesses.Findings), "receipts": witnessReceipts},
 	}); err != nil {
 		return err
 	}
@@ -239,4 +255,11 @@ func sameJSONValue(a, b interface{}) bool {
 	default:
 		return fmt.Sprintf("%T:%v", a, a) == fmt.Sprintf("%T:%v", b, b)
 	}
+}
+
+func nonNilStrings(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }

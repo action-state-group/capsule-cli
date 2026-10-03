@@ -181,7 +181,7 @@ capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsulectl verify --profile NAME --capsule ARTIFACT.json
-capsulectl verify --bundle BUNDLE.json
+capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl publish --profile NAME --request INPUT.json
 capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100]
 capsulectl cll append --profile NAME --capsule ARTIFACT.json
@@ -555,9 +555,32 @@ countersignatures it carried but did not check. Exit codes:
 - 1: a claim failed (an edited record, a signature that does not verify, a
   checkpoint field that differs from its signature).
 
-Its verdicts agree with capsule-emit's offline bundle verifier. Bundles from
-`capsulectl bundle` carry the checkpoint's signed fields and `checkpoint.cose`,
-and each record's producer signature inline.
+**Witness receipts.** A checkpoint can carry witness receipts
+(`checkpoint.witnesses`). With `--witness-directory WITNESSES.json` (capsule-emit's
+`witnesses.json` format: each row names a witness endpoint and its keys), each
+receipt is checked against the signed checkpoint under its witness's row, and
+reported under `witnesses`:
+
+- `pass`: it verifies under a key in the directory;
+- `withheld`: the file carries none, the directory has no row or no key for its
+  witness, the row's binding isn't `cll`, or the checkpoint itself did not
+  verify;
+- `fail`: it does not verify, or is malformed.
+
+The CLI privileges no witness. Without `--witness-directory` no receipt is
+checked, so receipts are `withheld`.
+
+capsulectl checks receipts from `cll` witnesses only. A receipt whose row is a
+`rekor` or `scrapi` binding is `withheld` here. capsule-emit's verifier checks
+those too, so the two can differ on such a file: there it can pass, or fail
+and make the file INVALID, where capsulectl reports it as not checked. The bundle draft defines no witness member,
+so only a failing receipt changes the verdict; a file without one is judged as
+before.
+
+Its verdicts agree with capsule-emit's offline bundle verifier, given the same
+witness directory and no `rekor` or `scrapi` receipts. Bundles from `capsulectl bundle` carry the checkpoint's
+signed fields and `checkpoint.cose`, and each record's producer signature
+inline.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
 
