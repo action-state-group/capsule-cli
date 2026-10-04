@@ -968,9 +968,14 @@ func dealCheckCommand() *cobra.Command {
 				if action != snap.Action {
 					return inputError("disclosing " + strings.Join(snap.Disclosing, ", ") + " goes with action " + action)
 				}
+			}
+			// Every share check says who receives it; nothing defaults to the
+			// counterparty, so an approval always names the party it is for.
+			if strings.HasPrefix(snap.Action, "share_") {
 				switch snap.DisclosingTo {
-				case "", "counterparty":
-					snap.DisclosingTo = "counterparty"
+				case "":
+					return inputError(`a share check needs "disclosing_to": "counterparty" (the deal's counterparty) or "other" (with a recipient)`)
+				case "counterparty":
 					if snap.Recipient != nil {
 						return inputError(`recipient goes with "disclosing_to": "other"; a telling to the counterparty is about the deal's own counterparty`)
 					}
@@ -982,7 +987,7 @@ func dealCheckCommand() *cobra.Command {
 					return inputError(`disclosing_to must be counterparty or other`)
 				}
 			} else if snap.DisclosingTo != "" || snap.Recipient != nil {
-				return inputError(`disclosing_to and recipient go with "disclosing"`)
+				return inputError(`disclosing_to and recipient go with a share check`)
 			}
 			if snap.Action == "pay" {
 				// The check names the payee it is about, so an action can be

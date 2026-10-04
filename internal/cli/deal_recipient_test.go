@@ -28,7 +28,7 @@ func openMerchant(t *testing.T, domain string) string {
 
 func shareCheck(t *testing.T, dealID, classes string) map[string]any {
 	t.Helper()
-	return dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","disclosing":[`+classes+`]}`))
+	return dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":[`+classes+`]}`))
 }
 
 func noteDelivery(t *testing.T, dealID string) map[string]any {
@@ -131,9 +131,9 @@ func TestDealCheckDisclosingIsChecked(t *testing.T) {
 	dealFixture(t)
 	dealID := openMerchant(t, "redbubble.com")
 	for body, want := range map[string]string{
-		`{"action":"share_contact","disclosing":["shoe_size"]}`:          "not one of",
-		`{"action":"share_contact","disclosing":["email","credential"]}`: "mixes contact details and credentials",
-		`{"action":"share_credentials","disclosing":["email"]}`:          "goes with action share_contact",
+		`{"action":"share_contact","disclosing_to":"counterparty","disclosing":["shoe_size"]}`:          "not one of",
+		`{"action":"share_contact","disclosing_to":"counterparty","disclosing":["email","credential"]}`: "mixes contact details and credentials",
+		`{"action":"share_credentials","disclosing_to":"counterparty","disclosing":["email"]}`:          "goes with action share_contact",
 	} {
 		out, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, body))
 		require.Error(t, err, body)
@@ -209,7 +209,7 @@ func TestDealOmittingWhatIsGivenDoesNotBypassTheFirstTelling(t *testing.T) {
 	// (b) A disclosure whose covering check named nothing (here a
 	// share_credentials check, where naming is optional) is a first telling
 	// of each class it gives: held when noted, before it is sent.
-	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_credentials"}`))
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_credentials","disclosing_to":"counterparty"}`))
 	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
 	held := heldNote(t, dealID, `{"fields":[{"class":"verification_code","value":"481516"}]}`)
 	assert.Equal(t, []any{"verification_code"}, held["held"])
@@ -280,12 +280,41 @@ func TestDealApprovalForOnePartyDoesNotCoverAnother(t *testing.T) {
 
 	// A check about someone else must say who, by an identity, not a name.
 	for body, want := range map[string]string{
-		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"other","recipient":{"name":"Quick Couriers"}}`: "needs a recipient with",
-		`{"action":"share_contact","disclosing":["address"],"recipient":{"phone":"+1 555 010 7777"}}`:                       `recipient goes with "disclosing_to": "other"`,
-		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"courier"}`:                                     "disclosing_to must be counterparty or other",
+		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"other","recipient":{"name":"Quick Couriers"}}`:          "needs a recipient with",
+		`{"action":"share_contact","disclosing_to":"counterparty","disclosing":["address"],"recipient":{"phone":"+1 555 010 7777"}}`: `recipient goes with "disclosing_to": "other"`,
+		`{"action":"share_contact","disclosing":["address"],"recipient":{"phone":"+1 555 010 7777"}}`:                                `needs "disclosing_to"`,
+		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"courier"}`:                                              "disclosing_to must be counterparty or other",
 	} {
 		out, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, body))
 		require.ErrorIs(t, err, ErrInput, body)
 		assert.Contains(t, out+err.Error(), want, body)
 	}
+}
+
+// Every share check says who receives it: nothing defaults to the
+// counterparty, for contact details and credentials alike.
+func TestDealEveryShareCheckNamesItsRecipient(t *testing.T) {
+	dealFixture(t)
+	dealID := openSeller(t, `{"name":"Garage Sale Gary","profile_id":"mkt:seller:4411"}`)
+	for _, body := range []string{
+		`{"action":"share_contact","disclosing":["address"]}`,
+		`{"action":"share_credentials"}`,
+		`{"action":"share_credentials","disclosing":["verification_code"]}`,
+	} {
+		out, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, body))
+		require.ErrorIs(t, err, ErrInput, body)
+		assert.Contains(t, out+err.Error(), `a share check needs "disclosing_to"`, body)
+	}
+	// Not on any other action.
+	out, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":12000,"disclosing_to":"counterparty"}`))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, out+err.Error(), "disclosing_to and recipient go with a share check")
+	// Named, it is sealed in the check record, with or without classes.
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_credentials","disclosing_to":"counterparty"}`))
+	export := filepath.Join(t.TempDir(), "deal.json")
+	dealRun(t, "export", "--deal", dealID, "--output", export)
+	raw, err := os.ReadFile(export)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"disclosing_to":"counterparty"`)
+	assert.NotEmpty(t, check["check_id"])
 }

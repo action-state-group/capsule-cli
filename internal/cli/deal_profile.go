@@ -576,9 +576,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				classes[i] = c
 			}
 			body["disclosing"] = classes
-			if sn.DisclosingTo != "" {
-				body["disclosing_to"] = sn.DisclosingTo
-			}
+		}
+		if sn.DisclosingTo != "" {
+			body["disclosing_to"] = sn.DisclosingTo
 		}
 		if sn.Terms != nil {
 			if t := termsBody(*sn.Terms); len(t) > 0 {

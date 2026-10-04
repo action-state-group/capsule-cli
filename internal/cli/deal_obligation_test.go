@@ -55,7 +55,7 @@ func TestDealCancelByDateAndCancellationProof(t *testing.T) {
 	assert.Equal(t, deadlineNotEnforced, deadline["note"])
 
 	// Every check lists the open date.
-	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","description":"give the shop my phone for delivery","disclosing":["phone"]}`))
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","description":"give the shop my phone for delivery","disclosing":["phone"]}`))
 	open := check["open_deadlines"].([]any)
 	require.Len(t, open, 1)
 	assert.Equal(t, "2026-10-16", open[0].(map[string]any)["cancel_by"])

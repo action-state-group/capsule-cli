@@ -39,7 +39,7 @@ func openDisclosureDeal(t *testing.T) (dealID string, phone, pickup map[string]a
 		"recourse":{"rail":"cash","refundable":false}}`
 	dealID = dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
 	// A first telling to a seller never dealt with: the user's own nod.
-	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","description":"give the seller my number and where","disclosing":["phone","pickup_location"]}`))
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","description":"give the seller my number and where","disclosing":["phone","pickup_location"]}`))
 	require.Equal(t, "pause", check["verdict"])
 	approval := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "yes, give them my number")
 	phone = dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t,
