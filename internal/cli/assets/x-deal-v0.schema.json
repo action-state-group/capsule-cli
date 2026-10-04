@@ -184,7 +184,36 @@
         "source": { "$ref": "#/$defs/ns_token" },
         "verified": { "type": "boolean" },
         "detail_commitment": { "$ref": "#/$defs/hex64" },
-        "counterparty_facts": { "$ref": "#/$defs/counterparty_facts" }
+        "counterparty_facts": { "$ref": "#/$defs/counterparty_facts" },
+        "merchant_email": { "$ref": "#/$defs/merchant_email" }
+      }
+    },
+    "merchant_email": {
+      "description": "A merchant's own DKIM-signed email, sealed raw on the device. The record carries only digests, the DKIM result against key records captured at seal time, and amounts parsed from the email by heuristics.",
+      "type": "object", "additionalProperties": false,
+      "required": ["message_digest", "key_records_digest", "key_source", "dkim", "merchant_signed", "dmarc_policy", "parsed"],
+      "properties": {
+        "message_digest": { "$ref": "#/$defs/hex64" },
+        "key_records_digest": { "$ref": "#/$defs/hex64" },
+        "key_source": { "enum": ["dns", "supplied"] },
+        "dkim": { "enum": ["pass", "fail", "none"] },
+        "merchant_signed": { "type": "boolean" },
+        "dmarc_policy": { "enum": ["reject", "quarantine", "none", "absent", "not_captured"] },
+        "dmarc_record_digest": { "$ref": "#/$defs/hex64" },
+        "dmarc_source": { "enum": ["dns", "supplied"] },
+        "signer_matches_baseline": { "type": "boolean" },
+        "parsed": {
+          "type": "object", "additionalProperties": false, "required": ["method"],
+          "properties": {
+            "method": { "const": "heuristic" },
+            "total_minor": { "$ref": "#/$defs/safe_uint" },
+            "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+            "order_id_commitment": { "$ref": "#/$defs/hex64" },
+            "cancel_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+            "sent_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+            "item_count": { "$ref": "#/$defs/safe_uint" }
+          }
+        }
       }
     },
     "body_detail_change": {

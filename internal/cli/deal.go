@@ -431,7 +431,7 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand(), dealReconcileCommand(), dealTickCommand())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand())
 	return deal
 }
 
@@ -629,11 +629,22 @@ type dealActInput struct {
 func dealNoteCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "note", Short: "Seal a message, claim, evidence, detail change, the user's answer to a check, or an action taken", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		kind, _ := c.Flags().GetString("kind")
+		emailPath, _ := c.Flags().GetString("email")
+		keyPath, _ := c.Flags().GetString("key-record")
+		dmarcPath, _ := c.Flags().GetString("dmarc-record")
 		ev := dealEvent{Kind: kind}
 		var act dealActInput
-		switch kind {
-		case "message", "claim", "evidence", "change", "intent", "act":
-			path, _ := c.Flags().GetString("input")
+		if (emailPath != "" || keyPath != "" || dmarcPath != "") && kind != "evidence" {
+			return inputError("--email, --key-record and --dmarc-record go with --kind evidence")
+		}
+		if keyPath != "" && emailPath == "" {
+			return inputError("--key-record needs --email")
+		}
+		path, _ := c.Flags().GetString("input")
+		switch {
+		case kind == "evidence" && emailPath != "" && path == "":
+			ev.Evidence = &dealEvidence{About: "merchant confirmation email", Source: "merchant_email"}
+		case slices.Contains([]string{"message", "claim", "evidence", "change", "intent", "act"}, kind):
 			raw, err := readInput(path)
 			if err != nil {
 				return err
@@ -661,7 +672,7 @@ func dealNoteCommand() *cobra.Command {
 			if err = decodeJSON(raw, target); err != nil {
 				return err
 			}
-		case "approval":
+		case kind == "approval":
 			check, _ := c.Flags().GetString("check")
 			choice, _ := c.Flags().GetString("choice")
 			said, _ := c.Flags().GetString("said")
@@ -671,6 +682,13 @@ func dealNoteCommand() *cobra.Command {
 			ev.Approval = &dealApproval{Check: check, Choice: choice, Approver: "user", Said: said}
 		default:
 			return inputError("--kind must be message, claim, evidence, change, intent, approval or act")
+		}
+		if emailPath != "" {
+			// Captured before the deal is locked: the key records are read
+			// from DNS now, as close to receipt as the agent can make it.
+			if err := attachEmail(ev.Evidence, emailPath, keyPath, dmarcPath); err != nil {
+				return err
+			}
 		}
 		if err := normalizeNote(&ev); err != nil {
 			return err
@@ -733,13 +751,34 @@ func dealNoteCommand() *cobra.Command {
 				out["unchecked"] = ev.Act.Unchecked
 				out["authorized_by"] = ev.Act.AuthorizedBy
 				out["reason"] = ev.Act.Reason
+			case "evidence":
+				if m := ev.Evidence.Email; m != nil {
+					// Keys rotate and are revoked: checkpoint (and witness)
+					// the sealed key record at once.
+					cp, err := s.milestone(ctx)
+					if err != nil {
+						return err
+					}
+					out["checkpoint"] = cp
+					out["dkim"] = m.DKIM.Result
+					out["merchant_signed"] = m.DKIM.Merchant
+					out["key_source"] = m.KeySource
+					out["dmarc_policy"] = m.DKIM.Policy
+					out["scope"] = emailScopeLine
+					out["merchant_says"] = emailVerdictWords(m.DKIM)
+					out["we_say"] = ourSealWords
+					out["parsed"] = m.Parsed
+				}
 			}
 			return output(c, out)
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval or act")
-	cmd.Flags().String("input", "", "JSON body for message, claim, evidence, change, intent or act")
+	cmd.Flags().String("input", "", "JSON body for message, claim, evidence, change, intent or act (optional for evidence with --email)")
+	cmd.Flags().String("email", "", "evidence: a merchant's email as a raw RFC 822 file (.eml), headers intact; sealed with its DKIM key records")
+	cmd.Flags().String("key-record", "", "evidence: the DKIM key record to check --email against instead of DNS (marked supplied)")
+	cmd.Flags().String("dmarc-record", "", "evidence: the sender's DMARC record, with --key-record (marked supplied)")
 	cmd.Flags().String("check", "", "approval: the check_id being answered")
 	cmd.Flags().String("choice", "", "approval: the option id the user chose")
 	cmd.Flags().String("said", "", "approval: the user's own words")
@@ -969,8 +1008,8 @@ func dealReportCommand() *cobra.Command {
 				lines = append(lines, fmt.Sprintf("%d. %s %s", se.Event.N, se.Event.At, trailLine(se.Event)))
 			}
 			out := map[string]any{
-				"deal_id": dealID, "demo": events[0].Event.Open.Demo, "outcome": outcome,
-				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "trail": strings.Join(lines, "\n"),
+				"deal_id": dealID, "scope": dealScopeLine, "did_line": dealDidLine(dealDidSources(events)), "demo": events[0].Event.Open.Demo, "outcome": outcome,
+				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "merchant": report.Merchant, "trail": strings.Join(lines, "\n"),
 			}
 			if htmlPath == "" && emailPath == "" && bundlePath == "" {
 				return output(c, out)

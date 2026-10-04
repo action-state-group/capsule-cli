@@ -79,7 +79,7 @@ Twelve record types. The set is closed: an unknown `record_type` fails the schem
 | `intent` | The user restates or widens the ask (for example, now allowing `share_contact`). Replaces `allowed` / `max_total_minor` / `asked` from here on. | `verbatim_commitment` | `baseline_ref`, `prev`. |
 | `message` | One message in the thread. The text stays local. | `from` (`counterparty`\|`user`\|`agent`), `content_commitment` | `channel`. `counterparty` when the message shows identifiers (for example, a new phone number). |
 | `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text` (≤ 200 chars, no identifiers), `source` | none beyond the chain. |
-| `evidence` | What was done to establish a claim, and whether it did. | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. |
+| `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. |
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
 | `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`), `pack_id` | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor`, `currency`, `seen_item`, `terms`, `recourse`, `pack_digest`. |
 | `verdict` | The answer to one check: pass, or pause with the differences. | `result` (`pass`\|`pause`), `pack_id`, `differences[]`, `options[]` | exactly one `checks` → a `check`; one verdict per check; `pack_id` equal to the check's. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. |
@@ -96,6 +96,18 @@ Field details:
 - **terms**: `item`, `quantity`, `price_minor`, `deposit_minor`, `currency`, `when`, `place`,
   `conditions` (token → string). `place` is a locality ("lakeside marina"), never a street
   address.
+- **merchant_email** (on `evidence`, optional): a merchant's DKIM-signed email, kept raw on the
+  device. `message_digest` (SHA-256 of the exact RFC 822 bytes), `key_records_digest` (SHA-256
+  of the JCS array of `{"name","txt"}` key records captured when the email was sealed),
+  `key_source` (`dns` | `supplied`), `dkim` (`pass` | `fail` | `none`), `merchant_signed` (a
+  passing signature is DMARC-aligned with the From domain: the same organizational domain, or
+  the exact domain under `adkim=s`), `dmarc_policy` (`reject` | `quarantine` | `none` |
+  `absent` | `not_captured`; shown, never a reason to refuse sealing), optional
+  `dmarc_record_digest` + `dmarc_source` (the DMARC records captured at seal time), optional
+  `signer_matches_baseline`, and `parsed` (`method: heuristic`; optional `total_minor`,
+  `currency`, `order_id_commitment`, `cancel_by`, `sent_at`, `item_count`). `verified` is true
+  only when `dkim` is `pass` and `merchant_signed` is true. The DKIM signature is the
+  merchant's attestation; the record's own seal is the producer's. They are different claims.
 - **recourse**: `rail` (a token: `card`, `zelle`, `wire`, …; the normalization is the safety
   pack's `rail` rule) and `refundable`.
 - **differences[]**: `{question, rule, field?}`. `question` is one of `asked`, `who`, `terms`,

@@ -67,8 +67,13 @@ func dealTexts(ev dealEvent) map[string]string {
 		t["verbatim"] = ev.Intent.Verbatim
 	case ev.Message != nil:
 		t["content"] = ev.Message.Text
-	case ev.Evidence != nil && ev.Evidence.Detail != "":
-		t["detail"] = ev.Evidence.Detail
+	case ev.Evidence != nil:
+		if ev.Evidence.Detail != "" {
+			t["detail"] = ev.Evidence.Detail
+		}
+		if ev.Evidence.Email != nil && ev.Evidence.Email.Parsed.OrderID != "" {
+			t["order_id"] = ev.Evidence.Email.Parsed.OrderID
+		}
 	case ev.Snapshot != nil && ev.Snapshot.Description != "":
 		t["description"] = ev.Snapshot.Description
 	case ev.Check != nil && ev.Check.Card != "":
@@ -266,6 +271,78 @@ func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]i
 	return m, nil
 }
 
+// merchantEmailBody is what a record says about a sealed merchant email: the
+// digest of the exact bytes, the digest of the key records it was checked
+// against and where they came from, the DKIM result, and the parsed amounts.
+// The message itself, its addresses and its order id stay on the device.
+func merchantEmailBody(m *merchantEmail, first dealWho, commit func(string) (string, error)) (map[string]interface{}, error) {
+	keys, err := keyRecordsDigest(m.Keys)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]interface{}{
+		"message_digest": emailDigest(m.Raw), "key_records_digest": keys, "key_source": m.KeySource,
+		"dkim": m.DKIM.Result, "merchant_signed": m.DKIM.Merchant, "dmarc_policy": m.DKIM.Policy,
+	}
+	if d, err := m.DMARC.digest(); err != nil {
+		return nil, err
+	} else if d != "" {
+		out["dmarc_record_digest"] = d
+		out["dmarc_source"] = m.DMARC.Source
+	}
+	if same, known := signerMatchesBaseline(m.DKIM, first); known {
+		out["signer_matches_baseline"] = same
+	}
+	parsed := map[string]interface{}{"method": "heuristic"}
+	p := m.Parsed
+	if p.TotalMinor != nil {
+		parsed["total_minor"] = *p.TotalMinor
+	}
+	if p.Currency != "" {
+		parsed["currency"] = p.Currency
+	}
+	if p.CancelBy != "" {
+		parsed["cancel_by"] = p.CancelBy
+	}
+	if p.SentAt != "" {
+		parsed["sent_at"] = p.SentAt
+	}
+	if len(p.Items) > 0 {
+		parsed["item_count"] = int64(len(p.Items))
+	}
+	if p.OrderID != "" {
+		if parsed["order_id_commitment"], err = commit("order_id"); err != nil {
+			return nil, err
+		}
+	}
+	out["parsed"] = parsed
+	return out, nil
+}
+
+// signerMatchesBaseline compares the domain behind a passing signature with
+// the counterparty's domain (or email domain) from first contact. known is
+// false when first contact named neither, or nothing passed.
+func signerMatchesBaseline(v merchantEmailVerdict, first dealWho) (same, known bool) {
+	signer := v.signer()
+	if signer == "" {
+		return false, false
+	}
+	for _, raw := range []string{first.Domain, first.Email} {
+		if raw == "" {
+			continue
+		}
+		d, err := normDomain(raw)
+		if err != nil {
+			continue
+		}
+		known = true
+		if d == signer || strings.HasSuffix(d, "."+signer) || strings.HasSuffix(signer, "."+d) {
+			return true, true
+		}
+	}
+	return false, known
+}
+
 // buildDealRecord derives the x-deal-v0 record for ev, which follows events.
 func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string]interface{}, error) {
 	digestOf := func(capsuleID string) string {
@@ -366,6 +443,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		body["verified"] = ev.Evidence.Verified
 		if ev.Evidence.Detail != "" {
 			if body["detail_commitment"], err = commit("detail"); err != nil {
+				return nil, err
+			}
+		}
+		if m := ev.Evidence.Email; m != nil {
+			if body["merchant_email"], err = merchantEmailBody(m, events[0].Event.Open.Who, commit); err != nil {
 				return nil, err
 			}
 		}

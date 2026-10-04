@@ -285,6 +285,43 @@ capsulectl --profile deal deal note --deal ID --kind act --input act.json   # {"
 An action with no sealed approval is still recorded, as an unchecked action,
 and it shows as an anomaly in the report. One approval covers one action.
 
+**4b. Seal the merchant's own email** as soon as it arrives (an order
+confirmation, a receipt, a booking or a cancellation). Save the message as a
+raw `.eml` file, headers intact, exactly as received. Never paste, summarize
+or forward it: a summary is your words again and loses the merchant's
+signature.
+
+```sh
+capsulectl --profile deal deal note --deal ID --kind evidence --email confirmation.eml
+```
+
+This seals the raw message on this device, reads the merchant's DKIM key
+from DNS **now**, seals that key with it, and checkpoints at once. Do it
+promptly: merchants rotate and revoke their keys, and a signature can only
+be checked later against a key that was sealed while it was still published.
+Prompt sealing is the whole protection.
+
+The result has two separate statements. Report them separately, in their own
+words, and never as one combined badge:
+
+- `merchant_says`: "merchant-confirmed: …" when the merchant's own signature
+  checks out, or "not confirmed: …" with the reason and the domain's DMARC
+  policy. This one is independent: it shows what the merchant sent, whatever
+  the agent says. Repeat it as written. A message that is not confirmed is
+  still sealed; never drop it or soften the words.
+- `we_say`: what our own seal shows (this device kept these exact bytes from
+  this time on). It is our own record, not the merchant's.
+
+`parsed` holds the order number, total, cancel-by date and items read from
+the email. They are best-effort readings; the report labels them as read from
+the email. To re-check later, with no network:
+
+```sh
+capsulectl --profile deal deal verify-email --deal ID
+```
+
+The mailbox stays on this machine: no credentials, no forwarding, no upload.
+
 **5. Close** when the deal is over, or check back later:
 
 ```sh
@@ -306,9 +343,14 @@ action, in order), and **anomalies** on either side: agent side (tried
 something not asked, skipped a check, went ahead without the user's sealed
 answer) and counterparty side (changed payee or contact, moved channels,
 pushed a deadline, asked for a code, a new website, unverified claims,
-delivered differently). Each item expands to its sealed steps. The page
-checks itself with no network. Message text is left out unless an anomaly
-points at that message.
+delivered differently, charged other than approved, a possible duplicate
+charge). When a merchant email is sealed, the page also sets what the user
+approved beside what the merchant's own email says was charged. Each item
+expands to its sealed steps. The page checks itself with no network. Message
+text is left out unless an anomaly points at that message.
+
+A merchant email result carries its own `scope` line (it covers one email
+from the merchant about this deal). Pass it on as written.
 
 Attach the file or hand it over when the user asks. Never upload or host it
 anywhere.

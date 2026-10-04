@@ -74,8 +74,8 @@ func dealDidLine(sources []string) string {
 }
 
 // dealDidSources lists the independent sources a deal recorded for what the
-// agent did, such as the merchant's own email. A deal records none yet.
-func dealDidSources(events []sealedEvent) []string { return nil }
+// agent did: the merchant's own emails that are merchant-confirmed.
+func dealDidSources(events []sealedEvent) []string { return merchantDidSources(events) }
 
 // dealDidLineOf reads the did line the report bundle carries, so the page and
 // the email say the same thing.
