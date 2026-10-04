@@ -213,6 +213,7 @@ capsulectl judge drift pin FILE_A FILE_B
 capsulectl judge drift reports FILE_A FILE_B
 capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
 capsulectl deal init|open|note|check|close|report --profile NAME [...]
+capsulectl backfill run|status --profile NAME [...]
 ```
 
 `capsulectl <command> --help` gives every flag; this list is the shape of each
@@ -254,6 +255,13 @@ unresolved signer, and the command exits partial (3).
 of no return (pay, commit, sign, share) against it. The check is advisory: it
 holds an action only where the host runs it from a pre-action hook; see
 [skills/deal](skills/deal/README.md).
+
+`backfill` imports an agent host's own records (tool calls, sub-tasks, spend
+approvals) after the fact, as a watermark poll by monotonic cursor: every new
+row by digest, and the rows near a consequential signal as Capsules in
+provenance mode `backfilled`. It shows effects only, never an amount charged
+or an approval, and it gives detectability of absence, not prevention; see
+[docs/BACKFILL.md](docs/BACKFILL.md).
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.
