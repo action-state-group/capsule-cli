@@ -111,7 +111,7 @@ func bundleProducerKey(c *cobra.Command, profile Profile) (ed25519.PublicKey, er
 	}
 	public, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
-		return nil, inputError("invalid signing key")
+		return nil, inputError("the profile's signing key is not an Ed25519 key")
 	}
 	return public, nil
 }
@@ -124,7 +124,7 @@ func integer(value uint64) json.Number { return json.Number(fmt.Sprintf("%d", va
 // graph-closure records.
 func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Backend, logID string, options BundleOptions) (map[string]interface{}, error) {
 	if len(options.Root) != 64 {
-		return nil, inputError("--root is required")
+		return nil, inputError("--root is required: the Capsule ID (64 hex) the bundle is built around")
 	}
 	// A negative depth means "unset" (the default); an explicit 0 is honored as a
 	// root-only bundle. The bundle command's flag default is 2.
@@ -143,7 +143,7 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		return nil, inputError("--payloads none cannot be combined with disclosure")
 	}
 	if options.Payloads == "all" && len(options.Withhold) != 0 {
-		return nil, inputError("payloads=all cannot withhold records")
+		return nil, inputError("--payloads all discloses every record, so it cannot withhold any: a shared copy uses --payloads selected")
 	}
 
 	root, err := getCapsule(ctx, artifacts, options.Root)
@@ -159,12 +159,12 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		return nil, err
 	}
 	if state.Checkpoint == nil {
-		return nil, inputError("log has no covering checkpoint")
+		return nil, inputError("the log has no checkpoint yet, so no bundle can prove its records: cut one with `capsulectl cll checkpoint create`")
 	}
 	checkpointSize := state.Checkpoint.Size
 	checkpointSeq := state.Checkpoint.IndexedSeq
 	if checkpointSeq == 0 {
-		return nil, inputError("covering checkpoint has no entries")
+		return nil, inputError("the log's checkpoint covers no entries: append a record and cut a new checkpoint with `capsulectl cll checkpoint create`")
 	}
 	// The emitted range must end at the checkpoint tip (leaf_count(size) ==
 	// checkpointSeq); the verifier enforces this, so refuse to emit a cert that

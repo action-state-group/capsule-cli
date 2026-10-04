@@ -43,10 +43,17 @@ func (s Secret) validate() error {
 		}
 	}
 	if n > 1 {
-		return inputError("conflicting secret sources")
+		return inputError("a secret may come from only one of a literal value, --*-file or --*-env; the profile sets more than one")
 	}
 	return nil
 }
+func emptySecretReason(s Secret) string {
+	if s.File != "" {
+		return "the secret file " + s.File + " is empty"
+	}
+	return "the environment variable " + s.Env + " named for a secret is unset or empty"
+}
+
 func (s Secret) resolve() (string, error) {
 	if err := s.validate(); err != nil {
 		return "", err
@@ -54,7 +61,7 @@ func (s Secret) resolve() (string, error) {
 	if s.File != "" {
 		b, e := readProtected(s.File)
 		if e != nil {
-			return "", inputError("cannot read protected secret file")
+			return "", inputError("cannot read the secret file " + s.File + ": it must exist, be a regular file, and be readable only by its owner (chmod 600)")
 		}
 		s.Value = strings.TrimSpace(string(b))
 	}
@@ -62,7 +69,7 @@ func (s Secret) resolve() (string, error) {
 		s.Value = os.Getenv(s.Env)
 	}
 	if (s.File != "" || s.Env != "") && s.Value == "" {
-		return "", inputError("declared secret reference is empty")
+		return "", inputError(emptySecretReason(s))
 	}
 	return s.Value, nil
 }
@@ -127,7 +134,7 @@ func (p Profile) validate() error {
 		return inputError("profile needs a valid name and mysql, sqlite, or jsonl type")
 	}
 	if (p.LogID != "" && !logName.MatchString(p.LogID)) || (p.Namespace != "" && !profileName.MatchString(p.Namespace)) {
-		return inputError("invalid log_id or namespace")
+		return inputError("log_id must be lowercase letters, digits and ._:/- (starting with a letter or digit, at most 191 characters); namespace must be letters, digits, _ and - (at most 64)")
 	}
 	if p.LogID == "" && p.Namespace == "" {
 		return inputError("configure an artifact namespace, a log_id, or both")
@@ -194,7 +201,7 @@ func readProtected(path string) ([]byte, error) {
 }
 func profilePath(name string) (string, error) {
 	if !profileName.MatchString(name) {
-		return "", inputError("valid profile name is required")
+		return "", inputError("a profile name is required: letters, digits, _ and - (starting with a letter or digit, at most 64 characters)")
 	}
 	dir, e := profilesDir()
 	if e != nil {
@@ -213,7 +220,7 @@ func profilesDir() (string, error) {
 		base = filepath.Join(home, ".config")
 	}
 	if !filepath.IsAbs(base) {
-		return "", inputError("XDG_CONFIG_HOME must be absolute")
+		return "", inputError("XDG_CONFIG_HOME must be an absolute path when it is set")
 	}
 	return filepath.Join(base, "capsule", "profiles"), nil
 }
@@ -224,20 +231,20 @@ func loadProfile(name string) (Profile, error) {
 	}
 	raw, e := readProtected(path)
 	if e != nil {
-		return Profile{}, inputError("profile missing or not owner-protected")
+		return Profile{}, inputError("profile " + name + " was not found, or its file is readable by others than its owner (chmod 600): see `capsulectl profile list`, or create it with `capsulectl profile create`")
 	}
 	var p Profile
 	d := yaml.NewDecoder(bytes.NewReader(raw))
 	d.KnownFields(true)
 	if e = d.Decode(&p); e != nil {
-		return Profile{}, inputError("invalid profile fields")
+		return Profile{}, inputError("profile " + name + " has a field capsulectl does not know, or a field of the wrong type: compare it with `capsulectl profile show`")
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return p, inputError("profile must contain one document")
+		return p, inputError("the profile file must hold exactly one YAML document")
 	}
 	if p.Name != name {
-		return p, inputError("profile filename and name differ")
+		return p, inputError("the profile file's name field must match its filename (NAME.yaml holds name: NAME)")
 	}
 	return p, p.validate()
 }
@@ -404,7 +411,7 @@ func profileCommands() *cobra.Command {
 			}
 			var p Profile
 			if e := v.UnmarshalExact(&p); e != nil {
-				return inputError("invalid profile settings")
+				return inputError("the profile settings could not be applied: a value has the wrong type for its field")
 			}
 			if sp, _ := c.Flags().GetString("sqlite-path"); sp != "" {
 				p.Connection.Database = sp

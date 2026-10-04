@@ -82,8 +82,8 @@ func (r jsonlExecutionReader) Read(_ context.Context) ([]dealExecutionRecord, er
 			continue
 		}
 		var rec dealExecutionRecord
-		if err := decodeJSON(text, &rec); err != nil {
-			return nil, inputError(fmt.Sprintf("execution record on line %d: invalid JSON or unknown field", line))
+		if err := decodeJSONAs(fmt.Sprintf("execution record on line %d", line), text, &rec); err != nil {
+			return nil, err
 		}
 		if err := rec.validate(); err != nil {
 			return nil, inputError(fmt.Sprintf("execution record on line %d: %s", line, err))
@@ -127,8 +127,8 @@ func readHostApprovals(path string) ([]dealHostApproval, error) {
 			continue
 		}
 		var a dealHostApproval
-		if err := decodeJSON(text, &a); err != nil {
-			return nil, inputError(fmt.Sprintf("approval record on line %d: invalid JSON or unknown field", line))
+		if err := decodeJSONAs(fmt.Sprintf("approval record on line %d", line), text, &a); err != nil {
+			return nil, err
 		}
 		at, err := time.Parse(time.RFC3339, a.At)
 		if err != nil {

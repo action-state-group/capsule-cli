@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/action-state-group/capsule-emit-go/artifact"
@@ -24,7 +25,7 @@ func keyCommands() *cobra.Command {
 	generate := &cobra.Command{Use: "generate", Short: "Generate an Ed25519 signing key: write the seed file, print the public key", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		path, _ := c.Flags().GetString("output")
 		if path == "" {
-			return inputError("--output is required")
+			return inputError("--output is required: the path to write the new seed file to (it must not exist yet)")
 		}
 		public, private, e := ed25519.GenerateKey(rand.Reader)
 		if e != nil {
@@ -38,7 +39,7 @@ func keyCommands() *cobra.Command {
 		}
 		_, we := f.WriteString(hex.EncodeToString(private.Seed()))
 		if e := errors.Join(we, f.Close()); e != nil {
-			return inputError("cannot write signing key file")
+			return inputError("could not write the seed to --output: check that its directory exists and is writable")
 		}
 		return output(c, map[string]string{"public_key": hex.EncodeToString(public), "signing_key_file": path})
 	}}
@@ -54,7 +55,7 @@ func keyCommands() *cobra.Command {
 		}
 		pub, ok := private.Public().(ed25519.PublicKey)
 		if !ok {
-			return inputError("not an Ed25519 key")
+			return inputError("the seed file does not hold an Ed25519 seed (64 hex characters)")
 		}
 		return output(c, map[string]string{"public_key": hex.EncodeToString(pub)})
 	}}
@@ -64,11 +65,38 @@ func keyCommands() *cobra.Command {
 
 func selected(c *cobra.Command) (Profile, error) {
 	name, _ := c.Flags().GetString("profile")
+	if name == "" {
+		return Profile{}, inputError(c.CommandPath() + " needs --profile NAME (see `capsulectl profile list`)")
+	}
 	p, err := loadProfile(name)
 	if err != nil {
 		return p, errors.Join(ErrInput, err)
 	}
 	return p, nil
+}
+
+// flagUnknown and flagBadValue pick the flag name out of a flag-parsing error
+// without its value: a mistyped value can be a secret typed into the wrong
+// flag.
+var (
+	flagUnknown  = regexp.MustCompile(`^unknown (?:shorthand )?flag: (\S+)`)
+	flagBadValue = regexp.MustCompile(`for "([^"]+)" flag`)
+	flagNoValue  = regexp.MustCompile(`^flag needs an argument: (\S+)`)
+)
+
+// flagError names the flag a command line got wrong, never its value.
+func flagError(c *cobra.Command, err error) error {
+	msg := err.Error()
+	switch {
+	case flagUnknown.MatchString(msg):
+		return inputError(fmt.Sprintf("%s has no flag %s; see --help", c.CommandPath(), flagUnknown.FindStringSubmatch(msg)[1]))
+	case flagNoValue.MatchString(msg):
+		return inputError(fmt.Sprintf("flag %s needs a value", flagNoValue.FindStringSubmatch(msg)[1]))
+	case flagBadValue.MatchString(msg):
+		return inputError(fmt.Sprintf("flag %s has a value of the wrong type; see --help for what it takes", flagBadValue.FindStringSubmatch(msg)[1]))
+	default:
+		return inputError(c.CommandPath() + ": a flag could not be parsed; see --help")
+	}
 }
 
 // sealToFileCommand builds the seal/emit command shape: sign a request, prepare
@@ -109,7 +137,7 @@ func sealToFileCommand(use, outputFlag, short string) *cobra.Command {
 		}
 		public, ok := key.Public().(ed25519.PublicKey)
 		if !ok {
-			return inputError("invalid signing key")
+			return inputError("the profile's signing key is not an Ed25519 key")
 		}
 		if _, e = artifact.Verify(record, []ed25519.PublicKey{public}); e != nil {
 			return e
@@ -130,7 +158,11 @@ func sealToFileCommand(use, outputFlag, short string) *cobra.Command {
 
 var ErrInput = errors.New("invalid input or profile configuration")
 
-func inputError(reason string) error { return errors.Join(ErrInput, errors.New(reason)) }
+// inputError is an input-class error (exit 2) whose reason is shown to the
+// operator. The reason must name the field, flag or file at fault and what is
+// expected, and must never carry a secret, a credential or a record's content
+// (TestNoGenericInputErrors holds every call site to this).
+func inputError(reason string) error { return hint(ErrInput, reason) }
 
 // hintError is an error whose message tells the operator what to do next.
 // It holds no secret -- no key, credential, DSN or record content -- so
@@ -147,15 +179,15 @@ func (h *hintError) Unwrap() error { return h.class }
 // or ErrConflict), which still decides the exit code.
 func hint(class error, message string) error { return &hintError{class: class, message: message} }
 
-func noArgs(_ *cobra.Command, args []string) error {
+func noArgs(c *cobra.Command, args []string) error {
 	if len(args) != 0 {
-		return ErrInput
+		return inputError(fmt.Sprintf("%s takes no positional arguments (got %d); every input is a --flag, see --help", c.CommandPath(), len(args)))
 	}
 	return nil
 }
-func oneArg(_ *cobra.Command, args []string) error {
+func oneArg(c *cobra.Command, args []string) error {
 	if len(args) != 1 {
-		return ErrInput
+		return inputError(fmt.Sprintf("%s takes exactly one positional argument (got %d): %s", c.CommandPath(), len(args), c.Use))
 	}
 	return nil
 }
@@ -264,7 +296,7 @@ func NewCommand() *cobra.Command {
 	root := &cobra.Command{Use: "capsulectl", Short: "Seal, store and publish AAC Capsules using named profiles", Version: cliVersion, SilenceUsage: true, SilenceErrors: true}
 	root.SetVersionTemplate("capsulectl {{.Version}} (commit " + cliCommit + ")\n")
 	root.PersistentFlags().String("profile", "", "Named target for commands that operate on a profile")
-	root.SetFlagErrorFunc(func(_ *cobra.Command, _ error) error { return ErrInput })
+	root.SetFlagErrorFunc(flagError)
 	root.AddCommand(profileCommands())
 	root.AddCommand(keyCommands())
 	root.AddCommand(bundleCommands()...)
@@ -324,7 +356,7 @@ func NewCommand() *cobra.Command {
 		}
 		id, _ := c.Flags().GetString("capsule-id")
 		if b, e := hex.DecodeString(id); e != nil || len(b) != 32 {
-			return inputError("--capsule-id is required")
+			return inputError("--capsule-id is required: a Capsule ID, 64 hex characters")
 		}
 		t, e := openTarget(c.Context(), p, useArtifacts)
 		if e != nil {
@@ -452,8 +484,24 @@ func NewCommand() *cobra.Command {
 		after, _ := c.Flags().GetUint64("after")
 		through, _ := c.Flags().GetUint64("through")
 		limit, _ := c.Flags().GetInt("limit")
-		if limit < 1 || limit > cll.MaxScanLimit || after > cll.MaxPortableInteger || (through != 0 && through < after) {
-			return inputError("invalid bounded range")
+		switch {
+		case limit < 1 || limit > cll.MaxScanLimit:
+			return inputError(fmt.Sprintf("--limit must be from 1 to %d", cll.MaxScanLimit))
+		case after > cll.MaxPortableInteger:
+			return inputError(fmt.Sprintf("--after must be at most %d", uint64(cll.MaxPortableInteger)))
+		case through != 0 && through < after:
+			return inputError("--through must be 0 (unbounded) or at least --after")
+		}
+		// --log-id reads another log of the same store: a deal profile keeps
+		// one log per deal (deal/<deal id>) beside its cadence log.
+		if logID, _ := c.Flags().GetString("log-id"); logID != "" {
+			if !logName.MatchString(logID) {
+				return inputError("--log-id must be lowercase letters, digits and ._:/-, such as deal/deal-0123456789abcdef")
+			}
+			if p.Type == "jsonl" {
+				return inputError("--log-id does not apply to a jsonl profile: its one log is the evidence book")
+			}
+			p.LogID = logID
 		}
 		t, e := openTarget(c.Context(), p, useCLLRead)
 		if e != nil {
@@ -487,6 +535,7 @@ func NewCommand() *cobra.Command {
 	list.Flags().Uint64("through", 0, "Inclusive sequence upper bound (0 unbounded)")
 	list.Flags().Int("limit", 100, "Page limit, at most 1000")
 	list.Flags().Bool("all", false, "jsonl profiles: also list the evidence book's internal records")
+	list.Flags().String("log-id", "", "Read this log of the profile's store instead of its log_id (a deal's log is deal/<deal id>)")
 	logs.AddCommand(list)
 	appendCmd := &cobra.Command{Use: "append", Short: "Append a Capsule ID to the CLL as a new entry", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)

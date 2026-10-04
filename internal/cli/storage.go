@@ -55,7 +55,7 @@ func openLog(ctx context.Context, p Profile, coordinate, logID string) (cll.Back
 		// The file is the log; coordinate is the profile's storage directory.
 		return clljsonl.Open(filepath.Join(coordinate, jsonlLogFile))
 	default:
-		return nil, inputError("unsupported profile type")
+		return nil, inputError("profile type must be mysql, sqlite or jsonl")
 	}
 }
 
@@ -68,7 +68,7 @@ func initLog(ctx context.Context, p Profile, coordinate, logID string) error {
 	case "jsonl":
 		return clljsonl.Init(filepath.Join(coordinate, jsonlLogFile))
 	default:
-		return inputError("unsupported profile type")
+		return inputError("profile type must be mysql, sqlite or jsonl")
 	}
 }
 
@@ -85,7 +85,7 @@ func newArtifactStore(p Profile, db *sql.DB, keys []ed25519.PublicKey) (artifact
 		}
 		return artifactjsonl.New(filepath.Join(dir, jsonlArtifactFile), p.Namespace, keys)
 	default:
-		return nil, inputError("unsupported profile type")
+		return nil, inputError("profile type must be mysql, sqlite or jsonl")
 	}
 }
 
@@ -150,7 +150,7 @@ func connection(p Profile) (*sql.DB, string, error) {
 	case "jsonl":
 		return jsonlConnection(p)
 	default:
-		return nil, "", inputError("unsupported profile type")
+		return nil, "", inputError("profile type must be mysql, sqlite or jsonl")
 	}
 }
 
@@ -215,14 +215,24 @@ func sqliteConnection(p Profile) (*sql.DB, string, error) {
 	}
 	return db, absolute, nil
 }
+
+// missingLogIDReason says why a profile without a log_id cannot serve a log
+// command, and what to pass instead.
+func missingLogIDReason(p Profile) string {
+	if p.Type == "sqlite" && p.Namespace == "deal" {
+		return "profile " + p.Name + " has no log_id: a deal profile keeps one log per deal; pass --log-id deal/<deal id> (cll list), or add a log with `capsulectl profile update --profile " + p.Name + " --log-id NAME`"
+	}
+	return "profile " + p.Name + " has no log_id, which this command needs: `capsulectl profile update --profile " + p.Name + " --log-id NAME`"
+}
+
 func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err error) {
 	needsArtifacts := use == useArtifacts || use == usePublication || (use == useInitialization && p.Namespace != "")
 	needsCLL := use == useCLL || use == useCLLRead || use == usePublication || (use == useInitialization && p.LogID != "")
 	if needsArtifacts && p.Namespace == "" {
-		return nil, inputError("this command requires an artifact namespace")
+		return nil, inputError("profile " + p.Name + " has no namespace, which this command needs: `capsulectl profile update --profile " + p.Name + " --namespace NAME`")
 	}
 	if needsCLL && p.LogID == "" {
-		return nil, inputError("this command requires a log_id")
+		return nil, inputError(missingLogIDReason(p))
 	}
 	if p.ReadOnly && use != useArtifacts && use != useCLLRead {
 		return nil, ErrReadOnlyCLL
@@ -314,7 +324,7 @@ type Publication struct {
 func requirePublisherKey(p Profile, private ed25519.PrivateKey) error {
 	public, ok := private.Public().(ed25519.PublicKey)
 	if !ok {
-		return inputError("invalid signer")
+		return inputError("the profile's signing key is not an Ed25519 key")
 	}
 	trusted, err := parseKeys(p.TrustedKeys)
 	if err != nil {

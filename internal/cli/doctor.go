@@ -144,7 +144,12 @@ func doctorCommand() *cobra.Command {
 					}
 					return ErrPartial
 				}
-				witness["ok"], witness["public_key"] = true, map[string]any{"ok": true}
+				// ok needs both a well-formed key and an endpoint that answered.
+				witness["public_key"] = map[string]any{"ok": true}
+				witness["ok"] = witness["reachable"] == true
+				if witness["ok"] != true {
+					witness["issue"] = "the checkpoint endpoint did not answer the probe: check the URL and the network"
+				}
 				report["witness"] = witness
 			}
 			return output(c, report)

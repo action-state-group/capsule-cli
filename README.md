@@ -201,7 +201,7 @@ capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsulectl verify --profile NAME --capsule ARTIFACT.json
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl publish --profile NAME --request INPUT.json
-capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100]
+capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100] [--log-id LOG]
 capsulectl cll append --profile NAME --capsule ARTIFACT.json
 capsulectl cll verify --profile NAME --proof PROOF.json
 capsulectl cll checkpoint create --profile NAME
@@ -279,6 +279,14 @@ timer): one checkpoint of hashes per tick, never on activity.
 `deal reconcile` reads the host's execution records afterwards and lists
 consequential actions that have no deal record; see
 [skills/deal](skills/deal/README.md).
+
+`cll list --log-id LOG` reads another log in the profile's store: a deal
+profile keeps each deal in its own log, `deal/<deal id>`, and a deal profile
+written by an earlier release has no `log_id` at all, so it needs `--log-id`.
+
+Every input error (exit 2) names the flag, field or file at fault and what is
+expected. It never prints a secret: a mistyped flag value is not echoed, only
+the flag's name.
 
 `backfill` imports an agent host's own records (tool calls, sub-tasks, spend
 approvals) after the fact, as a watermark poll by monotonic cursor: every new

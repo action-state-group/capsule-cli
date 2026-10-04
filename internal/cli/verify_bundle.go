@@ -148,7 +148,7 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 		return err
 	}
 	if value["bundle_kind"] != "evidence-bundle/v2" || value["bundle_version"] != "2" {
-		return inputError("not an evidence-bundle/v2 file")
+		return inputError("--bundle is not an evidence-bundle/v2 file (bundle_kind \"evidence-bundle/v2\", bundle_version \"2\")")
 	}
 	result := aacbundle.VerifyBundle(value)
 

@@ -33,7 +33,7 @@ func decodeBundleJSON(raw []byte) (map[string]interface{}, error) {
 	decoder.UseNumber()
 	var bundle map[string]interface{}
 	if err := decoder.Decode(&bundle); err != nil {
-		return nil, inputError("invalid bundle JSON")
+		return nil, inputError("the bundle file is not valid JSON")
 	}
 	return bundle, nil
 }
@@ -225,7 +225,7 @@ func verifyCountersignSignature(signerKeyHex, over string, signer, statement int
 // caller could confuse with a fragment-carried bundle.
 func validateServiceURL(raw string) (string, error) {
 	if raw == "" {
-		return "", inputError("--service is required")
+		return "", inputError("--service is required: the countersign service's HTTPS URL")
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
@@ -281,7 +281,7 @@ func postJSON(ctx context.Context, client *http.Client, target string, body, out
 	if len(raw) > maxCountersignResponse {
 		return fmt.Errorf("%s response exceeds size limit", target)
 	}
-	return decodeJSON(raw, out)
+	return decodeJSONAs("the response from "+target, raw, out)
 }
 
 // getJSON is postJSON's read-only counterpart, used for the directory fetch.
@@ -305,7 +305,7 @@ func getJSON(ctx context.Context, client *http.Client, target string, out any) e
 	if len(raw) > maxCountersignResponse {
 		return fmt.Errorf("%s response exceeds size limit", target)
 	}
-	return decodeJSON(raw, out)
+	return decodeJSONAs("the response from "+target, raw, out)
 }
 
 // buildCountersignSubmission signs the bundle digest with the requester's own
@@ -317,7 +317,7 @@ func buildCountersignSubmission(bundle map[string]interface{}, window, requester
 	}
 	public, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
-		return countersignSubmission{}, "", inputError("invalid signing key")
+		return countersignSubmission{}, "", inputError("the profile's signing key is not an Ed25519 key")
 	}
 	submission := countersignSubmission{
 		Bundle:             bundle,
@@ -420,7 +420,7 @@ func decodeCountersignerDirectory(raw []byte) (countersignerDirectory, error) {
 		}
 	}
 	var dir countersignerDirectory
-	if err := decodeJSON(rows, &dir.Countersigners); err != nil {
+	if err := decodeJSONAs("the countersigner directory", rows, &dir.Countersigners); err != nil {
 		return countersignerDirectory{}, err
 	}
 	return dir, nil
@@ -606,7 +606,7 @@ func countersignCommands() *cobra.Command {
 		}
 		window, _ := c.Flags().GetString("window")
 		if window == "" {
-			return inputError("--window is required")
+			return inputError("--window is required: the attestation window or period label to send")
 		}
 		bundlePath, _ := c.Flags().GetString("bundle")
 		outPath, _ := c.Flags().GetString("out")

@@ -156,7 +156,7 @@ func openDealSession(ctx context.Context, p Profile) (_ *dealSession, err error)
 // deal. An existing deal must already have indexed steps.
 func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) error {
 	if !dealIDPattern.MatchString(dealID) {
-		return inputError("invalid deal id")
+		return inputError("--deal must be a deal id as printed by `deal open`: deal- followed by 16 hex characters")
 	}
 	if create {
 		// The deal key is stored at open, so rotating the store secret later
@@ -456,7 +456,7 @@ func runDeal(c *cobra.Command, needDeal bool, fn func(ctx context.Context, s *de
 	if needDeal {
 		dealID, _ = c.Flags().GetString("deal")
 		if dealID == "" {
-			return inputError("--deal is required")
+			return inputError("--deal is required: a deal id as printed by `deal open`")
 		}
 	}
 	ctx := c.Context()
@@ -586,7 +586,7 @@ func dealOpenCommand() *cobra.Command {
 			return err
 		}
 		var o dealOpen
-		if err = decodeJSON(raw, &o); err != nil {
+		if err = decodeJSONAs("--input", raw, &o); err != nil {
 			return err
 		}
 		if err = o.validate(); err != nil {
@@ -648,7 +648,7 @@ func dealNoteCommand() *cobra.Command {
 			return inputError("--email, --key-record and --dmarc-record go with --kind evidence")
 		}
 		if keyPath != "" && emailPath == "" {
-			return inputError("--key-record needs --email")
+			return inputError("--key-record goes with --email: the key record is read for that email's DKIM signature")
 		}
 		path, _ := c.Flags().GetString("input")
 		switch {
@@ -679,7 +679,7 @@ func dealNoteCommand() *cobra.Command {
 			case "act":
 				target = &act
 			}
-			if err = decodeJSON(raw, target); err != nil {
+			if err = decodeJSONAs("--input", raw, target); err != nil {
 				return err
 			}
 		case kind == "approval":
@@ -717,7 +717,7 @@ func dealNoteCommand() *cobra.Command {
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			if dealFinallyClosed(events) {
-				return inputError("deal is closed")
+				return inputError("this deal is closed and takes no more steps; start a new one with `deal open`")
 			}
 			open := events[0].Event.Open
 			switch kind {
@@ -860,7 +860,7 @@ func dealCheckCommand() *cobra.Command {
 			return err
 		}
 		var snap dealSnapshot
-		if err = decodeJSON(raw, &snap); err != nil {
+		if err = decodeJSONAs("--input", raw, &snap); err != nil {
 			return err
 		}
 		staleAfter, _ := c.Flags().GetDuration("stale-after")
@@ -869,7 +869,7 @@ func dealCheckCommand() *cobra.Command {
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			if dealFinallyClosed(events) {
-				return inputError("deal is closed")
+				return inputError("this deal is closed and takes no more steps; start a new one with `deal open`")
 			}
 			open := events[0].Event.Open
 			if !slices.Contains(dealPointsOfNoReturn[open.Type], snap.Action) {
@@ -971,7 +971,7 @@ func dealCloseCommand() *cobra.Command {
 			return err
 		}
 		var in dealCloseInput
-		if err = decodeJSON(raw, &in); err != nil {
+		if err = decodeJSONAs("--input", raw, &in); err != nil {
 			return err
 		}
 		if !slices.Contains([]string{"received", "pending", "not_received"}, in.Status) {
@@ -982,7 +982,7 @@ func dealCloseCommand() *cobra.Command {
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			if dealFinallyClosed(events) {
-				return inputError("deal is closed")
+				return inputError("this deal is closed and takes no more steps; start a new one with `deal open`")
 			}
 			state, err := foldDeal(events)
 			if err != nil {
@@ -1139,7 +1139,7 @@ func dealExportCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "export", Short: "Write the deal's sealed x-deal-v0 records as one JSON array, in order (no raw values)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		path, _ := c.Flags().GetString("output")
 		if path == "" {
-			return inputError("--output is required")
+			return inputError("--output is required: the file to write the result to")
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			records := make([]json.RawMessage, 0, len(events))

@@ -90,7 +90,7 @@ func openBookUnguarded(ctx context.Context, p Profile, create bool) (openedBook,
 		return openedBook{}, err
 	}
 	if !checkpointSignerTrusted(p, hex.EncodeToString(checkpointKey.Public().(ed25519.PublicKey))) {
-		return openedBook{}, inputError("checkpoint signer must be explicitly trusted")
+		return openedBook{}, inputError("the checkpoint signing key is not in checkpoint.trusted_keys: add its public key with `capsulectl profile update --profile " + p.Name + " --checkpoint-trusted-key <64-hex key>`")
 	}
 	signer, err := evidencebook.NewEd25519Signer(recordKey)
 	if err != nil {
@@ -229,8 +229,12 @@ func (p Profile) clockTolerance() (time.Duration, error) {
 
 // bookError keeps the book's own input classes on exit code 2.
 func bookError(err error) error {
-	if errors.Is(err, evidencebook.ErrInvalid) || errors.Is(err, evidencebook.ErrNotFound) {
-		return errors.Join(ErrInput, err)
+	// The book's own messages name records and fields, never payloads.
+	if errors.Is(err, evidencebook.ErrNotFound) {
+		return errors.Join(inputError("not found in the profile's evidence book: "+err.Error()), err)
+	}
+	if errors.Is(err, evidencebook.ErrInvalid) {
+		return errors.Join(inputError("the evidence book refused this as invalid: "+err.Error()), err)
 	}
 	return err
 }
@@ -358,7 +362,7 @@ func peerWindow(peer evidencebook.VerifiedBundle, p period) (from, to uint64, er
 		}
 		at, err := committedAt(*r.Header)
 		if err != nil {
-			return 0, 0, errors.Join(ErrInput, err)
+			return 0, 0, errors.Join(inputError(fmt.Sprintf("the peer bundle's record at position %d has a committed_at that is not an RFC 3339 time", r.Seq)), err)
 		}
 		known = append(known, placed{seq: r.Seq, at: at})
 	}
@@ -390,7 +394,7 @@ func readPeer(path, key, counterparty string) (evidencebook.VerifiedBundle, erro
 	}
 	peer, err := evidencebook.VerifyBundle(raw)
 	if err != nil {
-		return evidencebook.VerifiedBundle{}, errors.Join(ErrInput, err)
+		return evidencebook.VerifiedBundle{}, errors.Join(inputError("the --peer bundle does not verify: "+err.Error()), err)
 	}
 	if !peer.AnchorAuthenticated || peer.AnchorKeyID != hex.EncodeToString(pinned[0]) {
 		return evidencebook.VerifiedBundle{}, inputError("the peer bundle's checkpoint is not signed by --peer-checkpoint-key")
@@ -510,7 +514,7 @@ func periodAndPeer(c *cobra.Command) (periodArgs, error) {
 	var a periodArgs
 	a.counterparty, _ = c.Flags().GetString("counterparty")
 	if a.counterparty == "" {
-		return a, inputError("--counterparty is required")
+		return a, inputError("--counterparty is required: the counterparty's book id")
 	}
 	kind, _ := c.Flags().GetString("period")
 	date, _ := c.Flags().GetString("date")
@@ -542,7 +546,7 @@ func reconcileCommand() *cobra.Command {
 			return e
 		}
 		if !a.hasPeer {
-			return inputError("--peer is required")
+			return inputError("--peer is required: a held Evidence Bundle file from the counterparty's book")
 		}
 		opened, e := openBook(c.Context(), p, false)
 		if e != nil {
@@ -841,7 +845,7 @@ func requestCommand() *cobra.Command {
 			if e != nil {
 				return e
 			}
-			if e = decodeJSON(raw, &req); e != nil {
+			if e = decodeJSONAs("--request "+ask, raw, &req); e != nil {
 				return e
 			}
 		}
@@ -862,7 +866,7 @@ func requestCommand() *cobra.Command {
 			if e != nil {
 				return e
 			}
-			if e = decodeJSON(raw, &resp); e != nil {
+			if e = decodeJSONAs("--response "+answer, raw, &resp); e != nil {
 				return e
 			}
 		}
@@ -947,7 +951,7 @@ func respondCommand() *cobra.Command {
 		requestPath, _ := c.Flags().GetString("request")
 		path, _ := c.Flags().GetString("output")
 		if path == "" {
-			return inputError("--output is required")
+			return inputError("--output is required: the file to write the result to")
 		}
 		requestBytes, e := readInput(requestPath)
 		if e != nil {
@@ -959,7 +963,7 @@ func respondCommand() *cobra.Command {
 			if e != nil {
 				return e
 			}
-			if e = decodeJSON(raw, &policy); e != nil {
+			if e = decodeJSONAs("--policy "+policyPath, raw, &policy); e != nil {
 				return e
 			}
 		}

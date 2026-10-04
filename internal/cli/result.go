@@ -23,7 +23,7 @@ const resultShapeNote = "Result v0 schema is still DRAFT; this is a best-effort 
 
 func decodeResultDocument(raw []byte) (map[string]interface{}, error) {
 	if len(raw) > maxInput {
-		return nil, inputError("input exceeds size limit")
+		return nil, inputError("the input exceeds the 12 MiB size limit")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -33,7 +33,7 @@ func decodeResultDocument(raw []byte) (map[string]interface{}, error) {
 	}
 	var extra any
 	if decoder.Decode(&extra) != io.EOF {
-		return nil, inputError("input must contain one JSON value")
+		return nil, inputError("the input must hold exactly one JSON value")
 	}
 	return doc, nil
 }
