@@ -569,7 +569,7 @@ func dealInitCommand() *cobra.Command {
 		}
 		if witness == "scheduled" {
 			out["witness_endpoint"], out["witness_sees"] = dealDefaultWitness, dealWitnessSees
-			out["next"] = "run `capsulectl --profile " + name + " deal tick` from a timer (every few minutes is enough; it publishes only when a tick is due)"
+			out["next"] = "run `capsulectl --profile " + name + " deal tick` every minute from a timer (a run that is not due exits at once; every minute keeps the cadence's jitter: see `deal tick --help` for schedulers that cannot run every minute)"
 		}
 		return output(c, out)
 	}}

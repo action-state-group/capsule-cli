@@ -307,8 +307,8 @@ unresolved signer, and the command exits partial (3).
 `deal` seals a deal's baseline and, when the host calls it, checks each point
 of no return (pay, commit, sign, share) against it. The check is advisory: it
 holds an action only where the host runs it from a pre-action hook. A deal
-profile is witnessed by default on a fixed cadence (`deal tick`, run from a
-timer): one checkpoint of hashes per tick, never on activity.
+profile is witnessed by default on a fixed cadence (`deal tick`, run every
+minute from a timer): one checkpoint of hashes per tick, never on activity.
 `deal reconcile` reads the host's execution records afterwards and lists
 consequential actions that have no deal record; see
 [skills/deal](skills/deal/README.md).
