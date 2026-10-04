@@ -64,6 +64,34 @@
 
   if (base.body.demo) host.append(el("span", "DEMO", "deal-demo"));
   host.append(el("h1", "Deal report"));
+  host.append(el("p", "This receipt covers this one deal. It is not a record of everything the agent did.", "deal-rung"));
+
+  // The assurance rung. A witness receipt rides in checkpoint.witnesses; this
+  // page does not check it (capsulectl verify does, against a witness
+  // directory the reader chooses), and says so.
+  const witnesses = ((bundle.checkpoint || {}).witnesses || []).filter((w) => w && typeof w.ts_url === "string");
+  if (witnesses.length > 0) {
+    let witness = witnesses[0].ts_url;
+    try {
+      witness = new URL(witness).host || witness;
+    } catch (e) {
+      // not a URL: show it as written
+    }
+    host.append(
+      el("p", `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint: the record existed, unchanged, by then. It does not confirm what the agent did.`, "deal-rung"),
+      el(
+        "p",
+        "The receipt is in this file; this page does not check it. Check it with " +
+          "capsulectl verify --bundle FILE --witness-directory DIRECTORY.json, using a witness directory you trust.",
+        "deal-note",
+      ),
+    );
+  } else {
+    host.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
+  }
+  // Written by capsulectl from what the deal recorded (dealDidLine).
+  const report0 = (bundle.extensions || {})["x-deal-v0"] || {};
+  if (typeof report0.did_line === "string") host.append(el("p", report0.did_line, "deal-note"));
 
   // The user's words are checked here against the baseline's sealed
   // commitment: SHA-256 over JCS({"nonce","text"}). For two string members in
