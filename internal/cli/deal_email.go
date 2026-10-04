@@ -168,6 +168,24 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 		when = "this deal's checkpoint, cut at " + at + " at a cadence tick after the deal's steps"
 		out["checkpoint_at"] = at
 	}
+	// Witnessed in part: the receipt covers an earlier checkpoint of this
+	// deal, which the bundle shows the current one extends (a consistency
+	// proof, checked by capsulectl verify). The steps after it are sealed on
+	// this device only until a later tick covers them.
+	if cadence["extent"] == "part" {
+		k, _ := jsonUint(cadence["steps_witnessed"])
+		n, _ := jsonUint(cadence["steps"])
+		out["rung"] = "witnessed_in_part"
+		out["steps_witnessed"], out["steps"] = k, n
+		rest := "Witness pending for the rest. "
+		if r, _ := cadence["rest"].(map[string]interface{}); r["state"] == "scheduled" {
+			rest = "Witness pending for the rest: the current checkpoint goes to the witness at the next tick of this profile's cadence" + cadencePhrase(r) + ". "
+		}
+		out["text"] = fmt.Sprintf(
+			"Witnessed in part: %s, an independent log, signed a receipt for %s, covering steps 1 to %d of %d: those existed, unchanged, by then. Steps %d to %d are sealed by my agent on this device only. %sIt does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s",
+			host, when, k, n, k+1, n, rest, dealDidLineOf(b))
+		return out
+	}
 	out["text"] = fmt.Sprintf(
 		"Witnessed: %s, an independent log, signed a receipt for %s: the record existed, unchanged, by then. It does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s", host, when, dealDidLineOf(b))
 	return out

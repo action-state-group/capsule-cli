@@ -85,12 +85,16 @@ function versionBefore(a, b) {
     } catch (e) {
       // not a URL: show it as written
     }
+    const cut = typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : "";
+    const part = cadence.state === "witnessed" && cadence.extent === "part";
+    const k = Number(cadence.steps_witnessed);
+    const n = Number(cadence.steps);
     header.append(
       el(
         "p",
-        `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${
-          typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : ""
-        }at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`,
+        part
+          ? `Witnessed in part: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${cut}at a cadence tick, covering steps 1 to ${k} of ${n}: those existed, unchanged, by then. Steps ${k + 1} to ${n} are sealed by my agent on this device only, witness pending. It does not confirm what the agent did.`
+          : `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${cut}at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`,
         "deal-rung",
       ),
       el(

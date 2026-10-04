@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -398,4 +399,115 @@ func TestDealIsWitnessPendingUntilATick(t *testing.T) {
 	assert.Contains(t, a["text"], "signed a receipt for this deal's checkpoint, cut at 2026-09-27T18:07:00Z at a cadence tick after the deal's steps")
 	cadence := embeddedBundle(t, string(mustRead(t, page)))["extensions"].(map[string]any)[dealCadenceExtension].(map[string]any)
 	assert.Equal(t, "2026-09-27T18:07:00Z", cadence["checkpoint_at"], "the page reads it from the bundle")
+}
+
+// The report names its rung from what it can show. A step sealed after the
+// last tick no longer drops the report to self-attested: the witnessed
+// earlier checkpoint is carried with a consistency proof to the current one,
+// and the report says which steps the witness covers.
+func TestDealReportRungWitnessedInPart(t *testing.T) {
+	public, key, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	endpoint, _ := countingWitness(t)
+	p := cadenceFixture(t, endpoint, public, "1h", "0s", 0)
+	now := clockAt(t, time.Date(2026, 10, 4, 9, 0, 0, 0, time.UTC))
+	dealID := retailDeal(t)
+	dir := t.TempDir()
+	report := func(name string) (map[string]any, string) {
+		path := filepath.Join(dir, name+".json")
+		return dealRun(t, "report", "--deal", dealID, "--bundle", path, "--html", filepath.Join(dir, name+".html"))["assurance"].(map[string]any), path
+	}
+	directory := writeDirectory(t, rawKeyRow(endpoint, public))
+
+	none, _ := report("none")
+	assert.Equal(t, "sealed", none["rung"])
+	assert.True(t, strings.HasPrefix(none["text"].(string), "Sealed by my agent"))
+
+	require.Equal(t, "ticked", dealRun(t, "tick")["state"])
+	deliver(t, p, cadenceSize(t, p), key)
+	all, _ := report("all")
+	assert.Equal(t, "witnessed", all["rung"])
+	assert.Equal(t, "2026-10-04T09:00:00Z", all["checkpoint_at"])
+	assert.Contains(t, all["text"], "cut at 2026-10-04T09:00:00Z")
+
+	// One more step after the tick.
+	*now = now.Add(10 * time.Minute)
+	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","text":"Your order has shipped."}`))
+	part, partPath := report("part")
+	assert.Equal(t, "witnessed_in_part", part["rung"])
+	k, n := part["steps_witnessed"].(float64), part["steps"].(float64)
+	assert.Equal(t, k+1, n)
+	assert.Contains(t, part["text"], fmt.Sprintf("covering steps 1 to %d of %d", int(k), int(n)))
+	assert.Contains(t, part["text"], fmt.Sprintf("Steps %d to %d are sealed by my agent on this device only", int(k)+1, int(n)))
+	assert.Contains(t, part["text"], "Witness pending for the rest: the current checkpoint goes to the witness at the next tick")
+	page := string(mustRead(t, filepath.Join(dir, "part.html")))
+	assert.Contains(t, page, "Witnessed in part")
+	result, err := verifyWithDirectory(t, partPath, directory)
+	require.NoError(t, err)
+	status, findings := bundleWitnesses(result)
+	assert.Equal(t, "pass", status, "earlier checkpoint -> consistency -> current checkpoint, and the earlier one's chain: %v", findings)
+
+	// Tampering with the earlier checkpoint or its proof fails.
+	for name, tamper := range map[string]func(map[string]any){
+		"proof": func(c map[string]any) {
+			proof := c["earlier"].(map[string]any)["consistency_proof"].(map[string]any)
+			peaks := proof["new_peaks"].([]any)
+			peaks[0] = strings.Repeat("ab", 32)
+		},
+		"checkpoint": func(c map[string]any) {
+			c["earlier"].(map[string]any)["checkpoint"].(map[string]any)["cose"] = c["cadence"].(map[string]any)["checkpoint"].(map[string]any)["cose"]
+		},
+		"extent": func(c map[string]any) { c["extent"] = "all" },
+	} {
+		var copy map[string]any
+		require.NoError(t, json.Unmarshal(mustRead(t, partPath), &copy))
+		tamper(copy["extensions"].(map[string]any)[dealCadenceExtension].(map[string]any))
+		path := filepath.Join(t.TempDir(), "tampered.json")
+		raw, err := json.Marshal(copy)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(path, raw, 0o600))
+		result, _ := verifyWithDirectory(t, path, directory)
+		status, _ := bundleWitnesses(result)
+		assert.Equal(t, "fail", status, name)
+	}
+
+	// The next tick holds the current checkpoint but its receipt has not come
+	// back: still witnessed in part, the rest pending.
+	*now = time.Date(2026, 10, 4, 10, 0, 0, 0, time.UTC)
+	require.Equal(t, "ticked", dealRun(t, "tick")["state"])
+	pending, _ := report("pending")
+	assert.Equal(t, "witnessed_in_part", pending["rung"])
+	assert.Contains(t, pending["text"], "Witness pending for the rest.")
+
+	// Once that receipt is in, every step is witnessed.
+	deliver(t, p, cadenceSize(t, p), key)
+	full, _ := report("full")
+	assert.Equal(t, "witnessed", full["rung"])
+	assert.Equal(t, "2026-10-04T10:00:00Z", full["checkpoint_at"])
+	plain := dealRun(t, "report", "--deal", dealID)["assurance"].(map[string]any)
+	assert.Equal(t, "witnessed", plain["rung"], "the plain report states the rung too")
+}
+
+// A later tick still waiting for its receipt never hides an earlier tick,
+// holding the same checkpoint, whose receipt verified.
+func TestDealReportUsesTheNewestVerifiedTick(t *testing.T) {
+	public, key, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	endpoint, _ := countingWitness(t)
+	p := cadenceFixture(t, endpoint, public, "1h", "0s", 0)
+	now := clockAt(t, time.Date(2026, 10, 4, 9, 0, 0, 0, time.UTC))
+	dealID := retailDeal(t)
+	require.Equal(t, "ticked", dealRun(t, "tick")["state"])
+	deliver(t, p, cadenceSize(t, p), key)
+	*now = time.Date(2026, 10, 4, 10, 0, 0, 0, time.UTC)
+	require.Equal(t, "ticked", dealRun(t, "tick")["state"])
+	assurance := dealRun(t, "report", "--deal", dealID, "--bundle", filepath.Join(t.TempDir(), "b.json"))["assurance"].(map[string]any)
+	assert.Equal(t, "witnessed", assurance["rung"])
+	assert.Equal(t, "2026-10-04T09:00:00Z", assurance["checkpoint_at"])
+}
+
+func TestMMRLeafCount(t *testing.T) {
+	for leaves, size := range []uint64{0, 1, 3, 4, 7, 8, 10, 11, 15} {
+		assert.Equal(t, uint64(leaves), mmrLeafCount(size), "size %d", size)
+	}
 }
