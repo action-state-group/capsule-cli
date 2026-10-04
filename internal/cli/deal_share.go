@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -177,7 +179,7 @@ type dealPrivate struct {
 	// digits alone, forwards and backwards: "larkspur", "rupskral",
 	// "739142". A text that spells one, whatever stands between the
 	// characters (L-a-r-k-s-p-u-r, 7/3/9/1/4/2), has that stretch withheld.
-	spelled []string
+	spelled []spelledForm
 }
 
 func dealPrivateValues(events []sealedEvent) dealPrivate {
@@ -236,14 +238,18 @@ func dealPrivateValues(events []sealedEvent) dealPrivate {
 	sort.SliceStable(p.values, func(i, j int) bool { return len(p.values[i]) > len(p.values[j]) })
 	spelledSeen := map[string]bool{}
 	spell := func(v string) {
-		sk, _ := spelling(v)
-		if len(sk) < 4 || !isDigits(sk) && len(sk) < 5 {
+		sp := spelling(v)
+		form := spelledForm{text: sp.lowerSkeleton}
+		if isDigits(sp.plain) {
+			form = spelledForm{text: sp.plain, numeric: true}
+		}
+		if len(form.text) < 4 || !form.numeric && len(form.text) < 5 {
 			return
 		}
-		for _, form := range []string{sk, reverseString(sk)} {
-			if !spelledSeen[form] {
-				spelledSeen[form] = true
-				p.spelled = append(p.spelled, form)
+		for i, text := range []string{form.text, reverseString(form.text)} {
+			if !spelledSeen[text] {
+				spelledSeen[text] = true
+				p.spelled = append(p.spelled, spelledForm{text: text, numeric: form.numeric, backwards: i == 1})
 			}
 		}
 	}
@@ -258,21 +264,127 @@ func dealPrivateValues(events []sealedEvent) dealPrivate {
 	return p
 }
 
-// spelling is s as its letters and digits alone, lower case, with the byte
-// offset in s where each of its characters starts and ends.
-func spelling(s string) (string, [][2]int) {
-	var b strings.Builder
-	var at [][2]int
+// spelt is a text as its letters and digits alone, read two ways: plain
+// (lower case; digits are ASCII after foldText) and as its confusable
+// skeleton (confusableSkeleton), each with the byte span in the text that
+// every character came from.
+type spelt struct {
+	plain, skeleton, lowerSkeleton       string
+	plainAt, skeletonAt, lowerSkeletonAt [][2]int
+}
+
+func spelling(s string) spelt {
+	var sp spelt
+	var plain, skeleton, lowerSkeleton strings.Builder
 	for i, r := range s {
+		span := [2]int{i, i + utf8.RuneLen(r)}
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			lower := string(unicode.ToLower(r))
-			for range lower {
-				at = append(at, [2]int{i, i + utf8.RuneLen(r)})
+			plain.WriteString(lower)
+			for range []byte(lower) {
+				sp.plainAt = append(sp.plainAt, span)
 			}
-			b.WriteString(lower)
+		}
+		// Every character counts in the skeleton, not only letters: a
+		// symbol drawn like a letter (| for l) spells that letter.
+		// TR39 skeletons are case-sensitive (I reads l), so the text is read
+		// both as written and lower-cased (SPRINGFIELD reads springfield).
+		for _, c := range confusableSkeleton(r) {
+			if unicode.IsLetter(c) || unicode.IsDigit(c) {
+				skeleton.WriteRune(c)
+				for range []byte(string(c)) {
+					sp.skeletonAt = append(sp.skeletonAt, span)
+				}
+			}
+		}
+		for _, c := range confusableSkeleton(unicode.ToLower(r)) {
+			if unicode.IsLetter(c) || unicode.IsDigit(c) {
+				lowerSkeleton.WriteRune(c)
+				for range []byte(string(c)) {
+					sp.lowerSkeletonAt = append(sp.lowerSkeletonAt, span)
+				}
+			}
 		}
 	}
-	return b.String(), at
+	sp.plain, sp.skeleton, sp.lowerSkeleton = plain.String(), skeleton.String(), lowerSkeleton.String()
+	return sp
+}
+
+// spelledForm is a private value as matching looks for it: a number by its
+// plain digits, anything with a letter by its skeleton.
+type spelledForm struct {
+	text    string
+	numeric bool
+	// backwards marks a letter form read right to left, so each
+	// character's reading is reversed too (m reads nr).
+	backwards bool
+}
+
+// spelledRune is one character of a text as the letter matcher reads it:
+// each way it can read (its skeleton as written, lower-cased and
+// upper-cased: I reads l, and i), "" for a character that spells nothing (a
+// separator), and the span of the text it came from.
+type spelledRune struct {
+	alts []string
+	span [2]int
+}
+
+func spelledRunes(s string) []spelledRune {
+	var out []spelledRune
+	for i, r := range s {
+		var alts []string
+		for _, c := range []rune{r, unicode.ToLower(r), unicode.ToUpper(r)} {
+			var b strings.Builder
+			for _, x := range confusableSkeleton(c) {
+				if unicode.IsLetter(x) || unicode.IsDigit(x) {
+					b.WriteRune(x)
+				}
+			}
+			if a := b.String(); !slices.Contains(alts, a) {
+				alts = append(alts, a)
+			}
+		}
+		out = append(out, spelledRune{alts: alts, span: [2]int{i, i + utf8.RuneLen(r)}})
+	}
+	return out
+}
+
+// spellsFrom returns the index just past a spelling of target that starts
+// at rs[j], taking any one reading of each character, or -1. A character
+// that spells nothing may stand inside the spelling, never at its start.
+func spellsFrom(rs []spelledRune, j int, target string, backwards bool) int {
+	memo := map[[2]int]int{}
+	var walk func(j, k int) int
+	walk = func(j, k int) int {
+		if k == len(target) {
+			return j
+		}
+		if j == len(rs) {
+			return -1
+		}
+		key := [2]int{j, k}
+		if v, ok := memo[key]; ok {
+			return v
+		}
+		end := -1
+		for _, a := range rs[j].alts {
+			if backwards {
+				a = reverseString(a)
+			}
+			switch {
+			case a == "" && k > 0:
+				end = walk(j+1, k)
+			case a != "" && strings.HasPrefix(target[k:], a):
+				end = walk(j+1, k+len(a))
+			}
+			if end >= 0 {
+				break
+			}
+		}
+		memo[key] = end
+		return end
+	}
+	return walk(j, 0)
 }
 
 func reverseString(s string) string {
@@ -285,17 +397,28 @@ func reverseString(s string) string {
 
 // withholdSpelled withholds every stretch of s that spells a private value.
 func (p dealPrivate) withholdSpelled(s string) string {
-	sk, at := spelling(s)
+	sp := spelling(s)
+	rs := spelledRunes(s)
 	var locs [][]int
 	for _, v := range p.spelled {
+		if !v.numeric {
+			for j := range rs {
+				if end := spellsFrom(rs, j, v.text, v.backwards); end > j {
+					locs = append(locs, []int{rs[j].span[0], rs[end-1].span[1]})
+				}
+			}
+			continue
+		}
+		in, at := sp.plain, sp.plainAt
 		for from := 0; ; {
-			i := strings.Index(sk[from:], v)
+			i := strings.Index(in[from:], v.text)
 			if i < 0 {
 				break
 			}
-			start, end := from+i, from+i+len(v)
-			// A number counts only where no digit adjoins it.
-			if !(isDigits(v) && (start > 0 && isDigits(sk[start-1:start]) || end < len(sk) && isDigits(sk[end:end+1]))) {
+			start, end := from+i, from+i+len(v.text)
+			// A short number (under six digits) counts only where no digit
+			// adjoins it; a code or a card number counts anywhere.
+			if len(v.text) >= 6 || !(start > 0 && isDigits(in[start-1:start]) || end < len(in) && isDigits(in[end:end+1])) {
 				locs = append(locs, []int{at[start][0], at[end-1][1]})
 			}
 			from = start + 1
@@ -323,21 +446,57 @@ func mergeLocs(locs [][]int) [][]int {
 // numberWords is four or more digits written as words: "seven three nine one".
 var numberWords = regexp.MustCompile(`(?i)\b(?:zero|oh|one|two|three|four|five|six|seven|eight|nine)(?:[^A-Za-z0-9]+(?:zero|oh|one|two|three|four|five|six|seven|eight|nine)){3,}\b`)
 
+var shareEncoded = regexp.MustCompile(`[A-Za-z0-9+/_-]{8,}={0,2}`)
+
+// decodedText reads run as base64 (any alphabet) or hex, and returns the text
+// inside when it is valid UTF-8 and printable.
+func decodedText(run string) (string, bool) {
+	decoders := []func(string) ([]byte, error){hex.DecodeString, base64.StdEncoding.DecodeString,
+		base64.URLEncoding.DecodeString, base64.RawStdEncoding.DecodeString, base64.RawURLEncoding.DecodeString}
+	for _, decode := range decoders {
+		b, err := decode(run)
+		if err != nil || len(b) < 4 || !utf8.Valid(b) {
+			continue
+		}
+		// Text, not binary: no control characters other than whitespace.
+		ok := true
+		for _, r := range string(b) {
+			ok = ok && r != utf8.RuneError && (!unicode.Is(unicode.Cc, r) || unicode.IsSpace(r))
+		}
+		if ok {
+			return string(b), true
+		}
+	}
+	return "", false
+}
+
 // codeLocs finds every code, card number, PIN, phone, house or order number
 // in s: a numberish run holding four or more digits, wherever it sits (inside
 // a word like G739142 or code739142, or split like 739 142). Only a date
 // and a money amount (1200.00) are left.
 func codeLocs(s string) [][]int {
+	keep := shareKept.FindAllStringIndex(s, -1)
 	var out [][]int
 	for _, loc := range shareNumberish.FindAllStringIndex(s, -1) {
 		m := s[loc[0]:loc[1]]
-		if len(nonDigit.ReplaceAllString(m, "")) < 4 || shareDateTime.MatchString(m) || shareMoney.MatchString(m) {
+		if len(nonDigit.ReplaceAllString(m, "")) < 4 || shareDateTime.MatchString(m) || shareMoney.MatchString(m) || withinAny(loc, keep) {
 			continue
 		}
 		out = append(out, loc)
 	}
 	return out
 }
+
+// shareKept are dates, times and money amounts: numbers a shared copy keeps
+// ("09/27/2026", "October 3, 2026", "18:00", "$1,200.00"). Only the generic
+// code detector spares them; a known private value is withheld wherever it
+// stands, a date-shaped one included.
+var shareKept = regexp.MustCompile(`(?i)\b\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[T ]\d{1,2}:\d{2}(?::\d{2})?Z?)?\b` +
+	`|\b\d{1,2}[-/.]\d{1,2}[-/.](?:\d{4}|\d{2})\b` +
+	`|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}\b` +
+	`|\b\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?,?\s+\d{4}\b` +
+	`|\b\d{1,2}:\d{2}(?::\d{2})?\b` +
+	`|[$€£¥]\s?\d[\d,]*(?:\.\d{2})?|\b\d{1,3}(?:,\d{3})+(?:\.\d{2})?\b`)
 
 func isDigits(s string) bool {
 	for _, c := range s {
@@ -352,9 +511,23 @@ func isDigits(s string) bool {
 // address, and every card number, email, phone, street address and code in
 // s. The text it returns is in folded form.
 func (p dealPrivate) scrub(s string) string {
+	return p.scrubDepth(s, 0)
+}
+
+func (p dealPrivate) scrubDepth(s string, depth int) string {
 	// Matched in its plain form: no zero-width characters, no fullwidth
 	// digits, no lookalike letters (foldText).
 	s = foldText(s)
+	// A base64 or hex run whose text holds a private value is withheld
+	// whole.
+	if depth < 2 {
+		s = shareEncoded.ReplaceAllStringFunc(s, func(run string) string {
+			if inner, ok := decodedText(run); ok && p.scrubDepth(inner, depth+1) != foldText(inner) {
+				return "[withheld]"
+			}
+			return run
+		})
+	}
 	// Codes first, so a code is withheld whole ("G739142", not "G[withheld]").
 	s = withholdAt(s, codeLocs(s))
 	for _, v := range p.values {
@@ -381,15 +554,26 @@ func withholdAt(s string, locs [][]int) string {
 // phoneLocs finds phone numbers (seven digits or more, "(555) 010-7788"
 // included) that are not dates.
 func phoneLocs(s string) [][]int {
+	keep := shareKept.FindAllStringIndex(s, -1)
 	var out [][]int
 	for _, loc := range scanPhone.FindAllStringIndex(s, -1) {
 		m := s[loc[0]:loc[1]]
-		if len(nonDigit.ReplaceAllString(m, "")) < 7 || shareDateTime.MatchString(m) {
+		if len(nonDigit.ReplaceAllString(m, "")) < 7 || shareDateTime.MatchString(m) || withinAny(loc, keep) {
 			continue
 		}
 		out = append(out, loc)
 	}
 	return out
+}
+
+// withinAny reports loc lying inside one of spans.
+func withinAny(loc []int, spans [][]int) bool {
+	for _, k := range spans {
+		if loc[0] >= k[0] && loc[1] <= k[1] {
+			return true
+		}
+	}
+	return false
 }
 
 // clean reports a string a shared copy may carry as is.

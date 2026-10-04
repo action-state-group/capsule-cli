@@ -236,7 +236,7 @@ func TestDealShareAdjudicatorAddsMessagesAndSources(t *testing.T) {
 	html := string(raw)
 	assertCarriesNone(t, html)
 	assert.Contains(t, html, "Your verification code is [withheld]", "message text, with codes, cards and addresses withheld")
-	assert.Contains(t, html, "Ship to [withheld], [withheld]. Code [withheld], or [withheld]. See ?order_ref=[withheld] and track/[withheld].",
+	assert.Contains(t, html, "Ship to [withheld] [withheld] Lane, [withheld]. Code [withheld], or [withheld]. See ?order_ref=[withheld] and track/[withheld].",
 		"lookalike letters, fullwidth digits, zero-width spaces and codes in URLs are withheld")
 	assert.Contains(t, html, "Codes: [withheld], [withheld], [withheld]. Deliver to [withheld] [withheld], [withheld] or [withheld] Lane [withheld].",
 		"codes inside words and split by a space, and the address in pieces, are withheld")
