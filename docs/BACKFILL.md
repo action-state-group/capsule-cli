@@ -125,6 +125,15 @@ host's own tables; capsulectl has no host-specific code. Any bad line refuses
 the whole file, naming the line and the field, never the value. Nothing is
 committed from a refused file, and the next pass starts from the same place.
 
+The fields it shares with `deal reconcile`'s deal-execution-record/v0
+(`id`, `at`, `task`, `parent_task`, `tool`, `merchant_domain`, `currency`,
+`status`) have the same names and identifier rules, so one reader can write
+both formats from the same row. Two differ on purpose. `status` here is the
+host's own value (for example `closed`), not that format's
+`succeeded`/`failed`/`unknown`. And an approval limit is
+`approved_ceiling_minor`: there is no `amount_minor` here, so a ceiling can
+never be read as a charged amount.
+
 `kind: "row"`:
 
 | Field | Required | Meaning |

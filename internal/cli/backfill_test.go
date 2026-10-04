@@ -400,3 +400,26 @@ func TestBackfillRefusesPersonalData(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, status, `"passes":0`)
 }
+
+// TestBackfillSharesDealExecutionFieldsButNotAmount: the fields shared with
+// deal-execution-record/v0 take the same values under the same guard, while an
+// approval limit has its own name: amount_minor is not a field here, so a
+// ceiling can never arrive as, or be read as, a charged amount.
+func TestBackfillSharesDealExecutionFieldsButNotAmount(t *testing.T) {
+	shared := `{"id":"sa-1","at":"2026-09-27T18:00:40Z","task":"agent-worker","parent_task":"agent-main","tool":"spend_request","merchant_domain":"www.stickers.example","currency":"usd"`
+	exec := shared + `,"action":"pay","observed":"approval","amount_minor":1100,"amount_kind":"ceiling","status":"unknown"}`
+	var rec dealExecutionRecord
+	require.NoError(t, decodeJSON([]byte(exec), &rec))
+	require.NoError(t, rec.validate())
+
+	row := strings.Replace(shared, `{"id"`, `{"kind":"row","source":"spend_approvals","cursor":1,"record_kind":"spend_approval","raw_digest":"`+rawDigest("sa-1")+`","status":"closed","id"`, 1)
+	rows, _, _, err := readBackfillSource(strings.NewReader(row + `,"approved_ceiling_minor":1100}`))
+	require.NoError(t, err)
+	assert.Equal(t, "USD", rows[0].Currency)
+
+	_, _, _, err = readBackfillSource(strings.NewReader(row + `,"amount_minor":1100}`))
+	require.ErrorIs(t, err, ErrInput, "a charged-amount field is not accepted")
+	_, _, _, err = readBackfillSource(strings.NewReader(strings.Replace(row, `"task":"agent-worker"`, `"task":"+15550100123"`, 1) + `,"approved_ceiling_minor":1100}`))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "task must be an identifier")
+}

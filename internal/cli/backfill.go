@@ -89,6 +89,12 @@ var backfillCannotSee = []string{
 // host recorded ("row"), a source the reader could not read ("gap"), or the
 // oldest row a source still holds ("horizon").
 // Unknown fields refuse the file: there is no field for text or form values.
+// Fields shared with deal-execution-record/v0 (id, at, task, parent_task,
+// tool, merchant_domain, currency, status) carry the same names and the same
+// identifier rules. Two differ on purpose: status is the host's own value,
+// not that format's succeeded/failed/unknown; and an approval limit is
+// approved_ceiling_minor, never amount_minor, so no reader of either format
+// can take a ceiling for a charged amount.
 type backfillSourceRecord struct {
 	Kind string `json:"kind"`
 	// Cursor is the row's monotonic id in its source (row), or the oldest
@@ -122,9 +128,7 @@ type backfillSourceRecord struct {
 
 var (
 	backfillToken  = regexp.MustCompile(`^[a-z0-9_.-]{1,64}$`)
-	backfillIdent  = regexp.MustCompile(`^[A-Za-z0-9._:@/+-]{1,200}$`)
 	backfillHost   = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
-	backfillCode   = regexp.MustCompile(`^[A-Z]{3}$`)
 	backfillReason = regexp.MustCompile(`^[A-Za-z0-9 ,.;:()_/'-]{1,200}$`)
 	backfillItem   = regexp.MustCompile(`^[\p{L}\p{N} ,.&'()/#+_-]{1,120}$`)
 	// Shapes no allow-listed field ever legitimately holds.
@@ -205,16 +209,13 @@ func (r *backfillSourceRecord) validate(line int) error {
 		return backfillLineError(line, "at", "must be an RFC 3339 time")
 	}
 	r.At = at.Format(time.RFC3339Nano)
-	for _, f := range []struct {
-		name, value string
-		required    bool
-	}{{"id", r.ID, true}, {"task", r.Task, false}, {"parent_task", r.ParentTask, false}, {"tool_call_id", r.ToolCallID, false}, {"tool", r.Tool, false}} {
-		if f.value == "" && !f.required {
-			continue
-		}
-		if !backfillIdent.MatchString(f.value) || backfillEmail.MatchString(f.value) || backfillPAN.MatchString(f.value) || strings.HasPrefix(f.value, "+") {
-			return backfillLineError(line, f.name, "must look like an identifier")
-		}
+	// The fields shared with deal-execution-record/v0 are checked by the same
+	// guard, so one reader can write both formats from one row.
+	if err := guardMetadata(map[string]string{"id": r.ID, "task": r.Task, "parent_task": r.ParentTask, "tool_call_id": r.ToolCallID, "tool": r.Tool, "merchant_domain": r.MerchantDomain}, "merchant_domain"); err != nil {
+		return hint(ErrInput, fmt.Sprintf("backfill source line %d: %s", line, err))
+	}
+	if r.ID == "" {
+		return backfillLineError(line, "id", "is required")
 	}
 	if r.RecordKind == "tool_call" && r.Tool == "" {
 		return backfillLineError(line, "tool", "is required for a tool_call")
@@ -245,9 +246,10 @@ func (r *backfillSourceRecord) validate(line int) error {
 		if r.RecordKind != "spend_approval" {
 			return backfillLineError(line, "approved_ceiling_minor", "belongs only on a spend_approval")
 		}
-		if r.ApprovedCeilingMinor == nil || *r.ApprovedCeilingMinor < 0 || *r.ApprovedCeilingMinor > 1<<53 || !backfillCode.MatchString(r.Currency) {
-			return backfillLineError(line, "approved_ceiling_minor/currency", "must be a non-negative integer with a 3-letter upper-case code")
+		if r.ApprovedCeilingMinor == nil || *r.ApprovedCeilingMinor < 0 || *r.ApprovedCeilingMinor > 1<<53 || !currencyCode.MatchString(r.Currency) {
+			return backfillLineError(line, "approved_ceiling_minor/currency", "must be a non-negative integer with a 3-letter currency code")
 		}
+		r.Currency = strings.ToUpper(r.Currency)
 	}
 	return nil
 }
