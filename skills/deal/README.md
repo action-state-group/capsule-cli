@@ -42,6 +42,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal note --kind evidence --input FILE` with `obligation` | Seals a cancel-by date (a trial that becomes paid, a renewal, the end of free cancellation, a payment on a date) with its source: the merchant's email (with `--email`) or a page snapshot. Cuts a checkpoint. |
 | `deal deadlines [--deal ID] [--ics FILE] [--remind-days N] [--all]` | Lists open cancel-by dates, for one deal or every deal in the profile, as JSON; `--ics` also writes them as a calendar file with reminders for the host's scheduler. Records, never enforces. |
 | `deal verify-email [--step N] [--email FILE]` | Re-checks a sealed merchant email offline, against the key records sealed with it. `--email` checks another copy, which must match the sealed bytes. Exit 1 when it does not verify. |
+| `bundle --deal ID [--out FILE]` · `permalink --deal ID [--payloads selected]` | The deal's Evidence Bundle, or a viewer link carrying it, read from the deal's own log (`deal/<deal_id>`): the whole deal by default (`--root` and `--closure-depth` override). `--log-id LOG` names any log instead. `disclose` refuses a deal's log, since it would append a disclosure record to it. The bundle carries only the sealed x-deal-v0 records (fingerprints and commitments), not the plain-words lines of `deal report`. |
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
 | `deal report --email FILE [--bundle FILE]` | Writes the receipt as a ready-to-send email (.eml, no sender or recipient) for the agent host's own email tool: a plain and a static HTML body that read on a phone, with `receipt.html` and `bundle.json` attached. `--bundle` writes the Evidence Bundle for `capsulectl verify --bundle`. Nothing is sent by capsulectl. |
@@ -309,6 +310,26 @@ its digest is appended to the deal's own disclosure log
 (`deal/<deal_id>/disclosures`) under a fresh signed checkpoint. That log sits
 beside the deal's log, which holds only steps. Nothing is hosted: there are
 no accounts and no links. The user hands over the file.
+
+## Sizes
+
+Measured on a synthetic retail deal (`demo/retail-checkout/`; the live
+numbers depend on each deal's steps):
+
+| Deal | Bundle (`bundle --deal`) | Permalink fragment, as minted | Same, deflate-raw (prototype) |
+|---|---|---|---|
+| 4 steps (open, then a passing check: snapshot, check, approval) | 9,066 B | 16,771 chars | 4,650 chars (3.6x) |
+| 5 steps (the same, then the act) | 11,049 B | 20,687 chars | 5,250 chars (3.9x) |
+
+A permalink fragment carries the disclosed bundle as base64url JSON, so it is
+about 4/3 of the bundle's disclosed JSON. It never carries the verifier: the
+hosted viewer brings that.
+
+Do not size a fragment from the `deal report --html` page. That page is
+self-contained, so most of it is the embedded verifier, not evidence: of a
+221,847-byte page for the 5-step deal, 194,730 B is the vendored
+`evidence-graph.iife.js` and 7,488 B is `deal-view.js` (91%). An earlier
+build measured 93% of a 215,251-byte page the same way.
 
 ## Records: the x-deal-v0 profile
 

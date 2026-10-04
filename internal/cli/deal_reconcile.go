@@ -576,3 +576,33 @@ func (s *dealSession) allCoverSteps(ctx context.Context) (_ []*dealCoverStep, er
 	}
 	return steps, nil
 }
+
+// dealStepIDs returns a deal's step capsule ids in order, after verifying the
+// deal as every deal command does, and cuts a local checkpoint of the deal's
+// log at its tip (never sent to the witness) so a bundle covers every step,
+// as `deal report` does.
+func dealStepIDs(ctx context.Context, p Profile, dealID string) (_ []string, err error) {
+	s, err := openDealSession(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, s.close()) }()
+	if err = s.useDeal(ctx, dealID, false); err != nil {
+		return nil, err
+	}
+	events, err := s.load(ctx, dealID)
+	if err != nil {
+		return nil, err
+	}
+	if s.dp.Checkpoint.Signing == (Secret{}) {
+		return nil, inputError("a deal bundle needs the profile's checkpoint key (see `deal init`)")
+	}
+	if _, err = cutCheckpoint(ctx, localOnly(s.dp), s.t.log); err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(events))
+	for i, se := range events {
+		ids[i] = se.CapsuleID
+	}
+	return ids, nil
+}

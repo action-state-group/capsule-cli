@@ -619,6 +619,56 @@ const htmlEmitterStubMessage = "--html requires the agent-action-capsule #102 ev
 
 const producerKeyFlagUsage = "Ed25519 public key (hex) to declare in the producer-key/v1 extension (default: the profile's signing key)"
 
+// bundleLog picks the log a bundle is read from. A deal profile keeps each
+// deal in its own log, deal/<deal_id>, and its own log_id is the cadence log,
+// which holds no records: --deal names a deal (and, unless given, makes the
+// root its last step and the closure the whole deal), --log-id names any log.
+// A deal's log takes deal steps only, so disclose (which appends a
+// disclosure record to the log it read) refuses one.
+func bundleLog(c *cobra.Command, p Profile, use, root string, depth int) (Profile, string, int, error) {
+	dealID, _ := c.Flags().GetString("deal")
+	logID, _ := c.Flags().GetString("log-id")
+	switch {
+	case dealID != "" && logID != "":
+		return p, root, depth, inputError("--deal and --log-id name the same thing: give one")
+	case dealID != "":
+		if !dealIDPattern.MatchString(dealID) {
+			return p, root, depth, inputError("--deal must be a deal id (deal-<16 hex>), as `deal open` printed it")
+		}
+		logID = dealLogID(dealID)
+	case logID != "":
+		if !logName.MatchString(logID) {
+			return p, root, depth, inputError("--log-id is not a valid log id")
+		}
+	case p.LogID == "":
+		return p, root, depth, inputError("the profile has no log_id: name the log with --log-id, or a deal with --deal")
+	case p.Namespace == "deal" && strings.HasPrefix(p.LogID, "deal-cadence/"):
+		return p, root, depth, inputError("this is a deal profile: each deal is its own log; name the deal with --deal DEAL_ID")
+	default:
+		return p, root, depth, nil
+	}
+	if use == "disclose" && strings.HasPrefix(logID, "deal/") {
+		return p, root, depth, inputError("a deal's log takes deal steps only, and disclose would append a disclosure record to it: use bundle or permalink with --deal")
+	}
+	p.LogID = logID
+	if dealID != "" && (root == "" || !c.Flags().Changed("closure-depth")) {
+		steps, err := dealStepIDs(c.Context(), p, dealID)
+		if err != nil {
+			return p, root, depth, err
+		}
+		if root == "" {
+			root = steps[len(steps)-1]
+		}
+		if !c.Flags().Changed("closure-depth") {
+			depth = len(steps) - 1
+		}
+	}
+	if root == "" {
+		return p, root, depth, inputError("--root is required")
+	}
+	return p, root, depth, nil
+}
+
 func bundleCommands() []*cobra.Command {
 	shortFor := map[string]string{
 		"bundle":    "Assemble a self-verifying Evidence Bundle from the root's citation closure",
@@ -636,6 +686,9 @@ func bundleCommands() []*cobra.Command {
 			}
 			root, _ := c.Flags().GetString("root")
 			closureDepth, _ := c.Flags().GetInt("closure-depth")
+			if profile, root, closureDepth, err = bundleLog(c, profile, use, root, closureDepth); err != nil {
+				return err
+			}
 			payloads, _ := c.Flags().GetString("payloads")
 			suppressNames, _ := c.Flags().GetStringSlice("suppress")
 			suppressSet := make(map[string]bool, len(suppressNames))
@@ -708,7 +761,9 @@ func bundleCommands() []*cobra.Command {
 			_, err = c.OutOrStdout().Write(append(encoded, '\n'))
 			return err
 		}}
-		command.Flags().String("root", "", "Root Capsule ID")
+		command.Flags().String("root", "", "Root Capsule ID (with --deal, default: the deal's last step)")
+		command.Flags().String("deal", "", "Read a deal's own log (deal/<deal_id>) on a deal profile; --root and --closure-depth then default to the whole deal")
+		command.Flags().String("log-id", "", "Read this log instead of the profile's log_id")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
 		command.Flags().String("producer-key", "", producerKeyFlagUsage)
 		command.Flags().Bool("html", false, "Also render an offline report.html carrier (not yet wired; see docs)")
