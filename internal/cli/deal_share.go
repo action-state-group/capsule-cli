@@ -177,6 +177,16 @@ func dealLocalData(events []sealedEvent) dealLocal {
 			text(e.Outcome.Note)
 		case e.Close != nil:
 			terms(e.Close.Delivered)
+		case e.Disclosure != nil:
+			// What the agent told someone: every value is private, and so is
+			// the person it was told to.
+			who(e.Disclosure.Who)
+			for _, f := range e.Disclosure.Fields {
+				l.ids = append(l.ids, f.Value)
+				if f.Class == "home_address" || f.Class == "address" || f.Class == "pickup_location" {
+					l.places = append(l.places, f.Value)
+				}
+			}
 		}
 	}
 	return l
@@ -850,6 +860,7 @@ var dealShareAnomaly = map[string]string{
 	"charged_before_cancel_by": "Charged before the cancel-by date in the merchant's own email",
 	"quantity_differs":         "The merchant's email lists a different quantity than agreed",
 	"duplicate_charge":         "Possibly charged twice, by the merchant's own emails",
+	"unapproved_disclosure":    "Told the other party about you without your approval",
 }
 
 // dealShareStepLine is one step in plain words for a shared copy.
@@ -919,6 +930,12 @@ func dealShareStepLine(e dealEvent, audience string, p dealPrivate, currency str
 		return "Observed: " + e.Outcome.Status + " (" + e.Outcome.Outcome + ")"
 	case "close":
 		return "Closed: " + e.Close.Outcome
+	case "disclosure":
+		line := "Told " + e.Disclosure.recipientWord() + ": " + e.Disclosure.classList() + " (values withheld)"
+		if e.Disclosure.AuthorizedBy == "" {
+			line = "⚠️ " + line + ", without your approval"
+		}
+		return line
 	}
 	return e.Kind
 }
@@ -1044,6 +1061,7 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 		"deal_id": events[0].Event.DealID, "scope": dealScopeLine, "audience": audience, "withheld": withheld, "steps": steps,
 		"asked_step": report.AskedStep, "did": items(report.Did, false), "anomalies": items(report.Anomalies, true),
 		"merchant": merchant, "email_scope": emailScopeLine,
+		"told": scrubTold(toldItems(report.Told, false), p),
 	}
 }
 
@@ -1150,3 +1168,17 @@ func (s *dealSession) recordShare(ctx context.Context, dealID string, b map[stri
 
 // dealDisclosureLogID names the log a deal's disclosure records go on.
 func dealDisclosureLogID(dealID string) string { return dealLogID(dealID) + "/disclosures" }
+
+// scrubTold runs every text of a shared copy's told list through the
+// scrubber: the list names classes, never values, and this makes sure.
+func scrubTold(items []interface{}, p dealPrivate) []interface{} {
+	for _, raw := range items {
+		m, _ := raw.(map[string]interface{})
+		for _, k := range []string{"text", "authority_text"} {
+			if v, ok := m[k].(string); ok {
+				m[k] = p.scrub(v)
+			}
+		}
+	}
+	return items
+}

@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -92,6 +93,11 @@ func dealTexts(ev dealEvent) map[string]string {
 		}
 	case ev.Outcome != nil && ev.Outcome.Note != "":
 		t["note"] = ev.Outcome.Note
+	case ev.Disclosure != nil:
+		// Each disclosed value is committed, never recorded.
+		for i, f := range ev.Disclosure.Fields {
+			t[fmt.Sprintf("value_%d", i)] = f.Value
+		}
 	}
 	return t
 }
@@ -116,6 +122,16 @@ func dealLocalValues(events []sealedEvent, ev dealEvent) []string {
 			whos = append(whos, *e.Snapshot.Who)
 		case e.Act != nil && e.Act.Payee != "":
 			whos = append(whos, dealWho{Payee: e.Act.Payee})
+		case e.Disclosure != nil:
+			if e.Disclosure.Who != nil {
+				whos = append(whos, *e.Disclosure.Who)
+			}
+			// A disclosed value never reaches a record, however short.
+			for _, f := range e.Disclosure.Fields {
+				if len(strings.TrimSpace(f.Value)) >= 5 {
+					out = append(out, strings.TrimSpace(f.Value))
+				}
+			}
 		}
 		for _, w := range whos {
 			for _, f := range whoFields(w) {
@@ -645,6 +661,30 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				return nil, err
 			}
 		}
+	case "disclosure":
+		rtype = "disclosure"
+		d := ev.Disclosure
+		if d.Channel != "" {
+			block["channel"] = d.Channel
+		}
+		if d.Who != nil {
+			setIDs(counterpartyIDs(key, *d.Who))
+		}
+		fields := make([]interface{}, len(d.Fields))
+		for i, f := range d.Fields {
+			c, err := commit(fmt.Sprintf("value_%d", i))
+			if err != nil {
+				return nil, err
+			}
+			fields[i] = map[string]interface{}{"class": f.Class, "value_commitment": c}
+		}
+		body = map[string]interface{}{"to": d.To, "fields": fields, "authority": "approval"}
+		if d.AuthorizedBy != "" {
+			block["refs"] = []interface{}{relRef("authorized_by", digestOf(d.AuthorizedBy))}
+		} else {
+			body["authority"] = "none"
+			body["rule"] = asToken(d.Rule, "no_check")
+		}
 	case "close":
 		rtype = "close"
 		cl := ev.Close
@@ -795,6 +835,16 @@ func normalizeOpen(o *dealOpen) error {
 func normalizeNote(ev *dealEvent) error {
 	var err error
 	switch {
+	case ev.Disclosure != nil:
+		d := ev.Disclosure
+		if d.To == "" {
+			d.To = "counterparty"
+		}
+		d.Channel = channelToken(d.Channel)
+		for i := range d.Fields {
+			d.Fields[i].Class = strings.ToLower(strings.TrimSpace(d.Fields[i].Class))
+		}
+		err = d.validate()
 	case ev.Message != nil:
 		ev.Message.Channel = channelToken(ev.Message.Channel)
 	case ev.Claim != nil:

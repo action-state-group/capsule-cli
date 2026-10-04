@@ -318,6 +318,9 @@ func dealCoverSteps(dealID string, events []sealedEvent) []*dealCoverStep {
 			if e.Act.Currency != "" {
 				step.currency = e.Act.Currency
 			}
+		case "disclosure":
+			// What the agent told someone is the share step itself.
+			step.action = e.Disclosure.action()
 		case "check":
 			step.action = e.Check.Action
 			if snap := snapshots[e.Check.Snapshot]; snap != nil {
@@ -421,7 +424,7 @@ func reconcileDeals(records []dealExecutionRecord, approvals []dealHostApproval,
 			}
 		}
 		var match *dealCoverStep
-		for _, kind := range []string{"act", "check"} {
+		for _, kind := range []string{"act", "disclosure", "check"} {
 			for _, step := range steps {
 				if step.kind == kind && step.covers(rec, window) {
 					match = step

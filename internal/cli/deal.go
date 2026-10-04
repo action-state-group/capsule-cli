@@ -637,7 +637,7 @@ type dealActInput struct {
 }
 
 func dealNoteCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "note", Short: "Seal a message, claim, evidence, detail change, the user's answer to a check, or an action taken", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "note", Short: "Seal a message, claim, evidence, detail change, the user's answer to a check, an action taken, or something the agent told someone (disclosure)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		kind, _ := c.Flags().GetString("kind")
 		emailPath, _ := c.Flags().GetString("email")
 		keyPath, _ := c.Flags().GetString("key-record")
@@ -654,7 +654,7 @@ func dealNoteCommand() *cobra.Command {
 		switch {
 		case kind == "evidence" && emailPath != "" && path == "":
 			ev.Evidence = &dealEvidence{About: "merchant confirmation email", Source: "merchant_email"}
-		case slices.Contains([]string{"message", "claim", "evidence", "change", "intent", "act"}, kind):
+		case slices.Contains([]string{"message", "claim", "evidence", "change", "intent", "act", "disclosure"}, kind):
 			raw, err := readInput(path)
 			if err != nil {
 				return err
@@ -678,6 +678,9 @@ func dealNoteCommand() *cobra.Command {
 				target = ev.Intent
 			case "act":
 				target = &act
+			case "disclosure":
+				ev.Disclosure = &dealDisclosure{}
+				target = ev.Disclosure
 			}
 			if err = decodeJSONAs("--input", raw, target); err != nil {
 				return err
@@ -691,7 +694,7 @@ func dealNoteCommand() *cobra.Command {
 			}
 			ev.Approval = &dealApproval{Check: check, Choice: choice, Approver: "user", Said: said}
 		default:
-			return inputError("--kind must be message, claim, evidence, change, intent, approval or act")
+			return inputError("--kind must be message, claim, evidence, change, intent, approval, act or disclosure")
 		}
 		if emailPath != "" {
 			// Captured before the deal is locked: the key records are read
@@ -742,6 +745,15 @@ func dealNoteCommand() *cobra.Command {
 				ev.Act = &dealAct{Action: act.Action, Description: act.Description, AmountMinor: act.AmountMinor, Currency: act.Currency, Payee: act.Payee, Rail: act.Rail, Reference: act.Reference}
 				ev.Act.AuthorizedBy, ev.Act.Reason, ev.Act.Rule = authorizeAct(events, *ev.Act)
 				ev.Act.Unchecked = ev.Act.AuthorizedBy == ""
+			case "disclosure":
+				// Covered by the same rules as an action: a check of
+				// share_contact (or share_credentials) answered with proceed,
+				// and no approval covers two steps.
+				d := ev.Disclosure
+				if !slices.Contains(dealPointsOfNoReturn[open.Type], d.action()) {
+					return inputError("this deal type has no " + d.action() + " point of no return")
+				}
+				d.AuthorizedBy, d.Reason, d.Rule = authorizeAct(events, dealAct{Action: d.action()})
 			}
 			se, err := s.seal(ctx, dealID, events, ev)
 			if err != nil {
@@ -761,6 +773,16 @@ func dealNoteCommand() *cobra.Command {
 				out["unchecked"] = ev.Act.Unchecked
 				out["authorized_by"] = ev.Act.AuthorizedBy
 				out["reason"] = ev.Act.Reason
+			case "disclosure":
+				d := ev.Disclosure
+				out["approved"] = d.AuthorizedBy != ""
+				out["authorized_by"] = d.AuthorizedBy
+				out["reason"] = d.Reason
+				classes := make([]string, len(d.Fields))
+				for i, f := range d.Fields {
+					classes[i] = f.Class
+				}
+				out["classes"] = classes
 			case "evidence":
 				if m := ev.Evidence.Email; m != nil {
 					// Keys rotate and are revoked: checkpoint the sealed key
@@ -799,7 +821,7 @@ func dealNoteCommand() *cobra.Command {
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
-	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval or act")
+	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval, act or disclosure")
 	cmd.Flags().String("input", "", "JSON body for message, claim, evidence, change, intent or act (optional for evidence with --email)")
 	cmd.Flags().String("email", "", "evidence: a merchant's email as a raw RFC 822 file (.eml), headers intact; sealed with its DKIM key records")
 	cmd.Flags().String("key-record", "", "evidence: the DKIM key record to check --email against instead of DNS (marked supplied)")
@@ -1069,7 +1091,7 @@ func dealReportCommand() *cobra.Command {
 			}
 			out := map[string]any{
 				"deal_id": dealID, "scope": dealScopeLine, "did_line": dealDidLine(dealDidSources(events)), "demo": events[0].Event.Open.Demo, "outcome": outcome,
-				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "merchant": report.Merchant,
+				"asked": report.Asked, "did": report.Did, "told": report.Told, "anomalies": report.Anomalies, "merchant": report.Merchant,
 				"produced_by": dealProducers(events),
 				"deadlines":   dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "trail": strings.Join(lines, "\n"),
 				"countersign": dealNotCountersigned(),

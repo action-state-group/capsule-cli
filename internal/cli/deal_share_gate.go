@@ -337,6 +337,16 @@ func gateSecrets(events []sealedEvent) (secrets, words []string) {
 		if e.Close != nil {
 			termValues(e.Close.Delivered)
 		}
+		if d := e.Disclosure; d != nil {
+			whoValues(d.Who)
+			for _, f := range d.Fields {
+				ids = append(ids, f.Value)
+				texts = append(texts, f.Value)
+				if f.Class == "home_address" || f.Class == "address" || f.Class == "pickup_location" {
+					places = append(places, f.Value)
+				}
+			}
+		}
 	}
 	var out []string
 	add := func(v string) {

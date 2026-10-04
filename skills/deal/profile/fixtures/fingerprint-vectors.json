@@ -107,6 +107,18 @@
       "nonce": "3d4335b20ba6affbe4d2d52a2deac5d6b5f2e08c0bd4d1f64df21aa3c61285c6",
       "text": "Hold",
       "commitment": "3fbc987e92545ceeb991a7e258a9928b41022f35253a834f10bf05117b2bfaa1"
+    },
+    {
+      "label": "disclosed-phone",
+      "nonce": "54ee0ea30cd62950667c2b001475883ebb3657e78639bf58405020e3e8491368",
+      "text": "(555) 010-2077",
+      "commitment": "9ef972e9bd81755575e7a71c663758deea4dff24eacccad04cb17b0a6a0f02fd"
+    },
+    {
+      "label": "disclosed-pickup",
+      "nonce": "d895fb7d42b85fcf6a5e450317f285825a323e8ce2c89baab6010a594e59df59",
+      "text": "lakeside marina, slip 14, by the fuel dock",
+      "commitment": "bb4e6d271a14e6afc4fa3a8fbe603db6558f4f3e27a88b4bc1151d35a463dcd2"
     }
   ]
 }
