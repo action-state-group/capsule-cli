@@ -550,7 +550,8 @@ func (s *dealSession) dealWitnessState(ctx context.Context, dealID string, state
 		"leaf_index":  integer(uint64(*state.Receipt.LeafIndex)), "tree_size": integer(uint64(*state.Receipt.TreeSize)),
 	}
 	return map[string]interface{}{
-		"state": "witnessed", "deal_log_id": leaf.LogID, "size": integer(leaf.Size), "salt": leaf.Salt,
+		"state": "witnessed", "checkpoint_at": tick.at.UTC().Format(time.RFC3339),
+		"deal_log_id": leaf.LogID, "size": integer(leaf.Size), "salt": leaf.Salt,
 		"index": integer(leaf.Index), "path": hexPath,
 		"cadence": map[string]interface{}{
 			"log_id": s.p.LogID, "entry_index": integer(tick.entrySeq - 1),
@@ -621,7 +622,7 @@ func dealTickCommand() *cobra.Command {
 			}
 		}
 	}}
-	cmd.Flags().Duration("wait-up-to", 0, "When the scheduler cannot run this every minute: wait for each tick due within this long (the scheduler's period) and publish it on time")
+	cmd.Flags().Duration("wait-up-to", 0, "When the scheduler cannot run this every minute: wait for each tick due within this long (the scheduler's period) and publish it on time; the run stays alive up to this long")
 	return cmd
 }
 

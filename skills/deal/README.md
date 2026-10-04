@@ -119,7 +119,9 @@ each has. Instead the profile has one cadence log (its `log_id`), and
   the jitter and can push a tick to a later run. Where the host can only
   schedule every N minutes, use `deal tick --wait-up-to Nm`: each run waits,
   with the store unlocked, for every tick due inside its window, and
-  publishes it on time.
+  publishes it on time. Such a run stays alive up to N (an hour for
+  `--wait-up-to 60m`): on a host that caps how long a scheduled job may run,
+  use a smaller N or schedule every minute instead.
 - At a tick, every deal's checkpoint is cut locally and becomes a leaf of a
   fixed-depth (16) Merkle tree, with a fresh random salt at a fresh random
   position, plus one random filler leaf. The tree's root is appended as

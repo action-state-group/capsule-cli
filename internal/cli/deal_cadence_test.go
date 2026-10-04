@@ -365,10 +365,10 @@ func TestDoctorExplainsWitnessConsent(t *testing.T) {
 // A deal is never called witnessed at the moment it happens: until a tick has
 // carried it to the witness, the receipt says witness pending, and why.
 func TestDealIsWitnessPendingUntilATick(t *testing.T) {
-	public, _, err := ed25519.GenerateKey(rand.Reader)
+	public, key, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	endpoint, _ := countingWitness(t)
-	cadenceFixture(t, endpoint, public, "5m", "2m", 0)
+	p := cadenceFixture(t, endpoint, public, "5m", "2m", 0)
 	dealID := retailDeal(t)
 	page := filepath.Join(t.TempDir(), "r.html")
 	report := dealRun(t, "report", "--deal", dealID, "--html", page)
@@ -383,4 +383,19 @@ func TestDealIsWitnessPendingUntilATick(t *testing.T) {
 		assert.NotContains(t, text, "witnessed at the time")
 		assert.NotContains(t, text, "Witnessed when")
 	}
+
+	// The tick at 18:07 carries the deal's checkpoint; once its receipt is
+	// back, the same deal is witnessed, and says when its checkpoint was cut.
+	now := clockAt(t, time.Date(2026, 9, 27, 18, 7, 31, 0, time.UTC))
+	require.Equal(t, "ticked", dealRun(t, "tick")["state"])
+	*now = now.Add(time.Minute)
+	deliver(t, p, cadenceSize(t, p), key)
+	page = filepath.Join(t.TempDir(), "r2.html")
+	report = dealRun(t, "report", "--deal", dealID, "--html", page)
+	a = report["assurance"].(map[string]any)
+	assert.Equal(t, "witnessed", a["rung"])
+	assert.Equal(t, "2026-09-27T18:07:00Z", a["checkpoint_at"], "the tick's time, coarsened to the minute")
+	assert.Contains(t, a["text"], "signed a receipt for this deal's checkpoint, cut at 2026-09-27T18:07:00Z at a cadence tick after the deal's steps")
+	cadence := embeddedBundle(t, string(mustRead(t, page)))["extensions"].(map[string]any)[dealCadenceExtension].(map[string]any)
+	assert.Equal(t, "2026-09-27T18:07:00Z", cadence["checkpoint_at"], "the page reads it from the bundle")
 }

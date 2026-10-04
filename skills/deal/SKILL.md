@@ -283,7 +283,10 @@ jitter only shows if `deal tick` runs near each due time: a scheduler that
 runs it every 5 or 60 minutes would publish on its own grid instead. If the
 host can only schedule every N minutes, run
 `capsulectl --profile deal deal tick --wait-up-to Nm` at that interval: each
-run waits for the ticks due inside its window and publishes them on time. Deal steps never publish anything
+run waits for the ticks due inside its window and publishes them on time.
+Such a run stays alive up to N minutes (an hour for `--wait-up-to 60m`); if
+the host caps how long a scheduled job may run, use a smaller N or schedule
+every minute. Deal steps never publish anything
 themselves. If your agent host asks before a program reaches a website, the
 first tick raises that question for the witness's site: tell the user to
 choose **"Always allow this site"**, not "allow once", because later ticks

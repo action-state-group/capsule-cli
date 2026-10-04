@@ -86,7 +86,13 @@ function versionBefore(a, b) {
       // not a URL: show it as written
     }
     header.append(
-      el("p", `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint, sent at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`, "deal-rung"),
+      el(
+        "p",
+        `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${
+          typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : ""
+        }at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`,
+        "deal-rung",
+      ),
       el(
         "p",
         "The receipt is in this file; this page does not check it. Check it with " +
