@@ -169,7 +169,9 @@ func captureEmail(raw []byte, supplied []dkimKeyRecord) (*merchantEmail, error) 
 		return nil, inputError("the email must be a raw RFC 822 message (.eml) of at most 10 MB")
 	}
 	if _, err := mail.ReadMessage(bytes.NewReader(raw)); err != nil {
-		return nil, inputError("the email is not a raw RFC 822 message with its headers intact: " + err.Error())
+		// The parser's own message can quote a header line (an address):
+		// it stays in the chain, never in the shown reason.
+		return nil, errors.Join(inputError("the email is not a raw RFC 822 message with its headers intact (a header line is malformed, or the header block does not end with a blank line)"), err)
 	}
 	e := &merchantEmail{Raw: raw, KeySource: "dns"}
 	var fetchErr error
@@ -242,7 +244,7 @@ func verifyDKIM(raw []byte, lookup func(string) ([]string, error), dmarc *dmarcC
 	v.Policy = pol.policy
 	verifs, err := dkim.VerifyWithOptions(bytes.NewReader(raw), &dkim.VerifyOptions{LookupTXT: lookup, MaxVerifications: 8})
 	if err != nil && !errors.Is(err, dkim.ErrTooManySignatures) {
-		return v, inputError("could not read the email for DKIM: " + err.Error())
+		return v, errors.Join(inputError("could not read the email's DKIM-Signature headers: one is malformed"), err)
 	}
 	for _, x := range verifs {
 		s := dealSignature{Domain: strings.ToLower(x.Domain), Result: "pass", Signed: x.HeaderKeys}

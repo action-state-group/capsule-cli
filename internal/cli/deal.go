@@ -638,7 +638,7 @@ func dealNoteCommand() *cobra.Command {
 			return inputError("--email, --key-record and --dmarc-record go with --kind evidence")
 		}
 		if keyPath != "" && emailPath == "" {
-			return inputError("--key-record needs --email")
+			return inputError("--key-record goes with --email: the key record is read for that email's DKIM signature")
 		}
 		path, _ := c.Flags().GetString("input")
 		switch {

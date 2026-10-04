@@ -249,3 +249,15 @@ func TestJSONTypeErrorNeverEchoesTheNumber(t *testing.T) {
 		assert.NotContains(t, msg, "4111111111111111")
 	}
 }
+
+// TestMalformedEmailRefusalNeverQuotesAHeader: the mail parser's own error
+// can quote a malformed header line; the shown refusal never does.
+func TestMalformedEmailRefusalNeverQuotesAHeader(t *testing.T) {
+	raw := []byte("Subject: order\r\nship-to jane.doe@example.com 12 Main Street\r\n\r\nbody\r\n")
+	_, err := captureEmail(raw, nil)
+	require.ErrorIs(t, err, ErrInput)
+	msg := SafeError(err)
+	assert.Contains(t, msg, "the email is not a raw RFC 822 message with its headers intact")
+	assert.NotContains(t, msg, "jane.doe@example.com")
+	assert.NotContains(t, msg, "Main Street")
+}
