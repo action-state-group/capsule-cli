@@ -344,6 +344,28 @@ self-contained, so most of it is the embedded verifier, not evidence: of a
 `evidence-graph.iife.js` and 7,488 B is `deal-view.js` (91%). An earlier
 build measured 93% of a 215,251-byte page the same way.
 
+## Which build made a record, and what is never collected
+
+Every sealed step names the build that sealed it, in the record itself
+(`x-deal-v0.producer`: name, version, commit). A development build says so.
+The report's `produced_by`, the assurance line ("Produced by capsulectl
+<version> (<commit>)") and the receipt page show it. The page compares it
+with the version of the capsulectl that made the page, from data already in
+the file. If the record is older it says so ("Produced by an older version
+... What changed:") and links the release notes. It fetches nothing to
+decide.
+
+Nothing phones home. capsulectl collects nothing and sends no version, usage
+or error data anywhere. The only things that leave the device are what the
+user turns on or chooses to share: the witness checkpoints (hashes), the
+optional remote checker, and receipts the user sends or publishes.
+
+What the public witness can and cannot show about versions: a witness holds
+cadence checkpoints, which carry a log id, a size, a root, a time and the
+signing key id. They carry no record content, so the version that produced a
+deal is NOT visible from the witness. It is visible only in records someone
+chooses to disclose: a receipt or bundle the user shares or publishes.
+
 ## Records: the x-deal-v0 profile
 
 [`profile/`](profile/) is the deal record profile: `PROFILE.md` (normative),

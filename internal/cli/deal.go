@@ -343,6 +343,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	if len(events) > 0 {
 		ev.Prev = events[len(events)-1].Digest
 	}
+	ev.Producer = currentProducer()
 	ev.Nonces = map[string]string{}
 	for name := range dealTexts(ev) {
 		nonce := make([]byte, 32)
@@ -1062,7 +1063,8 @@ func dealReportCommand() *cobra.Command {
 			out := map[string]any{
 				"deal_id": dealID, "scope": dealScopeLine, "did_line": dealDidLine(dealDidSources(events)), "demo": events[0].Event.Open.Demo, "outcome": outcome,
 				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "merchant": report.Merchant,
-				"deadlines": dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "trail": strings.Join(lines, "\n"),
+				"produced_by": dealProducers(events),
+				"deadlines":   dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "trail": strings.Join(lines, "\n"),
 			}
 			if htmlPath == "" && emailPath == "" && bundlePath == "" {
 				return output(c, out)

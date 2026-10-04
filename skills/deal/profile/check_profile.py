@@ -368,6 +368,12 @@ def stage_schema(rec):
         raise StageError("schema", "seq must be an integer >= 1")
     if not re.fullmatch(r"deal-[0-9a-f]{16,64}", str(blk["deal_id"])):
         raise StageError("schema", "deal_id pattern")
+    if "producer" in blk:
+        prod = blk["producer"]
+        if not isinstance(prod, dict) or set(prod) != {"name", "version", "commit"} or not all(
+            isinstance(prod[k], str) and 1 <= len(prod[k]) <= 64 for k in prod
+        ):
+            raise StageError("schema", "x-deal-v0/producer must be {name, version, commit}: non-empty strings")
 
 
 _EXEMPT = re.compile(r"^([0-9a-f]{16,}|deal-[0-9a-f]+|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?|"

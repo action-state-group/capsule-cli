@@ -732,6 +732,15 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 				}
 				continue
 			}
+			if k == "producer" {
+				// The software build that sealed the record: shareable in
+				// exactly its own shape, without opening "name" to every
+				// member of every record.
+				if !shareableProducer(child) {
+					return false
+				}
+				continue
+			}
 			if !dealRecordShareable(child, k, audience, p) {
 				return false
 			}
@@ -752,6 +761,28 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 	default:
 		return true
 	}
+}
+
+// The producer's members, in the only shapes a share discloses: a build
+// name, a release version (a pre-release tag of a few letters and at most
+// three digits, so no code or number can ride in it), and a commit hash.
+// They are checked by shape rather than scrubbed: "v0.1.0-rc4" would read
+// as a code to the scrubber.
+var (
+	producerName    = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+	producerVersion = regexp.MustCompile(`^v?\d{1,4}\.\d{1,4}\.\d{1,4}(-(rc|alpha|beta|dev)\d{0,3})?$`)
+	producerCommit  = regexp.MustCompile(`^([0-9a-f]{7,40}|unknown)$`)
+)
+
+func shareableProducer(v interface{}) bool {
+	m, ok := v.(map[string]interface{})
+	if !ok || len(m) != 3 {
+		return false
+	}
+	name, _ := m["name"].(string)
+	version, _ := m["version"].(string)
+	commit, _ := m["commit"].(string)
+	return producerName.MatchString(name) && producerVersion.MatchString(version) && producerCommit.MatchString(commit)
 }
 
 // dealWithholdRecords picks the records a shared copy withholds.

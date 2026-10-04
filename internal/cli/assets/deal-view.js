@@ -4,6 +4,28 @@
 // whole bundle first; a step's line is shown only when the verifier matched
 // the step's sealed record, otherwise the step shows its capsule_id only.
 // All text is set with textContent; nothing from the bundle is parsed as HTML.
+// versionBefore reports whether version a is older than b: "v0.1.0-rc3" style,
+// numbers compared as numbers, a pre-release before its release. An
+// unparsable version, or a development build, is never called older.
+function versionBefore(a, b) {
+  const parse = (v) => {
+    const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(v || "");
+    return m ? { n: [Number(m[1]), Number(m[2]), Number(m[3])], pre: m[4] } : undefined;
+  };
+  const x = parse(a), y = parse(b);
+  // A development build is built from source, older or newer than any tag:
+  // never call it, or anything next to it, older.
+  if (!x || !y || x.pre === "dev" || y.pre === "dev") return false;
+  for (let i = 0; i < 3; i++) if (x.n[i] !== y.n[i]) return x.n[i] < y.n[i];
+  if (x.pre === y.pre) return false;
+  if (x.pre === undefined) return false;
+  if (y.pre === undefined) return true;
+  const num = (p) => (/^(.*?)(\d+)$/.exec(p) || [p, p, ""]);
+  const [, xa, xd] = num(x.pre), [, ya, yd] = num(y.pre);
+  if (xa === ya && xd !== "" && yd !== "") return Number(xd) < Number(yd);
+  return x.pre < y.pre;
+}
+
 (async () => {
   const host = document.getElementById("deal");
   const bundle = window.__BUNDLE__;
@@ -131,6 +153,29 @@
 
   if (base && base.body.demo) host.append(el("span", "DEMO", "deal-demo"));
   host.append(el("h1", "Deal report"));
+
+  // Which build sealed the steps, read from the records this page verified
+  // (not from the summary), compared with the build that made this page.
+  // Both are already in this file: nothing is fetched to do it.
+  const builds = [];
+  matched.forEach((id) => {
+    const rec = ((bundle.disclosures || {})[id] || {}).agent_input || {};
+    const p = (rec["x-deal-v0"] || {}).producer;
+    const name = p && typeof p.version === "string" ? `${p.name || "capsulectl"} ${p.version} (${p.commit || "unknown"})` : "an earlier capsulectl that did not record its version";
+    if (!builds.some((b) => b.name === name)) builds.push({ name, version: p && p.version });
+  });
+  if (builds.length > 0) host.append(el("p", `Produced by ${builds.map((b) => b.name).join(", then ")}.`, "deal-note"));
+  const pageVersion = typeof report.page_version === "string" ? report.page_version : "";
+  const older = builds.filter((b) => b.version === undefined || versionBefore(b.version, pageVersion));
+  if (pageVersion && older.length > 0) {
+    const what = el("p", `Produced by an older version (${older.map((b) => b.version || "unrecorded").join(", ")}) than the capsulectl that made this page (${pageVersion}). What changed: `, "deal-note");
+    const link = document.createElement("a");
+    link.href = "https://github.com/action-state-group/capsule-cli/releases";
+    link.textContent = "the release notes";
+    link.rel = "noopener";
+    what.append(link);
+    host.append(what);
+  }
   host.append(header);
 
   // The user's words are checked here against the baseline's sealed
