@@ -768,6 +768,42 @@ func dealNoteCommand() *cobra.Command {
 					return inputError("this deal type has no " + d.action() + " point of no return")
 				}
 				d.AuthorizedBy, d.Reason, d.Rule = authorizeAct(events, dealAct{Action: d.action()})
+				// An approval covers a telling only to the party its check was
+				// about: approving the address for the seller is not approving
+				// it for a courier.
+				if d.AuthorizedBy != "" && !sameRecipient(events, d.AuthorizedBy, *d, *open) {
+					d.AuthorizedBy, d.Reason, d.Rule = "", "that approval was for a telling to someone else", "approval_for_another_party"
+				}
+				// Noting runs when the form is filled, before it is sent: a
+				// class going to this recipient for the first time that no
+				// approved check named is held, and nothing is sealed. Leaving
+				// a class out of the check is no way around its first telling.
+				memory, err := s.counterpartyMemory(ctx, dealID)
+				if err != nil {
+					return err
+				}
+				keys := disclosureRecipientKeys(*d, *open)
+				if first := firstTellings(events, d.AuthorizedBy, d.Fields, memory, keys); len(first) > 0 {
+					name := recipientName(open.Who)
+					if d.Who != nil && d.To == "other" {
+						name = recipientName(*d.Who)
+					}
+					words := make([]string, len(first))
+					for i, c := range first {
+						words[i] = classWord(c)
+					}
+					if err := output(c, map[string]any{
+						"deal_id": dealID, "proceed": false, "verdict": "pause", "held": first,
+						"reason": "First time telling " + name + " your " + strings.Join(words, ", ") + ", and no check the user approved named it",
+						"next":   `do not send it; run deal check with "disclosing" naming ` + strings.Join(first, ", ") + `, show its card, and note this again only once the user approves`,
+					}); err != nil {
+						return err
+					}
+					return ErrPaused
+				}
+				if class := uncheckedClass(events, d.AuthorizedBy, d.Fields); d.AuthorizedBy != "" && class != "" {
+					d.AuthorizedBy, d.Reason, d.Rule = "", "the check did not name your "+classWord(class), "class_not_checked"
+				}
 			}
 			se, err := s.seal(ctx, dealID, events, ev)
 			if err != nil {
@@ -917,6 +953,37 @@ func dealCheckCommand() *cobra.Command {
 			if snap.Who != nil && snap.Who.DomainAgeDays != nil {
 				return inputError("record the website's age as evidence, not in the check")
 			}
+			if snap.Action == "share_contact" && len(snap.Disclosing) == 0 {
+				return inputError(`a share_contact check needs "disclosing": the class of every field about to be given, for example ["name","email","address"]`)
+			}
+			if len(snap.Disclosing) > 0 {
+				for i := range snap.Disclosing {
+					snap.Disclosing[i] = strings.ToLower(strings.TrimSpace(snap.Disclosing[i]))
+				}
+				action, err := disclosureAction(snap.Disclosing)
+				if err != nil {
+					return err
+				}
+				snap.Disclosing = sortedClasses(snap.Disclosing)
+				if action != snap.Action {
+					return inputError("disclosing " + strings.Join(snap.Disclosing, ", ") + " goes with action " + action)
+				}
+				switch snap.DisclosingTo {
+				case "", "counterparty":
+					snap.DisclosingTo = "counterparty"
+					if snap.Recipient != nil {
+						return inputError(`recipient goes with "disclosing_to": "other"; a telling to the counterparty is about the deal's own counterparty`)
+					}
+				case "other":
+					if snap.Recipient == nil || len(counterpartyKeys(*snap.Recipient, "")) == 0 {
+						return inputError(`"disclosing_to": "other" needs a recipient with a phone, email, profile id, reply address or website, so the approval names who it is for`)
+					}
+				default:
+					return inputError(`disclosing_to must be counterparty or other`)
+				}
+			} else if snap.DisclosingTo != "" || snap.Recipient != nil {
+				return inputError(`disclosing_to and recipient go with "disclosing"`)
+			}
 			if snap.Action == "pay" {
 				// The check names the payee it is about, so an action can be
 				// held to the same payee.
@@ -944,6 +1011,9 @@ func dealCheckCommand() *cobra.Command {
 			// -> diff
 			state, err := foldDeal(events)
 			if err != nil {
+				return err
+			}
+			if state.memory, err = s.counterpartyMemory(ctx, dealID); err != nil {
 				return err
 			}
 			result := evaluateDeal(state, snap)
@@ -982,6 +1052,16 @@ func dealCheckCommand() *cobra.Command {
 			out["unverified"] = result.Unverified
 			out["asked_attributes"] = result.Asked
 			out["picked_by_agent"] = result.Picked
+			if rc := result.Recipient; rc != nil {
+				out["recipient"] = rc
+				if len(rc.Repeat) > 0 {
+					words := make([]string, len(rc.Repeat))
+					for i, c := range rc.Repeat {
+						words[i] = classWord(c)
+					}
+					out["note"] = "Told " + rc.Name + " your " + strings.Join(words, ", ") + " before: noted, no pause for that."
+				}
+			}
 			out["remote"] = result.Remote.Status
 			out["demo"] = open.Demo
 			// A date passing is a point of no return too: every check lists

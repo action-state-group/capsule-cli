@@ -570,6 +570,16 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if sn.SeenItem != nil {
 			body["seen_item"] = *sn.SeenItem
 		}
+		if len(sn.Disclosing) > 0 {
+			classes := make([]interface{}, len(sn.Disclosing))
+			for i, c := range sn.Disclosing {
+				classes[i] = c
+			}
+			body["disclosing"] = classes
+			if sn.DisclosingTo != "" {
+				body["disclosing_to"] = sn.DisclosingTo
+			}
+		}
 		if sn.Terms != nil {
 			if t := termsBody(*sn.Terms); len(t) > 0 {
 				body["terms"] = t
@@ -600,11 +610,23 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if len(ck.Unverified) > 0 {
 			body["unverified"] = ck.Unverified
 		}
-		if len(ck.Notes) > 0 {
-			notes := make([]interface{}, len(ck.Notes))
-			for i, n := range ck.Notes {
-				notes[i] = asToken(n, "note")
+		var notes []interface{}
+		for _, n := range ck.Notes {
+			notes = append(notes, asToken(n, "note"))
+		}
+		// What the counterparty memory found, as tokens: never the name.
+		if rc := ck.Recipient; rc != nil {
+			if rc.FirstTime {
+				notes = append(notes, "first_time_counterparty")
 			}
+			if len(rc.Repeat) > 0 {
+				notes = append(notes, "repeat_disclosure")
+			}
+			if rc.NewProfile && ck.Verdict == "pause" {
+				notes = append(notes, "new_profile")
+			}
+		}
+		if len(notes) > 0 {
 			body["notes"] = notes
 		}
 		if ck.Card != "" {
