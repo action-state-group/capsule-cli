@@ -295,3 +295,31 @@ func TestCanaryRunStopsBeforeTheTickWhenAVerbFails(t *testing.T) {
 	require.NoError(t, saveProfile(p, true))
 	assertNoTick(t)
 }
+
+func TestCanaryWatchRefusesAWitnessNotOnHTTPS(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	for _, witness := range []string{"http://witness.example", "ftp://witness.example", "witness.example"} {
+		_, err := invoke(t, "", "canary", "watch", "--log-id", "deal-cadence/00aa", "--witness", witness, "--expect-every", "26h")
+		require.ErrorIs(t, err, ErrInput, witness)
+		assert.Contains(t, SafeError(err), "--witness must be an https URL")
+	}
+}
+
+func TestCanaryWatchDoesNotFollowARedirectOffHTTPS(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	clockAt(t, time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC))
+	server := httptest.NewTLSServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		http.Redirect(rw, r, "http://witness.example"+r.URL.Path, http.StatusFound)
+	}))
+	t.Cleanup(server.Close)
+	old := canaryHTTP
+	canaryHTTP = canaryClient(server.Client().Transport)
+	t.Cleanup(func() { canaryHTTP = old })
+
+	state := filepath.Join(t.TempDir(), "state.json")
+	_, err := invoke(t, "", "canary", "watch", "--log-id", "deal-cadence/00aa", "--witness", server.URL,
+		"--expect-every", "26h", "--state", state)
+	require.ErrorIs(t, err, errWitnessUnread)
+	assert.Contains(t, SafeError(err), "redirected to a non-HTTPS URL")
+	assert.NotErrorIs(t, err, ErrAlarm)
+}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -240,7 +241,43 @@ type canaryObservation struct {
 	SizeSince string `json:"size_since"`
 }
 
-var canaryHTTP = &http.Client{Timeout: 20 * time.Second}
+var canaryHTTP = canaryClient(nil)
+
+// canaryClient reads the witness with transport (nil: the default), and
+// never follows a redirect off HTTPS: an answer about a public log must come
+// over the same kind of channel it was asked on.
+func canaryClient(transport http.RoundTripper) *http.Client {
+	return &http.Client{
+		Timeout:   20 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("too many redirects")
+			}
+			if !witnessURLAllowed(req.URL) {
+				return errors.New("redirected to a non-HTTPS URL")
+			}
+			return nil
+		},
+	}
+}
+
+// witnessURLAllowed: https, or plain http to a loopback address (a witness
+// run on this machine, as the tests do).
+func witnessURLAllowed(u *url.URL) bool {
+	switch u.Scheme {
+	case "https":
+		return u.Host != ""
+	case "http":
+		host := u.Hostname()
+		if host == "localhost" {
+			return true
+		}
+		ip := net.ParseIP(host)
+		return ip != nil && ip.IsLoopback()
+	}
+	return false
+}
 
 func canaryWatchCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "watch", Short: "Read a log's last checkpoint from the public witness and alarm when it is stale or its history was rewritten", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
@@ -250,6 +287,9 @@ func canaryWatchCommand() *cobra.Command {
 		statePath, _ := c.Flags().GetString("state")
 		if logID == "" || every <= 0 {
 			return inputError("--log-id and a positive --expect-every are required")
+		}
+		if u, err := url.Parse(witness); err != nil || u.Host == "" || !witnessURLAllowed(u) {
+			return hint(ErrInput, "--witness must be an https URL (plain http only for a witness on this machine)")
 		}
 		if statePath == "" {
 			dir, err := profilesDir()
@@ -332,8 +372,8 @@ func canaryRewritten(cp witnessCheckpoint, prev canaryObservation, hadPrev bool)
 
 func readWitnessCheckpoint(ctx context.Context, witness, logID string) (witnessCheckpoint, bool, error) {
 	base, err := url.Parse(witness)
-	if err != nil || base.Scheme == "" || base.Host == "" {
-		return witnessCheckpoint{}, false, errors.New("not a URL")
+	if err != nil || base.Host == "" || !witnessURLAllowed(base) {
+		return witnessCheckpoint{}, false, errors.New("not an https URL")
 	}
 	segments := strings.Split(logID, "/")
 	for i, s := range segments {
@@ -346,6 +386,10 @@ func readWitnessCheckpoint(ctx context.Context, witness, logID string) (witnessC
 	}
 	resp, err := canaryHTTP.Do(req)
 	if err != nil {
+		var redirect *url.Error
+		if errors.As(err, &redirect) && strings.Contains(redirect.Err.Error(), "redirect") {
+			return witnessCheckpoint{}, false, redirect.Err
+		}
 		return witnessCheckpoint{}, false, errors.New("no answer")
 	}
 	defer resp.Body.Close()

@@ -20,8 +20,9 @@ env:
   LOG_ID: deal-cadence/0000000000000000
   WITNESS: https://witness.agentactioncapsule.org
   EXPECT_EVERY: 26h
-  # A release that has `canary watch`.
-  CAPSULECTL_VERSION: v0.1.0-rc2
+  # The first release with `canary watch` (rc2 predates it). Check that this
+  # tag exists on the releases page before enabling the schedule.
+  CAPSULECTL_VERSION: v0.1.0-rc3
 
 jobs:
   watch:
@@ -29,7 +30,7 @@ jobs:
     steps:
       # The watcher keeps its last observation between runs; without it, it
       # still alarms on a stale log, but cannot tell a rewritten history.
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: canary-state.json
           key: canary-state-${{ github.run_id }}

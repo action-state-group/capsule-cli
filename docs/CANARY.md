@@ -33,6 +33,8 @@ needs no access to the host, the account or the agent.
     names a different root for it; the checkpoints are signed by a different
     key; or the witness has flagged conflicting checkpoints for the log;
   - the log was never witnessed at all.
+- It reads only over HTTPS: `--witness` must be an https URL (plain http only
+  for a witness on the same machine), and it never follows a redirect off HTTPS.
 - A witness it cannot read at all is not an alarm: `watch` exits 1 and says it
   cannot tell. Run it from more than one place if that matters.
 - Between two polls the log usually moves by more than one checkpoint. `watch`
