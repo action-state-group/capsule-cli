@@ -717,6 +717,15 @@ func releaseWatchCommand() *cobra.Command {
 		for _, t := range known {
 			cfg.knownUnsigned[strings.TrimSpace(t)] = true
 		}
+		if file, _ := c.Flags().GetString("known-unsigned-file"); file != "" {
+			tags, err := readKnownUnsigned(file)
+			if err != nil {
+				return err
+			}
+			for _, t := range tags {
+				cfg.knownUnsigned[t] = true
+			}
+		}
 		out, err := releaseWatch(c.Context(), cfg)
 		if err != nil {
 			return err
@@ -739,7 +748,25 @@ func releaseWatchCommand() *cobra.Command {
 	cmd.Flags().String("trusted-root", "", "Optional Sigstore trusted_root.jsonl, passed to gh as --custom-trusted-root for an offline check")
 	cmd.Flags().Duration("release-grace", 2*time.Hour, "How long after a signed tag its release may take before its absence is an alarm")
 	cmd.Flags().StringSlice("known-unsigned", nil, "Tags made before signing began, accepted as known exceptions (comma-separated)")
+	cmd.Flags().String("known-unsigned-file", "", "File of tags made before signing began, one per line (# starts a comment), accepted as known exceptions; kept with the monitor")
 	return cmd
+}
+
+// readKnownUnsigned reads one tag per line; blank lines and anything after
+// "#" are ignored.
+func readKnownUnsigned(path string) ([]string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, inputError("--known-unsigned-file: cannot read " + path)
+	}
+	var tags []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		line, _, _ = strings.Cut(line, "#")
+		if line = strings.TrimSpace(line); line != "" {
+			tags = append(tags, line)
+		}
+	}
+	return tags, nil
 }
 
 func releaseCommands() *cobra.Command {

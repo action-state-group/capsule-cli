@@ -582,3 +582,28 @@ func TestNextLink(t *testing.T) {
 	assert.Equal(t, "", nextLink(`<https://api.github.com/x?page=1>; rel="prev"`))
 	assert.Equal(t, "", nextLink(""))
 }
+
+// The known exceptions can come from a file kept with the monitor: one tag
+// per line, comments and blank lines ignored.
+func TestReleaseWatchKnownUnsignedFile(t *testing.T) {
+	w := newReleaseWorld(t)
+	w.addTag(t, "v0.1.0-rc4", nil)
+	w.addRelease(t, "v0.1.0-rc4", false)
+	w.addTag(t, "v0.1.0-rc5", nil)
+	w.addRelease(t, "v0.1.0-rc5", true)
+	file := filepath.Join(t.TempDir(), "known-unsigned")
+	require.NoError(t, os.WriteFile(file, []byte("# before signing\nv0.1.0-rc4  # first with a bundle\n\n"), 0o600))
+	result, err := w.watch(t, "--known-unsigned-file", file)
+	require.ErrorIs(t, err, ErrAlarm)
+	assert.Contains(t, alarmsOf(result), "unintended release v0.1.0-rc5")
+	assert.NotContains(t, alarmsOf(result), "v0.1.0-rc4")
+
+	require.NoError(t, os.WriteFile(file, []byte("# before signing\nv0.1.0-rc4  # first with a bundle\nv0.1.0-rc5\n"), 0o600))
+	result, err = w.watch(t, "--known-unsigned-file", file)
+	require.NoError(t, err, alarmsOf(result))
+	assert.Equal(t, []any{"v0.1.0-rc5"}, result["releases_checked"])
+
+	_, err = invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", w.witURL, "--witness-key", w.authHex,
+		"--allowed-signers", w.signer.allowed, "--known-unsigned-file", filepath.Join(t.TempDir(), "missing"))
+	require.ErrorIs(t, err, ErrInput)
+}

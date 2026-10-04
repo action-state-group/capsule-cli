@@ -120,14 +120,29 @@ problem) on any of:
 
 ```sh
 capsulectl release watch --allowed-signers ~/release-monitor/allowed_signers \
-  --known-unsigned v0.1.0-rc1,v0.1.0-rc2,v0.1.0-rc3,v0.1.0-rc4
+  --known-unsigned-file ~/release-monitor/known-unsigned
+```
+
+where `~/release-monitor/known-unsigned` lists every tag made before tag
+signing starts, one per line. Until the first signed tag, add each new tag
+as it is made; once signing starts, the file stops growing:
+
+```text
+# Tags made before tag signing began. Never add a tag made after it.
+v0.1.0-rc1
+v0.1.0-rc2
+v0.1.0-rc3
+v0.1.0-rc4
+v0.1.0-rc5
 ```
 
 - `--allowed-signers` (ssh `allowed_signers` format) belongs to whoever
   runs the monitor, never to this repository. An attacker who can change
   the repository must not be able to change what counts as intended.
-- `--known-unsigned` names the tags made before tag signing began, which
-  are accepted as known exceptions.
+- `--known-unsigned-file` (or `--known-unsigned`, comma-separated) names the
+  tags made before tag signing began, which are accepted as known
+  exceptions. Like the allowed signers, the file belongs to the monitor,
+  never to this repository.
 - `--trusted-root` passes a Sigstore trusted root to gh, for a fully
   offline check.
 
