@@ -223,7 +223,8 @@ func TestDealMerchantEmailSealVerifyAndMismatch(t *testing.T) {
 	assert.Contains(t, b0["merchant_says"], "not confirmed: fails DMARC alignment (domain policy p=reject); the signature does not check out")
 
 	page := filepath.Join(t.TempDir(), "receipt.html")
-	report := dealRun(t, "report", "--deal", dealID, "--html", page)
+	receipt := filepath.Join(t.TempDir(), "receipt.eml")
+	report := dealRun(t, "report", "--deal", dealID, "--html", page, "--email", receipt)
 	rows := report["merchant"].([]any)
 	require.Len(t, rows, 2)
 	row := rows[0].(map[string]any)
@@ -234,6 +235,30 @@ func TestDealMerchantEmailSealVerifyAndMismatch(t *testing.T) {
 	assert.Equal(t, "2026-10-10", row["cancel_by"])
 	assert.Equal(t, true, row["verified"])
 	assert.NotEqual(t, row["merchant_says"], row["we_say"])
+	assert.Equal(t, "RSA 2048-bit", row["key_size"])
+	assert.Equal(t, "shop.example", row["signing_domain"])
+	assert.Equal(t, "shop.example", row["merchant_apex"])
+	assert.Equal(t, "signed by shop.example, the merchant's own domain (apex shop.example)", row["domains"])
+
+	// The receipt email carries the same comparison, in the same words, in
+	// both its plain-text and HTML bodies, under the email's own scope line.
+	mail := report["email"].(map[string]any)
+	for _, body := range []string{mail["text"].(string), mail["html"].(string)} {
+		body = strings.ReplaceAll(body, "&#39;", "'")
+		for _, want := range []string{
+			dealScopeLine, emailScopeLine, "The merchant's own email",
+			"Merchant's signature: " + row["merchant_says"].(string), "Our seal: " + ourSealWords,
+			"You approved (the amount checked against what you already allowed)", "$48.00",
+			"The merchant's email says (read from the email)", "$64.00", "2026-10-10",
+			"signed by shop.example, the merchant's own domain (apex shop.example)", "RSA 2048-bit, sealed when the email was sealed",
+		} {
+			assert.Contains(t, body, want)
+		}
+		assert.NotContains(t, strings.ToLower(body), "bilateral")
+	}
+	eml, err := os.ReadFile(receipt)
+	require.NoError(t, err)
+	assert.Contains(t, string(eml), "Content-Type: multipart/mixed")
 
 	kinds := map[string]string{}
 	for _, a := range report["anomalies"].([]any) {
@@ -477,4 +502,10 @@ func TestMerchantEmailDMARCPolicies(t *testing.T) {
 		{Name: "_dmarc.mail.shop.example"}, {Name: dmarcName, TXT: []string{"v=DMARC1; p=reject; sp=quarantine"}},
 	}})
 	assert.Equal(t, "quarantine", pol.policy)
+}
+
+func TestMerchantDomainWords(t *testing.T) {
+	assert.Equal(t, "signed by mail.shop.example, the merchant's own domain (apex shop.example)", domainWords("mail.shop.example", "shop.example"))
+	assert.Equal(t, "signed by mailer.example; the merchant's domain (apex) is shop.example: not the same organization", domainWords("mailer.example", "shop.example"))
+	assert.Equal(t, "no signature passed; the merchant's domain (apex) is shop.example", domainWords("", "shop.example"))
 }

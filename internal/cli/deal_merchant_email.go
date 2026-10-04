@@ -3,7 +3,9 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -869,6 +871,62 @@ type dealMerchantRow struct {
 	CancelBy      string   `json:"cancel_by,omitempty"`
 	Items         []string `json:"items,omitempty"`
 	KeySource     string   `json:"key_source"`
+	// KeySize is the merchant key the verdict rests on ("RSA 2048-bit",
+	// "Ed25519"); SigningDomain is the domain whose signature passed, and
+	// MerchantApex the sender's organizational domain. Domains says how the
+	// two compare, in words.
+	KeySize       string `json:"key_size,omitempty"`
+	SigningDomain string `json:"signing_domain,omitempty"`
+	MerchantApex  string `json:"merchant_apex,omitempty"`
+	Domains       string `json:"domains,omitempty"`
+}
+
+// keySize names the sealed key the passing signature from signer used.
+func (m *merchantEmail) keySize(signer string) string {
+	if signer == "" {
+		return ""
+	}
+	for _, k := range m.Keys {
+		if !strings.HasSuffix(k.Name, "._domainkey."+signer) || len(k.TXT) == 0 {
+			continue
+		}
+		tags := dmarcTags(strings.Join(k.TXT, ""))
+		der, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(tags["p"]), ""))
+		if err != nil || len(der) == 0 {
+			continue
+		}
+		if strings.EqualFold(tags["k"], "ed25519") {
+			return "Ed25519"
+		}
+		pub, err := x509.ParsePKIXPublicKey(der)
+		if err != nil {
+			if rk, perr := x509.ParsePKCS1PublicKey(der); perr == nil {
+				pub = rk
+			}
+		}
+		if rk, ok := pub.(*rsa.PublicKey); ok {
+			size := fmt.Sprintf("RSA %d-bit", rk.N.BitLen())
+			if rk.N.BitLen() < 2048 {
+				size += " (shorter than the 2048 bits now recommended)"
+			}
+			return size
+		}
+	}
+	return ""
+}
+
+// domainWords compares the signing domain with the merchant's apex domain.
+func domainWords(signer, apex string) string {
+	switch {
+	case signer == "" && apex == "":
+		return ""
+	case signer == "":
+		return "no signature passed; the merchant's domain (apex) is " + apex
+	case orgDomain(signer) == apex:
+		return "signed by " + signer + ", the merchant's own domain (apex " + apex + ")"
+	default:
+		return "signed by " + signer + "; the merchant's domain (apex) is " + apex + ": not the same organization"
+	}
 }
 
 // approvedAmount is what the user approved, from our own sealed steps: the
@@ -945,7 +1003,13 @@ func merchantReport(events []sealedEvent, state dealState) ([]dealMerchantRow, [
 		row := dealMerchantRow{
 			Steps: []string{se.CapsuleID}, OrderID: p.OrderID, Verified: m.DKIM.Result == "pass" && m.DKIM.Merchant,
 			MerchantSays: emailVerdictWords(m.DKIM), WeSay: ourSealWords, CancelBy: p.CancelBy, KeySource: m.KeySource,
+			SigningDomain: m.DKIM.signer(),
 		}
+		if m.DKIM.FromDomain != "" {
+			row.MerchantApex = orgDomain(m.DKIM.FromDomain)
+		}
+		row.KeySize = m.keySize(row.SigningDomain)
+		row.Domains = domainWords(row.SigningDomain, row.MerchantApex)
 		unconfirmed := ""
 		if !row.Verified {
 			unconfirmed = " (this copy is not confirmed by the merchant's signature)"

@@ -171,6 +171,8 @@
       row("Charged on (the email's date)", m.charged_on);
       row("Cancel by (read from the email)", m.cancel_by);
       row("Items (read from the email)", (m.items || []).join(" · "));
+      row("Signing domain", m.domains);
+      row("Merchant's key", m.key_size ? `${m.key_size}, sealed when the email was sealed` : "");
       d.append(table, steps(m.steps || []));
       host.append(d);
     });
