@@ -275,3 +275,51 @@ func TestDealProfileHasNoBook(t *testing.T) {
 	defer func() { require.NoError(t, target.close()) }()
 	assert.Nil(t, target.book)
 }
+
+// A deal with a merchant's own email (addressed To a display name) can be
+// shared as a link: the counterparty's link carries the shareable order id
+// and none of the customer's name, email, code or card.
+func TestDealPermalinkCarriesTheShareableOrderID(t *testing.T) {
+	dealFixture(t)
+	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})
+	dealID := openMerchantDeal(t)
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--email", filepath.Join(merchantFixture, "confirmation.eml"))
+
+	out, err := invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--share", "counterparty", "--to", "the shop", "--max-fragment", "0")
+	require.NoError(t, err, out)
+	var result map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &result))
+	b, _ := linkBundle(t, result["permalink"].(string))
+	decoded, err := json.Marshal(b)
+	require.NoError(t, err)
+	content := strings.ToLower(string(decoded))
+	assert.Contains(t, string(decoded), "SE-104233", "the counterparty's link carries the merchant-confirmed order id")
+	for _, v := range []string{"Sam Customer", "sam.customer@mail.example", "orders@shop.example", "card ending 4242", "99812", "Customer"} {
+		assert.NotContains(t, content, strings.ToLower(v))
+	}
+	rows := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)["merchant"].([]any)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "SE-104233", rows[0].(map[string]any)["order_id"])
+
+	// The adjudicator's link carries no order id at all.
+	out, err = invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--share", "adjudicator", "--to", "the card issuer", "--max-fragment", "0")
+	require.NoError(t, err, out)
+	require.NoError(t, json.Unmarshal([]byte(out), &result))
+	b, _ = linkBundle(t, result["permalink"].(string))
+	decoded, err = json.Marshal(b)
+	require.NoError(t, err)
+	for _, v := range []string{"SE-104233", "104233", "Sam Customer", "sam.customer@mail.example"} {
+		assert.NotContains(t, strings.ToLower(string(decoded)), strings.ToLower(v))
+	}
+}
+
+// sameBundle refuses a link whose fragment is not the gated bundle.
+func TestPermalinkMustBeTheGatedBundle(t *testing.T) {
+	b := map[string]any{"a": "gated"}
+	fragment, err := aacbundle.EncodeFragment(map[string]any{"a": "something else"})
+	require.NoError(t, err)
+	assert.Error(t, sameBundle(defaultBundleURL+"#"+fragment, b))
+	fragment, err = aacbundle.EncodeFragment(b)
+	require.NoError(t, err)
+	assert.NoError(t, sameBundle(defaultBundleURL+"#"+fragment, b))
+}

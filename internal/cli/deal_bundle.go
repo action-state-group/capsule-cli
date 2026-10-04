@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/spf13/cobra"
 )
 
@@ -71,22 +73,27 @@ func dealBundleRun(c *cobra.Command, use string) error {
 			_, err = c.OutOrStdout().Write(append(encoded, '\n'))
 			return err
 		}
-		// What is handed over: the bundle file, or the link.
+		// The gate reads the shared bundle's JSON, with the audience's
+		// allow-list, before anything is on record or written.
+		if err = dealPageGate(encoded, events, dealShareableOrderIDs(events, audience)...); err != nil {
+			return err
+		}
+		// What is handed over: the bundle file, or the link. A link is only a
+		// re-encoding of that gated bundle: its fragment is decoded back and
+		// must be the same JCS bytes, so the link carries nothing the gate
+		// did not read. (The gate is not run on the link itself: there the
+		// allowed order id sits inside base64url, where it cannot be taken
+		// out before the gate decodes the run and finds it.)
 		shared := encoded
 		if use == "permalink" {
 			link, err := mintPermalink(c, b)
 			if err != nil {
 				return err
 			}
-			shared = []byte(link)
-		}
-		// The gate reads the final bytes and the bundle they carry, before
-		// anything is on record or written.
-		allowed := dealShareableOrderIDs(events, audience)
-		for _, bytes := range [][]byte{shared, encoded} {
-			if err = dealPageGate(bytes, events, allowed...); err != nil {
+			if err = sameBundle(link, b); err != nil {
 				return err
 			}
+			shared = []byte(link)
 		}
 		share, err := s.recordShare(ctx, dealID, b, audience, recipient, shared)
 		if err != nil {
@@ -100,6 +107,31 @@ func dealBundleRun(c *cobra.Command, use string) error {
 		}
 		return output(c, map[string]any{"deal_id": dealID, "bundle": out, "share": share})
 	})
+}
+
+// sameBundle checks that the link's fragment decodes to exactly the bundle,
+// compared as JCS bytes.
+func sameBundle(link string, b map[string]interface{}) error {
+	_, fragment, ok := strings.Cut(link, "#")
+	if !ok {
+		return errors.New("permalink has no fragment")
+	}
+	decoded, err := aacbundle.DecodeFragment(fragment)
+	if err != nil {
+		return err
+	}
+	want, err := canonical.JCS(b)
+	if err != nil {
+		return err
+	}
+	got, err := canonical.JCS(decoded)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(want, got) {
+		return errors.New("permalink fragment is not the gated bundle; nothing was put on record")
+	}
+	return nil
 }
 
 // mintPermalink encodes a bundle into a viewer link, refusing one too large
