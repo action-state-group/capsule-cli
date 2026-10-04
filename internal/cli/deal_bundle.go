@@ -75,7 +75,7 @@ func dealBundleRun(c *cobra.Command, use string) error {
 		}
 		// The gate reads the shared bundle's JSON, with the audience's
 		// allow-list, before anything is on record or written.
-		if err = dealPageGate(encoded, events, dealShareableOrderIDs(events, audience)...); err != nil {
+		if err = dealShareGate(encoded, events, audience); err != nil {
 			return err
 		}
 		// What is handed over: the bundle file, or the link. A link is only a
