@@ -800,7 +800,8 @@ def regen(pack_path: Path | None):
     c = add("claim", "claim", {"text": "has 2 jet skis available Saturday", "source": "counterparty"})
     add("evidence", "evidence", {"source": "listing_photo", "verified": False}, refs=[("about", c)])
     add("intent", "intent", {"verbatim_commitment": com["intent-2"], "allowed": ["pay", "share_contact"]})
-    k1 = add("check-share-contact", "check", {"action": "share_contact", "pack_id": pack_id,
+    k1 = add("check-share-contact", "check", {"action": "share_contact", "disclosing": ["phone"],
+                                              "disclosing_to": "counterparty", "pack_id": pack_id,
                                               **({"pack_digest": pack_digest} if pack_digest else {})})
     v1 = add("verdict-pass", "verdict", {"result": "pass", "pack_id": pack_id, "differences": [], "options": [],
                                          "judge": {"kind": "rules"}}, refs=[("checks", k1)])

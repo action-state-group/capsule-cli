@@ -31,7 +31,7 @@
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "99c936e70a24e98f3a4a90c7f516efc672ab65370e16a7bc7d73eba26171e9a9"
+        "digest": "607870d2b47d912f7b0e044395967ad564fdc40a1614ce1808ec7443bbf71b57"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -50,7 +50,7 @@
           "rel": "authorized_by",
           "type": "deal-record",
           "digest_alg": "SHA-256",
-          "digest": "01e184081e8aca797918492a2e0549d974ed5499c546291fbc872a02d85cd2c4"
+          "digest": "6bf2137f55088719de3efbbf9fa75ad88307536f08533d16251714aea2c7099b"
         }
       ]
     },
