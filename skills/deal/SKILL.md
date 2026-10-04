@@ -124,6 +124,8 @@ return is a date passing, not something you do.
    close.
 5. `deal close` refuses while a cancel-by date is open, because it would end
    the record that holds the date. Close with `"status": "pending"` meanwhile.
+6. Each obligation records one cancel-by date. A recurring renewal after that
+   date is not tracked; seal a new obligation for each later date.
 
 ### Cancellation (proving "I cancelled")
 

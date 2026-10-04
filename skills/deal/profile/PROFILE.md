@@ -101,7 +101,7 @@ Field details:
   last day to cancel), optional `takes_effect`, `amount_minor` + `currency`, `period` (`week` |
   `month` | `year` | `once`) and `terms_commitment` (to the merchant's own wording, kept on the
   device). The evidence record's `source` says where it came from (`merchant_email`,
-  `page_snapshot`). Recorded, never enforced.
+  `page_snapshot`). Recorded, never enforced. Each obligation records one cancel-by date. A recurring renewal after that date is not tracked; seal a new obligation for each later date.
 - **merchant_email** (on `evidence`, optional): a merchant's DKIM-signed email, kept raw on the
   device. `message_digest` (SHA-256 of the exact RFC 822 bytes), `key_records_digest` (SHA-256
   of the JCS array of `{"name","txt"}` key records captured when the email was sealed),
