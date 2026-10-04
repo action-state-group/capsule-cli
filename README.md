@@ -12,6 +12,13 @@ Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
 darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
 The current release is the pre-release `v0.1.0-rc2`; there is no final `v0.1.0`
 yet, so GitHub's "latest release" link does not resolve.
+Releases after `v0.1.0-rc2` also carry a GitHub build provenance attestation
+for each binary (Sigstore, keyless: there is no release key to hold or
+leak). It shows the file was built by this repository's release workflow
+from the tagged commit; checking it means trusting GitHub's build attestation
+for this repository. With the GitHub CLI:
+`gh attestation verify capsulectl-$V-$OS-$ARCH --repo action-state-group/capsule-cli --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml`.
+`v0.1.0-rc2` and earlier have `SHA256SUMS` only.
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
 `modernc.org/sqlite`), so they need no system libraries.
 
