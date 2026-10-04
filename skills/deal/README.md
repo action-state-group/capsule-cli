@@ -40,7 +40,8 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal note --kind intent --input FILE` | Seals a change to what the user asked or allowed. |
 | `deal note --kind evidence --email FILE [--key-record FILE]` | Seals a merchant's own email (raw RFC 822, headers intact) with the DKIM key records read from DNS at that moment, checks the signature, and cuts a checkpoint. See [The merchant's own email](#the-merchants-own-email). |
 | `deal note --kind evidence --input FILE` with `obligation` | Seals a cancel-by date (a trial that becomes paid, a renewal, the end of free cancellation, a payment on a date) with its source: the merchant's email (with `--email`) or a page snapshot. Cuts a checkpoint. |
-| `deal deadlines [--deal ID] [--ics FILE] [--remind-days N] [--all]` | Lists open cancel-by dates, for one deal or every deal in the profile, as JSON; `--ics` also writes them as a calendar file with reminders for the host's scheduler. Records, never enforces. |
+| `deal deadlines [--deal ID] [--ics FILE] [--remind-days N] [--all]` | Lists open cancel-by dates (on an open deal, or CARRIED AT CLOSE on a closed one) and open deals against their expected close date, for one deal or every deal in the profile, as JSON; `--all` adds resolved, cancel-sealed and passed dates; `--ics` also writes the open ones as a calendar file with reminders for the host's scheduler. Records, never enforces. |
+| `deal close --carry-open-obligations` | Closes a deal whose cancel-by date is still open: the close seals the open dates, and they stay open after it. |
 | `deal verify-email [--step N] [--email FILE]` | Re-checks a sealed merchant email offline, against the key records sealed with it. `--email` checks another copy, which must match the sealed bytes. Exit 1 when it does not verify. |
 | `bundle --deal ID [--out FILE]` | The deal's Evidence Bundle, your own copy: the same file as `deal report --bundle` (the whole deal from its own log, `deal/<deal_id>`, with its cadence chain and any witness receipt held). Nothing withheld, nothing on record. |
 | `disclose --deal ID --share counterparty\|adjudicator --to WHO --out FILE` | A bundle file for someone else: a share, exactly as `deal report --share` (see [Sharing a copy](#sharing-a-copy)). The copy withholds what that reader may not see, the final bytes pass the share gate, and the share is on record on `deal/<deal_id>/disclosures` before the file is written. A deal is not shared as a link: `permalink --deal` refuses and names the report file to hand over instead. |
@@ -559,6 +560,46 @@ The order number, total, cancel-by date and items are read by
 merchant-agnostic heuristics and may be misread; the report labels them as
 read from the email. The merchant's signature covers the bytes, not this
 reading of them.
+
+## Closing a deal, and records that arrive later
+
+A deal is closed when it reaches its point of resolution (a parcel at
+delivery, a flight at ticketing, a stay after the stay, a rental when it is
+returned, a service when the work is done), and evidence that arrives after
+that is linked to the closed deal instead of holding it open.
+
+- **Linked, not appended.** A record sealed after a deal's final close is a
+  new evidence record whose Capsule chains to the close with the registered
+  `chain.relation` `confirms` (agent-action-capsule REGISTRY.md §6:
+  non-terminal; it records an outcome of the parent, whose state stands).
+  Ordinary steps keep `follows`, which is ordering only: verifiers must not
+  read it as confirming anything, so a late record never uses it. The record
+  also commits to the close record's digest, not only its id, so it cannot be
+  reattached to another deal. It shows that whoever sealed it held that deal;
+  it does not show the deal expected it. A closed deal takes nothing else.
+- **Closing is proposed, not remembered.** Every deal carries an expected
+  close date (`expect_close_by`, sealed in the baseline; by default 14 days
+  for a purchase, 1 for a booking, 7 for a rental, 30 for a service).
+  `deal deadlines` lists open deals against it under `open_deals`, and
+  `--ics` adds a "Close deal …?" reminder, so the host's scheduler surfaces a
+  deal nobody closed.
+- **The receipt shows the chain, or says it may be incomplete.** Every
+  receipt (page, email, JSON, and shared copies, in fixed words) says whether
+  the deal is open or closed, lists the records linked after the close, and
+  says that more can be linked after it was made and how to see them (make a
+  new report). A deal never closed reads "Open: no close is sealed on this
+  deal", with its expected date and, once that has passed, "which has passed
+  (as of …)".
+- **Carried cancel-by dates.** `deal close` still refuses while a cancel-by
+  date is open. `--carry-open-obligations` closes anyway: the close record
+  seals the open dates (`carried_obligations`), and they stay open after the
+  close, listed as CARRIED AT CLOSE (in `deal deadlines`, and in the title of
+  their calendar event, with the deal's id). A later record that confirms the
+  close resolves one (`resolves_step`); otherwise, once the date passes, it
+  reads "The date passed (as of …). No cancellation confirmation is sealed on
+  this deal." "Passed" is computed when the listing or receipt is made, never
+  sealed, and every receipt states what the deal holds, never what anyone did
+  or did not do.
 
 ## Cancel-by dates and proving a cancellation
 

@@ -67,6 +67,8 @@ var dealShareKeys = map[string]bool{
 	// where the keys came from, and dates.
 	"key_source": true, "dkim": true, "dmarc_policy": true, "dmarc_source": true, "method": true,
 	"cancel_by": true, "sent_at": true,
+	// When the deal is expected to close: a date.
+	"expect_close_by": true,
 }
 
 // The adjudicator's copy adds claim text and sources.
@@ -1061,8 +1063,20 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 		"deal_id": events[0].Event.DealID, "scope": dealScopeLine, "audience": audience, "withheld": withheld, "steps": steps,
 		"asked_step": report.AskedStep, "did": items(report.Did, false), "anomalies": items(report.Anomalies, true),
 		"merchant": merchant, "email_scope": emailScopeLine,
-		"told": scrubTold(toldItems(report.Told, false), p),
+		"told":      scrubTold(toldItems(report.Told, false), p),
+		"lifecycle": shareLifecycle(buildDealLifecycle(events, dealClock())),
 	}
+}
+
+// shareLifecycle is where the deal stands, for a shared copy: the state,
+// the counts and when, in fixed words; a linked record's own line (which can
+// name the merchant) stays in your copy.
+func shareLifecycle(l dealLifecycle) map[string]interface{} {
+	later := make([]interface{}, len(l.Later))
+	for i, r := range l.Later {
+		later[i] = map[string]interface{}{"at": r.At, "relation": r.Relation, "capsule_id": r.CapsuleID, "text": "a record sealed after the close"}
+	}
+	return map[string]interface{}{"state": l.State, "as_of": l.AsOf, "text": l.Text, "later": later, "may_change": l.MayChange}
 }
 
 // dealVerifyCommand is the one command a stranger runs to check the file

@@ -70,7 +70,7 @@ func TestDealCancelByDateAndCancellationProof(t *testing.T) {
 	assert.Equal(t, "2026-10-13", ds[0].(map[string]any)["remind_on"])
 	cal, err := os.ReadFile(ics)
 	require.NoError(t, err)
-	for _, want := range []string{"BEGIN:VCALENDAR", "DTSTART;VALUE=DATE:20261016", "TRIGGER;RELATED=START:-P3D", "SUMMARY:Last day to cancel: the trial becomes paid ($24.00/month) on 2026-10-17 unless cancelled by 2026-10-16", "we do not enforce it"} {
+	for _, want := range []string{"BEGIN:VCALENDAR", "DTSTART;VALUE=DATE:20261016", "TRIGGER;RELATED=START:-P3D", "SUMMARY:Last day to cancel (" + dealID + "): the trial becomes paid ($24.00/month) on 2026-10-17 unless cancelled by 2026-10-16", "we do not enforce it"} {
 		assert.Contains(t, string(cal), want)
 	}
 

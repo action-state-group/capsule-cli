@@ -64,7 +64,7 @@ exactly two members.
 A **digest ref** is `{"type": "deal-record", "digest_alg": "SHA-256", "digest": <64 lowercase
 hex>}`: the typed digest reference shape AAC `references[]` uses. The digest alone is the
 identity. A **rel ref** is a digest ref plus `rel` (one of `about`, `source`, `checks`,
-`approves`, `authorized_by`, `observes`, `outcome`).
+`approves`, `authorized_by`, `observes`, `outcome`, `confirms`).
 
 `counterparty.ids` on a record states the identifiers observed or asserted *at that record*.
 On the baseline they are first contact. Every later check compares against first contact,
@@ -80,14 +80,14 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | `intent` | The user restates or widens the ask (for example, now allowing `share_contact`). Replaces `allowed` / `max_total_minor` / `asked` from here on. | `verbatim_commitment` | `baseline_ref`, `prev`. |
 | `message` | One message in the thread. The text stays local. | `from` (`counterparty`\|`user`\|`agent`), `content_commitment` | `channel`. `counterparty` when the message shows identifiers (for example, a new phone number). |
 | `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text` (≤ 200 chars, no identifiers), `source` | none beyond the chain. |
-| `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. |
+| `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). After the deal's final close, the only record type allowed: later evidence linked to that close. | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. At most one `confirms` → the deal's final `close` (required after it, not allowed before it). Optional `resolves_obligation` (a digest ref) → an earlier record holding a cancel-by date. |
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
 | `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`), `pack_id` | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor`, `currency`, `seen_item`, `terms`, `recourse`, `pack_digest`, and for a share `disclosing` (the classes about to be given, as for a `disclosure`) with `disclosing_to` (`counterparty`\|`other`). |
 | `verdict` | The answer to one check: pass, or pause with the differences. | `result` (`pass`\|`pause`), `pack_id`, `differences[]`, `options[]` | exactly one `checks` → a `check`; one verdict per check; `pack_id` equal to the check's. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. |
 | `approval` | What authorizes, or declines, the next step. | `choice` (`hold`\|`verify_contact`\|`proceed`), `proceed` (= `choice == "proceed"`), `approver` (`user`\|`standing_intent`) | exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment`, and on a pause the choice is one of the verdict's options. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
 | `action` | A point-of-no-return step actually taken. | `action` | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). |
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. |
-| `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. |
+| `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. Optional `carried_obligations`: the cancel-by dates still open at the close, each `{obligation: digest ref, cancel_by}`. |
 | `disclosure` | Something the agent told someone about the user: what kind of thing, to whom, when, under what authority. | `to` (`counterparty`\|`other`), `fields[]` (each `class` + `value_commitment`), `authority` (`approval`\|`none`) | `authority: approval` ⇒ exactly one `authorized_by` → an `approval`, under the same rules as an `action` (section 6); `none` ⇒ no `authorized_by`, and `rule` says why. All `fields` share one covering action: contact classes `share_contact`, credential classes `share_credentials`. Optional `channel`; `counterparty` when the recipient is someone new. |
 
 Field details:
@@ -98,6 +98,15 @@ Field details:
 - **terms**: `item`, `quantity`, `price_minor`, `deposit_minor`, `currency`, `when`, `place`,
   `conditions` (token → string). `place` is a locality ("lakeside marina"), never a street
   address.
+- **expect_close_by** (on `baseline`, optional): the day the deal is expected to close
+  (YYYY-MM-DD). capsulectl seals one on every deal (by default 14 days for a purchase, 1 for a
+  booking, 7 for a rental, 30 for a service) so an open deal can be listed against it.
+- **Late records.** A record sealed after a final close is an `evidence` record whose Capsule
+  chains to the close with the registered `chain.relation` `confirms` (non-terminal: it records
+  an outcome of the close, whose state stands), never `follows` (ordering only), and whose
+  `confirms` ref commits to the close record's digest, so it cannot be reattached to another
+  deal. It shows that whoever sealed it held that deal; it does not show the deal expected it.
+  `supersedes` (terminal) is not emitted: an expiry is computed when a receipt is made.
 - **obligation** (on `evidence`, optional): a commitment that takes effect when a date passes.
   `kind` (`trial_conversion` | `renewal` | `cancel_window` | `payment_due`), `cancel_by` (the
   last day to cancel), optional `takes_effect`, `amount_minor` + `currency`, `period` (`week` |
@@ -263,8 +272,10 @@ A verifier holding one deal's records in `seq` order checks:
    present, empty `allowed` allows nothing. A pause always needs the user's own answer.
 7. **Close.** `close` references the latest `outcome` (if any), and its `outcome` equals that
    outcome's. Without an outcome record, the close is `open`. `unchecked_actions` equals the
-   number of `unchecked_action` outcomes. A close with `completed` or `mismatch` is terminal. A
-   close with `open` MAY be followed by later `outcome` and `close` records.
+   number of `unchecked_action` outcomes. A close with `completed` or `mismatch` is terminal:
+   after it, only `evidence` records that `confirms` that close may follow. A close with `open`
+   MAY be followed by later `outcome` and `close` records. Each `carried_obligations` entry names
+   an earlier record holding that `cancel_by`.
 
 ## 7. Outcome conventions: `completed | mismatch | open`
 

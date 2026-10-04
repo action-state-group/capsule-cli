@@ -82,6 +82,10 @@ type dealOpen struct {
 	Recourse dealRecourse `json:"recourse"`
 	// Skill is set by `deal open --skill`, never from the input file.
 	Skill *dealSkill `json:"skill,omitempty"`
+	// ExpectCloseBy is the day this deal is expected to be closed
+	// (YYYY-MM-DD); the default depends on the deal type (deal_late.go).
+	// `deal deadlines` lists an open deal against it.
+	ExpectCloseBy string `json:"expect_close_by,omitempty"`
 }
 
 type dealMessage struct {
@@ -102,6 +106,10 @@ type dealEvidence struct {
 	// Obligation is a commitment that takes effect when a date passes
 	// (deal_obligation.go), recorded with this evidence as its source.
 	Obligation *dealObligation `json:"obligation,omitempty"`
+	// Resolves names the obligation step this evidence proves resolved
+	// (its capsule id; ResolvesStep, its step number, is accepted on input).
+	Resolves     string `json:"resolves,omitempty"`
+	ResolvesStep int64  `json:"resolves_step,omitempty"`
 }
 
 // dealChange is a detail the counterparty changed after first contact. It is
@@ -277,6 +285,9 @@ type dealCloseResult struct {
 	Outcome          string           `json:"outcome"`
 	Differences      []dealDifference `json:"differences"`
 	UncheckedActions int              `json:"unchecked_actions"`
+	// Carried are the cancel-by obligations still open when the deal was
+	// closed with --carry-open-obligations: they stay open after the close.
+	Carried []dealCarried `json:"carried,omitempty"`
 }
 
 // dealEvent is one step as the local store keeps it, with raw values. Exactly
@@ -303,8 +314,13 @@ type dealEvent struct {
 	Outcome  *dealCloseResult `json:"outcome,omitempty"`
 	Close    *dealCloseResult `json:"close,omitempty"`
 	// Disclosure is something the agent told someone about the user.
-	Disclosure *dealDisclosure   `json:"disclosure,omitempty"`
-	Nonces     map[string]string `json:"nonces,omitempty"`
+	Disclosure *dealDisclosure `json:"disclosure,omitempty"`
+	// Confirms is set on a record sealed after the deal was closed: the
+	// capsule id of that close. Its Capsule chains to the close with the
+	// registered relation `confirms`, never `follows`, and its record
+	// commits to the close record's digest.
+	Confirms string            `json:"confirms,omitempty"`
+	Nonces   map[string]string `json:"nonces,omitempty"`
 	// Producer is the capsulectl build that sealed the step, kept with the
 	// step so that a later build re-derives the same record.
 	Producer *dealProducer `json:"producer,omitempty"`
@@ -1017,6 +1033,11 @@ func trailLine(e dealEvent) string {
 	case "claim":
 		return "claim recorded (" + e.Claim.Source + "): " + e.Claim.Text
 	case "evidence":
+		if e.Confirms != "" {
+			c := e
+			c.Confirms = ""
+			return "after the close (confirms it): " + trailLine(c)
+		}
 		line := ""
 		if m := e.Evidence.Email; m != nil {
 			line = "merchant's email sealed; " + emailVerdictWords(m.DKIM)

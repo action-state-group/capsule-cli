@@ -74,7 +74,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["rel", "type", "digest_alg", "digest"],
       "properties": {
-        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome"] },
+        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome", "confirms"] },
         "type": { "const": "deal-record" },
         "digest_alg": { "const": "SHA-256" },
         "digest": { "$ref": "#/$defs/hex64" }
@@ -174,7 +174,8 @@
             "skill_md_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
             "other_copies": { "type": "integer", "minimum": 0 }
           }
-        }
+        },
+        "expect_close_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
       }
     },
     "body_intent": {
@@ -205,7 +206,8 @@
         "detail_commitment": { "$ref": "#/$defs/hex64" },
         "counterparty_facts": { "$ref": "#/$defs/counterparty_facts" },
         "merchant_email": { "$ref": "#/$defs/merchant_email" },
-        "obligation": { "$ref": "#/$defs/obligation" }
+        "obligation": { "$ref": "#/$defs/obligation" },
+        "resolves_obligation": { "$ref": "#/$defs/digest_ref" }
       }
     },
     "obligation": {
@@ -389,7 +391,18 @@
       "properties": {
         "outcome": { "$ref": "#/$defs/outcome_value" },
         "unchecked_actions": { "$ref": "#/$defs/safe_uint" },
-        "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } }
+        "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
+        "carried_obligations": {
+          "description": "Cancel-by obligations still open at the close, carried by it: they stay open after the close until a later record that confirms the close resolves them, or the date passes.",
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["obligation", "cancel_by"],
+            "properties": {
+              "obligation": { "$ref": "#/$defs/digest_ref" },
+              "cancel_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+            }
+          }
+        }
       }
     }
   }

@@ -442,6 +442,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if o.Who.DomainAgeDays != nil {
 			body["counterparty_facts"] = map[string]interface{}{"domain_age_days": *o.Who.DomainAgeDays}
 		}
+		if o.ExpectCloseBy != "" {
+			body["expect_close_by"] = o.ExpectCloseBy
+		}
 	case "intent":
 		rtype = "intent"
 		if body, err = intentBody(*ev.Intent, commit); err != nil {
@@ -468,7 +471,16 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				about = se.Digest
 			}
 		}
-		block["refs"] = []interface{}{relRef("about", about)}
+		refs := []interface{}{relRef("about", about)}
+		if ev.Confirms != "" {
+			// Committed to the closed deal's digest, not only its id: this
+			// record cannot be reattached to another deal.
+			refs = append(refs, relRef("confirms", digestOf(ev.Confirms)))
+		}
+		block["refs"] = refs
+		if ev.Evidence.Resolves != "" {
+			body["resolves_obligation"] = digestRef(digestOf(ev.Evidence.Resolves))
+		}
 		body["source"] = ev.Evidence.Source
 		body["verified"] = ev.Evidence.Verified
 		if ev.Evidence.Detail != "" {
@@ -723,6 +735,13 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		body = map[string]interface{}{"outcome": cl.Outcome, "unchecked_actions": cl.UncheckedActions}
 		if len(cl.Differences) > 0 {
 			body["differences"] = differencesBody(cl.Differences)
+		}
+		if len(cl.Carried) > 0 {
+			carried := make([]interface{}, len(cl.Carried))
+			for i, c := range cl.Carried {
+				carried[i] = map[string]interface{}{"obligation": digestRef(digestOf(c.CapsuleID)), "cancel_by": c.CancelBy}
+			}
+			body["carried_obligations"] = carried
 		}
 	default:
 		return nil, inputError("unknown step kind " + ev.Kind)

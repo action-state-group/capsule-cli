@@ -172,10 +172,54 @@ return is a date passing, not something you do.
    open dates as JSON. Run nothing in the background yourself.
 4. Every `deal check` lists the deal's `open_deadlines`. Mention any that are
    close.
-5. `deal close` refuses while a cancel-by date is open, because it would end
-   the record that holds the date. Close with `"status": "pending"` meanwhile.
+5. `deal close` refuses while a cancel-by date is open, and says why. When
+   the deal is otherwise done (the order arrived, the subscription started),
+   close it with `--carry-open-obligations`: the close seals the open dates,
+   and they stay open after the close. `deal deadlines` and every receipt list
+   each as CARRIED AT CLOSE, with its deal, until a later record resolves it
+   (step 5 of "Cancellation") or the date passes, when it reads "date
+   passed" with what the deal holds, as of when the listing or receipt was
+   made.
 6. Each obligation records one cancel-by date. A recurring renewal after that
    date is not tracked; seal a new obligation for each later date.
+
+### Closing a deal, and evidence that arrives later
+
+Close a deal when it reaches its point of resolution, and link anything
+that arrives after that to the closed deal. Do not hold a deal open waiting
+for every later email.
+
+| Deal | Close it |
+|---|---|
+| A purchase of something shipped | at delivery |
+| A purchase delivered at once (a download, a ticket) | at payment |
+| A booking: a flight, a table, a ticket | at confirmation or ticketing |
+| A booking: a stay | after the stay |
+| A rental | when the item is returned |
+| A service | when the work is done |
+
+1. Every deal is opened with an expected close date (`expect_close_by`; by
+   default 14 days for a purchase, 1 for a booking, 7 for a rental, 30 for a
+   service). Set it when you know better, for example the delivery estimate.
+2. `deal deadlines` lists every open deal under `open_deals`, against that
+   date, and `--ics` puts a "Close deal …?" reminder on it. When you see a
+   deal there that is done, close it. Nobody has to remember it.
+3. Evidence that arrives after the close (the merchant's confirmation, a
+   shipping notice, a refund) is sealed on the closed deal as usual, as soon
+   as it arrives:
+
+   ```sh
+   capsulectl --profile deal deal note --deal ID --kind evidence --email late.eml
+   ```
+
+   A closed deal takes later evidence only. It is linked to the close (it
+   *confirms* the close) and commits to the closed deal, so it cannot be
+   moved to another deal. Anything else needs a new deal.
+4. Every receipt says whether the deal is open or closed, lists the records
+   linked after the close, and says that more may be linked after it was
+   made. A deal that was never closed reads "Open: no close is sealed on this
+   deal", with its expected date. Pass that on as written; it is not a sign
+   that anything went wrong.
 
 ### Cancellation (proving "I cancelled")
 
@@ -193,6 +237,16 @@ merchant's word when the merchant's own email says so.
    shown (a cancel recorded at a time, whether that was before the cancel-by
    date, and whether the merchant's own signed email confirms it) and what is
    not (that no later charge will come). Pass both lists on as written.
+5. On a deal closed with the date carried, a cancel cannot be sealed as a
+   step (a closed deal takes later evidence only). Seal the merchant's
+   cancellation email and name the date it resolves, by its step number:
+
+   ```sh
+   capsulectl --profile deal deal note --deal ID --kind evidence --email cancelled.eml \
+     --input r.json   # {"about":"the trial","source":"merchant_email","resolves_step":6}
+   ```
+
+   The date then reads RESOLVED and leaves the open list.
 
 ## Sub-tasks
 
