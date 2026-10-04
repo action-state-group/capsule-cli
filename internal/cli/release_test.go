@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
@@ -115,6 +116,7 @@ func relMintReceipt(t *testing.T, entry []byte, key ed25519.PrivateKey) []byte {
 
 // relGitHub serves tags, tag objects, releases and asset downloads.
 type relGitHub struct {
+	pageSize int // when set, lists are served in pages linked by rel="next"
 	tags     []map[string]any
 	refs     map[string]map[string]any
 	tagObjs  map[string]map[string]any
@@ -133,9 +135,32 @@ func (g *relGitHub) handler() http.Handler {
 			}
 			_ = json.NewEncoder(rw).Encode(v)
 		}
+		list := func(items []map[string]any) {
+			if g.pageSize == 0 {
+				write(items, true)
+				return
+			}
+			page := 0
+			_, _ = fmt.Sscan(r.URL.Query().Get("page"), &page)
+			start := page * g.pageSize
+			end := start + g.pageSize
+			if start > len(items) {
+				start = len(items)
+			}
+			if end >= len(items) {
+				end = len(items)
+			} else {
+				next := *r.URL
+				q := next.Query()
+				q.Set("page", fmt.Sprint(page+1))
+				next.RawQuery = q.Encode()
+				rw.Header().Set("Link", `<http://`+r.Host+next.String()+`>; rel="next", <http://`+r.Host+`/last>; rel="last"`)
+			}
+			write(items[start:end], true)
+		}
 		switch {
 		case strings.HasSuffix(p, "/tags") && !strings.Contains(p, "/git/"):
-			write(g.tags, true)
+			list(g.tags)
 		case strings.Contains(p, "/git/ref/tags/"):
 			v, ok := g.refs[last]
 			write(v, ok)
@@ -143,7 +168,7 @@ func (g *relGitHub) handler() http.Handler {
 			v, ok := g.tagObjs[last]
 			write(v, ok)
 		case strings.HasSuffix(p, "/releases"):
-			write(g.releases, true)
+			list(g.releases)
 		default:
 			if b, ok := g.files[p]; ok {
 				_, _ = rw.Write(b)
@@ -226,10 +251,16 @@ func newReleaseWorld(t *testing.T) *releaseWorld {
 // addTag adds an annotated tag, signed by signer when it is set.
 func (w *releaseWorld) addTag(t *testing.T, tag string, signer *relSSHSigner) {
 	t.Helper()
+	w.addTagAt(t, tag, signer, 0)
+}
+
+// addTagAt adds a tag whose signed tagger line carries unix time at.
+func (w *releaseWorld) addTagAt(t *testing.T, tag string, signer *relSSHSigner, at int64) {
+	t.Helper()
 	sha := fmt.Sprintf("%040x", len(w.gh.tags)+1)
 	w.gh.tags = append(w.gh.tags, map[string]any{"name": tag, "commit": map[string]any{"sha": w.commit}})
 	w.gh.refs[tag] = map[string]any{"object": map[string]any{"type": "tag", "sha": sha}}
-	payload := "object " + w.commit + "\ntype commit\ntag " + tag + "\ntagger M <m@example.org> 0 +0000\n\n" + tag + "\n"
+	payload := "object " + w.commit + "\ntype commit\ntag " + tag + "\ntagger M <m@example.org> " + fmt.Sprint(at) + " +0000\n\n" + tag + "\n"
 	verification := map[string]any{"signature": "", "payload": payload}
 	if signer != nil {
 		verification["signature"] = signer.sign(t, payload)
@@ -449,4 +480,105 @@ func TestReleaseWatchNeedsAllowedSigners(t *testing.T) {
 func TestReleaseRegisterNeedsTheTaggedCommit(t *testing.T) {
 	_, err := invoke(t, "", "release", "register", "--dir", t.TempDir(), "--tag", "v1.0.0", "--commit", "abc")
 	require.ErrorIs(t, err, ErrInput)
+}
+
+// A signed tag is a promise of a release: past the grace window, a tag with
+// no release (never published, or deleted) is an alarm.
+func TestReleaseWatchIntendedTagWithNoRelease(t *testing.T) {
+	saved := releaseNow
+	t.Cleanup(func() { releaseNow = saved })
+	tagged := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+
+	w := newReleaseWorld(t)
+	w.addTag(t, "v1.0.0", &w.signer)
+	w.addRelease(t, "v1.0.0", true)
+	w.addTagAt(t, "v1.1.0", &w.signer, tagged.Unix())
+
+	releaseNow = func() time.Time { return tagged.Add(90 * time.Minute) }
+	result, err := w.watch(t)
+	require.NoError(t, err, "within the grace window the release may still be building: %s", alarmsOf(result))
+
+	releaseNow = func() time.Time { return tagged.Add(3 * time.Hour) }
+	result, err = w.watch(t)
+	require.ErrorIs(t, err, ErrAlarm)
+	assert.Contains(t, alarmsOf(result), "intended tag v1.1.0 has no release (tagged 2026-10-04T12:00:00Z; grace 2h0m0s)")
+
+	result, err = w.watch(t, "--release-grace", "4h")
+	require.NoError(t, err, alarmsOf(result))
+
+	// A known exception is not expected to have a release.
+	w.gh.tags = w.gh.tags[:1]
+	w.addTagAt(t, "v0.1.0-rc5", nil, tagged.Unix())
+	result, err = w.watch(t, "--known-unsigned", "v0.1.0-rc5")
+	require.NoError(t, err, alarmsOf(result))
+}
+
+// Tags and releases are read across every page; past the page limit the
+// monitor refuses rather than check a partial list.
+func TestReleaseWatchFollowsEveryPage(t *testing.T) {
+	w := newReleaseWorld(t)
+	w.gh.pageSize = 1
+	for _, tag := range []string{"v1.0.0", "v1.1.0", "v1.2.0"} {
+		w.addTag(t, tag, &w.signer)
+		w.addRelease(t, tag, true)
+	}
+	result, err := w.watch(t)
+	require.NoError(t, err, alarmsOf(result))
+	assert.Equal(t, []any{"v1.0.0", "v1.1.0", "v1.2.0"}, result["releases_checked"])
+
+	// An unintended release on the last page is still seen.
+	w.addTag(t, "v6.6.6", nil)
+	w.addRelease(t, "v6.6.6", true)
+	result, err = w.watch(t)
+	require.ErrorIs(t, err, ErrAlarm)
+	assert.Contains(t, alarmsOf(result), "unintended release v6.6.6")
+
+	saved := releaseMaxPages
+	t.Cleanup(func() { releaseMaxPages = saved })
+	releaseMaxPages = 2
+	_, err = invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", w.witURL, "--witness-key", w.authHex, "--allowed-signers", w.signer.allowed)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrAlarm, "a partial list is a failure to check, not a verdict")
+}
+
+// The witness answers in one response; if it ever pages, or the answer is
+// cut off, the monitor fails closed.
+func TestReleaseWatchFailsClosedOnAPartialLog(t *testing.T) {
+	paged := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(rw).Encode(map[string]any{"entries": []any{}, "next_cursor": "abc"})
+	}))
+	t.Cleanup(paged.Close)
+	linked := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Link", `<`+"http://"+r.Host+`/more>; rel="next"`)
+		_ = json.NewEncoder(rw).Encode(map[string]any{"entries": []any{}})
+	}))
+	t.Cleanup(linked.Close)
+
+	for name, witness := range map[string]string{"a cursor": paged.URL, "a Link header": linked.URL} {
+		t.Run(name, func(t *testing.T) {
+			w := newReleaseWorld(t)
+			_, err := invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", witness, "--witness-key", w.authHex, "--allowed-signers", w.signer.allowed)
+			require.Error(t, err)
+			assert.NotErrorIs(t, err, ErrAlarm)
+		})
+	}
+	t.Run("an answer over the size limit", func(t *testing.T) {
+		w := newReleaseWorld(t)
+		w.addTag(t, "v1.0.0", &w.signer)
+		w.addRelease(t, "v1.0.0", true)
+		saved := releaseMaxListBody
+		t.Cleanup(func() { releaseMaxListBody = saved })
+		releaseMaxListBody = 64
+		_, err := invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", w.witURL, "--witness-key", w.authHex, "--allowed-signers", w.signer.allowed)
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrAlarm)
+		assert.ErrorContains(t, err, "refusing to check part of it", "refused for its size, not because a cut-off answer happened not to parse")
+	})
+}
+
+func TestNextLink(t *testing.T) {
+	assert.Equal(t, "https://api.github.com/x?page=2", nextLink(`<https://api.github.com/x?page=2>; rel="next", <https://api.github.com/x?page=9>; rel="last"`))
+	assert.Equal(t, "https://api.github.com/x?page=2", nextLink(`<https://api.github.com/x?page=1>; rel="prev", <https://api.github.com/x?page=2>; rel="next"`))
+	assert.Equal(t, "", nextLink(`<https://api.github.com/x?page=1>; rel="prev"`))
+	assert.Equal(t, "", nextLink(""))
 }

@@ -224,7 +224,18 @@ type releaseWatchConfig struct {
 	knownUnsigned               map[string]bool
 	authority                   ed25519.PublicKey
 	gh, trustedRoot             string
+	grace                       time.Duration
 }
+
+// releaseNow is the monitor's clock; a variable so tests can move it.
+var releaseNow = time.Now
+
+// Limits on what the monitor reads; past them it fails closed. Variables so
+// tests can reach them.
+var (
+	releaseMaxPages          = 50
+	releaseMaxListBody int64 = 16 << 20
+)
 
 // releaseAttestationCheck verifies that file's keyless attestation (bundle)
 // was made by the release workflow running at refs/tags/<tag> on commit. A
@@ -315,9 +326,49 @@ func releaseGetJSON(ctx context.Context, rawURL string, into any) error {
 }
 
 func releaseGetBytes(ctx context.Context, rawURL string) ([]byte, error) {
+	raw, _, err := releaseGet(ctx, rawURL, releaseMaxAsset)
+	return raw, err
+}
+
+// releaseGetAll reads every page of a GitHub list, following the Link
+// header's rel="next", and fails closed rather than check a partial list.
+func releaseGetAll[T any](ctx context.Context, rawURL string) ([]T, error) {
+	var all []T
+	for page := 0; rawURL != ""; page++ {
+		if page == releaseMaxPages {
+			return nil, fmt.Errorf("more than %d pages at %s: refusing to check a partial list", releaseMaxPages, rawURL)
+		}
+		raw, header, err := releaseGet(ctx, rawURL, releaseMaxListBody)
+		if err != nil {
+			return nil, err
+		}
+		var items []T
+		if err := json.Unmarshal(raw, &items); err != nil {
+			return nil, fmt.Errorf("GET %s: not a list", rawURL)
+		}
+		all = append(all, items...)
+		rawURL = nextLink(header.Get("Link"))
+	}
+	return all, nil
+}
+
+// nextLink is the rel="next" target of an RFC 8288 Link header, or "".
+func nextLink(link string) string {
+	for _, part := range strings.Split(link, ",") {
+		target, params, ok := strings.Cut(strings.TrimSpace(part), ";")
+		if ok && strings.Contains(strings.ReplaceAll(params, " ", ""), `rel="next"`) {
+			return strings.Trim(strings.TrimSpace(target), "<>")
+		}
+	}
+	return ""
+}
+
+// releaseGet reads at most limit bytes and fails, rather than truncate, on
+// a longer body.
+func releaseGet(ctx context.Context, rawURL string, limit int64) ([]byte, http.Header, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// A token only raises the rate limit; the monitor never needs one.
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" && strings.HasPrefix(rawURL, "https://api.github.com/") {
@@ -325,18 +376,25 @@ func releaseGetBytes(ctx context.Context, rawURL string) ([]byte, error) {
 	}
 	resp, err := releaseHTTP.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s: HTTP %d", rawURL, resp.StatusCode)
+		return nil, nil, fmt.Errorf("GET %s: HTTP %d", rawURL, resp.StatusCode)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, releaseMaxAsset))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, nil, err
+	}
+	if int64(len(raw)) > limit {
+		return nil, nil, fmt.Errorf("GET %s: the response is over %d bytes: refusing to check part of it", rawURL, limit)
+	}
+	return raw, resp.Header, nil
 }
 
 // tagSignedBy reports the allowed signer whose SSH signature verifies the
-// tag, or "" when the tag is unsigned or no allowed signer verifies it.
-func (cfg releaseWatchConfig) tagSignedBy(ctx context.Context, tag string) (string, string, error) {
+// tag, or "" and why not, and the tagger time from the signed tag object.
+func (cfg releaseWatchConfig) tagSignedBy(ctx context.Context, tag string) (string, string, time.Time, error) {
 	var ref struct {
 		Object struct {
 			Type string `json:"type"`
@@ -344,10 +402,10 @@ func (cfg releaseWatchConfig) tagSignedBy(ctx context.Context, tag string) (stri
 		} `json:"object"`
 	}
 	if err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/git/ref/tags/"+url.PathEscape(tag), &ref); err != nil {
-		return "", "", err
+		return "", "", time.Time{}, err
 	}
 	if ref.Object.Type != "tag" {
-		return "", "a lightweight tag carries no signature", nil
+		return "", "a lightweight tag carries no signature", time.Time{}, nil
 	}
 	var obj struct {
 		Verification struct {
@@ -356,16 +414,37 @@ func (cfg releaseWatchConfig) tagSignedBy(ctx context.Context, tag string) (stri
 		} `json:"verification"`
 	}
 	if err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/git/tags/"+ref.Object.SHA, &obj); err != nil {
-		return "", "", err
+		return "", "", time.Time{}, err
 	}
 	sig := obj.Verification.Signature
 	switch {
 	case sig == "":
-		return "", "unsigned", nil
+		return "", "unsigned", time.Time{}, nil
 	case !strings.Contains(sig, "BEGIN SSH SIGNATURE"):
-		return "", "not an SSH signature", nil
+		return "", "not an SSH signature", time.Time{}, nil
 	}
-	return verifySSHSignature(ctx, cfg.allowedSigners, []byte(obj.Verification.Payload), []byte(sig))
+	signer, why, err := verifySSHSignature(ctx, cfg.allowedSigners, []byte(obj.Verification.Payload), []byte(sig))
+	return signer, why, taggerTime(obj.Verification.Payload), err
+}
+
+// taggerTime reads the time from a tag object's "tagger Name <email>
+// <unix seconds> <zone>" line, which the tag's signature covers.
+func taggerTime(payload string) time.Time {
+	for _, line := range strings.Split(payload, "\n") {
+		if line == "" {
+			break
+		}
+		if rest, ok := strings.CutPrefix(line, "tagger "); ok {
+			fields := strings.Fields(rest[strings.LastIndex(rest, ">")+1:])
+			if len(fields) >= 1 {
+				var secs int64
+				if _, err := fmt.Sscan(fields[0], &secs); err == nil {
+					return time.Unix(secs, 0)
+				}
+			}
+		}
+	}
+	return time.Time{}
 }
 
 // verifySSHSignature checks a git SSH signature (namespace "git") against an
@@ -399,10 +478,11 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 	var alarms []string
 	alarm := func(format string, args ...any) { alarms = append(alarms, fmt.Sprintf(format, args...)) }
 
-	var tags []githubTag
-	if err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/tags?per_page=100", &tags); err != nil {
+	tags, err := releaseGetAll[githubTag](ctx, cfg.api+"/repos/"+cfg.repo+"/tags?per_page=100")
+	if err != nil {
 		return nil, err
 	}
+	taggedAt := map[string]time.Time{}
 	commitOf := map[string]string{}
 	intended := map[string]string{} // tag -> who signed, or "known exception"
 	for _, t := range tags {
@@ -414,10 +494,11 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 			intended[t.Name] = "known exception"
 			continue
 		}
-		signer, why, err := cfg.tagSignedBy(ctx, t.Name)
+		signer, why, at, err := cfg.tagSignedBy(ctx, t.Name)
 		if err != nil {
 			return nil, err
 		}
+		taggedAt[t.Name] = at
 		if signer == "" {
 			alarm("unintended tag %s: %s", t.Name, why)
 			continue
@@ -425,9 +506,23 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 		intended[t.Name] = signer
 	}
 
-	var releases []githubRelease
-	if err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/releases?per_page=100", &releases); err != nil {
+	releases, err := releaseGetAll[githubRelease](ctx, cfg.api+"/repos/"+cfg.repo+"/releases?per_page=100")
+	if err != nil {
 		return nil, err
+	}
+	released := map[string]bool{}
+	for _, r := range releases {
+		released[r.TagName] = true
+	}
+	for tag := range intended {
+		if released[tag] || cfg.knownUnsigned[tag] {
+			continue
+		}
+		// A signed tag is a promise of a release: one never published, or
+		// deleted, must not pass quietly.
+		if at := taggedAt[tag]; at.IsZero() || releaseNow().Sub(at) > cfg.grace {
+			alarm("intended tag %s has no release (tagged %s; grace %s)", tag, at.UTC().Format(time.RFC3339), cfg.grace)
+		}
 	}
 	expected := map[string]string{} // entry hash -> tag
 	checked := []string{}
@@ -516,9 +611,22 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 			EntryHash string `json:"entry_hash"`
 			Payload   string `json:"capsule_id_digest"`
 		} `json:"entries"`
+		Next       any `json:"next"`
+		NextCursor any `json:"next_cursor"`
+		Cursor     any `json:"cursor"`
 	}
-	if err := releaseGetJSON(ctx, strings.TrimRight(cfg.witness, "/")+"/transparency/statements?subject="+url.QueryEscape(cfg.subject), &logged); err != nil {
+	// The witness returns every entry under a subject in one response. If
+	// it ever pages, this fails closed rather than check part of the log.
+	statementsURL := strings.TrimRight(cfg.witness, "/") + "/transparency/statements?subject=" + url.QueryEscape(cfg.subject)
+	raw, header, err := releaseGet(ctx, statementsURL, releaseMaxListBody)
+	if err != nil {
 		return nil, err
+	}
+	if err := json.Unmarshal(raw, &logged); err != nil {
+		return nil, fmt.Errorf("GET %s: not a statement list", statementsURL)
+	}
+	if nextLink(header.Get("Link")) != "" || logged.Next != nil || logged.NextCursor != nil || logged.Cursor != nil {
+		return nil, fmt.Errorf("GET %s: the witness paged its answer: refusing to check part of the log", statementsURL)
 	}
 	seen := map[string]bool{}
 	for _, e := range logged.Entries {
@@ -594,6 +702,7 @@ func releaseWatchCommand() *cobra.Command {
 		known, _ := c.Flags().GetStringSlice("known-unsigned")
 		cfg.gh, _ = c.Flags().GetString("gh")
 		cfg.trustedRoot, _ = c.Flags().GetString("trusted-root")
+		cfg.grace, _ = c.Flags().GetDuration("release-grace")
 		if cfg.allowedSigners == "" {
 			return inputError("--allowed-signers is required: the maintainer keys whose signed tags mark an intended release (ssh allowed_signers format)")
 		}
@@ -628,6 +737,7 @@ func releaseWatchCommand() *cobra.Command {
 	cmd.Flags().String("allowed-signers", "", "ssh allowed_signers file naming the maintainer keys whose signed tags are intended releases (kept with the monitor, never in the repository)")
 	cmd.Flags().String("gh", "gh", "The gh CLI used to verify release.json's attestation bundle (no account is used)")
 	cmd.Flags().String("trusted-root", "", "Optional Sigstore trusted_root.jsonl, passed to gh as --custom-trusted-root for an offline check")
+	cmd.Flags().Duration("release-grace", 2*time.Hour, "How long after a signed tag its release may take before its absence is an alarm")
 	cmd.Flags().StringSlice("known-unsigned", nil, "Tags made before signing began, accepted as known exceptions (comma-separated)")
 	return cmd
 }

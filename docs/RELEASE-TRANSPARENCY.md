@@ -76,6 +76,15 @@ anchored in Rekor.
 The anchoring is of the service's tree head, not of each statement, so
 registering releases adds no load on Rekor.
 
+Where this is in the service's source (capsule-anchor, at `04447927e2db`):
+- [`app.py` lines 266 and 282](https://github.com/action-state-group/capsule-anchor/blob/04447927e2db3d299ad8c4dede394e1f640feab0/packages/capsule_anchor/app.py#L266-L282): the publisher thread
+  is started with the interval `CAPSULE_ANCHOR_PUBLIC_LOG_INTERVAL`, which
+  defaults to 300 seconds.
+- [`public_log/scheduler.py`, `publish_if_new`](https://github.com/action-state-group/capsule-anchor/blob/04447927e2db3d299ad8c4dede394e1f640feab0/packages/capsule_anchor/public_log/scheduler.py#L53-L90):
+  this publishes the current signed tree head only if that tree size has
+  not been published yet. The publisher thread calls it on each interval
+  ([`start_publisher_thread`](https://github.com/action-state-group/capsule-anchor/blob/04447927e2db3d299ad8c4dede394e1f640feab0/packages/capsule_anchor/public_log/scheduler.py#L124)).
+
 ## 5. What the monitor adds: comparison with intent, from outside
 
 An **intended release** is a `v*` tag whose SSH signature verifies under a
@@ -90,6 +99,10 @@ under the release subject, and it **alarms** (exits non-zero and names the
 problem) on any of:
 - a tag or release that is not intended (unsigned, or signed by a key that
   is not allowed);
+- an intended tag with no release once a grace window has passed since it
+  was tagged (`--release-grace`, default two hours, measured from the
+  tagger time the tag's signature covers). This catches a release that was
+  never published or was deleted;
 - an intended release with no statement, or whose statement does not match
   the tag, its commit or its assets;
 - a statement whose signature does not verify under the key its payload
@@ -117,6 +130,12 @@ capsulectl release watch --allowed-signers ~/release-monitor/allowed_signers \
   are accepted as known exceptions.
 - `--trusted-root` passes a Sigstore trusted root to gh, for a fully
   offline check.
+
+**It never checks a partial picture.** It follows every page of the tag and
+release lists. The service returns all of a subject's statements in one
+answer, so if that answer is ever paged (a cursor, or a `Link` header) or
+exceeds the size limit, the monitor fails with an error instead of judging
+part of the log. An error, like an alarm, needs a person.
 
 **Where it runs.** A monitor running on the infrastructure it monitors is
 decoration. Run it on a schedule somewhere a compromise of this
