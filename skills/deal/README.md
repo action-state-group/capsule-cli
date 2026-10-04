@@ -43,7 +43,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal deadlines [--deal ID] [--ics FILE] [--remind-days N] [--all]` | Lists open cancel-by dates, for one deal or every deal in the profile, as JSON; `--ics` also writes them as a calendar file with reminders for the host's scheduler. Records, never enforces. |
 | `deal verify-email [--step N] [--email FILE]` | Re-checks a sealed merchant email offline, against the key records sealed with it. `--email` checks another copy, which must match the sealed bytes. Exit 1 when it does not verify. |
 | `bundle --deal ID [--out FILE]` | The deal's Evidence Bundle, your own copy: the same file as `deal report --bundle` (the whole deal from its own log, `deal/<deal_id>`, with its cadence chain and any witness receipt held). Nothing withheld, nothing on record. |
-| `disclose --deal ID --share counterparty\|adjudicator --to WHO --out FILE` · `permalink --deal ID --share counterparty\|adjudicator --to WHO` | A copy for someone else, as a bundle file or a viewer link: a share, exactly as `deal report --share` (see [Sharing a copy](#sharing-a-copy)). The copy withholds what that reader may not see, the final bytes pass the share gate, and the share is on record on `deal/<deal_id>/disclosures` before the file is written or the link printed. A link over 8,192 characters is refused ("too large for a link; share the bundle file"); see Sizes. |
+| `disclose --deal ID --share counterparty\|adjudicator --to WHO --out FILE` | A bundle file for someone else: a share, exactly as `deal report --share` (see [Sharing a copy](#sharing-a-copy)). The copy withholds what that reader may not see, the final bytes pass the share gate, and the share is on record on `deal/<deal_id>/disclosures` before the file is written. A deal is not shared as a link: `permalink --deal` refuses and names the report file to hand over instead. |
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
 | `deal report --email FILE [--bundle FILE]` | Writes the receipt as a ready-to-send email (.eml, no sender or recipient) for the agent host's own email tool: a plain and a static HTML body that read on a phone, with `receipt.html` and `bundle.json` attached. `--bundle` writes the Evidence Bundle for `capsulectl verify --bundle`. Nothing is sent by capsulectl. |
@@ -322,51 +322,38 @@ of the exact page. It is kept in the local store (`deal_disclosures`), and
 its digest is appended to the deal's own disclosure log
 (`deal/<deal_id>/disclosures`) under a fresh signed checkpoint. That log sits
 beside the deal's log, which holds only steps. Nothing is hosted and there
-are no accounts. The user hands over the file, or a link that carries the
-copy in its fragment (`permalink --deal`), which never leaves the reader's
-browser.
+are no accounts or links. The user hands over the file.
+
+**A second opinion without trusting the page.** The report page checks
+itself, and says so. A reader who would rather not take its word opens
+verify.agentactioncapsule.org and drops the file in: the report page (its
+embedded bundle is read out of it) or a bundle `.json`. That verifier checks
+it in the reader's own browser; the file is never uploaded.
 
 ## Sizes
 
 Measured on a synthetic retail deal (`demo/retail-checkout/`; the live
-numbers depend on each deal's steps, and vary by a few characters from run to
-run with each record's nonces and times):
+numbers depend on each deal's steps, and vary a little from run to run with
+each record's nonces and times):
 
-| Deal | Own bundle (`bundle --deal`) | Shared link fragment (`permalink --deal --share counterparty`), as minted | Same, deflate-raw (prototype) |
-|---|---|---|---|
-| 4 steps (open, then a passing check: snapshot, check, approval) | about 14,570 B | about 16,940 chars | about 4,960 chars (3.4x) |
-| 5 steps (the same, then the act) | about 17,870 B | about 21,340 chars | about 5,760 chars (3.7x) |
-| Merchant deal, 5 steps (open, a passing check, the merchant's own email) | about 19,460 B | about 24,450 chars | about 6,500 chars (3.8x) |
-| Merchant deal, 6 steps (the same with the act before the email) | about 22,420 B | about 28,310 chars | about 7,080 chars (4.0x) |
+| Deal | Own bundle (`bundle --deal`) |
+|---|---|
+| 4 steps (open, then a passing check: snapshot, check, approval) | about 14,570 B |
+| 5 steps (the same, then the act) | about 17,870 B |
+| Merchant deal, 5 steps (open, a passing check, the merchant's own email) | about 19,460 B |
+| Merchant deal, 6 steps (the same with the act before the email) | about 22,420 B |
 
 A shared copy carries the merchant's email only as its digests
 (`message_digest`, `key_records_digest`) and the verification result (DKIM,
 DMARC, whether the signer is the deal's counterparty) with the amounts and
 dates read from it: never a header, the body or a name. The raw `.eml` stays
 in the local deal store, where `deal verify-email` re-checks it; no bundle
-carries it. What fills a merchant deal's link is the same as any deal's: each
-step's record and membership proof, the disclosed step records and the deal
-section. A merchant deal fits a link only once the hosted viewer reads the
-compressed fragment; until then share it as a file.
+carries it.
 
-The adjudicator's link is within 150 characters of the counterparty's. A
-link fragment carries the shared bundle as base64url JSON, so it is about
-4/3 of that bundle's JSON. It never carries the verifier: the hosted viewer
-brings that. A fragment never leaves the reader's browser, so
-the hosted viewer holds nothing. A bundle too large for a link would have to
-be hosted by someone, which is custody, so `permalink` refuses any fragment
-over 8,192 characters ("too large for a link; share the bundle file") and
-points nowhere else. The limit is checked before the share goes on record,
-so a refused link leaves no disclosure record. Uncompressed, the deals above
-are over that limit: share them as a file with `disclose --deal ID --share
-... --to ... --out FILE` until the viewer reads a compressed fragment (the
-prototype column). `--max-fragment 0` lifts the limit, to measure.
-
-Do not size a fragment from the `deal report --html` page. That page is
-self-contained, so most of it is the embedded verifier, not evidence: of a
-221,847-byte page for the 5-step deal, 194,730 B is the vendored
-`evidence-graph.iife.js` and 7,488 B is `deal-view.js` (91%). An earlier
-build measured 93% of a 215,251-byte page the same way.
+Most of the self-contained `deal report --html` page is the embedded
+verifier, not evidence: of a 221,847-byte page for the 5-step deal,
+194,730 B is the vendored `evidence-graph.iife.js` and 7,488 B is
+`deal-view.js` (91%).
 
 ## Which build made a record, and what is never collected
 

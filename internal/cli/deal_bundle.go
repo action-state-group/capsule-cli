@@ -1,32 +1,33 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"strings"
 
-	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
-	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/spf13/cobra"
 )
 
-// `bundle --deal`, `disclose --deal` and `permalink --deal` read a deal's own
-// log through the same builder as `deal report` (dealReportBundle: the whole
-// deal, its cadence chain and any witness receipt held).
+// `bundle --deal` and `disclose --deal` read a deal's own log through the
+// same builder as `deal report` (dealReportBundle: the whole deal, its
+// cadence chain and any witness receipt held).
 //
 //   - bundle --deal writes the user's own copy: nothing withheld, nothing put
 //     on record, the same file as `deal report --bundle`.
-//   - disclose --deal and permalink --deal hand a copy to someone else, so
-//     they are a share: --share counterparty|adjudicator and --to are
-//     required, the copy withholds every record that audience may not see
-//     (dealWithholdRecords), the final bytes pass the share gate
-//     (dealPageGate) and the share is put on record (recordShare, on the
-//     deal's disclosure log, deal/<deal_id>/disclosures) before anything is
-//     written or printed.
+//   - disclose --deal hands a copy to someone else, so it is a share:
+//     --share counterparty|adjudicator and --to are required, the copy
+//     withholds every record that audience may not see
+//     (dealWithholdRecords), the final bytes pass the share gate and the
+//     share is put on record (recordShare, on the deal's disclosure log,
+//     deal/<deal_id>/disclosures) before the file is written.
+//
+// A deal is not shared as a link: the user hands over the report file, and
+// a reader who would rather not take the page's word drops it into a
+// verifier.
 func dealBundleRun(c *cobra.Command, use string) error {
+	if use == "permalink" {
+		return inputError("a deal is not shared as a link: hand over the report file instead, `deal report --deal ID --html FILE` or `--email FILE` (your own copy), or `deal report --deal ID --share counterparty|adjudicator --to WHO --html FILE` (a copy for someone else)")
+	}
 	if c.Flags().Changed("root") || c.Flags().Changed("closure-depth") || c.Flags().Changed("log-id") {
 		return inputError("--deal takes the whole deal from its own log: --root, --closure-depth and --log-id do not apply")
 	}
@@ -39,7 +40,7 @@ func dealBundleRun(c *cobra.Command, use string) error {
 	switch use {
 	case "bundle":
 		if audience != dealAudienceKeep || recipient != "" {
-			return inputError("bundle --deal writes your own copy, with nothing withheld; to hand a copy to someone, use disclose or permalink with --share counterparty|adjudicator --to WHO")
+			return inputError("bundle --deal writes your own copy, with nothing withheld; to hand a copy to someone, use disclose --deal with --share counterparty|adjudicator --to WHO, or `deal report --share`")
 		}
 	default:
 		if audience != dealAudienceCounterparty && audience != dealAudienceAdjudicator {
@@ -78,85 +79,13 @@ func dealBundleRun(c *cobra.Command, use string) error {
 		if err = dealShareGate(encoded, events, audience); err != nil {
 			return err
 		}
-		// What is handed over: the bundle file, or the link. A link is only a
-		// re-encoding of that gated bundle: its fragment is decoded back and
-		// must be the same JCS bytes, so the link carries nothing the gate
-		// did not read. (The gate is not run on the link itself: there the
-		// allowed order id sits inside base64url, where it cannot be taken
-		// out before the gate decodes the run and finds it.)
-		shared := encoded
-		if use == "permalink" {
-			link, err := mintPermalink(c, b)
-			if err != nil {
-				return err
-			}
-			if err = sameBundle(link, b); err != nil {
-				return err
-			}
-			shared = []byte(link)
-		}
-		share, err := s.recordShare(ctx, dealID, b, audience, recipient, shared)
+		share, err := s.recordShare(ctx, dealID, b, audience, recipient, encoded)
 		if err != nil {
 			return err
-		}
-		if use == "permalink" {
-			return output(c, map[string]any{"deal_id": dealID, "permalink": string(shared), "share": share})
 		}
 		if err = atomicFile(out, encoded, false); err != nil {
 			return err
 		}
 		return output(c, map[string]any{"deal_id": dealID, "bundle": out, "share": share})
 	})
-}
-
-// sameBundle checks that the link's fragment decodes to exactly the bundle,
-// compared as JCS bytes.
-func sameBundle(link string, b map[string]interface{}) error {
-	_, fragment, ok := strings.Cut(link, "#")
-	if !ok {
-		return errors.New("permalink has no fragment")
-	}
-	decoded, err := aacbundle.DecodeFragment(fragment)
-	if err != nil {
-		return err
-	}
-	want, err := canonical.JCS(b)
-	if err != nil {
-		return err
-	}
-	got, err := canonical.JCS(decoded)
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(want, got) {
-		return errors.New("permalink fragment is not the gated bundle; nothing was put on record")
-	}
-	return nil
-}
-
-// mintPermalink encodes a bundle into a viewer link, refusing one too large
-// to carry. A link carries the bundle in its fragment, which never leaves the
-// reader's browser, so the hosted viewer holds nothing. A bundle too large for
-// a link would have to be hosted by someone, which is custody; capsulectl does
-// not do that.
-func mintPermalink(c *cobra.Command, value map[string]interface{}) (string, error) {
-	fragment, err := aacbundle.EncodeFragment(value)
-	if err != nil {
-		return "", err
-	}
-	decoded, err := aacbundle.DecodeFragment(fragment)
-	if err != nil {
-		return "", err
-	}
-	if _, ok := decoded.(map[string]interface{}); !ok {
-		return "", errors.New("permalink fragment did not round-trip")
-	}
-	if limit, _ := c.Flags().GetInt("max-fragment"); limit > 0 && len(fragment) > limit {
-		return "", inputError(fmt.Sprintf("too large for a link (%d characters; the limit is %d): share the bundle file instead (`capsulectl disclose ... --out FILE`)", len(fragment), limit))
-	}
-	base, _ := c.Flags().GetString("base-url")
-	if base == "" {
-		base = defaultBundleURL
-	}
-	return strings.TrimRight(base, "#") + "#" + fragment, nil
 }
