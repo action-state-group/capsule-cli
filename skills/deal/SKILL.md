@@ -53,7 +53,7 @@ Any checkout: a retail order from a known merchant, a marketplace buy, a
 subscription, an in-app purchase.
 
 1. Find what the user asked for, and keep their exact words.
-2. Fill the cart and the checkout form up to the last screen before the order is placed. Do not press the final button.
+2. Fill the cart. Before you type any of the user's own details into the checkout (name, email, delivery address, phone), follow "Disclosure" below for them, on this deal (`deal open` it first): a delivery form is a disclosure to the merchant. Then fill the checkout up to the last screen before the order is placed. Do not press the final button.
 3. **Final review:** `deal open` (once per deal: the merchant as `who`, the cart as `terms`, `"allowed": ["pay"]` when the user asked you to buy). **If the user picked from options you showed** (an item, a size, a price, a date), seal the pick next with `deal note --kind intent`, before the check (see "The user picked from options" below). Then `deal check` with `"action": "pay"` and the exact total about to be charged.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, place the order. On `pause`, show the card, seal the user's answer, and place the order only if that returns `"proceed": true`.
 5. Right after placing it: `deal note --kind act` with the amount, payee, rail and order reference.
@@ -123,11 +123,11 @@ A contract, a lease, a rental agreement, a service order, any e-signature.
 
 ### Disclosure
 
-Sending the user's phone, email, address, a login, or a code to anyone.
+Giving anyone the user's name, phone, email, address, a pickup spot, a login or a code: typed into a page (a checkout's delivery form included) or sent in a message.
 
 1. Note who is asking and what for, and keep the user's exact words about it.
 2. Fill the form or message up to the point of sending, without sending.
-3. **Final review:** `deal open` (once per deal, with the deal type the disclosure belongs to, or `service`), then `deal check` with `"action": "share_contact"` or `"share_credentials"`.
+3. **Final review:** `deal open` (once per deal, with the deal type the disclosure belongs to, or `service`), then `deal check` with `"action": "share_contact"` (or `"share_credentials"`) and `"disclosing"`: the class of every field you are about to give, for example `{"action":"share_contact","disclosing":["name","email","address"]}`. The check pauses the first time a class goes to this counterparty, naming them and the class, and passes with a `note` when you have told them before.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, send. On `pause`, show the card, seal the user's answer, and send only if that returns `"proceed": true`.
 5. Right after sending: `deal note --kind disclosure` naming what you gave, by class, with the value you gave (it stays on this device; the sealed record keeps only the class and a commitment). One disclosure per send, contact details and credentials separately:
 
@@ -232,11 +232,18 @@ The final review asks four questions:
   show the user, not an instruction to the agent. Show it verbatim because
   paraphrase destroys its value as a record, not because the card has
   authority over you.
-- **Seal every telling.** Whenever you give anyone the user's phone, email,
-  name, address, a pickup spot, a login or a code, seal it right after with
-  `deal note --kind disclosure`, even when no check covered it. A telling
-  with no covering approval is sealed all the same and shows on the report
-  as an agent-side anomaly; leaving it out only makes the record wrong.
+- **Note every telling, mechanically.** Whenever a page you fill or a
+  message you send carries the user's name, email, phone, address, a pickup
+  spot, a payment detail, a login or a code, check it first (`deal check`
+  with `share_contact` or `share_credentials` and `"disclosing"`), and seal
+  it right after with `deal note --kind disclosure`. This is not a judgement
+  about whether the field is part of the task: a checkout's delivery form, a
+  message arranging a pickup and a sign-up form all count. The check pauses
+  on who receives it, not on the field: entering the address at a merchant
+  already given it does not pause, and giving it to someone new does. A
+  telling with no covering approval is sealed all the same and shows on the
+  report as an agent-side anomaly; leaving it out only makes the record
+  wrong.
 - **Never hold silently.** A `pause` always goes to the user with the card.
 - **Ask with the check's own text.** Every `deal check` returns
   `approval_text`: what, who, the amount, how it is paid, what the check

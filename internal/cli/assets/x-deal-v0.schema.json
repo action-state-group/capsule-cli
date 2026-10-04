@@ -261,6 +261,7 @@
         "amount_minor": { "$ref": "#/$defs/safe_uint" },
         "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
         "seen_item": { "type": "boolean" },
+        "disclosing": { "description": "For a share: the classes of the user's data about to be given.", "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/disclosure_class" } },
         "terms": { "$ref": "#/$defs/terms" },
         "recourse": { "$ref": "#/$defs/recourse" },
         "description_commitment": { "$ref": "#/$defs/hex64" },

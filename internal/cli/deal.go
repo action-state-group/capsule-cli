@@ -754,6 +754,9 @@ func dealNoteCommand() *cobra.Command {
 					return inputError("this deal type has no " + d.action() + " point of no return")
 				}
 				d.AuthorizedBy, d.Reason, d.Rule = authorizeAct(events, dealAct{Action: d.action()})
+				if class := uncheckedClass(events, d.AuthorizedBy, d.Fields); class != "" {
+					d.AuthorizedBy, d.Reason, d.Rule = "", "the check did not name your "+classWord(class), "class_not_checked"
+				}
 			}
 			se, err := s.seal(ctx, dealID, events, ev)
 			if err != nil {
@@ -903,6 +906,19 @@ func dealCheckCommand() *cobra.Command {
 			if snap.Who != nil && snap.Who.DomainAgeDays != nil {
 				return inputError("record the website's age as evidence, not in the check")
 			}
+			if len(snap.Disclosing) > 0 {
+				for i := range snap.Disclosing {
+					snap.Disclosing[i] = strings.ToLower(strings.TrimSpace(snap.Disclosing[i]))
+				}
+				action, err := disclosureAction(snap.Disclosing)
+				if err != nil {
+					return err
+				}
+				snap.Disclosing = sortedClasses(snap.Disclosing)
+				if action != snap.Action {
+					return inputError("disclosing " + strings.Join(snap.Disclosing, ", ") + " goes with action " + action)
+				}
+			}
 			if snap.Action == "pay" {
 				// The check names the payee it is about, so an action can be
 				// held to the same payee.
@@ -930,6 +946,9 @@ func dealCheckCommand() *cobra.Command {
 			// -> diff
 			state, err := foldDeal(events)
 			if err != nil {
+				return err
+			}
+			if state.memory, err = s.counterpartyMemory(ctx, dealID); err != nil {
 				return err
 			}
 			result := evaluateDeal(state, snap)
@@ -968,6 +987,16 @@ func dealCheckCommand() *cobra.Command {
 			out["unverified"] = result.Unverified
 			out["asked_attributes"] = result.Asked
 			out["picked_by_agent"] = result.Picked
+			if rc := result.Recipient; rc != nil {
+				out["recipient"] = rc
+				if len(rc.Repeat) > 0 {
+					words := make([]string, len(rc.Repeat))
+					for i, c := range rc.Repeat {
+						words[i] = classWord(c)
+					}
+					out["note"] = "Told " + rc.Name + " your " + strings.Join(words, ", ") + " before: noted, no pause for that."
+				}
+			}
 			out["remote"] = result.Remote.Status
 			out["demo"] = open.Demo
 			// A date passing is a point of no return too: every check lists

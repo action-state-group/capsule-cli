@@ -121,6 +121,10 @@ type dealSnapshot struct {
 	Who         *dealWho      `json:"who,omitempty"`
 	Terms       *dealTerms    `json:"terms,omitempty"`
 	Recourse    *dealRecourse `json:"recourse,omitempty"`
+	// Disclosing names, for a share, the classes of the user's data about to
+	// be given (phone, address, ...): the check pauses on the first time a
+	// class goes to this counterparty, never on a repeat.
+	Disclosing []string `json:"disclosing,omitempty"`
 }
 
 type dealDifference struct {
@@ -156,6 +160,9 @@ type dealCheckResult struct {
 	// Picked are the ones the agent chose and the user never said.
 	Asked  []dealAttribute `json:"asked_attributes"`
 	Picked []dealAttribute `json:"picked_by_agent"`
+	// Recipient is what the counterparty memory says about them: absent on
+	// checks made before there was one.
+	Recipient *dealRecipient `json:"recipient,omitempty"`
 }
 
 // dealAttribute is one attribute of what is about to happen, and its value.
@@ -389,6 +396,8 @@ type dealState struct {
 	agreedRecourse dealRecourse
 	claims         []dealClaim
 	messages       []dealMessage
+	// memory is the cross-deal counterparty memory, when the check has one.
+	memory *dealCounterpartyMemory
 }
 
 func foldDeal(events []sealedEvent) (dealState, error) {
@@ -693,7 +702,12 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 			add("asked", "agent_picked", a.Field, fmt.Sprintf("I picked %s %s; price varies by %s", a.Label, a.Value, a.Label))
 		}
 	}
-	if intent.Allowed != nil && !slices.Contains(intent.Allowed, snap.Action) {
+	// A share that names what it gives is judged by its recipient (below),
+	// not by whether the user named the action: giving a merchant you have
+	// given your address before needs no new nod, and giving a stranger it
+	// always does.
+	byRecipient := len(snap.Disclosing) > 0 && s.memory != nil
+	if intent.Allowed != nil && !slices.Contains(intent.Allowed, snap.Action) && !byRecipient {
 		add("asked", "not_asked", "action", "You didn't ask for this: "+actionNames[snap.Action])
 	}
 	askedFields := map[string]bool{}
@@ -727,6 +741,22 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 			detail += ", " + railName(recourse.Rail)
 		}
 		add("who", "payee_or_contact_changed", f.key, fmt.Sprintf("%s changed since first contact (%s)", f.label, detail))
+	}
+
+	// Who is this, to the user? The first dealing with a counterparty is a
+	// line on the card; the first time a class of the user's data goes to
+	// them is a pause, naming them and the class; a repeat is a note.
+	if s.memory != nil {
+		keys := counterpartyKeys(who)
+		r.Recipient = &dealRecipient{Name: recipientName(who), FirstTime: s.memory.firstTime(keys)}
+		for _, class := range sortedClasses(snap.Disclosing) {
+			if s.memory.toldBefore(keys, class) != "" {
+				r.Recipient.Repeat = append(r.Recipient.Repeat, class)
+				continue
+			}
+			r.Recipient.First = append(r.Recipient.First, class)
+			add("who", "first_disclosure", class, fmt.Sprintf("First time telling %s your %s", r.Recipient.Name, classWord(class)))
+		}
 	}
 
 	// 3. Same terms? Against what was agreed and approved.
@@ -829,7 +859,10 @@ func renderCard(r dealCheckResult, demo bool) string {
 	if r.Verdict == "pass" {
 		return ""
 	}
-	parts := make([]string, 0, len(r.Differences)+len(r.Notes)+1)
+	parts := make([]string, 0, len(r.Differences)+len(r.Notes)+2)
+	if r.Recipient != nil && r.Recipient.FirstTime {
+		parts = append(parts, "First time dealing with "+r.Recipient.Name)
+	}
 	for _, d := range r.Differences {
 		if d.Text != "" { // a difference folded into another line
 			parts = append(parts, d.Text)
@@ -1267,7 +1300,7 @@ func pauseCauseKind(rule string) (side, kind string) {
 		return "counterparty", "code_request"
 	case "off_platform_early":
 		return "counterparty", "channel_hop"
-	case "pay_before_seeing", "credentials_requested", "agent_picked":
+	case "pay_before_seeing", "credentials_requested", "agent_picked", "first_disclosure":
 		return "agent", rule
 	}
 	return "counterparty", rule
@@ -1353,7 +1386,7 @@ var disclosureClasses = map[string]string{
 }
 
 var disclosureClassWords = map[string]string{
-	"home_address": "home address", "pickup_location": "pickup location", "other_contact": "contact details",
+	"home_address": "home address", "address": "street address", "pickup_location": "pickup location", "other_contact": "contact details",
 	"verification_code": "verification code", "payment_card": "payment card", "id_document": "ID document",
 }
 
