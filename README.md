@@ -212,7 +212,7 @@ capsulectl judge pin FILE
 capsulectl judge drift pin FILE_A FILE_B
 capsulectl judge drift reports FILE_A FILE_B
 capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
-capsulectl deal init|open|note|check|close|report --profile NAME [...]
+capsulectl deal init|open|note|check|close|report|reconcile --profile NAME [...]
 capsulectl backfill run|status --profile NAME [...]
 ```
 
@@ -253,7 +253,9 @@ unresolved signer, and the command exits partial (3).
 
 `deal` seals a deal's baseline and, when the host calls it, checks each point
 of no return (pay, commit, sign, share) against it. The check is advisory: it
-holds an action only where the host runs it from a pre-action hook; see
+holds an action only where the host runs it from a pre-action hook.
+`deal reconcile` reads the host's execution records afterwards and lists
+consequential actions that have no deal record; see
 [skills/deal](skills/deal/README.md).
 
 `backfill` imports an agent host's own records (tool calls, sub-tasks, spend

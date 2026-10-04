@@ -1,0 +1,4 @@
+{"id":"call-1","at":"2026-09-27T18:00:00Z","task":"agent-main","tool":"spawn_browser_task","action":"other","status":"succeeded"}
+{"id":"call-2","at":"2026-09-27T18:00:20Z","task":"agent-worker","parent_task":"agent-main","tool":"browser_automation","action":"other","status":"succeeded"}
+{"id":"spend-1","at":"2026-09-27T18:00:40Z","task":"agent-worker","parent_task":"agent-main","tool":"spend_request","action":"pay","amount_minor":1000,"amount_kind":"ceiling","currency":"USD","merchant_domain":"stickers.example","observed":"approval","status":"unknown"}
+{"id":"call-3","at":"2026-09-27T18:01:00Z","task":"agent-worker","parent_task":"agent-main","tool":"browser_hand_off","action":"other","status":"succeeded"}

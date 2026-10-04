@@ -1,0 +1,8 @@
+{
+  "action": "pay",
+  "amount_minor": 627,
+  "currency": "USD",
+  "payee": "Example Stickers",
+  "rail": "card",
+  "reference": "ORDER-1001"
+}

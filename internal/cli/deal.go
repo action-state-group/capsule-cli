@@ -439,7 +439,7 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand(), dealReconcileCommand())
 	return deal
 }
 
@@ -791,6 +791,10 @@ func dealCheckCommand() *cobra.Command {
 		if err = decodeJSON(raw, &snap); err != nil {
 			return err
 		}
+		staleAfter, _ := c.Flags().GetDuration("stale-after")
+		if staleAfter < time.Minute {
+			return inputError("--stale-after must be at least one minute")
+		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			if dealFinallyClosed(events) {
 				return inputError("deal is closed")
@@ -870,11 +874,15 @@ func dealCheckCommand() *cobra.Command {
 			out["unverified"] = result.Unverified
 			out["remote"] = result.Remote.Status
 			out["demo"] = open.Demo
+			out["checked_at"] = checked.Event.At
+			out["stale_after_minutes"] = int(staleAfter / time.Minute)
+			out["approval_text"] = dealApprovalText(state, snap, result, checked.Event.At, staleAfter)
 			return output(c, out)
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("input", "", "Snapshot JSON: the action and exactly what is about to happen")
+	cmd.Flags().Duration("stale-after", 15*time.Minute, "How long the check stays current; the approval text says when it goes stale")
 	return cmd
 }
 
@@ -940,6 +948,8 @@ func dealCloseCommand() *cobra.Command {
 func dealReportCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "report", Short: "Report the deal in three parts (what you asked, what the agent did, anomalies); --html writes one local page", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		htmlPath, _ := c.Flags().GetString("html")
+		emailPath, _ := c.Flags().GetString("email")
+		bundlePath, _ := c.Flags().GetString("bundle")
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			report := buildDealReport(events)
 			lines := make([]string, 0, len(events))
@@ -954,25 +964,53 @@ func dealReportCommand() *cobra.Command {
 				"deal_id": dealID, "demo": events[0].Event.Open.Demo, "outcome": outcome,
 				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "trail": strings.Join(lines, "\n"),
 			}
+			if htmlPath == "" && emailPath == "" && bundlePath == "" {
+				return output(c, out)
+			}
+			b, err := s.dealReportBundle(ctx, events, report)
+			if err != nil {
+				return err
+			}
+			page, err := dealReportHTML(b)
+			if err != nil {
+				return err
+			}
+			bundle, err := json.Marshal(b)
+			if err != nil {
+				return err
+			}
+			assurance := dealAssurance(b)
+			out["assurance"] = assurance
 			if htmlPath != "" {
-				b, err := s.dealReportBundle(ctx, events, report)
-				if err != nil {
-					return err
-				}
-				page, err := dealReportHTML(b)
-				if err != nil {
-					return err
-				}
 				if err = atomicFile(htmlPath, []byte(page), false); err != nil {
 					return err
 				}
 				out["html"] = htmlPath
+			}
+			if bundlePath != "" {
+				if err = atomicFile(bundlePath, bundle, false); err != nil {
+					return err
+				}
+				out["bundle"] = bundlePath
+			}
+			if emailPath != "" {
+				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Did: report.Did, Anomalies: report.Anomalies, Steps: len(events)}
+				eml, subject, text, htmlBody, err := dealEmail(view, []byte(page), bundle, dealClock())
+				if err != nil {
+					return err
+				}
+				if err = atomicFile(emailPath, eml, false); err != nil {
+					return err
+				}
+				out["email"] = map[string]any{"eml": emailPath, "subject": subject, "text": text, "html": htmlBody, "attachments": []string{"receipt.html", "bundle.json"}}
 			}
 			return output(c, out)
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("html", "", "Write the report as one local, self-contained page to this new file")
+	cmd.Flags().String("email", "", "Write the receipt as a ready-to-send email (.eml, no sender or recipient) to this new file, for the agent host's own email tool to send")
+	cmd.Flags().String("bundle", "", "Write the deal's Evidence Bundle (for `capsulectl verify --bundle`) to this new file")
 	return cmd
 }
 
