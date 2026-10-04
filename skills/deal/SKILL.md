@@ -54,11 +54,50 @@ subscription, an in-app purchase.
 
 1. Find what the user asked for, and keep their exact words.
 2. Fill the cart and the checkout form up to the last screen before the order is placed. Do not press the final button.
-3. **Final review:** `deal open` (once per deal: the merchant as `who`, the cart as `terms`, `"allowed": ["pay"]` when the user asked you to buy), then `deal check` with `"action": "pay"` and the exact total about to be charged.
+3. **Final review:** `deal open` (once per deal: the merchant as `who`, the cart as `terms`, `"allowed": ["pay"]` when the user asked you to buy). **If the user picked from options you showed** (an item, a size, a price, a date), seal the pick next with `deal note --kind intent`, before the check (see "The user picked from options" below). Then `deal check` with `"action": "pay"` and the exact total about to be charged.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, place the order. On `pause`, show the card, seal the user's answer, and place the order only if that returns `"proceed": true`.
 5. Right after placing it: `deal note --kind act` with the amount, payee, rail and order reference.
 6. If the checkout or the confirmation shows a trial, a renewal or a last day to cancel, follow "Cancel-by date" below.
 7. `deal close` when the item arrives, or does not.
+
+#### The user picked from options
+
+Most purchases go: ask broadly, then pick. "A funny otter sticker under $8."
+You show five; the user picks one. The opening holds the broad ask. Unless
+you seal the pick, the check compares the specific item with the broad words
+and reports the user's own choice as "Not what you asked". That is a false
+pause.
+
+So when the user picks a specific item, option or price from a set you
+offered, seal an `intent` note right after `deal open` (or as soon as they
+pick, if the deal is already open) and **before** `deal check`:
+
+```json
+{"verbatim": "the Otterly Chaos one",
+ "asked": {"item": "Otterly Chaos - Unsupervised and Thriving Funny Otter Design Sticker"},
+ "max_total_minor": 800, "allowed": ["pay"]}
+```
+
+- `verbatim` is the user's own words for the pick.
+- `asked` holds only what the user chose, written exactly as the cart's
+  `terms` write it.
+- Carry `allowed` and `max_total_minor` forward: an intent replaces them.
+- What you picked yourself (a size, a colour or a delivery option the user
+  never mentioned) stays out of `asked` and in the cart's `terms`. The check
+  then lists it as yours: `picked_by_agent` in its output, "picked by the
+  agent, not by you" on a card, and "The agent picked, not you" in
+  `approval_text`. A choice you made is never shown as the user's.
+
+Some picks change what is bought or what it costs: a size, a variant, a
+quantity other than one, a shipping or delivery option. If you picked one of
+these yourself, the check pauses on it ("I picked size small; price varies
+by size") rather than passing quietly. Show the card and seal the user's
+answer. If the user chose it, put it in the pick's `asked` instead.
+
+The check still reports what the user did not choose, and an unverified
+claim (a "sale" price you could not confirm) stays unverified. An item
+different from the user's pick, or a price over their limit, still pauses
+after the pick is sealed.
 
 ### Booking
 
@@ -287,8 +326,9 @@ capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   #
 ```
 
 Seal an `intent` whenever the user widens or changes what you may do (for
-example, "go ahead and share my number"). It replaces `allowed`, `asked` and
-the limit from then on.
+example, "go ahead and share my number"), and whenever the user picks
+from options you offered (see "The user picked from options"). It replaces
+`allowed`, `asked` and the limit from then on.
 
 Record a `change` whenever the counterparty changes **any** detail: a new
 payee, a new payment method, a new phone, a new price. A change is never

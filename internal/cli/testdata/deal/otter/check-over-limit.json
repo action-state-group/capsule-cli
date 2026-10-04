@@ -1,0 +1,15 @@
+{
+  "action": "pay",
+  "amount_minor": 900,
+  "terms": {
+    "item": "Otterly Chaos - Unsupervised and Thriving Funny Otter Design Sticker",
+    "price_minor": 900,
+    "conditions": {
+      "size": "small 3.8in x 2.4in"
+    }
+  },
+  "recourse": {
+    "rail": "card",
+    "refundable": true
+  }
+}

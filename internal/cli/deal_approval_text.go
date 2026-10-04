@@ -78,6 +78,15 @@ func dealApprovalText(state dealState, snap dealSnapshot, result dealCheckResult
 	if len(parts) > 0 {
 		line += " · " + strings.Join(parts, " · ")
 	}
+	// What the user chose and what the agent chose for them, told apart, so
+	// a choice the agent made is never presented as the user's.
+	if len(result.Picked) > 0 {
+		chosen := "The agent picked, not you: " + attributeText(result.Picked) + "."
+		if len(result.Asked) > 0 {
+			chosen = "You asked for: " + attributeText(result.Asked) + ". " + chosen
+		}
+		line += "\n" + chosen
+	}
 	finding := "Deal check: no differences."
 	if result.Verdict != "pass" {
 		var texts []string

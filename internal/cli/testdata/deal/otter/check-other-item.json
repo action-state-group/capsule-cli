@@ -1,0 +1,15 @@
+{
+  "action": "pay",
+  "amount_minor": 300,
+  "terms": {
+    "item": "Otter Nonsense - Funny Otter Sticker",
+    "price_minor": 300,
+    "conditions": {
+      "size": "small 3.8in x 2.4in"
+    }
+  },
+  "recourse": {
+    "rail": "card",
+    "refundable": true
+  }
+}

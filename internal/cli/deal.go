@@ -943,6 +943,8 @@ func dealCheckCommand() *cobra.Command {
 			out["options"] = result.Options
 			out["differences"] = result.Differences
 			out["unverified"] = result.Unverified
+			out["asked_attributes"] = result.Asked
+			out["picked_by_agent"] = result.Picked
 			out["remote"] = result.Remote.Status
 			out["demo"] = open.Demo
 			// A date passing is a point of no return too: every check lists
