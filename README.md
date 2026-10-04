@@ -606,6 +606,13 @@ provisioned** and pinned out of band; do not trust a key merely because the same
 host serves it (`GET /anchor/authority-pubkey` is a distribution convenience, not
 a trust root: fetching a receipt and its verification key over one untrusted
 connection establishes nothing).
+A witness directory (the `witnesses.json` format) is one such out-of-band
+source: an Ed25519 witness's `key_ids` entry is its raw public key in 64 hex,
+which is exactly the `--checkpoint-public-key` value. The endpoint and its key
+are set together: `profile create`/`update` refuse an endpoint without a
+well-formed key (rather than saving a profile whose every witnessed checkpoint
+would fail), and `doctor --check-witness` reports a missing or malformed key as
+a failure.
 
 ```bash
 chmod 600 /protected/checkpoint-seed.hex

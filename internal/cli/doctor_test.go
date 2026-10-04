@@ -107,9 +107,10 @@ func TestDoctorWitnessReachabilityIsOptInAndNeverSendsAuth(t *testing.T) {
 
 	p, _ := profileFixture(t)
 	p.Checkpoint.Endpoint = server.URL
-	// serviceID (used elsewhere) requires HTTPS + a valid public key; doctor's
-	// own reachability probe intentionally does not call serviceID, so an
-	// http:// test server and an empty public key are fine here.
+	p.Checkpoint.PublicKey = p.TrustedKeys[0]
+	// serviceID (used elsewhere) requires HTTPS; doctor's own reachability
+	// probe intentionally does not call serviceID, so an http:// test server
+	// is fine here.
 	require.NoError(t, saveProfile(p, false))
 
 	// Without --check-witness: no request at all.
@@ -126,6 +127,33 @@ func TestDoctorWitnessReachabilityIsOptInAndNeverSendsAuth(t *testing.T) {
 	request, _ := witness["request"].(map[string]any)
 	assert.Equal(t, server.URL, request["url"])
 	assert.False(t, sawAuth, "doctor must never attach a token to its reachability probe")
+	assert.Equal(t, true, witness["ok"])
+}
+
+// TestDoctorWitnessFailsWithoutPublicKey: an endpoint with no witness public
+// key, or a malformed one, is a failure (exit 3) that names the field and the
+// fix, whether or not the endpoint answers.
+func TestDoctorWitnessFailsWithoutPublicKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusMethodNotAllowed) }))
+	defer server.Close()
+	for name, key := range map[string]string{"missing": "", "malformed": "39bb654c"} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			p, _ := profileFixture(t)
+			p.Checkpoint.Endpoint = server.URL
+			p.Checkpoint.PublicKey = key
+			require.NoError(t, saveProfile(p, false))
+			out, err := invoke(t, "", "doctor", "--profile", p.Name, "--check-witness")
+			require.ErrorIs(t, err, ErrPartial)
+			var report map[string]any
+			require.NoError(t, json.Unmarshal([]byte(out), &report))
+			witness, _ := report["witness"].(map[string]any)
+			assert.Equal(t, false, witness["ok"])
+			issue := witness["public_key"].(map[string]any)["issue"].(string)
+			assert.Contains(t, issue, "checkpoint.public_key")
+			assert.Contains(t, issue, "capsulectl profile update --profile test --checkpoint-public-key <64-hex Ed25519 key>")
+		})
+	}
 }
 
 func TestDoctorPluginTrustWalk(t *testing.T) {
