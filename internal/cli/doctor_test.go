@@ -165,8 +165,7 @@ func TestDoctorWitnessFailsWithoutPublicKey(t *testing.T) {
 }
 
 func TestDoctorPluginTrustWalk(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	root := pluginRoot(t)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	writeLauncher(t, root, "capsulectl-guard", fakePlugin, 0o755)
 	// group-writable: discovered but untrusted, so it must not appear.
