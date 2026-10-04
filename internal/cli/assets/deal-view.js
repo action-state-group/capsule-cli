@@ -78,9 +78,7 @@ function versionBefore(a, b) {
   const cadence = (bundle.extensions || {})["x-deal-cadence-v0"] || {};
   const anchored = cadence.state === "witnessed" ? (cadence.cadence || {}).witnesses || [] : [];
   const witnesses = ((bundle.checkpoint || {}).witnesses || []).concat(anchored).filter((w) => w && typeof w.ts_url === "string");
-  if (Array.isArray(bundle.countersignatures) && bundle.countersignatures.length > 0) {
-    header.append(el("p", "Countersigned: a second party's signature over this record is in this file; this page does not check it.", "deal-rung"));
-  } else if (witnesses.length > 0) {
+  if (witnesses.length > 0) {
     let witness = witnesses[0].ts_url;
     try {
       witness = new URL(witness).host || witness;
@@ -103,6 +101,39 @@ function versionBefore(a, b) {
     if (cadence.reason === "network_consent_needed" && typeof cadence.text === "string") header.append(el("p", `Witness ${cadence.text}`, "deal-note"));
   } else {
     header.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
+  }
+  // The countersign rung, as capsulectl checked it when it wrote this page
+  // (a page cannot resolve a signer against a directory): "Not
+  // countersigned" unless the bundle carried a countersignature that
+  // verified, and a self-countersignature is NOT INDEPENDENT. A file that
+  // carries a countersignature capsulectl did not check says only that.
+  let countersign = { rung: "not_countersigned", text: "Not countersigned: no other party has signed this record." };
+  const csNode = document.getElementById("deal-countersign");
+  if (csNode) {
+    try {
+      const parsed = JSON.parse(csNode.textContent);
+      if (parsed && typeof parsed.text === "string") countersign = parsed;
+    } catch (e) {
+      // unreadable: keep the honest default
+    }
+  }
+  const carried = Array.isArray(bundle.countersignatures) && bundle.countersignatures.length > 0;
+  if (carried && countersign.rung === "not_countersigned") {
+    countersign = {
+      rung: "unchecked",
+      text: "A countersignature is in this file, but it was not checked when this page was written: this page does not say who made it, and a countersignature by the producer's own key is not independent.",
+    };
+  }
+  header.append(el("p", countersign.text, countersign.rung === "not_independent" ? "deal-rung deal-bad" : "deal-rung"));
+  if (countersign.rung !== "not_countersigned") {
+    header.append(
+      el(
+        "p",
+        (countersign.directory ? "Checked by capsulectl when this page was written, against the directory " + countersign.directory + ". " : "") +
+          "Check it yourself with capsulectl countersign verify FILE --directory DIRECTORY, using a directory you trust.",
+        "deal-note",
+      ),
+    );
   }
   // Written by capsulectl from what the deal recorded (dealDidLine): the
   // conversation is rightly the agent's own record; what the agent did needs

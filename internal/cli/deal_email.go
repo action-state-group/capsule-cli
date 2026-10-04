@@ -164,6 +164,7 @@ type dealEmailView struct {
 	Asked         string
 	Outcome       string
 	Assurance     string
+	Countersign   string
 	Did           []dealReportItem
 	Anomalies     []dealReportItem
 	Merchant      []dealMerchantRow
@@ -196,7 +197,8 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <div style="max-width:640px;margin:0 auto;">
 <h1 style="font-size:20px;margin:0 0 8px;">Deal receipt{{if .Demo}} <span style="font-size:13px;border:1px solid #b45309;color:#b45309;padding:0 6px;border-radius:4px;">DEMO</span>{{end}}</h1>
 <p style="margin:0 0 8px;font-weight:600;">{{.Scope}}</p>
-<p style="margin:0 0 16px;color:#444;">{{.Assurance}}</p>
+<p style="margin:0 0 8px;color:#444;">{{.Assurance}}</p>
+<p style="margin:0 0 16px;color:#444;">{{.Countersign}}</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">What you asked</h2>
 <p style="margin:0;">&ldquo;{{.Asked}}&rdquo;</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">What the agent did</h2>
@@ -255,11 +257,14 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 	if view.Demo {
 		subject = "DEMO · " + subject
 	}
+	if view.Countersign == "" {
+		view.Countersign = dealNotCountersignedText
+	}
 	var tb strings.Builder
 	if view.Demo {
 		tb.WriteString("DEMO\n\n")
 	}
-	fmt.Fprintf(&tb, "%s\n\nWhat you asked: \"%s\"\n\n%s\n\nWhat the agent did:\n", view.Scope, view.Asked, view.Assurance)
+	fmt.Fprintf(&tb, "%s\n\nWhat you asked: \"%s\"\n\n%s\n\n%s\n\nWhat the agent did:\n", view.Scope, view.Asked, view.Assurance, view.Countersign)
 	if len(view.Did) == 0 {
 		tb.WriteString("- Nothing yet.\n")
 	}

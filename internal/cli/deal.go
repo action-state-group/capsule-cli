@@ -441,7 +441,7 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand(), dealDeadlinesCommand())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealCountersignCommand(), dealExportCommand(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand(), dealDeadlinesCommand())
 	return deal
 }
 
@@ -1033,6 +1033,13 @@ func dealReportCommand() *cobra.Command {
 		audience, _ := c.Flags().GetString("share")
 		recipient, _ := c.Flags().GetString("to")
 		recipient = strings.TrimSpace(recipient)
+		fromBundle, _ := c.Flags().GetString("from-bundle")
+		directory, _ := c.Flags().GetString("directory")
+		// A countersignature covers one exact bundle: your own copy. A shared
+		// copy withholds records, so it is a different bundle.
+		if fromBundle != "" && audience != dealAudienceKeep {
+			return inputError("--from-bundle renders your own copy, the bundle a countersignature covers; a shared copy (--share) withholds records, so it is a different bundle and is not countersigned")
+		}
 		switch audience {
 		case dealAudienceKeep:
 			if recipient != "" {
@@ -1065,15 +1072,32 @@ func dealReportCommand() *cobra.Command {
 				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "merchant": report.Merchant,
 				"produced_by": dealProducers(events),
 				"deadlines":   dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "trail": strings.Join(lines, "\n"),
+				"countersign": dealNotCountersigned(),
 			}
-			if htmlPath == "" && emailPath == "" && bundlePath == "" {
+			if htmlPath == "" && emailPath == "" && bundlePath == "" && fromBundle == "" {
 				return output(c, out)
 			}
-			b, err := s.dealReportBundle(ctx, events, report, audience, dealVerifyCommand(htmlPath))
+			// --from-bundle renders the receipt from a bundle file this deal
+			// wrote earlier (and someone may have countersigned since), so a
+			// countersignature covers exactly what the receipt shows.
+			var b map[string]interface{}
+			var err error
+			if fromBundle != "" {
+				b, err = s.dealBundleOf(fromBundle, dealID, events)
+			} else {
+				b, err = s.dealReportBundle(ctx, events, report, audience, dealVerifyCommand(htmlPath))
+			}
 			if err != nil {
 				return err
 			}
-			page, err := dealReportHTML(b)
+			countersign := dealNotCountersigned()
+			if fromBundle != "" {
+				if countersign, err = dealCountersignVerify(ctx, b, directory, s.p); err != nil {
+					return err
+				}
+			}
+			out["countersign"] = countersign
+			page, err := dealReportHTML(b, countersign)
 			if err != nil {
 				return err
 			}
@@ -1093,7 +1117,7 @@ func dealReportCommand() *cobra.Command {
 				if err = atomicFile(htmlPath, []byte(page), false); err != nil {
 					return err
 				}
-				return output(c, map[string]any{"deal_id": dealID, "scope": dealScopeLine, "html": htmlPath, "assurance": assurance, "share": share})
+				return output(c, map[string]any{"deal_id": dealID, "scope": dealScopeLine, "html": htmlPath, "assurance": assurance, "countersign": countersign, "share": share})
 			}
 			bundle, err := json.Marshal(b)
 			if err != nil {
@@ -1113,7 +1137,7 @@ func dealReportCommand() *cobra.Command {
 				out["bundle"] = bundlePath
 			}
 			if emailPath != "" {
-				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Did: report.Did, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, dealClock(), 2), Cancellations: dealCancellations(events), Steps: len(events)}
+				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, dealClock(), 2), Cancellations: dealCancellations(events), Steps: len(events)}
 				eml, subject, text, htmlBody, err := dealEmail(view, []byte(page), bundle, dealClock())
 				if err != nil {
 					return err
@@ -1132,6 +1156,8 @@ func dealReportCommand() *cobra.Command {
 	cmd.Flags().String("bundle", "", "Write the deal's Evidence Bundle (for `capsulectl verify --bundle`) to this new file")
 	cmd.Flags().String("share", dealAudienceKeep, "Who the page is for: keep (your own copy, nothing withheld), counterparty or adjudicator (a shared copy, put on record first)")
 	cmd.Flags().String("to", "", "With --share: who the shared copy is for, as sealed in the disclosure record")
+	cmd.Flags().String("from-bundle", "", "Render from this deal's earlier bundle file instead of a new one, with any countersignatures it carries (see `deal countersign`)")
+	cmd.Flags().String("directory", "", "With --from-bundle: the countersigner directory (HTTPS URL or file) that resolves who countersigned")
 	return cmd
 }
 
