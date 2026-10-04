@@ -423,3 +423,77 @@ func TestBackfillSharesDealExecutionFieldsButNotAmount(t *testing.T) {
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "task must be an identifier")
 }
+
+// TestBackfillNeverRetainsRowStampedAtOrAfterPassClock: imported_at must
+// follow source_asserted_at, so a row the host stamped at or after this
+// pass's clock is digested (Tier A) but never retained as a Capsule, and the
+// import record says so, even when it sits next to a signal.
+func TestBackfillNeverRetainsRowStampedAtOrAfterPassClock(t *testing.T) {
+	p := backfillProfile(t)
+	backfillPinClock(t, "2026-09-27T19:00:00Z")
+	signal := `{"kind":"row","source":"spend_approvals","cursor":1,"id":"sa-1","at":"2026-09-27T18:59:00Z","record_kind":"spend_approval","status":"closed","raw_digest":"` + rawDigest("sa-1") + `","signals":["spend_request"]}`
+	result, err := runBackfillCmd(t, p, writeSource(t,
+		signal,
+		toolRow("tc-1", 1, "2026-09-27T19:00:00Z", "succeeded"), // equal to the pass clock
+		toolRow("tc-2", 2, "2026-09-27T19:00:30Z", "succeeded"), // after it
+	))
+	require.NoError(t, err)
+
+	var tierA []string
+	for _, e := range result.TierA {
+		tierA = append(tierA, e.ID)
+	}
+	assert.Equal(t, []string{"sa-1", "tc-1", "tc-2"}, tierA, "every row is still digested")
+	require.Len(t, result.Retained, 1)
+	assert.Equal(t, "spend_approvals/sa-1", result.Retained[0].ActionID)
+	assert.Equal(t, []string{
+		"tool_calls/tc-1 is stamped at or after this pass's clock and was not retained",
+		"tool_calls/tc-2 is stamped at or after this pass's clock and was not retained",
+	}, result.Notes)
+	assert.Equal(t, 1, publishedCount(t, p))
+}
+
+// TestBackfillTimeLaunderingShapeFails: a backfilled record whose imported_at
+// equals its source_asserted_at (the shape that would pass an import off as
+// contemporaneous) cannot be sealed, and a Capsule edited into that shape
+// fails Class 1 as provenance_time_laundering_shape.
+func TestBackfillTimeLaunderingShapeFails(t *testing.T) {
+	p := backfillProfile(t)
+	rows, _, _, err := readBackfillSource(strings.NewReader(toolRow("tc-1", 1, "2026-09-27T18:00:00Z", "succeeded")))
+	require.NoError(t, err)
+	digest, err := rows[0].sourceDigest()
+	require.NoError(t, err)
+	_, key := profileFixture(t)
+
+	sourceAt := time.Date(2026, 9, 27, 18, 0, 0, 0, time.UTC)
+	laundered, err := backfillRequest(p, rows[0], digest, "b", "b", sourceAt, "self_attested")
+	require.NoError(t, err)
+	_, err = seal(laundered, key)
+	require.ErrorIs(t, err, ErrInput, "the producer refuses imported_at == source_asserted_at")
+
+	honest, err := backfillRequest(p, rows[0], digest, "b", "b", sourceAt.Add(time.Hour), "self_attested")
+	require.NoError(t, err)
+	record, err := seal(honest, key)
+	require.NoError(t, err)
+	var fields map[string]any
+	require.NoError(t, json.Unmarshal(record.Capsule, &fields))
+	pm := fields["provenance_mode"].(map[string]any)
+	pm["imported_at"] = pm["source_asserted_at"]
+	delete(fields, "capsule_id")
+	id, err := canonical.ComputeCapsuleID(fields)
+	require.NoError(t, err)
+	fields["capsule_id"] = id
+	edited, err := canonical.JCS(fields)
+	require.NoError(t, err)
+	capsule, err := verify.DecodeCapsuleJSON(edited)
+	require.NoError(t, err)
+	v := verify.Verify(capsule, nil, nil)
+	assert.False(t, v.OK)
+	var codes []string
+	for _, f := range v.Findings {
+		if f.Check != nil && *f.Check == 9 {
+			codes = append(codes, f.Code)
+		}
+	}
+	assert.Equal(t, []string{"provenance_time_laundering_shape"}, codes)
+}
