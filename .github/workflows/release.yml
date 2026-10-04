@@ -69,14 +69,23 @@ jobs:
           cp "$BUNDLE" "dist/capsulectl-$VERSION.sigstore.json"
           (cd dist && sha256sum "capsulectl-$VERSION.sigstore.json" >> SHA256SUMS)
       - name: Publish GitHub release
+        # A tag with a hyphen (v0.1.0-rc4, v1.0.0-beta1) is a pre-release:
+        # published as such and never marked the latest release.
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
         run: |
+          flags=()
+          case "$VERSION" in
+            *-*) flags=(--prerelease --latest=false) ;;
+          esac
           if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+            if [ "${#flags[@]}" -gt 0 ]; then
+              gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" "${flags[@]}"
+            fi
           else
-            gh release create "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag \
+            gh release create "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag "${flags[@]}" \
               --title "capsulectl $VERSION" \
-              --notes "Prebuilt capsulectl binaries (linux/amd64, linux/arm64, darwin/arm64). Verify with: sha256sum -c SHA256SUMS, and the build attestation with: gh attestation verify FILE --repo $GITHUB_REPOSITORY --signer-workflow $GITHUB_REPOSITORY/.github/workflows/release.yml"
+              --notes "Prebuilt capsulectl binaries (linux/amd64, linux/arm64, darwin/arm64). Verify with: sha256sum -c SHA256SUMS. Check the build attestation with no GitHub account: gh attestation verify FILE --bundle capsulectl-$VERSION.sigstore.json --repo $GITHUB_REPOSITORY --signer-workflow $GITHUB_REPOSITORY/.github/workflows/release.yml"
           fi
