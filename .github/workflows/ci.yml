@@ -13,7 +13,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # The nightly run has a group of its own: a push to main must not cancel it
+  # (pushes and PRs still cancel their own superseded runs).
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'schedule' && 'nightly' || github.ref }}
   cancel-in-progress: true
 
 jobs:
