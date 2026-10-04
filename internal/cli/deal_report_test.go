@@ -160,7 +160,7 @@ func TestDealRecordsFollowTheProfile(t *testing.T) {
 	dealRun(t, "note", "--deal", dealID, "--kind", "claim", "--input", writeJSON(t, `{"text":"breakfast is included","source":"hotel message"}`))
 	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--input", writeJSON(t, `{"about":"breakfast is included","source":"booking page","verified":true,"detail":"listed under amenities"}`))
 	dealRun(t, "note", "--deal", dealID, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"go ahead and share my number with the hotel","allowed":["pay","commit","share_contact"]}`))
-	share := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","description":"send my mobile number for check-in","disclosing":["phone"]}`))
+	share := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","description":"send my mobile number for check-in","disclosing":["phone"]}`))
 	require.Equal(t, "pause", share["verdict"], "a first telling to the hotel")
 	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", share["check_id"].(string), "--choice", "proceed", "--said", "yes, send it")
 	dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"share_contact","description":"sent the number"}`))
