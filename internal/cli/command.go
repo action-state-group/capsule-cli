@@ -242,6 +242,8 @@ func ExitCode(err error) int {
 		return 4
 	case errors.Is(err, ErrConflict):
 		return 5
+	case errors.Is(err, ErrAlarm):
+		return 6
 	default:
 		return 1
 	}
@@ -272,6 +274,7 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(calibrationCommands())
 	root.AddCommand(dealCommands())
 	root.AddCommand(backfillCommands())
+	root.AddCommand(canaryCommands())
 	root.AddCommand(closeCommand(), reconcileCommand(), requestCommand(), respondCommand())
 	store := &cobra.Command{Use: "store", Short: "Initialize and verify the profile's artifact and CLL store"}
 	init := &cobra.Command{Use: "init", Short: "Initialize the store and pin its store_id into the profile", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
