@@ -994,7 +994,7 @@ func approvedAmount(events []sealedEvent, state dealState) (amount *int64, curre
 		return snap.Event.Snapshot.AmountMinor, currency, basis, []string{snap.CapsuleID, check.CapsuleID, events[i].CapsuleID}, false
 	}
 	if state.intent.MaxTotalMinor != nil {
-		return state.intent.MaxTotalMinor, currency, "your limit", []string{events[0].CapsuleID}, true
+		return state.intent.MaxTotalMinor, currency, dealBasisYourLimit, []string{events[0].CapsuleID}, true
 	}
 	if state.agreed.PriceMinor != nil {
 		return state.agreed.PriceMinor, currency, "the agreed price", []string{events[0].CapsuleID}, false

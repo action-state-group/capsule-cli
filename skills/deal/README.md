@@ -219,8 +219,8 @@ copy, with nothing withheld, so they cannot be combined with `--share`.
 | Audience | What the copy carries |
 |---|---|
 | `keep` (default) | Nothing withheld. No disclosure record: it is the user's own copy. |
-| `counterparty` | Amounts, rails, timestamps and digests only. No home address, no names, payees or contact details, no card or payment identifiers, no verification codes, no message text, no claim text or sources, none of the user's own words. |
-| `adjudicator` | The counterparty copy plus message text and claim text with sources. Codes, card numbers, phones, emails and street addresses are replaced with `[withheld]`. |
+| `counterparty` | Amounts, rails, timestamps and digests only. No home address, no names, payees or contact details, no card or payment identifiers, no verification codes, no message text, no claim text or sources, none of the user's own words, and not the user's spending limit (a record that carries it is withheld; the merchant section leaves out an "approved" amount that is only that limit; the gate refuses it as the field or as money unless it equals the asked price or an amount paid). |
+| `adjudicator` | The counterparty copy plus message text and claim text with sources, and the spending limit. Codes, card numbers, phones, emails and street addresses are replaced with `[withheld]`. |
 
 A sealed record is disclosed whole or not at all, so a shared copy withholds
 every record holding a string it may not carry. That record still verifies:
@@ -324,6 +324,18 @@ run with each record's nonces and times):
 |---|---|---|---|
 | 4 steps (open, then a passing check: snapshot, check, approval) | about 14,570 B | about 16,940 chars | about 4,960 chars (3.4x) |
 | 5 steps (the same, then the act) | about 17,870 B | about 21,340 chars | about 5,760 chars (3.7x) |
+| Merchant deal, 5 steps (open, a passing check, the merchant's own email) | about 19,460 B | about 24,450 chars | about 6,500 chars (3.8x) |
+| Merchant deal, 6 steps (the same with the act before the email) | about 22,420 B | about 28,310 chars | about 7,080 chars (4.0x) |
+
+A shared copy carries the merchant's email only as its digests
+(`message_digest`, `key_records_digest`) and the verification result (DKIM,
+DMARC, whether the signer is the deal's counterparty) with the amounts and
+dates read from it: never a header, the body or a name. The raw `.eml` stays
+in the local deal store, where `deal verify-email` re-checks it; no bundle
+carries it. What fills a merchant deal's link is the same as any deal's: each
+step's record and membership proof, the disclosed step records and the deal
+section. A merchant deal fits a link only once the hosted viewer reads the
+compressed fragment; until then share it as a file.
 
 The adjudicator's link is within 150 characters of the counterparty's. A
 link fragment carries the shared bundle as base64url JSON, so it is about

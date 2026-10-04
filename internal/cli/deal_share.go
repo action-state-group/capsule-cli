@@ -42,6 +42,7 @@ var dealWithheldFields = map[string][]string{
 		"home address", "names, payees and contact details", "card and payment identifiers", "verification codes",
 		"message text", "claim text and sources", "your own words", "item, place and condition details",
 		"the merchant email's text, items and signing domain", "booking, confirmation and reservation codes, and any order number its signed email does not confirm",
+		"your spending limit",
 	},
 	dealAudienceAdjudicator: {
 		"home address", "names, payees and contact details", "card and payment identifiers", "verification codes",
@@ -732,6 +733,10 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 				}
 				continue
 			}
+			if k == "max_total_minor" && audience == dealAudienceCounterparty {
+				// The user's spending limit: never the counterparty's to see.
+				return false
+			}
 			if k == "producer" {
 				// The software build that sealed the record: shareable in
 				// exactly its own shape, without opening "name" to every
@@ -1002,7 +1007,12 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 			says = "merchant-confirmed: the merchant's signature checks out, and the email has not been changed since"
 		}
 		m := map[string]interface{}{"steps": ids, "verified": row.Verified, "merchant_says": says, "we_say": ourSealWords, "key_source": row.KeySource}
-		for k, v := range map[string]string{"approved": row.Approved, "approved_basis": row.ApprovedBasis, "charged": row.Charged, "charged_on": row.ChargedOn, "cancel_by": row.CancelBy, "key_size": row.KeySize} {
+		approved, basis := row.Approved, row.ApprovedBasis
+		if audience == dealAudienceCounterparty && basis == dealBasisYourLimit {
+			// What was approved was only the user's spending limit: private.
+			approved, basis = "", ""
+		}
+		for k, v := range map[string]string{"approved": approved, "approved_basis": basis, "charged": row.Charged, "charged_on": row.ChargedOn, "cancel_by": row.CancelBy, "key_size": row.KeySize} {
 			if v != "" {
 				m[k] = v
 			}
