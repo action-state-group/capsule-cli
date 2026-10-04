@@ -565,6 +565,22 @@ func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 		assert.Equal(t, []string{"item " + item}, attrs(check["asked_attributes"]))
 		assert.Equal(t, []string{"size small 3.8in x 2.4in"}, attrs(check["picked_by_agent"]))
 		assert.Contains(t, check["approval_text"], "You asked for: item "+item+". The agent picked, not you: size small 3.8in x 2.4in.")
+		// The receipt keeps them apart too: the report's check item, and
+		// the page and email it renders.
+		dealID := check["deal_id"].(string)
+		page := filepath.Join(t.TempDir(), "receipt.html")
+		report := dealRun(t, "report", "--deal", dealID, "--html", page, "--email", filepath.Join(t.TempDir(), "r.eml"))
+		var line string
+		for _, d := range report["did"].([]any) {
+			if d.(map[string]any)["kind"] == "check" {
+				line = d.(map[string]any)["text"].(string)
+			}
+		}
+		assert.Equal(t, "Checked before paying: flagged (you asked for: item "+item+"; the agent picked, not you: size small 3.8in x 2.4in)", line)
+		html, err := os.ReadFile(page)
+		require.NoError(t, err)
+		assert.Contains(t, string(html), "the agent picked, not you: size small 3.8in x 2.4in")
+		assert.Contains(t, report["email"].(map[string]any)["text"], "the agent picked, not you: size small 3.8in x 2.4in")
 	})
 	t.Run("when the user picked the size too it passes", func(t *testing.T) {
 		check := run(t, "intent-picked-with-size.json", "check-pay.json")

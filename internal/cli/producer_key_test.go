@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -245,4 +246,47 @@ func TestBundleCommandDeclaresProducerKeyOnSQLite(t *testing.T) {
 	require.NoError(t, err)
 	verified := aacbundle.VerifyBundle(bundle)
 	assert.Equal(t, "pass", verified.PerRecordMembership.Status)
+}
+
+// bundle --html writes the bundle as one self-contained page: the bundle
+// embedded and the vendored verifier, which checks it offline.
+func TestBundleHTMLWritesASelfCheckingPage(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, key := profileFixture(t)
+	p.Type = "jsonl"
+	p.Connection.Database = filepath.Join(t.TempDir(), "store")
+	require.NoError(t, saveProfile(p, false))
+	_, err := invoke(t, "", "store", "init", "--profile", p.Name)
+	require.NoError(t, err)
+	request, err := parseRequest(requestFixture(t))
+	require.NoError(t, err)
+	target, err := openTarget(t.Context(), p, usePublication)
+	require.NoError(t, err)
+	published, err := target.publish(t.Context(), request, key)
+	require.NoError(t, err)
+	require.NoError(t, target.close())
+
+	page := filepath.Join(t.TempDir(), "bundle.html")
+	out, err := invoke(t, "", "bundle", "--profile", p.Name, "--root", published.CapsuleID, "--html", page)
+	require.NoError(t, err)
+	raw, err := os.ReadFile(page)
+	require.NoError(t, err)
+	html := string(raw)
+	assert.Contains(t, html, string(evidenceGraphIIFE), "the verifier is in the page")
+	assert.NotRegexp(t, regexp.MustCompile(`(?i)<(script|link|img|iframe)[^>]+(src|href)=`), html, "nothing is fetched")
+	embedded, err := json.Marshal(embeddedBundle(t, html))
+	require.NoError(t, err)
+	var stdout, inPage map[string]any
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(out)), &stdout))
+	require.NoError(t, json.Unmarshal(embedded, &inPage))
+	assert.Equal(t, stdout["records"], inPage["records"], "the page holds the bundle the command wrote")
+	v := aacbundle.VerifyBundle(embeddedBundle(t, html))
+	assert.Equal(t, "pass", v.IntervalCoverage.Status, v.IntervalCoverage.Findings)
+	assert.Equal(t, "pass", v.PerRecordMembership.Status, v.PerRecordMembership.Findings)
+
+	// An existing file is never overwritten; a permalink and a deal take no --html.
+	_, err = invoke(t, "", "bundle", "--profile", p.Name, "--root", published.CapsuleID, "--html", page)
+	require.Error(t, err)
+	_, err = invoke(t, "", "permalink", "--profile", p.Name, "--root", published.CapsuleID, "--html", filepath.Join(t.TempDir(), "x.html"))
+	require.ErrorIs(t, err, ErrInput)
 }
