@@ -24,6 +24,10 @@ import (
 
 const defaultBundleURL = "https://verify.agentactioncapsule.org/bundle"
 
+// defaultMaxFragment is the longest fragment a permalink carries: the top of
+// the 2-8 KB that links survive in messengers, mail and QR codes.
+const defaultMaxFragment = 8192
+
 type bundleArtifacts interface {
 	Get(context.Context, string) (artifact.Record, error)
 }
@@ -742,6 +746,13 @@ func bundleCommands() []*cobra.Command {
 				if _, ok := decoded.(map[string]interface{}); !ok {
 					return errors.New("permalink fragment did not round-trip")
 				}
+				// A link carries the bundle in its fragment, which never leaves
+				// the reader's browser, so the hosted verifier holds nothing. A
+				// bundle too large for a link would have to be hosted by
+				// someone, which is custody; capsulectl does not do that.
+				if limit, _ := c.Flags().GetInt("max-fragment"); limit > 0 && len(fragment) > limit {
+					return inputError(fmt.Sprintf("too large for a link (%d characters; the limit is %d): share the bundle file instead (`capsulectl bundle ... --out FILE`)", len(fragment), limit))
+				}
 				base, _ := c.Flags().GetString("base-url")
 				if base == "" {
 					base = defaultBundleURL
@@ -775,6 +786,7 @@ func bundleCommands() []*cobra.Command {
 			command.Flags().String("out", "", "Write the Evidence Bundle JSON to a new file")
 		} else {
 			command.Flags().String("base-url", defaultBundleURL, "Bundle viewer base URL")
+			command.Flags().Int("max-fragment", defaultMaxFragment, "Refuse a link whose fragment is longer than this many characters (0: no limit, to measure)")
 		}
 		return command
 	}

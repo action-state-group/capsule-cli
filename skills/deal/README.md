@@ -42,7 +42,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal note --kind evidence --input FILE` with `obligation` | Seals a cancel-by date (a trial that becomes paid, a renewal, the end of free cancellation, a payment on a date) with its source: the merchant's email (with `--email`) or a page snapshot. Cuts a checkpoint. |
 | `deal deadlines [--deal ID] [--ics FILE] [--remind-days N] [--all]` | Lists open cancel-by dates, for one deal or every deal in the profile, as JSON; `--ics` also writes them as a calendar file with reminders for the host's scheduler. Records, never enforces. |
 | `deal verify-email [--step N] [--email FILE]` | Re-checks a sealed merchant email offline, against the key records sealed with it. `--email` checks another copy, which must match the sealed bytes. Exit 1 when it does not verify. |
-| `bundle --deal ID [--out FILE]` · `permalink --deal ID [--payloads selected]` | The deal's Evidence Bundle, or a viewer link carrying it, read from the deal's own log (`deal/<deal_id>`): the whole deal by default (`--root` and `--closure-depth` override). `--log-id LOG` names any log instead. `disclose` refuses a deal's log, since it would append a disclosure record to it. The bundle carries only the sealed x-deal-v0 records (fingerprints and commitments), not the plain-words lines of `deal report`. |
+| `bundle --deal ID [--out FILE]` · `permalink --deal ID [--payloads selected]` | The deal's Evidence Bundle, or a viewer link carrying it (refused when the fragment is over 8,192 characters; see Sizes), read from the deal's own log (`deal/<deal_id>`): the whole deal by default (`--root` and `--closure-depth` override). `--log-id LOG` names any log instead. `disclose` refuses a deal's log, since it would append a disclosure record to it. The bundle carries only the sealed x-deal-v0 records (fingerprints and commitments), not the plain-words lines of `deal report`. |
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
 | `deal report --email FILE [--bundle FILE]` | Writes the receipt as a ready-to-send email (.eml, no sender or recipient) for the agent host's own email tool: a plain and a static HTML body that read on a phone, with `receipt.html` and `bundle.json` attached. `--bundle` writes the Evidence Bundle for `capsulectl verify --bundle`. Nothing is sent by capsulectl. |
@@ -323,7 +323,14 @@ numbers depend on each deal's steps):
 
 A permalink fragment carries the disclosed bundle as base64url JSON, so it is
 about 4/3 of the bundle's disclosed JSON. It never carries the verifier: the
-hosted viewer brings that.
+hosted viewer brings that. A fragment never leaves the reader's browser, so
+the hosted viewer holds nothing. A bundle too large for a link would have to
+be hosted by someone, which is custody, so `permalink` refuses any fragment
+over 8,192 characters ("too large for a link; share the bundle file") and
+points nowhere else. Uncompressed, the deals above are over that limit:
+share them with `bundle --deal ID --out FILE` until the viewer reads a
+compressed fragment (the prototype column). `--max-fragment 0` lifts the
+limit, to measure.
 
 Do not size a fragment from the `deal report --html` page. That page is
 self-contained, so most of it is the embedded verifier, not evidence: of a

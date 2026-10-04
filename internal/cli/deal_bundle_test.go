@@ -30,8 +30,15 @@ func TestDealBundleAndPermalinkReadTheDealsOwnLog(t *testing.T) {
 	require.NoError(t, json.Unmarshal(mustRead(t, path), &bundle))
 	assert.Len(t, bundle["records"], 5, "the whole deal by default")
 
-	link, err := invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--payloads", "selected")
+	// Uncompressed, a 5-step deal is too large for a link: the bundle file
+	// is the way to share it, and nothing is hosted.
+	_, err = invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--payloads", "selected")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "too large for a link")
+	assert.Contains(t, err.Error(), "share the bundle file")
+	link, err := invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--payloads", "selected", "--max-fragment", "0")
 	require.NoError(t, err, link)
+	assert.True(t, strings.HasPrefix(link, defaultBundleURL+"#"), "a link that is made goes to the neutral verifier")
 	fragment := strings.TrimSpace(link[strings.Index(link, "#")+1:])
 	decoded, err := aacbundle.DecodeFragment(fragment)
 	require.NoError(t, err)
@@ -68,7 +75,7 @@ func TestDealBundleNamesTheLogItNeeds(t *testing.T) {
 func TestFragmentCodecZ1(t *testing.T) {
 	dealFixture(t)
 	dealID := retailDeal(t)
-	link, err := invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--payloads", "selected")
+	link, err := invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--payloads", "selected", "--max-fragment", "0")
 	require.NoError(t, err)
 	plain := strings.TrimSpace(link[strings.Index(link, "#")+1:])
 	value, err := aacbundle.DecodeFragment(plain)
@@ -115,7 +122,7 @@ func TestMeasureDealFragments(t *testing.T) {
 		_, err := invoke(t, "", "--profile", "deal", "bundle", "--deal", dealID, "--out", bundlePath)
 		require.NoError(t, err)
 		for _, payloads := range []string{"selected", "all"} {
-			link, err := invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--payloads", payloads)
+			link, err := invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--payloads", payloads, "--max-fragment", "0")
 			if err != nil {
 				fmt.Printf("steps=%d payloads=%s: %v\n", steps, payloads, err)
 				continue
@@ -130,4 +137,17 @@ func TestMeasureDealFragments(t *testing.T) {
 				steps, payloads, len(mustRead(t, bundlePath)), len(jcs), len(plain), len(z1), float64(len(plain))/float64(len(z1)))
 		}
 	}
+}
+
+// A sqlite deal profile has no evidence book: bundle takes the log path, so
+// it must be told which log (a deal's own) to read.
+func TestDealProfileHasNoBook(t *testing.T) {
+	dealFixture(t)
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	require.Equal(t, "sqlite", p.Type)
+	target, err := openTarget(t.Context(), p, usePublication)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, target.close()) }()
+	assert.Nil(t, target.book)
 }
