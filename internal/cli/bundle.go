@@ -623,54 +623,33 @@ const htmlEmitterStubMessage = "--html requires the agent-action-capsule #102 ev
 
 const producerKeyFlagUsage = "Ed25519 public key (hex) to declare in the producer-key/v1 extension (default: the profile's signing key)"
 
-// bundleLog picks the log a bundle is read from. A deal profile keeps each
-// deal in its own log, deal/<deal_id>, and its own log_id is the cadence log,
-// which holds no records: --deal names a deal (and, unless given, makes the
-// root its last step and the closure the whole deal), --log-id names any log.
-// A deal's log takes deal steps only, so disclose (which appends a
-// disclosure record to the log it read) refuses one.
-func bundleLog(c *cobra.Command, p Profile, use, root string, depth int) (Profile, string, int, error) {
-	dealID, _ := c.Flags().GetString("deal")
+// bundleLog picks the log a bundle is read from: --log-id names any log,
+// else the profile's log_id. A deal profile's log_id is its cadence log,
+// which holds no records, and each deal is its own log: those go through
+// --deal (dealBundleRun). disclose appends a disclosure record to the log it
+// read, so it refuses a deal's log named by --log-id.
+func bundleLog(c *cobra.Command, p Profile, use, root string) (Profile, error) {
 	logID, _ := c.Flags().GetString("log-id")
 	switch {
-	case dealID != "" && logID != "":
-		return p, root, depth, inputError("--deal and --log-id name the same thing: give one")
-	case dealID != "":
-		if !dealIDPattern.MatchString(dealID) {
-			return p, root, depth, inputError("--deal must be a deal id (deal-<16 hex>), as `deal open` printed it")
-		}
-		logID = dealLogID(dealID)
 	case logID != "":
 		if !logName.MatchString(logID) {
-			return p, root, depth, inputError("--log-id is not a valid log id")
+			return p, inputError("--log-id must be lowercase letters, digits and ._:/-, such as a profile's log_id")
 		}
 	case p.LogID == "":
-		return p, root, depth, inputError("the profile has no log_id: name the log with --log-id, or a deal with --deal")
+		return p, inputError("the profile has no log_id: name the log with --log-id, or a deal with --deal")
 	case p.Namespace == "deal" && strings.HasPrefix(p.LogID, "deal-cadence/"):
-		return p, root, depth, inputError("this is a deal profile: each deal is its own log; name the deal with --deal DEAL_ID")
+		return p, inputError("this is a deal profile: each deal is its own log; name the deal with --deal DEAL_ID")
 	default:
-		return p, root, depth, nil
+		return p, nil
 	}
-	if use == "disclose" && strings.HasPrefix(logID, "deal/") {
-		return p, root, depth, inputError("a deal's log takes deal steps only, and disclose would append a disclosure record to it: use bundle or permalink with --deal")
-	}
-	p.LogID = logID
-	if dealID != "" && (root == "" || !c.Flags().Changed("closure-depth")) {
-		steps, err := dealStepIDs(c.Context(), p, dealID)
-		if err != nil {
-			return p, root, depth, err
-		}
-		if root == "" {
-			root = steps[len(steps)-1]
-		}
-		if !c.Flags().Changed("closure-depth") {
-			depth = len(steps) - 1
-		}
+	if strings.HasPrefix(logID, "deal/") {
+		return p, inputError("a deal's logs are read with --deal DEAL_ID, which applies the deal's share rules; --log-id does not")
 	}
 	if root == "" {
-		return p, root, depth, inputError("--root is required")
+		return p, inputError("--root is required: the Capsule ID (64 hex) the bundle is built around")
 	}
-	return p, root, depth, nil
+	p.LogID = logID
+	return p, nil
 }
 
 func bundleCommands() []*cobra.Command {
@@ -684,13 +663,19 @@ func bundleCommands() []*cobra.Command {
 			if html, _ := c.Flags().GetBool("html"); html {
 				return inputError(htmlEmitterStubMessage)
 			}
+			if dealID, _ := c.Flags().GetString("deal"); dealID != "" {
+				return dealBundleRun(c, use)
+			}
+			if c.Flags().Changed("share") || c.Flags().Changed("to") {
+				return inputError("--share and --to go with --deal: they choose what a deal's shared copy withholds")
+			}
 			profile, err := selected(c)
 			if err != nil {
 				return err
 			}
 			root, _ := c.Flags().GetString("root")
 			closureDepth, _ := c.Flags().GetInt("closure-depth")
-			if profile, root, closureDepth, err = bundleLog(c, profile, use, root, closureDepth); err != nil {
+			if profile, err = bundleLog(c, profile, use, root); err != nil {
 				return err
 			}
 			payloads, _ := c.Flags().GetString("payloads")
@@ -735,29 +720,11 @@ func bundleCommands() []*cobra.Command {
 				}
 			}
 			if permalink {
-				fragment, err := aacbundle.EncodeFragment(value)
+				link, err := mintPermalink(c, value)
 				if err != nil {
 					return err
 				}
-				decoded, err := aacbundle.DecodeFragment(fragment)
-				if err != nil {
-					return err
-				}
-				if _, ok := decoded.(map[string]interface{}); !ok {
-					return errors.New("permalink fragment did not round-trip")
-				}
-				// A link carries the bundle in its fragment, which never leaves
-				// the reader's browser, so the hosted verifier holds nothing. A
-				// bundle too large for a link would have to be hosted by
-				// someone, which is custody; capsulectl does not do that.
-				if limit, _ := c.Flags().GetInt("max-fragment"); limit > 0 && len(fragment) > limit {
-					return inputError(fmt.Sprintf("too large for a link (%d characters; the limit is %d): share the bundle file instead (`capsulectl bundle ... --out FILE`)", len(fragment), limit))
-				}
-				base, _ := c.Flags().GetString("base-url")
-				if base == "" {
-					base = defaultBundleURL
-				}
-				_, err = fmt.Fprintln(c.OutOrStdout(), strings.TrimRight(base, "#")+"#"+fragment)
+				_, err = fmt.Fprintln(c.OutOrStdout(), link)
 				return err
 			}
 			out, _ := c.Flags().GetString("out")
@@ -772,8 +739,10 @@ func bundleCommands() []*cobra.Command {
 			_, err = c.OutOrStdout().Write(append(encoded, '\n'))
 			return err
 		}}
-		command.Flags().String("root", "", "Root Capsule ID (with --deal, default: the deal's last step)")
-		command.Flags().String("deal", "", "Read a deal's own log (deal/<deal_id>) on a deal profile; --root and --closure-depth then default to the whole deal")
+		command.Flags().String("root", "", "Root Capsule ID")
+		command.Flags().String("deal", "", "A deal on a deal profile: the whole deal from its own log, built as `deal report` builds it (disclose and permalink also need --share and --to)")
+		command.Flags().String("share", dealAudienceKeep, "With --deal: who the copy is for: keep (bundle only: your own copy), counterparty or adjudicator (a shared copy, put on record first)")
+		command.Flags().String("to", "", "With --deal and --share: who the shared copy is for, as sealed in the disclosure record")
 		command.Flags().String("log-id", "", "Read this log instead of the profile's log_id")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
 		command.Flags().String("producer-key", "", producerKeyFlagUsage)
