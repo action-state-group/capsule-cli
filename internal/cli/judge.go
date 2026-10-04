@@ -45,12 +45,7 @@ func calibrationCommands() *cobra.Command {
 // 700000 and 700000.0 are indistinguishable as a Go float64 but not as JSON
 // text. Same convention as decodeBundleJSON/getCapsule elsewhere in this
 // package.
-func decodeJSONPreserveNumbers(raw []byte, v any) (err error) {
-	defer func() {
-		if err != nil {
-			err = errors.Join(ErrInput, err)
-		}
-	}()
+func decodeJSONPreserveNumbers(label string, raw []byte, v any) error {
 	if len(raw) > maxInput {
 		return inputError("the input exceeds the 12 MiB size limit")
 	}
@@ -58,11 +53,11 @@ func decodeJSONPreserveNumbers(raw []byte, v any) (err error) {
 	d.UseNumber()
 	d.DisallowUnknownFields()
 	if e := d.Decode(v); e != nil {
-		return inputError("the input is not valid JSON, or has a field this command does not accept (see the command's documented format)")
+		return inputError(jsonDecodeReason(label, e))
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return inputError("the input must hold exactly one JSON value")
+		return inputError(label + " must hold exactly one JSON value; more follows it")
 	}
 	return nil
 }
@@ -165,7 +160,7 @@ func judgePinCommand() *cobra.Command {
 				return e
 			}
 			var input judgePinInput
-			if e := decodeJSONPreserveNumbers(raw, &input); e != nil {
+			if e := decodeJSONPreserveNumbers(args[0], raw, &input); e != nil {
 				return e
 			}
 			digest, e := judgePinDigest(input)
@@ -206,10 +201,10 @@ func judgeDriftPinCommand() *cobra.Command {
 				return e
 			}
 			var a, b judgePinInput
-			if e := decodeJSONPreserveNumbers(rawA, &a); e != nil {
+			if e := decodeJSONPreserveNumbers(args[0], rawA, &a); e != nil {
 				return e
 			}
-			if e := decodeJSONPreserveNumbers(rawB, &b); e != nil {
+			if e := decodeJSONPreserveNumbers(args[1], rawB, &b); e != nil {
 				return e
 			}
 			digestA, e := judgePinDigest(a)
@@ -245,7 +240,7 @@ func readReportSet(path string) ([]evaluationReportRecord, error) {
 		return nil, e
 	}
 	var records []evaluationReportRecord
-	if e := decodeJSONPreserveNumbers(raw, &records); e != nil {
+	if e := decodeJSONPreserveNumbers(path, raw, &records); e != nil {
 		return nil, e
 	}
 	seen := make(map[string]bool, len(records))
@@ -392,7 +387,7 @@ func readHumanRatings(path string) ([]humanRatingRecord, error) {
 		return nil, e
 	}
 	var records []humanRatingRecord
-	if e := decodeJSONPreserveNumbers(raw, &records); e != nil {
+	if e := decodeJSONPreserveNumbers(path, raw, &records); e != nil {
 		return nil, e
 	}
 	seen := make(map[string]bool, len(records))

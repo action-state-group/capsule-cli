@@ -191,7 +191,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 			return e
 		}
 		var proof Proof
-		if e = decodeJSON(raw, &proof); e != nil {
+		if e = decodeJSONAs("--proof "+path, raw, &proof); e != nil {
 			return e
 		}
 		r, e := verifyCheckpoint(p, proof.Checkpoint)

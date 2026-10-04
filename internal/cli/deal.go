@@ -576,7 +576,7 @@ func dealOpenCommand() *cobra.Command {
 			return err
 		}
 		var o dealOpen
-		if err = decodeJSON(raw, &o); err != nil {
+		if err = decodeJSONAs("--input", raw, &o); err != nil {
 			return err
 		}
 		if err = o.validate(); err != nil {
@@ -658,7 +658,7 @@ func dealNoteCommand() *cobra.Command {
 			case "act":
 				target = &act
 			}
-			if err = decodeJSON(raw, target); err != nil {
+			if err = decodeJSONAs("--input", raw, target); err != nil {
 				return err
 			}
 		case "approval":
@@ -796,7 +796,7 @@ func dealCheckCommand() *cobra.Command {
 			return err
 		}
 		var snap dealSnapshot
-		if err = decodeJSON(raw, &snap); err != nil {
+		if err = decodeJSONAs("--input", raw, &snap); err != nil {
 			return err
 		}
 		staleAfter, _ := c.Flags().GetDuration("stale-after")
@@ -902,7 +902,7 @@ func dealCloseCommand() *cobra.Command {
 			return err
 		}
 		var in dealCloseInput
-		if err = decodeJSON(raw, &in); err != nil {
+		if err = decodeJSONAs("--input", raw, &in); err != nil {
 			return err
 		}
 		if !slices.Contains([]string{"received", "pending", "not_received"}, in.Status) {

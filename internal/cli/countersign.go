@@ -281,7 +281,7 @@ func postJSON(ctx context.Context, client *http.Client, target string, body, out
 	if len(raw) > maxCountersignResponse {
 		return fmt.Errorf("%s response exceeds size limit", target)
 	}
-	return decodeJSON(raw, out)
+	return decodeJSONAs("the response from "+target, raw, out)
 }
 
 // getJSON is postJSON's read-only counterpart, used for the directory fetch.
@@ -305,7 +305,7 @@ func getJSON(ctx context.Context, client *http.Client, target string, out any) e
 	if len(raw) > maxCountersignResponse {
 		return fmt.Errorf("%s response exceeds size limit", target)
 	}
-	return decodeJSON(raw, out)
+	return decodeJSONAs("the response from "+target, raw, out)
 }
 
 // buildCountersignSubmission signs the bundle digest with the requester's own
@@ -420,7 +420,7 @@ func decodeCountersignerDirectory(raw []byte) (countersignerDirectory, error) {
 		}
 	}
 	var dir countersignerDirectory
-	if err := decodeJSON(rows, &dir.Countersigners); err != nil {
+	if err := decodeJSONAs("the countersigner directory", rows, &dir.Countersigners); err != nil {
 		return countersignerDirectory{}, err
 	}
 	return dir, nil

@@ -845,7 +845,7 @@ func requestCommand() *cobra.Command {
 			if e != nil {
 				return e
 			}
-			if e = decodeJSON(raw, &req); e != nil {
+			if e = decodeJSONAs("--request "+ask, raw, &req); e != nil {
 				return e
 			}
 		}
@@ -866,7 +866,7 @@ func requestCommand() *cobra.Command {
 			if e != nil {
 				return e
 			}
-			if e = decodeJSON(raw, &resp); e != nil {
+			if e = decodeJSONAs("--response "+answer, raw, &resp); e != nil {
 				return e
 			}
 		}
@@ -963,7 +963,7 @@ func respondCommand() *cobra.Command {
 			if e != nil {
 				return e
 			}
-			if e = decodeJSON(raw, &policy); e != nil {
+			if e = decodeJSONAs("--policy "+policyPath, raw, &policy); e != nil {
 				return e
 			}
 		}

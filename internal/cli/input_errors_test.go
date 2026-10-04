@@ -82,16 +82,15 @@ func TestInputErrorsNameTheProblem(t *testing.T) {
 			assert.True(t, strings.HasPrefix(msg, ErrInput.Error()+": "), msg)
 		})
 	}
+	t.Run("JSON input", func(t *testing.T) { jsonInputErrorCases(t, p) })
 }
 
 // joinAllowed lists the functions that join ErrInput with an error that is
 // already a shown reason (an inputError, a hint, or an error type SafeError
 // prints), so the join only fixes the exit code.
 var joinAllowed = map[string]string{
-	"decodeJSON":                "joins the inputError reasons it returns",
-	"decodeJSONPreserveNumbers": "joins the inputError reasons it returns",
-	"selected":                  "loadProfile returns inputError reasons",
-	"profileCommands":           "profile show: loadProfile returns inputError reasons",
+	"selected":        "loadProfile returns inputError reasons",
+	"profileCommands": "profile show: loadProfile returns inputError reasons",
 }
 
 // shownTypes are the error values SafeError prints in their own words.
@@ -192,4 +191,40 @@ func exprName(e ast.Expr) string {
 		return exprName(v.X) + "." + v.Sel.Name
 	}
 	return ""
+}
+
+// jsonInputErrorCases: a JSON input that does not fit names the flag or
+// file, then the unknown field, the mistyped field and the type it takes, or
+// the byte where the syntax breaks; it never repeats a value.
+func jsonInputErrorCases(t *testing.T, p Profile) {
+	const secret = "SECRET-VALUE-0123"
+	file := func(body string) string {
+		path := filepath.Join(t.TempDir(), "in.json")
+		require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+		return path
+	}
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"unknown field", []string{"publish", "--profile", p.Name, "--request", file(`{"spec_version":"capsule-seal-request/v1","capsule":{},"bogus_field":"` + secret + `"}`)},
+			`--request has a field this command does not accept: "bogus_field"`},
+		{"wrong type", []string{"publish", "--profile", p.Name, "--request", file(`{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":["` + secret + `"]}}`)},
+			"--request: field capsule.ActionID must be a string, not array"},
+		{"syntax", []string{"publish", "--profile", p.Name, "--request", file(`{"spec_version":"` + secret + `",,}`)},
+			"--request is not valid JSON: the syntax breaks at byte 37"},
+		{"judge file wrong type", []string{"judge", "pin", file(`{"model_id":{"x":"` + secret + `"}}`)},
+			"field model_id must be a string, not object"},
+		{"empty", []string{"publish", "--profile", p.Name, "--request", file(``)},
+			"--request is empty or ends before its JSON value is complete"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := invoke(t, "", tc.args...)
+			require.ErrorIs(t, err, ErrInput)
+			msg := SafeError(err)
+			assert.Contains(t, msg, tc.want)
+			assert.NotContains(t, msg+out, secret, "a value from the input is never repeated")
+		})
+	}
 }

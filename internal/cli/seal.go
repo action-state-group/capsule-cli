@@ -5,9 +5,12 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	"reflect"
+	"regexp"
 	"strings"
 
 	emit "github.com/action-state-group/capsule-emit-go"
@@ -100,25 +103,79 @@ func (c *chainRequest) toEmit() *emit.Chain {
 
 const maxInput = 12 << 20
 
-func decodeJSON(raw []byte, v any) (err error) {
-	defer func() {
-		if err != nil {
-			err = errors.Join(ErrInput, err)
-		}
-	}()
+func decodeJSON(raw []byte, v any) error { return decodeJSONAs("the JSON input", raw, v) }
+
+// decodeJSONAs decodes one strict JSON value; label names the input in a
+// refusal: the flag or file it came from.
+func decodeJSONAs(label string, raw []byte, v any) error {
 	if len(raw) > maxInput {
 		return inputError("the input exceeds the 12 MiB size limit")
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if e := d.Decode(v); e != nil {
-		return inputError("the input is not valid JSON, or has a field this command does not accept (see the command's documented format)")
+		return inputError(jsonDecodeReason(label, e))
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return inputError("the input must hold exactly one JSON value")
+		return inputError(label + " must hold exactly one JSON value; more follows it")
 	}
 	return nil
+}
+
+var jsonUnknownField = regexp.MustCompile(`^json: unknown field "([^"]*)"$`)
+
+// jsonDecodeReason says what is wrong with a JSON input: the unknown field's
+// name, the mistyped field with the type it takes, or where the syntax breaks.
+// It never repeats a value from the input, only field names and positions.
+func jsonDecodeReason(in string, err error) string {
+	var syntax *json.SyntaxError
+	var typed *json.UnmarshalTypeError
+	switch {
+	case errors.As(err, &syntax):
+		return fmt.Sprintf("%s is not valid JSON: the syntax breaks at byte %d", in, syntax.Offset)
+	case errors.As(err, &typed):
+		field := typed.Field
+		if field == "" {
+			field = "(the top level)"
+		}
+		return fmt.Sprintf("%s: field %s must be %s, not %s", in, field, jsonTypeName(typed.Type), typed.Value)
+	case jsonUnknownField.MatchString(err.Error()):
+		return fmt.Sprintf("%s has a field this command does not accept: %q (see the command's documented format)", in, jsonUnknownField.FindStringSubmatch(err.Error())[1])
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return in + " is empty or ends before its JSON value is complete"
+	default:
+		return in + " could not be read as this command's JSON format (see --help)"
+	}
+}
+
+// jsonTypeName names a Go destination type as the JSON type it accepts.
+func jsonTypeName(t reflect.Type) string {
+	if t == nil {
+		return "a different JSON type"
+	}
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.String:
+		return "a string"
+	case reflect.Bool:
+		return "true or false"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "an integer"
+	case reflect.Float32, reflect.Float64:
+		return "a number"
+	case reflect.Slice, reflect.Array:
+		if t.Elem().Kind() == reflect.Uint8 {
+			return "a base64 string"
+		}
+		return "an array"
+	case reflect.Map, reflect.Struct:
+		return "an object"
+	default:
+		return "a different JSON type"
+	}
 }
 
 // inputFileError reports a user-provided input file (the value of --request,
@@ -161,7 +218,7 @@ func readInput(path string) ([]byte, error) {
 }
 func parseRequest(raw []byte) (Request, error) {
 	var r Request
-	e := decodeJSON(raw, &r)
+	e := decodeJSONAs("--request", raw, &r)
 	if e != nil {
 		return r, e
 	}
@@ -213,7 +270,7 @@ func readRecord(path string) (artifact.Record, error) {
 	if e != nil {
 		return r, e
 	}
-	e = decodeJSON(b, &r)
+	e = decodeJSONAs("--capsule "+path, b, &r)
 	return r, e
 }
 
