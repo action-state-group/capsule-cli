@@ -95,6 +95,33 @@ func dealDidLineOf(b map[string]interface{}) string {
 // sealed by the agent's own device, and the text says whether it is still
 // scheduled for the next tick or waiting for the witness.
 func dealAssurance(b map[string]interface{}) map[string]any {
+	out := dealAssuranceRung(b)
+	if line := dealProducedByLine(b); line != "" {
+		out["text"] = out["text"].(string) + " " + line
+		out["produced_by"] = line
+	}
+	return out
+}
+
+// dealProducedByLine is "Produced by capsulectl <version> (<commit>)." from
+// the bundle's x-deal-v0 extension, or "" when it names none.
+func dealProducedByLine(b map[string]interface{}) string {
+	ext, _ := b["extensions"].(map[string]interface{})
+	deal, _ := ext["x-deal-v0"].(map[string]interface{})
+	list, _ := deal["produced_by"].([]interface{})
+	var names []string
+	for _, v := range list {
+		if s, ok := v.(string); ok && s != "" {
+			names = append(names, s)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return "Produced by " + strings.Join(names, ", then ") + "."
+}
+
+func dealAssuranceRung(b map[string]interface{}) map[string]any {
 	ext, _ := b["extensions"].(map[string]interface{})
 	cadence, _ := ext[dealCadenceExtension].(map[string]interface{})
 	state, _ := cadence["state"].(string)

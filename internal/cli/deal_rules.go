@@ -289,6 +289,46 @@ type dealEvent struct {
 	Outcome  *dealCloseResult  `json:"outcome,omitempty"`
 	Close    *dealCloseResult  `json:"close,omitempty"`
 	Nonces   map[string]string `json:"nonces,omitempty"`
+	// Producer is the capsulectl build that sealed the step, kept with the
+	// step so that a later build re-derives the same record.
+	Producer *dealProducer `json:"producer,omitempty"`
+}
+
+// dealProducer names the build that sealed a step. A development build says
+// so: its version is cliVersion's default ("0.1.0-dev") and its commit
+// "unknown" unless the build sets them.
+type dealProducer struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+}
+
+// dealUnrecordedProducer names the build of a step sealed before builds
+// were recorded.
+const dealUnrecordedProducer = "an earlier capsulectl that did not record its version"
+
+// dealProducers lists, in order of first use, the builds that sealed a
+// deal's steps: usually one, more when the deal spanned an upgrade.
+func dealProducers(events []sealedEvent) []string {
+	var out []string
+	for _, se := range events {
+		name := dealUnrecordedProducer
+		if se.Event.Producer != nil {
+			name = se.Event.Producer.String()
+		}
+		if !slices.Contains(out, name) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func currentProducer() *dealProducer {
+	return &dealProducer{Name: "capsulectl", Version: cliVersion, Commit: cliCommit}
+}
+
+func (p *dealProducer) String() string {
+	return p.Name + " " + p.Version + " (" + p.Commit + ")"
 }
 
 // sealedEvent is an event as read back from the store: the capsule that holds

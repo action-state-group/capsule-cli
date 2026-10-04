@@ -373,6 +373,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		block["prev"] = digestRef(events[len(events)-1].Digest)
 		block["baseline_ref"] = digestRef(events[0].Digest)
 	}
+	// A step sealed before producers were recorded has none and re-derives
+	// without one.
+	if ev.Producer != nil {
+		block["producer"] = map[string]interface{}{"name": ev.Producer.Name, "version": ev.Producer.Version, "commit": ev.Producer.Commit}
+	}
 	var currency string
 	if len(events) > 0 {
 		currency = events[0].Event.Open.Terms.Currency

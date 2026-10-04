@@ -136,7 +136,11 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 			"asked_opening": map[string]interface{}{"nonce": events[0].Event.Nonces["verbatim"], "text": events[0].Event.Open.Intent.Verbatim},
 			"did":           items(report.Did), "anomalies": items(report.Anomalies),
 			"did_line": dealDidLine(dealDidSources(events)),
-			"scope":    dealScopeLine, "audience": dealAudienceKeep, "verify_command": verifyCommand,
+			// Which builds sealed the steps, and which one made this page:
+			// the page compares the two from data it already holds. Nothing
+			// is fetched to do it.
+			"produced_by": stringList(dealProducers(events)), "page_built_by": currentProducer().String(), "page_version": cliVersion,
+			"scope": dealScopeLine, "audience": dealAudienceKeep, "verify_command": verifyCommand,
 		},
 	}
 	// The merchant rows carry only strings and booleans; round-trip them to
@@ -296,4 +300,12 @@ func bundleJSON(v any) (interface{}, error) {
 		return x, nil
 	}
 	return walk(generic)
+}
+
+func stringList(values []string) []interface{} {
+	out := make([]interface{}, len(values))
+	for i, v := range values {
+		out[i] = v
+	}
+	return out
 }
