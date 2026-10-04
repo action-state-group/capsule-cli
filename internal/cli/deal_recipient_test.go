@@ -140,3 +140,80 @@ func TestDealCheckDisclosingIsChecked(t *testing.T) {
 		assert.Contains(t, out+err.Error(), want, body)
 	}
 }
+
+func openSeller(t *testing.T, who string) string {
+	t.Helper()
+	return dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"marketplace",
+		"intent":{"verbatim":"buy the bike","allowed":["pay","share_contact"]},
+		"who":`+who+`,
+		"terms":{"item":"bike","price_minor":12000,"currency":"USD"},
+		"recourse":{"rail":"cash","refundable":false}}`))["deal_id"].(string)
+}
+
+// tellAddress checks, approves and seals the address going to the deal's
+// counterparty; it returns the check.
+func tellAddress(t *testing.T, dealID string) map[string]any {
+	t.Helper()
+	check := shareCheck(t, dealID, `"address"`)
+	if check["verdict"] == "pause" {
+		dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
+	}
+	require.Equal(t, true, dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t, `{"fields":[{"class":"address","value":"`+homeStreet+`"}]}`))["approved"])
+	return check
+}
+
+// A platform's domain is shared by every seller on it: a stranger on the
+// same marketplace is a stranger. Per-party identities decide when either
+// side has one; the registrable domain decides only when it is all both
+// sides have.
+func TestDealSharedPlatformIsNotOneCounterparty(t *testing.T) {
+	dealFixture(t)
+	first := tellAddress(t, openSeller(t, `{"name":"Seller A","profile_id":"fb:111","domain":"facebook.com"}`))
+	assert.Equal(t, "pause", first["verdict"])
+
+	for _, who := range []string{
+		`{"name":"Seller B","profile_id":"fb:222","domain":"https://www.facebook.com/marketplace"}`,
+		`{"name":"Seller C","domain":"evil.facebook.com"}`,
+		`{"name":"Seller A","phone":"+1 555 010 0001","domain":"facebook.com"}`,
+	} {
+		check := shareCheck(t, openSeller(t, who), `"address"`)
+		assert.Equal(t, "pause", check["verdict"], "%s is not seller A", who)
+		assert.Contains(t, check["card"], "First time telling", who)
+		assert.Contains(t, check["card"], "First time dealing with", who)
+	}
+
+	// Seller A again, by profile id: a note.
+	check := shareCheck(t, openSeller(t, `{"name":"A. Seller","profile_id":"fb:111","domain":"m.facebook.com"}`), `"address"`)
+	assert.Equal(t, "pass", check["verdict"], check["card"])
+	assert.Contains(t, check["note"], "street address before")
+
+	// A merchant known only by its website matches by registrable domain;
+	// a lookalike does not.
+	tellAddress(t, openMerchant(t, "shop.example.com"))
+	assert.Equal(t, "pass", shareCheck(t, openMerchant(t, "https://www.example.com/checkout"), `"address"`)["verdict"])
+	for _, lookalike := range []string{"example-shop.com", "examp1e.com", "example.com.evil.net"} {
+		assert.Equal(t, "pause", shareCheck(t, openMerchant(t, lookalike), `"address"`)["verdict"], lookalike)
+	}
+}
+
+// Leaving out what is given is no way around the first-time pause.
+func TestDealOmittingWhatIsGivenDoesNotBypassTheFirstTelling(t *testing.T) {
+	dealFixture(t)
+	dealID := openSeller(t, `{"name":"Garage Sale Gary","profile_id":"mkt:seller:4411"}`)
+
+	// (a) A share_contact check must name what it gives.
+	out, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact"}`))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, out+err.Error(), `needs "disclosing"`)
+
+	// (b) A disclosure whose covering check named nothing (here a
+	// share_credentials check, where naming is optional) is a first telling
+	// of each class it gives, and is not covered by it.
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_credentials"}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
+	sent := dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t, `{"fields":[{"class":"verification_code","value":"481516"}]}`))
+	assert.Equal(t, false, sent["approved"])
+	assert.Equal(t, "first time telling them your verification code, and no check named it", sent["reason"])
+	report := dealRun(t, "report", "--deal", dealID)
+	assert.Contains(t, reportTexts(t, report, "anomalies"), "agent/unapproved_disclosure: Told Garage Sale Gary your verification code without your approval (first time telling them your verification code, and no check named it)")
+}

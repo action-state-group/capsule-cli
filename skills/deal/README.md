@@ -86,14 +86,21 @@ it: the first time a class goes to a counterparty, the check pauses, naming
 them and the class; a class given to them before is a note and no pause. It
 does not ask whether the user named the share in their words: an address
 typed into a merchant's delivery form for the tenth time never pauses, and
-an address sent to a stranger always does. A disclosure that gives a class
-its check did not name is not covered by it.
+an address sent to a stranger always does. A `share_contact` check must name
+what it gives. A disclosure that gives a class its check did not name is not
+covered by it, and neither is a first telling covered by a check that named
+nothing.
 
 **Counterparty memory.** Who the user has dealt with, and what each was
 told, is read from this device's own store across all deals: every deal's
 opening and every sealed disclosure. A counterparty is known by mechanical
 identities only (the website's registrable domain, an email address, a
-phone number, a marketplace profile id, a reply address), never by name. A
+phone number, a marketplace profile id, a reply address), never by name.
+When either side has a per-party identity (an email, a phone, a profile id,
+a reply address), only those decide: every seller on a marketplace shares
+its domain, so a second seller there is a stranger. The registrable domain
+decides only when it is all both sides have, as for a merchant known by its
+website. A
 counterparty with no earlier deal gets "First time dealing with …" on the
 card. A check seals only rule tokens from the memory (`first_disclosure`,
 `first_time_counterparty`, `repeat_disclosure`), never a name or a value.

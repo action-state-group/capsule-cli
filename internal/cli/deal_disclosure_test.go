@@ -37,12 +37,15 @@ func openDisclosureDeal(t *testing.T) (dealID string, phone, pickup map[string]a
 		"terms":{"item":"bike","price_minor":12000,"currency":"USD"},
 		"recourse":{"rail":"cash","refundable":false}}`
 	dealID = dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
-	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","description":"give the seller my number"}`))
-	require.Equal(t, "pass", check["verdict"])
+	// A first telling to a seller never dealt with: the user's own nod.
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","description":"give the seller my number","disclosing":["phone"]}`))
+	require.Equal(t, "pause", check["verdict"])
+	approval := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "yes, give them my number")
 	phone = dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t,
 		`{"channel":"marketplace","fields":[{"class":"phone","value":"`+userPhone+`"}]}`))
 	pickup = dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t,
 		`{"channel":"marketplace","fields":[{"class":"pickup_location","value":"`+pickupSpot+`"}]}`))
+	require.Equal(t, approval["capsule_id"], phone["authorized_by"])
 	return dealID, phone, pickup
 }
 
@@ -63,7 +66,7 @@ func TestDealDisclosureLedgerNamesWhatWhoWhenAndAuthority(t *testing.T) {
 	dealID, phone, pickup := openDisclosureDeal(t)
 
 	assert.Equal(t, true, phone["approved"])
-	assert.NotEmpty(t, phone["authorized_by"], "the standing intent's approval covers the phone")
+	assert.NotEmpty(t, phone["authorized_by"], "the user's approval covers the phone")
 	assert.Equal(t, []any{"phone"}, phone["classes"])
 	assert.Equal(t, false, pickup["approved"], "that approval already covered the phone")
 	assert.Empty(t, pickup["authorized_by"])

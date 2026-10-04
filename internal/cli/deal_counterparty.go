@@ -17,16 +17,59 @@ import (
 // it never drifts from them, and it never leaves the device: a check seals
 // only rule tokens from it, never a name or a value.
 //
-// A counterparty is known by mechanical identities only: the merchant's
-// registrable domain, an email address, a phone number, a marketplace
-// profile id, a relay address. A name is not an identity: two sellers can
-// share one, and one seller can write it many ways.
+// A counterparty is known by mechanical identities only: an email address,
+// a phone number, a marketplace profile id, a relay address, and the
+// merchant's registrable domain. A name is not an identity: two sellers can
+// share one, and one seller can write it many ways. See sameParty for how
+// two sets of identities are read as one party.
 type dealCounterpartyMemory struct {
-	// dealt maps an identity to the other deals opened with it.
-	dealt map[string][]string
-	// told maps an identity to the classes disclosed to it, each with the
-	// first time it happened.
-	told map[string]map[string]string
+	// dealt lists the other deals, each with its counterparty's identities.
+	dealt []dealPartyDeal
+	// told lists every disclosure: the recipient's identities, the class and
+	// when.
+	told []dealPartyTold
+}
+
+type dealPartyDeal struct {
+	keys []string
+	deal string
+}
+
+type dealPartyTold struct {
+	keys      []string
+	class, at string
+}
+
+// perPartyKinds identify one party. A domain does not when the party is one
+// seller among many on a platform: every marketplace stranger shares
+// facebook.com.
+var perPartyKinds = []string{"email", "phone", "profile_id", "relay_address"}
+
+func perParty(keys []string) []string {
+	var out []string
+	for _, k := range keys {
+		if slices.Contains(perPartyKinds, k[:strings.Index(k, ":")]) {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+func sharesKey(a, b []string) bool {
+	return slices.ContainsFunc(a, func(k string) bool { return slices.Contains(b, k) })
+}
+
+// sameParty reads two sets of identities as one party. When either side has
+// a per-party identity (an email, a phone, a profile id, a relay address),
+// only those count: a stranger on the same platform is a stranger. The
+// registrable domain counts only when it is the sole identity on both sides,
+// as for a merchant known by its website.
+func sameParty(a, b []string) bool {
+	pa, pb := perParty(a), perParty(b)
+	if len(pa) > 0 || len(pb) > 0 {
+		return sharesKey(pa, pb)
+	}
+	return sharesKey(a, b)
 }
 
 // counterpartyKeys are a counterparty's mechanical identities.
@@ -64,7 +107,7 @@ func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ 
 		return nil, err
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
-	m := &dealCounterpartyMemory{dealt: map[string][]string{}, told: map[string]map[string]string{}}
+	m := &dealCounterpartyMemory{}
 	opened := map[string]dealWho{}
 	for rows.Next() {
 		var id, kind, local string
@@ -78,54 +121,46 @@ func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ 
 		switch {
 		case kind == "open" && ev.Open != nil:
 			opened[id] = ev.Open.Who
-			if id == dealID {
-				continue
-			}
-			for _, k := range counterpartyKeys(ev.Open.Who) {
-				if !slices.Contains(m.dealt[k], id) {
-					m.dealt[k] = append(m.dealt[k], id)
-				}
+			if id != dealID {
+				m.dealt = append(m.dealt, dealPartyDeal{keys: counterpartyKeys(ev.Open.Who), deal: id})
 			}
 		case kind == "disclosure" && ev.Disclosure != nil:
-			d := ev.Disclosure
-			var keys []string
-			if d.Who != nil {
-				keys = counterpartyKeys(*d.Who)
-			}
-			if d.To == "counterparty" {
-				keys = append(keys, counterpartyKeys(opened[id])...)
-			}
-			for _, k := range keys {
-				if m.told[k] == nil {
-					m.told[k] = map[string]string{}
-				}
-				for _, f := range d.Fields {
-					if _, ok := m.told[k][f.Class]; !ok {
-						m.told[k][f.Class] = ev.At
-					}
-				}
+			keys := disclosureRecipientKeys(*ev.Disclosure, opened[id])
+			for _, f := range ev.Disclosure.Fields {
+				m.told = append(m.told, dealPartyTold{keys: keys, class: f.Class, at: ev.At})
 			}
 		}
 	}
 	return m, rows.Err()
 }
 
-// firstTime reports whether no other deal was opened with any of keys.
-func (m *dealCounterpartyMemory) firstTime(keys []string) bool {
-	for _, k := range keys {
-		if len(m.dealt[k]) > 0 {
-			return false
-		}
+// disclosureRecipientKeys are the identities of whoever a disclosure went
+// to: the named recipient, else the deal's counterparty.
+func disclosureRecipientKeys(d dealDisclosure, counterparty dealWho) []string {
+	var keys []string
+	if d.Who != nil {
+		keys = counterpartyKeys(*d.Who)
 	}
-	return true
+	if d.To == "other" {
+		return keys
+	}
+	return append(keys, counterpartyKeys(counterparty)...)
 }
 
-// toldBefore returns when class was first disclosed to any of keys, or "".
+// firstTime reports whether no other deal was opened with this party.
+func (m *dealCounterpartyMemory) firstTime(keys []string) bool {
+	return len(keys) == 0 || !slices.ContainsFunc(m.dealt, func(d dealPartyDeal) bool { return sameParty(keys, d.keys) })
+}
+
+// toldBefore returns when class was first disclosed to this party, or "".
 func (m *dealCounterpartyMemory) toldBefore(keys []string, class string) string {
 	first := ""
-	for _, k := range keys {
-		if at, ok := m.told[k][class]; ok && (first == "" || at < first) {
-			first = at
+	if len(keys) == 0 {
+		return first
+	}
+	for _, t := range m.told {
+		if t.class == class && sameParty(keys, t.keys) && (first == "" || t.at < first) {
+			first = t.at
 		}
 	}
 	return first
@@ -179,28 +214,39 @@ func sortedClasses(classes []string) []string {
 }
 
 // uncheckedClass returns a class a disclosure gave that the check behind its
-// approval did not name, when that check named what it was about to give.
-func uncheckedClass(events []sealedEvent, approval string, fields []dealDisclosureField) string {
+// approval did not name, and the rule: class_not_checked when that check
+// named what it was about to give, first_disclosure_unchecked when it named
+// nothing and the class is a first telling to this recipient (a check made
+// without `disclosing` never stands in for the first-time pause).
+func uncheckedClass(events []sealedEvent, approval string, fields []dealDisclosureField, memory *dealCounterpartyMemory, keys []string) (class, rule string) {
+	snap := approvingSnapshot(events, approval)
+	if snap == nil {
+		return "", ""
+	}
+	for _, f := range fields {
+		switch {
+		case len(snap.Disclosing) > 0 && !slices.Contains(snap.Disclosing, f.Class):
+			return f.Class, "class_not_checked"
+		case len(snap.Disclosing) == 0 && memory.toldBefore(keys, f.Class) == "":
+			return f.Class, "first_disclosure_unchecked"
+		}
+	}
+	return "", ""
+}
+
+// approvingSnapshot is the snapshot of the check an approval answered.
+func approvingSnapshot(events []sealedEvent, approval string) *dealSnapshot {
 	byID := map[string]dealEvent{}
 	for _, se := range events {
 		byID[se.CapsuleID] = se.Event
 	}
 	a := byID[approval].Approval
 	if a == nil {
-		return ""
+		return nil
 	}
 	ck := byID[a.Check].Check
 	if ck == nil {
-		return ""
+		return nil
 	}
-	snap := byID[ck.Snapshot].Snapshot
-	if snap == nil || len(snap.Disclosing) == 0 {
-		return ""
-	}
-	for _, f := range fields {
-		if !slices.Contains(snap.Disclosing, f.Class) {
-			return f.Class
-		}
-	}
-	return ""
+	return byID[ck.Snapshot].Snapshot
 }

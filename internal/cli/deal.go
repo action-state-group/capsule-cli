@@ -754,8 +754,18 @@ func dealNoteCommand() *cobra.Command {
 					return inputError("this deal type has no " + d.action() + " point of no return")
 				}
 				d.AuthorizedBy, d.Reason, d.Rule = authorizeAct(events, dealAct{Action: d.action()})
-				if class := uncheckedClass(events, d.AuthorizedBy, d.Fields); class != "" {
-					d.AuthorizedBy, d.Reason, d.Rule = "", "the check did not name your "+classWord(class), "class_not_checked"
+				if d.AuthorizedBy != "" {
+					memory, err := s.counterpartyMemory(ctx, dealID)
+					if err != nil {
+						return err
+					}
+					keys := disclosureRecipientKeys(*d, open.Who)
+					switch class, rule := uncheckedClass(events, d.AuthorizedBy, d.Fields, memory, keys); rule {
+					case "class_not_checked":
+						d.AuthorizedBy, d.Reason, d.Rule = "", "the check did not name your "+classWord(class), rule
+					case "first_disclosure_unchecked":
+						d.AuthorizedBy, d.Reason, d.Rule = "", "first time telling them your "+classWord(class)+", and no check named it", rule
+					}
 				}
 			}
 			se, err := s.seal(ctx, dealID, events, ev)
@@ -905,6 +915,9 @@ func dealCheckCommand() *cobra.Command {
 			}
 			if snap.Who != nil && snap.Who.DomainAgeDays != nil {
 				return inputError("record the website's age as evidence, not in the check")
+			}
+			if snap.Action == "share_contact" && len(snap.Disclosing) == 0 {
+				return inputError(`a share_contact check needs "disclosing": the class of every field about to be given, for example ["name","email","address"]`)
 			}
 			if len(snap.Disclosing) > 0 {
 				for i := range snap.Disclosing {
