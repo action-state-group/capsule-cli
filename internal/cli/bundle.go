@@ -143,7 +143,7 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		return nil, inputError("--payloads none cannot be combined with disclosure")
 	}
 	if options.Payloads == "all" && len(options.Withhold) != 0 {
-		return nil, inputError("payloads=all cannot withhold records")
+		return nil, inputError("--payloads all discloses every record, so it cannot withhold any: a shared copy uses --payloads selected")
 	}
 
 	root, err := getCapsule(ctx, artifacts, options.Root)

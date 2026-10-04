@@ -94,6 +94,13 @@ var joinAllowed = map[string]string{
 	"profileCommands": "profile show: loadProfile returns inputError reasons",
 }
 
+// classifyAllowed lists the functions that use ErrInput only as an errors.Is
+// target in a list, to keep another command's error class while showing that
+// command's own reason.
+var classifyAllowed = map[string]string{
+	"canaryStep": "keeps a deal verb's error class; the shown reason is the verb's own SafeError text",
+}
+
 // shownTypes are the error values SafeError prints in their own words.
 var shownTypes = map[string]bool{"inputFileError": true, "schemaLoadError": true, "pluginRequiredError": true, "artifact.ErrUntrustedSigner": true}
 
@@ -171,6 +178,9 @@ func TestNoGenericInputErrors(t *testing.T) {
 				}
 				if gen, isGen := decl.(*ast.GenDecl); isGen && gen.Tok == token.VAR {
 					return true // its declaration
+				}
+				if _, allowed := classifyAllowed[fnName]; allowed {
+					return true
 				}
 				t.Errorf("%s: ErrInput used bare in %s: return inputError(reason) or hint(ErrInput, reason) so the operator sees what is wrong", fset.Position(id.Pos()), fnName)
 				return true
