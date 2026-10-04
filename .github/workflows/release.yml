@@ -6,7 +6,8 @@ name: Release
 # rebuilt locally with the same Go version and compared against SHA256SUMS.
 # Each binary also gets a GitHub build provenance attestation (Sigstore,
 # keyless: no release key is held anywhere), verifiable with
-#   gh attestation verify capsulectl-<version>-<os>-<arch> --repo action-state-group/capsule-cli
+#   gh attestation verify capsulectl-<version>-<os>-<arch> --repo action-state-group/capsule-cli \
+#     --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
 
 on:
   push:
@@ -64,5 +65,5 @@ jobs:
           else
             gh release create "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag \
               --title "capsulectl $VERSION" \
-              --notes "Prebuilt capsulectl binaries (linux/amd64, linux/arm64, darwin/arm64). Verify with: sha256sum -c SHA256SUMS, and the build attestation with: gh attestation verify FILE --repo $GITHUB_REPOSITORY"
+              --notes "Prebuilt capsulectl binaries (linux/amd64, linux/arm64, darwin/arm64). Verify with: sha256sum -c SHA256SUMS, and the build attestation with: gh attestation verify FILE --repo $GITHUB_REPOSITORY --signer-workflow $GITHUB_REPOSITORY/.github/workflows/release.yml"
           fi
