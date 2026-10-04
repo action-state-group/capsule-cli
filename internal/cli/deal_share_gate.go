@@ -58,8 +58,8 @@ func dealPageGate(page []byte, events []sealedEvent, allowed ...string) error {
 			data = bytes.ReplaceAll(data, []byte(f), nil)
 		}
 	}
-	secrets, words := gateSecrets(events)
-	return gateCheck(data, secrets, words, 0)
+	secrets, words, placeWords := gateSecrets(events)
+	return gateCheck(data, secrets, words, placeWords, 0)
 }
 
 // gateCheck runs every check on data, then again on the text inside any
@@ -69,11 +69,17 @@ func dealPageGate(page []byte, events []sealedEvent, allowed ...string) error {
 //
 // words are one-word names, read only as whole words: Grace refuses, the
 // "grace" inside "disgrace" does not.
-func gateCheck(data []byte, secrets, words []string, depth int) error {
+//
+// placeWords are the single words of a place ("Larkspur", "Juniper"): read
+// as whole words, and only in the bundle's field values, never its keys or
+// the page's fixed labels, so "side" is not found in an anomaly's "side" key
+// or "station" in "attestation". The whole place string stays a needle
+// everywhere.
+func gateCheck(data []byte, secrets, words, placeWords []string, depth int) error {
 	if depth < 2 {
 		for _, run := range gateEncoded.FindAll([]byte(foldText(string(data))), -1) {
 			if inner, ok := gateDecode(string(run)); ok {
-				if err := gateCheck([]byte(inner), secrets, words, depth+1); err != nil {
+				if err := gateCheck([]byte(inner), secrets, words, placeWords, depth+1); err != nil {
 					return err
 				}
 			}
@@ -122,12 +128,48 @@ func gateCheck(data []byte, secrets, words []string, depth int) error {
 	// is case-sensitive: I reads l as written, i lower-cased). Digests and
 	// signatures are left out, and each field of the bundle is read on its
 	// own (gateUnits), so no spelling runs from one field into the next.
-	for _, unit := range gateUnits(data) {
+	for _, w := range placeWords {
+		b := []byte(w)
+		for _, enc := range []string{hex.EncodeToString(b), base64.StdEncoding.EncodeToString(b), base64.RawStdEncoding.EncodeToString(b),
+			base64.URLEncoding.EncodeToString(b), base64.RawURLEncoding.EncodeToString(b)} {
+			if len(enc) >= 8 && gateContains(text, []byte(strings.ToLower(enc))) {
+				return inputError("refusing to write the shared copy: the page would carry a private value")
+			}
+		}
+	}
+	// Each word's spelling skeleton, computed once for every unit.
+	skeletons := func(ws []string) []string {
+		out := make([]string, len(ws))
+		for i, w := range ws {
+			out[i] = gateLettersOf(w, true)
+		}
+		return out
+	}
+	wordSkeletons, placeSkeletons := skeletons(words), skeletons(placeWords)
+	// Each place word, forwards and backwards, as a whole word: compiled once.
+	var placeRes []*regexp.Regexp
+	for _, w := range placeWords {
+		lw := strings.ToLower(foldText(w))
+		for _, form := range []string{lw, gateBackwards(lw)} {
+			placeRes = append(placeRes, regexp.MustCompile(`(?:^|[^\p{L}\p{N}])`+regexp.QuoteMeta(form)+`(?:$|[^\p{L}\p{N}])`))
+		}
+	}
+	for _, u := range gateUnits(data) {
+		unit := u.text
 		folded := foldText(unit)
 		plain := gateLetters([]byte(strings.ToLower(folded)), false)
 		chars, isWord := gateChars(folded)
-		for _, w := range words {
-			sk := gateLettersOf(w, true)
+		unitWords := wordSkeletons
+		if u.value {
+			low := strings.ToLower(folded)
+			for _, re := range placeRes {
+				if re.MatchString(low) {
+					return inputError("refusing to write the shared copy: the page would carry a private value")
+				}
+			}
+			unitWords = append(slices.Clone(wordSkeletons), placeSkeletons...)
+		}
+		for _, sk := range unitWords {
 			if sk == "" {
 				continue
 			}
@@ -248,7 +290,7 @@ var gateStreetWords = map[string]bool{
 }
 
 // gateSecrets are the gate's own needles, read from the deal's local steps.
-func gateSecrets(events []sealedEvent) (secrets, words []string) {
+func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 	var places, ids, texts, names []string
 	whoValues := func(w *dealWho) {
 		if w != nil {
@@ -361,10 +403,11 @@ func gateSecrets(events []sealedEvent) (secrets, words []string) {
 		v = foldText(v)
 		add(v)
 		// Each name in a place (four letters or more, not a street word) is
-		// a needle on its own: "Larkspur", "Springfield".
+		// a needle on its own, read as a whole word in field values only:
+		// "Larkspur", "Springfield".
 		for _, w := range gateWord.FindAllString(v, -1) {
-			if !isDigits(w) && !gateStreetWords[strings.ToLower(w)] {
-				add(w)
+			if !isDigits(w) && len(w) >= 4 && !gateStreetWords[strings.ToLower(w)] {
+				placeWords = append(placeWords, w)
 			}
 		}
 	}
@@ -412,7 +455,7 @@ func gateSecrets(events []sealedEvent) (secrets, words []string) {
 			words = append(words, name)
 		}
 	}
-	return out, words
+	return out, words, placeWords
 }
 
 var gateNameWord = regexp.MustCompile(`[\p{L}\p{N}]+`)
@@ -468,29 +511,39 @@ func gateLetters(text []byte, skeleton bool) string {
 // every string or number in the embedded bundle (window.__BUNDLE__, parsed as
 // JSON), and the page around it. A page whose bundle does not parse is one
 // text, read whole.
-func gateUnits(data []byte) []string {
+//
+// value marks a field value. Keys and the page around the bundle (its fixed
+// labels) are not values; a page or a decoded text with no bundle in it is
+// one text, read whole as a value.
+type gateUnit struct {
+	text  string
+	value bool
+}
+
+func gateUnits(data []byte) []gateUnit {
 	const start = "window.__BUNDLE__ = "
+	whole := []gateUnit{{string(data), true}}
 	i := bytes.Index(data, []byte(start))
 	if i < 0 {
-		return []string{string(data)}
+		return whole
 	}
 	j := bytes.Index(data[i:], []byte(";</script>"))
 	if j < 0 {
-		return []string{string(data)}
+		return whole
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data[i+len(start) : i+j]))
 	decoder.UseNumber()
 	var value interface{}
 	if decoder.Decode(&value) != nil {
-		return []string{string(data)}
+		return whole
 	}
-	units := []string{string(data[:i]) + " " + string(data[i+j:])}
+	units := []gateUnit{{string(data[:i]) + " " + string(data[i+j:]), false}}
 	var walk func(interface{})
 	walk = func(v interface{}) {
 		switch x := v.(type) {
 		case map[string]interface{}:
 			for k, child := range x {
-				units = append(units, k)
+				units = append(units, gateUnit{k, false})
 				walk(child)
 			}
 		case []interface{}:
@@ -498,9 +551,9 @@ func gateUnits(data []byte) []string {
 				walk(child)
 			}
 		case string:
-			units = append(units, x)
+			units = append(units, gateUnit{x, true})
 		case json.Number:
-			units = append(units, x.String())
+			units = append(units, gateUnit{x.String(), true})
 		}
 	}
 	walk(value)
