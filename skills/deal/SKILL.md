@@ -160,14 +160,24 @@ offer, agreeing to buy). `deal check` refuses any other action name.
 capsulectl --profile deal deal init --dir ~/.local/share/capsule-deal
 ```
 
-This creates a local SQLite store and two signing seeds (mode 0600). Nothing
-leaves the machine. Raw names, numbers, addresses and message text stay in
-this local store: each sealed step is an x-deal-v0 record (see
-`profile/PROFILE.md`) that carries only fingerprints of identifiers and
-commitments to text. Tell the user, in one message, exactly what this does:
-their deal steps are sealed locally; nothing is sent anywhere unless they
-later turn on a witness (hashes only) or a remote checker (minimal deal
-fields, never message text). Ask once, up front, before turning either on.
+This creates a local SQLite store and two signing seeds (mode 0600), and
+turns on the public witness by default (`--no-witness` turns it off). Raw
+names, numbers, addresses and message text stay in this local store: each
+sealed step is an x-deal-v0 record (see `profile/PROFILE.md`) that carries
+only fingerprints of identifiers and commitments to text.
+
+Then run `capsulectl --profile deal deal tick` from a timer on this machine
+(every few minutes is enough: it publishes only when a tick is due, on its
+own hourly clock with a random jitter). Deal steps never publish anything
+themselves.
+
+Tell the user, in one message, exactly what this does: their deal steps are
+sealed on this device; once an hour, whether or not anything happened, one
+checkpoint of hashes goes to the witness; the witness never sees content, how
+many deals there are, or when they happen. A remote checker (minimal deal
+fields, never message text) stays off unless they turn it on. Ask once, up
+front, before turning the remote checker on, or if they would rather have no
+witness.
 
 ## Command reference
 
@@ -364,10 +374,13 @@ trailing whitespace (the file ends in a newline; the card does not).
 
 ## What this is, honestly
 
-- The trail is **tamper-evident, not non-repudiation**. The seed that signs
-  it is on this machine, so a later edit or deletion is detectable, but the
-  trail does not prove it was the user, rather than the machine, who said
-  something.
+- The trail is **tamper-evident against ourselves and the agent, not
+  non-repudiation**. The seed that signs it is on this machine, so a later
+  edit or deletion of a sealed step is detectable, and once a tick has
+  reached the witness, not even this device can rewrite what it had sealed
+  by then. The trail does not prove it was the user, rather than the
+  machine, who said something. It covers this skill's own records only,
+  never the agent host's own store: a change there is not detected.
 - **Invocation is advisory, not enforced.** The check seals what was asked,
   proposed, approved and done; the host elects to call it, and a `pause` is
   advice to the host. It holds an action only where the host runs `deal check`

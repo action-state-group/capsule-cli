@@ -304,6 +304,11 @@ func addCheckpointCommands(logs *cobra.Command) {
 // re-verifying the stored statement. The checkpoint signer must be explicitly
 // trusted by the profile.
 func cutCheckpoint(ctx context.Context, p Profile, log cll.Backend) (*cll.CheckpointState, error) {
+	return cutCheckpointAt(ctx, p, log, time.Now().UTC())
+}
+
+// cutCheckpointAt is cutCheckpoint with the time the checkpoint states.
+func cutCheckpointAt(ctx context.Context, p Profile, log cll.Backend, at time.Time) (*cll.CheckpointState, error) {
 	key, e := privateKey(p.Checkpoint.Signing)
 	if e != nil {
 		return nil, e
@@ -338,7 +343,7 @@ func cutCheckpoint(ctx context.Context, p Profile, log cll.Backend) (*cll.Checkp
 	// couple of batches.
 	const maxCheckpointBatches = 10000
 	for batch := 0; batch < maxCheckpointBatches; batch++ {
-		changed, e := runner.RunOnce(ctx, time.Now().UTC())
+		changed, e := runner.RunOnce(ctx, at)
 		if e != nil {
 			return nil, e
 		}

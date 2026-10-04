@@ -58,6 +58,7 @@ var dealIndexSchema = []string{
 )`,
 	`CREATE TABLE IF NOT EXISTS deal_keys (deal_id TEXT PRIMARY KEY, deal_key BLOB NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS deal_store (id INTEGER PRIMARY KEY CHECK (id = 1), secret BLOB NOT NULL)`,
+	dealCadenceSchema,
 }
 
 // dealSession holds the write lock, the index handle and the signing key for
@@ -404,16 +405,16 @@ func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEv
 	return published, nil
 }
 
-// milestone cuts a signed checkpoint at a deal milestone (baseline, approval,
-// close) when the profile has a checkpoint key, and offers it to the witness
-// only when the operator configured one. A failed local checkpoint is an
-// error; a witness that is slow or down leaves delivery pending, retryable
-// with `cll checkpoint publish`.
+// milestone cuts a signed checkpoint of the deal's own log at a deal
+// milestone (baseline, approval, close) when the profile has a checkpoint
+// key. It never contacts the witness: a deal event publishing would tell the
+// witness when deals happen. The deal's checkpoint reaches the witness inside
+// the next cadence tick (`deal tick`), so its witness state is "scheduled".
 func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 	if s.p.Checkpoint.Signing == (Secret{}) {
 		return map[string]any{"state": "not_configured"}, nil
 	}
-	cp, err := cutCheckpoint(ctx, s.dp, s.t.log)
+	cp, err := cutCheckpoint(ctx, localOnly(s.dp), s.t.log)
 	if err != nil {
 		return nil, err
 	}
@@ -422,24 +423,15 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if service == "" {
-		return out, nil
+	if service != "" {
+		out["witness"] = "scheduled"
 	}
-	state, err := deliverWitness(ctx, s.dp, s.t.log, service, cp.Size)
-	if err != nil {
-		out["witness"] = "pending"
-		return out, nil
-	}
-	if err = verifyWitness(s.dp, state); err != nil {
-		return nil, err
-	}
-	out["witness"] = witnessResult(state)["state"]
 	return out, nil
 }
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand(), dealReconcileCommand())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand(), dealReconcileCommand(), dealTickCommand())
 	return deal
 }
 
@@ -531,13 +523,23 @@ func dealInitCommand() *cobra.Command {
 			return err
 		}
 		public := hex.EncodeToString(signing.Public().(ed25519.PublicKey))
-		// No profile-wide log: each deal gets its own (see dealLogID).
-		p := Profile{Name: name, Type: "sqlite", Namespace: "deal"}
+		// Each deal gets its own log (see dealLogID), never published. The
+		// profile's log is the cadence log: the only one the witness sees.
+		suffix, err := randomHex(8)
+		if err != nil {
+			return err
+		}
+		p := Profile{Name: name, Type: "sqlite", Namespace: "deal", LogID: "deal-cadence/" + suffix}
 		p.Connection.Database = filepath.Join(dir, "deal.db")
 		p.Signing.File = filepath.Join(dir, "signing.seed")
 		p.TrustedKeys = []string{public}
 		p.Checkpoint.Signing.File = filepath.Join(dir, "checkpoint.seed")
 		p.Checkpoint.TrustedKeys = []string{signer.KeyID()}
+		witness := "not_configured"
+		if noWitness, _ := c.Flags().GetBool("no-witness"); !noWitness {
+			p.Checkpoint.Endpoint, p.Checkpoint.PublicKey = dealDefaultWitness, dealDefaultWitnessKey
+			witness = "scheduled"
+		}
 		if err = saveProfile(p, false); err != nil {
 			return err
 		}
@@ -551,12 +553,18 @@ func dealInitCommand() *cobra.Command {
 		if err = os.Chmod(p.Connection.Database, 0o600); err != nil {
 			return err
 		}
-		return output(c, map[string]any{
-			"profile": name, "store": p.Connection.Database, "public_key": public, "witness": "not_configured",
-			"guarantee": "tamper-evident, not non-repudiation: the signing seed is on this machine",
-		})
+		out := map[string]any{
+			"profile": name, "store": p.Connection.Database, "public_key": public, "witness": witness, "cadence_log": p.LogID,
+			"guarantee": "tamper-evident against ourselves and the agent, not non-repudiation: the signing seed is on this machine",
+		}
+		if witness == "scheduled" {
+			out["witness_endpoint"], out["witness_sees"] = dealDefaultWitness, dealWitnessSees
+			out["next"] = "run `capsulectl --profile " + name + " deal tick` from a timer (every few minutes is enough; it publishes only when a tick is due)"
+		}
+		return output(c, out)
 	}}
 	cmd.Flags().String("dir", "", "Directory for the store and seeds (created 0700)")
+	cmd.Flags().Bool("no-witness", false, "Do not configure the default public witness; deals are sealed on this device only")
 	return cmd
 }
 

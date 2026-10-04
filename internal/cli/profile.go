@@ -108,6 +108,15 @@ type Profile struct {
 		PublicKey   string   `yaml:"public_key,omitempty" mapstructure:"public_key"`
 		Token       Secret   `yaml:"token,omitempty" mapstructure:"token"`
 	} `yaml:"checkpoint,omitempty" mapstructure:"checkpoint"`
+	// Cadence is when a deal profile publishes to its witness: on time alone
+	// (Interval, default 1h, each tick moved by a random amount within
+	// +/-Jitter, default 10m), never on activity. PadBucket (default 1) pads
+	// each tick's entries to a multiple of it with padding records.
+	Cadence struct {
+		Interval  string `yaml:"interval,omitempty" mapstructure:"interval"`
+		Jitter    string `yaml:"jitter,omitempty" mapstructure:"jitter"`
+		PadBucket uint64 `yaml:"pad_bucket,omitempty" mapstructure:"pad_bucket"`
+	} `yaml:"cadence,omitempty" mapstructure:"cadence"`
 }
 
 func (p Profile) validate() error {

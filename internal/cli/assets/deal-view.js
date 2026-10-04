@@ -66,10 +66,14 @@
   host.append(el("h1", "Deal report"));
   host.append(el("p", "This receipt covers this one deal. It is not a record of everything the agent did.", "deal-rung"));
 
-  // The assurance rung. A witness receipt rides in checkpoint.witnesses; this
-  // page does not check it (capsulectl verify does, against a witness
-  // directory the reader chooses), and says so.
-  const witnesses = ((bundle.checkpoint || {}).witnesses || []).filter((w) => w && typeof w.ts_url === "string");
+  // The assurance rung. A witness receipt rides in checkpoint.witnesses, or
+  // (the default) in the cadence chain, x-deal-cadence-v0, that anchors this
+  // deal's checkpoint in the profile's cadence log. This page does not check
+  // either (capsulectl verify does, against a witness directory the reader
+  // chooses), and says so. Any other witness state is shown as it is.
+  const cadence = (bundle.extensions || {})["x-deal-cadence-v0"] || {};
+  const anchored = cadence.state === "witnessed" ? (cadence.cadence || {}).witnesses || [] : [];
+  const witnesses = ((bundle.checkpoint || {}).witnesses || []).concat(anchored).filter((w) => w && typeof w.ts_url === "string");
   if (witnesses.length > 0) {
     let witness = witnesses[0].ts_url;
     try {
@@ -86,6 +90,10 @@
         "deal-note",
       ),
     );
+  } else if (cadence.state === "scheduled") {
+    host.append(el("p", "Sealed by my agent. Witness: scheduled. This checkpoint goes to the witness in the next tick of the profile's cadence; it is not witnessed yet.", "deal-rung"));
+  } else if (cadence.state === "pending") {
+    host.append(el("p", "Sealed by my agent. Witness: pending. This checkpoint was sent in a cadence tick, but no receipt has come back yet.", "deal-rung"));
   } else {
     host.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
   }
@@ -142,7 +150,8 @@
       "p",
       "This page checked itself: every step's sealed record and its place in this deal's log. " +
         "The records carry fingerprints, not names or numbers; the words shown come from this device. " +
-        "The seal key is on the agent's machine, so this shows the record was not changed after it was made, not who made it.",
+        "The seal key is on the agent's machine, so this shows the record was not changed after it was made, not who made it. " +
+        "It covers this skill's own records only, never the agent host's own store.",
       "deal-note",
     ),
   );

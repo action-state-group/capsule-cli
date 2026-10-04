@@ -29,7 +29,8 @@ func dealFixture(t *testing.T) string {
 	dealClock = func() time.Time { return fixed }
 	t.Cleanup(func() { dealClock = old })
 	dir := filepath.Join(t.TempDir(), "deal")
-	out, err := invoke(t, "", "deal", "init", "--profile", "deal", "--dir", dir)
+	// Most tests run without a witness; the witness tests configure one.
+	out, err := invoke(t, "", "deal", "init", "--profile", "deal", "--dir", dir, "--no-witness")
 	require.NoError(t, err, out)
 	return dir
 }

@@ -91,7 +91,13 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	if entry != nil {
 		cp["witnesses"] = []interface{}{entry}
 	}
+	// Where this checkpoint stands with the witness, through the cadence log.
+	cadence, err := s.dealWitnessState(ctx, events[0].Event.DealID, statement)
+	if err != nil {
+		return nil, err
+	}
 	b["extensions"] = map[string]interface{}{
+		dealCadenceExtension: cadence,
 		"x-deal-v0": map[string]interface{}{
 			"deal_id": events[0].Event.DealID, "steps": steps, "asked": report.Asked, "asked_step": report.AskedStep,
 			// The opening of the user's own words, so the page can check them
