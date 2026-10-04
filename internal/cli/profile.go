@@ -439,6 +439,14 @@ func profileCommands() *cobra.Command {
 					}
 				}
 			}
+			// A witness endpoint and its public key travel together: never write a
+			// profile whose every witnessed milestone is bound to fail.
+			if update && c.Flags().Changed("checkpoint-endpoint") && !c.Flags().Changed("checkpoint-public-key") && p.Checkpoint.Endpoint != "" {
+				return hint(ErrInput, "--checkpoint-endpoint needs --checkpoint-public-key <64-hex Ed25519 key> in the same call: the key identifies that witness")
+			}
+			if e := checkWitnessConfig(p); e != nil {
+				return e
+			}
 			if e := saveProfile(p, update); e != nil {
 				return e
 			}

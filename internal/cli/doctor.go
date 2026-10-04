@@ -128,7 +128,19 @@ func doctorCommand() *cobra.Command {
 			case p.Checkpoint.Endpoint == "":
 				report["witness"] = map[string]any{"checked": false, "reason": "profile has no checkpoint.endpoint configured"}
 			default:
-				report["witness"] = checkpointReachability(c.Context(), p.Checkpoint.Endpoint)
+				witness := checkpointReachability(c.Context(), p.Checkpoint.Endpoint)
+				if issue := witnessKeyIssue(p); issue != "" {
+					// Reachable or not, no receipt from this endpoint can be
+					// verified: report it as a failure, with the fix.
+					witness["ok"], witness["public_key"] = false, map[string]any{"ok": false, "issue": issue}
+					report["witness"] = witness
+					if e := output(c, report); e != nil {
+						return e
+					}
+					return ErrPartial
+				}
+				witness["ok"], witness["public_key"] = true, map[string]any{"ok": true}
+				report["witness"] = witness
 			}
 			return output(c, report)
 		},
