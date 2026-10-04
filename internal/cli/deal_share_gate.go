@@ -218,7 +218,7 @@ func gateCheck(data []byte, secrets, words, placeWords []string, depth int) erro
 		}
 	}
 	for _, loc := range gatePAN.FindAllIndex(text, -1) {
-		if !gateInDigest(text, loc[0], loc[1]) && luhn(nonDigit.ReplaceAllString(string(text[loc[0]:loc[1]]), "")) {
+		if !gateInDigest(text, loc[0], loc[1]) && gateCardAlone(text, loc[0], loc[1]) && luhn(nonDigit.ReplaceAllString(string(text[loc[0]:loc[1]]), "")) {
 			return inputError("refusing to write the shared copy: the page would carry a card number")
 		}
 	}
@@ -745,6 +745,66 @@ func gateInDigest(page []byte, start, end int) bool {
 		e++
 	}
 	return gateDigest.Match(page[s:e])
+}
+
+// gateCardAlone reports whether the digit run at page[start:end] stands alone
+// the way a written card number does. A run glued to letters in the same token
+// (a hex id, a UUID, a base64 value, "x4111…") is part of an identifier, and a
+// run that continues past 19 digits is longer than any card number: random
+// content of either kind passes the Luhn check one time in ten. The deal's own
+// card number is still found anywhere, by the spelled-secret check.
+func gateCardAlone(page []byte, start, end int) bool {
+	letter := func(c byte) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }
+	digit := func(c byte) bool { return c >= '0' && c <= '9' }
+	token := func(c byte) bool {
+		return digit(c) || letter(c) || c == '+' || c == '/' || c == '_' || c == '-' || c == '='
+	}
+	digits := 0
+	for i := start; i < end; i++ {
+		if digit(page[i]) {
+			digits++
+		}
+	}
+	// The whole run: more digits, each after at most one separator.
+	for e := end; ; {
+		if e < len(page) && digit(page[e]) {
+			digits, e = digits+1, e+1
+		} else if e+1 < len(page) && (page[e] == ' ' || page[e] == '-') && digit(page[e+1]) {
+			digits, e = digits+1, e+2
+		} else {
+			end = e
+			break
+		}
+	}
+	for s := start; ; {
+		if s > 0 && digit(page[s-1]) {
+			digits, s = digits+1, s-1
+		} else if s > 1 && (page[s-1] == ' ' || page[s-1] == '-') && digit(page[s-2]) {
+			digits, s = digits+1, s-2
+		} else {
+			start = s
+			break
+		}
+	}
+	if digits > 19 {
+		return false
+	}
+	for i := start - 1; i >= 0 && token(page[i]); i-- {
+		if letter(page[i]) {
+			return false
+		}
+	}
+	for i := end; i < len(page) && token(page[i]); i++ {
+		if letter(page[i]) {
+			return false
+		}
+	}
+	for i := start; i < end; i++ {
+		if letter(page[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // luhn reports a Luhn-valid number, the checksum every card number carries.
