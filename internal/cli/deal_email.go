@@ -143,7 +143,7 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 		switch state {
 		case "scheduled":
 			out["witness_state"] = "scheduled"
-			sealed += "Witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence (within about one cadence interval, an hour by default), and only then can it be witnessed. Until then it is sealed on this device only. "
+			sealed += "Witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence" + cadencePhrase(cadence) + ", and only then can it be witnessed. Until then it is sealed on this device only. "
 		case "pending":
 			out["witness_state"] = "pending"
 			sealed += "Witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet; it is retried at every tick. "
@@ -405,4 +405,13 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 		return nil, "", "", "", err
 	}
 	return msg.Bytes(), subject, text, htmlBody, nil
+}
+
+// cadencePhrase is " (every 5m, give or take 2m)" from the witness state the
+// report carries, or "" when it names none.
+func cadencePhrase(cadence map[string]interface{}) string {
+	if words, _ := cadence["cadence"].(string); words != "" {
+		return " (" + words + ")"
+	}
+	return ""
 }

@@ -95,7 +95,8 @@ function versionBefore(a, b) {
       ),
     );
   } else if (cadence.state === "scheduled") {
-    header.append(el("p", "Sealed by my agent, witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence (within about one cadence interval, an hour by default), and only then can it be witnessed. Until then it is sealed on this device only.", "deal-rung"));
+    const every = typeof cadence.cadence === "string" && cadence.cadence ? ` (${cadence.cadence})` : "";
+    header.append(el("p", `Sealed by my agent, witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence${every}, and only then can it be witnessed. Until then it is sealed on this device only.`, "deal-rung"));
   } else if (cadence.state === "pending") {
     header.append(el("p", "Sealed by my agent, witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet; it is retried at every tick.", "deal-rung"));
     if (cadence.reason === "network_consent_needed" && typeof cadence.text === "string") header.append(el("p", `Witness ${cadence.text}`, "deal-note"));

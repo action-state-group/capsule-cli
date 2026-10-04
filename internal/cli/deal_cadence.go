@@ -504,7 +504,7 @@ func (s *dealSession) dealWitnessState(ctx context.Context, dealID string, state
 		}
 	}
 	if tick == nil {
-		out := map[string]interface{}{"state": "scheduled"}
+		out := map[string]interface{}{"state": "scheduled", "cadence": s.cadenceWords()}
 		if len(ticks) > 0 {
 			out["due"] = ticks[0].dueNext.Format(time.RFC3339)
 		}
@@ -518,7 +518,7 @@ func (s *dealSession) dealWitnessState(ctx context.Context, dealID string, state
 	state, err := t.log.GetWitness(ctx, service, tick.size)
 	if errors.Is(err, cll.ErrNotFound) || (err == nil && (state.Receipt == nil || verifyWitness(s.p, state) != nil)) {
 		reason, text := witnessPendingReason(state, s.p.Checkpoint.Endpoint)
-		return map[string]interface{}{"state": "pending", "tick": integer(uint64(tick.n)), "reason": reason, "text": text}, nil
+		return map[string]interface{}{"state": "pending", "tick": integer(uint64(tick.n)), "reason": reason, "text": text, "cadence": s.cadenceWords()}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -623,4 +623,30 @@ func dealTickCommand() *cobra.Command {
 	}}
 	cmd.Flags().Duration("wait-up-to", 0, "When the scheduler cannot run this every minute: wait for each tick due within this long (the scheduler's period) and publish it on time")
 	return cmd
+}
+
+// cadenceWords is this profile's cadence as a receipt says it, for example
+// "every 5m, give or take 2m": the profile's own values, not the default.
+func (s *dealSession) cadenceWords() string {
+	cfg, err := s.p.dealCadence()
+	if err != nil {
+		return ""
+	}
+	words := "every " + shortDuration(cfg.interval)
+	if cfg.jitter > 0 {
+		words += ", give or take " + shortDuration(cfg.jitter)
+	}
+	return words
+}
+
+// shortDuration writes 1h, 90m, 5m or 30s, never "1h0m0s".
+func shortDuration(d time.Duration) string {
+	switch {
+	case d%time.Hour == 0:
+		return fmt.Sprintf("%dh", d/time.Hour)
+	case d%time.Minute == 0:
+		return fmt.Sprintf("%dm", d/time.Minute)
+	default:
+		return d.String()
+	}
 }

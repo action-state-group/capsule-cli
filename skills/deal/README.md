@@ -148,9 +148,12 @@ each has. Instead the profile has one cadence log (its `log_id`), and
   `capsulectl doctor --check-witness` says the same.
 
 A deal is **not witnessed at the moment it happens**. Its receipt says
-"Sealed, witness pending" until the next cadence tick (within about one
-interval, an hour by default) has carried its checkpoint to the witness and
-a receipt has come back; only then does it say "Witnessed". The states, as
+"Sealed, witness pending" until the next cadence tick has carried its
+checkpoint to the witness and a receipt has come back; only then does it say
+"Witnessed". How long that is depends on the profile's cadence
+(`cadence.interval`, give or take `cadence.jitter`; 1h and 10m by default),
+and the receipt names the profile's own, for example "every 5m, give or take
+2m". The states, as
 the receipt and `deal report` name them: **scheduled** (not yet in a tick),
 **pending** (in a tick, no receipt back yet; both read "Sealed, witness
 pending") and **witnessed**.
