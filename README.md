@@ -221,6 +221,8 @@ capsulectl judge drift reports FILE_A FILE_B
 capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
 capsulectl deal init|open|note|check|close|report|reconcile|tick --profile NAME [...]
 capsulectl backfill run|status --profile NAME [...]
+capsulectl canary run --profile NAME [--skill FILE] [--expect-version TAG] [--expect-skill-sha256 HEX]
+capsulectl canary watch --log-id ID --expect-every DURATION [--witness URL] [--state FILE]
 ```
 
 `capsulectl <command> --help` gives every flag; this list is the shape of each
@@ -273,6 +275,12 @@ row by digest, and the rows near a consequential signal as Capsules in
 provenance mode `backfilled`. It shows effects only, never an amount charged
 or an approval, and it gives detectability of absence, not prevention; see
 [docs/BACKFILL.md](docs/BACKFILL.md).
+
+`canary run` plays a scripted DEMO deal on a profile of its own and ticks that
+profile's cadence log only when every step succeeded; `canary watch` reads the
+log's last checkpoint from the public witness and exits 6 with one line when it
+has stopped advancing or its history was rewritten. Absence is the alarm, seen
+from outside with no access to the host; see [docs/CANARY.md](docs/CANARY.md).
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.
@@ -688,7 +696,7 @@ Successful stdout is one JSON object:
 `{"spec_version":"capsule-cli-result/v1",...}`.
 Diagnostics never expose raw driver/config/service errors. Exit codes: 0 success,
 1 operational failure, 2 invalid input/profile, 3 partial verification, 4 durable delivery pending,
-5 frozen input/target conflict. Inspect the exit code, not only a result object.
+5 frozen input/target conflict, 6 canary alarm (`canary watch`). Inspect the exit code, not only a result object.
 Verification lists passed/not-performed checks instead of calling all evidence valid.
 
 Only `store init` calls CLL `Init` and provisions selected library schemas.
