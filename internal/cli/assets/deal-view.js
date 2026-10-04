@@ -35,13 +35,76 @@
     verification.disclosures.filter((d) => d.status === "disclosure_match" && d.member === "agent_input").map((d) => d.capsuleId),
   );
   const report = (bundle.extensions || {})["x-deal-v0"] || {};
+  const shared = report.audience === "counterparty" || report.audience === "adjudicator";
   const byId = new Map((report.steps || []).map((s) => [s.capsule_id, s]));
   const base = matched.has(report.asked_step) ? bundle.disclosures[report.asked_step].agent_input : undefined;
-  if (!base || !base["x-deal-v0"] || base["x-deal-v0"].record_type !== "baseline") {
+  if (!shared && (!base || !base["x-deal-v0"] || base["x-deal-v0"].record_type !== "baseline")) {
     host.append(el("p", "⚠️ The deal's opening step is not in this report.", "deal-bad"));
     return;
   }
 
+  // The header, on the face of every copy: the scope, the assurance rung read
+  // from what the file itself carries, what the "did" part rests on, what
+  // the receipt does not claim, and the command that checks it.
+  const header = el("section", undefined, "deal-assurance");
+  header.append(el("p", report.scope || "This receipt covers this one deal. It is not a record of everything the agent did.", "deal-scope"));
+  // A witness receipt rides in checkpoint.witnesses, or (the default) in the
+  // cadence chain, x-deal-cadence-v0, that anchors this deal's checkpoint in
+  // the profile's cadence log. This page does not check either (capsulectl
+  // verify does, against a witness directory the reader chooses), and says
+  // so. Any other witness state is shown as it is.
+  const cadence = (bundle.extensions || {})["x-deal-cadence-v0"] || {};
+  const anchored = cadence.state === "witnessed" ? (cadence.cadence || {}).witnesses || [] : [];
+  const witnesses = ((bundle.checkpoint || {}).witnesses || []).concat(anchored).filter((w) => w && typeof w.ts_url === "string");
+  if (Array.isArray(bundle.countersignatures) && bundle.countersignatures.length > 0) {
+    header.append(el("p", "Countersigned: a second party's signature over this record is in this file; this page does not check it.", "deal-rung"));
+  } else if (witnesses.length > 0) {
+    let witness = witnesses[0].ts_url;
+    try {
+      witness = new URL(witness).host || witness;
+    } catch (e) {
+      // not a URL: show it as written
+    }
+    header.append(
+      el("p", `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint: the record existed, unchanged, by then. It does not confirm what the agent did.`, "deal-rung"),
+      el(
+        "p",
+        "The receipt is in this file; this page does not check it. Check it with " +
+          "capsulectl verify --bundle FILE --witness-directory DIRECTORY.json, using a witness directory you trust.",
+        "deal-note",
+      ),
+    );
+  } else if (cadence.state === "scheduled") {
+    header.append(el("p", "Sealed by my agent. Witness: scheduled. This checkpoint goes to the witness in the next tick of the profile's cadence; it is not witnessed yet.", "deal-rung"));
+  } else if (cadence.state === "pending") {
+    header.append(el("p", "Sealed by my agent. Witness: pending. This checkpoint was sent in a cadence tick, but no receipt has come back yet.", "deal-rung"));
+    if (cadence.reason === "network_consent_needed" && typeof cadence.text === "string") header.append(el("p", `Witness ${cadence.text}`, "deal-note"));
+  } else {
+    header.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
+  }
+  // Written by capsulectl from what the deal recorded (dealDidLine): the
+  // conversation is rightly the agent's own record; what the agent did needs
+  // an independent source.
+  if (typeof report.did_line === "string") header.append(el("p", report.did_line, "deal-note"));
+  const notClaimed = el("details", undefined, "deal-claims");
+  notClaimed.open = true;
+  notClaimed.append(el("summary", "What this does not claim"));
+  const claims = el("ul");
+  [
+    "It is tamper-evident, not non-repudiation: it shows these records were not changed after they were sealed, not who made them.",
+    "It records what the agent reported. It does not show that what was reported was true.",
+    "It does not prove the merchant shipped, delivered or refunded anything.",
+  ].forEach((t) => claims.append(el("li", t)));
+  notClaimed.append(claims);
+  header.append(notClaimed);
+  header.append(el("p", "Anyone can check this file offline, with only the file and capsulectl:", "deal-note"));
+  header.append(el("pre", report.verify_command || "capsulectl verify --bundle receipt.html", "deal-verify"));
+  if (shared) {
+    const who = report.audience === "counterparty" ? "the other party" : "an adjudicator";
+    header.append(el("p", `A shared copy for ${who}. Left out of this copy: ${(report.withheld || []).join(", ")}.`, "deal-note"));
+  }
+
+  const recordOk = (id) => verification.capsuleResults[id] !== undefined && verification.capsuleResults[id].ok;
   const steps = (ids) => {
     const list = el("ol", undefined, "deal-steps");
     ids.forEach((id) => {
@@ -49,6 +112,10 @@
       const li = el("li");
       if (step && matched.has(id)) {
         li.append(el("span", `${step.at} · `, "deal-at"), el("span", step.line));
+      } else if (shared && step && step.withheld && recordOk(id)) {
+        // A withheld step: its record and its place in the log verified;
+        // its contents are not in this copy.
+        li.append(el("span", `${step.at} · `, "deal-at"), el("span", step.line), el("span", " · contents withheld", "deal-at"));
       } else {
         li.append(el("span", "step not verified in this report "), el("code", id));
       }
@@ -62,45 +129,9 @@
     return d;
   };
 
-  if (base.body.demo) host.append(el("span", "DEMO", "deal-demo"));
+  if (base && base.body.demo) host.append(el("span", "DEMO", "deal-demo"));
   host.append(el("h1", "Deal report"));
-  host.append(el("p", "This receipt covers this one deal. It is not a record of everything the agent did.", "deal-rung"));
-
-  // The assurance rung. A witness receipt rides in checkpoint.witnesses, or
-  // (the default) in the cadence chain, x-deal-cadence-v0, that anchors this
-  // deal's checkpoint in the profile's cadence log. This page does not check
-  // either (capsulectl verify does, against a witness directory the reader
-  // chooses), and says so. Any other witness state is shown as it is.
-  const cadence = (bundle.extensions || {})["x-deal-cadence-v0"] || {};
-  const anchored = cadence.state === "witnessed" ? (cadence.cadence || {}).witnesses || [] : [];
-  const witnesses = ((bundle.checkpoint || {}).witnesses || []).concat(anchored).filter((w) => w && typeof w.ts_url === "string");
-  if (witnesses.length > 0) {
-    let witness = witnesses[0].ts_url;
-    try {
-      witness = new URL(witness).host || witness;
-    } catch (e) {
-      // not a URL: show it as written
-    }
-    host.append(
-      el("p", `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint: the record existed, unchanged, by then. It does not confirm what the agent did.`, "deal-rung"),
-      el(
-        "p",
-        "The receipt is in this file; this page does not check it. Check it with " +
-          "capsulectl verify --bundle FILE --witness-directory DIRECTORY.json, using a witness directory you trust.",
-        "deal-note",
-      ),
-    );
-  } else if (cadence.state === "scheduled") {
-    host.append(el("p", "Sealed by my agent. Witness: scheduled. This checkpoint goes to the witness in the next tick of the profile's cadence; it is not witnessed yet.", "deal-rung"));
-  } else if (cadence.state === "pending") {
-    host.append(el("p", "Sealed by my agent. Witness: pending. This checkpoint was sent in a cadence tick, but no receipt has come back yet.", "deal-rung"));
-    if (cadence.reason === "network_consent_needed" && typeof cadence.text === "string") host.append(el("p", `Witness ${cadence.text}`, "deal-note"));
-  } else {
-    host.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
-  }
-  // Written by capsulectl from what the deal recorded (dealDidLine).
-  const report0 = (bundle.extensions || {})["x-deal-v0"] || {};
-  if (typeof report0.did_line === "string") host.append(el("p", report0.did_line, "deal-note"));
+  host.append(header);
 
   // The user's words are checked here against the baseline's sealed
   // commitment: SHA-256 over JCS({"nonce","text"}). For two string members in
@@ -114,7 +145,9 @@
     askedChecked = hex === base.body.intent.verbatim_commitment;
   }
   host.append(el("h2", "What you asked"));
-  if (askedChecked) {
+  if (shared) {
+    host.append(el("p", "Withheld from this copy.", "deal-note"));
+  } else if (askedChecked) {
     host.append(item(`“${opening.text}”`, [report.asked_step]));
     host.append(el("p", "✓ These are the exact words sealed when the deal opened.", "deal-note"));
   } else {
@@ -133,6 +166,33 @@
   const did = report.did || [];
   if (did.length === 0) host.append(el("p", "Nothing yet.", "deal-note"));
   did.forEach((i) => host.append(item(i.text, i.steps)));
+
+  // Cancel-by dates: the point of no return is a date passing. Recorded,
+  // never enforced.
+  const deadlines = report.deadlines || [];
+  if (deadlines.length > 0) {
+    host.append(el("h2", "Cancel-by dates"));
+    const list = el("ul", undefined, "deal-steps");
+    deadlines.forEach((d) => {
+      const li = el("li", undefined, d.status === "open" ? "deal-bad" : undefined);
+      li.append(el("span", `${d.cancel_by} · ${d.status}: `), el("span", d.text));
+      list.append(li);
+    });
+    host.append(list, el("p", deadlines[0].note, "deal-note"));
+  }
+  // A cancellation: exactly what is shown, and what is not.
+  (report.cancellations || []).forEach((c) => {
+    host.append(el("h2", "Your cancellation"));
+    const shows = el("details", undefined, c.merchant === "confirmed" ? undefined : "deal-flag");
+    shows.open = true;
+    shows.append(el("summary", "What this shows"));
+    const proven = el("ul");
+    (c.proven || []).forEach((p) => proven.append(el("li", p)));
+    const notProven = el("ul", undefined, "deal-note");
+    (c.not_proven || []).forEach((p) => notProven.append(el("li", p)));
+    shows.append(proven, el("h3", "What this does not show"), notProven, steps(c.steps || []));
+    host.append(shows);
+  });
 
   // The merchant's own emails. Two statements, never one: the merchant's
   // DKIM signature (independent of the agent) and our seal (our own record).
@@ -196,6 +256,7 @@
       "p",
       "This page checked itself: every step's sealed record and its place in this deal's log. " +
         "The records carry fingerprints, not names or numbers; the words shown come from this device. " +
+        (shared ? "Steps marked contents withheld are proven present and unchanged; what they say is not in this copy. " : "") +
         "The seal key is on the agent's machine, so this shows the record was not changed after it was made, not who made it. " +
         "It covers this skill's own records only, never the agent host's own store.",
       "deal-note",

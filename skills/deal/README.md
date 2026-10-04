@@ -39,11 +39,16 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal close --input FILE` | Compares what was delivered with what was agreed: `completed`, `mismatch` or `open`. Cuts a checkpoint. |
 | `deal note --kind intent --input FILE` | Seals a change to what the user asked or allowed. |
 | `deal note --kind evidence --email FILE [--key-record FILE]` | Seals a merchant's own email (raw RFC 822, headers intact) with the DKIM key records read from DNS at that moment, checks the signature, and cuts a checkpoint. See [The merchant's own email](#the-merchants-own-email). |
+| `deal note --kind evidence --input FILE` with `obligation` | Seals a cancel-by date (a trial that becomes paid, a renewal, the end of free cancellation, a payment on a date) with its source: the merchant's email (with `--email`) or a page snapshot. Cuts a checkpoint. |
+| `deal deadlines [--deal ID] [--ics FILE] [--remind-days N] [--all]` | Lists open cancel-by dates, for one deal or every deal in the profile, as JSON; `--ics` also writes them as a calendar file with reminders for the host's scheduler. Records, never enforces. |
 | `deal verify-email [--step N] [--email FILE]` | Re-checks a sealed merchant email offline, against the key records sealed with it. `--email` checks another copy, which must match the sealed bytes. Exit 1 when it does not verify. |
+| `bundle --deal ID [--out FILE]` | The deal's Evidence Bundle, your own copy: the same file as `deal report --bundle` (the whole deal from its own log, `deal/<deal_id>`, with its cadence chain and any witness receipt held). Nothing withheld, nothing on record. |
+| `disclose --deal ID --share counterparty\|adjudicator --to WHO --out FILE` · `permalink --deal ID --share counterparty\|adjudicator --to WHO` | A copy for someone else, as a bundle file or a viewer link: a share, exactly as `deal report --share` (see [Sharing a copy](#sharing-a-copy)). The copy withholds what that reader may not see, the final bytes pass the share gate, and the share is on record on `deal/<deal_id>/disclosures` before the file is written or the link printed. A link over 8,192 characters is refused ("too large for a link; share the bundle file"); see Sizes. |
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
 | `deal report --email FILE [--bundle FILE]` | Writes the receipt as a ready-to-send email (.eml, no sender or recipient) for the agent host's own email tool: a plain and a static HTML body that read on a phone, with `receipt.html` and `bundle.json` attached. `--bundle` writes the Evidence Bundle for `capsulectl verify --bundle`. Nothing is sent by capsulectl. |
 | `deal reconcile --executions FILE [--approvals FILE] [--from T] [--to T]` | Reads the agent host's execution records (tool calls of the agent and its sub-tasks, in the format in [RECONCILE.md](RECONCILE.md)) and lists each consequential action that has no deal record, with what the pass cannot see. Seals nothing; exits 3 when anything is unrecorded. |
+| `deal report --html FILE --share counterparty\|adjudicator --to WHO` | A copy for someone else. It leaves out what that reader must not get, and seals a disclosure record of the share before the file is written. |
 
 Each step is a Capsule in the profile's store. Each deal has its own
 checkpointed log (`deal/<deal_id>`) in the same SQLite file, and each step
@@ -190,6 +195,155 @@ that what was asked, proposed and approved is sealed where it happened, while
 what the agent did is the agent's own report until an independent source is
 attached.
 
+The page also has a **What this does not claim** block: it is
+tamper-evident, not non-repudiation; it records what the agent reported; it
+does not prove the merchant shipped. It names *countersigned* only when the
+file carries a countersignature. And it gives one command anyone can run on
+the file, offline: `capsulectl verify --bundle receipt.html` (`verify
+--bundle` reads the page's embedded bundle). `deal report` prints the scope
+line as `scope`.
+
+### Sharing a copy
+
+`--html` alone writes the user's own copy (audience `keep`: nothing withheld). To
+hand a copy to someone else, name the reader:
+
+```sh
+capsulectl --profile deal deal report --deal ID --html receipt.html \
+  --share counterparty --to "the shop's support desk"
+```
+
+`--share` writes the page alone. `--email` and `--bundle` are the user's own
+copy, with nothing withheld, so they cannot be combined with `--share`.
+
+| Audience | What the copy carries |
+|---|---|
+| `keep` (default) | Nothing withheld. No disclosure record: it is the user's own copy. |
+| `counterparty` | Amounts, rails, timestamps and digests only. No home address, no names, payees or contact details, no card or payment identifiers, no verification codes, no message text, no claim text or sources, none of the user's own words. |
+| `adjudicator` | The counterparty copy plus message text and claim text with sources. Codes, card numbers, phones, emails and street addresses are replaced with `[withheld]`. |
+
+A sealed record is disclosed whole or not at all, so a shared copy withholds
+every record holding a string it may not carry. That record still verifies:
+it shows as WITHHELD, and its place in the log is still proven. The deal
+section is rewritten for the reader from fixed words, amounts and rails.
+In the adjudicator copy, codes are withheld wherever they sit: inside a word
+(`G739142`, `code739142`) or split by a space or dash (`739 142`). Any piece
+of the sealed place or address (`Larkspur`, `Springfield`, `41`) is withheld
+wherever it appears in message text, in any order.
+
+Both the scrubber and the gate read text in the same plain form:
+
+- Escapes are decoded, nested ones too: percent-escapes, HTML character
+  references and `\uXXXX` escapes (surrogate pairs included).
+- Characters that draw nothing are removed. These are the format characters
+  (Cf: zero-width characters, the soft hyphen, the bidirectional controls)
+  and the other default-ignorable ones, such as the Hangul fillers U+115F,
+  U+1160, U+3164 and U+FFA0.
+- NFKD is applied and every nonspacing mark (Mn) is dropped: `Làrkspur`,
+  `Laŗkspur` and `73̧9142` read `Larkspur` and `739142`.
+- Every decimal digit of any script becomes the ASCII digit of the same
+  value: `٧٣٩١٤٢` and `७३९१४२` read `739142`.
+- Letters are matched through the TR39 confusables skeleton, from Unicode's
+  official `confusables.txt` (version 18.0.0). The file is vendored
+  unmodified in `third_party/unicode/`, with only its mappings compiled in
+  (`internal/cli/confusables_table.go`, generated by
+  `scripts/genconfusables`). A test checks the file's digest and
+  regenerates the table. Refresh both with `scripts/update-confusables.sh
+  VERSION`. TR39 skeletons are
+  case-sensitive, so each character is read as written, lower-cased and
+  upper-cased, and a match takes any one reading at each position:
+  `Larkspսr`, `ᏞᎪᎡkspur` and `SPRINGFIELD` all read as the place.
+- A non-ASCII prototype takes one step through case to the ASCII letter
+  that a case variant of it, or of a character mapped to it, has as
+  prototype, so `Larᴋspur` reads `Larkspur`. The step never repeats: a
+  transitive closure under case merges `r`, `e`, `t`, `u` and `y`.
+
+A value is read by its letters and digits alone, forwards and backwards, so
+whatever stands between the characters does not hide it (`L-a-r-k-s-p-u-r`,
+`7/3/9/1/4/2`, `rupskraL`). Runs of four or more number words are read as
+digits (`seven three nine one four two`). A base64 or hex run that decodes to
+text is read for what it holds. A number of six digits or more counts
+wherever it stands; a shorter one only where no digit adjoins it, so `1200`
+is not found in the amount `120000`. Dates, times and money amounts
+(`09/27/2026`, `October 3, 2026`, `18:00`, `$1,200.00`) are kept. In the
+adjudicator copy, message text appears in the plain form.
+
+The tests:
+
+- 28 fixed transforms of the planted address, code and card number, each in
+  its own deal end to end; every one is withheld.
+- The listed lookalike and digit leaks, end to end.
+- A seeded randomized property test that combines confusables, marks,
+  digits of other scripts, separators, case, reversal and encodings. The gate
+  alone must refuse every rewriting, and the scrubber's output of it must
+  pass the gate. `DEAL_LEAK_SEED` and `DEAL_LEAK_ROUNDS` widen it.
+- A Go fuzz target, `FuzzDealSharePageGate`, whose found inputs are kept in
+  `internal/cli/testdata/fuzz`.
+
+Before the file is written, a last gate reads the **final page bytes** with
+its own detectors. It reads the deal's local steps itself and shares no
+detector with the scrubber. It looks for every place and
+address fragment, identifier, payment reference, code, card number and email
+in the deal's local store. It checks each one as written, in any case, digits
+only, with separators removed, base64 (all four alphabets), hex, and URL-,
+JSON- and HTML-escaped. It also looks for any Luhn-valid card number and any
+code word (code, OTP, PIN, passcode) followed by a number. A short value is
+skipped only inside a digest or signature (a run of 64 or more hex or base64
+characters). In an order reference or a URL path it counts. A hit refuses the
+copy: nothing is written and nothing goes on record.
+
+**A merchant's own email** (sealed with `deal note --kind evidence --email`)
+is private material too. Its order number, the names and addresses in its
+headers, its text and its items are all withheld. Each shared copy shows the
+signature's verdict in fixed words, without the signing domain (that is the
+counterparty's), and the amounts and dates. The counterparty's copy also
+carries the order number, but only where `shareableOrderID` allows it: an
+order number (never a booking, confirmation or reservation code) from an
+email whose signature checks out and was signed by the deal's own
+counterparty. The gate takes exactly that value out before it checks. The
+adjudicator's copy carries no order number, and also lists the items.
+
+**Sharing is on record.** Before the file exists, a disclosure record is
+sealed. It names the root, the payloads mode, the records withheld, the
+audience, the recipient (`--to`), what the copy leaves out, and the SHA-256
+of the exact page. It is kept in the local store (`deal_disclosures`), and
+its digest is appended to the deal's own disclosure log
+(`deal/<deal_id>/disclosures`) under a fresh signed checkpoint. That log sits
+beside the deal's log, which holds only steps. Nothing is hosted and there
+are no accounts. The user hands over the file, or a link that carries the
+copy in its fragment (`permalink --deal`), which never leaves the reader's
+browser.
+
+## Sizes
+
+Measured on a synthetic retail deal (`demo/retail-checkout/`; the live
+numbers depend on each deal's steps, and vary by a few characters from run to
+run with each record's nonces and times):
+
+| Deal | Own bundle (`bundle --deal`) | Shared link fragment (`permalink --deal --share counterparty`), as minted | Same, deflate-raw (prototype) |
+|---|---|---|---|
+| 4 steps (open, then a passing check: snapshot, check, approval) | about 14,570 B | about 16,940 chars | about 4,960 chars (3.4x) |
+| 5 steps (the same, then the act) | about 17,870 B | about 21,340 chars | about 5,760 chars (3.7x) |
+
+The adjudicator's link is within 150 characters of the counterparty's. A
+link fragment carries the shared bundle as base64url JSON, so it is about
+4/3 of that bundle's JSON. It never carries the verifier: the hosted viewer
+brings that. A fragment never leaves the reader's browser, so
+the hosted viewer holds nothing. A bundle too large for a link would have to
+be hosted by someone, which is custody, so `permalink` refuses any fragment
+over 8,192 characters ("too large for a link; share the bundle file") and
+points nowhere else. The limit is checked before the share goes on record,
+so a refused link leaves no disclosure record. Uncompressed, the deals above
+are over that limit: share them as a file with `disclose --deal ID --share
+... --to ... --out FILE` until the viewer reads a compressed fragment (the
+prototype column). `--max-fragment 0` lifts the limit, to measure.
+
+Do not size a fragment from the `deal report --html` page. That page is
+self-contained, so most of it is the embedded verifier, not evidence: of a
+221,847-byte page for the 5-step deal, 194,730 B is the vendored
+`evidence-graph.iife.js` and 7,488 B is `deal-view.js` (91%). An earlier
+build measured 93% of a 215,251-byte page the same way.
+
 ## Records: the x-deal-v0 profile
 
 [`profile/`](profile/) is the deal record profile: `PROFILE.md` (normative),
@@ -300,6 +454,38 @@ The order number, total, cancel-by date and items are read by
 merchant-agnostic heuristics and may be misread; the report labels them as
 read from the email. The merchant's signature covers the bytes, not this
 reading of them.
+
+## Cancel-by dates and proving a cancellation
+
+Some points of no return are a date passing, not an action: a free trial that
+becomes $24.00/month on the 17th unless cancelled by the 16th. The deal seals
+that obligation when it is created, with its source (the merchant's own
+email, which `deal note --email` proposes it from when the email says nothing
+is charged before a date, or a snapshot of the page). Every `deal check`
+lists the deal's open dates, and `deal deadlines` emits them as JSON or an
+iCalendar file with a reminder, for the host's own scheduler or the user's
+calendar. No daemon runs here. **We record the deadline; we do not enforce
+it, and nothing is cancelled for the user.** `deal close` refuses while a date
+is open (close with status `pending` meanwhile), because closing would end the
+record that holds it. A date that passed with no cancel sealed reads `passed`.
+
+"I cancelled on the 4th" needs evidence. A sealed `cancel` action (checked and
+approved like any other point of no return) plus the merchant's own
+cancellation email, sealed on the same deal, is the strongest record this
+produces. The report's "Your cancellation" section says exactly:
+
+- **what is shown:** a cancel recorded at a time (this device's clock, fixed by
+  the next witnessed checkpoint when a witness is configured); whether that
+  time is on or before the cancel-by date; and, when the merchant's own
+  cancellation email is merchant-confirmed, that the merchant says the
+  cancellation went through, and when;
+- **what is not:** that no later charge will come (only the merchant's records,
+  or the user's statement, can show that); that the merchant acted beyond what
+  its email says; and, with no confirmed email, that the merchant received the
+  cancel at all.
+
+An email that does not check out is named as such, with its DMARC policy, and
+is never counted as the merchant's confirmation.
 
 ## Guarantee
 

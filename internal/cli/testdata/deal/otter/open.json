@@ -1,0 +1,30 @@
+{
+  "type": "purchase",
+  "channel": "web",
+  "intent": {
+    "verbatim": "buy me a sticker for less than 8 bucks about otters that is funny",
+    "asked": {
+      "item": "funny otter sticker"
+    },
+    "max_total_minor": 800,
+    "allowed": [
+      "pay"
+    ]
+  },
+  "who": {
+    "name": "Sticker Marketplace",
+    "domain": "stickers.example"
+  },
+  "terms": {
+    "item": "Otterly Chaos - Unsupervised and Thriving Funny Otter Design Sticker",
+    "price_minor": 300,
+    "currency": "USD",
+    "conditions": {
+      "size": "small 3.8in x 2.4in"
+    }
+  },
+  "recourse": {
+    "rail": "card",
+    "refundable": true
+  }
+}

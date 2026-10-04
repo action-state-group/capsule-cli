@@ -140,6 +140,9 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if err != nil {
 		return err
 	}
+	if embedded, ok := receiptBundleJSON(raw); ok {
+		raw = embedded
+	}
 	value, err := decodeBundleJSON(raw)
 	if err != nil {
 		return err
@@ -234,6 +237,24 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	default:
 		return ErrBundleInvalid
 	}
+}
+
+// receiptBundleJSON returns the Evidence Bundle a self-contained report page
+// (a deal receipt.html) embeds, so the page itself can be handed to
+// `verify --bundle`. The emitter writes it as `window.__BUNDLE__ = <json>;`
+// with every "<" escaped, so the first ";</script>" after it ends the JSON.
+func receiptBundleJSON(raw []byte) ([]byte, bool) {
+	const start = "window.__BUNDLE__ = "
+	i := bytes.Index(raw, []byte(start))
+	if i < 0 || !bytes.HasPrefix(bytes.TrimSpace(raw), []byte("<!")) {
+		return nil, false
+	}
+	rest := raw[i+len(start):]
+	j := bytes.Index(rest, []byte(";</script>"))
+	if j < 0 {
+		return nil, false
+	}
+	return rest[:j], true
 }
 
 // sameJSONValue is JSON equality with the type kept, as Python's == on the

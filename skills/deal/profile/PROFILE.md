@@ -96,6 +96,12 @@ Field details:
 - **terms**: `item`, `quantity`, `price_minor`, `deposit_minor`, `currency`, `when`, `place`,
   `conditions` (token → string). `place` is a locality ("lakeside marina"), never a street
   address.
+- **obligation** (on `evidence`, optional): a commitment that takes effect when a date passes.
+  `kind` (`trial_conversion` | `renewal` | `cancel_window` | `payment_due`), `cancel_by` (the
+  last day to cancel), optional `takes_effect`, `amount_minor` + `currency`, `period` (`week` |
+  `month` | `year` | `once`) and `terms_commitment` (to the merchant's own wording, kept on the
+  device). The evidence record's `source` says where it came from (`merchant_email`,
+  `page_snapshot`). Recorded, never enforced. Each obligation records one cancel-by date. A recurring renewal after that date is not tracked; seal a new obligation for each later date.
 - **merchant_email** (on `evidence`, optional): a merchant's DKIM-signed email, kept raw on the
   device. `message_digest` (SHA-256 of the exact RFC 822 bytes), `key_records_digest` (SHA-256
   of the JCS array of `{"name","txt"}` key records captured when the email was sealed),
@@ -105,14 +111,15 @@ Field details:
   `absent` | `not_captured`; shown, never a reason to refuse sealing), optional
   `dmarc_record_digest` + `dmarc_source` (the DMARC records captured at seal time), optional
   `signer_matches_baseline`, and `parsed` (`method: heuristic`; optional `total_minor`,
-  `currency`, `order_id_commitment`, `cancel_by`, `sent_at`, `item_count`). `verified` is true
+  `currency`, `order_id_commitment`, `cancel_by`, `sent_at`, `item_count`, `kind`:
+  `confirmation` | `cancellation`). `verified` is true
   only when `dkim` is `pass` and `merchant_signed` is true. The DKIM signature is the
   merchant's attestation; the record's own seal is the producer's. They are different claims.
 - **recourse**: `rail` (a token: `card`, `zelle`, `wire`, …; the normalization is the safety
   pack's `rail` rule) and `refundable`.
 - **differences[]**: `{question, rule, field?}`. `question` is one of `asked`, `who`, `terms`,
   `recourse`, `safety`, `delivered`. `rule` is a rule id from the pack named by `pack_id`, or a
-  core rule (`not_asked`, `over_limit`, `terms_changed`, `recourse_changed`,
+  core rule (`not_asked`, `over_limit`, `agent_picked`, `terms_changed`, `recourse_changed`,
   `credentials_requested`, `not_delivered`, `delivered_differs`). Any change of
   `recourse.rail` or `recourse.refundable` from what was agreed is a
   `recourse_changed` difference, for every action. The human card text contains raw values, so it is

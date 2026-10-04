@@ -1,0 +1,48 @@
+# Template: watch a canary's cadence log from outside the host (docs/CANARY.md).
+#
+# Not run from this location -- copy it into a repo's .github/workflows/ and set
+# LOG_ID to the canary profile's cadence log (the `cadence_log` that
+# `capsulectl canary run` prints). It needs no secrets: the witness answers
+# anyone. A failing run is the alarm; route it wherever failed workflow runs
+# already go.
+
+name: Canary watch
+
+on:
+  schedule:
+    - cron: "41 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LOG_ID: deal-cadence/0000000000000000
+  WITNESS: https://witness.agentactioncapsule.org
+  EXPECT_EVERY: 26h
+  # The first release with `canary watch` (rc2 predates it). Check that this
+  # tag exists on the releases page before enabling the schedule.
+  CAPSULECTL_VERSION: v0.1.0-rc3
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      # The watcher keeps its last observation between runs; without it, it
+      # still alarms on a stale log, but cannot tell a rewritten history.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: canary-state.json
+          key: canary-state-${{ github.run_id }}
+          restore-keys: canary-state-
+      - name: Install capsulectl
+        run: |
+          base=https://github.com/action-state-group/capsule-cli/releases/download/$CAPSULECTL_VERSION
+          curl -fsSLO "$base/capsulectl-$CAPSULECTL_VERSION-linux-amd64"
+          curl -fsSLO "$base/SHA256SUMS"
+          sha256sum --ignore-missing -c SHA256SUMS
+          install -m 0755 "capsulectl-$CAPSULECTL_VERSION-linux-amd64" "$RUNNER_TEMP/capsulectl"
+      - name: Watch
+        run: |
+          "$RUNNER_TEMP/capsulectl" canary watch --log-id "$LOG_ID" --witness "$WITNESS" \
+            --expect-every "$EXPECT_EVERY" --state canary-state.json

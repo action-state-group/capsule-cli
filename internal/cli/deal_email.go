@@ -132,21 +132,24 @@ func dealAssurance(b map[string]interface{}) map[string]any {
 }
 
 type dealEmailView struct {
-	Demo        bool
-	Scope       string
-	Asked       string
-	Outcome     string
-	Assurance   string
-	Did         []dealReportItem
-	Anomalies   []dealReportItem
-	Merchant    []dealMerchantRow
-	EmailScope  string
-	Steps       int
-	VerifyLine  string
-	NotClaimed  []string
-	CheckedNote string
+	Demo          bool
+	Scope         string
+	Asked         string
+	Outcome       string
+	Assurance     string
+	Did           []dealReportItem
+	Anomalies     []dealReportItem
+	Merchant      []dealMerchantRow
+	Deadlines     []dealDeadline
+	Cancellations []dealCancellation
+	EmailScope    string
+	Steps         int
+	VerifyLine    string
+	NotClaimed    []string
+	CheckedNote   string
 	// MerchantNote says what stands behind the merchant section, once.
 	MerchantNote string
+	DeadlineNote string
 }
 
 const dealEmailMerchantNote = "Two different things stand behind each email. The merchant's signature, checked against the merchant's key saved when the email was sealed, shows what the merchant sent, independent of the agent. Our seal shows this device kept these exact bytes from that time on; it is our own record. Amounts, dates and order numbers are read from the email by capsulectl and may be misread."
@@ -174,6 +177,14 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <p style="margin:4px 0 0;color:#444;">Outcome: {{.Outcome}} &middot; {{.Steps}} sealed steps</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">Anomalies</h2>
 <ul style="margin:0;padding-left:20px;">{{range .Anomalies}}<li>{{if .Side}}{{.Side}} side: {{end}}{{.Text}}</li>{{else}}<li>None found.</li>{{end}}</ul>
+{{if .Deadlines}}<h2 style="font-size:16px;margin:16px 0 4px;">Cancel-by dates</h2>
+<ul style="margin:0;padding-left:20px;">{{range .Deadlines}}<li>{{.CancelBy}} &middot; {{.Status}}: {{.Text}}</li>{{end}}</ul>
+<p style="margin:4px 0 0;color:#444;">{{.DeadlineNote}}</p>{{end}}
+{{range .Cancellations}}<h2 style="font-size:16px;margin:16px 0 4px;">Your cancellation</h2>
+<p style="margin:0 0 4px;font-weight:600;">What this shows</p>
+<ul style="margin:0;padding-left:20px;">{{range .Proven}}<li>{{.}}</li>{{end}}</ul>
+<p style="margin:8px 0 4px;font-weight:600;">What this does not show</p>
+<ul style="margin:0;padding-left:20px;color:#444;">{{range .NotProven}}<li>{{.}}</li>{{end}}</ul>{{end}}
 {{if .Merchant}}<h2 style="font-size:16px;margin:16px 0 4px;">The merchant's own email</h2>
 <p style="margin:0 0 4px;font-weight:600;">{{.EmailScope}}</p>
 <p style="margin:0 0 8px;color:#444;">{{.MerchantNote}}</p>
@@ -207,6 +218,7 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 	view.NotClaimed = dealEmailNotClaimed
 	view.EmailScope = emailScopeLine
 	view.MerchantNote = dealEmailMerchantNote
+	view.DeadlineNote = deadlineNotEnforced
 	view.CheckedNote = "This copy cannot check itself: mail apps do not run scripts. Open the attached receipt.html in a browser, where it checks every sealed step offline, or save bundle.json and run:"
 	asked := view.Asked
 	if r := []rune(asked); len(r) > 60 {
@@ -237,6 +249,23 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 			side = a.Side + " side: "
 		}
 		fmt.Fprintf(&tb, "- %s%s\n", side, a.Text)
+	}
+	if len(view.Deadlines) > 0 {
+		tb.WriteString("\nCancel-by dates:\n")
+		for _, d := range view.Deadlines {
+			fmt.Fprintf(&tb, "- %s · %s: %s\n", d.CancelBy, d.Status, d.Text)
+		}
+		fmt.Fprintf(&tb, "%s\n", view.DeadlineNote)
+	}
+	for _, c := range view.Cancellations {
+		tb.WriteString("\nYour cancellation\nWhat this shows:\n")
+		for _, p := range c.Proven {
+			fmt.Fprintf(&tb, "- %s\n", p)
+		}
+		tb.WriteString("What this does not show:\n")
+		for _, p := range c.NotProven {
+			fmt.Fprintf(&tb, "- %s\n", p)
+		}
 	}
 	if len(view.Merchant) > 0 {
 		fmt.Fprintf(&tb, "\nThe merchant's own email:\n%s\n%s\n", view.EmailScope, view.MerchantNote)

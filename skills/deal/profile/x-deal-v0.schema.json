@@ -185,7 +185,21 @@
         "verified": { "type": "boolean" },
         "detail_commitment": { "$ref": "#/$defs/hex64" },
         "counterparty_facts": { "$ref": "#/$defs/counterparty_facts" },
-        "merchant_email": { "$ref": "#/$defs/merchant_email" }
+        "merchant_email": { "$ref": "#/$defs/merchant_email" },
+        "obligation": { "$ref": "#/$defs/obligation" }
+      }
+    },
+    "obligation": {
+      "description": "A commitment that takes effect when a date passes: the last day to cancel, what happens then, and the price. Recorded, never enforced.",
+      "type": "object", "additionalProperties": false, "required": ["kind", "cancel_by"],
+      "properties": {
+        "kind": { "enum": ["trial_conversion", "renewal", "cancel_window", "payment_due"] },
+        "cancel_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "takes_effect": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "amount_minor": { "$ref": "#/$defs/safe_uint" },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "period": { "enum": ["week", "month", "year", "once"] },
+        "terms_commitment": { "$ref": "#/$defs/hex64" }
       }
     },
     "merchant_email": {
@@ -211,7 +225,8 @@
             "order_id_commitment": { "$ref": "#/$defs/hex64" },
             "cancel_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
             "sent_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
-            "item_count": { "$ref": "#/$defs/safe_uint" }
+            "item_count": { "$ref": "#/$defs/safe_uint" },
+            "kind": { "enum": ["confirmation", "cancellation"] }
           }
         }
       }

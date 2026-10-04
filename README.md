@@ -10,7 +10,7 @@ included.
 
 Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
 darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
-The current release is the pre-release `v0.1.0-rc2`; there is no final `v0.1.0`
+The current release is the pre-release `v0.1.0-rc3`; there is no final `v0.1.0`
 yet, so GitHub's "latest release" link does not resolve.
 Releases after `v0.1.0-rc2` also carry a GitHub build provenance attestation
 for each binary (Sigstore, keyless: there is no release key to hold or
@@ -22,13 +22,24 @@ for this repository. With the GitHub CLI:
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
 `modernc.org/sqlite`), so they need no system libraries.
 
+`v0.1.0-rc3` (commit `d3c6a9bbf4eeaeedef67d1e3fe0d0f53e7164a70`), SHA-256 of
+each binary, to compare against the downloaded `SHA256SUMS`:
+
+| File | SHA-256 |
+|---|---|
+| `capsulectl-v0.1.0-rc3-linux-amd64` | `26ba141f0d0e1abfad02d6ede82a85823f8ee34b7c34c3169fa7cc5f693fa248` |
+| `capsulectl-v0.1.0-rc3-linux-arm64` | `8a613ea0f927a56ab625c3da6481397fff43426b453fc25eae812e705f9842d4` |
+| `capsulectl-v0.1.0-rc3-darwin-arm64` | `14c81bfe89ce22a4d117f10e0ec451804824f49a442580ef678cb668097b3746` |
+
 ```bash
-V=v0.1.0-rc2; OS=linux; ARCH=amd64   # pre-release; or linux/arm64, darwin/arm64
+V=v0.1.0-rc3; OS=linux; ARCH=amd64   # pre-release; or linux/arm64, darwin/arm64
 base=https://github.com/action-state-group/capsule-cli/releases/download/$V
 curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
+gh attestation verify "capsulectl-$V-$OS-$ARCH" --repo action-state-group/capsule-cli \
+  --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
 sudo install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
-capsulectl --version                        # capsulectl v0.1.0-rc2 (commit <sha>)
+capsulectl --version                        # capsulectl v0.1.0-rc3 (commit d3c6a9bbf4eeaeedef67d1e3fe0d0f53e7164a70)
 ```
 
 Writing to `/usr/local/bin` needs `sudo`. Without it, install into a directory
@@ -53,7 +64,7 @@ tag as your binary, so that every verb it lists exists in that binary
 (`capsulectl <verb> --help` confirms one).
 
 ```bash
-V=v0.1.0-rc2   # the same tag as the binary you installed (a pre-release)
+V=v0.1.0-rc3   # the same tag as the binary you installed (a pre-release)
 git clone --depth 1 --branch "$V" https://github.com/action-state-group/capsule-cli.git
 
 # Claude Code: a personal skill (or .claude/skills/ inside one project)
@@ -221,6 +232,8 @@ capsulectl judge drift reports FILE_A FILE_B
 capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
 capsulectl deal init|open|note|check|close|report|reconcile|tick --profile NAME [...]
 capsulectl backfill run|status --profile NAME [...]
+capsulectl canary run --profile NAME [--skill FILE] [--expect-version TAG] [--expect-skill-sha256 HEX]
+capsulectl canary watch --log-id ID --expect-every DURATION [--witness URL] [--state FILE]
 ```
 
 `capsulectl <command> --help` gives every flag; this list is the shape of each
@@ -281,6 +294,12 @@ row by digest, and the rows near a consequential signal as Capsules in
 provenance mode `backfilled`. It shows effects only, never an amount charged
 or an approval, and it gives detectability of absence, not prevention; see
 [docs/BACKFILL.md](docs/BACKFILL.md).
+
+`canary run` plays a scripted DEMO deal on a profile of its own and ticks that
+profile's cadence log only when every step succeeded; `canary watch` reads the
+log's last checkpoint from the public witness and exits 6 with one line when it
+has stopped advancing or its history was rewritten. Absence is the alarm, seen
+from outside with no access to the host; see [docs/CANARY.md](docs/CANARY.md).
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.
@@ -696,7 +715,7 @@ Successful stdout is one JSON object:
 `{"spec_version":"capsule-cli-result/v1",...}`.
 Diagnostics never expose raw driver/config/service errors. Exit codes: 0 success,
 1 operational failure, 2 invalid input/profile, 3 partial verification, 4 durable delivery pending,
-5 frozen input/target conflict. Inspect the exit code, not only a result object.
+5 frozen input/target conflict, 6 canary alarm (`canary watch`). Inspect the exit code, not only a result object.
 Verification lists passed/not-performed checks instead of calling all evidence valid.
 
 Only `store init` calls CLL `Init` and provisions selected library schemas.

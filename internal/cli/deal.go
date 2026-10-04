@@ -43,6 +43,7 @@ var dealClock = func() time.Time { return time.Now().UTC() }
 
 // The local store, in the profile's SQLite file. It never leaves the device:
 // deal_steps.local holds each step's raw values and commitment nonces,
+// deal_disclosures each shared copy's disclosure record,
 // deal_keys each deal's key, and deal_store the store secret the keys derive
 // from. What is sealed is only the x-deal-v0 record derived from them.
 var dealIndexSchema = []string{
@@ -54,6 +55,14 @@ var dealIndexSchema = []string{
 	cll_sequence INTEGER NOT NULL,
 	record_digest TEXT NOT NULL,
 	local TEXT NOT NULL,
+	PRIMARY KEY (deal_id, n)
+)`,
+	`CREATE TABLE IF NOT EXISTS deal_disclosures (
+	deal_id TEXT NOT NULL,
+	n INTEGER NOT NULL,
+	record_digest TEXT NOT NULL,
+	cll_sequence INTEGER NOT NULL,
+	record TEXT NOT NULL,
 	PRIMARY KEY (deal_id, n)
 )`,
 	`CREATE TABLE IF NOT EXISTS deal_keys (deal_id TEXT PRIMARY KEY, deal_key BLOB NOT NULL)`,
@@ -431,7 +440,7 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand(), dealDeadlinesCommand())
 	return deal
 }
 
@@ -768,6 +777,21 @@ func dealNoteCommand() *cobra.Command {
 					out["merchant_says"] = emailVerdictWords(m.DKIM)
 					out["we_say"] = ourSealWords
 					out["parsed"] = m.Parsed
+					if hint := obligationHint(m.Parsed); hint != nil && ev.Evidence.Obligation == nil {
+						// Proposed, never sealed by itself: the agent checks it
+						// against the email and seals it as evidence.
+						out["obligation_hint"] = hint
+					}
+				}
+				if o := ev.Evidence.Obligation; o != nil {
+					if ev.Evidence.Email == nil {
+						cp, err := s.milestone(ctx)
+						if err != nil {
+							return err
+						}
+						out["checkpoint"] = cp
+					}
+					out["deadline"] = map[string]any{"cancel_by": o.CancelBy, "text": o.sentence(events[0].Event.Open.Terms.Currency), "note": deadlineNotEnforced}
 				}
 			}
 			return output(c, out)
@@ -919,8 +943,13 @@ func dealCheckCommand() *cobra.Command {
 			out["options"] = result.Options
 			out["differences"] = result.Differences
 			out["unverified"] = result.Unverified
+			out["asked_attributes"] = result.Asked
+			out["picked_by_agent"] = result.Picked
 			out["remote"] = result.Remote.Status
 			out["demo"] = open.Demo
+			// A date passing is a point of no return too: every check lists
+			// the deal's open cancel-by dates.
+			out["open_deadlines"] = openDeadlines(events, dealClock())
 			out["checked_at"] = checked.Event.At
 			out["stale_after_minutes"] = int(staleAfter / time.Minute)
 			out["approval_text"] = dealApprovalText(state, snap, result, checked.Event.At, staleAfter)
@@ -957,6 +986,9 @@ func dealCloseCommand() *cobra.Command {
 			state, err := foldDeal(events)
 			if err != nil {
 				return err
+			}
+			if open := openDeadlines(events, dealClock()); len(open) > 0 && in.Status != "pending" {
+				return inputError("this deal has an open cancel-by date (" + open[0].CancelBy + ": " + open[0].Text + "); closing would end its record. Close with status pending, or close after the cancel is sealed or the date has passed")
 			}
 			result := closeDeal(state, in)
 			for _, se := range events {
@@ -997,6 +1029,26 @@ func dealReportCommand() *cobra.Command {
 		htmlPath, _ := c.Flags().GetString("html")
 		emailPath, _ := c.Flags().GetString("email")
 		bundlePath, _ := c.Flags().GetString("bundle")
+		audience, _ := c.Flags().GetString("share")
+		recipient, _ := c.Flags().GetString("to")
+		recipient = strings.TrimSpace(recipient)
+		switch audience {
+		case dealAudienceKeep:
+			if recipient != "" {
+				return inputError("--to names who a shared copy is for; use it with --share counterparty or adjudicator")
+			}
+		case dealAudienceCounterparty, dealAudienceAdjudicator:
+			if htmlPath == "" || recipient == "" {
+				return inputError("--share writes a copy for someone else: it needs --html FILE and --to (who it is for)")
+			}
+			// The email and the bundle file are the user's own copy, with
+			// nothing withheld; a shared copy is the page alone.
+			if emailPath != "" || bundlePath != "" {
+				return inputError("--share writes only the shared page; --email and --bundle are the user's own copy")
+			}
+		default:
+			return inputError("--share must be keep, counterparty or adjudicator")
+		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			report := buildDealReport(events)
 			lines := make([]string, 0, len(events))
@@ -1009,12 +1061,13 @@ func dealReportCommand() *cobra.Command {
 			}
 			out := map[string]any{
 				"deal_id": dealID, "scope": dealScopeLine, "did_line": dealDidLine(dealDidSources(events)), "demo": events[0].Event.Open.Demo, "outcome": outcome,
-				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "merchant": report.Merchant, "trail": strings.Join(lines, "\n"),
+				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "merchant": report.Merchant,
+				"deadlines": dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "trail": strings.Join(lines, "\n"),
 			}
 			if htmlPath == "" && emailPath == "" && bundlePath == "" {
 				return output(c, out)
 			}
-			b, err := s.dealReportBundle(ctx, events, report)
+			b, err := s.dealReportBundle(ctx, events, report, audience, dealVerifyCommand(htmlPath))
 			if err != nil {
 				return err
 			}
@@ -1022,11 +1075,28 @@ func dealReportCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			assurance := dealAssurance(b)
+			if audience != dealAudienceKeep {
+				// The final bytes are checked before anything is on record.
+				if err = dealPageGate([]byte(page), events, dealShareableOrderIDs(events, audience)...); err != nil {
+					return err
+				}
+				// Sharing is a disclose act: it is on record before the file
+				// exists, and the output carries none of the local report's
+				// raw text.
+				share, err := s.recordShare(ctx, dealID, b, audience, recipient, []byte(page))
+				if err != nil {
+					return err
+				}
+				if err = atomicFile(htmlPath, []byte(page), false); err != nil {
+					return err
+				}
+				return output(c, map[string]any{"deal_id": dealID, "scope": dealScopeLine, "html": htmlPath, "assurance": assurance, "share": share})
+			}
 			bundle, err := json.Marshal(b)
 			if err != nil {
 				return err
 			}
-			assurance := dealAssurance(b)
 			out["assurance"] = assurance
 			if htmlPath != "" {
 				if err = atomicFile(htmlPath, []byte(page), false); err != nil {
@@ -1041,7 +1111,7 @@ func dealReportCommand() *cobra.Command {
 				out["bundle"] = bundlePath
 			}
 			if emailPath != "" {
-				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Did: report.Did, Anomalies: report.Anomalies, Merchant: report.Merchant, Steps: len(events)}
+				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Did: report.Did, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, dealClock(), 2), Cancellations: dealCancellations(events), Steps: len(events)}
 				eml, subject, text, htmlBody, err := dealEmail(view, []byte(page), bundle, dealClock())
 				if err != nil {
 					return err
@@ -1058,6 +1128,8 @@ func dealReportCommand() *cobra.Command {
 	cmd.Flags().String("html", "", "Write the report as one local, self-contained page to this new file")
 	cmd.Flags().String("email", "", "Write the receipt as a ready-to-send email (.eml, no sender or recipient) to this new file, for the agent host's own email tool to send")
 	cmd.Flags().String("bundle", "", "Write the deal's Evidence Bundle (for `capsulectl verify --bundle`) to this new file")
+	cmd.Flags().String("share", dealAudienceKeep, "Who the page is for: keep (your own copy, nothing withheld), counterparty or adjudicator (a shared copy, put on record first)")
+	cmd.Flags().String("to", "", "With --share: who the shared copy is for, as sealed in the disclosure record")
 	return cmd
 }
 

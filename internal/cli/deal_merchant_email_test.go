@@ -78,6 +78,33 @@ func merchantMessage(order, date, total string) string {
 	}, "\r\n")
 }
 
+// subscriptionEmails are the synthetic trial and cancellation emails for the
+// cancel-by and proving-a-negative tests (deal_obligation_test.go).
+var subscriptionEmails = map[string]string{
+	"trial.eml": simpleMessage("offers@shop.example", "Sat, 03 Oct 2026 21:20:00 +0000", "<plus-trial-7731@shop.example>",
+		"Your Shop Example Plus trial has started",
+		"Welcome to Shop Example Plus!\r\n\r\nYour free trial has started. After the trial, Plus is $24/month.\r\n"+
+			"Cancel by October 16, 2026 to avoid being charged. Your first payment is on October 17, 2026.\r\n\r\nShop Example\r\n"),
+	"cancelled.eml": simpleMessage("offers@shop.example", "Sun, 04 Oct 2026 16:02:11 +0000", "<plus-cancel-7731@shop.example>",
+		"Your Shop Example Plus membership has been cancelled",
+		"Your Shop Example Plus membership has been cancelled. You won't be charged when the trial ends.\r\n\r\nShop Example\r\n"),
+}
+
+func simpleMessage(from, date, id, subject, body string) string {
+	return strings.Join([]string{
+		"From: Shop Example <" + from + ">",
+		"To: Sam Customer <sam.customer@mail.example>",
+		"Subject: " + subject,
+		"Date: " + date,
+		"Message-ID: " + id,
+		"MIME-Version: 1.0",
+		"Content-Type: text/plain; charset=utf-8",
+		"Content-Transfer-Encoding: 7bit",
+		"",
+		body,
+	}, "\r\n")
+}
+
 // TestRegenerateMerchantEmailFixtures rewrites the signed fixtures with a new
 // throwaway key. It runs only when asked:
 //
@@ -88,15 +115,22 @@ func TestRegenerateMerchantEmailFixtures(t *testing.T) {
 	}
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
+	messages := map[string]string{}
 	for _, m := range merchantEmails {
+		messages[m.file] = merchantMessage(m.order, m.date, m.total)
+	}
+	for file, msg := range subscriptionEmails {
+		messages[file] = msg
+	}
+	for file, msg := range messages {
 		var signed bytes.Buffer
-		err := dkim.Sign(&signed, strings.NewReader(merchantMessage(m.order, m.date, m.total)), &dkim.SignOptions{
+		err := dkim.Sign(&signed, strings.NewReader(msg), &dkim.SignOptions{
 			Domain: "shop.example", Selector: merchantSelector, Signer: key, Hash: crypto.SHA256,
 			HeaderCanonicalization: dkim.CanonicalizationRelaxed, BodyCanonicalization: dkim.CanonicalizationRelaxed,
 			HeaderKeys: []string{"From", "To", "Subject", "Date", "Message-ID", "MIME-Version", "Content-Type"},
 		})
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(filepath.Join(merchantFixture, m.file), signed.Bytes(), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(merchantFixture, file), signed.Bytes(), 0o644))
 	}
 	der, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
 	require.NoError(t, err)
