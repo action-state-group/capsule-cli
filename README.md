@@ -10,7 +10,7 @@ included.
 
 Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
 darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
-The current release is the pre-release `v0.1.0-rc4`; there is no final `v0.1.0`
+The current release is the pre-release `v0.1.0-rc5`; there is no final `v0.1.0`
 yet, so GitHub's "latest release" link does not resolve.
 Releases after `v0.1.0-rc2` also carry a GitHub build provenance attestation
 for each binary (Sigstore, keyless: there is no release key to hold or
@@ -50,27 +50,28 @@ checked: attestation verified; checksum matched" or "provenance not checked:
 gh not signed in; checksum matched".
 
 Provenance proves a binary was built by the release workflow, not that the
-project meant to release it. From the first release built with
-transparency registration, each release is also registered in a public transparency log, and
-`capsulectl release watch`, run off the release infrastructure, compares that
-log with the maintainer-signed tags. What each check covers, and what none of
-them does (telling you this is the right repository), is in
+project meant to release it. From `v0.1.0-rc5` on, each release is also
+registered in a public transparency log, and `capsulectl release watch`, run
+off the release infrastructure, compares that log with the maintainer-signed
+tags. What each check covers, and what none of them does (telling you this is
+the right repository), is in
 [docs/RELEASE-TRANSPARENCY.md](docs/RELEASE-TRANSPARENCY.md).
+
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
 `modernc.org/sqlite`), so they need no system libraries.
 
-`v0.1.0-rc4` (commit `4df207020a274eb33e71114772c04c8f51721d0b`), SHA-256 of
+`v0.1.0-rc5` (commit `fd487b2fbbed858aada8edc906dc7919d1f37d71`), SHA-256 of
 each file, to compare against the downloaded `SHA256SUMS`:
 
 | File | SHA-256 |
 |---|---|
-| `capsulectl-v0.1.0-rc4-linux-amd64` | `75f7459a64769d78a7ca6b7c1469b063187a53823c738fe9ea22d277d2345059` |
-| `capsulectl-v0.1.0-rc4-linux-arm64` | `e23a1ac924ffa5a4a32ce86cd116ed155995cd8b5b3b5aab32ce62b7490ef65b` |
-| `capsulectl-v0.1.0-rc4-darwin-arm64` | `7c03ddd8cb74373f774ab43b3ac056f5f92d5810b79cb7850153db83ead5fc10` |
-| `capsulectl-v0.1.0-rc4.sigstore.json` (the attestation bundle) | `a2bc4227bb7ba78ebf106e0b22f517f764fc3e7a37cdf7d8237b4e306a5a187b` |
+| `capsulectl-v0.1.0-rc5-linux-amd64` | `9ec6d78b4e8956fa5fda178bada6ce48c39db5383e03bb9c463fd5f3cc2c765e` |
+| `capsulectl-v0.1.0-rc5-linux-arm64` | `ed69d5c12b0ef043e419061349265475bcdaa333198ae195cfdb8dd219338d4b` |
+| `capsulectl-v0.1.0-rc5-darwin-arm64` | `a9fb4f5c989eba0ab46930330397041f4f7a4f2ddcb12ab5972e660c076b6053` |
+| `capsulectl-v0.1.0-rc5.sigstore.json` (the attestation bundle) | `94b6d8534a16fc33eb3e155e780b4a230f53b0c9928189adcf36bb7ec6cf459e` |
 
 ```bash
-V=v0.1.0-rc4; OS=linux; ARCH=amd64   # pre-release; or linux/arm64, darwin/arm64
+V=v0.1.0-rc5; OS=linux; ARCH=amd64   # pre-release; or linux/arm64, darwin/arm64
 base=https://github.com/action-state-group/capsule-cli/releases/download/$V
 curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/capsulectl-$V.sigstore.json" -O "$base/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
@@ -79,7 +80,7 @@ gh attestation verify "capsulectl-$V-$OS-$ARCH" --bundle "capsulectl-$V.sigstore
   --repo action-state-group/capsule-cli \
   --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
 sudo install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
-capsulectl --version                        # capsulectl v0.1.0-rc4 (commit 4df207020a274eb33e71114772c04c8f51721d0b)
+capsulectl --version                        # capsulectl v0.1.0-rc5 (commit fd487b2fbbed858aada8edc906dc7919d1f37d71)
 ```
 
 Writing to `/usr/local/bin` needs `sudo`. Without it, install into a directory
@@ -104,7 +105,7 @@ tag as your binary, so that every verb it lists exists in that binary
 (`capsulectl <verb> --help` confirms one).
 
 ```bash
-V=v0.1.0-rc4   # the same tag as the binary you installed (a pre-release)
+V=v0.1.0-rc5   # the same tag as the binary you installed (a pre-release)
 git clone --depth 1 --branch "$V" https://github.com/action-state-group/capsule-cli.git
 
 # Claude Code: a personal skill (or .claude/skills/ inside one project)
