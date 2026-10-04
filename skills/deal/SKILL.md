@@ -360,6 +360,25 @@ text is left out unless an anomaly points at that message.
 A merchant email result carries its own `scope` line (it covers one email
 from the merchant about this deal). Pass it on as written.
 
+Every page opens with its scope (this one deal, not a record of everything the agent did), then the rung it can prove (*sealed by my agent* unless the
+file carries a witness receipt or countersignature), what it does not claim,
+and one command anyone can run on the file: `capsulectl verify --bundle
+deal-report.html`.
+
+That page is the user's own copy, with nothing withheld. When the user wants
+to send it to someone, make a shared copy instead. Never send the user's own
+copy:
+
+```sh
+capsulectl --profile deal deal report --deal ID --html receipt.html --share counterparty --to "who it is for"
+```
+
+`--share counterparty` keeps amounts, rails, timestamps and digests only.
+`--share adjudicator` adds message text and claim sources, with codes, card
+numbers and addresses replaced with `[withheld]`. Neither copy can carry a
+home address, a verification code or a card number. Each share is sealed as
+a disclosure record before the file is written.
+
 Attach the file or hand it over when the user asks. Never upload or host it
 anywhere.
 

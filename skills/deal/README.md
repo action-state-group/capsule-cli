@@ -44,6 +44,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
 | `deal report --email FILE [--bundle FILE]` | Writes the receipt as a ready-to-send email (.eml, no sender or recipient) for the agent host's own email tool: a plain and a static HTML body that read on a phone, with `receipt.html` and `bundle.json` attached. `--bundle` writes the Evidence Bundle for `capsulectl verify --bundle`. Nothing is sent by capsulectl. |
 | `deal reconcile --executions FILE [--approvals FILE] [--from T] [--to T]` | Reads the agent host's execution records (tool calls of the agent and its sub-tasks, in the format in [RECONCILE.md](RECONCILE.md)) and lists each consequential action that has no deal record, with what the pass cannot see. Seals nothing; exits 3 when anything is unrecorded. |
+| `deal report --html FILE --share counterparty\|adjudicator --to WHO` | A copy for someone else. It leaves out what that reader must not get, and seals a disclosure record of the share before the file is written. |
 
 Each step is a Capsule in the profile's store. Each deal has its own
 checkpointed log (`deal/<deal_id>`) in the same SQLite file, and each step
@@ -189,6 +190,71 @@ one deal. It is not a record of everything the agent did." They also say
 that what was asked, proposed and approved is sealed where it happened, while
 what the agent did is the agent's own report until an independent source is
 attached.
+
+The page also has a **What this does not claim** block: it is
+tamper-evident, not non-repudiation; it records what the agent reported; it
+does not prove the merchant shipped. It names *countersigned* only when the
+file carries a countersignature. And it gives one command anyone can run on
+the file, offline: `capsulectl verify --bundle receipt.html` (`verify
+--bundle` reads the page's embedded bundle). `deal report` prints the scope
+line as `scope`.
+
+### Sharing a copy
+
+`--html` alone writes the user's own copy (audience `keep`: nothing withheld). To
+hand a copy to someone else, name the reader:
+
+```sh
+capsulectl --profile deal deal report --deal ID --html receipt.html \
+  --share counterparty --to "the shop's support desk"
+```
+
+`--share` writes the page alone. `--email` and `--bundle` are the user's own
+copy, with nothing withheld, so they cannot be combined with `--share`.
+
+| Audience | What the copy carries |
+|---|---|
+| `keep` (default) | Nothing withheld. No disclosure record: it is the user's own copy. |
+| `counterparty` | Amounts, rails, timestamps and digests only. No home address, no names, payees or contact details, no card or payment identifiers, no verification codes, no message text, no claim text or sources, none of the user's own words. |
+| `adjudicator` | The counterparty copy plus message text and claim text with sources. Codes, card numbers, phones, emails and street addresses are replaced with `[withheld]`. |
+
+A sealed record is disclosed whole or not at all, so a shared copy withholds
+every record holding a string it may not carry. That record still verifies:
+it shows as WITHHELD, and its place in the log is still proven. The deal
+section is rewritten for the reader from fixed words, amounts and rails.
+In the adjudicator copy, codes are withheld wherever they sit: inside a word
+(`G739142`, `code739142`) or split by a space or dash (`739 142`). Any piece
+of the sealed place or address (`Larkspur`, `Springfield`, `41`) is withheld
+wherever it appears in message text, in any order.
+
+Both the scrubber and the gate first fold text to a plain form. Zero-width
+and other format characters are removed. NFKC turns fullwidth digits into
+plain ones. Cyrillic and Greek letters that imitate Latin ones (`Lаrkspur`
+with a Cyrillic `а`) become the Latin letter, in any word that mixes scripts
+or is made only of lookalikes. A word written in Cyrillic or Greek proper is
+left as written. In the adjudicator copy, message text appears in this
+folded form.
+
+Before the file is written, a last gate reads the **final page bytes** with
+its own detectors. It reads the deal's local steps itself and shares no
+detector with the scrubber. It looks for every place and
+address fragment, identifier, payment reference, code, card number and email
+in the deal's local store. It checks each one as written, in any case, digits
+only, with separators removed, base64 (all four alphabets), hex, and URL-,
+JSON- and HTML-escaped. It also looks for any Luhn-valid card number and any
+code word (code, OTP, PIN, passcode) followed by a number. A short value is
+skipped only inside a digest or signature (a run of 64 or more hex or base64
+characters). In an order reference or a URL path it counts. A hit refuses the
+copy: nothing is written and nothing goes on record.
+
+**Sharing is on record.** Before the file exists, a disclosure record is
+sealed. It names the root, the payloads mode, the records withheld, the
+audience, the recipient (`--to`), what the copy leaves out, and the SHA-256
+of the exact page. It is kept in the local store (`deal_disclosures`), and
+its digest is appended to the deal's own disclosure log
+(`deal/<deal_id>/disclosures`) under a fresh signed checkpoint. That log sits
+beside the deal's log, which holds only steps. Nothing is hosted: there are
+no accounts and no links. The user hands over the file.
 
 ## Records: the x-deal-v0 profile
 

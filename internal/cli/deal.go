@@ -43,6 +43,7 @@ var dealClock = func() time.Time { return time.Now().UTC() }
 
 // The local store, in the profile's SQLite file. It never leaves the device:
 // deal_steps.local holds each step's raw values and commitment nonces,
+// deal_disclosures each shared copy's disclosure record,
 // deal_keys each deal's key, and deal_store the store secret the keys derive
 // from. What is sealed is only the x-deal-v0 record derived from them.
 var dealIndexSchema = []string{
@@ -54,6 +55,14 @@ var dealIndexSchema = []string{
 	cll_sequence INTEGER NOT NULL,
 	record_digest TEXT NOT NULL,
 	local TEXT NOT NULL,
+	PRIMARY KEY (deal_id, n)
+)`,
+	`CREATE TABLE IF NOT EXISTS deal_disclosures (
+	deal_id TEXT NOT NULL,
+	n INTEGER NOT NULL,
+	record_digest TEXT NOT NULL,
+	cll_sequence INTEGER NOT NULL,
+	record TEXT NOT NULL,
 	PRIMARY KEY (deal_id, n)
 )`,
 	`CREATE TABLE IF NOT EXISTS deal_keys (deal_id TEXT PRIMARY KEY, deal_key BLOB NOT NULL)`,
@@ -997,6 +1006,26 @@ func dealReportCommand() *cobra.Command {
 		htmlPath, _ := c.Flags().GetString("html")
 		emailPath, _ := c.Flags().GetString("email")
 		bundlePath, _ := c.Flags().GetString("bundle")
+		audience, _ := c.Flags().GetString("share")
+		recipient, _ := c.Flags().GetString("to")
+		recipient = strings.TrimSpace(recipient)
+		switch audience {
+		case dealAudienceKeep:
+			if recipient != "" {
+				return inputError("--to names who a shared copy is for; use it with --share counterparty or adjudicator")
+			}
+		case dealAudienceCounterparty, dealAudienceAdjudicator:
+			if htmlPath == "" || recipient == "" {
+				return inputError("--share writes a copy for someone else: it needs --html FILE and --to (who it is for)")
+			}
+			// The email and the bundle file are the user's own copy, with
+			// nothing withheld; a shared copy is the page alone.
+			if emailPath != "" || bundlePath != "" {
+				return inputError("--share writes only the shared page; --email and --bundle are the user's own copy")
+			}
+		default:
+			return inputError("--share must be keep, counterparty or adjudicator")
+		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			report := buildDealReport(events)
 			lines := make([]string, 0, len(events))
@@ -1014,7 +1043,7 @@ func dealReportCommand() *cobra.Command {
 			if htmlPath == "" && emailPath == "" && bundlePath == "" {
 				return output(c, out)
 			}
-			b, err := s.dealReportBundle(ctx, events, report)
+			b, err := s.dealReportBundle(ctx, events, report, audience, dealVerifyCommand(htmlPath))
 			if err != nil {
 				return err
 			}
@@ -1022,11 +1051,28 @@ func dealReportCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			assurance := dealAssurance(b)
+			if audience != dealAudienceKeep {
+				// The final bytes are checked before anything is on record.
+				if err = dealPageGate([]byte(page), events); err != nil {
+					return err
+				}
+				// Sharing is a disclose act: it is on record before the file
+				// exists, and the output carries none of the local report's
+				// raw text.
+				share, err := s.recordShare(ctx, dealID, b, audience, recipient, []byte(page))
+				if err != nil {
+					return err
+				}
+				if err = atomicFile(htmlPath, []byte(page), false); err != nil {
+					return err
+				}
+				return output(c, map[string]any{"deal_id": dealID, "scope": dealScopeLine, "html": htmlPath, "assurance": assurance, "share": share})
+			}
 			bundle, err := json.Marshal(b)
 			if err != nil {
 				return err
 			}
-			assurance := dealAssurance(b)
 			out["assurance"] = assurance
 			if htmlPath != "" {
 				if err = atomicFile(htmlPath, []byte(page), false); err != nil {
@@ -1058,6 +1104,8 @@ func dealReportCommand() *cobra.Command {
 	cmd.Flags().String("html", "", "Write the report as one local, self-contained page to this new file")
 	cmd.Flags().String("email", "", "Write the receipt as a ready-to-send email (.eml, no sender or recipient) to this new file, for the agent host's own email tool to send")
 	cmd.Flags().String("bundle", "", "Write the deal's Evidence Bundle (for `capsulectl verify --bundle`) to this new file")
+	cmd.Flags().String("share", dealAudienceKeep, "Who the page is for: keep (your own copy, nothing withheld), counterparty or adjudicator (a shared copy, put on record first)")
+	cmd.Flags().String("to", "", "With --share: who the shared copy is for, as sealed in the disclosure record")
 	return cmd
 }
 
