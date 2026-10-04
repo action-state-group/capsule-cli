@@ -30,7 +30,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | Command | What it does |
 |---|---|
 | `deal init --dir DIR [--no-witness]` | Creates a SQLite deal profile: store plus signing and checkpoint seeds, each mode 0600, and the profile's cadence log. The public witness is configured by default. |
-| `deal tick` | Run from a timer. When a tick is due (hourly with random jitter by default), cuts every deal's checkpoint locally, appends one entry to the cadence log and publishes its checkpoint to the witness; retries any delivery still pending. Deal steps never publish. |
+| `deal tick [--wait-up-to D]` | Run every minute from a timer (or every D with `--wait-up-to D`). When a tick is due (hourly with random jitter by default), cuts every deal's checkpoint locally, appends one entry to the cadence log and publishes its checkpoint to the witness; retries any delivery still pending. Deal steps never publish. |
 | `deal open --input FILE` | Seals the baseline: the user's verbatim words, who, terms, claims (each with its source) and recourse. Cuts a checkpoint. |
 | `deal note --kind message\|claim\|evidence\|change --input FILE` | Seals what happened. |
 | `deal check --input FILE [--stale-after 15m]` | Seals a snapshot of what is about to happen, asks the four questions, seals the result, returns the difference card and the `approval_text` (with the check time and when it goes stale). |
@@ -112,6 +112,14 @@ each has. Instead the profile has one cadence log (its `log_id`), and
   activity never brings a tick forward, and an explicit
   `cll checkpoint publish` is the only other way anything reaches the
   witness.
+- A tick is published when `deal tick` runs at or after its due time, so
+  run `deal tick` **every minute**: a run that is not due exits at once, and
+  publication then lands within a minute of the jittered due time. A
+  scheduler that runs it less often publishes on its own grid, which hides
+  the jitter and can push a tick to a later run. Where the host can only
+  schedule every N minutes, use `deal tick --wait-up-to Nm`: each run waits,
+  with the store unlocked, for every tick due inside its window, and
+  publishes it on time.
 - At a tick, every deal's checkpoint is cut locally and becomes a leaf of a
   fixed-depth (16) Merkle tree, with a fresh random salt at a fresh random
   position, plus one random filler leaf. The tree's root is appended as

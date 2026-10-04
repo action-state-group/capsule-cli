@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -567,14 +568,59 @@ func trimEndpoint(endpoint string) string {
 	return endpoint
 }
 
+// dealSleep waits d, or until ctx ends; tests replace it.
+var dealSleep = func(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// A tick is published when `deal tick` runs at or after its due time, so the
+// jitter in the due time only shows if something runs `deal tick` near it.
+// Run it every minute (a run that is not due exits at once); a scheduler
+// that can run it only every N minutes passes --wait-up-to N, and the run
+// then waits for each due time inside that window and publishes on time.
+// The waiting happens with the store unlocked, and every publish re-checks
+// the due time under the lock.
 func dealTickCommand() *cobra.Command {
-	return &cobra.Command{Use: "tick", Short: "Publish the profile's cadence checkpoint to its witness when a tick is due (run it from a timer); deal events never publish", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
-		return runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
-			out, err := s.tick(ctx)
+	cmd := &cobra.Command{Use: "tick", Short: "Publish the profile's cadence checkpoint to its witness when a tick is due (run it every minute; deal events never publish)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+		wait, _ := c.Flags().GetDuration("wait-up-to")
+		if wait < 0 {
+			return inputError("--wait-up-to must not be negative")
+		}
+		until := dealClock().Add(wait)
+		published := 0
+		for {
+			var out map[string]any
+			err := runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
+				var err error
+				out, err = s.tick(ctx)
+				return err
+			})
 			if err != nil {
 				return err
 			}
-			return output(c, out)
-		})
+			if out["state"] == "ticked" {
+				published++
+			}
+			due, err := time.Parse(time.RFC3339, fmt.Sprint(out["due"]))
+			now := dealClock()
+			if wait == 0 || err != nil || due.After(until) {
+				out["published_this_run"] = published
+				return output(c, out)
+			}
+			if d := due.Sub(now); d > 0 {
+				if err := dealSleep(c.Context(), d); err != nil {
+					return err
+				}
+			}
+		}
 	}}
+	cmd.Flags().Duration("wait-up-to", 0, "When the scheduler cannot run this every minute: wait for each tick due within this long (the scheduler's period) and publish it on time")
+	return cmd
 }

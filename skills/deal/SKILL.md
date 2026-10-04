@@ -275,9 +275,15 @@ names, numbers, addresses and message text stay in this local store: each
 sealed step is an x-deal-v0 record (see `profile/PROFILE.md`) that carries
 only fingerprints of identifiers and commitments to text.
 
-Then run `capsulectl --profile deal deal tick` from a timer on this machine
-(every few minutes is enough: it publishes only when a tick is due, on its
-own hourly clock with a random jitter). Deal steps never publish anything
+Then run `capsulectl --profile deal deal tick` **every minute** from a timer
+on this machine (a cron line `* * * * *`, or the host's scheduler at a
+one-minute interval). It publishes only when a tick is due, on its own
+hourly clock with a random jitter; a run that is not due exits at once. The
+jitter only shows if `deal tick` runs near each due time: a scheduler that
+runs it every 5 or 60 minutes would publish on its own grid instead. If the
+host can only schedule every N minutes, run
+`capsulectl --profile deal deal tick --wait-up-to Nm` at that interval: each
+run waits for the ticks due inside its window and publishes them on time. Deal steps never publish anything
 themselves. If your agent host asks before a program reaches a website, the
 first tick raises that question for the witness's site: tell the user to
 choose **"Always allow this site"**, not "allow once", because later ticks
