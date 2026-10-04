@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 )
@@ -171,6 +173,11 @@ func dealLocalData(events []sealedEvent) dealLocal {
 type dealPrivate struct {
 	values    []string
 	fragments *regexp.Regexp
+	// spelled are the private values and place names as their letters and
+	// digits alone, forwards and backwards: "larkspur", "rupskral",
+	// "739142". A text that spells one, whatever stands between the
+	// characters (L-a-r-k-s-p-u-r, 7/3/9/1/4/2), has that stretch withheld.
+	spelled []string
 }
 
 func dealPrivateValues(events []sealedEvent) dealPrivate {
@@ -227,8 +234,94 @@ func dealPrivateValues(events []sealedEvent) dealPrivate {
 	}
 	// Longest first, so a value is withheld whole before any part of it.
 	sort.SliceStable(p.values, func(i, j int) bool { return len(p.values[i]) > len(p.values[j]) })
+	spelledSeen := map[string]bool{}
+	spell := func(v string) {
+		sk, _ := spelling(v)
+		if len(sk) < 4 || !isDigits(sk) && len(sk) < 5 {
+			return
+		}
+		for _, form := range []string{sk, reverseString(sk)} {
+			if !spelledSeen[form] {
+				spelledSeen[form] = true
+				p.spelled = append(p.spelled, form)
+			}
+		}
+	}
+	for _, v := range p.values {
+		spell(v)
+	}
+	for f := range fragments {
+		if !isDigits(f) {
+			spell(f)
+		}
+	}
 	return p
 }
+
+// spelling is s as its letters and digits alone, lower case, with the byte
+// offset in s where each of its characters starts and ends.
+func spelling(s string) (string, [][2]int) {
+	var b strings.Builder
+	var at [][2]int
+	for i, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			lower := string(unicode.ToLower(r))
+			for range lower {
+				at = append(at, [2]int{i, i + utf8.RuneLen(r)})
+			}
+			b.WriteString(lower)
+		}
+	}
+	return b.String(), at
+}
+
+func reverseString(s string) string {
+	r := []rune(s)
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
+}
+
+// withholdSpelled withholds every stretch of s that spells a private value.
+func (p dealPrivate) withholdSpelled(s string) string {
+	sk, at := spelling(s)
+	var locs [][]int
+	for _, v := range p.spelled {
+		for from := 0; ; {
+			i := strings.Index(sk[from:], v)
+			if i < 0 {
+				break
+			}
+			start, end := from+i, from+i+len(v)
+			// A number counts only where no digit adjoins it.
+			if !(isDigits(v) && (start > 0 && isDigits(sk[start-1:start]) || end < len(sk) && isDigits(sk[end:end+1]))) {
+				locs = append(locs, []int{at[start][0], at[end-1][1]})
+			}
+			from = start + 1
+		}
+	}
+	return withholdAt(s, mergeLocs(locs))
+}
+
+// mergeLocs sorts spans and joins the ones that overlap.
+func mergeLocs(locs [][]int) [][]int {
+	sort.Slice(locs, func(i, j int) bool { return locs[i][0] < locs[j][0] })
+	var out [][]int
+	for _, l := range locs {
+		if n := len(out); n > 0 && l[0] <= out[n-1][1] {
+			if l[1] > out[n-1][1] {
+				out[n-1][1] = l[1]
+			}
+			continue
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
+// numberWords is four or more digits written as words: "seven three nine one".
+var numberWords = regexp.MustCompile(`(?i)\b(?:zero|oh|one|two|three|four|five|six|seven|eight|nine)(?:[^A-Za-z0-9]+(?:zero|oh|one|two|three|four|five|six|seven|eight|nine)){3,}\b`)
 
 // codeLocs finds every code, card number, PIN, phone, house or order number
 // in s: a numberish run holding four or more digits, wherever it sits (inside
@@ -273,6 +366,8 @@ func (p dealPrivate) scrub(s string) string {
 	if p.fragments != nil {
 		s = p.fragments.ReplaceAllString(s, "[withheld]")
 	}
+	s = numberWords.ReplaceAllString(s, "[withheld]")
+	s = p.withholdSpelled(s)
 	return withholdAt(s, codeLocs(s))
 }
 

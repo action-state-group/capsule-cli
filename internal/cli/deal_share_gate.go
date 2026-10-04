@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // dealPageGate is the last check before a shared copy is written. It reads
@@ -47,11 +48,29 @@ func dealPageGate(page []byte, events []sealedEvent) error {
 		}
 		squashed = next
 	}
-	for _, secret := range gateSecrets(events) {
+	secrets := gateSecrets(events)
+	for _, secret := range secrets {
 		for _, form := range gateForms(secret) {
 			needle := []byte(strings.ToLower(form))
 			if gateContains(text, needle) || isDigits(form) && gateContains(squashed, needle) {
 				return inputError("refusing to write the shared copy: the page would carry a private value")
+			}
+		}
+	}
+	// The same values read by their letters and digits alone, forwards and
+	// backwards, with digits written as words read as digits: L-a-r-k-s-p-u-r,
+	// 7/3/9/1/4/2, "seven three nine one four two" and rupskraL all spell a
+	// secret. Digests and signatures are left out, and JSON punctuation
+	// separates, so no spelling runs across two fields.
+	letters := gateLetters(text)
+	for _, secret := range secrets {
+		sk := gateLettersOf(secret)
+		if len(sk) < 4 || !isDigits(sk) && len(sk) < 5 {
+			continue
+		}
+		for _, form := range []string{sk, gateBackwards(sk)} {
+			if gateSpells(letters, form) {
+				return inputError("refusing to write the shared copy: the page would spell out a private value")
 			}
 		}
 	}
@@ -193,6 +212,71 @@ func gateSecrets(events []sealedEvent) []string {
 		}
 	}
 	return out
+}
+
+// gateWordDigits are the number words the gate reads as digits.
+var gateWordDigits = regexp.MustCompile(`\b(?:zero|oh|one|two|three|four|five|six|seven|eight|nine)\b`)
+
+var gateDigitOf = map[string]string{"zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9"}
+
+// gateLetters is the lower-cased page as letters and digits alone, number
+// words read as digits, digests and signatures cut out, and JSON
+// punctuation (quotes, braces, brackets, colons, commas) kept as a break.
+func gateLetters(text []byte) string {
+	s := gateWordDigits.ReplaceAllStringFunc(string(text), func(w string) string { return gateDigitOf[w] })
+	var b strings.Builder
+	for _, run := range gateTokens.FindAllStringIndex(s, -1) {
+		if gateDigest.MatchString(s[run[0]:run[1]]) {
+			s = s[:run[0]] + strings.Repeat("|", run[1]-run[0]) + s[run[1]:]
+		}
+	}
+	for _, r := range s {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			b.WriteRune(r)
+		case strings.ContainsRune(`"{}[]:,|`, r):
+			b.WriteByte('|')
+		}
+	}
+	return b.String()
+}
+
+var gateTokens = regexp.MustCompile(`[0-9A-Za-z+/=_-]{64,}`)
+
+// gateLettersOf is a value as its lower-cased letters and digits alone.
+func gateLettersOf(v string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(foldText(v)) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func gateBackwards(s string) string {
+	r := []rune(s)
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
+}
+
+// gateSpells reports whether letters holds form; a number only where no
+// digit adjoins it.
+func gateSpells(letters, form string) bool {
+	digit := func(i int) bool { return i >= 0 && i < len(letters) && letters[i] >= '0' && letters[i] <= '9' }
+	for from := 0; ; {
+		i := strings.Index(letters[from:], form)
+		if i < 0 {
+			return false
+		}
+		start, end := from+i, from+i+len(form)
+		if !isDigits(form) || !digit(start-1) && !digit(end) {
+			return true
+		}
+		from = start + 1
+	}
 }
 
 // gateForms is a value in every form a page could carry it.

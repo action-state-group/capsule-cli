@@ -227,13 +227,23 @@ In the adjudicator copy, codes are withheld wherever they sit: inside a word
 of the sealed place or address (`Larkspur`, `Springfield`, `41`) is withheld
 wherever it appears in message text, in any order.
 
-Both the scrubber and the gate first fold text to a plain form. Zero-width
-and other format characters are removed. NFKC turns fullwidth digits into
+Both the scrubber and the gate first fold text to a plain form.
+Percent-escapes, HTML character references and `\uXXXX` escapes are
+decoded, nested ones included. Zero-width and other format characters are
+removed. NFKC turns fullwidth digits into
 plain ones. Cyrillic and Greek letters that imitate Latin ones (`Lаrkspur`
 with a Cyrillic `а`) become the Latin letter, in any word that mixes scripts
 or is made only of lookalikes. A word written in Cyrillic or Greek proper is
 left as written. In the adjudicator copy, message text appears in this
 folded form.
+
+Both also read a value by its letters and digits alone, forwards and
+backwards, so whatever stands between the characters does not hide it
+(`L-a-r-k-s-p-u-r`, `7/3/9/1/4/2`, `rupskraL`). Runs of four or more number
+words are read as digits (`seven three nine one four two`). A test applies
+28 transforms to the planted address, code and card number. Each one is
+withheld from the adjudicator's copy or refused by the gate. Base64 is the
+only form refused rather than withheld.
 
 Before the file is written, a last gate reads the **final page bytes** with
 its own detectors. It reads the deal's local steps itself and shares no
