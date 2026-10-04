@@ -91,8 +91,11 @@ what it gives. The disclosure is noted when the form is filled, before it is
 sent: a class going to this counterparty for the first time that no check
 the user approved named is held there (nothing is sealed, `"proceed":
 false`, exit code 7), so leaving a class out of the check is no way around
-its first telling. A repeat class the check did not name is sealed and
-flagged.
+its first telling. An approval covers a telling only to the party its
+check was about: a check names someone other than the counterparty with
+`"disclosing_to": "other"` and a `recipient` carrying a mechanical identity,
+and an address approved for the seller is held when it is noted for a
+courier. A repeat class the check did not name is sealed and flagged.
 
 **Counterparty memory.** Who the user has dealt with, and what each was
 told, is read from this device's own store across all deals: every deal's

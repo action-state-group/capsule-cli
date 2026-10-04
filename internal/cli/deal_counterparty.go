@@ -301,3 +301,22 @@ func approvingSnapshot(events []sealedEvent, approval string) *dealSnapshot {
 // ErrPaused is a deal step held for the user: nothing was sealed, and the
 // step must not be taken until a check names it and the user approves.
 var ErrPaused = errors.New("paused: this needs the user's approval first")
+
+// sameRecipient reports whether the check behind approval was about the same
+// party as disclosure d. A telling to the deal's counterparty matches a check
+// about the counterparty (whatever identifiers the deal has); a telling to
+// anyone else matches only a check naming that same party.
+func sameRecipient(events []sealedEvent, approval string, d dealDisclosure, open dealOpen) bool {
+	snap := approvingSnapshot(events, approval)
+	if snap == nil {
+		return false
+	}
+	checkOther := snap.DisclosingTo == "other" && snap.Recipient != nil
+	if d.To != "other" {
+		return !checkOther
+	}
+	if !checkOther || d.Who == nil {
+		return false
+	}
+	return sameParty(counterpartyKeys(*d.Who, open.Channel), counterpartyKeys(*snap.Recipient, open.Channel))
+}

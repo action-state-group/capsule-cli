@@ -754,6 +754,12 @@ func dealNoteCommand() *cobra.Command {
 					return inputError("this deal type has no " + d.action() + " point of no return")
 				}
 				d.AuthorizedBy, d.Reason, d.Rule = authorizeAct(events, dealAct{Action: d.action()})
+				// An approval covers a telling only to the party its check was
+				// about: approving the address for the seller is not approving
+				// it for a courier.
+				if d.AuthorizedBy != "" && !sameRecipient(events, d.AuthorizedBy, *d, *open) {
+					d.AuthorizedBy, d.Reason, d.Rule = "", "that approval was for a telling to someone else", "approval_for_another_party"
+				}
 				// Noting runs when the form is filled, before it is sent: a
 				// class going to this recipient for the first time that no
 				// approved check named is held, and nothing is sealed. Leaving
@@ -948,6 +954,21 @@ func dealCheckCommand() *cobra.Command {
 				if action != snap.Action {
 					return inputError("disclosing " + strings.Join(snap.Disclosing, ", ") + " goes with action " + action)
 				}
+				switch snap.DisclosingTo {
+				case "", "counterparty":
+					snap.DisclosingTo = "counterparty"
+					if snap.Recipient != nil {
+						return inputError(`recipient goes with "disclosing_to": "other"; a telling to the counterparty is about the deal's own counterparty`)
+					}
+				case "other":
+					if snap.Recipient == nil || len(counterpartyKeys(*snap.Recipient, "")) == 0 {
+						return inputError(`"disclosing_to": "other" needs a recipient with a phone, email, profile id, reply address or website, so the approval names who it is for`)
+					}
+				default:
+					return inputError(`disclosing_to must be counterparty or other`)
+				}
+			} else if snap.DisclosingTo != "" || snap.Recipient != nil {
+				return inputError(`disclosing_to and recipient go with "disclosing"`)
 			}
 			if snap.Action == "pay" {
 				// The check names the payee it is about, so an action can be

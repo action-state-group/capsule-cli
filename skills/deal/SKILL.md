@@ -127,7 +127,7 @@ Giving anyone the user's name, phone, email, address, a pickup spot, a login or 
 
 1. Note who is asking and what for, and keep the user's exact words about it.
 2. Fill the form or message up to the point of sending, without sending.
-3. **Final review:** `deal open` (once per deal, with the deal type the disclosure belongs to, or `service`), then `deal check` with `"action": "share_contact"` (or `"share_credentials"`) and `"disclosing"`: the class of every field you are about to give, for example `{"action":"share_contact","disclosing":["name","email","address"]}`. The check pauses the first time a class goes to this counterparty, naming them and the class, and passes with a `note` when you have told them before.
+3. **Final review:** `deal open` (once per deal, with the deal type the disclosure belongs to, or `service`), then `deal check` with `"action": "share_contact"` (or `"share_credentials"`) and `"disclosing"`: the class of every field you are about to give, for example `{"action":"share_contact","disclosing":["name","email","address"]}`. The check pauses the first time a class goes to this counterparty, naming them and the class, and passes with a `note` when you have told them before. When it goes to someone other than the counterparty (a courier, a platform), say so: `"disclosing_to": "other", "recipient": {"name": "...", "phone": "..."}` with a phone, email, profile id, reply address or website. An approval covers a telling only to the party its check named.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, note it (step 5) and then send. On `pause`, show the card, seal the user's answer, and go on only if that returns `"proceed": true`.
 5. With the form filled and **not yet sent**: `deal note --kind disclosure` naming what you are giving, by class, with the value (it stays on this device; the sealed record keeps only the class and a commitment). One disclosure per send, contact details and credentials separately:
 
@@ -245,9 +245,10 @@ The final review asks four questions:
   message arranging a pickup and a sign-up form all count. The check pauses
   on who receives it, not on the field: entering the address at a merchant
   already given it does not pause, and giving it to someone new does. A
-  telling with no covering approval is sealed all the same and shows on the
-  report as an agent-side anomaly; leaving it out only makes the record
-  wrong.
+  first telling with no covering approval is held, never sealed. A **repeat**
+  telling (a class this party was given before) with no covering approval is
+  sealed all the same and shows on the report as an agent-side anomaly;
+  leaving it out only makes the record wrong.
 - **Never hold silently.** A `pause` always goes to the user with the card.
 - **Ask with the check's own text.** Every `deal check` returns
   `approval_text`: what, who, the amount, how it is paid, what the check

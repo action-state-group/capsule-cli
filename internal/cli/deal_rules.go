@@ -125,6 +125,11 @@ type dealSnapshot struct {
 	// be given (phone, address, ...): the check pauses on the first time a
 	// class goes to this counterparty, never on a repeat.
 	Disclosing []string `json:"disclosing,omitempty"`
+	// DisclosingTo is who receives it: "counterparty" (the default) or
+	// "other", named by Recipient (a courier, a platform, a third person).
+	// An approval covers a telling only to the party its check was about.
+	DisclosingTo string   `json:"disclosing_to,omitempty"`
+	Recipient    *dealWho `json:"recipient,omitempty"`
 }
 
 type dealDifference struct {
@@ -747,8 +752,12 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	// line on the card; the first time a class of the user's data goes to
 	// them is a pause, naming them and the class; a repeat is a note.
 	if s.memory != nil {
-		keys := counterpartyKeys(who, s.open.Channel)
-		r.Recipient = &dealRecipient{Name: recipientName(who), FirstTime: s.memory.firstTime(keys)}
+		receiver := who
+		if snap.DisclosingTo == "other" && snap.Recipient != nil {
+			receiver = *snap.Recipient
+		}
+		keys := counterpartyKeys(receiver, s.open.Channel)
+		r.Recipient = &dealRecipient{Name: recipientName(receiver), FirstTime: s.memory.firstTime(keys)}
 		r.Recipient.NewProfile = s.memory.newProfile() && !s.memory.newProfileNoted
 		for _, class := range sortedClasses(snap.Disclosing) {
 			if s.memory.toldBefore(keys, class) != "" {

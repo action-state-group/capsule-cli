@@ -254,3 +254,38 @@ func TestDealNewProfileSaysSoOnItsFirstPause(t *testing.T) {
 	again := shareCheck(t, openMerchant(t, "redbubble.com"), `"address"`)
 	assert.Contains(t, again["card"], newProfileLine)
 }
+
+// An approval covers a telling only to the party its check was about.
+func TestDealApprovalForOnePartyDoesNotCoverAnother(t *testing.T) {
+	dealFixture(t)
+	dealID := openSeller(t, `{"name":"Garage Sale Gary","profile_id":"mkt:seller:4411"}`)
+	check := shareCheck(t, dealID, `"address"`)
+	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "yes, give Gary the address")
+
+	// The address approved for Gary goes to a courier instead: held.
+	held := heldNote(t, dealID, `{"to":"other","who":{"phone":"+1 555 010 7777"},"fields":[{"class":"address","value":"`+homeStreet+`"}]}`)
+	assert.Equal(t, []any{"address"}, held["held"])
+
+	// A check about the courier, approved, covers the courier and no one else.
+	courier := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t,
+		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"other","recipient":{"name":"Quick Couriers","phone":"+1 555 010 7777"}}`))
+	require.Equal(t, "pause", courier["verdict"])
+	assert.Contains(t, courier["card"], "First time telling Quick Couriers your street address")
+	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", courier["check_id"].(string), "--choice", "proceed", "--said", "ok, the courier")
+	held = heldNote(t, dealID, `{"to":"other","who":{"phone":"+1 555 010 8888"},"fields":[{"class":"address","value":"`+homeStreet+`"}]}`)
+	assert.Equal(t, []any{"address"}, held["held"], "another courier is another party")
+	sent := dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t,
+		`{"to":"other","who":{"phone":"+1 555 010 7777"},"fields":[{"class":"address","value":"`+homeStreet+`"}]}`))
+	assert.Equal(t, true, sent["approved"])
+
+	// A check about someone else must say who, by an identity, not a name.
+	for body, want := range map[string]string{
+		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"other","recipient":{"name":"Quick Couriers"}}`: "needs a recipient with",
+		`{"action":"share_contact","disclosing":["address"],"recipient":{"phone":"+1 555 010 7777"}}`:                       `recipient goes with "disclosing_to": "other"`,
+		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"courier"}`:                                     "disclosing_to must be counterparty or other",
+	} {
+		out, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, body))
+		require.ErrorIs(t, err, ErrInput, body)
+		assert.Contains(t, out+err.Error(), want, body)
+	}
+}
