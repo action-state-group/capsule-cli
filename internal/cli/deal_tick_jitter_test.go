@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -110,4 +112,70 @@ func TestDealTickHourlyWithWaitFollowsTheJitter(t *testing.T) {
 	fakeSleep(t, now)
 	runScheduler(t, now, start, time.Hour, 12*time.Hour, "--wait-up-to", "1h")
 	assertJittered(t, publishedTicks(t), time.Hour)
+}
+
+// Two `deal tick --wait-up-to` runs that overlap (a scheduler firing again
+// while an earlier run still waits) both wake for the same due tick: exactly
+// one of them publishes it. The due time is re-checked under the store lock.
+func TestDealTickOverlappingRunsPublishOnce(t *testing.T) {
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	endpoint, _ := countingWitness(t)
+	cadenceFixture(t, endpoint, public, "1h", "0s", 0)
+
+	var mu sync.Mutex
+	now := time.Date(2026, 10, 4, 4, 0, 0, 0, time.UTC)
+	oldClock, oldSleep := dealClock, dealSleep
+	t.Cleanup(func() { dealClock, dealSleep = oldClock, oldSleep })
+	dealClock = func() time.Time { mu.Lock(); defer mu.Unlock(); return now }
+	dealRun(t, "tick") // the first tick; the next is due at 05:00
+	require.Len(t, publishedTicks(t), 1)
+
+	asleep := make(chan time.Duration, 2)
+	wake := make(chan struct{})
+	dealSleep = func(_ context.Context, d time.Duration) error {
+		asleep <- d
+		<-wake
+		return nil
+	}
+	mu.Lock()
+	now = now.Add(30 * time.Minute)
+	mu.Unlock()
+
+	var wg sync.WaitGroup
+	outs := make([]string, 2)
+	errs := make([]error, 2)
+	for i := range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			outs[i], errs[i] = invoke(t, "", "--profile", "deal", "deal", "tick", "--wait-up-to", "1h")
+		}()
+	}
+	// Both runs found the tick not yet due and are waiting for it.
+	for range 2 {
+		select {
+		case d := <-asleep:
+			assert.Equal(t, 30*time.Minute, d)
+		case <-time.After(30 * time.Second):
+			t.Fatal("both runs should be waiting for the due tick")
+		}
+	}
+	mu.Lock()
+	now = time.Date(2026, 10, 4, 5, 0, 0, 0, time.UTC)
+	mu.Unlock()
+	close(wake)
+	wg.Wait()
+
+	published := 0
+	for i := range 2 {
+		require.NoError(t, errs[i], outs[i])
+		var out map[string]any
+		require.NoError(t, json.Unmarshal([]byte(outs[i]), &out))
+		published += int(out["published_this_run"].(float64))
+	}
+	assert.Equal(t, 1, published, "one of the two runs publishes the tick, never both")
+	ticks := publishedTicks(t)
+	require.Len(t, ticks, 2, "the 05:00 tick is published exactly once")
+	assert.Equal(t, time.Date(2026, 10, 4, 5, 0, 0, 0, time.UTC), ticks[1])
 }
