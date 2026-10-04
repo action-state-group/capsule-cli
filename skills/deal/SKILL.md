@@ -169,7 +169,15 @@ only fingerprints of identifiers and commitments to text.
 Then run `capsulectl --profile deal deal tick` from a timer on this machine
 (every few minutes is enough: it publishes only when a tick is due, on its
 own hourly clock with a random jitter). Deal steps never publish anything
-themselves.
+themselves. If your agent host asks before a program reaches a website, the
+first tick raises that question for the witness's site: tell the user to
+choose **"Always allow this site"**, not "allow once", because later ticks
+run on the schedule, when nobody is there to answer, and an allow-once grant
+leaves every later tick pending. Say plainly that the grant covers the
+witness's whole site: for the default witness, witness.agentactioncapsule.org,
+that is agentactioncapsule.org and all its subdomains.
+A tick that could not reach the witness says so: "pending: network consent
+needed, or no network".
 
 Tell the user, in one message, exactly what this does: their deal steps are
 sealed on this device; once an hour, whether or not anything happened, one

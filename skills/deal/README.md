@@ -119,6 +119,16 @@ each has. Instead the profile has one cadence log (its `log_id`), and
 - A witness that is slow or down never stops a deal. The delivery stays
   pending and is retried at every `deal tick`, or by hand with
   `capsulectl --profile deal cll checkpoint publish --checkpoint SIZE`.
+- A delivery whose request never reached the witness (refused, unresolved,
+  timed out, or stopped by a proxy) is reported as "pending: network consent
+  needed, or no network", in `deal tick`'s output and on the receipt: on an
+  agent host that asks before network access, that is what a missing grant
+  looks like. Ticks run unattended, so choose "Always allow this site" for
+  the witness's site, not "allow once". That grant covers the site and all
+  its subdomains: for the default witness, witness.agentactioncapsule.org,
+  it covers agentactioncapsule.org and every subdomain of it. The message
+  names the site for whichever witness the profile uses, and
+  `capsulectl doctor --check-witness` says the same.
 
 A deal's receipt states its witness state as it is: **scheduled** (not yet
 in a tick), **pending** (in a tick, no receipt back yet) or **witnessed**.

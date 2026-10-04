@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"golang.org/x/net/publicsuffix"
 	"net/http"
 	"net/url"
 	"strings"
@@ -121,6 +123,15 @@ type safeSubmitter struct{ client *witness.Client }
 func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, error) {
 	r, e := s.client.Submit(ctx, b)
 	if e != nil {
+		// A request that got no answer from the witness at all (refused,
+		// unresolved, timed out, or stopped by a proxy asking for
+		// authorization) is recorded as not reached, so it can be shown as
+		// such: on an agent host that asks before network access, that is
+		// what a missing consent looks like from here.
+		var answered *witness.HTTPError
+		if !errors.As(e, &answered) || answered.StatusCode == http.StatusProxyAuthRequired {
+			return r, &witness.HTTPError{StatusCode: 503, Body: witnessNotReached}
+		}
 		status := 400
 		if witness.IsRetryable(e) {
 			status = 503
@@ -128,6 +139,55 @@ func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, e
 		return r, &witness.HTTPError{StatusCode: status, Body: "checkpoint submission failed; response details suppressed"}
 	}
 	return r, nil
+}
+
+// witnessNotReached marks a delivery whose request never got an answer from
+// the witness.
+const witnessNotReached = "witness not reached; response details suppressed"
+
+// witnessSite is the site an agent host's per-site network grant names for
+// a witness endpoint: its registrable domain (witness.example.org ->
+// example.org), or the host itself when it has none (an IP address).
+func witnessSite(endpoint string) (host, site string) {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Hostname() == "" {
+		return endpoint, endpoint
+	}
+	host = u.Hostname()
+	if site, err = publicsuffix.EffectiveTLDPlusOne(host); err != nil {
+		site = host
+	}
+	return host, site
+}
+
+// witnessAllowText is the plain instruction for an agent host that asks
+// before network access.
+func witnessAllowText(endpoint string) string {
+	host, site := witnessSite(endpoint)
+	return fmt.Sprintf("If your agent host asks before network access, choose \"Always allow this site\" for %s (the witness is %s), not \"allow once\": ticks run on a schedule, when nobody is there to answer a prompt. That grant covers %s and all its subdomains.", site, host, site)
+}
+
+// witnessConsentText says what a delivery that did not reach the witness
+// most likely needs, without claiming to know: this program cannot see an
+// agent host's network-consent prompt.
+func witnessConsentText(endpoint string) string {
+	return "pending: network consent needed, or no network. The request did not reach the witness. " + witnessAllowText(endpoint)
+}
+
+// witnessConsentReached is doctor's note when its own probe got through.
+func witnessConsentReached(endpoint string) string {
+	return "Reached from this command. A scheduled tick runs without anyone present. " + witnessAllowText(endpoint)
+}
+
+// witnessPendingReason classifies a pending delivery from its stored error.
+func witnessPendingReason(state cll.WitnessState, endpoint string) (string, string) {
+	if strings.Contains(state.LastError, witnessNotReached) {
+		return "network_consent_needed", witnessConsentText(endpoint)
+	}
+	if state.Attempts == 0 {
+		return "not_attempted", "pending: not sent yet; it goes at the next tick."
+	}
+	return "witness_error", "pending: the witness answered with an error; it is retried at every tick."
 }
 
 // A scoped view prevents one command from delivering unrelated checkpoint rows.

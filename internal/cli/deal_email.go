@@ -114,6 +114,10 @@ func dealAssurance(b map[string]interface{}) map[string]any {
 		case "pending":
 			out["witness_state"] = "pending"
 			sealed += "Witness: pending. This checkpoint was sent in a cadence tick, but no receipt has come back yet; it is retried at every tick. "
+			if text, ok := cadence["text"].(string); ok && cadence["reason"] == "network_consent_needed" {
+				out["witness_reason"] = "network_consent_needed"
+				sealed += "Witness " + text + " "
+			}
 		}
 		out["text"] = sealed + dealDidLineOf(b)
 		return out
