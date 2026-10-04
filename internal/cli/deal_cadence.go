@@ -50,21 +50,27 @@ const (
 	dealDefaultWitnessKey = "39bb654c9dc0afe1c0edef0deffaa69099b8518836c9ba26e0491535840f96b5"
 	// The bundle extension that carries a checkpoint's witnessed chain
 	// through a cadence log. Its name and fields are generic, so a neutral
-	// verifier can read it without knowing what a deal is; bundles written
-	// before carried it as legacyCadenceExtension, with deal_log_id.
-	dealCadenceExtension   = "cadence-witness/v0"
-	legacyCadenceExtension = "x-deal-cadence-v0"
+	// verifier can read it without knowing what a deal is. Extension names
+	// are a registered space; until this one is registered it is a private
+	// kind, so it carries the x- prefix.
+	dealCadenceExtension = "x-cadence-witness/v0"
 )
 
+// earlierCadenceExtensions are the names bundles carried the chain under
+// before, still read: cadence-witness/v0, and x-deal-cadence-v0 (whose
+// chain names its log in deal_log_id).
+var earlierCadenceExtensions = []string{"cadence-witness/v0", "x-deal-cadence-v0"}
+
 // cadenceChainOf is the cadence chain a bundle carries, under its name or
-// the name bundles carried it under before.
+// a name bundles carried it under before.
 func cadenceChainOf(b map[string]interface{}) map[string]interface{} {
 	ext, _ := b["extensions"].(map[string]interface{})
-	if chain, ok := ext[dealCadenceExtension].(map[string]interface{}); ok {
-		return chain
+	for _, name := range append([]string{dealCadenceExtension}, earlierCadenceExtensions...) {
+		if chain, ok := ext[name].(map[string]interface{}); ok {
+			return chain
+		}
 	}
-	chain, _ := ext[legacyCadenceExtension].(map[string]interface{})
-	return chain
+	return nil
 }
 
 // dealWitnessSees is said wherever the witness is configured.

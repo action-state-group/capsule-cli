@@ -71,12 +71,13 @@ function versionBefore(a, b) {
   const header = el("section", undefined, "deal-assurance");
   header.append(el("p", report.scope || "This receipt covers this one deal. It is not a record of everything the agent did.", "deal-scope"));
   // A witness receipt rides in checkpoint.witnesses, or (the default) in the
-  // cadence chain, cadence-witness/v0, that anchors this deal's checkpoint in
+  // cadence chain, x-cadence-witness/v0 (earlier bundles: cadence-witness/v0
+  // or x-deal-cadence-v0), that anchors this deal's checkpoint in
   // the profile's cadence log. This page does not check either (capsulectl
   // verify does, against a witness directory the reader chooses), and says
   // so. Any other witness state is shown as it is.
   const exts = bundle.extensions || {};
-  const cadence = exts["cadence-witness/v0"] || exts["x-deal-cadence-v0"] || {};
+  const cadence = exts["x-cadence-witness/v0"] || exts["cadence-witness/v0"] || exts["x-deal-cadence-v0"] || {};
   const anchored = cadence.state === "witnessed" ? (cadence.cadence || {}).witnesses || [] : [];
   const witnesses = ((bundle.checkpoint || {}).witnesses || []).concat(anchored).filter((w) => w && typeof w.ts_url === "string");
   if (witnesses.length > 0) {
