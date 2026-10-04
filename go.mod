@@ -7,6 +7,7 @@ require (
 	github.com/action-state-group/capsule-emit-go v0.2.0
 	github.com/action-state-group/cll-go v0.0.0-20260926202724-9741da3d4ace
 	github.com/action-state-group/evidencebook v0.0.0-20260926225933-d4e89f95a1ec
+	github.com/emersion/go-msgauth v0.7.0
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
@@ -38,6 +39,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	modernc.org/libc v1.75.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

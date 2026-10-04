@@ -95,6 +95,8 @@ type dealEvidence struct {
 	Verified bool     `json:"verified,omitempty"`
 	Detail   string   `json:"detail,omitempty"`
 	Who      *dealWho `json:"who,omitempty"`
+	// Email is a merchant's own email, sealed raw (deal_email.go).
+	Email *merchantEmail `json:"email,omitempty"`
 }
 
 // dealChange is a detail the counterparty changed after first contact. It is
@@ -827,6 +829,9 @@ func trailLine(e dealEvent) string {
 	case "claim":
 		return "claim recorded (" + e.Claim.Source + "): " + e.Claim.Text
 	case "evidence":
+		if m := e.Evidence.Email; m != nil {
+			return "merchant's email sealed; " + emailVerdictWords(m.DKIM)
+		}
 		state := "unverified"
 		if e.Evidence.Verified {
 			state = "checked"
@@ -879,6 +884,8 @@ type dealReport struct {
 	AskedStep string           `json:"asked_step"`
 	Did       []dealReportItem `json:"did"`
 	Anomalies []dealReportItem `json:"anomalies"`
+	// Merchant is each sealed merchant email set beside what was approved.
+	Merchant []dealMerchantRow `json:"merchant"`
 }
 
 func actText(a dealAct, currency string) string {
@@ -1074,6 +1081,9 @@ func buildDealReport(events []sealedEvent) dealReport {
 		}
 		counterparty("unverified_claim", "Unverified: "+c.Text+" (from "+strings.ReplaceAll(c.Source, "_", " ")+")", step)
 	}
+	var merchant []dealReportItem
+	r.Merchant, merchant = merchantReport(events, state)
+	r.Anomalies = append(r.Anomalies, merchant...)
 	return r
 }
 

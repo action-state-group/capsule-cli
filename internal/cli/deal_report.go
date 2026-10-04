@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -107,6 +108,19 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 			"did_line": dealDidLine(dealDidSources(events)),
 		},
 	}
+	// The merchant rows carry only strings and booleans; round-trip them to
+	// the generic JSON shape the bundle encoder takes.
+	var merchant []interface{}
+	raw, err := json.Marshal(report.Merchant)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(raw, &merchant); err != nil {
+		return nil, err
+	}
+	ext := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
+	ext["merchant"] = merchant
+	ext["email_scope"] = emailScopeLine
 	if err = verifyProducedBundle(b, true); err != nil {
 		return nil, err
 	}
@@ -158,6 +172,11 @@ body { background: var(--bg); color: var(--fg); }
 #deal .deal-bad { color: var(--warn); font-weight: 600; }
 #deal details { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
 #deal summary { cursor: pointer; font-weight: 600; }
+#deal table.deal-merchant { border-collapse: collapse; width: 100%; margin: 6px 0; }
+#deal table.deal-merchant th, #deal table.deal-merchant td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+#deal table.deal-merchant th { color: var(--muted); font-weight: 600; width: 40%; }
+#deal .deal-scope { font-weight: 600; }
+#deal .deal-ok { color: var(--ok); font-weight: 600; }
 #deal code { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
 #app { max-width: 760px; margin: 0 auto; padding: 0 16px 16px; overflow-wrap: anywhere; }
 `

@@ -94,6 +94,7 @@
     host.append(el("p", "Sealed by my agent. Witness: scheduled. This checkpoint goes to the witness in the next tick of the profile's cadence; it is not witnessed yet.", "deal-rung"));
   } else if (cadence.state === "pending") {
     host.append(el("p", "Sealed by my agent. Witness: pending. This checkpoint was sent in a cadence tick, but no receipt has come back yet.", "deal-rung"));
+    if (cadence.reason === "network_consent_needed" && typeof cadence.text === "string") host.append(el("p", `Witness ${cadence.text}`, "deal-note"));
   } else {
     host.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
   }
@@ -132,6 +133,51 @@
   const did = report.did || [];
   if (did.length === 0) host.append(el("p", "Nothing yet.", "deal-note"));
   did.forEach((i) => host.append(item(i.text, i.steps)));
+
+  // The merchant's own emails. Two statements, never one: the merchant's
+  // DKIM signature (independent of the agent) and our seal (our own record).
+  const merchant = report.merchant || [];
+  if (merchant.length > 0) {
+    host.append(el("h2", "The merchant's own email"));
+    host.append(
+      el(
+        "p",
+        "Two different things stand behind each email. The merchant's signature is checked against the merchant's published key, " +
+          "saved when the email was sealed; it shows what the merchant sent, and it does not depend on the agent. " +
+          "Our seal shows this device kept these exact bytes from that time on; it is our own record. " +
+          "Amounts, dates and order numbers below are read from the email by capsulectl and may be misread.",
+        "deal-note",
+      ),
+    );
+    if (typeof report.email_scope === "string") host.append(el("p", report.email_scope, "deal-scope"));
+    merchant.forEach((m) => {
+      const d = el("details", undefined, m.verified ? undefined : "deal-flag");
+      d.open = true;
+      d.append(el("summary", m.order_id ? `Order ${m.order_id}` : "Merchant email"));
+      d.append(el("p", `Merchant's signature: ${m.merchant_says}`, m.verified ? "deal-ok" : "deal-bad"));
+      d.append(el("p", `Our seal: ${m.we_say}`, "deal-note"));
+      if (m.key_source === "supplied") {
+        d.append(el("p", "The merchant's key was supplied by hand, not read from the merchant's DNS.", "deal-bad"));
+      }
+      const table = el("table", undefined, "deal-merchant");
+      const row = (label, value) => {
+        if (!value) return;
+        const tr = el("tr");
+        tr.append(el("th", label), el("td", value));
+        table.append(tr);
+      };
+      row(m.approved_basis ? `You approved (${m.approved_basis})` : "You approved", m.approved);
+      row("The agent reported paying", m.agent_reported);
+      row("The merchant's email says (read from the email)", m.charged);
+      row("Charged on (the email's date)", m.charged_on);
+      row("Cancel by (read from the email)", m.cancel_by);
+      row("Items (read from the email)", (m.items || []).join(" · "));
+      row("Signing domain", m.domains);
+      row("Merchant's key", m.key_size ? `${m.key_size}, sealed when the email was sealed` : "");
+      d.append(table, steps(m.steps || []));
+      host.append(d);
+    });
+  }
 
   host.append(el("h2", "Anomalies"));
   const anomalies = report.anomalies || [];

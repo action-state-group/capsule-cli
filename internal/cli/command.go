@@ -249,6 +249,8 @@ func SafeError(err error) string {
 		return ErrPartial.Error()
 	case errors.Is(err, ErrBundleInvalid):
 		return ErrBundleInvalid.Error()
+	case errors.Is(err, ErrEmailUnverified):
+		return ErrEmailUnverified.Error()
 	case errors.Is(err, ErrBreaking):
 		// Like ErrSchemaInvalid: `contract diff` already printed the changes.
 		return ErrBreaking.Error()

@@ -38,6 +38,8 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal note --kind act --input FILE` | Seals what the agent did and whether a passing check or approval covered it. |
 | `deal close --input FILE` | Compares what was delivered with what was agreed: `completed`, `mismatch` or `open`. Cuts a checkpoint. |
 | `deal note --kind intent --input FILE` | Seals a change to what the user asked or allowed. |
+| `deal note --kind evidence --email FILE [--key-record FILE]` | Seals a merchant's own email (raw RFC 822, headers intact) with the DKIM key records read from DNS at that moment, checks the signature, and cuts a checkpoint. See [The merchant's own email](#the-merchants-own-email). |
+| `deal verify-email [--step N] [--email FILE]` | Re-checks a sealed merchant email offline, against the key records sealed with it. `--email` checks another copy, which must match the sealed bytes. Exit 1 when it does not verify. |
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
 | `deal report --email FILE [--bundle FILE]` | Writes the receipt as a ready-to-send email (.eml, no sender or recipient) for the agent host's own email tool: a plain and a static HTML body that read on a phone, with `receipt.html` and `bundle.json` attached. `--bundle` writes the Evidence Bundle for `capsulectl verify --bundle`. Nothing is sent by capsulectl. |
@@ -119,6 +121,16 @@ each has. Instead the profile has one cadence log (its `log_id`), and
 - A witness that is slow or down never stops a deal. The delivery stays
   pending and is retried at every `deal tick`, or by hand with
   `capsulectl --profile deal cll checkpoint publish --checkpoint SIZE`.
+- A delivery whose request never reached the witness (refused, unresolved,
+  timed out, or stopped by a proxy) is reported as "pending: network consent
+  needed, or no network", in `deal tick`'s output and on the receipt: on an
+  agent host that asks before network access, that is what a missing grant
+  looks like. Ticks run unattended, so choose "Always allow this site" for
+  the witness's site, not "allow once". That grant covers the site and all
+  its subdomains: for the default witness, witness.agentactioncapsule.org,
+  it covers agentactioncapsule.org and every subdomain of it. The message
+  names the site for whichever witness the profile uses, and
+  `capsulectl doctor --check-witness` says the same.
 
 A deal's receipt states its witness state as it is: **scheduled** (not yet
 in a tick), **pending** (in a tick, no receipt back yet) or **witnessed**.
@@ -204,6 +216,90 @@ is not registered anywhere.
 - `deal export --deal ID --output FILE` writes the sealed records as one JSON
   array; `python3 profile/check_profile.py FILE` checks them. The Go code
   that builds the records is `internal/cli/deal_profile.go`.
+
+## The merchant's own email
+
+What the user asked, what was proposed and what the user approved are rightly
+recorded by the user's own agent: nobody else saw them. What was *done* is
+different, and needs a source outside the agent. A merchant's
+confirmation email is different: the merchant's mail server signs it with a
+DKIM key published in the merchant's DNS, and that signature survives being
+passed along by an agent nobody has to trust.
+
+So a sealed merchant email carries two statements, and the report never
+merges them:
+
+| | Who stands behind it | What it shows |
+|---|---|---|
+| **The merchant's signature** | The merchant's domain (DKIM) | The merchant sent this email, and it has not changed since. Independent of the agent and of this device. |
+| **Our seal** | This device's signing key | This device held these exact bytes at this time. Our own record. |
+
+Only a passing signature that is DMARC-aligned with the sender's domain (the
+same organizational domain, or the exact domain when the domain sets
+`adkim=s`), verified by our own offline check, reads as **merchant-confirmed**.
+Everything else is still sealed, never refused (a failing message is still
+evidence of what the user received), and reads **not confirmed**, with the
+reason and the domain's published policy, for example "not confirmed: fails
+DMARC alignment (domain policy p=reject)". A signature from a mailing service
+on another domain shows who relayed the email, not that the merchant sent
+it. The sender's DMARC record (`_dmarc.<domain>`, then its organizational
+domain's) is read from DNS at seal time and sealed with the keys, so the
+policy shown later comes from the sealed record. SPF is not evaluated: it
+depends on the connecting server, which a received message cannot prove.
+
+**Keys rotate and are revoked.** A signature that checks out today can be
+uncheckable next month, once the merchant has replaced its key. `deal note
+--email` therefore reads the key record (`selector._domainkey.domain`) from
+DNS when the email is sealed, seals it alongside the message, and cuts a
+checkpoint at once. When a witness is configured, that checkpoint reaches it
+at the next due tick (`deal tick`), like every deal checkpoint, normally
+within one cadence interval plus its jitter; until the witness is reached the
+receipt reads pending.
+`deal verify-email` then checks against the sealed key only, never against
+live DNS. **Sealing promptly is the whole protection**: an email sealed after
+its key was withdrawn cannot be verified. The key is read from ordinary DNS,
+which is not itself signed; the checkpoint fixes when it was read.
+`--key-record` (and optionally `--dmarc-record`) supplies records by hand (for tests, or a machine with no
+resolver); the record says `key_source: supplied`, and the report says the key
+was not read from the merchant's DNS.
+
+DKIM verification is [`github.com/emersion/go-msgauth/dkim`](https://github.com/emersion/go-msgauth)
+(MIT), with the key lookup answered from the sealed records. capsulectl
+implements no cryptography of its own here.
+
+**What is sealed where.** The raw message stays in the local store. The
+sealed record carries the message's SHA-256, the key records' SHA-256, where
+the key came from, the DKIM result, whether the merchant's own domain signed
+it, and the amounts and dates read from the email (`parsed.method:
+heuristic`). The order number is committed, not written. Addresses, names
+and the message text never enter a record.
+
+A copy shared with someone else may carry the order number only when all of
+these hold: it was found under the word "order", the email's signature checks
+out against the sealed key, the From domain signed it, that domain is the
+deal's own counterparty, and the copy is the counterparty's. Booking,
+confirmation, reservation and PNR-style codes are never shared: with a
+surname they work like a password.
+
+**Scope, and what counts as independent.** Each email result says it covers
+one email from the merchant about this deal, not everything the merchant
+sent or charged. Only a merchant-confirmed email counts as an independent
+source for what the agent did: the receipt's line on what the agent did
+names it, and a sealed email that is not confirmed is not named.
+
+**The mismatch.** The report sets each sealed merchant email beside what the
+user approved (the amount at the check that went ahead, else the user's
+limit, else the agreed price) and what the agent reported paying. It flags:
+
+- a charge other than the one approved (over the limit, when only a limit is known);
+- a possible duplicate: the same amount under two different orders, or paid twice;
+- a charge dated before a cancel-by date when the email says nothing is charged before then (a trial);
+- a quantity other than the one agreed.
+
+The order number, total, cancel-by date and items are read by
+merchant-agnostic heuristics and may be misread; the report labels them as
+read from the email. The merchant's signature covers the bytes, not this
+reading of them.
 
 ## Guarantee
 

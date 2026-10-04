@@ -454,7 +454,7 @@ func (s *dealSession) cutTick(ctx context.Context, p Profile, cfg dealCadenceCon
 
 // deliverCadence offers every cadence checkpoint still waiting for the
 // witness. A witness that is slow or down leaves it pending; deals go on.
-func (s *dealSession) deliverCadence(ctx context.Context, p Profile, service string, now time.Time) (delivered, pending []uint64, err error) {
+func (s *dealSession) deliverCadence(ctx context.Context, p Profile, service string, now time.Time) (delivered []uint64, pending []map[string]any, err error) {
 	t, err := openTarget(ctx, p, useCLL)
 	if err != nil {
 		return nil, nil, err
@@ -464,14 +464,15 @@ func (s *dealSession) deliverCadence(ctx context.Context, p Profile, service str
 	if err != nil {
 		return nil, nil, err
 	}
-	delivered, pending = []uint64{}, []uint64{}
+	delivered, pending = []uint64{}, []map[string]any{}
 	for _, w := range waiting {
 		if w.WitnessID != service {
 			continue
 		}
 		state, err := deliverWitness(ctx, p, t.log, service, w.CheckpointSize)
 		if err != nil || state.Receipt == nil || verifyWitness(p, state) != nil {
-			pending = append(pending, w.CheckpointSize)
+			reason, text := witnessPendingReason(state, p.Checkpoint.Endpoint)
+			pending = append(pending, map[string]any{"checkpoint": w.CheckpointSize, "reason": reason, "text": text})
 			continue
 		}
 		delivered = append(delivered, w.CheckpointSize)
@@ -515,7 +516,8 @@ func (s *dealSession) dealWitnessState(ctx context.Context, dealID string, state
 	defer func() { err = errors.Join(err, t.close()) }()
 	state, err := t.log.GetWitness(ctx, service, tick.size)
 	if errors.Is(err, cll.ErrNotFound) || (err == nil && (state.Receipt == nil || verifyWitness(s.p, state) != nil)) {
-		return map[string]interface{}{"state": "pending", "tick": integer(uint64(tick.n))}, nil
+		reason, text := witnessPendingReason(state, s.p.Checkpoint.Endpoint)
+		return map[string]interface{}{"state": "pending", "tick": integer(uint64(tick.n)), "reason": reason, "text": text}, nil
 	}
 	if err != nil {
 		return nil, err
