@@ -143,10 +143,10 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 		switch state {
 		case "scheduled":
 			out["witness_state"] = "scheduled"
-			sealed += "Witness: scheduled. This checkpoint goes to the witness in the next tick of the profile's cadence; it is not witnessed yet. "
+			sealed += "Witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence" + cadencePhrase(cadence) + ", and only then can it be witnessed. Until then it is sealed on this device only. "
 		case "pending":
 			out["witness_state"] = "pending"
-			sealed += "Witness: pending. This checkpoint was sent in a cadence tick, but no receipt has come back yet; it is retried at every tick. "
+			sealed += "Witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet; it is retried at every tick. "
 			if text, ok := cadence["text"].(string); ok && cadence["reason"] == "network_consent_needed" {
 				out["witness_reason"] = "network_consent_needed"
 				sealed += "Witness " + text + " "
@@ -160,8 +160,17 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 	if u, err := url.Parse(host); err == nil && u.Host != "" {
 		host = u.Host
 	}
-	return map[string]any{"rung": "witnessed", "witness_state": "witnessed", "witness": host, "text": fmt.Sprintf(
-		"Witnessed: %s, an independent log, signed a receipt for a checkpoint covering these steps: the record existed, unchanged, by then. It does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s", host, dealDidLineOf(b))}
+	// When the checkpoint was cut: the tick's time, coarsened to the minute.
+	// A receipt on the deal's own checkpoint (no tick) has no such time.
+	when := "a checkpoint covering these steps, sent at a cadence tick after them"
+	out := map[string]any{"rung": "witnessed", "witness_state": "witnessed", "witness": host}
+	if at, _ := cadence["checkpoint_at"].(string); at != "" {
+		when = "this deal's checkpoint, cut at " + at + " at a cadence tick after the deal's steps"
+		out["checkpoint_at"] = at
+	}
+	out["text"] = fmt.Sprintf(
+		"Witnessed: %s, an independent log, signed a receipt for %s: the record existed, unchanged, by then. It does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s", host, when, dealDidLineOf(b))
+	return out
 }
 
 type dealEmailView struct {
@@ -405,4 +414,13 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 		return nil, "", "", "", err
 	}
 	return msg.Bytes(), subject, text, htmlBody, nil
+}
+
+// cadencePhrase is " (every 5m, give or take 2m)" from the witness state the
+// report carries, or "" when it names none.
+func cadencePhrase(cadence map[string]interface{}) string {
+	if words, _ := cadence["cadence"].(string); words != "" {
+		return " (" + words + ")"
+	}
+	return ""
 }

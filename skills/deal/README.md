@@ -157,7 +157,9 @@ each has. Instead the profile has one cadence log (its `log_id`), and
   the jitter and can push a tick to a later run. Where the host can only
   schedule every N minutes, use `deal tick --wait-up-to Nm`: each run waits,
   with the store unlocked, for every tick due inside its window, and
-  publishes it on time.
+  publishes it on time. Such a run stays alive up to N (an hour for
+  `--wait-up-to 60m`): on a host that caps how long a scheduled job may run,
+  use a smaller N or schedule every minute instead.
 - At a tick, every deal's checkpoint is cut locally and becomes a leaf of a
   fixed-depth (16) Merkle tree, with a fresh random salt at a fresh random
   position, plus one random filler leaf. The tree's root is appended as
@@ -185,8 +187,16 @@ each has. Instead the profile has one cadence log (its `log_id`), and
   names the site for whichever witness the profile uses, and
   `capsulectl doctor --check-witness` says the same.
 
-A deal's receipt states its witness state as it is: **scheduled** (not yet
-in a tick), **pending** (in a tick, no receipt back yet) or **witnessed**.
+A deal is **not witnessed at the moment it happens**. Its receipt says
+"Sealed, witness pending" until the next cadence tick has carried its
+checkpoint to the witness and a receipt has come back; only then does it say
+"Witnessed". How long that is depends on the profile's cadence
+(`cadence.interval`, give or take `cadence.jitter`; 1h and 10m by default),
+and the receipt names the profile's own, for example "every 5m, give or take
+2m". The states, as
+the receipt and `deal report` name them: **scheduled** (not yet in a tick),
+**pending** (in a tick, no receipt back yet; both read "Sealed, witness
+pending") and **witnessed**.
 Witnessed means the bundle carries the whole chain: the deal checkpoint's
 leaf, its salt and position, the 16-hash path (the same length for every
 deal, so it says nothing about the others), the cadence entry's inclusion

@@ -295,7 +295,10 @@ jitter only shows if `deal tick` runs near each due time: a scheduler that
 runs it every 5 or 60 minutes would publish on its own grid instead. If the
 host can only schedule every N minutes, run
 `capsulectl --profile deal deal tick --wait-up-to Nm` at that interval: each
-run waits for the ticks due inside its window and publishes them on time. Deal steps never publish anything
+run waits for the ticks due inside its window and publishes them on time.
+Such a run stays alive up to N minutes (an hour for `--wait-up-to 60m`); if
+the host caps how long a scheduled job may run, use a smaller N or schedule
+every minute. Deal steps never publish anything
 themselves. If your agent host asks before a program reaches a website, the
 first tick raises that question for the witness's site: tell the user to
 choose **"Always allow this site"**, not "allow once", because later ticks
@@ -535,7 +538,11 @@ reads on a phone with nothing to download, and `receipt.html` plus
 the agent host's own email tool to the user's own address. Never send it
 through any other service, and never paste its contents anywhere else. The
 assurance line says "Sealed by my agent" unless a configured witness signed
-a receipt for the deal's checkpoint, and then "Witnessed". The receipt
+a receipt for the deal's checkpoint, and then "Witnessed". A new deal is not
+witnessed at once: until the next tick of the profile's cadence (the receipt
+says how often, for example "every 5m, give or take 2m") its receipt says
+"Sealed, witness pending". Say it that way to the
+user; never say a deal was witnessed when it happened. The receipt
 rides in `bundle.json`, where `capsulectl verify --bundle bundle.json
 --witness-directory DIRECTORY.json` checks it against a witness directory
 the reader chooses. The email copy cannot check itself; the attached page and

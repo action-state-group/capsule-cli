@@ -86,7 +86,13 @@ function versionBefore(a, b) {
       // not a URL: show it as written
     }
     header.append(
-      el("p", `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint: the record existed, unchanged, by then. It does not confirm what the agent did.`, "deal-rung"),
+      el(
+        "p",
+        `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${
+          typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : ""
+        }at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`,
+        "deal-rung",
+      ),
       el(
         "p",
         "The receipt is in this file; this page does not check it. Check it with " +
@@ -95,9 +101,10 @@ function versionBefore(a, b) {
       ),
     );
   } else if (cadence.state === "scheduled") {
-    header.append(el("p", "Sealed by my agent. Witness: scheduled. This checkpoint goes to the witness in the next tick of the profile's cadence; it is not witnessed yet.", "deal-rung"));
+    const every = typeof cadence.cadence === "string" && cadence.cadence ? ` (${cadence.cadence})` : "";
+    header.append(el("p", `Sealed by my agent, witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence${every}, and only then can it be witnessed. Until then it is sealed on this device only.`, "deal-rung"));
   } else if (cadence.state === "pending") {
-    header.append(el("p", "Sealed by my agent. Witness: pending. This checkpoint was sent in a cadence tick, but no receipt has come back yet.", "deal-rung"));
+    header.append(el("p", "Sealed by my agent, witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet; it is retried at every tick.", "deal-rung"));
     if (cadence.reason === "network_consent_needed" && typeof cadence.text === "string") header.append(el("p", `Witness ${cadence.text}`, "deal-note"));
   } else {
     header.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
