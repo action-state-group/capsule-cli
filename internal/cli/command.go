@@ -309,6 +309,7 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(judgeCommands())
 	root.AddCommand(calibrationCommands())
 	root.AddCommand(dealCommands())
+	root.AddCommand(releaseCommands())
 	root.AddCommand(backfillCommands())
 	root.AddCommand(canaryCommands())
 	root.AddCommand(closeCommand(), reconcileCommand(), requestCommand(), respondCommand())

@@ -48,6 +48,14 @@ Which check applies (`gh auth status` tells signed in from not):
 An install report should say which check was used, for example "provenance
 checked: attestation verified; checksum matched" or "provenance not checked:
 gh not signed in; checksum matched".
+
+Provenance proves a binary was built by the release workflow, not that the
+project meant to release it. From the first release built with
+transparency registration, each release is also registered in a public transparency log, and
+`capsulectl release watch`, run off the release infrastructure, compares that
+log with the maintainer-signed tags. What each check covers, and what none of
+them does (telling you this is the right repository), is in
+[docs/RELEASE-TRANSPARENCY.md](docs/RELEASE-TRANSPARENCY.md).
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
 `modernc.org/sqlite`), so they need no system libraries.
 
