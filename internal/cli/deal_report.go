@@ -32,18 +32,70 @@ var (
 // along as the x-deal-v0 extension. The page shows a step's line only when
 // that step's record verified. Message text is in a line only when an
 // anomaly cites that message.
-func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent, report dealReport) (map[string]interface{}, error) {
+//
+// A shared copy (audience counterparty or adjudicator) withholds every record
+// that carries more than that audience may see, rewrites the deal section
+// for it; the command then checks the final page (dealPageGate). Every copy
+// states its scope and carries the command that verifies it.
+func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent, report dealReport, audience, verifyCommand string) (map[string]interface{}, error) {
 	if s.dp.Checkpoint.Signing == (Secret{}) {
 		return nil, inputError("a deal report needs the profile's checkpoint key (see `deal init`)")
 	}
 	if _, err := cutCheckpoint(ctx, s.dp, s.t.log); err != nil {
 		return nil, err
 	}
+	shared := audience != dealAudienceKeep
+	var private dealPrivate
+	var withhold map[string]bool
+	if shared {
+		private = dealPrivateValues(events)
+		var err error
+		if withhold, err = s.dealWithholdRecords(events, audience, private); err != nil {
+			return nil, err
+		}
+	}
 	b, err := AssembleBundle(ctx, s.t.artifacts, s.t.log, s.dp.LogID, BundleOptions{
-		Root: events[len(events)-1].CapsuleID, ClosureDepth: len(events) - 1, Payloads: "selected", WithDisclosure: true,
+		Root: events[len(events)-1].CapsuleID, ClosureDepth: len(events) - 1, Payloads: "selected", WithDisclosure: true, Withhold: withhold,
 	})
 	if err != nil {
 		return nil, err
+	}
+	// The portable checkpoint signature lets a verifier authenticate the
+	// checkpoint in the page instead of labelling it producer-asserted.
+	cp, _ := b["checkpoint"].(map[string]interface{})
+	statement, err := base64.StdEncoding.DecodeString(fmt.Sprint(cp["statement"]))
+	if err != nil {
+		return nil, err
+	}
+	cp["cose"] = base64.RawURLEncoding.EncodeToString(statement)
+	// A witness receipt already held for this checkpoint, re-verified now
+	// under the profile's pinned witness key, rides in checkpoint.witnesses,
+	// where `capsulectl verify --bundle --witness-directory` checks it. The
+	// report itself never contacts the witness. It carries nothing private,
+	// so a shared copy keeps it too.
+	entry, err := s.heldWitnessReceipt(ctx, statement)
+	if err != nil {
+		return nil, err
+	}
+	if entry != nil {
+		cp["witnesses"] = []interface{}{entry}
+	}
+	// Where this checkpoint stands with the witness, through the cadence log.
+	// The cadence chain is digests, salts and proofs, nothing private, so a
+	// shared copy carries it too.
+	cadence, err := s.dealWitnessState(ctx, events[0].Event.DealID, statement)
+	if err != nil {
+		return nil, err
+	}
+	if shared {
+		ext := dealShareExtension(events, report, audience, private, withhold)
+		ext["did_line"] = dealDidLine(dealDidSources(events))
+		ext["verify_command"] = verifyCommand
+		b["extensions"] = map[string]interface{}{dealCadenceExtension: cadence, "x-deal-v0": ext}
+		if err = verifyProducedBundle(b, true); err != nil {
+			return nil, err
+		}
+		return b, nil
 	}
 	cited := map[string]bool{}
 	for _, item := range report.Anomalies {
@@ -73,30 +125,6 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 		}
 		return out
 	}
-	// The portable checkpoint signature lets a verifier authenticate the
-	// checkpoint in the page instead of labelling it producer-asserted.
-	cp, _ := b["checkpoint"].(map[string]interface{})
-	statement, err := base64.StdEncoding.DecodeString(fmt.Sprint(cp["statement"]))
-	if err != nil {
-		return nil, err
-	}
-	cp["cose"] = base64.RawURLEncoding.EncodeToString(statement)
-	// A witness receipt already held for this checkpoint, re-verified now
-	// under the profile's pinned witness key, rides in checkpoint.witnesses,
-	// where `capsulectl verify --bundle --witness-directory` checks it. The
-	// report itself never contacts the witness.
-	entry, err := s.heldWitnessReceipt(ctx, statement)
-	if err != nil {
-		return nil, err
-	}
-	if entry != nil {
-		cp["witnesses"] = []interface{}{entry}
-	}
-	// Where this checkpoint stands with the witness, through the cadence log.
-	cadence, err := s.dealWitnessState(ctx, events[0].Event.DealID, statement)
-	if err != nil {
-		return nil, err
-	}
 	b["extensions"] = map[string]interface{}{
 		dealCadenceExtension: cadence,
 		"x-deal-v0": map[string]interface{}{
@@ -106,6 +134,7 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 			"asked_opening": map[string]interface{}{"nonce": events[0].Event.Nonces["verbatim"], "text": events[0].Event.Open.Intent.Verbatim},
 			"did":           items(report.Did), "anomalies": items(report.Anomalies),
 			"did_line": dealDidLine(dealDidSources(events)),
+			"scope":    dealScopeLine, "audience": dealAudienceKeep, "verify_command": verifyCommand,
 		},
 	}
 	// The merchant rows carry only strings and booleans; round-trip them to
@@ -178,6 +207,11 @@ body { background: var(--bg); color: var(--fg); }
 #deal .deal-scope { font-weight: 600; }
 #deal .deal-ok { color: var(--ok); font-weight: 600; }
 #deal code { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
+#deal .deal-assurance { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0 16px; }
+#deal .deal-rung { font-weight: 600; margin: 0.2rem 0; }
+#deal .deal-scope { font-weight: 600; margin: 0.2rem 0 0.6rem; }
+#deal .deal-claims { border: none; padding: 0; }
+#deal .deal-verify { background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; overflow-x: auto; font-size: 0.85rem; user-select: all; }
 #app { max-width: 760px; margin: 0 auto; padding: 0 16px 16px; overflow-wrap: anywhere; }
 `
 

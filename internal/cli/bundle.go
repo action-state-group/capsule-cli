@@ -30,10 +30,14 @@ type bundleArtifacts interface {
 
 // BundleOptions declares the citation traversal and disclosure treatment.
 type BundleOptions struct {
-	Root           string
-	ClosureDepth   int
-	Payloads       string
-	Suppress       map[string]bool
+	Root         string
+	ClosureDepth int
+	Payloads     string
+	Suppress     map[string]bool
+	// Withhold names records (by capsule_id) whose originals are not
+	// disclosed at all: they verify as WITHHELD. Suppress withholds a member
+	// from every record; Withhold withholds every member of one record.
+	Withhold       map[string]bool
 	WithDisclosure bool
 	// ProducerKey, when set, is declared in the bundle's producer-key/v1
 	// extension (see producerKeyExtension). Nil emits no extension.
@@ -133,6 +137,9 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 	// withheld form a countersign request submits; it is not a disclosure mode.
 	if options.Payloads == "none" && options.WithDisclosure {
 		return nil, inputError("--payloads none cannot be combined with disclosure")
+	}
+	if options.Payloads == "all" && len(options.Withhold) != 0 {
+		return nil, inputError("payloads=all cannot withhold records")
 	}
 
 	root, err := getCapsule(ctx, artifacts, options.Root)
@@ -264,7 +271,7 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		"verification": map[string]interface{}{"producer": "capsulectl", "checks": []interface{}{"graph_closure", "interval_coverage", "per_record_membership"}},
 	}
 	if options.WithDisclosure {
-		overlay, disclosureErr := disclosureOverlay(ctx, artifacts, ids, options.Suppress)
+		overlay, disclosureErr := disclosureOverlay(ctx, artifacts, ids, options.Suppress, options.Withhold)
 		if disclosureErr != nil {
 			return nil, disclosureErr
 		}
@@ -478,11 +485,14 @@ func suppressed(values map[string]bool) []interface{} {
 	return result
 }
 
-func disclosureOverlay(ctx context.Context, artifacts bundleArtifacts, ids []string, suppress map[string]bool) (map[string]interface{}, error) {
+func disclosureOverlay(ctx context.Context, artifacts bundleArtifacts, ids []string, suppress, withhold map[string]bool) (map[string]interface{}, error) {
 	// Originals are looked up by the same names seal() persists. A missing or
 	// purged original is intentionally absent, which the verifier reports as WITHHELD.
 	result := make(map[string]interface{})
 	for _, id := range ids {
+		if withhold[id] {
+			continue
+		}
 		record, err := artifacts.Get(ctx, id)
 		if err != nil {
 			return nil, err
@@ -578,6 +588,11 @@ func appendDisclosureRecord(ctx context.Context, log cll.Backend, bundle map[str
 	if err != nil {
 		return cll.Entry{}, err
 	}
+	return appendRecordDigest(ctx, log, record)
+}
+
+// appendRecordDigest appends a disclosure record's own digest as a log entry.
+func appendRecordDigest(ctx context.Context, log cll.Backend, record map[string]interface{}) (cll.Entry, error) {
 	digest, err := canonical.JSONDigest(record)
 	if err != nil {
 		return cll.Entry{}, err
