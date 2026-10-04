@@ -135,6 +135,7 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 			// against the baseline's sealed verbatim_commitment.
 			"asked_opening": map[string]interface{}{"nonce": events[0].Event.Nonces["verbatim"], "text": events[0].Event.Open.Intent.Verbatim},
 			"did":           items(report.Did), "anomalies": items(report.Anomalies),
+			"told":     toldItems(report.Told, true),
 			"did_line": dealDidLine(dealDidSources(events)),
 			// Which builds sealed the steps, and which one made this page:
 			// the page compares the two from data it already holds. Nothing
@@ -231,6 +232,17 @@ body { background: var(--bg); color: var(--fg); }
 // dealStepLine is one step in plain words, from the local store.
 func dealStepLine(e dealEvent, showText bool) string {
 	switch e.Kind {
+	case "disclosure":
+		// The user's own copy: the values the agent gave, as given.
+		parts := make([]string, len(e.Disclosure.Fields))
+		for i, f := range e.Disclosure.Fields {
+			parts[i] = classWord(f.Class) + " " + f.Value
+		}
+		line := "Told " + e.Disclosure.recipientWord() + ": " + strings.Join(parts, "; ")
+		if e.Disclosure.AuthorizedBy == "" {
+			line = "⚠️ " + line + " (without your approval)"
+		}
+		return line
 	case "open":
 		return fmt.Sprintf("Opened: %q", e.Open.Intent.Verbatim)
 	case "message":
@@ -306,6 +318,45 @@ func stringList(values []string) []interface{} {
 	out := make([]interface{}, len(values))
 	for i, v := range values {
 		out[i] = v
+	}
+	return out
+}
+
+// toldItems is the report's "What your agent told whom", as the extension
+// carries it. withValues is the user's own copy only; a shared copy names the
+// class of each field and never its value.
+func toldItems(told []dealToldItem, withValues bool) []interface{} {
+	out := make([]interface{}, len(told))
+	for i, t := range told {
+		fields := make([]interface{}, len(t.Fields))
+		classes := make([]string, len(t.Fields))
+		for j, f := range t.Fields {
+			m := map[string]interface{}{"class": f.Class, "label": classWord(f.Class)}
+			if withValues {
+				m["value"] = f.Value
+			}
+			fields[j] = m
+			classes[j] = classWord(f.Class)
+		}
+		steps := make([]interface{}, len(t.Steps))
+		for j, s := range t.Steps {
+			steps[j] = s
+		}
+		text := "Told " + t.To + ": " + strings.Join(classes, ", ")
+		if !withValues {
+			who := "the other party"
+			if t.ToKind == "other" {
+				who = "someone other than the other party"
+			}
+			text = "Told " + who + ": " + strings.Join(classes, ", ")
+		}
+		authority := "covered by your approval"
+		if t.Authority == "none" {
+			authority = "without your approval (" + t.Reason + ")"
+		}
+		out[i] = map[string]interface{}{
+			"at": t.At, "text": text, "fields": fields, "authority": t.Authority, "authority_text": authority, "steps": steps,
+		}
 	}
 	return out
 }

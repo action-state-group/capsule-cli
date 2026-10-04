@@ -12,7 +12,7 @@ Files in this directory:
 |---|---|
 | `PROFILE.md` | This document. The normative text for the skill. |
 | `x-deal-v0.schema.json` | JSON Schema (Draft 2020-12) for one record: the block and each record type's body. |
-| `fixtures/positive/` | One deal, 16 records, covering all 12 record types, with the expected JCS digest of each. |
+| `fixtures/positive/` | One deal, 17 records, covering all 13 record types, with the expected JCS digest of each. |
 | `fixtures/negative/` | Records that MUST be rejected, each at one named stage. |
 | `fixtures/fingerprint-vectors.json` | Test-only local store: a public test secret, the raw values, their normalized forms, fingerprints and commitments. |
 | `fixtures/expected-digests.txt` | The positive digests as a manifest. |
@@ -51,7 +51,7 @@ exactly two members.
 | `profile` | `"x-deal-v0"` | REQUIRED | Profile and version. |
 | `canonicalization` | `"jcs"` | REQUIRED | Pinned: RFC 8785. Any other value fails closed (section 5). |
 | `deal_id` | string `^deal-[0-9a-f]{16,64}$` | REQUIRED | Random, opaque, and the same on every record of the deal. Never derived from any identifier. |
-| `record_type` | enum (section 3) | REQUIRED | One of the 12 record types. |
+| `record_type` | enum (section 3) | REQUIRED | One of the 13 record types. |
 | `seq` | integer ≥ 1 | REQUIRED | Position in the deal: 1, 2, 3, … with no gaps (section 6). |
 | `at` | string `YYYY-MM-DDThh:mm:ssZ` | REQUIRED | The seal time in UTC, whole seconds. |
 | `prev` | digest ref | REQUIRED iff `seq` > 1 | The record digest of record `seq − 1`. |
@@ -72,7 +72,7 @@ never against a later change.
 
 ## 3. Record types (action-type conventions)
 
-Twelve record types. The set is closed: an unknown `record_type` fails the schema.
+Thirteen record types. The set is closed: an unknown `record_type` fails the schema.
 
 | record_type | What it records | Required body fields | Required refs / block fields |
 |---|---|---|---|
@@ -88,6 +88,7 @@ Twelve record types. The set is closed: an unknown `record_type` fails the schem
 | `action` | A point-of-no-return step actually taken. | `action` | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). |
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. |
 | `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. |
+| `disclosure` | Something the agent told someone about the user: what kind of thing, to whom, when, under what authority. | `to` (`counterparty`\|`other`), `fields[]` (each `class` + `value_commitment`), `authority` (`approval`\|`none`) | `authority: approval` ⇒ exactly one `authorized_by` → an `approval`, under the same rules as an `action` (section 6); `none` ⇒ no `authorized_by`, and `rule` says why. All `fields` share one covering action: contact classes `share_contact`, credential classes `share_credentials`. Optional `channel`; `counterparty` when the recipient is someone new. |
 
 Field details:
 
@@ -137,6 +138,14 @@ Field details:
   `outcome` with `status: "unchecked_action"`, `outcome: "mismatch"` and the step in `unchecked`.
   It is counted in `close.unchecked_actions`. The trail stays honest, and the approval rule stays
   absolute.
+- **Disclosures.** A `disclosure` records what the agent told someone about the user. Each
+  field is a `class` (`name`, `phone`, `email`, `home_address`, `address`, `pickup_location`,
+  `other_contact`, `credential`, `verification_code`, `payment_card`, `id_document`) and a
+  `value_commitment` to the value given. The value itself stays in the local store; a ledger of
+  disclosures must never itself be a disclosure. Unlike an unauthorized `action`, a disclosure
+  with no covering approval is still a `disclosure` record, with `authority: "none"` and the
+  `rule` that failed (for example `no_check` or `answer_was_not_proceed`), so every telling
+  is in one list. A verifier and a report treat `authority: "none"` as an agent-side anomaly.
 - **Authority.** An approval's authority is the recorded answer (the user's, or the user's own
   standing intent on a pass). The store's signing key only makes the log tamper-evident. A
   record signed by the key is never, by that fact, an approval, and no verifier may read key
@@ -235,7 +244,8 @@ A verifier holding one deal's records in `seq` order checks:
    before it. `deal_id` is constant, and `at` never decreases.
 4. **References point back.** Every `refs` entry names an earlier record of the same deal, with
    a `rel` allowed for that record type, pointing at the record type section 3 names.
-5. **Never act on an unsealed approval.** An `action` MUST carry exactly one `authorized_by` →
+5. **Never act on an unsealed approval.** An `action`, and a `disclosure` with
+   `authority: "approval"`, MUST carry exactly one `authorized_by` →
    a sealed `approval` with `proceed: true`. That approval `approves` a `verdict`, which `checks`
    a `check` whose `action` equals the action's. Also:
    - No `detail_change`, and no `message` or `evidence` carrying `counterparty` identifiers or
@@ -243,7 +253,7 @@ A verifier holding one deal's records in `seq` order checks:
      check requires a new check (a new payee in a message is still a new payee).
    - `amount_minor`, `currency`, `rail` and the payee fingerprint, where both sides carry them,
      equal the checked ones.
-   - One approval authorizes at most one action.
+   - One approval authorizes at most one action or disclosure.
    - It is the verdict's first `approval`. A later answer to the same verdict never authorizes:
      changing the answer ("Hold", then "Pay anyway") requires a new check. The later answer is
      still sealed as the user gave it (`proceed` records the choice, as for every approval); no

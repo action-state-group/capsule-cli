@@ -1,5 +1,5 @@
 {
-  "fixture": "16-close.json",
+  "fixture": "17-close.json",
   "expect": "valid",
   "story": "The deal closes on mismatch, citing the outcome.",
   "record": {
@@ -8,12 +8,12 @@
       "canonicalization": "jcs",
       "deal_id": "deal-3f9c2a7be4d15068",
       "record_type": "close",
-      "seq": 16,
+      "seq": 17,
       "at": "2026-10-04T09:00:05Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "46c5ff49d6f498ce4b351164bd56176c66a631a3c6ceac157cc8d9ab831691ad"
+        "digest": "0190ea26c8f9534b6d25dac151223ff32ef6f55f266dfa513cd2091ce820caee"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -25,7 +25,7 @@
           "rel": "outcome",
           "type": "deal-record",
           "digest_alg": "SHA-256",
-          "digest": "46c5ff49d6f498ce4b351164bd56176c66a631a3c6ceac157cc8d9ab831691ad"
+          "digest": "0190ea26c8f9534b6d25dac151223ff32ef6f55f266dfa513cd2091ce820caee"
         }
       ]
     },
@@ -40,5 +40,5 @@
       ]
     }
   },
-  "expected_digest": "656da88f2d4565fb09c8059b9d6a17a7960f3f136409ffeb845f5255dd751d15"
+  "expected_digest": "f7bc7e4a8c60c08d2f1a90327069bf3a45ee598951c230913030bb3da79af245"
 }

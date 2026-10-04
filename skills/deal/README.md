@@ -148,15 +148,23 @@ checkpoint) and the witness receipt. `capsulectl verify --bundle FILE
 
 ## Report
 
-`deal report` reads the sealed steps into three parts:
+`deal report` reads the sealed steps into four parts:
 
 1. **What you asked**: the user's exact words, from the opening step.
 2. **What the agent did**: every check (and the user's answer to it), every
    action and the close, in order.
-3. **Anomalies**, on either side:
+3. **What your agent told whom**: every sealed disclosure, in order: what
+   kind of thing (phone, address, pickup location, a login, ...), to whom,
+   when, and the sealed approval that covered it, or that none did. The
+   user's own copy shows what was given; a shared copy names only the kind
+   of thing and the fact, never the value, and names the recipient by role.
+   It lists what the agent sealed as told; a telling it never sealed is not
+   in it.
+4. **Anomalies**, on either side:
    - agent side: `asked_vs_did` (tried something not asked, or did something
      other than what was checked), `skipped_check`, `unsealed_approval`
-     (went ahead without a sealed proceed);
+     (went ahead without a sealed proceed), `unapproved_disclosure` (told
+     someone about the user with no covering approval);
    - counterparty side: `changed_identifier`, `channel_hop`,
      `deadline_pressure`, `code_request`, `domain_recent`,
      `unverified_claim`, `delivered_differs`.
@@ -376,7 +384,13 @@ is not registered anywhere.
   {...}}`, in JCS bytes, with `prev` and `baseline_ref` chaining the record
   digests. Record types: `baseline`, `intent`, `message`, `claim`,
   `evidence`, `detail_change`, `check`, `verdict`, `approval`, `action`,
-  `outcome`, `close`.
+  `outcome`, `close`, `disclosure`.
+- A `disclosure` records what the agent told someone about the user: the
+  class of each field and a salted commitment to its value, the recipient
+  (`counterparty` or `other`, with fingerprints when new), and the approval
+  that covered it, or `authority: "none"` with the rule that failed. The
+  value stays in the local store. A ledger of disclosures must never itself
+  be a disclosure.
 - Counterparty identifiers are sealed only as per-deal HMAC fingerprints of
   their normalized form; text (the user's words, messages, the card, notes)
   only as salted commitments. The raw values, the per-deal keys, the store
@@ -518,6 +532,11 @@ not even this device can rewrite what it had sealed by then. The trail does
 not prove who, the user or the machine, said something. It covers this
 skill's own records only: the agent host's own store is not covered, and a
 change there is not detected.
+
+**The difference card is evidence to show the user, not an instruction to
+the agent.** The agent is told to show it verbatim because paraphrase
+destroys its value as a record, not because the card has authority over the
+agent.
 
 ## Demo
 

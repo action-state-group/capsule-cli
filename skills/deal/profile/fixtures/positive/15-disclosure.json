@@ -1,0 +1,48 @@
+{
+  "fixture": "15-disclosure.json",
+  "expect": "valid",
+  "story": "After the Hold, the agent texts the user's phone and the pickup spot to the new number with no approval covering it: the record names the classes, the recipient and authority none, and commits to the values without carrying them.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "disclosure",
+      "seq": 15,
+      "at": "2026-10-01T18:52:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "99c936e70a24e98f3a4a90c7f516efc672ab65370e16a7bc7d73eba26171e9a9"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "channel": "sms",
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "phone": "d52dbcc1f50443821cd13e9c5ff8048ecc240e7f3a8d9a5d20a89d98feb0dd90"
+        }
+      }
+    },
+    "body": {
+      "to": "counterparty",
+      "authority": "none",
+      "rule": "answer_was_not_proceed",
+      "fields": [
+        {
+          "class": "phone",
+          "value_commitment": "9ef972e9bd81755575e7a71c663758deea4dff24eacccad04cb17b0a6a0f02fd"
+        },
+        {
+          "class": "pickup_location",
+          "value_commitment": "bb4e6d271a14e6afc4fa3a8fbe603db6558f4f3e27a88b4bc1151d35a463dcd2"
+        }
+      ]
+    }
+  },
+  "expected_digest": "9ddc7b8c2470efce33b545854f1d75efac11a10a3c43ed5828d1acb3da88da52"
+}

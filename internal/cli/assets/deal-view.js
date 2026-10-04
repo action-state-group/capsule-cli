@@ -212,6 +212,19 @@ function versionBefore(a, b) {
   if (did.length === 0) host.append(el("p", "Nothing yet.", "deal-note"));
   did.forEach((i) => host.append(item(i.text, i.steps)));
 
+  // What the agent told whom about the user: each telling, its time and the
+  // approval that covered it, or that none did. Your own copy shows what was
+  // given; a shared copy names only the kind of thing.
+  host.append(el("h2", "What your agent told whom"));
+  const told = report.told || [];
+  if (told.length === 0) host.append(el("p", "Nothing about you was recorded as shared.", "deal-note"));
+  told.forEach((t) => {
+    const flagged = t.authority === "none";
+    const fields = (t.fields || []).map((f) => (typeof f.value === "string" ? `${f.label}: ${f.value}` : f.label)).join("; ");
+    host.append(item(`${flagged ? "⚠️ " : ""}${t.text} · ${t.at} · ${t.authority_text}${shared ? "" : ` (${fields})`}`, t.steps, flagged ? "deal-flag" : undefined));
+  });
+  host.append(el("p", "Only what the agent sealed as shared is listed here; something it told without sealing it is not.", "deal-note"));
+
   // Cancel-by dates: the point of no return is a date passing. Recorded,
   // never enforced.
   const deadlines = report.deadlines || [];

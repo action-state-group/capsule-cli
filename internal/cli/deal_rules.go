@@ -271,24 +271,26 @@ type dealCloseResult struct {
 // raw values. Prev is the previous step's record digest. Nonces are the
 // commitment nonces; they never leave the store.
 type dealEvent struct {
-	DealID   string            `json:"deal_id"`
-	N        int64             `json:"n"`
-	Kind     string            `json:"kind"`
-	Prev     string            `json:"prev,omitempty"`
-	At       string            `json:"at"`
-	Open     *dealOpen         `json:"open,omitempty"`
-	Intent   *dealIntent       `json:"intent,omitempty"`
-	Message  *dealMessage      `json:"message,omitempty"`
-	Claim    *dealClaim        `json:"claim,omitempty"`
-	Evidence *dealEvidence     `json:"evidence,omitempty"`
-	Change   *dealChange       `json:"change,omitempty"`
-	Snapshot *dealSnapshot     `json:"snapshot,omitempty"`
-	Check    *dealCheckResult  `json:"check,omitempty"`
-	Approval *dealApproval     `json:"approval,omitempty"`
-	Act      *dealAct          `json:"act,omitempty"`
-	Outcome  *dealCloseResult  `json:"outcome,omitempty"`
-	Close    *dealCloseResult  `json:"close,omitempty"`
-	Nonces   map[string]string `json:"nonces,omitempty"`
+	DealID   string           `json:"deal_id"`
+	N        int64            `json:"n"`
+	Kind     string           `json:"kind"`
+	Prev     string           `json:"prev,omitempty"`
+	At       string           `json:"at"`
+	Open     *dealOpen        `json:"open,omitempty"`
+	Intent   *dealIntent      `json:"intent,omitempty"`
+	Message  *dealMessage     `json:"message,omitempty"`
+	Claim    *dealClaim       `json:"claim,omitempty"`
+	Evidence *dealEvidence    `json:"evidence,omitempty"`
+	Change   *dealChange      `json:"change,omitempty"`
+	Snapshot *dealSnapshot    `json:"snapshot,omitempty"`
+	Check    *dealCheckResult `json:"check,omitempty"`
+	Approval *dealApproval    `json:"approval,omitempty"`
+	Act      *dealAct         `json:"act,omitempty"`
+	Outcome  *dealCloseResult `json:"outcome,omitempty"`
+	Close    *dealCloseResult `json:"close,omitempty"`
+	// Disclosure is something the agent told someone about the user.
+	Disclosure *dealDisclosure   `json:"disclosure,omitempty"`
+	Nonces     map[string]string `json:"nonces,omitempty"`
 	// Producer is the capsulectl build that sealed the step, kept with the
 	// step so that a later build re-derives the same record.
 	Producer *dealProducer `json:"producer,omitempty"`
@@ -866,10 +868,14 @@ func renderCard(r dealCheckResult, demo bool) string {
 // action: it is sealed anyway, as an outcome, and shown in the report. rule is
 // the token the sealed outcome carries.
 func authorizeAct(events []sealedEvent, act dealAct) (approval, reason, rule string) {
+	// One approval covers at most one step: an action or a disclosure.
 	used := map[string]bool{}
 	for _, se := range events {
 		if se.Event.Kind == "act" && !se.Event.Act.Unchecked {
 			used[se.Event.Act.AuthorizedBy] = true
+		}
+		if d := se.Event.Disclosure; d != nil && d.AuthorizedBy != "" {
+			used[d.AuthorizedBy] = true
 		}
 	}
 	for i := len(events) - 1; i >= 0; i-- {
@@ -893,7 +899,7 @@ func authorizeAct(events []sealedEvent, act dealAct) (approval, reason, rule str
 				return "", "the check paused and the answer was " + a.Choice, "answer_was_not_proceed"
 			}
 			if used[later.CapsuleID] {
-				return "", "that approval already covered an earlier action", "approval_already_used"
+				return "", "that approval already covered an earlier step", "approval_already_used"
 			}
 			return later.CapsuleID, "", ""
 		}
@@ -1004,6 +1010,12 @@ func trailLine(e dealEvent) string {
 		return "observed: " + e.Outcome.Status + " (" + e.Outcome.Outcome + ")"
 	case "close":
 		return "closed: " + e.Close.Outcome
+	case "disclosure":
+		line := "told " + e.Disclosure.recipientWord() + ": " + e.Disclosure.classList()
+		if e.Disclosure.AuthorizedBy == "" {
+			line = "⚠️ " + line + " without your approval (" + e.Disclosure.Reason + ")"
+		}
+		return line
 	default:
 		return e.Kind
 	}
@@ -1027,6 +1039,9 @@ type dealReport struct {
 	Asked     string           `json:"asked"`
 	AskedStep string           `json:"asked_step"`
 	Did       []dealReportItem `json:"did"`
+	// Told is what the agent told whom about the user, in order: each
+	// disclosure, its recipient, its time and the approval that covered it.
+	Told      []dealToldItem   `json:"told"`
 	Anomalies []dealReportItem `json:"anomalies"`
 	// Merchant is each sealed merchant email set beside what was approved.
 	Merchant []dealMerchantRow `json:"merchant"`
@@ -1056,7 +1071,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 	open := events[0].Event.Open
 	openID := events[0].CapsuleID
 	currency := open.Terms.Currency
-	r := dealReport{Asked: open.Intent.Verbatim, AskedStep: openID, Did: []dealReportItem{}, Anomalies: []dealReportItem{}}
+	r := dealReport{Asked: open.Intent.Verbatim, AskedStep: openID, Did: []dealReportItem{}, Told: []dealToldItem{}, Anomalies: []dealReportItem{}}
 	checkItem := map[string]int{}
 	agent := func(kind, text string, steps ...string) {
 		r.Anomalies = append(r.Anomalies, dealReportItem{Side: "agent", Kind: kind, Text: text, Steps: steps})
@@ -1202,6 +1217,16 @@ func buildDealReport(events []sealedEvent) dealReport {
 			}
 		case "close":
 			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: "Closed: " + e.Close.Outcome, Steps: []string{se.CapsuleID}})
+		case "disclosure":
+			d := e.Disclosure
+			item := dealToldItem{At: e.At, To: d.recipient(open.Who), ToKind: d.To, Fields: d.Fields, Authority: "approval", Steps: []string{se.CapsuleID}}
+			if d.AuthorizedBy != "" {
+				item.Steps = []string{d.AuthorizedBy, se.CapsuleID}
+			} else {
+				item.Authority, item.Reason = "none", d.Reason
+				agent("unapproved_disclosure", fmt.Sprintf("Told %s your %s without your approval (%s)", item.To, d.classList(), d.Reason), se.CapsuleID)
+			}
+			r.Told = append(r.Told, item)
 		}
 	}
 	kept := r.Anomalies[:0]
@@ -1279,4 +1304,128 @@ func changesDetails(e dealEvent) bool {
 		return e.Evidence.Who != nil
 	}
 	return false
+}
+
+// dealDisclosure is something the agent told someone about the user: the
+// fields it gave (each a class and, in the local store only, the value), to
+// whom, on what channel, and the approval that covered it, or why none did.
+// The sealed record carries the classes and a commitment to each value,
+// never a value: a ledger of disclosures must never itself be one.
+type dealDisclosure struct {
+	// To is "counterparty" (the deal's other side, the default) or "other"
+	// (anyone else: a courier, a platform, a third person).
+	To      string                `json:"to"`
+	Who     *dealWho              `json:"who,omitempty"`
+	Channel string                `json:"channel,omitempty"`
+	Fields  []dealDisclosureField `json:"fields"`
+	// AuthorizedBy is the sealed approval that covered it; empty when none
+	// did, with Reason and Rule saying why.
+	AuthorizedBy string `json:"authorized_by,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	Rule         string `json:"rule,omitempty"`
+}
+
+type dealDisclosureField struct {
+	Class string `json:"class"`
+	Value string `json:"value"`
+}
+
+// dealToldItem is one disclosure as the report states it.
+type dealToldItem struct {
+	At string `json:"at"`
+	To string `json:"to"`
+	// ToKind is counterparty or other, all a shared copy may say of whom.
+	ToKind    string                `json:"to_kind"`
+	Fields    []dealDisclosureField `json:"fields"`
+	Authority string                `json:"authority"` // approval | none
+	Reason    string                `json:"reason,omitempty"`
+	Steps     []string              `json:"steps"`
+}
+
+// disclosureClasses are the kinds of thing an agent tells someone about the
+// user, each with the point of no return that covers it.
+var disclosureClasses = map[string]string{
+	"name": "share_contact", "phone": "share_contact", "email": "share_contact",
+	"home_address": "share_contact", "address": "share_contact", "pickup_location": "share_contact",
+	"other_contact": "share_contact",
+	"credential":    "share_credentials", "verification_code": "share_credentials",
+	"payment_card": "share_credentials", "id_document": "share_credentials",
+}
+
+var disclosureClassWords = map[string]string{
+	"home_address": "home address", "pickup_location": "pickup location", "other_contact": "contact details",
+	"verification_code": "verification code", "payment_card": "payment card", "id_document": "ID document",
+}
+
+func classWord(c string) string {
+	if w, ok := disclosureClassWords[c]; ok {
+		return w
+	}
+	return strings.ReplaceAll(c, "_", " ")
+}
+
+// action is the point of no return that covers the disclosure.
+func (d dealDisclosure) action() string {
+	return disclosureClasses[d.Fields[0].Class]
+}
+
+func (d dealDisclosure) classList() string {
+	words := make([]string, len(d.Fields))
+	for i, f := range d.Fields {
+		words[i] = classWord(f.Class)
+	}
+	return strings.Join(words, ", ")
+}
+
+func (d dealDisclosure) recipientWord() string {
+	if d.To == "other" {
+		return "someone other than the counterparty"
+	}
+	return "the counterparty"
+}
+
+// recipient names who was told, as the local store knows them.
+func (d dealDisclosure) recipient(first dealWho) string {
+	if d.Who != nil {
+		for _, f := range whoFields(*d.Who) {
+			if f.value != "" {
+				return f.value
+			}
+		}
+	}
+	if d.To == "counterparty" {
+		for _, f := range whoFields(first) {
+			if f.value != "" {
+				return f.value
+			}
+		}
+	}
+	return d.recipientWord()
+}
+
+func (d dealDisclosure) validate() error {
+	if d.To != "counterparty" && d.To != "other" {
+		return inputError("disclosure.to must be counterparty or other")
+	}
+	if d.To == "other" && (d.Who == nil || *d.Who == (dealWho{})) {
+		return inputError("a disclosure to someone other than the counterparty needs who (who they are)")
+	}
+	if len(d.Fields) == 0 {
+		return inputError("disclosure.fields needs at least one {class, value}")
+	}
+	action := ""
+	for _, f := range d.Fields {
+		a, ok := disclosureClasses[f.Class]
+		if !ok {
+			return inputError("disclosure field class must be one of name, phone, email, home_address, address, pickup_location, other_contact, credential, verification_code, payment_card, id_document: " + f.Class)
+		}
+		if strings.TrimSpace(f.Value) == "" {
+			return inputError("every disclosed field needs the value that was given (kept on this device only)")
+		}
+		if action != "" && a != action {
+			return inputError("seal contact details and credentials as separate disclosures: each is covered by its own check")
+		}
+		action = a
+	}
+	return nil
 }

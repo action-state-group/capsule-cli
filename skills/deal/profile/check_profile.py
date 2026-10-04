@@ -34,7 +34,12 @@ SCHEMA_PATH = HERE / "x-deal-v0.schema.json"
 FIX = HERE / "fixtures"
 
 RECORD_TYPES = ["intent", "baseline", "message", "claim", "evidence", "detail_change",
-                "check", "verdict", "approval", "action", "outcome", "close"]
+                "check", "verdict", "approval", "action", "outcome", "close", "disclosure"]
+# The point of no return whose check covers a disclosed field of each class.
+DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "home_address", "address",
+                                                  "pickup_location", "other_contact")}
+DISCLOSURE_ACTION.update({c: "share_credentials" for c in ("credential", "verification_code",
+                                                           "payment_card", "id_document")})
 IDENTIFIER_KINDS = ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id"]
 SAFE_INT = 2**53 - 1
 
@@ -438,7 +443,7 @@ def check_chain(records):
         fail(0, "the first record of a deal must be the baseline")
     allowed_rels = {"evidence": {"about"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by"}, "outcome": {"observes"},
-                    "close": {"outcome"}}
+                    "close": {"outcome"}, "disclosure": {"authorized_by"}}
     # Absent allowed = no restriction; present and empty = nothing allowed.
     allowed = records[0]["body"]["intent"].get("allowed")
     used_approvals, verdict_for_check = set(), set()
@@ -484,6 +489,31 @@ def check_chain(records):
                 fail(i, f"{rel!r} must point at a {' or '.join(types)} record")
             return js[0] if js else None
 
+        def authorized_check(ja, action, what):
+            """Section 6, rule 5: the approval proceeds, is unused, is the
+            verdict's first answer, and its check is of this action with no
+            change of details since. Returns the check."""
+            appr = records[ja]
+            if not appr["body"]["proceed"]:
+                fail(i, "the referenced approval did not approve proceeding")
+            if ja in used_approvals:
+                fail(i, "an approval authorizes at most one action or disclosure")
+            used_approvals.add(ja)
+            jv = by_digest[appr["x-deal-v0"]["refs"][0]["digest"]]
+            if first_answer.get(jv) != ja:
+                fail(i, f"a{'n' if what == 'action' else ''} {what} is held to the verdict's first answer; a later answer needs a new check")
+            jc = by_digest[records[jv]["x-deal-v0"]["refs"][0]["digest"]]
+            chk = records[jc]
+            if chk["body"]["action"] != action:
+                fail(i, f"the {what} differs from the one checked")
+            for k in range(jc + 1, i):
+                kb = records[k]["x-deal-v0"]
+                identity = kb["record_type"] in ("message", "evidence") and (
+                    "counterparty" in kb or "counterparty_facts" in records[k]["body"])
+                if kb["record_type"] == "detail_change" or identity:
+                    fail(i, f"details changed after the check; the {what} needs a new check")
+            return chk
+
         if t == "intent":
             if "allowed" in body:
                 allowed = list(body["allowed"])
@@ -514,29 +544,21 @@ def check_chain(records):
                     fail(i, "standing-intent approval for an action the intent does not allow")
             elif v["result"] == "pause" and body["choice"] not in v["options"]:
                 fail(i, "the user's choice is not one of the verdict's options")
+        elif t == "disclosure":
+            actions = {DISCLOSURE_ACTION[f["class"]] for f in body["fields"]}
+            if len(actions) != 1:
+                fail(i, "contact details and credentials are separate disclosures, each covered by its own check")
+            if body["authority"] == "none":
+                if "authorized_by" in by_rel:
+                    fail(i, "a disclosure with authority none carries no authorized_by")
+            else:
+                if "authorized_by" not in by_rel:
+                    fail(i, "a disclosure with authority approval references that approval (authorized_by)")
+                authorized_check(one("authorized_by", ("approval",)), actions.pop(), "disclosure")
         elif t == "action":
             if "authorized_by" not in by_rel:
                 fail(i, "an action must reference the sealed approval that authorized it (authorized_by)")
-            ja = one("authorized_by", ("approval",))
-            appr = records[ja]
-            if not appr["body"]["proceed"]:
-                fail(i, "the referenced approval did not approve proceeding")
-            if ja in used_approvals:
-                fail(i, "an approval authorizes at most one action")
-            used_approvals.add(ja)
-            jv = by_digest[appr["x-deal-v0"]["refs"][0]["digest"]]
-            if first_answer.get(jv) != ja:
-                fail(i, "an action is held to the verdict's first answer; a later answer needs a new check")
-            jc = by_digest[records[jv]["x-deal-v0"]["refs"][0]["digest"]]
-            chk = records[jc]
-            if chk["body"]["action"] != body["action"]:
-                fail(i, "the action differs from the one checked")
-            for k in range(jc + 1, i):
-                kb = records[k]["x-deal-v0"]
-                identity = kb["record_type"] in ("message", "evidence") and (
-                    "counterparty" in kb or "counterparty_facts" in records[k]["body"])
-                if kb["record_type"] == "detail_change" or identity:
-                    fail(i, "details changed after the check; the action needs a new check")
+            chk = authorized_check(one("authorized_by", ("approval",)), body["action"], "action")
             cb = chk["body"]
             if "amount_minor" in body and "amount_minor" in cb and body["amount_minor"] != cb["amount_minor"]:
                 fail(i, "the amount differs from the one checked")
@@ -703,6 +725,9 @@ def regen(pack_path: Path | None):
                   "Zelle to a business = no card protection · Site registered 3 weeks ago · "
                   "unverified: has 2 jet skis available Saturday · [Hold] [Call the number I found] [Pay anyway]",
         "said-1": "Hold",
+        # What the agent told the new number, kept on the device only.
+        "disclosed-phone": "(555) 010-2077",
+        "disclosed-pickup": "lakeside marina, slip 14, by the fuel dock",
     }
     com = {k: commitment(nonce(k), v) for k, v in texts.items()}
     pack_digest = None
@@ -715,7 +740,7 @@ def regen(pack_path: Path | None):
                   "2026-10-01T16:05:00Z", "2026-10-01T16:20:00Z", "2026-10-01T16:20:05Z",
                   "2026-10-01T16:20:06Z", "2026-10-01T16:20:06Z", "2026-10-01T16:20:30Z",
                   "2026-10-01T18:41:00Z", "2026-10-01T18:41:20Z", "2026-10-01T18:43:00Z",
-                  "2026-10-01T18:43:01Z", "2026-10-01T18:44:30Z", "2026-10-04T09:00:00Z",
+                  "2026-10-01T18:43:01Z", "2026-10-01T18:44:30Z", "2026-10-01T18:52:00Z", "2026-10-04T09:00:00Z",
                   "2026-10-04T09:00:05Z"])
 
     def cp(*keys):
@@ -778,6 +803,12 @@ def regen(pack_path: Path | None):
         "judge": {"kind": "rules"}}, refs=[("checks", k2)])
     a2 = add("approval-hold", "approval", {"choice": "hold", "proceed": False, "approver": "user",
                                            "said_commitment": com["said-1"]}, refs=[("approves", v2)])
+    # After the Hold, the agent texts the new number the user's phone and the
+    # pickup spot anyway: no check covers it, so the record says authority none.
+    add("disclosure", "disclosure", {"to": "counterparty", "authority": "none", "rule": "answer_was_not_proceed",
+                                     "fields": [{"class": "phone", "value_commitment": com["disclosed-phone"]},
+                                                {"class": "pickup_location", "value_commitment": com["disclosed-pickup"]}]},
+        channel="sms", counterparty=cp(("phone", "second")))
     o = add("outcome", "outcome", {"status": "not_received", "outcome": "mismatch",
                                    "differences": [{"question": "delivered", "rule": "not_delivered"}]})
     add("close", "close", {"outcome": "mismatch", "unchecked_actions": 0,
@@ -806,6 +837,9 @@ def regen(pack_path: Path | None):
         "detail_change": "The counterparty switches payee, phone and rail after first contact (fingerprints only).",
         "outcome": "Saturday passes; nothing was delivered as agreed.",
         "close": "The deal closes on mismatch, citing the outcome.",
+        "disclosure": "After the Hold, the agent texts the user's phone and the pickup spot to the new number with no "
+                      "approval covering it: the record names the classes, the recipient and authority none, "
+                      "and commits to the values without carrying them.",
     }
     digests = []
     for n, r in zip(names, records):
@@ -872,6 +906,16 @@ def regen(pack_path: Path | None):
     neg("neg-action-on-second-answer", "chain", "first answer", r, 14,
         "After Hold, a second answer to the same verdict (Pay anyway) is cited by a pay action.",
         chain_between=[again])
+
+    r = copy.deepcopy(records[14]); r["body"]["fields"][0]["class_note"] = "texted (555) 010-2077"
+    neg("neg-disclosure-raw-value", "personal_data", "raw phone", r, 14,
+        "A disclosure that carries the disclosed phone number itself.")
+
+    r = copy.deepcopy(records[14]); r["body"] = {"to": "counterparty", "authority": "approval",
+                                                 "fields": [{"class": "phone", "value_commitment": com["disclosed-phone"]}]}
+    r["x-deal-v0"]["refs"] = [{"rel": "authorized_by", **_ref(record_digest(records[7]))}]
+    neg("neg-disclosure-reused-approval", "chain", "at most one action or disclosure", r, 14,
+        "A disclosure citing the standing approval that already covered the share_contact action.")
 
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["canonicalization"] = "jcs-n"
     neg("neg-wrong-canonicalization", "canonicalization", "must be exactly", r, 2,
