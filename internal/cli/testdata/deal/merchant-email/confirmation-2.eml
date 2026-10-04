@@ -1,0 +1,41 @@
+DKIM-Signature: a=rsa-sha256; bh=ftAABOEYEaQTsJmMCds69kSDSBxx0zx4OG3kiXdCwHk=;
+ c=relaxed/relaxed; d=shop.example;
+ h=From:To:Subject:Date:Message-ID:MIME-Version:Content-Type; s=s2026;
+ t=1791069958; v=1;
+ b=f6RUVyfnnK3TDLFVSvDkA7372IOSu3cIBtap8WR3yNCpl9xnm14sRPZ2XtHfyxUMWjJbQPsX
+ U8hENKH2NeThBzZmtKnK0Fhu1e2SJSQvHpt2SFepKu5m+miFKQm/Im97X0N8CBaQNejvLTbWOsv
+ 1ACYlgs3CSXhTnBVjzXhJ+CYld2y9U6D3CFDEtZQGIkmIvO3UZkMRVMqoF7rREF6qLfPGr6inbC
+ LegUKReMjgHnUAHWP7PUWbjgUYbEdC0e6ioFmsXU8ZJ0Wf0AOYhmP98BxWSpAAksnp+0YFelijA
+ kJ7kGqK7v9975TXsqFeefLM39AFIS8GC7QC1USBjrOhsg==
+From: Shop Example <orders@shop.example>
+To: Sam Customer <sam.customer@mail.example>
+Subject: Your Shop Example order SE-104251 is confirmed
+Date: Sat, 03 Oct 2026 21:16:40 +0000
+Message-ID: <se-104251@shop.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Thanks for your order!
+
+Order number: SE-104251
+
+Sticker pack (3 designs)   Qty: 1   $58.00
+
+Subtotal: $58.00
+Shipping: $6.00
+Order total: $64.00
+
+Changed your mind? You can cancel this order until October 10, 2026
+from your account page.
+
+Shop Example
+--b1
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+<html><body><p>Thanks for your order!</p><table><tr><td>Order number</td><td>SE-104251</td></tr><tr><td>Order total</td><td>$64.00</td></tr></table></body></html>
+--b1--

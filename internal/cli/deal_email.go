@@ -74,8 +74,8 @@ func dealDidLine(sources []string) string {
 }
 
 // dealDidSources lists the independent sources a deal recorded for what the
-// agent did, such as the merchant's own email. A deal records none yet.
-func dealDidSources(events []sealedEvent) []string { return nil }
+// agent did: the merchant's own emails that are merchant-confirmed.
+func dealDidSources(events []sealedEvent) []string { return merchantDidSources(events) }
 
 // dealDidLineOf reads the did line the report bundle carries, so the page and
 // the email say the same thing.
@@ -139,11 +139,17 @@ type dealEmailView struct {
 	Assurance   string
 	Did         []dealReportItem
 	Anomalies   []dealReportItem
+	Merchant    []dealMerchantRow
+	EmailScope  string
 	Steps       int
 	VerifyLine  string
 	NotClaimed  []string
 	CheckedNote string
+	// MerchantNote says what stands behind the merchant section, once.
+	MerchantNote string
 }
+
+const dealEmailMerchantNote = "Two different things stand behind each email. The merchant's signature, checked against the merchant's key saved when the email was sealed, shows what the merchant sent, independent of the agent. Our seal shows this device kept these exact bytes from that time on; it is our own record. Amounts, dates and order numbers are read from the email by capsulectl and may be misread."
 
 var dealEmailNotClaimed = []string{
 	"Tamper-evident against ourselves and the agent, not non-repudiation: it shows the record was not changed after it was made, not who made it.",
@@ -168,6 +174,23 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <p style="margin:4px 0 0;color:#444;">Outcome: {{.Outcome}} &middot; {{.Steps}} sealed steps</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">Anomalies</h2>
 <ul style="margin:0;padding-left:20px;">{{range .Anomalies}}<li>{{if .Side}}{{.Side}} side: {{end}}{{.Text}}</li>{{else}}<li>None found.</li>{{end}}</ul>
+{{if .Merchant}}<h2 style="font-size:16px;margin:16px 0 4px;">The merchant's own email</h2>
+<p style="margin:0 0 4px;font-weight:600;">{{.EmailScope}}</p>
+<p style="margin:0 0 8px;color:#444;">{{.MerchantNote}}</p>
+{{range .Merchant}}<div style="border:1px solid #d9d9e0;border-radius:6px;padding:8px 12px;margin:8px 0;">
+<p style="margin:0 0 4px;font-weight:600;">{{if .OrderID}}Order {{.OrderID}}{{else}}Merchant email{{end}}</p>
+<p style="margin:0 0 4px;{{if .Verified}}color:#1d6b35;{{else}}color:#9a3b00;{{end}}">Merchant's signature: {{.MerchantSays}}</p>
+<p style="margin:0 0 4px;color:#444;">Our seal: {{.WeSay}}</p>
+{{if eq .KeySource "supplied"}}<p style="margin:0 0 4px;color:#9a3b00;">The merchant's key was supplied by hand, not read from the merchant's DNS.</p>{{end}}
+<table style="border-collapse:collapse;width:100%;font-size:14px;">
+{{if .Approved}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">You approved{{if .ApprovedBasis}} ({{.ApprovedBasis}}){{end}}</th><td>{{.Approved}}</td></tr>{{end}}
+{{if .AgentReported}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">The agent reported paying</th><td>{{.AgentReported}}</td></tr>{{end}}
+{{if .Charged}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">The merchant's email says (read from the email)</th><td>{{.Charged}}</td></tr>{{end}}
+{{if .ChargedOn}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">Charged on (the email's date)</th><td>{{.ChargedOn}}</td></tr>{{end}}
+{{if .CancelBy}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">Cancel by (read from the email)</th><td>{{.CancelBy}}</td></tr>{{end}}
+{{if .Domains}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">Signing domain</th><td>{{.Domains}}</td></tr>{{end}}
+{{if .KeySize}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">Merchant's key</th><td>{{.KeySize}}, sealed when the email was sealed</td></tr>{{end}}
+</table></div>{{end}}{{end}}
 <h2 style="font-size:16px;margin:16px 0 4px;">Check it yourself</h2>
 <p style="margin:0;">{{.CheckedNote}}</p>
 <pre style="margin:8px 0 0;padding:8px;background:#f4f4f0;border-radius:4px;white-space:pre-wrap;word-break:break-all;">{{.VerifyLine}}</pre>
@@ -182,6 +205,8 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 	view.Scope = dealScopeLine
 	view.VerifyLine = dealEmailVerify
 	view.NotClaimed = dealEmailNotClaimed
+	view.EmailScope = emailScopeLine
+	view.MerchantNote = dealEmailMerchantNote
 	view.CheckedNote = "This copy cannot check itself: mail apps do not run scripts. Open the attached receipt.html in a browser, where it checks every sealed step offline, or save bundle.json and run:"
 	asked := view.Asked
 	if r := []rune(asked); len(r) > 60 {
@@ -212,6 +237,39 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 			side = a.Side + " side: "
 		}
 		fmt.Fprintf(&tb, "- %s%s\n", side, a.Text)
+	}
+	if len(view.Merchant) > 0 {
+		fmt.Fprintf(&tb, "\nThe merchant's own email:\n%s\n%s\n", view.EmailScope, view.MerchantNote)
+		for _, m := range view.Merchant {
+			title := "Merchant email"
+			if m.OrderID != "" {
+				title = "Order " + m.OrderID
+			}
+			fmt.Fprintf(&tb, "\n%s\n- Merchant's signature: %s\n- Our seal: %s\n", title, m.MerchantSays, m.WeSay)
+			if m.KeySource == "supplied" {
+				tb.WriteString("- The merchant's key was supplied by hand, not read from the merchant's DNS.\n")
+			}
+			approved, key := "You approved", ""
+			if m.ApprovedBasis != "" {
+				approved += " (" + m.ApprovedBasis + ")"
+			}
+			if m.KeySize != "" {
+				key = m.KeySize + ", sealed when the email was sealed"
+			}
+			for _, f := range []struct{ label, value string }{
+				{approved, m.Approved},
+				{"The agent reported paying", m.AgentReported},
+				{"The merchant's email says (read from the email)", m.Charged},
+				{"Charged on (the email's date)", m.ChargedOn},
+				{"Cancel by (read from the email)", m.CancelBy},
+				{"Signing domain", m.Domains},
+				{"Merchant's key", key},
+			} {
+				if f.value != "" {
+					fmt.Fprintf(&tb, "- %s: %s\n", f.label, f.value)
+				}
+			}
+		}
 	}
 	fmt.Fprintf(&tb, "\nCheck it yourself: %s\n  %s\n\nWhat this does not claim:\n", view.CheckedNote, view.VerifyLine)
 	for _, n := range view.NotClaimed {

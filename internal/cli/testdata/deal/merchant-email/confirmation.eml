@@ -1,0 +1,41 @@
+DKIM-Signature: a=rsa-sha256; bh=DBonionlv+SieB+CPUQM5kNKgVvNV9rB+R6OAecuJbc=;
+ c=relaxed/relaxed; d=shop.example;
+ h=From:To:Subject:Date:Message-ID:MIME-Version:Content-Type; s=s2026;
+ t=1791069958; v=1;
+ b=i6TkhCfVDrSf3VEwnkww5WMP5ob9gCqh7KQSfTd30Ks9NNVwiCP9GOcdH6ifBngGZdn2xu6K
+ mEfE/l/X1AWYst3L2okrQ+a7vqmgMV4jeAcc5amKwILPXF6iJaGo7fDewvuPcunq8uI1Z5MqfFk
+ Fh5JnDBRO3gHxUQ7fFIjk5gMY3h2ffIFFj5HTDqrpN2RYcg9bM9+T51FJRlFVY/US13/pdvdYsf
+ pGd4KB74PSGRJDnGzAXke1zAbFMgxRo55kndOKGMlguvG8Rica6qbgQYt24I1cuLJBk18EL4ZX0
+ b6/c60gRsxvJBGD2O3BBh/34a69C0VdvPfpLqu151HdAA==
+From: Shop Example <orders@shop.example>
+To: Sam Customer <sam.customer@mail.example>
+Subject: Your Shop Example order SE-104233 is confirmed
+Date: Sat, 03 Oct 2026 21:14:05 +0000
+Message-ID: <se-104233@shop.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Thanks for your order!
+
+Order number: SE-104233
+
+Sticker pack (3 designs)   Qty: 1   $58.00
+
+Subtotal: $58.00
+Shipping: $6.00
+Order total: $64.00
+
+Changed your mind? You can cancel this order until October 10, 2026
+from your account page.
+
+Shop Example
+--b1
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+<html><body><p>Thanks for your order!</p><table><tr><td>Order number</td><td>SE-104233</td></tr><tr><td>Order total</td><td>$64.00</td></tr></table></body></html>
+--b1--

@@ -1,0 +1,1 @@
+_dmarc.shop.example. 3600 IN TXT "v=DMARC1; p=reject; adkim=r; rua=mailto:dmarc@shop.example"
