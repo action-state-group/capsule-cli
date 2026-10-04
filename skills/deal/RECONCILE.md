@@ -55,7 +55,8 @@ codes, no message text. There is no field for any of them, and unknown fields
 refuse the file. `id`, `task`, `parent_task` and `tool` must look like
 identifiers (letters, digits and `._:/+-`; no spaces and no `@`), and
 `merchant_domain` like a host name. A value with a card-number-like run of
-digits, or that starts like a phone number (`+` and a digit), is refused.
+digits, or that contains `+` followed by a digit (phone-number shaped), is
+refused, in execution and approval records alike.
 A host's worker rows can hold filled form values (an email, a street
 address, a phone number) in cleartext: a reader selects only ids, tool
 names, timestamps, the merchant's domain and amounts, never a row's text.
@@ -147,6 +148,10 @@ One JSON object:
   - which tool calls are consequential is decided by the reader; a call it
     mapped to `other` is not checked;
   - matching does not see the merchant's or the payment provider's records;
+  - always, that authority is not established: the user's authority for each
+    action cannot be read from the host's records, and host approval ids,
+    where given, are the host's own references, not a record of who approved
+    or under what authority (also `coverage.authority: "not established"`);
   - when no approval history was given, that whether the user approved
     each action on the host is not shown;
   - when any amount is a `ceiling`, that the charged amount is not shown;

@@ -89,14 +89,9 @@
   } else {
     host.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
   }
-  host.append(
-    el(
-      "p",
-      "What you asked, what was proposed and what you approved are sealed on the agent's device, where they happened. " +
-        "What the agent did is the agent's own report: no independent source, such as the merchant's own email, is attached.",
-      "deal-note",
-    ),
-  );
+  // Written by capsulectl from what the deal recorded (dealDidLine).
+  const report0 = (bundle.extensions || {})["x-deal-v0"] || {};
+  if (typeof report0.did_line === "string") host.append(el("p", report0.did_line, "deal-note"));
 
   // The user's words are checked here against the baseline's sealed
   // commitment: SHA-256 over JCS({"nonce","text"}). For two string members in

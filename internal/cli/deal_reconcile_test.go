@@ -148,7 +148,9 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 	coverage := result["coverage"].(map[string]any)
 	assert.Equal(t, map[string]any{"available": false, "read": float64(0)}, coverage["host_approvals"])
 	gaps := coverage["cannot_see"].([]any)
-	assert.Len(t, gaps, len(dealCoverageGaps)+1)
+	assert.Len(t, gaps, len(dealCoverageGaps)+2)
+	assert.Contains(t, gaps, dealAuthorityGap)
+	assert.Equal(t, "not established", coverage["authority"])
 	assert.Contains(t, gaps, dealNoApprovalsGap, "the output says when approvals were not available")
 	assert.NotContains(t, recorded[0].(map[string]any), "host_approval")
 
@@ -159,6 +161,8 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 	coverage = result["coverage"].(map[string]any)
 	assert.Equal(t, map[string]any{"available": true, "read": float64(1)}, coverage["host_approvals"])
 	assert.NotContains(t, coverage["cannot_see"], dealNoApprovalsGap)
+	assert.Contains(t, coverage["cannot_see"], dealAuthorityGap, "approval ids do not establish authority")
+	assert.Equal(t, "not established", coverage["authority"])
 	assert.Equal(t, map[string]any{"id": "a1", "at": "2026-09-27T18:00:00Z", "decision": "approved"}, result["recorded"].([]any)[0].(map[string]any)["host_approval"])
 }
 

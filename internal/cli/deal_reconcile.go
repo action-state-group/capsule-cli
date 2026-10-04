@@ -196,7 +196,7 @@ var dealConsequentialActions = func() []string {
 
 var (
 	metadataToken       = regexp.MustCompile(`^[A-Za-z0-9._:/+-]{1,200}$`)
-	phoneLike           = regexp.MustCompile(`^\+\d`)
+	phoneLike           = regexp.MustCompile(`\+\d`)
 	metadataHost        = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
 	panLike             = regexp.MustCompile(`\d(?:[ -]?\d){12,18}`)
 	execReferenceSHA256 = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -279,6 +279,11 @@ const (
 	dealCeilingGap      = "Some amounts are approval ceilings, the most a spend was approved for, not what was charged; the charged amount is not shown."
 	dealApprovalOnlyGap = "Some records are the host's spend approvals, not the payment itself; whether and when the payment was made is not shown."
 )
+
+// dealAuthorityGap is printed with every result. Even with the host's
+// approval history, its approval ids are the host's own references: who
+// approved, and under what authority, cannot be read from the host's store.
+const dealAuthorityGap = "Authority is not established: the user's authority for each action cannot be read from the agent host's records. Host approval ids, where given, are the host's own references, not a record of who approved or under what authority."
 
 // dealNoApprovalsGap is added when no approval history was given.
 const dealNoApprovalsGap = "The agent host's history of approvals was not available, so whether the user approved each action on the host is not shown."
@@ -449,6 +454,7 @@ func reconcileDeals(records []dealExecutionRecord, approvals []dealHostApproval,
 		gaps = append(gaps, dealApprovalOnlyGap)
 	}
 	hostApprovals := map[string]any{"available": approvals != nil, "read": len(approvals)}
+	gaps = append(gaps, dealAuthorityGap)
 	if approvals == nil {
 		gaps = append(gaps, dealNoApprovalsGap)
 	}
@@ -465,7 +471,7 @@ func reconcileDeals(records []dealExecutionRecord, approvals []dealHostApproval,
 		"recorded":          recorded,
 		"unrecorded":        unrecorded,
 		"failed_attempts":   failed,
-		"coverage":          map[string]any{"reads": "the agent host's execution records (tool calls of the agent and its sub-tasks), not the conversation", "host_approvals": hostApprovals, "cannot_see": gaps},
+		"coverage":          map[string]any{"reads": "the agent host's execution records (tool calls of the agent and its sub-tasks), not the conversation", "host_approvals": hostApprovals, "authority": "not established", "cannot_see": gaps},
 	}
 }
 

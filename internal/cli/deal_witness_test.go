@@ -196,6 +196,8 @@ func TestDealReconcileNeverCarriesPersonalDetails(t *testing.T) {
 		`{"id":"c2","at":"2026-09-27T18:05:00Z","task":"` + phone + `","tool":"browser_automation","action":"other","status":"succeeded"}`,
 		`{"id":"c2","at":"2026-09-27T18:05:00Z","tool":"` + street + `","action":"other","status":"succeeded"}`,
 		`{"id":"c2","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"pay","status":"unknown","merchant_domain":"` + email + `"}`,
+		`{"id":"call` + phone + `","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"other","status":"succeeded"}`,
+		`{"id":"c2","at":"2026-09-27T18:05:00Z","parent_task":"jane.doe@example","tool":"browser_automation","action":"other","status":"succeeded"}`,
 	} {
 		out, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", writeJSON(t, good+"\n"+bad))
 		require.ErrorIs(t, err, ErrInput, bad)
@@ -208,4 +210,35 @@ func TestDealReconcileNeverCarriesPersonalDetails(t *testing.T) {
 	for _, secret := range []string{email, phone, street} {
 		assert.NotContains(t, raw, secret)
 	}
+}
+
+// The approval records take the same guard.
+func TestDealReconcileApprovalsNeverCarryPersonalDetails(t *testing.T) {
+	dealFixture(t)
+	const email, phone, street = "jane.doe@example.com", "+15550100123", "12 Main Street"
+	executions := writeJSON(t, `{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"other","status":"succeeded"}`)
+	for _, bad := range []string{
+		`{"id":"a1","at":"2026-09-27T18:00:00Z","decision":"approved","task":"` + email + `"}`,
+		`{"id":"a` + phone + `","at":"2026-09-27T18:00:00Z","decision":"approved"}`,
+		`{"id":"a1","at":"2026-09-27T18:00:00Z","decision":"approved","execution_id":"` + street + `"}`,
+		`{"id":"a1","at":"2026-09-27T18:00:00Z","decision":"approved","note":"ship to ` + street + `"}`,
+	} {
+		out, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", executions, "--approvals", writeJSON(t, bad))
+		require.ErrorIs(t, err, ErrInput, bad)
+		for _, secret := range []string{email, phone, street, "jane.doe"} {
+			assert.NotContains(t, out, secret, bad)
+			assert.NotContains(t, err.Error(), secret, bad)
+		}
+	}
+}
+
+func TestDealDidLineNamesAnIndependentSourceOnlyWhenOneIsAttached(t *testing.T) {
+	assert.Contains(t, dealDidLine(nil), "What the agent did is the agent's own report: no independent source, such as the merchant's own email, is attached.")
+	with := dealDidLine([]string{"the merchant's own email"})
+	assert.Contains(t, with, "with an independent source attached: the merchant's own email.")
+	assert.NotContains(t, with, "no independent source")
+	assert.Equal(t, dealDidLine(nil), dealDidLineOf(map[string]interface{}{}))
+	b := map[string]interface{}{"extensions": map[string]interface{}{"x-deal-v0": map[string]interface{}{"did_line": with}}}
+	assert.Equal(t, with, dealDidLineOf(b))
+	assert.Contains(t, dealAssurance(b)["text"], with)
 }

@@ -98,6 +98,7 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 			// against the baseline's sealed verbatim_commitment.
 			"asked_opening": map[string]interface{}{"nonce": events[0].Event.Nonces["verbatim"], "text": events[0].Event.Open.Intent.Verbatim},
 			"did":           items(report.Did), "anomalies": items(report.Anomalies),
+			"did_line": dealDidLine(dealDidSources(events)),
 		},
 	}
 	if err = verifyProducedBundle(b, true); err != nil {

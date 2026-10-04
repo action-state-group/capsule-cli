@@ -62,9 +62,31 @@ const dealScopeLine = "This receipt covers this one deal. It is not a record of 
 // dealDidLine says what kind of evidence the "did" part is. What was asked,
 // proposed and approved happened in the conversation on the agent's device,
 // so a seal there is the right record of it; what the agent did happened
-// elsewhere, so the seal is the agent's own report until an independent
-// source (such as the merchant's own email) is attached.
-const dealDidLine = "What you asked, what was proposed and what you approved are sealed on the agent's device, where they happened. What the agent did is the agent's own report: no independent source, such as the merchant's own email, is attached."
+// elsewhere, so the seal is the agent's own report unless an independent
+// source (such as the merchant's own email) is attached. sources names the
+// independent sources a deal recorded for what the agent did.
+func dealDidLine(sources []string) string {
+	const conversation = "What you asked, what was proposed and what you approved are sealed on the agent's device, where they happened. "
+	if len(sources) == 0 {
+		return conversation + "What the agent did is the agent's own report: no independent source, such as the merchant's own email, is attached."
+	}
+	return conversation + "What the agent did is the agent's own report, with an independent source attached: " + strings.Join(sources, "; ") + "."
+}
+
+// dealDidSources lists the independent sources a deal recorded for what the
+// agent did, such as the merchant's own email. A deal records none yet.
+func dealDidSources(events []sealedEvent) []string { return nil }
+
+// dealDidLineOf reads the did line the report bundle carries, so the page and
+// the email say the same thing.
+func dealDidLineOf(b map[string]interface{}) string {
+	ext, _ := b["extensions"].(map[string]interface{})
+	deal, _ := ext["x-deal-v0"].(map[string]interface{})
+	if line, ok := deal["did_line"].(string); ok && line != "" {
+		return line
+	}
+	return dealDidLine(nil)
+}
 
 // dealAssurance names the rung the report stands on, from the bundle itself:
 // "witnessed" when it carries a witness receipt (added only after it
@@ -74,7 +96,7 @@ func dealAssurance(b map[string]interface{}) map[string]any {
 	cp, _ := b["checkpoint"].(map[string]interface{})
 	witnesses, _ := cp["witnesses"].([]interface{})
 	if len(witnesses) == 0 {
-		return map[string]any{"rung": "sealed", "text": "Sealed by my agent: tamper-evident, not non-repudiation. The key that sealed it is on the agent's own device. " + dealDidLine}
+		return map[string]any{"rung": "sealed", "text": "Sealed by my agent: tamper-evident, not non-repudiation. The key that sealed it is on the agent's own device. " + dealDidLineOf(b)}
 	}
 	entry, _ := witnesses[0].(map[string]interface{})
 	host := fmt.Sprint(entry["ts_url"])
@@ -82,7 +104,7 @@ func dealAssurance(b map[string]interface{}) map[string]any {
 		host = u.Host
 	}
 	return map[string]any{"rung": "witnessed", "witness": host, "text": fmt.Sprintf(
-		"Witnessed: %s, an independent log, signed a receipt for the checkpoint covering these steps: the record existed, unchanged, by then. It does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s", host, dealDidLine)}
+		"Witnessed: %s, an independent log, signed a receipt for the checkpoint covering these steps: the record existed, unchanged, by then. It does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s", host, dealDidLineOf(b))}
 }
 
 type dealEmailView struct {
