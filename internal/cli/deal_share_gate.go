@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"net/mail"
 	"net/url"
 	"regexp"
 	"slices"
@@ -262,6 +263,15 @@ func gateSecrets(events []sealedEvent) []string {
 				if msg != nil {
 					for _, h := range []string{"From", "To", "Cc", "Reply-To", "Sender", "Subject", "Delivered-To", "Return-Path"} {
 						texts = append(texts, msg.Header.Get(h))
+					}
+					// The customer's own name, as the recipient headers
+					// display it, is a needle on its own.
+					for _, h := range []string{"To", "Cc", "Delivered-To"} {
+						if list, err := mail.ParseAddressList(msg.Header.Get(h)); err == nil {
+							for _, a := range list {
+								ids = append(ids, a.Name)
+							}
+						}
 					}
 				}
 				for _, it := range m.Parsed.Items {

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/mail"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -155,6 +156,7 @@ func dealLocalData(events []sealedEvent) dealLocal {
 				// A merchant's email, sealed raw: its order id, its headers'
 				// addresses and its text are all private.
 				l.ids = append(l.ids, m.Parsed.OrderID)
+				l.ids = append(l.ids, recipientNames(m)...)
 				text(merchantEmailTexts(m)...)
 			}
 		case e.Change != nil:
@@ -194,6 +196,29 @@ func merchantEmailTexts(m *merchantEmail) []string {
 		out = append(out, it.Text)
 	}
 	return out
+}
+
+// recipientNames are the display names on a merchant email's To, Cc and
+// Delivered-To headers: the customer's own name ("Sam Customer"), which is
+// as private as their address.
+func recipientNames(m *merchantEmail) []string {
+	msg, _ := emailText(m.Raw)
+	if msg == nil {
+		return nil
+	}
+	var names []string
+	for _, h := range []string{"To", "Cc", "Delivered-To"} {
+		list, err := mail.ParseAddressList(msg.Header.Get(h))
+		if err != nil {
+			continue
+		}
+		for _, a := range list {
+			if strings.TrimSpace(a.Name) != "" {
+				names = append(names, a.Name)
+			}
+		}
+	}
+	return names
 }
 
 // dealPrivate is what a shared copy must never carry, read from the local
