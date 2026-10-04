@@ -181,6 +181,12 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	signatures, signatureStates := producerSignatureClaim(rawRecords)
 	signedCheckpoint, statement := checkpointClaim(value)
 	witnesses, witnessReceipts := witnessClaim(value, statement, directory)
+	// A deal bundle's receipt is on the cadence checkpoint its own
+	// checkpoint is anchored in; that chain is the bundle's witness claim.
+	cadence, cadenceReceipts, anchored := cadenceClaim(value, statement, directory)
+	if anchored {
+		witnesses, witnessReceipts = cadence, cadenceReceipts
+	}
 	claims := []aacbundle.ClaimResult{result.GraphClosure, signedCheckpoint, result.IntervalCoverage, result.PerRecordMembership, signatures}
 	// The bundle draft defines no witness member: only a failing receipt
 	// changes the verdict, and a file without one is judged as before.

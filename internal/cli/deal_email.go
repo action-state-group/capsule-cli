@@ -88,23 +88,43 @@ func dealDidLineOf(b map[string]interface{}) string {
 	return dealDidLine(nil)
 }
 
-// dealAssurance names the rung the report stands on, from the bundle itself:
-// "witnessed" when it carries a witness receipt (added only after it
-// re-verified under the pinned witness key), otherwise sealed by the agent's
-// own device and nothing more is claimed.
+// dealAssurance names the rung the report stands on, from the bundle itself,
+// and says the witness state truthfully. "witnessed" needs a receipt in the
+// bundle: on the deal's own checkpoint, or (the default) on the cadence
+// checkpoint the deal's checkpoint is anchored in. Otherwise the record is
+// sealed by the agent's own device, and the text says whether it is still
+// scheduled for the next tick or waiting for the witness.
 func dealAssurance(b map[string]interface{}) map[string]any {
+	ext, _ := b["extensions"].(map[string]interface{})
+	cadence, _ := ext[dealCadenceExtension].(map[string]interface{})
+	state, _ := cadence["state"].(string)
 	cp, _ := b["checkpoint"].(map[string]interface{})
 	witnesses, _ := cp["witnesses"].([]interface{})
+	if state == "witnessed" {
+		inner, _ := cadence["cadence"].(map[string]interface{})
+		witnesses, _ = inner["witnesses"].([]interface{})
+	}
+	sealed := "Sealed by my agent: tamper-evident against ourselves and the agent, not non-repudiation. The key that sealed it is on the agent's own device; it does not cover the agent host's own records. "
 	if len(witnesses) == 0 {
-		return map[string]any{"rung": "sealed", "text": "Sealed by my agent: tamper-evident, not non-repudiation. The key that sealed it is on the agent's own device. " + dealDidLineOf(b)}
+		out := map[string]any{"rung": "sealed", "witness_state": "not_configured"}
+		switch state {
+		case "scheduled":
+			out["witness_state"] = "scheduled"
+			sealed += "Witness: scheduled. This checkpoint goes to the witness in the next tick of the profile's cadence; it is not witnessed yet. "
+		case "pending":
+			out["witness_state"] = "pending"
+			sealed += "Witness: pending. This checkpoint was sent in a cadence tick, but no receipt has come back yet; it is retried at every tick. "
+		}
+		out["text"] = sealed + dealDidLineOf(b)
+		return out
 	}
 	entry, _ := witnesses[0].(map[string]interface{})
 	host := fmt.Sprint(entry["ts_url"])
 	if u, err := url.Parse(host); err == nil && u.Host != "" {
 		host = u.Host
 	}
-	return map[string]any{"rung": "witnessed", "witness": host, "text": fmt.Sprintf(
-		"Witnessed: %s, an independent log, signed a receipt for the checkpoint covering these steps: the record existed, unchanged, by then. It does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s", host, dealDidLineOf(b))}
+	return map[string]any{"rung": "witnessed", "witness_state": "witnessed", "witness": host, "text": fmt.Sprintf(
+		"Witnessed: %s, an independent log, signed a receipt for a checkpoint covering these steps: the record existed, unchanged, by then. It does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s", host, dealDidLineOf(b))}
 }
 
 type dealEmailView struct {
@@ -122,7 +142,8 @@ type dealEmailView struct {
 }
 
 var dealEmailNotClaimed = []string{
-	"Tamper-evident, not non-repudiation: it shows the record was not changed after it was made, not who made it.",
+	"Tamper-evident against ourselves and the agent, not non-repudiation: it shows the record was not changed after it was made, not who made it.",
+	"It covers this skill's own records only, never the agent host's own store: a change there is not detected.",
 	"It records what the agent reported doing; it does not prove what the merchant charged or shipped.",
 	"Calling the deal check is advisory: steps the agent never sealed are not in it.",
 }
