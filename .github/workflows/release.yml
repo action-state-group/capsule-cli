@@ -10,6 +10,9 @@ name: Release
 #     --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
 # The attestation bundle is also published, as capsulectl-<version>.sigstore.json,
 # so the same check runs with no GitHub account: add --bundle with that file.
+# Each release is also registered in a public transparency log, and an
+# independent monitor compares the log with the maintainer-signed tags
+# (docs/RELEASE-TRANSPARENCY.md).
 
 on:
   push:
@@ -68,6 +71,31 @@ jobs:
         run: |
           cp "$BUNDLE" "dist/capsulectl-$VERSION.sigstore.json"
           (cd dist && sha256sum "capsulectl-$VERSION.sigstore.json" >> SHA256SUMS)
+      - name: Register the release in the transparency log
+        # docs/RELEASE-TRANSPARENCY.md. Writes capsulectl-<tag>.release.json
+        # (tag, commit, every binary's and the bundle's SHA-256), signs it as
+        # a COSE statement with a key made for this release and discarded,
+        # registers it at the public witness, and checks the receipt offline.
+        # A release that cannot be logged is not published.
+        env:
+          VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: go run ./cmd/capsulectl release register --dir dist --tag "$VERSION" --commit "$COMMIT"
+      - name: Attest release.json
+        # Ties the statement (and the one-release key it names) to this
+        # workflow at this tag: the statement's own signature cannot.
+        id: attest-release
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: dist/*.release.json
+      - name: Attach the release statement files
+        env:
+          BUNDLE: ${{ steps.attest-release.outputs.bundle-path }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          cp "$BUNDLE" "dist/capsulectl-$VERSION.release.sigstore.json"
+          (cd dist && sha256sum "capsulectl-$VERSION.release.json" "capsulectl-$VERSION.release.cose" \
+            "capsulectl-$VERSION.release.registration.json" "capsulectl-$VERSION.release.sigstore.json" >> SHA256SUMS)
       - name: Publish GitHub release
         # A tag with a hyphen (v0.1.0-rc4, v1.0.0-beta1) is a pre-release:
         # published as such and never marked the latest release.
