@@ -107,7 +107,7 @@ func addressFragments(v string) []string {
 
 // dealLocal is everything private the deal's local store holds: the
 // identifiers and references, the places, and every free text.
-type dealLocal struct{ ids, places, texts []string }
+type dealLocal struct{ ids, places, texts, names []string }
 
 func dealLocalData(events []sealedEvent) dealLocal {
 	var l dealLocal
@@ -156,7 +156,7 @@ func dealLocalData(events []sealedEvent) dealLocal {
 				// A merchant's email, sealed raw: its order id, its headers'
 				// addresses and its text are all private.
 				l.ids = append(l.ids, m.Parsed.OrderID)
-				l.ids = append(l.ids, recipientNames(m)...)
+				l.names = append(l.names, recipientNames(m)...)
 				text(merchantEmailTexts(m)...)
 			}
 		case e.Change != nil:
@@ -315,7 +315,57 @@ func dealPrivateValues(events []sealedEvent) dealPrivate {
 			spell(f)
 		}
 	}
+	// The customer's display names: a role ("Customer", "Sales Team") is
+	// not a name and is skipped; a name of several words is a value like any
+	// other; a one-word name of three letters or more ("Amy") is matched only
+	// as a whole word, in any of its spellings, so it never takes a bite out
+	// of a longer word; a shorter one is never matched.
+	for _, name := range l.names {
+		name = strings.TrimSpace(foldText(name))
+		words := nameWord.FindAllString(strings.ToLower(name), -1)
+		switch {
+		case len(words) == 0 || roleName(words):
+		case len(words) > 1:
+			add(name)
+			spell(name)
+		case utf8.RuneCountInString(words[0]) < 3:
+			// A one- or two-letter name ("Al", "Jo") is never matched: it
+			// would take out words and abbreviations that are not names.
+		default:
+			sk := spelling(name).lowerSkeleton
+			if sk == "" {
+				continue
+			}
+			for i, text := range []string{sk, reverseString(sk)} {
+				p.spelled = append(p.spelled, spelledForm{text: text, bounded: true, backwards: i == 1})
+			}
+		}
+	}
+	sort.SliceStable(p.values, func(i, j int) bool { return len(p.values[i]) > len(p.values[j]) })
 	return p
+}
+
+var nameWord = regexp.MustCompile(`[\p{L}\p{N}]+`)
+
+// roleWords are the words a mailbox's display name uses for a role, not a
+// person: "Customer", "Orders", "Sales Team", "Billing".
+var roleWords = map[string]bool{
+	"customer": true, "customers": true, "client": true, "order": true, "orders": true, "sales": true,
+	"support": true, "team": true, "info": true, "billing": true, "accounts": true, "account": true,
+	"service": true, "services": true, "help": true, "helpdesk": true, "noreply": true, "no": true,
+	"reply": true, "notifications": true, "notification": true, "admin": true, "contact": true,
+	"hello": true, "mail": true, "newsletter": true, "shipping": true, "returns": true, "care": true,
+	"payments": true, "receipts": true, "bookings": true, "reservations": true, "dear": true, "valued": true,
+}
+
+// roleName reports a display name made of role words only.
+func roleName(words []string) bool {
+	for _, w := range words {
+		if !roleWords[w] {
+			return false
+		}
+	}
+	return true
 }
 
 // spelt is a text as its letters and digits alone, read two ways: plain
@@ -369,6 +419,9 @@ func spelling(s string) spelt {
 type spelledForm struct {
 	text    string
 	numeric bool
+	// bounded marks a one-word name, matched only as a whole word: Grace is
+	// withheld, the "grace" inside "disgrace" is not.
+	bounded bool
 	// backwards marks a letter form read right to left, so each
 	// character's reading is reversed too (m reads nr).
 	backwards bool
@@ -381,6 +434,7 @@ type spelledForm struct {
 type spelledRune struct {
 	alts []string
 	span [2]int
+	word bool // a letter or a digit, as written
 }
 
 func spelledRunes(s string) []spelledRune {
@@ -398,7 +452,7 @@ func spelledRunes(s string) []spelledRune {
 				alts = append(alts, a)
 			}
 		}
-		out = append(out, spelledRune{alts: alts, span: [2]int{i, i + utf8.RuneLen(r)}})
+		out = append(out, spelledRune{alts: alts, span: [2]int{i, i + utf8.RuneLen(r)}, word: unicode.IsLetter(r) || unicode.IsDigit(r)})
 	}
 	return out
 }
@@ -457,7 +511,10 @@ func (p dealPrivate) withholdSpelled(s string) string {
 	for _, v := range p.spelled {
 		if !v.numeric {
 			for j := range rs {
-				if end := spellsFrom(rs, j, v.text, v.backwards); end > j {
+				if v.bounded && j > 0 && rs[j-1].word {
+					continue
+				}
+				if end := spellsFrom(rs, j, v.text, v.backwards); end > j && !(v.bounded && end < len(rs) && rs[end].word) {
 					locs = append(locs, []int{rs[j].span[0], rs[end-1].span[1]})
 				}
 			}

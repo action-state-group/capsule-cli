@@ -453,3 +453,60 @@ func TestDealShareWithholdsTheCustomersNameFromTheMerchantEmail(t *testing.T) {
 	}
 	assert.NoError(t, dealPageGate(gatePage(t, "Shipping today"), events))
 }
+
+// Display names from the merchant email's recipient headers: a role
+// ("Customer Support") is not a name; a one-word name is withheld only as a
+// whole word, so it never takes a bite out of a longer one; a name of
+// several words is withheld as before.
+func TestDealShareDisplayNamesAreWholeWordsAndNotRoles(t *testing.T) {
+	eml := []byte("From: Shop Example <orders@shop.example>\r\n" +
+		"To: Grace <grace@mail.example>, Chris <chris@mail.example>, Customer Support <cs@mail.example>, Sam Customer <sam@mail.example>\r\n" +
+		"Subject: Your order\r\n\r\nThanks for your order.\r\n")
+	events := plantedEvents()
+	events = append(events, sealedEvent{Event: dealEvent{Kind: "evidence", Evidence: &dealEvidence{Email: &merchantEmail{Raw: eml}}}})
+	p := dealPrivateValues(events)
+
+	for _, kept := range []string{
+		"what a disgrace, just before Christmas",
+		"Dear customer, the support team is here to help",
+		"Graceful service from Christopher",
+	} {
+		assert.Equal(t, kept, p.scrub(kept))
+		assert.NoError(t, dealPageGate(gatePage(t, kept), events), kept)
+	}
+	for in, want := range map[string]string{
+		"Thanks Grace!":        "Thanks [withheld]!",
+		"for G r a c e, today": "for [withheld], today",
+		"to Grаce (lookalike)": "to [withheld] (lookalike)",
+		"ecarG backwards":      "[withheld] backwards",
+		"Hi Chris.":            "Hi [withheld].",
+		"ship to Sam Customer": "ship to [withheld]",
+	} {
+		assert.Equal(t, want, p.scrub(in), in)
+		assert.Error(t, dealPageGate(gatePage(t, in), events), in)
+	}
+}
+
+// The floor for a one-word name is three letters. "Amy" is withheld, as a
+// whole word only ("Amygdala" stays); "Al" is never matched, so a page that
+// mentions AL (Alabama) or "Al" is neither scrubbed nor refused.
+func TestDealShareOneWordNameFloorIsThreeLetters(t *testing.T) {
+	eml := []byte("From: Shop Example <orders@shop.example>\r\n" +
+		"To: Amy <amy@mail.example>, Al <al@mail.example>\r\n" +
+		"Subject: Your order\r\n\r\nThanks for your order.\r\n")
+	events := plantedEvents()
+	events = append(events, sealedEvent{Event: dealEvent{Kind: "evidence", Evidence: &dealEvidence{Email: &merchantEmail{Raw: eml}}}})
+	p := dealPrivateValues(events)
+	_, words := gateSecrets(events)
+	assert.Equal(t, []string{"Amy"}, words, "only a name of three letters or more is a word needle")
+
+	for _, kept := range []string{"the amygdala", "Al said hi", "Montgomery, AL", "an alpaca"} {
+		assert.Equal(t, kept, p.scrub(kept))
+		assert.NoError(t, dealPageGate(gatePage(t, kept), events), kept)
+	}
+	for _, in := range []string{"Thanks Amy!", "for A m y", "ymA"} {
+		assert.Contains(t, p.scrub(in), "[withheld]", in)
+		assert.NotContains(t, strings.ToLower(p.scrub(in)), "amy", in)
+		assert.Error(t, dealPageGate(gatePage(t, in), events), in)
+	}
+}

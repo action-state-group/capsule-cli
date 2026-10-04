@@ -58,18 +58,22 @@ func dealPageGate(page []byte, events []sealedEvent, allowed ...string) error {
 			data = bytes.ReplaceAll(data, []byte(f), nil)
 		}
 	}
-	return gateCheck(data, gateSecrets(events), 0)
+	secrets, words := gateSecrets(events)
+	return gateCheck(data, secrets, words, 0)
 }
 
 // gateCheck runs every check on data, then again on the text inside any
 // base64 or hex run of it that decodes to printable text (two levels deep):
 // a value encoded after it was rewritten is still read. A digest, a
 // signature or a signed statement decodes to binary and is not text.
-func gateCheck(data []byte, secrets []string, depth int) error {
+//
+// words are one-word names, read only as whole words: Grace refuses, the
+// "grace" inside "disgrace" does not.
+func gateCheck(data []byte, secrets, words []string, depth int) error {
 	if depth < 2 {
 		for _, run := range gateEncoded.FindAll([]byte(foldText(string(data))), -1) {
 			if inner, ok := gateDecode(string(run)); ok {
-				if err := gateCheck([]byte(inner), secrets, depth+1); err != nil {
+				if err := gateCheck([]byte(inner), secrets, words, depth+1); err != nil {
 					return err
 				}
 			}
@@ -94,23 +98,54 @@ func gateCheck(data []byte, secrets []string, depth int) error {
 			}
 		}
 	}
+	for _, w := range words {
+		low := strings.ToLower(foldText(w))
+		for _, form := range []string{low, gateBackwards(low)} {
+			if regexp.MustCompile(`(?:^|[^\p{L}\p{N}])` + regexp.QuoteMeta(form) + `(?:$|[^\p{L}\p{N}])`).Match(text) {
+				return inputError("refusing to write the shared copy: the page would carry a private value")
+			}
+		}
+		b := []byte(w)
+		for _, enc := range []string{hex.EncodeToString(b), base64.StdEncoding.EncodeToString(b), base64.RawStdEncoding.EncodeToString(b),
+			base64.URLEncoding.EncodeToString(b), base64.RawURLEncoding.EncodeToString(b)} {
+			if len(enc) >= 8 && gateContains(text, []byte(strings.ToLower(enc))) {
+				return inputError("refusing to write the shared copy: the page would carry a private value")
+			}
+		}
+	}
 	// The same values read by their letters and digits alone, forwards and
 	// backwards, with digits written as words read as digits: L-a-r-k-s-p-u-r,
 	// 7/3/9/1/4/2, "seven three nine one four two" and rupskraL all spell a
-	// secret. Digests and signatures are left out, and each field of the
-	// bundle is read on its own (gateUnits).
-	// A number is read by its plain digits; anything with a letter by its
-	// confusable skeleton, so lookalikes from any script read the same.
-	// A number is read by its plain digits. Anything with a letter is read
-	// character by character, each character in any of its readings: its
-	// confusable skeleton as written, lower-cased and upper-cased (TR39 is
-	// case-sensitive: I reads l as written, i lower-cased).
-	// Each unit is read on its own, so no spelling runs from one field into
-	// the next (gateUnits).
+	// secret. A number is read by its plain digits. Anything with a letter is
+	// read character by character, each character in any of its readings:
+	// its confusable skeleton as written, lower-cased and upper-cased (TR39
+	// is case-sensitive: I reads l as written, i lower-cased). Digests and
+	// signatures are left out, and each field of the bundle is read on its
+	// own (gateUnits), so no spelling runs from one field into the next.
 	for _, unit := range gateUnits(data) {
 		folded := foldText(unit)
 		plain := gateLetters([]byte(strings.ToLower(folded)), false)
-		chars := gateChars(folded)
+		chars, isWord := gateChars(folded)
+		for _, w := range words {
+			sk := gateLettersOf(w, true)
+			if sk == "" {
+				continue
+			}
+			for _, backwards := range []bool{false, true} {
+				form := sk
+				if backwards {
+					form = gateBackwards(sk)
+				}
+				for j := range chars {
+					if j > 0 && isWord[j-1] {
+						continue
+					}
+					if end := gateSpellsFrom(chars, j, form, backwards); end > j && (end == len(chars) || !isWord[end]) {
+						return inputError("refusing to write the shared copy: the page would spell out a private value")
+					}
+				}
+			}
+		}
 		for _, secret := range secrets {
 			if digits := gateLettersOf(secret, false); isDigits(digits) {
 				if len(digits) < 4 {
@@ -133,7 +168,7 @@ func gateCheck(data []byte, secrets []string, depth int) error {
 					form = gateBackwards(sk)
 				}
 				for j := range chars {
-					if gateSpellsFrom(chars, j, form, backwards) {
+					if gateSpellsFrom(chars, j, form, backwards) >= 0 {
 						return inputError("refusing to write the shared copy: the page would spell out a private value")
 					}
 				}
@@ -213,8 +248,8 @@ var gateStreetWords = map[string]bool{
 }
 
 // gateSecrets are the gate's own needles, read from the deal's local steps.
-func gateSecrets(events []sealedEvent) []string {
-	var places, ids, texts []string
+func gateSecrets(events []sealedEvent) (secrets, words []string) {
+	var places, ids, texts, names []string
 	whoValues := func(w *dealWho) {
 		if w != nil {
 			ids = append(ids, w.Name, w.Domain, w.Phone, w.Email, w.Payee, w.RelayAddress, w.ProfileID)
@@ -269,7 +304,7 @@ func gateSecrets(events []sealedEvent) []string {
 					for _, h := range []string{"To", "Cc", "Delivered-To"} {
 						if list, err := mail.ParseAddressList(msg.Header.Get(h)); err == nil {
 							for _, a := range list {
-								ids = append(ids, a.Name)
+								names = append(names, a.Name)
 							}
 						}
 					}
@@ -350,7 +385,45 @@ func gateSecrets(events []sealedEvent) []string {
 			add(m)
 		}
 	}
-	return out
+	// The customer's display names: a role ("Customer", "Sales Team") is not
+	// a name; a name of several words is a needle like any other; a one-word
+	// name of three letters or more is read only as a whole word, and a
+	// shorter one never.
+	for _, name := range names {
+		name = strings.TrimSpace(foldText(name))
+		parts := gateNameWord.FindAllString(strings.ToLower(name), -1)
+		switch {
+		case len(parts) == 0 || gateRole(parts):
+		case len(parts) > 1:
+			add(name)
+		case utf8.RuneCountInString(parts[0]) >= 3:
+			// A one-word name of three letters or more; a shorter one ("Al")
+			// is never a needle.
+			words = append(words, name)
+		}
+	}
+	return out, words
+}
+
+var gateNameWord = regexp.MustCompile(`[\p{L}\p{N}]+`)
+
+// gateRoleWords name a mailbox's role, not a person.
+var gateRoleWords = map[string]bool{
+	"customer": true, "customers": true, "client": true, "order": true, "orders": true, "sales": true,
+	"support": true, "team": true, "info": true, "billing": true, "accounts": true, "account": true,
+	"service": true, "services": true, "help": true, "helpdesk": true, "noreply": true, "no": true,
+	"reply": true, "notifications": true, "notification": true, "admin": true, "contact": true,
+	"hello": true, "mail": true, "newsletter": true, "shipping": true, "returns": true, "care": true,
+	"payments": true, "receipts": true, "bookings": true, "reservations": true, "dear": true, "valued": true,
+}
+
+func gateRole(parts []string) bool {
+	for _, p := range parts {
+		if !gateRoleWords[p] {
+			return false
+		}
+	}
+	return true
 }
 
 // gateWordDigits are the number words the gate reads as digits.
@@ -429,14 +502,16 @@ func gateUnits(data []byte) []string {
 // digest or a signature) that no spelling runs across.
 type gateChar []string
 
-func gateChars(s string) []gateChar {
+func gateChars(s string) ([]gateChar, []bool) {
 	for _, run := range gateTokens.FindAllStringIndex(s, -1) {
 		if gateDigest.MatchString(s[run[0]:run[1]]) {
 			s = s[:run[0]] + strings.Repeat("\x00", run[1]-run[0]) + s[run[1]:]
 		}
 	}
 	var out []gateChar
+	var isWord []bool // the character is a letter or a digit, as written
 	for _, r := range s {
+		isWord = append(isWord, unicode.IsLetter(r) || unicode.IsDigit(r))
 		if r == 0 {
 			out = append(out, nil) // a digest or signature: a break
 			continue
@@ -451,32 +526,38 @@ func gateChars(s string) []gateChar {
 		}
 		out = append(out, c)
 	}
-	return out
+	return out, isWord
 }
 
-// gateSpellsFrom reports whether chars spell form starting at j, taking any
-// reading of each character; a character that spells nothing may stand
-// inside the spelling, not at its start.
-func gateSpellsFrom(chars []gateChar, j int, form string, backwards bool) bool {
+// gateSpellsFrom returns the index just past a spelling of form that starts
+// at chars[j], taking any reading of each character, or -1; a character
+// that spells nothing may stand inside the spelling, not at its start.
+func gateSpellsFrom(chars []gateChar, j int, form string, backwards bool) int {
 	seen := map[[2]int]bool{}
-	var walk func(j, k int) bool
-	walk = func(j, k int) bool {
+	var walk func(j, k int) int
+	walk = func(j, k int) int {
 		if k == len(form) {
-			return true
+			return j
 		}
 		if j == len(chars) || seen[[2]int{j, k}] {
-			return false
+			return -1
 		}
 		seen[[2]int{j, k}] = true
 		for _, a := range chars[j] {
 			if backwards {
 				a = gateBackwards(a)
 			}
-			if a == "" && k > 0 && walk(j+1, k) || a != "" && strings.HasPrefix(form[k:], a) && walk(j+1, k+len(a)) {
-				return true
+			if a == "" && k > 0 {
+				if end := walk(j+1, k); end >= 0 {
+					return end
+				}
+			} else if a != "" && strings.HasPrefix(form[k:], a) {
+				if end := walk(j+1, k+len(a)); end >= 0 {
+					return end
+				}
 			}
 		}
-		return false
+		return -1
 	}
 	return walk(j, 0)
 }
