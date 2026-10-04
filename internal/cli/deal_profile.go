@@ -616,6 +616,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			if len(rc.Repeat) > 0 {
 				notes = append(notes, "repeat_disclosure")
 			}
+			if rc.NewProfile && ck.Verdict == "pause" {
+				notes = append(notes, "new_profile")
+			}
 		}
 		if len(notes) > 0 {
 			body["notes"] = notes

@@ -747,8 +747,9 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	// line on the card; the first time a class of the user's data goes to
 	// them is a pause, naming them and the class; a repeat is a note.
 	if s.memory != nil {
-		keys := counterpartyKeys(who)
+		keys := counterpartyKeys(who, s.open.Channel)
 		r.Recipient = &dealRecipient{Name: recipientName(who), FirstTime: s.memory.firstTime(keys)}
+		r.Recipient.NewProfile = s.memory.newProfile() && !s.memory.newProfileNoted
 		for _, class := range sortedClasses(snap.Disclosing) {
 			if s.memory.toldBefore(keys, class) != "" {
 				r.Recipient.Repeat = append(r.Recipient.Repeat, class)
@@ -860,6 +861,9 @@ func renderCard(r dealCheckResult, demo bool) string {
 		return ""
 	}
 	parts := make([]string, 0, len(r.Differences)+len(r.Notes)+2)
+	if r.Recipient != nil && r.Recipient.NewProfile {
+		parts = append(parts, newProfileLine)
+	}
 	if r.Recipient != nil && r.Recipient.FirstTime {
 		parts = append(parts, "First time dealing with "+r.Recipient.Name)
 	}

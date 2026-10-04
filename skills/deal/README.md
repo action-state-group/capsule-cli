@@ -87,9 +87,12 @@ them and the class; a class given to them before is a note and no pause. It
 does not ask whether the user named the share in their words: an address
 typed into a merchant's delivery form for the tenth time never pauses, and
 an address sent to a stranger always does. A `share_contact` check must name
-what it gives. A disclosure that gives a class its check did not name is not
-covered by it, and neither is a first telling covered by a check that named
-nothing.
+what it gives. The disclosure is noted when the form is filled, before it is
+sent: a class going to this counterparty for the first time that no check
+the user approved named is held there (nothing is sealed, `"proceed":
+false`, exit code 7), so leaving a class out of the check is no way around
+its first telling. A repeat class the check did not name is sealed and
+flagged.
 
 **Counterparty memory.** Who the user has dealt with, and what each was
 told, is read from this device's own store across all deals: every deal's
@@ -98,9 +101,15 @@ identities only (the website's registrable domain, an email address, a
 phone number, a marketplace profile id, a reply address), never by name.
 When either side has a per-party identity (an email, a phone, a profile id,
 a reply address), only those decide: every seller on a marketplace shares
-its domain, so a second seller there is a stranger. The registrable domain
-decides only when it is all both sides have, as for a merchant known by its
-website. A
+its domain, so a second seller there is a stranger. On a marketplace (the
+deal's channel, or a known marketplace host such as facebook.com, ebay.com
+or craigslist.org) the domain is never an identity. Elsewhere the
+registrable domain decides only when it is all both sides have, as for a
+merchant known by its website. The memory lives in this profile on this
+device: a new or reinstalled profile has none, so every counterparty is
+first-time. Its first pause says so once ("This profile has no record of
+earlier counterparties yet, so everyone is first-time; this settles after
+your first deals") and keeps the pause. A
 counterparty with no earlier deal gets "First time dealing with …" on the
 card. A check seals only rule tokens from the memory (`first_disclosure`,
 `first_time_counterparty`, `repeat_disclosure`), never a name or a value.

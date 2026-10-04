@@ -128,8 +128,8 @@ Giving anyone the user's name, phone, email, address, a pickup spot, a login or 
 1. Note who is asking and what for, and keep the user's exact words about it.
 2. Fill the form or message up to the point of sending, without sending.
 3. **Final review:** `deal open` (once per deal, with the deal type the disclosure belongs to, or `service`), then `deal check` with `"action": "share_contact"` (or `"share_credentials"`) and `"disclosing"`: the class of every field you are about to give, for example `{"action":"share_contact","disclosing":["name","email","address"]}`. The check pauses the first time a class goes to this counterparty, naming them and the class, and passes with a `note` when you have told them before.
-4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, send. On `pause`, show the card, seal the user's answer, and send only if that returns `"proceed": true`.
-5. Right after sending: `deal note --kind disclosure` naming what you gave, by class, with the value you gave (it stays on this device; the sealed record keeps only the class and a commitment). One disclosure per send, contact details and credentials separately:
+4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, note it (step 5) and then send. On `pause`, show the card, seal the user's answer, and go on only if that returns `"proceed": true`.
+5. With the form filled and **not yet sent**: `deal note --kind disclosure` naming what you are giving, by class, with the value (it stays on this device; the sealed record keeps only the class and a commitment). One disclosure per send, contact details and credentials separately:
 
    ```sh
    capsulectl --profile deal deal note --deal ID --kind disclosure --input d.json
@@ -138,7 +138,10 @@ Giving anyone the user's name, phone, email, address, a pickup spot, a login or 
    ```
 
    `class` is `name`, `phone`, `email`, `home_address`, `address`, `pickup_location`, `other_contact`, `credential`, `verification_code`, `payment_card` or `id_document`. To someone other than the counterparty (a courier, a platform), add `"to":"other"` and `"who":{...}`. The result says whether a sealed approval covered it (`"approved"`).
-6. `deal close` when the exchange is over.
+
+   If a class would go to this counterparty for the first time and no check the user approved named it, the note seals nothing, returns `"proceed": false` with the classes `held`, and exits 7. **Do not send.** Check again with `"disclosing"` naming them, and note again once the user approves.
+6. Send.
+7. `deal close` when the exchange is over.
 
 ### Cancel-by date
 
@@ -235,8 +238,9 @@ The final review asks four questions:
 - **Note every telling, mechanically.** Whenever a page you fill or a
   message you send carries the user's name, email, phone, address, a pickup
   spot, a payment detail, a login or a code, check it first (`deal check`
-  with `share_contact` or `share_credentials` and `"disclosing"`), and seal
-  it right after with `deal note --kind disclosure`. This is not a judgement
+  with `share_contact` or `share_credentials` and `"disclosing"`), and note
+  it with `deal note --kind disclosure` once the form is filled and before
+  it is sent: a first telling no approved check named is held there. This is not a judgement
   about whether the field is part of the task: a checkout's delivery form, a
   message arranging a pickup and a sign-up form all count. The check pauses
   on who receives it, not on the field: entering the address at a merchant

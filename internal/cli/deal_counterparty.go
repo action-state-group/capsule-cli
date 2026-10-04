@@ -28,6 +28,16 @@ type dealCounterpartyMemory struct {
 	// told lists every disclosure: the recipient's identities, the class and
 	// when.
 	told []dealPartyTold
+	// newProfileNoted: a paused check already said this profile had no
+	// earlier counterparties.
+	newProfileNoted bool
+}
+
+// newProfile reports a profile with no counterparty history at all: no other
+// deal and nothing told to anyone. Every counterparty is then first-time,
+// after a reinstall as much as on a first install.
+func (m *dealCounterpartyMemory) newProfile() bool {
+	return len(m.dealt) == 0 && len(m.told) == 0
 }
 
 type dealPartyDeal struct {
@@ -72,8 +82,19 @@ func sameParty(a, b []string) bool {
 	return sharesKey(a, b)
 }
 
-// counterpartyKeys are a counterparty's mechanical identities.
-func counterpartyKeys(w dealWho) []string {
+// marketplaceHosts are sites where many independent sellers share one
+// domain: there the domain never identifies a party, and only a per-party
+// identity (a profile id, an email, a phone) does.
+var marketplaceHosts = map[string]bool{
+	"facebook.com": true, "craigslist.org": true, "ebay.com": true, "etsy.com": true,
+	"offerup.com": true, "mercari.com": true, "poshmark.com": true, "depop.com": true,
+	"vinted.com": true, "gumtree.com": true, "kijiji.ca": true, "nextdoor.com": true,
+}
+
+// counterpartyKeys are a counterparty's mechanical identities. On a
+// marketplace (the deal's channel, or a known marketplace host) the domain is
+// not one of them.
+func counterpartyKeys(w dealWho, channel string) []string {
 	var keys []string
 	add := func(kind, v string) {
 		if strings.TrimSpace(v) == "" {
@@ -86,6 +107,9 @@ func counterpartyKeys(w dealWho) []string {
 		if kind == "domain" {
 			if apex, err := publicsuffix.EffectiveTLDPlusOne(n); err == nil {
 				n = apex
+			}
+			if channel == "marketplace" || marketplaceHosts[n] {
+				return
 			}
 		}
 		keys = append(keys, kind+":"+n)
@@ -102,13 +126,13 @@ func counterpartyKeys(w dealWho) []string {
 // dealID is the deal being checked: its own opening is not an earlier
 // dealing, but its own earlier disclosures are earlier tellings.
 func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ *dealCounterpartyMemory, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT deal_id, kind, local FROM deal_steps WHERE kind IN ('open', 'disclosure') ORDER BY deal_id, n`)
+	rows, err := s.db.QueryContext(ctx, `SELECT deal_id, kind, local FROM deal_steps WHERE kind IN ('open', 'disclosure', 'check') ORDER BY deal_id, n`)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	m := &dealCounterpartyMemory{}
-	opened := map[string]dealWho{}
+	opened := map[string]*dealOpen{}
 	for rows.Next() {
 		var id, kind, local string
 		if err = rows.Scan(&id, &kind, &local); err != nil {
@@ -120,12 +144,16 @@ func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ 
 		}
 		switch {
 		case kind == "open" && ev.Open != nil:
-			opened[id] = ev.Open.Who
+			opened[id] = ev.Open
 			if id != dealID {
-				m.dealt = append(m.dealt, dealPartyDeal{keys: counterpartyKeys(ev.Open.Who), deal: id})
+				m.dealt = append(m.dealt, dealPartyDeal{keys: counterpartyKeys(ev.Open.Who, ev.Open.Channel), deal: id})
 			}
-		case kind == "disclosure" && ev.Disclosure != nil:
-			keys := disclosureRecipientKeys(*ev.Disclosure, opened[id])
+		case kind == "check" && ev.Check != nil:
+			if rc := ev.Check.Recipient; rc != nil && rc.NewProfile && ev.Check.Verdict == "pause" {
+				m.newProfileNoted = true
+			}
+		case kind == "disclosure" && ev.Disclosure != nil && opened[id] != nil:
+			keys := disclosureRecipientKeys(*ev.Disclosure, *opened[id])
 			for _, f := range ev.Disclosure.Fields {
 				m.told = append(m.told, dealPartyTold{keys: keys, class: f.Class, at: ev.At})
 			}
@@ -136,15 +164,15 @@ func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ 
 
 // disclosureRecipientKeys are the identities of whoever a disclosure went
 // to: the named recipient, else the deal's counterparty.
-func disclosureRecipientKeys(d dealDisclosure, counterparty dealWho) []string {
+func disclosureRecipientKeys(d dealDisclosure, open dealOpen) []string {
 	var keys []string
 	if d.Who != nil {
-		keys = counterpartyKeys(*d.Who)
+		keys = counterpartyKeys(*d.Who, open.Channel)
 	}
 	if d.To == "other" {
 		return keys
 	}
-	return append(keys, counterpartyKeys(counterparty)...)
+	return append(keys, counterpartyKeys(open.Who, open.Channel)...)
 }
 
 // firstTime reports whether no other deal was opened with this party.
@@ -174,7 +202,15 @@ type dealRecipient struct {
 	FirstTime bool     `json:"first_time"`
 	First     []string `json:"first_disclosures,omitempty"`
 	Repeat    []string `json:"repeat_disclosures,omitempty"`
+	// NewProfile: this profile has no counterparty history yet, said once,
+	// on its first pause.
+	NewProfile bool `json:"new_profile,omitempty"`
 }
+
+// newProfileLine is said once, on the first pause from a profile with no
+// counterparty history: the pause stands, and the user knows why every
+// counterparty reads as first-time.
+const newProfileLine = "This profile has no record of earlier counterparties yet, so everyone is first-time; this settles after your first deals"
 
 // recipientName is how the card names them: their name, else their first
 // identifier.
@@ -214,24 +250,35 @@ func sortedClasses(classes []string) []string {
 }
 
 // uncheckedClass returns a class a disclosure gave that the check behind its
-// approval did not name, and the rule: class_not_checked when that check
-// named what it was about to give, first_disclosure_unchecked when it named
-// nothing and the class is a first telling to this recipient (a check made
-// without `disclosing` never stands in for the first-time pause).
-func uncheckedClass(events []sealedEvent, approval string, fields []dealDisclosureField, memory *dealCounterpartyMemory, keys []string) (class, rule string) {
+// approval did not name, when that check named what it was about to give.
+func uncheckedClass(events []sealedEvent, approval string, fields []dealDisclosureField) string {
 	snap := approvingSnapshot(events, approval)
-	if snap == nil {
-		return "", ""
+	if snap == nil || len(snap.Disclosing) == 0 {
+		return ""
 	}
 	for _, f := range fields {
-		switch {
-		case len(snap.Disclosing) > 0 && !slices.Contains(snap.Disclosing, f.Class):
-			return f.Class, "class_not_checked"
-		case len(snap.Disclosing) == 0 && memory.toldBefore(keys, f.Class) == "":
-			return f.Class, "first_disclosure_unchecked"
+		if !slices.Contains(snap.Disclosing, f.Class) {
+			return f.Class
 		}
 	}
-	return "", ""
+	return ""
+}
+
+// firstTellings are the classes of a disclosure that go to this recipient
+// for the first time and that no approved check named: the user has not
+// nodded to them, so the disclosure must not be made.
+func firstTellings(events []sealedEvent, approval string, fields []dealDisclosureField, memory *dealCounterpartyMemory, keys []string) []string {
+	var named []string
+	if snap := approvingSnapshot(events, approval); approval != "" && snap != nil {
+		named = snap.Disclosing
+	}
+	var out []string
+	for _, f := range fields {
+		if memory.toldBefore(keys, f.Class) == "" && !slices.Contains(named, f.Class) && !slices.Contains(out, f.Class) {
+			out = append(out, f.Class)
+		}
+	}
+	return out
 }
 
 // approvingSnapshot is the snapshot of the check an approval answered.
@@ -250,3 +297,7 @@ func approvingSnapshot(events []sealedEvent, approval string) *dealSnapshot {
 	}
 	return byID[ck.Snapshot].Snapshot
 }
+
+// ErrPaused is a deal step held for the user: nothing was sealed, and the
+// step must not be taken until a check names it and the user approves.
+var ErrPaused = errors.New("paused: this needs the user's approval first")

@@ -749,7 +749,7 @@ Successful stdout is one JSON object:
 `{"spec_version":"capsule-cli-result/v1",...}`.
 Diagnostics never expose raw driver/config/service errors. Exit codes: 0 success,
 1 operational failure, 2 invalid input/profile, 3 partial verification, 4 durable delivery pending,
-5 frozen input/target conflict, 6 canary alarm (`canary watch`). Inspect the exit code, not only a result object.
+5 frozen input/target conflict, 6 canary alarm (`canary watch`), 7 paused for the user (a deal step that needs the user's approval first). Inspect the exit code, not only a result object.
 Verification lists passed/not-performed checks instead of calling all evidence valid.
 
 Only `store init` calls CLL `Init` and provisions selected library schemas.

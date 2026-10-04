@@ -26,9 +26,10 @@ const (
 	sellerPhone = "+1 555 010 9911"
 )
 
-// openDisclosureDeal opens a marketplace pickup in which the user allowed
-// sharing their contact details, shares the phone under that approval, then
-// the pickup spot with no approval left to cover it.
+// openDisclosureDeal opens a marketplace pickup in which the user approves
+// giving the seller their phone and the pickup spot, which the agent does in
+// one send; then the agent sends the phone again with no approval left to
+// cover it (a repeat, so it is not held, and is flagged).
 func openDisclosureDeal(t *testing.T) (dealID string, phone, pickup map[string]any) {
 	t.Helper()
 	open := `{"type":"purchase","channel":"marketplace",
@@ -38,13 +39,13 @@ func openDisclosureDeal(t *testing.T) (dealID string, phone, pickup map[string]a
 		"recourse":{"rail":"cash","refundable":false}}`
 	dealID = dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
 	// A first telling to a seller never dealt with: the user's own nod.
-	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","description":"give the seller my number","disclosing":["phone"]}`))
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","description":"give the seller my number and where","disclosing":["phone","pickup_location"]}`))
 	require.Equal(t, "pause", check["verdict"])
 	approval := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "yes, give them my number")
 	phone = dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t,
-		`{"channel":"marketplace","fields":[{"class":"phone","value":"`+userPhone+`"}]}`))
+		`{"channel":"marketplace","fields":[{"class":"phone","value":"`+userPhone+`"},{"class":"pickup_location","value":"`+pickupSpot+`"}]}`))
 	pickup = dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t,
-		`{"channel":"marketplace","fields":[{"class":"pickup_location","value":"`+pickupSpot+`"}]}`))
+		`{"channel":"marketplace","fields":[{"class":"phone","value":"`+userPhone+`"}]}`))
 	require.Equal(t, approval["capsule_id"], phone["authorized_by"])
 	return dealID, phone, pickup
 }
@@ -67,8 +68,8 @@ func TestDealDisclosureLedgerNamesWhatWhoWhenAndAuthority(t *testing.T) {
 
 	assert.Equal(t, true, phone["approved"])
 	assert.NotEmpty(t, phone["authorized_by"], "the user's approval covers the phone")
-	assert.Equal(t, []any{"phone"}, phone["classes"])
-	assert.Equal(t, false, pickup["approved"], "that approval already covered the phone")
+	assert.Equal(t, []any{"phone", "pickup_location"}, phone["classes"])
+	assert.Equal(t, false, pickup["approved"], "that approval already covered the first send")
 	assert.Empty(t, pickup["authorized_by"])
 	assert.Equal(t, "that approval already covered an earlier step", pickup["reason"])
 
@@ -79,17 +80,17 @@ func TestDealDisclosureLedgerNamesWhatWhoWhenAndAuthority(t *testing.T) {
 	assert.Equal(t, sellerName, first["to"], "the recipient is named")
 	assert.Equal(t, "2026-09-27T18:00:00Z", first["at"])
 	assert.Equal(t, "approval", first["authority"])
-	assert.Equal(t, []any{map[string]any{"class": "phone", "value": userPhone}}, first["fields"], "the user's own report keeps what was given")
+	assert.Equal(t, []any{map[string]any{"class": "phone", "value": userPhone}, map[string]any{"class": "pickup_location", "value": pickupSpot}}, first["fields"], "the user's own report keeps what was given")
 	assert.Equal(t, []any{phone["authorized_by"], phone["capsule_id"]}, first["steps"], "the covering approval, then the disclosure")
 	assert.Equal(t, sellerName, second["to"])
 	assert.Equal(t, "none", second["authority"])
 	assert.Equal(t, "that approval already covered an earlier step", second["reason"])
-	assert.Equal(t, []any{map[string]any{"class": "pickup_location", "value": pickupSpot}}, second["fields"])
+	assert.Equal(t, []any{map[string]any{"class": "phone", "value": userPhone}}, second["fields"])
 	assert.Contains(t, reportTexts(t, report, "anomalies"),
-		"agent/unapproved_disclosure: Told "+sellerName+" your pickup location without your approval (that approval already covered an earlier step)",
+		"agent/unapproved_disclosure: Told "+sellerName+" your phone without your approval (that approval already covered an earlier step)",
 		"a disclosure with no covering approval is an agent-side anomaly")
 	for _, line := range reportTexts(t, report, "anomalies") {
-		assert.NotContains(t, line, "phone without", "the approved disclosure is not an anomaly")
+		assert.NotContains(t, line, "pickup location without", "the approved disclosure is not an anomaly")
 	}
 
 	// The sealed records carry the classes and commitments, never the values.
@@ -148,11 +149,14 @@ func TestDealDisclosureSharedCopiesCarryNoDisclosedValue(t *testing.T) {
 		ext := embeddedBundle(t, html)["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
 		told := ext["told"].([]any)
 		require.Len(t, told, 2, audience)
-		for i, want := range [][2]string{{"phone", "approval"}, {"pickup_location", "none"}} {
+		for i, want := range [][2]string{{"pickup_location", "approval"}, {"phone", "none"}} {
 			item := told[i].(map[string]any)
-			field := item["fields"].([]any)[0].(map[string]any)
+			fields := item["fields"].([]any)
+			field := fields[len(fields)-1].(map[string]any)
 			assert.Equal(t, want[0], field["class"], audience)
-			assert.NotContains(t, field, "value", "%s: the class and the fact, never the value", audience)
+			for _, f := range fields {
+				assert.NotContains(t, f, "value", "%s: the class and the fact, never the value", audience)
+			}
 			assert.Equal(t, want[1], item["authority"], audience)
 			assert.NotContains(t, item["text"], sellerName, "%s: the recipient is the other party, by role", audience)
 		}
@@ -167,21 +171,30 @@ func TestDealDisclosureSharedCopiesCarryNoDisclosedValue(t *testing.T) {
 	}
 }
 
-// A disclosure covered by nothing at all: no check was run.
-func TestDealDisclosureWithNoCheckIsFlagged(t *testing.T) {
+// A first telling covered by nothing at all (no check was run) is held when
+// it is noted, before it is sent: nothing is sealed, and the step pauses.
+func TestDealFirstTellingWithNoCheckIsHeld(t *testing.T) {
 	dealFixture(t)
 	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
-	out := dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t,
-		`{"fields":[{"class":"home_address","value":"`+pickupSpot+`"}]}`))
-	assert.Equal(t, false, out["approved"])
-	assert.Equal(t, "no check before this action", out["reason"])
+	out := heldNote(t, dealID, `{"fields":[{"class":"home_address","value":"`+pickupSpot+`"}]}`)
+	assert.Equal(t, []any{"home_address"}, out["held"])
+	assert.Equal(t, "First time telling Example Hotel Shinjuku your home address, and no check the user approved named it", out["reason"])
+	assert.NotContains(t, out["reason"], pickupSpot)
 	report := dealRun(t, "report", "--deal", dealID)
-	assert.Contains(t, reportTexts(t, report, "anomalies"),
-		"agent/unapproved_disclosure: Told Example Hotel Shinjuku your home address without your approval (no check before this action)")
-	told := report["told"].([]any)
-	require.Len(t, told, 1)
-	assert.Equal(t, "none", told[0].(map[string]any)["authority"])
-	assert.Equal(t, "Example Hotel Shinjuku", told[0].(map[string]any)["to"])
+	assert.Empty(t, report["told"], "nothing was told: it was held")
+}
+
+// heldNote notes a disclosure that must be held: exit code 7, proceed false.
+func heldNote(t *testing.T, dealID, body string) map[string]any {
+	t.Helper()
+	raw, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t, body))
+	require.ErrorIs(t, err, ErrPaused, raw)
+	assert.Equal(t, 7, ExitCode(err))
+	var out map[string]any
+	require.NoError(t, json.Unmarshal([]byte(raw[:strings.LastIndex(raw, "}")+1]), &out), raw)
+	assert.Equal(t, false, out["proceed"])
+	assert.Equal(t, "pause", out["verdict"])
+	return out
 }
 
 func TestDealDisclosureInputIsRefusedWhenIncomplete(t *testing.T) {

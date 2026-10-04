@@ -121,7 +121,7 @@ func TestDealAskedVsDidBooking(t *testing.T) {
 	dealID := opened["deal_id"].(string)
 
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit.json"))
-	assert.Equal(t, "⚠️ First time dealing with Example Hotel Shinjuku · Not what you asked: check_out 2026-10-05 → 2026-10-07 · Over your limit of $400.00 ($760.00) · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
+	assert.Equal(t, "⚠️ This profile has no record of earlier counterparties yet, so everyone is first-time; this settles after your first deals · First time dealing with Example Hotel Shinjuku · Not what you asked: check_out 2026-10-05 → 2026-10-07 · Over your limit of $400.00 ($760.00) · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
 
 	cancel := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-cancel.json"))
 	assert.Equal(t, "⚠️ First time dealing with Example Hotel Shinjuku · You didn't ask for this: cancelling · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Cancel anyway]", cancel["card"])
@@ -306,7 +306,7 @@ func TestDealRefundabilityChangePauses(t *testing.T) {
 	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
 	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"commit","terms":{"when":"2026-10-03","conditions":{"check_out":"2026-10-05"},"price_minor":38000},"recourse":{"refundable":false}}`))
 	assert.Equal(t, "pause", check["verdict"])
-	assert.Equal(t, "⚠️ First time dealing with Example Hotel Shinjuku · No longer refundable (agreed as refundable) · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
+	assert.Equal(t, "⚠️ This profile has no record of earlier counterparties yet, so everyone is first-time; this settles after your first deals · First time dealing with Example Hotel Shinjuku · No longer refundable (agreed as refundable) · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
 }
 
 // B2: a payee change carried in a counterparty message, after the check,

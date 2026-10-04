@@ -754,18 +754,35 @@ func dealNoteCommand() *cobra.Command {
 					return inputError("this deal type has no " + d.action() + " point of no return")
 				}
 				d.AuthorizedBy, d.Reason, d.Rule = authorizeAct(events, dealAct{Action: d.action()})
-				if d.AuthorizedBy != "" {
-					memory, err := s.counterpartyMemory(ctx, dealID)
-					if err != nil {
+				// Noting runs when the form is filled, before it is sent: a
+				// class going to this recipient for the first time that no
+				// approved check named is held, and nothing is sealed. Leaving
+				// a class out of the check is no way around its first telling.
+				memory, err := s.counterpartyMemory(ctx, dealID)
+				if err != nil {
+					return err
+				}
+				keys := disclosureRecipientKeys(*d, *open)
+				if first := firstTellings(events, d.AuthorizedBy, d.Fields, memory, keys); len(first) > 0 {
+					name := recipientName(open.Who)
+					if d.Who != nil && d.To == "other" {
+						name = recipientName(*d.Who)
+					}
+					words := make([]string, len(first))
+					for i, c := range first {
+						words[i] = classWord(c)
+					}
+					if err := output(c, map[string]any{
+						"deal_id": dealID, "proceed": false, "verdict": "pause", "held": first,
+						"reason": "First time telling " + name + " your " + strings.Join(words, ", ") + ", and no check the user approved named it",
+						"next":   `do not send it; run deal check with "disclosing" naming ` + strings.Join(first, ", ") + `, show its card, and note this again only once the user approves`,
+					}); err != nil {
 						return err
 					}
-					keys := disclosureRecipientKeys(*d, open.Who)
-					switch class, rule := uncheckedClass(events, d.AuthorizedBy, d.Fields, memory, keys); rule {
-					case "class_not_checked":
-						d.AuthorizedBy, d.Reason, d.Rule = "", "the check did not name your "+classWord(class), rule
-					case "first_disclosure_unchecked":
-						d.AuthorizedBy, d.Reason, d.Rule = "", "first time telling them your "+classWord(class)+", and no check named it", rule
-					}
+					return ErrPaused
+				}
+				if class := uncheckedClass(events, d.AuthorizedBy, d.Fields); d.AuthorizedBy != "" && class != "" {
+					d.AuthorizedBy, d.Reason, d.Rule = "", "the check did not name your "+classWord(class), "class_not_checked"
 				}
 			}
 			se, err := s.seal(ctx, dealID, events, ev)

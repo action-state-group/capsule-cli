@@ -251,6 +251,8 @@ func SafeError(err error) string {
 		return ErrBundleInvalid.Error()
 	case errors.Is(err, ErrEmailUnverified):
 		return ErrEmailUnverified.Error()
+	case errors.Is(err, ErrPaused):
+		return ErrPaused.Error()
 	case errors.Is(err, ErrBreaking):
 		// Like ErrSchemaInvalid: `contract diff` already printed the changes.
 		return ErrBreaking.Error()
@@ -276,6 +278,8 @@ func ExitCode(err error) int {
 		return 5
 	case errors.Is(err, ErrAlarm):
 		return 6
+	case errors.Is(err, ErrPaused):
+		return 7
 	default:
 		return 1
 	}

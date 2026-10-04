@@ -85,11 +85,12 @@ func TestDealPausesOnTheRecipientNotTheField(t *testing.T) {
 	assert.Contains(t, check["differences"], map[string]any{"question": "who", "rule": "first_disclosure", "field": "address", "text": "First time telling Garage Sale Gary your street address"})
 	assert.NotContains(t, card, homeStreet, "the card names the class, never the value")
 
-	// The user holds; the agent sends it anyway: an unapproved disclosure.
+	// The user holds; the agent tries to note it anyway: held, nothing sealed.
 	dealRun(t, "note", "--deal", stranger, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "hold", "--said", "not yet")
-	sent := dealRun(t, "note", "--deal", stranger, "--kind", "disclosure", "--input", writeJSON(t, `{"fields":[{"class":"address","value":"`+homeStreet+`"}]}`))
-	assert.Equal(t, false, sent["approved"])
+	held := heldNote(t, stranger, `{"fields":[{"class":"address","value":"`+homeStreet+`"}]}`)
+	assert.Equal(t, []any{"address"}, held["held"])
 	report := dealRun(t, "report", "--deal", stranger)
+	assert.Empty(t, report["told"])
 	assert.Contains(t, reportTexts(t, report, "anomalies"), "agent/first_disclosure: First time telling Garage Sale Gary your street address")
 
 	// Neither the note nor the pause puts a raw value in a sealed record or a
@@ -122,9 +123,8 @@ func TestDealDisclosureBeyondTheCheckIsNotCovered(t *testing.T) {
 	dealID := openMerchant(t, "redbubble.com")
 	check := shareCheck(t, dealID, `"email"`)
 	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
-	out := dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t, `{"fields":[{"class":"email","value":"`+homeEmail+`"},{"class":"phone","value":"+1 555 010 3030"}]}`))
-	assert.Equal(t, false, out["approved"])
-	assert.Equal(t, "the check did not name your phone", out["reason"])
+	out := heldNote(t, dealID, `{"fields":[{"class":"email","value":"`+homeEmail+`"},{"class":"phone","value":"+1 555 010 3030"}]}`)
+	assert.Equal(t, []any{"phone"}, out["held"], "a first telling the check did not name is held")
 }
 
 func TestDealCheckDisclosingIsChecked(t *testing.T) {
@@ -208,12 +208,49 @@ func TestDealOmittingWhatIsGivenDoesNotBypassTheFirstTelling(t *testing.T) {
 
 	// (b) A disclosure whose covering check named nothing (here a
 	// share_credentials check, where naming is optional) is a first telling
-	// of each class it gives, and is not covered by it.
+	// of each class it gives: held when noted, before it is sent.
 	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_credentials"}`))
 	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
-	sent := dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t, `{"fields":[{"class":"verification_code","value":"481516"}]}`))
-	assert.Equal(t, false, sent["approved"])
-	assert.Equal(t, "first time telling them your verification code, and no check named it", sent["reason"])
-	report := dealRun(t, "report", "--deal", dealID)
-	assert.Contains(t, reportTexts(t, report, "anomalies"), "agent/unapproved_disclosure: Told Garage Sale Gary your verification code without your approval (first time telling them your verification code, and no check named it)")
+	held := heldNote(t, dealID, `{"fields":[{"class":"verification_code","value":"481516"}]}`)
+	assert.Equal(t, []any{"verification_code"}, held["held"])
+
+	// (c) Declaring less than is given: the check names only the name, and
+	// the address noted at fill time to a first-time counterparty pauses.
+	other := openSeller(t, `{"name":"Porch Pickup Pam","profile_id":"mkt:seller:9090"}`)
+	check = shareCheck(t, other, `"name"`)
+	dealRun(t, "note", "--deal", other, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
+	held = heldNote(t, other, `{"fields":[{"class":"name","value":"`+homeName+`"},{"class":"address","value":"`+homeStreet+`"}]}`)
+	assert.Equal(t, []any{"address"}, held["held"])
+	assert.Contains(t, held["reason"], "First time telling Porch Pickup Pam your street address")
+}
+
+// A marketplace's domain is never a party's identity, even when it is all a
+// seller record carries.
+func TestDealMarketplaceDomainIsNotAnIdentity(t *testing.T) {
+	dealFixture(t)
+	tellAddress(t, openSeller(t, `{"name":"Seller One","domain":"facebook.com"}`))
+	check := shareCheck(t, openSeller(t, `{"name":"Seller Two","domain":"https://www.facebook.com/marketplace/item/1"}`), `"address"`)
+	assert.Equal(t, "pause", check["verdict"], "a second seller on the same marketplace pauses")
+	// A marketplace channel drops the domain too, whatever site it is.
+	tellAddress(t, openSeller(t, `{"name":"Swap One","domain":"swapmeet.example"}`))
+	check = shareCheck(t, openSeller(t, `{"name":"Swap Two","domain":"swapmeet.example"}`), `"address"`)
+	assert.Equal(t, "pause", check["verdict"], "on a marketplace channel the domain is not an identity")
+}
+
+// A profile with no counterparty history (a first install, or a reinstall)
+// makes everyone first-time: its first pause says so once, and keeps the
+// pause.
+func TestDealNewProfileSaysSoOnItsFirstPause(t *testing.T) {
+	dealFixture(t)
+	first := shareCheck(t, openMerchant(t, "redbubble.com"), `"address"`)
+	require.Equal(t, "pause", first["verdict"])
+	assert.Contains(t, first["card"], newProfileLine)
+	second := shareCheck(t, openMerchant(t, "society6.com"), `"address"`)
+	require.Equal(t, "pause", second["verdict"])
+	assert.NotContains(t, second["card"], newProfileLine, "said once")
+
+	// A reinstall: a fresh profile says it again.
+	dealFixture(t)
+	again := shareCheck(t, openMerchant(t, "redbubble.com"), `"address"`)
+	assert.Contains(t, again["card"], newProfileLine)
 }
