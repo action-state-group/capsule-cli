@@ -150,7 +150,7 @@ func TestDealWitnessStatesAreShownAsTheyAre(t *testing.T) {
 	pending := report("down")
 	assert.Equal(t, "pending", pending["assurance"].(map[string]any)["witness_state"])
 	assert.Equal(t, "sealed", pending["assurance"].(map[string]any)["rung"], "pending is never shown as witnessed")
-	assert.Contains(t, pending["assurance"].(map[string]any)["text"], "Witness: pending")
+	assert.Contains(t, pending["assurance"].(map[string]any)["text"], "Witness pending. This checkpoint was sent at a cadence tick")
 
 	deliver(t, p, cadenceSize(t, p), key)
 	witnessed := report("up")
@@ -360,4 +360,26 @@ func TestDoctorExplainsWitnessConsent(t *testing.T) {
 	require.NoError(t, err, out)
 	require.NoError(t, json.Unmarshal([]byte(out), &report))
 	assert.Contains(t, report["witness"].(map[string]any)["consent"], `"Always allow this site"`)
+}
+
+// A deal is never called witnessed at the moment it happens: until a tick has
+// carried it to the witness, the receipt says witness pending, and why.
+func TestDealIsWitnessPendingUntilATick(t *testing.T) {
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	endpoint, _ := countingWitness(t)
+	cadenceFixture(t, endpoint, public, "1h", "0s", 0)
+	dealID := retailDeal(t)
+	page := filepath.Join(t.TempDir(), "r.html")
+	report := dealRun(t, "report", "--deal", dealID, "--html", page)
+	a := report["assurance"].(map[string]any)
+	assert.Equal(t, "scheduled", a["witness_state"])
+	assert.Equal(t, "sealed", a["rung"])
+	assert.Contains(t, a["text"], "Witness pending. A deal is not witnessed at the moment it happens")
+	html := string(mustRead(t, page))
+	assert.Contains(t, html, "Sealed by my agent, witness pending.")
+	for _, text := range []string{a["text"].(string), html} {
+		assert.NotContains(t, text, "witnessed at the time")
+		assert.NotContains(t, text, "Witnessed when")
+	}
 }

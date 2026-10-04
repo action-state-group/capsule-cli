@@ -147,8 +147,13 @@ each has. Instead the profile has one cadence log (its `log_id`), and
   names the site for whichever witness the profile uses, and
   `capsulectl doctor --check-witness` says the same.
 
-A deal's receipt states its witness state as it is: **scheduled** (not yet
-in a tick), **pending** (in a tick, no receipt back yet) or **witnessed**.
+A deal is **not witnessed at the moment it happens**. Its receipt says
+"Sealed, witness pending" until the next cadence tick (within about one
+interval, an hour by default) has carried its checkpoint to the witness and
+a receipt has come back; only then does it say "Witnessed". The states, as
+the receipt and `deal report` name them: **scheduled** (not yet in a tick),
+**pending** (in a tick, no receipt back yet; both read "Sealed, witness
+pending") and **witnessed**.
 Witnessed means the bundle carries the whole chain: the deal checkpoint's
 leaf, its salt and position, the 16-hash path (the same length for every
 deal, so it says nothing about the others), the cadence entry's inclusion
