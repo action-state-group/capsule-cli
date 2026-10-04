@@ -365,3 +365,58 @@ func TestDealSharePageGateIsIndependent(t *testing.T) {
 		assert.NotContains(t, string(src), name)
 	}
 }
+
+// A merchant's own confirmation email in a shared copy. The counterparty's
+// copy carries the order number, because the merchant's signature checks out
+// against the deal's own counterparty and the id is an order number
+// (shareableOrderID). It carries nothing else from the email: not the
+// customer's name or address, not the signing domain. The adjudicator's copy
+// carries no order number at all.
+func TestDealShareMerchantEmail(t *testing.T) {
+	dealFixture(t)
+	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})
+	dealID := openMerchantDeal(t)
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--email", filepath.Join(merchantFixture, "confirmation.eml"))
+	dir := t.TempDir()
+	private := []string{"Sam Customer", "sam.customer@mail.example", "orders@shop.example", "shop.example", "Shop Example", "99812", "card ending 4242"}
+
+	page := filepath.Join(dir, "counterparty.html")
+	shareRun(t, dealID, "counterparty", page)
+	raw, err := os.ReadFile(page)
+	require.NoError(t, err)
+	html := string(raw)
+	for _, v := range private {
+		assert.NotContains(t, strings.ToLower(html), strings.ToLower(v))
+	}
+	ext := embeddedBundle(t, html)["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	rows := ext["merchant"].([]any)
+	require.Len(t, rows, 1)
+	row := rows[0].(map[string]any)
+	assert.Equal(t, "SE-104233", row["order_id"], "a merchant-confirmed order number is shared with the counterparty")
+	assert.Equal(t, true, row["verified"])
+	assert.Equal(t, "$64.00", row["charged"])
+	assert.NotContains(t, row, "items")
+	assert.NotContains(t, row, "domains")
+	out, err := invoke(t, "", "verify", "--bundle", page)
+	require.NoError(t, err, out)
+
+	page = filepath.Join(dir, "adjudicator.html")
+	shareRun(t, dealID, "adjudicator", page)
+	raw, err = os.ReadFile(page)
+	require.NoError(t, err)
+	for _, v := range append(private, "SE-104233", "104233") {
+		assert.NotContains(t, strings.ToLower(string(raw)), strings.ToLower(v))
+	}
+	ext = embeddedBundle(t, string(raw))["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	assert.NotContains(t, ext["merchant"].([]any)[0], "order_id", "no order number in the adjudicator's copy")
+}
+
+// The gate takes the shareable order number out before it checks, and only
+// that: the same page with the customer's address still refuses.
+func TestDealSharePageGateAllowsOnlyTheShareableOrderID(t *testing.T) {
+	events := plantedEvents()
+	events[0].Event.Open.Intent.Verbatim += " order SE-104233"
+	assert.Error(t, dealPageGate(gatePage(t, "Order SE-104233"), events))
+	assert.NoError(t, dealPageGate(gatePage(t, "Order SE-104233"), events, "SE-104233"))
+	assert.Error(t, dealPageGate(gatePage(t, "Order SE-104233, "+homeAddress), events, "SE-104233"))
+}

@@ -231,8 +231,10 @@ Both the scrubber and the gate read text in the same plain form:
 
 - Escapes are decoded, nested ones too: percent-escapes, HTML character
   references and `\uXXXX` escapes (surrogate pairs included).
-- Format characters (Cf) are removed: zero-width characters, the soft hyphen,
-  and the bidirectional controls.
+- Characters that draw nothing are removed. These are the format characters
+  (Cf: zero-width characters, the soft hyphen, the bidirectional controls)
+  and the other default-ignorable ones, such as the Hangul fillers U+115F,
+  U+1160, U+3164 and U+FFA0.
 - NFKD is applied and every nonspacing mark (Mn) is dropped: `Làrkspur`,
   `Laŗkspur` and `73̧9142` read `Larkspur` and `739142`.
 - Every decimal digit of any script becomes the ASCII digit of the same
@@ -285,6 +287,17 @@ code word (code, OTP, PIN, passcode) followed by a number. A short value is
 skipped only inside a digest or signature (a run of 64 or more hex or base64
 characters). In an order reference or a URL path it counts. A hit refuses the
 copy: nothing is written and nothing goes on record.
+
+**A merchant's own email** (sealed with `deal note --kind evidence --email`)
+is private material too. Its order number, the names and addresses in its
+headers, its text and its items are all withheld. Each shared copy shows the
+signature's verdict in fixed words, without the signing domain (that is the
+counterparty's), and the amounts and dates. The counterparty's copy also
+carries the order number, but only where `shareableOrderID` allows it: an
+order number (never a booking, confirmation or reservation code) from an
+email whose signature checks out and was signed by the deal's own
+counterparty. The gate takes exactly that value out before it checks. The
+adjudicator's copy carries no order number, and also lists the items.
 
 **Sharing is on record.** Before the file exists, a disclosure record is
 sealed. It names the root, the payloads mode, the records withheld, the

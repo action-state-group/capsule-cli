@@ -40,10 +40,12 @@ var dealWithheldFields = map[string][]string{
 	dealAudienceCounterparty: {
 		"home address", "names, payees and contact details", "card and payment identifiers", "verification codes",
 		"message text", "claim text and sources", "your own words", "item, place and condition details",
+		"the merchant email's text, items and signing domain", "booking, confirmation and reservation codes, and any order number its signed email does not confirm",
 	},
 	dealAudienceAdjudicator: {
 		"home address", "names, payees and contact details", "card and payment identifiers", "verification codes",
 		"your own words", "item, place and condition details",
+		"the merchant email's text and signing domain", "order, booking and confirmation numbers",
 	},
 }
 
@@ -59,6 +61,10 @@ var dealShareKeys = map[string]bool{
 	"question": true, "rule": true, "field": true, "options": true, "notes": true, "changed": true,
 	"choice": true, "approver": true, "status": true, "outcome": true, "from": true, "kind": true,
 	"response_digest": true,
+	// A sealed merchant email's record: digests, the DKIM and DMARC verdicts,
+	// where the keys came from, and dates.
+	"key_source": true, "dkim": true, "dmarc_policy": true, "dmarc_source": true, "method": true,
+	"cancel_by": true, "sent_at": true,
 }
 
 // The adjudicator's copy adds claim text and sources.
@@ -145,6 +151,12 @@ func dealLocalData(events []sealedEvent) dealLocal {
 		case e.Evidence != nil:
 			who(e.Evidence.Who)
 			text(e.Evidence.About, e.Evidence.Detail)
+			if m := e.Evidence.Email; m != nil {
+				// A merchant's email, sealed raw: its order id, its headers'
+				// addresses and its text are all private.
+				l.ids = append(l.ids, m.Parsed.OrderID)
+				text(merchantEmailTexts(m)...)
+			}
 		case e.Change != nil:
 			who(e.Change.Who)
 			terms(e.Change.Terms)
@@ -165,6 +177,23 @@ func dealLocalData(events []sealedEvent) dealLocal {
 		}
 	}
 	return l
+}
+
+// merchantEmailTexts are the texts of a sealed merchant email: its decoded
+// text, the headers that carry names and addresses, its subject and the items
+// read from it.
+func merchantEmailTexts(m *merchantEmail) []string {
+	msg, body := emailText(m.Raw)
+	out := []string{body, m.Parsed.Subject}
+	if msg != nil {
+		for _, h := range []string{"From", "To", "Cc", "Reply-To", "Sender", "Subject", "Delivered-To", "Return-Path"} {
+			out = append(out, msg.Header.Get(h))
+		}
+	}
+	for _, it := range m.Parsed.Items {
+		out = append(out, it.Text)
+	}
+	return out
 }
 
 // dealPrivate is what a shared copy must never carry, read from the local
@@ -634,7 +663,9 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 		}
 		return true
 	case string:
-		allowed := dealShareKeys[key] || strings.HasSuffix(key, "_commitment") || (audience == dealAudienceAdjudicator && dealAdjudicatorKeys[key])
+		allowed := dealShareKeys[key] || strings.HasSuffix(key, "_commitment") || strings.HasSuffix(key, "_digest") ||
+			(audience == dealAudienceAdjudicator && dealAdjudicatorKeys[key]) ||
+			key == "source" && x == "merchant_email" // a fixed token, not a claim's source
 		return allowed && p.clean(x)
 	default:
 		return true
@@ -662,23 +693,45 @@ func (s *dealSession) dealWithholdRecords(events []sealedEvent, audience string,
 	return withhold, nil
 }
 
+// dealShareableOrderIDs are the merchant order ids a copy for audience may
+// carry: in the counterparty's copy only, each one shareableOrderID allows.
+func dealShareableOrderIDs(events []sealedEvent, audience string) []string {
+	if audience != dealAudienceCounterparty || len(events) == 0 || events[0].Event.Open == nil {
+		return nil
+	}
+	first := events[0].Event.Open.Who
+	var out []string
+	for _, se := range events {
+		if ev := se.Event.Evidence; ev != nil {
+			if id := ev.Email.shareableOrderID(first); id != "" {
+				out = append(out, id)
+			}
+		}
+	}
+	return out
+}
+
 // dealShareAnomaly is a counterparty-copy anomaly line: fixed words per kind,
 // never the values the local line was written from.
 var dealShareAnomaly = map[string]string{
-	"changed_identifier":    "A payee or contact detail changed after first contact",
-	"recourse_changed":      "The way to pay changed after it was agreed",
-	"irreversible_rail":     "Payment by a rail with no card protection",
-	"domain_recent":         "The website was registered recently",
-	"unsealed_approval":     "Went ahead without your approval",
-	"asked_vs_did":          "Tried something other than what you asked",
-	"skipped_check":         "Acted without a check first",
-	"deadline_pressure":     "Pushed you to decide fast",
-	"code_request":          "Asked for a verification code",
-	"channel_hop":           "Asked to move off the platform",
-	"unverified_claim":      "A claim that was not verified",
-	"delivered_differs":     "What arrived differs from what was agreed",
-	"pay_before_seeing":     "Paying before seeing the item",
-	"credentials_requested": "Asked for a login or code",
+	"changed_identifier":       "A payee or contact detail changed after first contact",
+	"recourse_changed":         "The way to pay changed after it was agreed",
+	"irreversible_rail":        "Payment by a rail with no card protection",
+	"domain_recent":            "The website was registered recently",
+	"unsealed_approval":        "Went ahead without your approval",
+	"asked_vs_did":             "Tried something other than what you asked",
+	"skipped_check":            "Acted without a check first",
+	"deadline_pressure":        "Pushed you to decide fast",
+	"code_request":             "Asked for a verification code",
+	"channel_hop":              "Asked to move off the platform",
+	"unverified_claim":         "A claim that was not verified",
+	"delivered_differs":        "What arrived differs from what was agreed",
+	"pay_before_seeing":        "Paying before seeing the item",
+	"credentials_requested":    "Asked for a login or code",
+	"charged_differs":          "The merchant's email shows a different charge than you approved",
+	"charged_before_cancel_by": "Charged before the cancel-by date in the merchant's own email",
+	"quantity_differs":         "The merchant's email lists a different quantity than agreed",
+	"duplicate_charge":         "Possibly charged twice, by the merchant's own emails",
 }
 
 // dealShareStepLine is one step in plain words for a shared copy.
@@ -814,6 +867,52 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 		}
 		return out
 	}
+	// The merchant's own emails, for the audience: the signature's verdict in
+	// fixed words (the signing domain is the counterparty's: withheld),
+	// amounts and dates, the order id only where shareableOrderID allows it
+	// (the counterparty's copy), and the items only for an adjudicator.
+	first := events[0].Event.Open.Who
+	var paid *dealAct
+	for _, se := range events {
+		if a := se.Event.Act; a != nil && a.Action == "pay" && a.AmountMinor != nil {
+			paid = a
+		}
+	}
+	merchant := make([]interface{}, 0, len(report.Merchant))
+	for _, row := range report.Merchant {
+		ids := make([]interface{}, len(row.Steps))
+		for j, id := range row.Steps {
+			ids[j] = id
+		}
+		says := "not confirmed by the merchant's signature"
+		if row.Verified {
+			says = "merchant-confirmed: the merchant's signature checks out, and the email has not been changed since"
+		}
+		m := map[string]interface{}{"steps": ids, "verified": row.Verified, "merchant_says": says, "we_say": ourSealWords, "key_source": row.KeySource}
+		for k, v := range map[string]string{"approved": row.Approved, "approved_basis": row.ApprovedBasis, "charged": row.Charged, "charged_on": row.ChargedOn, "cancel_by": row.CancelBy, "key_size": row.KeySize} {
+			if v != "" {
+				m[k] = v
+			}
+		}
+		if paid != nil {
+			m["agent_reported"] = dealShareAct(*paid, currency)
+		}
+		if audience == dealAudienceCounterparty && len(row.Steps) > 0 {
+			if e, ok := byID[row.Steps[0]]; ok && e.Evidence != nil {
+				if id := e.Evidence.Email.shareableOrderID(first); id != "" {
+					m["order_id"] = id
+				}
+			}
+		}
+		if audience == dealAudienceAdjudicator && len(row.Items) > 0 {
+			items := make([]interface{}, len(row.Items))
+			for j, it := range row.Items {
+				items[j] = p.scrub(it)
+			}
+			m["items"] = items
+		}
+		merchant = append(merchant, m)
+	}
 	withheld := make([]interface{}, 0, len(dealWithheldFields[audience]))
 	for _, f := range dealWithheldFields[audience] {
 		withheld = append(withheld, f)
@@ -821,6 +920,7 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 	return map[string]interface{}{
 		"deal_id": events[0].Event.DealID, "scope": dealScopeLine, "audience": audience, "withheld": withheld, "steps": steps,
 		"asked_step": report.AskedStep, "did": items(report.Did, false), "anomalies": items(report.Anomalies, true),
+		"merchant": merchant, "email_scope": emailScopeLine,
 	}
 }
 

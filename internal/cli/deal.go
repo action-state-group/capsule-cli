@@ -1054,7 +1054,7 @@ func dealReportCommand() *cobra.Command {
 			assurance := dealAssurance(b)
 			if audience != dealAudienceKeep {
 				// The final bytes are checked before anything is on record.
-				if err = dealPageGate([]byte(page), events); err != nil {
+				if err = dealPageGate([]byte(page), events, dealShareableOrderIDs(events, audience)...); err != nil {
 					return err
 				}
 				// Sharing is a disclose act: it is on record before the file

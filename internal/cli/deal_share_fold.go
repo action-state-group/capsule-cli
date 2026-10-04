@@ -21,9 +21,10 @@ import (
 //
 //   - percent-escapes, HTML character references and \uXXXX escapes are
 //     decoded, repeatedly, so an escape inside another is read too;
-//   - every format character is removed (Cf: zero-width space and joiners,
-//     word joiner, byte-order mark, soft hyphen, and the bidirectional
-//     controls that reorder text on screen);
+//   - every character that draws nothing is removed: format characters
+//     (Cf: zero-width space and joiners, word joiner, byte-order mark, soft
+//     hyphen, the bidirectional controls) and the other default-ignorable
+//     ones (the Hangul fillers U+115F, U+1160, U+3164, U+FFA0);
 //   - NFKD, then every nonspacing mark (Mn) is dropped: fullwidth and other
 //     compatibility forms become plain ones, and accents and other marks
 //     come off (Làrkspur, Laŗkspur and 73̧9142 read Larkspur and 739142);
@@ -61,7 +62,7 @@ func foldText(s string) string {
 		}
 	}
 	s = strings.Map(func(r rune) rune {
-		if unicode.Is(unicode.Cf, r) {
+		if ignorable(r) {
 			return -1
 		}
 		return r
@@ -69,13 +70,20 @@ func foldText(s string) string {
 	s = norm.NFKD.String(s)
 	return strings.Map(func(r rune) rune {
 		switch {
-		case unicode.Is(unicode.Mn, r):
+		case unicode.Is(unicode.Mn, r) || ignorable(r):
 			return -1
 		case r > 0x7f && unicode.Is(unicode.Nd, r):
 			return '0' + digitValue(r)
 		}
 		return r
 	}, s)
+}
+
+// ignorable is a character that draws nothing: a format character (Cf) or
+// another default-ignorable one, such as the Hangul fillers (U+115F, U+1160,
+// U+3164, U+FFA0), which a font may show as blank space or not at all.
+func ignorable(r rune) bool {
+	return unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Other_Default_Ignorable_Code_Point, r)
 }
 
 var (

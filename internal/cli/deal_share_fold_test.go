@@ -42,6 +42,8 @@ func TestConfusablesAreTheVendoredUnicodeData(t *testing.T) {
 // planted value once folded and skeletonized.
 var listedLeaks = []string{
 	"Laŗkspur", "Làrkspur", "Spríngfield", "73̧9142", "٧٣٩١٤٢", "७३९१४२", "Larkspսr", "Larᴋspur", "ᏞᎪᎡkspur",
+	// Hangul fillers: default-ignorable, drawn as blank or not at all.
+	"Lar\u115fkspur", "Lar\u1160kspur", "Lar\u3164kspur", "Lar\uffa0kspur", "739\u3164142",
 }
 
 func plantedEvents() []sealedEvent {
@@ -139,7 +141,7 @@ func newLeakGen(seed int64) *leakGen {
 	return g
 }
 
-var leakSeparators = []string{" ", "-", ".", "_", "/", "​", "­", "⁠", "‮", "‍", "\ufeff"}
+var leakSeparators = []string{" ", "-", ".", "_", "/", "​", "­", "⁠", "‮", "‍", "\ufeff", "\u115f", "\u1160", "\u3164", "\uffa0"}
 
 // rewrite returns a rewriting of v and whether it is an encoding the
 // scrubber cannot read (base64), where refusal by the gate is the only

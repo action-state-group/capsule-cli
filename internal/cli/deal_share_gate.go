@@ -36,9 +36,27 @@ import (
 // digest or a signature: a run of 64 or more hex or base64 characters, where
 // a six-digit code occurs by chance. Anywhere else (G739142,
 // ?order_ref=G739142, track/ABCDEFGHIJ739142) it counts.
-func dealPageGate(page []byte, events []sealedEvent) error {
+//
+// allowed are values the copy may carry although the local store holds them:
+// the merchant's order id, in the counterparty's copy, when
+// shareableOrderID allows it. Each is taken out of the page, as written and
+// JSON-escaped, before any check, so it neither trips the checks nor hides
+// anything else.
+func dealPageGate(page []byte, events []sealedEvent, allowed ...string) error {
 	data := bytes.Replace(page, evidenceGraphIIFE, nil, 1)
 	data = bytes.Replace(data, []byte(dealViewJS), nil, 1)
+	for _, a := range allowed {
+		if strings.TrimSpace(a) == "" {
+			continue
+		}
+		forms := []string{a}
+		if quoted, err := json.Marshal(a); err == nil {
+			forms = append(forms, string(quoted[1:len(quoted)-1]))
+		}
+		for _, f := range forms {
+			data = bytes.ReplaceAll(data, []byte(f), nil)
+		}
+	}
 	return gateCheck(data, gateSecrets(events), 0)
 }
 
@@ -235,6 +253,21 @@ func gateSecrets(events []sealedEvent) []string {
 		if e.Evidence != nil {
 			whoValues(e.Evidence.Who)
 			texts = append(texts, e.Evidence.About, e.Evidence.Detail)
+			if m := e.Evidence.Email; m != nil {
+				// The merchant's email: its order id, the addresses in its
+				// headers, its subject, its text and its items.
+				ids = append(ids, m.Parsed.OrderID)
+				msg, body := emailText(m.Raw)
+				texts = append(texts, body, m.Parsed.Subject)
+				if msg != nil {
+					for _, h := range []string{"From", "To", "Cc", "Reply-To", "Sender", "Subject", "Delivered-To", "Return-Path"} {
+						texts = append(texts, msg.Header.Get(h))
+					}
+				}
+				for _, it := range m.Parsed.Items {
+					texts = append(texts, it.Text)
+				}
+			}
 		}
 		if e.Change != nil {
 			whoValues(e.Change.Who)
