@@ -497,7 +497,7 @@ func TestDealShareOneWordNameFloorIsThreeLetters(t *testing.T) {
 	events := plantedEvents()
 	events = append(events, sealedEvent{Event: dealEvent{Kind: "evidence", Evidence: &dealEvidence{Email: &merchantEmail{Raw: eml}}}})
 	p := dealPrivateValues(events)
-	_, words := gateSecrets(events)
+	_, words, _ := gateSecrets(events)
 	assert.Equal(t, []string{"Amy"}, words, "only a name of three letters or more is a word needle")
 
 	for _, kept := range []string{"the amygdala", "Al said hi", "Montgomery, AL", "an alpaca"} {
