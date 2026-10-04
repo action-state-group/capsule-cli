@@ -1,0 +1,70 @@
+# Template: the outside verdict for test accounts (docs/HARNESS.md).
+#
+# Not run from this location -- copy it into a repo's .github/workflows/ and
+# list each test account's cadence log id (`deal tick` prints it as
+# cadence_log). It needs no secrets: the witness answers anyone. Each account
+# is one job; the run fails when any account's log stopped advancing or was
+# rewritten, and the run summary lists every account's verdict. A failed
+# scheduled run is the alarm: GitHub notifies the repo's watchers.
+#
+# This is liveness only. A test account's install ticks on a timer whether or
+# not its daily deal happened, so whether the deal itself was sealed and held
+# is decided from that deal's emailed receipt (docs/HARNESS.md, "The receipt").
+
+name: Deal harness verdict
+
+on:
+  schedule:
+    - cron: "23 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        account:
+          # name: a label only; log: the account's cadence log id.
+          - { name: account-1, log: deal-cadence/0000000000000001 }
+          - { name: account-2, log: deal-cadence/0000000000000002 }
+          - { name: account-3, log: deal-cadence/0000000000000003 }
+          - { name: account-4, log: deal-cadence/0000000000000004 }
+          - { name: control-pinned, log: deal-cadence/0000000000000005 }
+    env:
+      WITNESS: https://witness.agentactioncapsule.org
+      # A live account ticks every 1h +/- 10m, so its last checkpoint is at most
+      # about 70 minutes old whenever this runs; 3h leaves room for a slow witness.
+      EXPECT_EVERY: 3h
+      # The first release with `canary watch`.
+      CAPSULECTL_VERSION: v0.1.0-rc3
+    steps:
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: state.json
+          key: harness-${{ matrix.account.name }}-${{ github.run_id }}
+          restore-keys: harness-${{ matrix.account.name }}-
+      - name: Install capsulectl
+        run: |
+          base=https://github.com/action-state-group/capsule-cli/releases/download/$CAPSULECTL_VERSION
+          curl -fsSLO "$base/capsulectl-$CAPSULECTL_VERSION-linux-amd64"
+          curl -fsSLO "$base/SHA256SUMS"
+          sha256sum --ignore-missing -c SHA256SUMS
+          install -m 0755 "capsulectl-$CAPSULECTL_VERSION-linux-amd64" "$RUNNER_TEMP/capsulectl"
+      - name: Verdict
+        run: |
+          set +e
+          line=$("$RUNNER_TEMP/capsulectl" canary watch --log-id "${{ matrix.account.log }}" \
+            --witness "$WITNESS" --expect-every "$EXPECT_EVERY" --state state.json 2>&1)
+          code=$?
+          case $code in
+            0) verdict="advancing" ;;
+            6) verdict="ALARM" ;;
+            *) verdict="UNKNOWN (witness not readable)" ;;
+          esac
+          echo "| ${{ matrix.account.name }} | $verdict | ${line//|/\\|} |" >>"$GITHUB_STEP_SUMMARY"
+          echo "$line"
+          exit $code

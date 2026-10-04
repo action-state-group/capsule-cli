@@ -73,6 +73,9 @@ func doctorCommand() *cobra.Command {
 		Short: "Environment sanity: binary version, plugin trust, profile presence, key permissions; never prints a token",
 		Args:  noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
+			if install, _ := c.Flags().GetBool("install-check"); install {
+				return installCheck(c)
+			}
 			plugins := discoverPlugins()
 			pluginRows := make([]map[string]any, 0, len(plugins))
 			for _, p := range plugins {
@@ -150,6 +153,11 @@ func doctorCommand() *cobra.Command {
 			return output(c, report)
 		},
 	}
+	cmd.Flags().Bool("install-check", false, "Check a fresh install before its first deal: the expected release, exactly one deal skill, a witness endpoint with its key; one JSON object, exit 3 on any issue")
+	cmd.Flags().String("expect-version", "", "With --install-check: the release tag this binary must report")
+	cmd.Flags().String("expect-commit", "", "With --install-check: the commit this binary must report (prefix)")
+	cmd.Flags().String("expect-skill-sha256", "", "With --install-check: the sha256 of the release's deal SKILL.md")
+	cmd.Flags().String("skills-dir", "", "With --install-check: the directory the agent loads skills from")
 	cmd.Flags().Bool("check-witness", false, "Also probe the profile's checkpoint endpoint with an unauthenticated HEAD request (opt-in; prints exactly what would leave)")
 	return cmd
 }
