@@ -13,7 +13,7 @@ import (
 	"github.com/action-state-group/cll-go/mmr"
 )
 
-// cadenceClaim checks a bundle's cadence-witness/v0 chain: the bundle's
+// cadenceClaim checks a bundle's x-cadence-witness/v0 chain: the bundle's
 // own (deal) checkpoint is a leaf, at the stated position and with the
 // stated salt, of the tree whose root is an entry of the cadence log; that
 // entry is included in the cadence checkpoint; the cadence checkpoint is

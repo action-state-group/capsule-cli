@@ -447,24 +447,37 @@ func TestDealReportRungWitnessedInPart(t *testing.T) {
 	status, findings := bundleWitnesses(result)
 	assert.Equal(t, "pass", status, "earlier checkpoint -> consistency -> current checkpoint, and the earlier one's chain: %v", findings)
 
-	// A bundle written before the extension's rename (x-deal-cadence-v0,
-	// deal_log_id) still verifies.
+	// The chain is written under x-cadence-witness/v0, and read under it and
+	// under both names bundles carried it under before (x-deal-cadence-v0
+	// named its log deal_log_id): each verifies, and the rung reads the same.
 	{
-		var legacy map[string]any
-		require.NoError(t, json.Unmarshal(mustRead(t, partPath), &legacy))
-		exts := legacy["extensions"].(map[string]any)
+		var written map[string]any
+		require.NoError(t, json.Unmarshal(mustRead(t, partPath), &written))
+		exts := written["extensions"].(map[string]any)
+		require.Contains(t, exts, "x-cadence-witness/v0")
+		for _, name := range []string{"cadence-witness/v0", "x-deal-cadence-v0"} {
+			require.NotContains(t, exts, name)
+		}
+	}
+	for _, name := range []string{"x-cadence-witness/v0", "cadence-witness/v0", "x-deal-cadence-v0"} {
+		var renamed map[string]any
+		require.NoError(t, json.Unmarshal(mustRead(t, partPath), &renamed))
+		exts := renamed["extensions"].(map[string]any)
 		chain := exts[dealCadenceExtension].(map[string]any)
-		chain["deal_log_id"] = chain["log_id"]
-		delete(chain, "log_id")
-		exts[legacyCadenceExtension] = chain
 		delete(exts, dealCadenceExtension)
-		path := filepath.Join(t.TempDir(), "legacy.json")
-		raw, err := json.Marshal(legacy)
+		if name == "x-deal-cadence-v0" {
+			chain["deal_log_id"] = chain["log_id"]
+			delete(chain, "log_id")
+		}
+		exts[name] = chain
+		path := filepath.Join(t.TempDir(), "renamed.json")
+		raw, err := json.Marshal(renamed)
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(path, raw, 0o600))
 		result, _ := verifyWithDirectory(t, path, directory)
 		status, findings := bundleWitnesses(result)
-		assert.Equal(t, "pass", status, "legacy names: %v", findings)
+		assert.Equal(t, "pass", status, "%s: %v", name, findings)
+		assert.Equal(t, "witnessed_in_part", dealAssuranceRung(renamed)["rung"], name)
 	}
 
 	// Tampering with the earlier checkpoint or its proof fails.
