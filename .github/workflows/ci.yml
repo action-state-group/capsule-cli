@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Nightly: every case under the race detector (see the tests job's env).
+    - cron: '0 6 * * *'
 
 permissions:
   contents: read
@@ -68,6 +71,8 @@ jobs:
     env:
       # Explicitly enable integration tests against the disposable service.
       CAPSULE_CLI_TEST_MYSQL_PORT: "3306"
+      # The nightly run samples nothing: every case under the race detector.
+      CAPSULE_TEST_RACE_FULL: ${{ github.event_name == 'schedule' && '1' || '' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

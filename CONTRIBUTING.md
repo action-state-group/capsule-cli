@@ -1,14 +1,16 @@
 # Contributing to capsule-cli
 
 Commits are signed off (`git commit -s`, the Developer Certificate of Origin).
-CI checks formatting, module files, vet, the build, and the full suite under
-the race detector; see "Tests" and "Continuous integration" in the README.
+CI checks formatting, module files, vet, the build, and the suite under the
+race detector (slow single-goroutine case loops sampled), then every case
+without it; see "Tests" and "Continuous integration" in the README.
 
 ## Running the tests the way CI does
 
 ```bash
 make test                                    # MySQL; race detector, then every case without it
 bash scripts/test.sh -tags=actionstate       # the same for the plugin-dispatch build
+CAPSULE_TEST_RACE_FULL=1 make test           # every case under the race detector
 ```
 
 Under the race detector the slowest single-goroutine case loops (random
