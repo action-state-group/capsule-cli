@@ -137,26 +137,39 @@ func gateCheck(data []byte, secrets, words, placeWords []string, depth int) erro
 			}
 		}
 	}
+	// Each word's spelling skeleton, computed once for every unit.
+	skeletons := func(ws []string) []string {
+		out := make([]string, len(ws))
+		for i, w := range ws {
+			out[i] = gateLettersOf(w, true)
+		}
+		return out
+	}
+	wordSkeletons, placeSkeletons := skeletons(words), skeletons(placeWords)
+	// Each place word, forwards and backwards, as a whole word: compiled once.
+	var placeRes []*regexp.Regexp
+	for _, w := range placeWords {
+		lw := strings.ToLower(foldText(w))
+		for _, form := range []string{lw, gateBackwards(lw)} {
+			placeRes = append(placeRes, regexp.MustCompile(`(?:^|[^\p{L}\p{N}])`+regexp.QuoteMeta(form)+`(?:$|[^\p{L}\p{N}])`))
+		}
+	}
 	for _, u := range gateUnits(data) {
 		unit := u.text
 		folded := foldText(unit)
 		plain := gateLetters([]byte(strings.ToLower(folded)), false)
 		chars, isWord := gateChars(folded)
-		unitWords := words
+		unitWords := wordSkeletons
 		if u.value {
 			low := strings.ToLower(folded)
-			for _, w := range placeWords {
-				lw := strings.ToLower(foldText(w))
-				for _, form := range []string{lw, gateBackwards(lw)} {
-					if regexp.MustCompile(`(?:^|[^\p{L}\p{N}])` + regexp.QuoteMeta(form) + `(?:$|[^\p{L}\p{N}])`).MatchString(low) {
-						return inputError("refusing to write the shared copy: the page would carry a private value")
-					}
+			for _, re := range placeRes {
+				if re.MatchString(low) {
+					return inputError("refusing to write the shared copy: the page would carry a private value")
 				}
 			}
-			unitWords = append(slices.Clone(words), placeWords...)
+			unitWords = append(slices.Clone(wordSkeletons), placeSkeletons...)
 		}
-		for _, w := range unitWords {
-			sk := gateLettersOf(w, true)
+		for _, sk := range unitWords {
 			if sk == "" {
 				continue
 			}
