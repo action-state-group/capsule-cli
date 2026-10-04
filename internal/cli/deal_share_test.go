@@ -420,3 +420,36 @@ func TestDealSharePageGateAllowsOnlyTheShareableOrderID(t *testing.T) {
 	assert.NoError(t, dealPageGate(gatePage(t, "Order SE-104233"), events, "SE-104233"))
 	assert.Error(t, dealPageGate(gatePage(t, "Order SE-104233, "+homeAddress), events, "SE-104233"))
 }
+
+// The customer's own name, as the merchant's email addresses them (To: Sam
+// Customer <...>), is private: withheld from a shared copy as written, in
+// lookalike letters or spelled out, and refused by the gate on its own.
+func TestDealShareWithholdsTheCustomersNameFromTheMerchantEmail(t *testing.T) {
+	dealFixture(t)
+	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})
+	dealID := openMerchantDeal(t)
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--email", filepath.Join(merchantFixture, "confirmation.eml"))
+	names := []string{"Sam Customer", "Sаm Custоmer", "S a m  C u s t o m e r", "SAM CUSTOMER"}
+	msg, err := json.Marshal(map[string]any{"from": "counterparty", "text": "Shipping to " + strings.Join(names, ", ") + " today"})
+	require.NoError(t, err)
+	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, string(msg)))
+
+	page := filepath.Join(t.TempDir(), "adjudicator.html")
+	shareRun(t, dealID, "adjudicator", page)
+	raw, err := os.ReadFile(page)
+	require.NoError(t, err)
+	for _, n := range append(names, "Customer") {
+		assert.NotContains(t, strings.ToLower(string(raw)), strings.ToLower(n))
+	}
+	assert.Contains(t, string(raw), "Shipping to [withheld], [withheld], [withheld], [withheld] today")
+
+	// The gate alone, as if the scrubber had missed it.
+	eml, err := os.ReadFile(filepath.Join(merchantFixture, "confirmation.eml"))
+	require.NoError(t, err)
+	events := plantedEvents()
+	events = append(events, sealedEvent{Event: dealEvent{Kind: "evidence", Evidence: &dealEvidence{Email: &merchantEmail{Raw: eml}}}})
+	for _, n := range names {
+		assert.Error(t, dealPageGate(gatePage(t, "Shipping to "+n), events), n)
+	}
+	assert.NoError(t, dealPageGate(gatePage(t, "Shipping today"), events))
+}
