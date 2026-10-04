@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
-	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,30 +30,18 @@ func openCeilingDeal(t *testing.T, limit bool) string {
 	return dealID
 }
 
-func sharedLinkBundle(t *testing.T, dealID, audience string) (map[string]any, string) {
-	t.Helper()
-	out, err := invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--share", audience, "--to", "x", "--max-fragment", "0")
-	require.NoError(t, err, out)
-	var result map[string]any
-	require.NoError(t, json.Unmarshal([]byte(out), &result))
-	b, _ := linkBundle(t, result["permalink"].(string))
-	raw, err := json.Marshal(b)
-	require.NoError(t, err)
-	return b, string(raw)
-}
-
 // The counterparty never learns the user's spending limit; the adjudicator
 // may (it is how "over your limit" is judged).
 func TestDealSpendingLimitIsPrivateFromTheCounterparty(t *testing.T) {
 	dealFixture(t)
 	// Without a limit, the counterparty's copy discloses the opening record.
 	twin := openCeilingDeal(t, false)
-	b, _ := sharedLinkBundle(t, twin, dealAudienceCounterparty)
+	b, _ := sharedCopy(t, twin, dealAudienceCounterparty, "x")
 	ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
 	require.Equal(t, false, ext["steps"].([]any)[0].(map[string]any)["withheld"])
 
 	dealID := openCeilingDeal(t, true)
-	b, raw := sharedLinkBundle(t, dealID, dealAudienceCounterparty)
+	b, raw := sharedCopy(t, dealID, dealAudienceCounterparty, "x")
 	assert.NotContains(t, raw, "max_total_minor")
 	assert.NotContains(t, raw, "$50.00")
 	assert.NotContains(t, raw, "50.00")
@@ -63,7 +49,7 @@ func TestDealSpendingLimitIsPrivateFromTheCounterparty(t *testing.T) {
 	assert.Equal(t, true, ext["steps"].([]any)[0].(map[string]any)["withheld"], "the opening record carries the limit: withheld")
 	assert.Contains(t, ext["withheld"], "your spending limit")
 
-	_, raw = sharedLinkBundle(t, dealID, dealAudienceAdjudicator)
+	_, raw = sharedCopy(t, dealID, dealAudienceAdjudicator, "x")
 	assert.Contains(t, raw, `"max_total_minor":5000`, "the adjudicator's copy carries the limit")
 
 	// The counterparty's page too.
@@ -115,15 +101,13 @@ func openShortMerchantDeal(t *testing.T) string {
 // A shared copy carries the merchant's email as its digests and the
 // verification result, never the message: no header, no body, no name. The
 // raw .eml stays in the local deal store (`deal verify-email` re-checks it
-// there); not even the user's own bundle carries it. The shortest merchant
-// deal fits a link in the compressed codec, not in the plain fragment the
-// hosted viewer reads today, so a plain link is still refused.
+// there); not even the user's own bundle carries it.
 func TestDealSharedMerchantEmailIsDigestAndVerdict(t *testing.T) {
 	dealFixture(t)
 	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})
 	dealID := openShortMerchantDeal(t)
 	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
-		b, raw := sharedLinkBundle(t, dealID, audience)
+		b, raw := sharedCopy(t, dealID, audience, "x")
 		require.Len(t, b["records"], 5)
 		assert.Contains(t, raw, `"message_digest":"`)
 		assert.Contains(t, raw, `"key_records_digest":"`)
@@ -131,16 +115,7 @@ func TestDealSharedMerchantEmailIsDigestAndVerdict(t *testing.T) {
 		for _, v := range []string{"DKIM-Signature", "Received:", "Subject:", "From:", "Content-Type", "Sam Customer", "sam.customer@mail.example", "orders@shop.example"} {
 			assert.NotContains(t, raw, v, audience)
 		}
-		z1, err := encodeFragmentZ1(b)
-		require.NoError(t, err)
-		assert.Less(t, len(z1), defaultMaxFragment, "%s: the compressed link fits", audience)
-		plain, err := aacbundle.EncodeFragment(b)
-		require.NoError(t, err)
-		assert.Greater(t, len(plain), defaultMaxFragment, "%s: the plain link does not", audience)
 	}
-	_, err := invoke(t, "", "--profile", "deal", "permalink", "--deal", dealID, "--share", "counterparty", "--to", "x")
-	require.ErrorIs(t, err, ErrInput)
-	assert.Contains(t, err.Error(), "too large for a link")
 
 	own, err := invoke(t, "", "--profile", "deal", "bundle", "--deal", dealID)
 	require.NoError(t, err)

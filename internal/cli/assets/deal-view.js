@@ -150,6 +150,9 @@ function versionBefore(a, b) {
   ].forEach((t) => claims.append(el("li", t)));
   notClaimed.append(claims);
   header.append(notClaimed);
+  // A second opinion without trusting this page or installing anything: a
+  // verifier that checks a dropped file in the reader's own browser.
+  header.append(el("p", "This page checked itself. If you would rather not take its word, open verify.agentactioncapsule.org and drop this file in.", "deal-note"));
   header.append(el("p", "Anyone can check this file offline, with only the file and capsulectl:", "deal-note"));
   header.append(el("pre", report.verify_command || "capsulectl verify --bundle receipt.html", "deal-verify"));
   if (shared) {

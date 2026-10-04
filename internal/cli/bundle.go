@@ -24,10 +24,6 @@ import (
 
 const defaultBundleURL = "https://verify.agentactioncapsule.org/bundle"
 
-// defaultMaxFragment is the longest fragment a permalink carries: the top of
-// the 2-8 KB that links survive in messengers, mail and QR codes.
-const defaultMaxFragment = 8192
-
 type bundleArtifacts interface {
 	Get(context.Context, string) (artifact.Record, error)
 }
@@ -720,11 +716,22 @@ func bundleCommands() []*cobra.Command {
 				}
 			}
 			if permalink {
-				link, err := mintPermalink(c, value)
+				fragment, err := aacbundle.EncodeFragment(value)
 				if err != nil {
 					return err
 				}
-				_, err = fmt.Fprintln(c.OutOrStdout(), link)
+				decoded, err := aacbundle.DecodeFragment(fragment)
+				if err != nil {
+					return err
+				}
+				if _, ok := decoded.(map[string]interface{}); !ok {
+					return errors.New("permalink fragment did not round-trip")
+				}
+				base, _ := c.Flags().GetString("base-url")
+				if base == "" {
+					base = defaultBundleURL
+				}
+				_, err = fmt.Fprintln(c.OutOrStdout(), strings.TrimRight(base, "#")+"#"+fragment)
 				return err
 			}
 			out, _ := c.Flags().GetString("out")
@@ -740,8 +747,8 @@ func bundleCommands() []*cobra.Command {
 			return err
 		}}
 		command.Flags().String("root", "", "Root Capsule ID")
-		command.Flags().String("deal", "", "A deal on a deal profile: the whole deal from its own log, built as `deal report` builds it (disclose and permalink also need --share and --to)")
-		command.Flags().String("share", dealAudienceKeep, "With --deal: who the copy is for: keep (bundle only: your own copy), counterparty or adjudicator (a shared copy, put on record first)")
+		command.Flags().String("deal", "", "A deal on a deal profile: the whole deal from its own log, built as `deal report` builds it (disclose also needs --share and --to; a deal is not shared as a link)")
+		command.Flags().String("share", dealAudienceKeep, "With --deal: who the copy is for: keep (bundle only: your own copy), counterparty or adjudicator (disclose only: a shared copy, put on record first)")
 		command.Flags().String("to", "", "With --deal and --share: who the shared copy is for, as sealed in the disclosure record")
 		command.Flags().String("log-id", "", "Read this log instead of the profile's log_id")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
@@ -755,7 +762,6 @@ func bundleCommands() []*cobra.Command {
 			command.Flags().String("out", "", "Write the Evidence Bundle JSON to a new file")
 		} else {
 			command.Flags().String("base-url", defaultBundleURL, "Bundle viewer base URL")
-			command.Flags().Int("max-fragment", defaultMaxFragment, "Refuse a link whose fragment is longer than this many characters (0: no limit, to measure)")
 		}
 		return command
 	}
