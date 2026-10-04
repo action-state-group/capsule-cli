@@ -565,6 +565,31 @@ func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 		assert.Equal(t, []string{"item " + item}, attrs(check["asked_attributes"]))
 		assert.Equal(t, []string{"size small 3.8in x 2.4in"}, attrs(check["picked_by_agent"]))
 		assert.Contains(t, check["approval_text"], "You asked for: item "+item+". The agent picked, not you: size small 3.8in x 2.4in.")
+		// The receipt keeps them apart too: the report's check item, and
+		// the page and email it renders.
+		dealID := check["deal_id"].(string)
+		page := filepath.Join(t.TempDir(), "receipt.html")
+		report := dealRun(t, "report", "--deal", dealID, "--html", page, "--email", filepath.Join(t.TempDir(), "r.eml"))
+		var line string
+		for _, d := range report["did"].([]any) {
+			if d.(map[string]any)["kind"] == "check" {
+				line = d.(map[string]any)["text"].(string)
+			}
+		}
+		assert.Equal(t, "Checked before paying: flagged (you asked for: item "+item+"; the agent picked, not you: size small 3.8in x 2.4in)", line)
+		html, err := os.ReadFile(page)
+		require.NoError(t, err)
+		assert.Contains(t, string(html), "the agent picked, not you: size small 3.8in x 2.4in")
+		assert.Contains(t, report["email"].(map[string]any)["text"], "the agent picked, not you: size small 3.8in x 2.4in")
+		// A counterparty's copy keeps the check, not the choices: the items
+		// go only to an adjudicator.
+		shared := filepath.Join(t.TempDir(), "shared.html")
+		shareRun(t, dealID, dealAudienceCounterparty, shared)
+		copyPage := string(mustRead(t, shared))
+		assert.Contains(t, copyPage, "Checked before paying: flagged")
+		for _, words := range []string{"you asked for", "the agent picked", "size small"} {
+			assert.NotContains(t, strings.ToLower(copyPage), words)
+		}
 	})
 	t.Run("when the user picked the size too it passes", func(t *testing.T) {
 		check := run(t, "intent-picked-with-size.json", "check-pay.json")

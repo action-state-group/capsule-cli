@@ -257,8 +257,8 @@ capsulectl contract validate FILE --schema PATH_OR_URL [--json]
 capsulectl contract diff A B [--schema PATH_OR_URL] [--json]
 capsulectl discover --profile NAME --scope SCOPE.yaml --seal-output SCAN.json [--effects] [--format table|json]
 capsulectl map CONTRACT --schema PATH_OR_URL --discover EFFECTS.json [--format text|json]
-capsulectl bundle --profile NAME --root CAPSULE_ID --out BUNDLE.json [--closure-depth 2] [--producer-key HEX]
-capsulectl disclose --profile NAME --root CAPSULE_ID --out BUNDLE.json [--payloads all|selected] [--suppress agent_input|agent_output] [--producer-key HEX]
+capsulectl bundle --profile NAME --root CAPSULE_ID --out BUNDLE.json [--html PAGE.html] [--closure-depth 2] [--producer-key HEX]
+capsulectl disclose --profile NAME --root CAPSULE_ID --out BUNDLE.json [--html PAGE.html] [--payloads all|selected] [--suppress agent_input|agent_output] [--producer-key HEX]
 capsulectl permalink --profile NAME --root CAPSULE_ID [--payloads all|selected] [--suppress ...] [--base-url URL]
 capsulectl countersign request --profile NAME --service URL (--bundle BUNDLE.json | --root CAPSULE_ID [--producer-key HEX]) [--out FILE] [--window LABEL]
 capsulectl countersign verify --profile NAME --directory URL_OR_FILE BUNDLE.json
@@ -294,6 +294,13 @@ licence logic of its own: it dispatches to a discovered `actionstate` plugin,
 or refuses with an actionable message if that plugin is absent or unlicensed.
 The default build, and the release binaries, carry no plugin dispatch: there
 `run` is hidden and answers "run is not available in this build".
+
+`--html PAGE.html` on `bundle` and `disclose` also writes the bundle as one
+self-contained page: the bundle embedded and agent-action-capsule's own
+evidence-graph verifier (vendored, `internal/cli/assets/`), which checks it
+with no network when the page is opened. The file must be new. A permalink
+carries its bundle in the link and takes no `--html`; a deal's page is its
+receipt, `deal report --html`.
 
 Every bundle `bundle`, `disclose`, `permalink` and `countersign request --root`
 build declares the producer's own Ed25519 key in the `producer-key/v1` bundle

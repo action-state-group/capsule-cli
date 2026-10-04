@@ -982,6 +982,8 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 			}
 			text := item.Text
 			switch {
+			case item.Shared != "" && audience == dealAudienceCounterparty:
+				text = item.Shared
 			case item.Kind == "act":
 				if a := lastAct(item.Steps); a != nil {
 					text = "Did: " + dealShareAct(*a, currency)

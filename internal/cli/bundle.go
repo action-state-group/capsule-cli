@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/action-state-group/agent-action-capsule/go/emitter"
 	"sort"
 	"strings"
 	"time"
@@ -608,15 +609,6 @@ func appendRecordDigest(ctx context.Context, log cll.Backend, record map[string]
 	return result.Entry, nil
 }
 
-// htmlEmitterStubMessage names the unmet dependency explicitly rather than
-// silently ignoring --html: agent-action-capsule PR #102 ("evidence-graph
-// emitter", branch evidence-graph-emitter) is not yet merged to go/emitter on
-// main, so there is no library to render report.html from. TODO: once #102
-// merges, wire its Go emitter here to write the offline report.html carrier
-// (the bundle embedded + inline verifier); the permalink carrier (codec B,
-// aacbundle.EncodeFragment/DecodeFragment) is already wired below.
-const htmlEmitterStubMessage = "--html requires the agent-action-capsule #102 evidence-graph emitter (branch evidence-graph-emitter), not yet merged to go/emitter on main; not wired"
-
 const producerKeyFlagUsage = "Ed25519 public key (hex) to declare in the producer-key/v1 extension (default: the profile's signing key)"
 
 // bundleLog picks the log a bundle is read from: --log-id names any log,
@@ -656,10 +648,14 @@ func bundleCommands() []*cobra.Command {
 	}
 	makeCommand := func(use string, disclosure bool, permalink bool) *cobra.Command {
 		command := &cobra.Command{Use: use, Short: shortFor[use], Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
-			if html, _ := c.Flags().GetBool("html"); html {
-				return inputError(htmlEmitterStubMessage)
+			htmlPath, _ := c.Flags().GetString("html")
+			if htmlPath != "" && permalink {
+				return inputError("--html writes a page holding the bundle; a permalink carries the bundle in its link. Use `bundle --html FILE` or `disclose --html FILE` for a page")
 			}
 			if dealID, _ := c.Flags().GetString("deal"); dealID != "" {
+				if htmlPath != "" {
+					return inputError("a deal's page is its receipt: `deal report --deal ID --html FILE` (or `--share ... --html FILE` for someone else)")
+				}
 				return dealBundleRun(c, use)
 			}
 			if c.Flags().Changed("share") || c.Flags().Changed("to") {
@@ -734,6 +730,19 @@ func bundleCommands() []*cobra.Command {
 				_, err = fmt.Fprintln(c.OutOrStdout(), strings.TrimRight(base, "#")+"#"+fragment)
 				return err
 			}
+			if htmlPath != "" {
+				// One self-contained page: the bundle embedded and
+				// agent-action-capsule's own evidence-graph verifier, vendored
+				// (assets/evidence-graph.iife.js), which checks it with no
+				// network when the page is opened.
+				page, err := emitter.EmitEvidenceGraphHTML(value, evidenceGraphIIFE)
+				if err != nil {
+					return err
+				}
+				if err = atomicFile(htmlPath, []byte(page), false); err != nil {
+					return err
+				}
+			}
 			out, _ := c.Flags().GetString("out")
 			if encoded == nil {
 				if encoded, err = json.Marshal(value); err != nil {
@@ -753,7 +762,11 @@ func bundleCommands() []*cobra.Command {
 		command.Flags().String("log-id", "", "Read this log instead of the profile's log_id")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
 		command.Flags().String("producer-key", "", producerKeyFlagUsage)
-		command.Flags().Bool("html", false, "Also render an offline report.html carrier (not yet wired; see docs)")
+		if !permalink {
+			command.Flags().String("html", "", "Also write the bundle as one self-contained page that checks itself offline (the bundle and the vendored verifier) to this new file")
+		} else {
+			command.Flags().String("html", "", "Not for permalink: a link carries the bundle; use bundle or disclose --html")
+		}
 		if disclosure || permalink {
 			command.Flags().String("payloads", "all", "Disclosure mode: all or selected")
 			command.Flags().StringSlice("suppress", nil, "Disclosed member to withhold (agent_input or agent_output)")

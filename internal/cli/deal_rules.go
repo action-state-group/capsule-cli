@@ -1100,6 +1100,10 @@ type dealReportItem struct {
 	Kind  string   `json:"kind"`
 	Text  string   `json:"text"`
 	Steps []string `json:"steps"`
+	// Shared is the text for a counterparty's copy, when it differs: a
+	// check's line without the user's and the agent's choices (the items go
+	// only to an adjudicator).
+	Shared string `json:"-"`
 }
 
 // dealReport is the three-part report: what the user asked, what the agent
@@ -1221,7 +1225,22 @@ func buildDealReport(events []sealedEvent) dealReport {
 				verdict = "flagged"
 			}
 			checkItem[se.CapsuleID] = len(r.Did)
-			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: fmt.Sprintf("Checked before %s: %s", actionNames[e.Check.Action], verdict), Steps: []string{e.Check.Snapshot, se.CapsuleID}})
+			text := fmt.Sprintf("Checked before %s: %s", actionNames[e.Check.Action], verdict)
+			shared := text
+			// What the user chose and what the agent chose for them, told
+			// apart as the approval text tells them, so a choice the agent
+			// made never reads as the user's.
+			var who []string
+			if len(e.Check.Asked) > 0 {
+				who = append(who, "you asked for: "+attributeText(e.Check.Asked))
+			}
+			if len(e.Check.Picked) > 0 {
+				who = append(who, "the agent picked, not you: "+attributeText(e.Check.Picked))
+			}
+			if len(who) > 0 {
+				text += " (" + strings.Join(who, "; ") + ")"
+			}
+			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: text, Steps: []string{e.Check.Snapshot, se.CapsuleID}, Shared: shared})
 			var asked []string
 			for _, d := range e.Check.Differences {
 				if d.Question == "asked" && d.Rule != "agent_picked" {

@@ -224,7 +224,10 @@ checkpoint and its consistency proof. `capsulectl verify --bundle FILE
 
 1. **What you asked**: the user's exact words, from the opening step.
 2. **What the agent did**: every check (and the user's answer to it), every
-   action and the close, in order.
+   action and the close, in order. A check states what the user asked for
+   and what the agent picked for them, apart ("(you asked for: item …; the
+   agent picked, not you: size …)"), as the approval text does, so a choice
+   the agent made never reads as the user's.
 3. **What your agent told whom**: every sealed disclosure, in order: what
    kind of thing (phone, address, pickup location, a login, ...), to whom,
    when, and the sealed approval that covered it, or that none did. The
