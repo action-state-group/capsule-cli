@@ -13,7 +13,7 @@ import (
 	"github.com/action-state-group/cll-go/mmr"
 )
 
-// cadenceClaim checks a deal bundle's x-deal-cadence-v0 chain: the bundle's
+// cadenceClaim checks a bundle's cadence-witness/v0 chain: the bundle's
 // own (deal) checkpoint is a leaf, at the stated position and with the
 // stated salt, of the tree whose root is an entry of the cadence log; that
 // entry is included in the cadence checkpoint; the cadence checkpoint is
@@ -22,8 +22,7 @@ import (
 // no witnessed chain. dealStatement is nil when the bundle's checkpoint did
 // not verify.
 func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory []witnessRow) (result aacbundle.ClaimResult, receipts []map[string]string, present bool) {
-	ext, _ := value["extensions"].(map[string]interface{})
-	chain, _ := ext[dealCadenceExtension].(map[string]interface{})
+	chain := cadenceChainOf(value)
 	if chain["state"] != "witnessed" {
 		return aacbundle.ClaimResult{}, nil, false
 	}
@@ -66,7 +65,10 @@ func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory 
 		}
 		dealStatement, deal = statement, prior
 	}
-	logID, _ := chain["deal_log_id"].(string)
+	logID, _ := chain["log_id"].(string)
+	if logID == "" {
+		logID, _ = chain["deal_log_id"].(string) // bundles written before the rename
+	}
 	salt, _ := chain["salt"].(string)
 	size, sizeErr := jsonUint(chain["size"])
 	index, indexErr := jsonUint(chain["index"])

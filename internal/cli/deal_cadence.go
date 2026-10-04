@@ -48,8 +48,24 @@ const (
 	// release they installed.
 	dealDefaultWitness    = "https://witness.agentactioncapsule.org"
 	dealDefaultWitnessKey = "39bb654c9dc0afe1c0edef0deffaa69099b8518836c9ba26e0491535840f96b5"
-	dealCadenceExtension  = "x-deal-cadence-v0"
+	// The bundle extension that carries a checkpoint's witnessed chain
+	// through a cadence log. Its name and fields are generic, so a neutral
+	// verifier can read it without knowing what a deal is; bundles written
+	// before carried it as legacyCadenceExtension, with deal_log_id.
+	dealCadenceExtension   = "cadence-witness/v0"
+	legacyCadenceExtension = "x-deal-cadence-v0"
 )
+
+// cadenceChainOf is the cadence chain a bundle carries, under its name or
+// the name bundles carried it under before.
+func cadenceChainOf(b map[string]interface{}) map[string]interface{} {
+	ext, _ := b["extensions"].(map[string]interface{})
+	if chain, ok := ext[dealCadenceExtension].(map[string]interface{}); ok {
+		return chain
+	}
+	chain, _ := ext[legacyCadenceExtension].(map[string]interface{})
+	return chain
+}
 
 // dealWitnessSees is said wherever the witness is configured.
 const dealWitnessSees = "The witness sees one checkpoint per tick of this profile's cadence log: hashes, a size that grows by the same amount every tick, and a time on the cadence. It never sees content, how many deals there are, or when they happen."
@@ -615,7 +631,7 @@ func (s *dealSession) cadenceChain(ctx context.Context, t *target, tick dealTick
 	}
 	out := map[string]interface{}{
 		"state": "witnessed", "extent": "all", "checkpoint_at": tick.at.UTC().Format(time.RFC3339),
-		"deal_log_id": leaf.LogID, "size": integer(leaf.Size), "salt": leaf.Salt,
+		"log_id": leaf.LogID, "size": integer(leaf.Size), "salt": leaf.Salt,
 		"index": integer(leaf.Index), "path": hexPath,
 		"cadence": map[string]interface{}{
 			"log_id": s.p.LogID, "entry_index": integer(tick.entrySeq - 1),

@@ -128,8 +128,7 @@ func dealProducedByLine(b map[string]interface{}) string {
 }
 
 func dealAssuranceRung(b map[string]interface{}) map[string]any {
-	ext, _ := b["extensions"].(map[string]interface{})
-	cadence, _ := ext[dealCadenceExtension].(map[string]interface{})
+	cadence := cadenceChainOf(b)
 	state, _ := cadence["state"].(string)
 	cp, _ := b["checkpoint"].(map[string]interface{})
 	witnesses, _ := cp["witnesses"].([]interface{})

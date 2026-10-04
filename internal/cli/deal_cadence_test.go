@@ -447,6 +447,26 @@ func TestDealReportRungWitnessedInPart(t *testing.T) {
 	status, findings := bundleWitnesses(result)
 	assert.Equal(t, "pass", status, "earlier checkpoint -> consistency -> current checkpoint, and the earlier one's chain: %v", findings)
 
+	// A bundle written before the extension's rename (x-deal-cadence-v0,
+	// deal_log_id) still verifies.
+	{
+		var legacy map[string]any
+		require.NoError(t, json.Unmarshal(mustRead(t, partPath), &legacy))
+		exts := legacy["extensions"].(map[string]any)
+		chain := exts[dealCadenceExtension].(map[string]any)
+		chain["deal_log_id"] = chain["log_id"]
+		delete(chain, "log_id")
+		exts[legacyCadenceExtension] = chain
+		delete(exts, dealCadenceExtension)
+		path := filepath.Join(t.TempDir(), "legacy.json")
+		raw, err := json.Marshal(legacy)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(path, raw, 0o600))
+		result, _ := verifyWithDirectory(t, path, directory)
+		status, findings := bundleWitnesses(result)
+		assert.Equal(t, "pass", status, "legacy names: %v", findings)
+	}
+
 	// Tampering with the earlier checkpoint or its proof fails.
 	for name, tamper := range map[string]func(map[string]any){
 		"proof": func(c map[string]any) {
