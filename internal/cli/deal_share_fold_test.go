@@ -78,8 +78,9 @@ func TestDealShareListedLeaksAreWithheldAndRefused(t *testing.T) {
 // The same leaks end to end: in a message, through `deal report --share
 // adjudicator`, each withheld from the copy (or the share refused).
 func TestDealShareListedLeaksEndToEnd(t *testing.T) {
-	for _, leak := range listedLeaks {
+	for i, leak := range listedLeaks {
 		t.Run(leak, func(t *testing.T) {
+			raceSample(t, i)
 			dealFixture(t)
 			dealID := openPrivateDeal(t)
 			msg, err := json.Marshal(map[string]any{"from": "counterparty", "channel": "web", "text": "Here it is: " + leak + " (thanks)"})
@@ -206,7 +207,7 @@ func (g *leakGen) rewrite(v string) (string, bool) {
 // scrubber withholds every one it can read, so its output passes the gate.
 // DEAL_LEAK_SEED and DEAL_LEAK_ROUNDS widen the search.
 func TestDealShareRandomRewritingsAreWithheldOrRefused(t *testing.T) {
-	seed, rounds := int64(20261003), 600
+	seed, rounds := int64(20261003), raceRounds(600)
 	if v, err := strconv.ParseInt(os.Getenv("DEAL_LEAK_SEED"), 10, 64); err == nil {
 		seed = v
 	}

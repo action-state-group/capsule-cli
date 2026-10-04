@@ -51,7 +51,7 @@ func TestDealShareGateIgnoresRandomIdentifiers(t *testing.T) {
 		}},
 	}
 	for _, k := range kinds {
-		for range 3000 {
+		for range raceRounds(3000) {
 			id := k.gen()
 			for _, page := range [][]byte{
 				gatePage(t, "Reference "+id+" on file"),
@@ -100,13 +100,13 @@ func TestDealShareGateBareNumberRate(t *testing.T) {
 		}},
 		{"random uint64 (mostly 20)", func() string { return strconv.FormatUint(r.Uint64(), 10) }},
 	} {
-		const n = 5000
+		n := raceRounds(5000)
 		refused := 0
 		for range n {
 			if dealPageGate(gatePage(t, "at "+k.gen()), nil) != nil {
 				refused++
 			}
 		}
-		t.Logf("%-26s refused %4d/%d (%.1f%%)", k.name, refused, n, 100*float64(refused)/n)
+		t.Logf("%-26s refused %4d/%d (%.1f%%)", k.name, refused, n, 100*float64(refused)/float64(n))
 	}
 }

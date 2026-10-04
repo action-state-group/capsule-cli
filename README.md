@@ -808,8 +808,9 @@ libraries and a dedicated MySQL container. Never point them at production.
 
 ## Continuous integration
 
-Run `make test` for the complete suite, including MySQL integration tests and
-the race detector. Locally this requires Docker: the runner creates a temporary
+Run `make test` for the complete suite, including MySQL integration tests,
+under the race detector and then every case without it (CI runs it for the
+default build and the plugin-dispatch build in parallel). Locally this requires Docker: the runner creates a temporary
 MySQL 8.4 container on a random loopback port and removes it when finished.
 CI supplies its own disposable service via `CAPSULE_CLI_TEST_MYSQL_PORT`.
 Only set that variable yourself for a disposable test database, never a

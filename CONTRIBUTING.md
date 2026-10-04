@@ -7,14 +7,18 @@ the race detector; see "Tests" and "Continuous integration" in the README.
 ## Running the tests the way CI does
 
 ```bash
-make test                                                  # race detector + MySQL, -timeout=15m
-go test -tags actionstate -race -count=1 -timeout=15m ./...  # the plugin-dispatch build
+make test                                    # MySQL; race detector, then every case without it
+bash scripts/test.sh -tags=actionstate       # the same for the plugin-dispatch build
 ```
 
-Pass `-timeout=15m` as CI does. Without it, `go test` stops a package after
-10 minutes and reports a failure. The race-enabled `internal/cli` package takes
-3 to 6 minutes on a CI runner and up to about 8.5 on a busy 8-core machine, so
-the default leaves little room.
+Under the race detector the slowest single-goroutine case loops (random
+rewritings through the share gate, end-to-end runs over fixed case lists) run a
+fixed sample: the detector makes them about ten times slower and finds nothing
+in them. The second pass runs every case. `CAPSULE_TEST_RACE_FULL=1` runs every
+case under the race detector too; see `internal/cli/race_sample_test.go`.
+
+If you call `go test -race` yourself, pass `-timeout=15m` as the script does.
+Without it, `go test` stops a package after 10 minutes and reports a failure.
 
 ## Race failures
 
