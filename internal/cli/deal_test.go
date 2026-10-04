@@ -514,46 +514,76 @@ const otterFixture = "testdata/deal/otter"
 // before the check means the check compares against what the user chose, so
 // the specific item is not "Not what you asked". Without the note it still
 // is: the rule is not weakened. The unverifiable sale price stays a claim.
+//
 // What the user chose (the item) and what the agent picked on its own (the
-// size) are told apart on the card and in the approval text.
+// size) are told apart. A size the agent picked is material: the check asks
+// the user ("I picked size ...; price varies by size") rather than passing
+// on an empty card. Once the user's pick names the size too, it passes.
 func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 	const item = "Otterly Chaos - Unsupervised and Thriving Funny Otter Design Sticker"
-	run := func(t *testing.T, picked bool) map[string]any {
+	const pickedSize = "I picked size small 3.8in x 2.4in; price varies by size"
+	run := func(t *testing.T, intent, check string) map[string]any {
 		dealFixture(t)
 		dealID := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
 		dealRun(t, "note", "--deal", dealID, "--kind", "claim", "--input", filepath.Join(otterFixture, "claim-price.json"))
-		if picked {
-			dealRun(t, "note", "--deal", dealID, "--kind", "intent", "--input", filepath.Join(otterFixture, "intent-picked.json"))
+		if intent != "" {
+			dealRun(t, "note", "--deal", dealID, "--kind", "intent", "--input", filepath.Join(otterFixture, intent))
 		}
-		return dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(otterFixture, "check-pay.json"))
+		return dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(otterFixture, check))
 	}
 	attrs := func(v any) []string {
-		var out []string
+		out := []string{}
 		for _, a := range v.([]any) {
 			m := a.(map[string]any)
 			out = append(out, m["label"].(string)+" "+m["value"].(string))
 		}
 		return out
 	}
+	rules := func(check map[string]any) []string {
+		var out []string
+		for _, d := range check["differences"].([]any) {
+			out = append(out, d.(map[string]any)["rule"].(string))
+		}
+		return out
+	}
 	t.Run("without the intent note it still flags", func(t *testing.T) {
-		check := run(t, false)
+		check := run(t, "", "check-pay.json")
 		assert.Equal(t, "pause", check["verdict"])
 		assert.Contains(t, check["card"], "Not what you asked: item funny otter sticker → "+item)
-		assert.Contains(t, check["card"], "picked by the agent, not by you: size small 3.8in x 2.4in")
+		assert.Contains(t, check["card"], pickedSize)
 		assert.Contains(t, check["unverified"], "Sticker listed on sale at $3.00 (list $3.50)")
+		assert.Empty(t, attrs(check["asked_attributes"]), "the item differs from the ask, so it is not the user's")
 	})
-	t.Run("with the intent note it does not", func(t *testing.T) {
-		check := run(t, true)
+	t.Run("with the intent note the item is the user's and the size still needs a nod", func(t *testing.T) {
+		check := run(t, "intent-picked.json", "check-pay.json")
 		assert.NotContains(t, check["card"], "Not what you asked")
-		for _, d := range check["differences"].([]any) {
-			assert.NotEqual(t, "asked", d.(map[string]any)["question"], "no asked-vs-did difference: %v", d)
-		}
+		assert.Equal(t, []string{"agent_picked"}, rules(check), "only the agent's own pick pauses")
+		assert.Equal(t, "pause", check["verdict"])
+		assert.Equal(t, false, check["proceed"], "never proceed on an empty card when the agent picked a size")
+		assert.Contains(t, check["card"], pickedSize)
 		assert.Contains(t, check["unverified"], "Sticker listed on sale at $3.00 (list $3.50)", "an unverifiable reference price stays a claim")
-		assert.Equal(t, "pass", check["verdict"])
-		// The item is the user's choice; the size is the agent's.
 		assert.Equal(t, []string{"item " + item}, attrs(check["asked_attributes"]))
 		assert.Equal(t, []string{"size small 3.8in x 2.4in"}, attrs(check["picked_by_agent"]))
 		assert.Contains(t, check["approval_text"], "You asked for: item "+item+". The agent picked, not you: size small 3.8in x 2.4in.")
+	})
+	t.Run("when the user picked the size too it passes", func(t *testing.T) {
+		check := run(t, "intent-picked-with-size.json", "check-pay.json")
+		assert.Equal(t, "pass", check["verdict"])
+		assert.Equal(t, "", check["card"])
+		assert.Equal(t, []string{"item " + item, "size small 3.8in x 2.4in"}, attrs(check["asked_attributes"]))
+		assert.Empty(t, attrs(check["picked_by_agent"]))
+	})
+	t.Run("after the intent note a different item still pauses", func(t *testing.T) {
+		check := run(t, "intent-picked-with-size.json", "check-other-item.json")
+		assert.Equal(t, "pause", check["verdict"])
+		assert.Contains(t, check["card"], "Not what you asked: item "+item+" → Otter Nonsense - Funny Otter Sticker")
+		assert.NotContains(t, check["approval_text"], "You asked for: item Otter Nonsense", "the agent's item is never called the user's")
+		assert.NotContains(t, attrs(check["asked_attributes"]), "item Otter Nonsense - Funny Otter Sticker")
+	})
+	t.Run("after the intent note a price over the limit still pauses", func(t *testing.T) {
+		check := run(t, "intent-picked-with-size.json", "check-over-limit.json")
+		assert.Equal(t, "pause", check["verdict"])
+		assert.Contains(t, check["card"], "Over your limit of $8.00 ($9.00)")
 	})
 }
 

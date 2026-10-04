@@ -88,8 +88,16 @@ pick, if the deal is already open) and **before** `deal check`:
   agent, not by you" on a card, and "The agent picked, not you" in
   `approval_text`. A choice you made is never shown as the user's.
 
+Some picks change what is bought or what it costs: a size, a variant, a
+quantity other than one, a shipping or delivery option. If you picked one of
+these yourself, the check pauses on it ("I picked size small; price varies
+by size") rather than passing quietly. Show the card and seal the user's
+answer. If the user chose it, put it in the pick's `asked` instead.
+
 The check still reports what the user did not choose, and an unverified
-claim (a "sale" price you could not confirm) stays unverified.
+claim (a "sale" price you could not confirm) stays unverified. An item
+different from the user's pick, or a price over their limit, still pauses
+after the pick is sealed.
 
 ### Booking
 

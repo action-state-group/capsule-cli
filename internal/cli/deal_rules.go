@@ -166,9 +166,11 @@ type dealAttribute struct {
 }
 
 // attributeProvenance splits what is about to happen into what the user
-// asked for and what the agent picked on its own: an attribute the user's
-// sealed intent names is theirs, any other is the agent's. Money is not
-// listed: the amount, the limit and the price are on the card already.
+// asked for and what the agent picked on its own. An attribute is the user's
+// only where their sealed intent names it and the value matches: one that
+// differs is not theirs, and is a "Not what you asked" difference instead.
+// An attribute the intent does not name is the agent's. Money is not listed:
+// the amount, the limit and the price are on the card already.
 func attributeProvenance(asked, proposed dealTerms) (yours, agents []dealAttribute) {
 	yours, agents = []dealAttribute{}, []dealAttribute{}
 	sort := func(field, label, mine, value string) {
@@ -176,10 +178,11 @@ func attributeProvenance(asked, proposed dealTerms) (yours, agents []dealAttribu
 			return
 		}
 		a := dealAttribute{Field: field, Label: label, Value: value}
-		if strings.TrimSpace(mine) != "" {
-			yours = append(yours, a)
-		} else {
+		switch {
+		case strings.TrimSpace(mine) == "":
 			agents = append(agents, a)
+		case strings.EqualFold(strings.TrimSpace(mine), strings.TrimSpace(value)):
+			yours = append(yours, a)
 		}
 	}
 	qty := func(v int64) string {
@@ -201,6 +204,17 @@ func attributeProvenance(asked, proposed dealTerms) (yours, agents []dealAttribu
 		sort("conditions."+k, strings.ReplaceAll(k, "_", " "), asked.Conditions[k], proposed.Conditions[k])
 	}
 	return yours, agents
+}
+
+// materialAttribute is an attribute the agent may not settle alone: one that
+// changes what is bought or what it costs (quantity, size, variant,
+// shipping or delivery). When the agent picked one, the check asks the user.
+var materialCondition = regexp.MustCompile(`(?i)size|variant|shipping|delivery|quantity|qty`)
+
+// A quantity of one is how any request in the singular reads, so it is never
+// the agent's pick to ask about; any other quantity is.
+func materialAttribute(a dealAttribute) bool {
+	return a.Field == "quantity" && a.Value != "1" || strings.HasPrefix(a.Field, "conditions.") && materialCondition.MatchString(a.Field)
 }
 
 // attributeText is a list of attributes as "label value" pairs.
@@ -630,6 +644,13 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	// 1. Asked?
 	intent := s.intent
 	r.Asked, r.Picked = attributeProvenance(intent.Asked, proposed)
+	// A material attribute the agent picked needs the user's nod: it pauses
+	// the check, so "proceed" is never true on an empty card.
+	for _, a := range r.Picked {
+		if materialAttribute(a) {
+			add("asked", "agent_picked", a.Field, fmt.Sprintf("I picked %s %s; price varies by %s", a.Label, a.Value, a.Label))
+		}
+	}
 	if intent.Allowed != nil && !slices.Contains(intent.Allowed, snap.Action) {
 		add("asked", "not_asked", "action", "You didn't ask for this: "+actionNames[snap.Action])
 	}
@@ -773,8 +794,15 @@ func renderCard(r dealCheckResult, demo bool) string {
 		}
 	}
 	parts = append(parts, r.Notes...)
-	if len(r.Picked) > 0 {
-		parts = append(parts, "picked by the agent, not by you: "+attributeText(r.Picked))
+	// The agent's other picks, not material enough to pause on their own.
+	var minor []dealAttribute
+	for _, a := range r.Picked {
+		if !materialAttribute(a) {
+			minor = append(minor, a)
+		}
+	}
+	if len(minor) > 0 {
+		parts = append(parts, "picked by the agent, not by you: "+attributeText(minor))
 	}
 	if len(r.Unverified) > 0 {
 		parts = append(parts, "unverified: "+strings.Join(r.Unverified, ", "))
@@ -1069,7 +1097,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: fmt.Sprintf("Checked before %s: %s", actionNames[e.Check.Action], verdict), Steps: []string{e.Check.Snapshot, se.CapsuleID}})
 			var asked []string
 			for _, d := range e.Check.Differences {
-				if d.Question == "asked" {
+				if d.Question == "asked" && d.Rule != "agent_picked" {
 					asked = append(asked, d.Text)
 				}
 			}
@@ -1077,7 +1105,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 				agent("asked_vs_did", fmt.Sprintf("Tried %s: %s", actionNames[e.Check.Action], strings.Join(asked, " · ")), openID, e.Check.Snapshot, se.CapsuleID)
 			}
 			for _, d := range e.Check.Differences {
-				if d.Question == "asked" || d.Text == "" {
+				if d.Question == "asked" && d.Rule != "agent_picked" || d.Text == "" {
 					continue
 				}
 				var steps []string
@@ -1174,7 +1202,7 @@ func pauseCauseKind(rule string) (side, kind string) {
 		return "counterparty", "code_request"
 	case "off_platform_early":
 		return "counterparty", "channel_hop"
-	case "pay_before_seeing", "credentials_requested":
+	case "pay_before_seeing", "credentials_requested", "agent_picked":
 		return "agent", rule
 	}
 	return "counterparty", rule

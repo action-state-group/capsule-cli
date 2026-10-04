@@ -119,7 +119,7 @@ Field details:
   pack's `rail` rule) and `refundable`.
 - **differences[]**: `{question, rule, field?}`. `question` is one of `asked`, `who`, `terms`,
   `recourse`, `safety`, `delivered`. `rule` is a rule id from the pack named by `pack_id`, or a
-  core rule (`not_asked`, `over_limit`, `terms_changed`, `recourse_changed`,
+  core rule (`not_asked`, `over_limit`, `agent_picked`, `terms_changed`, `recourse_changed`,
   `credentials_requested`, `not_delivered`, `delivered_differs`). Any change of
   `recourse.rail` or `recourse.refundable` from what was agreed is a
   `recourse_changed` difference, for every action. The human card text contains raw values, so it is
