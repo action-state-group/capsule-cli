@@ -595,6 +595,16 @@ func dealOpenCommand() *cobra.Command {
 		if err = normalizeOpen(&o); err != nil {
 			return err
 		}
+		o.Skill = nil
+		skillPath, _ := c.Flags().GetString("skill")
+		if skillPath == "" {
+			skillPath = os.Getenv(dealSkillEnv)
+		}
+		if skillPath != "" {
+			if o.Skill, err = readDealSkill(skillPath); err != nil {
+				return err
+			}
+		}
 		return runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
 			id := make([]byte, 8)
 			if _, err := rand.Read(id); err != nil {
@@ -617,10 +627,14 @@ func dealOpenCommand() *cobra.Command {
 			out["points_of_no_return"] = dealPointsOfNoReturn[o.Type]
 			out["checkpoint"] = cp
 			out["remote_warm"] = dealRemoteWarm(ctx)
+			if o.Skill != nil {
+				out["skill"] = map[string]any{"skill_md_digest": o.Skill.Digest, "other_copies": o.Skill.OtherCopies, "others": o.Skill.Others}
+			}
 			return output(c, out)
 		})
 	}}
 	cmd.Flags().String("input", "", "Baseline JSON: type, intent, who, terms, claims, recourse")
+	cmd.Flags().String("skill", "", "The SKILL.md the agent is following (or $"+dealSkillEnv+"): its digest is sealed in the baseline")
 	return cmd
 }
 
@@ -1080,7 +1094,10 @@ func dealReportCommand() *cobra.Command {
 			return inputError("--share must be keep, counterparty or adjudicator")
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
-			report := buildDealReport(events)
+			report, reportErr := s.dealReportFor(ctx, events)
+			if reportErr != nil {
+				return reportErr
+			}
 			lines := make([]string, 0, len(events))
 			outcome := "open"
 			for _, se := range events {
@@ -1092,8 +1109,9 @@ func dealReportCommand() *cobra.Command {
 			out := map[string]any{
 				"deal_id": dealID, "scope": dealScopeLine, "did_line": dealDidLine(dealDidSources(events)), "demo": events[0].Event.Open.Demo, "outcome": outcome,
 				"asked": report.Asked, "did": report.Did, "told": report.Told, "anomalies": report.Anomalies, "merchant": report.Merchant,
-				"produced_by": dealProducers(events),
-				"deadlines":   dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "trail": strings.Join(lines, "\n"),
+				"instructions": report.Instructions,
+				"produced_by":  dealProducers(events),
+				"deadlines":    dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "trail": strings.Join(lines, "\n"),
 				"countersign": dealNotCountersigned(),
 			}
 			if htmlPath == "" && emailPath == "" && bundlePath == "" && fromBundle == "" {

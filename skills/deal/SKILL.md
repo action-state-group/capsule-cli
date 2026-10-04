@@ -309,8 +309,17 @@ All commands take `--profile deal` and print one JSON object.
 **1. Open** at the final review, or earlier when you first contact a seller:
 
 ```sh
-capsulectl --profile deal deal open --input open.json
+capsulectl --profile deal deal open --skill <path of this SKILL.md> --input open.json
 ```
+
+Always pass `--skill` with the full path of **this** file, the SKILL.md you
+are following now (or set `CAPSULE_DEAL_SKILL` to it). Its digest is sealed
+in the deal's baseline, with how many other copies of this skill sit beside
+it. If `deal open` reports `"other_copies"` above 0, tell the user: another
+copy of the deal skill (for example an old backup left inside the skills
+folder) is visible, and it may be the one being followed. The record shows
+which instructions were present when the deal opened, as you reported them;
+it is not proof that they were followed. Never say it is.
 
 `open.json` carries: `type`; `intent.verbatim` (**the user's exact words**,
 copied, never paraphrased); `intent.asked` (the parts of the request you can

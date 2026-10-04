@@ -140,7 +140,8 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 			// Which builds sealed the steps, and which one made this page:
 			// the page compares the two from data it already holds. Nothing
 			// is fetched to do it.
-			"produced_by": stringList(dealProducers(events)), "page_built_by": currentProducer().String(), "page_version": cliVersion,
+			"instructions": report.Instructions,
+			"produced_by":  stringList(dealProducers(events)), "page_built_by": currentProducer().String(), "page_version": cliVersion,
 			"scope": dealScopeLine, "audience": dealAudienceKeep, "verify_command": verifyCommand,
 		},
 	}

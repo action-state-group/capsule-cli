@@ -100,6 +100,12 @@ func dealAssurance(b map[string]interface{}) map[string]any {
 		out["text"] = out["text"].(string) + " " + line
 		out["produced_by"] = line
 	}
+	ext, _ := b["extensions"].(map[string]interface{})
+	deal, _ := ext["x-deal-v0"].(map[string]interface{})
+	if line, _ := deal["instructions"].(string); line != "" {
+		out["text"] = out["text"].(string) + " " + line
+		out["instructions"] = line
+	}
 	return out
 }
 

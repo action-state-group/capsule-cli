@@ -373,6 +373,13 @@ def stage_schema(rec):
         raise StageError("schema", "seq must be an integer >= 1")
     if not re.fullmatch(r"deal-[0-9a-f]{16,64}", str(blk["deal_id"])):
         raise StageError("schema", "deal_id pattern")
+    body = rec.get("body")
+    if blk["record_type"] == "baseline" and isinstance(body, dict) and "skill" in body:
+        sk = body["skill"]
+        if not isinstance(sk, dict) or set(sk) != {"skill_md_digest", "other_copies"} or not re.fullmatch(
+            r"[0-9a-f]{64}", str(sk.get("skill_md_digest", ""))
+        ) or not isinstance(sk.get("other_copies"), int) or sk["other_copies"] < 0:
+            raise StageError("schema", "body/skill must be {skill_md_digest: 64 hex, other_copies: integer >= 0}")
     if "producer" in blk:
         prod = blk["producer"]
         if not isinstance(prod, dict) or set(prod) != {"name", "version", "commit"} or not all(
