@@ -24,6 +24,10 @@ import (
 
 const defaultBundleURL = "https://verify.agentactioncapsule.org/bundle"
 
+// defaultMaxFragment is the longest fragment a permalink carries: the top of
+// the 2-8 KB that links survive in messengers, mail and QR codes.
+const defaultMaxFragment = 8192
+
 type bundleArtifacts interface {
 	Get(context.Context, string) (artifact.Record, error)
 }
@@ -619,6 +623,35 @@ const htmlEmitterStubMessage = "--html requires the agent-action-capsule #102 ev
 
 const producerKeyFlagUsage = "Ed25519 public key (hex) to declare in the producer-key/v1 extension (default: the profile's signing key)"
 
+// bundleLog picks the log a bundle is read from: --log-id names any log,
+// else the profile's log_id. A deal profile's log_id is its cadence log,
+// which holds no records, and each deal is its own log: those go through
+// --deal (dealBundleRun). disclose appends a disclosure record to the log it
+// read, so it refuses a deal's log named by --log-id.
+func bundleLog(c *cobra.Command, p Profile, use, root string) (Profile, error) {
+	logID, _ := c.Flags().GetString("log-id")
+	switch {
+	case logID != "":
+		if !logName.MatchString(logID) {
+			return p, inputError("--log-id must be lowercase letters, digits and ._:/-, such as a profile's log_id")
+		}
+	case p.LogID == "":
+		return p, inputError("the profile has no log_id: name the log with --log-id, or a deal with --deal")
+	case p.Namespace == "deal" && strings.HasPrefix(p.LogID, "deal-cadence/"):
+		return p, inputError("this is a deal profile: each deal is its own log; name the deal with --deal DEAL_ID")
+	default:
+		return p, nil
+	}
+	if strings.HasPrefix(logID, "deal/") {
+		return p, inputError("a deal's logs are read with --deal DEAL_ID, which applies the deal's share rules; --log-id does not")
+	}
+	if root == "" {
+		return p, inputError("--root is required: the Capsule ID (64 hex) the bundle is built around")
+	}
+	p.LogID = logID
+	return p, nil
+}
+
 func bundleCommands() []*cobra.Command {
 	shortFor := map[string]string{
 		"bundle":    "Assemble a self-verifying Evidence Bundle from the root's citation closure",
@@ -630,12 +663,21 @@ func bundleCommands() []*cobra.Command {
 			if html, _ := c.Flags().GetBool("html"); html {
 				return inputError(htmlEmitterStubMessage)
 			}
+			if dealID, _ := c.Flags().GetString("deal"); dealID != "" {
+				return dealBundleRun(c, use)
+			}
+			if c.Flags().Changed("share") || c.Flags().Changed("to") {
+				return inputError("--share and --to go with --deal: they choose what a deal's shared copy withholds")
+			}
 			profile, err := selected(c)
 			if err != nil {
 				return err
 			}
 			root, _ := c.Flags().GetString("root")
 			closureDepth, _ := c.Flags().GetInt("closure-depth")
+			if profile, err = bundleLog(c, profile, use, root); err != nil {
+				return err
+			}
 			payloads, _ := c.Flags().GetString("payloads")
 			suppressNames, _ := c.Flags().GetStringSlice("suppress")
 			suppressSet := make(map[string]bool, len(suppressNames))
@@ -678,22 +720,11 @@ func bundleCommands() []*cobra.Command {
 				}
 			}
 			if permalink {
-				fragment, err := aacbundle.EncodeFragment(value)
+				link, err := mintPermalink(c, value)
 				if err != nil {
 					return err
 				}
-				decoded, err := aacbundle.DecodeFragment(fragment)
-				if err != nil {
-					return err
-				}
-				if _, ok := decoded.(map[string]interface{}); !ok {
-					return errors.New("permalink fragment did not round-trip")
-				}
-				base, _ := c.Flags().GetString("base-url")
-				if base == "" {
-					base = defaultBundleURL
-				}
-				_, err = fmt.Fprintln(c.OutOrStdout(), strings.TrimRight(base, "#")+"#"+fragment)
+				_, err = fmt.Fprintln(c.OutOrStdout(), link)
 				return err
 			}
 			out, _ := c.Flags().GetString("out")
@@ -709,6 +740,10 @@ func bundleCommands() []*cobra.Command {
 			return err
 		}}
 		command.Flags().String("root", "", "Root Capsule ID")
+		command.Flags().String("deal", "", "A deal on a deal profile: the whole deal from its own log, built as `deal report` builds it (disclose and permalink also need --share and --to)")
+		command.Flags().String("share", dealAudienceKeep, "With --deal: who the copy is for: keep (bundle only: your own copy), counterparty or adjudicator (a shared copy, put on record first)")
+		command.Flags().String("to", "", "With --deal and --share: who the shared copy is for, as sealed in the disclosure record")
+		command.Flags().String("log-id", "", "Read this log instead of the profile's log_id")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
 		command.Flags().String("producer-key", "", producerKeyFlagUsage)
 		command.Flags().Bool("html", false, "Also render an offline report.html carrier (not yet wired; see docs)")
@@ -720,6 +755,7 @@ func bundleCommands() []*cobra.Command {
 			command.Flags().String("out", "", "Write the Evidence Bundle JSON to a new file")
 		} else {
 			command.Flags().String("base-url", defaultBundleURL, "Bundle viewer base URL")
+			command.Flags().Int("max-fragment", defaultMaxFragment, "Refuse a link whose fragment is longer than this many characters (0: no limit, to measure)")
 		}
 		return command
 	}
