@@ -1242,6 +1242,17 @@ func dealReportCommand() *cobra.Command {
 				"countersign": dealNotCountersigned(),
 			}
 			if htmlPath == "" && emailPath == "" && bundlePath == "" && fromBundle == "" {
+				// Every report states its rung, read from the same bundle the
+				// page and the email would carry.
+				if s.dp.Checkpoint.Signing == (Secret{}) {
+					out["assurance"] = dealAssurance(map[string]interface{}{})
+					return output(c, out)
+				}
+				b, err := s.dealReportBundle(ctx, events, report, dealAudienceKeep, "")
+				if err != nil {
+					return err
+				}
+				out["assurance"] = dealAssurance(b)
 				return output(c, out)
 			}
 			// --from-bundle renders the receipt from a bundle file this deal

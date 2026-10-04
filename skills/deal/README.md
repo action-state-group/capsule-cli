@@ -200,11 +200,22 @@ and the receipt names the profile's own, for example "every 5m, give or take
 the receipt and `deal report` name them: **scheduled** (not yet in a tick),
 **pending** (in a tick, no receipt back yet; both read "Sealed, witness
 pending") and **witnessed**.
+
+A step sealed after the last witnessed tick does not undo what the witness
+holds. The report then reads **witnessed in part**: "steps 1 to k of n" are
+witnessed, and the rest are sealed on this device, witness pending, until a
+later tick carries them. The bundle carries the earlier, witnessed
+checkpoint of the deal and an MMR consistency proof that the current
+checkpoint extends it. Of the ticks that hold a deal checkpoint, the newest
+whose receipt verifies is used, so a later tick still waiting for its receipt
+never hides an earlier one that came back. Every `deal report`, plain JSON
+included, names its rung.
 Witnessed means the bundle carries the whole chain: the deal checkpoint's
 leaf, its salt and position, the 16-hash path (the same length for every
 deal, so it says nothing about the others), the cadence entry's inclusion
 proof, the cadence checkpoint (signed by the same key as the deal
-checkpoint) and the witness receipt. `capsulectl verify --bundle FILE
+checkpoint) and the witness receipt, plus, witnessed in part, the earlier
+checkpoint and its consistency proof. `capsulectl verify --bundle FILE
 --witness-directory DIRECTORY.json` checks every link.
 
 ## Report

@@ -13,7 +13,7 @@ import (
 	"github.com/action-state-group/cll-go/mmr"
 )
 
-// cadenceClaim checks a deal bundle's x-deal-cadence-v0 chain: the bundle's
+// cadenceClaim checks a bundle's cadence-witness/v0 chain: the bundle's
 // own (deal) checkpoint is a leaf, at the stated position and with the
 // stated salt, of the tree whose root is an entry of the cadence log; that
 // entry is included in the cadence checkpoint; the cadence checkpoint is
@@ -22,8 +22,7 @@ import (
 // no witnessed chain. dealStatement is nil when the bundle's checkpoint did
 // not verify.
 func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory []witnessRow) (result aacbundle.ClaimResult, receipts []map[string]string, present bool) {
-	ext, _ := value["extensions"].(map[string]interface{})
-	chain, _ := ext[dealCadenceExtension].(map[string]interface{})
+	chain := cadenceChainOf(value)
 	if chain["state"] != "witnessed" {
 		return aacbundle.ClaimResult{}, nil, false
 	}
@@ -37,7 +36,39 @@ func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory 
 	if err != nil {
 		return fail("cadence_deal_checkpoint_malformed")
 	}
-	logID, _ := chain["deal_log_id"].(string)
+	// Witnessed in part: the leaf holds an earlier checkpoint of this deal,
+	// signed by the same key, and a consistency proof shows the bundle's
+	// checkpoint extends it. The rest of the chain is checked for it.
+	if chain["extent"] == "part" {
+		earlier, _ := chain["earlier"].(map[string]interface{})
+		cp, _ := earlier["checkpoint"].(map[string]interface{})
+		encoded, _ := cp["cose"].(string)
+		statement, err := base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil {
+			return fail("cadence_earlier_checkpoint_malformed")
+		}
+		if _, err = signedCheckpoint(statement); err != nil {
+			return fail("cadence_earlier_checkpoint_signature_invalid")
+		}
+		prior, err := checkpoint.ParseRecord(statement)
+		if err != nil {
+			return fail("cadence_earlier_checkpoint_malformed")
+		}
+		if prior.KeyID != deal.KeyID || prior.LogID != deal.LogID || prior.MMRSize >= deal.MMRSize {
+			return fail("cadence_earlier_checkpoint_not_this_deal")
+		}
+		proof, err := parseConsistencyJSON(earlier["consistency_proof"])
+		oldRoot, oldErr := hex.DecodeString(prior.Root)
+		newRoot, newErr := hex.DecodeString(deal.Root)
+		if err != nil || oldErr != nil || newErr != nil || proof.OldSize != prior.MMRSize || proof.NewSize != deal.MMRSize || !mmr.VerifyConsistency(oldRoot, newRoot, proof) {
+			return fail("cadence_earlier_checkpoint_not_a_prefix")
+		}
+		dealStatement, deal = statement, prior
+	}
+	logID, _ := chain["log_id"].(string)
+	if logID == "" {
+		logID, _ = chain["deal_log_id"].(string) // bundles written before the rename
+	}
 	salt, _ := chain["salt"].(string)
 	size, sizeErr := jsonUint(chain["size"])
 	index, indexErr := jsonUint(chain["index"])
@@ -182,4 +213,50 @@ func parseProofJSON(v interface{}) (mmr.InclusionProof, error) {
 	}
 	p.PeaksRight, err = hashes("peaks_right")
 	return p, err
+}
+
+func parseConsistencyJSON(v interface{}) (mmr.ConsistencyProof, error) {
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		return mmr.ConsistencyProof{}, fmt.Errorf("not a proof")
+	}
+	hashes := func(v interface{}) ([][]byte, error) {
+		list, _ := v.([]interface{})
+		out := make([][]byte, len(list))
+		for i, item := range list {
+			s, _ := item.(string)
+			b, err := hex.DecodeString(s)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = b
+		}
+		return out, nil
+	}
+	var p mmr.ConsistencyProof
+	var err error
+	p.Kind, _ = m["kind"].(string)
+	if p.V, err = jsonUint(m["v"]); err != nil {
+		return p, err
+	}
+	if p.OldSize, err = jsonUint(m["old_size"]); err != nil {
+		return p, err
+	}
+	if p.NewSize, err = jsonUint(m["new_size"]); err != nil {
+		return p, err
+	}
+	if p.OldPeaks, err = hashes(m["old_peaks"]); err != nil {
+		return p, err
+	}
+	if p.NewPeaks, err = hashes(m["new_peaks"]); err != nil {
+		return p, err
+	}
+	steps, _ := m["witness"].([]interface{})
+	p.Witness = make([][][]byte, len(steps))
+	for i, step := range steps {
+		if p.Witness[i], err = hashes(step); err != nil {
+			return p, err
+		}
+	}
+	return p, nil
 }

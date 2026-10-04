@@ -71,11 +71,12 @@ function versionBefore(a, b) {
   const header = el("section", undefined, "deal-assurance");
   header.append(el("p", report.scope || "This receipt covers this one deal. It is not a record of everything the agent did.", "deal-scope"));
   // A witness receipt rides in checkpoint.witnesses, or (the default) in the
-  // cadence chain, x-deal-cadence-v0, that anchors this deal's checkpoint in
+  // cadence chain, cadence-witness/v0, that anchors this deal's checkpoint in
   // the profile's cadence log. This page does not check either (capsulectl
   // verify does, against a witness directory the reader chooses), and says
   // so. Any other witness state is shown as it is.
-  const cadence = (bundle.extensions || {})["x-deal-cadence-v0"] || {};
+  const exts = bundle.extensions || {};
+  const cadence = exts["cadence-witness/v0"] || exts["x-deal-cadence-v0"] || {};
   const anchored = cadence.state === "witnessed" ? (cadence.cadence || {}).witnesses || [] : [];
   const witnesses = ((bundle.checkpoint || {}).witnesses || []).concat(anchored).filter((w) => w && typeof w.ts_url === "string");
   if (witnesses.length > 0) {
@@ -85,12 +86,16 @@ function versionBefore(a, b) {
     } catch (e) {
       // not a URL: show it as written
     }
+    const cut = typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : "";
+    const part = cadence.state === "witnessed" && cadence.extent === "part";
+    const k = Number(cadence.steps_witnessed);
+    const n = Number(cadence.steps);
     header.append(
       el(
         "p",
-        `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${
-          typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : ""
-        }at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`,
+        part
+          ? `Witnessed in part: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${cut}at a cadence tick, covering steps 1 to ${k} of ${n}: those existed, unchanged, by then. Steps ${k + 1} to ${n} are sealed by my agent on this device only, witness pending. It does not confirm what the agent did.`
+          : `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${cut}at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`,
         "deal-rung",
       ),
       el(

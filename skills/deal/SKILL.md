@@ -599,7 +599,8 @@ assurance line says "Sealed by my agent" unless a configured witness signed
 a receipt for the deal's checkpoint, and then "Witnessed". A new deal is not
 witnessed at once: until the next tick of the profile's cadence (the receipt
 says how often, for example "every 5m, give or take 2m") its receipt says
-"Sealed, witness pending". Say it that way to the
+"Sealed, witness pending". Steps added after a tick read "Witnessed in part"
+(steps 1 to k of n witnessed, the rest pending). Say it that way to the
 user; never say a deal was witnessed when it happened. The receipt
 rides in `bundle.json`, where `capsulectl verify --bundle bundle.json
 --witness-directory DIRECTORY.json` checks it against a witness directory

@@ -43,7 +43,9 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	if s.dp.Checkpoint.Signing == (Secret{}) {
 		return nil, inputError("a deal report needs the profile's checkpoint key (see `deal init`)")
 	}
-	if _, err := cutCheckpoint(ctx, s.dp, s.t.log); err != nil {
+	// Cut locally: a report, like every deal event, never queues anything
+	// for the witness; only a due tick does.
+	if _, err := cutCheckpoint(ctx, localOnly(s.dp), s.t.log); err != nil {
 		return nil, err
 	}
 	shared := audience != dealAudienceKeep
