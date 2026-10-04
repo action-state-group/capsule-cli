@@ -107,16 +107,16 @@ func decodeJSON(raw []byte, v any) (err error) {
 		}
 	}()
 	if len(raw) > maxInput {
-		return inputError("input exceeds size limit")
+		return inputError("the input exceeds the 12 MiB size limit")
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if e := d.Decode(v); e != nil {
-		return inputError("invalid JSON input or unknown field")
+		return inputError("the input is not valid JSON, or has a field this command does not accept (see the command's documented format)")
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return inputError("input must contain one JSON value")
+		return inputError("the input must hold exactly one JSON value")
 	}
 	return nil
 }
@@ -140,7 +140,7 @@ func (e *inputFileError) Error() string {
 
 func readInput(path string) ([]byte, error) {
 	if path == "" {
-		return nil, inputError("input file is required")
+		return nil, inputError("an input file is required: pass the command's file flag (see --help)")
 	}
 	f, e := os.Open(path)
 	if e != nil {
@@ -155,7 +155,7 @@ func readInput(path string) ([]byte, error) {
 		return nil, errors.Join(ErrInput, &inputFileError{path: path})
 	}
 	if len(b) > maxInput {
-		return nil, inputError("input exceeds size limit")
+		return nil, inputError("the input exceeds the 12 MiB size limit")
 	}
 	return b, nil
 }
@@ -166,7 +166,7 @@ func parseRequest(raw []byte) (Request, error) {
 		return r, e
 	}
 	if r.Version != "capsule-seal-request/v1" {
-		return r, inputError("expected capsule-seal-request/v1")
+		return r, inputError("spec_version must be capsule-seal-request/v1")
 	}
 	if r.ProvenanceMode != nil {
 		if r.Capsule.ProvenanceMode != nil {

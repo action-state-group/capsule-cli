@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"sort"
 
@@ -51,24 +52,24 @@ func decodeJSONPreserveNumbers(raw []byte, v any) (err error) {
 		}
 	}()
 	if len(raw) > maxInput {
-		return inputError("input exceeds size limit")
+		return inputError("the input exceeds the 12 MiB size limit")
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.UseNumber()
 	d.DisallowUnknownFields()
 	if e := d.Decode(v); e != nil {
-		return inputError("invalid JSON input or unknown field")
+		return inputError("the input is not valid JSON, or has a field this command does not accept (see the command's documented format)")
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return inputError("input must contain one JSON value")
+		return inputError("the input must hold exactly one JSON value")
 	}
 	return nil
 }
 
-func twoArgs(_ *cobra.Command, args []string) error {
+func twoArgs(c *cobra.Command, args []string) error {
 	if len(args) != 2 {
-		return ErrInput
+		return inputError(fmt.Sprintf("%s takes exactly two positional arguments (got %d): %s", c.CommandPath(), len(args), c.Use))
 	}
 	return nil
 }
@@ -120,13 +121,13 @@ func validateSamplingParams(params map[string]any) error {
 // for capsule_id and BundleDigest -- this is not a second digest scheme.
 func judgePinDigest(input judgePinInput) (string, error) {
 	if input.ModelID == "" {
-		return "", inputError("model_id is required")
+		return "", inputError("model_id is required in the judge pin input: the judging model's id")
 	}
 	if input.PromptDigest == "" {
-		return "", inputError("prompt_digest is required")
+		return "", inputError("prompt_digest is required in the judge pin input: the SHA-256 digest of the judge prompt")
 	}
 	if input.AxesDigest == "" {
-		return "", inputError("axes_digest is required")
+		return "", inputError("axes_digest is required in the judge pin input: the SHA-256 digest of the scoring axes")
 	}
 	if err := validateSamplingParams(input.SamplingParams); err != nil {
 		return "", err
@@ -144,7 +145,7 @@ func judgePinDigest(input judgePinInput) (string, error) {
 	}
 	digest, e := canonical.JSONDigest(canonicalDict)
 	if e != nil {
-		return "", errors.Join(ErrInput, e)
+		return "", errors.Join(inputError("the judge pin cannot be canonicalized (JCS): it holds a float or an integer outside the safe range"), e)
 	}
 	return digest, nil
 }

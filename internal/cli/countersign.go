@@ -33,7 +33,7 @@ func decodeBundleJSON(raw []byte) (map[string]interface{}, error) {
 	decoder.UseNumber()
 	var bundle map[string]interface{}
 	if err := decoder.Decode(&bundle); err != nil {
-		return nil, inputError("invalid bundle JSON")
+		return nil, inputError("the bundle file is not valid JSON")
 	}
 	return bundle, nil
 }
@@ -225,7 +225,7 @@ func verifyCountersignSignature(signerKeyHex, over string, signer, statement int
 // caller could confuse with a fragment-carried bundle.
 func validateServiceURL(raw string) (string, error) {
 	if raw == "" {
-		return "", inputError("--service is required")
+		return "", inputError("--service is required: the countersign service's HTTPS URL")
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
@@ -317,7 +317,7 @@ func buildCountersignSubmission(bundle map[string]interface{}, window, requester
 	}
 	public, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
-		return countersignSubmission{}, "", inputError("invalid signing key")
+		return countersignSubmission{}, "", inputError("the profile's signing key is not an Ed25519 key")
 	}
 	submission := countersignSubmission{
 		Bundle:             bundle,
@@ -606,7 +606,7 @@ func countersignCommands() *cobra.Command {
 		}
 		window, _ := c.Flags().GetString("window")
 		if window == "" {
-			return inputError("--window is required")
+			return inputError("--window is required: the attestation window or period label to send")
 		}
 		bundlePath, _ := c.Flags().GetString("bundle")
 		outPath, _ := c.Flags().GetString("out")

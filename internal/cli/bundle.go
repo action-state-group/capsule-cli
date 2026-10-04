@@ -103,7 +103,7 @@ func bundleProducerKey(c *cobra.Command, profile Profile) (ed25519.PublicKey, er
 	}
 	public, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
-		return nil, inputError("invalid signing key")
+		return nil, inputError("the profile's signing key is not an Ed25519 key")
 	}
 	return public, nil
 }
@@ -116,7 +116,7 @@ func integer(value uint64) json.Number { return json.Number(fmt.Sprintf("%d", va
 // graph-closure records.
 func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Backend, logID string, options BundleOptions) (map[string]interface{}, error) {
 	if len(options.Root) != 64 {
-		return nil, inputError("--root is required")
+		return nil, inputError("--root is required: the Capsule ID (64 hex) the bundle is built around")
 	}
 	// A negative depth means "unset" (the default); an explicit 0 is honored as a
 	// root-only bundle. The bundle command's flag default is 2.

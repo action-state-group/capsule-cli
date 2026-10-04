@@ -147,7 +147,7 @@ func openDealSession(ctx context.Context, p Profile) (_ *dealSession, err error)
 // deal. An existing deal must already have indexed steps.
 func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) error {
 	if !dealIDPattern.MatchString(dealID) {
-		return inputError("invalid deal id")
+		return inputError("--deal must be a deal id as printed by `deal open`: deal- followed by 16 hex characters")
 	}
 	if create {
 		// The deal key is stored at open, so rotating the store secret later
@@ -446,7 +446,7 @@ func runDeal(c *cobra.Command, needDeal bool, fn func(ctx context.Context, s *de
 	if needDeal {
 		dealID, _ = c.Flags().GetString("deal")
 		if dealID == "" {
-			return inputError("--deal is required")
+			return inputError("--deal is required: a deal id as printed by `deal open`")
 		}
 	}
 	ctx := c.Context()
@@ -689,7 +689,7 @@ func dealNoteCommand() *cobra.Command {
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			if dealFinallyClosed(events) {
-				return inputError("deal is closed")
+				return inputError("this deal is closed and takes no more steps; start a new one with `deal open`")
 			}
 			open := events[0].Event.Open
 			switch kind {
@@ -805,7 +805,7 @@ func dealCheckCommand() *cobra.Command {
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			if dealFinallyClosed(events) {
-				return inputError("deal is closed")
+				return inputError("this deal is closed and takes no more steps; start a new one with `deal open`")
 			}
 			open := events[0].Event.Open
 			if !slices.Contains(dealPointsOfNoReturn[open.Type], snap.Action) {
@@ -913,7 +913,7 @@ func dealCloseCommand() *cobra.Command {
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			if dealFinallyClosed(events) {
-				return inputError("deal is closed")
+				return inputError("this deal is closed and takes no more steps; start a new one with `deal open`")
 			}
 			state, err := foldDeal(events)
 			if err != nil {
@@ -1026,7 +1026,7 @@ func dealExportCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "export", Short: "Write the deal's sealed x-deal-v0 records as one JSON array, in order (no raw values)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		path, _ := c.Flags().GetString("output")
 		if path == "" {
-			return inputError("--output is required")
+			return inputError("--output is required: the file to write the result to")
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			records := make([]json.RawMessage, 0, len(events))

@@ -128,6 +128,14 @@ func TestDoctorWitnessReachabilityIsOptInAndNeverSendsAuth(t *testing.T) {
 	assert.Equal(t, server.URL, request["url"])
 	assert.False(t, sawAuth, "doctor must never attach a token to its reachability probe")
 	assert.Equal(t, true, witness["ok"])
+
+	// An endpoint that does not answer is not ok, even with a good key.
+	server.Close()
+	report = doctorReport(t, "--profile", p.Name, "--check-witness")
+	witness, _ = report["witness"].(map[string]any)
+	assert.Equal(t, false, witness["reachable"])
+	assert.Equal(t, false, witness["ok"])
+	assert.Contains(t, witness["issue"], "did not answer")
 }
 
 // TestDoctorWitnessFailsWithoutPublicKey: an endpoint with no witness public

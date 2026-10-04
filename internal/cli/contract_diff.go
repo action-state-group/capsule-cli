@@ -795,9 +795,9 @@ func contractDiffCommand() *cobra.Command {
 			"and name both by <id>@<version> and the SHA-256 of their JCS bytes. Both are validated first, against\n" +
 			"the embedded Evidence Contract v0 schema or --schema. Exit 0: identical or non-breaking; 1: breaking;\n" +
 			"2: an input is unreadable or invalid.",
-		Args: func(_ *cobra.Command, args []string) error {
+		Args: func(c *cobra.Command, args []string) error {
 			if len(args) != 2 {
-				return ErrInput
+				return inputError(fmt.Sprintf("%s takes exactly two contract files, OLD and NEW (got %d)", c.CommandPath(), len(args)))
 			}
 			return nil
 		},

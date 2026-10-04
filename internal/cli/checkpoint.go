@@ -238,7 +238,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 			return e
 		}
 		if !checkpointSignerTrusted(p, signer.KeyID()) {
-			return inputError("checkpoint signer must be explicitly trusted")
+			return inputError("the checkpoint signing key is not in checkpoint.trusted_keys: add its public key with `capsulectl profile update --profile " + p.Name + " --checkpoint-trusted-key <64-hex key>`")
 		}
 		service, e := serviceID(p)
 		if e != nil {
@@ -282,7 +282,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 				return e
 			}
 			if service == "" {
-				return inputError("checkpoint service not configured")
+				return inputError("checkpoint.endpoint is not set, so there is no witness to publish to: `capsulectl profile update --profile " + p.Name + " --checkpoint-endpoint URL --checkpoint-public-key <64-hex Ed25519 key>`")
 			}
 			use := useCLLRead
 			if publish {
@@ -350,7 +350,7 @@ func cutCheckpointAt(ctx context.Context, p Profile, log cll.Backend, at time.Ti
 		return nil, e
 	}
 	if !checkpointSignerTrusted(p, signer.KeyID()) {
-		return nil, inputError("checkpoint signer must be explicitly trusted")
+		return nil, inputError("the checkpoint signing key is not in checkpoint.trusted_keys: add its public key with `capsulectl profile update --profile " + p.Name + " --checkpoint-trusted-key <64-hex key>`")
 	}
 	service, e := serviceID(p)
 	if e != nil {
