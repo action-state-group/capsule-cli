@@ -390,6 +390,26 @@ signing key id. They carry no record content, so the version that produced a
 deal is NOT visible from the witness. It is visible only in records someone
 chooses to disclose: a receipt or bundle the user shares or publishes.
 
+## Which instructions were present
+
+`deal open --skill FILE` (or `CAPSULE_DEAL_SKILL`) takes the SKILL.md the
+agent says it is following. It seals the file's SHA-256 in the deal's
+baseline, with how many other copies of the same skill (the same `name:`)
+sit in the folders beside it. The paths stay on this device. The report, the
+page and the assurance line say "Instructions present when the deal opened:
+deal SKILL.md sha256:...", and two cases are anomalies:
+
+- `skill_copies_visible`: another copy of the skill was visible, for example
+  an old backup left inside the skills folder, which the host may load
+  instead of the current one;
+- `skill_changed`: the digest differs from the previous deal's.
+
+It is a boundary marker, not a detector. The agent computes it, so it catches
+accidents (a stale backup the host loaded, a partial upgrade, skill files that
+drifted from the binary), not a dishonest agent. It records which
+instructions were present, never that the agent followed them. A deal opened
+without `--skill` says that this was not recorded.
+
 ## Records: the x-deal-v0 profile
 
 [`profile/`](profile/) is the deal record profile: `PROFILE.md` (normative),

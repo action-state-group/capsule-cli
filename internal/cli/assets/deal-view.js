@@ -196,6 +196,7 @@ function versionBefore(a, b) {
     if (!builds.some((b) => b.name === name)) builds.push({ name, version: p && p.version });
   });
   if (builds.length > 0) host.append(el("p", `Produced by ${builds.map((b) => b.name).join(", then ")}.`, "deal-note"));
+  if (typeof report.instructions === "string" && report.instructions) host.append(el("p", report.instructions, "deal-note"));
   const pageVersion = typeof report.page_version === "string" ? report.page_version : "";
   const older = builds.filter((b) => b.version === undefined || versionBefore(b.version, pageVersion));
   if (pageVersion && older.length > 0) {

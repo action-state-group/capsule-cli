@@ -429,6 +429,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 		body["terms"] = termsBody(o.Terms)
 		body["recourse"] = recourseBody(o.Recourse)
+		if o.Skill != nil {
+			body["skill"] = map[string]interface{}{"skill_md_digest": o.Skill.Digest, "other_copies": o.Skill.OtherCopies}
+		}
 		if len(o.Claims) > 0 {
 			claims := make([]interface{}, len(o.Claims))
 			for i, c := range o.Claims {

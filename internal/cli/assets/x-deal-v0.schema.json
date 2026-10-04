@@ -166,7 +166,15 @@
         "terms": { "$ref": "#/$defs/terms" },
         "claims": { "type": "array", "items": { "$ref": "#/$defs/claim" } },
         "recourse": { "type": "object", "allOf": [ { "$ref": "#/$defs/recourse" } ], "required": ["rail", "refundable"] },
-        "counterparty_facts": { "$ref": "#/$defs/counterparty_facts" }
+        "counterparty_facts": { "$ref": "#/$defs/counterparty_facts" },
+        "skill": {
+          "description": "The skill instructions present when the deal opened, as the agent reported them: the SHA-256 of its SKILL.md, and how many other copies of the same skill were beside it. A boundary marker, not proof they were followed.",
+          "type": "object", "additionalProperties": false, "required": ["skill_md_digest", "other_copies"],
+          "properties": {
+            "skill_md_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "other_copies": { "type": "integer", "minimum": 0 }
+          }
+        }
       }
     },
     "body_intent": {

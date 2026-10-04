@@ -80,6 +80,8 @@ type dealOpen struct {
 	Terms    dealTerms    `json:"terms"`
 	Claims   []dealClaim  `json:"claims,omitempty"`
 	Recourse dealRecourse `json:"recourse"`
+	// Skill is set by `deal open --skill`, never from the input file.
+	Skill *dealSkill `json:"skill,omitempty"`
 }
 
 type dealMessage struct {
@@ -1036,9 +1038,12 @@ type dealReportItem struct {
 // dealReport is the three-part report: what the user asked, what the agent
 // did, and the anomalies on either side.
 type dealReport struct {
-	Asked     string           `json:"asked"`
-	AskedStep string           `json:"asked_step"`
-	Did       []dealReportItem `json:"did"`
+	// Instructions says which skill instructions were present when the
+	// deal opened (see deal_skill.go), or that this was not recorded.
+	Instructions string           `json:"instructions,omitempty"`
+	Asked        string           `json:"asked"`
+	AskedStep    string           `json:"asked_step"`
+	Did          []dealReportItem `json:"did"`
 	// Told is what the agent told whom about the user, in order: each
 	// disclosure, its recipient, its time and the approval that covered it.
 	Told      []dealToldItem   `json:"told"`
