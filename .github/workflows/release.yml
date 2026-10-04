@@ -4,6 +4,10 @@ name: Release
 # tag is pushed, and attaches the binaries plus SHA256SUMS to the GitHub
 # release for that tag. The build is scripts/release-build.sh, so a tag can be
 # rebuilt locally with the same Go version and compared against SHA256SUMS.
+# Each binary also gets a GitHub build provenance attestation (Sigstore,
+# keyless: no release key is held anywhere), verifiable with
+#   gh attestation verify capsulectl-<version>-<os>-<arch> --repo action-state-group/capsule-cli \
+#     --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
 
 on:
   push:
@@ -21,6 +25,8 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      id-token: write # OIDC token for the build provenance attestation
+      attestations: write
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,6 +51,10 @@ jobs:
         run: |
           got="$(dist/capsulectl-"$VERSION"-linux-amd64 --version)"
           test "$got" = "capsulectl $VERSION (commit $COMMIT)" || { echo "unexpected: $got"; exit 1; }
+      - name: Attest build provenance of the binaries
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: dist/capsulectl-*
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,5 +65,5 @@ jobs:
           else
             gh release create "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag \
               --title "capsulectl $VERSION" \
-              --notes "Prebuilt capsulectl binaries (linux/amd64, linux/arm64, darwin/arm64). Verify with: sha256sum -c SHA256SUMS"
+              --notes "Prebuilt capsulectl binaries (linux/amd64, linux/arm64, darwin/arm64). Verify with: sha256sum -c SHA256SUMS, and the build attestation with: gh attestation verify FILE --repo $GITHUB_REPOSITORY --signer-workflow $GITHUB_REPOSITORY/.github/workflows/release.yml"
           fi

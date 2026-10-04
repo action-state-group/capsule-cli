@@ -12,6 +12,13 @@ Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
 darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
 The current release is the pre-release `v0.1.0-rc2`; there is no final `v0.1.0`
 yet, so GitHub's "latest release" link does not resolve.
+Releases after `v0.1.0-rc2` also carry a GitHub build provenance attestation
+for each binary (Sigstore, keyless: there is no release key to hold or
+leak). It shows the file was built by this repository's release workflow
+from the tagged commit; checking it means trusting GitHub's build attestation
+for this repository. With the GitHub CLI:
+`gh attestation verify capsulectl-$V-$OS-$ARCH --repo action-state-group/capsule-cli --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml`.
+`v0.1.0-rc2` and earlier have `SHA256SUMS` only.
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
 `modernc.org/sqlite`), so they need no system libraries.
 
@@ -213,6 +220,7 @@ capsulectl judge drift pin FILE_A FILE_B
 capsulectl judge drift reports FILE_A FILE_B
 capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
 capsulectl deal init|open|note|check|close|report|reconcile|tick --profile NAME [...]
+capsulectl backfill run|status --profile NAME [...]
 ```
 
 `capsulectl <command> --help` gives every flag; this list is the shape of each
@@ -266,6 +274,13 @@ written by an earlier release has no `log_id` at all, so it needs `--log-id`.
 Every input error (exit 2) names the flag, field or file at fault and what is
 expected. It never prints a secret: a mistyped flag value is not echoed, only
 the flag's name.
+
+`backfill` imports an agent host's own records (tool calls, sub-tasks, spend
+approvals) after the fact, as a watermark poll by monotonic cursor: every new
+row by digest, and the rows near a consequential signal as Capsules in
+provenance mode `backfilled`. It shows effects only, never an amount charged
+or an approval, and it gives detectability of absence, not prevention; see
+[docs/BACKFILL.md](docs/BACKFILL.md).
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.
