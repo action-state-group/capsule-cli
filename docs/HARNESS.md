@@ -13,21 +13,36 @@ Right after installing, before the first deal:
 
 ```bash
 capsulectl doctor --install-check --profile deal \
-  --expect-version v0.1.0-rc3 --expect-commit <sha> \
-  --expect-skill-sha256 <sha256 of the release's skills/deal/SKILL.md> \
-  --skills-dir <the directory the agent loads skills from>
+  --expect-version <tag> --expect-commit <the tag's full commit> \
+  --expect-skill-sha256 <sha256 of the tag's skills/deal/SKILL.md> \
+  --skills-dir <the directory the agent loads skills from> \
+  --evidence-out install-check.json
 ```
 
-It prints one JSON object on one line (`install_check`), which the run seals as
-evidence, and exits 3 naming every issue when:
+`<tag>` is the release being tested, from the first release that ships
+`--install-check` on. All three expected values come from that tag's release
+page and source, never from the account under test.
 
-- the binary is not the expected release (version, and commit when given);
+It prints one JSON object on one line (`install_check`) and exits 3 naming
+every issue when:
+
+- the binary is not the expected release: its version, and its full commit
+  exactly (a short or partial value never passes);
 - there is not exactly one skill named `deal` under the skills directory. A
   backup copy left beside the installed one (`deal.bak-*/SKILL.md`) counts as a
   second one: the agent may load either;
 - the deal skill is not the release's (`--expect-skill-sha256`);
 - the deal profile lacks a witness endpoint, or has one without the witness's
   public key, which makes `deal open` fail closed.
+
+`--evidence-out` also writes that result as an evidence-note body. Once the
+day's deal is open, the run seals it on that deal, unchanged:
+
+```bash
+capsulectl --profile deal deal note --deal <deal id> --kind evidence --input install-check.json
+```
+
+So the receipt carries what the install was when the deal ran.
 
 ## 2. The verdict from outside, in two halves
 
@@ -54,9 +69,11 @@ operator saves each day's `bundle.json`, and:
 ```bash
 capsulectl verify --bundle bundle.json --witness-directory witnesses.json
 jq -e '[.disclosures[].agent_input.body | select(.choice? == "hold")] | length > 0' bundle.json
+jq -e '[.disclosures[].agent_input.body | select(.source? == "capsulectl_doctor_install_check")] | length > 0' bundle.json
 ```
 
-A receipt that verifies, is witnessed and holds a sealed Hold is a pass. **No
+A receipt that verifies, is witnessed, holds a sealed Hold and carries the
+sealed install check is a pass. **No
 receipt for the day is the alarm**: the deal never reached its end, whatever
 the reason. This half is the only place a deal that never started can show.
 

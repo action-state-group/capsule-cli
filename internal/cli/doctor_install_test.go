@@ -14,6 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// releaseCommit is a full 40-hex commit, as release builds report.
+var releaseCommit = strings.Repeat("a1b2c3d4", 5)
+
 const dealSkillText = "---\nname: deal\ndescription: test\n---\n# deal\n"
 
 func skillsDir(t *testing.T, skills map[string]string) string {
@@ -43,7 +46,7 @@ func witnessedDealProfile(t *testing.T) {
 
 func installCheckRun(t *testing.T, dir string, extra ...string) (map[string]any, string, error) {
 	t.Helper()
-	args := append([]string{"doctor", "--install-check", "--profile", "deal", "--expect-version", "v0.1.0-rc3", "--skills-dir", dir}, extra...)
+	args := append([]string{"doctor", "--install-check", "--profile", "deal", "--expect-version", "v0.1.0-rc3", "--expect-commit", releaseCommit, "--skills-dir", dir}, extra...)
 	out, err := invoke(t, "", args...)
 	var m struct {
 		Check map[string]any `json:"install_check"`
@@ -54,13 +57,13 @@ func installCheckRun(t *testing.T, dir string, extra ...string) (map[string]any,
 
 func TestInstallCheckPassesAFreshInstall(t *testing.T) {
 	witnessedDealProfile(t)
-	releaseBuild(t, "v0.1.0-rc3", "abc1234def")
+	releaseBuild(t, "v0.1.0-rc3", releaseCommit)
 	dir := skillsDir(t, map[string]string{
 		"deal/SKILL.md":     dealSkillText,
 		"calendar/SKILL.md": "---\nname: calendar\n---\n",
 		"notes/README.md":   "not a skill",
 	})
-	check, out, err := installCheckRun(t, dir, "--expect-commit", "abc1234")
+	check, out, err := installCheckRun(t, dir)
 	require.NoError(t, err, out)
 	assert.Equal(t, 1, strings.Count(out, "\n"), "one JSON line, for the run to seal")
 	assert.Equal(t, true, check["ok"])
@@ -73,7 +76,7 @@ func TestInstallCheckPassesAFreshInstall(t *testing.T) {
 
 func TestInstallCheckFindsABackupSkillLeftInTheSkillsDir(t *testing.T) {
 	witnessedDealProfile(t)
-	releaseBuild(t, "v0.1.0-rc3", "abc1234def")
+	releaseBuild(t, "v0.1.0-rc3", releaseCommit)
 	dir := skillsDir(t, map[string]string{
 		"deal/SKILL.md":              dealSkillText,
 		"deal.bak-20261003/SKILL.md": dealSkillText,
@@ -90,19 +93,64 @@ func TestInstallCheckFindsABackupSkillLeftInTheSkillsDir(t *testing.T) {
 
 func TestInstallCheckFindsADriftedBinary(t *testing.T) {
 	witnessedDealProfile(t)
-	releaseBuild(t, "v0.1.0-rc2", "0ld0ld0")
+	releaseBuild(t, "v0.1.0-rc2", strings.Repeat("0d", 20))
 	dir := skillsDir(t, map[string]string{"deal/SKILL.md": dealSkillText})
-	check, _, err := installCheckRun(t, dir, "--expect-commit", "abc1234")
+	check, _, err := installCheckRun(t, dir)
 	require.ErrorIs(t, err, ErrPartial)
 	assert.Equal(t, []any{
 		"binary is v0.1.0-rc2, expected v0.1.0-rc3",
-		"binary commit is 0ld0ld0, expected abc1234",
+		"binary commit is " + strings.Repeat("0d", 20) + ", expected " + releaseCommit,
 	}, check["issues"])
+}
+
+func TestInstallCheckMatchesTheCommitExactly(t *testing.T) {
+	witnessedDealProfile(t)
+	releaseBuild(t, "v0.1.0-rc3", releaseCommit)
+	dir := skillsDir(t, map[string]string{"deal/SKILL.md": dealSkillText})
+	for _, partial := range []string{releaseCommit[:7], releaseCommit[:39], releaseCommit + "0"} {
+		_, err := invoke(t, "", "doctor", "--install-check", "--profile", "deal", "--expect-version", "v0.1.0-rc3",
+			"--expect-commit", partial, "--skills-dir", dir)
+		require.ErrorIs(t, err, ErrPartial, partial)
+	}
+	// Without it, the check does not run.
+	_, err := invoke(t, "", "doctor", "--install-check", "--profile", "deal", "--expect-version", "v0.1.0-rc3", "--skills-dir", dir)
+	require.ErrorIs(t, err, ErrInput)
+}
+
+func TestInstallCheckWritesTheEvidenceThatSealsIt(t *testing.T) {
+	witnessedDealProfile(t)
+	releaseBuild(t, "v0.1.0-rc3", releaseCommit)
+	dir := skillsDir(t, map[string]string{"deal/SKILL.md": dealSkillText})
+	evidence := filepath.Join(t.TempDir(), "install-check.json")
+	_, out, err := installCheckRun(t, dir, "--evidence-out", evidence)
+	require.NoError(t, err, out)
+
+	var body map[string]string
+	data, err := os.ReadFile(evidence)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(data, &body))
+	assert.Equal(t, "install check", body["about"])
+	assert.Equal(t, "capsulectl doctor --install-check", body["source"])
+	var printed map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &printed))
+	delete(printed, "spec_version")
+	want, err := json.Marshal(printed)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(want), body["detail"], "the detail is the printed result")
+
+	// The body seals as is, on a deal (here on a profile without a witness).
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	p.Checkpoint.Endpoint, p.Checkpoint.PublicKey = "", ""
+	require.NoError(t, saveProfile(p, true))
+	dealID := dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))["deal_id"].(string)
+	noted := dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--input", evidence)
+	assert.NotEmpty(t, noted["capsule_id"])
 }
 
 func TestInstallCheckFindsASkillBehindTheRelease(t *testing.T) {
 	witnessedDealProfile(t)
-	releaseBuild(t, "v0.1.0-rc3", "abc1234def")
+	releaseBuild(t, "v0.1.0-rc3", releaseCommit)
 	dir := skillsDir(t, map[string]string{"deal/SKILL.md": dealSkillText})
 	sum := sha256.Sum256([]byte(dealSkillText))
 	_, out, err := installCheckRun(t, dir, "--expect-skill-sha256", strings.ToUpper(hex.EncodeToString(sum[:])))
@@ -115,7 +163,7 @@ func TestInstallCheckFindsASkillBehindTheRelease(t *testing.T) {
 
 func TestInstallCheckFindsAWitnessWithoutItsKey(t *testing.T) {
 	witnessedDealProfile(t)
-	releaseBuild(t, "v0.1.0-rc3", "abc1234def")
+	releaseBuild(t, "v0.1.0-rc3", releaseCommit)
 	p, err := loadProfile("deal")
 	require.NoError(t, err)
 	p.Checkpoint.PublicKey = ""
@@ -131,7 +179,7 @@ func TestInstallCheckFindsAWitnessWithoutItsKey(t *testing.T) {
 
 func TestInstallCheckFindsAProfileWithNoWitness(t *testing.T) {
 	dealFixture(t) // no witness
-	releaseBuild(t, "v0.1.0-rc3", "abc1234def")
+	releaseBuild(t, "v0.1.0-rc3", releaseCommit)
 	dir := skillsDir(t, map[string]string{"deal/SKILL.md": dealSkillText})
 	check, _, err := installCheckRun(t, dir)
 	require.ErrorIs(t, err, ErrPartial)

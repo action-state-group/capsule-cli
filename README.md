@@ -197,7 +197,7 @@ capsulectl cll checkpoint create --profile NAME
 capsulectl cll checkpoint publish --profile NAME --checkpoint MMR_SIZE
 capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
-capsulectl doctor --install-check --profile NAME --expect-version TAG --skills-dir DIR [--expect-commit SHA] [--expect-skill-sha256 HEX]
+capsulectl doctor --install-check --profile NAME --expect-version TAG --expect-commit SHA --skills-dir DIR [--expect-skill-sha256 HEX] [--evidence-out FILE]
 capsulectl result open FILE [--format text|json]
 capsulectl run [args passed to the plugin]   # only in a build with -tags actionstate
 capsulectl plugin ls

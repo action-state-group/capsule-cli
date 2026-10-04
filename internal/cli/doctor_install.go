@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -25,25 +26,25 @@ import (
 //     public key, without which `deal open` fails closed.
 //
 // Any failed check exits 3 after printing the object, with every issue named.
+// With --evidence-out it also writes the evidence-note body that seals it.
 func installCheck(c *cobra.Command) error {
 	wantVersion, _ := c.Flags().GetString("expect-version")
 	wantCommit, _ := c.Flags().GetString("expect-commit")
 	skillsDir, _ := c.Flags().GetString("skills-dir")
 	wantSkill, _ := c.Flags().GetString("expect-skill-sha256")
+	evidenceOut, _ := c.Flags().GetString("evidence-out")
 	name, _ := c.Flags().GetString("profile")
-	if wantVersion == "" || skillsDir == "" || name == "" {
-		return inputError("--install-check needs --expect-version, --skills-dir and --profile")
+	if wantVersion == "" || wantCommit == "" || skillsDir == "" || name == "" {
+		return inputError("--install-check needs --expect-version, --expect-commit, --skills-dir and --profile")
 	}
 	var issues []string
-	report := map[string]any{"binary_version": cliVersion, "binary_commit": cliCommit, "expected_version": wantVersion}
+	report := map[string]any{"binary_version": cliVersion, "binary_commit": cliCommit, "expected_version": wantVersion, "expected_commit": wantCommit}
 	if cliVersion != wantVersion {
 		issues = append(issues, "binary is "+cliVersion+", expected "+wantVersion)
 	}
-	if wantCommit != "" {
-		report["expected_commit"] = wantCommit
-		if !strings.HasPrefix(cliCommit, wantCommit) && !strings.HasPrefix(wantCommit, cliCommit) || cliCommit == "unknown" {
-			issues = append(issues, "binary commit is "+cliCommit+", expected "+wantCommit)
-		}
+	// The full commit, exactly: a short or partial value never passes.
+	if cliCommit != wantCommit {
+		issues = append(issues, "binary commit is "+cliCommit+", expected "+wantCommit)
 	}
 
 	skills, err := dealSkills(skillsDir)
@@ -90,6 +91,21 @@ func installCheck(c *cobra.Command) error {
 		issues = []string{}
 	}
 	report["ok"], report["issues"] = len(issues) == 0, issues
+	if evidenceOut != "" {
+		// The body `deal note --kind evidence --input FILE` seals as is: the
+		// object below, as one line, is the detail.
+		line, err := json.Marshal(map[string]any{"install_check": report})
+		if err != nil {
+			return err
+		}
+		body, err := json.Marshal(map[string]string{"about": "install check", "source": "capsulectl doctor --install-check", "detail": string(line)})
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(evidenceOut, append(body, '\n'), 0o600); err != nil {
+			return hint(ErrInput, "cannot write --evidence-out "+evidenceOut)
+		}
+	}
 	if err := output(c, map[string]any{"install_check": report}); err != nil {
 		return err
 	}
