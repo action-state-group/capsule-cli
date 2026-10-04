@@ -581,8 +581,8 @@ that is linked to the closed deal instead of holding it open.
   close date (`expect_close_by`, sealed in the baseline; by default 14 days
   for a purchase, 1 for a booking, 7 for a rental, 30 for a service).
   `deal deadlines` lists open deals against it under `open_deals`, and
-  `--ics` adds a "Close deal …?" reminder, so the host's scheduler surfaces a
-  deal nobody closed.
+  `--ics` writes a "Close deal …?" event into its file, so the host's own
+  tracking can surface a deal nobody closed.
 - **The receipt shows the chain, or says it may be incomplete.** Every
   receipt (page, email, JSON, and shared copies, in fixed words) says whether
   the deal is open or closed, lists the records linked after the close, and
@@ -608,10 +608,19 @@ becomes $24.00/month on the 17th unless cancelled by the 16th. The deal seals
 that obligation when it is created, with its source (the merchant's own
 email, which `deal note --email` proposes it from when the email says nothing
 is charged before a date, or a snapshot of the page). Every `deal check`
-lists the deal's open dates, and `deal deadlines` emits them as JSON or an
-iCalendar file with a reminder, for the host's own scheduler or the user's
-calendar. No daemon runs here. **We record the deadline; we do not enforce
-it, and nothing is cancelled for the user.** `deal close` refuses while a date
+lists the deal's open dates, and `deal deadlines` emits them as JSON (the
+interface: hand them to the host's own goals, tasks or scheduler) or, as a
+convenience, an iCalendar file with an alarm. No daemon runs here.
+**We record the deadline; we do not enforce it, and nothing is cancelled for
+the user.**
+
+**We emit; we never place.** `--ics` writes a file and nothing else:
+capsulectl never writes to a calendar, never asks for calendar access, and
+holds no calendar credential. A tool about agents committing users to things
+without their approval must not quietly change the user's calendar; the user
+or the host imports the file if they choose. The sealed date is ours and
+durable; a reminder is the host's and best-effort. So a receipt may say the
+date was recorded, and never that the user was reminded. `deal close` refuses while a date
 is open (close with status `pending` meanwhile), because closing would end the
 record that holds it. A date that passed with no cancel sealed reads `passed`.
 

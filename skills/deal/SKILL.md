@@ -166,10 +166,13 @@ return is a date passing, not something you do.
    `kind` is `trial_conversion`, `renewal`, `cancel_window` or `payment_due`.
 2. Tell the user the date in plain words, and that you record it but do not
    enforce it: nothing is cancelled for them.
-3. If the host can schedule reminders, hand it the date:
-   `deal deadlines --ics deadlines.ics` writes a calendar file with a
-   reminder (`--remind-days`, default 2); `deal deadlines` alone prints the
-   open dates as JSON. Run nothing in the background yourself.
+3. Hand the date to the host's own tracking (its goals, tasks or
+   scheduler): `deal deadlines` prints every open date as JSON, and that is
+   the interface. `deal deadlines --ics FILE` also writes them as a calendar
+   file (with an alarm `--remind-days` before, default 2) for the user to
+   import if they want. Never add anything to a calendar yourself, and never
+   tell the user they will be reminded: the date is recorded; whether a
+   reminder fires is up to the host. Run nothing in the background yourself.
 4. Every `deal check` lists the deal's `open_deadlines`. Mention any that are
    close.
 5. `deal close` refuses while a cancel-by date is open, and says why. When
@@ -202,8 +205,9 @@ for every later email.
    default 14 days for a purchase, 1 for a booking, 7 for a rental, 30 for a
    service). Set it when you know better, for example the delivery estimate.
 2. `deal deadlines` lists every open deal under `open_deals`, against that
-   date, and `--ics` puts a "Close deal …?" reminder on it. When you see a
-   deal there that is done, close it. Nobody has to remember it.
+   date (and `--ics` writes a "Close deal …?" event for it into the file).
+   Hand those to the host's tracking like any other date. When you see a
+   deal there that is done, close it.
 3. Evidence that arrives after the close (the merchant's confirmation, a
    shipping notice, a refund) is sealed on the closed deal as usual, as soon
    as it arrives:

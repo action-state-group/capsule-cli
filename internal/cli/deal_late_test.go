@@ -327,3 +327,30 @@ func TestDealCarriedObligationDatePassedIsComputedWhenRead(t *testing.T) {
 	require.Len(t, again, 1)
 	assert.Equal(t, "carried_at_close", again[0].(map[string]any)["status"])
 }
+
+// We emit; we never place. The sealed date is ours; a reminder is the
+// host's, best-effort. So no receipt ever says the user was reminded, in
+// any of its forms.
+func TestDealReceiptNeverSaysTheUserWasReminded(t *testing.T) {
+	dealFixture(t)
+	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})
+	dealID := trialDeal(t)
+	setDealClock(t, "2026-10-04T10:00:00Z")
+	dealRun(t, "close", "--deal", dealID, "--carry-open-obligations", "--input", writeJSON(t, `{"status":"received"}`))
+	reminded := regexp.MustCompile(`(?i)\breminded\b|\bwill be reminded\b|\bwe(?:'ll| will) remind\b`)
+	for _, at := range []string{"2026-10-10T08:00:00Z", "2026-10-20T08:00:00Z"} {
+		setDealClock(t, at)
+		page := filepath.Join(t.TempDir(), "receipt.html")
+		report := dealRun(t, "report", "--deal", dealID, "--html", page, "--email", filepath.Join(t.TempDir(), "r.eml"))
+		raw, err := json.Marshal(report)
+		require.NoError(t, err)
+		html, err := os.ReadFile(page)
+		require.NoError(t, err)
+		ext, err := json.Marshal(embeddedBundle(t, string(html))["extensions"])
+		require.NoError(t, err)
+		for name, text := range map[string]string{"json": string(raw), "page data": string(ext), "page script": dealViewJS} {
+			assert.Empty(t, reminded.FindAllString(text, -1), "%s at %s", name, at)
+		}
+		assert.Contains(t, string(raw), "carried")
+	}
+}
