@@ -23,9 +23,13 @@
     },
     "body": {
       "action": "share_contact",
+      "disclosing": [
+        "phone"
+      ],
+      "disclosing_to": "counterparty",
       "pack_id": "capsule/marketplace-rentals-safety/0.1.0",
       "pack_digest": "60a215d6447d3e6f6adb1f31a4219f3165874418742b7d2590733bce424c1aed"
     }
   },
-  "expected_digest": "b6043dc9480e71db9f786603b76f093f4eacb293ab4d42d4c8ffda7f1357076c"
+  "expected_digest": "737d5d91bf384632bfc268cc14549a0dd6767c2129992c7d1558d911d546223f"
 }

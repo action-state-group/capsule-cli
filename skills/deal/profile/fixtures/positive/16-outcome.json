@@ -13,7 +13,7 @@
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "9ddc7b8c2470efce33b545854f1d75efac11a10a3c43ed5828d1acb3da88da52"
+        "digest": "c0d23bff83018894898604b8b05d3d777ffc938f75f96fb6288fba5b3aaabb4b"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -32,5 +32,5 @@
       ]
     }
   },
-  "expected_digest": "0190ea26c8f9534b6d25dac151223ff32ef6f55f266dfa513cd2091ce820caee"
+  "expected_digest": "b438582b63281553fbff19d1f2ac23480fc68653058b7b6e96134b21fe63d594"
 }
