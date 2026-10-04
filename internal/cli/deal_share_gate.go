@@ -39,8 +39,8 @@ import (
 // ?order_ref=G739142, track/ABCDEFGHIJ739142) it counts.
 //
 // allowed are values the copy may carry although the local store holds them:
-// the merchant's order id, in the counterparty's copy, when
-// shareableOrderID allows it. Each is taken out of the page, as written and
+// the merchant's order id and tracking number, in the counterparty's copy,
+// when shareableOrderID and shareableTracking allow them. Each is taken out of the page, as written and
 // JSON-escaped, before any check, so it neither trips the checks nor hides
 // anything else.
 func dealPageGate(page []byte, events []sealedEvent, allowed ...string) error {
@@ -217,8 +217,14 @@ func gateCheck(data []byte, secrets, words, placeWords []string, depth int) erro
 			}
 		}
 	}
-	for _, loc := range gatePAN.FindAllIndex(text, -1) {
-		if !gateInDigest(text, loc[0], loc[1]) && luhn(nonDigit.ReplaceAllString(string(text[loc[0]:loc[1]]), "")) {
+	for done, locs := 0, gatePAN.FindAllIndex(text, -1); len(locs) > 0; locs = locs[1:] {
+		loc := locs[0]
+		if loc[0] < done || gateInDigest(text, loc[0], loc[1]) {
+			continue
+		}
+		start, end, alone := gateCardRun(text, loc[0], loc[1])
+		done = end
+		if alone && gateCardWindows(nonDigit.ReplaceAllString(string(text[start:end]), "")) {
 			return inputError("refusing to write the shared copy: the page would carry a card number")
 		}
 	}
@@ -334,7 +340,7 @@ func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 			if m := e.Evidence.Email; m != nil {
 				// The merchant's email: its order id, the addresses in its
 				// headers, its subject, its text and its items.
-				ids = append(ids, m.Parsed.OrderID)
+				ids = append(ids, m.Parsed.OrderID, m.Parsed.Tracking)
 				msg, body := emailText(m.Raw)
 				texts = append(texts, body, m.Parsed.Subject)
 				if msg != nil {
@@ -746,6 +752,98 @@ func gateInDigest(page []byte, start, end int) bool {
 	}
 	return gateDigest.Match(page[s:e])
 }
+
+// gateCardRun widens the digit match at page[start:end] (lowercased, folded
+// text) to its whole run, digits each after at most one space or dash, and
+// reports whether that run stands alone the way a written card number does.
+// Random identifiers hold a Luhn-valid run one time in ten, so a run inside
+// one is not a card number:
+//   - inside one [0-9a-z+/] span with letters on BOTH sides of it (a hex or
+//     base64 value: "c0f8…1766058009643e074");
+//   - inside a span that is a hex id of 32 or more characters;
+//   - inside a UUID (8-4-4-4-12 hex).
+//
+// '=', '_', ':' and a '-' after a word end a span, so a card number joined
+// to a label ("pan=…", "card_number=…", "visa-4111-…", "ref-…") or glued to a
+// word on one side ("pan4111…", "4111…x") is still a card number. The deal's
+// own card number is found anywhere, by the spelled-secret check.
+func gateCardRun(page []byte, start, end int) (int, int, bool) {
+	digit := func(c byte) bool { return c >= '0' && c <= '9' }
+	letter := func(c byte) bool { return c >= 'a' && c <= 'z' }
+	span := func(c byte) bool { return digit(c) || letter(c) || c == '+' || c == '/' }
+	hex := func(c byte) bool { return digit(c) || c >= 'a' && c <= 'f' }
+	for e := end; ; {
+		if e < len(page) && digit(page[e]) {
+			e++
+		} else if e+1 < len(page) && (page[e] == ' ' || page[e] == '-') && digit(page[e+1]) {
+			e += 2
+		} else {
+			end = e
+			break
+		}
+	}
+	for s := start; ; {
+		if s > 0 && digit(page[s-1]) {
+			s--
+		} else if s > 1 && (page[s-1] == ' ' || page[s-1] == '-') && digit(page[s-2]) {
+			s -= 2
+		} else {
+			start = s
+			break
+		}
+	}
+	// A run with a separator in it is written out, not part of one span.
+	if !bytes.ContainsAny(page[start:end], " -") {
+		s, e := start, end
+		for s > 0 && span(page[s-1]) {
+			s--
+		}
+		for e < len(page) && span(page[e]) {
+			e++
+		}
+		before, after := false, false
+		for i := s; i < start; i++ {
+			before = before || letter(page[i])
+		}
+		for i := end; i < e; i++ {
+			after = after || letter(page[i])
+		}
+		if before && after {
+			return start, end, false
+		}
+		allHex := e-s >= 32
+		for i := s; i < e && allHex; i++ {
+			allHex = hex(page[i])
+		}
+		if allHex {
+			return start, end, false
+		}
+	}
+	// A UUID: the 36 bytes around the run, in the 8-4-4-4-12 shape.
+	for s := max(start-35, 0); s <= start && s+36 <= len(page); s++ {
+		if s+36 >= end && gateUUID.Match(page[s:s+36]) &&
+			(s == 0 || !hex(page[s-1]) && page[s-1] != '-') && (s+36 == len(page) || !hex(page[s+36]) && page[s+36] != '-') {
+			return start, end, false
+		}
+	}
+	return start, end, true
+}
+
+// gateCardWindows reports whether the digits of a run hold a card number: the
+// whole run, or a 13-19 digit window anchored at its start or its end (a card
+// number followed or preceded by a code or a date). Only the two ends are
+// tried, not every window, so a long run is not read as a card number by
+// chance from its middle.
+func gateCardWindows(digits string) bool {
+	for n := 13; n <= 19 && n <= len(digits); n++ {
+		if luhn(digits[:n]) || luhn(digits[len(digits)-n:]) {
+			return true
+		}
+	}
+	return false
+}
+
+var gateUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // luhn reports a Luhn-valid number, the checksum every card number carries.
 func luhn(digits string) bool {

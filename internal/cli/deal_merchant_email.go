@@ -118,9 +118,12 @@ type merchantEmailParsed struct {
 	// booking, confirmation, reservation, receipt, pnr, record locator.
 	// Only an "order" id can ever be shared (see shareableOrderID).
 	OrderIDLabel string `json:"order_id_label,omitempty"`
-	TotalMinor   *int64 `json:"total_minor,omitempty"`
-	Currency     string `json:"currency,omitempty"`
-	CancelBy     string `json:"cancel_by,omitempty"` // YYYY-MM-DD
+	// Tracking is a shipment tracking number, found under the word
+	// "tracking", as written ("9400 1000 0000 0000 0000 00").
+	Tracking   string `json:"tracking,omitempty"`
+	TotalMinor *int64 `json:"total_minor,omitempty"`
+	Currency   string `json:"currency,omitempty"`
+	CancelBy   string `json:"cancel_by,omitempty"` // YYYY-MM-DD
 	// ChargeAfterCancelBy is set when the email says no charge comes before
 	// the cancel-by date (a trial, or "cancel by ... to avoid being charged").
 	// Only then is a charge dated before it a mismatch.
@@ -559,7 +562,10 @@ var (
 	chargeLater      = regexp.MustCompile(`(?i)avoid (being )?charged|before (you are|you're|you get|being) (charged|billed)|won'?t be (charged|billed)|will not be (charged|billed)|free trial|trial (ends|period)|first (charge|payment) (is|will be) on`)
 	itemQty          = regexp.MustCompile(`(?im)^\s*(.{2,80}?)\s+(?:qty|quantity)\s*[:x]?\s*(\d{1,4})\b`)
 	itemTimes        = regexp.MustCompile(`(?im)^\s*(\d{1,4})\s*[x×]\s+(.{2,80}?)\s*$`)
-	orderIDBad       = map[string]bool{"CONFIRMATION": true, "NUMBER": true, "DETAILS": true, "SUMMARY": true, "TOTAL": true, "STATUS": true}
+	// trackingLine: a tracking number of 8 to 40 characters with a digit,
+	// unbroken or in groups of digits ("9400 1000 0000 0000 0000 00").
+	trackingLine = regexp.MustCompile(`(?i)\btracking\s*(?:number|no\.?|id|#)?\s*[:#]?\s*#?\s*(\d{2,6}(?:[ -]\d{2,6}){2,9}|[A-Z0-9]{8,40})\b`)
+	orderIDBad   = map[string]bool{"CONFIRMATION": true, "NUMBER": true, "DETAILS": true, "SUMMARY": true, "TOTAL": true, "STATUS": true}
 )
 
 var symbolCurrency = map[string]string{"$": "USD", "€": "EUR", "£": "GBP", "¥": "JPY"}
@@ -590,6 +596,17 @@ func parseMerchantEmail(raw []byte) merchantEmailParsed {
 			}
 		}
 		if p.OrderID != "" {
+			break
+		}
+	}
+	for _, src := range []string{p.Subject, text} {
+		for _, m := range trackingLine.FindAllStringSubmatch(src, -1) {
+			if digits := nonDigit.ReplaceAllString(m[1], ""); len(digits) >= 8 {
+				p.Tracking = m[1]
+				break
+			}
+		}
+		if p.Tracking != "" {
 			break
 		}
 	}
@@ -696,6 +713,22 @@ func (m *merchantEmail) shareableOrderID(first dealWho) string {
 		return ""
 	}
 	return m.Parsed.OrderID
+}
+
+// shareableTracking is the tracking number a shared copy may carry from a
+// merchant email, on exactly the terms of shareableOrderID: the counterparty's
+// copy only, from an email whose signature checks out, signed by the From
+// domain, that signer being the deal's own counterparty. A tracking number
+// says where a parcel is, not who may collect it, so unlike a booking code it
+// may be shared. It returns "" when the number stays withheld.
+func (m *merchantEmail) shareableTracking(first dealWho) string {
+	if m == nil || m.Parsed.Tracking == "" || m.DKIM.Result != "pass" || !m.DKIM.Merchant {
+		return ""
+	}
+	if same, known := signerMatchesBaseline(m.DKIM, first); !known || !same {
+		return ""
+	}
+	return m.Parsed.Tracking
 }
 
 // emailSigner is the domain whose passing signature the verdict rests on: the

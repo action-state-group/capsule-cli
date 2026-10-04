@@ -158,7 +158,7 @@ func dealLocalData(events []sealedEvent) dealLocal {
 			if m := e.Evidence.Email; m != nil {
 				// A merchant's email, sealed raw: its order id, its headers'
 				// addresses and its text are all private.
-				l.ids = append(l.ids, m.Parsed.OrderID)
+				l.ids = append(l.ids, m.Parsed.OrderID, m.Parsed.Tracking)
 				l.names = append(l.names, recipientNames(m)...)
 				text(merchantEmailTexts(m)...)
 			}
@@ -823,9 +823,10 @@ func (s *dealSession) dealWithholdRecords(events []sealedEvent, audience string,
 	return withhold, nil
 }
 
-// dealShareableOrderIDs are the merchant order ids a copy for audience may
-// carry: in the counterparty's copy only, each one shareableOrderID allows.
-func dealShareableOrderIDs(events []sealedEvent, audience string) []string {
+// dealShareableIDs are the merchant order ids and tracking numbers a copy for
+// audience may carry: in the counterparty's copy only, each one
+// shareableOrderID or shareableTracking allows.
+func dealShareableIDs(events []sealedEvent, audience string) []string {
 	if audience != dealAudienceCounterparty || len(events) == 0 || events[0].Event.Open == nil {
 		return nil
 	}
@@ -833,8 +834,10 @@ func dealShareableOrderIDs(events []sealedEvent, audience string) []string {
 	var out []string
 	for _, se := range events {
 		if ev := se.Event.Evidence; ev != nil {
-			if id := ev.Email.shareableOrderID(first); id != "" {
-				out = append(out, id)
+			for _, id := range []string{ev.Email.shareableOrderID(first), ev.Email.shareableTracking(first)} {
+				if id != "" {
+					out = append(out, id)
+				}
 			}
 		}
 	}
@@ -1006,7 +1009,8 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 	}
 	// The merchant's own emails, for the audience: the signature's verdict in
 	// fixed words (the signing domain is the counterparty's: withheld),
-	// amounts and dates, the order id only where shareableOrderID allows it
+	// amounts and dates, the order id and tracking number only where
+	// shareableOrderID and shareableTracking allow them
 	// (the counterparty's copy), and the items only for an adjudicator.
 	first := events[0].Event.Open.Who
 	var paid *dealAct
@@ -1043,6 +1047,9 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 			if e, ok := byID[row.Steps[0]]; ok && e.Evidence != nil {
 				if id := e.Evidence.Email.shareableOrderID(first); id != "" {
 					m["order_id"] = id
+				}
+				if tr := e.Evidence.Email.shareableTracking(first); tr != "" {
+					m["tracking"] = tr
 				}
 			}
 		}

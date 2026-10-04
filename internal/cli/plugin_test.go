@@ -20,6 +20,19 @@ fi
 echo "guard ran: $*"
 `
 
+// pluginRoot makes an empty trusted plugin root and points
+// CAPSULECTL_PLUGIN_ROOTS at it. t.TempDir's directory takes the process
+// umask, so under 002 (a stock Ubuntu login) it is group-writable and the trust
+// walk rightly refuses it; the root is set to 0755 so these tests pass under
+// any umask.
+func pluginRoot(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	require.NoError(t, os.Chmod(root, 0o755))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	return root
+}
+
 func writeLauncher(t *testing.T, dir, name, body string, mode os.FileMode) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
@@ -29,8 +42,7 @@ func writeLauncher(t *testing.T, dir, name, body string, mode os.FileMode) strin
 }
 
 func TestVerifyTrustedPathRejections(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	root := pluginRoot(t)
 
 	valid := writeLauncher(t, root, "capsulectl-guard", fakePlugin, 0o755)
 	require.NoError(t, verifyTrustedPath(valid), "a user-owned 0755 launcher on the trusted root is accepted")
@@ -68,8 +80,7 @@ func TestVerifyTrustedPathRejections(t *testing.T) {
 }
 
 func TestPluginCannotShadowCoreOrBuiltins(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	root := pluginRoot(t)
 	// launchers named after a core command, both cobra builtins, and a multi-token
 	// name (whose cobra name would be the first token, "verify")
 	writeLauncher(t, root, "capsulectl-verify", strings.Replace(fakePlugin, `"name":"guard"`, `"name":"verify"`, 1), 0o755)
@@ -101,8 +112,7 @@ func TestPluginCannotShadowCoreOrBuiltins(t *testing.T) {
 }
 
 func TestDiscoverAndHandshake(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	root := pluginRoot(t)
 	writeLauncher(t, root, "capsulectl-guard", fakePlugin, 0o755)
 	// a version-mismatched plugin must be refused, not trusted
 	writeLauncher(t, root, "capsulectl-stale", strings.Replace(fakePlugin, "cli-plugin/v1", "cli-plugin/v2", 1), 0o755)
@@ -124,8 +134,7 @@ func TestDiscoverAndHandshake(t *testing.T) {
 }
 
 func TestPluginDispatchAndLs(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	root := pluginRoot(t)
 	writeLauncher(t, root, "capsulectl-guard", fakePlugin, 0o755)
 
 	// `plugin ls` lists the discovered plugin with its vendor

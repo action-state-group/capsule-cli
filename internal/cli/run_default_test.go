@@ -16,7 +16,7 @@ import (
 )
 
 func TestRunIsUnavailableInTheDefaultBuild(t *testing.T) {
-	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", t.TempDir())
+	pluginRoot(t)
 	_, err := invoke(t, "", "run", "--dry-run")
 	require.Error(t, err)
 	assert.Equal(t, 2, ExitCode(err))
@@ -26,8 +26,7 @@ func TestRunIsUnavailableInTheDefaultBuild(t *testing.T) {
 func TestRunStaysReservedAndHiddenInTheDefaultBuild(t *testing.T) {
 	// A launcher literally named `run` must not take the name, even though the
 	// default build ships no dispatch behind it.
-	root := t.TempDir()
-	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	root := pluginRoot(t)
 	writeLauncher(t, root, "capsulectl-run", strings.Replace(fakePlugin, `"name":"guard"`, `"name":"run"`, 1), 0o755)
 	c := NewCommand()
 	count := 0
