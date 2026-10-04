@@ -214,6 +214,10 @@ func jsonInputErrorCases(t *testing.T, p Profile) {
 			"--request: field capsule.ActionID must be a string, not array"},
 		{"syntax", []string{"publish", "--profile", p.Name, "--request", file(`{"spec_version":"` + secret + `",,}`)},
 			"--request is not valid JSON: the syntax breaks at byte 37"},
+		{"card-like number into a string field", []string{"publish", "--profile", p.Name, "--request", file(`{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":4111111111111111.5}}`)},
+			"--request: field capsule.ActionID must be a string, not number"},
+		{"card-like number into a string field of a judge file", []string{"judge", "pin", file(`{"model_id":"m","model_version":4111111111111111}`)},
+			"field model_version must be a string, not number"},
 		{"judge file wrong type", []string{"judge", "pin", file(`{"model_id":{"x":"` + secret + `"}}`)},
 			"field model_id must be a string, not object"},
 		{"empty", []string{"publish", "--profile", p.Name, "--request", file(``)},
@@ -225,6 +229,23 @@ func jsonInputErrorCases(t *testing.T, p Profile) {
 			msg := SafeError(err)
 			assert.Contains(t, msg, tc.want)
 			assert.NotContains(t, msg+out, secret, "a value from the input is never repeated")
+			assert.NotContains(t, msg+out, "4111111111111111", "a number from the input is never repeated")
 		})
+	}
+}
+
+// TestJSONTypeErrorNeverEchoesTheNumber: Go reports a number that does not
+// fit an integer field with the number itself ("number 4111111111111111.5");
+// the refusal keeps only the kind.
+func TestJSONTypeErrorNeverEchoesTheNumber(t *testing.T) {
+	var into struct {
+		AmountMinor int64 `json:"amount_minor"`
+	}
+	for _, raw := range []string{`{"amount_minor":4111111111111111.5}`, `{"amount_minor":41111111111111111111111}`} {
+		err := decodeJSONAs("--input", []byte(raw), &into)
+		require.ErrorIs(t, err, ErrInput)
+		msg := SafeError(err)
+		assert.Contains(t, msg, "--input: field amount_minor must be an integer, not number")
+		assert.NotContains(t, msg, "4111111111111111")
 	}
 }

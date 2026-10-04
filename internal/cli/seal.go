@@ -139,7 +139,13 @@ func jsonDecodeReason(in string, err error) string {
 		if field == "" {
 			field = "(the top level)"
 		}
-		return fmt.Sprintf("%s: field %s must be %s, not %s", in, field, jsonTypeName(typed.Type), typed.Value)
+		// typed.Value can carry the value itself ("number 4111..."): only
+		// its first word, the JSON kind, is ever shown.
+		kind := "another type"
+		if words := strings.Fields(typed.Value); len(words) > 0 {
+			kind = words[0]
+		}
+		return fmt.Sprintf("%s: field %s must be %s, not %s", in, field, jsonTypeName(typed.Type), kind)
 	case jsonUnknownField.MatchString(err.Error()):
 		return fmt.Sprintf("%s has a field this command does not accept: %q (see the command's documented format)", in, jsonUnknownField.FindStringSubmatch(err.Error())[1])
 	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
