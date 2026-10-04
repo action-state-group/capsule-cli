@@ -241,7 +241,9 @@ depends on the connecting server, which a received message cannot prove.
 uncheckable next month, once the merchant has replaced its key. `deal note
 --email` therefore reads the key record (`selector._domainkey.domain`) from
 DNS when the email is sealed, seals it alongside the message, and cuts a
-checkpoint at once (offered to the witness, when one is configured).
+checkpoint at once. When a witness is configured, that checkpoint reaches it
+at the next cadence tick (`deal tick`), like every deal checkpoint, so the
+witnessed time is at most one cadence interval later.
 `deal verify-email` then checks against the sealed key only, never against
 live DNS. **Sealing promptly is the whole protection**: an email sealed after
 its key was withdrawn cannot be verified. The key is read from ordinary DNS,

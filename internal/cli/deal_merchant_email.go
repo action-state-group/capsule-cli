@@ -40,8 +40,9 @@ import (
 //
 // DKIM keys rotate and are revoked, so a signature that verifies today may be
 // uncheckable next month. The key record is therefore captured from DNS when
-// the email is sealed and sealed with it, and the step is checkpointed (and
-// witnessed, when a witness is configured) at once. Verification afterwards
+// the email is sealed and sealed with it, and the step is checkpointed at once;
+// the checkpoint reaches the witness, when one is configured, at the next
+// cadence tick (`deal tick`). Verification afterwards
 // runs offline against the sealed key record, never against live DNS.
 //
 // DKIM verification is github.com/emersion/go-msgauth/dkim (MIT). Nothing here

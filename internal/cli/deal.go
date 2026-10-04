@@ -753,8 +753,8 @@ func dealNoteCommand() *cobra.Command {
 				out["reason"] = ev.Act.Reason
 			case "evidence":
 				if m := ev.Evidence.Email; m != nil {
-					// Keys rotate and are revoked: checkpoint (and witness)
-					// the sealed key record at once.
+					// Keys rotate and are revoked: checkpoint the sealed key
+					// record at once (the next cadence tick witnesses it).
 					cp, err := s.milestone(ctx)
 					if err != nil {
 						return err
