@@ -128,7 +128,7 @@ func gateCheck(data []byte, secrets, words []string, depth int) error {
 		chars, isWord := gateChars(folded)
 		for _, w := range words {
 			sk := gateLettersOf(w, true)
-			if len(sk) < 3 {
+			if sk == "" {
 				continue
 			}
 			for _, backwards := range []bool{false, true} {
@@ -387,7 +387,8 @@ func gateSecrets(events []sealedEvent) (secrets, words []string) {
 	}
 	// The customer's display names: a role ("Customer", "Sales Team") is not
 	// a name; a name of several words is a needle like any other; a one-word
-	// name is read only as a whole word.
+	// name of three letters or more is read only as a whole word, and a
+	// shorter one never.
 	for _, name := range names {
 		name = strings.TrimSpace(foldText(name))
 		parts := gateNameWord.FindAllString(strings.ToLower(name), -1)
@@ -395,7 +396,9 @@ func gateSecrets(events []sealedEvent) (secrets, words []string) {
 		case len(parts) == 0 || gateRole(parts):
 		case len(parts) > 1:
 			add(name)
-		default:
+		case utf8.RuneCountInString(parts[0]) >= 3:
+			// A one-word name of three letters or more; a shorter one ("Al")
+			// is never a needle.
 			words = append(words, name)
 		}
 	}

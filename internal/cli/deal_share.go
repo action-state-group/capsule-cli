@@ -317,8 +317,9 @@ func dealPrivateValues(events []sealedEvent) dealPrivate {
 	}
 	// The customer's display names: a role ("Customer", "Sales Team") is
 	// not a name and is skipped; a name of several words is a value like any
-	// other; a one-word name is matched only as a whole word, in any of its
-	// spellings, so it never takes a bite out of a longer word.
+	// other; a one-word name of three letters or more ("Amy") is matched only
+	// as a whole word, in any of its spellings, so it never takes a bite out
+	// of a longer word; a shorter one is never matched.
 	for _, name := range l.names {
 		name = strings.TrimSpace(foldText(name))
 		words := nameWord.FindAllString(strings.ToLower(name), -1)
@@ -327,9 +328,12 @@ func dealPrivateValues(events []sealedEvent) dealPrivate {
 		case len(words) > 1:
 			add(name)
 			spell(name)
+		case utf8.RuneCountInString(words[0]) < 3:
+			// A one- or two-letter name ("Al", "Jo") is never matched: it
+			// would take out words and abbreviations that are not names.
 		default:
 			sk := spelling(name).lowerSkeleton
-			if len(sk) < 3 {
+			if sk == "" {
 				continue
 			}
 			for i, text := range []string{sk, reverseString(sk)} {

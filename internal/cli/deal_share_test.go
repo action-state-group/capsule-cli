@@ -486,3 +486,27 @@ func TestDealShareDisplayNamesAreWholeWordsAndNotRoles(t *testing.T) {
 		assert.Error(t, dealPageGate(gatePage(t, in), events), in)
 	}
 }
+
+// The floor for a one-word name is three letters. "Amy" is withheld, as a
+// whole word only ("Amygdala" stays); "Al" is never matched, so a page that
+// mentions AL (Alabama) or "Al" is neither scrubbed nor refused.
+func TestDealShareOneWordNameFloorIsThreeLetters(t *testing.T) {
+	eml := []byte("From: Shop Example <orders@shop.example>\r\n" +
+		"To: Amy <amy@mail.example>, Al <al@mail.example>\r\n" +
+		"Subject: Your order\r\n\r\nThanks for your order.\r\n")
+	events := plantedEvents()
+	events = append(events, sealedEvent{Event: dealEvent{Kind: "evidence", Evidence: &dealEvidence{Email: &merchantEmail{Raw: eml}}}})
+	p := dealPrivateValues(events)
+	_, words := gateSecrets(events)
+	assert.Equal(t, []string{"Amy"}, words, "only a name of three letters or more is a word needle")
+
+	for _, kept := range []string{"the amygdala", "Al said hi", "Montgomery, AL", "an alpaca"} {
+		assert.Equal(t, kept, p.scrub(kept))
+		assert.NoError(t, dealPageGate(gatePage(t, kept), events), kept)
+	}
+	for _, in := range []string{"Thanks Amy!", "for A m y", "ymA"} {
+		assert.Contains(t, p.scrub(in), "[withheld]", in)
+		assert.NotContains(t, strings.ToLower(p.scrub(in)), "amy", in)
+		assert.Error(t, dealPageGate(gatePage(t, in), events), in)
+	}
+}
