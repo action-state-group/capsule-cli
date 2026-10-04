@@ -186,8 +186,8 @@ func TestDealApprovalGoesStaleAfterChange(t *testing.T) {
 func TestDealRejectsUnknownActionAndBadInput(t *testing.T) {
 	dealFixture(t)
 	dealID := openJetSki(t)
-	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"cancel"}`))
-	require.Error(t, err, "cancel is not a point of no return for a rental")
+	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"refund"}`))
+	require.Error(t, err, "refund is not a point of no return for any deal type")
 	_, err = invoke(t, "", "--profile", "deal", "deal", "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","unchecked":false,"authorized_by":"x"}`))
 	require.Error(t, err, "authorization cannot be supplied by the caller")
 	_, err = invoke(t, "", "--profile", "deal", "deal", "open", "--input", writeJSON(t, `{"type":"rental","intent":{"verbatim":""},"who":{"name":"x"},"terms":{},"recourse":{"rail":"card","refundable":true}}`))

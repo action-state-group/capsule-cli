@@ -1,0 +1,24 @@
+DKIM-Signature: a=rsa-sha256; bh=Rc+vtJOu39kY5dH//RezyKJBZ5taUAh84P89hW1P+MA=;
+ c=relaxed/relaxed; d=shop.example;
+ h=From:To:Subject:Date:Message-ID:MIME-Version:Content-Type; s=s2026;
+ t=1791077644; v=1;
+ b=L+nfS3ZOiXvVdnnihs7geVM4B8S8UcJIS7R+zPHRfNEhZyj3xswokhM96NdXZ0bMPN2a4ZdK
+ TMeAT1WQPUFfej/VIEmAoFJViOyU+p+lJyKQDTt04iyn2WaQYBysMbaT9KEX5YvGP30nnu9vyTP
+ uOh1jNQaHoq7EV3bmiEweb4xB3+0vN+upJobNiLzq0IGKlQuKAUnIyt1Zjl7VAgXSuVBBE5SriK
+ kxeuXhqqCaijgyDUtLd1gIMBTzYj/Lue+cUhoGsqz1mf/QePVRuZRmL/KM67nfR+CuOx8bsQjTP
+ PIxOOhbnAxxd99tEt6wj0hZC2Foyic/7ApTeXCUj8IpvQ==
+From: Shop Example <offers@shop.example>
+To: Sam Customer <sam.customer@mail.example>
+Subject: Your Shop Example Plus trial has started
+Date: Sat, 03 Oct 2026 21:20:00 +0000
+Message-ID: <plus-trial-7731@shop.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Welcome to Shop Example Plus!
+
+Your free trial has started. After the trial, Plus is $24/month.
+Cancel by October 16, 2026 to avoid being charged. Your first payment is on October 17, 2026.
+
+Shop Example

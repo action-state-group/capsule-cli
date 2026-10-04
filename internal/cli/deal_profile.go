@@ -74,6 +74,9 @@ func dealTexts(ev dealEvent) map[string]string {
 		if ev.Evidence.Email != nil && ev.Evidence.Email.Parsed.OrderID != "" {
 			t["order_id"] = ev.Evidence.Email.Parsed.OrderID
 		}
+		if ev.Evidence.Obligation != nil && ev.Evidence.Obligation.Terms != "" {
+			t["terms"] = ev.Evidence.Obligation.Terms
+		}
 	case ev.Snapshot != nil && ev.Snapshot.Description != "":
 		t["description"] = ev.Snapshot.Description
 	case ev.Check != nil && ev.Check.Card != "":
@@ -310,6 +313,9 @@ func merchantEmailBody(m *merchantEmail, first dealWho, commit func(string) (str
 	if len(p.Items) > 0 {
 		parsed["item_count"] = int64(len(p.Items))
 	}
+	if p.Kind != "" {
+		parsed["kind"] = p.Kind
+	}
 	if p.OrderID != "" {
 		if parsed["order_id_commitment"], err = commit("order_id"); err != nil {
 			return nil, err
@@ -450,6 +456,31 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			if body["merchant_email"], err = merchantEmailBody(m, events[0].Event.Open.Who, commit); err != nil {
 				return nil, err
 			}
+		}
+		if o := ev.Evidence.Obligation; o != nil {
+			ob := map[string]interface{}{"kind": o.Kind, "cancel_by": o.CancelBy}
+			if o.TakesEffect != "" {
+				ob["takes_effect"] = o.TakesEffect
+			}
+			if o.AmountMinor != nil {
+				ob["amount_minor"] = *o.AmountMinor
+				cur := o.Currency
+				if cur == "" {
+					cur = currency
+				}
+				if cur != "" {
+					ob["currency"] = cur
+				}
+			}
+			if o.Period != "" {
+				ob["period"] = o.Period
+			}
+			if o.Terms != "" {
+				if ob["terms_commitment"], err = commit("terms"); err != nil {
+					return nil, err
+				}
+			}
+			body["obligation"] = ob
 		}
 		if ev.Evidence.Who != nil {
 			setIDs(counterpartyIDs(key, *ev.Evidence.Who))
@@ -764,6 +795,11 @@ func normalizeNote(ev *dealEvent) error {
 	case ev.Claim != nil:
 		ev.Claim.Source, err = sourceToken(ev.Claim.Source)
 	case ev.Evidence != nil:
+		if ev.Evidence.Obligation != nil {
+			if err = ev.Evidence.Obligation.normalize(); err != nil {
+				return err
+			}
+		}
 		ev.Evidence.Source, err = sourceToken(ev.Evidence.Source)
 	case ev.Change != nil:
 		if ev.Change.Who != nil && ev.Change.Who.DomainAgeDays != nil {

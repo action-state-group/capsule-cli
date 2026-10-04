@@ -39,6 +39,8 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal close --input FILE` | Compares what was delivered with what was agreed: `completed`, `mismatch` or `open`. Cuts a checkpoint. |
 | `deal note --kind intent --input FILE` | Seals a change to what the user asked or allowed. |
 | `deal note --kind evidence --email FILE [--key-record FILE]` | Seals a merchant's own email (raw RFC 822, headers intact) with the DKIM key records read from DNS at that moment, checks the signature, and cuts a checkpoint. See [The merchant's own email](#the-merchants-own-email). |
+| `deal note --kind evidence --input FILE` with `obligation` | Seals a cancel-by date (a trial that becomes paid, a renewal, the end of free cancellation, a payment on a date) with its source: the merchant's email (with `--email`) or a page snapshot. Cuts a checkpoint. |
+| `deal deadlines [--deal ID] [--ics FILE] [--remind-days N] [--all]` | Lists open cancel-by dates, for one deal or every deal in the profile, as JSON; `--ics` also writes them as a calendar file with reminders for the host's scheduler. Records, never enforces. |
 | `deal verify-email [--step N] [--email FILE]` | Re-checks a sealed merchant email offline, against the key records sealed with it. `--email` checks another copy, which must match the sealed bytes. Exit 1 when it does not verify. |
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
@@ -300,6 +302,38 @@ The order number, total, cancel-by date and items are read by
 merchant-agnostic heuristics and may be misread; the report labels them as
 read from the email. The merchant's signature covers the bytes, not this
 reading of them.
+
+## Cancel-by dates and proving a cancellation
+
+Some points of no return are a date passing, not an action: a free trial that
+becomes $24.00/month on the 17th unless cancelled by the 16th. The deal seals
+that obligation when it is created, with its source (the merchant's own
+email, which `deal note --email` proposes it from when the email says nothing
+is charged before a date, or a snapshot of the page). Every `deal check`
+lists the deal's open dates, and `deal deadlines` emits them as JSON or an
+iCalendar file with a reminder, for the host's own scheduler or the user's
+calendar. No daemon runs here. **We record the deadline; we do not enforce
+it, and nothing is cancelled for the user.** `deal close` refuses while a date
+is open (close with status `pending` meanwhile), because closing would end the
+record that holds it. A date that passed with no cancel sealed reads `passed`.
+
+"I cancelled on the 4th" needs evidence. A sealed `cancel` action (checked and
+approved like any other point of no return) plus the merchant's own
+cancellation email, sealed on the same deal, is the strongest record this
+produces. The report's "Your cancellation" section says exactly:
+
+- **what is shown:** a cancel recorded at a time (this device's clock, fixed by
+  the next witnessed checkpoint when a witness is configured); whether that
+  time is on or before the cancel-by date; and, when the merchant's own
+  cancellation email is merchant-confirmed, that the merchant says the
+  cancellation went through, and when;
+- **what is not:** that no later charge will come (only the merchant's records,
+  or the user's statement, can show that); that the merchant acted beyond what
+  its email says; and, with no confirmed email, that the merchant received the
+  cancel at all.
+
+An email that does not check out is named as such, with its DMARC policy, and
+is never counted as the merchant's confirmation.
 
 ## Guarantee
 

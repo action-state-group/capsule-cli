@@ -431,7 +431,7 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealExportCommand(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand(), dealDeadlinesCommand())
 	return deal
 }
 
@@ -768,6 +768,21 @@ func dealNoteCommand() *cobra.Command {
 					out["merchant_says"] = emailVerdictWords(m.DKIM)
 					out["we_say"] = ourSealWords
 					out["parsed"] = m.Parsed
+					if hint := obligationHint(m.Parsed); hint != nil && ev.Evidence.Obligation == nil {
+						// Proposed, never sealed by itself: the agent checks it
+						// against the email and seals it as evidence.
+						out["obligation_hint"] = hint
+					}
+				}
+				if o := ev.Evidence.Obligation; o != nil {
+					if ev.Evidence.Email == nil {
+						cp, err := s.milestone(ctx)
+						if err != nil {
+							return err
+						}
+						out["checkpoint"] = cp
+					}
+					out["deadline"] = map[string]any{"cancel_by": o.CancelBy, "text": o.sentence(events[0].Event.Open.Terms.Currency), "note": deadlineNotEnforced}
 				}
 			}
 			return output(c, out)
@@ -921,6 +936,9 @@ func dealCheckCommand() *cobra.Command {
 			out["unverified"] = result.Unverified
 			out["remote"] = result.Remote.Status
 			out["demo"] = open.Demo
+			// A date passing is a point of no return too: every check lists
+			// the deal's open cancel-by dates.
+			out["open_deadlines"] = openDeadlines(events, dealClock())
 			out["checked_at"] = checked.Event.At
 			out["stale_after_minutes"] = int(staleAfter / time.Minute)
 			out["approval_text"] = dealApprovalText(state, snap, result, checked.Event.At, staleAfter)
@@ -957,6 +975,9 @@ func dealCloseCommand() *cobra.Command {
 			state, err := foldDeal(events)
 			if err != nil {
 				return err
+			}
+			if open := openDeadlines(events, dealClock()); len(open) > 0 && in.Status != "pending" {
+				return inputError("this deal has an open cancel-by date (" + open[0].CancelBy + ": " + open[0].Text + "); closing would end its record. Close with status pending, or close after the cancel is sealed or the date has passed")
 			}
 			result := closeDeal(state, in)
 			for _, se := range events {
@@ -1009,7 +1030,8 @@ func dealReportCommand() *cobra.Command {
 			}
 			out := map[string]any{
 				"deal_id": dealID, "scope": dealScopeLine, "did_line": dealDidLine(dealDidSources(events)), "demo": events[0].Event.Open.Demo, "outcome": outcome,
-				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "merchant": report.Merchant, "trail": strings.Join(lines, "\n"),
+				"asked": report.Asked, "did": report.Did, "anomalies": report.Anomalies, "merchant": report.Merchant,
+				"deadlines": dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "trail": strings.Join(lines, "\n"),
 			}
 			if htmlPath == "" && emailPath == "" && bundlePath == "" {
 				return output(c, out)
@@ -1041,7 +1063,7 @@ func dealReportCommand() *cobra.Command {
 				out["bundle"] = bundlePath
 			}
 			if emailPath != "" {
-				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Did: report.Did, Anomalies: report.Anomalies, Merchant: report.Merchant, Steps: len(events)}
+				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Did: report.Did, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, dealClock(), 2), Cancellations: dealCancellations(events), Steps: len(events)}
 				eml, subject, text, htmlBody, err := dealEmail(view, []byte(page), bundle, dealClock())
 				if err != nil {
 					return err

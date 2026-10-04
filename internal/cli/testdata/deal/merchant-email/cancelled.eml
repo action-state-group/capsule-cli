@@ -1,0 +1,21 @@
+DKIM-Signature: a=rsa-sha256; bh=qintMGaYlKFJOtgD/FHNvBxM6sEP867dnlolP8QqtDc=;
+ c=relaxed/relaxed; d=shop.example;
+ h=From:To:Subject:Date:Message-ID:MIME-Version:Content-Type; s=s2026;
+ t=1791077644; v=1;
+ b=Y+xKV9InUEBU0IQka6y+ZbkvNlu+BsdIkHU4kmvfeGW3uBeLeRl7nrG6gqyVGZsgDMDx/nE/
+ uCVZR8Jaj+0xMXSrUbPNpFV9/tEIMye1JSaQeCSFoqb9BiOGNNTl7IOcDVAAZiSacQjBZC+zeAQ
+ pOdW73U6HOTQxitBJ8bHPl9Qpl2wmHWKL1qYAblAuGJVKktKQVwi14IoY3FAbUKz8/xOSGbDlfd
+ D+Zi15WmuIif4laBAII8LpQeq21fwJS0ylgHScOyqu8UHD4+NXT7PWHM5RVMbAdYfeJeerBEZAL
+ AXTzaeX5ZalLSbBA6gvYrUcesWRm3CLX7OwVwwt4Gtdlw==
+From: Shop Example <offers@shop.example>
+To: Sam Customer <sam.customer@mail.example>
+Subject: Your Shop Example Plus membership has been cancelled
+Date: Sun, 04 Oct 2026 16:02:11 +0000
+Message-ID: <plus-cancel-7731@shop.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Your Shop Example Plus membership has been cancelled. You won't be charged when the trial ends.
+
+Shop Example

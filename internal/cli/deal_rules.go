@@ -17,10 +17,10 @@ import (
 // undone. `deal check` refuses any other action, so an agent cannot reach an
 // irreversible step through a name the rules do not cover.
 var dealPointsOfNoReturn = map[string][]string{
-	"purchase": {"pay", "commit", "share_contact", "share_credentials"},
-	"rental":   {"pay", "commit", "sign", "share_contact", "share_credentials"},
+	"purchase": {"pay", "commit", "cancel", "share_contact", "share_credentials"},
+	"rental":   {"pay", "commit", "sign", "cancel", "share_contact", "share_credentials"},
 	"booking":  {"pay", "commit", "cancel", "share_contact", "share_credentials"},
-	"service":  {"pay", "commit", "sign", "share_contact", "share_credentials"},
+	"service":  {"pay", "commit", "sign", "cancel", "share_contact", "share_credentials"},
 }
 
 // dealWho identifies the counterparty. Every field is optional; each one that
@@ -95,8 +95,11 @@ type dealEvidence struct {
 	Verified bool     `json:"verified,omitempty"`
 	Detail   string   `json:"detail,omitempty"`
 	Who      *dealWho `json:"who,omitempty"`
-	// Email is a merchant's own email, sealed raw (deal_email.go).
+	// Email is a merchant's own email, sealed raw (deal_merchant_email.go).
 	Email *merchantEmail `json:"email,omitempty"`
+	// Obligation is a commitment that takes effect when a date passes
+	// (deal_obligation.go), recorded with this evidence as its source.
+	Obligation *dealObligation `json:"obligation,omitempty"`
 }
 
 // dealChange is a detail the counterparty changed after first contact. It is
@@ -829,8 +832,18 @@ func trailLine(e dealEvent) string {
 	case "claim":
 		return "claim recorded (" + e.Claim.Source + "): " + e.Claim.Text
 	case "evidence":
+		line := ""
 		if m := e.Evidence.Email; m != nil {
-			return "merchant's email sealed; " + emailVerdictWords(m.DKIM)
+			line = "merchant's email sealed; " + emailVerdictWords(m.DKIM)
+		}
+		if o := e.Evidence.Obligation; o != nil {
+			if line != "" {
+				line += "; "
+			}
+			line += "cancel-by date recorded (" + e.Evidence.Source + "): " + o.sentence("")
+		}
+		if line != "" {
+			return line
 		}
 		state := "unverified"
 		if e.Evidence.Verified {

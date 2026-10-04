@@ -124,10 +124,19 @@ type merchantEmailParsed struct {
 	// ChargeAfterCancelBy is set when the email says no charge comes before
 	// the cancel-by date (a trial, or "cancel by ... to avoid being charged").
 	// Only then is a charge dated before it a mismatch.
-	ChargeAfterCancelBy bool                `json:"charge_after_cancel_by,omitempty"`
-	SentAt              string              `json:"sent_at,omitempty"` // the Date header, UTC
-	Subject             string              `json:"subject,omitempty"`
-	Items               []merchantEmailItem `json:"items,omitempty"`
+	ChargeAfterCancelBy bool   `json:"charge_after_cancel_by,omitempty"`
+	SentAt              string `json:"sent_at,omitempty"` // the Date header, UTC
+	// Kind is what the email is about, read from its subject and text:
+	// "cancellation" (the merchant says something was cancelled),
+	// "confirmation" (an order, booking or subscription confirmed), or "".
+	Kind string `json:"kind,omitempty"`
+	// Recurring is a recurring price the email states ("$24/month"),
+	// with its period: week, month or year.
+	RecurringMinor *int64              `json:"recurring_minor,omitempty"`
+	RecurringCur   string              `json:"recurring_currency,omitempty"`
+	Period         string              `json:"period,omitempty"`
+	Subject        string              `json:"subject,omitempty"`
+	Items          []merchantEmailItem `json:"items,omitempty"`
 }
 
 type merchantEmailItem struct {
@@ -542,6 +551,9 @@ var (
 	totalLine        = regexp.MustCompile(`(?i)\b(grand total|order total|total charged|amount charged|total paid|amount paid|you paid|total)\b[^0-9\n]{0,24}?(?:([A-Z]{3})\s*)?([$€£¥])?\s*([0-9]{1,3}(?:,[0-9]{3})*|[0-9]+)(?:\.([0-9]{2}))?(?:\s*([A-Z]{3}))?`)
 	subtotal         = regexp.MustCompile(`(?i)sub\s*-?\s*total|total\s+(?:items?|savings|discount|tax|before)`)
 	cancelLine       = regexp.MustCompile(`(?i)\bcancel(?:l?ation)?\b[^\n.]{0,40}?\b(?:by|before|until|no later than|deadline:?)\s+([^\n]{6,40})`)
+	cancelledMail    = regexp.MustCompile(`(?i)\b(?:has been|have been|was|is now|successfully|you(?:'ve| have))\s+cancell?ed\b|\bcancell?ation (?:is )?(?:confirmed|confirmation|complete)|\byour (?:\w+ )?(?:subscription|membership|plan|order|booking|reservation) (?:has been |was |is )?(?:cancell?ed|ended)\b`)
+	confirmedMail    = regexp.MustCompile(`(?i)\b(?:order|booking|reservation|subscription|membership|trial)\b[^\n]{0,40}\b(?:confirmed|confirmation|is active|has started|received)\b|\bthanks? (?:you )?for your (?:order|purchase|booking)\b`)
+	recurringPrice   = regexp.MustCompile(`(?i)([$€£])\s?([0-9]+)(?:\.([0-9]{2}))?\s*(?:/|per|a|an|every)\s*(week|wk|month|mo|year|yr)\b`)
 	chargeLater      = regexp.MustCompile(`(?i)avoid (being )?charged|before (you are|you're|you get|being) (charged|billed)|won'?t be (charged|billed)|will not be (charged|billed)|free trial|trial (ends|period)|first (charge|payment) (is|will be) on`)
 	itemQty          = regexp.MustCompile(`(?im)^\s*(.{2,80}?)\s+(?:qty|quantity)\s*[:x]?\s*(\d{1,4})\b`)
 	itemTimes        = regexp.MustCompile(`(?im)^\s*(\d{1,4})\s*[x×]\s+(.{2,80}?)\s*$`)
@@ -612,6 +624,24 @@ func parseMerchantEmail(raw []byte) merchantEmailParsed {
 	if m := cancelLine.FindStringSubmatch(text); m != nil {
 		p.CancelBy = parseLooseDate(m[1])
 		p.ChargeAfterCancelBy = p.CancelBy != "" && chargeLater.MatchString(text)
+	}
+	switch {
+	case cancelledMail.MatchString(p.Subject) || (!confirmedMail.MatchString(p.Subject) && cancelledMail.MatchString(text)):
+		p.Kind = "cancellation"
+	case confirmedMail.MatchString(p.Subject) || confirmedMail.MatchString(text):
+		p.Kind = "confirmation"
+	}
+	if m := recurringPrice.FindStringSubmatch(text); m != nil {
+		whole, err := strconv.ParseInt(m[2], 10, 64)
+		if err == nil {
+			cents := int64(0)
+			if m[3] != "" {
+				cents, _ = strconv.ParseInt(m[3], 10, 64)
+			}
+			minor := whole*100 + cents
+			p.RecurringMinor, p.RecurringCur = &minor, symbolCurrency[m[1]]
+			p.Period = map[string]string{"week": "week", "wk": "week", "month": "month", "mo": "month", "year": "year", "yr": "year"}[strings.ToLower(m[4])]
+		}
 	}
 	for _, m := range itemQty.FindAllStringSubmatch(text, 20) {
 		q, _ := strconv.ParseInt(m[2], 10, 64)

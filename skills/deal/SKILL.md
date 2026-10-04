@@ -57,7 +57,8 @@ subscription, an in-app purchase.
 3. **Final review:** `deal open` (once per deal: the merchant as `who`, the cart as `terms`, `"allowed": ["pay"]` when the user asked you to buy), then `deal check` with `"action": "pay"` and the exact total about to be charged.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, place the order. On `pause`, show the card, seal the user's answer, and place the order only if that returns `"proceed": true`.
 5. Right after placing it: `deal note --kind act` with the amount, payee, rail and order reference.
-6. `deal close` when the item arrives, or does not.
+6. If the checkout or the confirmation shows a trial, a renewal or a last day to cancel, follow "Cancel-by date" below.
+7. `deal close` when the item arrives, or does not.
 
 ### Booking
 
@@ -91,6 +92,55 @@ Sending the user's phone, email, address, a login, or a code to anyone.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, send. On `pause`, show the card, seal the user's answer, and send only if that returns `"proceed": true`.
 5. Right after sending: `deal note --kind act` saying what was shared.
 6. `deal close` when the exchange is over.
+
+### Cancel-by date
+
+A free trial that becomes paid, a subscription that renews, a booking whose
+free cancellation ends, a payment taken on a date. Here the point of no
+return is a date passing, not something you do.
+
+1. As soon as the date appears (in the merchant's email, or on the page at
+   checkout), seal it as evidence with an `obligation`. From the merchant's
+   email, seal the email and the obligation together; `deal note --email`
+   alone proposes one as `obligation_hint` when the email says nothing is
+   charged before a date. Check the hint against the email before sealing it.
+
+   ```sh
+   capsulectl --profile deal deal note --deal ID --kind evidence --email trial.eml --input o.json
+   # o.json: {"about":"the trial","source":"merchant_email",
+   #          "obligation":{"kind":"trial_conversion","cancel_by":"2026-10-16","takes_effect":"2026-10-17",
+   #                        "amount_minor":2400,"currency":"USD","period":"month","terms":"the merchant's own words"}}
+   ```
+
+   From the page instead: `"source": "page_snapshot"`, with no `--email`.
+   `kind` is `trial_conversion`, `renewal`, `cancel_window` or `payment_due`.
+2. Tell the user the date in plain words, and that you record it but do not
+   enforce it: nothing is cancelled for them.
+3. If the host can schedule reminders, hand it the date:
+   `deal deadlines --ics deadlines.ics` writes a calendar file with a
+   reminder (`--remind-days`, default 2); `deal deadlines` alone prints the
+   open dates as JSON. Run nothing in the background yourself.
+4. Every `deal check` lists the deal's `open_deadlines`. Mention any that are
+   close.
+5. `deal close` refuses while a cancel-by date is open, because it would end
+   the record that holds the date. Close with `"status": "pending"` meanwhile.
+
+### Cancellation (proving "I cancelled")
+
+A cancel only counts as evidence when it is sealed, and it only counts as the
+merchant's word when the merchant's own email says so.
+
+1. Seal the user's words asking to cancel (`deal note --kind intent` with
+   `"allowed"` including `"cancel"`), then `deal check` with
+   `"action": "cancel"`, on the same deal that holds the cancel-by date.
+2. On `"proceed": true`, cancel with the merchant. Right after:
+   `deal note --kind act` with `"action": "cancel"`.
+3. When the merchant's cancellation email arrives, seal it raw:
+   `deal note --kind evidence --email cancelled.eml`.
+4. `deal report` then states, under "Your cancellation", exactly what is
+   shown (a cancel recorded at a time, whether that was before the cancel-by
+   date, and whether the merchant's own signed email confirms it) and what is
+   not (that no later charge will come). Pass both lists on as written.
 
 ## Sub-tasks
 
@@ -146,13 +196,15 @@ The final review asks four questions:
 
 | Deal type | Actions the final review covers |
 |---|---|
-| `purchase` | `pay`, `commit`, `share_contact`, `share_credentials` |
-| `rental` | `pay`, `commit`, `sign`, `share_contact`, `share_credentials` |
+| `purchase` | `pay`, `commit`, `cancel`, `share_contact`, `share_credentials` |
+| `rental` | `pay`, `commit`, `sign`, `cancel`, `share_contact`, `share_credentials` |
 | `booking` | `pay`, `commit`, `cancel`, `share_contact`, `share_credentials` |
-| `service` | `pay`, `commit`, `sign`, `share_contact`, `share_credentials` |
+| `service` | `pay`, `commit`, `sign`, `cancel`, `share_contact`, `share_credentials` |
 
 `commit` means sending a commitment (confirming a booking, accepting an
-offer, agreeing to buy). `deal check` refuses any other action name.
+offer, agreeing to buy). `cancel` means cancelling with the merchant. `deal
+check` refuses any other action name. A cancel-by date is a point of no return
+too, though nothing is done at it: see "Cancel-by date".
 
 ## Setup (once)
 
