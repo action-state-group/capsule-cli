@@ -431,7 +431,7 @@ words, and never as one combined badge:
 - `we_say`: what our own seal shows (this device kept these exact bytes from
   this time on). It is our own record, not the merchant's.
 
-`parsed` holds the order number, total, cancel-by date and items read from
+`parsed` holds the order number, tracking number, total, cancel-by date and items read from
 the email. They are best-effort readings; the report labels them as read from
 the email. To re-check later, with no network:
 

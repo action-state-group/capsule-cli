@@ -107,7 +107,7 @@ func dealCeilingGate(data []byte, events []sealedEvent, audience string) error {
 // is put on record: the share gate, then the spending-limit gate for the
 // counterparty.
 func dealShareGate(data []byte, events []sealedEvent, audience string) error {
-	if err := dealPageGate(data, events, dealShareableOrderIDs(events, audience)...); err != nil {
+	if err := dealPageGate(data, events, dealShareableIDs(events, audience)...); err != nil {
 		return err
 	}
 	return dealCeilingGate(data, events, audience)

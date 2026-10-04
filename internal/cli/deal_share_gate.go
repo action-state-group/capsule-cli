@@ -39,8 +39,8 @@ import (
 // ?order_ref=G739142, track/ABCDEFGHIJ739142) it counts.
 //
 // allowed are values the copy may carry although the local store holds them:
-// the merchant's order id, in the counterparty's copy, when
-// shareableOrderID allows it. Each is taken out of the page, as written and
+// the merchant's order id and tracking number, in the counterparty's copy,
+// when shareableOrderID and shareableTracking allow them. Each is taken out of the page, as written and
 // JSON-escaped, before any check, so it neither trips the checks nor hides
 // anything else.
 func dealPageGate(page []byte, events []sealedEvent, allowed ...string) error {
@@ -340,7 +340,7 @@ func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 			if m := e.Evidence.Email; m != nil {
 				// The merchant's email: its order id, the addresses in its
 				// headers, its subject, its text and its items.
-				ids = append(ids, m.Parsed.OrderID)
+				ids = append(ids, m.Parsed.OrderID, m.Parsed.Tracking)
 				msg, body := emailText(m.Raw)
 				texts = append(texts, body, m.Parsed.Subject)
 				if msg != nil {

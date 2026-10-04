@@ -309,11 +309,13 @@ is private material too. Its order number, the names and addresses in its
 headers, its text and its items are all withheld. Each shared copy shows the
 signature's verdict in fixed words, without the signing domain (that is the
 counterparty's), and the amounts and dates. The counterparty's copy also
-carries the order number, but only where `shareableOrderID` allows it: an
-order number (never a booking, confirmation or reservation code) from an
+carries the order number and the tracking number, but only where
+`shareableOrderID` and `shareableTracking` allow them: an order number (never
+a booking, confirmation or reservation code) or a tracking number from an
 email whose signature checks out and was signed by the deal's own
-counterparty. The gate takes exactly that value out before it checks. The
-adjudicator's copy carries no order number, and also lists the items.
+counterparty. The gate takes exactly those values out, as written, before it
+checks, so a long tracking number is not read as a card number. The
+adjudicator's copy carries neither, and also lists the items.
 
 **Sharing is on record.** Before the file exists, a disclosure record is
 sealed. It names the root, the payloads mode, the records withheld, the
@@ -464,15 +466,18 @@ implements no cryptography of its own here.
 sealed record carries the message's SHA-256, the key records' SHA-256, where
 the key came from, the DKIM result, whether the merchant's own domain signed
 it, and the amounts and dates read from the email (`parsed.method:
-heuristic`). The order number is committed, not written. Addresses, names
-and the message text never enter a record.
+heuristic`). The order number is committed, not written; the tracking
+number is not in the record at all. Addresses, names and the message text
+never enter a record.
 
 A copy shared with someone else may carry the order number only when all of
 these hold: it was found under the word "order", the email's signature checks
 out against the sealed key, the From domain signed it, that domain is the
 deal's own counterparty, and the copy is the counterparty's. Booking,
 confirmation, reservation and PNR-style codes are never shared: with a
-surname they work like a password.
+surname they work like a password. A tracking number, found under the word
+"tracking", is shared on the same terms (its signature, its signer, the
+counterparty's copy): it says where a parcel is, not who may collect it.
 
 **Scope, and what counts as independent.** Each email result says it covers
 one email from the merchant about this deal, not everything the merchant
@@ -489,7 +494,7 @@ limit, else the agreed price) and what the agent reported paying. It flags:
 - a charge dated before a cancel-by date when the email says nothing is charged before then (a trial);
 - a quantity other than the one agreed.
 
-The order number, total, cancel-by date and items are read by
+The order number, tracking number, total, cancel-by date and items are read by
 merchant-agnostic heuristics and may be misread; the report labels them as
 read from the email. The merchant's signature covers the bytes, not this
 reading of them.
