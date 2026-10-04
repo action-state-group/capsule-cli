@@ -122,6 +122,7 @@ func TestDealShareTransformsAreWithheldOrRefused(t *testing.T) {
 	for name, transform := range dealTransforms {
 		for what, value := range planted {
 			t.Run(name+"/"+what, func(t *testing.T) {
+				raceSampleKey(t, name+"/"+what)
 				dealFixture(t)
 				open := map[string]any{
 					"type": "purchase", "channel": "web",

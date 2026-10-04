@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Nightly: every case under the race detector (see the tests job's env).
+    - cron: '0 6 * * *'
 
 permissions:
   contents: read
@@ -39,7 +42,17 @@ jobs:
       - name: Build CLI with the plugin-dispatch tag
         run: go build -tags actionstate -o capsulectl-actionstate ./cmd/capsulectl
 
-  test:
+  tests:
+    # The default build and the plugin-dispatch build, in parallel. Each runs
+    # the race detector (the slowest case loops sampled) and then every case
+    # without it: see scripts/test.sh.
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+          - { name: default, args: "" }
+          - { name: plugin-dispatch tag, args: "-tags=actionstate" }
+    name: test (${{ matrix.build.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -58,6 +71,8 @@ jobs:
     env:
       # Explicitly enable integration tests against the disposable service.
       CAPSULE_CLI_TEST_MYSQL_PORT: "3306"
+      # The nightly run samples nothing: every case under the race detector.
+      CAPSULE_TEST_RACE_FULL: ${{ github.event_name == 'schedule' && '1' || '' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,10 +81,19 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Unit and MySQL integration tests with race detector
-        run: make test
-      - name: Tests of the build with the plugin-dispatch tag
-        run: go test -tags actionstate -race -count=1 -timeout=15m ./...
+      - name: Unit and MySQL integration tests, with and without the race detector
+        run: bash scripts/test.sh ${{ matrix.build.args }}
+
+  test:
+    # One result for both builds, under the job name checks and the PR
+    # capsule already use.
+    if: always()
+    needs: [tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Both builds passed
+        run: test "${{ needs.tests.result }}" = success
 
   seal-pr-capsule:
     # Same-repo PRs only: a fork PR's pull_request event carries no repository

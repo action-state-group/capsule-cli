@@ -52,8 +52,9 @@ func openPickupDeal(t *testing.T, spot string) string {
 }
 
 func TestDealSharePickupSpotsDoNotBlockAShare(t *testing.T) {
-	for _, spot := range pickupSpots {
+	for i, spot := range pickupSpots {
 		t.Run(spot, func(t *testing.T) {
+			raceSample(t, i)
 			dealFixture(t)
 			dealID := openPickupDeal(t, spot)
 			dir := t.TempDir()
