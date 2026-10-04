@@ -16,9 +16,38 @@ Releases after `v0.1.0-rc2` also carry a GitHub build provenance attestation
 for each binary (Sigstore, keyless: there is no release key to hold or
 leak). It shows the file was built by this repository's release workflow
 from the tagged commit; checking it means trusting GitHub's build attestation
-for this repository. With the GitHub CLI:
-`gh attestation verify capsulectl-$V-$OS-$ARCH --repo action-state-group/capsule-cli --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml`.
-`v0.1.0-rc2` and earlier have `SHA256SUMS` only.
+for this repository. `v0.1.0-rc2` and earlier have `SHA256SUMS` only.
+
+Releases after `v0.1.0-rc3` also publish the attestation bundle itself,
+`capsulectl-$V.sigstore.json` (one file covering every binary, listed in
+`SHA256SUMS`). Checking a binary against that file needs **no GitHub account
+and no sign-in**:
+
+```bash
+gh attestation verify "capsulectl-$V-$OS-$ARCH" --bundle "capsulectl-$V.sigstore.json" \
+  --repo action-state-group/capsule-cli \
+  --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
+```
+
+That reaches Sigstore's public trust root over the network (no account). To
+check with no network at all, fetch the root once with
+`gh attestation trusted-root > trusted_root.jsonl` (no account either) and add
+`--custom-trusted-root trusted_root.jsonl`. Take the root from Sigstore this
+way, never from a release: a root shipped next to the files it vouches for
+proves nothing. Without `--bundle`, `gh attestation verify` looks the
+attestation up on GitHub, which needs `gh` signed in.
+
+Which check applies (`gh auth status` tells signed in from not):
+
+| `gh` | What to run |
+|---|---|
+| not installed | The SHA-256 against `SHA256SUMS` is the only check. |
+| installed, not signed in | Never sign in for this. Use `--bundle` (releases after `v0.1.0-rc3`); for `v0.1.0-rc3`, the SHA-256 is the only check. |
+| installed and signed in | `--bundle` (preferred, same as above), or without it: `gh attestation verify capsulectl-$V-$OS-$ARCH --repo action-state-group/capsule-cli --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml` |
+
+An install report should say which check was used, for example "provenance
+checked: attestation verified; checksum matched" or "provenance not checked:
+gh not signed in; checksum matched".
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
 `modernc.org/sqlite`), so they need no system libraries.
 
@@ -36,6 +65,7 @@ V=v0.1.0-rc3; OS=linux; ARCH=amd64   # pre-release; or linux/arm64, darwin/arm64
 base=https://github.com/action-state-group/capsule-cli/releases/download/$V
 curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
+# provenance, with gh signed in (v0.1.0-rc3 has no bundle file; see the table above):
 gh attestation verify "capsulectl-$V-$OS-$ARCH" --repo action-state-group/capsule-cli \
   --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
 sudo install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl

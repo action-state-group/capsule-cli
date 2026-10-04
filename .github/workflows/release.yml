@@ -8,6 +8,8 @@ name: Release
 # keyless: no release key is held anywhere), verifiable with
 #   gh attestation verify capsulectl-<version>-<os>-<arch> --repo action-state-group/capsule-cli \
 #     --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
+# The attestation bundle is also published, as capsulectl-<version>.sigstore.json,
+# so the same check runs with no GitHub account: add --bundle with that file.
 
 on:
   push:
@@ -52,9 +54,20 @@ jobs:
           got="$(dist/capsulectl-"$VERSION"-linux-amd64 --version)"
           test "$got" = "capsulectl $VERSION (commit $COMMIT)" || { echo "unexpected: $got"; exit 1; }
       - name: Attest build provenance of the binaries
+        id: attest
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: dist/capsulectl-*
+      - name: Attach the attestation bundle
+        # One attestation names every binary, so one bundle file covers them
+        # all. Publishing it lets anyone verify a binary's provenance with no
+        # GitHub account: gh attestation verify FILE --bundle BUNDLE ...
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          cp "$BUNDLE" "dist/capsulectl-$VERSION.sigstore.json"
+          (cd dist && sha256sum "capsulectl-$VERSION.sigstore.json" >> SHA256SUMS)
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
