@@ -172,7 +172,11 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 // dealReportHTML renders one local, self-contained page: the bundle, the
 // vendored verifier and the deal view. It needs no network to open or verify,
 // and nothing is hosted: the agent attaches or hands over the file.
-func dealReportHTML(b map[string]interface{}) (string, error) {
+//
+// The countersign rung was checked by capsulectl when the page was written
+// (the page cannot check a signature against a directory); it rides as JSON
+// beside the bundle, never inside it, so the bundle's digest is unchanged.
+func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (string, error) {
 	page, err := emitter.EmitEvidenceGraphHTML(b, evidenceGraphIIFE)
 	if err != nil {
 		return "", err
@@ -193,7 +197,12 @@ func dealReportHTML(b map[string]interface{}) (string, error) {
 	if end < 0 || strings.Contains(dealViewJS, "</script") {
 		return "", errors.New("report page shell changed; cannot place the deal section")
 	}
-	return page[:end] + "<script>" + dealViewJS + "</script>\n  " + page[end:], nil
+	// json.Marshal escapes <, > and &, so the blob cannot close its element.
+	cs, err := json.Marshal(countersign)
+	if err != nil {
+		return "", err
+	}
+	return page[:end] + `<script type="application/json" id="deal-countersign">` + string(cs) + "</script>\n  <script>" + dealViewJS + "</script>\n  " + page[end:], nil
 }
 
 const dealViewCSS = `

@@ -47,6 +47,8 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal report [--html FILE]` | The three-part report: what you asked, what the agent did, anomalies on either side. `--html` writes it as one local page that checks itself. |
 | `deal report --email FILE [--bundle FILE]` | Writes the receipt as a ready-to-send email (.eml, no sender or recipient) for the agent host's own email tool: a plain and a static HTML body that read on a phone, with `receipt.html` and `bundle.json` attached. `--bundle` writes the Evidence Bundle for `capsulectl verify --bundle`. Nothing is sent by capsulectl. |
+| `deal countersign --bundle FILE --directory DIR [--entry FILE]` | Verifies (and with `--entry`, attaches) a countersignature you already hold over this deal's report bundle, and names its rung; a self-countersignature is shown as NOT INDEPENDENT. Sends nothing. See [COUNTERSIGN.md](COUNTERSIGN.md). |
+| `deal report --from-bundle FILE --directory DIR` | Renders the receipt from that same bundle file, so a countersignature covers what it shows. Every receipt names its countersign rung; without one it says "Not countersigned". |
 | `deal reconcile --executions FILE [--approvals FILE] [--from T] [--to T]` | Reads the agent host's execution records (tool calls of the agent and its sub-tasks, in the format in [RECONCILE.md](RECONCILE.md)) and lists each consequential action that has no deal record, with what the pass cannot see. Seals nothing; exits 3 when anything is unrecorded. |
 | `deal report --html FILE --share counterparty\|adjudicator --to WHO` | A copy for someone else. It leaves out what that reader must not get, and seals a disclosure record of the share before the file is written. |
 
@@ -197,8 +199,10 @@ attached.
 
 The page also has a **What this does not claim** block: it is
 tamper-evident, not non-repudiation; it records what the agent reported; it
-does not prove the merchant shipped. It names *countersigned* only when the
-file carries a countersignature. And it gives one command anyone can run on
+does not prove the merchant shipped. It names its countersign rung: "Not
+countersigned" unless the file carries a countersignature that capsulectl
+verified, and NOT INDEPENDENT for one by the producer's own key (see
+[COUNTERSIGN.md](COUNTERSIGN.md)). And it gives one command anyone can run on
 the file, offline: `capsulectl verify --bundle receipt.html` (`verify
 --bundle` reads the page's embedded bundle). `deal report` prints the scope
 line as `scope`.
