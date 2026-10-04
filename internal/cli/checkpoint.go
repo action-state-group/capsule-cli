@@ -50,16 +50,48 @@ func checkpointSignerTrusted(p Profile, keyID string) bool {
 	}
 	return false
 }
+
+// witnessKeyIssue says what is wrong with the witness public key a profile
+// with a checkpoint endpoint must carry, as text to show the operator; ""
+// when it is set and shaped as a 64-hex Ed25519 key.
+func witnessKeyIssue(p Profile) string {
+	if p.Checkpoint.Endpoint == "" {
+		return ""
+	}
+	fix := "capsulectl profile update --profile " + p.Name + " --checkpoint-public-key <64-hex Ed25519 key>"
+	if p.Checkpoint.PublicKey == "" {
+		return "checkpoint.public_key is required when checkpoint.endpoint is set: " + fix
+	}
+	if _, e := parseKeys([]string{p.Checkpoint.PublicKey}); e != nil {
+		return "checkpoint.public_key must be the witness's Ed25519 public key as 64 hex characters: " + fix
+	}
+	return ""
+}
+
+// checkWitnessConfig refuses a checkpoint endpoint that serviceID could
+// never use, naming the field and the fix (shown verbatim, unlike a plain
+// input error).
+func checkWitnessConfig(p Profile) error {
+	endpoint := strings.TrimRight(p.Checkpoint.Endpoint, "/")
+	if endpoint == "" {
+		return nil
+	}
+	u, e := url.Parse(endpoint)
+	if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return hint(ErrInput, "checkpoint.endpoint must be an HTTPS URL without credentials, query or fragment")
+	}
+	if issue := witnessKeyIssue(p); issue != "" {
+		return hint(ErrInput, issue)
+	}
+	return nil
+}
+
 func serviceID(p Profile) (string, error) {
 	endpoint := strings.TrimRight(p.Checkpoint.Endpoint, "/")
 	if endpoint == "" {
 		return "", nil
 	}
-	u, e := url.Parse(endpoint)
-	if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return "", inputError("checkpoint service requires an HTTPS endpoint without credentials or query")
-	}
-	if _, e = parseKeys([]string{p.Checkpoint.PublicKey}); e != nil {
+	if e := checkWitnessConfig(p); e != nil {
 		return "", e
 	}
 	sum := sha256.Sum256([]byte(endpoint + "\n" + strings.ToLower(p.Checkpoint.PublicKey)))
@@ -304,6 +336,11 @@ func addCheckpointCommands(logs *cobra.Command) {
 // re-verifying the stored statement. The checkpoint signer must be explicitly
 // trusted by the profile.
 func cutCheckpoint(ctx context.Context, p Profile, log cll.Backend) (*cll.CheckpointState, error) {
+	return cutCheckpointAt(ctx, p, log, time.Now().UTC())
+}
+
+// cutCheckpointAt is cutCheckpoint with the time the checkpoint states.
+func cutCheckpointAt(ctx context.Context, p Profile, log cll.Backend, at time.Time) (*cll.CheckpointState, error) {
 	key, e := privateKey(p.Checkpoint.Signing)
 	if e != nil {
 		return nil, e
@@ -338,7 +375,7 @@ func cutCheckpoint(ctx context.Context, p Profile, log cll.Backend) (*cll.Checkp
 	// couple of batches.
 	const maxCheckpointBatches = 10000
 	for batch := 0; batch < maxCheckpointBatches; batch++ {
-		changed, e := runner.RunOnce(ctx, time.Now().UTC())
+		changed, e := runner.RunOnce(ctx, at)
 		if e != nil {
 			return nil, e
 		}

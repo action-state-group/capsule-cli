@@ -212,7 +212,7 @@ capsulectl judge pin FILE
 capsulectl judge drift pin FILE_A FILE_B
 capsulectl judge drift reports FILE_A FILE_B
 capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
-capsulectl deal init|open|note|check|close|report|reconcile --profile NAME [...]
+capsulectl deal init|open|note|check|close|report|reconcile|tick --profile NAME [...]
 capsulectl backfill run|status --profile NAME [...]
 ```
 
@@ -253,7 +253,9 @@ unresolved signer, and the command exits partial (3).
 
 `deal` seals a deal's baseline and, when the host calls it, checks each point
 of no return (pay, commit, sign, share) against it. The check is advisory: it
-holds an action only where the host runs it from a pre-action hook.
+holds an action only where the host runs it from a pre-action hook. A deal
+profile is witnessed by default on a fixed cadence (`deal tick`, run from a
+timer): one checkpoint of hashes per tick, never on activity.
 `deal reconcile` reads the host's execution records afterwards and lists
 consequential actions that have no deal record; see
 [skills/deal](skills/deal/README.md).
@@ -612,6 +614,13 @@ provisioned** and pinned out of band; do not trust a key merely because the same
 host serves it (`GET /anchor/authority-pubkey` is a distribution convenience, not
 a trust root: fetching a receipt and its verification key over one untrusted
 connection establishes nothing).
+A witness directory (the `witnesses.json` format) is one such out-of-band
+source: an Ed25519 witness's `key_ids` entry is its raw public key in 64 hex,
+which is exactly the `--checkpoint-public-key` value. The endpoint and its key
+are set together: `profile create`/`update` refuse an endpoint without a
+well-formed key (rather than saving a profile whose every witnessed checkpoint
+would fail), and `doctor --check-witness` reports a missing or malformed key as
+a failure.
 
 ```bash
 chmod 600 /protected/checkpoint-seed.hex

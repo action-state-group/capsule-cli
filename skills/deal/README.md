@@ -29,7 +29,8 @@ host runs `deal check` from a pre-action hook. Without one:
 
 | Command | What it does |
 |---|---|
-| `deal init --dir DIR` | Creates a SQLite deal profile: store plus signing and checkpoint seeds, each mode 0600. |
+| `deal init --dir DIR [--no-witness]` | Creates a SQLite deal profile: store plus signing and checkpoint seeds, each mode 0600, and the profile's cadence log. The public witness is configured by default. |
+| `deal tick` | Run from a timer. When a tick is due (hourly with random jitter by default), cuts every deal's checkpoint locally, appends one entry to the cadence log and publishes its checkpoint to the witness; retries any delivery still pending. Deal steps never publish. |
 | `deal open --input FILE` | Seals the baseline: the user's verbatim words, who, terms, claims (each with its source) and recourse. Cuts a checkpoint. |
 | `deal note --kind message\|claim\|evidence\|change --input FILE` | Seals what happened. |
 | `deal check --input FILE [--stale-after 15m]` | Seals a snapshot of what is about to happen, asks the four questions, seals the result, returns the difference card and the `approval_text` (with the check time and when it goes stale). |
@@ -71,11 +72,13 @@ make the verdict `pause` on their own.
 
 ## What leaves the machine
 
-Nothing, by default.
+Content never leaves the machine. By default, one thing does: a checkpoint of
+hashes, once a tick.
 
-- **Witness (optional).** When the profile has a checkpoint endpoint, signed
-  checkpoints are offered to it at three milestones only: baseline, approval
-  and close. Checkpoints hold hashes, not content.
+- **Witness (on by default; `deal init --no-witness` turns it off).** See
+  "Witness cadence" below. The witness sees hashes and a checkpoint size
+  that grows by the same amount every tick, at a time on the profile's
+  cadence: never content, how many deals there are, or when they happen.
 - **Remote checker (optional).** When `CAPSULE_DEAL_CHECK_URL` is set
   (HTTPS, or HTTP on loopback), `deal open` sends `POST /v1/warm` and
   `deal check` sends `POST /v1/check` with minimal fields: deal type, action,
@@ -85,6 +88,46 @@ Nothing, by default.
   token. The checker can only add differences. A remote pass never clears a
   local `pause`, and after 2 seconds, or on any error, the local rules decide
   alone.
+
+## Witness cadence
+
+Checkpoints are checkpoints of a log at a size, not a registration of each
+record: the witness never receives a record, a record id or a deal id. And
+no deal's own log is ever published. If it were, the witness would learn how
+many deals there are (one log each), when each starts, and how many steps
+each has. Instead the profile has one cadence log (its `log_id`), and
+`deal tick`, run from a timer, publishes on time alone:
+
+- A tick is due at the previous tick plus `cadence.interval` (default `1h`)
+  moved by a random amount within `cadence.jitter` (default `10m`). Deal
+  activity never brings a tick forward, and an explicit
+  `cll checkpoint publish` is the only other way anything reaches the
+  witness.
+- At a tick, every deal's checkpoint is cut locally and becomes a leaf of a
+  fixed-depth (16) Merkle tree, with a fresh random salt at a fresh random
+  position, plus one random filler leaf. The tree's root is appended as
+  exactly one entry of the cadence log, and the cadence log's checkpoint is
+  published. Ticks happen whether or not anything happened.
+- So the witness sees one log that grows by one entry per tick. This reduces
+  the volume signal to the tick count, and the timing signal to the
+  cadence; it does not remove what the cadence itself shows (that the
+  device was on to run a tick). With `cadence.pad_bucket` above 1, each tick
+  also appends Evidence Layer padding records (`record_type: "padding"`,
+  only a fresh random value) until the leaf count is a multiple of it. The
+  padding is never an action and never counted, and nothing that reads a
+  deal reads it.
+- A witness that is slow or down never stops a deal. The delivery stays
+  pending and is retried at every `deal tick`, or by hand with
+  `capsulectl --profile deal cll checkpoint publish --checkpoint SIZE`.
+
+A deal's receipt states its witness state as it is: **scheduled** (not yet
+in a tick), **pending** (in a tick, no receipt back yet) or **witnessed**.
+Witnessed means the bundle carries the whole chain: the deal checkpoint's
+leaf, its salt and position, the 16-hash path (the same length for every
+deal, so it says nothing about the others), the cadence entry's inclusion
+proof, the cadence checkpoint (signed by the same key as the deal
+checkpoint) and the witness receipt. `capsulectl verify --bundle FILE
+--witness-directory DIRECTORY.json` checks every link.
 
 ## Report
 
@@ -121,10 +164,10 @@ against the step's seal; the words shown come from this device's local
 store. If a byte was changed, the page says "This report did not verify"
 instead. Message text appears only when an anomaly cites that message.
 
-When the profile's witness signed a receipt for the checkpoint the report
-carries (re-checked against the pinned witness key when the report is made),
-the receipt rides in the bundle's `checkpoint.witnesses`, and the page and
-the email say "Witnessed" instead of "Sealed by my agent". The page does not
+When a witness receipt covers the checkpoint the report carries (through the
+cadence chain above, re-checked against the pinned witness key when the
+report is made), the page and the email say "Witnessed" instead of "Sealed
+by my agent", and otherwise say whether it is scheduled or pending. The page does not
 check the receipt itself and says so; `capsulectl verify --bundle FILE
 --witness-directory DIRECTORY.json` does, against a witness directory the
 reader chooses. Making a report never contacts the witness.
@@ -164,10 +207,13 @@ is not registered anywhere.
 
 ## Guarantee
 
-**Tamper-evident, not non-repudiation.** The signing seed is a 0600 file on
-the same machine as the agent. A later edit or deletion of a sealed step is
-detectable; the trail does not prove who, the user or the machine, said
-something.
+**Tamper-evident against ourselves and the agent, not non-repudiation.** The
+signing seed is a 0600 file on the same machine as the agent. A later edit or
+deletion of a sealed step is detectable, and once a tick has been witnessed,
+not even this device can rewrite what it had sealed by then. The trail does
+not prove who, the user or the machine, said something. It covers this
+skill's own records only: the agent host's own store is not covered, and a
+change there is not detected.
 
 ## Demo
 
