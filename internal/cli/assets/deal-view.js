@@ -94,6 +94,7 @@
     host.append(el("p", "Sealed by my agent. Witness: scheduled. This checkpoint goes to the witness in the next tick of the profile's cadence; it is not witnessed yet.", "deal-rung"));
   } else if (cadence.state === "pending") {
     host.append(el("p", "Sealed by my agent. Witness: pending. This checkpoint was sent in a cadence tick, but no receipt has come back yet.", "deal-rung"));
+    if (cadence.reason === "network_consent_needed" && typeof cadence.text === "string") host.append(el("p", `Witness ${cadence.text}`, "deal-note"));
   } else {
     host.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
   }

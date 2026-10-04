@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -305,4 +307,57 @@ func mustRead(t *testing.T, path string) []byte {
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	return raw
+}
+
+// A delivery that never reached the witness (as a host's unanswered
+// network-consent prompt looks from here) is shown as such, never silently.
+func TestDealBlockedDeliveryIsShownAsNetworkConsent(t *testing.T) {
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	cadenceFixture(t, "https://127.0.0.1:1", public, "1h", "0s", 0)
+	dealID := retailDeal(t)
+	tick := dealRun(t, "tick")
+	pending := tick["pending"].([]any)
+	require.Len(t, pending, 1)
+	row := pending[0].(map[string]any)
+	assert.Equal(t, "network_consent_needed", row["reason"])
+	assert.True(t, strings.HasPrefix(row["text"].(string), "pending: network consent needed"))
+	assert.Contains(t, row["text"], `"Always allow this site"`)
+	withBundle := dealRun(t, "report", "--deal", dealID, "--bundle", filepath.Join(t.TempDir(), "b.json"))
+	assurance := withBundle["assurance"].(map[string]any)
+	assert.Equal(t, "pending", assurance["witness_state"])
+	assert.Equal(t, "network_consent_needed", assurance["witness_reason"])
+	assert.Contains(t, assurance["text"], "Witness pending: network consent needed")
+}
+
+func TestWitnessPendingReasons(t *testing.T) {
+	reason, text := witnessPendingReason(cll.WitnessState{Attempts: 1, LastError: "witness returned HTTP 503: " + witnessNotReached}, dealDefaultWitness)
+	assert.Equal(t, "network_consent_needed", reason)
+	assert.Contains(t, text, `choose "Always allow this site" for agentactioncapsule.org (the witness is witness.agentactioncapsule.org)`)
+	assert.Contains(t, text, "That grant covers agentactioncapsule.org and all its subdomains.")
+	reason, _ = witnessPendingReason(cll.WitnessState{Attempts: 1, LastError: "witness returned HTTP 503: checkpoint submission failed; response details suppressed"}, dealDefaultWitness)
+	assert.Equal(t, "witness_error", reason, "a witness that answered is not a consent problem")
+	reason, _ = witnessPendingReason(cll.WitnessState{}, dealDefaultWitness)
+	assert.Equal(t, "not_attempted", reason)
+}
+
+func TestDoctorExplainsWitnessConsent(t *testing.T) {
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	cadenceFixture(t, "https://127.0.0.1:1", public, "1h", "0s", 0)
+	out, err := invoke(t, "", "doctor", "--profile", "deal", "--check-witness")
+	require.NoError(t, err, out)
+	var report map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &report))
+	w := report["witness"].(map[string]any)
+	assert.Equal(t, false, w["reachable"])
+	assert.Equal(t, witnessConsentText("https://127.0.0.1:1"), w["consent"])
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusMethodNotAllowed) }))
+	t.Cleanup(server.Close)
+	cadenceFixture(t, server.URL, public, "1h", "0s", 0)
+	out, err = invoke(t, "", "doctor", "--profile", "deal", "--check-witness")
+	require.NoError(t, err, out)
+	require.NoError(t, json.Unmarshal([]byte(out), &report))
+	assert.Contains(t, report["witness"].(map[string]any)["consent"], `"Always allow this site"`)
 }
