@@ -275,7 +275,7 @@ type dealState struct {
 
 func foldDeal(events []sealedEvent) (dealState, error) {
 	if len(events) == 0 || events[0].Event.Kind != "open" || events[0].Event.Open == nil {
-		return dealState{}, inputError("deal has no sealed baseline")
+		return dealState{}, inputError("this deal has no sealed opening step to check against: start a new deal with `deal open`")
 	}
 	o := *events[0].Event.Open
 	s := dealState{open: o, intent: o.Intent, agreed: o.Terms, who: o.Who, terms: o.Terms, recourse: o.Recourse, agreedRecourse: o.Recourse, claims: slices.Clone(o.Claims), whoSource: map[string]string{}}

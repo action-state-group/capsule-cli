@@ -278,7 +278,7 @@ func migrateStore(ctx context.Context, p Profile, newLogID string, now time.Time
 	book := p
 	if newLogID != "" {
 		if !logName.MatchString(newLogID) {
-			return migrateResult{}, hint(ErrInput, "invalid --log-id")
+			return migrateResult{}, hint(ErrInput, "--log-id must be lowercase letters, digits and ._:/- (starting with a letter or digit, at most 191 characters)")
 		}
 		book.LogID = newLogID
 	}

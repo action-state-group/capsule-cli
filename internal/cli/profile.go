@@ -220,7 +220,7 @@ func profilesDir() (string, error) {
 		base = filepath.Join(home, ".config")
 	}
 	if !filepath.IsAbs(base) {
-		return "", inputError("XDG_CONFIG_HOME must be absolute")
+		return "", inputError("XDG_CONFIG_HOME must be an absolute path when it is set")
 	}
 	return filepath.Join(base, "capsule", "profiles"), nil
 }
@@ -241,10 +241,10 @@ func loadProfile(name string) (Profile, error) {
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return p, inputError("profile must contain one document")
+		return p, inputError("the profile file must hold exactly one YAML document")
 	}
 	if p.Name != name {
-		return p, inputError("profile filename and name differ")
+		return p, inputError("the profile file's name field must match its filename (NAME.yaml holds name: NAME)")
 	}
 	return p, p.validate()
 }

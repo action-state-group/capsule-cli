@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -127,7 +128,7 @@ func TestNoGenericInputErrors(t *testing.T) {
 				}
 				callee := exprName(call.Fun)
 				switch callee {
-				case "errors.Is", "hint":
+				case "errors.Is":
 					for _, a := range call.Args {
 						ok[a] = true
 					}
@@ -139,11 +140,21 @@ func TestNoGenericInputErrors(t *testing.T) {
 							ok[call.Args[0]] = true
 						}
 					}
-				case "inputError":
-					if lit, isLit := call.Args[0].(*ast.BasicLit); isLit {
+				case "inputError", "hint":
+					reasonArg := call.Args[0]
+					if callee == "hint" {
+						for _, a := range call.Args {
+							ok[a] = true
+						}
+						if exprName(call.Args[0]) != "ErrInput" || len(call.Args) < 2 {
+							return true
+						}
+						reasonArg = call.Args[1]
+					}
+					if lit, isLit := reasonArg.(*ast.BasicLit); isLit {
 						reason, _ := strconv.Unquote(lit.Value)
-						if len(strings.Fields(reason)) < 4 {
-							t.Errorf("%s: inputError(%q) is too terse to name the field and the expected value", fset.Position(call.Pos()), reason)
+						if !namesWhatIsWrong(reason) {
+							t.Errorf("%s: %s(%q) names no flag, field or file, and is too short to say what is wrong", fset.Position(call.Pos()), callee, reason)
 						}
 					}
 				}
@@ -166,6 +177,19 @@ func TestNoGenericInputErrors(t *testing.T) {
 			})
 		}
 	}
+}
+
+// reasonNames matches a flag (--name), a field (snake_case, dotted, an
+// UPPER_CASE variable) or a quoted command in a reason.
+var reasonNames = regexp.MustCompile("--[a-z]|[a-z0-9]+_[a-z0-9_]+|[a-z]+\\.[a-z_]+|[A-Z]+_[A-Z_]+|`")
+
+// namesWhatIsWrong is the bar every literal reason meets: it names the flag,
+// field or file at fault, or says in at least six words what is wrong and
+// what is expected. "emit rejected sealing input" and "invalid --log-id"
+// would not have passed in that form.
+func namesWhatIsWrong(reason string) bool {
+	words := len(strings.Fields(reason))
+	return words >= 6 || words >= 3 && reasonNames.MatchString(reason)
 }
 
 // startsWithReason reports whether e is an inputError(...) or hint(...)
@@ -260,4 +284,26 @@ func TestMalformedEmailRefusalNeverQuotesAHeader(t *testing.T) {
 	assert.Contains(t, msg, "the email is not a raw RFC 822 message with its headers intact")
 	assert.NotContains(t, msg, "jane.doe@example.com")
 	assert.NotContains(t, msg, "Main Street")
+}
+
+// The bar TestNoGenericInputErrors holds literal reasons to.
+func TestNamesWhatIsWrong(t *testing.T) {
+	for _, terse := range []string{"emit rejected sealing input", "invalid --log-id", "invalid profile fields", "unsupported profile type"} {
+		assert.False(t, namesWhatIsWrong(terse), terse)
+	}
+	for _, named := range []string{"--log-id must be lowercase letters, digits and ._:/-", "--peer is required: a held Evidence Bundle file", "model_id is required in the judge pin input", "XDG_CONFIG_HOME must be an absolute path when it is set"} {
+		assert.True(t, namesWhatIsWrong(named), named)
+	}
+}
+
+// A capsule the producer refuses names the field and the rule it breaks.
+func TestSealRefusalNamesTheField(t *testing.T) {
+	r, err := parseRequest([]byte(`{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":"a","ActionType":"decide","Operator":"o","Developer":"d","Timestamp":"2026-09-08T00:00:00Z"}}`))
+	require.NoError(t, err)
+	_, key := profileFixture(t)
+	_, err = seal(r, key)
+	require.ErrorIs(t, err, ErrInput)
+	msg := SafeError(err)
+	assert.Contains(t, msg, "emit rejected sealing input: decide action requires a disposition")
+	assert.Contains(t, msg, "fix that field in the capsule-seal-request/v1 request (--request)")
 }

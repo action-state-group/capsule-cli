@@ -39,7 +39,7 @@ func keyCommands() *cobra.Command {
 		}
 		_, we := f.WriteString(hex.EncodeToString(private.Seed()))
 		if e := errors.Join(we, f.Close()); e != nil {
-			return inputError("cannot write signing key file")
+			return inputError("could not write the seed to --output: check that its directory exists and is writable")
 		}
 		return output(c, map[string]string{"public_key": hex.EncodeToString(public), "signing_key_file": path})
 	}}

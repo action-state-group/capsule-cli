@@ -259,7 +259,9 @@ func seal(r Request, key ed25519.PrivateKey) (artifact.Record, error) {
 	}
 	result, e := emit.Seal(input)
 	if e != nil {
-		return artifact.Record{}, inputError("emit rejected sealing input")
+		// emit's messages name the capsule field and the rule it breaks
+		// ("decide action requires a disposition"), never a payload value.
+		return artifact.Record{}, errors.Join(inputError("emit rejected sealing input: "+e.Error()+"; fix that field in the capsule-seal-request/v1 request (--request)"), e)
 	}
 	record := artifact.Record{CapsuleID: result.CapsuleID, Capsule: result.Payload, ProducerEnvelope: result.Envelope, Artifacts: append([]artifact.Artifact(nil), r.Artifacts...)}
 	if r.Payload != nil {

@@ -447,7 +447,7 @@ func cutCheckpointAt(ctx context.Context, p Profile, log cll.Backend, at time.Ti
 			return nil, e
 		}
 		if state.Checkpoint == nil {
-			return nil, inputError("log has no entries")
+			return nil, inputError("the log has no checkpoint yet, so there is nothing to publish: cut one with `capsulectl cll checkpoint create`")
 		}
 		record, e := verifyCheckpoint(p, state.Checkpoint.Bytes)
 		if e != nil {

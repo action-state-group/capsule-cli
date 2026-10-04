@@ -148,12 +148,12 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		return nil, err
 	}
 	if state.Checkpoint == nil {
-		return nil, inputError("log has no covering checkpoint")
+		return nil, inputError("the log has no checkpoint yet, so no bundle can prove its records: cut one with `capsulectl cll checkpoint create`")
 	}
 	checkpointSize := state.Checkpoint.Size
 	checkpointSeq := state.Checkpoint.IndexedSeq
 	if checkpointSeq == 0 {
-		return nil, inputError("covering checkpoint has no entries")
+		return nil, inputError("the log's checkpoint covers no entries: append a record and cut a new checkpoint with `capsulectl cll checkpoint create`")
 	}
 	// The emitted range must end at the checkpoint tip (leaf_count(size) ==
 	// checkpointSeq); the verifier enforces this, so refuse to emit a cert that

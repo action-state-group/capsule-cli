@@ -266,7 +266,7 @@ func readBackfillSource(in io.Reader) (rows, gaps, horizons []backfillSourceReco
 		raw := s.Bytes()
 		read += len(raw) + 1
 		if read > maxInput {
-			return nil, nil, nil, inputError("backfill source exceeds size limit")
+			return nil, nil, nil, inputError("the backfill source (--source) exceeds the 12 MiB size limit")
 		}
 		if len(bytes.TrimSpace(raw)) == 0 {
 			continue
