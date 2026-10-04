@@ -581,6 +581,15 @@ func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, string(html), "the agent picked, not you: size small 3.8in x 2.4in")
 		assert.Contains(t, report["email"].(map[string]any)["text"], "the agent picked, not you: size small 3.8in x 2.4in")
+		// A counterparty's copy keeps the check, not the choices: the items
+		// go only to an adjudicator.
+		shared := filepath.Join(t.TempDir(), "shared.html")
+		shareRun(t, dealID, dealAudienceCounterparty, shared)
+		copyPage := string(mustRead(t, shared))
+		assert.Contains(t, copyPage, "Checked before paying: flagged")
+		for _, words := range []string{"you asked for", "the agent picked", "size small"} {
+			assert.NotContains(t, strings.ToLower(copyPage), words)
+		}
 	})
 	t.Run("when the user picked the size too it passes", func(t *testing.T) {
 		check := run(t, "intent-picked-with-size.json", "check-pay.json")
