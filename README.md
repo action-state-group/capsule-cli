@@ -208,6 +208,7 @@ capsulectl cll checkpoint create --profile NAME
 capsulectl cll checkpoint publish --profile NAME --checkpoint MMR_SIZE
 capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
+capsulectl doctor --install-check --profile NAME --expect-version TAG --expect-commit SHA --skills-dir DIR [--expect-skill-sha256 HEX] [--evidence-out FILE]
 capsulectl result open FILE [--format text|json]
 capsulectl run [args passed to the plugin]   # only in a build with -tags actionstate
 capsulectl plugin ls
@@ -300,6 +301,9 @@ profile's cadence log only when every step succeeded; `canary watch` reads the
 log's last checkpoint from the public witness and exits 6 with one line when it
 has stopped advancing or its history was rewritten. Absence is the alarm, seen
 from outside with no access to the host; see [docs/CANARY.md](docs/CANARY.md).
+A harness for test accounts on an agent host (`doctor --install-check`, a
+scheduled outside verdict, what each check catches and its limits) is in
+[docs/HARNESS.md](docs/HARNESS.md).
 
 `profile show` takes the profile name as its positional argument. Commands
 outside profile management that access a configured target require `--profile`.
