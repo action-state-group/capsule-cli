@@ -44,7 +44,8 @@ func openPickupDeal(t *testing.T, spot string) string {
 	text, err := json.Marshal("Pick it up at " + spot + " after six.")
 	require.NoError(t, err)
 	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","text":`+string(text)+`}`))
-	dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","description":"tell the seller where"}`))
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","description":"tell the seller where","disclosing":["pickup_location"]}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
 	dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t,
 		`{"fields":[{"class":"pickup_location","value":`+string(place)+`}]}`))
 	return dealID
