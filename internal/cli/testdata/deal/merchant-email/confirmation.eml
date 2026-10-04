@@ -1,12 +1,12 @@
 DKIM-Signature: a=rsa-sha256; bh=DBonionlv+SieB+CPUQM5kNKgVvNV9rB+R6OAecuJbc=;
  c=relaxed/relaxed; d=shop.example;
  h=From:To:Subject:Date:Message-ID:MIME-Version:Content-Type; s=s2026;
- t=1791069958; v=1;
- b=i6TkhCfVDrSf3VEwnkww5WMP5ob9gCqh7KQSfTd30Ks9NNVwiCP9GOcdH6ifBngGZdn2xu6K
- mEfE/l/X1AWYst3L2okrQ+a7vqmgMV4jeAcc5amKwILPXF6iJaGo7fDewvuPcunq8uI1Z5MqfFk
- Fh5JnDBRO3gHxUQ7fFIjk5gMY3h2ffIFFj5HTDqrpN2RYcg9bM9+T51FJRlFVY/US13/pdvdYsf
- pGd4KB74PSGRJDnGzAXke1zAbFMgxRo55kndOKGMlguvG8Rica6qbgQYt24I1cuLJBk18EL4ZX0
- b6/c60gRsxvJBGD2O3BBh/34a69C0VdvPfpLqu151HdAA==
+ t=1791077644; v=1;
+ b=nsvHBUoPiQsXQVigOGV3u6TegVVajQ5irqEdCzH3WAVl5jhGx/u/wp19Noje7SuS6h6oI9hD
+ m4xLEFP/p0keeVjHKmvf2OIQNYyEwQ+YiG2TQzkHidDfwB/hNVgyY6/vfDuiIaLQRkro94JZyMb
+ dJ3A8Ah2ic2820arzyEH9fZaBJnI0oceJeSgRbJNb5zP+ZXumJGVIxaBGGz6hkGTlSqJcfAXjhr
+ iJiikqursuxmJaQEq9xODDymywBbeBSI0730GusGXA05KUXy3Ss1VmkG6NlFhn8vg70ZZX9ArXs
+ k1IPRxsK+WEP7tXvXaXlmZT1U+Bk7zh2d618A5PE16pqg==
 From: Shop Example <orders@shop.example>
 To: Sam Customer <sam.customer@mail.example>
 Subject: Your Shop Example order SE-104233 is confirmed

@@ -167,6 +167,33 @@
   if (did.length === 0) host.append(el("p", "Nothing yet.", "deal-note"));
   did.forEach((i) => host.append(item(i.text, i.steps)));
 
+  // Cancel-by dates: the point of no return is a date passing. Recorded,
+  // never enforced.
+  const deadlines = report.deadlines || [];
+  if (deadlines.length > 0) {
+    host.append(el("h2", "Cancel-by dates"));
+    const list = el("ul", undefined, "deal-steps");
+    deadlines.forEach((d) => {
+      const li = el("li", undefined, d.status === "open" ? "deal-bad" : undefined);
+      li.append(el("span", `${d.cancel_by} · ${d.status}: `), el("span", d.text));
+      list.append(li);
+    });
+    host.append(list, el("p", deadlines[0].note, "deal-note"));
+  }
+  // A cancellation: exactly what is shown, and what is not.
+  (report.cancellations || []).forEach((c) => {
+    host.append(el("h2", "Your cancellation"));
+    const shows = el("details", undefined, c.merchant === "confirmed" ? undefined : "deal-flag");
+    shows.open = true;
+    shows.append(el("summary", "What this shows"));
+    const proven = el("ul");
+    (c.proven || []).forEach((p) => proven.append(el("li", p)));
+    const notProven = el("ul", undefined, "deal-note");
+    (c.not_proven || []).forEach((p) => notProven.append(el("li", p)));
+    shows.append(proven, el("h3", "What this does not show"), notProven, steps(c.steps || []));
+    host.append(shows);
+  });
+
   // The merchant's own emails. Two statements, never one: the merchant's
   // DKIM signature (independent of the agent) and our seal (our own record).
   const merchant = report.merchant || [];

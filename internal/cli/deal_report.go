@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/action-state-group/agent-action-capsule/go/emitter"
@@ -150,6 +152,13 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	ext := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
 	ext["merchant"] = merchant
 	ext["email_scope"] = emailScopeLine
+	for key, v := range map[string]any{"deadlines": dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events)} {
+		generic, err := bundleJSON(v)
+		if err != nil {
+			return nil, err
+		}
+		ext[key] = generic
+	}
 	if err = verifyProducedBundle(b, true); err != nil {
 		return nil, err
 	}
@@ -246,4 +255,45 @@ func dealStepLine(e dealEvent, showText bool) string {
 		line := trailLine(e)
 		return strings.ToUpper(line[:1]) + line[1:]
 	}
+}
+
+// bundleJSON turns a report value into the generic shape the bundle encoder
+// takes. JSON numbers become integers: the bundle carries no floats, and
+// every number here is a count or a step.
+func bundleJSON(v any) (interface{}, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var generic interface{}
+	if err = dec.Decode(&generic); err != nil {
+		return nil, err
+	}
+	var walk func(interface{}) (interface{}, error)
+	walk = func(x interface{}) (interface{}, error) {
+		switch t := x.(type) {
+		case json.Number:
+			n, err := strconv.ParseUint(t.String(), 10, 64)
+			if err != nil {
+				return nil, errors.New("report value is not a count: " + t.String())
+			}
+			return integer(n), nil
+		case map[string]interface{}:
+			for k, c := range t {
+				if t[k], err = walk(c); err != nil {
+					return nil, err
+				}
+			}
+		case []interface{}:
+			for i, c := range t {
+				if t[i], err = walk(c); err != nil {
+					return nil, err
+				}
+			}
+		}
+		return x, nil
+	}
+	return walk(generic)
 }
