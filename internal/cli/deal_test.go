@@ -121,10 +121,10 @@ func TestDealAskedVsDidBooking(t *testing.T) {
 	dealID := opened["deal_id"].(string)
 
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit.json"))
-	assert.Equal(t, "⚠️ Not what you asked: check_out 2026-10-05 → 2026-10-07 · Over your limit of $400.00 ($760.00) · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
+	assert.Equal(t, "⚠️ Not what you asked: check_out 2026-10-05 → 2026-10-07 · Over your limit of $400.00 ($760.00) · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
 
 	cancel := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-cancel.json"))
-	assert.Equal(t, "⚠️ You didn't ask for this: cancelling · unverified: free cancellation until October 1 · [Hold] [Cancel anyway]", cancel["card"])
+	assert.Equal(t, "⚠️ You didn't ask for this: cancelling · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Cancel anyway]", cancel["card"])
 
 	// What was asked passes quietly and authorizes the act.
 	ok := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit-asked.json"))
@@ -306,7 +306,7 @@ func TestDealRefundabilityChangePauses(t *testing.T) {
 	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
 	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"commit","terms":{"when":"2026-10-03","conditions":{"check_out":"2026-10-05"},"price_minor":38000},"recourse":{"refundable":false}}`))
 	assert.Equal(t, "pause", check["verdict"])
-	assert.Equal(t, "⚠️ No longer refundable (agreed as refundable) · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
+	assert.Equal(t, "⚠️ No longer refundable (agreed as refundable) · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
 }
 
 // B2: a payee change carried in a counterparty message, after the check,
@@ -505,4 +505,73 @@ func TestDealCallTheNumberThenCheckAgain(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(skill), "--choice verify_contact")
 	assert.Contains(t, string(skill), "--kind evidence")
+}
+
+const otterFixture = "testdata/deal/otter"
+
+// The generic ask, then the pick: the user asked for "a funny otter sticker",
+// was shown candidates and chose one. Sealing that choice as an intent note
+// before the check means the check compares against what the user chose, so
+// the specific item is not "Not what you asked". Without the note it still
+// is: the rule is not weakened. The unverifiable sale price stays a claim.
+// What the user chose (the item) and what the agent picked on its own (the
+// size) are told apart on the card and in the approval text.
+func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
+	const item = "Otterly Chaos - Unsupervised and Thriving Funny Otter Design Sticker"
+	run := func(t *testing.T, picked bool) map[string]any {
+		dealFixture(t)
+		dealID := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+		dealRun(t, "note", "--deal", dealID, "--kind", "claim", "--input", filepath.Join(otterFixture, "claim-price.json"))
+		if picked {
+			dealRun(t, "note", "--deal", dealID, "--kind", "intent", "--input", filepath.Join(otterFixture, "intent-picked.json"))
+		}
+		return dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	}
+	attrs := func(v any) []string {
+		var out []string
+		for _, a := range v.([]any) {
+			m := a.(map[string]any)
+			out = append(out, m["label"].(string)+" "+m["value"].(string))
+		}
+		return out
+	}
+	t.Run("without the intent note it still flags", func(t *testing.T) {
+		check := run(t, false)
+		assert.Equal(t, "pause", check["verdict"])
+		assert.Contains(t, check["card"], "Not what you asked: item funny otter sticker → "+item)
+		assert.Contains(t, check["card"], "picked by the agent, not by you: size small 3.8in x 2.4in")
+		assert.Contains(t, check["unverified"], "Sticker listed on sale at $3.00 (list $3.50)")
+	})
+	t.Run("with the intent note it does not", func(t *testing.T) {
+		check := run(t, true)
+		assert.NotContains(t, check["card"], "Not what you asked")
+		for _, d := range check["differences"].([]any) {
+			assert.NotEqual(t, "asked", d.(map[string]any)["question"], "no asked-vs-did difference: %v", d)
+		}
+		assert.Contains(t, check["unverified"], "Sticker listed on sale at $3.00 (list $3.50)", "an unverifiable reference price stays a claim")
+		assert.Equal(t, "pass", check["verdict"])
+		// The item is the user's choice; the size is the agent's.
+		assert.Equal(t, []string{"item " + item}, attrs(check["asked_attributes"]))
+		assert.Equal(t, []string{"size small 3.8in x 2.4in"}, attrs(check["picked_by_agent"]))
+		assert.Contains(t, check["approval_text"], "You asked for: item "+item+". The agent picked, not you: size small 3.8in x 2.4in.")
+	})
+}
+
+// The Purchase procedure tells the agent to seal the user's pick as an intent
+// note before the check, and to keep what it picked itself out of `asked`.
+func TestDealPurchaseProcedureSealsThePickBeforeTheCheck(t *testing.T) {
+	var review string
+	for _, step := range procedureSteps(t, "Purchase") {
+		if strings.HasPrefix(step, "**Final review:**") {
+			review = step
+		}
+	}
+	note, check := strings.Index(review, "`deal note --kind intent`"), strings.Index(review, "`deal check`")
+	require.GreaterOrEqual(t, note, 0, "the final review seals the pick")
+	assert.Less(t, note, check, "the pick is sealed before the check")
+	raw, err := os.ReadFile("../../skills/deal/SKILL.md")
+	require.NoError(t, err)
+	skill := strings.Join(strings.Fields(string(raw)), " ")
+	assert.Contains(t, skill, "#### The user picked from options")
+	assert.Contains(t, skill, "What you picked yourself (a size, a colour or a delivery option the user never mentioned) stays out of `asked`")
 }

@@ -151,6 +151,65 @@ type dealCheckResult struct {
 	Card        string           `json:"card"`
 	Options     []dealOption     `json:"options"`
 	Remote      dealRemoteResult `json:"remote"`
+	// Asked are the attributes of what is about to happen that the user
+	// specified (in their own words, or by choosing, sealed as an intent);
+	// Picked are the ones the agent chose and the user never said.
+	Asked  []dealAttribute `json:"asked_attributes"`
+	Picked []dealAttribute `json:"picked_by_agent"`
+}
+
+// dealAttribute is one attribute of what is about to happen, and its value.
+type dealAttribute struct {
+	Field string `json:"field"`
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// attributeProvenance splits what is about to happen into what the user
+// asked for and what the agent picked on its own: an attribute the user's
+// sealed intent names is theirs, any other is the agent's. Money is not
+// listed: the amount, the limit and the price are on the card already.
+func attributeProvenance(asked, proposed dealTerms) (yours, agents []dealAttribute) {
+	yours, agents = []dealAttribute{}, []dealAttribute{}
+	sort := func(field, label, mine, value string) {
+		if strings.TrimSpace(value) == "" {
+			return
+		}
+		a := dealAttribute{Field: field, Label: label, Value: value}
+		if strings.TrimSpace(mine) != "" {
+			yours = append(yours, a)
+		} else {
+			agents = append(agents, a)
+		}
+	}
+	qty := func(v int64) string {
+		if v == 0 {
+			return ""
+		}
+		return fmt.Sprint(v)
+	}
+	sort("item", "item", asked.Item, proposed.Item)
+	sort("quantity", "quantity", qty(asked.Quantity), qty(proposed.Quantity))
+	sort("when", "dates", asked.When, proposed.When)
+	sort("place", "place", asked.Place, proposed.Place)
+	keys := make([]string, 0, len(proposed.Conditions))
+	for k := range proposed.Conditions {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		sort("conditions."+k, strings.ReplaceAll(k, "_", " "), asked.Conditions[k], proposed.Conditions[k])
+	}
+	return yours, agents
+}
+
+// attributeText is a list of attributes as "label value" pairs.
+func attributeText(list []dealAttribute) string {
+	parts := make([]string, len(list))
+	for i, a := range list {
+		parts[i] = a.Label + " " + a.Value
+	}
+	return strings.Join(parts, " · ")
 }
 
 // dealApproval answers one check (a verdict). Approver is "user" for the
@@ -570,6 +629,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 
 	// 1. Asked?
 	intent := s.intent
+	r.Asked, r.Picked = attributeProvenance(intent.Asked, proposed)
 	if intent.Allowed != nil && !slices.Contains(intent.Allowed, snap.Action) {
 		add("asked", "not_asked", "action", "You didn't ask for this: "+actionNames[snap.Action])
 	}
@@ -713,6 +773,9 @@ func renderCard(r dealCheckResult, demo bool) string {
 		}
 	}
 	parts = append(parts, r.Notes...)
+	if len(r.Picked) > 0 {
+		parts = append(parts, "picked by the agent, not by you: "+attributeText(r.Picked))
+	}
 	if len(r.Unverified) > 0 {
 		parts = append(parts, "unverified: "+strings.Join(r.Unverified, ", "))
 	}
