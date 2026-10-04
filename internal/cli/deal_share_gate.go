@@ -747,25 +747,32 @@ func gateInDigest(page []byte, start, end int) bool {
 	return gateDigest.Match(page[s:e])
 }
 
-// gateCardAlone reports whether the digit run at page[start:end] stands alone
-// the way a written card number does. A run glued to letters in the same token
-// (a hex id, a UUID, a base64 value, "x4111…") is part of an identifier, and a
-// run that continues past 19 digits is longer than any card number: random
-// content of either kind passes the Luhn check one time in ten. The deal's own
-// card number is still found anywhere, by the spelled-secret check.
+// gateCardAlone reports whether the digit run at page[start:end] (lowercased,
+// folded text) stands alone the way a written card number does. Random
+// identifiers hold a Luhn-valid run one time in ten, so a run inside one is
+// not a card number:
+//   - inside one [0-9a-z+/] span with letters on BOTH sides of it (a hex or
+//     base64 value: "c0f8…1766058009643e074");
+//   - inside a span that is a hex id of 32 or more characters;
+//   - inside a UUID (8-4-4-4-12 hex).
+//
+// '=', '_', ':' and a '-' after a word end a span, so a card number joined
+// to a label ("pan=…", "card_number=…", "visa-4111-…", "ref-…") or glued to a
+// word on one side ("pan4111…", "4111…x") is still a card number. A run that
+// continues past 19 digits is longer than any card number. The deal's own card
+// number is found anywhere, by the spelled-secret check.
 func gateCardAlone(page []byte, start, end int) bool {
-	letter := func(c byte) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }
 	digit := func(c byte) bool { return c >= '0' && c <= '9' }
-	token := func(c byte) bool {
-		return digit(c) || letter(c) || c == '+' || c == '/' || c == '_' || c == '-' || c == '='
-	}
+	letter := func(c byte) bool { return c >= 'a' && c <= 'z' }
+	span := func(c byte) bool { return digit(c) || letter(c) || c == '+' || c == '/' }
+	hex := func(c byte) bool { return digit(c) || c >= 'a' && c <= 'f' }
 	digits := 0
 	for i := start; i < end; i++ {
 		if digit(page[i]) {
 			digits++
 		}
 	}
-	// The whole run: more digits, each after at most one separator.
+	// The whole run: more digits, each after at most one space or dash.
 	for e := end; ; {
 		if e < len(page) && digit(page[e]) {
 			digits, e = digits+1, e+1
@@ -789,23 +796,44 @@ func gateCardAlone(page []byte, start, end int) bool {
 	if digits > 19 {
 		return false
 	}
-	for i := start - 1; i >= 0 && token(page[i]); i-- {
-		if letter(page[i]) {
+	// A run with a separator in it is written out, not part of one span.
+	if !bytes.ContainsAny(page[start:end], " -") {
+		s, e := start, end
+		for s > 0 && span(page[s-1]) {
+			s--
+		}
+		for e < len(page) && span(page[e]) {
+			e++
+		}
+		before, after := false, false
+		for i := s; i < start; i++ {
+			before = before || letter(page[i])
+		}
+		for i := end; i < e; i++ {
+			after = after || letter(page[i])
+		}
+		if before && after {
+			return false
+		}
+		allHex := e-s >= 32
+		for i := s; i < e && allHex; i++ {
+			allHex = hex(page[i])
+		}
+		if allHex {
 			return false
 		}
 	}
-	for i := end; i < len(page) && token(page[i]); i++ {
-		if letter(page[i]) {
-			return false
-		}
-	}
-	for i := start; i < end; i++ {
-		if letter(page[i]) {
+	// A UUID: the 36 bytes around the run, in the 8-4-4-4-12 shape.
+	for s := max(start-35, 0); s <= start && s+36 <= len(page); s++ {
+		if s+36 >= end && gateUUID.Match(page[s:s+36]) &&
+			(s == 0 || !hex(page[s-1]) && page[s-1] != '-') && (s+36 == len(page) || !hex(page[s+36]) && page[s+36] != '-') {
 			return false
 		}
 	}
 	return true
 }
+
+var gateUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // luhn reports a Luhn-valid number, the checksum every card number carries.
 func luhn(digits string) bool {

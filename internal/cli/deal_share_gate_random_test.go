@@ -56,9 +56,19 @@ func TestDealShareGateIgnoresRandomIdentifiers(t *testing.T) {
 			}
 		}
 	}
-	// A written card number is still refused, alone or with separators, and
-	// whether or not it is this deal's.
-	for _, card := range []string{"4111111111111111", "4111 1111 1111 1111", "4111-1111-1111-1111", "4242 4242 4242 4242", "card 5555555555554444.", "(378282246310005)"} {
+	// A written card number is still refused: alone, with separators, joined
+	// to a label or glued to a word on one side, folded from fullwidth digits
+	// or split by zero-width spaces, whether or not it is this deal's.
+	for _, card := range []string{
+		"4111111111111111", "4111 1111 1111 1111", "4111-1111-1111-1111", "4242 4242 4242 4242",
+		"card 5555555555554444.", "(378282246310005)",
+		"pan=4111111111111111", "?card_number=4111111111111111", "VISA-4111-1111-1111-1111",
+		"ref-4111111111111111", "pan_4111111111111111", "PAN4111111111111111", "4111111111111111x",
+		"card:4111111111111111", "4111111111111111=", "/4111111111111111/",
+		"\uff14\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11",
+		"4111\u200b1111\u200b1111\u200b1111",
+	} {
 		assert.Error(t, dealPageGate(gatePage(t, "Paid with "+card), nil), card)
+		assert.Error(t, dealPageGate([]byte(`<!doctype html><script>window.__BUNDLE__ = {"line":"Paid with `+card+`"};</script>`), nil), card)
 	}
 }
