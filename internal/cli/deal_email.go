@@ -185,6 +185,7 @@ type dealEmailView struct {
 	Merchant      []dealMerchantRow
 	Deadlines     []dealDeadline
 	Cancellations []dealCancellation
+	Lifecycle     dealLifecycle
 	EmailScope    string
 	Steps         int
 	VerifyLine    string
@@ -221,8 +222,12 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <p style="margin:4px 0 0;color:#444;">Outcome: {{.Outcome}} &middot; {{.Steps}} sealed steps</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">Anomalies</h2>
 <ul style="margin:0;padding-left:20px;">{{range .Anomalies}}<li>{{if .Side}}{{.Side}} side: {{end}}{{.Text}}</li>{{else}}<li>None found.</li>{{end}}</ul>
+<h2 style="font-size:16px;margin:16px 0 4px;">Where this deal stands</h2>
+<p style="margin:0 0 4px;">{{.Lifecycle.Text}}</p>
+{{if .Lifecycle.Later}}<ul style="margin:0;padding-left:20px;">{{range .Lifecycle.Later}}<li>{{.At}} &middot; confirms the close: {{.Text}}</li>{{end}}</ul>{{end}}
+<p style="margin:4px 0 0;color:#444;">{{.Lifecycle.MayChange}} (as of {{.Lifecycle.AsOf}})</p>
 {{if .Deadlines}}<h2 style="font-size:16px;margin:16px 0 4px;">Cancel-by dates</h2>
-<ul style="margin:0;padding-left:20px;">{{range .Deadlines}}<li>{{.CancelBy}} &middot; {{.Status}}: {{.Text}}</li>{{end}}</ul>
+<ul style="margin:0;padding-left:20px;">{{range .Deadlines}}<li>{{.CancelBy}} &middot; {{.Marking}}: {{.Text}}. {{.Holds}}</li>{{end}}</ul>
 <p style="margin:4px 0 0;color:#444;">{{.DeadlineNote}}</p>{{end}}
 {{range .Cancellations}}<h2 style="font-size:16px;margin:16px 0 4px;">Your cancellation</h2>
 <p style="margin:0 0 4px;font-weight:600;">What this shows</p>
@@ -297,10 +302,15 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 		}
 		fmt.Fprintf(&tb, "- %s%s\n", side, a.Text)
 	}
+	fmt.Fprintf(&tb, "\nWhere this deal stands:\n%s\n", view.Lifecycle.Text)
+	for _, l := range view.Lifecycle.Later {
+		fmt.Fprintf(&tb, "- %s · confirms the close: %s\n", l.At, l.Text)
+	}
+	fmt.Fprintf(&tb, "%s (as of %s)\n", view.Lifecycle.MayChange, view.Lifecycle.AsOf)
 	if len(view.Deadlines) > 0 {
 		tb.WriteString("\nCancel-by dates:\n")
 		for _, d := range view.Deadlines {
-			fmt.Fprintf(&tb, "- %s · %s: %s\n", d.CancelBy, d.Status, d.Text)
+			fmt.Fprintf(&tb, "- %s · %s: %s. %s\n", d.CancelBy, d.Marking, d.Text, d.Holds)
 		}
 		fmt.Fprintf(&tb, "%s\n", view.DeadlineNote)
 	}

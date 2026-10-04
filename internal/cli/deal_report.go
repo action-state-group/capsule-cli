@@ -158,7 +158,7 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	ext := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
 	ext["merchant"] = merchant
 	ext["email_scope"] = emailScopeLine
-	for key, v := range map[string]any{"deadlines": dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events)} {
+	for key, v := range map[string]any{"deadlines": dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "lifecycle": buildDealLifecycle(events, dealClock())} {
 		generic, err := bundleJSON(v)
 		if err != nil {
 			return nil, err

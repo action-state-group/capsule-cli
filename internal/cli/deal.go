@@ -322,8 +322,14 @@ func (s *dealSession) stepRequest(events []sealedEvent, ev dealEvent) (Request, 
 		Payload: payload,
 	}
 	// Each step's Capsule follows the one before it (ordering only), so the
-	// deal is a citation chain any Evidence Bundle verifier can close.
-	if len(events) > 0 {
+	// deal is a citation chain any Evidence Bundle verifier can close. A
+	// record sealed after the close instead CONFIRMS the close (registered
+	// chain.relation): `follows` is ordering only, and verifiers must not
+	// read it as confirming anything.
+	switch {
+	case ev.Confirms != "":
+		request.Capsule.Chain = &emit.Chain{ParentCapsuleID: ev.Confirms, Relation: "confirms"}
+	case len(events) > 0:
 		request.Capsule.Chain = &emit.Chain{ParentCapsuleID: events[len(events)-1].CapsuleID, Relation: "follows"}
 	}
 	return request, digest, nil
@@ -477,11 +483,6 @@ func runDeal(c *cobra.Command, needDeal bool, fn func(ctx context.Context, s *de
 	return fn(ctx, s, dealID, events)
 }
 
-func dealFinallyClosed(events []sealedEvent) bool {
-	last := events[len(events)-1].Event
-	return last.Kind == "close" && last.Close.Outcome != "open"
-}
-
 func stepOutput(dealID string, se sealedEvent) map[string]any {
 	return map[string]any{"deal_id": dealID, "step": se.Event.N, "kind": se.Event.Kind, "capsule_id": se.CapsuleID, "sequence": se.Sequence}
 }
@@ -604,6 +605,12 @@ func dealOpenCommand() *cobra.Command {
 			if o.Skill, err = readDealSkill(skillPath); err != nil {
 				return err
 			}
+		}
+		switch {
+		case o.ExpectCloseBy == "":
+			o.ExpectCloseBy = defaultExpectClose(o.Type, dealClock())
+		case !validDate(o.ExpectCloseBy):
+			return inputError("expect_close_by must be a date, YYYY-MM-DD")
 		}
 		return runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
 			id := make([]byte, 8)
@@ -733,8 +740,31 @@ func dealNoteCommand() *cobra.Command {
 			return inputError("change needs its source and at least one of who, terms or recourse")
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
-			if dealFinallyClosed(events) {
-				return inputError("this deal is closed and takes no more steps; start a new one with `deal open`")
+			if i := finalClose(events); i >= 0 {
+				// A closed deal takes later evidence only, linked to the close
+				// (it confirms the close); every other step needs a new deal.
+				if kind != "evidence" {
+					return inputError("this deal is closed; it takes later evidence only (`deal note --kind evidence`, linked to the close), and any other step needs a new deal (`deal open`)")
+				}
+				if ev.Evidence.Obligation != nil {
+					return inputError("this deal is closed; a new cancel-by date belongs on a new deal (`deal open`)")
+				}
+				ev.Confirms = events[i].CapsuleID
+			}
+			if ev.Evidence != nil && (ev.Evidence.ResolvesStep != 0 || ev.Evidence.Resolves != "") {
+				target := ev.Evidence.Resolves
+				for _, se := range events {
+					if se.Event.N == ev.Evidence.ResolvesStep || (target != "" && se.CapsuleID == target) {
+						target = se.CapsuleID
+						if se.Event.Evidence == nil || se.Event.Evidence.Obligation == nil {
+							return inputError("resolves names a step that holds no cancel-by date")
+						}
+					}
+				}
+				if target == "" {
+					return inputError("resolves names no step of this deal")
+				}
+				ev.Evidence.Resolves, ev.Evidence.ResolvesStep = target, 0
 			}
 			open := events[0].Event.Open
 			switch kind {
@@ -1109,10 +1139,17 @@ func dealCloseCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if open := openDeadlines(events, dealClock()); len(open) > 0 && in.Status != "pending" {
-				return inputError("this deal has an open cancel-by date (" + open[0].CancelBy + ": " + open[0].Text + "); closing would end its record. Close with status pending, or close after the cancel is sealed or the date has passed")
+			carry, _ := c.Flags().GetBool("carry-open-obligations")
+			open := openDeadlines(events, dealClock())
+			if len(open) > 0 && in.Status != "pending" && !carry {
+				return inputError("this deal has an open cancel-by date (" + open[0].CancelBy + ": " + open[0].Text + "); closing would end its record. Close with status pending, close after the cancel is sealed or the date has passed, or close with --carry-open-obligations to keep the date open after the close")
 			}
 			result := closeDeal(state, in)
+			if in.Status != "pending" {
+				for _, d := range open {
+					result.Carried = append(result.Carried, dealCarried{Step: d.Step, CapsuleID: d.CapsuleID, CancelBy: d.CancelBy})
+				}
+			}
 			for _, se := range events {
 				if se.Event.Kind == "act" && se.Event.Act.Unchecked {
 					result.UncheckedActions++
@@ -1138,11 +1175,16 @@ func dealCloseCommand() *cobra.Command {
 			out["differences"] = result.Differences
 			out["unchecked_actions"] = result.UncheckedActions
 			out["checkpoint"] = cp
+			if len(result.Carried) > 0 {
+				out["carried_open_obligations"] = result.Carried
+				out["note"] = "The deal is closed; the carried cancel-by dates stay open, and `deal deadlines` lists them as CARRIED AT CLOSE until a later record resolves them or the date passes."
+			}
 			return output(c, out)
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("input", "", "Close JSON: status and what was delivered")
+	cmd.Flags().Bool("carry-open-obligations", false, "Close although a cancel-by date is open: the close seals it, and it stays open after the close")
 	return cmd
 }
 
@@ -1196,7 +1238,7 @@ func dealReportCommand() *cobra.Command {
 				"asked": report.Asked, "did": report.Did, "told": report.Told, "anomalies": report.Anomalies, "merchant": report.Merchant,
 				"instructions": report.Instructions,
 				"produced_by":  dealProducers(events),
-				"deadlines":    dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "trail": strings.Join(lines, "\n"),
+				"deadlines":    dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "lifecycle": buildDealLifecycle(events, dealClock()), "trail": strings.Join(lines, "\n"),
 				"countersign": dealNotCountersigned(),
 			}
 			if htmlPath == "" && emailPath == "" && bundlePath == "" && fromBundle == "" {
@@ -1262,7 +1304,7 @@ func dealReportCommand() *cobra.Command {
 				out["bundle"] = bundlePath
 			}
 			if emailPath != "" {
-				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, dealClock(), 2), Cancellations: dealCancellations(events), Steps: len(events)}
+				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, dealClock(), 2), Cancellations: dealCancellations(events), Lifecycle: buildDealLifecycle(events, dealClock()), Steps: len(events)}
 				eml, subject, text, htmlBody, err := dealEmail(view, []byte(page), bundle, dealClock())
 				if err != nil {
 					return err

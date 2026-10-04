@@ -119,25 +119,52 @@ type dealDeadline struct {
 	CapsuleID string `json:"capsule_id"`
 	Kind      string `json:"kind"`
 	CancelBy  string `json:"cancel_by"`
-	// Status: open, passed (the date went by with no cancel sealed) or
-	// cancelled (a cancel was sealed after it; see the cancellation proof
-	// for what that shows).
-	Status      string `json:"status"`
+	// Status: open (on an open deal), carried_at_close (on a closed deal
+	// that carried it), resolved (a later record resolves it), cancelled (a
+	// cancel is sealed after it), or passed (the date went by and nothing
+	// resolving it is sealed). Only open and carried_at_close are listed by
+	// default; both stay open until resolved or the date passes.
+	Status string `json:"status"`
+	// Marking is the status as a listing and a calendar title show it.
+	Marking string `json:"marking"`
+	// Carried is true for an obligation the deal's close carried.
+	Carried     bool   `json:"carried_at_close"`
+	DealState   string `json:"deal_state"`
 	DaysLeft    *int64 `json:"days_left,omitempty"`
 	RemindOn    string `json:"remind_on,omitempty"`
 	Text        string `json:"text"`
 	Source      string `json:"source"`
 	Confirmed   bool   `json:"source_merchant_confirmed"`
 	CancelledAt string `json:"cancelled_at,omitempty"`
-	Note        string `json:"note"`
+	ResolvedBy  string `json:"resolved_by,omitempty"`
+	// Holds says what the deal holds about this obligation, as of AsOf.
+	// It never says what anyone did or did not do.
+	Holds string `json:"holds"`
+	AsOf  string `json:"as_of"`
+	Note  string `json:"note"`
 }
 
-// dealDeadlines lists a deal's obligations as of today. A cancel act sealed
-// after an obligation cancels it in the deal's record; a date that passed
-// with none is "passed".
-func dealDeadlines(events []sealedEvent, today time.Time, remindDays int) []dealDeadline {
+var deadlineMarkings = map[string]string{
+	"open": "OPEN DEAL", "carried_at_close": "CARRIED AT CLOSE", "resolved": "RESOLVED",
+	"cancelled": "CANCEL SEALED", "passed": "DATE PASSED",
+}
+
+// dealDeadlines lists a deal's obligations as of now. Whether a date has
+// passed is computed here, when the listing or receipt is made, never
+// sealed.
+func dealDeadlines(events []sealedEvent, now time.Time, remindDays int) []dealDeadline {
 	currency := events[0].Event.Open.Terms.Currency
-	day := today.UTC().Format("2006-01-02")
+	day := now.UTC().Format("2006-01-02")
+	asOf := now.UTC().Format("2006-01-02T15:04:05Z")
+	closeAt := finalClose(events)
+	carried := map[string]bool{}
+	dealState := "open"
+	if closeAt >= 0 {
+		dealState = "closed"
+		for _, c := range events[closeAt].Event.Close.Carried {
+			carried[c.CapsuleID] = true
+		}
+	}
 	var out []dealDeadline
 	for i, se := range events {
 		ev := se.Event.Evidence
@@ -148,29 +175,46 @@ func dealDeadlines(events []sealedEvent, today time.Time, remindDays int) []deal
 		d := dealDeadline{
 			DealID: se.Event.DealID, Step: se.Event.N, CapsuleID: se.CapsuleID, Kind: o.Kind, CancelBy: o.CancelBy,
 			Text: o.sentence(currency), Source: ev.Source, Confirmed: ev.Email != nil && ev.Verified, Note: deadlineNotEnforced,
+			Carried: carried[se.CapsuleID], DealState: dealState, AsOf: asOf,
 		}
 		for _, later := range events[i+1:] {
-			if a := later.Event.Act; a != nil && a.Action == "cancel" {
-				d.Status, d.CancelledAt = "cancelled", later.Event.At
+			if r := later.Event.Evidence; r != nil && r.Resolves == se.CapsuleID {
+				d.Status, d.ResolvedBy = "resolved", later.CapsuleID
+				how := "recorded by the agent"
+				if r.Email != nil && r.Verified {
+					how = "the merchant's own email, merchant-confirmed"
+				}
+				d.Holds = fmt.Sprintf("Resolved: a record sealed at %s resolves it (%s).", later.Event.At, how)
 				break
 			}
-		}
-		if d.Status == "" {
-			if day > o.CancelBy {
-				d.Status = "passed"
-			} else {
-				d.Status = "open"
-				by, _ := time.Parse("2006-01-02", o.CancelBy)
-				now, _ := time.Parse("2006-01-02", day)
-				left := int64(by.Sub(now).Hours() / 24)
-				d.DaysLeft = &left
-				remind := by.AddDate(0, 0, -remindDays)
-				if remind.Before(now) {
-					remind = now
-				}
-				d.RemindOn = remind.Format("2006-01-02")
+			if a := later.Event.Act; a != nil && a.Action == "cancel" && d.Status == "" {
+				d.Status, d.CancelledAt = "cancelled", later.Event.At
+				d.Holds = "A cancel is sealed on this deal at " + later.Event.At + "."
 			}
 		}
+		switch {
+		case d.Status != "":
+		case day > o.CancelBy:
+			d.Status = "passed"
+			d.Holds = fmt.Sprintf("The date passed (as of %s). No cancellation confirmation is sealed on this deal.", asOf)
+		default:
+			d.Status = "open"
+			d.Holds = "The last day to cancel is " + o.CancelBy + "; nothing resolving it is sealed on this deal yet."
+			if d.Carried {
+				d.Status = "carried_at_close"
+				d.Holds = "Carried at the close of this deal: the last day to cancel is " + o.CancelBy + "; nothing resolving it is sealed on this deal yet."
+			}
+			by, _ := time.Parse("2006-01-02", o.CancelBy)
+			today, _ := time.Parse("2006-01-02", day)
+			left := int64(by.Sub(today).Hours() / 24)
+			d.DaysLeft = &left
+			remind := by.AddDate(0, 0, -remindDays)
+			if remind.Before(today) {
+				remind = today
+			}
+			d.RemindOn = remind.Format("2006-01-02")
+		}
+		d.Marking = deadlineMarkings[d.Status]
 		out = append(out, d)
 	}
 	return out
@@ -186,21 +230,38 @@ func openDeadlines(events []sealedEvent, today time.Time) []dealDeadline {
 	return open
 }
 
-// deadlinesICS renders open deadlines as an iCalendar file with an alarm,
-// for the host's calendar or scheduler. No daemon runs here.
-func deadlinesICS(ds []dealDeadline, remindDays int, now time.Time) string {
+// deadlinesICS renders the open deadlines (on an open deal, or carried at a
+// close) and the open deals' expected close dates as an iCalendar file with
+// an alarm, for the host's calendar or scheduler. No daemon runs here. Each
+// title says which deal it is and, for a carried obligation, CARRIED AT
+// CLOSE, so a reminder for a deal that looks finished is not read as a bug.
+func deadlinesICS(ds []dealDeadline, deals []dealOpenListing, remindDays int, now time.Time) string {
 	esc := strings.NewReplacer(`\`, `\\`, ";", `\;`, ",", `\,`, "\n", `\n`)
 	var b strings.Builder
 	b.WriteString("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//capsulectl//deal deadlines//EN\r\nCALSCALE:GREGORIAN\r\n")
+	event := func(uid, date, summary, description, alarm string) {
+		day, _ := time.Parse("2006-01-02", date)
+		fmt.Fprintf(&b, "BEGIN:VEVENT\r\nUID:%s@capsulectl.deal\r\nDTSTAMP:%s\r\nDTSTART;VALUE=DATE:%s\r\nDTEND;VALUE=DATE:%s\r\n",
+			uid, now.UTC().Format("20060102T150405Z"), day.Format("20060102"), day.AddDate(0, 0, 1).Format("20060102"))
+		fmt.Fprintf(&b, "SUMMARY:%s\r\nDESCRIPTION:%s\r\n", esc.Replace(summary), esc.Replace(description))
+		fmt.Fprintf(&b, "BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:%s\r\nTRIGGER;RELATED=START:-P%dD\r\nEND:VALARM\r\nEND:VEVENT\r\n", esc.Replace(alarm), remindDays)
+	}
 	for _, d := range ds {
-		if d.Status != "open" {
+		uid := fmt.Sprintf("%s-%d", d.DealID, d.Step)
+		switch d.Status {
+		case "open":
+			event(uid, d.CancelBy, "Last day to cancel ("+d.DealID+"): "+d.Text, d.Holds+" "+d.Note, "Cancel-by date: "+d.CancelBy)
+		case "carried_at_close":
+			event(uid, d.CancelBy, "CARRIED AT CLOSE · "+d.DealID+" · last day to cancel: "+d.Text,
+				"This deal is closed; this cancel-by date was carried at its close and stays open until a record resolves it. "+d.Holds+" "+d.Note, "Carried at close, "+d.DealID+": cancel by "+d.CancelBy)
+		}
+	}
+	for _, l := range deals {
+		if l.ExpectCloseBy == "" {
 			continue
 		}
-		by, _ := time.Parse("2006-01-02", d.CancelBy)
-		fmt.Fprintf(&b, "BEGIN:VEVENT\r\nUID:%s-%d@capsulectl.deal\r\nDTSTAMP:%s\r\nDTSTART;VALUE=DATE:%s\r\nDTEND;VALUE=DATE:%s\r\n",
-			d.DealID, d.Step, now.UTC().Format("20060102T150405Z"), by.Format("20060102"), by.AddDate(0, 0, 1).Format("20060102"))
-		fmt.Fprintf(&b, "SUMMARY:%s\r\nDESCRIPTION:%s\r\n", esc.Replace("Last day to cancel: "+d.Text), esc.Replace(d.Note+" Deal "+d.DealID+", step "+fmt.Sprint(d.Step)+"."))
-		fmt.Fprintf(&b, "BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:%s\r\nTRIGGER;RELATED=START:-P%dD\r\nEND:VALARM\r\nEND:VEVENT\r\n", esc.Replace("Cancel-by date: "+d.CancelBy), remindDays)
+		event(l.DealID+"-close", l.ExpectCloseBy, "Close deal "+l.DealID+"? (open, expected to close by "+l.ExpectCloseBy+")",
+			l.Text+" Close it with capsulectl deal close when it is resolved.", "Open deal "+l.DealID)
 	}
 	b.WriteString("END:VCALENDAR\r\n")
 	return b.String()
@@ -298,7 +359,7 @@ func dealCancellations(events []sealedEvent) []dealCancellation {
 }
 
 func dealDeadlinesCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "deadlines", Short: "List cancel-by dates (one deal, or every deal in the profile) as JSON, and optionally as a calendar file with reminders", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "deadlines", Short: "List cancel-by dates and open deals (one deal, or every deal in the profile) as JSON, and optionally as a calendar file with reminders", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		dealID, _ := c.Flags().GetString("deal")
 		icsPath, _ := c.Flags().GetString("ics")
 		remind, _ := c.Flags().GetInt("remind-days")
@@ -324,21 +385,30 @@ func dealDeadlinesCommand() *cobra.Command {
 		}
 		now := dealClock()
 		list := []dealDeadline{}
+		deals := []dealOpenListing{}
 		for _, id := range ids {
 			events, err := s.loadOther(ctx, id)
 			if err != nil {
 				return err
 			}
 			for _, d := range dealDeadlines(events, now, remind) {
-				if all || d.Status == "open" {
+				if all || d.Status == "open" || d.Status == "carried_at_close" {
 					list = append(list, d)
 				}
 			}
+			if l := openDealListing(events, now); l != nil {
+				deals = append(deals, *l)
+			}
 		}
 		slices.SortStableFunc(list, func(a, b dealDeadline) int { return strings.Compare(a.CancelBy, b.CancelBy) })
-		out := map[string]any{"deadlines": list, "enforced": false, "note": deadlineNotEnforced, "as_of": now.UTC().Format("2006-01-02")}
+		slices.SortStableFunc(deals, func(a, b dealOpenListing) int { return strings.Compare(a.ExpectCloseBy, b.ExpectCloseBy) })
+		out := map[string]any{
+			"deadlines": list, "open_deals": deals, "enforced": false, "note": deadlineNotEnforced,
+			"as_of":  now.UTC().Format("2006-01-02T15:04:05Z"),
+			"states": "deadlines: OPEN DEAL (on an open deal), CARRIED AT CLOSE (on a closed deal, still open), RESOLVED, CANCEL SEALED and DATE PASSED (with --all). open_deals: deals with no close sealed, against their expected close date.",
+		}
 		if icsPath != "" {
-			if err := atomicFile(icsPath, []byte(deadlinesICS(list, remind, now)), false); err != nil {
+			if err := atomicFile(icsPath, []byte(deadlinesICS(list, deals, remind, now)), false); err != nil {
 				return err
 			}
 			out["ics"] = icsPath
@@ -346,9 +416,9 @@ func dealDeadlinesCommand() *cobra.Command {
 		return output(c, out)
 	}}
 	cmd.Flags().String("deal", "", "Only this deal (default: every deal in the profile)")
-	cmd.Flags().String("ics", "", "Also write the open dates to this new iCalendar file, each with a reminder")
+	cmd.Flags().String("ics", "", "Also write the open dates (and open deals' expected close dates) to this new iCalendar file, each with a reminder")
 	cmd.Flags().Int("remind-days", 2, "Remind this many days before each cancel-by date")
-	cmd.Flags().Bool("all", false, "Include dates that passed or were cancelled")
+	cmd.Flags().Bool("all", false, "Include dates that were resolved, cancelled or passed")
 	return cmd
 }
 

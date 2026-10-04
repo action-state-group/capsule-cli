@@ -267,6 +267,17 @@ function versionBefore(a, b) {
   });
   host.append(el("p", "Only what the agent sealed as shared is listed here; something it told without sealing it is not.", "deal-note"));
 
+  // Where the deal stands: open or closed, the records linked to the close
+  // after it, and that more may be linked after this page was made. Written
+  // by capsulectl when the page was made ("as of"); each linked record
+  // expands to its sealed step.
+  const life = report.lifecycle;
+  if (life && typeof life.text === "string") {
+    host.append(el("h2", "Where this deal stands"), el("p", life.text));
+    (life.later || []).forEach((l) => host.append(item(`${l.at} · confirms the close: ${l.text}`, [l.capsule_id])));
+    host.append(el("p", `${life.may_change} (as of ${life.as_of})`, "deal-note"));
+  }
+
   // Cancel-by dates: the point of no return is a date passing. Recorded,
   // never enforced.
   const deadlines = report.deadlines || [];
@@ -274,8 +285,9 @@ function versionBefore(a, b) {
     host.append(el("h2", "Cancel-by dates"));
     const list = el("ul", undefined, "deal-steps");
     deadlines.forEach((d) => {
-      const li = el("li", undefined, d.status === "open" ? "deal-bad" : undefined);
-      li.append(el("span", `${d.cancel_by} · ${d.status}: `), el("span", d.text));
+      const live = d.status === "open" || d.status === "carried_at_close";
+      const li = el("li", undefined, live ? "deal-bad" : undefined);
+      li.append(el("span", `${d.cancel_by} · ${d.marking || d.status}: `), el("span", `${d.text}. ${d.holds || ""}`));
       list.append(li);
     });
     host.append(list, el("p", deadlines[0].note, "deal-note"));

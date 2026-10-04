@@ -448,7 +448,7 @@ def check_chain(records):
     blk0 = records[0]["x-deal-v0"]
     if blk0["record_type"] != "baseline":
         fail(0, "the first record of a deal must be the baseline")
-    allowed_rels = {"evidence": {"about"}, "detail_change": {"source"}, "verdict": {"checks"},
+    allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"}}
     # Absent allowed = no restriction; present and empty = nothing allowed.
@@ -457,12 +457,19 @@ def check_chain(records):
     first_answer = {}  # verdict index -> index of its first approval
     last_outcome = None
     unchecked = 0
-    closed_final = False
+    closed_final = None  # index of the final close, once there is one
     for i, rec in enumerate(records):
         b, body = rec["x-deal-v0"], rec["body"]
         t = b["record_type"]
-        if closed_final:
-            fail(i, "record after a close whose outcome is completed or mismatch (close is terminal)")
+        confirms = [r for r in b.get("refs", []) if r["rel"] == "confirms"]
+        if closed_final is not None:
+            # Close is terminal: after it, only later evidence that confirms
+            # that close (and commits to its digest) may follow.
+            if t != "evidence" or len(confirms) != 1 or confirms[0]["digest"] != digests[closed_final]:
+                fail(i, "record after a close whose outcome is completed or mismatch (close is terminal): "
+                        "only an evidence record that confirms that close may follow")
+        elif confirms:
+            fail(i, "a confirms ref names the deal's final close; this deal is not closed")
         if b["deal_id"] != blk0["deal_id"]:
             fail(i, "deal_id differs from the baseline's")
         if b["seq"] != i + 1:
@@ -526,6 +533,11 @@ def check_chain(records):
                 allowed = list(body["allowed"])
         elif t == "evidence":
             one("about", ("claim", "baseline"))
+            one("confirms", ("close",), required=False)
+            if "resolves_obligation" in body:
+                j = by_digest.get(body["resolves_obligation"]["digest"])
+                if j is None or j >= i or "obligation" not in records[j]["body"]:
+                    fail(i, "resolves_obligation must name an earlier record holding a cancel-by date")
         elif t == "detail_change":
             one("source", ("message", "evidence"), required=False)
             kinds = set(b.get("counterparty", {}).get("ids", {}))
@@ -597,7 +609,12 @@ def check_chain(records):
                     fail(i, "close outcome differs from the referenced outcome")
             if body["unchecked_actions"] != unchecked:
                 fail(i, f"unchecked_actions must count unchecked_action outcomes ({unchecked})")
-            closed_final = body["outcome"] != "open"
+            if body["outcome"] != "open":
+                closed_final = i
+            for c in body.get("carried_obligations", []):
+                j = by_digest.get(c["obligation"]["digest"])
+                if j is None or j >= i or records[j]["body"].get("obligation", {}).get("cancel_by") != c["cancel_by"]:
+                    fail(i, "carried_obligations must name earlier records holding that cancel-by date")
 
 
 def check_record(rec, local_store_values=()):
