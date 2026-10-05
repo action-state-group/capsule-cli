@@ -112,8 +112,11 @@ type pluginInfo struct {
 }
 
 // pluginMetadata runs the launcher's cli-plugin-metadata handshake. A launcher
-// that does not answer, answers with the wrong command name, or advertises a
-// different plugin_api is refused (returned as an error) rather than trusted.
+// that does not answer, advertises a different plugin_api, or names a command
+// other than its own filename's (capsulectl-<name> must say "name": "<name>")
+// is refused (returned as an error) rather than trusted. The name check is what
+// lets discovery dedupe on the filename while dispatch uses the metadata name:
+// for every accepted launcher the two are the same string.
 func pluginMetadata(path, name string) (pluginInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -134,17 +137,34 @@ func pluginMetadata(path, name string) (pluginInfo, error) {
 		return pluginInfo{}, fmt.Errorf("%s: plugin_api %q does not match %q", name, info.PluginAPI, pluginAPI)
 	}
 	if info.Name != name {
-		return pluginInfo{}, fmt.Errorf("%s: launcher name mismatch (metadata says %q)", name, info.Name)
+		return pluginInfo{}, fmt.Errorf("%s: metadata names the command %q, but the launcher's filename names %q; they must match", name, info.Name, name)
 	}
 	info.path = path
 	return info, nil
+}
+
+// refusedPlugin is a capsulectl-<name> launcher discovery found on a trusted root
+// but did not wire up, with the reason. `plugin ls` reports these so an operator
+// learns why a launcher is missing instead of seeing it silently absent.
+type refusedPlugin struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
 }
 
 // discoverPlugins scans the trusted roots for capsulectl-<name> launchers, in root
 // order (an earlier root shadows a later one for the same name), keeping only those
 // that pass the trusted-path check and a valid metadata handshake.
 func discoverPlugins() []pluginInfo {
+	plugins, _ := discoverPluginsAndRefusals()
+	return plugins
+}
+
+// discoverPluginsAndRefusals is discoverPlugins plus every refused launcher and
+// its reason. Deduplication is by filename: the first accepted
+// capsulectl-<name> wins, and a refused one does not shadow a later candidate.
+func discoverPluginsAndRefusals() ([]pluginInfo, []refusedPlugin) {
 	var plugins []pluginInfo
+	var refused []refusedPlugin
 	seen := map[string]bool{}
 	for _, root := range trustedPluginRoots() {
 		entries, err := os.ReadDir(root)
@@ -161,11 +181,13 @@ func discoverPlugins() []pluginInfo {
 				continue
 			}
 			path := filepath.Join(root, base)
-			if verifyTrustedPath(path) != nil {
+			if err := verifyTrustedPath(path); err != nil {
+				refused = append(refused, refusedPlugin{Path: path, Reason: err.Error()})
 				continue
 			}
 			info, err := pluginMetadata(path, name)
 			if err != nil {
+				refused = append(refused, refusedPlugin{Path: path, Reason: err.Error()})
 				continue
 			}
 			seen[name] = true
@@ -173,7 +195,7 @@ func discoverPlugins() []pluginInfo {
 		}
 	}
 	sort.Slice(plugins, func(i, j int) bool { return plugins[i].Name < plugins[j].Name })
-	return plugins
+	return plugins, refused
 }
 
 // execPlugin re-verifies the launcher's trusted path at dispatch time (closing
@@ -237,13 +259,16 @@ func pluginGroup() *cobra.Command {
 	group := &cobra.Command{Use: "plugin", Short: "Inspect discovered capsulectl-* plugins (read-only)"}
 	ls := &cobra.Command{Use: "ls", Short: "List trusted, handshake-valid plugins discovered on the plugin roots", Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			plugins := discoverPlugins()
+			plugins, refused := discoverPluginsAndRefusals()
 			rows := make([]map[string]any, 0, len(plugins))
 			for _, p := range plugins {
 				rows = append(rows, map[string]any{"name": p.Name, "vendor": p.Vendor, "version": p.Version,
 					"plugin_api": p.PluginAPI, "subcommands": p.Subcommands, "path": p.path})
 			}
-			return output(c, map[string]any{"roots": trustedPluginRoots(), "plugins": rows})
+			if refused == nil {
+				refused = []refusedPlugin{}
+			}
+			return output(c, map[string]any{"roots": trustedPluginRoots(), "plugins": rows, "refused": refused})
 		}}
 	group.AddCommand(ls)
 	return group

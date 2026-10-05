@@ -42,8 +42,7 @@ if [[ -z "${CAPSULE_CLI_TEST_MYSQL_PORT:-}" ]]; then
   export CAPSULE_CLI_TEST_MYSQL_PORT
 fi
 
-# Arguments are passed to go test (CI passes -tags=actionstate for the
-# plugin-dispatch build). Two passes: the race detector, under which the
+# Arguments are passed to go test. Two passes: the race detector, under which the
 # slowest single-goroutine case loops run a fixed sample (see
 # internal/cli/race_sample_test.go; CAPSULE_TEST_RACE_FULL=1 runs them all),
 # then every case without it.

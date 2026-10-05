@@ -264,7 +264,7 @@ capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
 capsulectl doctor --install-check --profile NAME --expect-version TAG --expect-commit SHA --skills-dir DIR [--expect-skill-sha256 HEX] [--evidence-out FILE]
 capsulectl result open FILE [--format text|json]
-capsulectl run [args passed to the plugin]   # only in a build with -tags actionstate
+capsulectl <plugin> [args passed to the plugin]   # a discovered capsulectl-<plugin> launcher
 capsulectl plugin ls
 capsulectl store migrate --profile NAME [--log-id NEW_LOG_ID]
 capsulectl contract validate FILE --schema PATH_OR_URL [--json]
@@ -304,12 +304,10 @@ plugin trust, profile presence, signing-key-file permissions, and (only with
 checkpoint endpoint. `result open` validates and prints a Result v0
 document's aggregate/coverage statement as text (or `--format json`); the
 Result v0 schema is still DRAFT, so this is a structural check, not schema
-validation, and it stands in for the `capsule-viewer` build. `run` exists
-only in a build made with `-tags actionstate`, where it carries no flags or
-licence logic of its own: it dispatches to a discovered `actionstate` plugin,
-or refuses with an actionable message if that plugin is absent or unlicensed.
-The default build, and the release binaries, carry no plugin dispatch: there
-`run` is hidden and answers "run is not available in this build". The plugin
+validation, and it stands in for the `capsule-viewer` build. A plugin is an
+executable named `capsulectl-<name>` on a trusted plugin root: discovery wires
+it up as `capsulectl <name>`, `plugin ls` lists what was found and what was
+refused and why, and no core verb is ever replaced by one. The plugin
 contract (`cli-plugin/v1`: discovery roots, handshake, and what a plugin can
 never change) is all in [docs/PLUGINS.md](docs/PLUGINS.md).
 
@@ -858,8 +856,7 @@ libraries and a dedicated MySQL container. Never point them at production.
 ## Continuous integration
 
 Run `make test` for the complete suite, including MySQL integration tests,
-under the race detector and then every case without it (CI runs it for the
-default build and the plugin-dispatch build in parallel). Locally this requires Docker: the runner creates a temporary
+under the race detector and then every case without it. Locally this requires Docker: the runner creates a temporary
 MySQL 8.4 container on a random loopback port and removes it when finished.
 CI supplies its own disposable service via `CAPSULE_CLI_TEST_MYSQL_PORT`.
 Only set that variable yourself for a disposable test database, never a
