@@ -1,0 +1,12 @@
+# The Python stack for scripts/interop-resolved.sh, as evidencebook's CI pins it.
+# Locked with hashes, transitively, in interop-requirements.txt:
+#   uv pip compile scripts/interop-requirements.in --generate-hashes --no-emit-package checkpointed-local-log \
+#     --python-version 3.12 --python-platform x86_64-unknown-linux-gnu -o scripts/interop-requirements.txt
+# checkpointed-local-log itself is installed FIRST from its pinned commit with --no-deps (a
+# git checkout cannot be hash-pinned); its runtime dependencies are listed here so
+# the lock covers them: cbor2, scitt-cose, agent-action-capsule, cryptography.
+agent-action-capsule==0.6.0
+capsule-emit==0.8.6
+cbor2>=5.5
+scitt-cose>=0.2.0
+cryptography>=42.0
