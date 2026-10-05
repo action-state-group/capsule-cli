@@ -1,0 +1,48 @@
+[
+  {
+    "book_id": "example-org",
+    "committed_at": "2026-09-02T00:05:00Z",
+    "epistemic_type": "producer_claim",
+    "event_time_claim": "2026-09-02T00:00:00Z",
+    "links": [
+      {
+        "target": "5653a61b4ed088f818552f3e386bfdbc0c4272f99d8fc5084ce38b86e7f4398b",
+        "type": "closes"
+      }
+    ],
+    "record_type": "close",
+    "seq": 41,
+    "statement": {
+      "note": "EXAMPLE-ORG own Close record for 2026-09-01, v0 placeholder",
+      "period": {
+        "end": "2026-09-02T00:00:00Z",
+        "start": "2026-09-01T00:00:00Z"
+      }
+    },
+    "subject_ref": "ec:example-org-outcomes-reconcile:2026-09-25@1",
+    "v": 1
+  },
+  {
+    "book_id": "example-org",
+    "committed_at": "2026-09-02T00:10:00Z",
+    "epistemic_type": "producer_claim",
+    "event_time_claim": "2026-09-02T00:00:00Z",
+    "links": [
+      {
+        "target": "761923a4e7b90174ee1a8a5b8bd878b33c3316da8fa348c6f77d37a47c2a9b0d",
+        "type": "acknowledges"
+      }
+    ],
+    "record_type": "close",
+    "seq": 42,
+    "statement": {
+      "note": "EXAMPLE-ORG record from EXAMPLE-ORG's own book acknowledging EXAMPLE-ORG's own Close, v0 placeholder",
+      "period": {
+        "end": "2026-09-02T00:00:00Z",
+        "start": "2026-09-01T00:00:00Z"
+      }
+    },
+    "subject_ref": "ec:example-org-outcomes-reconcile:2026-09-25@1",
+    "v": 1
+  }
+]

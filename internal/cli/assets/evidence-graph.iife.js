@@ -220,7 +220,7 @@ var EvidenceGraph = (() => {
     }
     return out;
   }
-  var useBuffer, textEncoder, FROM_STRING_THRESHOLD_BUFFER, FROM_STRING_THRESHOLD_TEXTENCODER, fromString, fromArray, slice, concat, alloc;
+  var useBuffer, textEncoder, FROM_STRING_THRESHOLD_BUFFER, FROM_STRING_THRESHOLD_TEXTENCODER, fromString, fromArray, slice, concat2, alloc;
   var init_byte_utils = __esm({
     "node_modules/cborg/lib/byte-utils.js"() {
       useBuffer = globalThis.process && // @ts-ignore
@@ -279,7 +279,7 @@ var EvidenceGraph = (() => {
           return bytes.slice(start, end);
         }
       );
-      concat = useBuffer ? (
+      concat2 = useBuffer ? (
         // eslint-disable-line operator-linebreak
         /**
          * @param {ByteView[]} chunks
@@ -432,7 +432,7 @@ var EvidenceGraph = (() => {
               byts = slice(chunk, 0, this.cursor);
             }
           } else {
-            byts = concat(this.chunks, this.cursor);
+            byts = concat2(this.chunks, this.cursor);
           }
           if (reset) {
             this.reset();
@@ -2192,9 +2192,9 @@ var EvidenceGraph = (() => {
       kind: "inclusion",
       size: Number(size),
       leaf_index: Number(leafIndex),
-      witness: path(s, nodes, leaf).map(toHex2),
-      peaks_left: s.peaks.slice(0, peak).map((x) => toHex2(nodes[x])),
-      peaks_right: s.peaks.slice(peak + 1).map((x) => toHex2(nodes[x]))
+      witness: path(s, nodes, leaf).map(toHex),
+      peaks_left: s.peaks.slice(0, peak).map((x) => toHex(nodes[x])),
+      peaks_right: s.peaks.slice(peak + 1).map((x) => toHex(nodes[x]))
     };
   }
   async function consistencyProof(tree, sizeA, sizeB = tree.size) {
@@ -2207,9 +2207,9 @@ var EvidenceGraph = (() => {
       kind: "consistency",
       size_a: Number(sizeA),
       size_b: Number(sizeB),
-      old_peaks: old.peaks.map((x) => toHex2(nodes[x])),
-      witness: old.peaks.map((x) => path(next, nodes, x).map(toHex2)),
-      new_peaks: next.peaks.map((x) => toHex2(nodes[x]))
+      old_peaks: old.peaks.map((x) => toHex(nodes[x])),
+      witness: old.peaks.map((x) => path(next, nodes, x).map(toHex)),
+      new_peaks: next.peaks.map((x) => toHex(nodes[x]))
     };
   }
   async function verifyInclusionValue(hash2, root, size, leafIndex, value, proof) {
@@ -2265,7 +2265,7 @@ var EvidenceGraph = (() => {
   function rangeWitnesses(nodes, pos, height, leafStart, lo, hi, out) {
     const span = 2 ** height, leafEnd = leafStart + span - 1;
     if (leafEnd < lo || leafStart > hi) {
-      out.push(toHex2(nodes[pos]));
+      out.push(toHex(nodes[pos]));
       return;
     }
     if (leafStart >= lo && leafEnd <= hi) return;
@@ -2341,7 +2341,7 @@ var EvidenceGraph = (() => {
       return false;
     }
   }
-  var ok, same, be64, parent, toHex2, hex, MmrTree;
+  var ok, same, be64, parent, toHex, hex, MmrTree;
   var init_chunk_X37KTVJ5 = __esm({
     "node_modules/@action-state-group/cll/dist/chunk-X37KTVJ5.js"() {
       init_cborg();
@@ -2353,7 +2353,7 @@ var EvidenceGraph = (() => {
         return x;
       };
       parent = (hash2, l, r, p) => hash2(be64(BigInt(p + 1)), l, r);
-      toHex2 = (x) => Array.from(x, (b) => b.toString(16).padStart(2, "0")).join("");
+      toHex = (x) => Array.from(x, (b) => b.toString(16).padStart(2, "0")).join("");
       hex = (x) => /^[0-9a-f]{64}$/u.test(x) ? Uint8Array.from(x.match(/../gu), (b) => Number.parseInt(b, 16)) : void 0;
       MmrTree = class {
         constructor(hash2, nodes = []) {
@@ -2533,238 +2533,76 @@ var EvidenceGraph = (() => {
   var browser_exports2 = {};
   __export(browser_exports2, {
     ACCEPTED_SPEC_VERSIONS: () => ACCEPTED_SPEC_VERSIONS,
-    BUNDLE_DIGEST_CONTENT_TYPE: () => BUNDLE_DIGEST_CONTENT_TYPE,
+    CLAIM_REQUIRED: () => CLAIM_REQUIRED,
+    CLOSE_CLAIM: () => CLOSE_CLAIM,
+    CLOSE_LINK_TYPES: () => CLOSE_LINK_TYPES,
+    CLOSE_STATES: () => CLOSE_STATES,
+    COUNTERSIGN_RESULTS: () => COUNTERSIGN_RESULTS,
+    COUNTERSIGN_V1: () => COUNTERSIGN_V1,
     CURRENT_SPEC_VERSION: () => CURRENT_SPEC_VERSION,
+    DISCLOSED_STATUSES: () => DISCLOSED_STATUSES,
     DISCLOSURE_INELIGIBLE_FIELD: () => DISCLOSURE_INELIGIBLE_FIELD,
     DISCLOSURE_MATCH: () => DISCLOSURE_MATCH,
     DISCLOSURE_MISMATCH: () => DISCLOSURE_MISMATCH,
     DISCLOSURE_NO_COMMITTED_DIGEST: () => DISCLOSURE_NO_COMMITTED_DIGEST,
+    EVIDENCE_STATUSES: () => EVIDENCE_STATUSES,
+    GRADES: () => GRADES,
     JcsFloatError: () => JcsFloatError,
     JcsUnsafeIntegerError: () => JcsUnsafeIntegerError,
     JsonNumber: () => JsonNumber,
+    PROOF_KINDS: () => PROOF_KINDS,
+    REQUIREMENT_CLAIM: () => REQUIREMENT_CLAIM,
+    RESULT_MEMBERS: () => RESULT_MEMBERS,
+    RESULT_RECORD_TYPE: () => RESULT_RECORD_TYPE,
+    RESULT_VERSION: () => RESULT_VERSION,
+    SUFFICIENCIES: () => SUFFICIENCIES,
+    TIERS: () => TIERS,
+    UNVERIFIED_KEY_LABEL: () => UNVERIFIED_KEY_LABEL,
+    VERDICTS: () => VERDICTS,
     VERIFY_INDEPENDENTLY_LINE: () => VERIFY_INDEPENDENTLY_LINE,
     asJsonObject: () => asJsonObject,
     buildDisclosureEnvelope: () => buildDisclosureEnvelope,
+    buildResultRoot: () => buildResultRoot,
     buildVerificationPageModel: () => buildVerificationPageModel,
     bundleDigest: () => bundleDigest,
     classifyCountersignatures: () => classifyCountersignatures,
     computeCapsuleId: () => computeCapsuleId,
+    counterpartyLinks: () => counterpartyLinks,
+    countersignV1SigningInput: () => countersignV1SigningInput,
     coverageStatement: () => coverageStatement,
     decodeCapsuleJson: () => decodeCapsuleJson,
     decodeFragment: () => decodeFragment,
     decodeStrictJson: () => decodeStrictJson,
+    deriveCloseState: () => deriveCloseState,
     disclosureEligibleFields: () => disclosureEligibleFields,
     encodeFragment: () => encodeFragment,
+    indexCountersigners: () => indexCountersigners,
     isHex64: () => isHex64,
+    isResultRoot: () => isResultRoot,
     isV4IrreversibilityClass: () => isV4IrreversibilityClass,
     jcs: () => jcs,
     jsonDigest: () => jsonDigest,
     parseCapsule: () => parseCapsule,
+    pinnedCountersignerSource: () => pinnedCountersignerSource,
     readPresentationBlock: () => readPresentationBlock,
+    recomputeCounts: () => recomputeCounts,
     registries: () => registries,
     renderEvidenceGraph: () => renderEvidenceGraph,
     sealCapsule: () => sealCapsule,
     sha256Hex: () => sha256Hex,
     unboundRecordIds: () => unboundRecordIds,
+    validateEvidenceResult: () => validateEvidenceResult,
     verifyBundle: () => verifyBundle,
     verifyClass1: () => verifyClass1,
+    verifyCountersignV1Signature: () => verifyCountersignV1Signature,
     verifyDisclosureEnvelope: () => verifyDisclosureEnvelope,
     verifyProducerEnvelope: () => verifyProducerEnvelope,
     verifyStore: () => verifyStore
   });
 
-  // src/countersignature-stamp.ts
-  init_cborg();
-
-  // src/producer-envelope-wire.ts
-  var encoder = new TextEncoder();
-  var CONTENT_TYPE = "application/agent-action-capsule-id";
-  var hex64 = /^[0-9a-f]{64}$/u;
-  function concat2(...parts) {
-    const result = new Uint8Array(
-      parts.reduce((length, part) => length + part.length, 0)
-    );
-    let offset = 0;
-    for (const part of parts) {
-      result.set(part, offset);
-      offset += part.length;
-    }
-    return result;
-  }
-  function hexToBytes(value) {
-    const result = new Uint8Array(value.length / 2);
-    for (let i = 0; i < result.length; i += 1)
-      result[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
-    return result;
-  }
-  function equalBytes(left, right) {
-    return left.length === right.length && left.every((byte, index) => byte === right[index]);
-  }
-  function head(major, length) {
-    if (length < 24) return Uint8Array.of(major << 5 | length);
-    if (length < 256) return Uint8Array.of(major << 5 | 24, length);
-    if (length < 65536)
-      return Uint8Array.of(major << 5 | 25, length >>> 8, length & 255);
-    throw new RangeError("CBOR value too large");
-  }
-  function bstr(value) {
-    return concat2(head(2, value.length), value);
-  }
-  function tstr(value) {
-    const bytes = encoder.encode(value);
-    return concat2(head(3, bytes.length), bytes);
-  }
-  function array(parts) {
-    return concat2(head(4, parts.length), ...parts);
-  }
-  function producerEnvelopeSigningBytes(protectedBytes, payload) {
-    return array([
-      tstr("Signature1"),
-      bstr(protectedBytes),
-      bstr(new Uint8Array()),
-      bstr(payload)
-    ]);
-  }
-  var spkiPrefix = hexToBytes("302a300506032b6570032100");
-  function producerPublicKeySpki(publicKey) {
-    return concat2(spkiPrefix, publicKey);
-  }
-
-  // src/countersignature-stamp.ts
-  var BUNDLE_DIGEST_CONTENT_TYPE = "application/agent-action-capsule-bundle-digest";
-  var Reader = class {
-    constructor(data) {
-      this.data = data;
-    }
-    data;
-    offset = 0;
-    byte() {
-      const value = this.data[this.offset++];
-      if (value === void 0) throw new SyntaxError("truncated CBOR");
-      return value;
-    }
-    length(major) {
-      const first = this.byte();
-      if (first >>> 5 !== major) throw new SyntaxError("unexpected CBOR type");
-      const add = first & 31;
-      if (add < 24) return add;
-      if (add === 24) return this.byte();
-      if (add === 25) return this.byte() << 8 | this.byte();
-      throw new SyntaxError("unsupported or indefinite CBOR length");
-    }
-    bytes() {
-      const length = this.length(2);
-      const end = this.offset + length;
-      if (end > this.data.length) throw new SyntaxError("truncated CBOR bytes");
-      const value = this.data.slice(this.offset, end);
-      this.offset = end;
-      return value;
-    }
-  };
-  function decodeBase64Url(value) {
-    if (!/^[A-Za-z0-9_-]*$/u.test(value)) return void 0;
-    try {
-      const padded = `${value}${"=".repeat((4 - value.length % 4) % 4)}`;
-      const binary = atob(padded.replaceAll("-", "+").replaceAll("_", "/"));
-      return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    } catch {
-      return void 0;
-    }
-  }
-  async function verifyCoseSign1OverDigest(digestHex, cose) {
-    try {
-      const reader = new Reader(cose);
-      if (reader.byte() !== 210 || reader.length(4) !== 4) return void 0;
-      const protectedBytes = reader.bytes();
-      if (reader.byte() !== 160) return void 0;
-      const payload = reader.bytes();
-      const signature = reader.bytes();
-      if (reader.offset !== cose.length) return void 0;
-      const protectedHeaders = decode(protectedBytes, {
-        allowIndefinite: false,
-        coerceUndefinedToNull: false,
-        useMaps: true
-      });
-      if (!(protectedHeaders instanceof Map) || protectedHeaders.size !== 3)
-        return void 0;
-      if (protectedHeaders.get(3) !== BUNDLE_DIGEST_CONTENT_TYPE)
-        return void 0;
-      const publicKey = protectedHeaders.get(4);
-      if (!(publicKey instanceof Uint8Array) || publicKey.length !== 32)
-        return void 0;
-      if (protectedHeaders.get(1) !== -8) return void 0;
-      if (!equalBytes(payload, hexToBytes(digestHex))) return void 0;
-      if (signature.length !== 64) return void 0;
-      const key = await globalThis.crypto.subtle.importKey(
-        "spki",
-        producerPublicKeySpki(publicKey),
-        { name: "Ed25519" },
-        false,
-        ["verify"]
-      );
-      const valid = await globalThis.crypto.subtle.verify(
-        { name: "Ed25519" },
-        key,
-        signature,
-        producerEnvelopeSigningBytes(protectedBytes, payload)
-      );
-      return valid ? Uint8Array.from(publicKey) : void 0;
-    } catch {
-      return void 0;
-    }
-  }
-  function toHex(bytes) {
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-      ""
-    );
-  }
-  function object(value) {
-    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-  }
-  async function classifyCountersignatures(entries, bundleDigest2, producerPublicKeyHex2, directory) {
-    if (entries.length === 0) return [{ kind: "hollow" }];
-    if (bundleDigest2 === void 0)
-      return entries.map(() => ({ kind: "invalid" }));
-    const byPublicKey = new Map(
-      directory.map((entry) => [entry.publicKey, entry])
-    );
-    const results = [];
-    for (const raw of entries) {
-      const entry = object(raw);
-      if (entry === void 0 || entry.type !== "cose-sign1" || typeof entry.signature !== "string") {
-        results.push({ kind: "invalid" });
-        continue;
-      }
-      const cose = decodeBase64Url(entry.signature);
-      const publicKey = cose === void 0 ? void 0 : await verifyCoseSign1OverDigest(bundleDigest2, cose);
-      if (publicKey === void 0) {
-        results.push({ kind: "invalid" });
-        continue;
-      }
-      const keyHex = toHex(publicKey);
-      if (producerPublicKeyHex2 !== void 0 && keyHex === producerPublicKeyHex2) {
-        results.push({ kind: "producer" });
-        continue;
-      }
-      const directoryEntry = byPublicKey.get(keyHex);
-      if (directoryEntry !== void 0) {
-        results.push({
-          kind: "directory",
-          name: directoryEntry.name,
-          logoDataUrl: directoryEntry.logoDataUrl,
-          checksRecomputed: directoryEntry.checksRecomputed,
-          ...typeof entry.signed_at === "string" ? { date: entry.signed_at } : {}
-        });
-        continue;
-      }
-      results.push({ kind: "unresolved" });
-    }
-    return results;
-  }
-
   // src/json.ts
   var utf8 = new TextDecoder("utf-8", { fatal: true });
-  var encoder2 = new TextEncoder();
+  var encoder = new TextEncoder();
   var MAX_DEPTH = 1e3;
   var numberToken = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/;
   var JsonNumber = class {
@@ -2972,7 +2810,7 @@ var EvidenceGraph = (() => {
     }
   }
   function jcs(value) {
-    return encoder2.encode(render(value, "$", /* @__PURE__ */ new Set(), 0));
+    return encoder.encode(render(value, "$", /* @__PURE__ */ new Set(), 0));
   }
   async function sha256Hex(value) {
     const digest = await globalThis.crypto.subtle.digest(
@@ -2986,6 +2824,225 @@ var EvidenceGraph = (() => {
   }
   async function jsonDigest(value) {
     return sha256Hex(jcs(value));
+  }
+
+  // src/producer-envelope-wire.ts
+  var encoder2 = new TextEncoder();
+  var CONTENT_TYPE = "application/agent-action-capsule-id";
+  var hex64 = /^[0-9a-f]{64}$/u;
+  function concat(...parts) {
+    const result = new Uint8Array(
+      parts.reduce((length, part) => length + part.length, 0)
+    );
+    let offset = 0;
+    for (const part of parts) {
+      result.set(part, offset);
+      offset += part.length;
+    }
+    return result;
+  }
+  function hexToBytes(value) {
+    const result = new Uint8Array(value.length / 2);
+    for (let i = 0; i < result.length; i += 1)
+      result[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
+    return result;
+  }
+  function equalBytes(left, right) {
+    return left.length === right.length && left.every((byte, index) => byte === right[index]);
+  }
+  function head(major, length) {
+    if (length < 24) return Uint8Array.of(major << 5 | length);
+    if (length < 256) return Uint8Array.of(major << 5 | 24, length);
+    if (length < 65536)
+      return Uint8Array.of(major << 5 | 25, length >>> 8, length & 255);
+    throw new RangeError("CBOR value too large");
+  }
+  function bstr(value) {
+    return concat(head(2, value.length), value);
+  }
+  function tstr(value) {
+    const bytes = encoder2.encode(value);
+    return concat(head(3, bytes.length), bytes);
+  }
+  function array(parts) {
+    return concat(head(4, parts.length), ...parts);
+  }
+  function producerEnvelopeSigningBytes(protectedBytes, payload) {
+    return array([
+      tstr("Signature1"),
+      bstr(protectedBytes),
+      bstr(new Uint8Array()),
+      bstr(payload)
+    ]);
+  }
+  var spkiPrefix = hexToBytes("302a300506032b6570032100");
+  function producerPublicKeySpki(publicKey) {
+    return concat(spkiPrefix, publicKey);
+  }
+
+  // src/countersignature-stamp.ts
+  var COUNTERSIGN_V1 = "countersign/v1";
+  var COUNTERSIGN_RESULTS = [
+    "established",
+    "failed",
+    "not present",
+    "not checked",
+    "inconclusive"
+  ];
+  var KEY_ID = /^[0-9a-f]{64}$/u;
+  var SIGNATURE = /^[0-9a-f]{128}$/u;
+  var UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u;
+  var RESULTS = new Set(COUNTERSIGN_RESULTS);
+  function object(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  }
+  function nonEmptyString(value) {
+    return typeof value === "string" && value.length > 0;
+  }
+  function indexCountersigners(source) {
+    const names = /* @__PURE__ */ new Map();
+    const ambiguous = /* @__PURE__ */ new Set();
+    if (!Array.isArray(source)) return names;
+    for (const raw of source) {
+      const listing = object(raw);
+      if (listing === void 0 || !nonEmptyString(listing.name)) continue;
+      if (!Array.isArray(listing.key_ids)) continue;
+      for (const key of listing.key_ids) {
+        if (typeof key !== "string" || !KEY_ID.test(key)) continue;
+        const existing = names.get(key);
+        if (existing !== void 0 && existing !== listing.name)
+          ambiguous.add(key);
+        names.set(key, listing.name);
+      }
+    }
+    ambiguous.forEach((key) => names.delete(key));
+    return names;
+  }
+  async function pinnedCountersignerSource(bytes, expectedSha256) {
+    if (!KEY_ID.test(expectedSha256)) return void 0;
+    if (await sha256Hex(bytes) !== expectedSha256) return void 0;
+    try {
+      const parsed = JSON.parse(
+        new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+      );
+      return Array.isArray(parsed) ? parsed : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  function readChecks(value) {
+    if (!Array.isArray(value) || value.length === 0) return void 0;
+    const checks = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const raw of value) {
+      const check = object(raw);
+      if (check === void 0 || !nonEmptyString(check.name)) return void 0;
+      if (typeof check.result !== "string" || !RESULTS.has(check.result))
+        return void 0;
+      if (seen.has(check.name)) return void 0;
+      seen.add(check.name);
+      checks.push({
+        name: check.name,
+        result: check.result
+      });
+    }
+    return checks;
+  }
+  function scopeIsWellFormed(value) {
+    const scope = object(value);
+    if (scope === void 0 || !nonEmptyString(scope.ledger_id)) return false;
+    if (typeof scope.closure_depth !== "number" || !Number.isInteger(scope.closure_depth) || scope.closure_depth < 0)
+      return false;
+    if (scope.period === void 0) return true;
+    const period = object(scope.period);
+    return period !== void 0 && typeof period.from === "string" && typeof period.to === "string";
+  }
+  function countersignV1SigningInput(entry) {
+    return jcs({
+      over: entry.over,
+      signer: entry.signer,
+      statement: entry.statement,
+      type: entry.type
+    });
+  }
+  async function verifyCountersignV1Signature(entry, keyId, signatureHex) {
+    if (!KEY_ID.test(keyId) || !SIGNATURE.test(signatureHex)) return false;
+    try {
+      const key = await globalThis.crypto.subtle.importKey(
+        "spki",
+        producerPublicKeySpki(hexToBytes(keyId)),
+        { name: "Ed25519" },
+        false,
+        ["verify"]
+      );
+      return await globalThis.crypto.subtle.verify(
+        { name: "Ed25519" },
+        key,
+        hexToBytes(signatureHex),
+        countersignV1SigningInput(entry)
+      );
+    } catch {
+      return false;
+    }
+  }
+  async function classifyCountersignV1(entry, bundleDigest2, producerKeys, countersignerNames) {
+    const signer = object(entry.signer);
+    const statement = object(entry.statement);
+    const keyId = signer?.key_id;
+    if (signer === void 0 || !nonEmptyString(signer.id) || typeof keyId !== "string" || !KEY_ID.test(keyId) || typeof entry.over !== "string" || typeof entry.signature !== "string" || statement === void 0 || typeof statement.recomputed_at !== "string" || !UTC_TIMESTAMP.test(statement.recomputed_at) || !scopeIsWellFormed(statement.scope))
+      return { kind: "invalid" };
+    const checks = readChecks(statement.checks);
+    if (checks === void 0) return { kind: "invalid" };
+    if (entry.over !== bundleDigest2) return { kind: "invalid" };
+    const signed = await verifyCountersignV1Signature(
+      {
+        over: entry.over,
+        signer: entry.signer,
+        statement: entry.statement,
+        type: COUNTERSIGN_V1
+      },
+      keyId,
+      entry.signature
+    );
+    if (!signed) return { kind: "invalid" };
+    const view = {
+      checks,
+      recomputedAt: statement.recomputed_at,
+      receipt: entry.receipt === void 0 ? "absent" : "unverified"
+    };
+    if (producerKeys.has(keyId))
+      return { kind: "not-independent", keyId, statement: view };
+    const name = countersignerNames.get(keyId);
+    if (name === void 0)
+      return { kind: "unresolved-signer", keyId, statement: view };
+    return { kind: "resolved", keyId, name, statement: view };
+  }
+  async function classifyCountersignatures(entries, bundleDigest2, producerKeys, countersigners) {
+    if (entries.length === 0) return [{ kind: "hollow" }];
+    const producers = new Set(producerKeys.filter((key) => KEY_ID.test(key)));
+    const countersignerNames = indexCountersigners(countersigners);
+    const results = [];
+    for (const raw of entries) {
+      const entry = object(raw);
+      const type = entry?.type === void 0 ? "" : entry.type;
+      if (entry === void 0 || typeof type !== "string") {
+        results.push({ kind: "invalid" });
+      } else if (type !== "" && type !== COUNTERSIGN_V1) {
+        results.push({ kind: "unverified", type });
+      } else if (bundleDigest2 === void 0) {
+        results.push({ kind: "invalid" });
+      } else {
+        results.push(
+          await classifyCountersignV1(
+            entry,
+            bundleDigest2,
+            producers,
+            countersignerNames
+          )
+        );
+      }
+    }
+    return results;
   }
 
   // src/disclosure-path.ts
@@ -3060,6 +3117,43 @@ var EvidenceGraph = (() => {
   });
 
   // src/references.ts
+  var RETENTION_STRING_MEMBERS = [
+    "declarant",
+    "retained_until",
+    "not_retained_after"
+  ];
+  function retentionFindings(raw, path2, add) {
+    const retention = asJsonObject(raw);
+    if (retention === void 0) {
+      add(
+        "field_not_object",
+        `${path2} MUST be a JSON object when present (\xA75.5.5)`,
+        1
+      );
+      return;
+    }
+    for (const field of RETENTION_STRING_MEMBERS) {
+      const present = Object.hasOwn(retention, field);
+      if (field === "declarant" && (!present || retention[field] === null))
+        add(
+          "missing_required_field",
+          `${path2}.declarant is REQUIRED (\xA75.5.5)`,
+          1
+        );
+      else if (present && typeof retention[field] !== "string")
+        add(
+          "field_not_string",
+          `${path2}.${field} MUST be a string when present (\xA75.5.5)`,
+          1
+        );
+    }
+    if (!Object.hasOwn(retention, "retained_until") && !Object.hasOwn(retention, "not_retained_after"))
+      add(
+        "retention_empty",
+        `${path2} MUST carry retained_until or not_retained_after (\xA75.5.5)`,
+        1
+      );
+  }
   function referenceFindings(capsule, purposes) {
     if (capsule.format_version !== "4") return [];
     if (!("references" in capsule)) return [];
@@ -3120,6 +3214,8 @@ var EvidenceGraph = (() => {
           );
         }
       }
+      if (ref.retention !== void 0)
+        retentionFindings(ref.retention, `${path2}.retention`, add);
       if ("log_coordinates" in ref) {
         const coordinates = asJsonObject(ref.log_coordinates);
         if (coordinates === void 0) {
@@ -3253,6 +3349,24 @@ var EvidenceGraph = (() => {
   function isV4IrreversibilityClass(value) {
     return v4IrreversibilityClasses.has(value);
   }
+  var STRING_MEMBERS = [
+    ["disposition", "decision"],
+    ["disposition", "verdict_class"],
+    ["effect", "status"],
+    ["effect", "type"],
+    ["effect", "irreversibility_class"],
+    ["effect", "effect_attestation"],
+    ["effect", "external_ref"],
+    ["chain", "relation"],
+    ["cross_party", "correlator"],
+    ["assurance", "effect_mode"],
+    ["assurance", "attestation_mode"],
+    ["assurance", "ledger_mode"],
+    ["assurance", "cross_party_rung"],
+    ["provenance_mode", "source_asserted_at"],
+    ["provenance_mode", "import_batch"],
+    ["provenance_mode", "imported_at"]
+  ];
   async function verifyClass1(capsule, store, extensions2 = {}) {
     const findings = [];
     const add = (code, detail, check, severity = "error") => {
@@ -3355,10 +3469,16 @@ var EvidenceGraph = (() => {
       );
     const disposition = object2(top.disposition);
     if (disposition !== void 0) {
-      if (typeof disposition.approver !== "string")
+      if (disposition.approver === void 0 || disposition.approver === null)
         add(
           "missing_required_field",
           "disposition.approver is REQUIRED (\xA75.4)",
+          1
+        );
+      else if (typeof disposition.approver !== "string")
+        add(
+          "field_not_string",
+          "disposition.approver MUST be a string (\xA75.4)",
           1
         );
       else if (!["human", "policy", "counterparty"].includes(disposition.approver))
@@ -3385,6 +3505,17 @@ var EvidenceGraph = (() => {
           "human_disposed=true with non-human approver (\xA75.4)",
           void 0,
           "warning"
+        );
+    }
+    if (Object.hasOwn(top, "epoch_id") && typeof top.epoch_id !== "string")
+      add("field_not_string", "epoch_id MUST be a string when present (\xA75.1)", 1);
+    for (const [block, member] of STRING_MEMBERS) {
+      const members = object2(top[block]);
+      if (members !== void 0 && Object.hasOwn(members, member) && typeof members[member] !== "string")
+        add(
+          "field_not_string",
+          `${block}.${member} MUST be a string when present (\xA76 check 1)`,
+          1
         );
     }
     findings.push(...references.filter((finding) => finding.check === 1));
@@ -4140,7 +4271,7 @@ var EvidenceGraph = (() => {
 
   // src/producer-envelope-verification.ts
   init_cborg();
-  var Reader2 = class {
+  var Reader = class {
     constructor(data) {
       this.data = data;
     }
@@ -4186,7 +4317,7 @@ var EvidenceGraph = (() => {
         `producer envelope is ${data.length} bytes; maximum is 4096`
       );
     try {
-      const reader = new Reader2(data);
+      const reader = new Reader(data);
       if (reader.byte() !== 210 || reader.length(4) !== 4)
         throw new SyntaxError(
           "top-level value MUST be tagged COSE_Sign1 with four array elements"
@@ -4265,154 +4396,6 @@ var EvidenceGraph = (() => {
     } catch (error) {
       return fail2("envelope_malformed", String(error));
     }
-  }
-
-  // src/verification-page.ts
-  var UNBOUND = "membership_record_unbound:";
-  var INVALID = /^membership_(?:proof_invalid|coordinates_missing|coordinates_invalid|record_unknown):(.+)$/u;
-  function invalidRecordIds(verified) {
-    return new Set(
-      verified.perRecordMembership.findings.flatMap((finding) => {
-        const match = INVALID.exec(finding);
-        return match === null ? [] : [match[1]];
-      })
-    );
-  }
-  function unboundRecordIds(verified) {
-    const invalid = invalidRecordIds(verified);
-    return verified.perRecordMembership.findings.flatMap((finding) => {
-      if (!finding.startsWith(UNBOUND)) return [];
-      const id = finding.slice(UNBOUND.length);
-      return invalid.has(id) ? [] : [id];
-    });
-  }
-  function nonUnboundFindings(verified) {
-    const names = [];
-    for (const finding of verified.perRecordMembership.findings) {
-      if (finding.startsWith(UNBOUND)) continue;
-      const name = finding.split(":", 1)[0];
-      if (!names.includes(name)) names.push(name);
-    }
-    return names;
-  }
-  function coverageStatement(verified) {
-    const claim = verified.perRecordMembership;
-    if (claim.status === "withheld")
-      return { status: "withheld", reason: claim.findings.join(", ") };
-    if (claim.status === "pass") return { status: "established" };
-    const reasons = nonUnboundFindings(verified);
-    return reasons.length === 0 ? { status: "established" } : { status: "not_established", reason: reasons.join(", ") };
-  }
-  function recordCoverage(bundle, verified, coverage) {
-    const unbound = new Set(unboundRecordIds(verified));
-    const invalid = invalidRecordIds(verified);
-    return (Array.isArray(bundle.records) ? bundle.records : []).flatMap(
-      (record) => {
-        const capsuleId = object5(record)?.capsule_id;
-        if (typeof capsuleId !== "string") return [];
-        return [
-          {
-            capsuleId,
-            status: invalid.has(capsuleId) ? "membership_invalid" : unbound.has(capsuleId) ? "uncheckpointed" : coverage.status === "established" ? "checkpointed" : "unverified"
-          }
-        ];
-      }
-    );
-  }
-  var VERIFY_INDEPENDENTLY_LINE = "verify independently at verify.agentactioncapsule.org or with the CLI";
-  var FIVE_WORD_RESULT = Object.freeze({
-    pass: "passed with no errors found",
-    withheld: "still withheld pending producer disclosure",
-    fail: "failed at least one check",
-    not_checked: "not checked no evidence supplied"
-  });
-  function object5(value) {
-    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-  }
-  function capsuleGroupStatus(capsuleResults, checks) {
-    const results = Object.values(capsuleResults);
-    if (results.length === 0) return "not_checked";
-    const failed = results.some(
-      (result) => result.findings.some(
-        (finding) => finding.severity === "error" && finding.check !== void 0 && checks.includes(finding.check)
-      )
-    );
-    return failed ? "fail" : "pass";
-  }
-  function receiptGradeWord(value) {
-    return value === "mmr-verified" ? "consistency-verified" : value === "countersigned-observed" ? "existence-and-time" : void 0;
-  }
-  function receipts(raw) {
-    if (!Array.isArray(raw)) return [];
-    return raw.flatMap((entry) => {
-      const record = object5(entry);
-      if (record === void 0) return [];
-      const witness = record.witness, time = record.time, grade = receiptGradeWord(record.grade);
-      return typeof witness === "string" && typeof time === "string" && grade !== void 0 ? [{ witness, grade, time }] : [];
-    });
-  }
-  function completenessStatement(raw) {
-    const record = object5(raw);
-    if (record === void 0) return void 0;
-    return {
-      ...typeof record.closure_depth === "number" ? { closureDepth: record.closure_depth } : {},
-      ...typeof record.records_mode === "string" ? { recordsMode: record.records_mode } : {},
-      ...typeof record.payloads_mode === "string" ? { payloadsMode: record.payloads_mode } : {},
-      suppressedFields: Array.isArray(record.suppressed_fields) ? record.suppressed_fields.filter(
-        (field) => typeof field === "string"
-      ) : []
-    };
-  }
-  function summarize(name, status2) {
-    return { name, status: status2, result: FIVE_WORD_RESULT[status2] };
-  }
-  function buildVerificationPageModel(bundle, verified) {
-    const top = object5(bundle) ?? {};
-    const checkpoint = object5(top.checkpoint);
-    const checks = [
-      summarize(
-        "Required fields",
-        capsuleGroupStatus(verified.capsuleResults, [1])
-      ),
-      summarize(
-        "Capsule identity",
-        capsuleGroupStatus(verified.capsuleResults, [2])
-      ),
-      summarize(
-        "Effect consistency",
-        capsuleGroupStatus(verified.capsuleResults, [3, 5])
-      ),
-      summarize(
-        "Verdict conflict",
-        capsuleGroupStatus(verified.capsuleResults, [4])
-      ),
-      summarize("Chain parent", capsuleGroupStatus(verified.capsuleResults, [6])),
-      summarize(
-        "Assurance claims",
-        capsuleGroupStatus(verified.capsuleResults, [7, 8])
-      ),
-      summarize(
-        "Bundle digest",
-        verified.bundleDigest === void 0 ? "fail" : "pass"
-      ),
-      summarize("Graph closure", verified.graphClosure.status),
-      summarize("Interval coverage", verified.intervalCoverage.status),
-      summarize("Per-record membership", verified.perRecordMembership.status)
-    ];
-    const coverage = coverageStatement(verified);
-    return {
-      ...verified.bundleDigest === void 0 ? {} : { bundleDigest: verified.bundleDigest },
-      ...typeof checkpoint?.root === "string" ? { checkpointRoot: checkpoint.root } : {},
-      ...typeof checkpoint?.mmr_size === "number" ? { checkpointSize: checkpoint.mmr_size } : {},
-      receipts: receipts(top.receipts),
-      selfWitnessed: checkpoint !== void 0 && receipts(top.receipts).length === 0,
-      records: recordCoverage(top, verified, coverage),
-      uncheckpointedCount: unboundRecordIds(verified).length,
-      coverage,
-      ...completenessStatement(top.completeness) === void 0 ? {} : { completeness: completenessStatement(top.completeness) },
-      checks,
-      verifyIndependentlyLine: VERIFY_INDEPENDENTLY_LINE
-    };
   }
 
   // src/evidence-graph.ts
@@ -4715,6 +4698,745 @@ var EvidenceGraph = (() => {
     };
   }
 
+  // src/result-root.ts
+  var RESULT_VERSION = "evidence-result-v0";
+  var RESULT_RECORD_TYPE = "evidence_result";
+  var TIERS = Object.freeze(["recomputed", "judged"]);
+  var GRADES = Object.freeze([
+    "self-attested",
+    "witnessed",
+    "countersigned"
+  ]);
+  var SUFFICIENCIES = Object.freeze([
+    "SATISFIED",
+    "GAP",
+    "INSUFFICIENT",
+    "UNKNOWN"
+  ]);
+  var VERDICTS = Object.freeze([
+    "met",
+    "not_met",
+    "not_evaluable"
+  ]);
+  var EVIDENCE_STATUSES = Object.freeze([
+    "SATISFIED",
+    "INSUFFICIENT",
+    "NOT_FOUND",
+    "NOT_COMMITTED",
+    "WITHHELD",
+    "CONTRADICTED",
+    "NOT_APPLICABLE",
+    "UNKNOWN"
+  ]);
+  var DISCLOSED_STATUSES = Object.freeze([
+    "SATISFIED",
+    "INSUFFICIENT",
+    "NOT_FOUND",
+    "CONTRADICTED",
+    "NOT_APPLICABLE",
+    "UNKNOWN"
+  ]);
+  var PROOF_KINDS = Object.freeze([
+    "inclusion_proof",
+    "receipt"
+  ]);
+  var RESULT_MEMBERS = Object.freeze([
+    "result_version",
+    "generated_at",
+    "claims",
+    "aggregate",
+    "view"
+  ]);
+  var CLAIM_REQUIRED = Object.freeze([
+    "id",
+    "contract_ref",
+    "requirement_ref",
+    "tier",
+    "grade",
+    "sufficiency",
+    "verdict",
+    "evidence",
+    "proofs",
+    "presentation"
+  ]);
+  var REQUIREMENT_CLAIM = "requirement";
+  var CLOSE_CLAIM = "close";
+  var CLOSE_STATES = Object.freeze([
+    "UNILATERAL",
+    "AGREED",
+    "CONTESTED"
+  ]);
+  var CLOSE_LINK_TYPES = Object.freeze([
+    "acknowledges",
+    "rebuts"
+  ]);
+  var UNVERIFIED_KEY_LABEL = "stated key_id (not verified)";
+  var oneOf = (values, value) => typeof value === "string" && values.includes(value);
+  var nonEmptyString2 = (value) => typeof value === "string" && value.length > 0;
+  var CONTRACT_REF = /^[^@\s]+@[^@\s]+$/u;
+  var nonNegativeInteger = (value) => Number.isSafeInteger(value) && value >= 0;
+  function digestRefFindings(path2, value) {
+    if (!isObject(value)) return [`${path2}: not an object`];
+    const findings = [];
+    if (value.digest_alg !== "SHA-256") findings.push(`${path2}.digest_alg`);
+    if (!isHex64(value.digest)) findings.push(`${path2}.digest`);
+    return findings;
+  }
+  function presentationFindings(path2, value) {
+    if (!isObject(value)) return [`${path2}: not an object`];
+    const findings = [];
+    switch (value.kind) {
+      case "disclosure":
+        if (!oneOf(DISCLOSED_STATUSES, value.status))
+          findings.push(`${path2}.status: not a disclosable status`);
+        if (!Array.isArray(value.evidence)) findings.push(`${path2}.evidence`);
+        else
+          value.evidence.forEach(
+            (item, index) => findings.push(
+              ...digestRefFindings(`${path2}.evidence[${index}]`, item)
+            )
+          );
+        break;
+      case "analysis":
+        if (!oneOf(EVIDENCE_STATUSES, value.status))
+          findings.push(`${path2}.status`);
+        if (!nonEmptyString2(value.summary)) findings.push(`${path2}.summary`);
+        break;
+      case "story":
+        if (!oneOf(EVIDENCE_STATUSES, value.status))
+          findings.push(`${path2}.status`);
+        if (!nonEmptyString2(value.narrative)) findings.push(`${path2}.narrative`);
+        break;
+      default:
+        findings.push(`${path2}.kind: not disclosure, analysis, or story`);
+    }
+    return findings;
+  }
+  function claimFindings(path2, value) {
+    if (!isObject(value)) return [`${path2}: not an object`];
+    const findings = [];
+    for (const member of CLAIM_REQUIRED)
+      if (!Object.hasOwn(value, member))
+        findings.push(`${path2}.${member}: absent`);
+    if (findings.length > 0) return findings;
+    if (!nonEmptyString2(value.id)) findings.push(`${path2}.id`);
+    if (typeof value.contract_ref !== "string" || !CONTRACT_REF.test(value.contract_ref))
+      findings.push(`${path2}.contract_ref: not <contract_id>@<version>`);
+    if (!nonEmptyString2(value.requirement_ref))
+      findings.push(`${path2}.requirement_ref`);
+    if (!oneOf(TIERS, value.tier)) findings.push(`${path2}.tier`);
+    if (!oneOf(GRADES, value.grade)) findings.push(`${path2}.grade`);
+    if (!oneOf(SUFFICIENCIES, value.sufficiency))
+      findings.push(`${path2}.sufficiency`);
+    if (!oneOf(VERDICTS, value.verdict)) findings.push(`${path2}.verdict`);
+    if (oneOf(SUFFICIENCIES, value.sufficiency) && oneOf(VERDICTS, value.verdict)) {
+      if (value.sufficiency === "SATISFIED" ? value.verdict === "not_evaluable" : value.verdict !== "not_evaluable")
+        findings.push(
+          `${path2}.verdict: ${value.verdict} is not a verdict under sufficiency ${value.sufficiency}`
+        );
+    }
+    if (!Array.isArray(value.evidence)) findings.push(`${path2}.evidence`);
+    else
+      value.evidence.forEach(
+        (item, index) => findings.push(...digestRefFindings(`${path2}.evidence[${index}]`, item))
+      );
+    if (!Array.isArray(value.proofs)) findings.push(`${path2}.proofs`);
+    else
+      value.proofs.forEach((item, index) => {
+        const itemPath = `${path2}.proofs[${index}]`;
+        findings.push(...digestRefFindings(itemPath, item));
+        if (isObject(item) && !oneOf(PROOF_KINDS, item.kind))
+          findings.push(`${itemPath}.kind`);
+      });
+    findings.push(
+      ...presentationFindings(`${path2}.presentation`, value.presentation)
+    );
+    return findings;
+  }
+  function validateEvidenceResult(value) {
+    if (!isObject(value)) return ["result: not an object"];
+    const findings = [];
+    for (const key of Object.keys(value))
+      if (!RESULT_MEMBERS.includes(key))
+        findings.push(`${key}: not a member of an Evidence Result v0`);
+    if (value.result_version !== RESULT_VERSION)
+      findings.push(`result_version: not ${RESULT_VERSION}`);
+    if (typeof value.generated_at !== "string") findings.push("generated_at");
+    if (!Array.isArray(value.claims) || value.claims.length === 0)
+      findings.push("claims: not a non-empty array");
+    else
+      value.claims.forEach(
+        (claim, index) => findings.push(...claimFindings(`claims[${index}]`, claim))
+      );
+    const aggregate = isObject(value.aggregate) ? value.aggregate : void 0;
+    if (aggregate === void 0) findings.push("aggregate: not an object");
+    const coverage = isObject(aggregate?.coverage) ? aggregate.coverage : void 0;
+    if (coverage === void 0)
+      findings.push("aggregate.coverage: not an object");
+    else
+      for (const member of [
+        "evaluated_population",
+        "excluded_not_applicable",
+        "unknown_count"
+      ])
+        if (!nonNegativeInteger(coverage[member]))
+          findings.push(
+            `aggregate.coverage.${member}: not a non-negative integer`
+          );
+    const buckets = isObject(aggregate?.buckets) ? aggregate.buckets : void 0;
+    if (buckets === void 0) findings.push("aggregate.buckets: not an object");
+    else
+      for (const member of VERDICTS)
+        if (!Array.isArray(buckets[member]) || !buckets[member].every(nonEmptyString2))
+          findings.push(`aggregate.buckets.${member}: not an array of claim ids`);
+    if (findings.length > 0) return findings;
+    const verdictById = /* @__PURE__ */ new Map();
+    value.claims.forEach((claim, index) => {
+      const id = claim.id;
+      if (verdictById.has(id))
+        findings.push(`claims[${index}].id: duplicate ${id}`);
+      verdictById.set(id, claim.verdict);
+    });
+    const appearances = /* @__PURE__ */ new Map();
+    let entries = 0;
+    for (const member of VERDICTS)
+      for (const id of buckets[member]) {
+        entries += 1;
+        appearances.set(id, (appearances.get(id) ?? 0) + 1);
+        if (verdictById.get(id) !== member)
+          findings.push(
+            `aggregate.buckets.${member}: ${id} is not a claim with that verdict`
+          );
+      }
+    for (const [id, verdict2] of verdictById) {
+      const count = appearances.get(id) ?? 0;
+      if (count === 0)
+        findings.push(
+          `aggregate.buckets: ${id} (${verdict2}) appears in no bucket`
+        );
+      else if (count > 1)
+        findings.push(
+          `aggregate.buckets: ${id} appears ${count} times across the buckets`
+        );
+    }
+    if (entries !== verdictById.size)
+      findings.push(
+        `aggregate.buckets: ${entries} entries for ${verdictById.size} claims`
+      );
+    return findings;
+  }
+  var countOf = (value) => nonNegativeInteger(value) ? value : 0;
+  function recomputeCounts(document2, failed = /* @__PURE__ */ new Set()) {
+    const claims = document2.claims;
+    const aggregate = document2.aggregate;
+    const coverage = aggregate.coverage;
+    const buckets = aggregate.buckets;
+    const standing = claims.filter((claim) => !failed.has(claim.id));
+    const stated = {
+      evaluated_population: countOf(coverage.evaluated_population),
+      unknown_count: countOf(coverage.unknown_count),
+      "buckets.met": buckets.met.length,
+      "buckets.not_met": buckets.not_met.length,
+      "buckets.not_evaluable": buckets.not_evaluable.length
+    };
+    const recomputed = {
+      evaluated_population: claims.length,
+      unknown_count: standing.filter((claim) => claim.sufficiency === "UNKNOWN").length,
+      "buckets.met": standing.filter((claim) => claim.verdict === "met").length,
+      "buckets.not_met": standing.filter((claim) => claim.verdict === "not_met").length,
+      "buckets.not_evaluable": standing.filter(
+        (claim) => claim.verdict === "not_evaluable"
+      ).length
+    };
+    const mismatches = [];
+    for (const field of Object.keys(stated))
+      if (stated[field] !== recomputed[field])
+        mismatches.push({
+          field,
+          stated: stated[field],
+          recomputed: recomputed[field]
+        });
+    return {
+      coverage: {
+        evaluatedPopulation: recomputed.evaluated_population,
+        excludedNotApplicable: countOf(coverage.excluded_not_applicable),
+        unknownCount: recomputed.unknown_count
+      },
+      bucketCounts: {
+        met: recomputed["buckets.met"],
+        notMet: recomputed["buckets.not_met"],
+        notEvaluable: recomputed["buckets.not_evaluable"],
+        failed: claims.length - standing.length
+      },
+      mismatches
+    };
+  }
+  function deriveCloseState(links) {
+    if (links.some((link) => link.type === "rebuts")) return "CONTESTED";
+    if (links.some((link) => link.type === "acknowledges")) return "AGREED";
+    return "UNILATERAL";
+  }
+  function closeBody(raw) {
+    const body = raw.close;
+    if (!isObject(body) || !oneOf(CLOSE_STATES, body.close_state) || !isObject(body.close_ref) || !isHex64(body.close_ref.digest))
+      return void 0;
+    return body;
+  }
+  async function inboundCloseLinks(records, disclosures2) {
+    const inbound = /* @__PURE__ */ new Map();
+    for (const record of records) {
+      const header = await disclosurePayload(record, disclosures2, "agent_input");
+      if (!isObject(header) || !Array.isArray(header.links)) continue;
+      const bookId = asString(header.book_id);
+      const signer = await signerOf(record);
+      for (const link of header.links) {
+        if (!isObject(link) || !oneOf(CLOSE_LINK_TYPES, link.type)) continue;
+        const target = asString(link.target);
+        if (target === void 0) continue;
+        const list = inbound.get(target) ?? [];
+        list.push({
+          type: link.type,
+          recordId: record.capsule_id,
+          ...bookId === void 0 ? {} : { bookId },
+          ...signer
+        });
+        inbound.set(target, list);
+      }
+    }
+    return inbound;
+  }
+  async function signerOf(record) {
+    const keyId = record.key_id;
+    if (typeof keyId !== "string" || !isHex64(keyId)) return {};
+    return { keyId, keyVerified: await keyVerifies(record, keyId) };
+  }
+  var lowerHex = /^(?:[0-9a-f]{2})+$/u;
+  async function keyVerifies(record, keyId) {
+    const signature = record.signature;
+    if (typeof signature !== "string" || !lowerHex.test(signature)) return false;
+    let recomputed;
+    try {
+      recomputed = await computeCapsuleId(record);
+    } catch {
+      return false;
+    }
+    if (recomputed !== record.capsule_id) return false;
+    const envelope = await verifyProducerEnvelope(
+      recomputed,
+      hexToBytes(signature)
+    );
+    if (!envelope.ok || envelope.publicKey === void 0) return false;
+    const kid = Array.from(
+      envelope.publicKey,
+      (byte) => byte.toString(16).padStart(2, "0")
+    ).join("");
+    return kid === keyId;
+  }
+  function counterpartyLinks(close, peer, inbound) {
+    const links = [];
+    const ignored = [];
+    for (const link of inbound) {
+      const reason = close.bookId === void 0 ? "the cited Close names no book_id, so nothing can be its counterparty" : close.keyId === void 0 ? "the cited Close carries no key_id, so no signer can be shown to differ from its own" : close.keyVerified !== true ? `the cited Close's key_id is a ${UNVERIFIED_KEY_LABEL}: its Producer Envelope does not verify under it, so no signer can be shown to differ from its own` : link.bookId === void 0 ? "the linking record names no book_id" : link.bookId === close.bookId ? "the linking record is from the Close's own book" : link.bookId !== peer ? peer === void 0 ? "the claim names no peer, so no book can be the counterparty" : `the linking record's book_id ${link.bookId} is not the claim's named peer ${peer}` : link.keyId === void 0 ? "the linking record carries no key_id" : link.keyVerified !== true ? `${UNVERIFIED_KEY_LABEL}: the linking record's Producer Envelope does not verify under its key_id` : link.keyId === close.keyId ? "the linking record is signed under the Close's own key" : void 0;
+      if (reason === void 0) links.push(link);
+      else ignored.push({ ...link, reason });
+    }
+    return { links, ignored };
+  }
+  var actedOnReferences2 = (record) => Array.isArray(record.references) ? record.references.flatMap(
+    (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" && typeof reference.digest === "string" ? [reference.digest] : []
+  ) : [];
+  async function resultDocument(root, disclosures2) {
+    return (await resultCarriers(root, disclosures2))[0];
+  }
+  async function resultCarriers(record, disclosures2) {
+    const carriers = [];
+    for (const member of ["agent_output", "agent_input"]) {
+      const payload = await disclosurePayload(record, disclosures2, member);
+      if (!isObject(payload)) continue;
+      if (payload.result_version === RESULT_VERSION)
+        carriers.push({ member, form: "payload", document: payload });
+      else if (member === "agent_input" && payload.record_type === RESULT_RECORD_TYPE)
+        carriers.push({ member, form: "book", document: payload.statement });
+    }
+    return carriers;
+  }
+  async function nonResultDescription(root, disclosures2) {
+    const header = await disclosurePayload(root, disclosures2, "agent_input");
+    const recordType = isObject(header) ? header.record_type : void 0;
+    return typeof recordType === "string" ? `agent_input is a book record header of record_type ${JSON.stringify(recordType)}, not ${JSON.stringify(RESULT_RECORD_TYPE)}` : `no disclosed member carries an ${RESULT_VERSION} document or an ${RESULT_RECORD_TYPE} record header`;
+  }
+  async function isResultRoot(bundle) {
+    if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures))
+      return false;
+    const root = asString(bundle.root);
+    const record = bundle.records.find(
+      (candidate) => isObject(candidate) && candidate.capsule_id === root
+    );
+    return record !== void 0 && await resultDocument(record, bundle.disclosures) !== void 0;
+  }
+  async function buildResultRoot(bundle) {
+    if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures))
+      throw new EvidenceGraphError("bundle must contain records and disclosures");
+    const disclosures2 = bundle.disclosures;
+    const records = bundle.records.filter(
+      (record) => isObject(record) && asString(record.capsule_id) !== void 0
+    );
+    const root = asString(bundle.root);
+    const rootRecord = records.find((record) => record.capsule_id === root);
+    if (rootRecord === void 0)
+      throw new EvidenceGraphError("root record not supplied");
+    const rootCarriers = await resultCarriers(rootRecord, disclosures2);
+    const carried = rootCarriers[0];
+    if (carried === void 0)
+      throw new EvidenceGraphError(
+        `root is not a Result v0: ${await nonResultDescription(rootRecord, disclosures2)}`
+      );
+    if (rootCarriers.length > 1)
+      throw new EvidenceGraphError(
+        `root ${rootRecord.capsule_id} carries a Result v0 in both agent_output and agent_input; a bundle has exactly one headline document`
+      );
+    const otherCarriers = [];
+    for (const record of records)
+      if (record !== rootRecord && (await resultCarriers(record, disclosures2)).length > 0)
+        otherCarriers.push(record.capsule_id);
+    if (otherCarriers.length > 0)
+      throw new EvidenceGraphError(
+        `bundle carries ${otherCarriers.length + 1} Result v0 documents: root ${rootRecord.capsule_id} and ${otherCarriers.join(", ")}; a bundle has exactly one headline document`
+      );
+    const findings = carried.form === "book" ? isObject(carried.document) ? validateEvidenceResult(carried.document).map(
+      (finding) => `agent_input.statement.${finding}`
+    ) : [
+      `agent_input.statement: ${carried.document === void 0 ? "absent" : "not an object"} on the ${RESULT_RECORD_TYPE} record header`
+    ] : validateEvidenceResult(carried.document);
+    if (findings.length > 0)
+      throw new EvidenceGraphError(
+        `root is not a Result v0: ${findings.join("; ")}`
+      );
+    const document2 = carried.document;
+    const memberships2 = isObject(bundle.completeness_certificate) ? isObject(bundle.completeness_certificate.memberships) ? bundle.completeness_certificate.memberships : {} : {};
+    const recordsById = new Map(
+      records.map((record) => [record.capsule_id, record])
+    );
+    const cited = /* @__PURE__ */ new Map();
+    const resolveRecord = async (id) => {
+      if (cited.has(id)) return;
+      const record = recordsById.get(id);
+      if (record === void 0) return;
+      const cites = actedOnReferences2(record);
+      const coordinates = logCoordinates(memberships2, id);
+      const agentInputDigest = committedDigest(record, "agent_input");
+      const agentOutputDigest = committedDigest(record, "agent_output");
+      cited.set(id, {
+        capsuleId: id,
+        agentInput: await resolveDisclosure(record, disclosures2, "agent_input"),
+        agentOutput: await resolveDisclosure(record, disclosures2, "agent_output"),
+        ...agentInputDigest === void 0 ? {} : { agentInputDigest },
+        ...agentOutputDigest === void 0 ? {} : { agentOutputDigest },
+        ...coordinates === void 0 ? {} : { logCoordinates: coordinates },
+        cites,
+        ...recordTimes(record)
+      });
+      for (const target of cites) await resolveRecord(target);
+    };
+    const hasCloseClaim = document2.claims.some(
+      (raw) => raw.type === CLOSE_CLAIM
+    );
+    const inbound = hasCloseClaim ? await inboundCloseLinks(records, disclosures2) : /* @__PURE__ */ new Map();
+    const claims = [];
+    for (const raw of document2.claims) {
+      const evidence = [];
+      for (const ref of raw.evidence) {
+        const digest = ref.digest;
+        const resolved = recordsById.has(digest);
+        evidence.push({ digest, resolved });
+        if (resolved) await resolveRecord(digest);
+      }
+      const missing = evidence.filter((ref) => !ref.resolved).map((ref) => ref.digest);
+      const type = Object.hasOwn(raw, "type") ? typeof raw.type === "string" ? raw.type : JSON.stringify(raw.type) : REQUIREMENT_CLAIM;
+      const presentation = raw.presentation;
+      const body = type === CLOSE_CLAIM ? closeBody(raw) : void 0;
+      let close;
+      if (body !== void 0) {
+        const closeRef = body.close_ref.digest;
+        const asserted = body.close_state;
+        const closeRecord = recordsById.get(closeRef);
+        const supplied = closeRecord !== void 0;
+        const peer = asString(body.peer);
+        const closeHeader = closeRecord === void 0 ? void 0 : await disclosurePayload(closeRecord, disclosures2, "agent_input");
+        const closeBookId = isObject(closeHeader) ? asString(closeHeader.book_id) : void 0;
+        const closeSigner = closeRecord === void 0 ? {} : await signerOf(closeRecord);
+        const { links, ignored } = counterpartyLinks(
+          {
+            ...closeBookId === void 0 ? {} : { bookId: closeBookId },
+            ...closeSigner
+          },
+          peer,
+          inbound.get(closeRef) ?? []
+        );
+        const derived = supplied ? deriveCloseState(links) : void 0;
+        const peerCloseRef = isObject(body.peer_close_ref) ? asString(body.peer_close_ref.digest) : void 0;
+        const period = isObject(body.period) ? {
+          start: asString(body.period.start) ?? "",
+          end: asString(body.period.end) ?? ""
+        } : void 0;
+        const wanted = derived === "AGREED" ? "acknowledges" : derived === "CONTESTED" ? "rebuts" : void 0;
+        close = {
+          closeRef,
+          ...closeBookId === void 0 ? {} : { bookId: closeBookId },
+          ...closeSigner,
+          ...period === void 0 ? {} : { period },
+          asserted,
+          ...derived === void 0 ? {} : { derived },
+          state: derived ?? asserted,
+          derivation: derived === void 0 ? "producer-asserted" : "recomputed",
+          stateMismatch: derived !== void 0 && derived !== asserted,
+          peerRefMismatch: wanted !== void 0 && !links.some(
+            (link) => link.type === wanted && link.recordId === peerCloseRef
+          ),
+          ...peer === void 0 ? {} : { peer },
+          ...peerCloseRef === void 0 ? {} : { peerCloseRef },
+          links,
+          ignored
+        };
+        if (supplied) await resolveRecord(closeRef);
+      }
+      let failedOn;
+      let failure;
+      if (close !== void 0) {
+        const inEvidence = new Set(evidence.map((ref) => ref.digest));
+        const outside = [
+          ["close_ref", close.closeRef],
+          ["peer_close_ref", close.peerCloseRef]
+        ].filter(([, digest]) => digest !== void 0 && !inEvidence.has(digest));
+        if (outside.length > 0) {
+          failedOn = "evidence";
+          failure = outside.map(
+            ([field, digest]) => `${field} ${digest} is not among the claim's evidence[] digests`
+          ).join("; ");
+        } else if (close.stateMismatch) {
+          failedOn = "close_state";
+          const why = close.ignored.length === 0 ? "" : ` (ignored ${close.ignored.map((link) => `${link.type} from ${link.recordId}: ${link.reason}`).join("; ")})`;
+          failure = `close_state mismatch: asserted ${close.asserted}, the cited Close's links read ${close.state}${why}`;
+        } else if (close.peerRefMismatch) {
+          failedOn = "peer_close_ref";
+          failure = `peer_close_ref ${close.peerCloseRef ?? "(absent)"} is not the counterparty record carrying the ${close.state === "AGREED" ? "acknowledges" : "rebuts"} link that makes this Close ${close.state}`;
+        }
+      }
+      claims.push({
+        id: raw.id,
+        type,
+        recognized: type === REQUIREMENT_CLAIM || body !== void 0,
+        contractRef: raw.contract_ref,
+        requirementRef: raw.requirement_ref,
+        tier: raw.tier,
+        grade: raw.grade,
+        sufficiency: raw.sufficiency,
+        verdict: raw.verdict,
+        support: evidence.length > 0 && missing.length === 0 ? "supported" : "unsupported",
+        evidence,
+        missing,
+        proofs: raw.proofs.map((proof) => ({
+          kind: proof.kind,
+          digest: proof.digest
+        })),
+        presentation: {
+          kind: presentation.kind,
+          status: presentation.status,
+          ...typeof presentation.summary === "string" ? { summary: presentation.summary } : {},
+          ...typeof presentation.narrative === "string" ? { narrative: presentation.narrative } : {},
+          ...Array.isArray(presentation.evidence) ? {
+            evidence: presentation.evidence.map(
+              (ref) => ref.digest
+            )
+          } : {}
+        },
+        ...close === void 0 ? {} : { close },
+        failed: failure !== void 0,
+        ...failure === void 0 ? {} : { failure },
+        ...failedOn === void 0 ? {} : { failedOn }
+      });
+    }
+    const aggregate = document2.aggregate;
+    const coverage = aggregate.coverage;
+    const buckets = aggregate.buckets;
+    const counts = recomputeCounts(
+      document2,
+      new Set(claims.filter((claim) => claim.failed).map((claim) => claim.id))
+    );
+    const rootCoordinates = logCoordinates(memberships2, rootRecord.capsule_id);
+    return {
+      capsuleId: rootRecord.capsule_id,
+      member: carried.member,
+      form: carried.form,
+      generatedAt: document2.generated_at,
+      coverage: counts.coverage,
+      statedCoverage: {
+        evaluatedPopulation: coverage.evaluated_population,
+        excludedNotApplicable: coverage.excluded_not_applicable,
+        unknownCount: coverage.unknown_count
+      },
+      bucketCounts: counts.bucketCounts,
+      countMismatches: counts.mismatches,
+      buckets: {
+        met: [...buckets.met],
+        notMet: [...buckets.not_met],
+        notEvaluable: [...buckets.not_evaluable]
+      },
+      claims,
+      records: cited,
+      ...rootCoordinates === void 0 ? {} : { logCoordinates: rootCoordinates },
+      ...recordTimes(rootRecord)
+    };
+  }
+
+  // src/verification-page.ts
+  var UNBOUND = "membership_record_unbound:";
+  var INVALID = /^membership_(?:proof_invalid|coordinates_missing|coordinates_invalid|record_unknown):(.+)$/u;
+  function invalidRecordIds(verified) {
+    return new Set(
+      verified.perRecordMembership.findings.flatMap((finding) => {
+        const match = INVALID.exec(finding);
+        return match === null ? [] : [match[1]];
+      })
+    );
+  }
+  function unboundRecordIds(verified) {
+    const invalid = invalidRecordIds(verified);
+    return verified.perRecordMembership.findings.flatMap((finding) => {
+      if (!finding.startsWith(UNBOUND)) return [];
+      const id = finding.slice(UNBOUND.length);
+      return invalid.has(id) ? [] : [id];
+    });
+  }
+  function nonUnboundFindings(verified) {
+    const names = [];
+    for (const finding of verified.perRecordMembership.findings) {
+      if (finding.startsWith(UNBOUND)) continue;
+      const name = finding.split(":", 1)[0];
+      if (!names.includes(name)) names.push(name);
+    }
+    return names;
+  }
+  function coverageStatement(verified) {
+    const claim = verified.perRecordMembership;
+    if (claim.status === "withheld")
+      return { status: "withheld", reason: claim.findings.join(", ") };
+    if (claim.status === "pass") return { status: "established" };
+    const reasons = nonUnboundFindings(verified);
+    return reasons.length === 0 ? { status: "established" } : { status: "not_established", reason: reasons.join(", ") };
+  }
+  function recordCoverage(bundle, verified, coverage) {
+    const unbound = new Set(unboundRecordIds(verified));
+    const invalid = invalidRecordIds(verified);
+    return (Array.isArray(bundle.records) ? bundle.records : []).flatMap(
+      (record) => {
+        const capsuleId = object5(record)?.capsule_id;
+        if (typeof capsuleId !== "string") return [];
+        return [
+          {
+            capsuleId,
+            status: invalid.has(capsuleId) ? "membership_invalid" : unbound.has(capsuleId) ? "uncheckpointed" : coverage.status === "established" ? "checkpointed" : "unverified"
+          }
+        ];
+      }
+    );
+  }
+  var VERIFY_INDEPENDENTLY_LINE = "verify independently at verify.agentactioncapsule.org or with the CLI";
+  var FIVE_WORD_RESULT = Object.freeze({
+    pass: "passed with no errors found",
+    withheld: "still withheld pending producer disclosure",
+    fail: "failed at least one check",
+    not_checked: "not checked no evidence supplied"
+  });
+  function object5(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  }
+  function capsuleGroupStatus(capsuleResults, checks) {
+    const results = Object.values(capsuleResults);
+    if (results.length === 0) return "not_checked";
+    const failed = results.some(
+      (result) => result.findings.some(
+        (finding) => finding.severity === "error" && finding.check !== void 0 && checks.includes(finding.check)
+      )
+    );
+    return failed ? "fail" : "pass";
+  }
+  function receiptGradeWord(value) {
+    return value === "mmr-verified" ? "consistency-verified" : value === "countersigned-observed" ? "existence-and-time" : void 0;
+  }
+  function receipts(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((entry) => {
+      const record = object5(entry);
+      if (record === void 0) return [];
+      const witness = record.witness, time = record.time, grade = receiptGradeWord(record.grade);
+      return typeof witness === "string" && typeof time === "string" && grade !== void 0 ? [{ witness, grade, time }] : [];
+    });
+  }
+  function completenessStatement(raw) {
+    const record = object5(raw);
+    if (record === void 0) return void 0;
+    return {
+      ...typeof record.closure_depth === "number" ? { closureDepth: record.closure_depth } : {},
+      ...typeof record.records_mode === "string" ? { recordsMode: record.records_mode } : {},
+      ...typeof record.payloads_mode === "string" ? { payloadsMode: record.payloads_mode } : {},
+      suppressedFields: Array.isArray(record.suppressed_fields) ? record.suppressed_fields.filter(
+        (field) => typeof field === "string"
+      ) : []
+    };
+  }
+  function summarize(name, status2) {
+    return { name, status: status2, result: FIVE_WORD_RESULT[status2] };
+  }
+  function buildVerificationPageModel(bundle, verified) {
+    const top = object5(bundle) ?? {};
+    const checkpoint = object5(top.checkpoint);
+    const checks = [
+      summarize(
+        "Required fields",
+        capsuleGroupStatus(verified.capsuleResults, [1])
+      ),
+      summarize(
+        "Capsule identity",
+        capsuleGroupStatus(verified.capsuleResults, [2])
+      ),
+      summarize(
+        "Effect consistency",
+        capsuleGroupStatus(verified.capsuleResults, [3, 5])
+      ),
+      summarize(
+        "Verdict conflict",
+        capsuleGroupStatus(verified.capsuleResults, [4])
+      ),
+      summarize("Chain parent", capsuleGroupStatus(verified.capsuleResults, [6])),
+      summarize(
+        "Assurance claims",
+        capsuleGroupStatus(verified.capsuleResults, [7, 8])
+      ),
+      summarize(
+        "Bundle digest",
+        verified.bundleDigest === void 0 ? "fail" : "pass"
+      ),
+      summarize("Graph closure", verified.graphClosure.status),
+      summarize("Interval coverage", verified.intervalCoverage.status),
+      summarize("Per-record membership", verified.perRecordMembership.status)
+    ];
+    const coverage = coverageStatement(verified);
+    return {
+      ...verified.bundleDigest === void 0 ? {} : { bundleDigest: verified.bundleDigest },
+      ...typeof checkpoint?.root === "string" ? { checkpointRoot: checkpoint.root } : {},
+      ...typeof checkpoint?.mmr_size === "number" ? { checkpointSize: checkpoint.mmr_size } : {},
+      receipts: receipts(top.receipts),
+      selfWitnessed: checkpoint !== void 0 && receipts(top.receipts).length === 0,
+      records: recordCoverage(top, verified, coverage),
+      uncheckpointedCount: unboundRecordIds(verified).length,
+      coverage,
+      ...completenessStatement(top.completeness) === void 0 ? {} : { completeness: completenessStatement(top.completeness) },
+      checks,
+      verifyIndependentlyLine: VERIFY_INDEPENDENTLY_LINE
+    };
+  }
+
   // src/report-rows.ts
   var rowCitationDigests = (row) => Array.isArray(row.references) ? row.references.flatMap(
     (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" ? asString(reference.digest) === void 0 ? [] : [asString(reference.digest)] : []
@@ -4877,37 +5599,61 @@ var EvidenceGraph = (() => {
     }
     root.append(header);
   }
-  function producerPublicKeyHex(bundle) {
+  function producerPublicKeys(bundle) {
     const extensions2 = object6(object6(bundle).extensions);
     const block = object6(extensions2["producer-key/v1"]);
     const publicKey = block.public_key;
-    return typeof publicKey === "string" && /^[0-9a-f]{64}$/u.test(publicKey) ? publicKey : void 0;
+    return typeof publicKey === "string" && /^[0-9a-f]{64}$/u.test(publicKey) ? [publicKey] : [];
   }
   function stampText(stamp) {
     switch (stamp.kind) {
       case "hollow":
         return "Countersigned: none";
-      case "producer":
-        return "countersigned by the producer \u2014 not independent";
-      case "directory":
-        return `Countersigned by ${stamp.name} \xB7 ${stamp.checksRecomputed} of 10 checks recomputed${stamp.date === void 0 ? "" : ` \xB7 ${stamp.date}`}`;
-      case "unresolved":
-        return "countersigned by an unlisted signer, not in the countersigner directory";
+      case "unverified":
+        return `a ${stamp.type} countersignature is present; this viewer does not verify that type`;
       case "invalid":
         return "a countersignature is present but failed to verify";
+      case "not-independent":
+        return `countersigned by the producer \u2014 not independent \xB7 recomputed ${stamp.statement.recomputedAt}`;
+      case "unresolved-signer":
+        return `countersigned by an unlisted signer, not in any countersigner list consulted \xB7 recomputed ${stamp.statement.recomputedAt}`;
+      case "resolved":
+        return `Countersigned by ${stamp.name} \xB7 recomputed ${stamp.statement.recomputedAt}`;
+    }
+  }
+  function renderSignerStatement(item, signer, statement) {
+    const label = element("p", `${signer}'s statement of what it recomputed:`);
+    item.append(label);
+    const checks = element("ul");
+    checks.dataset.countersignStatement = "checks";
+    statement.checks.forEach((check) => {
+      const row = element("li", `${check.name}: ${check.result}`);
+      row.dataset.checkResult = check.result;
+      checks.append(row);
+    });
+    item.append(checks);
+    if (statement.receipt === "unverified") {
+      const receipt = element(
+        "p",
+        "receipt present, not verified by this viewer"
+      );
+      receipt.dataset.countersignReceipt = "unverified";
+      item.append(receipt);
     }
   }
   function renderStamps(host, stamps) {
     host.append(element("h4", "Countersignatures"));
     const list = element("ul");
     stamps.forEach((stamp) => {
-      const item = element("li", stampText(stamp));
+      const item = element("li");
       item.dataset.stampKind = stamp.kind;
-      if (stamp.kind === "directory") {
-        const logo = document.createElement("img");
-        logo.src = stamp.logoDataUrl;
-        logo.alt = `${stamp.name} logo`;
-        item.append(logo);
+      item.append(element("span", stampText(stamp)));
+      if (stamp.kind === "resolved") {
+        renderSignerStatement(item, stamp.name, stamp.statement);
+      } else if (stamp.kind === "not-independent") {
+        renderSignerStatement(item, "The producer", stamp.statement);
+      } else if (stamp.kind === "unresolved-signer") {
+        renderSignerStatement(item, "The unlisted signer", stamp.statement);
       }
       list.append(item);
     });
@@ -4996,7 +5742,7 @@ var EvidenceGraph = (() => {
     });
     host.append(list);
   }
-  async function renderVerificationPage(root, bundle, verified, countersignerDirectory) {
+  async function renderVerificationPage(root, bundle, verified, countersigners) {
     const page = element("section");
     page.dataset.page = "verification";
     page.append(element("h2", "Verification"));
@@ -5025,8 +5771,8 @@ var EvidenceGraph = (() => {
     const stamps = await classifyCountersignatures(
       Array.isArray(countersignatures) ? countersignatures : [],
       verified.bundleDigest,
-      producerPublicKeyHex(bundle),
-      countersignerDirectory
+      producerPublicKeys(bundle),
+      countersigners
     );
     renderStamps(page, stamps);
     renderCompletenessStatement(page, model.completeness);
@@ -5263,6 +6009,394 @@ var EvidenceGraph = (() => {
     );
     root.append(section);
   }
+  function renderCitedMember(host, field, resolution, committed) {
+    if (resolution.state !== "disclosed" && committed === void 0) return;
+    host.append(element("h5", field));
+    if (resolution.state === "disclosed") {
+      host.append(element("pre", display(resolution.payload)));
+      return;
+    }
+    const note = element(
+      "p",
+      resolution.state === "disclosure_mismatch" ? `withheld \xB7 ${committed}: the disclosed value does not match the committed digest` : `withheld \xB7 ${committed}`
+    );
+    note.dataset.disclosure = resolution.state;
+    host.append(note);
+  }
+  function renderCitedRecord(record, records, host) {
+    const section = element("section");
+    section.dataset.citedRecord = record.capsuleId;
+    section.append(
+      renderProvenance(record.capsuleId, record.logCoordinates, record)
+    );
+    renderCitedMember(
+      section,
+      "agent_input",
+      record.agentInput,
+      record.agentInputDigest
+    );
+    renderCitedMember(
+      section,
+      "agent_output",
+      record.agentOutput,
+      record.agentOutputDigest
+    );
+    if (record.cites.length > 0) {
+      section.append(element("h5", "Cites"));
+      renderCitationList(record.cites, records, section);
+    }
+    host.append(section);
+  }
+  function renderCitationList(ids, records, host) {
+    const list = element("ul");
+    const detail = element("section");
+    for (const id of ids) {
+      const item = element("li");
+      const target = records.get(id);
+      if (target === void 0) {
+        item.textContent = `${id} \xB7 not in this bundle`;
+        item.dataset.citation = "missing";
+      } else {
+        const button = element("button", id);
+        button.setAttribute("type", "button");
+        button.dataset.citedId = id;
+        button.addEventListener("click", () => {
+          detail.replaceChildren();
+          renderCitedRecord(target, records, detail);
+        });
+        item.append(button);
+      }
+      list.append(item);
+    }
+    host.append(list, detail);
+    return list;
+  }
+  var CLAIM_TYPE_LABEL = (claim) => claim.recognized ? claim.type : `unrecognized (${claim.type})`;
+  function countMismatchMarker(result, field) {
+    const mismatch = result.countMismatches.find(
+      (entry) => entry.field === field
+    );
+    if (mismatch === void 0) return void 0;
+    const marker = element("span", "count mismatch");
+    marker.dataset.countMismatch = field;
+    marker.dataset.stated = String(mismatch.stated);
+    marker.dataset.recomputed = String(mismatch.recomputed);
+    return marker;
+  }
+  function appendCloseState(parent2, close, tag) {
+    const cell = element(tag, close.state);
+    cell.dataset.closeState = close.state;
+    cell.dataset.closeDerivation = close.derivation;
+    cell.dataset.assertedState = close.asserted;
+    if (close.stateMismatch) {
+      const marker = element("span", "state mismatch");
+      marker.dataset.stateMismatch = "close_state";
+      marker.dataset.asserted = close.asserted;
+      marker.dataset.recomputed = close.state;
+      cell.append(" ", marker);
+    } else if (close.derivation === "producer-asserted") {
+      const marker = element("span", "producer-asserted");
+      marker.dataset.producerAsserted = "close_state";
+      cell.append(" ", marker);
+    }
+    if (close.peerRefMismatch) {
+      const marker = element("span", "peer_close_ref carries no such link");
+      marker.dataset.peerRefMismatch = "peer_close_ref";
+      cell.append(" ", marker);
+    }
+    parent2.append(cell);
+    return cell;
+  }
+  function renderClose(close, result, host) {
+    host.append(element("h4", "Close"));
+    const details = element("dl");
+    if (close.period !== void 0)
+      appendValue(
+        details,
+        "period",
+        `${close.period.start} \u2192 ${close.period.end}`
+      );
+    details.append(element("dt", "state"));
+    appendCloseState(details, close, "dd");
+    details.append(element("dt", "derivation"));
+    const derivation = element(
+      "dd",
+      close.derivation === "recomputed" ? `recomputed from ${close.links.length} counterparty ${close.links.length === 1 ? "link" : "links"} to the cited Close in this bundle${close.ignored.length === 0 ? "" : ` (${close.ignored.length} other ${close.ignored.length === 1 ? "link" : "links"} ignored)`}` : "producer-asserted: the cited Close is not a record in this bundle, so its links could not be read"
+    );
+    derivation.dataset.closeDerivationNote = close.derivation;
+    details.append(derivation);
+    if (close.peer !== void 0) appendValue(details, "peer", close.peer);
+    if (close.bookId !== void 0) appendValue(details, "book", close.bookId);
+    if (close.keyId !== void 0) {
+      details.append(element("dt", "signer"));
+      const signer = element(
+        "dd",
+        close.keyVerified === true ? `${close.keyId} (verified)` : `${close.keyId} \xB7 ${UNVERIFIED_KEY_LABEL}`
+      );
+      signer.dataset.keyVerified = String(close.keyVerified === true);
+      details.append(signer);
+    }
+    host.append(details);
+    host.append(element("h5", "Cited Close"));
+    renderCitationList([close.closeRef], result.records, host);
+    if (close.peerCloseRef !== void 0) {
+      host.append(element("h5", "Peer record"));
+      renderCitationList([close.peerCloseRef], result.records, host);
+    }
+    if (close.links.length > 0) {
+      host.append(element("h5", "Links to the cited Close"));
+      const list = element("ul");
+      for (const link of close.links) {
+        const item = element(
+          "li",
+          `${link.type} \xB7 ${link.recordId} \xB7 signer ${link.keyId} (verified)`
+        );
+        item.dataset.closeLink = link.type;
+        item.dataset.linkRecord = link.recordId;
+        list.append(item);
+      }
+      host.append(list);
+    }
+    if (close.ignored.length > 0) {
+      host.append(element("h5", "Links ignored (not from the counterparty)"));
+      const list = element("ul");
+      for (const link of close.ignored) {
+        const item = element(
+          "li",
+          `${link.type} \xB7 ${link.recordId} \xB7 ${link.reason}`
+        );
+        item.dataset.ignoredLink = link.type;
+        item.dataset.linkRecord = link.recordId;
+        list.append(item);
+      }
+      host.append(list);
+    }
+  }
+  function appendVerdict(parent2, claim) {
+    const shown = claim.failed ? "failed" : claim.support === "supported" ? claim.verdict : "unsupported";
+    const cell = element(parent2.tagName === "TR" ? "td" : "dd", shown);
+    cell.dataset.verdict = shown;
+    cell.dataset.support = claim.support;
+    if (claim.failed) {
+      cell.dataset.statedVerdict = claim.verdict;
+      cell.className = "claim-failed";
+    } else if (claim.support === "unsupported")
+      cell.className = "claim-unsupported";
+    parent2.append(cell);
+    return cell;
+  }
+  function appendSufficiency(parent2, claim) {
+    const shown = claim.failed ? "failed" : claim.sufficiency;
+    const cell = element(parent2.tagName === "TR" ? "td" : "dd", shown);
+    cell.dataset.sufficiency = shown;
+    if (claim.failed) {
+      cell.dataset.statedSufficiency = claim.sufficiency;
+      cell.className = "claim-failed";
+    }
+    parent2.append(cell);
+    return cell;
+  }
+  function renderClaim(claim, result, host) {
+    host.replaceChildren();
+    host.append(element("h3", `Claim ${claim.id}`));
+    const details = element("dl");
+    appendValue(details, "contract", claim.contractRef);
+    appendValue(details, "requirement", claim.requirementRef);
+    details.append(element("dt", "type"));
+    const type = element("dd", CLAIM_TYPE_LABEL(claim));
+    type.dataset.claimType = claim.recognized ? claim.type : "unrecognized";
+    if (!claim.recognized) type.className = "claim-unrecognized";
+    details.append(type);
+    appendValue(details, "tier", claim.tier);
+    appendValue(details, "grade", claim.grade);
+    details.append(element("dt", "sufficiency"));
+    appendSufficiency(details, claim);
+    details.append(element("dt", "verdict"));
+    appendVerdict(details, claim);
+    host.append(details);
+    if (claim.failed) {
+      const note = element(
+        "p",
+        `failed: ${claim.failure ?? "verification failed"}; sufficiency and verdict withheld`
+      );
+      note.dataset.claimFailed = claim.failedOn ?? "close_state";
+      host.append(note);
+    }
+    if (claim.close !== void 0) renderClose(claim.close, result, host);
+    if (claim.support === "unsupported") {
+      const note = element(
+        "p",
+        claim.missing.length === 0 ? "unsupported: this claim cites no evidence" : `unsupported: cited evidence not in this bundle: ${claim.missing.join(", ")}`
+      );
+      note.dataset.claimMissing = String(claim.missing.length);
+      host.append(note);
+    }
+    host.append(element("h4", "Presentation"));
+    const carrier = element("dl");
+    appendValue(carrier, "carrier", claim.presentation.kind);
+    appendValue(carrier, "status", claim.presentation.status);
+    if (claim.presentation.summary !== void 0)
+      appendValue(carrier, "summary", claim.presentation.summary);
+    if (claim.presentation.narrative !== void 0)
+      appendValue(carrier, "narrative", claim.presentation.narrative);
+    host.append(carrier);
+    if (claim.presentation.evidence !== void 0) {
+      host.append(element("h5", "Carrier evidence"));
+      const list = renderCitationList(
+        claim.presentation.evidence,
+        result.records,
+        host
+      );
+      list.dataset.carrierEvidence = String(claim.presentation.evidence.length);
+    }
+    host.append(element("h4", "Proofs"));
+    if (claim.proofs.length === 0) {
+      host.append(element("p", "no proof cited"));
+    } else {
+      const proofs = element("ul");
+      for (const proof of claim.proofs)
+        proofs.append(
+          element("li", `${proof.kind} \xB7 ${proof.digest} \xB7 not resolved here`)
+        );
+      host.append(proofs);
+    }
+    host.append(element("h4", "Evidence"));
+    for (const ref of claim.evidence) {
+      const record = result.records.get(ref.digest);
+      if (record === void 0) {
+        const missing = element("p", `${ref.digest} \xB7 not in this bundle`);
+        missing.dataset.evidence = "missing";
+        host.append(missing);
+      } else {
+        renderCitedRecord(record, result.records, host);
+      }
+    }
+  }
+  var BUCKETS = [
+    ["met", "met"],
+    ["notMet", "not met"],
+    ["notEvaluable", "not evaluable"]
+  ];
+  function renderResultPage(result, root) {
+    const section = element("section");
+    section.dataset.page = "result";
+    section.append(element("h1", "Evidence result"));
+    const coverage = element("p");
+    coverage.append(
+      `coverage: ${result.coverage.evaluatedPopulation} requirements evaluated`
+    );
+    const evaluatedMarker = countMismatchMarker(result, "evaluated_population");
+    if (evaluatedMarker !== void 0) coverage.append(" ", evaluatedMarker);
+    coverage.append(
+      ` \xB7 ${result.coverage.excludedNotApplicable} excluded as not applicable \xB7 ${result.coverage.unknownCount} unresolved`
+    );
+    const unknownMarker = countMismatchMarker(result, "unknown_count");
+    if (unknownMarker !== void 0) coverage.append(" ", unknownMarker);
+    coverage.dataset.coverage = "result";
+    coverage.dataset.evaluated = String(result.coverage.evaluatedPopulation);
+    coverage.dataset.excluded = String(result.coverage.excludedNotApplicable);
+    coverage.dataset.excludedBasis = "stated";
+    coverage.dataset.unknown = String(result.coverage.unknownCount);
+    section.append(coverage);
+    const byId = new Map(result.claims.map((claim) => [claim.id, claim]));
+    const buckets = element("section");
+    buckets.dataset.buckets = "verdict";
+    buckets.append(element("h2", "Claims by verdict"));
+    for (const [key, label] of BUCKETS) {
+      const count = result.bucketCounts[key];
+      const heading = element("h3", `${label}: ${count === 0 ? "none" : count}`);
+      heading.dataset.bucketCount = String(count);
+      heading.dataset.bucketOf = key;
+      const marker = countMismatchMarker(
+        result,
+        `buckets.${key === "notMet" ? "not_met" : key === "notEvaluable" ? "not_evaluable" : "met"}`
+      );
+      if (marker !== void 0) heading.append(" ", marker);
+      buckets.append(heading);
+      const ids = result.buckets[key];
+      if (ids.length === 0) {
+        buckets.append(element("p", "none"));
+        continue;
+      }
+      const list = element("ul");
+      list.dataset.bucket = key;
+      for (const id of ids) {
+        const claim = byId.get(id);
+        const item = element(
+          "li",
+          claim?.failed ? `${id} \xB7 failed` : claim?.support === "unsupported" ? `${id} \xB7 unsupported` : id
+        );
+        item.dataset.claimRef = id;
+        if (claim?.failed) item.className = "claim-failed";
+        else if (claim?.support === "unsupported")
+          item.className = "claim-unsupported";
+        list.append(item);
+      }
+      buckets.append(list);
+    }
+    const failedHeading = element(
+      "h3",
+      `failed: ${result.bucketCounts.failed === 0 ? "none" : result.bucketCounts.failed}`
+    );
+    failedHeading.dataset.bucketCount = String(result.bucketCounts.failed);
+    failedHeading.dataset.bucketOf = "failed";
+    buckets.append(failedHeading);
+    const failedIds = result.claims.filter((claim) => claim.failed).map((claim) => claim.id);
+    if (failedIds.length === 0) buckets.append(element("p", "none"));
+    else {
+      const list = element("ul");
+      list.dataset.bucket = "failed";
+      for (const id of failedIds) {
+        const item = element("li", id);
+        item.dataset.claimRef = id;
+        item.className = "claim-failed";
+        list.append(item);
+      }
+      buckets.append(list);
+    }
+    section.append(buckets);
+    const table = document.createElement("table");
+    table.dataset.claims = "rows";
+    const detail = element("section");
+    for (const claim of result.claims) {
+      const tr = document.createElement("tr");
+      tr.dataset.claimRow = claim.id;
+      tr.dataset.support = claim.support;
+      if (claim.support === "unsupported") tr.className = "claim-unsupported";
+      if (claim.failed) {
+        tr.classList.add("claim-failed");
+        tr.dataset.failed = claim.failedOn ?? "close_state";
+      }
+      const idCell = document.createElement("td");
+      const button = element("button", claim.id);
+      button.setAttribute("type", "button");
+      button.dataset.claimId = claim.id;
+      button.addEventListener("click", () => renderClaim(claim, result, detail));
+      idCell.append(button);
+      tr.append(idCell, element("td", claim.requirementRef));
+      appendSufficiency(tr, claim);
+      appendVerdict(tr, claim);
+      const tier = element("td", claim.tier);
+      tier.dataset.tier = claim.tier;
+      const grade = element("td", claim.grade);
+      grade.dataset.grade = claim.grade;
+      const type = element("td", CLAIM_TYPE_LABEL(claim));
+      type.dataset.claimType = claim.recognized ? claim.type : "unrecognized";
+      if (!claim.recognized) type.className = "claim-unrecognized";
+      if (claim.close !== void 0) {
+        type.append(" \xB7 ");
+        appendCloseState(type, claim.close, "span");
+      }
+      tr.append(tier, grade, type);
+      table.append(tr);
+    }
+    section.append(
+      table,
+      detail,
+      renderProvenance(result.capsuleId, result.logCoordinates, result)
+    );
+    root.append(section);
+  }
   function renderGraph(graph2, root, records) {
     const aggregate = element("section");
     aggregate.append(element("h1", "Evidence graph"));
@@ -5287,11 +6421,12 @@ var EvidenceGraph = (() => {
     });
     root.append(calendar, detail);
   }
-  async function renderEvidenceGraph(bundle, root, countersignerDirectory = []) {
+  async function renderEvidenceGraph(bundle, root, countersigners) {
     const verification = await verifyBundle(bundle);
     const verified = bundleVerified(verification);
     const reportRows = verified ? await buildReportRows(bundle) : void 0;
-    const graph2 = verified && reportRows === void 0 ? await buildEvidenceGraph(bundle) : void 0;
+    const result = verified && reportRows === void 0 && await isResultRoot(bundle) ? await buildResultRoot(bundle) : void 0;
+    const graph2 = verified && reportRows === void 0 && result === void 0 ? await buildEvidenceGraph(bundle) : void 0;
     const records = object6(bundle).records;
     root.replaceChildren();
     renderPresentationHeader(root, bundle);
@@ -5301,15 +6436,12 @@ var EvidenceGraph = (() => {
     });
     if (reportRows !== void 0) {
       renderReportRowsTable(reportRows, root);
+    } else if (result !== void 0) {
+      renderResultPage(result, root);
     } else if (graph2 !== void 0) {
       renderGraph(graph2, root, Array.isArray(records) ? records : []);
     }
-    await renderVerificationPage(
-      root,
-      bundle,
-      verification,
-      countersignerDirectory
-    );
+    await renderVerificationPage(root, bundle, verification, countersigners);
   }
   return __toCommonJS(browser_exports2);
 })();

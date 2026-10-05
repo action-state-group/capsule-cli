@@ -594,6 +594,7 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(mapCommand())
 	root.AddCommand(doctorCommand())
 	root.AddCommand(resultCommands())
+	root.AddCommand(reportCommands())
 	addPluginCommands(root)
 	root.SetHelpCommand(&cobra.Command{Use: "help [command]", Short: "Help about any command", RunE: func(c *cobra.Command, args []string) error {
 		target, _, e := root.Find(args)
