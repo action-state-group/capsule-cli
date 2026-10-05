@@ -102,7 +102,7 @@ var classifyAllowed = map[string]string{
 }
 
 // shownTypes are the error values SafeError prints in their own words.
-var shownTypes = map[string]bool{"inputFileError": true, "schemaLoadError": true, "pluginRequiredError": true, "artifact.ErrUntrustedSigner": true}
+var shownTypes = map[string]bool{"inputFileError": true, "schemaLoadError": true, "artifact.ErrUntrustedSigner": true}
 
 // TestNoGenericInputErrors holds every ErrInput path in the package to a
 // shown reason. It parses the package's own source: ErrInput may appear only

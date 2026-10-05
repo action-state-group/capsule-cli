@@ -216,7 +216,6 @@ func output(c *cobra.Command, value any) error {
 func SafeError(err error) string {
 	var fileErr *inputFileError
 	var schemaErr *schemaLoadError
-	var pluginErr *pluginRequiredError
 	var hintErr *hintError
 	switch {
 	case errors.As(err, &hintErr):
@@ -230,11 +229,6 @@ func SafeError(err error) string {
 	case errors.As(err, &schemaErr):
 		// --schema is likewise caller-typed, not a profile secret.
 		return schemaErr.Error()
-	case errors.As(err, &pluginErr):
-		// A fixed, static message naming no path, secret, or profile detail:
-		// a command refusing for lack of what it needs must reach the operator
-		// verbatim, not collapse to the generic ErrInput text.
-		return pluginErr.Error()
 	case errors.Is(err, artifact.ErrUntrustedSigner):
 		return "producer is not authorized by the profile trusted_keys"
 	case errors.Is(err, ErrInput):
@@ -600,7 +594,6 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(mapCommand())
 	root.AddCommand(doctorCommand())
 	root.AddCommand(resultCommands())
-	root.AddCommand(runCommand())
 	addPluginCommands(root)
 	root.SetHelpCommand(&cobra.Command{Use: "help [command]", Short: "Help about any command", RunE: func(c *cobra.Command, args []string) error {
 		target, _, e := root.Find(args)

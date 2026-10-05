@@ -53,9 +53,9 @@ discovery model is the reference):
   trusted by definition -- but everything from the root down to the launcher
   is.
 
-A launcher that fails any of these checks is silently skipped during
-discovery (it never appears in `capsulectl plugin ls` and is never wired up
-as a command). This is re-checked again at dispatch time, immediately before
+A launcher that fails any of these checks is skipped during discovery: it is
+never wired up as a command, and `capsulectl plugin ls` lists it under
+`refused` with the reason. This is re-checked again at dispatch time, immediately before
 exec, so a launcher swapped out between discovery and invocation is still
 caught.
 
@@ -85,7 +85,10 @@ and expects exactly one line of JSON on stdout:
 A launcher that does not exit zero, does not answer within the timeout,
 does not print valid JSON, prints a `plugin_api` other than
 `cli-plugin/v1`, or prints a `name` that does not match its own filename is
-refused: it is not wired up, and discovery moves on to the next candidate.
+refused: it is not wired up, `capsulectl plugin ls` lists it under `refused`
+with the reason, and discovery moves on to the next candidate. Discovery
+deduplicates on the filename, so a refused launcher never shadows a valid one
+of the same name on a later root.
 There is no partial credit and no "wired up but broken" state.
 
 ## Dispatch

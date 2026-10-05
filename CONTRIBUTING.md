@@ -9,7 +9,6 @@ without it; see "Tests" and "Continuous integration" in the README.
 
 ```bash
 make test                                    # MySQL; race detector, then every case without it
-bash scripts/test.sh -tags=actionstate       # the same for the plugin-dispatch build
 CAPSULE_TEST_RACE_FULL=1 make test           # every case under the race detector
 ```
 

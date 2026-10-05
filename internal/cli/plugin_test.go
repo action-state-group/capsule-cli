@@ -157,3 +157,58 @@ func TestPluginDispatchAndLs(t *testing.T) {
 	require.NoError(t, c.ExecuteContext(t.Context()))
 	assert.Contains(t, buf.String(), "guard ran: decide --flag")
 }
+
+func TestDiscoveryRequiresTheMetadataNameToMatchTheFilename(t *testing.T) {
+	root := pluginRoot(t)
+	writeLauncher(t, root, "capsulectl-guard", fakePlugin, 0o755)
+	// capsulectl-alias answers as "guard": dispatch would use the metadata name
+	// while discovery deduplicates on the filename, so it is refused.
+	alias := writeLauncher(t, root, "capsulectl-alias", fakePlugin, 0o755)
+
+	plugins, refused := discoverPluginsAndRefusals()
+	require.Len(t, plugins, 1)
+	assert.Equal(t, "guard", plugins[0].Name)
+	assert.Equal(t, filepath.Join(root, "capsulectl-guard"), plugins[0].path)
+	require.Len(t, refused, 1)
+	assert.Equal(t, alias, refused[0].Path)
+	assert.Equal(t, `alias: metadata names the command "guard", but the launcher's filename names "alias"; they must match`, refused[0].Reason)
+
+	// `plugin ls` says why the launcher is missing.
+	out, err := invoke(t, "", "plugin", "ls")
+	require.NoError(t, err, out)
+	var ls struct {
+		Plugins []map[string]any `json:"plugins"`
+		Refused []refusedPlugin  `json:"refused"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &ls), out)
+	require.Len(t, ls.Plugins, 1)
+	assert.Equal(t, refused, ls.Refused)
+
+	// and it is never wired up as a command
+	_, err = invoke(t, "", "alias")
+	require.Error(t, err)
+}
+
+func TestDiscoveryDedupesOnTheFilename(t *testing.T) {
+	first, second := t.TempDir(), t.TempDir()
+	require.NoError(t, os.Chmod(first, 0o755))
+	require.NoError(t, os.Chmod(second, 0o755))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", first+string(os.PathListSeparator)+second)
+
+	// The same filename on two roots: the earlier root wins.
+	writeLauncher(t, first, "capsulectl-guard", fakePlugin, 0o755)
+	writeLauncher(t, second, "capsulectl-guard", strings.Replace(fakePlugin, "ACME Compliance", "Second Root", 1), 0o755)
+	// A refused launcher does not shadow a valid one of the same filename later.
+	writeLauncher(t, first, "capsulectl-tool", fakePlugin, 0o755) // says "guard"
+	writeLauncher(t, second, "capsulectl-tool", strings.Replace(fakePlugin, `"name":"guard"`, `"name":"tool"`, 1), 0o755)
+
+	plugins, refused := discoverPluginsAndRefusals()
+	require.Len(t, plugins, 2)
+	assert.Equal(t, "guard", plugins[0].Name)
+	assert.Equal(t, "ACME Compliance", plugins[0].Vendor)
+	assert.Equal(t, filepath.Join(first, "capsulectl-guard"), plugins[0].path)
+	assert.Equal(t, "tool", plugins[1].Name)
+	assert.Equal(t, filepath.Join(second, "capsulectl-tool"), plugins[1].path)
+	require.Len(t, refused, 1)
+	assert.Equal(t, filepath.Join(first, "capsulectl-tool"), refused[0].Path)
+}
