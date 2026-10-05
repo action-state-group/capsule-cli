@@ -46,13 +46,18 @@ import (
 func dealPageGate(page []byte, events []sealedEvent, allowed ...string) error {
 	data := bytes.Replace(page, evidenceGraphIIFE, nil, 1)
 	data = bytes.Replace(data, []byte(dealViewJS), nil, 1)
+	// Fold first, as the scan does, so the allowed values are taken out of the
+	// same text the scan reads: a zero-width space, a soft hyphen or a
+	// fullwidth or Arabic-Indic digit after an allowed id is then a digit or
+	// nothing, not a boundary, and the id stays glued to what follows it.
+	data = []byte(foldText(string(data)))
 	for _, a := range allowed {
 		if strings.TrimSpace(a) == "" {
 			continue
 		}
-		forms := []string{a}
+		forms := []string{foldText(a)}
 		if quoted, err := json.Marshal(a); err == nil {
-			forms = append(forms, string(quoted[1:len(quoted)-1]))
+			forms = append(forms, foldText(string(quoted[1:len(quoted)-1])))
 		}
 		for _, f := range forms {
 			data = removeWholeToken(data, []byte(f))

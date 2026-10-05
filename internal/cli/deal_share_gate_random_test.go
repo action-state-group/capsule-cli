@@ -144,6 +144,16 @@ func TestDealShareGateTakesTheDealsOwnIDOutOnlyAsAWholeToken(t *testing.T) {
 	assert.ErrorContains(t, gate("deal-b16473025966", "deal-b164730259664111111111111111"), "card number", "a card glued to the id")
 	assert.ErrorContains(t, gate("deal-b16473025966", "deal-b16473025966-4111111111111111"), "card number", "a card after the id and a dash")
 	assert.ErrorContains(t, gate("deal-b164730259661136", "deal-b164730259661136 4111 1111 1111 1111"), "card number", "a card right after the id")
+	// The same overlap with the continuation in characters the scan folds: a
+	// zero-width space, a soft hyphen, fullwidth digits, Arabic-Indic digits.
+	for name, rest := range map[string]string{
+		"a zero-width space":  "\u200b411111111112",
+		"a soft hyphen":       "\u00ad411111111112",
+		"fullwidth digits":    "\uff14\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff12",
+		"Arabic-Indic digits": "\u0664\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0662",
+	} {
+		assert.ErrorContains(t, gate("deal-b164730259661136", "see deal-b164730259661136"+rest), "card number", "a card that continues the id after "+name)
+	}
 	// The bare id alone is allowed, in text and as the log id.
 	assert.NoError(t, gate("deal-b164730259661136", "deal deal-b164730259661136, log deal/deal-b164730259661136."))
 	// A card elsewhere on the page is refused.
