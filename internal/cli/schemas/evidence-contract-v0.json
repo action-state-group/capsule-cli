@@ -7,7 +7,7 @@
   "$defs": {
     "epistemicType": {
       "type": "string",
-      "description": "The closed set of epistemic types a piece of evidence can carry. Owned by EvidenceBook's record header (its `epistemic_type` field), mirrored here -- see schemas/vendor/epistemic-types.json for the vendored source and tests/test_evidence_contract_schema.py for the cross-repo parity test against capsule_engine.packs.schema.EPISTEMIC_TYPE_VALUES.",
+      "description": "The closed set of epistemic types a piece of evidence can carry. Owned by the published Internet-Draft draft-mih-agent-evidence-layer-00, section 4.1 'Epistemic Type' (the record header's `epistemic_type` field; interim registry: agent-action-capsule spec/REGISTRY.md section 17), mirrored here -- see schemas/vendor/epistemic-types.json for the vendored source and tests/test_evidence_contract_schema.py for the cross-repo parity test against capsule_engine.packs.schema.EPISTEMIC_TYPE_VALUES.",
       "enum": [
         "observed_event",
         "system_of_record_fact",
