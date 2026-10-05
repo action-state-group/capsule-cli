@@ -213,10 +213,9 @@ func TestDealDiscloseCarriesTheShareableOrderID(t *testing.T) {
 	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--email", filepath.Join(merchantFixture, "confirmation.eml"))
 
 	b, raw := sharedCopy(t, dealID, "counterparty", "the shop")
-	content := strings.ToLower(raw)
 	assert.Contains(t, raw, "SE-104233", "the counterparty's copy carries the merchant-confirmed order id")
 	for _, v := range []string{"Sam Customer", "sam.customer@mail.example", "orders@shop.example", "card ending 4242", "99812", "Customer"} {
-		assert.NotContains(t, content, strings.ToLower(v))
+		assertNoPrivateValue(t, raw, v)
 	}
 	rows := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)["merchant"].([]any)
 	require.Len(t, rows, 1)
