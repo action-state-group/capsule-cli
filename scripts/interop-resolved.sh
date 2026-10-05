@@ -41,33 +41,44 @@ expect_reject() {
   echo "$name: rejected ($(grep -m 1 -- "$message" <<<"$out"))"
 }
 
+# tamper BUNDLE: write BUNDLE.record-changed.json (one record changed: record identity)
+# and BUNDLE.digest-changed.json (one body digest changed: the range proof). Each
+# direction is tampered at both layers, separately.
+tamper() {
+  python - "$1" <<'EOF'
+import json, sys
+path = sys.argv[1]
+bundle = json.load(open(path))
+record_changed = json.loads(json.dumps(bundle))
+record_changed["records"][1]["operator"] = "someone-else"
+json.dump(record_changed, open(path.removesuffix(".json") + ".record-changed.json", "w"))
+digest_changed = json.loads(json.dumps(bundle))
+digests = digest_changed["completeness_certificate"]["body_digests"]
+digests[0] = ("0" if digests[0][0] != "0" else "1") + digests[0][1:]
+json.dump(digest_changed, open(path.removesuffix(".json") + ".digest-changed.json", "w"))
+EOF
+}
+
 echo "== Go -> Python: a bundle built by evidencebook as resolved here, verified by Python"
 go run "$eb/test/interop/bundle" "$work/book" "$work/bundle.json" "$work/refusal.json"
 python "$py/python-aac/verify_bundle.py" "$work/bundle.json"
 python "$py/python-cll/verify_bundle.py" "$work/bundle.json"
 python "$py/python-cll/verify_refusal.py" "$work/refusal.json"
-# Tampered copies of that bundle: a changed record (record identity is AAC's
-# check) and a changed body digest (the range proof is cll's check).
-python - "$work/bundle.json" "$work/record-changed.json" "$work/digest-changed.json" <<'EOF'
-import json, sys
-bundle = json.load(open(sys.argv[1]))
-record_changed = json.loads(json.dumps(bundle))
-record_changed["records"][1]["operator"] = "someone-else"
-json.dump(record_changed, open(sys.argv[2], "w"))
-digest_changed = json.loads(json.dumps(bundle))
-digests = digest_changed["completeness_certificate"]["body_digests"]
-digests[0] = ("0" if digests[0][0] != "0" else "1") + digests[0][1:]
-json.dump(digest_changed, open(sys.argv[3], "w"))
-EOF
-expect_reject "Python AAC, a changed record" "rejected the bundle" \
-  python "$py/python-aac/verify_bundle.py" "$work/record-changed.json"
-expect_reject "Python cll, a changed body digest" "range proof" \
-  python "$py/python-cll/verify_bundle.py" "$work/digest-changed.json"
+tamper "$work/bundle.json"
+expect_reject "Python AAC, a changed record" "record_identity_invalid" \
+  python "$py/python-aac/verify_bundle.py" "$work/bundle.record-changed.json"
+expect_reject "Python cll, a changed body digest" "interval range proof" \
+  python "$py/python-cll/verify_bundle.py" "$work/bundle.digest-changed.json"
 
 echo "== Python -> Go: a bundle built by Python, verified by evidencebook as resolved here"
 python "$py/python-cll/build_bundle.py" "$work/py-bundle.json" "$work/py-tampered.json"
 go run "$eb/test/interop/verify" "$work/py-bundle.json"
-expect_reject "evidencebook (resolved), a tampered Python bundle" "evidencebook rejected the bundle" \
+expect_reject "evidencebook (resolved), the Python script's own tampered copy" "evidencebook rejected the bundle" \
   go run "$eb/test/interop/verify" "$work/py-tampered.json"
+tamper "$work/py-bundle.json"
+expect_reject "evidencebook (resolved), a changed record" "record_identity_invalid" \
+  go run "$eb/test/interop/verify" "$work/py-bundle.record-changed.json"
+expect_reject "evidencebook (resolved), a changed body digest" "range_proof_invalid" \
+  go run "$eb/test/interop/verify" "$work/py-bundle.digest-changed.json"
 
 echo "== round trip passed at the resolved versions"

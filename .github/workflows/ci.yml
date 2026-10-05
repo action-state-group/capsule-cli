@@ -134,8 +134,14 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
-      - name: Install Python CLL, the AAC bundle verifier and capsule-emit
-        run: python -m pip install ./.interop/checkpointed-local-log "agent-action-capsule==0.6.0" "capsule-emit==0.8.6"
+      - name: Install Python CLL, the AAC bundle verifier and capsule-emit (locked, with hashes)
+        # Python CLL from its pinned commit, without dependencies (a checkout cannot be
+        # hash-pinned); then everything else, its dependencies included, from the
+        # hash-locked file. See scripts/interop-requirements.in for how it is made.
+        run: |
+          python -m pip install --no-deps ./.interop/checkpointed-local-log
+          python -m pip install --require-hashes -r scripts/interop-requirements.txt
+          python -m pip check
       - name: The round trip, both ways, with the tampered copies refused
         run: bash scripts/interop-resolved.sh .interop/evidencebook
 
