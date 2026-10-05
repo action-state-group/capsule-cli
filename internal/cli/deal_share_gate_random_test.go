@@ -126,3 +126,26 @@ func TestDealShareGateTakesTheDealsOwnIDOut(t *testing.T) {
 	leaked := []byte(strings.Replace(string(page), "Did: pay $6.27 by card", "Paid with 4111 1111 1111 1111", 1))
 	assert.ErrorContains(t, dealShareGate(leaked, events, dealAudienceCounterparty), "card number")
 }
+
+// The deal's own id is taken out only as a whole token: a card number that
+// continues it, or is glued to it, is still read whole and refused.
+func TestDealShareGateTakesTheDealsOwnIDOutOnlyAsAWholeToken(t *testing.T) {
+	gate := func(dealID, text string) error {
+		events := []sealedEvent{{Event: dealEvent{DealID: dealID, Kind: "open", Open: &dealOpen{}}}}
+		return dealShareGate(gatePage(t, text), events, dealAudienceCounterparty)
+	}
+	// The card 1136411111111112 overlaps the id's tail: deleting the id as a
+	// substring would leave only 411111111112 behind, too short to be a card.
+	assert.ErrorContains(t, gate("deal-b164730259661136", "see deal-b164730259661136411111111112"), "card number", "a card that continues the id")
+	// The id's digits alone, without deal-, are a card number by themselves.
+	assert.ErrorContains(t, gate("deal-b164730259661136", "ref 164730259661136"), "card number", "the id's digits alone")
+	// The id immediately followed by a card number: glued, after a dash, after
+	// a space.
+	assert.ErrorContains(t, gate("deal-b16473025966", "deal-b164730259664111111111111111"), "card number", "a card glued to the id")
+	assert.ErrorContains(t, gate("deal-b16473025966", "deal-b16473025966-4111111111111111"), "card number", "a card after the id and a dash")
+	assert.ErrorContains(t, gate("deal-b164730259661136", "deal-b164730259661136 4111 1111 1111 1111"), "card number", "a card right after the id")
+	// The bare id alone is allowed, in text and as the log id.
+	assert.NoError(t, gate("deal-b164730259661136", "deal deal-b164730259661136, log deal/deal-b164730259661136."))
+	// A card elsewhere on the page is refused.
+	assert.ErrorContains(t, gate("deal-b164730259661136", "deal-b164730259661136 paid with 5555555555554444"), "card number")
+}
