@@ -66,7 +66,7 @@ expect_reject "Python cll, a changed body digest" "range proof" \
 
 echo "== Python -> Go: a bundle built by Python, verified by evidencebook as resolved here"
 python "$py/python-cll/build_bundle.py" "$work/py-bundle.json" "$work/py-tampered.json"
-go run "$eb/test/interop/verify" "$work/py-tampered.json"  # DELIBERATELY RED: the tampered copy as if genuine
+go run "$eb/test/interop/verify" "$work/py-bundle.json"
 expect_reject "evidencebook (resolved), a tampered Python bundle" "evidencebook rejected the bundle" \
   go run "$eb/test/interop/verify" "$work/py-tampered.json"
 
