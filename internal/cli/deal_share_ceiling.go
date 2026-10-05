@@ -103,11 +103,24 @@ func dealCeilingGate(data []byte, events []sealedEvent, audience string) error {
 	return nil
 }
 
+// dealOwnIDs are the deal's own identifiers, which every shared copy carries (the
+// x-deal-v0 deal_id and the log id deal/<deal_id>): random hex, never a private
+// value. The gate takes them out before it checks, or a deal id whose hex happens to
+// hold a Luhn-valid digit run reads as a card number and the deal can never be
+// shared.
+func dealOwnIDs(events []sealedEvent) []string {
+	if len(events) == 0 || events[0].Event.DealID == "" {
+		return nil
+	}
+	return []string{events[0].Event.DealID}
+}
+
 // dealShareGate is the last check before a shared copy is written or a share
 // is put on record: the share gate, then the spending-limit gate for the
 // counterparty.
 func dealShareGate(data []byte, events []sealedEvent, audience string) error {
-	if err := dealPageGate(data, events, dealShareableIDs(events, audience)...); err != nil {
+	allowed := append(dealShareableIDs(events, audience), dealOwnIDs(events)...)
+	if err := dealPageGate(data, events, allowed...); err != nil {
 		return err
 	}
 	return dealCeilingGate(data, events, audience)

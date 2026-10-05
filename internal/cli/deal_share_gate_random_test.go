@@ -110,3 +110,19 @@ func TestDealShareGateBareNumberRate(t *testing.T) {
 		t.Logf("%-26s refused %4d/%d (%.1f%%)", k.name, refused, n, 100*float64(refused)/float64(n))
 	}
 }
+
+// A deal id is 16 random hex characters, and one whose hex is a letter then a
+// Luhn-valid digit run (this one, seen in a real run) read as a card number: the
+// deal could never be shared. The deal's own id, and its log id deal/<id>, are
+// taken out before the check; a card number on the same page is still refused.
+func TestDealShareGateTakesTheDealsOwnIDOut(t *testing.T) {
+	const dealID = "deal-b164730259661136"
+	events := []sealedEvent{{Event: dealEvent{DealID: dealID, Kind: "open", Open: &dealOpen{}}}}
+	page := []byte(`<!doctype html><script>window.__BUNDLE__ = {"deal_id":"` + dealID +
+		`","checkpoint":{"log_id":"deal/` + dealID + `"},"line":"Did: pay $6.27 by card"};</script>`)
+	assert.ErrorContains(t, dealPageGate(page, nil), "card number", "without the deal's own id, its digits read as a card number")
+	assert.NoError(t, dealShareGate(page, events, dealAudienceCounterparty))
+	assert.NoError(t, dealShareGate(page, events, dealAudienceAdjudicator))
+	leaked := []byte(strings.Replace(string(page), "Did: pay $6.27 by card", "Paid with 4111 1111 1111 1111", 1))
+	assert.ErrorContains(t, dealShareGate(leaked, events, dealAudienceCounterparty), "card number")
+}
