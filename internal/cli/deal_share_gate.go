@@ -46,20 +46,57 @@ import (
 func dealPageGate(page []byte, events []sealedEvent, allowed ...string) error {
 	data := bytes.Replace(page, evidenceGraphIIFE, nil, 1)
 	data = bytes.Replace(data, []byte(dealViewJS), nil, 1)
+	// Fold first, as the scan does, so the allowed values are taken out of the
+	// same text the scan reads: a zero-width space, a soft hyphen or a
+	// fullwidth or Arabic-Indic digit after an allowed id is then a digit or
+	// nothing, not a boundary, and the id stays glued to what follows it.
+	data = []byte(foldText(string(data)))
 	for _, a := range allowed {
 		if strings.TrimSpace(a) == "" {
 			continue
 		}
-		forms := []string{a}
+		forms := []string{foldText(a)}
 		if quoted, err := json.Marshal(a); err == nil {
-			forms = append(forms, string(quoted[1:len(quoted)-1]))
+			forms = append(forms, foldText(string(quoted[1:len(quoted)-1])))
 		}
 		for _, f := range forms {
-			data = bytes.ReplaceAll(data, []byte(f), nil)
+			data = removeWholeToken(data, []byte(f))
 		}
 	}
 	secrets, words, placeWords := gateSecrets(events)
 	return gateCheck(data, secrets, words, placeWords, 0)
+}
+
+// removeWholeToken replaces each occurrence of value in data that stands as a whole
+// token (no letter or digit right before or right after it) with one space. An
+// allowed value glued to more letters or digits is left in place, so a card
+// number that continues an allowed id ("deal-b16473025966" followed by
+// "1136411111111112") is still read whole; the space keeps the text on either
+// side from joining into a new run.
+func removeWholeToken(data, value []byte) []byte {
+	if len(value) == 0 {
+		return data
+	}
+	alnum := func(c byte) bool {
+		return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+	}
+	var out []byte
+	last := 0
+	for from := 0; from <= len(data)-len(value); {
+		i := bytes.Index(data[from:], value)
+		if i < 0 {
+			break
+		}
+		i += from
+		end := i + len(value)
+		if (i > 0 && alnum(data[i-1])) || (end < len(data) && alnum(data[end])) {
+			from = i + 1
+			continue
+		}
+		out = append(append(out, data[last:i]...), ' ')
+		last, from = end, end
+	}
+	return append(out, data[last:]...)
 }
 
 // gateCheck runs every check on data, then again on the text inside any

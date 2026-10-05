@@ -110,3 +110,52 @@ func TestDealShareGateBareNumberRate(t *testing.T) {
 		t.Logf("%-26s refused %4d/%d (%.1f%%)", k.name, refused, n, 100*float64(refused)/float64(n))
 	}
 }
+
+// A deal id is 16 random hex characters, and one whose hex is a letter then a
+// Luhn-valid digit run (this one, seen in a real run) read as a card number: the
+// deal could never be shared. The deal's own id, and its log id deal/<id>, are
+// taken out before the check; a card number on the same page is still refused.
+func TestDealShareGateTakesTheDealsOwnIDOut(t *testing.T) {
+	const dealID = "deal-b164730259661136"
+	events := []sealedEvent{{Event: dealEvent{DealID: dealID, Kind: "open", Open: &dealOpen{}}}}
+	page := []byte(`<!doctype html><script>window.__BUNDLE__ = {"deal_id":"` + dealID +
+		`","checkpoint":{"log_id":"deal/` + dealID + `"},"line":"Did: pay $6.27 by card"};</script>`)
+	assert.ErrorContains(t, dealPageGate(page, nil), "card number", "without the deal's own id, its digits read as a card number")
+	assert.NoError(t, dealShareGate(page, events, dealAudienceCounterparty))
+	assert.NoError(t, dealShareGate(page, events, dealAudienceAdjudicator))
+	leaked := []byte(strings.Replace(string(page), "Did: pay $6.27 by card", "Paid with 4111 1111 1111 1111", 1))
+	assert.ErrorContains(t, dealShareGate(leaked, events, dealAudienceCounterparty), "card number")
+}
+
+// The deal's own id is taken out only as a whole token: a card number that
+// continues it, or is glued to it, is still read whole and refused.
+func TestDealShareGateTakesTheDealsOwnIDOutOnlyAsAWholeToken(t *testing.T) {
+	gate := func(dealID, text string) error {
+		events := []sealedEvent{{Event: dealEvent{DealID: dealID, Kind: "open", Open: &dealOpen{}}}}
+		return dealShareGate(gatePage(t, text), events, dealAudienceCounterparty)
+	}
+	// The card 1136411111111112 overlaps the id's tail: deleting the id as a
+	// substring would leave only 411111111112 behind, too short to be a card.
+	assert.ErrorContains(t, gate("deal-b164730259661136", "see deal-b164730259661136411111111112"), "card number", "a card that continues the id")
+	// The id's digits alone, without deal-, are a card number by themselves.
+	assert.ErrorContains(t, gate("deal-b164730259661136", "ref 164730259661136"), "card number", "the id's digits alone")
+	// The id immediately followed by a card number: glued, after a dash, after
+	// a space.
+	assert.ErrorContains(t, gate("deal-b16473025966", "deal-b164730259664111111111111111"), "card number", "a card glued to the id")
+	assert.ErrorContains(t, gate("deal-b16473025966", "deal-b16473025966-4111111111111111"), "card number", "a card after the id and a dash")
+	assert.ErrorContains(t, gate("deal-b164730259661136", "deal-b164730259661136 4111 1111 1111 1111"), "card number", "a card right after the id")
+	// The same overlap with the continuation in characters the scan folds: a
+	// zero-width space, a soft hyphen, fullwidth digits, Arabic-Indic digits.
+	for name, rest := range map[string]string{
+		"a zero-width space":  "\u200b411111111112",
+		"a soft hyphen":       "\u00ad411111111112",
+		"fullwidth digits":    "\uff14\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff11\uff12",
+		"Arabic-Indic digits": "\u0664\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0661\u0662",
+	} {
+		assert.ErrorContains(t, gate("deal-b164730259661136", "see deal-b164730259661136"+rest), "card number", "a card that continues the id after "+name)
+	}
+	// The bare id alone is allowed, in text and as the log id.
+	assert.NoError(t, gate("deal-b164730259661136", "deal deal-b164730259661136, log deal/deal-b164730259661136."))
+	// A card elsewhere on the page is refused.
+	assert.ErrorContains(t, gate("deal-b164730259661136", "deal-b164730259661136 paid with 5555555555554444"), "card number")
+}
