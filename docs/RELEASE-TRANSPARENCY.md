@@ -134,6 +134,7 @@ v0.1.0-rc2
 v0.1.0-rc3
 v0.1.0-rc4
 v0.1.0-rc5
+v0.1.0-rc6
 ```
 
 - `--allowed-signers` (ssh `allowed_signers` format) belongs to whoever
