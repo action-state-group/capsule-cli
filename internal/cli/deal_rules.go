@@ -434,7 +434,7 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		e := se.Event
 		switch e.Kind {
 		case "intent":
-			s.intent = *e.Intent
+			s.intent = laterIntent(s.intent, *e.Intent)
 		case "message":
 			s.messages = append(s.messages, *e.Message)
 			if e.Message.Who != nil && e.Message.From == "counterparty" {
@@ -481,6 +481,37 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		}
 	}
 	return s, nil
+}
+
+// laterIntent folds a later intent note over the one in force. The note is
+// written by the agent, so it may narrow what the user set but never widen
+// it: the limit is the lower of the two (a note without one keeps the one in
+// force), and the allowed actions are those both allow (a note without a list
+// keeps the list in force). What the user picked (verbatim, asked) is the
+// note's. Going over the limit, or doing what was not allowed, stays the
+// user's call one step at a time: the check pauses and only their sealed
+// approval covers that step.
+func laterIntent(cur, next dealIntent) dealIntent {
+	out := next
+	switch {
+	case cur.MaxTotalMinor == nil:
+	case next.MaxTotalMinor == nil || *next.MaxTotalMinor > *cur.MaxTotalMinor:
+		limit := *cur.MaxTotalMinor
+		out.MaxTotalMinor = &limit
+	}
+	switch {
+	case cur.Allowed == nil:
+	case next.Allowed == nil:
+		out.Allowed = slices.Clone(cur.Allowed)
+	default:
+		out.Allowed = []string{}
+		for _, a := range next.Allowed {
+			if slices.Contains(cur.Allowed, a) {
+				out.Allowed = append(out.Allowed, a)
+			}
+		}
+	}
+	return out
 }
 
 func (s *dealState) overlayWho(w dealWho, source string) {

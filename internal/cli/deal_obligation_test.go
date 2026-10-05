@@ -82,9 +82,15 @@ func TestDealCancelByDateAndCancellationProof(t *testing.T) {
 	setDealClock(t, "2026-10-04T15:30:00Z")
 	dealRun(t, "note", "--deal", dealID, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"cancel the Plus trial before it charges me","allowed":["pay","cancel"]}`))
 	cancel := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"cancel","description":"cancel Shop Example Plus"}`))
-	require.Equal(t, "pass", cancel["verdict"], cancel["card"])
+	// The deal opened with only "pay" allowed. An intent note the agent
+	// writes cannot widen that on its own, so the cancel pauses for the
+	// user's own answer, which covers this one step.
+	require.Equal(t, "pause", cancel["verdict"], cancel["card"])
+	assert.Contains(t, cancel["card"], "You didn't ask for this: cancelling")
+	yes := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", cancel["check_id"].(string), "--choice", "proceed", "--said", "yes, cancel it")
 	act := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"cancel","description":"cancelled Plus in the account settings"}`))
 	require.Equal(t, false, act["unchecked"])
+	assert.Equal(t, yes["capsule_id"], act["authorized_by"])
 	// ...and the merchant's own cancellation email.
 	setDealClock(t, "2026-10-04T16:10:00Z")
 	conf := dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--email", filepath.Join(merchantFixture, "cancelled.eml"))

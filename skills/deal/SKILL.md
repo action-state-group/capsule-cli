@@ -81,7 +81,11 @@ pick, if the deal is already open) and **before** `deal check`:
 - `verbatim` is the user's own words for the pick.
 - `asked` holds only what the user chose, written exactly as the cart's
   `terms` write it.
-- Carry `allowed` and `max_total_minor` forward: an intent replaces them.
+- Copy the user's `allowed` and `max_total_minor` into the note unchanged.
+  A later intent can lower the limit or drop an action, but it never raises
+  the limit or adds an action: the check keeps the user's. When the user
+  wants more for this step, the check pauses and their own answer to that
+  check covers it.
 - What you picked yourself (a size, a colour or a delivery option the user
   never mentioned) stays out of `asked` and in the cart's `terms`. The check
   then lists it as yours: `picked_by_agent` in its output, "picked by the
@@ -230,11 +234,13 @@ for every later email.
 A cancel only counts as evidence when it is sealed, and it only counts as the
 merchant's word when the merchant's own email says so.
 
-1. Seal the user's words asking to cancel (`deal note --kind intent` with
-   `"allowed"` including `"cancel"`), then `deal check` with
-   `"action": "cancel"`, on the same deal that holds the cancel-by date.
-2. On `"proceed": true`, cancel with the merchant. Right after:
-   `deal note --kind act` with `"action": "cancel"`.
+1. Seal the user's words asking to cancel (`deal note --kind intent`), then
+   `deal check` with `"action": "cancel"`, on the same deal that holds the
+   cancel-by date. If the deal did not allow `cancel` from the start, the
+   check pauses: show the card and seal the user's answer
+   (`deal note --kind approval`). A note cannot add `cancel` on its own.
+2. On `"proceed": true`, or the user's sealed yes, cancel with the
+   merchant. Right after: `deal note --kind act` with `"action": "cancel"`.
 3. When the merchant's cancellation email arrives, seal it raw:
    `deal note --kind evidence --email cancelled.eml`.
 4. `deal report` then states, under "Your cancellation", exactly what is
@@ -430,10 +436,14 @@ capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   #
 capsulectl --profile deal deal note --deal ID --kind disclosure --input d.json # {"fields":[{"class":"phone","value":"..."}]}
 ```
 
-Seal an `intent` whenever the user widens or changes what you may do (for
-example, "go ahead and share my number"), and whenever the user picks
-from options you offered (see "The user picked from options"). It replaces
-`allowed`, `asked` and the limit from then on.
+Seal an `intent` whenever the user changes what they asked (for example,
+"go ahead and share my number"), and whenever the user picks from options
+you offered (see "The user picked from options"). It replaces `verbatim` and
+`asked` from then on. It can lower `max_total_minor` or drop actions from
+`allowed`, but never raise or add: those stay as the user first set them.
+When the user says yes to more ("go ahead and share my number"), the next
+check that needs it pauses, and the user's sealed answer to that check
+covers that one step.
 
 Record a `change` whenever the counterparty changes **any** detail: a new
 payee, a new payment method, a new phone, a new price. A change is never
