@@ -4,7 +4,7 @@
 # `go run ../../cmd/skillgen`. Edit this file, then regenerate — see
 # ../SKILL-SPEC.md for the contract.
 #
-# Verb surface note: the batch brief names seven verbs as one flat list
+# Verb surface note: the skill's scope names seven verbs as one flat list
 # (verify, contract validate, discover, plugin ls, cll, get, publish). `cll`
 # covers two distinct subcommands with different argument shapes and
 # different emission mechanics (`list` only reads; `append` itself creates
@@ -28,9 +28,9 @@
 # whole, unsplit, because it is prose (a rule and its exception), not a
 # list.
 #
-# Ruling also fixed the scope this item's original brief left ambiguous:
-# capsule emission is for CONSEQUENTIAL actions only. `result open` (the
-# other Batch 5 item's verb) and local validation generally get no capsule.
+# The ruling also settled a scope question the first draft left open:
+# capsule emission is for CONSEQUENTIAL actions only. `result open` and
+# local validation generally get no capsule.
 # Applied here as `emission_mode: not-consequential` on every verb in this
 # surface that only reads, checks or validates rather than durably writing
 # or persisting something (`verify`, `contract validate`, `plugin ls`,

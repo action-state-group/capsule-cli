@@ -128,8 +128,8 @@ func TestSchemaRejectsUnknownFieldAndMissingVerb(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestCapsulectlSkillMatchesItsSpec is the real CI gate this item's DONE
-// depends on: the checked-in skills/capsulectl/{SKILL.md,AGENTS.md} must be
+// TestCapsulectlSkillMatchesItsSpec is the CI gate for the generated skill:
+// the checked-in skills/capsulectl/{SKILL.md,AGENTS.md} must be
 // exactly what skills/capsulectl/spec.yaml renders right now. Run
 // `go run ./cmd/skillgen` from the repo root to regenerate after any edit to
 // the spec, and never hand-edit either rendered file.
