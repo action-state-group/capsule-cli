@@ -895,7 +895,10 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, artifacts bundleAr
 		if err != nil {
 			return evidencebook.Bundle{}, err
 		}
-		request.Extensions = make(map[string]json.RawMessage, len(extensions))
+		// Add to, never replace, extensions set above (--attach-input-originals).
+		if request.Extensions == nil {
+			request.Extensions = make(map[string]json.RawMessage, len(extensions))
+		}
 		for kind, block := range extensions {
 			if request.Extensions[kind], err = json.Marshal(block); err != nil {
 				return evidencebook.Bundle{}, err

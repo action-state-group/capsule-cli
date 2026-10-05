@@ -243,6 +243,11 @@ func TestJSONLDiscloseAttachesInputOriginalsOnlyOnOptIn(t *testing.T) {
 	carried, err := base64.RawURLEncoding.DecodeString(bundle.Extensions[inputOriginalsExtension][stored.CapsuleID])
 	require.NoError(t, err)
 	assert.Equal(t, original, carried)
+	if strings.Contains(plain, producerKeyExtensionKind) {
+		// The producer-key extension and the opt-in originals travel together:
+		// declaring the key must never drop the originals, or the reverse.
+		assert.Contains(t, attached, producerKeyExtensionKind)
+	}
 	var decoded any
 	require.NoError(t, decodeJSONPreserveNumbers("the carried original", carried, &decoded))
 	digest, err := canonical.JSONDigest(decoded)
