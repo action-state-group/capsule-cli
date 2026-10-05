@@ -19,6 +19,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// encodedRun is a long hex or base64-alphabet run: a digest, a signature, a
+// key. Random content of that kind holds any short digit string now and then
+// ("99812" inside a 64-hex digest), so a check for a private value in a shared
+// copy leaves these runs out; none of the private values is one.
+var encodedRun = regexp.MustCompile(`[0-9A-Za-z+/_=-]{40,}`)
+
+// assertNoPrivateValue fails when v appears in s outside a long encoded run,
+// case-insensitively.
+func assertNoPrivateValue(t *testing.T, s, v string, msgAndArgs ...any) {
+	t.Helper()
+	text := strings.ToLower(encodedRun.ReplaceAllString(s, " "))
+	assert.NotContains(t, text, strings.ToLower(v), msgAndArgs...)
+}
+
 // The private values a shared copy must never carry, all present in the
 // deal's baseline: a home address, a full card number, a verification code
 // and the counterparty's contact details.
@@ -386,7 +400,7 @@ func TestDealShareMerchantEmail(t *testing.T) {
 	require.NoError(t, err)
 	html := string(raw)
 	for _, v := range private {
-		assert.NotContains(t, strings.ToLower(html), strings.ToLower(v))
+		assertNoPrivateValue(t, html, v)
 	}
 	ext := embeddedBundle(t, html)["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
 	rows := ext["merchant"].([]any)
@@ -405,7 +419,7 @@ func TestDealShareMerchantEmail(t *testing.T) {
 	raw, err = os.ReadFile(page)
 	require.NoError(t, err)
 	for _, v := range append(private, "SE-104233", "104233") {
-		assert.NotContains(t, strings.ToLower(string(raw)), strings.ToLower(v))
+		assertNoPrivateValue(t, string(raw), v)
 	}
 	ext = embeddedBundle(t, string(raw))["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
 	assert.NotContains(t, ext["merchant"].([]any)[0], "order_id", "no order number in the adjudicator's copy")
