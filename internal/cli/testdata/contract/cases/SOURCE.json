@@ -1,8 +1,8 @@
 {
   "repo": "action-state-group/capsule-engine",
   "path": "tests/fixtures/contract-cases",
-  "commit": "275922e1f73f252f5c791c809a354d4799a87afa",
+  "commit": "ce76a8ae3009d67375d94f2ef16f41e302f37048",
   "sha256sums_digest": "2f7bba51493325ccc38317b2d5e7ff73f502c3711f6b95b529d5849cf07fae80",
   "contract_schema_path": "schemas/evidence-contract-v0.json",
-  "contract_schema_sha256": "c753ba0c96702ddb7f7702bf92857d20aa73d0c328cd184ab0082561219ed358"
+  "contract_schema_sha256": "6d10d5eb97e15421db0ab922b5f6d1f0a2e9f453fb64e52fb45306ba029ad480"
 }
