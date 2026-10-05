@@ -1,7 +1,10 @@
 # capsule-cli
 
 Standalone Go executable `capsulectl`, wrapping `capsule-emit-go`, its optional
-artifact SDK, and `cll-go`. Applications import those libraries, not this CLI.
+artifact SDK, `cll-go` and the `evidencebook` Go library. Applications import
+those libraries, not this CLI: everything outside `cmd/` is under Go's
+`internal/` and cannot be imported. This repository is a command-line tool, not
+an SDK.
 No application-specific (investigation/evaluation) semantics, database
 migration tools, selective disclosure, or implicit login/default profile are
 included.
@@ -122,6 +125,16 @@ the others) need a profile and an initialized store first; the
 [Quickstart](#quickstart-no-database-server) below makes one in four commands.
 The skill never writes a scope file or a schema for you: `discover --scope`
 and `contract validate --schema` always name files you supply.
+
+The two renderings are generated, never edited by hand. `cmd/skillgen`, the
+repository's second binary, validates `skills/capsulectl/spec.yaml` against
+[`schemas/skill-spec-v0.json`](schemas/skill-spec-v0.json) and writes both
+files: run `go run ./cmd/skillgen` from the repository root after editing the
+spec, or `go run ./cmd/skillgen --check` to fail when the files on disk differ
+from what the spec renders. A test (`TestCapsulectlSkillMatchesItsSpec`) runs
+that comparison in CI. The format is described in
+[skills/SKILL-SPEC.md](skills/SKILL-SPEC.md). `skills/deal/` is the deal skill,
+written by hand; see [skills/deal](skills/deal/README.md).
 
 `skills/capsulectl/scripts/run-scripted-demo.sh` is a contributor check, not an
 install step: it builds `capsulectl` from a source checkout, so it needs Go and
@@ -276,6 +289,8 @@ capsulectl deal init|open|note|check|close|report|countersign|reconcile|tick --p
 capsulectl backfill run|status --profile NAME [...]
 capsulectl canary run --profile NAME [--skill FILE] [--expect-version TAG] [--expect-skill-sha256 HEX]
 capsulectl canary watch --log-id ID --expect-every DURATION [--witness URL] [--state FILE]
+capsulectl release register --dir DIR --tag TAG --commit SHA [--witness URL --witness-key HEX]
+capsulectl release watch --allowed-signers FILE [--repo OWNER/NAME] [--known-unsigned-file FILE] [--trusted-root FILE]
 ```
 
 `capsulectl <command> --help` gives every flag; this list is the shape of each
@@ -294,7 +309,16 @@ only in a build made with `-tags actionstate`, where it carries no flags or
 licence logic of its own: it dispatches to a discovered `actionstate` plugin,
 or refuses with an actionable message if that plugin is absent or unlicensed.
 The default build, and the release binaries, carry no plugin dispatch: there
-`run` is hidden and answers "run is not available in this build".
+`run` is hidden and answers "run is not available in this build". The plugin
+contract (`cli-plugin/v1`: discovery roots, handshake, and what a plugin can
+never change) is all in [docs/PLUGINS.md](docs/PLUGINS.md).
+
+`release register` records a built release in the witness's transparency log;
+the release workflow runs it. `release watch` compares the repository's
+releases and that log with the intended releases, the tags signed by the keys
+in `--allowed-signers`, and is meant to run off the release infrastructure.
+What each covers, and what it does not, is in
+[docs/RELEASE-TRANSPARENCY.md](docs/RELEASE-TRANSPARENCY.md).
 
 `--html PAGE.html` on `bundle` and `disclose` also writes the bundle as one
 self-contained page: the bundle embedded and agent-action-capsule's own
@@ -329,6 +353,13 @@ minute from a timer): one checkpoint of hashes per tick, never on activity.
 consequential actions that have no deal record; see
 [skills/deal](skills/deal/README.md).
 
+The book verbs (`close`, `reconcile`, `request`, `respond`) and a `jsonl`
+profile's log (`publish`, `cll append`, `cll list`) run over an evidence book
+from the `evidencebook` Go library (`internal/cli/book.go`,
+`internal/cli/booklog.go`). The CLI does not implement an evidence book of its
+own: it chooses windows, reads files and writes results, and the library
+composes every proof.
+
 `cll list --log-id LOG` reads another log in the profile's store: a deal
 profile keeps each deal in its own log, `deal/<deal id>`, and a deal profile
 written by an earlier release has no `log_id` at all, so it needs `--log-id`.
@@ -358,6 +389,24 @@ outside profile management that access a configured target require `--profile`.
 Connection settings and credentials are accepted only by profile create/update.
 Each invocation gets a fresh Cobra/Viper instance. No automatic environment
 override is enabled.
+
+## What is in this repository
+
+| Path | What it is |
+|---|---|
+| `cmd/capsulectl/` | the CLI's entry point |
+| `cmd/skillgen/` | the second binary: renders the agent skill from its spec ([Agent skill](#agent-skill-claude-code-and-codex)) |
+| `internal/cli/` | every command; not importable (Go `internal/`) |
+| `internal/cli/assets/` | what the HTML pages embed: the vendored evidence-graph verifier (with its digest and NOTICE), the deal page's viewer, and the deal profile schema |
+| `internal/cli/schemas/` | the embedded evidence-contract schema (a byte copy of capsule-engine's, pinned by digest) |
+| `internal/cli/confusables_table.go` | **a security control**, generated: Unicode's TR39 confusables, so the deal skill's share check and page gate match a sensitive value even when it is written with lookalike letters from another script. Built by `scripts/genconfusables` from the unmodified `third_party/unicode/confusables.txt` (digest beside it); `scripts/update-confusables.sh` re-vendors a new Unicode version |
+| `schemas/skill-spec-v0.json` | the schema a skill spec is validated against |
+| `skills/` | the `capsulectl` skill (generated) and the `deal` skill, each with contributor demo scripts (`skills/capsulectl/scripts/bookdemo` is a small Go program the scripted demo runs); `skills/SKILL-SPEC.md` is the spec format |
+| `action.yml` | the `Seal PR Capsule` GitHub Action ([below](#github-action-seal-a-capsule-per-pull-request)); its profile is [docs/PR-CAPSULE-PROFILE.md](docs/PR-CAPSULE-PROFILE.md), and `scripts/pr-capsule-*.sh` are its steps |
+| `docs/` | plugins, release transparency, backfill, canary, the test-account harness, and the PR capsule profile |
+| `examples/` | workflow files to copy: adopting the PR-capsule action, a canary watch, a deal-harness watch |
+| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, the confusables tools, and `build-evidence-graph-iife.sh`, which rebuilds the vendored verifier |
+| `third_party/unicode/` | Unicode's confusables data, vendored unmodified with its terms of use |
 
 ## Profile setup
 
