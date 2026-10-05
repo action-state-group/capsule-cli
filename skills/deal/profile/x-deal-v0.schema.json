@@ -265,7 +265,7 @@
     },
     "body_check": {
       "type": "object", "additionalProperties": false,
-      "required": ["action", "pack_id"],
+      "required": ["action"],
       "properties": {
         "action": { "$ref": "#/$defs/point_of_no_return" },
         "amount_minor": { "$ref": "#/$defs/safe_uint" },
@@ -282,7 +282,7 @@
     },
     "body_verdict": {
       "type": "object", "additionalProperties": false,
-      "required": ["result", "pack_id", "differences", "options"],
+      "required": ["result", "differences", "options"],
       "properties": {
         "result": { "enum": ["pass", "pause"] },
         "pack_id": { "$ref": "#/$defs/pack_id" },

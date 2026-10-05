@@ -1,7 +1,7 @@
 {
   "fixture": "06-check-share-contact.json",
   "expect": "valid",
-  "story": "The agent runs the deal check before a point of no return; names the pack it runs.",
+  "story": "The agent runs the deal check before a point of no return.",
   "record": {
     "x-deal-v0": {
       "profile": "x-deal-v0",
@@ -26,10 +26,8 @@
       "disclosing": [
         "phone"
       ],
-      "disclosing_to": "counterparty",
-      "pack_id": "capsule/marketplace-rentals-safety/0.1.0",
-      "pack_digest": "60a215d6447d3e6f6adb1f31a4219f3165874418742b7d2590733bce424c1aed"
+      "disclosing_to": "counterparty"
     }
   },
-  "expected_digest": "737d5d91bf384632bfc268cc14549a0dd6767c2129992c7d1558d911d546223f"
+  "expected_digest": "97f9d7470a33f7a6984926987975ecd5c2f51930ae23098b8d705610ea405022"
 }

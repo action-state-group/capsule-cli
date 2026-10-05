@@ -13,7 +13,7 @@
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "3d7fda657af2f39c699e9a360a009b62d6d776e83be709d9dc8df3676d9020b5"
+        "digest": "dadf71e7a9ae43be3c9ef168c95da6b3e79c3c7533ecdb154547338dd5e3aceb"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -25,13 +25,12 @@
           "rel": "checks",
           "type": "deal-record",
           "digest_alg": "SHA-256",
-          "digest": "3d7fda657af2f39c699e9a360a009b62d6d776e83be709d9dc8df3676d9020b5"
+          "digest": "dadf71e7a9ae43be3c9ef168c95da6b3e79c3c7533ecdb154547338dd5e3aceb"
         }
       ]
     },
     "body": {
       "result": "pause",
-      "pack_id": "capsule/marketplace-rentals-safety/0.1.0",
       "differences": [
         {
           "question": "who",
@@ -71,5 +70,5 @@
       }
     }
   },
-  "expected_digest": "3911dd24409b6154a974283e4c866c71eef41c4b962f4d712f2ece910bd67584"
+  "expected_digest": "e6a609895e2fbc1d3fed3722eb22554bb8fdf98aa02dfb30dca721f3f76a2c2f"
 }

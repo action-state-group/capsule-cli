@@ -1,7 +1,7 @@
 {
   "fixture": "12-check-pay.json",
   "expect": "valid",
-  "story": "The agent runs the deal check before a point of no return; names the pack it runs.",
+  "story": "The agent runs the deal check before a point of no return.",
   "record": {
     "x-deal-v0": {
       "profile": "x-deal-v0",
@@ -13,7 +13,7 @@
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "a3183be9132022307084479b6f0dc5189fd7d9b1ccce87be1122316dd1d13f26"
+        "digest": "701166c1255f19aed66ed73131766d4c392a64f61d636a42babf5d06a8604426"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -35,10 +35,8 @@
       "recourse": {
         "rail": "zelle",
         "refundable": false
-      },
-      "pack_id": "capsule/marketplace-rentals-safety/0.1.0",
-      "pack_digest": "60a215d6447d3e6f6adb1f31a4219f3165874418742b7d2590733bce424c1aed"
+      }
     }
   },
-  "expected_digest": "3d7fda657af2f39c699e9a360a009b62d6d776e83be709d9dc8df3676d9020b5"
+  "expected_digest": "dadf71e7a9ae43be3c9ef168c95da6b3e79c3c7533ecdb154547338dd5e3aceb"
 }
