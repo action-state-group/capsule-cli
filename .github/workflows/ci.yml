@@ -97,6 +97,48 @@ jobs:
       - name: Both builds passed
         run: test "${{ needs.tests.result }}" = success
 
+  interop-at-resolved-versions:
+    # evidencebook's own CI runs this Go <-> Python round trip against ITS pins;
+    # capsulectl links newer ones (minimal version selection), so here the same
+    # round trip runs with evidencebook as THIS go.mod resolves it, compiled with
+    # this module's graph. The log prints `go list -m all`. Python verifier
+    # scripts come from evidencebook at the resolved version; the Python stack is
+    # pinned as evidencebook's CI pins it.
+    name: interop at the resolved versions (Go <-> Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: The evidencebook version this module resolves
+        id: resolved
+        run: echo "evidencebook=$(go list -m -f '{{.Version}}' github.com/action-state-group/evidencebook)" >> "$GITHUB_OUTPUT"
+      - name: Check out evidencebook at that version (its Python verifier scripts)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: action-state-group/evidencebook
+          ref: ${{ steps.resolved.outputs.evidencebook }}
+          path: .interop/evidencebook
+      - name: Check out Python CLL (as evidencebook's CI pins it)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: action-state-group/checkpointed-local-log
+          ref: 88e99d405241aee790f6795fda612527679114ba
+          path: .interop/checkpointed-local-log
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Install Python CLL, the AAC bundle verifier and capsule-emit
+        run: python -m pip install ./.interop/checkpointed-local-log "agent-action-capsule==0.6.0" "capsule-emit==0.8.6"
+      - name: The round trip, both ways, with the tampered copies refused
+        run: bash scripts/interop-resolved.sh .interop/evidencebook
+
   seal-pr-capsule:
     # Same-repo PRs only: a fork PR's pull_request event carries no repository
     # secrets, so sealing (which needs the producer/checkpoint signing keys)
