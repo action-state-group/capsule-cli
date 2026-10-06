@@ -6,7 +6,7 @@ require (
 	github.com/action-state-group/agent-action-capsule/go v0.6.0
 	github.com/action-state-group/capsule-emit-go v0.2.0
 	github.com/action-state-group/cll-go v0.0.0-20260926202724-9741da3d4ace
-	github.com/action-state-group/evidencebook v0.1.1-0.20261006174345-0b8036b3fd99
+	github.com/action-state-group/evidencebook v0.1.1-0.20261006175723-65e4ed754e09
 	github.com/emersion/go-msgauth v0.7.0
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1
