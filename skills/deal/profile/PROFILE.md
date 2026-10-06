@@ -40,9 +40,10 @@ exactly two members.
   the record shows:
   - An `action` record (an act a sealed approval authorized) whose action has a registered AAC
     `effect.type` is `action_type: "decide"`. Today that is `pay`, as `send_payment`. Its
-    `disposition` is `accept` and `executed`, by `human` (with `human_disposed`) when the user
-    approved it in their own words, or by `policy` when a passing check approved it under
-    their standing intent. Its `effect` is `dispatched` and `runtime_claimed` (the agent's
+    `disposition` is `accept` and `executed`, by `human` (with `human_disposed`) only when the
+    user approved it in their own words (`approver: user`, with `said_commitment`), or by
+    `policy` when a passing check approved it under their standing intent. An act approved by
+    `agent_card` is not certified by anyone and stays `fyi`. Its `effect` is `dispatched` and `runtime_claimed` (the agent's
     report, with no response in hand), so `effect_mode` is `dispatched_unconfirmed`;
     `one_way_recoverable` when the agreed recourse is refundable, else
     `one_way_consequential`.
@@ -96,7 +97,7 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
 | `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor`, `currency`, `seen_item`, `terms`, `recourse`, `pack_id`, `pack_digest`, and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
 | `verdict` | The answer to one check: pass, or pause with the differences. | `result` (`pass`\|`pause`), `differences[]`, `options[]` | exactly one `checks` → a `check`; one verdict per check; optional `pack_id`, equal to the check's when either names one. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. |
-| `approval` | What authorizes, or declines, the next step; or the user's confirmation of the limits an intent proposed. | `choice` (`hold`\|`verify_contact`\|`proceed`\|`confirm_limits`), `proceed` (`true` on `proceed`, `false` on `hold` and `verify_contact`), `approver` (`user`\|`standing_intent`); on `confirm_limits` only, `limits` (`previous` and `new`, each `max_total_minor` and `allowed`) | `confirm_limits`: exactly one `approves` → the proposing `intent`, `approver: user`, and section 6, rule 6. Otherwise exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment`, and on a pause the choice is one of the verdict's options. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
+| `approval` | What authorizes, or declines, the next step; or the user's confirmation of the limits an intent proposed. | `choice` (`hold`\|`verify_contact`\|`proceed`\|`confirm_limits`), `proceed` (`true` on `proceed`, `false` on `hold` and `verify_contact`), `approver` (`user`\|`standing_intent`\|`agent_card`); on `confirm_limits` only, `limits` (`previous` and `new`, each `max_total_minor` and `allowed`) | `confirm_limits`: exactly one `approves` → the proposing `intent`, `approver: user`, and section 6, rule 6. Otherwise exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment` (the user's own words), and on a pause the choice is one of the verdict's options. `agent_card` ⇒ no `said_commitment`: a card the agent composed was answered, and no words of the user's are on record; never on `confirm_limits`. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
 | `action` | A point-of-no-return step actually taken. | `action` | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). |
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. |
 | `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. Optional `carried_obligations`: the cancel-by dates still open at the close, each `{obligation: digest ref, cancel_by}`. |
@@ -294,7 +295,9 @@ A verifier holding one deal's records in `seq` order checks:
    nothing. A `confirm_limits` approval authorizes no `action` or `disclosure`.
    `approver: "standing_intent"` is valid only on a passing verdict, and only for an action in
    the `allowed` in force. An absent `allowed` places no restriction; a present, empty `allowed`
-   allows nothing. A pause always needs the user's own answer.
+   allows nothing. A pause always needs an answer: the user's own (`user`, with their words), or
+   a card's (`agent_card`), which certifies only that the card was answered, not that the user
+   consented to the action.
 7. **Close.** `close` references the latest `outcome` (if any), and its `outcome` equals that
    outcome's. Without an outcome record, the close is `open`. `unchecked_actions` equals the
    number of `unchecked_action` outcomes. A close with `completed` or `mismatch` is terminal:

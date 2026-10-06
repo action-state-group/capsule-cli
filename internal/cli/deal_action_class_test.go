@@ -202,3 +202,131 @@ func TestDealRecoversAStepAnEarlierReleasePrepared(t *testing.T) {
 	require.True(t, ok, "the step was recovered as the Capsule it was prepared as")
 	assert.Equal(t, "fyi", capsule["action_type"])
 }
+
+// dealApprovers is the approver each sealed approval of the deal records, by capsule_id.
+func dealApprovers(t *testing.T, dealID string) map[string]string {
+	t.Helper()
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, s.close()) }()
+	require.NoError(t, s.useDeal(t.Context(), dealID, false))
+	events, err := s.load(t.Context(), dealID)
+	require.NoError(t, err)
+	out := map[string]string{}
+	for _, se := range events {
+		if se.Event.Approval != nil {
+			out[se.CapsuleID] = se.Event.Approval.Approver
+		}
+	}
+	return out
+}
+
+// Three authority values, and only one certifies the user's consent. approver
+// user is sealed only with the user's own words (said_commitment) on an
+// approval of the check, which pins the proposed action; a click on a card
+// the agent composed (no words) seals agent_card, and the act it authorizes
+// stays fyi; a passing check seals standing_intent (policy).
+func TestDealApprovalAuthorityHasThreeValues(t *testing.T) {
+	for _, tc := range []struct {
+		name, said, approver, actionType string
+		pass                             bool
+	}{
+		{name: "the user's words", said: "yes, 30 is fine for this one", approver: "user", actionType: "decide"},
+		{name: "a card click", said: "", approver: "agent_card", actionType: "fyi"},
+		{name: "a card click with blank words", said: "   ", approver: "agent_card", actionType: "fyi"},
+		{name: "a passing check", pass: true, approver: "standing_intent", actionType: "decide"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dealFixture(t)
+			id := openSticker(t, true)
+			amount := 3000
+			if tc.pass {
+				amount = 600
+			}
+			c := checkAct(t, id, "pay", amount)
+			approvalID, _ := c["approval_id"].(string)
+			if !tc.pass {
+				require.Equal(t, "pause", c["verdict"])
+				args := []string{"note", "--deal", id, "--kind", "approval", "--check", c["check_id"].(string), "--choice", "proceed"}
+				if tc.said != "" {
+					args = append(args, "--said", tc.said)
+				}
+				approvalID = dealRun(t, args...)["capsule_id"].(string)
+			}
+			paid := act(t, id, "pay", amount)
+			require.Equal(t, approvalID, paid["authorized_by"], "the deal's own rules still let the answer authorize the act")
+
+			assert.Equal(t, tc.approver, dealApprovers(t, id)[approvalID], "the approver the record seals")
+			capsule := dealCapsules(t, id)[paid["capsule_id"].(string)]
+			assert.Equal(t, tc.actionType, capsule["action_type"])
+			switch tc.approver {
+			case "user":
+				assert.Equal(t, "human", capsule["disposition"].(map[string]any)["approver"])
+				assert.Equal(t, true, capsule["disposition"].(map[string]any)["human_disposed"])
+			case "standing_intent":
+				assert.Equal(t, "policy", capsule["disposition"].(map[string]any)["approver"])
+			case "agent_card":
+				assert.Nil(t, capsule["disposition"], "a card click certifies no one's consent")
+			}
+		})
+	}
+}
+
+// Raising the user's limits takes their own words: a card click can't.
+func TestDealConfirmLimitsNeedsTheUsersWords(t *testing.T) {
+	dealFixture(t)
+	id := openSticker(t, true)
+	note := dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"up to 50","max_total_minor":5000,"allowed":["pay"]}`))
+	_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "approval", "--check", note["capsule_id"].(string), "--choice", "confirm_limits")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "confirm_limits needs --said")
+}
+
+// Keying the Capsule's human approver on approver user is sound because every
+// user approval this producer seals commits the user's words (said_commitment)
+// and refs the check it approves; an agent_card approval commits none.
+func TestDealUserApprovalsCarrySaidCommitment(t *testing.T) {
+	dealFixture(t)
+	id := openSticker(t, true)
+	c1 := checkAct(t, id, "pay", 3000)
+	user := dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", c1["check_id"].(string), "--choice", "hold", "--said", "not yet")
+	c2 := checkAct(t, id, "pay", 3000)
+	card := dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", c2["check_id"].(string), "--choice", "hold")
+
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, s.close()) }()
+	require.NoError(t, s.useDeal(t.Context(), id, false))
+	events, err := s.load(t.Context(), id)
+	require.NoError(t, err)
+	records := map[string]map[string]any{}
+	for i, se := range events {
+		if se.Event.Approval == nil {
+			continue
+		}
+		raw, _, err := encodeDealRecord(se.Event, events[:i], s.dkey)
+		require.NoError(t, err)
+		var record map[string]any
+		require.NoError(t, json.Unmarshal(raw, &record))
+		records[se.CapsuleID] = record
+	}
+	digests := map[string]string{}
+	for _, se := range events {
+		digests[se.CapsuleID] = se.Digest
+	}
+
+	u := records[user["capsule_id"].(string)]
+	assert.Equal(t, "user", u["body"].(map[string]any)["approver"])
+	assert.Regexp(t, `^[0-9a-f]{64}$`, u["body"].(map[string]any)["said_commitment"], "the user's words, committed")
+	refs := u["x-deal-v0"].(map[string]any)["refs"].([]any)
+	assert.Equal(t, "approves", refs[0].(map[string]any)["rel"])
+	assert.Equal(t, digests[c1["check_id"].(string)], refs[0].(map[string]any)["digest"], "on the check it answers")
+
+	k := records[card["capsule_id"].(string)]
+	assert.Equal(t, "agent_card", k["body"].(map[string]any)["approver"])
+	assert.NotContains(t, k["body"], "said_commitment", "a card click commits no words")
+}

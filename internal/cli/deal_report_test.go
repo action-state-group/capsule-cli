@@ -42,7 +42,7 @@ func TestDealReportThreeParts(t *testing.T) {
 	dealFixture(t)
 	dealID := openJetSki(t)
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
-	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "hold")
+	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "hold", "--said", "hold off for now")
 	dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"payee":"M. Torres","rail":"zelle"}`))
 
 	report := dealRun(t, "report", "--deal", dealID)

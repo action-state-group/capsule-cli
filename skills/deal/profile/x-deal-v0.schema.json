@@ -318,7 +318,7 @@
       "properties": {
         "choice": { "enum": ["hold", "verify_contact", "proceed", "confirm_limits"] },
         "proceed": { "type": "boolean" },
-        "approver": { "enum": ["user", "standing_intent"] },
+        "approver": { "enum": ["user", "standing_intent", "agent_card"] },
         "said_commitment": { "$ref": "#/$defs/hex64" },
         "limits": {
           "description": "On confirm_limits only: the user's limits in force before this answer and the new version it puts in force. The intent it approves is the proposal.",
@@ -336,7 +336,9 @@
           "else": { "not": { "required": ["limits"] } } },
         { "if": { "properties": { "approver": { "const": "user" } } },
           "then": { "required": ["said_commitment"] },
-          "else": { "properties": { "choice": { "const": "proceed" } }, "not": { "required": ["said_commitment"] } } }
+          "else": { "not": { "required": ["said_commitment"] } } },
+        { "if": { "properties": { "approver": { "const": "standing_intent" } } },
+          "then": { "properties": { "choice": { "const": "proceed" } } } }
       ]
     },
     "body_action": {

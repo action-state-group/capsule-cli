@@ -1171,6 +1171,9 @@ func trailLine(e dealEvent) string {
 		if e.Approval.Approver == "standing_intent" {
 			return "went ahead on what you already allowed"
 		}
+		if e.Approval.Approver == "agent_card" {
+			return "the card was answered: " + e.Approval.Choice + " (you approved this card; no words of yours are on record)"
+		}
 		if l := e.Approval.Limits; l != nil && e.Approval.Proceed {
 			return "you confirmed new limits: " + l.Previous.String() + " → " + l.New.String()
 		}
@@ -1380,6 +1383,8 @@ func buildDealReport(events []sealedEvent) dealReport {
 				r.Did[i].Steps = append(r.Did[i].Steps, se.CapsuleID)
 				if e.Approval.Approver == "standing_intent" {
 					r.Did[i].Text += "; went ahead on what you already allowed"
+				} else if e.Approval.Approver == "agent_card" {
+					r.Did[i].Text += "; the card was answered " + e.Approval.Choice
 				} else {
 					r.Did[i].Text += "; you chose " + e.Approval.Choice
 				}

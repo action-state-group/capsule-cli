@@ -924,6 +924,9 @@ func dealShareStepLine(e dealEvent, audience string, p dealPrivate, currency str
 		if e.Approval.Approver == "standing_intent" {
 			return "Went ahead on what you already allowed"
 		}
+		if e.Approval.Approver == "agent_card" {
+			return "The card was answered: " + e.Approval.Choice
+		}
 		if l := e.Approval.Limits; l != nil && e.Approval.Proceed {
 			return "You confirmed new limits"
 		}

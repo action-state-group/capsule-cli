@@ -318,9 +318,10 @@ var dealEffectTypes = map[string]string{"pay": "send_payment"}
 // authorized act whose action has a registered effect type) is a decide
 // Capsule:
 //   - disposition: accepted, and executed, as the act reports. The approver
-//     is the one the approval records: a human when the user approved it
-//     (their approval carries their words as said_commitment), policy when a
-//     passing check approved it under the user's standing intent;
+//     is the one the approval records: a human only when the user approved it
+//     in their own words (committed as said_commitment), policy when a passing
+//     check approved it under the user's standing intent. An act approved by
+//     agent_card (a click on a card the agent composed) stays fyi;
 //   - effect: dispatched, runtime_claimed: the agent's report that it acted,
 //     with no response in hand, so effect_mode is dispatched_unconfirmed;
 //     one_way_recoverable when the agreed recourse says refundable, otherwise
@@ -369,10 +370,14 @@ func dealDisposition(events []sealedEvent, id string) (emit.Disposition, bool) {
 		d := emit.Disposition{Decision: emit.DecisionAccept, VerdictClass: emit.VerdictExecuted}
 		switch a.Approver {
 		case "user":
+			// Every user approval this producer seals commits the user's words
+			// (said_commitment, deal_profile.go) and refs the check it approves.
 			d.Approver, d.HumanDisposed = emit.ApproverHuman, true
 		case "standing_intent":
 			d.Approver = emit.ApproverPolicy
 		default:
+			// agent_card: a click on a card the agent composed certifies no one's
+			// consent, so the act stays fyi.
 			return emit.Disposition{}, false
 		}
 		return d, true
@@ -797,7 +802,18 @@ func dealNoteCommand() *cobra.Command {
 			if check == "" || choice == "" {
 				return inputError("approval needs --check and --choice")
 			}
-			ev.Approval = &dealApproval{Check: check, Choice: choice, Approver: "user", Said: said}
+			// approver "user" certifies the user's consent, so it is sealed only with their own
+			// words, committed as said_commitment beside the approval's ref to the check (which
+			// pins the proposed action). A click on a card the agent composed carries no words of
+			// theirs: it is sealed agent_card, never user.
+			approver := "user"
+			if strings.TrimSpace(said) == "" {
+				if choice == "confirm_limits" {
+					return inputError("confirm_limits needs --said with the user's own words: raising their limits takes their consent, not a card click")
+				}
+				approver, said = "agent_card", ""
+			}
+			ev.Approval = &dealApproval{Check: check, Choice: choice, Approver: approver, Said: said}
 		default:
 			return inputError("--kind must be message, claim, evidence, change, intent, approval, act or disclosure")
 		}
