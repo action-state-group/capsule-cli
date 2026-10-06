@@ -873,6 +873,20 @@ func requestCommand() *cobra.Command {
 			if e = decodeJSONAs("--response "+answer, raw, &resp); e != nil {
 				return e
 			}
+			// Witness receipts an answer carries are checked against its
+			// anchor under this directory, the requester's own; without
+			// one, an answer carrying any receipt is recorded as failed.
+			if path, _ := c.Flags().GetString("witness-directory"); path != "" {
+				raw, e := readInput(path)
+				if e != nil {
+					return e
+				}
+				if responder.Witnesses, e = evidencebook.ParseWitnessDirectory(raw); e != nil {
+					return hint(ErrInput, "--witness-directory "+path+": "+e.Error())
+				}
+			}
+		} else if path, _ := c.Flags().GetString("witness-directory"); path != "" {
+			return inputError("--witness-directory goes with --response: it checks the witness receipts an answer carries")
 		}
 		opened, e := openBook(c.Context(), p, false)
 		if e != nil {
@@ -929,6 +943,7 @@ func requestCommand() *cobra.Command {
 	cmd.Flags().String("response", "", "The response JSON that came back")
 	cmd.Flags().String("responder-key", "", "Required with --response: the responder's signing public key in hex; a response under any other key is refused")
 	cmd.Flags().String("responder-checkpoint-key", "", "Required with --response: the responder's checkpoint public key in hex; an artifact anchored under any other key is refused")
+	cmd.Flags().String("witness-directory", "", "With --response: a witness directory (witnesses.json format) to verify the witness receipts an answer carries; any receipt that does not verify under it, or any receipt at all without it, records the answer as failed")
 	cmd.Flags().String("absent-until", "", "RFC 3339 end of the window in which nothing arrived")
 	cmd.Flags().String("route", "", "Route the request was sent over (recorded with an absence)")
 	return cmd

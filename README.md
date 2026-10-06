@@ -277,7 +277,7 @@ capsulectl permalink --profile NAME --root CAPSULE_ID [--payloads all|selected] 
 capsulectl countersign request --profile NAME --service URL (--bundle BUNDLE.json | --root CAPSULE_ID [--producer-key HEX]) [--out FILE] [--window LABEL]
 capsulectl countersign verify --profile NAME --directory URL_OR_FILE BUNDLE.json
 capsulectl request --profile NAME --request FILE --responder NAME --output FILE
-capsulectl request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX | --absent-until TIME)
+capsulectl request --profile NAME --for RECORD_ID (--response FILE --responder-key HEX --responder-checkpoint-key HEX [--witness-directory FILE] | --absent-until TIME)
 capsulectl respond --profile NAME --request FILE --requester ID [--policy FILE] --output FILE
 capsulectl close --profile NAME --period day|week --counterparty ID [--date YYYY-MM-DD] [--since-last] [--peer FILE --peer-checkpoint-key HEX]
 capsulectl reconcile --profile NAME --period day|week --counterparty BOOK_ID --peer FILE --peer-checkpoint-key HEX
