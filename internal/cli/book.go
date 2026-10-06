@@ -75,8 +75,12 @@ func openBook(ctx context.Context, p Profile, create bool) (openedBook, error) {
 // openBookUnguarded is openBook without the retired-log check; only
 // `store migrate`, which is what satisfies that check, calls it directly.
 func openBookUnguarded(ctx context.Context, p Profile, create bool) (openedBook, error) {
-	if p.Type != "jsonl" || p.LogID == "" || p.Operator == "" {
+	if !p.isBook() {
 		return openedBook{}, inputError("book verbs need a jsonl profile with log_id and operator set")
+	}
+	if p.operatorMissing() {
+		// A profile saved by an earlier capsulectl, which did not require one.
+		return openedBook{}, inputError(fmt.Sprintf("profile %s has no operator, and the operator names who signs every record the book seals: set it with `capsulectl profile update --profile %s --operator <name>`", p.Name, p.Name))
 	}
 	recordKey, err := privateKey(p.Signing)
 	if err != nil {

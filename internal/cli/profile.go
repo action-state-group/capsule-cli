@@ -126,6 +126,17 @@ type Profile struct {
 	} `yaml:"cadence,omitempty" mapstructure:"cadence"`
 }
 
+// isBook reports whether the profile is an evidence book: a jsonl profile with
+// a log_id. Every record a book seals carries the profile's operator.
+func (p Profile) isBook() bool { return p.Type == "jsonl" && p.LogID != "" }
+
+// operatorMissing reports a book whose operator is empty or only whitespace.
+// Such a profile is refused when it is created or updated, and refused at seal
+// time if an earlier capsulectl saved it.
+func (p Profile) operatorMissing() bool {
+	return p.isBook() && strings.TrimSpace(p.Operator) == ""
+}
+
 func (p Profile) validate() error {
 	if _, err := p.clockTolerance(); err != nil {
 		return err
@@ -442,16 +453,30 @@ func profileCommands() *cobra.Command {
 				if p.Type == "mysql" {
 					prompts = append(prompts, prompt{"MySQL user", &p.Credentials.Username})
 				}
+				ask := func(item prompt) error {
+					if *item.target != "" {
+						return nil
+					}
+					if _, e := fmt.Fprint(c.ErrOrStderr(), item.label+": "); e != nil {
+						return e
+					}
+					s, e := reader.ReadString('\n')
+					if e != nil {
+						return inputError("guided configuration requires input; use flags for automation")
+					}
+					*item.target = strings.TrimSpace(s)
+					return nil
+				}
 				for _, item := range prompts {
-					if *item.target == "" {
-						if _, e := fmt.Fprint(c.ErrOrStderr(), item.label+": "); e != nil {
-							return e
-						}
-						s, e := reader.ReadString('\n')
-						if e != nil {
-							return inputError("guided configuration requires input; use flags for automation")
-						}
-						*item.target = strings.TrimSpace(s)
+					if e := ask(item); e != nil {
+						return e
+					}
+				}
+				// Only a book seals records with the operator, and whether this
+				// profile is one depends on the log ID just asked for.
+				if p.isBook() {
+					if e := ask(prompt{"Operator (who signs the book's records)", &p.Operator}); e != nil {
+						return e
 					}
 				}
 			}
@@ -462,6 +487,9 @@ func profileCommands() *cobra.Command {
 			}
 			if e := checkWitnessConfig(p); e != nil {
 				return e
+			}
+			if p.operatorMissing() {
+				return inputError("--operator is required for a jsonl profile with a log_id: the profile is an evidence book, and the operator names who signs every record it seals")
 			}
 			if e := saveProfile(p, update); e != nil {
 				return e
