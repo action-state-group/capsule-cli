@@ -30,6 +30,17 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Refuse committed env files
+        run: |
+          # .gitignore excludes .env and .env.*; this catches one committed anyway (git add -f, a
+          # rename). Example files (*.example) are allowed. ls-files runs on its own line, so a
+          # failure fails the step instead of reading as "no env files".
+          tracked="$(git ls-files)"
+          bad="$(printf '%s\n' "$tracked" | grep -E '(^|/)\.env($|\.)' | grep -vE '\.example$' || true)"
+          if [ -n "$bad" ]; then
+            printf '::error::env file(s) committed; remove them from the repository and rotate any secret they held:\n%s\n' "$bad"
+            exit 1
+          fi
       - name: Check formatting and module files
         run: |
           test -z "$(gofmt -l .)"
