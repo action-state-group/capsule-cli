@@ -24,24 +24,43 @@ import (
 // profile's trusted_keys, or the one the bundle's producer-key/v1 extension
 // declares) is shown as NOT INDEPENDENT, never as a countersignature.
 
-// dealCountersignView is the countersign rung on the receipt, the report JSON
-// and the page.
+// dealCountersignView is the countersign line on the receipt, the report JSON
+// and the page. The page renders it as written: it spells no rung of its
+// own.
 type dealCountersignView struct {
-	// Rung is countersigned (a rung of the grade ladder, gradeLadder);
-	// self_countersigned or unresolved_signer, annotations that are not rungs
-	// and leave the grade where witnessing put it (gradeAnnotations); or
-	// not_countersigned or unverified, which name no rung (gradeNoRung). The
-	// strongest entry decides.
-	Rung      string                   `json:"rung"`
-	Text      string                   `json:"text"`
+	// Rung is a rung of the grade ladder (gradeLadder) when one is reached:
+	// countersigned. Absent otherwise.
+	Rung string `json:"rung,omitempty"`
+	// Finding is what was found when no rung was reached: a
+	// countersignature annotation (gradeAnnotations: self_countersigned,
+	// unresolved_signer), or a value that names no rung (gradeNoRung:
+	// not_countersigned, unverified, unchecked). The strongest entry decides.
+	Finding string `json:"finding,omitempty"`
+	Text    string `json:"text"`
+	// Note says how this was checked and how to check it again; Flag marks a
+	// finding the reader must not mistake for a countersignature.
+	Note      string                   `json:"note,omitempty"`
+	Flag      bool                     `json:"flag,omitempty"`
 	Directory string                   `json:"directory,omitempty"`
 	Entries   []countersignatureReport `json:"entries,omitempty"`
 }
 
 const dealNotCountersignedText = "Not countersigned: no other party has signed this record. It stands on the agent's own seal and any witness receipt above."
 
+const dealCountersignCheckYourself = "Check it yourself with capsulectl countersign verify FILE --directory DIRECTORY, using a directory you trust."
+
 func dealNotCountersigned() dealCountersignView {
-	return dealCountersignView{Rung: "not_countersigned", Text: dealNotCountersignedText}
+	return dealCountersignView{Finding: "not_countersigned", Text: dealNotCountersignedText}
+}
+
+// dealCountersignForPage is the view a page carries: a bundle that holds a
+// countersignature capsulectl did not check says only that.
+func dealCountersignForPage(b map[string]interface{}, view dealCountersignView) dealCountersignView {
+	if carried, _ := b["countersignatures"].([]interface{}); len(carried) > 0 && view.Finding == "not_countersigned" {
+		return dealCountersignView{Finding: "unchecked", Note: dealCountersignCheckYourself,
+			Text: "A countersignature is in this file, but it was not checked when this page was written: this page does not say who made it, and a countersignature by the producer's own key is not independent."}
+	}
+	return view
 }
 
 // dealCountersignVerify verifies every countersignature the bundle carries,
@@ -76,15 +95,16 @@ func dealCountersignVerify(ctx context.Context, b map[string]interface{}, direct
 	case "resolved":
 		view.Rung = "countersigned"
 	case "not_independent":
-		view.Rung = "self_countersigned"
+		view.Finding, view.Flag = "self_countersigned", true
 	case "unresolved_signer":
-		view.Rung = "unresolved_signer"
+		view.Finding = "unresolved_signer"
 	case "unverified":
-		view.Rung = "unverified"
+		view.Finding = "unverified"
 	default:
 		return dealNotCountersigned(), nil
 	}
 	view.Text = strings.Join(lines, " ")
+	view.Note = "Checked by capsulectl when this page was written, against the directory " + directory + ". " + dealCountersignCheckYourself
 	return view, nil
 }
 

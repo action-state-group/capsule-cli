@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -227,6 +228,30 @@ func attributeProvenance(asked, proposed dealTerms) (yours, agents []dealAttribu
 		sort("conditions."+k, strings.ReplaceAll(k, "_", " "), asked.Conditions[k], proposed.Conditions[k])
 	}
 	return yours, agents
+}
+
+// namedInWords reports whether every word of value appears in words, the
+// user's own: "HOU/SJC" in "HOU to SJC", "Oct 21 to Oct 24" in "Oct 21 to
+// Oct 24", but not a flight number the user never said. Small joining words
+// are not needed.
+func namedInWords(value, words string) bool {
+	token := regexp.MustCompile(`[\p{L}\p{N}]+`)
+	said := map[string]bool{}
+	for _, w := range token.FindAllString(strings.ToLower(words), -1) {
+		said[w] = true
+	}
+	joining := map[string]bool{"to": true, "and": true, "the": true, "a": true, "of": true, "on": true, "in": true, "at": true, "for": true, "from": true}
+	named := 0
+	for _, w := range token.FindAllString(strings.ToLower(value), -1) {
+		if joining[w] {
+			continue
+		}
+		if !said[w] {
+			return false
+		}
+		named++
+	}
+	return named > 0
 }
 
 // materialAttribute is an attribute the agent may not settle alone: one that
@@ -615,6 +640,11 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 // or for one step when the user approves that step's paused check.
 func laterIntent(cur, next dealIntent) dealIntent {
 	out := next
+	// A note that names no terms ("cancel this ticket") changes nothing the
+	// user asked to buy: the terms in force stay.
+	if reflect.DeepEqual(next.Asked, dealTerms{}) {
+		out.Asked = cur.Asked
+	}
 	switch {
 	case cur.MaxTotalMinor == nil:
 	case next.MaxTotalMinor == nil || *next.MaxTotalMinor > *cur.MaxTotalMinor:
@@ -871,6 +901,19 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	// 1. Asked?
 	intent := s.intent
 	r.Asked, r.Picked = attributeProvenance(intent.Asked, proposed)
+	// What the user's own words name is theirs, even where the structured
+	// terms leave it out: dates, a place or a fare named in the opening
+	// sentence were never the agent's pick.
+	words := s.open.Intent.Verbatim + " " + intent.Verbatim
+	picked := r.Picked[:0:0]
+	for _, a := range r.Picked {
+		if namedInWords(a.Value, words) {
+			r.Asked = append(r.Asked, a)
+		} else {
+			picked = append(picked, a)
+		}
+	}
+	r.Picked = picked
 	// A material attribute the agent picked needs the user's nod: it pauses
 	// the check, so "proceed" is never true on an empty card.
 	for _, a := range r.Picked {
@@ -1170,6 +1213,33 @@ func closeDeal(s dealState, in dealCloseInput) dealCloseResult {
 	return r
 }
 
+// restatedIntents marks each intent note whose words are the ones already in
+// force (the opening's, or the latest earlier note's): the user said it
+// again, they did not change what they asked.
+func restatedIntents(events []sealedEvent) map[string]bool {
+	out := map[string]bool{}
+	if len(events) == 0 || events[0].Event.Open == nil {
+		return out
+	}
+	current := events[0].Event.Open.Intent.Verbatim
+	for _, se := range events[1:] {
+		if i := se.Event.Intent; i != nil {
+			out[se.CapsuleID] = i.Verbatim == current
+			current = i.Verbatim
+		}
+	}
+	return out
+}
+
+// trailLineIn is trailLine for events[i], which a restated intent changes:
+// the same words again are not a change of what was asked.
+func trailLineIn(events []sealedEvent, restated map[string]bool, i int) string {
+	if e := events[i].Event; e.Kind == "intent" && restated[events[i].CapsuleID] {
+		return fmt.Sprintf("you said again what you asked, unchanged: %q", e.Intent.Verbatim)
+	}
+	return trailLine(events[i].Event)
+}
+
 // trailLine is the one-line, plain-words account of a step for the report.
 func trailLine(e dealEvent) string {
 	switch e.Kind {
@@ -1256,6 +1326,9 @@ type dealReportItem struct {
 	Kind  string   `json:"kind"`
 	Text  string   `json:"text"`
 	Steps []string `json:"steps"`
+	// At is when the step this item reports was sealed, for the "did"
+	// items: two cycles in the same words are told apart by their times.
+	At string `json:"at,omitempty"`
 	// Shared is the text for a counterparty's copy, when it differs: a
 	// check's line without the user's and the agent's choices (the items go
 	// only to an adjudicator).
@@ -1462,7 +1535,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 			if len(who) > 0 {
 				text += " (" + strings.Join(who, "; ") + ")"
 			}
-			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: text, Steps: []string{e.Check.Snapshot, se.CapsuleID}, Shared: shared})
+			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: text, Steps: []string{e.Check.Snapshot, se.CapsuleID}, Shared: shared, At: e.At})
 			var asked []string
 			for _, d := range e.Check.Differences {
 				if d.Question == "asked" && d.Rule != "agent_picked" && !(d.Rule == "not_asked" && d.Field == "action" && userApproved[se.CapsuleID]) {
@@ -1511,7 +1584,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 			if a.Unchecked {
 				text += " ⚠️"
 			}
-			r.Did = append(r.Did, dealReportItem{Kind: "act", Text: text, Steps: steps})
+			r.Did = append(r.Did, dealReportItem{Kind: "act", Text: text, Steps: steps, At: e.At})
 			if !a.Unchecked {
 				continue
 			}
@@ -1529,7 +1602,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 				counterparty("delivered_differs", d.Text, openID, se.CapsuleID)
 			}
 		case "close":
-			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: "Closed: " + e.Close.Outcome, Steps: []string{se.CapsuleID}})
+			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: "Closed: " + e.Close.Outcome, Steps: []string{se.CapsuleID}, At: e.At})
 		case "disclosure":
 			d := e.Disclosure
 			item := dealToldItem{At: e.At, To: d.recipient(open.Who), ToKind: d.To, Fields: d.Fields, Authority: "approval", Steps: []string{se.CapsuleID}}

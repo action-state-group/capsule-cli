@@ -1283,11 +1283,12 @@ func dealReportCommand() *cobra.Command {
 			}
 			lines := make([]string, 0, len(events))
 			outcome := "open"
-			for _, se := range events {
+			restated := restatedIntents(events)
+			for i, se := range events {
 				if se.Event.Kind == "close" {
 					outcome = se.Event.Close.Outcome
 				}
-				lines = append(lines, fmt.Sprintf("%d. %s %s", se.Event.N, se.Event.At, trailLine(se.Event)))
+				lines = append(lines, fmt.Sprintf("%d. %s %s", se.Event.N, se.Event.At, trailLineIn(events, restated, i)))
 			}
 			out := map[string]any{
 				"deal_id": dealID, "scope": dealScopeLine, "did_line": dealDidLine(dealDidSources(events)), "demo": events[0].Event.Open.Demo, "outcome": outcome,
