@@ -48,8 +48,10 @@ func TestRepeatedCyclesCarryTheirTimes(t *testing.T) {
 	assert.Equal(t, "2026-10-04T18:37:00Z", checks[1]["at"])
 }
 
-// What the user's opening sentence named (dates, place, fare) is theirs, not
-// the agent's pick; a flight number they never said is the agent's.
+// What the user's opening sentence named (dates, place, fare) reads as
+// theirs in the report; a flight number they never said is the agent's. The
+// check itself keeps every attribute the agent picked: the report re-reads
+// it, the check's verdict is untouched.
 func TestAttributesNamedInTheOpeningAreTheUsers(t *testing.T) {
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
@@ -58,15 +60,35 @@ func TestAttributesNamedInTheOpeningAreTheUsers(t *testing.T) {
 		"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"currency":"USD","conditions":{"fare":"Basic"}},
 		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"conditions":{"fare":"Basic"}},"recourse":{"rail":"card","refundable":true}}`))
-	fields := func(key string) []string {
-		var out []string
-		for _, a := range check[key].([]any) {
-			out = append(out, a.(map[string]any)["field"].(string))
-		}
-		return out
+	var picked []string
+	for _, a := range check["picked_by_agent"].([]any) {
+		picked = append(picked, a.(map[string]any)["field"].(string))
 	}
-	assert.ElementsMatch(t, []string{"when", "place", "conditions.fare"}, fields("asked_attributes"))
-	assert.Equal(t, []string{"item"}, fields("picked_by_agent"), "the flight number was never in the user's words")
+	assert.ElementsMatch(t, []string{"item", "when", "place", "conditions.fare"}, picked, "the check keeps what it judged")
+	var text string
+	for _, d := range dealRun(t, "report", "--deal", id)["did"].([]any) {
+		if item := d.(map[string]any); item["kind"] == "check" {
+			text = item["text"].(string)
+		}
+	}
+	assert.Contains(t, text, "you asked for: dates Oct 21 to Oct 24 · place HOU/SJC · fare Basic")
+	assert.Contains(t, text, "the agent picked, not you: item WN 1234")
+}
+
+// A number the agent picked is never made the user's by a digit that only
+// happens to be in their words: the opening says "Oct 2", the agent picked
+// quantity 2, and the check still pauses for the user's nod.
+func TestADigitInADateDoesNotSettleAMaterialPick(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+		"intent":{"verbatim":"get me tickets for the Oct 2 show","allowed":["pay"]},
+		"who":{"name":"Example Tickets","domain":"tickets.example"},
+		"terms":{"item":"show ticket","when":"Oct 2","price_minor":9000,"currency":"USD"},
+		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":9000,"terms":{"item":"show ticket","quantity":2,"when":"Oct 2","price_minor":9000},"recourse":{"rail":"card","refundable":true}}`))
+	assert.Equal(t, "pause", check["verdict"])
+	assert.Equal(t, false, check["proceed"])
+	assert.Contains(t, check["card"], "I picked quantity 2")
 }
 
 // Facts before epistemics: on the page, what was asked, what was done and

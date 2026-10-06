@@ -233,7 +233,8 @@ func attributeProvenance(asked, proposed dealTerms) (yours, agents []dealAttribu
 // namedInWords reports whether every word of value appears in words, the
 // user's own: "HOU/SJC" in "HOU to SJC", "Oct 21 to Oct 24" in "Oct 21 to
 // Oct 24", but not a flight number the user never said. Small joining words
-// are not needed.
+// are not needed. It is a reading aid for the report only: a single word
+// (the "2" in "Oct 2") can match by chance, so it never decides a check.
 func namedInWords(value, words string) bool {
 	token := regexp.MustCompile(`[\p{L}\p{N}]+`)
 	said := map[string]bool{}
@@ -901,19 +902,6 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	// 1. Asked?
 	intent := s.intent
 	r.Asked, r.Picked = attributeProvenance(intent.Asked, proposed)
-	// What the user's own words name is theirs, even where the structured
-	// terms leave it out: dates, a place or a fare named in the opening
-	// sentence were never the agent's pick.
-	words := s.open.Intent.Verbatim + " " + intent.Verbatim
-	picked := r.Picked[:0:0]
-	for _, a := range r.Picked {
-		if namedInWords(a.Value, words) {
-			r.Asked = append(r.Asked, a)
-		} else {
-			picked = append(picked, a)
-		}
-	}
-	r.Picked = picked
 	// A material attribute the agent picked needs the user's nod: it pauses
 	// the check, so "proceed" is never true on an empty card.
 	for _, a := range r.Picked {
@@ -1482,8 +1470,13 @@ func buildDealReport(events []sealedEvent) dealReport {
 		}
 	}
 	changedWho(open.Who, openID)
+	// The user's own words so far: the opening, then each sealed intent.
+	userWords := open.Intent.Verbatim
 	for _, se := range events {
 		e := se.Event
+		if e.Intent != nil {
+			userWords += " " + e.Intent.Verbatim
+		}
 		switch e.Kind {
 		case "message":
 			if e.Message.From != "counterparty" {
@@ -1525,12 +1518,25 @@ func buildDealReport(events []sealedEvent) dealReport {
 			// What the user chose and what the agent chose for them, told
 			// apart as the approval text tells them, so a choice the agent
 			// made never reads as the user's.
-			var who []string
-			if len(e.Check.Asked) > 0 {
-				who = append(who, "you asked for: "+attributeText(e.Check.Asked))
+			// The check sealed what it judged; the report only re-reads, in
+			// the user's own words so far, what the agent picked: an
+			// attribute those words name (dates, a place, a fare in the
+			// opening sentence) is shown as the user's. The verdict, and any
+			// pause for a material pick, stay as the check sealed them.
+			yours, picked := slices.Clone(e.Check.Asked), []dealAttribute{}
+			for _, a := range e.Check.Picked {
+				if namedInWords(a.Value, userWords) {
+					yours = append(yours, a)
+				} else {
+					picked = append(picked, a)
+				}
 			}
-			if len(e.Check.Picked) > 0 {
-				who = append(who, "the agent picked, not you: "+attributeText(e.Check.Picked))
+			var who []string
+			if len(yours) > 0 {
+				who = append(who, "you asked for: "+attributeText(yours))
+			}
+			if len(picked) > 0 {
+				who = append(who, "the agent picked, not you: "+attributeText(picked))
 			}
 			if len(who) > 0 {
 				text += " (" + strings.Join(who, "; ") + ")"
