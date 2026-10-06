@@ -204,9 +204,9 @@ func TestDealRecordsFollowTheProfile(t *testing.T) {
 	}
 
 	// The profile's own checker, when python3 is available.
-	python, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not available; the profile checker did not run")
+	python := profilePython(t)
+	if python == "" {
+		return
 	}
 	cmd := exec.Command(python, dealProfileDir+"/check_profile.py", export)
 	result, err := cmd.CombinedOutput()
@@ -263,6 +263,9 @@ func TestGradeStringsNameOnlyLadderRungs(t *testing.T) {
 		}
 		return false
 	}
+	// The countersign view's Finding field (finding in its JSON), not any
+	// local variable that happens to be called finding.
+	findingField := func(name string) bool { return name == "Finding" }
 	keyName := func(e ast.Expr) string {
 		switch k := e.(type) {
 		case *ast.Ident:
@@ -293,7 +296,7 @@ func TestGradeStringsNameOnlyLadderRungs(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	require.NoError(t, err)
 	fset := token.NewFileSet()
-	var values []string
+	var values, findings []string
 	for _, path := range files {
 		if strings.HasSuffix(path, "_test.go") {
 			continue
@@ -301,18 +304,22 @@ func TestGradeStringsNameOnlyLadderRungs(t *testing.T) {
 		f, err := parser.ParseFile(fset, path, nil, 0)
 		require.NoError(t, err)
 		ast.Inspect(f, func(n ast.Node) bool {
-			var key, value ast.Expr
+			// pairs are (field or key, value) a node assigns; a
+			// multi-value assignment is one pair per name.
+			var pairs [][2]ast.Expr
 			switch n := n.(type) {
 			case *ast.KeyValueExpr:
-				key, value = n.Key, n.Value
+				pairs = append(pairs, [2]ast.Expr{n.Key, n.Value})
 			case *ast.AssignStmt:
-				if len(n.Lhs) == 1 && len(n.Rhs) == 1 {
-					key, value = n.Lhs[0], n.Rhs[0]
+				if len(n.Lhs) == len(n.Rhs) {
+					for i := range n.Lhs {
+						pairs = append(pairs, [2]ast.Expr{n.Lhs[i], n.Rhs[i]})
+					}
 				}
 			case *ast.CallExpr:
 				// emit.TimeRung("self_attested")
 				if sel, ok := n.Fun.(*ast.SelectorExpr); ok && rungField(sel.Sel.Name) && len(n.Args) == 1 {
-					key, value = n.Fun, n.Args[0]
+					pairs = append(pairs, [2]ast.Expr{n.Fun, n.Args[0]})
 				}
 			case *ast.BasicLit:
 				if receiptFiles[path] && n.Kind == token.STRING {
@@ -320,29 +327,38 @@ func TestGradeStringsNameOnlyLadderRungs(t *testing.T) {
 					checkWords(fset.Position(n.Pos()).String(), v)
 				}
 			}
-			lit, ok := value.(*ast.BasicLit)
-			if key == nil || !ok || lit.Kind != token.STRING || !rungField(keyName(key)) {
-				return true
+			for _, pair := range pairs {
+				lit, ok := pair[1].(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					continue
+				}
+				v, _ := strconv.Unquote(lit.Value)
+				switch name := keyName(pair[0]); {
+				case rungField(name):
+					values = append(values, v)
+					assert.True(t, isRungValue(v), "%s: rung value %q is not a rung of the grade ladder", fset.Position(lit.Pos()), v)
+				case findingField(name):
+					findings = append(findings, v)
+					assert.True(t, isFindingValue(v), "%s: finding %q is neither an annotation nor a no-rung value", fset.Position(lit.Pos()), v)
+				}
 			}
-			v, _ := strconv.Unquote(lit.Value)
-			values = append(values, v)
-			assert.True(t, isGradeValue(v), "%s: rung value %q is not on the grade ladder", fset.Position(lit.Pos()), v)
 			return true
 		})
 	}
 	page, err := os.ReadFile("assets/deal-view.js")
 	require.NoError(t, err)
-	for _, m := range regexp.MustCompile(`rung\s*(?::|===|!==)\s*"([^"]+)"`).FindAllStringSubmatch(string(page), -1) {
-		values = append(values, m[1])
-		assert.True(t, isGradeValue(m[1]), "deal-view.js: rung value %q is not on the grade ladder", m[1])
-	}
+	// The page renders the rung capsulectl wrote: it spells none itself.
+	assert.Empty(t, regexp.MustCompile(`(?:rung|finding)\s*(?::|===|!==)\s*"[^"]+"`).FindAllString(string(page), -1), "deal-view.js spells a rung or finding")
 	for _, m := range regexp.MustCompile(`"(?:[^"\\\n]|\\.)*"|`+"`[^`]*`").FindAllString(string(page), -1) {
 		checkWords("deal-view.js", m)
 	}
-	// The scan found the rung fields it exists to check: the receipt's
-	// assurance and countersign rungs, and the page's.
-	for _, want := range []string{"self_attested", "witnessed", "witnessed_in_part", "countersigned", "self_countersigned", "unresolved_signer", "not_countersigned", "unchecked"} {
+	// The scan found the fields it exists to check: the receipt's assurance
+	// and countersign rungs, and the countersign findings.
+	for _, want := range []string{"self_attested", "witnessed", "witnessed_in_part", "countersigned"} {
 		assert.Contains(t, values, want)
+	}
+	for _, want := range []string{"not_countersigned", "self_countersigned", "unresolved_signer", "unverified", "unchecked"} {
+		assert.Contains(t, findings, want)
 	}
 }
 

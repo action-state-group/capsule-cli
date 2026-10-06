@@ -89,13 +89,18 @@ function versionBefore(a, b) {
     }
     const cut = typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : "";
     const part = cadence.state === "witnessed" && cadence.extent === "part";
+    // What those steps hold, in the user's terms, as capsulectl named them.
+    const wc = report.witness_coverage || {};
+    const coverage =
+      (typeof wc.witnessed_acts === "string" && wc.witnessed_acts ? `Witnessed, steps 1 to ${Number(cadence.steps_witnessed)}: ${wc.witnessed_acts}. ` : "") +
+      (typeof wc.pending_acts === "string" && wc.pending_acts ? `Witness pending, steps ${Number(cadence.steps_witnessed) + 1} to ${Number(cadence.steps)}: ${wc.pending_acts}. ` : "");
     const k = Number(cadence.steps_witnessed);
     const n = Number(cadence.steps);
     header.append(
       el(
         "p",
         part
-          ? `Witnessed in part: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${cut}at a cadence tick, covering steps 1 to ${k} of ${n}: those existed, unchanged, by then. Steps ${k + 1} to ${n} are sealed by my agent on this device only, witness pending. It does not confirm what the agent did.`
+          ? `Witnessed in part: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${cut}at a cadence tick, covering steps 1 to ${k} of ${n}: those existed, unchanged, by then. Steps ${k + 1} to ${n} are sealed by my agent on this device only, witness pending. ${coverage}It does not confirm what the agent did.`
           : `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${cut}at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`,
         "deal-rung",
       ),
@@ -120,34 +125,19 @@ function versionBefore(a, b) {
   // countersigned" unless the bundle carried a countersignature that
   // verified, and a self-countersignature is NOT INDEPENDENT. A file that
   // carries a countersignature capsulectl did not check says only that.
-  let countersign = { rung: "not_countersigned", text: "Not countersigned: no other party has signed this record." };
+  // The page renders the line capsulectl wrote; it names no rung itself.
+  let countersign = { text: "The countersign line could not be read from this file." };
   const csNode = document.getElementById("deal-countersign");
   if (csNode) {
     try {
       const parsed = JSON.parse(csNode.textContent);
       if (parsed && typeof parsed.text === "string") countersign = parsed;
     } catch (e) {
-      // unreadable: keep the honest default
+      // unreadable: say so, and claim nothing
     }
   }
-  const carried = Array.isArray(bundle.countersignatures) && bundle.countersignatures.length > 0;
-  if (carried && countersign.rung === "not_countersigned") {
-    countersign = {
-      rung: "unchecked",
-      text: "A countersignature is in this file, but it was not checked when this page was written: this page does not say who made it, and a countersignature by the producer's own key is not independent.",
-    };
-  }
-  header.append(el("p", countersign.text, countersign.rung === "self_countersigned" ? "deal-rung deal-bad" : "deal-rung"));
-  if (countersign.rung !== "not_countersigned") {
-    header.append(
-      el(
-        "p",
-        (countersign.directory ? "Checked by capsulectl when this page was written, against the directory " + countersign.directory + ". " : "") +
-          "Check it yourself with capsulectl countersign verify FILE --directory DIRECTORY, using a directory you trust.",
-        "deal-note",
-      ),
-    );
-  }
+  header.append(el("p", countersign.text, countersign.flag === true ? "deal-rung deal-bad" : "deal-rung"));
+  if (typeof countersign.note === "string" && countersign.note) header.append(el("p", countersign.note, "deal-note"));
   // Written by capsulectl from what the deal recorded (dealDidLine): the
   // conversation is rightly the agent's own record; what the agent did needs
   // an independent source.
@@ -204,6 +194,7 @@ function versionBefore(a, b) {
   // Which build sealed the steps, read from the records this page verified
   // (not from the summary), compared with the build that made this page.
   // Both are already in this file: nothing is fetched to do it.
+  const provenance = el("section", undefined, "deal-provenance");
   const builds = [];
   matched.forEach((id) => {
     const rec = ((bundle.disclosures || {})[id] || {}).agent_input || {};
@@ -211,8 +202,8 @@ function versionBefore(a, b) {
     const name = p && typeof p.version === "string" ? `${p.name || "capsulectl"} ${p.version} (${p.commit || "unknown"})` : "an earlier capsulectl that did not record its version";
     if (!builds.some((b) => b.name === name)) builds.push({ name, version: p && p.version });
   });
-  if (builds.length > 0) host.append(el("p", `Produced by ${builds.map((b) => b.name).join(", then ")}.`, "deal-note"));
-  if (typeof report.instructions === "string" && report.instructions) host.append(el("p", report.instructions, "deal-note"));
+  if (builds.length > 0) provenance.append(el("p", `Produced by ${builds.map((b) => b.name).join(", then ")}.`, "deal-note"));
+  if (typeof report.instructions === "string" && report.instructions) provenance.append(el("p", report.instructions, "deal-note"));
   const pageVersion = typeof report.page_version === "string" ? report.page_version : "";
   const older = builds.filter((b) => b.version === undefined || versionBefore(b.version, pageVersion));
   if (pageVersion && older.length > 0) {
@@ -222,9 +213,8 @@ function versionBefore(a, b) {
     link.textContent = "the release notes";
     link.rel = "noopener";
     what.append(link);
-    host.append(what);
+    provenance.append(what);
   }
-  host.append(header);
 
   // The user's words are checked here against the baseline's sealed
   // commitment: SHA-256 over JCS({"nonce","text"}). For two string members in
@@ -258,7 +248,24 @@ function versionBefore(a, b) {
   host.append(el("h2", "What the agent did"));
   const did = report.did || [];
   if (did.length === 0) host.append(el("p", "Nothing yet.", "deal-note"));
-  did.forEach((i) => host.append(item(i.text, i.steps)));
+  did.forEach((i) => host.append(item(typeof i.at === "string" && i.at ? `${i.at} · ${i.text}` : i.text, i.steps)));
+  // What the sealed acts moved, by direction: a pay and its reversal net to zero.
+  if (report.money && typeof report.money.text === "string") host.append(el("p", report.money.text));
+
+  // Where the deal stands (open, cancelled or closed), the records linked to
+  // the close after it, and that more may be linked after this page was
+  // made: a fact, before what the page can and cannot prove about it.
+  // Written by capsulectl when the page was made ("as of"); each linked
+  // record expands to its sealed step.
+  const life = report.lifecycle;
+  if (life && typeof life.text === "string") {
+    host.append(el("h2", "Where this deal stands"), el("p", life.text));
+    (life.later || []).forEach((l) => host.append(item(`${l.at} · confirms the close: ${l.text}`, [l.capsule_id])));
+    host.append(el("p", `${life.may_change} (as of ${life.as_of})`, "deal-note"));
+  }
+
+  // What this receipt can prove and how to check it, after the facts it is about.
+  host.append(header, provenance);
 
   // What the agent told whom about the user: each telling, its time and the
   // approval that covered it, or that none did. Your own copy shows what was
@@ -272,17 +279,6 @@ function versionBefore(a, b) {
     host.append(item(`${flagged ? "⚠️ " : ""}${t.text} · ${t.at} · ${t.authority_text}${shared ? "" : ` (${fields})`}`, t.steps, flagged ? "deal-flag" : undefined));
   });
   host.append(el("p", "Only what the agent sealed as shared is listed here; something it told without sealing it is not.", "deal-note"));
-
-  // Where the deal stands: open or closed, the records linked to the close
-  // after it, and that more may be linked after this page was made. Written
-  // by capsulectl when the page was made ("as of"); each linked record
-  // expands to its sealed step.
-  const life = report.lifecycle;
-  if (life && typeof life.text === "string") {
-    host.append(el("h2", "Where this deal stands"), el("p", life.text));
-    (life.later || []).forEach((l) => host.append(item(`${l.at} · confirms the close: ${l.text}`, [l.capsule_id])));
-    host.append(el("p", `${life.may_change} (as of ${life.as_of})`, "deal-note"));
-  }
 
   // Cancel-by dates: the point of no return is a date passing. Recorded,
   // never enforced.

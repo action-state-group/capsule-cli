@@ -74,7 +74,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["rel", "type", "digest_alg", "digest"],
       "properties": {
-        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome", "confirms"] },
+        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome", "confirms", "reverses"] },
         "type": { "const": "deal-record" },
         "digest_alg": { "const": "SHA-256" },
         "digest": { "$ref": "#/$defs/hex64" }
@@ -349,6 +349,7 @@
         "amount_minor": { "$ref": "#/$defs/safe_uint" },
         "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
         "rail": { "$ref": "#/$defs/ns_token" },
+        "direction": { "description": "Which way the amount moved: out (paid by the user) or in (back to the user, from the action it reverses). Absent on records sealed before it was recorded.", "enum": ["out", "in"] },
         "reference_commitment": { "$ref": "#/$defs/hex64" },
         "description_commitment": { "$ref": "#/$defs/hex64" }
       }

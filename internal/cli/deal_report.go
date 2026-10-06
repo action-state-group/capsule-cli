@@ -91,8 +91,12 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	if err != nil {
 		return nil, err
 	}
+	coverage := witnessCoverage(events, cadence)
 	if shared {
 		ext := dealShareExtension(events, report, audience, private, withhold)
+		if coverage != nil {
+			ext["witness_coverage"] = coverage
+		}
 		ext["did_line"] = dealDidLine(dealDidSources(events))
 		ext["verify_command"] = verifyCommand
 		b["extensions"] = map[string]interface{}{dealCadenceExtension: cadence, "x-deal-v0": ext}
@@ -108,10 +112,16 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 		}
 	}
 	steps := make([]interface{}, len(events))
+	restated := restatedIntents(events)
 	for i, se := range events {
+		line := dealStepLine(se.Event, cited[se.CapsuleID])
+		if restated[se.CapsuleID] {
+			line = trailLineIn(events, restated, i)
+			line = strings.ToUpper(line[:1]) + line[1:]
+		}
 		steps[i] = map[string]interface{}{
 			"n": integer(uint64(se.Event.N)), "kind": se.Event.Kind, "capsule_id": se.CapsuleID, "at": se.Event.At,
-			"line": dealStepLine(se.Event, cited[se.CapsuleID]),
+			"line": line,
 		}
 	}
 	items := func(list []dealReportItem) []interface{} {
@@ -124,6 +134,9 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 			m := map[string]interface{}{"kind": item.Kind, "text": item.Text, "steps": ids}
 			if item.Side != "" {
 				m["side"] = item.Side
+			}
+			if item.At != "" {
+				m["at"] = item.At
 			}
 			out[i] = m
 		}
@@ -160,6 +173,16 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	ext := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
 	ext["merchant"] = merchant
 	ext["email_scope"] = emailScopeLine
+	if coverage != nil {
+		ext["witness_coverage"] = coverage
+	}
+	if report.Money != nil {
+		money, err := bundleJSON(report.Money)
+		if err != nil {
+			return nil, err
+		}
+		ext["money"] = money
+	}
 	for key, v := range map[string]any{"deadlines": dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "lifecycle": buildDealLifecycle(events, dealClock())} {
 		generic, err := bundleJSON(v)
 		if err != nil {
@@ -173,6 +196,40 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	return b, nil
 }
 
+// witnessCoverage names, in the user's terms, what a receipt covering only
+// part of a deal covers: the acts in the witnessed steps, and the acts in
+// the steps still witness-pending ("the payment is witnessed; the
+// cancellation is not yet"). Acts are named without payee or reference, so
+// a shared copy carries it as it is. Nil unless the deal is witnessed in
+// part.
+func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[string]interface{} {
+	if cadence["state"] != "witnessed" || cadence["extent"] != "part" {
+		return nil
+	}
+	k, err := jsonUint(cadence["steps_witnessed"])
+	if err != nil || k == 0 || int(k) >= len(events) {
+		return nil
+	}
+	currency := events[0].Event.Open.Terms.Currency
+	acts := func(from []sealedEvent) string {
+		var names []string
+		for _, se := range from {
+			if a := se.Event.Act; a != nil {
+				names = append(names, dealShareAct(*a, currency))
+			}
+		}
+		return strings.Join(names, "; ")
+	}
+	out := map[string]interface{}{"steps_witnessed": integer(k), "steps": integer(uint64(len(events)))}
+	if covered := acts(events[:k]); covered != "" {
+		out["witnessed_acts"] = covered
+	}
+	if pending := acts(events[k:]); pending != "" {
+		out["pending_acts"] = pending
+	}
+	return out
+}
+
 // dealReportHTML renders one local, self-contained page: the bundle, the
 // vendored verifier and the deal view. It needs no network to open or verify,
 // and nothing is hosted: the agent attaches or hands over the file.
@@ -181,6 +238,7 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 // (the page cannot check a signature against a directory); it rides as JSON
 // beside the bundle, never inside it, so the bundle's digest is unchanged.
 func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (string, error) {
+	countersign = dealCountersignForPage(b, countersign)
 	page, err := emitter.EmitEvidenceGraphHTML(b, evidenceGraphIIFE)
 	if err != nil {
 		return "", err

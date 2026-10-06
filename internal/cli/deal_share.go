@@ -963,11 +963,16 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 	currency := events[0].Event.Open.Terms.Currency
 	byID := map[string]dealEvent{}
 	steps := make([]interface{}, len(events))
+	restated := restatedIntents(events)
 	for i, se := range events {
 		byID[se.CapsuleID] = se.Event
+		line := dealShareStepLine(se.Event, audience, p, currency)
+		if restated[se.CapsuleID] {
+			line = "You said again what you asked, unchanged (your words withheld)"
+		}
 		steps[i] = map[string]interface{}{
 			"n": integer(uint64(se.Event.N)), "kind": se.Event.Kind, "capsule_id": se.CapsuleID, "at": se.Event.At,
-			"line": p.scrub(dealShareStepLine(se.Event, audience, p, currency)), "withheld": withhold[se.CapsuleID],
+			"line": p.scrub(line), "withheld": withhold[se.CapsuleID],
 		}
 	}
 	// lastAct is the act an item was read from, if any, for its amount and rail.
@@ -1010,6 +1015,9 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 			m := map[string]interface{}{"kind": item.Kind, "text": p.scrub(text), "steps": ids}
 			if item.Side != "" {
 				m["side"] = item.Side
+			}
+			if item.At != "" {
+				m["at"] = item.At
 			}
 			out[i] = m
 		}

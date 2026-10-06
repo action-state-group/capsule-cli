@@ -30,7 +30,7 @@ var gradeAnnotations = []string{"self-countersigned", "unresolved-signer"}
 // self-attested until a later checkpoint covers them).
 const gradeInPart = "_in_part"
 
-// gradeNoRung are the values a rung field takes when no rung on its axis is
+// gradeNoRung are the findings when no rung on the countersign axis is
 // reached. They name the absence, never a rung: not_countersigned (no
 // countersignature), unverified (a countersignature of a type capsulectl
 // does not check: attached, not counted), unchecked (the page carries a
@@ -43,12 +43,21 @@ func rungName(value string) string {
 	return strings.ReplaceAll(value, "_", "-")
 }
 
-// isGradeValue reports whether value, a rung field's value, names a rung of
-// the ladder (or a rung in part), an annotation, or one of the values that
-// name no rung.
-func isGradeValue(value string) bool {
-	if slices.Contains(gradeNoRung, value) || slices.Contains(gradeAnnotations, rungName(value)) {
-		return true
-	}
+// isRungValue reports whether value, a rung field's value, is a rung of the
+// ladder, or a rung in part. Nothing else may sit in a rung field.
+func isRungValue(value string) bool {
 	return slices.Contains(gradeLadder, rungName(strings.TrimSuffix(value, gradeInPart)))
+}
+
+// isFindingValue reports whether value, a finding field's value, is a
+// countersignature annotation or one of the values that name no rung.
+func isFindingValue(value string) bool {
+	return slices.Contains(gradeNoRung, value) || slices.Contains(gradeAnnotations, rungName(value))
+}
+
+// isGradeValue reports whether a word the receipt shows names a rung, an
+// annotation, or no rung: anything else that looks like a grade is off the
+// ladder.
+func isGradeValue(value string) bool {
+	return isRungValue(value) || isFindingValue(value)
 }

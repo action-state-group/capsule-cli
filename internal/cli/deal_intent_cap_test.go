@@ -115,7 +115,7 @@ func TestDealLaterIntentCannotRaiseTheLimit(t *testing.T) {
 		records, err := os.ReadFile(export)
 		require.NoError(t, err)
 		assert.Contains(t, string(records), `"choice":"confirm_limits","limits":{"new":{"allowed":["pay"],"max_total_minor":5000},"previous":{"allowed":["pay"],"max_total_minor":800}}`)
-		if python, err := exec.LookPath("python3"); err == nil {
+		if python := profilePython(t); python != "" {
 			result, err := exec.Command(python, dealProfileDir+"/check_profile.py", export).CombinedOutput()
 			require.NoError(t, err, string(result))
 			assert.Contains(t, string(result), "ALL OK")

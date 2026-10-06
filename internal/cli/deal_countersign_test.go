@@ -88,7 +88,7 @@ func TestDealReceiptIsNotCountersignedByDefault(t *testing.T) {
 	assert.Equal(t, dealNotCountersigned(), asView(t, plain["countersign"]))
 
 	out, _, html, eml := dealReportFiles(t, dealID)
-	assert.Equal(t, "not_countersigned", asView(t, out["countersign"]).Rung)
+	assert.Equal(t, "not_countersigned", asView(t, out["countersign"]).Finding)
 	assert.Equal(t, dealNotCountersigned(), pageCountersign(t, html))
 	email, err := os.ReadFile(eml)
 	require.NoError(t, err)
@@ -157,13 +157,13 @@ func TestDealSelfCountersignatureIsNotIndependent(t *testing.T) {
 
 	attached := dealRun(t, "countersign", "--deal", dealID, "--bundle", bundlePath, "--entry", writeEntry(t, entry), "--directory", directory)
 	view := asView(t, attached["countersign"])
-	assert.Equal(t, "self_countersigned", view.Rung)
+	assert.Equal(t, "self_countersigned", view.Finding)
 	assert.True(t, strings.HasPrefix(view.Text, "NOT INDEPENDENT: countersigned by the producer's own key."), view.Text)
 	assert.NotContains(t, view.Text, "Looks Independent")
 
 	out, _, html, eml := dealReportFiles(t, dealID, "--from-bundle", bundlePath, "--directory", directory)
-	assert.Equal(t, "self_countersigned", asView(t, out["countersign"]).Rung)
-	assert.Equal(t, "self_countersigned", pageCountersign(t, html).Rung)
+	assert.Equal(t, "self_countersigned", asView(t, out["countersign"]).Finding)
+	assert.Equal(t, "self_countersigned", pageCountersign(t, html).Finding)
 	email, err := os.ReadFile(eml)
 	require.NoError(t, err)
 	assert.Contains(t, string(email), "NOT INDEPENDENT")
@@ -265,6 +265,6 @@ func TestDealSharedCopyIsNotCountersigned(t *testing.T) {
 
 	html := filepath.Join(t.TempDir(), "shared.html")
 	out := dealRun(t, "report", "--deal", dealID, "--html", html, "--share", "counterparty", "--to", "the shop")
-	assert.Equal(t, "not_countersigned", asView(t, out["countersign"]).Rung)
+	assert.Equal(t, "not_countersigned", asView(t, out["countersign"]).Finding)
 	assert.Equal(t, dealNotCountersigned(), pageCountersign(t, html))
 }

@@ -56,7 +56,14 @@ receipt's grade stays where witnessing put it (`assurance.rung`:
 receipt with no witness receipt is self-attested. `not_countersigned` and
 `unverified` name no rung.
 
-| Value | When | What the receipt says |
+The report's `countersign` object carries a rung only when one is reached:
+`rung` is `countersigned`, or absent. Everything else is a `finding`:
+`self_countersigned`, `unresolved_signer`, `not_countersigned`,
+`unverified`, or `unchecked` (the file carries a countersignature that was
+not checked when the page was written). The page shows the `text` and
+`note` capsulectl wrote; it names no rung itself.
+
+| `rung` or `finding` | When | What the receipt says |
 |---|---|---|
 | `not_countersigned` | no countersignature | Not countersigned (above) |
 | `countersigned` | the signature verifies and the directory lists the key | Countersigned by NAME, a signer listed in the directory you chose, over this exact bundle, with its own check results. It vouches only as far as you trust that directory. |

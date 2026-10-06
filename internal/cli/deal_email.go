@@ -181,12 +181,29 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 			rest = "Witness pending for the rest: the current checkpoint goes to the witness at the next tick of this profile's cadence" + cadencePhrase(r) + ". "
 		}
 		out["text"] = fmt.Sprintf(
-			"Witnessed in part: %s, an independent log, signed a receipt for %s, covering steps 1 to %d of %d: those existed, unchanged, by then. Steps %d to %d are sealed by my agent on this device only. %sIt does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s",
-			host, when, k, n, k+1, n, rest, dealDidLineOf(b))
+			"Witnessed in part: %s, an independent log, signed a receipt for %s, covering steps 1 to %d of %d: those existed, unchanged, by then. Steps %d to %d are sealed by my agent on this device only. %s%sIt does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s",
+			host, when, k, n, k+1, n, coverageSentence(b, k, n), rest, dealDidLineOf(b))
 		return out
 	}
 	out["text"] = fmt.Sprintf(
 		"Witnessed: %s, an independent log, signed a receipt for %s: the record existed, unchanged, by then. It does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s", host, when, dealDidLineOf(b))
+	return out
+}
+
+// coverageSentence names what the witnessed steps and the witness-pending
+// steps hold, from the deal extension's witness_coverage, or "" when the
+// steps hold no act.
+func coverageSentence(b map[string]interface{}, k, n uint64) string {
+	ext, _ := b["extensions"].(map[string]interface{})
+	deal, _ := ext["x-deal-v0"].(map[string]interface{})
+	c, _ := deal["witness_coverage"].(map[string]interface{})
+	var out string
+	if s, _ := c["witnessed_acts"].(string); s != "" {
+		out += fmt.Sprintf("Witnessed, steps 1 to %d: %s. ", k, s)
+	}
+	if s, _ := c["pending_acts"].(string); s != "" {
+		out += fmt.Sprintf("Witness pending, steps %d to %d: %s. ", k+1, n, s)
+	}
 	return out
 }
 
@@ -230,13 +247,13 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <div style="max-width:640px;margin:0 auto;">
 <h1 style="font-size:20px;margin:0 0 8px;">Deal receipt{{if .Demo}} <span style="font-size:13px;border:1px solid #b45309;color:#b45309;padding:0 6px;border-radius:4px;">DEMO</span>{{end}}</h1>
 <p style="margin:0 0 8px;font-weight:600;">{{.Scope}}</p>
-<p style="margin:0 0 8px;color:#444;">{{.Assurance}}</p>
-<p style="margin:0 0 16px;color:#444;">{{.Countersign}}</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">What you asked</h2>
 <p style="margin:0;">&ldquo;{{.Asked}}&rdquo;</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">What the agent did</h2>
-<ul style="margin:0;padding-left:20px;">{{range .Did}}<li>{{.Text}}</li>{{else}}<li>Nothing yet.</li>{{end}}</ul>
+<ul style="margin:0;padding-left:20px;">{{range .Did}}<li>{{if .At}}{{.At}} &middot; {{end}}{{.Text}}</li>{{else}}<li>Nothing yet.</li>{{end}}</ul>
 <p style="margin:4px 0 0;color:#444;">Outcome: {{.Outcome}} &middot; {{.Steps}} sealed steps</p>
+<p style="margin:12px 0 8px;color:#444;">{{.Assurance}}</p>
+<p style="margin:0 0 16px;color:#444;">{{.Countersign}}</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">Anomalies</h2>
 <ul style="margin:0;padding-left:20px;">{{range .Anomalies}}<li>{{if .Side}}{{.Side}} side: {{end}}{{.Text}}</li>{{else}}<li>None found.</li>{{end}}</ul>
 <h2 style="font-size:16px;margin:16px 0 4px;">Where this deal stands</h2>
@@ -301,14 +318,18 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 	if view.Demo {
 		tb.WriteString("DEMO\n\n")
 	}
-	fmt.Fprintf(&tb, "%s\n\nWhat you asked: \"%s\"\n\n%s\n\n%s\n\nWhat the agent did:\n", view.Scope, view.Asked, view.Assurance, view.Countersign)
+	fmt.Fprintf(&tb, "%s\n\nWhat you asked: \"%s\"\n\nWhat the agent did:\n", view.Scope, view.Asked)
 	if len(view.Did) == 0 {
 		tb.WriteString("- Nothing yet.\n")
 	}
 	for _, d := range view.Did {
+		if d.At != "" {
+			fmt.Fprintf(&tb, "- %s · %s\n", d.At, d.Text)
+			continue
+		}
 		fmt.Fprintf(&tb, "- %s\n", d.Text)
 	}
-	fmt.Fprintf(&tb, "Outcome: %s · %d sealed steps\n\nAnomalies:\n", view.Outcome, view.Steps)
+	fmt.Fprintf(&tb, "Outcome: %s · %d sealed steps\n\n%s\n\n%s\n\nAnomalies:\n", view.Outcome, view.Steps, view.Assurance, view.Countersign)
 	if len(view.Anomalies) == 0 {
 		tb.WriteString("- None found.\n")
 	}

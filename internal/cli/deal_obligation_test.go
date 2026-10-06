@@ -144,7 +144,7 @@ func TestDealCancelByDateAndCancellationProof(t *testing.T) {
 	for _, private := range []string{"Cancel by October 16", "sam.customer@mail.example", "cancelled Plus in the account settings"} {
 		assert.NotContains(t, string(records), private)
 	}
-	if python, err := exec.LookPath("python3"); err == nil {
+	if python := profilePython(t); python != "" {
 		result, err := exec.Command(python, dealProfileDir+"/check_profile.py", export).CombinedOutput()
 		require.NoError(t, err, string(result))
 		assert.Contains(t, string(result), "ALL OK")

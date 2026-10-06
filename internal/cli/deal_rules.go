@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -229,6 +230,31 @@ func attributeProvenance(asked, proposed dealTerms) (yours, agents []dealAttribu
 	return yours, agents
 }
 
+// namedInWords reports whether every word of value appears in words, the
+// user's own: "HOU/SJC" in "HOU to SJC", "Oct 21 to Oct 24" in "Oct 21 to
+// Oct 24", but not a flight number the user never said. Small joining words
+// are not needed. It is a reading aid for the report only: a single word
+// (the "2" in "Oct 2") can match by chance, so it never decides a check.
+func namedInWords(value, words string) bool {
+	token := regexp.MustCompile(`[\p{L}\p{N}]+`)
+	said := map[string]bool{}
+	for _, w := range token.FindAllString(strings.ToLower(words), -1) {
+		said[w] = true
+	}
+	joining := map[string]bool{"to": true, "and": true, "the": true, "a": true, "of": true, "on": true, "in": true, "at": true, "for": true, "from": true}
+	named := 0
+	for _, w := range token.FindAllString(strings.ToLower(value), -1) {
+		if joining[w] {
+			continue
+		}
+		if !said[w] {
+			return false
+		}
+		named++
+	}
+	return named > 0
+}
+
 // materialAttribute is an attribute the agent may not settle alone: one that
 // changes what is bought or what it costs (quantity, size, variant,
 // shipping or delivery). When the agent picked one, the check asks the user.
@@ -334,6 +360,57 @@ type dealAct struct {
 	Unchecked    bool   `json:"unchecked"`
 	Reason       string `json:"reason,omitempty"`
 	Rule         string `json:"rule,omitempty"`
+	// Direction is which way the amount moved: "out" (paid by the user) or
+	// "in" (back to the user). Reverses is the sealed act whose money this
+	// one returns. capsulectl sets both when the act is sealed
+	// (actDirection), never from the agent's input. Older acts carry
+	// neither; a pay among them moved money out.
+	Direction string `json:"direction,omitempty"`
+	Reverses  string `json:"reverses,omitempty"`
+}
+
+// actDirection is which way an act's amount moved, and the act it reverses.
+// A pay with an amount moved money out. A cancel with an amount returns
+// money when it undoes a payment: the latest sealed pay, not already
+// reversed, with the same amount and currency; then it moved money in and
+// reverses that pay. Anything else states no direction.
+func actDirection(events []sealedEvent, a dealAct, currency string) (string, string) {
+	if a.AmountMinor == nil {
+		return "", ""
+	}
+	cur := func(c string) string {
+		if c == "" {
+			return strings.ToUpper(currency)
+		}
+		return strings.ToUpper(c)
+	}
+	switch a.Action {
+	case "pay":
+		return "out", ""
+	case "cancel":
+		reversed := map[string]bool{}
+		for _, se := range events {
+			if se.Event.Act != nil && se.Event.Act.Reverses != "" {
+				reversed[se.Event.Act.Reverses] = true
+			}
+		}
+		for i := len(events) - 1; i >= 0; i-- {
+			p := events[i].Event.Act
+			if p == nil || p.Action != "pay" || p.AmountMinor == nil || reversed[events[i].CapsuleID] {
+				continue
+			}
+			if *p.AmountMinor == *a.AmountMinor && cur(p.Currency) == cur(a.Currency) {
+				return "in", events[i].CapsuleID
+			}
+		}
+	}
+	return "", ""
+}
+
+// actOut reports whether an act's amount was paid out by the user: its
+// direction says so, or it is a pay sealed before acts carried a direction.
+func actOut(a dealAct) bool {
+	return a.Direction == "out" || a.Direction == "" && a.Action == "pay"
 }
 
 type dealCloseInput struct {
@@ -564,6 +641,11 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 // or for one step when the user approves that step's paused check.
 func laterIntent(cur, next dealIntent) dealIntent {
 	out := next
+	// A note that names no terms ("cancel this ticket") changes nothing the
+	// user asked to buy: the terms in force stay.
+	if reflect.DeepEqual(next.Asked, dealTerms{}) {
+		out.Asked = cur.Asked
+	}
 	switch {
 	case cur.MaxTotalMinor == nil:
 	case next.MaxTotalMinor == nil || *next.MaxTotalMinor > *cur.MaxTotalMinor:
@@ -1119,6 +1201,33 @@ func closeDeal(s dealState, in dealCloseInput) dealCloseResult {
 	return r
 }
 
+// restatedIntents marks each intent note whose words are the ones already in
+// force (the opening's, or the latest earlier note's): the user said it
+// again, they did not change what they asked.
+func restatedIntents(events []sealedEvent) map[string]bool {
+	out := map[string]bool{}
+	if len(events) == 0 || events[0].Event.Open == nil {
+		return out
+	}
+	current := events[0].Event.Open.Intent.Verbatim
+	for _, se := range events[1:] {
+		if i := se.Event.Intent; i != nil {
+			out[se.CapsuleID] = i.Verbatim == current
+			current = i.Verbatim
+		}
+	}
+	return out
+}
+
+// trailLineIn is trailLine for events[i], which a restated intent changes:
+// the same words again are not a change of what was asked.
+func trailLineIn(events []sealedEvent, restated map[string]bool, i int) string {
+	if e := events[i].Event; e.Kind == "intent" && restated[events[i].CapsuleID] {
+		return fmt.Sprintf("you said again what you asked, unchanged: %q", e.Intent.Verbatim)
+	}
+	return trailLine(events[i].Event)
+}
+
 // trailLine is the one-line, plain-words account of a step for the report.
 func trailLine(e dealEvent) string {
 	switch e.Kind {
@@ -1208,6 +1317,9 @@ type dealReportItem struct {
 	Kind  string   `json:"kind"`
 	Text  string   `json:"text"`
 	Steps []string `json:"steps"`
+	// At is when the step this item reports was sealed, for the "did"
+	// items: two cycles in the same words are told apart by their times.
+	At string `json:"at,omitempty"`
 	// Shared is the text for a counterparty's copy, when it differs: a
 	// check's line without the user's and the agent's choices (the items go
 	// only to an adjudicator).
@@ -1229,6 +1341,52 @@ type dealReport struct {
 	Anomalies []dealReportItem `json:"anomalies"`
 	// Merchant is each sealed merchant email set beside what was approved.
 	Merchant []dealMerchantRow `json:"merchant"`
+	// Money is what the sealed acts moved: paid out, returned, and the net.
+	// Absent when no act carried an amount.
+	Money *dealMoney `json:"money,omitempty"`
+}
+
+// dealMoney sums the sealed acts' amounts by direction, in minor units.
+// Acts in another currency than the first are not summed and are counted
+// in Other.
+type dealMoney struct {
+	Currency      string `json:"currency"`
+	PaidMinor     int64  `json:"paid_minor"`
+	ReturnedMinor int64  `json:"returned_minor"`
+	NetMinor      int64  `json:"net_minor"`
+	Other         int    `json:"other_currency_acts,omitempty"`
+	Text          string `json:"text"`
+}
+
+func buildDealMoney(events []sealedEvent, currency string) *dealMoney {
+	var m *dealMoney
+	for _, se := range events {
+		a := se.Event.Act
+		if a == nil || a.AmountMinor == nil || !actOut(*a) && a.Direction != "in" {
+			continue
+		}
+		cur := strings.ToUpper(a.Currency)
+		if cur == "" {
+			cur = strings.ToUpper(currency)
+		}
+		if m == nil {
+			m = &dealMoney{Currency: cur}
+		}
+		switch {
+		case cur != m.Currency:
+			m.Other++
+		case a.Direction == "in":
+			m.ReturnedMinor += *a.AmountMinor
+		default:
+			m.PaidMinor += *a.AmountMinor
+		}
+	}
+	if m == nil {
+		return nil
+	}
+	m.NetMinor = m.PaidMinor - m.ReturnedMinor
+	m.Text = fmt.Sprintf("Paid %s, returned %s: net %s.", formatMoney(m.PaidMinor, m.Currency), formatMoney(m.ReturnedMinor, m.Currency), formatMoney(m.NetMinor, m.Currency))
+	return m
 }
 
 func actText(a dealAct, currency string) string {
@@ -1237,6 +1395,17 @@ func actText(a dealAct, currency string) string {
 		cur := a.Currency
 		if cur == "" {
 			cur = currency
+		}
+		if a.Direction == "in" {
+			// Money coming back reads as a return, never as a second charge.
+			text = a.Action + ": " + formatMoney(*a.AmountMinor, cur) + " back to you"
+			if a.Rail != "" {
+				text += " on the " + railName(a.Rail)
+			}
+			if a.Reverses != "" {
+				text += ", reversing the payment"
+			}
+			return text
 		}
 		text += " " + formatMoney(*a.AmountMinor, cur)
 	}
@@ -1255,8 +1424,17 @@ func buildDealReport(events []sealedEvent) dealReport {
 	open := events[0].Event.Open
 	openID := events[0].CapsuleID
 	currency := open.Terms.Currency
-	r := dealReport{Asked: open.Intent.Verbatim, AskedStep: openID, Did: []dealReportItem{}, Told: []dealToldItem{}, Anomalies: []dealReportItem{}}
+	r := dealReport{Asked: open.Intent.Verbatim, AskedStep: openID, Did: []dealReportItem{}, Told: []dealToldItem{}, Anomalies: []dealReportItem{}, Money: buildDealMoney(events, currency)}
 	checkItem := map[string]int{}
+	// The checks the user answered with a sealed, valid proceed. A "you
+	// didn't ask for this" on such a check's action was answered by the
+	// user's own yes: it is not an anomaly.
+	userApproved := map[string]bool{}
+	for _, se := range events {
+		if a := se.Event.Approval; a != nil && a.Approver == "user" && a.Proceed && a.Reason == "" && a.Limits == nil {
+			userApproved[a.Check] = true
+		}
+	}
 	agent := func(kind, text string, steps ...string) {
 		r.Anomalies = append(r.Anomalies, dealReportItem{Side: "agent", Kind: kind, Text: text, Steps: steps})
 	}
@@ -1295,8 +1473,13 @@ func buildDealReport(events []sealedEvent) dealReport {
 		}
 	}
 	changedWho(open.Who, openID)
+	// The user's own words so far: the opening, then each sealed intent.
+	userWords := open.Intent.Verbatim
 	for _, se := range events {
 		e := se.Event
+		if e.Intent != nil {
+			userWords += " " + e.Intent.Verbatim
+		}
 		switch e.Kind {
 		case "message":
 			if e.Message.From != "counterparty" {
@@ -1338,20 +1521,33 @@ func buildDealReport(events []sealedEvent) dealReport {
 			// What the user chose and what the agent chose for them, told
 			// apart as the approval text tells them, so a choice the agent
 			// made never reads as the user's.
-			var who []string
-			if len(e.Check.Asked) > 0 {
-				who = append(who, "you asked for: "+attributeText(e.Check.Asked))
+			// The check sealed what it judged; the report only re-reads, in
+			// the user's own words so far, what the agent picked: an
+			// attribute those words name (dates, a place, a fare in the
+			// opening sentence) is shown as the user's. The verdict, and any
+			// pause for a material pick, stay as the check sealed them.
+			yours, picked := slices.Clone(e.Check.Asked), []dealAttribute{}
+			for _, a := range e.Check.Picked {
+				if namedInWords(a.Value, userWords) {
+					yours = append(yours, a)
+				} else {
+					picked = append(picked, a)
+				}
 			}
-			if len(e.Check.Picked) > 0 {
-				who = append(who, "the agent picked, not you: "+attributeText(e.Check.Picked))
+			var who []string
+			if len(yours) > 0 {
+				who = append(who, "you asked for: "+attributeText(yours))
+			}
+			if len(picked) > 0 {
+				who = append(who, "the agent picked, not you: "+attributeText(picked))
 			}
 			if len(who) > 0 {
 				text += " (" + strings.Join(who, "; ") + ")"
 			}
-			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: text, Steps: []string{e.Check.Snapshot, se.CapsuleID}, Shared: shared})
+			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: text, Steps: []string{e.Check.Snapshot, se.CapsuleID}, Shared: shared, At: e.At})
 			var asked []string
 			for _, d := range e.Check.Differences {
-				if d.Question == "asked" && d.Rule != "agent_picked" {
+				if d.Question == "asked" && d.Rule != "agent_picked" && !(d.Rule == "not_asked" && d.Field == "action" && userApproved[se.CapsuleID]) {
 					asked = append(asked, d.Text)
 				}
 			}
@@ -1399,7 +1595,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 			if a.Unchecked {
 				text += " ⚠️"
 			}
-			r.Did = append(r.Did, dealReportItem{Kind: "act", Text: text, Steps: steps})
+			r.Did = append(r.Did, dealReportItem{Kind: "act", Text: text, Steps: steps, At: e.At})
 			if !a.Unchecked {
 				continue
 			}
@@ -1417,7 +1613,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 				counterparty("delivered_differs", d.Text, openID, se.CapsuleID)
 			}
 		case "close":
-			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: "Closed: " + e.Close.Outcome, Steps: []string{se.CapsuleID}})
+			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: "Closed: " + e.Close.Outcome, Steps: []string{se.CapsuleID}, At: e.At})
 		case "disclosure":
 			d := e.Disclosure
 			item := dealToldItem{At: e.At, To: d.recipient(open.Who), ToKind: d.To, Fields: d.Fields, Authority: "approval", Steps: []string{se.CapsuleID}}

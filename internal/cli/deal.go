@@ -889,6 +889,7 @@ func dealNoteCommand() *cobra.Command {
 				ev.Act = &dealAct{Action: act.Action, Description: act.Description, AmountMinor: act.AmountMinor, Currency: act.Currency, Payee: act.Payee, Rail: act.Rail, Reference: act.Reference}
 				ev.Act.AuthorizedBy, ev.Act.Reason, ev.Act.Rule = authorizeAct(events, *ev.Act)
 				ev.Act.Unchecked = ev.Act.AuthorizedBy == ""
+				ev.Act.Direction, ev.Act.Reverses = actDirection(events, *ev.Act, events[0].Event.Open.Terms.Currency)
 			case "disclosure":
 				// Covered by the same rules as an action: a check of
 				// share_contact (or share_credentials) answered with proceed,
@@ -1382,11 +1383,12 @@ func dealReportCommand() *cobra.Command {
 			}
 			lines := make([]string, 0, len(events))
 			outcome := "open"
-			for _, se := range events {
+			restated := restatedIntents(events)
+			for i, se := range events {
 				if se.Event.Kind == "close" {
 					outcome = se.Event.Close.Outcome
 				}
-				lines = append(lines, fmt.Sprintf("%d. %s %s", se.Event.N, se.Event.At, trailLine(se.Event)))
+				lines = append(lines, fmt.Sprintf("%d. %s %s", se.Event.N, se.Event.At, trailLineIn(events, restated, i)))
 			}
 			out := map[string]any{
 				"deal_id": dealID, "scope": dealScopeLine, "did_line": dealDidLine(dealDidSources(events)), "demo": events[0].Event.Open.Demo, "outcome": outcome,
@@ -1395,6 +1397,9 @@ func dealReportCommand() *cobra.Command {
 				"produced_by":  dealProducers(events),
 				"deadlines":    dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "lifecycle": buildDealLifecycle(events, dealClock()), "trail": strings.Join(lines, "\n"),
 				"countersign": dealNotCountersigned(),
+			}
+			if report.Money != nil {
+				out["money"] = report.Money
 			}
 			if htmlPath == "" && emailPath == "" && bundlePath == "" && fromBundle == "" {
 				// Every report states its rung, read from the same bundle the

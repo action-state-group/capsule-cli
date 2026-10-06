@@ -449,7 +449,7 @@ def check_chain(records):
     if blk0["record_type"] != "baseline":
         fail(0, "the first record of a deal must be the baseline")
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
-                    "approval": {"approves"}, "action": {"authorized_by"}, "outcome": {"observes"},
+                    "approval": {"approves"}, "action": {"authorized_by", "reverses"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"}}
     # The user's limits in force. Absent allowed = no restriction; present and
     # empty = nothing allowed. An intent may narrow them; only the user's
@@ -459,6 +459,7 @@ def check_chain(records):
     max_total = records[0]["body"]["intent"].get("max_total_minor")
     confirmed_intents = set()
     used_approvals, verdict_for_check = set(), set()
+    reversed_actions = set()
     first_answer = {}  # verdict index -> index of its first approval
     last_outcome = None
     unchecked = 0
@@ -631,6 +632,22 @@ def check_chain(records):
             p_chk = chk["x-deal-v0"].get("counterparty", {}).get("ids", {}).get("payee")
             if p_act and p_chk and p_act != p_chk:
                 fail(i, "the payee fingerprint differs from the one checked")
+            # Section 6, rule 8: an action that returns money names the pay it
+            # reverses, once, with the same amount and currency.
+            j = one("reverses", ("action",), required=False)
+            if j is not None:
+                undone = records[j]["body"]
+                if undone["action"] != "pay" or undone.get("direction", "out") != "out":
+                    fail(i, "reverses must name an earlier pay action")
+                if body.get("direction") != "in":
+                    fail(i, "an action that reverses a payment carries direction in")
+                if body.get("amount_minor") != undone.get("amount_minor") or body.get("currency") != undone.get("currency"):
+                    fail(i, "a reversal returns the amount and currency of the pay it reverses")
+                if j in reversed_actions:
+                    fail(i, "a payment is reversed at most once")
+                reversed_actions.add(j)
+            elif body.get("direction") == "in":
+                fail(i, "an action with direction in names the pay it reverses (reverses)")
         elif t == "outcome":
             one("observes", ("action",), required=False)
             if body["status"] == "unchecked_action":
@@ -1008,6 +1025,67 @@ def regen():
     r = copy.deepcopy(records[9]); r["x-deal-v0"]["refs"] = [{"rel": "authorized_by", **_ref(record_digest(records[5]))}]
     neg("neg-confirm-limits-as-authority", "chain", "authorizes no action", r, 9,
         "The share_contact action cites the user's limits confirmation instead of the approval of its own check.")
+
+    # Section 6, rule 8 (reversals). Each negative continues the deal after
+    # its share action (records[:10]) with a standing-approved pay, then a
+    # cancel the user approves, and ends in the reversal under test.
+    def continue_after(upto, specs):
+        """Records continuing the deal after records[:upto]: specs are
+        (record_type, body, [(rel, target)]), target a record or a list index."""
+        built, previous = [], records[upto - 1]
+        for n, (rtype, body, refs) in enumerate(specs):
+            blk = {"profile": "x-deal-v0", "canonicalization": "jcs", "deal_id": deal_id, "record_type": rtype,
+                   "seq": upto + n + 1, "at": "2026-10-01T16:%02d:00Z" % (30 + n),
+                   "prev": _ref(record_digest(previous)), "baseline_ref": _ref(record_digest(records[0]))}
+            if refs:
+                blk["refs"] = [{"rel": rel, **_ref(record_digest(built[t] if isinstance(t, int) else t))} for rel, t in refs]
+            previous = {"x-deal-v0": blk, "body": body}
+            built.append(previous)
+        return built
+
+    def reversal_run(cancel_minor, reversal, extra_reversal=None):
+        pay = [
+            ("check", {"action": "pay", "amount_minor": 20000, "currency": "USD"}, []),
+            ("verdict", {"result": "pass", "differences": [], "options": [], "judge": {"kind": "rules"}}, [("checks", 0)]),
+            ("approval", {"choice": "proceed", "proceed": True, "approver": "standing_intent"}, [("approves", 1)]),
+            ("action", {"action": "pay", "amount_minor": 20000, "currency": "USD", "direction": "out"}, [("authorized_by", 2)]),
+        ]
+
+        def cancel(at):
+            return [
+                ("check", {"action": "cancel", "amount_minor": cancel_minor, "currency": "USD"}, []),
+                ("verdict", {"result": "pause", "differences": [{"question": "asked", "rule": "not_asked", "field": "action"}],
+                             "options": ["hold", "proceed"], "card_commitment": com["card-1"], "judge": {"kind": "rules"}},
+                 [("checks", at)]),
+                ("approval", {"choice": "proceed", "proceed": True, "approver": "user", "said_commitment": com["said-1"]},
+                 [("approves", at + 1)]),
+            ]
+        specs = pay + cancel(4)
+        if extra_reversal is not None:
+            specs += [extra_reversal(6)] + cancel(8)
+        specs.append(reversal(len(specs) - 1))
+        return continue_after(10, specs)
+
+    good_in = {"action": "cancel", "amount_minor": 20000, "currency": "USD", "direction": "in"}
+    for name, contains, run, desc in [
+        ("neg-reversal-amount-mismatch", "returns the amount and currency",
+         reversal_run(15000, lambda g: ("action", {**good_in, "amount_minor": 15000}, [("authorized_by", g), ("reverses", 3)])),
+         "A cancel that reverses a 200.00 payment but returns 150.00."),
+        ("neg-reversal-without-reverses", "names the pay it reverses",
+         reversal_run(20000, lambda g: ("action", good_in, [("authorized_by", g)])),
+         "An action with direction in that names no payment it reverses."),
+        ("neg-reversal-twice", "reversed at most once",
+         reversal_run(20000, lambda g: ("action", good_in, [("authorized_by", g), ("reverses", 3)]),
+                      extra_reversal=lambda g: ("action", good_in, [("authorized_by", g), ("reverses", 3)])),
+         "A second cancel reversing the same payment again."),
+        ("neg-reversal-of-non-pay", "earlier pay action",
+         reversal_run(20000, lambda g: ("action", good_in, [("authorized_by", g), ("reverses", records[9])])),
+         "A reversal naming the share_contact action, not a payment."),
+        ("neg-reversal-direction-out", "carries direction in",
+         reversal_run(20000, lambda g: ("action", {**good_in, "direction": "out"}, [("authorized_by", g), ("reverses", 3)])),
+         "An action that reverses a payment but says its money went out."),
+    ]:
+        neg(name, "chain", contains, run[-1], 10, desc, chain_between=run[:-1])
 
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["canonicalization"] = "jcs-n"
     neg("neg-wrong-canonicalization", "canonicalization", "must be exactly", r, 2,

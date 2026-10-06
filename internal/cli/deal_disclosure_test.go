@@ -118,7 +118,7 @@ func TestDealDisclosureLedgerNamesWhatWhoWhenAndAuthority(t *testing.T) {
 	assert.Equal(t, "approval_already_used", disclosures[1]["body"].(map[string]any)["rule"])
 	assert.NotContains(t, disclosures[1]["x-deal-v0"], "refs")
 
-	if python, err := exec.LookPath("python3"); err == nil {
+	if python := profilePython(t); python != "" {
 		result, err := exec.Command(python, dealProfileDir+"/check_profile.py", export).CombinedOutput()
 		require.NoError(t, err, string(result))
 		assert.Contains(t, string(result), "ALL OK")

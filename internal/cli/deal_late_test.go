@@ -69,10 +69,26 @@ func recordDigest(t *testing.T, r map[string]any) string {
 	return d
 }
 
-func checkProfile(t *testing.T, export string) {
+// profilePython is the python3 that runs the profile checker. In CI
+// (CI set) a missing python3 fails the test: the checker must run there.
+// Elsewhere it returns "" and the caller skips only the checker step.
+func profilePython(t *testing.T) string {
 	t.Helper()
 	python, err := exec.LookPath("python3")
 	if err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("python3 is required in CI: the profile checker must run")
+		}
+		t.Log("python3 not available; the profile checker did not run")
+		return ""
+	}
+	return python
+}
+
+func checkProfile(t *testing.T, export string) {
+	t.Helper()
+	python := profilePython(t)
+	if python == "" {
 		return
 	}
 	result, err := exec.Command(python, dealProfileDir+"/check_profile.py", export).CombinedOutput()
