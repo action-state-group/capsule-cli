@@ -509,7 +509,8 @@ selects one with `--type`:
   `book/`, the profile's evidence book, which is its one log: `publish`,
   `cll append`, `cll list`, `cll checkpoint`, the bundle verbs and the book
   verbs (`close`, `reconcile`, `request`, `respond`) all use it, and it needs
-  `--operator`. No host, port, or TLS. `cll list` keeps the same fields
+  `--operator`: `profile create` and `profile update` refuse a jsonl profile
+  with a log_id and an empty one. No host, port, or TLS. `cll list` keeps the same fields
   (`capsule_id` is the published capsule) and lists only entries that record a
   capsule; `--all` also lists the book's internal records. `cll list` and
   `cll checkpoint status` read the book's files without opening it, so a

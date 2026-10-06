@@ -104,11 +104,13 @@ func TestJSONLProfileCreate(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "store")
 	trusted := strings.Repeat("ab", 32)
 	_, e := invoke(t, "", "profile", "create", "--name", "jl", "--type", "jsonl",
-		"--jsonl-path", dir, "--namespace", "demo", "--log-id", "log-j", "--trusted-key", trusted)
+		"--jsonl-path", dir, "--namespace", "demo", "--log-id", "log-j", "--trusted-key", trusted,
+		"--operator", "example-operator")
 	require.NoError(t, e)
 	p, e := loadProfile("jl")
 	require.NoError(t, e)
 	assert.Equal(t, "jsonl", p.Type)
+	assert.Equal(t, "example-operator", p.Operator)
 	assert.Equal(t, dir, p.Connection.Database)
 	assert.Equal(t, "demo", p.Namespace)
 	assert.Empty(t, p.Connection.Host)

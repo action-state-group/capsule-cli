@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -124,6 +125,38 @@ type Profile struct {
 		Jitter    string `yaml:"jitter,omitempty" mapstructure:"jitter"`
 		PadBucket uint64 `yaml:"pad_bucket,omitempty" mapstructure:"pad_bucket"`
 	} `yaml:"cadence,omitempty" mapstructure:"cadence"`
+}
+
+// isBook reports whether the profile is an evidence book: a jsonl profile with
+// a log_id. Every record a book seals carries the profile's operator.
+func (p Profile) isBook() bool { return p.Type == "jsonl" && p.LogID != "" }
+
+// invisibleRune reports whitespace and format characters (Unicode category
+// Cf: U+200B, U+FEFF, U+200D and the like), which print as nothing.
+func invisibleRune(r rune) bool { return unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) }
+
+// normalizeOperator is the operator as profile create and update store it,
+// whether it came from --operator or --interactive: without leading or
+// trailing whitespace or format characters.
+func normalizeOperator(s string) string { return strings.TrimFunc(s, invisibleRune) }
+
+// operatorVisible reports whether s has at least one character that prints:
+// a graphic rune that is neither whitespace nor a format character.
+func operatorVisible(s string) bool {
+	for _, r := range s {
+		if unicode.IsGraphic(r) && !invisibleRune(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// operatorMissing reports a book whose operator has no visible character:
+// empty, whitespace, or only invisible characters such as U+200B. Such a
+// profile is refused when it is created or updated, and refused at seal time
+// if an earlier capsulectl saved it.
+func (p Profile) operatorMissing() bool {
+	return p.isBook() && !operatorVisible(p.Operator)
 }
 
 func (p Profile) validate() error {
@@ -442,16 +475,30 @@ func profileCommands() *cobra.Command {
 				if p.Type == "mysql" {
 					prompts = append(prompts, prompt{"MySQL user", &p.Credentials.Username})
 				}
+				ask := func(item prompt) error {
+					if *item.target != "" {
+						return nil
+					}
+					if _, e := fmt.Fprint(c.ErrOrStderr(), item.label+": "); e != nil {
+						return e
+					}
+					s, e := reader.ReadString('\n')
+					if e != nil {
+						return inputError("guided configuration requires input; use flags for automation")
+					}
+					*item.target = strings.TrimSpace(s)
+					return nil
+				}
 				for _, item := range prompts {
-					if *item.target == "" {
-						if _, e := fmt.Fprint(c.ErrOrStderr(), item.label+": "); e != nil {
-							return e
-						}
-						s, e := reader.ReadString('\n')
-						if e != nil {
-							return inputError("guided configuration requires input; use flags for automation")
-						}
-						*item.target = strings.TrimSpace(s)
+					if e := ask(item); e != nil {
+						return e
+					}
+				}
+				// Only a book seals records with the operator, and whether this
+				// profile is one depends on the log ID just asked for.
+				if p.isBook() {
+					if e := ask(prompt{"Operator (who signs the book's records)", &p.Operator}); e != nil {
+						return e
 					}
 				}
 			}
@@ -462,6 +509,10 @@ func profileCommands() *cobra.Command {
 			}
 			if e := checkWitnessConfig(p); e != nil {
 				return e
+			}
+			p.Operator = normalizeOperator(p.Operator)
+			if p.operatorMissing() {
+				return inputError("--operator is required for a jsonl profile with a log_id: the profile is an evidence book, and the operator names who signs every record it seals")
 			}
 			if e := saveProfile(p, update); e != nil {
 				return e
