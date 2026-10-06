@@ -12,8 +12,8 @@ github.com/action-state-group/capsule-emit-go v0.2.0 h1:fRPRHf7SBr2Lf8WqfUg4Qi+X
 github.com/action-state-group/capsule-emit-go v0.2.0/go.mod h1:KHmfQdA2Utpr05zPzykuAvyly6gRd5Z+JXZyX4ICJ0U=
 github.com/action-state-group/cll-go v0.0.0-20260926202724-9741da3d4ace h1:XDFC5EQL/YvcsBNCDFPpSAEDCDVghgk6Sn0KTjeNlus=
 github.com/action-state-group/cll-go v0.0.0-20260926202724-9741da3d4ace/go.mod h1:56rOQ/W8Uk7nz69nfqQ3AKqyJ9ZTmwLfhYPLsc1BEEM=
-github.com/action-state-group/evidencebook v0.1.0 h1:iNRTANJGuwXE8fkv52xQdpTefBgb8SlR/1fqt15a+Pc=
-github.com/action-state-group/evidencebook v0.1.0/go.mod h1:DRVhMdrqN3OKmkVyh3boMfpnKqRWyg5yJ3ZD3jeHlbQ=
+github.com/action-state-group/evidencebook v0.1.1-0.20261006174345-0b8036b3fd99 h1:kY3bmmnL0NcZkb7lq0DHt0hBoNl+R6Xgx4+ql0kbhWc=
+github.com/action-state-group/evidencebook v0.1.1-0.20261006174345-0b8036b3fd99/go.mod h1:DRVhMdrqN3OKmkVyh3boMfpnKqRWyg5yJ3ZD3jeHlbQ=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
 github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=

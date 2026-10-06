@@ -243,13 +243,15 @@ verbs:
   - name: request
     args:
       - "--profile NAME --request FILE --responder NAME --output FILE"
-      - "--profile NAME --for RECORD_ID --response FILE --responder-key HEX --responder-checkpoint-key HEX"
+      - "--profile NAME --for RECORD_ID --response FILE --responder-key HEX --responder-checkpoint-key HEX [--witness-directory FILE]"
       - "--profile NAME --for RECORD_ID --absent-until TIME"
     when: >-
       Ask a party for evidence (the request is recorded before it is sent),
       then record exactly one outcome for it: the answer that came back, or
       that nothing came back in the window. The output file is what to
-      transmit; this verb transmits nothing itself.
+      transmit; this verb transmits nothing itself. An answer carrying
+      witness receipts is recorded as granted only when every receipt
+      verifies under --witness-directory, your own witness directory.
     emits: (each mode's own book record is the evidence; no wrapper capsule)
     emission_mode: primary-action
 
