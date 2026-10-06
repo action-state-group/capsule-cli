@@ -37,9 +37,9 @@ func TestDealSchemaStillAcceptsRecordsThatNameAPack(t *testing.T) {
 	}
 	assert.Equal(t, map[string]bool{"check": true, "verdict": true}, named, "the rc6 deal's check and verdict name a pack")
 
-	python, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not available; the profile checker did not run")
+	python := profilePython(t)
+	if python == "" {
+		return
 	}
 	result, err := exec.Command(python, dealProfileDir+"/check_profile.py", rc6Records).CombinedOutput()
 	require.NoError(t, err, string(result))

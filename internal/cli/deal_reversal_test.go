@@ -68,7 +68,7 @@ func TestCancelAfterPurchaseIsAReversal(t *testing.T) {
 	assert.Contains(t, string(records), `"direction":"out"`)
 	assert.Contains(t, string(records), `"direction":"in"`)
 	assert.Equal(t, 1, strings.Count(string(records), `"rel":"reverses"`))
-	if python, err := exec.LookPath("python3"); err == nil {
+	if python := profilePython(t); python != "" {
 		result, err := exec.Command(python, dealProfileDir+"/check_profile.py", export).CombinedOutput()
 		require.NoError(t, err, string(result))
 		assert.Contains(t, string(result), "ALL OK")
