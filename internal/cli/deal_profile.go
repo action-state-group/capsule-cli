@@ -681,6 +681,18 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				return nil, err
 			}
 		}
+		if a.ShownCard != "" {
+			// Under the check's own card nonce: equal commitments mean the
+			// card shown is the card checked, recomputable without the text.
+			verdict, _, ok := checkedCard(events, a.Check)
+			nonce := verdict.Event.Nonces["card"]
+			if !ok || nonce == "" {
+				return nil, inputError("the card shown has no checked card to commit against")
+			}
+			if body["card_commitment"], err = commitText(nonce, a.ShownCard); err != nil {
+				return nil, err
+			}
+		}
 	case "act":
 		act, err := actionBody(*ev.Act, currency, commit)
 		if err != nil {

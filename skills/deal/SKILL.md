@@ -480,10 +480,14 @@ the check time and when it goes stale), `checked_at` and
   pass is approved by what the user already allowed, and that approval is
   sealed for you (`approval_id`).
 - `"verdict": "pause"`: show `card` verbatim with its `options`, then seal
-  the answer:
+  the answer. Save the card text exactly as you showed it to a file and pass
+  it with `--shown-card`: the answer then commits to that card, and the record
+  shows it is the card the check produced (a different text is refused).
+  `--said` is the user's own words; without them the answer is sealed as the
+  card's (`agent_card`), not the user's:
 
 ```sh
-capsulectl --profile deal deal note --deal ID --kind approval --check CHECK_ID --choice hold --said "the user's words"
+capsulectl --profile deal deal note --deal ID --kind approval --check CHECK_ID --choice hold --said "the user's words" --shown-card card.txt
 ```
 
 Act only if that returns `"proceed": true`. If it says details changed, or

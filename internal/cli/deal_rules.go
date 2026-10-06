@@ -283,8 +283,13 @@ type dealApproval struct {
 	Choice   string `json:"choice"`
 	Approver string `json:"approver"`
 	Said     string `json:"said,omitempty"`
-	Proceed  bool   `json:"proceed"`
-	Reason   string `json:"reason,omitempty"`
+	// ShownCard is the exact card text the answer was given on (deal note
+	// --shown-card). The record commits to it under the check's own card
+	// nonce, so its card_commitment equals the check's exactly when the card
+	// shown is the card checked.
+	ShownCard string `json:"shown_card,omitempty"`
+	Proceed   bool   `json:"proceed"`
+	Reason    string `json:"reason,omitempty"`
 	// Limits is set on the user's confirm_limits answer to an intent note
 	// that proposed a higher limit or more actions: the limits in force
 	// before it and the new version it seals. Check then names that note.
