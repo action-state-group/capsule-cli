@@ -7,8 +7,8 @@ import (
 
 // gradeLadder is the evidence grade ladder, lowest first, as capsule-emit's
 // TRANSLATION.md defines it ("The ladder") at
-// action-state-group/capsule-emit@d4e5a3913df0d536516f36c089c365cc3240b8cc
-// (pending merge; re-pinned to the merge commit when it lands): self-attested → witnessed → countersigned.
+// action-state-group/capsule-emit@9d862d99ef9eb64d3ea8eadea173d4ec17f5ae2f:
+// self-attested → witnessed → countersigned.
 //
 // It is the one list of rung names. A grade capsulectl shows, as a field
 // value or in its own words, names one of these, an annotation, or no rung
