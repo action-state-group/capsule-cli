@@ -451,8 +451,13 @@ def check_chain(records):
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"}}
-    # Absent allowed = no restriction; present and empty = nothing allowed.
+    # The user's limits in force. Absent allowed = no restriction; present and
+    # empty = nothing allowed. An intent may narrow them; only the user's
+    # confirm_limits answer to an intent that asks for more puts a new version
+    # in force (section 6).
     allowed = records[0]["body"]["intent"].get("allowed")
+    max_total = records[0]["body"]["intent"].get("max_total_minor")
+    confirmed_intents = set()
     used_approvals, verdict_for_check = set(), set()
     first_answer = {}  # verdict index -> index of its first approval
     last_outcome = None
@@ -508,6 +513,8 @@ def check_chain(records):
             verdict's first answer, and its check is of this action with no
             change of details since. Returns the check."""
             appr = records[ja]
+            if appr["body"]["choice"] == "confirm_limits":
+                fail(i, "a limits confirmation authorizes no action or disclosure; the step needs its own check")
             if not appr["body"]["proceed"]:
                 fail(i, "the referenced approval did not approve proceeding")
             if ja in used_approvals:
@@ -529,8 +536,12 @@ def check_chain(records):
             return chk
 
         if t == "intent":
-            if "allowed" in body:
-                allowed = list(body["allowed"])
+            # An intent narrows the limits in force; asking for more is a
+            # proposal that applies only once the user confirms it.
+            if body.get("max_total_minor") is not None and (max_total is None or body["max_total_minor"] < max_total):
+                max_total = body["max_total_minor"]
+            if body.get("allowed") is not None:
+                allowed = [a for a in body["allowed"] if allowed is None or a in allowed]
         elif t == "evidence":
             one("about", ("claim", "baseline"))
             one("confirms", ("close",), required=False)
@@ -553,6 +564,34 @@ def check_chain(records):
             # either side names one, the two must agree.
             if body.get("pack_id") != records[j]["body"].get("pack_id"):
                 fail(i, "verdict pack_id differs from the check's")
+        elif t == "approval" and body["choice"] == "confirm_limits":
+            j = one("approves", ("intent",))
+            prop = records[j]["body"]
+            # A late answer (the proposal was replaced by a later intent, or is
+            # already confirmed) is sealed as said but changes nothing.
+            if j in confirmed_intents or any(records[k]["x-deal-v0"]["record_type"] == "intent" for k in range(j + 1, i)):
+                if body["proceed"]:
+                    fail(i, "a proposal replaced by a later intent, or already confirmed, cannot be confirmed (proceed must be false)")
+                continue
+            if not body["proceed"]:
+                fail(i, "a confirmation of a standing proposal proceeds")
+            in_force = {k: v for k, v in (("max_total_minor", max_total), ("allowed", allowed)) if v is not None}
+            if body["limits"]["previous"] != in_force:
+                fail(i, "limits.previous is not the limits in force")
+            new = dict(in_force)
+            for k in ("max_total_minor", "allowed"):
+                if prop.get(k) is not None:
+                    new[k] = prop[k]
+            if body["limits"]["new"] != new:
+                fail(i, "limits.new is not what the intent proposed")
+            more = (prop.get("max_total_minor") is not None and max_total is not None
+                    and prop["max_total_minor"] > max_total) or \
+                   (prop.get("allowed") is not None and allowed is not None
+                    and any(a not in allowed for a in prop["allowed"]))
+            if not more:
+                fail(i, "the intent asks for no higher limit and no new action: nothing to confirm")
+            confirmed_intents.add(j)
+            max_total, allowed = new.get("max_total_minor"), new.get("allowed")
         elif t == "approval":
             j = one("approves", ("verdict",))
             first_answer.setdefault(j, i)
@@ -750,6 +789,7 @@ def regen():
         "card-1": "Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle) · "
                   "Zelle to a business = no card protection · Site registered 3 weeks ago · "
                   "unverified: has 2 jet skis available Saturday · [Hold] [Call the number I found] [Pay anyway]",
+        "said-limits": "yes, share my number with them",
         "said-1": "Hold",
         # What the agent told the new number, kept on the device only.
         "disclosed-phone": "(555) 010-2077",
@@ -759,7 +799,7 @@ def regen():
 
     records, names = [], []
     clock = iter(["2026-10-01T16:00:00Z", "2026-10-01T16:02:10Z", "2026-10-01T16:02:40Z",
-                  "2026-10-01T16:05:00Z", "2026-10-01T16:20:00Z", "2026-10-01T16:20:05Z",
+                  "2026-10-01T16:05:00Z", "2026-10-01T16:06:00Z", "2026-10-01T16:20:00Z", "2026-10-01T16:20:05Z",
                   "2026-10-01T16:20:06Z", "2026-10-01T16:20:06Z", "2026-10-01T16:20:30Z",
                   "2026-10-01T18:41:00Z", "2026-10-01T18:41:20Z", "2026-10-01T18:43:00Z",
                   "2026-10-01T18:43:01Z", "2026-10-01T18:44:30Z", "2026-10-01T18:52:00Z", "2026-10-04T09:00:00Z",
@@ -797,7 +837,14 @@ def regen():
     add("message-quote", "message", {"from": "counterparty", "content_commitment": com["message-1"]}, channel="marketplace")
     c = add("claim", "claim", {"text": "has 2 jet skis available Saturday", "source": "counterparty"})
     add("evidence", "evidence", {"source": "listing_photo", "verified": False}, refs=[("about", c)])
-    add("intent", "intent", {"verbatim_commitment": com["intent-2"], "allowed": ["pay", "share_contact"]})
+    # The user's "go ahead and share my number" is sealed by the agent as an
+    # intent that proposes a new action; it applies only once the user's own
+    # confirm_limits answer seals the new version of the limits.
+    p1 = add("intent", "intent", {"verbatim_commitment": com["intent-2"], "allowed": ["pay", "share_contact"]})
+    add("approval-confirm-limits", "approval", {
+        "choice": "confirm_limits", "proceed": True, "approver": "user", "said_commitment": com["said-limits"],
+        "limits": {"previous": {"max_total_minor": 45000, "allowed": ["pay"]},
+                   "new": {"max_total_minor": 45000, "allowed": ["pay", "share_contact"]}}}, refs=[("approves", p1)])
     k1 = add("check-share-contact", "check", {"action": "share_contact", "disclosing": ["phone"],
                                               "disclosing_to": "counterparty"})
     v1 = add("verdict-pass", "verdict", {"result": "pass", "differences": [], "options": [],
@@ -850,10 +897,12 @@ def regen():
         "message": "A counterparty message; its text stays local, the record holds a salted commitment.",
         "claim": "The counterparty says the skis are available; recorded as a claim, not a fact.",
         "evidence": "The listing photo does not establish the claim; it stays unverified.",
-        "intent": "The user widens what the agent may do: sharing the user's own number is now allowed.",
+        "intent": "The user asks the agent to share their number: sealed as a proposal of a new action, "
+                  "which applies only once the user confirms it.",
         "check": "The agent runs the deal check before a point of no return.",
         "verdict": "The deal check's answer to the check it references.",
-        "approval": "What authorizes the next step: a standing intent on a pass, or the user's own answer.",
+        "approval": "What authorizes the next step: a standing intent on a pass, or the user's own answer; "
+                    "or the user's confirmation of limits an intent proposed (a new version naming the previous one).",
         "action": "The step actually taken, citing the sealed approval.",
         "detail_change": "The counterparty switches payee, phone and rail after first contact (fingerprints only).",
         "outcome": "Saturday passes; nothing was delivered as agreed.",
@@ -903,40 +952,62 @@ def regen():
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["seq"] = 2
     neg("neg-seq-regression", "chain", "seq regression", r, 2, "seq repeats 2 after 2.")
 
-    r = copy.deepcopy(records[8]); del r["x-deal-v0"]["refs"]
-    neg("neg-action-without-approval", "chain", "must reference the sealed approval", r, 8,
+    r = copy.deepcopy(records[9]); del r["x-deal-v0"]["refs"]
+    neg("neg-action-without-approval", "chain", "must reference the sealed approval", r, 9,
         "The share_contact action carries no authorized_by ref.")
 
-    r = copy.deepcopy(records[8]); r["x-deal-v0"]["refs"] = [{"rel": "authorized_by", **_ref(record_digest(records[13]))}]
+    r = copy.deepcopy(records[9]); r["x-deal-v0"]["refs"] = [{"rel": "authorized_by", **_ref(record_digest(records[14]))}]
     r["body"] = {"action": "pay", "amount_minor": 20000, "currency": "USD", "rail": "zelle"}
-    r["x-deal-v0"]["seq"] = 15; r["x-deal-v0"]["at"] = "2026-10-01T18:45:00Z"
-    r["x-deal-v0"]["prev"] = _ref(record_digest(records[13]))
-    neg("neg-action-on-hold", "chain", "did not approve proceeding", r, 14,
+    r["x-deal-v0"]["seq"] = 16; r["x-deal-v0"]["at"] = "2026-10-01T18:45:00Z"
+    r["x-deal-v0"]["prev"] = _ref(record_digest(records[14]))
+    neg("neg-action-on-hold", "chain", "did not approve proceeding", r, 15,
         "A pay action citing the user's Hold answer.")
 
     # The user holds, then answers the same verdict again with "Pay anyway": the second answer is
     # sealed (it records what the user chose), but an action is held to the verdict's first answer.
-    again = copy.deepcopy(records[13])
+    again = copy.deepcopy(records[14])
     again["body"] = {"choice": "proceed", "proceed": True, "approver": "user",
                      "said_commitment": commitment(nonce("said-2"), "Pay anyway")}
-    again["x-deal-v0"].update(seq=15, at="2026-10-01T18:44:50Z", prev=_ref(record_digest(records[13])))
-    r = {"x-deal-v0": {**copy.deepcopy(records[8]["x-deal-v0"]), "seq": 16, "at": "2026-10-01T18:45:00Z",
+    again["x-deal-v0"].update(seq=16, at="2026-10-01T18:44:50Z", prev=_ref(record_digest(records[14])))
+    r = {"x-deal-v0": {**copy.deepcopy(records[9]["x-deal-v0"]), "seq": 17, "at": "2026-10-01T18:45:00Z",
                        "prev": _ref(record_digest(again)), "counterparty": cp(("payee", "second")),
                        "refs": [{"rel": "authorized_by", **_ref(record_digest(again))}]},
          "body": {"action": "pay", "amount_minor": 20000, "currency": "USD", "rail": "zelle"}}
-    neg("neg-action-on-second-answer", "chain", "first answer", r, 14,
+    neg("neg-action-on-second-answer", "chain", "first answer", r, 15,
         "After Hold, a second answer to the same verdict (Pay anyway) is cited by a pay action.",
         chain_between=[again])
 
-    r = copy.deepcopy(records[14]); r["body"]["fields"][0]["class_note"] = "texted (555) 010-2077"
-    neg("neg-disclosure-raw-value", "personal_data", "raw phone", r, 14,
+    r = copy.deepcopy(records[15]); r["body"]["fields"][0]["class_note"] = "texted (555) 010-2077"
+    neg("neg-disclosure-raw-value", "personal_data", "raw phone", r, 15,
         "A disclosure that carries the disclosed phone number itself.")
 
-    r = copy.deepcopy(records[14]); r["body"] = {"to": "counterparty", "authority": "approval",
+    r = copy.deepcopy(records[15]); r["body"] = {"to": "counterparty", "authority": "approval",
                                                  "fields": [{"class": "phone", "value_commitment": com["disclosed-phone"]}]}
-    r["x-deal-v0"]["refs"] = [{"rel": "authorized_by", **_ref(record_digest(records[7]))}]
-    neg("neg-disclosure-reused-approval", "chain", "at most one action or disclosure", r, 14,
+    r["x-deal-v0"]["refs"] = [{"rel": "authorized_by", **_ref(record_digest(records[8]))}]
+    neg("neg-disclosure-reused-approval", "chain", "at most one action or disclosure", r, 15,
         "A disclosure citing the standing approval that already covered the share_contact action.")
+
+    # The proposal without the user's confirmation: the share_contact check passes on standing
+    # intent as if the intent note had widened what the user allowed. It did not.
+    r = copy.deepcopy(records[8]); r["x-deal-v0"]["seq"] = 8
+    k_unconfirmed = copy.deepcopy(records[6]); k_unconfirmed["x-deal-v0"].update(seq=6, prev=_ref(record_digest(records[4])))
+    v_unconfirmed = copy.deepcopy(records[7]); v_unconfirmed["x-deal-v0"].update(
+        seq=7, prev=_ref(record_digest(k_unconfirmed)), refs=[{"rel": "checks", **_ref(record_digest(k_unconfirmed))}])
+    r["x-deal-v0"].update(prev=_ref(record_digest(v_unconfirmed)), refs=[{"rel": "approves", **_ref(record_digest(v_unconfirmed))}])
+    neg("neg-standing-on-unconfirmed-proposal", "chain", "does not allow", r, 5,
+        "An intent note proposes share_contact; with no confirm_limits answer from the user, a standing-intent "
+        "approval of a share_contact check is refused: the limits in force are unchanged.",
+        chain_between=[k_unconfirmed, v_unconfirmed])
+
+    # A confirmation that claims to raise the limit the intent never asked to raise.
+    r = copy.deepcopy(records[5]); r["body"]["limits"]["new"]["max_total_minor"] = 90000
+    neg("neg-confirm-limits-not-the-proposal", "chain", "not what the intent proposed", r, 5,
+        "A confirm_limits answer whose new version raises the limit, which the intent it approves did not propose.")
+
+    # A confirmation cited as the authority for an action.
+    r = copy.deepcopy(records[9]); r["x-deal-v0"]["refs"] = [{"rel": "authorized_by", **_ref(record_digest(records[5]))}]
+    neg("neg-confirm-limits-as-authority", "chain", "authorizes no action", r, 9,
+        "The share_contact action cites the user's limits confirmation instead of the approval of its own check.")
 
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["canonicalization"] = "jcs-n"
     neg("neg-wrong-canonicalization", "canonicalization", "must be exactly", r, 2,
@@ -951,8 +1022,8 @@ def regen():
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["record_type"] = "payment"
     neg("neg-unknown-record-type", "schema", "x-deal-v0/record_type", r, 2, "record_type outside the closed set.")
 
-    r = copy.deepcopy(records[12]); r["body"]["differences"][2]["rule"] = "likely_scam"
-    neg("neg-wording-label", "wording", "prohibited word", r, 12, "A difference rule that labels the counterparty.")
+    r = copy.deepcopy(records[13]); r["body"]["differences"][2]["rule"] = "likely_scam"
+    neg("neg-wording-label", "wording", "prohibited word", r, 13, "A difference rule that labels the counterparty.")
 
     r = copy.deepcopy(records[2]); r["body"]["text"] = "seller rating 4.9 on the marketplace"
     neg("neg-wording-grade", "wording", "prohibited word", r, 2, "A claim that carries a grade of the counterparty.")

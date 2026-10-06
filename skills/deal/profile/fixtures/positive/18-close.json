@@ -1,0 +1,44 @@
+{
+  "fixture": "18-close.json",
+  "expect": "valid",
+  "story": "The deal closes on mismatch, citing the outcome.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "close",
+      "seq": 18,
+      "at": "2026-10-04T09:00:05Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "e83c565961ecb0af7b78e6ce70aa7f0e6c476b89dcf87c5d1c47814cf65776db"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "refs": [
+        {
+          "rel": "outcome",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "e83c565961ecb0af7b78e6ce70aa7f0e6c476b89dcf87c5d1c47814cf65776db"
+        }
+      ]
+    },
+    "body": {
+      "outcome": "mismatch",
+      "unchecked_actions": 0,
+      "differences": [
+        {
+          "question": "delivered",
+          "rule": "not_delivered"
+        }
+      ]
+    }
+  },
+  "expected_digest": "9a24b14323203e285772b289f25cabbae4dfe3213ca8a7b0cdd430d9ea45cba1"
+}

@@ -841,9 +841,27 @@ func dealNoteCommand() *cobra.Command {
 			}
 			out := stepOutput(dealID, se)
 			switch kind {
+			case "intent":
+				// A note that asks for more than the limits in force is a
+				// proposal: sealed as written, applied only on the user's
+				// confirmation.
+				state, err := foldDeal(events)
+				if err != nil {
+					return err
+				}
+				if proposed, more := proposedLimits(state.intent.limits(), *ev.Intent); more {
+					out["proposed"] = proposed
+					out["in_force"] = state.intent.limits()
+					out["next"] = "this note asks for a higher limit or a new action: it is recorded as a proposal and not applied. " +
+						"Ask the user; only on their explicit yes, seal deal note --kind approval --check " + se.CapsuleID +
+						" --choice confirm_limits --said \"<their words>\""
+				}
 			case "approval":
 				out["proceed"] = ev.Approval.Proceed && ev.Approval.Reason == ""
 				out["reason"] = ev.Approval.Reason
+				if ev.Approval.Limits != nil {
+					out["limits"] = ev.Approval.Limits
+				}
 				cp, err := s.milestone(ctx)
 				if err != nil {
 					return err
@@ -906,8 +924,8 @@ func dealNoteCommand() *cobra.Command {
 	cmd.Flags().String("email", "", "evidence: a merchant's email as a raw RFC 822 file (.eml), headers intact; sealed with its DKIM key records")
 	cmd.Flags().String("key-record", "", "evidence: the DKIM key record to check --email against instead of DNS (marked supplied)")
 	cmd.Flags().String("dmarc-record", "", "evidence: the sender's DMARC record, with --key-record (marked supplied)")
-	cmd.Flags().String("check", "", "approval: the check_id being answered")
-	cmd.Flags().String("choice", "", "approval: the option id the user chose")
+	cmd.Flags().String("check", "", "approval: the check_id being answered, or the capsule_id of an intent note whose proposed limits the user confirms")
+	cmd.Flags().String("choice", "", "approval: the option id the user chose, or confirm_limits for an intent note")
 	cmd.Flags().String("said", "", "approval: the user's own words")
 	return cmd
 }
@@ -921,8 +939,14 @@ func judgeApproval(events []sealedEvent, a *dealApproval) error {
 		if se.CapsuleID != a.Check {
 			continue
 		}
+		if se.Event.Kind == "intent" {
+			return judgeLimitsConfirmation(events, i, a)
+		}
 		if se.Event.Kind != "check" {
 			return inputError("--check does not name a check of this deal")
+		}
+		if a.Choice == "confirm_limits" {
+			return inputError("confirm_limits answers an intent note that proposed new limits: --check names that note")
 		}
 		check := se.Event.Check
 		if check.Verdict == "pass" {
@@ -952,6 +976,37 @@ func judgeApproval(events []sealedEvent, a *dealApproval) error {
 		return nil
 	}
 	return inputError("--check does not name a step of this deal")
+}
+
+// judgeLimitsConfirmation judges the user's answer to an intent note
+// (events[i]) that proposed a higher limit or more actions. Only
+// confirm_limits answers one; the answer seals the limits in force and the
+// new version, which then apply. An intent note sealed after the proposal
+// replaces it, and a proposal is confirmed once.
+func judgeLimitsConfirmation(events []sealedEvent, i int, a *dealApproval) error {
+	if a.Choice != "confirm_limits" {
+		return inputError("an intent note is answered only with --choice confirm_limits")
+	}
+	state, err := foldDeal(events)
+	if err != nil {
+		return err
+	}
+	cur := state.intent.limits()
+	proposed, more := proposedLimits(cur, *events[i].Event.Intent)
+	for _, later := range events[i+1:] {
+		switch {
+		case later.Event.Kind == "intent":
+			a.Reason = "a later intent note replaced this proposal; confirm that one"
+		case later.Event.Approval != nil && later.Event.Approval.Check == a.Check && later.Event.Approval.Limits != nil:
+			a.Reason = "this proposal was already confirmed"
+		}
+	}
+	if a.Reason == "" && !more {
+		return inputError("this intent note asks for no higher limit and no new action: there is nothing to confirm")
+	}
+	a.Limits = &dealLimits{Previous: cur, New: proposed}
+	a.Proceed = a.Reason == ""
+	return nil
 }
 
 func dealCheckCommand() *cobra.Command {

@@ -304,19 +304,36 @@
       "then": { "properties": { "differences": { "minItems": 1 }, "options": { "minItems": 1 } } },
       "else": { "properties": { "options": { "maxItems": 0 } } }
     },
+    "limit_set": {
+      "description": "A version of the user's limits. allowed absent = no restriction; present and empty = nothing is allowed yet.",
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "max_total_minor": { "type": "integer", "minimum": 0 },
+        "allowed": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
     "body_approval": {
       "type": "object", "additionalProperties": false,
       "required": ["choice", "proceed", "approver"],
       "properties": {
-        "choice": { "enum": ["hold", "verify_contact", "proceed"] },
+        "choice": { "enum": ["hold", "verify_contact", "proceed", "confirm_limits"] },
         "proceed": { "type": "boolean" },
         "approver": { "enum": ["user", "standing_intent"] },
-        "said_commitment": { "$ref": "#/$defs/hex64" }
+        "said_commitment": { "$ref": "#/$defs/hex64" },
+        "limits": {
+          "description": "On confirm_limits only: the user's limits in force before this answer and the new version it puts in force. The intent it approves is the proposal.",
+          "type": "object", "additionalProperties": false, "required": ["previous", "new"],
+          "properties": { "previous": { "$ref": "#/$defs/limit_set" }, "new": { "$ref": "#/$defs/limit_set" } }
+        }
       },
       "allOf": [
         { "if": { "properties": { "choice": { "const": "proceed" } } },
-          "then": { "properties": { "proceed": { "const": true } } },
-          "else": { "properties": { "proceed": { "const": false } } } },
+          "then": { "properties": { "proceed": { "const": true } } } },
+        { "if": { "properties": { "choice": { "enum": ["hold", "verify_contact"] } } },
+          "then": { "properties": { "proceed": { "const": false } } } },
+        { "if": { "properties": { "choice": { "const": "confirm_limits" } } },
+          "then": { "required": ["limits"], "properties": { "approver": { "const": "user" } } },
+          "else": { "not": { "required": ["limits"] } } },
         { "if": { "properties": { "approver": { "const": "user" } } },
           "then": { "required": ["said_commitment"] },
           "else": { "properties": { "choice": { "const": "proceed" } }, "not": { "required": ["said_commitment"] } } }

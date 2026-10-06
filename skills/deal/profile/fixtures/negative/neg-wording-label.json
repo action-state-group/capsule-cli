@@ -10,13 +10,14 @@
     "03-claim.json",
     "04-evidence.json",
     "05-intent.json",
-    "06-check-share-contact.json",
-    "07-verdict-pass.json",
-    "08-approval-standing.json",
-    "09-action-share-contact.json",
-    "10-message-switch.json",
-    "11-detail-change-payee.json",
-    "12-check-pay.json"
+    "06-approval-confirm-limits.json",
+    "07-check-share-contact.json",
+    "08-verdict-pass.json",
+    "09-approval-standing.json",
+    "10-action-share-contact.json",
+    "11-message-switch.json",
+    "12-detail-change-payee.json",
+    "13-check-pay.json"
   ],
   "record": {
     "x-deal-v0": {
@@ -24,12 +25,12 @@
       "canonicalization": "jcs",
       "deal_id": "deal-3f9c2a7be4d15068",
       "record_type": "verdict",
-      "seq": 13,
+      "seq": 14,
       "at": "2026-10-01T18:43:01Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "dadf71e7a9ae43be3c9ef168c95da6b3e79c3c7533ecdb154547338dd5e3aceb"
+        "digest": "7dc000edde84af2c654e86e8f9f8d73a7c961c56b24ad21d59cf6085b602ef26"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -41,7 +42,7 @@
           "rel": "checks",
           "type": "deal-record",
           "digest_alg": "SHA-256",
-          "digest": "dadf71e7a9ae43be3c9ef168c95da6b3e79c3c7533ecdb154547338dd5e3aceb"
+          "digest": "7dc000edde84af2c654e86e8f9f8d73a7c961c56b24ad21d59cf6085b602ef26"
         }
       ]
     },

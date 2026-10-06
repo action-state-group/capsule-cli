@@ -271,6 +271,20 @@ func actionBody(a dealAct, currency string, commit func(string) (string, error))
 	return m, nil
 }
 
+// limitSetBody is a version of the user's limits as a record carries it:
+// allowed absent means no restriction, present and empty means nothing is
+// allowed yet.
+func limitSetBody(l dealLimitSet) map[string]interface{} {
+	m := map[string]interface{}{}
+	if l.MaxTotalMinor != nil {
+		m["max_total_minor"] = *l.MaxTotalMinor
+	}
+	if l.Allowed != nil {
+		m["allowed"] = l.Allowed
+	}
+	return m
+}
+
 func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]interface{}, error) {
 	c, err := commit("verbatim")
 	if err != nil {
@@ -656,6 +670,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		a := ev.Approval
 		block["refs"] = []interface{}{relRef("approves", digestOf(a.Check))}
 		body = map[string]interface{}{"choice": a.Choice, "proceed": a.Proceed, "approver": a.Approver}
+		if a.Limits != nil {
+			body["limits"] = map[string]interface{}{"previous": limitSetBody(a.Limits.Previous), "new": limitSetBody(a.Limits.New)}
+		}
 		if a.Approver == "user" {
 			if body["said_commitment"], err = commit("said"); err != nil {
 				return nil, err

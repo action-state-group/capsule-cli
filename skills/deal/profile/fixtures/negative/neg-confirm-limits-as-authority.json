@@ -1,9 +1,9 @@
 {
-  "fixture": "neg-action-without-approval",
+  "fixture": "neg-confirm-limits-as-authority",
   "expect": "invalid",
-  "description": "The share_contact action carries no authorized_by ref.",
+  "description": "The share_contact action cites the user's limits confirmation instead of the approval of its own check.",
   "expected_stage": "chain",
-  "expected_error_contains": "must reference the sealed approval",
+  "expected_error_contains": "authorizes no action",
   "chain_prefix": [
     "01-baseline.json",
     "02-message-quote.json",
@@ -32,7 +32,15 @@
         "type": "deal-record",
         "digest_alg": "SHA-256",
         "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
-      }
+      },
+      "refs": [
+        {
+          "rel": "authorized_by",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f64b49e620427b297243b409b76114535762e70804216d4c95d94aed7fbb7ef0"
+        }
+      ]
     },
     "body": {
       "action": "share_contact"

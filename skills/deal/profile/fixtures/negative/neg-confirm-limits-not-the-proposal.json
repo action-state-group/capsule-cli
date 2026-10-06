@@ -1,0 +1,63 @@
+{
+  "fixture": "neg-confirm-limits-not-the-proposal",
+  "expect": "invalid",
+  "description": "A confirm_limits answer whose new version raises the limit, which the intent it approves did not propose.",
+  "expected_stage": "chain",
+  "expected_error_contains": "not what the intent proposed",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-message-quote.json",
+    "03-claim.json",
+    "04-evidence.json",
+    "05-intent.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "approval",
+      "seq": 6,
+      "at": "2026-10-01T16:20:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "7b999ee80c35aa553aba80ed3e8f2a4d14f9b79bce6e21220a6311cfe8dab4ce"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "refs": [
+        {
+          "rel": "approves",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "7b999ee80c35aa553aba80ed3e8f2a4d14f9b79bce6e21220a6311cfe8dab4ce"
+        }
+      ]
+    },
+    "body": {
+      "choice": "confirm_limits",
+      "proceed": true,
+      "approver": "user",
+      "said_commitment": "87892017f15171fa03a530d7d8d046ca5ac79c212b2e52bac29b7b78cc37affb",
+      "limits": {
+        "previous": {
+          "max_total_minor": 45000,
+          "allowed": [
+            "pay"
+          ]
+        },
+        "new": {
+          "max_total_minor": 90000,
+          "allowed": [
+            "pay",
+            "share_contact"
+          ]
+        }
+      }
+    }
+  }
+}

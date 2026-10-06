@@ -1,5 +1,5 @@
 {
-  "fixture": "13-verdict-pause.json",
+  "fixture": "14-verdict-pause.json",
   "expect": "valid",
   "story": "The deal check's answer to the check it references.",
   "record": {
@@ -8,12 +8,12 @@
       "canonicalization": "jcs",
       "deal_id": "deal-3f9c2a7be4d15068",
       "record_type": "verdict",
-      "seq": 13,
+      "seq": 14,
       "at": "2026-10-01T18:43:01Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "dadf71e7a9ae43be3c9ef168c95da6b3e79c3c7533ecdb154547338dd5e3aceb"
+        "digest": "7dc000edde84af2c654e86e8f9f8d73a7c961c56b24ad21d59cf6085b602ef26"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -25,7 +25,7 @@
           "rel": "checks",
           "type": "deal-record",
           "digest_alg": "SHA-256",
-          "digest": "dadf71e7a9ae43be3c9ef168c95da6b3e79c3c7533ecdb154547338dd5e3aceb"
+          "digest": "7dc000edde84af2c654e86e8f9f8d73a7c961c56b24ad21d59cf6085b602ef26"
         }
       ]
     },
@@ -70,5 +70,5 @@
       }
     }
   },
-  "expected_digest": "e6a609895e2fbc1d3fed3722eb22554bb8fdf98aa02dfb30dca721f3f76a2c2f"
+  "expected_digest": "333e1cb8bf8e2bcae2e5a967ed3997bdfa244b47294c38ee7976df24346d951f"
 }

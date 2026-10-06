@@ -1,5 +1,5 @@
 {
-  "fixture": "11-detail-change-payee.json",
+  "fixture": "12-detail-change-payee.json",
   "expect": "valid",
   "story": "The counterparty switches payee, phone and rail after first contact (fingerprints only).",
   "record": {
@@ -8,12 +8,12 @@
       "canonicalization": "jcs",
       "deal_id": "deal-3f9c2a7be4d15068",
       "record_type": "detail_change",
-      "seq": 11,
+      "seq": 12,
       "at": "2026-10-01T18:41:20Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "f79e8e1c4be734960828e3117df96b32478f3cec2cb908bfbdabf46f9f41d0af"
+        "digest": "ef1cd192f3d9fc09e2f5826fc90014dc3b423005c4f44fb3a3ea25e44cedd118"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -32,7 +32,7 @@
           "rel": "source",
           "type": "deal-record",
           "digest_alg": "SHA-256",
-          "digest": "f79e8e1c4be734960828e3117df96b32478f3cec2cb908bfbdabf46f9f41d0af"
+          "digest": "ef1cd192f3d9fc09e2f5826fc90014dc3b423005c4f44fb3a3ea25e44cedd118"
         }
       ]
     },
@@ -50,5 +50,5 @@
       }
     }
   },
-  "expected_digest": "701166c1255f19aed66ed73131766d4c392a64f61d636a42babf5d06a8604426"
+  "expected_digest": "bea5d9b724f52eac68f27ef189841b8900fb8c191d3d2af15e7bce942944ac37"
 }

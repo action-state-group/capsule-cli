@@ -1,5 +1,5 @@
 {
-  "fixture": "09-action-share-contact.json",
+  "fixture": "10-action-share-contact.json",
   "expect": "valid",
   "story": "The step actually taken, citing the sealed approval.",
   "record": {
@@ -8,12 +8,12 @@
       "canonicalization": "jcs",
       "deal_id": "deal-3f9c2a7be4d15068",
       "record_type": "action",
-      "seq": 9,
+      "seq": 10,
       "at": "2026-10-01T16:20:30Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "08ef4ea3ddcc7569019e8e6dcf673a519a5bc8866592ddae0657b2528fee298c"
+        "digest": "e152c91a8d78a109ca4ca4de5e01ead51cec39eaa8bea221bd408aad4d328772"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -25,7 +25,7 @@
           "rel": "authorized_by",
           "type": "deal-record",
           "digest_alg": "SHA-256",
-          "digest": "08ef4ea3ddcc7569019e8e6dcf673a519a5bc8866592ddae0657b2528fee298c"
+          "digest": "e152c91a8d78a109ca4ca4de5e01ead51cec39eaa8bea221bd408aad4d328772"
         }
       ]
     },
@@ -33,5 +33,5 @@
       "action": "share_contact"
     }
   },
-  "expected_digest": "84a95ba8bc1a900dcabd311294ee0c0ea13d1982a8df38777910df79a3e721ed"
+  "expected_digest": "930ad0b2971f787937a769b0ec67a45475922872df42cf8ec4a490ccdac666e7"
 }

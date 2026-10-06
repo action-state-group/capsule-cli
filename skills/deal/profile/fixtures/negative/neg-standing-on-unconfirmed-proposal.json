@@ -1,0 +1,112 @@
+{
+  "fixture": "neg-standing-on-unconfirmed-proposal",
+  "expect": "invalid",
+  "description": "An intent note proposes share_contact; with no confirm_limits answer from the user, a standing-intent approval of a share_contact check is refused: the limits in force are unchanged.",
+  "expected_stage": "chain",
+  "expected_error_contains": "does not allow",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-message-quote.json",
+    "03-claim.json",
+    "04-evidence.json",
+    "05-intent.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "approval",
+      "seq": 8,
+      "at": "2026-10-01T16:20:06Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "9fb61e335731675f5e6f89085c128da5fded8258a47271248ae8cdf093745f6f"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "refs": [
+        {
+          "rel": "approves",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "9fb61e335731675f5e6f89085c128da5fded8258a47271248ae8cdf093745f6f"
+        }
+      ]
+    },
+    "body": {
+      "choice": "proceed",
+      "proceed": true,
+      "approver": "standing_intent"
+    }
+  },
+  "chain_between": [
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "check",
+        "seq": 6,
+        "at": "2026-10-01T16:20:05Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "7b999ee80c35aa553aba80ed3e8f2a4d14f9b79bce6e21220a6311cfe8dab4ce"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        }
+      },
+      "body": {
+        "action": "share_contact",
+        "disclosing": [
+          "phone"
+        ],
+        "disclosing_to": "counterparty"
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "verdict",
+        "seq": 7,
+        "at": "2026-10-01T16:20:06Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "06b7eca6046c2288338baa976de97f24bcb3688abc3f0f02fe4ad6b8b6e8f022"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        },
+        "refs": [
+          {
+            "rel": "checks",
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "06b7eca6046c2288338baa976de97f24bcb3688abc3f0f02fe4ad6b8b6e8f022"
+          }
+        ]
+      },
+      "body": {
+        "result": "pass",
+        "differences": [],
+        "options": [],
+        "judge": {
+          "kind": "rules"
+        }
+      }
+    }
+  ]
+}

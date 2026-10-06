@@ -35,9 +35,10 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal note --kind message\|claim\|evidence\|change --input FILE` | Seals what happened. |
 | `deal check --input FILE [--stale-after 15m]` | Seals a snapshot of what is about to happen, asks the four questions, seals the result, returns the difference card and the `approval_text` (with the check time and when it goes stale). |
 | `deal note --kind approval --check ID --choice OPT` | Seals the user's answer to a check. Cuts a checkpoint. |
+| `deal note --kind approval --check INTENT_ID --choice confirm_limits` | Seals the user's confirmation of the limits an intent proposed: a new version of their limits, naming the previous one. Cuts a checkpoint. |
 | `deal note --kind act --input FILE` | Seals what the agent did and whether a passing check or approval covered it. |
 | `deal close --input FILE` | Compares what was delivered with what was agreed: `completed`, `mismatch` or `open`. Cuts a checkpoint. |
-| `deal note --kind intent --input FILE` | Seals a change to what the user asked or allowed. |
+| `deal note --kind intent --input FILE` | Seals a change to what the user asked. It may lower the limit or drop actions; a higher limit or a new action is only a proposal until the user confirms it. |
 | `deal note --kind evidence --email FILE [--key-record FILE]` | Seals a merchant's own email (raw RFC 822, headers intact) with the DKIM key records read from DNS at that moment, checks the signature, and cuts a checkpoint. See [The merchant's own email](#the-merchants-own-email). |
 | `deal note --kind evidence --input FILE` with `obligation` | Seals a cancel-by date (a trial that becomes paid, a renewal, the end of free cancellation, a payment on a date) with its source: the merchant's email (with `--email`) or a page snapshot. Cuts a checkpoint. |
 | `deal deadlines [--deal ID] [--ics FILE] [--remind-days N] [--all]` | Lists open cancel-by dates (on an open deal, or CARRIED AT CLOSE on a closed one) and open deals against their expected close date, for one deal or every deal in the profile, as JSON; `--all` adds resolved, cancel-sealed and passed dates; `--ics` also writes the open ones as a calendar file with reminders for the host's scheduler. Records, never enforces. |

@@ -1,7 +1,7 @@
 {
   "fixture": "05-intent.json",
   "expect": "valid",
-  "story": "The user widens what the agent may do: sharing the user's own number is now allowed.",
+  "story": "The user asks the agent to share their number: sealed as a proposal of a new action, which applies only once the user confirms it.",
   "record": {
     "x-deal-v0": {
       "profile": "x-deal-v0",
@@ -9,7 +9,7 @@
       "deal_id": "deal-3f9c2a7be4d15068",
       "record_type": "intent",
       "seq": 5,
-      "at": "2026-10-01T16:20:00Z",
+      "at": "2026-10-01T16:06:00Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
@@ -29,5 +29,5 @@
       ]
     }
   },
-  "expected_digest": "4fbc10792652e166ed5cd8355a3269b87d596d5658fcd20a169986c6af04a944"
+  "expected_digest": "7b999ee80c35aa553aba80ed3e8f2a4d14f9b79bce6e21220a6311cfe8dab4ce"
 }
