@@ -34,9 +34,21 @@ exactly two members.
   `canonicalization_id: "jcs"`). The Capsule commits to the record by its **record digest**
   (section 5). In capsulectl this is the payload binding: `agent_input_digest` = the AAC
   JSON-DIGEST of the payload, which is by construction the record digest. This profile changes nothing in the Capsule: `action_type`, `effect`,
-  `disposition`, `chain` and `references` keep their AAC meaning. v0 seals every step with
-  `action_type: "fyi"` and `action_id: "<deal_id>/<seq>"`, and chains each Capsule to the
-  previous one with `chain.relation: "follows"`. A `follows` link is ordering only.
+  `disposition`, `chain` and `references` keep their AAC meaning. v0 seals each step with
+  `action_id: "<deal_id>/<seq>"`, and chains each Capsule to the previous one with
+  `chain.relation: "follows"`. A `follows` link is ordering only. The Capsule claims only what
+  the record shows:
+  - An `action` record (an act a sealed approval authorized) whose action has a registered AAC
+    `effect.type` is `action_type: "decide"`. Today that is `pay`, as `send_payment`. Its
+    `disposition` is `accept` and `executed`, by `human` (with `human_disposed`) when the user
+    approved it in their own words, or by `policy` when a passing check approved it under
+    their standing intent. Its `effect` is `dispatched` and `runtime_claimed` (the agent's
+    report, with no response in hand), so `effect_mode` is `dispatched_unconfirmed`;
+    `one_way_recoverable` when the agreed recourse is refundable, else
+    `one_way_consequential`.
+  - Every other step is `action_type: "fyi"`: the other actions (`commit`, `cancel`, `sign`)
+    and disclosures have no registered `effect.type` yet, and an unchecked act is sealed as an
+    `outcome`, never as an action. Steps sealed by an earlier capsulectl are all `fyi`.
 - `record_type` is not AAC's `action_type`. AAC `action_type` stays `fyi` or `decide`.
   `record_type` is this profile's own closed vocabulary.
 - The record carries **no raw personal identifiers** (section 4). Raw values stay in the
