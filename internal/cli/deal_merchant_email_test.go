@@ -338,7 +338,7 @@ func TestDealMerchantEmailSealVerifyAndMismatch(t *testing.T) {
 		assert.NotContains(t, string(records), private)
 	}
 	assert.Contains(t, string(records), `"merchant_email":{"dkim":"pass","dmarc_policy":"reject","dmarc_record_digest":`)
-	if python, err := exec.LookPath("python3"); err == nil {
+	if python := profilePython(t); python != "" {
 		result, err := exec.Command(python, dealProfileDir+"/check_profile.py", export).CombinedOutput()
 		require.NoError(t, err, string(result))
 		assert.Contains(t, string(result), "ALL OK")

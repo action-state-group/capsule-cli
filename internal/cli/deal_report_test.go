@@ -204,9 +204,9 @@ func TestDealRecordsFollowTheProfile(t *testing.T) {
 	}
 
 	// The profile's own checker, when python3 is available.
-	python, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not available; the profile checker did not run")
+	python := profilePython(t)
+	if python == "" {
+		return
 	}
 	cmd := exec.Command(python, dealProfileDir+"/check_profile.py", export)
 	result, err := cmd.CombinedOutput()

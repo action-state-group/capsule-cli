@@ -1,0 +1,439 @@
+{
+  "fixture": "neg-reversal-twice",
+  "expect": "invalid",
+  "description": "A second cancel reversing the same payment again.",
+  "expected_stage": "chain",
+  "expected_error_contains": "reversed at most once",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-message-quote.json",
+    "03-claim.json",
+    "04-evidence.json",
+    "05-intent.json",
+    "06-approval-confirm-limits.json",
+    "07-check-share-contact.json",
+    "08-verdict-pass.json",
+    "09-approval-standing.json",
+    "10-action-share-contact.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "action",
+      "seq": 22,
+      "at": "2026-10-01T16:41:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "4e531d52a8ad8f0f0a8de5fb24612c7a1f62189d536650b0f603685036e0843b"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "refs": [
+        {
+          "rel": "authorized_by",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "4e531d52a8ad8f0f0a8de5fb24612c7a1f62189d536650b0f603685036e0843b"
+        },
+        {
+          "rel": "reverses",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "4b20ff0ca97d5a679aa439121dce7e7145f4ca7b5e5ba07a97fe18b57793f40d"
+        }
+      ]
+    },
+    "body": {
+      "action": "cancel",
+      "amount_minor": 20000,
+      "currency": "USD",
+      "direction": "in"
+    }
+  },
+  "chain_between": [
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "check",
+        "seq": 11,
+        "at": "2026-10-01T16:30:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "930ad0b2971f787937a769b0ec67a45475922872df42cf8ec4a490ccdac666e7"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        }
+      },
+      "body": {
+        "action": "pay",
+        "amount_minor": 20000,
+        "currency": "USD"
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "verdict",
+        "seq": 12,
+        "at": "2026-10-01T16:31:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "b6f4af894fd9bfcb1d94de38ac264734b7fe4b0e39b6c57b0a27bd496ca91628"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        },
+        "refs": [
+          {
+            "rel": "checks",
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "b6f4af894fd9bfcb1d94de38ac264734b7fe4b0e39b6c57b0a27bd496ca91628"
+          }
+        ]
+      },
+      "body": {
+        "result": "pass",
+        "differences": [],
+        "options": [],
+        "judge": {
+          "kind": "rules"
+        }
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "approval",
+        "seq": 13,
+        "at": "2026-10-01T16:32:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "8d8840ca4927bec0b3725a169d4b70875d19777bd4836c391d8ffc593e59161e"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        },
+        "refs": [
+          {
+            "rel": "approves",
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "8d8840ca4927bec0b3725a169d4b70875d19777bd4836c391d8ffc593e59161e"
+          }
+        ]
+      },
+      "body": {
+        "choice": "proceed",
+        "proceed": true,
+        "approver": "standing_intent"
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "action",
+        "seq": 14,
+        "at": "2026-10-01T16:33:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "642eaab02212dd39ab4aac58d89c697b3d16b9140c80675772b7f083d07052c2"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        },
+        "refs": [
+          {
+            "rel": "authorized_by",
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "642eaab02212dd39ab4aac58d89c697b3d16b9140c80675772b7f083d07052c2"
+          }
+        ]
+      },
+      "body": {
+        "action": "pay",
+        "amount_minor": 20000,
+        "currency": "USD",
+        "direction": "out"
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "check",
+        "seq": 15,
+        "at": "2026-10-01T16:34:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "4b20ff0ca97d5a679aa439121dce7e7145f4ca7b5e5ba07a97fe18b57793f40d"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        }
+      },
+      "body": {
+        "action": "cancel",
+        "amount_minor": 20000,
+        "currency": "USD"
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "verdict",
+        "seq": 16,
+        "at": "2026-10-01T16:35:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "ffdf479d7a15760703ceb86fd4d05e8a7d400972ccb33aeb44766525bf07ec4f"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        },
+        "refs": [
+          {
+            "rel": "checks",
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "ffdf479d7a15760703ceb86fd4d05e8a7d400972ccb33aeb44766525bf07ec4f"
+          }
+        ]
+      },
+      "body": {
+        "result": "pause",
+        "differences": [
+          {
+            "question": "asked",
+            "rule": "not_asked",
+            "field": "action"
+          }
+        ],
+        "options": [
+          "hold",
+          "proceed"
+        ],
+        "card_commitment": "a477b69a5e48d437888ac6a8a06890ad333101bc7ad119ae03584b7d4448867e",
+        "judge": {
+          "kind": "rules"
+        }
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "approval",
+        "seq": 17,
+        "at": "2026-10-01T16:36:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "ffa9090a9dfbaa20bf0d3f8eb6867a17e080c296c88a8650fb908aa2339fd75b"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        },
+        "refs": [
+          {
+            "rel": "approves",
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "ffa9090a9dfbaa20bf0d3f8eb6867a17e080c296c88a8650fb908aa2339fd75b"
+          }
+        ]
+      },
+      "body": {
+        "choice": "proceed",
+        "proceed": true,
+        "approver": "user",
+        "said_commitment": "3fbc987e92545ceeb991a7e258a9928b41022f35253a834f10bf05117b2bfaa1"
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "action",
+        "seq": 18,
+        "at": "2026-10-01T16:37:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "c1a0f7fef91de2696abb590608ad329cf4e4da61d08e699f50cbb98c3fd0f857"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        },
+        "refs": [
+          {
+            "rel": "authorized_by",
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "c1a0f7fef91de2696abb590608ad329cf4e4da61d08e699f50cbb98c3fd0f857"
+          },
+          {
+            "rel": "reverses",
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "4b20ff0ca97d5a679aa439121dce7e7145f4ca7b5e5ba07a97fe18b57793f40d"
+          }
+        ]
+      },
+      "body": {
+        "action": "cancel",
+        "amount_minor": 20000,
+        "currency": "USD",
+        "direction": "in"
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "check",
+        "seq": 19,
+        "at": "2026-10-01T16:38:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "55ec40af7956088ac0a094d43e952ffc6f3ae58b0c2f89dd89c8543c6a06fb60"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        }
+      },
+      "body": {
+        "action": "cancel",
+        "amount_minor": 20000,
+        "currency": "USD"
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "verdict",
+        "seq": 20,
+        "at": "2026-10-01T16:39:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "14fa8f38473bbeea7b9842a3acec83e22f78d6d54158afefc99638ffdb59e0ab"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        },
+        "refs": [
+          {
+            "rel": "checks",
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "14fa8f38473bbeea7b9842a3acec83e22f78d6d54158afefc99638ffdb59e0ab"
+          }
+        ]
+      },
+      "body": {
+        "result": "pause",
+        "differences": [
+          {
+            "question": "asked",
+            "rule": "not_asked",
+            "field": "action"
+          }
+        ],
+        "options": [
+          "hold",
+          "proceed"
+        ],
+        "card_commitment": "a477b69a5e48d437888ac6a8a06890ad333101bc7ad119ae03584b7d4448867e",
+        "judge": {
+          "kind": "rules"
+        }
+      }
+    },
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-3f9c2a7be4d15068",
+        "record_type": "approval",
+        "seq": 21,
+        "at": "2026-10-01T16:40:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "a70ca6c081ca462ca765dbf508f76abf3192db363977616cf9c3a1fb6cc371cf"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+        },
+        "refs": [
+          {
+            "rel": "approves",
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "a70ca6c081ca462ca765dbf508f76abf3192db363977616cf9c3a1fb6cc371cf"
+          }
+        ]
+      },
+      "body": {
+        "choice": "proceed",
+        "proceed": true,
+        "approver": "user",
+        "said_commitment": "3fbc987e92545ceeb991a7e258a9928b41022f35253a834f10bf05117b2bfaa1"
+      }
+    }
+  ]
+}
