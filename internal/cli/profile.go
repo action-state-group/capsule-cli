@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -130,11 +131,32 @@ type Profile struct {
 // a log_id. Every record a book seals carries the profile's operator.
 func (p Profile) isBook() bool { return p.Type == "jsonl" && p.LogID != "" }
 
-// operatorMissing reports a book whose operator is empty or only whitespace.
-// Such a profile is refused when it is created or updated, and refused at seal
-// time if an earlier capsulectl saved it.
+// invisibleRune reports whitespace and format characters (Unicode category
+// Cf: U+200B, U+FEFF, U+200D and the like), which print as nothing.
+func invisibleRune(r rune) bool { return unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) }
+
+// normalizeOperator is the operator as profile create and update store it,
+// whether it came from --operator or --interactive: without leading or
+// trailing whitespace or format characters.
+func normalizeOperator(s string) string { return strings.TrimFunc(s, invisibleRune) }
+
+// operatorVisible reports whether s has at least one character that prints:
+// a graphic rune that is neither whitespace nor a format character.
+func operatorVisible(s string) bool {
+	for _, r := range s {
+		if unicode.IsGraphic(r) && !invisibleRune(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// operatorMissing reports a book whose operator has no visible character:
+// empty, whitespace, or only invisible characters such as U+200B. Such a
+// profile is refused when it is created or updated, and refused at seal time
+// if an earlier capsulectl saved it.
 func (p Profile) operatorMissing() bool {
-	return p.isBook() && strings.TrimSpace(p.Operator) == ""
+	return p.isBook() && !operatorVisible(p.Operator)
 }
 
 func (p Profile) validate() error {
@@ -488,6 +510,7 @@ func profileCommands() *cobra.Command {
 			if e := checkWitnessConfig(p); e != nil {
 				return e
 			}
+			p.Operator = normalizeOperator(p.Operator)
 			if p.operatorMissing() {
 				return inputError("--operator is required for a jsonl profile with a log_id: the profile is an evidence book, and the operator names who signs every record it seals")
 			}
