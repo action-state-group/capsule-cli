@@ -253,11 +253,9 @@ func TestDealReportAskedIsCheckable(t *testing.T) {
 //     hyphenated rung such as "co-signed", or "anchored", "notarized",
 //     "attested");
 //   - the contract grades (assuranceLadder, the Evidence Result v0 grade) are
-//     ladder rungs.
+//     the ladder.
 func TestGradeStringsNameOnlyLadderRungs(t *testing.T) {
-	for _, g := range assuranceLadder {
-		assert.True(t, isGradeValue(g), "contract grade %q is not a ladder rung", g)
-	}
+	assert.Equal(t, gradeLadder, assuranceLadder, "the contract grades are the grade ladder")
 	rungField := func(name string) bool {
 		switch strings.ToLower(name) {
 		case "rung", "time_rung", "timerung", "grade":

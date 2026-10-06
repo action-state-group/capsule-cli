@@ -100,8 +100,9 @@ var changeSeverity = map[string]string{
 	"editorial":              severityNonBreaking,
 }
 
-// assuranceLadder is the Evidence Result's Grade vocabulary, lowest first.
-var assuranceLadder = []string{"self-attested", "witnessed", "countersigned"}
+// assuranceLadder is the Evidence Result's Grade vocabulary, lowest first:
+// the grade ladder itself (gradeLadder), so the two cannot drift apart.
+var assuranceLadder = gradeLadder
 
 var tierRank = map[string]int{"informational": 0, "must_have": 1}
 
