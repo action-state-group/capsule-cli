@@ -82,8 +82,8 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text` (≤ 200 chars, no identifiers), `source` | none beyond the chain. |
 | `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). After the deal's final close, the only record type allowed: later evidence linked to that close. | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. At most one `confirms` → the deal's final `close` (required after it, not allowed before it). Optional `resolves_obligation` (a digest ref) → an earlier record holding a cancel-by date. |
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
-| `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`), `pack_id` | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor`, `currency`, `seen_item`, `terms`, `recourse`, `pack_digest`, and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
-| `verdict` | The answer to one check: pass, or pause with the differences. | `result` (`pass`\|`pause`), `pack_id`, `differences[]`, `options[]` | exactly one `checks` → a `check`; one verdict per check; `pack_id` equal to the check's. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. |
+| `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor`, `currency`, `seen_item`, `terms`, `recourse`, `pack_id`, `pack_digest`, and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
+| `verdict` | The answer to one check: pass, or pause with the differences. | `result` (`pass`\|`pause`), `differences[]`, `options[]` | exactly one `checks` → a `check`; one verdict per check; optional `pack_id`, equal to the check's when either names one. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. |
 | `approval` | What authorizes, or declines, the next step. | `choice` (`hold`\|`verify_contact`\|`proceed`), `proceed` (= `choice == "proceed"`), `approver` (`user`\|`standing_intent`) | exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment`, and on a pause the choice is one of the verdict's options. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
 | `action` | A point-of-no-return step actually taken. | `action` | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). |
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. |
@@ -126,20 +126,24 @@ Field details:
   `confirmation` | `cancellation`). `verified` is true
   only when `dkim` is `pass` and `merchant_signed` is true. The DKIM signature is the
   merchant's attestation; the record's own seal is the producer's. They are different claims.
-- **recourse**: `rail` (a token: `card`, `zelle`, `wire`, …; the normalization is the safety
-  pack's `rail` rule) and `refundable`.
+- **recourse**: `rail` (a token: `card`, `zelle`, `wire`, …; normalized as in **Normalization**
+  below) and `refundable`.
 - **differences[]**: `{question, rule, field?}`. `question` is one of `asked`, `who`, `terms`,
-  `recourse`, `safety`, `delivered`. `rule` is a rule id from the pack named by `pack_id`, or a
-  core rule (`not_asked`, `over_limit`, `agent_picked`, `terms_changed`, `recourse_changed`,
-  `credentials_requested`, `not_delivered`, `delivered_differs`). Any change of
+  `recourse`, `safety`, `delivered`. `rule` is the id of the rule that found the difference.
+  `capsulectl`'s deal check writes its own built-in rules, among them `not_asked`, `over_limit`,
+  `agent_picked`, `terms_changed`, `recourse_changed`, `credentials_requested`, `not_delivered`
+  and `delivered_differs`. Any change of
   `recourse.rail` or `recourse.refundable` from what was agreed is a
   `recourse_changed` difference, for every action. The human card text contains raw values, so it is
   **not** in the record. The verdict carries `card_commitment` instead, and the text stays
   local.
-- **pack_id**: `publisher/name/semver`. v0 uses `capsule/marketplace-rentals-safety/0.1.0`.
-  `pack_digest` is OPTIONAL: SHA-256 over the JCS bytes of the exact `pack.json` that ran. It is
-  an identity reference (exact bytes). A pack version range is a policy reference and is never
-  written here.
+- **pack_id** (OPTIONAL): `publisher/name/semver`, naming a rule pack that actually ran.
+  `capsulectl`'s deal check loads no pack (it runs its own built-in rules), so from the release
+  after v0.1.0-rc6 it writes no `pack_id`. Records sealed by v0.1.0-rc6 and earlier carry
+  `capsule/marketplace-rentals-safety/0.1.0`, and still validate. A producer that does run a pack
+  may name it, and then `pack_digest` (OPTIONAL) is SHA-256 over the JCS bytes of the exact
+  `pack.json` that ran: an identity reference (exact bytes). A pack version range is a policy
+  reference and is never written here.
 - **verdict.judge**: `{kind: "rules"|"remote", status?, response_digest?}`. A remote judge's
   signed response is committed by digest, and the response stays local.
 - **Actions without approval.** An `action` record exists only for an authorized step. If the
@@ -181,7 +185,7 @@ break a deal in progress.
 Including the kind separates the domains, so the same string as `name` and as `payee` gives
 different fingerprints.
 
-**Normalization** (the same rules as the safety pack's `normalization`):
+**Normalization**:
 
 | kind | normalize(kind, raw) |
 |---|---|

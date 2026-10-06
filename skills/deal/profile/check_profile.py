@@ -549,7 +549,9 @@ def check_chain(records):
             if j in verdict_for_check:
                 fail(i, "a check has at most one verdict")
             verdict_for_check.add(j)
-            if body["pack_id"] != records[j]["body"]["pack_id"]:
+            # pack_id is optional (records sealed before v0.1.0-rc7 carry it); when
+            # either side names one, the two must agree.
+            if body.get("pack_id") != records[j]["body"].get("pack_id"):
                 fail(i, "verdict pack_id differs from the check's")
         elif t == "approval":
             j = one("approves", ("verdict",))
@@ -722,7 +724,7 @@ def check_files(paths) -> int:
 # Fixture generation (deterministic; the jet-ski payee-switch deal)
 # ---------------------------------------------------------------------------
 
-def regen(pack_path: Path | None):
+def regen():
     secret = hashlib.sha256(b"x-deal-v0 fixture store secret: public, test only").digest()
     deal_id = "deal-3f9c2a7be4d15068"
     dk = deal_key(secret, deal_id)
@@ -754,10 +756,6 @@ def regen(pack_path: Path | None):
         "disclosed-pickup": "lakeside marina, slip 14, by the fuel dock",
     }
     com = {k: commitment(nonce(k), v) for k, v in texts.items()}
-    pack_digest = None
-    if pack_path and pack_path.exists():
-        pack_digest = record_digest(json.loads(pack_path.read_text()))
-    pack_id = "capsule/marketplace-rentals-safety/0.1.0"
 
     records, names = [], []
     clock = iter(["2026-10-01T16:00:00Z", "2026-10-01T16:02:10Z", "2026-10-01T16:02:40Z",
@@ -801,9 +799,8 @@ def regen(pack_path: Path | None):
     add("evidence", "evidence", {"source": "listing_photo", "verified": False}, refs=[("about", c)])
     add("intent", "intent", {"verbatim_commitment": com["intent-2"], "allowed": ["pay", "share_contact"]})
     k1 = add("check-share-contact", "check", {"action": "share_contact", "disclosing": ["phone"],
-                                              "disclosing_to": "counterparty", "pack_id": pack_id,
-                                              **({"pack_digest": pack_digest} if pack_digest else {})})
-    v1 = add("verdict-pass", "verdict", {"result": "pass", "pack_id": pack_id, "differences": [], "options": [],
+                                              "disclosing_to": "counterparty"})
+    v1 = add("verdict-pass", "verdict", {"result": "pass", "differences": [], "options": [],
                                          "judge": {"kind": "rules"}}, refs=[("checks", k1)])
     a1 = add("approval-standing", "approval", {"choice": "proceed", "proceed": True, "approver": "standing_intent"},
              refs=[("approves", v1)])
@@ -814,11 +811,10 @@ def regen(pack_path: Path | None):
                                                  "recourse": {"rail": "zelle", "refundable": False}},
         counterparty=cp(("payee", "second"), ("phone", "second")), refs=[("source", m2)])
     k2 = add("check-pay", "check", {"action": "pay", "amount_minor": 20000, "currency": "USD", "seen_item": False,
-                                    "recourse": {"rail": "zelle", "refundable": False}, "pack_id": pack_id,
-                                    **({"pack_digest": pack_digest} if pack_digest else {})},
+                                    "recourse": {"rail": "zelle", "refundable": False}},
              counterparty=cp(("payee", "second")))
     v2 = add("verdict-pause", "verdict", {
-        "result": "pause", "pack_id": pack_id,
+        "result": "pause",
         "differences": [{"question": "who", "rule": "payee_or_contact_changed", "field": "payee"},
                         {"question": "who", "rule": "payee_or_contact_changed", "field": "phone"},
                         {"question": "recourse", "rule": "business_zelle_or_wire", "field": "rail"},
@@ -855,7 +851,7 @@ def regen(pack_path: Path | None):
         "claim": "The counterparty says the skis are available; recorded as a claim, not a fact.",
         "evidence": "The listing photo does not establish the claim; it stays unverified.",
         "intent": "The user widens what the agent may do: sharing the user's own number is now allowed.",
-        "check": "The agent runs the deal check before a point of no return; names the pack it runs.",
+        "check": "The agent runs the deal check before a point of no return.",
         "verdict": "The deal check's answer to the check it references.",
         "approval": "What authorizes the next step: a standing intent on a pass, or the user's own answer.",
         "action": "The step actually taken, citing the sealed approval.",
@@ -974,9 +970,7 @@ def regen(pack_path: Path | None):
 
 def main(argv):
     if "--regen" in argv:
-        i = argv.index("--pack") if "--pack" in argv else -1
-        pack = Path(argv[i + 1]) if i >= 0 else HERE.parent.parent / "safety-pack-marketplace-rentals-v0" / "pack.json"
-        regen(pack)
+        regen()
         return 0
     fails = jcs_selftest()
     for f in fails:

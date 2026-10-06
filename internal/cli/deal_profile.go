@@ -23,7 +23,6 @@ import (
 
 const (
 	dealProfile   = "x-deal-v0"
-	dealPackID    = "capsule/marketplace-rentals-safety/0.1.0"
 	dealFPAlg     = "hmac-sha256-deal-key"
 	dealRecordRef = "deal-record"
 )
@@ -568,7 +567,6 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			setIDs(counterpartyIDs(key, *sn.Who))
 		}
 		body["action"] = sn.Action
-		body["pack_id"] = dealPackID
 		if sn.AmountMinor != nil {
 			body["amount_minor"] = *sn.AmountMinor
 			cur := currency
@@ -612,7 +610,6 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		ck := ev.Check
 		block["refs"] = []interface{}{relRef("checks", digestOf(ck.Snapshot))}
 		body["result"] = ck.Verdict
-		body["pack_id"] = dealPackID
 		body["differences"] = differencesBody(ck.Differences)
 		options := make([]interface{}, len(ck.Options))
 		for i, o := range ck.Options {

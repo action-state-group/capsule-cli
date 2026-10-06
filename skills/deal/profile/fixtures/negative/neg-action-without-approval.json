@@ -25,7 +25,7 @@
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "6bf2137f55088719de3efbbf9fa75ad88307536f08533d16251714aea2c7099b"
+        "digest": "08ef4ea3ddcc7569019e8e6dcf673a519a5bc8866592ddae0657b2528fee298c"
       },
       "baseline_ref": {
         "type": "deal-record",
