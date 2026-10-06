@@ -6,18 +6,24 @@ import (
 )
 
 // gradeLadder is the evidence grade ladder, lowest first, as capsule-emit's
-// TRANSLATION.md defines it ("The ladder" table) at
-// action-state-group/capsule-emit@502402f14c0bb40c6550aeb98ea80fea37345375:
-// unsigned entry → self-attested → witnessed → self-countersigned /
-// unresolved-signer → countersigned. self-countersigned and
-// unresolved-signer share a rung: a countersignature exists, but it is the
-// producer's own key, or a key no directory resolves.
+// TRANSLATION.md defines it ("The ladder") at
+// action-state-group/capsule-emit@d4e5a3913df0d536516f36c089c365cc3240b8cc
+// (pending merge; re-pinned to the merge commit when it lands): self-attested → witnessed → countersigned.
 //
 // It is the one list of rung names. A grade capsulectl shows, as a field
-// value or in its own words, names one of these and nothing else
+// value or in its own words, names one of these, an annotation, or no rung
 // (TestGradeStringsNameOnlyLadderRungs): when the ladder is renamed, this
 // list moves first and every string that no longer names a rung fails.
-var gradeLadder = []string{"unsigned-entry", "self-attested", "witnessed", "self-countersigned", "unresolved-signer", "countersigned"}
+var gradeLadder = []string{"self-attested", "witnessed", "countersigned"}
+
+// gradeAnnotations are the countersignature findings that are not rungs:
+// a self-countersignature (the producer's own key) or a countersignature
+// from a signer no directory resolves. Either adds nothing: the grade stays
+// where witnessing put it (self-attested, or witnessed with a receipt), and
+// the finding is listed beside it. (TRANSLATION.md, "Countersignature
+// annotations are not rungs"; agent-action-capsule PR #187, pending, maps
+// them onto an Evidence Result.)
+var gradeAnnotations = []string{"self-countersigned", "unresolved-signer"}
 
 // gradeInPart qualifies a rung that covers only some of a record's steps
 // (witnessed_in_part: a receipt covers steps 1 to k of n; the rest are
@@ -38,9 +44,10 @@ func rungName(value string) string {
 }
 
 // isGradeValue reports whether value, a rung field's value, names a rung of
-// the ladder (or a rung in part), or one of the values that name no rung.
+// the ladder (or a rung in part), an annotation, or one of the values that
+// name no rung.
 func isGradeValue(value string) bool {
-	if slices.Contains(gradeNoRung, value) {
+	if slices.Contains(gradeNoRung, value) || slices.Contains(gradeAnnotations, rungName(value)) {
 		return true
 	}
 	return slices.Contains(gradeLadder, rungName(strings.TrimSuffix(value, gradeInPart)))

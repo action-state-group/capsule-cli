@@ -242,11 +242,13 @@ func TestDealReportAskedIsCheckable(t *testing.T) {
 }
 
 // Every grade capsulectl shows names a rung of the grade ladder
-// (gradeLadder), so a renamed ladder cannot leave the receipt claiming a rung
-// that no longer exists:
+// (gradeLadder: self-attested, witnessed, countersigned), so a renamed ladder
+// cannot leave the receipt claiming a rung that no longer exists:
 //   - every value a rung field takes (the Go fields and map keys rung,
 //     time_rung and grade, and the page's countersign.rung) is a ladder rung,
-//     a rung in part, or one of the values that name no rung;
+//     a rung in part, a countersignature annotation (gradeAnnotations:
+//     self-countersigned, unresolved-signer, which are not rungs), or one of
+//     the values that name no rung;
 //   - the words a receipt shows never name a rung off the ladder (a
 //     hyphenated rung such as "co-signed", or "anchored", "notarized",
 //     "attested");

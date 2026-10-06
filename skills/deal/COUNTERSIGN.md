@@ -46,14 +46,17 @@ its deal extension must name this deal. Without `--entry`,
 `deal countersign` only verifies the countersignatures the file already
 carries.
 
-## What each rung says
+## What each value says
 
-The rungs are the evidence grade ladder's (self-attested, witnessed,
-self-countersigned / unresolved-signer, countersigned); `not_countersigned`
-and `unverified` name no rung. The receipt's `assurance.rung` is
-`self_attested`, `witnessed` or `witnessed_in_part` on the same ladder.
+The evidence grade ladder is self-attested → witnessed → countersigned.
+`countersigned` is its top rung. `self_countersigned` and
+`unresolved_signer` are annotations, not rungs: they add nothing, and the
+receipt's grade stays where witnessing put it (`assurance.rung`:
+`self_attested`, `witnessed` or `witnessed_in_part`), so a self-countersigned
+receipt with no witness receipt is self-attested. `not_countersigned` and
+`unverified` name no rung.
 
-| Rung | When | What the receipt says |
+| Value | When | What the receipt says |
 |---|---|---|
 | `not_countersigned` | no countersignature | Not countersigned (above) |
 | `countersigned` | the signature verifies and the directory lists the key | Countersigned by NAME, a signer listed in the directory you chose, over this exact bundle, with its own check results. It vouches only as far as you trust that directory. |

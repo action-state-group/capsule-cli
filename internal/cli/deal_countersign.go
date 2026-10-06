@@ -27,10 +27,11 @@ import (
 // dealCountersignView is the countersign rung on the receipt, the report JSON
 // and the page.
 type dealCountersignView struct {
-	// Rung is a rung of the grade ladder (gradeLadder): countersigned,
-	// self_countersigned or unresolved_signer; or not_countersigned or
-	// unverified, which name no rung (gradeNoRung). The strongest entry
-	// decides.
+	// Rung is countersigned (a rung of the grade ladder, gradeLadder);
+	// self_countersigned or unresolved_signer, annotations that are not rungs
+	// and leave the grade where witnessing put it (gradeAnnotations); or
+	// not_countersigned or unverified, which name no rung (gradeNoRung). The
+	// strongest entry decides.
 	Rung      string                   `json:"rung"`
 	Text      string                   `json:"text"`
 	Directory string                   `json:"directory,omitempty"`
