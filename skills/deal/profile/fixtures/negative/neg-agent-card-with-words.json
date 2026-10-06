@@ -1,0 +1,57 @@
+{
+  "fixture": "neg-agent-card-with-words",
+  "expect": "invalid",
+  "description": "An agent_card answer that carries a said_commitment: words are only ever the user's (approver user).",
+  "expected_stage": "schema",
+  "expected_error_contains": "said_commitment",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-message-quote.json",
+    "03-claim.json",
+    "04-evidence.json",
+    "05-intent.json",
+    "06-approval-confirm-limits.json",
+    "07-check-share-contact.json",
+    "08-verdict-pass.json",
+    "09-approval-standing.json",
+    "10-action-share-contact.json",
+    "11-message-switch.json",
+    "12-detail-change-payee.json",
+    "13-check-pay.json",
+    "14-verdict-pause.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "approval",
+      "seq": 15,
+      "at": "2026-10-01T18:44:30Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "333e1cb8bf8e2bcae2e5a967ed3997bdfa244b47294c38ee7976df24346d951f"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "refs": [
+        {
+          "rel": "approves",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "333e1cb8bf8e2bcae2e5a967ed3997bdfa244b47294c38ee7976df24346d951f"
+        }
+      ]
+    },
+    "body": {
+      "choice": "hold",
+      "proceed": false,
+      "approver": "agent_card",
+      "said_commitment": "3fbc987e92545ceeb991a7e258a9928b41022f35253a834f10bf05117b2bfaa1"
+    }
+  }
+}

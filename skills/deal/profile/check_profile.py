@@ -1035,6 +1035,15 @@ def regen():
     neg("neg-approval-card-not-checked", "chain", "card shown is not the card checked", r, 14,
         "The Hold answer commits to a card text other than the one its verdict rendered.")
 
+    # agent_card: a click on a card the agent composed. It carries no words of the user's, so a
+    # said_commitment on it is a schema error, and it can never confirm the user's limits.
+    r = copy.deepcopy(records[14]); r["body"]["approver"] = "agent_card"
+    neg("neg-agent-card-with-words", "schema", "said_commitment", r, 14,
+        "An agent_card answer that carries a said_commitment: words are only ever the user's (approver user).")
+    r = copy.deepcopy(records[5]); r["body"]["approver"] = "agent_card"; del r["body"]["said_commitment"]
+    neg("neg-agent-card-confirms-limits", "schema", "user", r, 5,
+        "A confirm_limits answer sealed as agent_card: raising the user's limits takes their own words.")
+
     # A confirmation cited as the authority for an action.
     r = copy.deepcopy(records[9]); r["x-deal-v0"]["refs"] = [{"rel": "authorized_by", **_ref(record_digest(records[5]))}]
     neg("neg-confirm-limits-as-authority", "chain", "authorizes no action", r, 9,
