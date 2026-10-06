@@ -103,6 +103,12 @@
       "commitment": "a477b69a5e48d437888ac6a8a06890ad333101bc7ad119ae03584b7d4448867e"
     },
     {
+      "label": "said-limits",
+      "nonce": "95c321d97aab2213ca16844a0566d13329ba4a72080938cc95b475170718d0d3",
+      "text": "yes, share my number with them",
+      "commitment": "87892017f15171fa03a530d7d8d046ca5ac79c212b2e52bac29b7b78cc37affb"
+    },
+    {
       "label": "said-1",
       "nonce": "3d4335b20ba6affbe4d2d52a2deac5d6b5f2e08c0bd4d1f64df21aa3c61285c6",
       "text": "Hold",

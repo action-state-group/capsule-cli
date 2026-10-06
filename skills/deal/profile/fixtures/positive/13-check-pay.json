@@ -1,5 +1,5 @@
 {
-  "fixture": "12-check-pay.json",
+  "fixture": "13-check-pay.json",
   "expect": "valid",
   "story": "The agent runs the deal check before a point of no return.",
   "record": {
@@ -8,12 +8,12 @@
       "canonicalization": "jcs",
       "deal_id": "deal-3f9c2a7be4d15068",
       "record_type": "check",
-      "seq": 12,
+      "seq": 13,
       "at": "2026-10-01T18:43:00Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "701166c1255f19aed66ed73131766d4c392a64f61d636a42babf5d06a8604426"
+        "digest": "bea5d9b724f52eac68f27ef189841b8900fb8c191d3d2af15e7bce942944ac37"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -38,5 +38,5 @@
       }
     }
   },
-  "expected_digest": "dadf71e7a9ae43be3c9ef168c95da6b3e79c3c7533ecdb154547338dd5e3aceb"
+  "expected_digest": "7dc000edde84af2c654e86e8f9f8d73a7c961c56b24ad21d59cf6085b602ef26"
 }

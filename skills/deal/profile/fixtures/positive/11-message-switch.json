@@ -1,5 +1,5 @@
 {
-  "fixture": "10-message-switch.json",
+  "fixture": "11-message-switch.json",
   "expect": "valid",
   "story": "A counterparty message; its text stays local, the record holds a salted commitment.",
   "record": {
@@ -8,12 +8,12 @@
       "canonicalization": "jcs",
       "deal_id": "deal-3f9c2a7be4d15068",
       "record_type": "message",
-      "seq": 10,
+      "seq": 11,
       "at": "2026-10-01T18:41:00Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "84a95ba8bc1a900dcabd311294ee0c0ea13d1982a8df38777910df79a3e721ed"
+        "digest": "930ad0b2971f787937a769b0ec67a45475922872df42cf8ec4a490ccdac666e7"
       },
       "baseline_ref": {
         "type": "deal-record",
@@ -33,5 +33,5 @@
       "content_commitment": "6a4b8b8fa935fecb7fcb6fdc94199011c5997c96d7021260a78cddd4821d4329"
     }
   },
-  "expected_digest": "f79e8e1c4be734960828e3117df96b32478f3cec2cb908bfbdabf46f9f41d0af"
+  "expected_digest": "ef1cd192f3d9fc09e2f5826fc90014dc3b423005c4f44fb3a3ea25e44cedd118"
 }

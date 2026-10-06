@@ -77,14 +77,14 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | record_type | What it records | Required body fields | Required refs / block fields |
 |---|---|---|---|
 | `baseline` | First contact: what the user asked, who the counterparty is, the terms and the way back. The deal's contract. | `deal_type` (`purchase`\|`rental`\|`booking`\|`service`), `intent` (as the intent body), `terms`, `recourse.rail` + `recourse.refundable` | `seq` = 1; `channel`; `counterparty` (≥ 1 id). No `prev`, no `baseline_ref`. Optional `claims[]`, `counterparty_facts`, `demo`, `skill` (`{"skill_md_digest": <64 hex>, "other_copies": <int ≥ 0>}`: the SHA-256 of the SKILL.md the agent reported following, and how many other copies of that skill sat beside it; a boundary marker for accidents, not proof the instructions were followed). |
-| `intent` | The user restates or widens the ask (for example, now allowing `share_contact`). Replaces `allowed` / `max_total_minor` / `asked` from here on. | `verbatim_commitment` | `baseline_ref`, `prev`. |
+| `intent` | The user restates or picks within the ask. Replaces `verbatim` / `asked` from here on. `allowed` and `max_total_minor` carry forward unchanged: an intent may lower the limit or drop actions, and a higher limit or a new action is only a proposal (section 6, rule 6). | `verbatim_commitment` | `baseline_ref`, `prev`. |
 | `message` | One message in the thread. The text stays local. | `from` (`counterparty`\|`user`\|`agent`), `content_commitment` | `channel`. `counterparty` when the message shows identifiers (for example, a new phone number). |
 | `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text` (≤ 200 chars, no identifiers), `source` | none beyond the chain. |
 | `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). After the deal's final close, the only record type allowed: later evidence linked to that close. | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. At most one `confirms` → the deal's final `close` (required after it, not allowed before it). Optional `resolves_obligation` (a digest ref) → an earlier record holding a cancel-by date. |
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
 | `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor`, `currency`, `seen_item`, `terms`, `recourse`, `pack_id`, `pack_digest`, and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
 | `verdict` | The answer to one check: pass, or pause with the differences. | `result` (`pass`\|`pause`), `differences[]`, `options[]` | exactly one `checks` → a `check`; one verdict per check; optional `pack_id`, equal to the check's when either names one. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. |
-| `approval` | What authorizes, or declines, the next step. | `choice` (`hold`\|`verify_contact`\|`proceed`), `proceed` (= `choice == "proceed"`), `approver` (`user`\|`standing_intent`) | exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment`, and on a pause the choice is one of the verdict's options. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
+| `approval` | What authorizes, or declines, the next step; or the user's confirmation of the limits an intent proposed. | `choice` (`hold`\|`verify_contact`\|`proceed`\|`confirm_limits`), `proceed` (`true` on `proceed`, `false` on `hold` and `verify_contact`), `approver` (`user`\|`standing_intent`); on `confirm_limits` only, `limits` (`previous` and `new`, each `max_total_minor` and `allowed`) | `confirm_limits`: exactly one `approves` → the proposing `intent`, `approver: user`, and section 6, rule 6. Otherwise exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment`, and on a pause the choice is one of the verdict's options. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
 | `action` | A point-of-no-return step actually taken. | `action` | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). |
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. |
 | `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. Optional `carried_obligations`: the cancel-by dates still open at the close, each `{obligation: digest ref, cancel_by}`. |
@@ -271,9 +271,18 @@ A verifier holding one deal's records in `seq` order checks:
      changing the answer ("Hold", then "Pay anyway") requires a new check. The later answer is
      still sealed as the user gave it (`proceed` records the choice, as for every approval); no
      `action` may cite it.
-6. **Standing intent.** `approver: "standing_intent"` is valid only on a passing verdict, and
-   only for an action in the current `allowed`. An absent `allowed` places no restriction; a
-   present, empty `allowed` allows nothing. A pause always needs the user's own answer.
+6. **The user's limits, and standing intent.** The limits in force start as the baseline
+   intent's `max_total_minor` and `allowed`. An `intent` record may lower the limit or drop
+   actions; a higher limit or an action not in force is a proposal, recorded and not applied.
+   Only the user's `approval` with `choice: "confirm_limits"` that `approves` the proposing
+   `intent` puts it in force, as a new version: its `limits.previous` equals the limits in force,
+   its `limits.new` is what the intent proposed (a field the intent leaves out keeps its value),
+   it carries `proceed: true`, and the intent asks for more. A proposal replaced by a later
+   `intent`, or already confirmed, may still be answered, with `proceed: false`; that changes
+   nothing. A `confirm_limits` approval authorizes no `action` or `disclosure`.
+   `approver: "standing_intent"` is valid only on a passing verdict, and only for an action in
+   the `allowed` in force. An absent `allowed` places no restriction; a present, empty `allowed`
+   allows nothing. A pause always needs the user's own answer.
 7. **Close.** `close` references the latest `outcome` (if any), and its `outcome` equals that
    outcome's. Without an outcome record, the close is `open`. `unchecked_actions` equals the
    number of `unchecked_action` outcomes. A close with `completed` or `mismatch` is terminal:

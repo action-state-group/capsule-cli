@@ -81,7 +81,17 @@ pick, if the deal is already open) and **before** `deal check`:
 - `verbatim` is the user's own words for the pick.
 - `asked` holds only what the user chose, written exactly as the cart's
   `terms` write it.
-- Carry `allowed` and `max_total_minor` forward: an intent replaces them.
+- `allowed` and `max_total_minor` carry forward UNCHANGED: copy the user's
+  values into the note. An intent may PROPOSE a change; it never applies one.
+  A proposed change needs the user's explicit confirmation and produces
+  either (a) a one-shot override bound to this exact proposed action, used
+  once: the check pauses, and the user's sealed answer to that check covers
+  that one step; or (b) a new sealed version of the user's limits: the
+  user's `deal note --kind approval --check <the intent's capsule_id>
+  --choice confirm_limits --said "<their words>"`, which records the
+  previous limits and the new ones. The agent may not activate either: seal
+  either answer only when the user has said it. An intent may lower the
+  limit or drop an action without a confirmation.
 - What you picked yourself (a size, a colour or a delivery option the user
   never mentioned) stays out of `asked` and in the cart's `terms`. The check
   then lists it as yours: `picked_by_agent` in its output, "picked by the
@@ -230,11 +240,14 @@ for every later email.
 A cancel only counts as evidence when it is sealed, and it only counts as the
 merchant's word when the merchant's own email says so.
 
-1. Seal the user's words asking to cancel (`deal note --kind intent` with
-   `"allowed"` including `"cancel"`), then `deal check` with
-   `"action": "cancel"`, on the same deal that holds the cancel-by date.
-2. On `"proceed": true`, cancel with the merchant. Right after:
-   `deal note --kind act` with `"action": "cancel"`.
+1. Seal the user's words asking to cancel (`deal note --kind intent`), then
+   `deal check` with `"action": "cancel"`, on the same deal that holds the
+   cancel-by date. If the deal did not allow `cancel` from the start, the
+   intent only proposes it and the check pauses: show the card and seal the
+   user's own answer (`deal note --kind approval`). A note never adds
+   `cancel` on its own.
+2. On `"proceed": true`, or the user's sealed yes, cancel with the
+   merchant. Right after: `deal note --kind act` with `"action": "cancel"`.
 3. When the merchant's cancellation email arrives, seal it raw:
    `deal note --kind evidence --email cancelled.eml`.
 4. `deal report` then states, under "Your cancellation", exactly what is
@@ -426,14 +439,19 @@ capsulectl --profile deal deal note --deal ID --kind message  --input m.json   #
 capsulectl --profile deal deal note --deal ID --kind claim    --input c.json   # {"text":"...","source":"..."}
 capsulectl --profile deal deal note --deal ID --kind evidence --input e.json   # {"about":"...","source":"...","verified":true}
 capsulectl --profile deal deal note --deal ID --kind change   --input d.json   # {"source":"...","who":{...},"terms":{...},"recourse":{...}}
-capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   # {"verbatim":"the user's new words","allowed":["pay","share_contact"]}
+capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   # {"verbatim":"the user's new words","allowed":["pay","share_contact"]}: a new action is only proposed
 capsulectl --profile deal deal note --deal ID --kind disclosure --input d.json # {"fields":[{"class":"phone","value":"..."}]}
 ```
 
-Seal an `intent` whenever the user widens or changes what you may do (for
-example, "go ahead and share my number"), and whenever the user picks
-from options you offered (see "The user picked from options"). It replaces
-`allowed`, `asked` and the limit from then on.
+Seal an `intent` whenever the user changes what they asked (for example,
+"go ahead and share my number"), and whenever the user picks from options
+you offered (see "The user picked from options"). It replaces `verbatim` and
+`asked` from then on. `allowed` and `max_total_minor` carry forward
+unchanged: a higher limit or a new action in the note is only a proposal,
+and the note's output says so (`proposed`, `in_force`). It applies only
+when the user confirms it, as above: their answer to the paused check for
+one step, or their `confirm_limits` answer to the note for a new version of
+their limits. Never seal either without the user's own words.
 
 Record a `change` whenever the counterparty changes **any** detail: a new
 payee, a new payment method, a new phone, a new price. A change is never

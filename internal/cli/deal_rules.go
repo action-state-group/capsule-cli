@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -258,6 +259,67 @@ type dealApproval struct {
 	Said     string `json:"said,omitempty"`
 	Proceed  bool   `json:"proceed"`
 	Reason   string `json:"reason,omitempty"`
+	// Limits is set on the user's confirm_limits answer to an intent note
+	// that proposed a higher limit or more actions: the limits in force
+	// before it and the new version it seals. Check then names that note.
+	Limits *dealLimits `json:"limits,omitempty"`
+}
+
+// dealLimits is one confirmed change to the user's limits: the version in
+// force before it and the version it puts in force.
+type dealLimits struct {
+	Previous dealLimitSet `json:"previous"`
+	New      dealLimitSet `json:"new"`
+}
+
+// dealLimitSet is a version of the user's limits. Allowed absent (nil) means
+// no restriction, as in dealIntent.
+type dealLimitSet struct {
+	MaxTotalMinor *int64   `json:"max_total_minor,omitempty"`
+	Allowed       []string `json:"allowed"`
+}
+
+// String is a version of the limits in plain words, for the trail.
+func (l dealLimitSet) String() string {
+	limit := "no limit"
+	if l.MaxTotalMinor != nil {
+		limit = "limit " + strconv.FormatInt(*l.MaxTotalMinor, 10) + " (minor units)"
+	}
+	switch {
+	case l.Allowed == nil:
+		return limit + ", any action"
+	case len(l.Allowed) == 0:
+		return limit + ", no action yet"
+	}
+	return limit + ", " + strings.Join(l.Allowed, ", ")
+}
+
+func (i dealIntent) limits() dealLimitSet {
+	return dealLimitSet{MaxTotalMinor: i.MaxTotalMinor, Allowed: i.Allowed}
+}
+
+// proposedLimits is what an intent note asks for beyond the limits in force,
+// and whether it asks for more at all: a higher limit, or an action the
+// limits in force do not allow. A note without a limit or a list keeps the
+// one in force.
+func proposedLimits(cur dealLimitSet, note dealIntent) (dealLimitSet, bool) {
+	out, more := cur, false
+	if note.MaxTotalMinor != nil {
+		if cur.MaxTotalMinor != nil && *note.MaxTotalMinor > *cur.MaxTotalMinor {
+			more = true
+		}
+		limit := *note.MaxTotalMinor
+		out.MaxTotalMinor = &limit
+	}
+	if note.Allowed != nil {
+		for _, a := range note.Allowed {
+			if cur.Allowed != nil && !slices.Contains(cur.Allowed, a) {
+				more = true
+			}
+		}
+		out.Allowed = slices.Clone(note.Allowed)
+	}
+	return out, more
 }
 
 type dealAct struct {
@@ -434,7 +496,7 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		e := se.Event
 		switch e.Kind {
 		case "intent":
-			s.intent = *e.Intent
+			s.intent = laterIntent(s.intent, *e.Intent)
 		case "message":
 			s.messages = append(s.messages, *e.Message)
 			if e.Message.Who != nil && e.Message.From == "counterparty" {
@@ -466,6 +528,15 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		case "snapshot":
 			lastSnapshot = e.Snapshot
 		case "approval":
+			// The user's confirmation of proposed limits is the new version of
+			// them; the note it answers stays sealed as the proposal.
+			if e.Approval.Limits != nil {
+				if e.Approval.Proceed && e.Approval.Reason == "" {
+					s.intent.MaxTotalMinor = e.Approval.Limits.New.MaxTotalMinor
+					s.intent.Allowed = slices.Clone(e.Approval.Limits.New.Allowed)
+				}
+				continue
+			}
 			// An approved proceed adopts the checked terms as the new agreement.
 			// Who is never adopted: it is always compared with first contact.
 			if e.Approval.Proceed && e.Approval.Reason == "" && lastSnapshot != nil {
@@ -481,6 +552,37 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		}
 	}
 	return s, nil
+}
+
+// laterIntent folds a later intent note over the one in force. The note is
+// written by the agent, so it may narrow what the user set but never widen
+// it: the limit is the lower of the two (a note without one keeps the one in
+// force), and the allowed actions are those both allow (a note without a list
+// keeps the list in force). What the user picked (verbatim, asked) is the
+// note's. A note that asks for more is a proposal: it applies only once the
+// user confirms it (a confirm_limits approval, a new version of the limits),
+// or for one step when the user approves that step's paused check.
+func laterIntent(cur, next dealIntent) dealIntent {
+	out := next
+	switch {
+	case cur.MaxTotalMinor == nil:
+	case next.MaxTotalMinor == nil || *next.MaxTotalMinor > *cur.MaxTotalMinor:
+		limit := *cur.MaxTotalMinor
+		out.MaxTotalMinor = &limit
+	}
+	switch {
+	case cur.Allowed == nil:
+	case next.Allowed == nil:
+		out.Allowed = slices.Clone(cur.Allowed)
+	default:
+		out.Allowed = []string{}
+		for _, a := range next.Allowed {
+			if slices.Contains(cur.Allowed, a) {
+				out.Allowed = append(out.Allowed, a)
+			}
+		}
+	}
+	return out
 }
 
 func (s *dealState) overlayWho(w dealWho, source string) {
@@ -1068,6 +1170,9 @@ func trailLine(e dealEvent) string {
 	case "approval":
 		if e.Approval.Approver == "standing_intent" {
 			return "went ahead on what you already allowed"
+		}
+		if l := e.Approval.Limits; l != nil && e.Approval.Proceed {
+			return "you confirmed new limits: " + l.Previous.String() + " → " + l.New.String()
 		}
 		return "your answer: " + e.Approval.Choice
 	case "act":
