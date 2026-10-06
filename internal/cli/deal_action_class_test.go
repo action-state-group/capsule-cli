@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -269,6 +270,14 @@ func TestDealApprovalAuthorityHasThreeValues(t *testing.T) {
 				assert.Equal(t, "policy", capsule["disposition"].(map[string]any)["approver"])
 			case "agent_card":
 				assert.Nil(t, capsule["disposition"], "a card click certifies no one's consent")
+			}
+			// The exported records pass the profile's own checker.
+			if python := profilePython(t); python != "" {
+				export := filepath.Join(t.TempDir(), "deal.json")
+				dealRun(t, "export", "--deal", id, "--output", export)
+				result, err := exec.Command(python, dealProfileDir+"/check_profile.py", export).CombinedOutput()
+				require.NoError(t, err, string(result))
+				assert.Contains(t, string(result), "ALL OK")
 			}
 		})
 	}
