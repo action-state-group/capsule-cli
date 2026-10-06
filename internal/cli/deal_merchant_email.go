@@ -1024,6 +1024,9 @@ func approvedAmount(events []sealedEvent, state dealState) (amount *int64, curre
 		if a.Approver == "standing_intent" {
 			basis = "the amount checked against what you already allowed"
 		}
+		if a.Approver == "agent_card" {
+			basis = "the amount on the card that was approved"
+		}
 		return snap.Event.Snapshot.AmountMinor, currency, basis, []string{snap.CapsuleID, check.CapsuleID, events[i].CapsuleID}, false
 	}
 	if state.intent.MaxTotalMinor != nil {

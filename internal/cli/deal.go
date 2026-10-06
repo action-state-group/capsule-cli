@@ -305,9 +305,90 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 	return events, nil
 }
 
+// dealEffectTypes maps a deal action to its registered AAC effect.type
+// (agent-action-capsule spec/REGISTRY.md §3, "effect.type"). Only an action
+// listed here is sealed as a decide Capsule. Every other action (commit,
+// cancel, sign) and every disclosure (share_contact, share_credentials) has
+// no registered effect type yet, so its Capsule stays fyi rather than carry
+// an unregistered one.
+var dealEffectTypes = map[string]string{"pay": "send_payment"}
+
+// dealCapsuleInput is a step's Capsule, claiming only what the deal record
+// shows. A record that says an action was taken under a sealed approval (an
+// authorized act whose action has a registered effect type) is a decide
+// Capsule:
+//   - disposition: accepted, and executed, as the act reports. The approver
+//     is the one the approval records: a human only when the user approved it
+//     in their own words (committed as said_commitment), policy when a passing
+//     check approved it under the user's standing intent. An act approved by
+//     agent_card (a click on a card the agent composed) stays fyi;
+//   - effect: dispatched, runtime_claimed: the agent's report that it acted,
+//     with no response in hand, so effect_mode is dispatched_unconfirmed;
+//     one_way_recoverable when the agreed recourse says refundable, otherwise
+//     one_way_consequential.
+//
+// Every other record stays fyi, including an unchecked act, which the deal
+// record itself seals as an outcome and never as an action. legacy gives the
+// all-fyi Capsule earlier capsulectl releases sealed, for recovering a step
+// one of them prepared.
+func dealCapsuleInput(events []sealedEvent, ev dealEvent, operator string, at time.Time, legacy bool) emit.Input {
+	in := emit.Input{ActionID: fmt.Sprintf("%s/%d", ev.DealID, ev.N), ActionType: emit.ActionTypeFYI, Operator: operator, Developer: "capsulectl-deal", Timestamp: at}
+	if legacy || ev.Kind != "act" || ev.Act == nil || ev.Act.Unchecked {
+		return in
+	}
+	disposition, ok := dealDisposition(events, ev.Act.AuthorizedBy)
+	if !ok {
+		return in
+	}
+	effectType, ok := dealEffectTypes[ev.Act.Action]
+	if !ok {
+		return in
+	}
+	state, err := foldDeal(events)
+	if err != nil {
+		return in
+	}
+	irreversibility := emit.IrreversibilityOneWayConsequential
+	if r := state.agreedRecourse.Refundable; r != nil && *r {
+		irreversibility = emit.IrreversibilityOneWayRecoverable
+	}
+	in.ActionType = emit.ActionTypeDecide
+	in.Disposition = &disposition
+	in.Effect = &emit.Effect{Type: effectType, Status: emit.EffectDispatched, IrreversibilityClass: irreversibility, EffectAttestation: emit.AttestationRuntimeClaimed}
+	return in
+}
+
+// dealDisposition is the disposition of an act authorized by the sealed
+// approval id: accepted and executed, by the approver that approval records.
+// It is false when id names no proceeding approval this maps.
+func dealDisposition(events []sealedEvent, id string) (emit.Disposition, bool) {
+	for _, se := range events {
+		a := se.Event.Approval
+		if id == "" || se.CapsuleID != id || se.Event.Kind != "approval" || a == nil || !a.Proceed {
+			continue
+		}
+		d := emit.Disposition{Decision: emit.DecisionAccept, VerdictClass: emit.VerdictExecuted}
+		switch a.Approver {
+		case "user":
+			// Every user approval this producer seals commits the user's words
+			// (said_commitment, deal_profile.go) and refs the check it approves.
+			d.Approver, d.HumanDisposed = emit.ApproverHuman, true
+		case "standing_intent":
+			d.Approver = emit.ApproverPolicy
+		default:
+			// agent_card: a click on a card the agent composed certifies no one's
+			// consent, so the act stays fyi.
+			return emit.Disposition{}, false
+		}
+		return d, true
+	}
+	return emit.Disposition{}, false
+}
+
 // stepRequest is the frozen seal request for a step: rebuilt from the stored
-// step it gives the same Capsule, which is what makes recovery possible.
-func (s *dealSession) stepRequest(events []sealedEvent, ev dealEvent) (Request, string, error) {
+// step it gives the same Capsule, which is what makes recovery possible
+// (legacy: the Capsule an earlier release sealed; see dealCapsuleInput).
+func (s *dealSession) stepRequest(events []sealedEvent, ev dealEvent, legacy bool) (Request, string, error) {
 	payload, digest, err := encodeDealRecord(ev, events, s.dkey)
 	if err != nil {
 		return Request{}, "", err
@@ -318,7 +399,7 @@ func (s *dealSession) stepRequest(events []sealedEvent, ev dealEvent) (Request, 
 	}
 	request := Request{
 		Version: "capsule-seal-request/v1",
-		Capsule: emit.Input{ActionID: fmt.Sprintf("%s/%d", ev.DealID, ev.N), ActionType: emit.ActionTypeFYI, Operator: s.p.Name, Developer: "capsulectl-deal", Timestamp: at.UTC()},
+		Capsule: dealCapsuleInput(events, ev, s.p.Name, at.UTC(), legacy),
 		Payload: payload,
 	}
 	// Each step's Capsule follows the one before it (ordering only), so the
@@ -358,7 +439,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 		}
 		ev.Nonces[name] = hex.EncodeToString(nonce)
 	}
-	request, digest, err := s.stepRequest(events, ev)
+	request, digest, err := s.stepRequest(events, ev, false)
 	if err != nil {
 		return Request{}, sealedEvent{}, err
 	}
@@ -394,12 +475,20 @@ func (s *dealSession) publishStep(ctx context.Context, request Request, se seale
 	return se, nil
 }
 
+// recoverStep publishes a step that was prepared but never reached the log.
+// The step may have been prepared by an earlier capsulectl, which sealed every
+// step fyi, so the request whose Capsule is the one prepared is the one used.
 func (s *dealSession) recoverStep(ctx context.Context, events []sealedEvent, ev dealEvent, capsuleID string) (sealedEvent, error) {
-	request, digest, err := s.stepRequest(events, ev)
-	if err != nil {
-		return sealedEvent{}, ErrConflict
+	for _, legacy := range []bool{false, true} {
+		request, digest, err := s.stepRequest(events, ev, legacy)
+		if err != nil {
+			return sealedEvent{}, ErrConflict
+		}
+		if record, err := seal(request, s.key); err == nil && record.CapsuleID == capsuleID {
+			return s.publishStep(ctx, request, sealedEvent{CapsuleID: capsuleID, Digest: digest, Event: ev})
+		}
 	}
-	return s.publishStep(ctx, request, sealedEvent{CapsuleID: capsuleID, Digest: digest, Event: ev})
+	return sealedEvent{}, ErrConflict
 }
 
 // seal prepares and publishes one step. Any failure is returned: a step
@@ -713,7 +802,18 @@ func dealNoteCommand() *cobra.Command {
 			if check == "" || choice == "" {
 				return inputError("approval needs --check and --choice")
 			}
-			ev.Approval = &dealApproval{Check: check, Choice: choice, Approver: "user", Said: said}
+			// approver "user" certifies the user's consent, so it is sealed only with their own
+			// words, committed as said_commitment beside the approval's ref to the check (which
+			// pins the proposed action). A click on a card the agent composed carries no words of
+			// theirs: it is sealed agent_card, never user.
+			approver := "user"
+			if strings.TrimSpace(said) == "" {
+				if choice == "confirm_limits" {
+					return inputError("confirm_limits needs --said with the user's own words: raising their limits takes their consent, not a card click")
+				}
+				approver, said = "agent_card", ""
+			}
+			ev.Approval = &dealApproval{Check: check, Choice: choice, Approver: approver, Said: said}
 		default:
 			return inputError("--kind must be message, claim, evidence, change, intent, approval, act or disclosure")
 		}
