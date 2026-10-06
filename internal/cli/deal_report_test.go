@@ -5,10 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -235,6 +239,111 @@ func TestDealReportAskedIsCheckable(t *testing.T) {
 	assert.Equal(t, intent["verbatim_commitment"], commitment)
 	assert.Equal(t, "rent me 2 jet skis Saturday", opening["text"])
 	assert.Contains(t, string(raw), "not checked by this page")
+}
+
+// Every grade capsulectl shows names a rung of the grade ladder
+// (gradeLadder), so a renamed ladder cannot leave the receipt claiming a rung
+// that no longer exists:
+//   - every value a rung field takes (the Go fields and map keys rung,
+//     time_rung and grade, and the page's countersign.rung) is a ladder rung,
+//     a rung in part, or one of the values that name no rung;
+//   - the words a receipt shows never name a rung off the ladder (a
+//     hyphenated rung such as "co-signed", or "anchored", "notarized",
+//     "attested");
+//   - the contract grades (assuranceLadder, the Evidence Result v0 grade) are
+//     ladder rungs.
+func TestGradeStringsNameOnlyLadderRungs(t *testing.T) {
+	for _, g := range assuranceLadder {
+		assert.True(t, isGradeValue(g), "contract grade %q is not a ladder rung", g)
+	}
+	rungField := func(name string) bool {
+		switch strings.ToLower(name) {
+		case "rung", "time_rung", "timerung", "grade":
+			return true
+		}
+		return false
+	}
+	keyName := func(e ast.Expr) string {
+		switch k := e.(type) {
+		case *ast.Ident:
+			return k.Name
+		case *ast.BasicLit:
+			v, _ := strconv.Unquote(k.Value)
+			return v
+		case *ast.SelectorExpr:
+			return k.Sel.Name
+		case *ast.IndexExpr:
+			if lit, ok := k.Index.(*ast.BasicLit); ok {
+				v, _ := strconv.Unquote(lit.Value)
+				return v
+			}
+		}
+		return ""
+	}
+	// Words a receipt shows that would name a rung: checked in every string
+	// literal of the files that write the receipt, the email and the page.
+	offLadderWord := regexp.MustCompile(`(?i)\b[a-z]+-(?:attested|witnessed|countersigned|signed|signer)\b|\b(?:anchored|notari[sz]ed|attested)\b`)
+	receiptFiles := map[string]bool{"deal_email.go": true, "deal_countersign.go": true, "deal_report.go": true}
+	checkWords := func(where, text string) {
+		for _, w := range offLadderWord.FindAllString(text, -1) {
+			assert.True(t, isGradeValue(strings.ToLower(w)), "%s: %q names a rung the ladder does not define", where, w)
+		}
+	}
+
+	files, err := filepath.Glob("*.go")
+	require.NoError(t, err)
+	fset := token.NewFileSet()
+	var values []string
+	for _, path := range files {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		require.NoError(t, err)
+		ast.Inspect(f, func(n ast.Node) bool {
+			var key, value ast.Expr
+			switch n := n.(type) {
+			case *ast.KeyValueExpr:
+				key, value = n.Key, n.Value
+			case *ast.AssignStmt:
+				if len(n.Lhs) == 1 && len(n.Rhs) == 1 {
+					key, value = n.Lhs[0], n.Rhs[0]
+				}
+			case *ast.CallExpr:
+				// emit.TimeRung("self_attested")
+				if sel, ok := n.Fun.(*ast.SelectorExpr); ok && rungField(sel.Sel.Name) && len(n.Args) == 1 {
+					key, value = n.Fun, n.Args[0]
+				}
+			case *ast.BasicLit:
+				if receiptFiles[path] && n.Kind == token.STRING {
+					v, _ := strconv.Unquote(n.Value)
+					checkWords(fset.Position(n.Pos()).String(), v)
+				}
+			}
+			lit, ok := value.(*ast.BasicLit)
+			if key == nil || !ok || lit.Kind != token.STRING || !rungField(keyName(key)) {
+				return true
+			}
+			v, _ := strconv.Unquote(lit.Value)
+			values = append(values, v)
+			assert.True(t, isGradeValue(v), "%s: rung value %q is not on the grade ladder", fset.Position(lit.Pos()), v)
+			return true
+		})
+	}
+	page, err := os.ReadFile("assets/deal-view.js")
+	require.NoError(t, err)
+	for _, m := range regexp.MustCompile(`rung\s*(?::|===|!==)\s*"([^"]+)"`).FindAllStringSubmatch(string(page), -1) {
+		values = append(values, m[1])
+		assert.True(t, isGradeValue(m[1]), "deal-view.js: rung value %q is not on the grade ladder", m[1])
+	}
+	for _, m := range regexp.MustCompile(`"(?:[^"\\\n]|\\.)*"|`+"`[^`]*`").FindAllString(string(page), -1) {
+		checkWords("deal-view.js", m)
+	}
+	// The scan found the rung fields it exists to check: the receipt's
+	// assurance and countersign rungs, and the page's.
+	for _, want := range []string{"self_attested", "witnessed", "witnessed_in_part", "countersigned", "self_countersigned", "unresolved_signer", "not_countersigned", "unchecked"} {
+		assert.Contains(t, values, want)
+	}
 }
 
 // assertEveryPauseCauseListed checks that each difference a paused check

@@ -68,7 +68,7 @@ func TestDealReceiptEmailIsReadableWithoutADownloadAndCheckable(t *testing.T) {
 	dir := t.TempDir()
 	eml, bundlePath := filepath.Join(dir, "receipt.eml"), filepath.Join(dir, "bundle.json")
 	report := dealRun(t, "report", "--deal", dealID, "--email", eml, "--bundle", bundlePath)
-	assert.Equal(t, "sealed", report["assurance"].(map[string]any)["rung"], "no witness configured: sealed by my agent, nothing more")
+	assert.Equal(t, "self_attested", report["assurance"].(map[string]any)["rung"], "no witness configured: sealed by my agent, nothing more")
 
 	raw, err := os.ReadFile(eml)
 	require.NoError(t, err)

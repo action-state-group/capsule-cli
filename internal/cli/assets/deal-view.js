@@ -137,7 +137,7 @@ function versionBefore(a, b) {
       text: "A countersignature is in this file, but it was not checked when this page was written: this page does not say who made it, and a countersignature by the producer's own key is not independent.",
     };
   }
-  header.append(el("p", countersign.text, countersign.rung === "not_independent" ? "deal-rung deal-bad" : "deal-rung"));
+  header.append(el("p", countersign.text, countersign.rung === "self_countersigned" ? "deal-rung deal-bad" : "deal-rung"));
   if (countersign.rung !== "not_countersigned") {
     header.append(
       el(

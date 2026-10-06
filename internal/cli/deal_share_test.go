@@ -117,7 +117,7 @@ func shareRun(t *testing.T, dealID, audience, path string) map[string]any {
 	t.Helper()
 	out := dealRun(t, "report", "--deal", dealID, "--html", path, "--share", audience, "--to", "the shop's support desk")
 	assert.Equal(t, path, out["html"])
-	assert.Equal(t, "sealed", out["assurance"].(map[string]any)["rung"], "no witness configured: never more than sealed by my agent")
+	assert.Equal(t, "self_attested", out["assurance"].(map[string]any)["rung"], "no witness configured: never more than sealed by my agent")
 	assert.NotContains(t, out, "asked", "a share's output carries none of the local report's text")
 	assert.NotContains(t, out, "trail")
 	return out["share"].(map[string]any)
@@ -169,7 +169,7 @@ func TestDealShareCounterpartyCarriesNoPrivateValues(t *testing.T) {
 	// The user's own copy keeps everything: the baseline really holds the address.
 	keep := filepath.Join(dir, "keep.html")
 	keepOut := dealRun(t, "report", "--deal", dealID, "--html", keep)
-	assert.Equal(t, "sealed", keepOut["assurance"].(map[string]any)["rung"], "no witness configured: never more than sealed by my agent")
+	assert.Equal(t, "self_attested", keepOut["assurance"].(map[string]any)["rung"], "no witness configured: never more than sealed by my agent")
 	raw, err := os.ReadFile(keep)
 	require.NoError(t, err)
 	assert.Contains(t, string(raw), "Larkspur Lane", "the baseline record holds the home address")
