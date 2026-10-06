@@ -138,7 +138,7 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 	}
 	sealed := "Sealed by my agent: tamper-evident against ourselves and the agent, not non-repudiation. The key that sealed it is on the agent's own device; it does not cover the agent host's own records. "
 	if len(witnesses) == 0 {
-		out := map[string]any{"rung": "sealed", "witness_state": "not_configured"}
+		out := map[string]any{"rung": "self_attested", "witness_state": "not_configured"}
 		switch state {
 		case "scheduled":
 			out["witness_state"] = "scheduled"

@@ -27,8 +27,11 @@ import (
 // dealCountersignView is the countersign rung on the receipt, the report JSON
 // and the page.
 type dealCountersignView struct {
-	// Rung is not_countersigned, countersigned, not_independent,
-	// unresolved_signer or unverified (the strongest entry decides).
+	// Rung is countersigned (a rung of the grade ladder, gradeLadder);
+	// self_countersigned or unresolved_signer, annotations that are not rungs
+	// and leave the grade where witnessing put it (gradeAnnotations); or
+	// not_countersigned or unverified, which name no rung (gradeNoRung). The
+	// strongest entry decides.
 	Rung      string                   `json:"rung"`
 	Text      string                   `json:"text"`
 	Directory string                   `json:"directory,omitempty"`
@@ -72,8 +75,12 @@ func dealCountersignVerify(ctx context.Context, b map[string]interface{}, direct
 	switch summary {
 	case "resolved":
 		view.Rung = "countersigned"
-	case "not_independent", "unresolved_signer", "unverified":
-		view.Rung = summary
+	case "not_independent":
+		view.Rung = "self_countersigned"
+	case "unresolved_signer":
+		view.Rung = "unresolved_signer"
+	case "unverified":
+		view.Rung = "unverified"
 	default:
 		return dealNotCountersigned(), nil
 	}

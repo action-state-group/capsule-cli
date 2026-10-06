@@ -150,7 +150,7 @@ func TestDealWitnessStatesAreShownAsTheyAre(t *testing.T) {
 	assert.Len(t, tick["pending"], 1, "the witness is down: the delivery is pending")
 	pending := report("down")
 	assert.Equal(t, "pending", pending["assurance"].(map[string]any)["witness_state"])
-	assert.Equal(t, "sealed", pending["assurance"].(map[string]any)["rung"], "pending is never shown as witnessed")
+	assert.Equal(t, "self_attested", pending["assurance"].(map[string]any)["rung"], "pending is never shown as witnessed")
 	assert.Contains(t, pending["assurance"].(map[string]any)["text"], "Witness pending. This checkpoint was sent at a cadence tick")
 
 	deliver(t, p, cadenceSize(t, p), key)
@@ -375,7 +375,7 @@ func TestDealIsWitnessPendingUntilATick(t *testing.T) {
 	report := dealRun(t, "report", "--deal", dealID, "--html", page)
 	a := report["assurance"].(map[string]any)
 	assert.Equal(t, "scheduled", a["witness_state"])
-	assert.Equal(t, "sealed", a["rung"])
+	assert.Equal(t, "self_attested", a["rung"])
 	assert.Contains(t, a["text"], "Witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence (every 5m, give or take 2m)")
 	assert.NotContains(t, a["text"], "an hour by default", "the profile's own cadence, not the default")
 	html := string(mustRead(t, page))
@@ -420,7 +420,7 @@ func TestDealReportRungWitnessedInPart(t *testing.T) {
 	directory := writeDirectory(t, rawKeyRow(endpoint, public))
 
 	none, _ := report("none")
-	assert.Equal(t, "sealed", none["rung"])
+	assert.Equal(t, "self_attested", none["rung"])
 	assert.True(t, strings.HasPrefix(none["text"].(string), "Sealed by my agent"))
 
 	require.Equal(t, "ticked", dealRun(t, "tick")["state"])

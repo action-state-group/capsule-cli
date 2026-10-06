@@ -46,13 +46,21 @@ its deal extension must name this deal. Without `--entry`,
 `deal countersign` only verifies the countersignatures the file already
 carries.
 
-## What each rung says
+## What each value says
 
-| Rung | When | What the receipt says |
+The evidence grade ladder is self-attested → witnessed → countersigned.
+`countersigned` is its top rung. `self_countersigned` and
+`unresolved_signer` are annotations, not rungs: they add nothing, and the
+receipt's grade stays where witnessing put it (`assurance.rung`:
+`self_attested`, `witnessed` or `witnessed_in_part`), so a self-countersigned
+receipt with no witness receipt is self-attested. `not_countersigned` and
+`unverified` name no rung.
+
+| Value | When | What the receipt says |
 |---|---|---|
 | `not_countersigned` | no countersignature | Not countersigned (above) |
 | `countersigned` | the signature verifies and the directory lists the key | Countersigned by NAME, a signer listed in the directory you chose, over this exact bundle, with its own check results. It vouches only as far as you trust that directory. |
-| `not_independent` | the key is the producer's own (a key in the profile's `trusted_keys`, or the one the bundle's `producer-key/v1` extension declares) | **NOT INDEPENDENT**: countersigned by the producer's own key. A self-countersignature is not a check by anyone else. A directory listing that key does not change this. |
+| `self_countersigned` | the key is the producer's own (a key in the profile's `trusted_keys`, or the one the bundle's `producer-key/v1` extension declares) | **NOT INDEPENDENT**: countersigned by the producer's own key. A self-countersignature is not a check by anyone else. A directory listing that key does not change this. |
 | `unresolved_signer` | the signature verifies, but the directory does not list the key | Countersigned by a key the directory does not list: its signer is unknown. |
 | `unverified` | a countersignature type capsulectl does not check | Attached, not counted. |
 
