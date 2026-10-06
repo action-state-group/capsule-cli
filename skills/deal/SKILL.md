@@ -248,6 +248,10 @@ merchant's word when the merchant's own email says so.
    `cancel` on its own.
 2. On `"proceed": true`, or the user's sealed yes, cancel with the
    merchant. Right after: `deal note --kind act` with `"action": "cancel"`.
+   When the cancel returns a payment, give the amount coming back
+   (`"amount_minor"`, `"currency"`, `"rail"`): capsulectl records it as money
+   back to the user, reversing that payment, and the receipt nets the two
+   to zero instead of reading two charges.
 3. When the merchant's cancellation email arrives, seal it raw:
    `deal note --kind evidence --email cancelled.eml`.
 4. `deal report` then states, under "Your cancellation", exactly what is

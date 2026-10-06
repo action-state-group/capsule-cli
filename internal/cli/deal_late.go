@@ -92,7 +92,7 @@ func openDealListing(events []sealedEvent, now time.Time) *dealOpenListing {
 // anyone did or failed to do. Anything that depends on today is computed
 // when the receipt is made and says so ("as of").
 type dealLifecycle struct {
-	State     string           `json:"state"` // "open" or "closed"
+	State     string           `json:"state"` // "open", "cancelled" (an authorized cancel, no close yet) or "closed"
 	AsOf      string           `json:"as_of"`
 	Text      string           `json:"text"`
 	ClosedAt  string           `json:"closed_at,omitempty"`
@@ -114,14 +114,33 @@ type dealLateRecord struct {
 
 const dealMayChange = "Records can be linked to this deal after this receipt was made (a merchant's confirmation, a shipping notice, a refund). This receipt shows those sealed when it was made; to see later ones, make a new report with `capsulectl deal report`."
 
+// authorizedCancelAt is when the latest act was an authorized cancel, or ""
+// when the latest act is not one (a later pay reopens the business).
+func authorizedCancelAt(events []sealedEvent) string {
+	for i := len(events) - 1; i >= 0; i-- {
+		if a := events[i].Event.Act; a != nil {
+			if a.Action == "cancel" && !a.Unchecked {
+				return events[i].Event.At
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
 func buildDealLifecycle(events []sealedEvent, now time.Time) dealLifecycle {
 	asOf := now.UTC().Format("2006-01-02T15:04:05Z")
 	l := dealLifecycle{AsOf: asOf, Later: []dealLateRecord{}, MayChange: dealMayChange}
 	i := finalClose(events)
 	if i < 0 {
-		l.State = "open"
 		l.Open = openDealListing(events, now)
-		l.Text = l.Open.Text
+		l.State, l.Text = "open", l.Open.Text
+		// An authorized cancel ends the deal's business before any close is
+		// sealed: the deal is cancelled, not open.
+		if at := authorizedCancelAt(events); at != "" {
+			l.State = "cancelled"
+			l.Text = "Cancelled: an authorized cancel was sealed at " + at + ". No close is sealed on this deal yet."
+		}
 		return l
 	}
 	c := events[i]

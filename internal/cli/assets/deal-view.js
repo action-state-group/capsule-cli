@@ -259,6 +259,8 @@ function versionBefore(a, b) {
   const did = report.did || [];
   if (did.length === 0) host.append(el("p", "Nothing yet.", "deal-note"));
   did.forEach((i) => host.append(item(i.text, i.steps)));
+  // What the sealed acts moved, by direction: a pay and its reversal net to zero.
+  if (report.money && typeof report.money.text === "string") host.append(el("p", report.money.text));
 
   // What the agent told whom about the user: each telling, its time and the
   // approval that covered it, or that none did. Your own copy shows what was

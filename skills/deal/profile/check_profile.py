@@ -449,7 +449,7 @@ def check_chain(records):
     if blk0["record_type"] != "baseline":
         fail(0, "the first record of a deal must be the baseline")
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
-                    "approval": {"approves"}, "action": {"authorized_by"}, "outcome": {"observes"},
+                    "approval": {"approves"}, "action": {"authorized_by", "reverses"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"}}
     # The user's limits in force. Absent allowed = no restriction; present and
     # empty = nothing allowed. An intent may narrow them; only the user's
@@ -459,6 +459,7 @@ def check_chain(records):
     max_total = records[0]["body"]["intent"].get("max_total_minor")
     confirmed_intents = set()
     used_approvals, verdict_for_check = set(), set()
+    reversed_actions = set()
     first_answer = {}  # verdict index -> index of its first approval
     last_outcome = None
     unchecked = 0
@@ -631,6 +632,22 @@ def check_chain(records):
             p_chk = chk["x-deal-v0"].get("counterparty", {}).get("ids", {}).get("payee")
             if p_act and p_chk and p_act != p_chk:
                 fail(i, "the payee fingerprint differs from the one checked")
+            # Section 6, rule 8: an action that returns money names the pay it
+            # reverses, once, with the same amount and currency.
+            j = one("reverses", ("action",), required=False)
+            if j is not None:
+                undone = records[j]["body"]
+                if undone["action"] != "pay" or undone.get("direction", "out") != "out":
+                    fail(i, "reverses must name an earlier pay action")
+                if body.get("direction") != "in":
+                    fail(i, "an action that reverses a payment carries direction in")
+                if body.get("amount_minor") != undone.get("amount_minor") or body.get("currency") != undone.get("currency"):
+                    fail(i, "a reversal returns the amount and currency of the pay it reverses")
+                if j in reversed_actions:
+                    fail(i, "a payment is reversed at most once")
+                reversed_actions.add(j)
+            elif body.get("direction") == "in":
+                fail(i, "an action with direction in names the pay it reverses (reverses)")
         elif t == "outcome":
             one("observes", ("action",), required=False)
             if body["status"] == "unchecked_action":

@@ -258,6 +258,9 @@ func actionBody(a dealAct, currency string, commit func(string) (string, error))
 	if a.Rail != "" {
 		m["rail"] = normRail(a.Rail)
 	}
+	if a.Direction != "" {
+		m["direction"] = a.Direction
+	}
 	for name, field := range map[string]string{"reference": "reference_commitment", "description": "description_commitment"} {
 		if (name == "reference" && a.Reference == "") || (name == "description" && a.Description == "") {
 			continue
@@ -692,7 +695,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			}
 		} else {
 			rtype = "action"
-			block["refs"] = []interface{}{relRef("authorized_by", digestOf(ev.Act.AuthorizedBy))}
+			refs := []interface{}{relRef("authorized_by", digestOf(ev.Act.AuthorizedBy))}
+			if ev.Act.Reverses != "" {
+				refs = append(refs, relRef("reverses", digestOf(ev.Act.Reverses)))
+			}
+			block["refs"] = refs
 			if ev.Act.Payee != "" {
 				setIDs(counterpartyIDs(key, dealWho{Payee: ev.Act.Payee}))
 			}
