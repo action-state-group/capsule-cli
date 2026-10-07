@@ -971,7 +971,16 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 			total = snap.AmountMinor
 		}
 		if total != nil && *total > *intent.MaxTotalMinor {
-			add("asked", "over_limit", "price", fmt.Sprintf("Over your limit of %s (%s)", formatMoney(*intent.MaxTotalMinor, proposed.Currency), formatMoney(*total, proposed.Currency)))
+			limit, amount := formatMoney(*intent.MaxTotalMinor, proposed.Currency), formatMoney(*total, proposed.Currency)
+			text := fmt.Sprintf("Over your limit of %s (%s)", limit, amount)
+			// The user's own words named this very purchase, the item and its
+			// price: the rule still asks, and says why this is an exception to
+			// it rather than skipping the ask.
+			if a := intent.Asked; a.Item != "" && a.PriceMinor != nil && *a.PriceMinor == *total &&
+				strings.EqualFold(strings.TrimSpace(a.Item), strings.TrimSpace(proposed.Item)) {
+				text = fmt.Sprintf("Your rules normally ask above %s. You asked for this %s purchase specifically. Approve this exception?", limit, amount)
+			}
+			add("asked", "over_limit", "price", text)
 			askedFields["price"] = true
 		}
 	}
@@ -1312,7 +1321,33 @@ func trailLineIn(events []sealedEvent, restated map[string]bool, i int) string {
 	if e := events[i].Event; e.Kind == "intent" && restated[events[i].CapsuleID] {
 		return fmt.Sprintf("you said again what you asked, unchanged: %q", e.Intent.Verbatim)
 	}
+	if e := events[i].Event; e.Kind == "act" && !e.Act.Unchecked {
+		if basis := typedActBasis(events[:i], e.Act.AuthorizedBy); basis != "" {
+			return e.Act.Action + " done, as checked: " + basis
+		}
+	}
 	return trailLine(events[i].Event)
+}
+
+// typedActBasis is, in a deal sealed in typed records, what an action went
+// ahead on: the user's own approval, or what they had already asked for (a
+// check that needed no approval). "" otherwise.
+func typedActBasis(events []sealedEvent, authorizedBy string) string {
+	if dealRecordSet(dealEvent{}, events) != recordsTyped {
+		return ""
+	}
+	for _, se := range events {
+		if se.CapsuleID != authorizedBy {
+			continue
+		}
+		switch {
+		case se.Event.Kind == "check":
+			return "I went ahead based on what you had already asked me to do"
+		case se.Event.Approval != nil && se.Event.Approval.Approver == "user":
+			return "you approved this"
+		}
+	}
+	return ""
 }
 
 // trailLine is the one-line, plain-words account of a step for the report.
@@ -1358,6 +1393,10 @@ func trailLine(e dealEvent) string {
 		return "counterparty changed details (" + e.Change.Source + ")"
 	case "snapshot":
 		return "snapshot before " + actionNames[e.Snapshot.Action]
+	case "task_authority":
+		return "your request recorded as what the agent may do for you"
+	case "platform_approval":
+		return e.Platform.Platform + " separately asked you for approval (recorded as observed; it does not answer your rules)"
 	case "check":
 		if e.Check.Verdict == "pass" {
 			return "checked " + e.Check.Action + ": no differences"
@@ -1431,6 +1470,9 @@ type dealReport struct {
 	// Money is what the sealed acts moved: paid out, returned, and the net.
 	// Absent when no act carried an amount.
 	Money *dealMoney `json:"money,omitempty"`
+	// Authority is the AUTHORITY block of each action of a deal sealed in
+	// typed records: every authority layer, in order, with its time.
+	Authority []dealAuthorityBlock `json:"authority,omitempty"`
 }
 
 // dealMoney sums the sealed acts' amounts by direction, in minor units.
@@ -1511,7 +1553,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 	open := events[0].Event.Open
 	openID := events[0].CapsuleID
 	currency := open.Terms.Currency
-	r := dealReport{Asked: open.Intent.Verbatim, AskedStep: openID, Did: []dealReportItem{}, Told: []dealToldItem{}, Anomalies: []dealReportItem{}, Money: buildDealMoney(events, currency)}
+	r := dealReport{Asked: open.Intent.Verbatim, AskedStep: openID, Did: []dealReportItem{}, Told: []dealToldItem{}, Anomalies: []dealReportItem{}, Money: buildDealMoney(events, currency), Authority: buildDealAuthority(events)}
 	checkItem := map[string]int{}
 	// The checks the user answered with a sealed, valid proceed. A "you
 	// didn't ask for this" on such a check's action was answered by the
@@ -1672,6 +1714,12 @@ func buildDealReport(events []sealedEvent) dealReport {
 					r.Did[i].Text += "; you chose " + e.Approval.Choice
 				}
 			}
+		case "platform_approval":
+			p := e.Platform
+			line := p.Platform + " separately asked you for approval"
+			r.Did = append(r.Did, dealReportItem{Kind: "platform_approval", At: p.ObservedAt, Steps: []string{se.CapsuleID},
+				Text:   fmt.Sprintf("%s: %q (recorded as observed; it does not answer your rules)", line, p.DisplayedText),
+				Shared: line + " (recorded as observed)"})
 		case "act":
 			a := e.Act
 			steps := []string{se.CapsuleID}
@@ -1681,6 +1729,8 @@ func buildDealReport(events []sealedEvent) dealReport {
 			text := "Did: " + actText(*a, currency)
 			if a.Unchecked {
 				text += " ⚠️"
+			} else if basis := typedActBasis(events, a.AuthorizedBy); basis != "" {
+				text += " (" + basis + ")"
 			}
 			r.Did = append(r.Did, dealReportItem{Kind: "act", Text: text, Steps: steps, At: e.At})
 			if !a.Unchecked {

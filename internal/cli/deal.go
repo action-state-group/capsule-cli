@@ -1551,6 +1551,9 @@ func dealReportCommand() *cobra.Command {
 			if report.Money != nil {
 				out["money"] = report.Money
 			}
+			if report.Authority != nil {
+				out["authority"] = report.Authority
+			}
 			if htmlPath == "" && emailPath == "" && bundlePath == "" && fromBundle == "" {
 				// Every report states its rung, read from the same bundle the
 				// page and the email would carry.
@@ -1625,7 +1628,7 @@ func dealReportCommand() *cobra.Command {
 				out["bundle"] = bundlePath
 			}
 			if emailPath != "" {
-				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, dealClock(), 2), Cancellations: dealCancellations(events), Lifecycle: buildDealLifecycle(events, dealClock()), Steps: len(events)}
+				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Authority: report.Authority, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, dealClock(), 2), Cancellations: dealCancellations(events), Lifecycle: buildDealLifecycle(events, dealClock()), Steps: len(events)}
 				eml, subject, text, htmlBody, err := dealEmail(view, []byte(page), bundle, dealClock())
 				if err != nil {
 					return err
