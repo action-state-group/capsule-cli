@@ -12,8 +12,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// retireClock dates a retired profile's name; tests set it.
-var retireClock = func() time.Time { return time.Now().UTC() }
+// retireClock dates a retired profile's name; retireRename and retireRemove
+// do the file changes. Tests set them.
+var (
+	retireClock  = func() time.Time { return time.Now().UTC() }
+	retireRename = os.Rename
+	retireRemove = os.Remove
+)
 
 // `profile retire NAME` frees a profile's name without touching what it
 // recorded: the profile is renamed NAME-retired-YYYYMMDD (NAME-retired-
@@ -44,7 +49,7 @@ func profileRetireCommand() *cobra.Command {
 	return cmd
 }
 
-func retireProfile(name, moveTo string) (map[string]any, error) {
+func retireProfile(name, moveTo string) (_ map[string]any, err error) {
 	p, err := loadProfile(name) // its errors already say what is wrong
 	if err != nil {
 		return nil, err
@@ -53,6 +58,14 @@ func retireProfile(name, moveTo string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A store a running command has open is not retired. The locks are held
+	// until the retire is done, and follow the files through --move-data's
+	// rename, so nothing opens the store mid-move.
+	release, err := holdJSONLStore(p)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, release()) }()
 	data := p.Connection.Database
 	if moveTo != "" {
 		if moveTo, err = checkDataMove(p, moveTo); err != nil {
@@ -75,21 +88,26 @@ func retireProfile(name, moveTo string) (map[string]any, error) {
 	}
 	undo := func(cause error) (map[string]any, error) {
 		if path, e := profilePath(retired); e == nil {
-			cause = errors.Join(cause, os.Remove(path))
+			cause = errors.Join(cause, retireRemove(path))
 		}
 		return nil, cause
 	}
 	if moveTo != "" {
-		if err = os.Rename(data, moveTo); err != nil {
+		if err = retireRename(data, moveTo); err != nil {
 			if errors.Is(err, syscall.EXDEV) {
 				err = inputError("--move-data must stay on the data directory's filesystem; nothing was changed")
 			}
 			return undo(err)
 		}
 	}
-	if err = os.Remove(oldPath); err != nil {
+	if err = retireRemove(oldPath); err != nil {
 		if moveTo != "" {
-			err = errors.Join(err, os.Rename(moveTo, data))
+			if back := retireRename(moveTo, data); back != nil {
+				// The data stays moved, and the retired profile is the only
+				// file that points at it: keep it.
+				return nil, errors.Join(err, back, hint(ErrConflict, fmt.Sprintf(
+					"retire stopped half-way: the data is at %s and profile %s points at it; profile %s still exists and points at %s, which no longer holds it", moveTo, retired, name, data)))
+			}
 		}
 		return undo(err)
 	}
@@ -158,4 +176,38 @@ func checkDataMove(p Profile, moveTo string) (string, error) {
 		}
 	}
 	return target, nil
+}
+
+// holdJSONLStore takes, without waiting, the writer lock each journal of a
+// jsonl profile's store holds while a command writes it (the book's
+// log.jsonl, and a pre-book cll.jsonl), and returns a release. A lock that is
+// already held means a running command has the store open: refused.
+func holdJSONLStore(p Profile) (func() error, error) {
+	release := func() error { return nil }
+	if p.Type != "jsonl" {
+		return release, nil
+	}
+	var held []*os.File
+	release = func() error {
+		var errs []error
+		for _, f := range held {
+			errs = append(errs, syscall.Flock(int(f.Fd()), syscall.LOCK_UN), f.Close())
+		}
+		return errors.Join(errs...)
+	}
+	for _, journal := range []string{filepath.Join(p.Connection.Database, "book", "log.jsonl"), filepath.Join(p.Connection.Database, jsonlLogFile)} {
+		f, err := os.Open(journal)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, errors.Join(err, release())
+		}
+		if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			err = errors.Join(f.Close(), release())
+			return nil, errors.Join(err, hint(ErrConflict, "profile "+p.Name+"'s store is in use by a running capsulectl command; retire it when that has finished"))
+		}
+		held = append(held, f)
+	}
+	return release, nil
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -185,4 +186,100 @@ func TestProfileRetireMoveDataRefusals(t *testing.T) {
 	require.ErrorIs(t, err, ErrInput, "a key file inside the data directory")
 	assert.Contains(t, profileNames(t), q.Name)
 	assert.DirExists(t, q.Connection.Database)
+}
+
+// lockJournal holds a journal's writer lock as a running command would, until
+// the returned release.
+func lockJournal(t *testing.T, dir string) func() {
+	t.Helper()
+	var path string
+	for _, candidate := range []string{filepath.Join(dir, "book", "log.jsonl"), filepath.Join(dir, jsonlLogFile)} {
+		if _, err := os.Stat(candidate); err == nil {
+			path = candidate
+			break
+		}
+	}
+	require.NotEmpty(t, path, "the store has a journal")
+	f, err := os.Open(path)
+	require.NoError(t, err)
+	require.NoError(t, syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB))
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}
+}
+
+// A store a running command has open is not retired, with or without
+// --move-data: nothing changes, and once it is free the retire goes ahead.
+func TestProfileRetireRefusesAStoreInUse(t *testing.T) {
+	retireOn(t, "2026-10-07")
+	p, _ := jsonlWithARecord(t)
+	release := lockJournal(t, p.Connection.Database)
+	for _, args := range [][]string{{}, {"--move-data", filepath.Join(t.TempDir(), "moved")}} {
+		_, err := invoke(t, "", append([]string{"profile", "retire", p.Name}, args...)...)
+		require.ErrorIs(t, err, ErrConflict, "%v", args)
+		assert.Equal(t, []string{p.Name}, profileNames(t), "nothing changed %v", args)
+		assert.DirExists(t, p.Connection.Database)
+	}
+	release()
+	_, err := invoke(t, "", "profile", "retire", p.Name)
+	require.NoError(t, err)
+}
+
+// A data directory on another filesystem is not moved: the retire is
+// refused, and the profile, its name and its data stay as they were.
+func TestProfileRetireMoveDataAcrossFilesystems(t *testing.T) {
+	retireOn(t, "2026-10-07")
+	p, _ := jsonlWithARecord(t)
+	previous := retireRename
+	retireRename = func(from, to string) error {
+		return &os.LinkError{Op: "rename", Old: from, New: to, Err: syscall.EXDEV}
+	}
+	t.Cleanup(func() { retireRename = previous })
+	_, err := invoke(t, "", "profile", "retire", p.Name, "--move-data", filepath.Join(t.TempDir(), "moved"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "must stay on the data directory's filesystem")
+	assert.Equal(t, []string{p.Name}, profileNames(t), "the retired file this run wrote is removed")
+	assert.DirExists(t, p.Connection.Database)
+}
+
+// When the old profile file cannot be removed after the data moved, the data
+// goes back and the retire is undone; if it cannot go back, the retired
+// profile, the only file pointing at the moved data, is kept.
+func TestProfileRetireFailingHalfWay(t *testing.T) {
+	retireOn(t, "2026-10-07")
+	for _, back := range []bool{true, false} {
+		p, _ := jsonlWithARecord(t)
+		moved := filepath.Join(t.TempDir(), "moved")
+		previousRemove, previousRename := retireRemove, retireRename
+		retireRemove = func(path string) error {
+			if strings.HasSuffix(path, string(filepath.Separator)+p.Name+".yaml") {
+				return &os.PathError{Op: "remove", Path: path, Err: syscall.EACCES}
+			}
+			return previousRemove(path)
+		}
+		retireRename = func(from, to string) error {
+			if from == moved && !back {
+				return &os.LinkError{Op: "rename", Old: from, New: to, Err: syscall.EACCES}
+			}
+			return previousRename(from, to)
+		}
+		_, err := invoke(t, "", "profile", "retire", p.Name, "--move-data", moved)
+		retireRemove, retireRename = previousRemove, previousRename
+		require.Error(t, err)
+		retired := p.Name + "-retired-20261007"
+		if back {
+			assert.Equal(t, []string{p.Name}, profileNames(t), "undone: the data went back")
+			assert.DirExists(t, p.Connection.Database)
+			assert.NoDirExists(t, moved)
+		} else {
+			require.ErrorIs(t, err, ErrConflict)
+			assert.Contains(t, err.Error(), "retire stopped half-way")
+			assert.ElementsMatch(t, []string{p.Name, retired}, profileNames(t), "the retired profile is kept")
+			r, err := loadProfile(retired)
+			require.NoError(t, err)
+			assert.Equal(t, moved, r.Connection.Database, "and points at the moved data")
+			assert.DirExists(t, moved)
+		}
+	}
 }
