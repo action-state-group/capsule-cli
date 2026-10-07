@@ -112,8 +112,16 @@ func (p Profile) dealCadence() (dealCadenceConfig, error) {
 	switch {
 	case cfg.interval < time.Minute:
 		return cfg, inputError("cadence.interval must be at least 1m")
-	case cfg.jitter < 0 || 2*cfg.jitter >= cfg.interval:
-		return cfg, inputError("cadence.jitter must be at least 0 and under half of cadence.interval")
+	case cfg.jitter < 0:
+		return cfg, inputError("cadence.jitter must be at least 0")
+	case 2*cfg.jitter >= cfg.interval:
+		// A profile that set a jitter for an earlier default and no interval
+		// is told the interval it now gets.
+		interval := "cadence.interval is " + shortDuration(cfg.interval)
+		if p.Cadence.Interval == "" {
+			interval = "cadence.interval is not set, so it is the default " + shortDuration(cfg.interval)
+		}
+		return cfg, inputError("cadence.jitter is " + shortDuration(cfg.jitter) + " but " + interval + ", and the jitter must be under half the interval: set cadence.interval (for example 1h), or a cadence.jitter under " + shortDuration(cfg.interval/2))
 	case cfg.padBucket > 1024:
 		return cfg, inputError("cadence.pad_bucket must be at most 1024")
 	}
@@ -719,13 +727,14 @@ var dealSleep = func(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// A tick is published when `deal tick` runs at or after its due time, so the
-// jitter in the due time only shows if something runs `deal tick` near it.
-// Run it every minute (a run that is not due exits at once); a scheduler
-// that can run it only every N minutes passes --wait-up-to N, and the run
-// then waits for each due time inside that window and publishes on time.
-// The waiting happens with the store unlocked, and every publish re-checks
-// the due time under the lock.
+// The checkpoint cadence's poll (`cll checkpoint cadence`, also `deal
+// tick`). A tick is published when the poll runs at or after its due time,
+// so the jitter in the due time only shows if the poll runs near it: a
+// scheduler that runs it every N minutes passes --wait-up-to N (5m by the
+// documented schedule), and the run then waits for each due time inside
+// that window and publishes on time. A run with no tick due publishes
+// nothing. The waiting happens with the store unlocked, and every publish
+// re-checks the due time under the lock.
 func dealTickCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "tick", Short: "The checkpoint cadence's poll: when a tick is due, publish the profile's cadence checkpoint to its witness; a run that is not due publishes nothing (schedule it every 5 minutes with --wait-up-to 5m; deal events never publish)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		wait, _ := c.Flags().GetDuration("wait-up-to")
