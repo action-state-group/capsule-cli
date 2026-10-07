@@ -527,3 +527,43 @@ func TestTypedFixturesNameTheSealedRuleset(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, rules, f.Record.Body["ruleset_digest"])
 }
+
+// Several findings are one prompt: one evaluation lists them all, one card
+// renders them, and the user's one answer, citing that evaluation, covers
+// every one.
+func TestTypedOnePromptForSeveralFindings(t *testing.T) {
+	dealFixture(t)
+	id := openTyped(t, flightOpen)
+	check := strings.NewReplacer(`"price_minor":55880}`, `"price_minor":57900}`, `"amount_minor":55880`, `"amount_minor":57900`,
+		`"refundable":true}}`, `"refundable":false}}`, `"domain":"travel-super-discount.example",`, ``).Replace(flightCheck)
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, check))
+	require.Equal(t, "pause", c["verdict"])
+	approval, err := answerCheck(t, id, c["check_id"].(string), "yes to all of it", c["card"].(string))
+	require.NoError(t, err)
+	paid := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, strings.Replace(flightPay, "55880", "57900", 1)))
+	require.Equal(t, false, paid["unchecked"])
+
+	records := chainRecords(t, id)
+	var evaluations, prompts []map[string]any
+	for _, r := range records {
+		switch {
+		case r["type"] == typeActionEvaluation:
+			evaluations = append(evaluations, r)
+		case r["type"] == typeActionApproval && bodyOf(r)["authority"] == "action_state_approval":
+			prompts = append(prompts, r)
+		}
+	}
+	require.Len(t, evaluations, 1)
+	require.Len(t, prompts, 1, "one prompt")
+	findings := bodyOf(evaluations[0])["findings"].([]any)
+	questions := map[string]bool{}
+	for _, f := range findings {
+		questions[f.(map[string]any)["question"].(string)] = true
+	}
+	assert.Len(t, findings, 3, "%v", findings)
+	assert.Equal(t, map[string]bool{"who": true, "terms": true, "recourse": true}, questions)
+	assert.Equal(t, stepDigest(t, id, c["check_id"].(string)), digestOfRef(prompts[0]["refs"].([]any)[0]),
+		"the one answer cites the evaluation that lists every finding")
+	assert.Equal(t, approval["capsule_id"], paid["authorized_by"])
+	checkerPasses(t, id)
+}
