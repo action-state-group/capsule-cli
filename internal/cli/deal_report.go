@@ -189,7 +189,7 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 		if err != nil {
 			return nil, err
 		}
-		ext["authority"] = authority
+		ext["authority"], ext["authority_order"] = authority, dealAuthorityOrder
 	}
 	for key, v := range map[string]any{"deadlines": dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "lifecycle": buildDealLifecycle(events, dealClock())} {
 		generic, err := bundleJSON(v)

@@ -131,12 +131,12 @@ func TestAuthorityBlockPlatformScopeMismatch(t *testing.T) {
 	platformApproval(t, id, c["check_id"].(string), "Buy otter sticker for $9.99", "999")
 	payNow(t, id, 600)
 	lines := authorityLines(authorityBlocks(t, dealRun(t, "report", "--deal", id))[0])
-	assert.Contains(t, lines[2].Note, "It stated $9.99, not the $6.00 done.")
+	assert.Contains(t, lines[2].Note, "It stated another amount than the one done ($9.99, not $6.00).")
 }
 
 // Paying on the platform's approval alone, or on a card answered with no
-// words, is not covered: the block shows what was there and why it did not
-// count.
+// words, is not covered: it is sealed with no authority basis, and its block
+// is the action and the reason it was not covered.
 func TestAuthorityBlockShowsAnUncoveredAction(t *testing.T) {
 	dealFixture(t)
 	id := openTypedFlight(t)
@@ -150,15 +150,63 @@ func TestAuthorityBlockShowsAnUncoveredAction(t *testing.T) {
 	block := authorityBlocks(t, dealRun(t, "report", "--deal", id))[0]
 	assert.Equal(t, false, block["covered"])
 	lines := authorityLines(block)
-	layers := make([]string, len(lines))
-	for i, l := range lines {
-		layers[i] = l.Layer
+	require.Len(t, lines, 1, "no sealed basis: nothing is re-decided for the block")
+	assert.Equal(t, "action", lines[0].Layer)
+	assert.True(t, strings.HasPrefix(lines[0].Text, "Done without a passing check or your approval: pay $558.80"), lines[0].Text)
+	assert.Contains(t, lines[0].Note, "your words")
+}
+
+// The block is the sealed record: each covered action's layers are its
+// action-record/v0's authority_basis refs, in order, with the evaluation it
+// relied on (evaluation_ref) after the task authority, and a scope mismatch
+// exactly where the basis states one.
+func TestAuthorityBlockIsTheSealedBasis(t *testing.T) {
+	dealFixture(t)
+	id := openTypedFlight(t)
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, merchantCheck))
+	platformApproval(t, id, c["check_id"].(string), "Approve $558.80 purchase", "55880")
+	platformApproval(t, id, c["check_id"].(string), "Approve $600.00 purchase", "60000")
+	_, err := answerCheck(t, id, c["check_id"].(string), "yes, the new site is fine", c["card"].(string))
+	require.NoError(t, err)
+	dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, merchantPay))
+	sticker := openTypedSticker(t)
+	checkPay(t, sticker, 600)
+	payNow(t, sticker, 600)
+
+	for _, deal := range []string{id, sticker} {
+		report := dealRun(t, "report", "--deal", deal)
+		assert.Equal(t, dealAuthorityOrder, report["authority_order"])
+		records := chainRecords(t, deal)
+		digest := map[string]string{}
+		for _, se := range chainSteps(t, deal) {
+			digest[se.CapsuleID] = se.Digest
+		}
+		for _, b := range authorityBlocks(t, report) {
+			body := bodyOf(records[b["step"].(string)])
+			var want []string
+			for j, e := range body["authority_basis"].([]any) {
+				entry := e.(map[string]any)
+				want = append(want, entry["type"].(string)+"@"+digestOfRef(entry["ref"]))
+				if entry["scope"] == "mismatch" {
+					want[len(want)-1] += "/mismatch"
+				}
+				if j == 0 {
+					want = append(want, "evaluation@"+digestOfRef(body["evaluation_ref"]))
+				}
+			}
+			want = append(want, "action@"+digest[b["step"].(string)])
+			var got []string
+			for _, l := range b["layers"].([]any) {
+				m := l.(map[string]any)
+				line := m["layer"].(string) + "@" + digest[m["step"].(string)]
+				if note, _ := m["note"].(string); strings.Contains(note, "another amount") {
+					line += "/mismatch"
+				}
+				got = append(got, line)
+			}
+			assert.Equal(t, want, got, "the rendered layers are the sealed basis")
+		}
 	}
-	assert.Equal(t, []string{"task_authority", "evaluation", "card_answer", "platform_approval", "action"}, layers)
-	assert.Contains(t, lines[2].Note, "That does not answer the check")
-	last := lines[len(lines)-1]
-	assert.True(t, strings.HasPrefix(last.Text, "Done without a passing check or your approval: pay $558.80"), last.Text)
-	assert.Contains(t, last.Note, "your words")
 }
 
 // A deal sealed in x-deal-v0 records keeps its report as it was: no block.

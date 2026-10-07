@@ -259,6 +259,7 @@ function versionBefore(a, b) {
   const authority = report.authority || [];
   if (authority.length > 0) {
     host.append(el("h2", "Authority"));
+    if (typeof report.authority_order === "string") host.append(el("p", report.authority_order, "deal-note"));
     authority.forEach((b) => {
       host.append(el("h3", `${b.covered ? "" : "⚠️ "}${b.action}`));
       (b.layers || []).forEach((l) => {

@@ -1553,7 +1553,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 	open := events[0].Event.Open
 	openID := events[0].CapsuleID
 	currency := open.Terms.Currency
-	r := dealReport{Asked: open.Intent.Verbatim, AskedStep: openID, Did: []dealReportItem{}, Told: []dealToldItem{}, Anomalies: []dealReportItem{}, Money: buildDealMoney(events, currency), Authority: buildDealAuthority(events)}
+	r := dealReport{Asked: open.Intent.Verbatim, AskedStep: openID, Did: []dealReportItem{}, Told: []dealToldItem{}, Anomalies: []dealReportItem{}, Money: buildDealMoney(events, currency)}
 	checkItem := map[string]int{}
 	// The checks the user answered with a sealed, valid proceed. A "you
 	// didn't ask for this" on such a check's action was answered by the

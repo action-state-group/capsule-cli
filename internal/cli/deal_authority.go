@@ -1,15 +1,19 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
 
-// dealAuthorityLayer is one authority layer an action relied on (or that was
-// present when it was done without one), in the user's words, with its time
-// and the step it was read from.
+// dealAuthorityOrder says how an AUTHORITY block is ordered, wherever it is
+// shown.
+const dealAuthorityOrder = "Each action's layers are listed in the order it relied on them (its sealed authority basis), each with its own time."
+
+// dealAuthorityLayer is one authority layer an action relied on, in the
+// user's words, with its time and the step it was read from.
 type dealAuthorityLayer struct {
-	// Layer is task_authority, evaluation, user_approval, card_answer,
+	// Layer is task_authority, evaluation, user_approval,
 	// platform_approval or action.
 	Layer string `json:"layer"`
 	At    string `json:"at"`
@@ -30,106 +34,104 @@ type dealAuthorityBlock struct {
 }
 
 // buildDealAuthority reads the AUTHORITY block of every action (and every
-// disclosure that needed approval) of a deal sealed in typed records, from
-// the sealed steps alone. A deal sealed in x-deal-v0 records has none: its
-// report keeps its own wording.
-func buildDealAuthority(events []sealedEvent) []dealAuthorityBlock {
-	if len(events) == 0 || dealRecordSet(dealEvent{}, events) != recordsTyped {
+// disclosure that needed approval) of a deal sealed in typed records from
+// the sealed records themselves: records[i] is step i's record as sealed
+// (the log's own bytes; loading a deal refuses any step whose record
+// re-derives differently). A covered action's block is its
+// action-record/v0's evaluation_ref and authority_basis, in that order,
+// scope included; nothing is re-decided here. An action done without
+// authority is sealed as an action-outcome/v0 with no basis: its block is
+// the action and the reason it was not covered. A deal sealed in x-deal-v0
+// records has none: its report keeps its own wording.
+func buildDealAuthority(events []sealedEvent, records [][]byte) []dealAuthorityBlock {
+	if len(events) == 0 || len(records) != len(events) || dealRecordSet(dealEvent{}, events) != recordsTyped {
 		return nil
 	}
-	byID := map[string]int{}
-	for i, se := range events {
-		byID[se.CapsuleID] = i
+	byDigest := map[string]sealedEvent{}
+	for _, se := range events {
+		byDigest[se.Digest] = se
 	}
 	currency := events[0].Event.Open.Terms.Currency
 	var blocks []dealAuthorityBlock
 	for i, se := range events {
+		var rec struct {
+			Type string `json:"type"`
+			Body struct {
+				AmountMinor   *int64    `json:"amount_minor"`
+				EvaluationRef sealedRef `json:"evaluation_ref"`
+				Basis         []struct {
+					Type  string    `json:"type"`
+					Ref   sealedRef `json:"ref"`
+					Scope string    `json:"scope"`
+				} `json:"authority_basis"`
+			} `json:"body"`
+		}
+		if json.Unmarshal(records[i], &rec) != nil {
+			continue
+		}
 		e := se.Event
-		var action, authorizedBy, reason string
-		var amount *int64
-		covered := false
 		switch {
-		case e.Kind == "act" && e.Act != nil:
-			action, authorizedBy, amount = e.Act.Action, e.Act.AuthorizedBy, e.Act.AmountMinor
-			covered, reason = !e.Act.Unchecked, e.Act.Reason
-		case e.Kind == "disclosure" && e.Disclosure != nil && e.Disclosure.AuthorizedBy != "":
-			action, authorizedBy, covered = "share", e.Disclosure.AuthorizedBy, true
+		case rec.Type == typeActionRecord:
+		case rec.Type == typeActionOutcome && e.Kind == "act" && e.Act != nil && e.Act.Unchecked:
+			what := actText(*e.Act, currency)
+			blocks = append(blocks, dealAuthorityBlock{Action: what, Step: se.CapsuleID, Layers: []dealAuthorityLayer{{
+				Layer: "action", At: e.At, Step: se.CapsuleID, Text: "Done without a passing check or your approval: " + what, Note: e.Act.Reason}}})
+			continue
 		default:
 			continue
 		}
-		// The evaluation the step relied on: itself on a DO, the one the
-		// user's answer was to on an ASK; for a step done without either,
-		// the latest check of the same action before it.
-		evaluation, approval := "", ""
-		if j, ok := byID[authorizedBy]; ok && authorizedBy != "" {
-			if a := events[j].Event.Approval; a != nil {
-				evaluation, approval = a.Check, authorizedBy
-			} else {
-				evaluation = authorizedBy
-			}
-		} else if e.Kind == "act" {
-			for k := i - 1; k >= 0; k-- {
-				if c := events[k].Event.Check; events[k].Event.Kind == "check" && c != nil && c.Action == action {
-					evaluation = events[k].CapsuleID
-					break
-				}
-			}
-		}
-		b := dealAuthorityBlock{Step: se.CapsuleID, Covered: covered}
-		if ev, ok := byID[evaluation]; ok && evaluation != "" {
-			if layer, ok := taskAuthorityLayer(events[:ev]); ok {
-				b.Layers = append(b.Layers, layer)
-			}
-			b.Layers = append(b.Layers, evaluationLayer(events[ev]))
-			if !covered {
-				// What answered the check, if anything, when it did not count.
-				for _, later := range events[ev+1 : i] {
-					if a := later.Event.Approval; later.Event.Kind == "approval" && a != nil && a.Check == evaluation && a.Approver == "agent_card" {
-						b.Layers = append(b.Layers, dealAuthorityLayer{Layer: "card_answer", At: later.Event.At, Step: later.CapsuleID,
-							Text: "The card was answered (" + a.Choice + ") with no words of yours", Note: "That does not answer the check: it needs your own words."})
-					}
-				}
-			}
-			if j, ok := byID[approval]; ok && approval != "" {
-				b.Layers = append(b.Layers, userApprovalLayer(events[j]))
-			}
-			for _, later := range events[ev+1 : i] {
-				if p := later.Event.Platform; later.Event.Kind == "platform_approval" && p != nil && p.Check == evaluation {
-					b.Layers = append(b.Layers, platformLayer(later, events[ev].Event.Check.Verdict == "pass", amount, currency))
-				}
-			}
-		}
+		b := dealAuthorityBlock{Step: se.CapsuleID, Covered: true}
 		if e.Kind == "disclosure" {
 			b.Action = "told " + e.Disclosure.recipientWord() + ": " + e.Disclosure.classList()
 		} else {
 			b.Action = actText(*e.Act, currency)
 		}
-		done := dealAuthorityLayer{Layer: "action", At: e.At, Step: se.CapsuleID, Text: "Done: " + b.Action}
-		if !covered {
-			done.Text, done.Note = "Done without a passing check or your approval: "+b.Action, reason
+		evaluation, haveEvaluation := byDigest[rec.Body.EvaluationRef.Digest]
+		for j, entry := range rec.Body.Basis {
+			ref, ok := byDigest[entry.Ref.Digest]
+			if !ok {
+				continue
+			}
+			switch entry.Type {
+			case "task_authority":
+				b.Layers = append(b.Layers, taskAuthorityLayer(ref))
+			case "user_approval":
+				b.Layers = append(b.Layers, userApprovalLayer(ref))
+			case "platform_approval":
+				do := haveEvaluation && evaluation.Event.Check != nil && evaluation.Event.Check.Verdict == "pass"
+				b.Layers = append(b.Layers, platformLayer(ref, do, entry.Scope == "mismatch", rec.Body.AmountMinor, currency))
+			}
+			// The evaluation the action relied on follows the task authority
+			// it was made under.
+			if j == 0 && haveEvaluation {
+				b.Layers = append(b.Layers, evaluationLayer(evaluation))
+			}
 		}
-		b.Layers = append(b.Layers, done)
+		b.Layers = append(b.Layers, dealAuthorityLayer{Layer: "action", At: e.At, Step: se.CapsuleID, Text: "Done: " + b.Action})
 		blocks = append(blocks, b)
 	}
 	return blocks
 }
 
-// taskAuthorityLayer is the user's task authority in force after the given
-// steps: what they asked when the deal opened, or the new limits they last
-// confirmed in their own words.
-func taskAuthorityLayer(events []sealedEvent) (dealAuthorityLayer, bool) {
-	for k := len(events) - 1; k >= 0; k-- {
-		se := events[k]
-		if ta := se.Event.TaskAuthority; se.Event.Kind == "task_authority" && ta != nil {
-			return dealAuthorityLayer{Layer: "task_authority", At: se.Event.At, Step: se.CapsuleID,
-				Text: fmt.Sprintf("Your request recorded: %q", ta.Verbatim)}, true
-		}
-		if a := se.Event.Approval; a != nil && a.Choice == "confirm_limits" && a.Proceed && a.Limits != nil {
-			return dealAuthorityLayer{Layer: "task_authority", At: se.Event.At, Step: se.CapsuleID,
-				Text: fmt.Sprintf("You confirmed new limits: %s → %s (%q)", a.Limits.Previous.String(), a.Limits.New.String(), a.Said)}, true
-		}
+// sealedRef is a typed record ref, as sealed.
+type sealedRef struct {
+	Digest string `json:"digest"`
+}
+
+// taskAuthorityLayer is the task authority a basis names: what the user
+// asked when the deal opened, or the new limits they confirmed in their own
+// words.
+func taskAuthorityLayer(se sealedEvent) dealAuthorityLayer {
+	l := dealAuthorityLayer{Layer: "task_authority", At: se.Event.At, Step: se.CapsuleID}
+	switch a := se.Event.Approval; {
+	case se.Event.TaskAuthority != nil:
+		l.Text = fmt.Sprintf("Your request recorded: %q", se.Event.TaskAuthority.Verbatim)
+	case a != nil && a.Limits != nil:
+		l.Text = fmt.Sprintf("You confirmed new limits: %s → %s (%q)", a.Limits.Previous.String(), a.Limits.New.String(), a.Said)
+	default:
+		l.Text = "Your request recorded"
 	}
-	return dealAuthorityLayer{}, false
+	return l
 }
 
 // evaluationLayer is the rules check: DO, within the user's rules, or ASK
@@ -164,8 +166,9 @@ func userApprovalLayer(se sealedEvent) dealAuthorityLayer {
 
 // platformLayer is a platform's own approval prompt, as observed: what it
 // displayed and the reply it returned. It is that platform's own check and
-// never the answer to the user's rules.
-func platformLayer(se sealedEvent, do bool, amount *int64, currency string) dealAuthorityLayer {
+// never the answer to the user's rules. mismatch is the sealed basis entry's
+// scope: the amount it stated is not the amount done.
+func platformLayer(se sealedEvent, do, mismatch bool, amount *int64, currency string) dealAuthorityLayer {
 	p := se.Event.Platform
 	text := fmt.Sprintf("%s asked separately (%s): %q", p.Platform, p.Mechanism, p.DisplayedText)
 	if p.UserText != "" {
@@ -175,12 +178,16 @@ func platformLayer(se sealedEvent, do bool, amount *int64, currency string) deal
 	if do {
 		note = "This is " + p.Platform + "'s own check, recorded as observed. Your rules needed no approval: DO, within your rules."
 	}
-	if amount != nil && p.AmountMinor != nil && *amount != *p.AmountMinor {
-		cur := p.Currency
-		if cur == "" {
-			cur = currency
+	if mismatch {
+		note += " It stated another amount than the one done"
+		if amount != nil && p.AmountMinor != nil {
+			cur := p.Currency
+			if cur == "" {
+				cur = currency
+			}
+			note += fmt.Sprintf(" (%s, not %s)", formatMoney(*p.AmountMinor, cur), formatMoney(*amount, currency))
 		}
-		note += fmt.Sprintf(" It stated %s, not the %s done.", formatMoney(*p.AmountMinor, cur), formatMoney(*amount, currency))
+		note += "."
 	}
 	return dealAuthorityLayer{Layer: "platform_approval", At: p.ObservedAt, Step: se.CapsuleID, Text: text, Note: note}
 }
