@@ -652,3 +652,30 @@ func TestTheCadenceVerbTicks(t *testing.T) {
 	assert.Equal(t, "not_due", run()["state"])
 	assert.Equal(t, "not_due", dealRun(t, "tick")["state"], "deal tick is the same cadence")
 }
+
+// A jitter that is not under half the interval is refused with both values
+// and the fix. A profile that set a jitter for the old 1h default and no
+// interval is told the interval is now the 5m default.
+func TestACadenceJitterTooLargeForItsIntervalSaysWhy(t *testing.T) {
+	var onlyJitter Profile
+	onlyJitter.Cadence.Jitter = "10m"
+	_, err := onlyJitter.dealCadence()
+	require.ErrorIs(t, err, ErrInput)
+	for _, part := range []string{"cadence.jitter is 10m", "cadence.interval is not set, so it is the default 5m", "under half the interval", "set cadence.interval", "a cadence.jitter under 2m30s"} {
+		assert.Contains(t, err.Error(), part)
+	}
+
+	var both Profile
+	both.Cadence.Interval, both.Cadence.Jitter = "15m", "8m"
+	_, err = both.dealCadence()
+	require.ErrorIs(t, err, ErrInput)
+	for _, part := range []string{"cadence.jitter is 8m", "cadence.interval is 15m", "under 7m30s"} {
+		assert.Contains(t, err.Error(), part)
+	}
+
+	var negative Profile
+	negative.Cadence.Jitter = "-1m"
+	_, err = negative.dealCadence()
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "cadence.jitter must be at least 0")
+}

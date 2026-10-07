@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### The checkpoint cadence: every 5m by default
+
+- **Behaviour change for existing deal profiles.** A deal profile's witness cadence
+  (its checkpoint cadence) now defaults to a tick every 5m, give or take 1m, instead
+  of every 1h, give or take 10m. A profile that sets no cadence moves at upgrade; one
+  that sets both `cadence.interval` and `cadence.jitter` keeps them.
+- **A profile that sets `cadence.jitter` but not `cadence.interval` may now be
+  refused.** Its jitter must be under half the 5m default, so under 2m30s. The error
+  names both values; set `cadence.interval` (for example `1h`), or lower the jitter.
+- The poll is `cll checkpoint cadence` (`deal tick` stays callable). Schedule it every
+  5 minutes with `--wait-up-to 5m`. A run with no tick due publishes nothing.
+
 ### Deal checks: which agent picks pause is a pinned materiality predicate
 
 - **Behaviour change for existing deal profiles.** Which attributes the agent picked

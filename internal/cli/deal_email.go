@@ -487,8 +487,6 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 	return msg.Bytes(), subject, text, htmlBody, nil
 }
 
-// cadencePhrase is " (every 5m, give or take 2m)" from the witness state the
-// report carries, or "" when it names none.
 // cadencePhrase is how a receipt says when a pending checkpoint reaches the
 // witness, from the cadence words the bundle carries ("every 1h, give or
 // take 10m"): ", within about 1h10m (every 1h, give or take 10m)", the
