@@ -12,7 +12,9 @@ Files in this directory:
 |---|---|
 | `PROFILE.md` | This document. The normative text for the skill. |
 | `x-deal-v0.schema.json` | JSON Schema (Draft 2020-12) for one record: the block and each record type's body. |
-| `fixtures/positive/` | One deal, 17 records, covering all 13 record types, with the expected JCS digest of each. |
+| `records/` | JSON Schemas (Draft 2020-12) for the typed action records and the check request and response (section 9). |
+| `fixtures/positive/` | One deal, 18 records, covering all 13 record types, with the expected JCS digest of each. |
+| `fixtures/positive-typed/` | One deal sealed in the typed action records beside x-deal-v0 evidence records (section 9). |
 | `fixtures/negative/` | Records that MUST be rejected, each at one named stage. |
 | `fixtures/fingerprint-vectors.json` | Test-only local store: a public test secret, the raw values, their normalized forms, fingerprints and commitments. |
 | `fixtures/expected-digests.txt` | The positive digests as a manifest. |
@@ -347,3 +349,61 @@ The story in the fixtures (all fictional; 555-01xx numbers, `.example` domains):
 14. The user taps **Hold**.
 15. Outcome: nothing delivered, `mismatch`.
 16. Close `mismatch`.
+
+## 9. Typed action records and the check contract
+
+A deal opened with `--records typed` seals its authority steps as typed action records, one
+schema per type under `records/`, and its evidence (baseline, messages, claims, evidence,
+detail changes, intents, disclosures with no authority, close) as x-deal-v0 records. Both kinds
+sit in ONE chain: one `seq`, one `prev` chain, one root. No typed record type carries "deal".
+
+Every typed record has the common header (`records/record-common-v0.schema.json`): `type`,
+`canonicalization` (`"jcs"`), `chain_id` (the deal's id), `seq`, `at`, `prev`, `chain_root`
+(the baseline), optional `refs` (`{rel, type: "record", digest_alg, digest}`) and `body`.
+Counterparty fingerprints in a typed body name `fp_alg: "hmac-sha256-chain-key"` (the same keyed
+fingerprint as section 4). Digests are over the record's JCS bytes, as for x-deal-v0.
+
+| Type | Sealed for | Replaces (x-deal-v0) |
+|---|---|---|
+| `task-authority/v0` | The user's task authority: their words by commitment, `max_total_minor`, `allowed`. Sealed after the baseline (`source` ref), and again when the user confirms new limits (`approves` the intent, `previous_ref`, `said_commitment`). | the baseline intent; `approval` with `confirm_limits` |
+| `proposed-action/v0` | The action about to be taken, exactly as checked. | `check` |
+| `action-evaluation/v0` | The deal check's disposition (`DO` or `ASK`) and findings, with the contract fields below. | `verdict` |
+| `action-approval/v0` | An approval artifact of one stated `authority`: `action_state_approval` (the user's own answer, with their words and the `rendering_commitment` of what they were shown), `card_answer` (a card answered with no words), `platform_approval` (a platform's own gate, as observed), `policy_change` (the user confirming a policy change: `rendering_commitment`, `effective_policy_digest`, `semantic_diff_digest`), `one_shot_override` (reserved). | `approval` |
+| `action-record/v0` | What the agent did, with `evaluation_ref` and `authority_basis`; a disclosure that needed approval is an `action-record/v0` with `disclosed`. | `action`; `disclosure` with authority `approval` |
+| `action-outcome/v0` | What was observed (`attempted` names an unchecked action). | `outcome` |
+| `action-report/v0` | Reserved for the report a chain is summarized into. | — |
+
+**The evaluation's contract fields.** `proposed_action_digest` is the digest of the
+`proposed-action/v0` it evaluates; `task_authority_ref` names the task authority in force;
+`ruleset_digest` is the digest of the rule table the evaluator ran (`{evaluator, rules,
+materiality_digest}`), so it also covers the materiality predicate; `materiality_digest` names
+the predicate that decides which changes are material; `valid_until` is when the evaluation
+stops covering a step; `authority_basis` is `[{type: "task_authority", ref}]`;
+`rendering_commitment` commits to the card the evaluation rendered.
+
+**Typed authorization.** In a chain whose second record is a `task-authority/v0`:
+- every check, verdict, approval, action and outcome step is a typed record, and an approved
+  disclosure is an `action-record/v0`;
+- an `action-evaluation/v0` names the proposed action it follows (`checks`) by
+  `proposed_action_digest`, and the task authority in force by `task_authority_ref`;
+- a `DO` evaluation authorizes one step on the task authority alone (`authorized_by` names
+  the evaluation); no approval is sealed;
+- an `ASK` is answered only by an `action_state_approval`, the user's first answer to that
+  evaluation. Its `rendering_commitment`, when present, equals the evaluation's. A
+  `card_answer` and a `platform_approval` never answer it;
+- a step after the evaluation's `valid_until` is not covered;
+- an approval covers only the proposed action its evaluation names. A changed proposed action
+  is a new evaluation with another `proposed_action_digest`; an earlier approval never extends
+  to it, and the materiality predicate never extends one;
+- the step's `evaluation_ref` names the evaluation it relied on, and its `authority_basis`
+  lists, in order: the evaluation's task authority; on an `ASK`, the user's answer it cites;
+  every `platform_approval` sealed `about` that evaluation, with `scope: "mismatch"` exactly
+  when that approval stated another amount. `one_shot_override` is refused.
+
+**The check request and response.** `records/check-request-v0.schema.json` and
+`records/check-response-v0.schema.json` are the shapes an evaluator takes and returns, sealed or
+not. A request carries the `phase`, the ruleset and task authority it is checked against, the
+proposed action, history refs and any platform approvals; a response carries the
+`disposition`, `valid_until`, `proposed_action_digest`, findings, `authority_basis`,
+`evaluation_ref`, `ruleset_digest`, `task_authority_ref` and `materiality_digest`.
+`capsulectl deal check` returns the response for the evaluation it sealed (`check_response`).

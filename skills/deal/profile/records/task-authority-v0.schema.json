@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/records/task-authority-v0.schema.json",
+  "title": "task-authority/v0",
+  "description": "The user's task authority: what they asked for and the limits they set (max_total_minor; allowed: absent = no restriction, present and empty = nothing allowed yet), with their words by commitment. A later version names the one it replaces (previous_ref) and carries the user's words confirming it (said_commitment); it approves the proposal it confirms.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "canonicalization",
+    "chain_id",
+    "seq",
+    "at",
+    "prev",
+    "chain_root",
+    "body"
+  ],
+  "properties": {
+    "type": {
+      "const": "task-authority/v0"
+    },
+    "canonicalization": {
+      "const": "jcs"
+    },
+    "chain_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,15}-[0-9a-f]{16,64}$"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 9007199254740991
+    },
+    "at": {
+      "$ref": "record-common-v0.schema.json#/$defs/when"
+    },
+    "prev": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "chain_root": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "record-common-v0.schema.json#/$defs/rel_ref"
+      }
+    },
+    "producer": {
+      "$ref": "record-common-v0.schema.json#/$defs/producer"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verbatim_commitment"
+      ],
+      "properties": {
+        "verbatim_commitment": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "max_total_minor": {
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
+        "allowed": {
+          "type": "array",
+          "items": {
+            "$ref": "record-common-v0.schema.json#/$defs/action"
+          },
+          "uniqueItems": true
+        },
+        "asked": {
+          "type": "object"
+        },
+        "previous_ref": {
+          "$ref": "record-common-v0.schema.json#/$defs/ref"
+        },
+        "said_commitment": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        }
+      },
+      "dependentRequired": {
+        "previous_ref": [
+          "said_commitment"
+        ],
+        "said_commitment": [
+          "previous_ref"
+        ]
+      }
+    }
+  }
+}

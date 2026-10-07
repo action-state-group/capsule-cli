@@ -379,7 +379,7 @@ func TestDealRecoversAStepThatNeverReachedTheLog(t *testing.T) {
 	events, err := s.load(t.Context(), dealID)
 	require.NoError(t, err)
 	act := &dealAct{Action: "pay", AmountMinor: ptr(int64(38000))}
-	act.AuthorizedBy, act.Reason, act.Rule = authorizeAct(events, *act)
+	act.AuthorizedBy, act.Reason, act.Rule = authorizeAct(events, *act, dealClock().UTC())
 	act.Unchecked = true
 	_, _, err = s.prepareStep(t.Context(), dealID, events, dealEvent{Kind: "act", Act: act})
 	require.NoError(t, err)

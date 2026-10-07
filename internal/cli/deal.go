@@ -392,6 +392,11 @@ func shownCardMatches(events []sealedEvent, a dealApproval) error {
 // It is false when id names no proceeding approval this maps.
 func dealDisposition(events []sealedEvent, id string) (emit.Disposition, bool) {
 	for _, se := range events {
+		// Typed records: a DO evaluation authorizes on the task authority
+		// alone, as a standing intent did.
+		if c := se.Event.Check; id != "" && se.CapsuleID == id && se.Event.Kind == "check" && c != nil && c.Verdict == "pass" {
+			return emit.Disposition{Decision: emit.DecisionAccept, VerdictClass: emit.VerdictExecuted, Approver: emit.ApproverPolicy}, true
+		}
 		a := se.Event.Approval
 		if id == "" || se.CapsuleID != id || se.Event.Kind != "approval" || a == nil || !a.Proceed {
 			continue
@@ -721,6 +726,16 @@ func dealOpenCommand() *cobra.Command {
 			return err
 		}
 		o.Skill = nil
+		// The record set is fixed for the deal here, never taken from the
+		// input file.
+		o.Records = ""
+		switch v, _ := c.Flags().GetString("records"); v {
+		case "", "x-deal-v0":
+		case "typed":
+			o.Records = recordsTyped
+		default:
+			return inputError("--records must be typed or x-deal-v0")
+		}
 		skillPath, _ := c.Flags().GetString("skill")
 		if skillPath == "" {
 			skillPath = os.Getenv(dealSkillEnv)
@@ -749,6 +764,14 @@ func dealOpenCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Typed records: the user's task authority is its own step,
+			// right after the baseline it was asked in.
+			if o.Records == recordsTyped {
+				intent := o.Intent
+				if _, err = s.seal(ctx, dealID, []sealedEvent{se}, dealEvent{Kind: "task_authority", TaskAuthority: &intent}); err != nil {
+					return err
+				}
+			}
 			cp, err := s.milestone(ctx)
 			if err != nil {
 				return err
@@ -766,6 +789,7 @@ func dealOpenCommand() *cobra.Command {
 	}}
 	cmd.Flags().String("input", "", "Baseline JSON: type, intent, who, terms, claims, recourse")
 	cmd.Flags().String("skill", "", "The SKILL.md the agent is following (or $"+dealSkillEnv+"): its digest is sealed in the baseline")
+	cmd.Flags().String("records", "", "The record set: x-deal-v0 (the default) or typed (the typed action records, which carry the check contract)")
 	return cmd
 }
 
@@ -859,8 +883,29 @@ func dealNoteCommand() *cobra.Command {
 				}
 				ev.Approval.ShownCard = strings.TrimSuffix(string(shown), "\n")
 			}
+		case kind == "platform_approval":
+			p := &dealPlatformApproval{}
+			p.Check, _ = c.Flags().GetString("check")
+			p.Provider, _ = c.Flags().GetString("provider")
+			p.Mechanism, _ = c.Flags().GetString("mechanism")
+			p.Text, _ = c.Flags().GetString("text")
+			if p.Check == "" || p.Provider == "" || p.Mechanism == "" || strings.TrimSpace(p.Text) == "" {
+				return inputError("platform_approval needs --check, --provider, --mechanism and --text (the approval text exactly as the platform returned it)")
+			}
+			if !callerToken.MatchString(p.Provider) || !callerToken.MatchString(p.Mechanism) {
+				return inputError("--provider and --mechanism are names you give the platform and its approval: lowercase letters, digits and . _ - (at most 64)")
+			}
+			if c.Flags().Changed("amount-minor") {
+				amount, _ := c.Flags().GetInt64("amount-minor")
+				if amount < 0 {
+					return inputError("--amount-minor is the amount the platform's approval stated, in minor units")
+				}
+				p.AmountMinor = &amount
+				p.Currency, _ = c.Flags().GetString("currency")
+			}
+			ev.Platform = p
 		default:
-			return inputError("--kind must be message, claim, evidence, change, intent, approval, act or disclosure")
+			return inputError("--kind must be message, claim, evidence, change, intent, approval, act, disclosure or platform_approval")
 		}
 		if emailPath != "" {
 			// Captured before the deal is locked: the key records are read
@@ -930,12 +975,25 @@ func dealNoteCommand() *cobra.Command {
 				if err := shownCardMatches(events, *ev.Approval); err != nil {
 					return err
 				}
+				// Typed records: the user's answer to an ask is bound to what
+				// they were shown, so it can stand as the check's approval.
+				if verdict, _, ok := checkedCard(events, ev.Approval.Check); ok && dealRecordSet(dealEvent{}, events) == recordsTyped &&
+					ev.Approval.Approver == "user" && verdict.Event.Check.Verdict == "pause" && ev.Approval.ShownCard == "" {
+					return inputError("in a typed deal the user's answer to a paused check is bound to the card it was given on: pass that card with --shown-card")
+				}
+			case "platform_approval":
+				if dealRecordSet(dealEvent{}, events) != recordsTyped {
+					return inputError("platform approvals are recorded in typed deals (deal open --records typed)")
+				}
+				if _, _, ok := checkedCard(events, ev.Platform.Check); !ok {
+					return inputError("--check names no check of this deal: a platform approval is recorded beside the check of the same action")
+				}
 			case "act":
 				if !slices.Contains(dealPointsOfNoReturn[events[0].Event.Open.Type], act.Action) {
 					return inputError("act.action is not a point of no return for this deal type")
 				}
 				ev.Act = &dealAct{Action: act.Action, Description: act.Description, AmountMinor: act.AmountMinor, Currency: act.Currency, Payee: act.Payee, Rail: act.Rail, Reference: act.Reference}
-				ev.Act.AuthorizedBy, ev.Act.Reason, ev.Act.Rule = authorizeAct(events, *ev.Act)
+				ev.Act.AuthorizedBy, ev.Act.Reason, ev.Act.Rule = authorizeAct(events, *ev.Act, dealClock().UTC())
 				ev.Act.Unchecked = ev.Act.AuthorizedBy == ""
 				ev.Act.Direction, ev.Act.Reverses = actDirection(events, *ev.Act, events[0].Event.Open.Terms.Currency)
 			case "disclosure":
@@ -946,7 +1004,7 @@ func dealNoteCommand() *cobra.Command {
 				if !slices.Contains(dealPointsOfNoReturn[open.Type], d.action()) {
 					return inputError("this deal type has no " + d.action() + " point of no return")
 				}
-				d.AuthorizedBy, d.Reason, d.Rule = authorizeAct(events, dealAct{Action: d.action()})
+				d.AuthorizedBy, d.Reason, d.Rule = authorizeAct(events, dealAct{Action: d.action()}, dealClock().UTC())
 				// An approval covers a telling only to the party its check was
 				// about: approving the address for the seller is not approving
 				// it for a courier.
@@ -1005,6 +1063,9 @@ func dealNoteCommand() *cobra.Command {
 						"Ask the user; only on their explicit yes, seal deal note --kind approval --check " + se.CapsuleID +
 						" --choice confirm_limits --said \"<their words>\""
 				}
+			case "platform_approval":
+				out["answers_check"] = false
+				out["note"] = "recorded as " + ev.Platform.Provider + "'s own approval; it does not answer the deal check"
 			case "approval":
 				out["proceed"] = ev.Approval.Proceed && ev.Approval.Reason == ""
 				out["reason"] = ev.Approval.Reason
@@ -1020,6 +1081,7 @@ func dealNoteCommand() *cobra.Command {
 				out["unchecked"] = ev.Act.Unchecked
 				out["authorized_by"] = ev.Act.AuthorizedBy
 				out["reason"] = ev.Act.Reason
+				out["rule"] = ev.Act.Rule
 			case "disclosure":
 				d := ev.Disclosure
 				out["approved"] = d.AuthorizedBy != ""
@@ -1068,7 +1130,7 @@ func dealNoteCommand() *cobra.Command {
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
-	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval, act or disclosure")
+	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval, act, disclosure or platform_approval")
 	cmd.Flags().String("input", "", "JSON body for message, claim, evidence, change, intent or act (optional for evidence with --email)")
 	cmd.Flags().String("email", "", "evidence: a merchant's email as a raw RFC 822 file (.eml), headers intact; sealed with its DKIM key records")
 	cmd.Flags().String("key-record", "", "evidence: the DKIM key record to check --email against instead of DNS (marked supplied)")
@@ -1077,6 +1139,11 @@ func dealNoteCommand() *cobra.Command {
 	cmd.Flags().String("choice", "", "approval: the option id the user chose, or confirm_limits for an intent note")
 	cmd.Flags().String("said", "", "approval: the user's own words")
 	cmd.Flags().String("shown-card", "", "approval: a file holding the exact card text the answer was given on, as `deal check` returned it")
+	cmd.Flags().String("provider", "", "platform_approval: the platform whose own gate the user approved on (a name you choose)")
+	cmd.Flags().String("mechanism", "", "platform_approval: that platform's approval mechanism (a name you choose)")
+	cmd.Flags().String("text", "", "platform_approval: the approval text exactly as the platform returned it (committed, never stored)")
+	cmd.Flags().Int64("amount-minor", 0, "platform_approval: the amount the platform's approval stated, in minor units")
+	cmd.Flags().String("currency", "", "platform_approval: the currency of --amount-minor (default: the deal's)")
 	return cmd
 }
 
@@ -1275,6 +1342,14 @@ func dealCheckCommand() *cobra.Command {
 			result.Snapshot = snapped.CapsuleID
 			result.Card = renderCard(result, open.Demo)
 			// -> seal the result before it is shown
+			if dealRecordSet(dealEvent{}, events) == recordsTyped {
+				// The check contract's fields, fixed when the evaluation is sealed.
+				result.ValidUntil = dealClock().UTC().Truncate(time.Second).Add(staleAfter).Format(time.RFC3339)
+				result.MaterialityDigest = materialityPredicateDigest
+				if result.RulesetDigest, err = rulesetDigest(result.MaterialityDigest); err != nil {
+					return err
+				}
+			}
 			checked, err := s.seal(ctx, dealID, events, dealEvent{Kind: "check", Check: &result})
 			if err != nil {
 				return err
@@ -1284,7 +1359,11 @@ func dealCheckCommand() *cobra.Command {
 			// A passing check of an action the user already allowed is
 			// approved by that standing intent, sealed as its own step: every
 			// action cites a sealed approval.
-			if result.Verdict == "pass" {
+			typed := dealRecordSet(dealEvent{}, events) == recordsTyped
+			if typed {
+				out["check_response"] = checkResponseFor(checked.Event, events, checked.Digest)
+			}
+			if result.Verdict == "pass" && !typed {
 				approval := &dealApproval{Check: checked.CapsuleID, Choice: "proceed", Approver: "standing_intent", Proceed: true}
 				approved, err := s.seal(ctx, dealID, events, dealEvent{Kind: "approval", Approval: approval})
 				if err != nil {
@@ -1590,3 +1669,7 @@ func dealExportCommand() *cobra.Command {
 	cmd.Flags().String("output", "", "New file for the JSON array of records")
 	return cmd
 }
+
+// callerToken is a name the caller gives a platform or its approval
+// mechanism: capsulectl names none itself.
+var callerToken = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)

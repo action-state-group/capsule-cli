@@ -1,0 +1,51 @@
+{
+  "fixture": "neg-typed-x-deal-verdict-in-a-typed-chain",
+  "expect": "invalid",
+  "description": "An x-deal-v0 verdict in a chain sealed in the typed action records.",
+  "expected_stage": "chain",
+  "expected_error_contains": "a verdict step is a typed record",
+  "chain_dir": "positive-typed",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json",
+    "03-message-site-switch.json",
+    "04-detail-change-merchant.json",
+    "05-proposed-action.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "verdict",
+      "seq": 6,
+      "at": "2026-10-06T09:13:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "179c5868bd5c5fcf9c372f706fafce8dd951018f151d88bc020304e1524108b0"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+      },
+      "refs": [
+        {
+          "rel": "checks",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "179c5868bd5c5fcf9c372f706fafce8dd951018f151d88bc020304e1524108b0"
+        }
+      ]
+    },
+    "body": {
+      "result": "pass",
+      "differences": [],
+      "options": [],
+      "judge": {
+        "kind": "rules"
+      }
+    }
+  }
+}

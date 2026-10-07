@@ -1,0 +1,39 @@
+{
+  "fixture": "08-outcome-platform-only.json",
+  "expect": "valid",
+  "story": "Paying on the platform's approval alone is an unchecked action: it did not answer the ask.",
+  "record": {
+    "type": "action-outcome/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-7a1e5c0d9b2f4e68",
+    "seq": 8,
+    "at": "2026-10-06T09:15:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "cfeed3cb4249fc25ea341a5c0a28837403db6e9203ef278cdc6f9badc5e16b98"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+    },
+    "body": {
+      "status": "unchecked_action",
+      "outcome": "mismatch",
+      "findings": [
+        {
+          "question": "asked",
+          "rule": "no_sealed_approval"
+        }
+      ],
+      "attempted": {
+        "action": "pay",
+        "amount_minor": 55880,
+        "currency": "USD",
+        "rail": "card"
+      }
+    }
+  },
+  "expected_digest": "f30d143a6c3c299b4c83d730835d662912354d338acdfec58a91b52e483ab096"
+}

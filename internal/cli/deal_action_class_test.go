@@ -185,7 +185,7 @@ func TestDealRecoversAStepAnEarlierReleasePrepared(t *testing.T) {
 	events, err := s.load(t.Context(), id)
 	require.NoError(t, err)
 	a := &dealAct{Action: "pay", AmountMinor: ptr(int64(600))}
-	a.AuthorizedBy, a.Reason, a.Rule = authorizeAct(events, *a)
+	a.AuthorizedBy, a.Reason, a.Rule = authorizeAct(events, *a, dealClock().UTC())
 	require.NotEmpty(t, a.AuthorizedBy)
 	_, prepared, err := s.prepareStep(t.Context(), id, events, dealEvent{Kind: "act", Act: a})
 	require.NoError(t, err)

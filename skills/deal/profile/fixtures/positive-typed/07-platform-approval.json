@@ -1,0 +1,40 @@
+{
+  "fixture": "07-platform-approval.json",
+  "expect": "valid",
+  "story": "An approval artifact of a stated authority: here the platform's own approval (observed, never the check's answer), or the user's own answer on the card the check rendered.",
+  "record": {
+    "type": "action-approval/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-7a1e5c0d9b2f4e68",
+    "seq": 7,
+    "at": "2026-10-06T09:14:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "4d8f7d001b7d67c4ff3b15c3b949ca6e70cdd547a5c42d8aaa3a91782f8cd744"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+    },
+    "refs": [
+      {
+        "rel": "about",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "4d8f7d001b7d67c4ff3b15c3b949ca6e70cdd547a5c42d8aaa3a91782f8cd744"
+      }
+    ],
+    "body": {
+      "authority": "platform_approval",
+      "provider": "example-platform",
+      "mechanism": "native-gate",
+      "actor": "user",
+      "approval_text_commitment": "a9307b607262a2ea16a67c1d6507aaa8a00ea346cc1b193189297cdf670746d2",
+      "amount_minor": 55880,
+      "currency": "USD"
+    }
+  },
+  "expected_digest": "cfeed3cb4249fc25ea341a5c0a28837403db6e9203ef278cdc6f9badc5e16b98"
+}

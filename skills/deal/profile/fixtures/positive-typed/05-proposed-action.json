@@ -1,0 +1,38 @@
+{
+  "fixture": "05-proposed-action.json",
+  "expect": "valid",
+  "story": "The payment about to be made, exactly as checked.",
+  "record": {
+    "type": "proposed-action/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-7a1e5c0d9b2f4e68",
+    "seq": 5,
+    "at": "2026-10-06T09:13:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "b529a92142bb0dfd6719797b3baeeabc49f3fc0fa2eab78d4338add734f5cacf"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+    },
+    "body": {
+      "action": "pay",
+      "amount_minor": 55880,
+      "currency": "USD",
+      "recourse": {
+        "rail": "card",
+        "refundable": true
+      },
+      "counterparty": {
+        "fp_alg": "hmac-sha256-chain-key",
+        "ids": {
+          "payee": "448ac256f669560a03396bf405bb19a5636b758a56f7034b2a87a0befb95ea14"
+        }
+      }
+    }
+  },
+  "expected_digest": "179c5868bd5c5fcf9c372f706fafce8dd951018f151d88bc020304e1524108b0"
+}

@@ -1,0 +1,50 @@
+{
+  "fixture": "neg-typed-shown-not-what-was-checked",
+  "expect": "invalid",
+  "description": "The user's answer commits to a card other than the one the evaluation rendered.",
+  "expected_stage": "chain",
+  "expected_error_contains": "is not what the evaluation rendered",
+  "chain_dir": "positive-typed",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json",
+    "03-message-site-switch.json",
+    "04-detail-change-merchant.json",
+    "05-proposed-action.json",
+    "06-action-evaluation.json",
+    "07-platform-approval.json",
+    "08-outcome-platform-only.json"
+  ],
+  "record": {
+    "type": "action-approval/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-7a1e5c0d9b2f4e68",
+    "seq": 9,
+    "at": "2026-10-06T09:16:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "f30d143a6c3c299b4c83d730835d662912354d338acdfec58a91b52e483ab096"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+    },
+    "refs": [
+      {
+        "rel": "approves",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "4d8f7d001b7d67c4ff3b15c3b949ca6e70cdd547a5c42d8aaa3a91782f8cd744"
+      }
+    ],
+    "body": {
+      "authority": "action_state_approval",
+      "choice": "proceed",
+      "proceed": true,
+      "said_commitment": "60b5b2b1237a12666ec051e57927dd948948e6c6bca112b8a28df78f0c224224",
+      "rendering_commitment": "70297b5022b00f87f1559487c5e4faacd10ae973ac08bb36b078a31a1d114af8"
+    }
+  }
+}

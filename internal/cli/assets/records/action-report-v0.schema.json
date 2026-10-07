@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/records/action-report-v0.schema.json",
+  "title": "action-report/v0",
+  "description": "A report a person reads about a chain (consumer copy calls it a receipt): the records it presents and, for each action, the authority layers in order with their times. Defined here; sealed by a later release.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "canonicalization",
+    "chain_id",
+    "seq",
+    "at",
+    "prev",
+    "chain_root",
+    "body"
+  ],
+  "properties": {
+    "type": {
+      "const": "action-report/v0"
+    },
+    "canonicalization": {
+      "const": "jcs"
+    },
+    "chain_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,15}-[0-9a-f]{16,64}$"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 9007199254740991
+    },
+    "at": {
+      "$ref": "record-common-v0.schema.json#/$defs/when"
+    },
+    "prev": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "chain_root": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "record-common-v0.schema.json#/$defs/rel_ref"
+      }
+    },
+    "producer": {
+      "$ref": "record-common-v0.schema.json#/$defs/producer"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "presents"
+      ],
+      "properties": {
+        "presents": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "record-common-v0.schema.json#/$defs/ref"
+          }
+        },
+        "authority": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "layer",
+              "ref",
+              "at"
+            ],
+            "properties": {
+              "layer": {
+                "enum": [
+                  "task_authority",
+                  "action_evaluation",
+                  "action_state_approval",
+                  "platform_approval",
+                  "one_shot_override",
+                  "action_record"
+                ]
+              },
+              "ref": {
+                "$ref": "record-common-v0.schema.json#/$defs/ref"
+              },
+              "at": {
+                "$ref": "record-common-v0.schema.json#/$defs/when"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

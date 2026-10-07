@@ -1,0 +1,74 @@
+{
+  "fixture": "10-action-record-pay.json",
+  "expect": "valid",
+  "story": "The payment, with the evaluation it relied on and every authority layer, in order.",
+  "record": {
+    "type": "action-record/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-7a1e5c0d9b2f4e68",
+    "seq": 10,
+    "at": "2026-10-06T09:17:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "c080f2c0c88921e48342ed12b0bd33cec87bb92a44b14fccac863d5b88126b75"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+    },
+    "refs": [
+      {
+        "rel": "authorized_by",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "c080f2c0c88921e48342ed12b0bd33cec87bb92a44b14fccac863d5b88126b75"
+      }
+    ],
+    "body": {
+      "action": "pay",
+      "amount_minor": 55880,
+      "currency": "USD",
+      "rail": "card",
+      "counterparty": {
+        "fp_alg": "hmac-sha256-chain-key",
+        "ids": {
+          "payee": "448ac256f669560a03396bf405bb19a5636b758a56f7034b2a87a0befb95ea14"
+        }
+      },
+      "evaluation_ref": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "4d8f7d001b7d67c4ff3b15c3b949ca6e70cdd547a5c42d8aaa3a91782f8cd744"
+      },
+      "authority_basis": [
+        {
+          "type": "task_authority",
+          "ref": {
+            "type": "record",
+            "digest_alg": "SHA-256",
+            "digest": "d1962067c88f4e8f32294fd84d3fca31120a5a5584511a8bd4385b2a0e44a3e2"
+          }
+        },
+        {
+          "type": "action_state_approval",
+          "ref": {
+            "type": "record",
+            "digest_alg": "SHA-256",
+            "digest": "c080f2c0c88921e48342ed12b0bd33cec87bb92a44b14fccac863d5b88126b75"
+          }
+        },
+        {
+          "type": "platform_approval",
+          "ref": {
+            "type": "record",
+            "digest_alg": "SHA-256",
+            "digest": "cfeed3cb4249fc25ea341a5c0a28837403db6e9203ef278cdc6f9badc5e16b98"
+          }
+        }
+      ]
+    }
+  },
+  "expected_digest": "6ffbcec514330f0b2d948ebde4617bf6675f720e9cb5ba90c2dc1f17836cdac8"
+}
