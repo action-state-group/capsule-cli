@@ -320,6 +320,9 @@
         "proceed": { "type": "boolean" },
         "approver": { "enum": ["user", "standing_intent", "agent_card"] },
         "said_commitment": { "$ref": "#/$defs/hex64" },
+        "card_commitment": {
+          "description": "The card the answer was given on, committed under the answered verdict's card nonce: equal to the verdict's card_commitment exactly when the card shown is the card checked.",
+          "$ref": "#/$defs/hex64" },
         "limits": {
           "description": "On confirm_limits only: the user's limits in force before this answer and the new version it puts in force. The intent it approves is the proposal.",
           "type": "object", "additionalProperties": false, "required": ["previous", "new"],
@@ -338,7 +341,9 @@
           "then": { "required": ["said_commitment"] },
           "else": { "not": { "required": ["said_commitment"] } } },
         { "if": { "properties": { "approver": { "const": "standing_intent" } } },
-          "then": { "properties": { "choice": { "const": "proceed" } } } }
+          "then": { "properties": { "choice": { "const": "proceed" } }, "not": { "required": ["card_commitment"] } } },
+        { "if": { "properties": { "choice": { "const": "confirm_limits" } } },
+          "then": { "not": { "required": ["card_commitment"] } } }
       ]
     },
     "body_action": {

@@ -358,6 +358,35 @@ func dealCapsuleInput(events []sealedEvent, ev dealEvent, operator string, at ti
 	return in
 }
 
+// checkedCard is the check (verdict) step an approval answers, and the card it
+// rendered.
+func checkedCard(events []sealedEvent, check string) (sealedEvent, string, bool) {
+	for _, se := range events {
+		if se.CapsuleID == check && se.Event.Kind == "check" && se.Event.Check != nil {
+			return se, se.Event.Check.Card, true
+		}
+	}
+	return sealedEvent{}, "", false
+}
+
+// shownCardMatches refuses an answer given on a card other than the one the
+// check rendered: a card_commitment must equal the check's, never differ.
+func shownCardMatches(events []sealedEvent, a dealApproval) error {
+	if a.ShownCard == "" {
+		return nil
+	}
+	_, card, ok := checkedCard(events, a.Check)
+	switch {
+	case !ok:
+		return inputError("--shown-card goes with an answer to a check")
+	case card == "":
+		return inputError("that check rendered no card, so no card can have been shown for it")
+	case a.ShownCard != card:
+		return inputError("the card shown is not the card checked: pass the check's card exactly as `deal check` returned it")
+	}
+	return nil
+}
+
 // dealDisposition is the disposition of an act authorized by the sealed
 // approval id: accepted and executed, by the approver that approval records.
 // It is false when id names no proceeding approval this maps.
@@ -814,6 +843,16 @@ func dealNoteCommand() *cobra.Command {
 				approver, said = "agent_card", ""
 			}
 			ev.Approval = &dealApproval{Check: check, Choice: choice, Approver: approver, Said: said}
+			if path, _ := c.Flags().GetString("shown-card"); path != "" {
+				if choice == "confirm_limits" {
+					return inputError("--shown-card goes with an answer to a check's card, not with confirm_limits")
+				}
+				shown, err := os.ReadFile(path)
+				if err != nil {
+					return inputError("cannot read --shown-card " + path)
+				}
+				ev.Approval.ShownCard = strings.TrimSuffix(string(shown), "\n")
+			}
 		default:
 			return inputError("--kind must be message, claim, evidence, change, intent, approval, act or disclosure")
 		}
@@ -880,6 +919,9 @@ func dealNoteCommand() *cobra.Command {
 				}
 			case "approval":
 				if err := judgeApproval(events, ev.Approval); err != nil {
+					return err
+				}
+				if err := shownCardMatches(events, *ev.Approval); err != nil {
 					return err
 				}
 			case "act":
@@ -1028,6 +1070,7 @@ func dealNoteCommand() *cobra.Command {
 	cmd.Flags().String("check", "", "approval: the check_id being answered, or the capsule_id of an intent note whose proposed limits the user confirms")
 	cmd.Flags().String("choice", "", "approval: the option id the user chose, or confirm_limits for an intent note")
 	cmd.Flags().String("said", "", "approval: the user's own words")
+	cmd.Flags().String("shown-card", "", "approval: a file holding the exact card text the answer was given on, as `deal check` returned it")
 	return cmd
 }
 

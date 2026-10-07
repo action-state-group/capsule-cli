@@ -605,6 +605,13 @@ def check_chain(records):
                     fail(i, "standing-intent approval for an action the intent does not allow")
             elif v["result"] == "pause" and body["choice"] not in v["options"]:
                 fail(i, "the user's choice is not one of the verdict's options")
+            # The card the answer was given on is committed under the verdict's own card nonce,
+            # so equal commitments mean the card shown is the card checked.
+            if "card_commitment" in body:
+                if "card_commitment" not in v:
+                    fail(i, "the approval commits to a shown card, but the verdict it answers rendered none")
+                elif body["card_commitment"] != v["card_commitment"]:
+                    fail(i, "the card shown is not the card checked: the approval's card_commitment differs from the verdict's")
         elif t == "disclosure":
             actions = {DISCLOSURE_ACTION[f["class"]] for f in body["fields"]}
             if len(actions) != 1:
@@ -1020,6 +1027,22 @@ def regen():
     r = copy.deepcopy(records[5]); r["body"]["limits"]["new"]["max_total_minor"] = 90000
     neg("neg-confirm-limits-not-the-proposal", "chain", "not what the intent proposed", r, 5,
         "A confirm_limits answer whose new version raises the limit, which the intent it approves did not propose.")
+
+    # An answer given on a card other than the one the check rendered: its card_commitment, under
+    # the verdict's card nonce, differs from the verdict's.
+    r = copy.deepcopy(records[14])
+    r["body"]["card_commitment"] = commitment(nonce("card-1"), "Pay M. Torres $200 by Zelle: all checks passed.")
+    neg("neg-approval-card-not-checked", "chain", "card shown is not the card checked", r, 14,
+        "The Hold answer commits to a card text other than the one its verdict rendered.")
+
+    # agent_card: a click on a card the agent composed. It carries no words of the user's, so a
+    # said_commitment on it is a schema error, and it can never confirm the user's limits.
+    r = copy.deepcopy(records[14]); r["body"]["approver"] = "agent_card"
+    neg("neg-agent-card-with-words", "schema", "said_commitment", r, 14,
+        "An agent_card answer that carries a said_commitment: words are only ever the user's (approver user).")
+    r = copy.deepcopy(records[5]); r["body"]["approver"] = "agent_card"; del r["body"]["said_commitment"]
+    neg("neg-agent-card-confirms-limits", "schema", "user", r, 5,
+        "A confirm_limits answer sealed as agent_card: raising the user's limits takes their own words.")
 
     # A confirmation cited as the authority for an action.
     r = copy.deepcopy(records[9]); r["x-deal-v0"]["refs"] = [{"rel": "authorized_by", **_ref(record_digest(records[5]))}]
