@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### A second report on a profile works after a checkpoint covers a disclosure
+
+- **Fixed:** once a checkpoint covered a disclosure, every later `bundle` and `disclose` on that
+  profile failed ("operation failed … sensitive details suppressed"). A re-run of an install, or
+  any later report, hit it.
+- **Wire change: what `disclose` puts on the log.** It used to append the bare digest of a
+  disclosure record, kept nowhere else, which no later bundle could supply. It now seals the
+  disclosure record as an ordinary `fyi` capsule (`action_id: capsulectl-disclosure`) with the
+  profile's signing key, stores it, and appends its capsule id. Its input holds only ids, digests
+  and labels, never disclosed payload bytes.
+- **A later bundle** proves an earlier disclosure capsule's place in the log but withholds its
+  input, so a copy made for one party never shows what was disclosed to another. Such a bundle
+  states `payloads_mode: selected`.
+- **Logs written by an earlier release** that disclosed and then checkpointed cannot be bundled
+  over: the record behind a bare digest is gone. The error now says so ("log entry N is a
+  disclosure record an earlier release appended as a bare digest; no bundle over this log can
+  include it: start a new profile (or log id) for new reports"), exit 2.
+
 ### The checkpoint cadence: every 5m by default
 
 - **Behaviour change for existing deal profiles.** A deal profile's witness cadence

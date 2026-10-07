@@ -748,9 +748,12 @@ payloads, the citation closure and the log proofs. It does **not** check:
 It says "Bundle verification passed" for a bundle that `verify --bundle` calls
 `INCOMPLETE` too. Run `verify --bundle` for the verdict.
 
-**Order matters.** Publish everything and cut the checkpoint before you disclose.
-Each `disclose` puts the disclosure on the log, so for another report later,
-publish, checkpoint and disclose again.
+**Order matters.** Publish everything and cut the checkpoint before you disclose:
+a bundle proves the records its checkpoint covers. Each `disclose` puts the
+disclosure on the log as a sealed capsule (`action_id` `capsulectl-disclosure`,
+its input the disclosure record: ids, digests and labels, never a disclosed
+byte). A later report carries that capsule, proven in the log, with its input
+withheld, so one party's copy never shows what was disclosed to another.
 
 ## Publication and recovery
 
