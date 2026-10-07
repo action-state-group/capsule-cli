@@ -95,7 +95,7 @@ check "the page renders the report" contains report.html.dom 'data-page="report-
 check "the page renders the row 'Config file'" contains report.html.dom 'data-row-id="config">Config file</button></td><td data-row-status="same">same<'
 check "the page renders the row 'Permissions'" contains report.html.dom 'data-row-id="permissions">Permissions</button></td><td data-row-status="different">different<'
 check "no console.error, uncaught error or unhandled rejection" no_render_errors report.html.dom
-capsulectl verify --bundle bundle.json >/dev/null && verdict=0 || verdict=$?
+capsulectl verify --bundle bundle.json >verify.json && verdict=0 || verdict=$?
 check "verify --bundle: VALID, exit 0" test "$verdict" -eq 0
 
 # Tampered: one disclosed payload edited, in the page and in the bundle.
@@ -106,16 +106,29 @@ check "the tampered page says verification failed" contains tampered.html.dom 'B
 check "the tampered page renders no rows" lacks tampered.html.dom 'data-page="report-rows"'
 permissions=$(jq -r '.disclosures | to_entries[] | select(.value.agent_input.check == "permissions") | .key' bundle.json)
 jq --arg id "$permissions" '.disclosures[$id].agent_input.result = "same"' bundle.json >tampered.json
-capsulectl verify --bundle tampered.json >/dev/null 2>&1 && verdict=0 || verdict=$?
+capsulectl verify --bundle tampered.json >tampered-verify.json 2>/dev/null && verdict=0 || verdict=$?
 check "verify --bundle on the tampered bundle: INVALID, exit 1" test "$verdict" -eq 1
 
-# The page should state verify --bundle's verdict (data-verdict="valid" for
-# this bundle), not only "passed": its banner reads "passed" for an
-# INCOMPLETE bundle too. Checked once the vendored viewer sets data-verdict.
+# The page should state a verdict (data-verdict: valid, incomplete or
+# invalid) that claims no more than verify --bundle's on the same bundle. It
+# may claim less: a browser that cannot authenticate the checkpoint can
+# honestly say incomplete for a bundle the CLI calls VALID; it must never say
+# valid for one the CLI calls INCOMPLETE or INVALID. Checked once the vendored
+# viewer sets data-verdict: until then its banner reads "passed" for an
+# INCOMPLETE bundle too.
+rank() { case "$1" in invalid) echo 0 ;; incomplete) echo 1 ;; valid) echo 2 ;; *) echo -1 ;; esac; }
+claims_no_more() { # DOM, verify --bundle output
+  local page cli
+  page=$(grep -o 'data-verdict="[a-z]*"' "$1" | head -1 | sed 's/data-verdict="//; s/"$//')
+  cli=$(jq -r '.verdict | ascii_downcase' "$2")
+  echo "     page: ${page:-none}, verify --bundle: $cli"
+  [[ $(rank "$page") -ge 0 && $(rank "$cli") -ge 0 && $(rank "$page") -le $(rank "$cli") ]]
+}
 if contains report.html.dom 'data-verdict='; then
-  check "the page states verify --bundle's verdict" contains report.html.dom 'data-verdict="valid"'
+  check "the page's verdict claims no more than verify --bundle's" claims_no_more report.html.dom verify.json
+  check "the tampered page's verdict claims no more than verify --bundle's" claims_no_more tampered.html.dom tampered-verify.json
 else
-  echo "skip the page states verify --bundle's verdict: the vendored viewer sets no data-verdict yet (see agent-action-capsule's issue on the viewer's verdict wording)"
+  echo "skip the page's verdict against verify --bundle's: the vendored viewer sets no data-verdict yet (see agent-action-capsule's issue on the viewer's verdict wording)"
 fi
 
 exit "$fail"
