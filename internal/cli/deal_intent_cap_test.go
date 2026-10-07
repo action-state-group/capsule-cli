@@ -37,7 +37,7 @@ func TestDealLaterIntentCannotRaiseTheLimit(t *testing.T) {
 	check := func(t *testing.T, dealID, action string, amount int) map[string]any {
 		body := `{"action":"` + action + `","terms":{"item":"` + item + `","price_minor":` + strconv.Itoa(amount) + `,"conditions":{"size":"small 3.8in x 2.4in"}},"recourse":{"rail":"card","refundable":true}`
 		if action == "pay" {
-			body += `,"amount_minor":` + strconv.Itoa(amount)
+			body += `,"amount_minor":` + strconv.Itoa(amount) + `,"authorized_max_minor":` + strconv.Itoa(amount)
 		}
 		return dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, body+`}`))
 	}

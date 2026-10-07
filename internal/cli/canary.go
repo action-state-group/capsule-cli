@@ -53,7 +53,7 @@ const (
 "who":{"name":"Example Stickers","domain":"stickers.example"},
 "terms":{"item":"cat sticker","quantity":1,"price_minor":627,"currency":"USD"},
 "recourse":{"rail":"card","refundable":true}}`
-	canaryCheck = `{"action":"pay","description":"Place order: 1 cat sticker, $6.27 total, saved card","amount_minor":627,
+	canaryCheck = `{"action":"pay","description":"Place order: 1 cat sticker, $6.27 total, saved card","amount_minor":627,"authorized_max_minor":627,
 "who":{"name":"Example Stickers","domain":"stickers.example"},
 "terms":{"item":"cat sticker","quantity":1,"price_minor":627,"currency":"USD"},
 "recourse":{"rail":"card","refundable":true}}`

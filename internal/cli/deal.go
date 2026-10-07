@@ -1334,6 +1334,9 @@ func dealCheckCommand() *cobra.Command {
 			if err := checkFee(snap.Action, snap.FeeMinor); err != nil {
 				return err
 			}
+			if err := checkAuthorizedMax(snap, open.Recourse.Rail); err != nil {
+				return err
+			}
 			if err := normalizeTerms(snap.Terms); err != nil {
 				return err
 			}

@@ -320,7 +320,7 @@ func TestDealRefundabilityChangePauses(t *testing.T) {
 func TestDealPayeeChangeInAMessageMakesTheApprovalStale(t *testing.T) {
 	dealFixture(t)
 	dealID := dealRun(t, "open", "--input", filepath.Join(jetSkiDemo, "01-open.json"))["deal_id"].(string)
-	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"recourse":{"rail":"zelle"}}`))
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"authorized_max_minor":20000,"recourse":{"rail":"zelle"}}`))
 	require.Equal(t, "pause", check["verdict"])
 	require.NotContains(t, check["card"], "Payee changed")
 	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","text":"send it to M. Torres","who":{"payee":"M. Torres"}}`))
@@ -329,7 +329,7 @@ func TestDealPayeeChangeInAMessageMakesTheApprovalStale(t *testing.T) {
 	act := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"payee":"M. Torres","rail":"zelle"}`))
 	assert.Equal(t, true, act["unchecked"])
 	assert.Equal(t, "details changed after the last check", act["reason"])
-	again := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"recourse":{"rail":"zelle"}}`))
+	again := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"authorized_max_minor":20000,"recourse":{"rail":"zelle"}}`))
 	assert.Contains(t, again["card"], "Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle)")
 }
 
@@ -425,7 +425,7 @@ func TestDealPayAnywayThenTermsChangeAgain(t *testing.T) {
 	assert.Equal(t, false, again["proceed"])
 	assert.NotEmpty(t, again["reason"])
 
-	recheck := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":30000,"who":{"payee":"M. Torres"},"recourse":{"rail":"zelle","refundable":false}}`))
+	recheck := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":30000,"authorized_max_minor":30000,"who":{"payee":"M. Torres"},"recourse":{"rail":"zelle","refundable":false}}`))
 	assert.Equal(t, "pause", recheck["verdict"])
 	assert.Contains(t, recheck["card"], "Deposit changed since it was agreed ($200.00 → $300.00)")
 	ok := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", recheck["check_id"].(string), "--choice", "proceed", "--said", "pay the new deposit")

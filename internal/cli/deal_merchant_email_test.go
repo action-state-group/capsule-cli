@@ -190,7 +190,7 @@ func openMerchantDeal(t *testing.T) (dealID string) {
 		"terms": {"item": "sticker pack", "quantity": 1, "price_minor": 4800, "currency": "USD"},
 		"recourse": {"rail": "card", "refundable": true}
 	}`))["deal_id"].(string)
-	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":4800,"description":"pay for the sticker pack"}`))
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":4800,"authorized_max_minor":4800,"description":"pay for the sticker pack"}`))
 	require.Equal(t, "pass", check["verdict"], check["card"])
 	paid := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":4800,"rail":"card","reference":"card ending 4242 auth 99812"}`))
 	require.Equal(t, false, paid["unchecked"])

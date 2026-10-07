@@ -161,6 +161,11 @@ type dealSnapshot struct {
 	// as its own amount: never the amount a spend cap evaluates (spend_minor
 	// is 0 on every cancel).
 	FeeMinor *int64 `json:"fee_minor,omitempty"`
+	// AuthorizedMaxMinor is, on a pay, the most the counterparty may take
+	// under the payment's authorization (a card hold, a pre-authorization
+	// with a buffer for tax settled later): what a limit binds. AmountMinor
+	// stays the expected charge.
+	AuthorizedMaxMinor *int64 `json:"authorized_max_minor,omitempty"`
 }
 
 type dealDifference struct {
@@ -994,9 +999,22 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 		if total == nil {
 			total = snap.AmountMinor
 		}
+		// A limit binds the most that may be taken: the authorized maximum,
+		// when it is more than the price or the expected charge.
+		field := "price"
+		if m := snap.AuthorizedMaxMinor; m != nil && (total == nil || *m > *total) {
+			total, field = m, "authorized_max_minor"
+		}
 		if total != nil && *total > *intent.MaxTotalMinor {
 			limit, amount := formatMoney(*intent.MaxTotalMinor, proposed.Currency), formatMoney(*total, proposed.Currency)
 			text := fmt.Sprintf("Over your limit of %s (%s)", limit, amount)
+			if field == "authorized_max_minor" {
+				expected := ""
+				if snap.AmountMinor != nil {
+					expected = "; the expected charge is " + formatMoney(*snap.AmountMinor, proposed.Currency)
+				}
+				text = fmt.Sprintf("Over your limit of %s: up to %s may be taken (the authorized maximum%s)", limit, amount, expected)
+			}
 			// The user's own words named this very purchase, the item and its
 			// price: the rule still asks, and says why this is an exception to
 			// it rather than skipping the ask.
@@ -1004,7 +1022,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 				strings.EqualFold(strings.TrimSpace(a.Item), strings.TrimSpace(proposed.Item)) {
 				text = fmt.Sprintf("Your rules normally ask above %s. You asked for this %s purchase specifically. Approve this exception?", limit, amount)
 			}
-			add("asked", "over_limit", "price", text)
+			add("asked", "over_limit", field, text)
 			askedFields["price"] = true
 		}
 	}
@@ -1283,7 +1301,14 @@ func actMismatch(events []sealedEvent, snapshotID string, act dealAct) string {
 			continue
 		}
 		snap := se.Event.Snapshot
-		if act.AmountMinor != nil && snap.AmountMinor != nil && *act.AmountMinor != *snap.AmountMinor {
+		// What was taken is held to what may be taken: above the authorized
+		// maximum it differs from the check; below it, though not the
+		// estimate, is what a hold is for.
+		if act.AmountMinor != nil && snap.AuthorizedMaxMinor != nil {
+			if *act.AmountMinor > *snap.AuthorizedMaxMinor {
+				return "the amount is more than the authorized maximum checked"
+			}
+		} else if act.AmountMinor != nil && snap.AmountMinor != nil && *act.AmountMinor != *snap.AmountMinor {
 			return "the amount differs from the one checked"
 		}
 		if act.Payee != "" && snap.Who != nil && snap.Who.Payee != "" && !sameID("payee", act.Payee, snap.Who.Payee) {

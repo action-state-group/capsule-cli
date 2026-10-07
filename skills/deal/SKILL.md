@@ -479,6 +479,15 @@ capsulectl --profile deal deal check --deal ID --input snapshot.json
 about to use. For an item from a private seller, add `seen_item` (true or
 false); leave it out for a retail order.
 
+For a `pay`, also state `authorized_max_minor`: **the most the payment may
+take**, which is what the user's limit binds. Read it from the approval or the
+card hold before you check: "the approval will ask for a maximum of $9.54" (a
+$4.54 order plus up to $5 for tax settled later) means `amount_minor` 454 and
+`authorized_max_minor` 954. When nothing shows a larger maximum, pass the
+price: `authorized_max_minor` equal to `amount_minor`. Never pass the estimate
+when a larger maximum is shown. A pay by card, wallet, PayPal, or any rail that
+can hold more than it charges is refused without it.
+
 Every check also returns `approval_text` (a short, paste-ready summary with
 the check time and when it goes stale), `checked_at` and
 `stale_after_minutes`.

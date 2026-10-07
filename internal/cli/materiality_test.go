@@ -35,7 +35,7 @@ func flightCheck(t *testing.T) map[string]any {
 		"who":{"name":"Example Air","domain":"air.example"},
 		"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"currency":"USD","conditions":{"fare":"Basic"}},
 		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
-	return dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"conditions":{"fare":"Basic"}},"recourse":{"rail":"card","refundable":true}}`))
+	return dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"authorized_max_minor":55880,"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"conditions":{"fare":"Basic"}},"recourse":{"rail":"card","refundable":true}}`))
 }
 
 func pausedOn(check map[string]any) []string {
@@ -88,7 +88,7 @@ func TestADigitInADateStillPausesWithNoPredicate(t *testing.T) {
 		"who":{"name":"Example Tickets","domain":"tickets.example"},
 		"terms":{"item":"show ticket","when":"Oct 2","price_minor":9000,"currency":"USD"},
 		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
-	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":9000,"terms":{"item":"show ticket","quantity":2,"when":"Oct 2","price_minor":9000},"recourse":{"rail":"card","refundable":true}}`))
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":9000,"authorized_max_minor":9000,"terms":{"item":"show ticket","quantity":2,"when":"Oct 2","price_minor":9000},"recourse":{"rail":"card","refundable":true}}`))
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Contains(t, pausedOn(check), "quantity")
 	assert.Contains(t, check["card"], "I picked quantity 2")

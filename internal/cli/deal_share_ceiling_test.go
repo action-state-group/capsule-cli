@@ -26,7 +26,7 @@ func openCeilingDeal(t *testing.T, limit bool) string {
 		"terms": {"price_minor": 4800, "currency": "USD"},
 		"recourse": {"rail": "card", "refundable": true}
 	}`))["deal_id"].(string)
-	dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":4800}`))
+	dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":4800,"authorized_max_minor":4800}`))
 	return dealID
 }
 
@@ -93,7 +93,7 @@ func openShortMerchantDeal(t *testing.T) string {
 		"who":{"name":"Shop Example","domain":"shop.example"},
 		"terms":{"item":"sticker pack","quantity":1,"price_minor":4800,"currency":"USD"},
 		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
-	dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":4800}`))
+	dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":4800,"authorized_max_minor":4800}`))
 	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--email", filepath.Join(merchantFixture, "confirmation.eml"))
 	return dealID
 }

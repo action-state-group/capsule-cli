@@ -67,7 +67,7 @@ func TestDealPausesOnTheRecipientNotTheField(t *testing.T) {
 	assert.Equal(t, []any{"address", "email", "name"}, recipient["repeat_disclosures"])
 	assert.Equal(t, true, noteDelivery(t, again)["approved"], "the note is covered by the passing check")
 	// A known merchant's card, when something else pauses, has no first-time line.
-	pay := dealRun(t, "check", "--deal", again, "--input", writeJSON(t, `{"action":"pay","amount_minor":1200,"terms":{"price_minor":1200}}`))
+	pay := dealRun(t, "check", "--deal", again, "--input", writeJSON(t, `{"action":"pay","amount_minor":1200,"authorized_max_minor":1200,"terms":{"price_minor":1200}}`))
 	require.Equal(t, "pause", pay["verdict"])
 	assert.NotContains(t, pay["card"], "First time dealing")
 
@@ -306,7 +306,7 @@ func TestDealEveryShareCheckNamesItsRecipient(t *testing.T) {
 		assert.Contains(t, out+err.Error(), `a share check needs "disclosing_to"`, body)
 	}
 	// Not on any other action.
-	out, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":12000,"disclosing_to":"counterparty"}`))
+	out, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":12000,"authorized_max_minor":12000,"disclosing_to":"counterparty"}`))
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, out+err.Error(), "disclosing_to and recipient go with a share check")
 	// Named, it is sealed in the check record, with or without classes.

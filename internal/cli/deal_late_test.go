@@ -170,7 +170,7 @@ func TestDealLateEvidenceConfirmsTheClose(t *testing.T) {
 		_, err := invoke(t, "", append([]string{"--profile", "deal", "deal", "note", "--deal", dealID}, args...)...)
 		require.ErrorIs(t, err, ErrInput, args[1])
 	}
-	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":100}`))
+	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":100,"authorized_max_minor":100}`))
 	require.ErrorIs(t, err, ErrInput)
 }
 
