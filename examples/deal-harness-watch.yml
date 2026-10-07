@@ -1,7 +1,7 @@
 # Template: the outside verdict for test accounts (docs/HARNESS.md).
 #
 # Not run from this location -- copy it into a repo's .github/workflows/ and
-# list each test account's cadence log id (`deal tick` prints it as
+# list each test account's cadence log id (`cll checkpoint cadence` prints it as
 # cadence_log). It needs no secrets: the witness answers anyone. Each account
 # is one job; the run fails when any account's log stopped advancing or was
 # rewritten, and the run summary lists every account's verdict. A failed
@@ -36,9 +36,9 @@ jobs:
           - { name: control-pinned, log: deal-cadence/0000000000000005 }
     env:
       WITNESS: https://witness.agentactioncapsule.org
-      # A live account ticks every 1h +/- 10m, so its last checkpoint is at most
-      # about 70 minutes old whenever this runs; 3h leaves room for a slow witness.
-      EXPECT_EVERY: 3h
+      # A live account ticks every 5m +/- 1m, so its last checkpoint is at most
+      # about 6 minutes old whenever this runs; 30m leaves room for a slow witness.
+      EXPECT_EVERY: 30m
       # The first release with `canary watch`.
       CAPSULECTL_VERSION: v0.1.0-rc3
     steps:

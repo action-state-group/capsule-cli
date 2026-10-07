@@ -142,7 +142,7 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 		switch state {
 		case "scheduled":
 			out["witness_state"] = "scheduled"
-			sealed += "Witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence" + cadencePhrase(cadence) + ", and only then can it be witnessed. Until then it is sealed on this device only. "
+			sealed += "Witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's checkpoint cadence" + cadencePhrase(cadence) + ", and only then can it be witnessed. Until then it is sealed on this device only. "
 		case "pending":
 			out["witness_state"] = "pending"
 			sealed += "Witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet; it is retried at every tick. "
@@ -178,7 +178,7 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 		out["steps_witnessed"], out["steps"] = k, n
 		rest := "Witness pending for the rest. "
 		if r, _ := cadence["rest"].(map[string]interface{}); r["state"] == "scheduled" {
-			rest = "Witness pending for the rest: the current checkpoint goes to the witness at the next tick of this profile's cadence" + cadencePhrase(r) + ". "
+			rest = "Witness pending for the rest: the current checkpoint goes to the witness at the next tick of this profile's checkpoint cadence" + cadencePhrase(r) + ". "
 		}
 		out["text"] = fmt.Sprintf(
 			"Witnessed in part: %s, an independent log, signed a receipt for %s, covering steps 1 to %d of %d: those existed, unchanged, by then. Steps %d to %d are sealed by my agent on this device only. %s%sIt does not confirm what the agent did. The receipt is in the attached bundle; check it with capsulectl verify --bundle bundle.json --witness-directory DIRECTORY.json, using a witness directory you trust. %s",
@@ -489,9 +489,25 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 
 // cadencePhrase is " (every 5m, give or take 2m)" from the witness state the
 // report carries, or "" when it names none.
+// cadencePhrase is how a receipt says when a pending checkpoint reaches the
+// witness, from the cadence words the bundle carries ("every 1h, give or
+// take 10m"): ", within about 1h10m (every 1h, give or take 10m)", the
+// interval plus the jitter. Words it cannot read are shown as they are.
 func cadencePhrase(cadence map[string]interface{}) string {
-	if words, _ := cadence["cadence"].(string); words != "" {
+	words, _ := cadence["cadence"].(string)
+	if words == "" {
+		return ""
+	}
+	interval, jitter, ok := strings.Cut(strings.TrimPrefix(words, "every "), ", give or take ")
+	longest, err := time.ParseDuration(interval)
+	if ok {
+		var j time.Duration
+		if j, err = time.ParseDuration(jitter); err == nil {
+			longest += j
+		}
+	}
+	if !strings.HasPrefix(words, "every ") || err != nil {
 		return " (" + words + ")"
 	}
-	return ""
+	return ", within about " + aboutDuration(longest) + " (" + words + ")"
 }

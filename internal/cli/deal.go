@@ -740,7 +740,14 @@ func dealInitCommand() *cobra.Command {
 		}
 		if witness == "scheduled" {
 			out["witness_endpoint"], out["witness_sees"] = dealDefaultWitness, dealWitnessSees
-			out["next"] = "run `capsulectl --profile " + name + " deal tick` every minute from a timer (a run that is not due exits at once; every minute keeps the cadence's jitter: see `deal tick --help` for schedulers that cannot run every minute)"
+			cadence := "its cadence"
+			if cfg, err := p.dealCadence(); err == nil {
+				cadence = "every " + shortDuration(cfg.interval)
+				if cfg.jitter > 0 {
+					cadence += ", give or take " + shortDuration(cfg.jitter)
+				}
+			}
+			out["next"] = "set up the checkpoint cadence: schedule `capsulectl --profile " + name + " cll checkpoint cadence --wait-up-to 5m` every 5 minutes. Each run is a poll: it waits for a tick due within its 5 minutes and publishes it on time, and a run with none due publishes nothing. The witness hears from this profile once per tick (" + cadence + ")"
 		}
 		return output(c, out)
 	}}

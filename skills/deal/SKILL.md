@@ -371,18 +371,16 @@ the predicate is the user's policy: never do it yourself.** If a check refuses
 because the predicate changed since it was pinned, tell the user; re-pinning is
 theirs to run.
 
-Then run `capsulectl --profile deal deal tick` **every minute** from a timer
-on this machine (a cron line `* * * * *`, or the host's scheduler at a
-one-minute interval). It publishes only when a tick is due, on its own
-hourly clock with a random jitter; a run that is not due exits at once. The
-jitter only shows if `deal tick` runs near each due time: a scheduler that
-runs it every 5 or 60 minutes would publish on its own grid instead. If the
-host can only schedule every N minutes, run
-`capsulectl --profile deal deal tick --wait-up-to Nm` at that interval: each
-run waits for the ticks due inside its window and publishes them on time.
-Such a run stays alive up to N minutes (an hour for `--wait-up-to 60m`); if
-the host caps how long a scheduled job may run, use a smaller N or schedule
-every minute. Deal steps never publish anything
+Then set up the **checkpoint cadence**: schedule
+`capsulectl --profile deal cll checkpoint cadence --wait-up-to 5m` **every 5
+minutes** on this machine (a cron line `*/5 * * * *`, or the host's scheduler
+at a five-minute interval). Each run is a poll: it waits for a tick due within
+its 5 minutes and publishes it on time, on the profile's own clock (every 5m,
+give or take 1m, by default), and a run with no tick due publishes nothing. A
+run stays alive up to 5 minutes; if the host caps how long a scheduled job may
+run, schedule more often with a matching smaller `--wait-up-to`. Never drop
+`--wait-up-to`: without it a scheduled run publishes on the scheduler's grid,
+which hides the cadence's jitter. Deal steps never publish anything
 themselves. If your agent host asks before a program reaches a website, the
 first tick raises that question for the witness's site: tell the user to
 choose **"Always allow this site"**, not "allow once", because later ticks
@@ -643,8 +641,9 @@ the agent host's own email tool to the user's own address. Never send it
 through any other service, and never paste its contents anywhere else. The
 assurance line says "Sealed by my agent" unless a configured witness signed
 a receipt for the deal's checkpoint, and then "Witnessed". A new deal is not
-witnessed at once: until the next tick of the profile's cadence (the receipt
-says how often, for example "every 5m, give or take 2m") its receipt says
+witnessed at once: until the next tick of the profile's checkpoint cadence
+(the receipt says how long at most, for example "within about 7m (every 5m,
+give or take 2m)") its receipt says
 "Sealed, witness pending". Steps added after a tick read "Witnessed in part"
 (steps 1 to k of n witnessed, the rest pending). Say it that way to the
 user; never say a deal was witnessed when it happened. The receipt
