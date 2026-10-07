@@ -1,0 +1,37 @@
+{
+  "fixture": "02-message-site-switch.json",
+  "expect": "valid",
+  "story": "Checkout moves to another site.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v1",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "message",
+      "seq": 2,
+      "at": "2026-10-06T09:10:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+      },
+      "channel": "web",
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "domain": "8a4427ad7fc448a407e7df10be65edea4e651cda128b060d572faf30a316c06b"
+        }
+      }
+    },
+    "body": {
+      "from": "counterparty",
+      "content_commitment": "f18c244123679031c2b25ad67fe7319b23d1a7ecf535faf9dab543065d7f7421"
+    }
+  },
+  "expected_digest": "23ab3bcfd17359b808fca74c73b0644b7e2e8ac149c82f5b72affca6bbe66cf5"
+}

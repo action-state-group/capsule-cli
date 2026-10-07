@@ -1,0 +1,51 @@
+{
+  "fixture": "neg-v1-answer-without-card",
+  "expect": "invalid",
+  "description": "The user's answer to a paused check without the card it was given on.",
+  "expected_stage": "chain",
+  "expected_error_contains": "carries the card it was given on",
+  "chain_dir": "positive-v1",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-message-site-switch.json",
+    "03-detail-change-merchant.json",
+    "04-check-pay.json",
+    "05-verdict-pause.json",
+    "06-platform-approval.json",
+    "07-outcome-platform-only.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v1",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "approval",
+      "seq": 8,
+      "at": "2026-10-06T09:16:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "ec7fc9d8aada741ccdeac899bd495d92b196c1d7a86003634d64a6596a39ddb9"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+      },
+      "refs": [
+        {
+          "rel": "approves",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "b3bad17d190d06b05d00df07c79b58af557044409213dfd22b2fcd0160c9f368"
+        }
+      ]
+    },
+    "body": {
+      "choice": "proceed",
+      "proceed": true,
+      "approver": "user",
+      "said_commitment": "60b5b2b1237a12666ec051e57927dd948948e6c6bca112b8a28df78f0c224224"
+    }
+  }
+}

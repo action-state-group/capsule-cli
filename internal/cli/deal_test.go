@@ -8,10 +8,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,11 +39,60 @@ func dealFixture(t *testing.T) string {
 
 func dealRun(t *testing.T, args ...string) map[string]any {
 	t.Helper()
+	args = withShownCard(t, args)
 	out, err := invoke(t, "", append([]string{"--profile", "deal", "deal"}, args...)...)
 	require.NoError(t, err, out)
 	var m map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &m), out)
 	return m
+}
+
+// withShownCard answers a paused check as a well-behaved agent does: on the
+// card the check returned, passed with --shown-card. It applies to a user's
+// answer (--said) given without one; tests about the shown card itself call
+// invoke directly.
+func withShownCard(t *testing.T, args []string) []string {
+	t.Helper()
+	flag := func(name string) string {
+		for i := 0; i+1 < len(args); i++ {
+			if args[i] == name {
+				return args[i+1]
+			}
+		}
+		return ""
+	}
+	if len(args) == 0 || args[0] != "note" || flag("--kind") != "approval" || flag("--choice") == "confirm_limits" ||
+		strings.TrimSpace(flag("--said")) == "" || flag("--shown-card") != "" {
+		return args
+	}
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, s.close()) }()
+	if s.useDeal(t.Context(), flag("--deal"), false) != nil {
+		return args
+	}
+	events, err := s.load(t.Context(), flag("--deal"))
+	if err != nil {
+		return args
+	}
+	verdict, card, ok := checkedCard(events, flag("--check"))
+	if !ok || card == "" || verdict.Event.Check.Verdict != "pause" {
+		return args
+	}
+	path := filepath.Join(t.TempDir(), "shown-card.txt")
+	require.NoError(t, os.WriteFile(path, []byte(card), 0o600))
+	return append(slices.Clone(args), "--shown-card", path)
+}
+
+// recordSchema is the schema of the profile version a record names.
+func recordSchema(t *testing.T, record any) *jsonschema.Schema {
+	t.Helper()
+	profile, _ := record.(map[string]any)["x-deal-v0"].(map[string]any)["profile"].(string)
+	schema, err := compiledDealSchemaFor(profile)
+	require.NoError(t, err)
+	return schema
 }
 
 func writeJSON(t *testing.T, body string) string {
@@ -374,7 +425,7 @@ func TestDealRecoversAStepThatNeverReachedTheLog(t *testing.T) {
 	events, err := s.load(t.Context(), dealID)
 	require.NoError(t, err)
 	act := &dealAct{Action: "pay", AmountMinor: ptr(int64(38000))}
-	act.AuthorizedBy, act.Reason, act.Rule = authorizeAct(events, *act)
+	act.AuthorizedBy, act.Reason, act.Rule = authorizeAct(events, *act, dealClock().UTC())
 	act.Unchecked = true
 	_, _, err = s.prepareStep(t.Context(), dealID, events, dealEvent{Kind: "act", Act: act})
 	require.NoError(t, err)

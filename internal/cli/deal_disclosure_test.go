@@ -101,11 +101,9 @@ func TestDealDisclosureLedgerNamesWhatWhoWhenAndAuthority(t *testing.T) {
 	assertNoDisclosedValue(t, string(raw))
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	require.NoError(t, err)
-	schema, err := compiledDealSchema()
-	require.NoError(t, err)
 	var disclosures []map[string]any
 	for i, r := range doc.([]any) {
-		assert.NoError(t, schema.Validate(r), "record %d", i+1)
+		assert.NoError(t, recordSchema(t, r).Validate(r), "record %d", i+1)
 		rec := r.(map[string]any)
 		if rec["x-deal-v0"].(map[string]any)["record_type"] == "disclosure" {
 			disclosures = append(disclosures, rec)

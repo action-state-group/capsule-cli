@@ -1,0 +1,2014 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/profiles/x-deal-v1/record.schema.json",
+  "title": "x-deal-v1 deal record",
+  "description": "One sealed step of a deal: the x-deal-v0 extension block (profile x-deal-v1) plus a body whose shape is fixed by record_type. Digest input is SHA-256 over the RFC 8785 (JCS) bytes of the whole record. Structural rules only; the sequence, reference and authorization rules in PROFILE.md section 6 are checked by check_profile.py. x-deal-v1 adds authority_basis (every authority layer an action or approved disclosure relied on) and the platform_approval record type.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "x-deal-v0",
+    "body"
+  ],
+  "properties": {
+    "x-deal-v0": {
+      "$ref": "#/$defs/block"
+    },
+    "body": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "baseline"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_baseline"
+          },
+          "x-deal-v0": {
+            "required": [
+              "channel",
+              "counterparty"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "baseline_ref"
+                  ]
+                },
+                {
+                  "required": [
+                    "prev"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "x-deal-v0": {
+            "required": [
+              "baseline_ref",
+              "prev"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "intent"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_intent"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "message"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_message"
+          },
+          "x-deal-v0": {
+            "required": [
+              "channel"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "claim"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_claim"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "evidence"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_evidence"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "detail_change"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_detail_change"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "check"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_check"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "verdict"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_verdict"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "approval"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_approval"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "action"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/body_action"
+              },
+              {
+                "required": [
+                  "authority_basis",
+                  "evaluation_ref"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "outcome"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_outcome"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "close"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_close"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "disclosure"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_disclosure"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "x-deal-v0": {
+            "properties": {
+              "record_type": {
+                "const": "platform_approval"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/body_platform_approval"
+          },
+          "x-deal-v0": {
+            "required": [
+              "refs"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hex64": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "safe_uint": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "ns_token": {
+      "description": "A seeded bare token, or a namespaced one (reverse-DNS prefix, e.g. org.example.foo).",
+      "type": "string",
+      "pattern": "^([a-z][a-z0-9_]{0,63}|[a-z0-9-]+(\\.[a-z0-9-]+)+\\.[a-z][a-z0-9_]{0,63})$"
+    },
+    "short_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "record_type": {
+      "enum": [
+        "intent",
+        "baseline",
+        "message",
+        "claim",
+        "evidence",
+        "detail_change",
+        "check",
+        "verdict",
+        "approval",
+        "action",
+        "outcome",
+        "close",
+        "disclosure",
+        "platform_approval"
+      ]
+    },
+    "point_of_no_return": {
+      "enum": [
+        "pay",
+        "sign",
+        "commit",
+        "cancel",
+        "share_contact",
+        "share_credentials"
+      ]
+    },
+    "outcome_value": {
+      "enum": [
+        "completed",
+        "mismatch",
+        "open"
+      ]
+    },
+    "identifier_kind": {
+      "enum": [
+        "payee",
+        "name",
+        "domain",
+        "phone",
+        "email",
+        "relay_address",
+        "profile_id"
+      ]
+    },
+    "channel": {
+      "description": "Seeded: marketplace, web, sms, phone_call, email, app_chat, whatsapp, telegram, signal, in_person, other. Anything else MUST be namespaced.",
+      "anyOf": [
+        {
+          "enum": [
+            "marketplace",
+            "web",
+            "sms",
+            "phone_call",
+            "email",
+            "app_chat",
+            "whatsapp",
+            "telegram",
+            "signal",
+            "in_person",
+            "other"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+\\.[a-z][a-z0-9_]{0,63}$"
+        }
+      ]
+    },
+    "digest_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "digest_alg",
+        "digest"
+      ],
+      "properties": {
+        "type": {
+          "const": "deal-record"
+        },
+        "digest_alg": {
+          "const": "SHA-256"
+        },
+        "digest": {
+          "$ref": "#/$defs/hex64"
+        }
+      }
+    },
+    "rel_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rel",
+        "type",
+        "digest_alg",
+        "digest"
+      ],
+      "properties": {
+        "rel": {
+          "enum": [
+            "about",
+            "source",
+            "checks",
+            "approves",
+            "authorized_by",
+            "observes",
+            "outcome",
+            "confirms",
+            "reverses"
+          ]
+        },
+        "type": {
+          "const": "deal-record"
+        },
+        "digest_alg": {
+          "const": "SHA-256"
+        },
+        "digest": {
+          "$ref": "#/$defs/hex64"
+        }
+      }
+    },
+    "counterparty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fp_alg",
+        "ids"
+      ],
+      "properties": {
+        "fp_alg": {
+          "const": "hmac-sha256-deal-key"
+        },
+        "ids": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/identifier_kind"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/hex64"
+          }
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "canonicalization",
+        "deal_id",
+        "record_type",
+        "seq",
+        "at"
+      ],
+      "properties": {
+        "profile": {
+          "const": "x-deal-v1"
+        },
+        "canonicalization": {
+          "const": "jcs"
+        },
+        "deal_id": {
+          "type": "string",
+          "pattern": "^deal-[0-9a-f]{16,64}$"
+        },
+        "record_type": {
+          "$ref": "#/$defs/record_type"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "prev": {
+          "$ref": "#/$defs/digest_ref"
+        },
+        "baseline_ref": {
+          "$ref": "#/$defs/digest_ref"
+        },
+        "channel": {
+          "$ref": "#/$defs/channel"
+        },
+        "counterparty": {
+          "$ref": "#/$defs/counterparty"
+        },
+        "refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/rel_ref"
+          }
+        },
+        "producer": {
+          "description": "The software build that sealed this record. Absent on records sealed before it was recorded.",
+          "type": "object",
+          "required": [
+            "name",
+            "version",
+            "commit"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "commit": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        }
+      }
+    },
+    "terms": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "item": {
+          "$ref": "#/$defs/short_text"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "price_minor": {
+          "$ref": "#/$defs/safe_uint"
+        },
+        "deposit_minor": {
+          "$ref": "#/$defs/safe_uint"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "when": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "place": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "conditions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/token"
+          }
+        }
+      }
+    },
+    "recourse": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "rail": {
+          "$ref": "#/$defs/ns_token"
+        },
+        "refundable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "counterparty_facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "domain_age_days": {
+          "$ref": "#/$defs/safe_uint"
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "source"
+      ],
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/short_text"
+        },
+        "source": {
+          "$ref": "#/$defs/ns_token"
+        }
+      }
+    },
+    "difference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question",
+        "rule"
+      ],
+      "properties": {
+        "question": {
+          "enum": [
+            "asked",
+            "who",
+            "terms",
+            "recourse",
+            "safety",
+            "delivered"
+          ]
+        },
+        "rule": {
+          "$ref": "#/$defs/ns_token"
+        },
+        "field": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)?$"
+        }
+      }
+    },
+    "pack_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*/[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "body_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deal_type",
+        "intent",
+        "terms",
+        "recourse"
+      ],
+      "properties": {
+        "deal_type": {
+          "enum": [
+            "purchase",
+            "rental",
+            "booking",
+            "service"
+          ]
+        },
+        "demo": {
+          "type": "boolean"
+        },
+        "intent": {
+          "$ref": "#/$defs/body_intent"
+        },
+        "terms": {
+          "$ref": "#/$defs/terms"
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/claim"
+          }
+        },
+        "recourse": {
+          "type": "object",
+          "allOf": [
+            {
+              "$ref": "#/$defs/recourse"
+            }
+          ],
+          "required": [
+            "rail",
+            "refundable"
+          ]
+        },
+        "counterparty_facts": {
+          "$ref": "#/$defs/counterparty_facts"
+        },
+        "skill": {
+          "description": "The skill instructions present when the deal opened, as the agent reported them: the SHA-256 of its SKILL.md, and how many other copies of the same skill were beside it. A boundary marker, not proof they were followed.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "skill_md_digest",
+            "other_copies"
+          ],
+          "properties": {
+            "skill_md_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "other_copies": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "expect_close_by": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        }
+      }
+    },
+    "body_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verbatim_commitment"
+      ],
+      "properties": {
+        "verbatim_commitment": {
+          "$ref": "#/$defs/hex64"
+        },
+        "asked": {
+          "$ref": "#/$defs/terms"
+        },
+        "max_total_minor": {
+          "$ref": "#/$defs/safe_uint"
+        },
+        "allowed": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/point_of_no_return"
+          }
+        }
+      }
+    },
+    "body_message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "content_commitment"
+      ],
+      "properties": {
+        "from": {
+          "enum": [
+            "counterparty",
+            "user",
+            "agent"
+          ]
+        },
+        "content_commitment": {
+          "$ref": "#/$defs/hex64"
+        }
+      }
+    },
+    "body_claim": {
+      "$ref": "#/$defs/claim"
+    },
+    "body_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "verified"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/ns_token"
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "detail_commitment": {
+          "$ref": "#/$defs/hex64"
+        },
+        "counterparty_facts": {
+          "$ref": "#/$defs/counterparty_facts"
+        },
+        "merchant_email": {
+          "$ref": "#/$defs/merchant_email"
+        },
+        "obligation": {
+          "$ref": "#/$defs/obligation"
+        },
+        "resolves_obligation": {
+          "$ref": "#/$defs/digest_ref"
+        }
+      }
+    },
+    "obligation": {
+      "description": "A commitment that takes effect when a date passes: the last day to cancel, what happens then, and the price. Recorded, never enforced.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "cancel_by"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "trial_conversion",
+            "renewal",
+            "cancel_window",
+            "payment_due"
+          ]
+        },
+        "cancel_by": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "takes_effect": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "amount_minor": {
+          "$ref": "#/$defs/safe_uint"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "period": {
+          "enum": [
+            "week",
+            "month",
+            "year",
+            "once"
+          ]
+        },
+        "terms_commitment": {
+          "$ref": "#/$defs/hex64"
+        }
+      }
+    },
+    "merchant_email": {
+      "description": "A merchant's own DKIM-signed email, sealed raw on the device. The record carries only digests, the DKIM result against key records captured at seal time, and amounts parsed from the email by heuristics.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "message_digest",
+        "key_records_digest",
+        "key_source",
+        "dkim",
+        "merchant_signed",
+        "dmarc_policy",
+        "parsed"
+      ],
+      "properties": {
+        "message_digest": {
+          "$ref": "#/$defs/hex64"
+        },
+        "key_records_digest": {
+          "$ref": "#/$defs/hex64"
+        },
+        "key_source": {
+          "enum": [
+            "dns",
+            "supplied"
+          ]
+        },
+        "dkim": {
+          "enum": [
+            "pass",
+            "fail",
+            "none"
+          ]
+        },
+        "merchant_signed": {
+          "type": "boolean"
+        },
+        "dmarc_policy": {
+          "enum": [
+            "reject",
+            "quarantine",
+            "none",
+            "absent",
+            "not_captured"
+          ]
+        },
+        "dmarc_record_digest": {
+          "$ref": "#/$defs/hex64"
+        },
+        "dmarc_source": {
+          "enum": [
+            "dns",
+            "supplied"
+          ]
+        },
+        "signer_matches_baseline": {
+          "type": "boolean"
+        },
+        "parsed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method"
+          ],
+          "properties": {
+            "method": {
+              "const": "heuristic"
+            },
+            "total_minor": {
+              "$ref": "#/$defs/safe_uint"
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "order_id_commitment": {
+              "$ref": "#/$defs/hex64"
+            },
+            "cancel_by": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "sent_at": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+            },
+            "item_count": {
+              "$ref": "#/$defs/safe_uint"
+            },
+            "kind": {
+              "enum": [
+                "confirmation",
+                "cancellation"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "body_detail_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "changed"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/ns_token"
+        },
+        "changed": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "payee",
+              "name",
+              "domain",
+              "phone",
+              "email",
+              "relay_address",
+              "profile_id",
+              "item",
+              "quantity",
+              "price",
+              "deposit",
+              "currency",
+              "when",
+              "place",
+              "conditions",
+              "rail",
+              "refundable"
+            ]
+          }
+        },
+        "terms": {
+          "$ref": "#/$defs/terms"
+        },
+        "recourse": {
+          "$ref": "#/$defs/recourse"
+        }
+      }
+    },
+    "body_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action"
+      ],
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/point_of_no_return"
+        },
+        "amount_minor": {
+          "$ref": "#/$defs/safe_uint"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "seen_item": {
+          "type": "boolean"
+        },
+        "disclosing": {
+          "description": "For a share: the classes of the user's data about to be given.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/disclosure_class"
+          }
+        },
+        "disclosing_to": {
+          "description": "For a share: who receives it, the counterparty or someone else. An approval covers a telling only to that party.",
+          "enum": [
+            "counterparty",
+            "other"
+          ]
+        },
+        "terms": {
+          "$ref": "#/$defs/terms"
+        },
+        "recourse": {
+          "$ref": "#/$defs/recourse"
+        },
+        "description_commitment": {
+          "$ref": "#/$defs/hex64"
+        },
+        "pack_id": {
+          "$ref": "#/$defs/pack_id"
+        },
+        "pack_digest": {
+          "$ref": "#/$defs/hex64"
+        }
+      }
+    },
+    "body_verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "differences",
+        "options",
+        "disposition",
+        "proposed_action_digest",
+        "task_authority_ref",
+        "valid_until",
+        "ruleset_digest",
+        "authority_basis"
+      ],
+      "properties": {
+        "result": {
+          "enum": [
+            "pass",
+            "pause"
+          ]
+        },
+        "pack_id": {
+          "$ref": "#/$defs/pack_id"
+        },
+        "differences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/difference"
+          }
+        },
+        "unverified": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/short_text"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/token"
+          }
+        },
+        "options": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "hold",
+              "verify_contact",
+              "proceed"
+            ]
+          }
+        },
+        "card_commitment": {
+          "$ref": "#/$defs/hex64"
+        },
+        "judge": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "rules",
+                "remote"
+              ]
+            },
+            "status": {
+              "$ref": "#/$defs/token"
+            },
+            "response_digest": {
+              "$ref": "#/$defs/hex64"
+            }
+          }
+        },
+        "disposition": {
+          "description": "PRD section 13: DO on a pass, ASK on a pause. NEVER and ASK_UNVERIFIED are reserved.",
+          "enum": [
+            "DO",
+            "ASK"
+          ]
+        },
+        "proposed_action_digest": {
+          "description": "The record digest of the check record this verdict evaluates: the ProposedAction as checked.",
+          "$ref": "#/$defs/hex64"
+        },
+        "task_authority_ref": {
+          "description": "The task authority in force at the evaluation: the baseline, or the confirm_limits answer that put the limits in force.",
+          "$ref": "#/$defs/digest_ref"
+        },
+        "valid_until": {
+          "description": "When the evaluation stops covering the action (PRD section 14).",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "ruleset_digest": {
+          "description": "The digest of the rule table that evaluated.",
+          "$ref": "#/$defs/hex64"
+        },
+        "authority_basis": {
+          "description": "Proposed phase: the task authority. On an ASK the approval it requires is still to come.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "ref"
+            ],
+            "properties": {
+              "type": {
+                "const": "task_authority"
+              },
+              "ref": {
+                "$ref": "#/$defs/digest_ref"
+              }
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "result": {
+            "const": "pause"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "differences": {
+            "minItems": 1
+          },
+          "options": {
+            "minItems": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "options": {
+            "maxItems": 0
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "const": "pass"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "disposition": {
+                "const": "DO"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "const": "pause"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "disposition": {
+                "const": "ASK"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "limit_set": {
+      "description": "A version of the user's limits. allowed absent = no restriction; present and empty = nothing is allowed yet.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_total_minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "allowed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "body_approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "choice",
+        "proceed",
+        "approver"
+      ],
+      "properties": {
+        "choice": {
+          "enum": [
+            "hold",
+            "verify_contact",
+            "proceed",
+            "confirm_limits"
+          ]
+        },
+        "proceed": {
+          "type": "boolean"
+        },
+        "approver": {
+          "enum": [
+            "user",
+            "standing_intent",
+            "agent_card"
+          ]
+        },
+        "said_commitment": {
+          "$ref": "#/$defs/hex64"
+        },
+        "card_commitment": {
+          "description": "The card the answer was given on, committed under the answered verdict's card nonce: equal to the verdict's card_commitment exactly when the card shown is the card checked.",
+          "$ref": "#/$defs/hex64"
+        },
+        "limits": {
+          "description": "On confirm_limits only: the user's limits in force before this answer and the new version it puts in force. The intent it approves is the proposal.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "previous",
+            "new"
+          ],
+          "properties": {
+            "previous": {
+              "$ref": "#/$defs/limit_set"
+            },
+            "new": {
+              "$ref": "#/$defs/limit_set"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "choice": {
+                "const": "proceed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "proceed": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "choice": {
+                "enum": [
+                  "hold",
+                  "verify_contact"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "proceed": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "choice": {
+                "const": "confirm_limits"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "limits"
+            ],
+            "properties": {
+              "approver": {
+                "const": "user"
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "limits"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "approver": {
+                "const": "user"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "said_commitment"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "said_commitment"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "approver": {
+                "const": "standing_intent"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "choice": {
+                "const": "proceed"
+              }
+            },
+            "not": {
+              "required": [
+                "card_commitment"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "choice": {
+                "const": "confirm_limits"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "card_commitment"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "body_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action"
+      ],
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/point_of_no_return"
+        },
+        "amount_minor": {
+          "$ref": "#/$defs/safe_uint"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "rail": {
+          "$ref": "#/$defs/ns_token"
+        },
+        "direction": {
+          "description": "Which way the amount moved: out (paid by the user) or in (back to the user, from the action it reverses). Absent on records sealed before it was recorded.",
+          "enum": [
+            "out",
+            "in"
+          ]
+        },
+        "reference_commitment": {
+          "$ref": "#/$defs/hex64"
+        },
+        "description_commitment": {
+          "$ref": "#/$defs/hex64"
+        },
+        "authority_basis": {
+          "$ref": "#/$defs/authority_basis"
+        },
+        "evaluation_ref": {
+          "description": "The verdict (the evaluation) this step relied on: the one its approval answers.",
+          "$ref": "#/$defs/digest_ref"
+        }
+      }
+    },
+    "body_outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "outcome",
+        "differences"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "received",
+            "not_received",
+            "pending",
+            "unchecked_action",
+            "reverted"
+          ]
+        },
+        "outcome": {
+          "$ref": "#/$defs/outcome_value"
+        },
+        "delivered": {
+          "$ref": "#/$defs/terms"
+        },
+        "differences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/difference"
+          }
+        },
+        "unchecked": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/body_action"
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "authority_basis"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "evaluation_ref"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "note_commitment": {
+          "$ref": "#/$defs/hex64"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pending"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "const": "open"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "not_received",
+                  "unchecked_action"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "const": "mismatch"
+              },
+              "differences": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unchecked_action"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "unchecked"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "unchecked"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "completed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "differences": {
+                "maxItems": 0
+              },
+              "status": {
+                "const": "received"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "received"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "if": {
+              "properties": {
+                "differences": {
+                  "minItems": 1
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "outcome": {
+                  "const": "mismatch"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "outcome": {
+                  "const": "completed"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "disclosure_class": {
+      "description": "The kind of thing told about the user. Contact classes are covered by a share_contact check; credential classes by share_credentials.",
+      "enum": [
+        "name",
+        "phone",
+        "email",
+        "home_address",
+        "address",
+        "pickup_location",
+        "other_contact",
+        "credential",
+        "verification_code",
+        "payment_card",
+        "id_document"
+      ]
+    },
+    "body_disclosure": {
+      "description": "Something the agent told someone about the user: the class of each field and a commitment to its value, never the value. authority is approval (refs carries exactly one authorized_by) or none (rule says why).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "to",
+        "fields",
+        "authority"
+      ],
+      "properties": {
+        "to": {
+          "enum": [
+            "counterparty",
+            "other"
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "class",
+              "value_commitment"
+            ],
+            "properties": {
+              "class": {
+                "$ref": "#/$defs/disclosure_class"
+              },
+              "value_commitment": {
+                "$ref": "#/$defs/hex64"
+              }
+            }
+          }
+        },
+        "authority": {
+          "enum": [
+            "approval",
+            "none"
+          ]
+        },
+        "rule": {
+          "$ref": "#/$defs/token"
+        },
+        "authority_basis": {
+          "$ref": "#/$defs/authority_basis"
+        },
+        "evaluation_ref": {
+          "description": "The verdict (the evaluation) this step relied on: the one its approval answers.",
+          "$ref": "#/$defs/digest_ref"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "authority": {
+                "const": "none"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "rule"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "rule"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "authority": {
+                "const": "approval"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "authority_basis",
+              "evaluation_ref"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "authority_basis"
+                  ]
+                },
+                {
+                  "required": [
+                    "evaluation_ref"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "body_close": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "unchecked_actions"
+      ],
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/outcome_value"
+        },
+        "unchecked_actions": {
+          "$ref": "#/$defs/safe_uint"
+        },
+        "differences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/difference"
+          }
+        },
+        "carried_obligations": {
+          "description": "Cancel-by obligations still open at the close, carried by it: they stay open after the close until a later record that confirms the close resolves them, or the date passes.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation",
+              "cancel_by"
+            ],
+            "properties": {
+              "obligation": {
+                "$ref": "#/$defs/digest_ref"
+              },
+              "cancel_by": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "authority_entry": {
+      "description": "One authority layer relied on, with a ref to the sealed record of that layer. task_authority: the limits in force (the baseline intent, or the confirm_limits approval that put them in force). action_state_approval: the user's own answer to a paused check, bound to the card that check rendered (binding.card_commitment equals the verdict's). platform_approval: an approval the user gave on another platform's own gate, observed; it never answers a deal check (scope mismatch: the platform stated another amount). one_shot_override: reserved for a rule that defines its own override; never emitted.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "ref"
+          ],
+          "properties": {
+            "type": {
+              "const": "task_authority"
+            },
+            "ref": {
+              "$ref": "#/$defs/digest_ref"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "ref",
+            "binding"
+          ],
+          "properties": {
+            "type": {
+              "const": "action_state_approval"
+            },
+            "ref": {
+              "$ref": "#/$defs/digest_ref"
+            },
+            "binding": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "card_commitment"
+              ],
+              "properties": {
+                "card_commitment": {
+                  "$ref": "#/$defs/hex64"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "ref",
+            "provider",
+            "mechanism"
+          ],
+          "properties": {
+            "type": {
+              "const": "platform_approval"
+            },
+            "ref": {
+              "$ref": "#/$defs/digest_ref"
+            },
+            "provider": {
+              "$ref": "#/$defs/caller_token"
+            },
+            "mechanism": {
+              "$ref": "#/$defs/caller_token"
+            },
+            "scope": {
+              "const": "mismatch"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "ref"
+          ],
+          "properties": {
+            "type": {
+              "const": "one_shot_override"
+            },
+            "ref": {
+              "$ref": "#/$defs/digest_ref"
+            }
+          }
+        }
+      ]
+    },
+    "authority_basis": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/authority_entry"
+      }
+    },
+    "caller_token": {
+      "description": "A name the caller supplies (a platform and its approval mechanism); never a value capsulectl chooses.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "body_platform_approval": {
+      "description": "An approval the user gave on another platform's own gate, as observed: the platform and mechanism as the caller names them, a commitment to the approval text as returned, and the amount it stated, if any. Recorded beside the deal's own checks, never as an answer to one. refs: exactly one about -> the check (verdict) of the action it was observed for.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "mechanism",
+        "actor",
+        "approval_text_commitment"
+      ],
+      "properties": {
+        "provider": {
+          "$ref": "#/$defs/caller_token"
+        },
+        "mechanism": {
+          "$ref": "#/$defs/caller_token"
+        },
+        "actor": {
+          "const": "user"
+        },
+        "approval_text_commitment": {
+          "$ref": "#/$defs/hex64"
+        },
+        "amount_minor": {
+          "$ref": "#/$defs/safe_uint"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      },
+      "dependentRequired": {
+        "amount_minor": [
+          "currency"
+        ]
+      }
+    }
+  }
+}

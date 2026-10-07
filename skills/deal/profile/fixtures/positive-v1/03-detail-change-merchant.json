@@ -1,0 +1,48 @@
+{
+  "fixture": "03-detail-change-merchant.json",
+  "expect": "valid",
+  "story": "The merchant changes: payee and domain (fingerprints only).",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v1",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "detail_change",
+      "seq": 3,
+      "at": "2026-10-06T09:11:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "23ab3bcfd17359b808fca74c73b0644b7e2e8ac149c82f5b72affca6bbe66cf5"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+      },
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "payee": "448ac256f669560a03396bf405bb19a5636b758a56f7034b2a87a0befb95ea14",
+          "domain": "8a4427ad7fc448a407e7df10be65edea4e651cda128b060d572faf30a316c06b"
+        }
+      },
+      "refs": [
+        {
+          "rel": "source",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "23ab3bcfd17359b808fca74c73b0644b7e2e8ac149c82f5b72affca6bbe66cf5"
+        }
+      ]
+    },
+    "body": {
+      "source": "counterparty",
+      "changed": [
+        "payee",
+        "domain"
+      ]
+    }
+  },
+  "expected_digest": "186324d2384c47f17720bba5d21283e62434c449b584c1a6709c08bbf678b3a1"
+}

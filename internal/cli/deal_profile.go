@@ -22,39 +22,72 @@ import (
 // sealed record on every read.
 
 const (
-	dealProfile   = "x-deal-v0"
+	dealProfile   = "x-deal-v0" // the profile family: names the record block and the bundle extension
+	dealProfileV0 = "x-deal-v0"
+	// dealProfileV1 adds authority_basis and the platform_approval record. A
+	// deal's version is fixed when it opens (dealOpen.Profile), so a deal
+	// opened under v0 re-derives the same v0 records for as long as it is read.
+	dealProfileV1 = "x-deal-v1"
 	dealFPAlg     = "hmac-sha256-deal-key"
 	dealRecordRef = "deal-record"
 )
 
-// The profile schema ships in skills/deal/profile/; this is a byte-identical
-// copy (a test keeps them equal) so every record is validated before sealing.
-//
-//go:embed assets/x-deal-v0.schema.json
-var dealProfileSchema []byte
-
+// The profile schemas ship in skills/deal/profile/; these are byte-identical
+// copies (a test keeps them equal) so every record is validated before sealing.
 var (
-	dealSchemaOnce sync.Once
-	dealSchema     *jsonschema.Schema
-	dealSchemaErr  error
+	//go:embed assets/x-deal-v0.schema.json
+	dealProfileSchema []byte
+	//go:embed assets/x-deal-v1.schema.json
+	dealProfileSchemaV1 []byte
 )
 
-func compiledDealSchema() (*jsonschema.Schema, error) {
-	dealSchemaOnce.Do(func() {
-		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(dealProfileSchema))
-		if err != nil {
-			dealSchemaErr = err
-			return
-		}
-		c := jsonschema.NewCompiler()
-		const id = "x-deal-v0.schema.json"
-		if err = c.AddResource(id, doc); err != nil {
-			dealSchemaErr = err
-			return
-		}
-		dealSchema, dealSchemaErr = c.Compile(id)
-	})
-	return dealSchema, dealSchemaErr
+var (
+	dealSchemaMu sync.Mutex
+	dealSchemas  = map[string]*jsonschema.Schema{}
+)
+
+// compiledDealSchema is the x-deal-v0 profile's schema.
+func compiledDealSchema() (*jsonschema.Schema, error) { return compiledDealSchemaFor(dealProfileV0) }
+
+// compiledDealSchemaFor is the schema of a profile version.
+func compiledDealSchemaFor(version string) (*jsonschema.Schema, error) {
+	dealSchemaMu.Lock()
+	defer dealSchemaMu.Unlock()
+	if s, ok := dealSchemas[version]; ok {
+		return s, nil
+	}
+	raw := map[string][]byte{dealProfileV0: dealProfileSchema, dealProfileV1: dealProfileSchemaV1}[version]
+	if raw == nil {
+		return nil, inputError("unknown deal profile version " + version)
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	c := jsonschema.NewCompiler()
+	id := version + ".schema.json"
+	if err = c.AddResource(id, doc); err != nil {
+		return nil, err
+	}
+	s, err := c.Compile(id)
+	if err != nil {
+		return nil, err
+	}
+	dealSchemas[version] = s
+	return s, nil
+}
+
+// dealVersion is the profile version of the deal ev belongs to: the one its
+// opening step names, x-deal-v0 when it names none.
+func dealVersion(ev dealEvent, events []sealedEvent) string {
+	open := ev.Open
+	if open == nil && len(events) > 0 {
+		open = events[0].Event.Open
+	}
+	if open == nil || open.Profile == "" {
+		return dealProfileV0
+	}
+	return open.Profile
 }
 
 // The texts a step commits to, by nonce name. Each gets its own nonce.
@@ -83,6 +116,8 @@ func dealTexts(ev dealEvent) map[string]string {
 		t["card"] = ev.Check.Card
 	case ev.Approval != nil && ev.Approval.Approver == "user":
 		t["said"] = ev.Approval.Said
+	case ev.Platform != nil:
+		t["approval_text"] = ev.Platform.Text
 	case ev.Act != nil:
 		if ev.Act.Reference != "" {
 			t["reference"] = ev.Act.Reference
@@ -398,8 +433,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 		return commitText(nonce, dealTexts(ev)[name])
 	}
+	version := dealVersion(ev, events)
 	block := map[string]interface{}{
-		"profile": dealProfile, "canonicalization": "jcs", "deal_id": ev.DealID, "seq": ev.N, "at": ev.At,
+		"profile": version, "canonicalization": "jcs", "deal_id": ev.DealID, "seq": ev.N, "at": ev.At,
 	}
 	if ev.N > 1 {
 		block["prev"] = digestRef(events[len(events)-1].Digest)
@@ -660,6 +696,19 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				return nil, err
 			}
 		}
+		if version == dealProfileV1 {
+			// The PRD section 13 check contract, on the evaluation it describes.
+			disposition := map[string]string{"pass": "DO", "pause": "ASK"}[ck.Verdict]
+			task := taskAuthorityAt(events, "")
+			body["proposed_action_digest"] = digestOf(ck.Snapshot)
+			body["task_authority_ref"] = digestRef(task)
+			body["valid_until"] = ck.ValidUntil
+			body["ruleset_digest"] = ck.RulesetDigest
+			body["disposition"] = disposition
+			// Proposed phase: on a DO the task authority is the whole basis;
+			// on an ASK it still lacks the approval the evaluation requires.
+			body["authority_basis"] = []interface{}{map[string]interface{}{"type": "task_authority", "ref": digestRef(task)}}
+		}
 		judge := map[string]interface{}{"kind": "rules"}
 		switch ck.Remote.Status {
 		case "used":
@@ -716,6 +765,12 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				setIDs(counterpartyIDs(key, dealWho{Payee: ev.Act.Payee}))
 			}
 			body = act
+			if version == dealProfileV1 {
+				if body["authority_basis"], err = authorityBasis(events, ev.Act.AuthorizedBy, ev.Act.AmountMinor); err != nil {
+					return nil, err
+				}
+				body["evaluation_ref"] = digestRef(evaluationRef(events, ev.Act.AuthorizedBy))
+			}
 		}
 	case "outcome":
 		rtype = "outcome"
@@ -751,9 +806,33 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		body = map[string]interface{}{"to": d.To, "fields": fields, "authority": "approval"}
 		if d.AuthorizedBy != "" {
 			block["refs"] = []interface{}{relRef("authorized_by", digestOf(d.AuthorizedBy))}
+			if version == dealProfileV1 {
+				if body["authority_basis"], err = authorityBasis(events, d.AuthorizedBy, nil); err != nil {
+					return nil, err
+				}
+				body["evaluation_ref"] = digestRef(evaluationRef(events, d.AuthorizedBy))
+			}
 		} else {
 			body["authority"] = "none"
 			body["rule"] = asToken(d.Rule, "no_check")
+		}
+	case "platform_approval":
+		// An approval the user gave on another platform's own gate, as
+		// observed: recorded beside the deal check, never as its answer.
+		rtype = "platform_approval"
+		p := ev.Platform
+		block["refs"] = []interface{}{relRef("about", digestOf(p.Check))}
+		body = map[string]interface{}{"provider": p.Provider, "mechanism": p.Mechanism, "actor": "user"}
+		if body["approval_text_commitment"], err = commit("approval_text"); err != nil {
+			return nil, err
+		}
+		if p.AmountMinor != nil {
+			body["amount_minor"] = *p.AmountMinor
+			cur := p.Currency
+			if cur == "" {
+				cur = currency
+			}
+			body["currency"] = cur
 		}
 	case "close":
 		rtype = "close"
@@ -783,6 +862,90 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 	return map[string]interface{}{"x-deal-v0": block, "body": body}, nil
 }
 
+// authorityBasis lists every authority layer an act (or an approved
+// disclosure) relied on, each a ref to the sealed record of that layer:
+//   - task_authority: the limits in force when the approved check was made
+//     (the baseline, or the confirm_limits answer that put them in force);
+//   - action_state_approval: the user's own answer to a paused check, bound
+//     to the card that check rendered (its card_commitment, recomputed under
+//     the verdict's card nonce);
+//   - platform_approval: each approval observed on another platform's own
+//     gate for the same check, marked scope mismatch when it stated another
+//     amount. It is listed, never counted as the check's answer.
+//
+// Layers accumulate: none replaces another.
+func authorityBasis(events []sealedEvent, approvalID string, amount *int64) ([]interface{}, error) {
+	var approval *sealedEvent
+	for i := range events {
+		if events[i].CapsuleID == approvalID && events[i].Event.Approval != nil {
+			approval = &events[i]
+		}
+	}
+	if approval == nil {
+		return nil, inputError("an authorized step names no sealed approval")
+	}
+	a := approval.Event.Approval
+	basis := []interface{}{map[string]interface{}{"type": "task_authority", "ref": digestRef(taskAuthorityAt(events, a.Check))}}
+	if a.Approver == "user" {
+		verdict, _, ok := checkedCard(events, a.Check)
+		nonce := verdict.Event.Nonces["card"]
+		if !ok || nonce == "" || a.ShownCard == "" {
+			return nil, inputError("an answer to the deal check must be bound to the card it was given on (--shown-card)")
+		}
+		binding, err := commitText(nonce, a.ShownCard)
+		if err != nil {
+			return nil, err
+		}
+		basis = append(basis, map[string]interface{}{
+			"type": "action_state_approval", "ref": digestRef(approval.Digest),
+			"binding": map[string]interface{}{"card_commitment": binding},
+		})
+	}
+	for _, se := range events {
+		p := se.Event.Platform
+		if se.Event.Kind != "platform_approval" || p == nil || p.Check != a.Check {
+			continue
+		}
+		entry := map[string]interface{}{"type": "platform_approval", "ref": digestRef(se.Digest), "provider": p.Provider, "mechanism": p.Mechanism}
+		if amount != nil && p.AmountMinor != nil && *amount != *p.AmountMinor {
+			entry["scope"] = "mismatch"
+		}
+		basis = append(basis, entry)
+	}
+	return basis, nil
+}
+
+// taskAuthorityAt is the record digest of the task authority in force before
+// the step named upTo ("" = after every step in events): the baseline, or the
+// latest confirm_limits answer that put new limits in force.
+func taskAuthorityAt(events []sealedEvent, upTo string) string {
+	task := events[0].Digest
+	for _, se := range events {
+		if upTo != "" && se.CapsuleID == upTo {
+			break
+		}
+		if ap := se.Event.Approval; ap != nil && ap.Choice == "confirm_limits" && ap.Proceed && ap.Limits != nil {
+			task = se.Digest
+		}
+	}
+	return task
+}
+
+// evaluationRef is the verdict an approved step relied on: the one its
+// approval answers.
+func evaluationRef(events []sealedEvent, approvalID string) string {
+	for _, se := range events {
+		if se.CapsuleID == approvalID && se.Event.Approval != nil {
+			for _, v := range events {
+				if v.CapsuleID == se.Event.Approval.Check {
+					return v.Digest
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // encodeDealRecord returns the sealed payload (the record's JCS bytes) and its
 // record digest, after the schema check and the privacy and wording scans. A
 // record that fails any of them is not sealed.
@@ -803,12 +966,13 @@ func encodeDealRecord(ev dealEvent, events []sealedEvent, key []byte) ([]byte, s
 	if err = scanRecord(docMap, dealLocalValues(events, ev)); err != nil {
 		return nil, "", err
 	}
-	schema, err := compiledDealSchema()
+	version := dealVersion(ev, events)
+	schema, err := compiledDealSchemaFor(version)
 	if err != nil {
 		return nil, "", err
 	}
 	if err = schema.Validate(doc); err != nil {
-		return nil, "", inputError("refusing to seal: the step does not fit the x-deal-v0 profile: " + firstSchemaError(err))
+		return nil, "", inputError("refusing to seal: the step does not fit the " + version + " profile: " + firstSchemaError(err))
 	}
 	payload, err := canonical.JCS(doc)
 	if err != nil {

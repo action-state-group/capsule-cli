@@ -31,10 +31,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SCHEMA_PATH = HERE / "x-deal-v0.schema.json"
+# Each record names its profile version (x-deal-v0 block, member profile); a deal keeps one.
+SCHEMA_PATHS = {"x-deal-v0": SCHEMA_PATH, "x-deal-v1": HERE / "x-deal-v1.schema.json"}
 FIX = HERE / "fixtures"
 
 RECORD_TYPES = ["intent", "baseline", "message", "claim", "evidence", "detail_change",
-                "check", "verdict", "approval", "action", "outcome", "close", "disclosure"]
+                "check", "verdict", "approval", "action", "outcome", "close", "disclosure",
+                "platform_approval"]  # platform_approval: x-deal-v1 only (its schema says so)
 # The point of no return whose check covers a disclosed field of each class.
 DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "home_address", "address",
                                                   "pickup_location", "other_contact")}
@@ -307,24 +310,23 @@ class StageError(Exception):
         self.stage = stage
 
 
-_SCHEMA = None
-_VALIDATOR = None
+_VALIDATORS = {}
 SCHEMA_MODE = "unknown"
 
 
-def _validator():
-    global _SCHEMA, _VALIDATOR, SCHEMA_MODE
-    if _SCHEMA is None:
-        _SCHEMA = json.loads(SCHEMA_PATH.read_text())
+def _validator(profile="x-deal-v0"):
+    global SCHEMA_MODE
+    if profile not in _VALIDATORS:
+        schema = json.loads(SCHEMA_PATHS[profile].read_text())
         try:
             import jsonschema  # noqa: F401
             from jsonschema import Draft202012Validator
-            _VALIDATOR = Draft202012Validator(_SCHEMA)
+            _VALIDATORS[profile] = Draft202012Validator(schema)
             SCHEMA_MODE = "jsonschema (Draft 2020-12)"
         except ImportError:
-            _VALIDATOR = None
+            _VALIDATORS[profile] = None
             SCHEMA_MODE = "fallback (jsonschema not installed: reduced structural check)"
-    return _VALIDATOR
+    return _VALIDATORS[profile]
 
 
 def stage_canonicalization(rec):
@@ -353,7 +355,10 @@ def _no_floats(v, path="$"):
 
 
 def stage_schema(rec):
-    val = _validator()
+    profile = rec.get("x-deal-v0", {}).get("profile") if isinstance(rec.get("x-deal-v0"), dict) else None
+    if profile not in SCHEMA_PATHS:
+        raise StageError("schema", f"x-deal-v0/profile: {profile!r} is not a known profile version ({sorted(SCHEMA_PATHS)})")
+    val = _validator(profile)
     if val is not None:
         errs = sorted(val.iter_errors(rec), key=lambda e: list(e.absolute_path))
         if errs:
@@ -450,7 +455,12 @@ def check_chain(records):
         fail(0, "the first record of a deal must be the baseline")
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by", "reverses"}, "outcome": {"observes"},
-                    "close": {"outcome"}, "disclosure": {"authorized_by"}}
+                    "close": {"outcome"}, "disclosure": {"authorized_by"}, "platform_approval": {"about"}}
+    # x-deal-v1 (section 6, rule 9): authority_basis. The limits in force when
+    # each verdict was reached, and the platform approvals observed for it.
+    v1 = blk0["profile"] == "x-deal-v1"
+    task_idx = 0
+    task_at_verdict, platform_for_verdict = {}, {}
     # The user's limits in force. Absent allowed = no restriction; present and
     # empty = nothing allowed. An intent may narrow them; only the user's
     # confirm_limits answer to an intent that asks for more puts a new version
@@ -478,6 +488,8 @@ def check_chain(records):
             fail(i, "a confirms ref names the deal's final close; this deal is not closed")
         if b["deal_id"] != blk0["deal_id"]:
             fail(i, "deal_id differs from the baseline's")
+        if b["profile"] != blk0["profile"]:
+            fail(i, "profile differs from the baseline's: a deal keeps one profile version")
         if b["seq"] != i + 1:
             kind = "regression" if b["seq"] <= i else "gap"
             fail(i, f"seq {kind}: expected {i + 1}, got {b['seq']}")
@@ -536,6 +548,60 @@ def check_chain(records):
                     fail(i, f"details changed after the check; the {what} needs a new check")
             return chk
 
+        def verify_basis(ja, amount):
+            """Section 6, rule 9 (x-deal-v1): authority_basis lists every
+            layer the step relied on, each a ref to its record: the limits in
+            force at the verdict; on a paused verdict, the user's own answer,
+            bound to the card the verdict rendered (an agent_card answer does
+            not satisfy an ask); every platform approval observed for that
+            verdict, never as the answer; and no one_shot_override."""
+            basis = body.get("authority_basis") or []
+            types = [e["type"] for e in basis]
+            if "one_shot_override" in types:
+                fail(i, "one_shot_override is reserved: no rule in this profile defines an override")
+            appr = records[ja]
+            jv = by_digest[appr["x-deal-v0"]["refs"][0]["digest"]]
+            v = records[jv]["body"]
+            if not types or types[0] != "task_authority" or types.count("task_authority") != 1:
+                fail(i, "authority_basis starts with exactly one task_authority")
+            if basis[0]["ref"] != v["task_authority_ref"]:
+                fail(i, "task_authority is not the verdict's task_authority_ref")
+            if body.get("evaluation_ref", {}).get("digest") != digests[jv]:
+                fail(i, "evaluation_ref is not the verdict the cited approval answers")
+            if b["at"] > v["valid_until"]:
+                fail(i, f"the verdict was valid until {v['valid_until']}: a step after that needs a new check")
+            asa = [e for e in basis if e["type"] == "action_state_approval"]
+            if v["result"] == "pause":
+                if appr["body"]["approver"] != "user":
+                    fail(i, "the deal check asked (it paused); an ask needs the user's own approval, and an "
+                            f"{appr['body']['approver']} answer does not satisfy it")
+                if len(asa) != 1 or asa[0]["ref"]["digest"] != digests[ja]:
+                    fail(i, "the action_state_approval entry is the user's answer the step cites (authorized_by)")
+                cc = asa[0]["binding"]["card_commitment"]
+                if cc != v.get("card_commitment") or cc != appr["body"].get("card_commitment"):
+                    fail(i, "the action_state_approval binding is not the card the check rendered")
+            elif asa:
+                fail(i, "a passing check needs no approval of the check: the step rests on the task authority")
+            seen = []
+            for e in basis:
+                if e["type"] != "platform_approval":
+                    continue
+                jp = by_digest.get(e["ref"]["digest"])
+                if jp is None or jp >= i or records[jp]["x-deal-v0"]["record_type"] != "platform_approval":
+                    fail(i, "a platform_approval entry names an earlier platform_approval record")
+                pb = records[jp]["body"]
+                if (e["provider"], e["mechanism"]) != (pb["provider"], pb["mechanism"]):
+                    fail(i, "a platform_approval entry names its record's provider and mechanism")
+                mismatch = amount is not None and "amount_minor" in pb and pb["amount_minor"] != amount
+                if mismatch != (e.get("scope") == "mismatch"):
+                    fail(i, "scope mismatch is stated exactly when the platform's approval stated another amount")
+                seen.append(jp)
+            if sorted(seen) != sorted(platform_for_verdict.get(jv, [])):
+                fail(i, "authority_basis lists every platform approval observed for the check, and only those")
+            want = ["task_authority"] + (["action_state_approval"] if asa else []) + ["platform_approval"] * len(seen)
+            if types != want:
+                fail(i, "authority_basis lists task_authority, then the check's approval, then platform approvals")
+
         if t == "intent":
             # An intent narrows the limits in force; asking for more is a
             # proposal that applies only once the user confirms it.
@@ -561,6 +627,16 @@ def check_chain(records):
             if j in verdict_for_check:
                 fail(i, "a check has at most one verdict")
             verdict_for_check.add(j)
+            task_at_verdict[i] = task_idx
+            if v1:
+                # PRD section 13 on the evaluation: it names the ProposedAction it evaluated and
+                # the task authority in force, and its proposed-phase basis is that authority.
+                if body["proposed_action_digest"] != digests[j]:
+                    fail(i, "proposed_action_digest is not the digest of the check this verdict evaluates")
+                if body["task_authority_ref"]["digest"] != digests[task_idx]:
+                    fail(i, "task_authority_ref is not the task authority in force at the evaluation")
+                if body["authority_basis"][0]["ref"] != body["task_authority_ref"]:
+                    fail(i, "the verdict's authority_basis is its task_authority_ref")
             # pack_id is optional (records sealed before v0.1.0-rc7 carry it); when
             # either side names one, the two must agree.
             if body.get("pack_id") != records[j]["body"].get("pack_id"):
@@ -593,10 +669,13 @@ def check_chain(records):
                 fail(i, "the intent asks for no higher limit and no new action: nothing to confirm")
             confirmed_intents.add(j)
             max_total, allowed = new.get("max_total_minor"), new.get("allowed")
+            task_idx = i
         elif t == "approval":
             j = one("approves", ("verdict",))
             first_answer.setdefault(j, i)
             v = records[j]["body"]
+            if v1 and v["result"] == "pause" and body["approver"] == "user" and "card_commitment" not in body:
+                fail(i, "in x-deal-v1 the user's answer to a paused check carries the card it was given on (card_commitment)")
             if body["approver"] == "standing_intent":
                 chk = records[by_digest[records[j]["x-deal-v0"]["refs"][0]["digest"]]]["body"]
                 if v["result"] != "pass":
@@ -622,11 +701,17 @@ def check_chain(records):
             else:
                 if "authorized_by" not in by_rel:
                     fail(i, "a disclosure with authority approval references that approval (authorized_by)")
-                authorized_check(one("authorized_by", ("approval",)), actions.pop(), "disclosure")
+                ja = one("authorized_by", ("approval",))
+                authorized_check(ja, actions.pop(), "disclosure")
+                if v1:
+                    verify_basis(ja, None)
         elif t == "action":
             if "authorized_by" not in by_rel:
                 fail(i, "an action must reference the sealed approval that authorized it (authorized_by)")
-            chk = authorized_check(one("authorized_by", ("approval",)), body["action"], "action")
+            ja = one("authorized_by", ("approval",))
+            chk = authorized_check(ja, body["action"], "action")
+            if v1:
+                verify_basis(ja, body.get("amount_minor"))
             cb = chk["body"]
             if "amount_minor" in body and "amount_minor" in cb and body["amount_minor"] != cb["amount_minor"]:
                 fail(i, "the amount differs from the one checked")
@@ -655,6 +740,9 @@ def check_chain(records):
                 reversed_actions.add(j)
             elif body.get("direction") == "in":
                 fail(i, "an action with direction in names the pay it reverses (reverses)")
+        elif t == "platform_approval":
+            # Recorded beside the deal check, never as its answer.
+            platform_for_verdict.setdefault(one("about", ("verdict",)), []).append(i)
         elif t == "outcome":
             one("observes", ("action",), required=False)
             if body["status"] == "unchecked_action":
@@ -722,33 +810,36 @@ def run_fixtures() -> int:
         print(f"{'ok  ' if ok else 'FAIL'} commitment {x['label']:<18} {x['commitment'][:16]}…")
     store = local_store_values()
 
-    positives = sorted((FIX / "positive").glob("*.json"))
-    chain = []
-    for p in positives:
-        f = load(p)
-        rec = f["record"]
-        try:
-            check_record(rec, store)
-            d = record_digest(rec)
-            if d != f["expected_digest"]:
-                raise StageError("digest", f"recomputed {d} != expected {f['expected_digest']}")
-            chain.append(rec)
-            check_chain(chain)
-            print(f"ok   {p.name:<32} {rec['x-deal-v0']['record_type']:<13} jcs-sha256 {d}")
-        except StageError as e:
-            bad += 1
-            print(f"FAIL {p.name}: {e}")
+    # One positive deal per profile version, each checked as its own chain.
+    positives = []
+    for deal_dir in ("positive", "positive-v1"):
+        chain = []
+        for p in sorted((FIX / deal_dir).glob("*.json")):
+            positives.append(p)
+            f = load(p)
+            rec = f["record"]
+            try:
+                check_record(rec, store)
+                d = record_digest(rec)
+                if d != f["expected_digest"]:
+                    raise StageError("digest", f"recomputed {d} != expected {f['expected_digest']}")
+                chain.append(rec)
+                check_chain(chain)
+                print(f"ok   {deal_dir}/{p.name:<32} {rec['x-deal-v0']['record_type']:<17} jcs-sha256 {d}")
+            except StageError as e:
+                bad += 1
+                print(f"FAIL {deal_dir}/{p.name}: {e}")
     types = {load(p)["record"]["x-deal-v0"]["record_type"] for p in positives}
     missing = set(RECORD_TYPES) - types
     if missing:
         bad += 1
         print(f"FAIL positives do not cover record types: {sorted(missing)}")
     else:
-        print(f"ok   positives cover all {len(RECORD_TYPES)} record types in one deal ({len(positives)} records)")
+        print(f"ok   positives cover all {len(RECORD_TYPES)} record types across the v0 and v1 deals ({len(positives)} records)")
 
     for p in sorted((FIX / "negative").glob("*.json")):
         f = load(p)
-        prefix = [load(FIX / "positive" / n)["record"] for n in f.get("chain_prefix", [])]
+        prefix = [load(FIX / f.get("chain_dir", "positive") / n)["record"] for n in f.get("chain_prefix", [])]
         prefix += f.get("chain_between", [])
         got = None
         try:
@@ -942,9 +1033,125 @@ def regen():
         dump(FIX / "positive" / n, {"fixture": n, "expect": "valid",
                                     "story": stories[r["x-deal-v0"]["record_type"]],
                                     "record": r, "expected_digest": d})
+
+    # --- x-deal-v1: the merchant-changed counterexample ----------------------------------------------------
+    # The merchant changes from Example Air to travel-super-discount.example, so the deal check asks.
+    # The platform's own gate asks "Approve $558.80 purchase" and the user approves it there: that
+    # is recorded as the platform's approval and does not answer the deal check's question (the
+    # attempt is sealed as an unchecked action). The user's own answer, on the card the check
+    # rendered, does; the payment then lists all three layers in authority_basis.
+    deal_id1 = "deal-7a1e5c0d9b2f4e68"
+    dk1 = deal_key(secret, deal_id1)
+    raw1 = {("name", "first"): "Example Air", ("payee", "first"): "Example Air",
+            ("domain", "first"): "air.example", ("payee", "second"): "Travel Super Discount",
+            ("domain", "second"): "travel-super-discount.example"}
+    fps1 = {k: fingerprint(dk1, k[0], v) for k, v in raw1.items()}
+    texts1 = {"flight-intent": "book the SJC to HOU flight under $600",
+              "flight-message": "Checkout continues on travel-super-discount.example for this fare.",
+              "flight-card": "Payee changed since first contact (Example Air → Travel Super Discount) · [Hold] [Pay anyway]",
+              "flight-platform": "Approve $558.80 purchase",
+              "flight-said": "yes, the new site is fine"}
+    com1 = {k: commitment(nonce(k), v) for k, v in texts1.items()}
+    records1, names1 = [], []
+    clock1 = iter([f"2026-10-06T09:{m:02d}:00Z" for m in (2, 10, 11, 13, 13, 14, 15, 16, 17)])
+
+    def cp1(*keys):
+        return {"fp_alg": "hmac-sha256-deal-key", "ids": {k[0]: fps1[k] for k in keys}}
+
+    def add1(name, rtype, body, channel=None, counterparty=None, refs=None):
+        blk = {"profile": "x-deal-v1", "canonicalization": "jcs", "deal_id": deal_id1,
+               "record_type": rtype, "seq": len(records1) + 1, "at": next(clock1)}
+        if records1:
+            blk["prev"] = _ref(record_digest(records1[-1]))
+            blk["baseline_ref"] = _ref(record_digest(records1[0]))
+        if channel:
+            blk["channel"] = channel
+        if counterparty:
+            blk["counterparty"] = counterparty
+        if refs:
+            blk["refs"] = [{"rel": rel, **_ref(record_digest(records1[j]))} for rel, j in refs]
+        records1.append({"x-deal-v0": blk, "body": body})
+        names1.append(f"{len(records1):02d}-{name}.json")
+        return len(records1) - 1
+
+    fb = add1("baseline", "baseline", {
+        "deal_type": "purchase",
+        "intent": {"verbatim_commitment": com1["flight-intent"], "max_total_minor": 60000, "allowed": ["pay"]},
+        "terms": {"item": "SJC-HOU flight", "price_minor": 55880, "currency": "USD"},
+        "recourse": {"rail": "card", "refundable": True},
+    }, channel="web", counterparty=cp1(("payee", "first"), ("name", "first"), ("domain", "first")))
+    fm = add1("message-site-switch", "message", {"from": "counterparty", "content_commitment": com1["flight-message"]},
+              channel="web", counterparty=cp1(("domain", "second")))
+    add1("detail-change-merchant", "detail_change", {"source": "counterparty", "changed": ["payee", "domain"]},
+         counterparty=cp1(("payee", "second"), ("domain", "second")), refs=[("source", fm)])
+    fk = add1("check-pay", "check", {"action": "pay", "amount_minor": 55880, "currency": "USD",
+                                     "recourse": {"rail": "card", "refundable": True}},
+              counterparty=cp1(("payee", "second")))
+    # capsulectl's built-in rule table (internal/cli dealBuiltinRules), whose digest the
+    # verdict names as ruleset_digest.
+    builtin_rules = {"evaluator": "capsulectl deal check", "rules": [
+        {"question": "asked", "rules": ["agent_picked", "not_asked", "over_limit"]},
+        {"question": "who", "rules": ["payee_or_contact_changed", "first_disclosure"]},
+        {"question": "terms", "rules": ["terms_changed"]},
+        {"question": "recourse", "rules": ["recourse_changed", "irreversible_rail"]},
+        {"question": "safety", "rules": ["pay_before_seeing", "credentials_requested", "verification_code_request",
+                                         "off_platform_early", "domain_recent"]}]}
+    task1 = _ref(record_digest(records1[0]))
+    fv = add1("verdict-pause", "verdict", {
+        "result": "pause", "differences": [{"question": "who", "rule": "payee_or_contact_changed", "field": "payee"}],
+        "options": ["hold", "proceed"], "card_commitment": com1["flight-card"], "judge": {"kind": "rules"},
+        "disposition": "ASK", "proposed_action_digest": record_digest(records1[fk]),
+        "task_authority_ref": task1, "valid_until": "2026-10-06T09:28:00Z",
+        "ruleset_digest": record_digest(builtin_rules),
+        "authority_basis": [{"type": "task_authority", "ref": task1}]},
+        refs=[("checks", fk)])
+    fp = add1("platform-approval", "platform_approval", {
+        "provider": "example-platform", "mechanism": "native-gate", "actor": "user",
+        "approval_text_commitment": com1["flight-platform"], "amount_minor": 55880, "currency": "USD"},
+        refs=[("about", fv)])
+    add1("outcome-platform-only", "outcome", {
+        "status": "unchecked_action", "outcome": "mismatch",
+        "unchecked": {"action": "pay", "amount_minor": 55880, "currency": "USD", "rail": "card"},
+        "differences": [{"question": "asked", "rule": "no_sealed_approval"}]})
+    fa = add1("approval-user-on-card", "approval", {
+        "choice": "proceed", "proceed": True, "approver": "user",
+        "said_commitment": com1["flight-said"], "card_commitment": com1["flight-card"]}, refs=[("approves", fv)])
+    add1("action-pay", "action", {
+        "action": "pay", "amount_minor": 55880, "currency": "USD", "rail": "card",
+        "evaluation_ref": _ref(record_digest(records1[fv])),
+        "authority_basis": [
+            {"type": "task_authority", "ref": _ref(record_digest(records1[fb]))},
+            {"type": "action_state_approval", "ref": _ref(record_digest(records1[fa])),
+             "binding": {"card_commitment": com1["flight-card"]}},
+            {"type": "platform_approval", "ref": _ref(record_digest(records1[fp])),
+             "provider": "example-platform", "mechanism": "native-gate"}]},
+        counterparty=cp1(("payee", "second")), refs=[("authorized_by", fa)])
+    stories1 = {
+        "baseline": "x-deal-v1. First contact: the user asks for the SJC-HOU flight under $600 from Example Air.",
+        "message": "Checkout moves to another site.",
+        "detail_change": "The merchant changes: payee and domain (fingerprints only).",
+        "check": "The deal check before paying.",
+        "verdict": "The deal check asks: the payee changed since first contact.",
+        "platform_approval": "The platform's own gate asked to approve the $558.80 purchase and the user approved it "
+                             "there: recorded as the platform's approval, never as the check's answer.",
+        "outcome": "Paying on the platform's approval alone is sealed as an unchecked action: it did not answer the ask.",
+        "approval": "The user's own answer, in their words, on the card the check rendered (card_commitment).",
+        "action": "The payment lists every layer it relied on: the task authority, the user's answer to the ask, "
+                  "and the platform's approval beside it.",
+    }
+    (FIX / "positive-v1").mkdir(parents=True, exist_ok=True)
+    for old in (FIX / "positive-v1").glob("*.json"):
+        old.unlink()
+    for n, r in zip(names1, records1):
+        d = record_digest(r)
+        digests.append((f"positive-v1/{n}", d))
+        dump(FIX / "positive-v1" / n, {"fixture": n, "expect": "valid", "story": stories1[r["x-deal-v0"]["record_type"]],
+                                       "record": r, "expected_digest": d})
     (FIX / "expected-digests.txt").write_text(
         "# SHA-256 over the RFC 8785 (JCS) bytes of each positive record (the `record` member only)\n"
-        + "".join(f"{d}  positive/{n}\n" for n, d in digests), encoding="utf-8")
+        + "".join(f"{d}  {n if '/' in n else 'positive/' + n}\n" for n, d in digests), encoding="utf-8")
+    texts.update(texts1)
+    com.update(com1)
 
     vec = {"note": "TEST-ONLY. Simulates a device's local store: the secret and raw values below never appear in a record. "
                    "All names, numbers and domains are fictional (555-01xx, .example).",
@@ -954,7 +1161,7 @@ def regen():
     extra = [("email", "  Bookings@CoastalJetRentals.example "), ("relay_address", " Reply-7f3@Relay.Marketplace.example"),
              ("profile_id", " mkt:seller:88213 "), ("name", "The Coastal Jet Rentals, Inc."),
              ("payee", "+1 (555) 010-2044")]
-    for k, v in extra:
+    for k, v in extra + [(k[0], v) for k, v in raw1.items()]:
         vec["vectors"].append({"kind": k, "raw": v, "normalized": normalize(k, v), "fp": fingerprint(dk, k, v)})
     dump(FIX / "fingerprint-vectors.json", vec)
 
@@ -1137,7 +1344,70 @@ def regen():
     neg("neg-unfingerprinted-id", "personal_data", "raw phone", r, 1,
         "A counterparty id carried as the raw E.164 value instead of a fingerprint.")
 
-    print(f"regenerated {len(records)} positives, negatives and vectors under {FIX}")
+    # --- x-deal-v1 negatives (section 6, rule 9), on the v1 deal ------------------------------
+    def neg1(name, stage, contains, record, prefix_upto, desc, **extra_fields):
+        dump(FIX / "negative" / f"{name}.json", {
+            "fixture": name, "expect": "invalid", "description": desc, "expected_stage": stage,
+            "expected_error_contains": contains, "chain_dir": "positive-v1", "chain_prefix": names1[:prefix_upto],
+            "record": record, **extra_fields})
+
+    pay = records1[-1]
+    r = copy.deepcopy(pay)
+    r["body"]["authority_basis"] = [e for e in r["body"]["authority_basis"] if e["type"] != "action_state_approval"]
+    r["x-deal-v0"]["refs"] = [{"rel": "authorized_by", **_ref(record_digest(records1[fp]))}]
+    neg1("neg-v1-platform-approval-as-the-answer", "chain", "must point at a approval record", r, len(records1) - 1,
+         "The payment cites the platform's approval as its authority: a platform approval never answers the deal check's ask.")
+
+    card_click = copy.deepcopy(records1[fa])
+    card_click["body"] = {"choice": "proceed", "proceed": True, "approver": "agent_card", "card_commitment": com1["flight-card"]}
+    r = copy.deepcopy(pay)
+    r["x-deal-v0"].update(prev=_ref(record_digest(card_click)), refs=[{"rel": "authorized_by", **_ref(record_digest(card_click))}])
+    r["body"]["authority_basis"] = [e for e in r["body"]["authority_basis"] if e["type"] != "action_state_approval"]
+    neg1("neg-v1-card-click-answers-the-ask", "chain", "an agent_card answer does not satisfy it", r, fa,
+         "A click on a card (agent_card, no words of the user's) cited as the answer to the deal check's ask.",
+         chain_between=[card_click])
+
+    r = copy.deepcopy(pay)
+    r["body"]["authority_basis"][1]["binding"]["card_commitment"] = commitment(nonce("flight-card"), "Pay Example Air $558.80 · [Pay]")
+    neg1("neg-v1-binding-not-the-card", "chain", "binding is not the card the check rendered", r, len(records1) - 1,
+         "The check approval's binding names a card other than the one the check rendered.")
+
+    r = copy.deepcopy(pay)
+    r["body"]["authority_basis"] = r["body"]["authority_basis"][:2]
+    neg1("neg-v1-platform-approval-left-out", "chain", "every platform approval observed for the check", r, len(records1) - 1,
+         "The payment leaves out the platform approval observed for the same check: layers accumulate, none is dropped.")
+
+    r = copy.deepcopy(pay)
+    r["body"]["authority_basis"].append({"type": "one_shot_override", "ref": _ref(record_digest(records1[fa]))})
+    neg1("neg-v1-one-shot-override", "chain", "one_shot_override is reserved", r, len(records1) - 1,
+         "one_shot_override is reserved until a rule defines its own override.")
+
+    r = copy.deepcopy(records1[fa]); del r["body"]["card_commitment"]
+    neg1("neg-v1-answer-without-card", "chain", "carries the card it was given on", r, fa,
+         "The user's answer to a paused check without the card it was given on.")
+
+    r = copy.deepcopy(pay); r["x-deal-v0"]["at"] = "2026-10-06T09:40:00Z"
+    neg1("neg-v1-act-after-valid-until", "chain", "a step after that needs a new check", r, len(records1) - 1,
+         "The payment is sealed after the verdict's valid_until (PRD section 14): it needs a new check.")
+
+    r = copy.deepcopy(pay); r["body"]["evaluation_ref"] = _ref(record_digest(records1[fk]))
+    neg1("neg-v1-evaluation-ref-not-the-verdict", "chain", "evaluation_ref is not the verdict", r, len(records1) - 1,
+         "The payment's evaluation_ref names the check, not the verdict its approval answers.")
+
+    r = copy.deepcopy(records1[fv]); r["body"]["proposed_action_digest"] = record_digest(records1[1])
+    neg1("neg-v1-proposed-action-digest", "chain", "proposed_action_digest is not the digest of the check", r, fv,
+         "The verdict names a ProposedAction other than the check it evaluates.")
+
+    r = copy.deepcopy(records1[fv]); r["body"]["task_authority_ref"] = _ref(record_digest(records1[1]))
+    r["body"]["authority_basis"] = [{"type": "task_authority", "ref": r["body"]["task_authority_ref"]}]
+    neg1("neg-v1-task-authority-ref", "chain", "task_authority_ref is not the task authority in force", r, fv,
+         "The verdict's task_authority_ref names a message instead of the limits in force.")
+
+    r = copy.deepcopy(records1[1]); r["x-deal-v0"]["profile"] = "x-deal-v0"
+    neg1("neg-v1-profile-switch", "chain", "a deal keeps one profile version", r, 1,
+         "A v0 record inside a v1 deal.")
+
+    print(f"regenerated {len(records)} + {len(records1)} positives, negatives and vectors under {FIX}")
 
 
 def main(argv):

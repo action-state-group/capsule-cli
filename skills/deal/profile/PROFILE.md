@@ -311,6 +311,47 @@ A verifier holding one deal's records in `seq` order checks:
    deal moved: a pay and its reversal net to zero. Records sealed before this rule carry no
    `direction`; a `pay` among them moved money out, and no other action states a direction.
 
+9. **Authority basis (`x-deal-v1`).** A deal's profile version is fixed by its baseline; every
+   record of the deal names the same `profile`, so a deal opened as `x-deal-v0` keeps its v0
+   records, and v0 readers and checkers stay correct for it. In an `x-deal-v1` deal:
+   - **The verdict is the evaluation**, under the names of the check contract:
+     - `disposition` (`DO` on a pass, `ASK` on a pause);
+     - `proposed_action_digest`: the digest of the check record it evaluates;
+     - `task_authority_ref`: the limits in force, meaning the baseline or the latest
+       `confirm_limits` answer that put new limits in force;
+     - `valid_until`: the evaluation time plus the check's validity;
+     - `ruleset_digest`: the digest of the rule table that evaluated;
+     - `authority_basis`: `[task_authority]`, the proposed phase.
+   - **An `action`, and a `disclosure` with `authority: approval`,** carry `evaluation_ref` (the
+     verdict its approval answers) and `authority_basis`: every authority layer it relied on, in
+     order, each a ref to the record of that layer.
+     - `task_authority`: equal to the verdict's `task_authority_ref`.
+     - `action_state_approval`: on an `ASK` only. It is the user's own answer
+       (`approver: user`, with `said_commitment`), and `binding.card_commitment` equals both
+       the answer's and the verdict's `card_commitment`, so the answer was given on the card
+       the check rendered. An `agent_card` answer (a click, no words) does not satisfy an ask.
+       On a `DO` there is none: the step rests on the task authority.
+     - `platform_approval`: every `platform_approval` record observed for the same verdict, and
+       only those, with its provider and mechanism. `scope: "mismatch"` appears exactly when
+       the platform's approval stated another amount. A platform approval is recorded beside
+       the check, never as its answer, and it never stands in for an `action_state_approval`.
+     - `one_shot_override`: reserved. No rule in this profile defines an override, so it is
+       refused.
+   - **Validity:** a step sealed after its verdict's `valid_until` needs a new check.
+   - **Scope:** an approval covers the action only under the terms and refund terms in force
+     when it was checked.
+   - **Platform approvals:** a `platform_approval` record carries exactly one `about` ref, to
+     the verdict of the action it was observed for. Its `provider` and `mechanism` are names
+     the caller gives, and the approval text is committed, never stored.
+
+   **Retiring `x-deal-v0`.** capsulectl keeps reading, verifying and rendering v0 deals for as
+   long as they exist; nothing re-encodes them. Retirement takes three steps:
+   1. `--profile-version x-deal-v0` stops opening new deals, one release after v1 ships.
+   2. The v0 encoder stays read-only, to re-derive and verify existing v0 records, for as
+      long as deals sealed under it can still be read.
+   3. The v0 schema and checker rules stay in the skill permanently, so anyone can still
+      verify a v0 deal.
+
 ## 7. Outcome conventions: `completed | mismatch | open`
 
 | outcome | Meaning | Set when |

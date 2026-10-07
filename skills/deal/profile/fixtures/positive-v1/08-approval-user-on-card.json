@@ -1,0 +1,41 @@
+{
+  "fixture": "08-approval-user-on-card.json",
+  "expect": "valid",
+  "story": "The user's own answer, in their words, on the card the check rendered (card_commitment).",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v1",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "approval",
+      "seq": 8,
+      "at": "2026-10-06T09:16:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "ec7fc9d8aada741ccdeac899bd495d92b196c1d7a86003634d64a6596a39ddb9"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+      },
+      "refs": [
+        {
+          "rel": "approves",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "b3bad17d190d06b05d00df07c79b58af557044409213dfd22b2fcd0160c9f368"
+        }
+      ]
+    },
+    "body": {
+      "choice": "proceed",
+      "proceed": true,
+      "approver": "user",
+      "said_commitment": "60b5b2b1237a12666ec051e57927dd948948e6c6bca112b8a28df78f0c224224",
+      "card_commitment": "6d02a586e32eac5366b1dbc685561d5a7bfad317e7c3fbed1bbebd287d3eec21"
+    }
+  },
+  "expected_digest": "0ef45b5a08e63496df8d35e4e27d28d7ea765e7fa5413e1d54f8f2f9bc591f85"
+}

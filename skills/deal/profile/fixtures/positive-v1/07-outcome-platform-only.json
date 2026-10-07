@@ -1,0 +1,42 @@
+{
+  "fixture": "07-outcome-platform-only.json",
+  "expect": "valid",
+  "story": "Paying on the platform's approval alone is sealed as an unchecked action: it did not answer the ask.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v1",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "outcome",
+      "seq": 7,
+      "at": "2026-10-06T09:15:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "8c298544648cdb7fec1b3331d48bdf5e8b72a8cda227ce69e5acf1503fee40de"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+      }
+    },
+    "body": {
+      "status": "unchecked_action",
+      "outcome": "mismatch",
+      "unchecked": {
+        "action": "pay",
+        "amount_minor": 55880,
+        "currency": "USD",
+        "rail": "card"
+      },
+      "differences": [
+        {
+          "question": "asked",
+          "rule": "no_sealed_approval"
+        }
+      ]
+    }
+  },
+  "expected_digest": "ec7fc9d8aada741ccdeac899bd495d92b196c1d7a86003634d64a6596a39ddb9"
+}

@@ -8,6 +8,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 )
 
 // This file is the deterministic half of `capsulectl deal`: the deal record
@@ -84,6 +87,10 @@ type dealOpen struct {
 	Recourse dealRecourse `json:"recourse"`
 	// Skill is set by `deal open --skill`, never from the input file.
 	Skill *dealSkill `json:"skill,omitempty"`
+	// Profile is the record profile version this deal is sealed under, set by
+	// `deal open` (never from the input file); absent on deals opened before
+	// it existed, which are x-deal-v0.
+	Profile string `json:"profile,omitempty"`
 	// ExpectCloseBy is the day this deal is expected to be closed
 	// (YYYY-MM-DD); the default depends on the deal type (deal_late.go).
 	// `deal deadlines` lists an open deal against it.
@@ -172,6 +179,12 @@ type dealCheckResult struct {
 	Card        string           `json:"card"`
 	Options     []dealOption     `json:"options"`
 	Remote      dealRemoteResult `json:"remote"`
+	// ValidUntil is when the evaluation stops covering the action (RFC 3339:
+	// sealed at plus --stale-after), and RulesetDigest the digest of the rule
+	// table that evaluated it. Both are fixed when the check is sealed
+	// (x-deal-v1), so a later release re-derives the same record.
+	ValidUntil    string `json:"valid_until,omitempty"`
+	RulesetDigest string `json:"ruleset_digest,omitempty"`
 	// Asked are the attributes of what is about to happen that the user
 	// specified (in their own words, or by choosing, sealed as an intent);
 	// Picked are the ones the agent chose and the user never said.
@@ -459,6 +472,9 @@ type dealEvent struct {
 	Close    *dealCloseResult `json:"close,omitempty"`
 	// Disclosure is something the agent told someone about the user.
 	Disclosure *dealDisclosure `json:"disclosure,omitempty"`
+	// Platform is an approval the user gave on another platform's own gate,
+	// as observed (x-deal-v1). It never answers a deal check.
+	Platform *dealPlatformApproval `json:"platform,omitempty"`
 	// Confirms is set on a record sealed after the deal was closed: the
 	// capsule id of that close. Its Capsule chains to the close with the
 	// registered relation `confirms`, never `follows`, and its record
@@ -468,6 +484,19 @@ type dealEvent struct {
 	// Producer is the capsulectl build that sealed the step, kept with the
 	// step so that a later build re-derives the same record.
 	Producer *dealProducer `json:"producer,omitempty"`
+}
+
+// dealPlatformApproval is an approval the user gave on another platform's
+// own gate (a native purchase confirmation, say), as the caller observed it:
+// the platform and mechanism as the caller names them, the approval text as
+// returned (committed, never stored in the record), and the amount it stated.
+type dealPlatformApproval struct {
+	Check       string `json:"check"`
+	Provider    string `json:"provider"`
+	Mechanism   string `json:"mechanism"`
+	Text        string `json:"text"`
+	AmountMinor *int64 `json:"amount_minor,omitempty"`
+	Currency    string `json:"currency,omitempty"`
 }
 
 // dealProducer names the build that sealed a step. A development build says
@@ -1120,7 +1149,10 @@ func renderCard(r dealCheckResult, demo bool) string {
 // amount, rail and payee match what was done. Anything else is an unchecked
 // action: it is sealed anyway, as an outcome, and shown in the report. rule is
 // the token the sealed outcome carries.
-func authorizeAct(events []sealedEvent, act dealAct) (approval, reason, rule string) {
+// now is when the act is being sealed: an evaluation covers it only until its
+// valid_until (x-deal-v1).
+func authorizeAct(events []sealedEvent, act dealAct, now time.Time) (approval, reason, rule string) {
+	v1 := dealVersion(dealEvent{}, events) == dealProfileV1
 	// One approval covers at most one step: an action or a disclosure.
 	used := map[string]bool{}
 	for _, se := range events {
@@ -1140,8 +1172,28 @@ func authorizeAct(events []sealedEvent, act dealAct) (approval, reason, rule str
 			continue
 		}
 		verdict := events[i]
+		// x-deal-v1 (PRD section 14): an evaluation covers the action until
+		// its valid_until, and no later.
+		if v1 && verdict.Event.Check.ValidUntil != "" {
+			if until, err := time.Parse(time.RFC3339, verdict.Event.Check.ValidUntil); err == nil && now.After(until) {
+				return "", "the check went stale at " + verdict.Event.Check.ValidUntil + ": check again before acting", "stale_check"
+			}
+		}
 		if mismatch := actMismatch(events, verdict.Event.Check.Snapshot, act); mismatch != "" {
 			return "", mismatch, "differs_from_check"
+		}
+		if v1 {
+			// The terms and refund terms in force must be the ones the check
+			// was made under (x-deal-v1). Today only a change step moves them,
+			// and changed_after_check catches that first; this keeps the scope
+			// explicit for any other path.
+			atCheck, err1 := foldDeal(events[:i])
+			now, err2 := foldDeal(events)
+			if err1 == nil && err2 == nil {
+				if mismatch := scopeMismatch(atCheck, now); mismatch != "" {
+					return "", mismatch, "differs_from_check"
+				}
+			}
 		}
 		for _, later := range events[i+1:] {
 			a := later.Event.Approval
@@ -1154,9 +1206,18 @@ func authorizeAct(events []sealedEvent, act dealAct) (approval, reason, rule str
 			if used[later.CapsuleID] {
 				return "", "that approval already covered an earlier step", "approval_already_used"
 			}
+			// x-deal-v1: an ASK (a paused check) is answered only by the
+			// user's own approval, in their words; a click on a card is not one.
+			if v1 && verdict.Event.Check.Verdict == "pause" && a.Approver != "user" {
+				return "", "the card was answered, but the deal check asked, and an ask needs your own approval, in your words", "ask_needs_your_words"
+			}
 			return later.CapsuleID, "", ""
 		}
-		return "", "the check paused and there is no sealed approval", "no_sealed_approval"
+		reason = "the check paused and there is no sealed approval"
+		if v1 && platformObserved(events[i+1:], verdict.CapsuleID) {
+			reason += " of yours: a platform's approval does not answer the deal check"
+		}
+		return "", reason, "no_sealed_approval"
 	}
 	return "", "no check before this action", "no_check"
 }
@@ -1830,4 +1891,55 @@ func (d dealDisclosure) validate() error {
 		action = a
 	}
 	return nil
+}
+
+// dealBuiltinRules is the rule table capsulectl's own deal check evaluates, by
+// question, in the order evaluateDeal asks them. Its digest is the verdict's
+// ruleset_digest (x-deal-v1); a test keeps it equal to the rules evaluateDeal
+// emits.
+var dealBuiltinRules = []struct {
+	Question string   `json:"question"`
+	Rules    []string `json:"rules"`
+}{
+	{"asked", []string{"agent_picked", "not_asked", "over_limit"}},
+	{"who", []string{"payee_or_contact_changed", "first_disclosure"}},
+	{"terms", []string{"terms_changed"}},
+	{"recourse", []string{"recourse_changed", "irreversible_rail"}},
+	{"safety", []string{"pay_before_seeing", "credentials_requested", "verification_code_request", "off_platform_early", "domain_recent"}},
+}
+
+// dealRulesetDigest is the JSON digest of the built-in rule table.
+func dealRulesetDigest() (string, error) {
+	table := make([]interface{}, len(dealBuiltinRules))
+	for i, q := range dealBuiltinRules {
+		rules := make([]interface{}, len(q.Rules))
+		for j, r := range q.Rules {
+			rules[j] = r
+		}
+		table[i] = map[string]interface{}{"question": q.Question, "rules": rules}
+	}
+	return canonical.JSONDigest(map[string]interface{}{"evaluator": "capsulectl deal check", "rules": table})
+}
+
+// scopeMismatch compares the deal's terms and refund terms in force when a
+// check was made (atCheck) with those in force now: an approval covers only
+// the action as it stood when it was checked (x-deal-v1).
+func scopeMismatch(atCheck, now dealState) string {
+	if !reflect.DeepEqual(termsBody(atCheck.terms), termsBody(now.terms)) {
+		return "the terms differ from the ones checked"
+	}
+	if !reflect.DeepEqual(atCheck.recourse.Refundable, now.recourse.Refundable) {
+		return "the refund terms differ from the ones checked"
+	}
+	return ""
+}
+
+// platformObserved reports a platform approval sealed for the check.
+func platformObserved(events []sealedEvent, check string) bool {
+	for _, se := range events {
+		if p := se.Event.Platform; se.Event.Kind == "platform_approval" && p != nil && p.Check == check {
+			return true
+		}
+	}
+	return false
 }

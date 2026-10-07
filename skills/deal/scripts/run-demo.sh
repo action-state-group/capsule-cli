@@ -43,7 +43,10 @@ if [[ "$card" != "$expected" ]]; then
 fi
 
 check_id=$(jq -r .check_id "$work/check.json")
-deal note --deal "$id" --kind approval --check "$check_id" --choice hold --said "hold" >/dev/null
+# The answer is given on the card shown: pass that card, exactly as the check
+# returned it, so the record binds the answer to it.
+jq -j .card "$work/check.json" >"$work/card.txt"
+deal note --deal "$id" --kind approval --check "$check_id" --choice hold --said "hold" --shown-card "$work/card.txt" >/dev/null
 # The sealed records carry no raw values; check them against the profile.
 deal export --deal "$id" --output "$work/records.json" >/dev/null
 if command -v python3 >/dev/null; then

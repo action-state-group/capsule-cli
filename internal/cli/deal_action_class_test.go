@@ -33,11 +33,21 @@ func dealCapsules(t *testing.T, dealID string) map[string]map[string]any {
 // recourse; pay checks at or under 800 pass, above it pause.
 func openSticker(t *testing.T, refundable bool) string {
 	t.Helper()
-	return dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+	return openStickerAs(t, refundable, "")
+}
+
+// openStickerAs is openSticker under a given record profile ("" = the default).
+func openStickerAs(t *testing.T, refundable bool, profile string) string {
+	t.Helper()
+	args := []string{"open"}
+	if profile != "" {
+		args = append(args, "--profile-version", profile)
+	}
+	return dealRun(t, append(args, "--input", writeJSON(t, `{"type":"purchase","channel":"web",
 		"intent":{"verbatim":"buy me an otter sticker under 8 bucks","max_total_minor":800,"allowed":["pay","commit","cancel"]},
 		"who":{"name":"Sticker Marketplace","domain":"stickers.example"},
 		"terms":{"item":"otter sticker","price_minor":600,"currency":"USD"},
-		"recourse":{"rail":"card","refundable":`+strconv.FormatBool(refundable)+`}}`))["deal_id"].(string)
+		"recourse":{"rail":"card","refundable":`+strconv.FormatBool(refundable)+`}}`))...)["deal_id"].(string)
 }
 
 func checkAct(t *testing.T, dealID, action string, amount int) map[string]any {
@@ -185,7 +195,7 @@ func TestDealRecoversAStepAnEarlierReleasePrepared(t *testing.T) {
 	events, err := s.load(t.Context(), id)
 	require.NoError(t, err)
 	a := &dealAct{Action: "pay", AmountMinor: ptr(int64(600))}
-	a.AuthorizedBy, a.Reason, a.Rule = authorizeAct(events, *a)
+	a.AuthorizedBy, a.Reason, a.Rule = authorizeAct(events, *a, dealClock().UTC())
 	require.NotEmpty(t, a.AuthorizedBy)
 	_, prepared, err := s.prepareStep(t.Context(), id, events, dealEvent{Kind: "act", Act: a})
 	require.NoError(t, err)
@@ -227,21 +237,24 @@ func dealApprovers(t *testing.T, dealID string) map[string]string {
 // Three authority values, and only one certifies the user's consent. approver
 // user is sealed only with the user's own words (said_commitment) on an
 // approval of the check, which pins the proposed action; a click on a card
-// the agent composed (no words) seals agent_card, and the act it authorizes
-// stays fyi; a passing check seals standing_intent (policy).
+// the agent composed (no words) seals agent_card; a passing check seals
+// standing_intent (policy). In an x-deal-v1 deal a card click answers no ask,
+// so the act it would authorize is not authorized; an x-deal-v0 deal keeps
+// the behaviour it was opened under (the act is authorized, its Capsule fyi).
 func TestDealApprovalAuthorityHasThreeValues(t *testing.T) {
 	for _, tc := range []struct {
-		name, said, approver, actionType string
-		pass                             bool
+		name, said, approver, actionType, profile string
+		pass, authorizes                          bool
 	}{
-		{name: "the user's words", said: "yes, 30 is fine for this one", approver: "user", actionType: "decide"},
+		{name: "the user's words", said: "yes, 30 is fine for this one", approver: "user", actionType: "decide", authorizes: true},
 		{name: "a card click", said: "", approver: "agent_card", actionType: "fyi"},
 		{name: "a card click with blank words", said: "   ", approver: "agent_card", actionType: "fyi"},
-		{name: "a passing check", pass: true, approver: "standing_intent", actionType: "decide"},
+		{name: "a passing check", pass: true, approver: "standing_intent", actionType: "decide", authorizes: true},
+		{name: "a card click in an x-deal-v0 deal", said: "", approver: "agent_card", actionType: "fyi", profile: dealProfileV0, authorizes: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dealFixture(t)
-			id := openSticker(t, true)
+			id := openStickerAs(t, true, tc.profile)
 			amount := 3000
 			if tc.pass {
 				amount = 600
@@ -257,7 +270,12 @@ func TestDealApprovalAuthorityHasThreeValues(t *testing.T) {
 				approvalID = dealRun(t, args...)["capsule_id"].(string)
 			}
 			paid := act(t, id, "pay", amount)
-			require.Equal(t, approvalID, paid["authorized_by"], "the deal's own rules still let the answer authorize the act")
+			if tc.authorizes {
+				require.Equal(t, approvalID, paid["authorized_by"])
+			} else {
+				require.Equal(t, true, paid["unchecked"], "a card click answers no ask")
+				require.Equal(t, "ask_needs_your_words", paid["rule"])
+			}
 
 			assert.Equal(t, tc.approver, dealApprovers(t, id)[approvalID], "the approver the record seals")
 			capsule := dealCapsules(t, id)[paid["capsule_id"].(string)]

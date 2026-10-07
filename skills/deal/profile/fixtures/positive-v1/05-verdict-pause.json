@@ -1,0 +1,71 @@
+{
+  "fixture": "05-verdict-pause.json",
+  "expect": "valid",
+  "story": "The deal check asks: the payee changed since first contact.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v1",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "verdict",
+      "seq": 5,
+      "at": "2026-10-06T09:13:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "01c9de1385145fbcf4525ef81ded6346298b007a3235c5e002e0a6f12030fca4"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+      },
+      "refs": [
+        {
+          "rel": "checks",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "01c9de1385145fbcf4525ef81ded6346298b007a3235c5e002e0a6f12030fca4"
+        }
+      ]
+    },
+    "body": {
+      "result": "pause",
+      "differences": [
+        {
+          "question": "who",
+          "rule": "payee_or_contact_changed",
+          "field": "payee"
+        }
+      ],
+      "options": [
+        "hold",
+        "proceed"
+      ],
+      "card_commitment": "6d02a586e32eac5366b1dbc685561d5a7bfad317e7c3fbed1bbebd287d3eec21",
+      "judge": {
+        "kind": "rules"
+      },
+      "disposition": "ASK",
+      "proposed_action_digest": "01c9de1385145fbcf4525ef81ded6346298b007a3235c5e002e0a6f12030fca4",
+      "task_authority_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+      },
+      "valid_until": "2026-10-06T09:28:00Z",
+      "ruleset_digest": "91228ddeeada54d64584e3cb5d5a7a2b4a00c9401a48d489c67902b1438c20fd",
+      "authority_basis": [
+        {
+          "type": "task_authority",
+          "ref": {
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+          }
+        }
+      ]
+    }
+  },
+  "expected_digest": "b3bad17d190d06b05d00df07c79b58af557044409213dfd22b2fcd0160c9f368"
+}

@@ -155,8 +155,9 @@ func TestDealRecordsFollowTheProfile(t *testing.T) {
 	shipped, err := os.ReadFile(dealProfileDir + "/x-deal-v0.schema.json")
 	require.NoError(t, err)
 	assert.Equal(t, string(shipped), string(dealProfileSchema), "internal/cli/assets copy must equal the skill's schema")
-	schema, err := compiledDealSchema()
+	shippedV1, err := os.ReadFile(dealProfileDir + "/x-deal-v1.schema.json")
 	require.NoError(t, err)
+	assert.Equal(t, string(shippedV1), string(dealProfileSchemaV1), "internal/cli/assets copy must equal the skill's x-deal-v1 schema")
 
 	dealFixture(t)
 	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
@@ -189,7 +190,7 @@ func TestDealRecordsFollowTheProfile(t *testing.T) {
 	assert.Len(t, records, int(out["records"].(float64)))
 	types := map[string]bool{}
 	for i, r := range records {
-		assert.NoError(t, schema.Validate(r), "record %d", i+1)
+		assert.NoError(t, recordSchema(t, r).Validate(r), "record %d", i+1)
 		types[r.(map[string]interface{})["x-deal-v0"].(map[string]interface{})["record_type"].(string)] = true
 	}
 	for _, rt := range []string{"baseline", "intent", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close"} {

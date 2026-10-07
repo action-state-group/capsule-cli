@@ -1,0 +1,44 @@
+{
+  "fixture": "01-baseline.json",
+  "expect": "valid",
+  "story": "x-deal-v1. First contact: the user asks for the SJC-HOU flight under $600 from Example Air.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v1",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "baseline",
+      "seq": 1,
+      "at": "2026-10-06T09:02:00Z",
+      "channel": "web",
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "payee": "7fd7df142956f3bd3f892bed75734b81da777048536d0845b27317c9bccace90",
+          "name": "88832536ecafd63900068ff9be69e36d9fcdbb893a652d11e3067fdb341f0c0b",
+          "domain": "0e7d833b78a0b39ac3a5eb812ff1bc4bfbbe0e628ab43ee217825409806e6d4b"
+        }
+      }
+    },
+    "body": {
+      "deal_type": "purchase",
+      "intent": {
+        "verbatim_commitment": "ff56f9733e6f5a78625cc3dd2adf95964292edee3cbd2b9218d8576d36bde7c7",
+        "max_total_minor": 60000,
+        "allowed": [
+          "pay"
+        ]
+      },
+      "terms": {
+        "item": "SJC-HOU flight",
+        "price_minor": 55880,
+        "currency": "USD"
+      },
+      "recourse": {
+        "rail": "card",
+        "refundable": true
+      }
+    }
+  },
+  "expected_digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+}

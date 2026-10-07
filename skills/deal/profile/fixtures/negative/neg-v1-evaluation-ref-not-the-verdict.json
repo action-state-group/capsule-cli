@@ -1,0 +1,94 @@
+{
+  "fixture": "neg-v1-evaluation-ref-not-the-verdict",
+  "expect": "invalid",
+  "description": "The payment's evaluation_ref names the check, not the verdict its approval answers.",
+  "expected_stage": "chain",
+  "expected_error_contains": "evaluation_ref is not the verdict",
+  "chain_dir": "positive-v1",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-message-site-switch.json",
+    "03-detail-change-merchant.json",
+    "04-check-pay.json",
+    "05-verdict-pause.json",
+    "06-platform-approval.json",
+    "07-outcome-platform-only.json",
+    "08-approval-user-on-card.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v1",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "action",
+      "seq": 9,
+      "at": "2026-10-06T09:17:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "0ef45b5a08e63496df8d35e4e27d28d7ea765e7fa5413e1d54f8f2f9bc591f85"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+      },
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "payee": "448ac256f669560a03396bf405bb19a5636b758a56f7034b2a87a0befb95ea14"
+        }
+      },
+      "refs": [
+        {
+          "rel": "authorized_by",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "0ef45b5a08e63496df8d35e4e27d28d7ea765e7fa5413e1d54f8f2f9bc591f85"
+        }
+      ]
+    },
+    "body": {
+      "action": "pay",
+      "amount_minor": 55880,
+      "currency": "USD",
+      "rail": "card",
+      "evaluation_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "01c9de1385145fbcf4525ef81ded6346298b007a3235c5e002e0a6f12030fca4"
+      },
+      "authority_basis": [
+        {
+          "type": "task_authority",
+          "ref": {
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "bd174c6e5a012f77a18adae60fb8fc1ca35d56ef85f33fe256f1f14dc4f2bdc9"
+          }
+        },
+        {
+          "type": "action_state_approval",
+          "ref": {
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "0ef45b5a08e63496df8d35e4e27d28d7ea765e7fa5413e1d54f8f2f9bc591f85"
+          },
+          "binding": {
+            "card_commitment": "6d02a586e32eac5366b1dbc685561d5a7bfad317e7c3fbed1bbebd287d3eec21"
+          }
+        },
+        {
+          "type": "platform_approval",
+          "ref": {
+            "type": "deal-record",
+            "digest_alg": "SHA-256",
+            "digest": "8c298544648cdb7fec1b3331d48bdf5e8b72a8cda227ce69e5acf1503fee40de"
+          },
+          "provider": "example-platform",
+          "mechanism": "native-gate"
+        }
+      ]
+    }
+  }
+}
