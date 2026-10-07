@@ -255,17 +255,6 @@ func namedInWords(value, words string) bool {
 	return named > 0
 }
 
-// materialAttribute is an attribute the agent may not settle alone: one that
-// changes what is bought or what it costs (quantity, size, variant,
-// shipping or delivery). When the agent picked one, the check asks the user.
-var materialCondition = regexp.MustCompile(`(?i)size|variant|shipping|delivery|quantity|qty`)
-
-// A quantity of one is how any request in the singular reads, so it is never
-// the agent's pick to ask about; any other quantity is.
-func materialAttribute(a dealAttribute) bool {
-	return a.Field == "quantity" && a.Value != "1" || strings.HasPrefix(a.Field, "conditions.") && materialCondition.MatchString(a.Field)
-}
-
 // attributeText is a list of attributes as "label value" pairs.
 func attributeText(list []dealAttribute) string {
 	parts := make([]string, len(list))
@@ -546,13 +535,16 @@ func (c dealClaim) validate() error {
 
 // dealState folds a deal's sealed steps into what a check compares.
 type dealState struct {
-	open      dealOpen
-	intent    dealIntent // the latest: the baseline's, or a later intent step
-	agreed    dealTerms
-	who       dealWho
-	whoSource map[string]string
-	terms     dealTerms
-	recourse  dealRecourse
+	// materiality is the predicate the check evaluates on the agent's
+	// picks; nil when none is configured (every pick is material).
+	materiality *materialityPredicate
+	open        dealOpen
+	intent      dealIntent // the latest: the baseline's, or a later intent step
+	agreed      dealTerms
+	who         dealWho
+	whoSource   map[string]string
+	terms       dealTerms
+	recourse    dealRecourse
 	// agreedRecourse is the way back as agreed: the baseline's, updated only
 	// by an approved check.
 	agreedRecourse dealRecourse
@@ -903,10 +895,12 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	intent := s.intent
 	r.Asked, r.Picked = attributeProvenance(intent.Asked, proposed)
 	// A material attribute the agent picked needs the user's nod: it pauses
-	// the check, so "proceed" is never true on an empty card.
+	// the check, so "proceed" is never true on an empty card. Which picks are
+	// material is the materiality predicate's to say, not this code's; with
+	// none configured, every pick is (fail safe).
 	for _, a := range r.Picked {
-		if materialAttribute(a) {
-			add("asked", "agent_picked", a.Field, fmt.Sprintf("I picked %s %s; price varies by %s", a.Label, a.Value, a.Label))
+		if s.materiality.material(a) {
+			add("asked", "agent_picked", a.Field, fmt.Sprintf("I picked %s %s; you didn't choose it", a.Label, a.Value))
 		}
 	}
 	// A share that names what it gives is judged by its recipient (below),
@@ -1084,10 +1078,16 @@ func renderCard(r dealCheckResult, demo bool) string {
 		}
 	}
 	parts = append(parts, r.Notes...)
-	// The agent's other picks, not material enough to pause on their own.
+	// The agent's other picks: the ones the check did not pause on.
+	paused := map[string]bool{}
+	for _, d := range r.Differences {
+		if d.Rule == "agent_picked" {
+			paused[d.Field] = true
+		}
+	}
 	var minor []dealAttribute
 	for _, a := range r.Picked {
-		if !materialAttribute(a) {
+		if !paused[a.Field] {
 			minor = append(minor, a)
 		}
 	}

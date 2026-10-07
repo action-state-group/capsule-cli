@@ -23,7 +23,7 @@ if [[ -z "$bin" ]]; then
 fi
 deal() { "$bin" --profile demo deal "$@"; }
 
-deal init --dir "$work/store" >/dev/null
+deal init --dir "$work/store" --materiality "$skill_dir/profile/materiality-predicate/neutral.json" >/dev/null
 id=$(deal open --input "$demo/01-open.json" | jq -r .deal_id)
 deal note --deal "$id" --kind message --input "$demo/02-message-quote.json" >/dev/null
 deal note --deal "$id" --kind message --input "$demo/03-message-switch.json" >/dev/null

@@ -124,6 +124,23 @@ func doctorCommand() *cobra.Command {
 			profileReport["type"] = p.Type
 			profileReport["signing_key"] = signingKeySummary(p.Signing)
 			report["profile"] = profileReport
+			// A deal profile's materiality predicate: which of the agent's own
+			// picks pause a check. None is a notice, not an issue: checks fail
+			// safe. One that cannot be read refuses every check: an issue.
+			unreadablePredicate := false
+			if p.Namespace == "deal" {
+				materiality := map[string]any{"configured": p.Materiality.Predicate != ""}
+				switch predicate, err := loadMaterialityPredicate(p.Materiality.Predicate); {
+				case p.Materiality.Predicate == "":
+					materiality["notice"] = "no materiality predicate: every attribute the agent picks pauses the check (set one with deal init --materiality)"
+				case err != nil:
+					materiality["ok"], materiality["issue"] = false, SafeError(err)
+					unreadablePredicate = true
+				default:
+					materiality["ok"], materiality["name"], materiality["version"], materiality["digest"] = true, predicate.Name, predicate.Version, predicate.Digest
+				}
+				profileReport["materiality"] = materiality
+			}
 
 			switch {
 			case !checkWitness:
@@ -155,7 +172,10 @@ func doctorCommand() *cobra.Command {
 				}
 				report["witness"] = witness
 			}
-			return output(c, report)
+			if e := output(c, report); e != nil || !unreadablePredicate {
+				return e
+			}
+			return ErrPartial
 		},
 	}
 	cmd.Flags().Bool("install-check", false, "Check a fresh install before its first deal: the expected release, exactly one deal skill, a witness endpoint with its key; one JSON object, exit 3 on any issue")

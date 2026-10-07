@@ -362,6 +362,12 @@ names, numbers, addresses and message text stay in this local store: each
 sealed step is an x-deal-v0 record (see `profile/PROFILE.md`) that carries
 only fingerprints of identifiers and commitments to text.
 
+Which of your own picks (a size, a delivery option the user never named)
+pause a check is set by a materiality predicate the profile names:
+`deal init --materiality FILE` (see `profile/materiality-predicate/`). With
+none configured, every attribute you picked pauses the check and the user is
+asked about it.
+
 Then run `capsulectl --profile deal deal tick` **every minute** from a timer
 on this machine (a cron line `* * * * *`, or the host's scheduler at a
 one-minute interval). It publishes only when a tick is due, on its own
