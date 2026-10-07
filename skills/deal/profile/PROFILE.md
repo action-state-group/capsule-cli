@@ -45,7 +45,12 @@ exactly two members.
     `disposition` is `accept` and `executed`, by `human` (with `human_disposed`) only when the
     user approved it in their own words (`approver: user`, with `said_commitment`), or by
     `policy` when a passing check approved it under their standing intent. An act approved by
-    `agent_card` is not certified by anyone and stays `fyi`. Its `effect` is `dispatched` and `runtime_claimed` (the agent's
+    `agent_card` is not certified by anyone and stays `fyi`. In a deal sealed in typed records
+    (section 9), an `action-record/v0`'s disposition is read from its own `authority_basis`,
+    the canonical authority field, and `decide`/`fyi` is only its presentation: `human` (with
+    `human_disposed`) when a `user_approval` is a layer, `policy` when the `task_authority`
+    alone covered it (a `DO`). A `platform_approval` is that platform's own check and changes
+    neither; any other basis stays `fyi`. Its `effect` is `dispatched` and `runtime_claimed` (the agent's
     report, with no response in hand), so `effect_mode` is `dispatched_unconfirmed`;
     `one_way_recoverable` when the agreed recourse is refundable, else
     `one_way_consequential`.

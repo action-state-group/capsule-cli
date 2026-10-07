@@ -164,7 +164,7 @@ func TestDealOverCapPaymentIsSelectedByItsClass(t *testing.T) {
 	events, err := s.load(t.Context(), id)
 	require.NoError(t, err)
 	last := events[len(events)-1]
-	legacy := dealCapsuleInput(events[:len(events)-1], last.Event, p.Name, time.Now(), true)
+	legacy := dealCapsuleInput(events[:len(events)-1], last.Event, nil, p.Name, time.Now(), true)
 	assert.Equal(t, "fyi", string(legacy.ActionType))
 	assert.Nil(t, legacy.Effect, "nothing for a check keyed on the class to select")
 }

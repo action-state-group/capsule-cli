@@ -317,11 +317,16 @@ var dealEffectTypes = map[string]string{"pay": "send_payment"}
 // shows. A record that says an action was taken under a sealed approval (an
 // authorized act whose action has a registered effect type) is a decide
 // Capsule:
-//   - disposition: accepted, and executed, as the act reports. The approver
-//     is the one the approval records: a human only when the user approved it
-//     in their own words (committed as said_commitment), policy when a passing
-//     check approved it under the user's standing intent. An act approved by
-//     agent_card (a click on a card the agent composed) stays fyi;
+//   - disposition: accepted, and executed, as the act reports. In a typed
+//     action-record/v0 it is read from the record's own authority_basis, the
+//     canonical authority field (basisDisposition): human only when the
+//     user's own approval is a layer, policy when the task authority alone
+//     covered it (a DO); a platform approval never makes it human. In an
+//     x-deal-v0 record, the approver is the one the approval records: a human
+//     only when the user approved it in their own words (committed as
+//     said_commitment), policy when a passing check approved it under the
+//     user's standing intent. An act approved by agent_card (a click on a
+//     card the agent composed) stays fyi;
 //   - effect: dispatched, runtime_claimed: the agent's report that it acted,
 //     with no response in hand, so effect_mode is dispatched_unconfirmed;
 //     one_way_recoverable when the agreed recourse says refundable, otherwise
@@ -331,12 +336,15 @@ var dealEffectTypes = map[string]string{"pay": "send_payment"}
 // record itself seals as an outcome and never as an action. legacy gives the
 // all-fyi Capsule earlier capsulectl releases sealed, for recovering a step
 // one of them prepared.
-func dealCapsuleInput(events []sealedEvent, ev dealEvent, operator string, at time.Time, legacy bool) emit.Input {
+func dealCapsuleInput(events []sealedEvent, ev dealEvent, record []byte, operator string, at time.Time, legacy bool) emit.Input {
 	in := emit.Input{ActionID: fmt.Sprintf("%s/%d", ev.DealID, ev.N), ActionType: emit.ActionTypeFYI, Operator: operator, Developer: "capsulectl-deal", Timestamp: at}
 	if legacy || ev.Kind != "act" || ev.Act == nil || ev.Act.Unchecked {
 		return in
 	}
-	disposition, ok := dealDisposition(events, ev.Act.AuthorizedBy)
+	disposition, ok, typed := basisDisposition(record)
+	if !typed {
+		disposition, ok = dealDisposition(events, ev.Act.AuthorizedBy)
+	}
 	if !ok {
 		return in
 	}
@@ -387,16 +395,50 @@ func shownCardMatches(events []sealedEvent, a dealApproval) error {
 	return nil
 }
 
-// dealDisposition is the disposition of an act authorized by the sealed
-// approval id: accepted and executed, by the approver that approval records.
-// It is false when id names no proceeding approval this maps.
+// basisDisposition is the Capsule disposition a typed action-record/v0
+// supports, read from its own authority_basis (decide/fyi is presentation of
+// that canonical field): accepted and executed; approver human, with
+// human_disposed, when the user's own approval is a layer; policy when the
+// task authority alone covered it (a DO). A platform approval is that
+// platform's own check and changes neither. Any other basis (no task
+// authority first, or a layer this producer defines no override for) maps to
+// nothing: the act stays fyi. typed is false when the record is not an
+// action-record/v0 (an x-deal-v0 record maps by dealDisposition).
+func basisDisposition(record []byte) (d emit.Disposition, ok, typed bool) {
+	var r struct {
+		Type string `json:"type"`
+		Body struct {
+			AuthorityBasis []struct {
+				Type string `json:"type"`
+			} `json:"authority_basis"`
+		} `json:"body"`
+	}
+	if json.Unmarshal(record, &r) != nil || r.Type != typeActionRecord {
+		return emit.Disposition{}, false, false
+	}
+	basis := r.Body.AuthorityBasis
+	if len(basis) == 0 || basis[0].Type != "task_authority" {
+		return emit.Disposition{}, false, true
+	}
+	d = emit.Disposition{Decision: emit.DecisionAccept, VerdictClass: emit.VerdictExecuted, Approver: emit.ApproverPolicy}
+	for _, layer := range basis[1:] {
+		switch layer.Type {
+		case "user_approval":
+			d.Approver, d.HumanDisposed = emit.ApproverHuman, true
+		case "platform_approval":
+		default:
+			return emit.Disposition{}, false, true
+		}
+	}
+	return d, true, true
+}
+
+// dealDisposition is the disposition of an act in an x-deal-v0 record,
+// authorized by the sealed approval id: accepted and executed, by the
+// approver that approval records. It is false when id names no proceeding
+// approval this maps.
 func dealDisposition(events []sealedEvent, id string) (emit.Disposition, bool) {
 	for _, se := range events {
-		// Typed records: a DO evaluation authorizes on the task authority
-		// alone, as a standing intent did.
-		if c := se.Event.Check; id != "" && se.CapsuleID == id && se.Event.Kind == "check" && c != nil && c.Verdict == "pass" {
-			return emit.Disposition{Decision: emit.DecisionAccept, VerdictClass: emit.VerdictExecuted, Approver: emit.ApproverPolicy}, true
-		}
 		a := se.Event.Approval
 		if id == "" || se.CapsuleID != id || se.Event.Kind != "approval" || a == nil || !a.Proceed {
 			continue
@@ -433,7 +475,7 @@ func (s *dealSession) stepRequest(events []sealedEvent, ev dealEvent, legacy boo
 	}
 	request := Request{
 		Version: "capsule-seal-request/v1",
-		Capsule: dealCapsuleInput(events, ev, s.p.Name, at.UTC(), legacy),
+		Capsule: dealCapsuleInput(events, ev, payload, s.p.Name, at.UTC(), legacy),
 		Payload: payload,
 	}
 	// Each step's Capsule follows the one before it (ordering only), so the
