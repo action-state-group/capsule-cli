@@ -1006,6 +1006,13 @@ func approvedAmount(events []sealedEvent, state dealState) (amount *int64, curre
 	currency = state.agreed.Currency
 	for i := len(events) - 1; i >= 0; i-- {
 		a := events[i].Event.Approval
+		// In typed records a check that needed no approval authorizes the
+		// action itself: what it checked is what went ahead.
+		if act := events[i].Event.Act; act != nil && !act.Unchecked {
+			if c, ok := byID[act.AuthorizedBy]; ok && c.Event.Check != nil {
+				a = &dealApproval{Check: act.AuthorizedBy, Proceed: true, Approver: "standing_intent"}
+			}
+		}
 		if a == nil || !a.Proceed || a.Reason != "" {
 			continue
 		}
@@ -1023,6 +1030,9 @@ func approvedAmount(events []sealedEvent, state dealState) (amount *int64, curre
 		basis = "the amount you approved at the check"
 		if a.Approver == "standing_intent" {
 			basis = "the amount checked against what you already allowed"
+			if dealRecordSet(dealEvent{}, events) == recordsTyped {
+				basis = "the amount checked against what you had already asked for"
+			}
 		}
 		if a.Approver == "agent_card" {
 			basis = "the amount on the card that was approved"

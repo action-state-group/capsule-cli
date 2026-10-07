@@ -208,23 +208,26 @@ func coverageSentence(b map[string]interface{}, k, n uint64) string {
 }
 
 type dealEmailView struct {
-	Demo          bool
-	Scope         string
-	Asked         string
-	Outcome       string
-	Assurance     string
-	Countersign   string
-	Did           []dealReportItem
-	Anomalies     []dealReportItem
-	Merchant      []dealMerchantRow
-	Deadlines     []dealDeadline
-	Cancellations []dealCancellation
-	Lifecycle     dealLifecycle
-	EmailScope    string
-	Steps         int
-	VerifyLine    string
-	NotClaimed    []string
-	CheckedNote   string
+	Demo        bool
+	Scope       string
+	Asked       string
+	Outcome     string
+	Assurance   string
+	Countersign string
+	Did         []dealReportItem
+	// Authority is the AUTHORITY block of each action of a typed deal.
+	Authority      []dealAuthorityBlock
+	AuthorityOrder string
+	Anomalies      []dealReportItem
+	Merchant       []dealMerchantRow
+	Deadlines      []dealDeadline
+	Cancellations  []dealCancellation
+	Lifecycle      dealLifecycle
+	EmailScope     string
+	Steps          int
+	VerifyLine     string
+	NotClaimed     []string
+	CheckedNote    string
 	// MerchantNote says what stands behind the merchant section, once.
 	MerchantNote string
 	DeadlineNote string
@@ -251,6 +254,10 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <p style="margin:0;">&ldquo;{{.Asked}}&rdquo;</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">What the agent did</h2>
 <ul style="margin:0;padding-left:20px;">{{range .Did}}<li>{{if .At}}{{.At}} &middot; {{end}}{{.Text}}</li>{{else}}<li>Nothing yet.</li>{{end}}</ul>
+{{if .Authority}}<h2 style="font-size:16px;margin:16px 0 4px;">Authority</h2>
+<p style="margin:0;color:#444;">{{.AuthorityOrder}}</p>
+{{range .Authority}}<p style="margin:8px 0 2px;font-weight:600;">{{if not .Covered}}&#9888;&#65039; {{end}}{{.Action}}</p>
+<ul style="margin:0;padding-left:20px;">{{range .Layers}}<li>{{.At}} &middot; {{.Text}}{{if .Note}}<br><span style="color:#444;">{{.Note}}</span>{{end}}</li>{{end}}</ul>{{end}}{{end}}
 <p style="margin:4px 0 0;color:#444;">Outcome: {{.Outcome}} &middot; {{.Steps}} sealed steps</p>
 <p style="margin:12px 0 8px;color:#444;">{{.Assurance}}</p>
 <p style="margin:0 0 16px;color:#444;">{{.Countersign}}</p>
@@ -328,6 +335,22 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 			continue
 		}
 		fmt.Fprintf(&tb, "- %s\n", d.Text)
+	}
+	if len(view.Authority) > 0 {
+		tb.WriteString("\nAuthority:\n" + view.AuthorityOrder + "\n")
+		for _, b := range view.Authority {
+			mark := ""
+			if !b.Covered {
+				mark = "⚠️ "
+			}
+			fmt.Fprintf(&tb, "%s%s\n", mark, b.Action)
+			for _, l := range b.Layers {
+				fmt.Fprintf(&tb, "- %s · %s\n", l.At, l.Text)
+				if l.Note != "" {
+					fmt.Fprintf(&tb, "  %s\n", l.Note)
+				}
+			}
+		}
 	}
 	fmt.Fprintf(&tb, "Outcome: %s · %d sealed steps\n\n%s\n\n%s\n\nAnomalies:\n", view.Outcome, view.Steps, view.Assurance, view.Countersign)
 	if len(view.Anomalies) == 0 {

@@ -183,6 +183,14 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 		}
 		ext["money"] = money
 	}
+	// The AUTHORITY block: the user's own copy only (it carries their words).
+	if report.Authority != nil {
+		authority, err := bundleJSON(report.Authority)
+		if err != nil {
+			return nil, err
+		}
+		ext["authority"], ext["authority_order"] = authority, dealAuthorityOrder
+	}
 	for key, v := range map[string]any{"deadlines": dealDeadlines(events, dealClock(), 2), "cancellations": dealCancellations(events), "lifecycle": buildDealLifecycle(events, dealClock())} {
 		generic, err := bundleJSON(v)
 		if err != nil {

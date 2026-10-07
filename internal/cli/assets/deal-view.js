@@ -198,7 +198,8 @@ function versionBefore(a, b) {
   const builds = [];
   matched.forEach((id) => {
     const rec = ((bundle.disclosures || {})[id] || {}).agent_input || {};
-    const p = (rec["x-deal-v0"] || {}).producer;
+    // An x-deal-v0 record names its producer in its block; a typed record, in its header.
+    const p = (rec["x-deal-v0"] || rec).producer;
     const name = p && typeof p.version === "string" ? `${p.name || "capsulectl"} ${p.version} (${p.commit || "unknown"})` : "an earlier capsulectl that did not record its version";
     if (!builds.some((b) => b.name === name)) builds.push({ name, version: p && p.version });
   });
@@ -251,6 +252,23 @@ function versionBefore(a, b) {
   did.forEach((i) => host.append(item(typeof i.at === "string" && i.at ? `${i.at} · ${i.text}` : i.text, i.steps)));
   // What the sealed acts moved, by direction: a pay and its reversal net to zero.
   if (report.money && typeof report.money.text === "string") host.append(el("p", report.money.text));
+
+  // Authority: for each action, every layer it relied on, in order, each with
+  // its time; never collapsed into "you approved". Written by capsulectl on
+  // this device; each line expands to the step it was read from.
+  const authority = report.authority || [];
+  if (authority.length > 0) {
+    host.append(el("h2", "Authority"));
+    if (typeof report.authority_order === "string") host.append(el("p", report.authority_order, "deal-note"));
+    authority.forEach((b) => {
+      host.append(el("h3", `${b.covered ? "" : "⚠️ "}${b.action}`));
+      (b.layers || []).forEach((l) => {
+        const line = item(`${l.at} · ${l.text}`, [l.step], b.covered || l.layer !== "action" ? undefined : "deal-flag");
+        if (typeof l.note === "string" && l.note) line.append(el("p", l.note, "deal-note"));
+        host.append(line);
+      });
+    });
+  }
 
   // Where the deal stands (open, cancelled or closed), the records linked to
   // the close after it, and that more may be linked after this page was
