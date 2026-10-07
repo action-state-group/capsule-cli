@@ -12,6 +12,16 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]{0,63}$"
     },
+    "action_class": {
+      "description": "The action's class in the action taxonomy that taxonomy_version names.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}\\.[a-z][a-z0-9_]{0,63}$"
+    },
+    "taxonomy_version": {
+      "description": "The version of the action taxonomy action_class is drawn from.",
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,3}$"
+    },
     "ns_token": {
       "type": "string",
       "pattern": "^([a-z][a-z0-9_]{0,63}|[a-z0-9-]+(\\.[a-z0-9-]+)+\\.[a-z][a-z0-9_]{0,63})$"
@@ -327,9 +337,35 @@
       "required": [
         "action"
       ],
+      "dependentRequired": {
+        "action_class": [
+          "taxonomy_version"
+        ],
+        "taxonomy_version": [
+          "action_class"
+        ]
+      },
       "properties": {
         "action": {
           "$ref": "#/$defs/action"
+        },
+        "action_class": {
+          "$ref": "#/$defs/action_class"
+        },
+        "taxonomy_version": {
+          "$ref": "#/$defs/taxonomy_version"
+        },
+        "spend_minor": {
+          "description": "The amount a spend cap evaluates: what the action pays out. 0 on every cancel.",
+          "$ref": "#/$defs/uint"
+        },
+        "fee_minor": {
+          "description": "On a cancel only: a fee the cancellation costs, never the amount a spend cap evaluates.",
+          "$ref": "#/$defs/uint"
+        },
+        "cancelled_amount_minor": {
+          "description": "On a cancel only: the amount the cancel was about when it returns no sealed payment. Neither money moved nor spend.",
+          "$ref": "#/$defs/uint"
         },
         "amount_minor": {
           "type": "integer",

@@ -279,6 +279,9 @@ func actionBody(a dealAct, currency string, commit func(string) (string, error))
 	if a.Direction != "" {
 		m["direction"] = a.Direction
 	}
+	if a.FeeMinor != nil {
+		m["fee_minor"] = *a.FeeMinor
+	}
 	for name, field := range map[string]string{"reference": "reference_commitment", "description": "description_commitment"} {
 		if (name == "reference" && a.Reference == "") || (name == "description" && a.Description == "") {
 			continue
@@ -458,9 +461,26 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 	if ev.Producer != nil {
 		block["producer"] = map[string]interface{}{"name": ev.Producer.Name, "version": ev.Producer.Version, "commit": ev.Producer.Commit}
 	}
-	var currency string
+	var currency, dealType string
 	if len(events) > 0 {
 		currency = events[0].Event.Open.Terms.Currency
+		dealType = events[0].Event.Open.Type
+	}
+	// classify seals the action's taxonomy class beside it, and the amount a
+	// spend cap evaluates (dealSpendMinor), for a step that carries a
+	// taxonomy version (dealActionClass).
+	classify := func(m map[string]interface{}, action, direction string, amount *int64) {
+		if ev.TaxonomyVersion == "" {
+			return
+		}
+		m["action_class"] = dealActionClass(dealType, action, direction)
+		m["taxonomy_version"] = ev.TaxonomyVersion
+		if spend, ok := dealSpendMinor(action, direction, amount); ok {
+			m["spend_minor"] = spend
+		}
+		if action == "cancel" {
+			sealCancelAmount(m, direction)
+		}
 	}
 	setIDs := func(ids map[string]interface{}) {
 		if len(ids) > 0 {
@@ -637,6 +657,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			setIDs(counterpartyIDs(key, *sn.Who))
 		}
 		body["action"] = sn.Action
+		var snapCurrency string
 		if sn.AmountMinor != nil {
 			body["amount_minor"] = *sn.AmountMinor
 			cur := currency
@@ -646,7 +667,15 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			if cur != "" {
 				body["currency"] = cur
 			}
+			snapCurrency = cur
 		}
+		// The checked action's direction, as its act would be sealed with: a
+		// cancel that returns a sealed payment is a refund.
+		direction, _ := actDirection(events, dealAct{Action: sn.Action, AmountMinor: sn.AmountMinor, Currency: snapCurrency}, currency)
+		if sn.FeeMinor != nil {
+			body["fee_minor"] = *sn.FeeMinor
+		}
+		classify(body, sn.Action, direction, sn.AmountMinor)
 		if sn.SeenItem != nil {
 			body["seen_item"] = *sn.SeenItem
 		}
@@ -756,7 +785,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			return nil, err
 		}
 		if ev.Act.Unchecked {
-			// Not authorized: sealed as an outcome, never as an action.
+			// Not authorized: sealed as an outcome, never as an action. A
+			// cancel's amount still never reads as money paid out.
+			if ev.TaxonomyVersion != "" && ev.Act.Action == "cancel" {
+				sealCancelAmount(act, ev.Act.Direction)
+			}
 			rtype = "outcome"
 			body = map[string]interface{}{
 				"status": "unchecked_action", "outcome": "mismatch", "unchecked": act,
@@ -772,6 +805,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			if ev.Act.Payee != "" {
 				setIDs(counterpartyIDs(key, dealWho{Payee: ev.Act.Payee}))
 			}
+			classify(act, ev.Act.Action, ev.Act.Direction, ev.Act.AmountMinor)
 			body = act
 		}
 	case "outcome":
@@ -806,6 +840,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			fields[i] = map[string]interface{}{"class": f.Class, "value_commitment": c}
 		}
 		body = map[string]interface{}{"to": d.To, "fields": fields, "authority": "approval"}
+		classify(body, d.action(), "", nil)
 		if d.AuthorizedBy != "" {
 			block["refs"] = []interface{}{relRef("authorized_by", digestOf(d.AuthorizedBy))}
 		} else {

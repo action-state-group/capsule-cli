@@ -507,6 +507,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 		ev.Prev = events[len(events)-1].Digest
 	}
 	ev.Producer = currentProducer()
+	ev.TaxonomyVersion = dealTaxonomyVersion
 	ev.Nonces = map[string]string{}
 	for name := range dealTexts(ev) {
 		nonce := make([]byte, 32)
@@ -860,6 +861,10 @@ type dealActInput struct {
 	Payee       string `json:"payee,omitempty"`
 	Rail        string `json:"rail,omitempty"`
 	Reference   string `json:"reference,omitempty"`
+	// FeeMinor is, on a cancel only, a fee the cancellation costs, recorded
+	// as its own amount: never the amount a spend cap evaluates (spend_minor
+	// is 0 on every cancel).
+	FeeMinor *int64 `json:"fee_minor,omitempty"`
 }
 
 func dealNoteCommand() *cobra.Command {
@@ -1056,7 +1061,10 @@ func dealNoteCommand() *cobra.Command {
 				if !slices.Contains(dealPointsOfNoReturn[events[0].Event.Open.Type], act.Action) {
 					return inputError("act.action is not a point of no return for this deal type")
 				}
-				ev.Act = &dealAct{Action: act.Action, Description: act.Description, AmountMinor: act.AmountMinor, Currency: act.Currency, Payee: act.Payee, Rail: act.Rail, Reference: act.Reference}
+				if err := checkFee(act.Action, act.FeeMinor); err != nil {
+					return err
+				}
+				ev.Act = &dealAct{Action: act.Action, Description: act.Description, AmountMinor: act.AmountMinor, Currency: act.Currency, Payee: act.Payee, Rail: act.Rail, Reference: act.Reference, FeeMinor: act.FeeMinor}
 				ev.Act.AuthorizedBy, ev.Act.Reason, ev.Act.Rule = authorizeAct(events, *ev.Act, dealClock().UTC())
 				ev.Act.Unchecked = ev.Act.AuthorizedBy == ""
 				ev.Act.Direction, ev.Act.Reverses = actDirection(events, *ev.Act, events[0].Event.Open.Terms.Currency)
@@ -1322,6 +1330,9 @@ func dealCheckCommand() *cobra.Command {
 			open := events[0].Event.Open
 			if !slices.Contains(dealPointsOfNoReturn[open.Type], snap.Action) {
 				return inputError("action is not a point of no return for a " + open.Type + " deal; use one of " + strings.Join(dealPointsOfNoReturn[open.Type], ", "))
+			}
+			if err := checkFee(snap.Action, snap.FeeMinor); err != nil {
+				return err
 			}
 			if err := normalizeTerms(snap.Terms); err != nil {
 				return err

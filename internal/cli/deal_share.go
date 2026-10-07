@@ -63,6 +63,9 @@ var dealShareKeys = map[string]bool{
 	"question": true, "rule": true, "field": true, "options": true, "notes": true, "changed": true,
 	"choice": true, "approver": true, "status": true, "outcome": true, "from": true, "kind": true,
 	"response_digest": true,
+	// The action's taxonomy class and the taxonomy's version: vocabulary
+	// tokens, never the user's data.
+	"action_class": true, "taxonomy_version": true,
 	// A sealed merchant email's record: digests, the DKIM and DMARC verdicts,
 	// where the keys came from, and dates.
 	"key_source": true, "dkim": true, "dmarc_policy": true, "dmarc_source": true, "method": true,

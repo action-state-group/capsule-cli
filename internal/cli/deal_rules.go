@@ -157,6 +157,10 @@ type dealSnapshot struct {
 	// An approval covers a telling only to the party its check was about.
 	DisclosingTo string   `json:"disclosing_to,omitempty"`
 	Recipient    *dealWho `json:"recipient,omitempty"`
+	// FeeMinor is, on a cancel only, a fee the cancellation costs, recorded
+	// as its own amount: never the amount a spend cap evaluates (spend_minor
+	// is 0 on every cancel).
+	FeeMinor *int64 `json:"fee_minor,omitempty"`
 }
 
 type dealDifference struct {
@@ -386,6 +390,10 @@ type dealAct struct {
 	// neither; a pay among them moved money out.
 	Direction string `json:"direction,omitempty"`
 	Reverses  string `json:"reverses,omitempty"`
+	// FeeMinor is, on a cancel only, a fee the cancellation costs, recorded
+	// as its own amount: never the amount a spend cap evaluates (spend_minor
+	// is 0 on every cancel).
+	FeeMinor *int64 `json:"fee_minor,omitempty"`
 }
 
 // actDirection is which way an act's amount moved, and the act it reverses.
@@ -488,6 +496,11 @@ type dealEvent struct {
 	// Producer is the capsulectl build that sealed the step, kept with the
 	// step so that a later build re-derives the same record.
 	Producer *dealProducer `json:"producer,omitempty"`
+	// TaxonomyVersion is the action-class taxonomy (dealTaxonomyVersion) the
+	// step's record classes its action by, kept with the step like Producer:
+	// a step sealed before records carried an action_class has none and
+	// re-derives without one.
+	TaxonomyVersion string `json:"taxonomy_version,omitempty"`
 }
 
 // dealPlatformApproval is an observation of another platform's own approval
