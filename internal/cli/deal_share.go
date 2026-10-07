@@ -881,6 +881,17 @@ func dealShareableIDs(events []sealedEvent, audience string) []string {
 
 // dealShareAnomaly is a counterparty-copy anomaly line: fixed words per kind,
 // never the values the local line was written from.
+// sharedDifferenceText is a difference's text as any shared copy carries it.
+// A materiality change names the user's own predicates (their names and
+// versions describe the user's policy), so every shared copy says it in
+// fixed words instead.
+func sharedDifferenceText(rule, text string) string {
+	if rule == "materiality_changed" {
+		return dealShareAnomaly[rule]
+	}
+	return text
+}
+
 var dealShareAnomaly = map[string]string{
 	"changed_identifier":       "A payee or contact detail changed after first contact",
 	"materiality_changed":      "The rule for which of the agent's picks need an answer changed during the deal",
@@ -950,7 +961,7 @@ func dealShareStepLine(e dealEvent, audience string, p dealPrivate, currency str
 			var texts []string
 			for _, d := range e.Check.Differences {
 				if d.Text != "" {
-					texts = append(texts, p.scrub(d.Text))
+					texts = append(texts, p.scrub(sharedDifferenceText(d.Rule, d.Text)))
 				}
 			}
 			return "Check flagged: " + strings.Join(texts, " · ")
@@ -1038,6 +1049,8 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 						text += " ⚠️"
 					}
 				}
+			case item.Kind == "materiality_changed":
+				text = sharedDifferenceText(item.Kind, item.Text)
 			case anomalies && audience == dealAudienceCounterparty:
 				words, ok := dealShareAnomaly[item.Kind]
 				if !ok {

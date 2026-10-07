@@ -423,3 +423,38 @@ func TestAMaterialityLabelInTheClearIsWithheldFromSharedCopies(t *testing.T) {
 		assert.False(t, shareableMateriality(bad), "%v", bad)
 	}
 }
+
+// No shared copy names the predicates a re-pin mid-deal changed between: the
+// counterparty's and the adjudicator's copies say it in fixed words, in the
+// step line and in the anomalies; the user's own copy names them.
+func TestARepinMidDealIsNamedOnlyInTheUsersOwnCopy(t *testing.T) {
+	materialityFixture(t, "--materiality", neutralMateriality)
+	raw, err := os.ReadFile(neutralMateriality)
+	require.NoError(t, err)
+	example, err := parseMaterialityPredicate("", raw)
+	require.NoError(t, err)
+	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing at all","version":"2.7","material":[]}`))
+	check := dealRun(t, "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	require.Contains(t, check["card"], "nothing at all 2.7")
+
+	for _, audience := range []string{dealAudienceAdjudicator, dealAudienceCounterparty} {
+		b, sharedRaw := sharedCopy(t, id, audience, "x")
+		for _, leak := range []string{example.Name, "nothing at all", "2.7"} {
+			assert.NotContains(t, sharedRaw, leak, "%s copy", audience)
+		}
+		ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+		var kinds []string
+		for _, a := range ext["anomalies"].([]any) {
+			kinds = append(kinds, a.(map[string]any)["kind"].(string))
+		}
+		assert.Contains(t, kinds, "materiality_changed", "%s copy", audience)
+		assert.Contains(t, sharedRaw, dealShareAnomaly["materiality_changed"], "%s copy", audience)
+	}
+
+	path := filepath.Join(t.TempDir(), "own.json")
+	dealRun(t, "report", "--deal", id, "--bundle", path)
+	own, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(own), "nothing at all 2.7", "the user's own copy names them")
+}
