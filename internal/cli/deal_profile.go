@@ -295,6 +295,16 @@ func limitSetBody(l dealLimitSet) map[string]interface{} {
 	return m
 }
 
+// materialityBody is a materiality predicate as a record carries it: its
+// digest, and its name and version when there is one.
+func materialityBody(m dealMateriality) map[string]interface{} {
+	mb := map[string]interface{}{"digest": m.Digest}
+	if m.Name != "" {
+		mb["name"], mb["version"] = m.Name, m.Version
+	}
+	return mb
+}
+
 func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]interface{}, error) {
 	c, err := commit("verbatim")
 	if err != nil {
@@ -444,6 +454,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 		setIDs(ids)
 		body["deal_type"] = o.Type
+		if o.Materiality.Digest != "" {
+			body["materiality"] = materialityBody(o.Materiality)
+		}
 		if o.Demo {
 			body["demo"] = true
 		}
@@ -638,11 +651,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		// Which materiality predicate decided the pauses on the agent's
 		// picks: a verifier knows what applied ("none": every pick paused).
 		if m := ck.Materiality; m.Digest != "" {
-			mb := map[string]interface{}{"digest": m.Digest}
-			if m.Name != "" {
-				mb["name"], mb["version"] = m.Name, m.Version
-			}
-			body["materiality"] = mb
+			body["materiality"] = materialityBody(m)
 		}
 		options := make([]interface{}, len(ck.Options))
 		for i, o := range ck.Options {

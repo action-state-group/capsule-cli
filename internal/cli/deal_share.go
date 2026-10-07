@@ -749,6 +749,15 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 				// The user's spending limit: never the counterparty's to see.
 				return false
 			}
+			if k == "materiality" {
+				// Which materiality predicate applied: shareable in exactly
+				// its own shape (a digest, and a name and version), without
+				// opening "name" or "version" to every member of every record.
+				if !shareableMateriality(child) {
+					return false
+				}
+				continue
+			}
 			if k == "producer" {
 				// The software build that sealed the record: shareable in
 				// exactly its own shape, without opening "name" to every
@@ -800,6 +809,29 @@ func shareableProducer(v interface{}) bool {
 	version, _ := m["version"].(string)
 	commit, _ := m["commit"].(string)
 	return producerName.MatchString(name) && producerVersion.MatchString(version) && producerCommit.MatchString(commit)
+}
+
+// shareableMateriality reports whether v is a materiality reference in its
+// record shape: a 64-hex digest or "none", and a name and version (together,
+// within the schema's lengths) or neither. Anything else withholds the record.
+func shareableMateriality(v interface{}) bool {
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	digest, _ := m["digest"].(string)
+	if digest != "none" && (len(digest) != 64 || !isLowerHex(digest)) {
+		return false
+	}
+	name, hasName := m["name"].(string)
+	version, hasVersion := m["version"].(string)
+	switch {
+	case len(m) == 1:
+		return true
+	case len(m) == 3 && hasName && hasVersion:
+		return name != "" && len(name) <= 200 && version != "" && len(version) <= 64
+	}
+	return false
 }
 
 // dealWithholdRecords picks the records a shared copy withholds.

@@ -21,3 +21,11 @@
 - Every check records which predicate decided (name, version and digest, or digest
   `none`) in its output and its sealed verdict (`materiality`, an additive x-deal-v0
   field).
+- `deal open` seals the predicate pinned when the deal opened into the baseline
+  (`materiality`, additive), from the profile and never from the input. A later check
+  under another predicate (a re-pin mid-deal) carries a `materiality_changed`
+  difference: it shows on the card and pauses the check.
+- A pinned predicate whose file is gone refuses with its own message ("materiality
+  predicate file missing; re-pin it with profile update").
+- Shared copies keep the opening and check records again: since the verdict began
+  recording `materiality`, a counterparty's copy withheld every check step.

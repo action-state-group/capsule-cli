@@ -3,7 +3,10 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -140,6 +143,9 @@ func pinnedMateriality(p Profile) (*materialityPredicate, error) {
 	case m.Predicate == "" || m.Digest == "":
 		return nil, inputError("the profile's materiality predicate is not pinned: set it with `capsulectl --profile " + p.Name + " profile update --materiality FILE` (the user's to run)")
 	}
+	if _, err := os.Stat(m.Predicate); errors.Is(err, fs.ErrNotExist) {
+		return nil, inputError("materiality predicate file missing (" + m.Predicate + "): re-pin it with `capsulectl --profile " + p.Name + " profile update --materiality FILE`, which is the user's to run")
+	}
 	predicate, err := loadMaterialityPredicate(m.Predicate)
 	if err != nil {
 		return nil, err
@@ -157,6 +163,15 @@ type dealMateriality struct {
 	Name    string `json:"name,omitempty"`
 	Version string `json:"version,omitempty"`
 	Digest  string `json:"digest"`
+}
+
+// materialityLabel names a predicate for the card: its name and version, or
+// that none was configured.
+func materialityLabel(m dealMateriality) string {
+	if m.Digest == "none" || m.Name == "" {
+		return "none: every pick asked about"
+	}
+	return m.Name + " " + m.Version
 }
 
 func (p *materialityPredicate) ref() dealMateriality {

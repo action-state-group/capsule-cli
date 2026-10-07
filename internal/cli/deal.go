@@ -752,6 +752,14 @@ func dealOpenCommand() *cobra.Command {
 			return inputError("expect_close_by must be a date, YYYY-MM-DD")
 		}
 		return runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
+			// The pinned materiality predicate, sealed into the baseline from
+			// the profile (never the input): a check under another one later
+			// is flagged. One that cannot be read refuses the open.
+			predicate, err := pinnedMateriality(s.p)
+			if err != nil {
+				return err
+			}
+			o.Materiality = predicate.ref()
 			id := make([]byte, 8)
 			if _, err := rand.Read(id); err != nil {
 				return err

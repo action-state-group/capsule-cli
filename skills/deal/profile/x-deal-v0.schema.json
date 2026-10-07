@@ -156,11 +156,23 @@
     },
     "pack_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*/[0-9]+\\.[0-9]+\\.[0-9]+$" },
 
+    "materiality_ref": {
+      "description": "A materiality predicate: its name, version and digest (SHA-256 of its JCS bytes), or digest none when none was configured and every pick of the agent's pauses.",
+      "type": "object", "additionalProperties": false, "required": ["digest"],
+      "properties": {
+        "digest": { "type": "string", "pattern": "^([0-9a-f]{64}|none)$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 64 }
+      },
+      "dependentRequired": { "name": ["version"], "version": ["name"] }
+    },
+
     "body_baseline": {
       "type": "object", "additionalProperties": false,
       "required": ["deal_type", "intent", "terms", "recourse"],
       "properties": {
         "deal_type": { "enum": ["purchase", "rental", "booking", "service"] },
+        "materiality": { "$ref": "#/$defs/materiality_ref", "description": "The materiality predicate the profile pinned when the deal opened; a later verdict under another one carries a materiality_changed difference. Absent on baselines sealed before it was recorded." },
         "demo": { "type": "boolean" },
         "intent": { "$ref": "#/$defs/body_intent" },
         "terms": { "$ref": "#/$defs/terms" },
@@ -285,16 +297,7 @@
       "required": ["result", "differences", "options"],
       "properties": {
         "result": { "enum": ["pass", "pause"] },
-        "materiality": {
-          "description": "The materiality predicate that decided which of the agent's own picks pause: its name, version and digest (SHA-256 of its JCS bytes), or digest none when no predicate was configured and every pick paused. Absent on verdicts sealed before it was recorded.",
-          "type": "object", "additionalProperties": false, "required": ["digest"],
-          "properties": {
-            "digest": { "type": "string", "pattern": "^([0-9a-f]{64}|none)$" },
-            "name": { "type": "string", "minLength": 1, "maxLength": 200 },
-            "version": { "type": "string", "minLength": 1, "maxLength": 64 }
-          },
-          "dependentRequired": { "name": ["version"], "version": ["name"] }
-        },
+        "materiality": { "$ref": "#/$defs/materiality_ref", "description": "The materiality predicate that decided which of the agent's own picks pause. Absent on verdicts sealed before it was recorded." },
         "pack_id": { "$ref": "#/$defs/pack_id" },
         "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
         "unverified": { "type": "array", "items": { "$ref": "#/$defs/short_text" } },

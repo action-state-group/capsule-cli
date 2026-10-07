@@ -158,8 +158,8 @@ func TestAChangedOrUnpinnedPredicateRefusesTheCheck(t *testing.T) {
 	pin(t, path)
 	assert.Equal(t, []string{"when"}, pausedOn(flightCheck(t)))
 
-	require.NoError(t, os.WriteFile(path, []byte(`{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[]}`), 0o600))
 	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+	require.NoError(t, os.WriteFile(path, []byte(`{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[]}`), 0o600))
 	trail := func() string { return dealRun(t, "report", "--deal", id)["trail"].(string) }
 	before := trail()
 	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
@@ -279,4 +279,84 @@ func TestDoctorReportsTheMaterialityPredicate(t *testing.T) {
 	p, err := parseMaterialityPredicate("", example)
 	require.NoError(t, err)
 	assert.Equal(t, p.Digest, set["digest"])
+}
+
+// The deal's opening seals the predicate pinned then, from the profile and
+// never from the input. A check under another one (a re-pin mid-deal) is
+// flagged on its card and pauses; one under the same predicate is not.
+func TestARepinMidDealIsFlagged(t *testing.T) {
+	materialityFixture(t, "--materiality", neutralMateriality)
+	raw, err := os.ReadFile(filepath.Join(otterFixture, "open.json"))
+	require.NoError(t, err)
+	var open map[string]any
+	require.NoError(t, json.Unmarshal(raw, &open))
+	open["materiality"] = map[string]any{"digest": "none"}
+	claimed, err := json.Marshal(open)
+	require.NoError(t, err)
+	id := dealRun(t, "open", "--input", writeJSON(t, string(claimed)))["deal_id"].(string)
+
+	example, err := os.ReadFile(neutralMateriality)
+	require.NoError(t, err)
+	p, err := parseMaterialityPredicate("", example)
+	require.NoError(t, err)
+	records, _ := exportRecords(t, id)
+	assert.Equal(t, map[string]any{"name": p.Name, "version": p.Version, "digest": p.Digest}, records[0]["body"].(map[string]any)["materiality"], "the profile's predicate, not the input's claim")
+
+	rules := func(check map[string]any) []string {
+		var out []string
+		for _, d := range check["differences"].([]any) {
+			out = append(out, d.(map[string]any)["rule"].(string))
+		}
+		return out
+	}
+	same := dealRun(t, "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	assert.NotContains(t, rules(same), "materiality_changed")
+
+	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing","version":"2","material":[]}`))
+	changed := dealRun(t, "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	assert.Equal(t, "pause", changed["verdict"])
+	assert.Contains(t, rules(changed), "materiality_changed")
+	assert.Contains(t, changed["card"], "The rule for which of the agent's picks need your answer changed since this deal opened ("+p.Name+" "+p.Version+" → nothing 2)")
+	assert.Empty(t, pausedOn(changed), "the new predicate itself pauses on nothing: only the change is flagged")
+	_, export := exportRecords(t, id)
+	checkProfile(t, export)
+}
+
+// A pinned predicate whose file is gone refuses with a message that says so,
+// at a check and at a deal's opening.
+func TestAMissingPredicateFileRefusesWithItsOwnMessage(t *testing.T) {
+	materialityFixture(t)
+	path := writePredicate(t, `{"type":"materiality-predicate/v0","name":"x","version":"1","material":[]}`)
+	pin(t, path)
+	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+	require.NoError(t, os.Remove(path))
+	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "materiality predicate file missing")
+	assert.Contains(t, err.Error(), "profile update --materiality")
+	_, err = invoke(t, "", "--profile", "deal", "deal", "open", "--input", filepath.Join(otterFixture, "open.json"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "materiality predicate file missing")
+}
+
+// A shared copy carries the materiality the opening and every check
+// recorded: the opening and check records are not withheld for it.
+func TestASharedCopyKeepsTheMaterialityRecords(t *testing.T) {
+	materialityFixture(t, "--materiality", neutralMateriality)
+	id := openCeilingDeal(t, false)
+	b, _ := sharedCopy(t, id, dealAudienceCounterparty, "x")
+	for _, s := range b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)["steps"].([]any) {
+		step := s.(map[string]any)
+		if step["kind"] == "open" || step["kind"] == "check" {
+			assert.Equal(t, false, step["withheld"], "step %v (%v)", step["n"], step["kind"])
+		}
+	}
+	for _, bad := range []any{
+		map[string]any{"digest": "abc"},
+		map[string]any{"digest": "none", "name": "x"},
+		map[string]any{"digest": "none", "name": "x", "version": "1", "extra": "y"},
+		"none",
+	} {
+		assert.False(t, shareableMateriality(bad), "%v", bad)
+	}
 }
