@@ -283,3 +283,32 @@ func TestSameJSONValue(t *testing.T) {
 	assert.False(t, sameJSONValue("a", "b"))
 	assert.False(t, sameJSONValue(nil, ""))
 }
+
+// A disclosed payload that does not match what its record sealed fails the
+// bundle: the verdict is INVALID, not VALID with the mismatch listed. Only a
+// matching disclosure, or a member withheld, leaves the verdict as it was.
+func TestVerifyBundleFailsADisclosureThatDoesNotMatch(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	disclose := func(members map[string]interface{}) func(map[string]interface{}) {
+		return func(b map[string]interface{}) {
+			b["disclosures"] = map[string]interface{}{b["root"].(string): members}
+		}
+	}
+	for name, members := range map[string]map[string]interface{}{
+		"a payload the record did not seal": {"agent_input": map[string]interface{}{"result": "edited"}},
+		"a member that cannot be disclosed": {"capsule_id": "edited"},
+	} {
+		result, err := verifyBundleOutput(t, producedBundle(t, disclose(members)))
+		assert.ErrorIs(t, err, ErrBundleInvalid, name)
+		assert.Equal(t, "INVALID", result["verdict"], name)
+		var statuses []string
+		for _, d := range result["disclosures"].([]interface{}) {
+			statuses = append(statuses, d.(map[string]interface{})["status"].(string))
+		}
+		assert.NotContains(t, statuses, "disclosure_match", name)
+	}
+
+	result, err := verifyBundleOutput(t, producedBundle(t, nil))
+	require.NoError(t, err)
+	assert.Equal(t, "VALID", result["verdict"], "nothing disclosed: the verdict is as before")
+}

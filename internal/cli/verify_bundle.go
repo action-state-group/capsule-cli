@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	"github.com/action-state-group/agent-action-capsule/go/disclosure"
 	"github.com/action-state-group/agent-action-capsule/go/envelope"
 	"github.com/spf13/cobra"
 )
@@ -167,9 +168,17 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 			identityOK = false
 		}
 	}
+	// A disclosed member either matches what its record sealed or is
+	// withheld; any other result (a mismatch, a member that cannot be
+	// disclosed, one with no sealed digest, or an unknown status) means the
+	// bundle carries content its records do not vouch for.
 	disclosures := make([]map[string]string, 0, len(result.Disclosures))
+	disclosuresOK := true
 	for _, d := range result.Disclosures {
 		disclosures = append(disclosures, map[string]string{"capsule_id": d.CapsuleID, "member": d.Member, "status": d.Status})
+		if d.Status != disclosure.Match && d.Status != "withheld" {
+			disclosuresOK = false
+		}
 	}
 	extensions := make([]map[string]string, 0, len(result.Extensions))
 	for _, x := range result.Extensions {
@@ -204,7 +213,7 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 			verdict = "INCOMPLETE"
 		}
 	}
-	if !identityOK {
+	if !identityOK || !disclosuresOK {
 		verdict = "INVALID"
 	}
 
