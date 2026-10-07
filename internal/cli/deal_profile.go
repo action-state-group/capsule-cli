@@ -105,6 +105,17 @@ func dealTexts(ev dealEvent) map[string]string {
 			t[fmt.Sprintf("value_%d", i)] = f.Value
 		}
 	}
+	// A materiality predicate's name and version describe the user's own
+	// policy: committed, never recorded; the digest alone says which applied.
+	var m dealMateriality
+	if ev.Open != nil {
+		m = ev.Open.Materiality
+	} else if ev.Check != nil {
+		m = ev.Check.Materiality
+	}
+	if m.Name != "" {
+		t["materiality"] = materialityLabelText(m)
+	}
 	return t
 }
 
@@ -296,13 +307,33 @@ func limitSetBody(l dealLimitSet) map[string]interface{} {
 }
 
 // materialityBody is a materiality predicate as a record carries it: its
-// digest, and its name and version when there is one.
-func materialityBody(m dealMateriality) map[string]interface{} {
+// digest, and a commitment to its name and version when there is one. A
+// verdict sealed before the name and version were committed (with no nonce
+// for them) carries them in the clear, and re-derives so.
+func materialityBody(m dealMateriality, nonces map[string]string, commit func(string) (string, error)) (map[string]interface{}, error) {
 	mb := map[string]interface{}{"digest": m.Digest}
-	if m.Name != "" {
+	switch {
+	case m.Name == "":
+	case nonces["materiality"] != "":
+		c, err := commit("materiality")
+		if err != nil {
+			return nil, err
+		}
+		mb["label_commitment"] = c
+	default:
 		mb["name"], mb["version"] = m.Name, m.Version
 	}
-	return mb
+	return mb, nil
+}
+
+// materialityLabelText is the text a materiality label commitment binds: the
+// JCS bytes of the predicate's name and version.
+func materialityLabelText(m dealMateriality) string {
+	b, err := canonical.JCS(map[string]interface{}{"name": m.Name, "version": m.Version})
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]interface{}, error) {
@@ -455,7 +486,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		setIDs(ids)
 		body["deal_type"] = o.Type
 		if o.Materiality.Digest != "" {
-			body["materiality"] = materialityBody(o.Materiality)
+			if body["materiality"], err = materialityBody(o.Materiality, ev.Nonces, commit); err != nil {
+				return nil, err
+			}
 		}
 		if o.Demo {
 			body["demo"] = true
@@ -651,7 +684,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		// Which materiality predicate decided the pauses on the agent's
 		// picks: a verifier knows what applied ("none": every pick paused).
 		if m := ck.Materiality; m.Digest != "" {
-			body["materiality"] = materialityBody(m)
+			if body["materiality"], err = materialityBody(m, ev.Nonces, commit); err != nil {
+				return nil, err
+			}
 		}
 		options := make([]interface{}, len(ck.Options))
 		for i, o := range ck.Options {

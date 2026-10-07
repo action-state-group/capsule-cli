@@ -224,3 +224,28 @@ func (m materialityMatcher) matches(a dealAttribute) bool {
 	}
 	return true
 }
+
+// materialityOpenings are, for each step that committed a materiality
+// predicate's name and version, the step and the opening of its
+// label_commitment: the nonce, name and version. Only the user's own copy
+// carries them.
+func materialityOpenings(events []sealedEvent) []interface{} {
+	out := []interface{}{}
+	for _, se := range events {
+		nonce := se.Event.Nonces["materiality"]
+		if nonce == "" {
+			continue
+		}
+		var m dealMateriality
+		switch {
+		case se.Event.Open != nil:
+			m = se.Event.Open.Materiality
+		case se.Event.Check != nil:
+			m = se.Event.Check.Materiality
+		default:
+			continue
+		}
+		out = append(out, map[string]interface{}{"step": se.CapsuleID, "nonce": nonce, "name": m.Name, "version": m.Version})
+	}
+	return out
+}

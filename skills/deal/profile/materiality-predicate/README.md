@@ -12,9 +12,12 @@ its own: whoever runs it cannot choose another.
 **Setting or changing the predicate is the user's, never the agent's: it is
 policy.** A check refuses, and seals nothing, when the pinned file no longer has
 the pinned digest ("materiality predicate changed since it was pinned"); the
-user re-pins it with `profile update --materiality FILE`. Every check records
+user re-pins it with `profile update --materiality FILE`. Every check says
 which predicate decided its pauses (name, version and digest, or digest `none`)
-in its output and in its sealed verdict (`materiality`).
+in its output. Its sealed verdict, and the deal's opening, carry the digest and
+a commitment to the name and version: the user's own copy opens it, while a
+copy shared with a counterparty discloses the digest only, since the name and
+version describe the user's own policy.
 
 **With no predicate configured, every attribute the agent picked pauses the check.**
 That is the safe default: nothing the agent chose alone goes through unasked.

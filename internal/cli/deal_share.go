@@ -750,9 +750,10 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 				return false
 			}
 			if k == "materiality" {
-				// Which materiality predicate applied: shareable in exactly
-				// its own shape (a digest, and a name and version), without
-				// opening "name" or "version" to every member of every record.
+				// Which materiality predicate applied: shareable as its
+				// digest and the commitment to its name and version only.
+				// The name and version describe the user's own policy, so a
+				// record sealing them in the clear is withheld.
 				if !shareableMateriality(child) {
 					return false
 				}
@@ -811,25 +812,27 @@ func shareableProducer(v interface{}) bool {
 	return producerName.MatchString(name) && producerVersion.MatchString(version) && producerCommit.MatchString(commit)
 }
 
-// shareableMateriality reports whether v is a materiality reference in its
-// record shape: a 64-hex digest or "none", and a name and version (together,
-// within the schema's lengths) or neither. Anything else withholds the record.
+// shareableMateriality reports whether v is a materiality reference a shared
+// copy may carry: a 64-hex digest or "none", and at most a 64-hex commitment
+// to the predicate's name and version. A name or version in the clear (a
+// verdict sealed before they were committed), or anything else, withholds the
+// record.
 func shareableMateriality(v interface{}) bool {
 	m, ok := v.(map[string]interface{})
 	if !ok {
 		return false
 	}
+	isDigest := func(s string) bool { return len(s) == 64 && isLowerHex(s) }
 	digest, _ := m["digest"].(string)
-	if digest != "none" && (len(digest) != 64 || !isLowerHex(digest)) {
+	if digest != "none" && !isDigest(digest) {
 		return false
 	}
-	name, hasName := m["name"].(string)
-	version, hasVersion := m["version"].(string)
-	switch {
-	case len(m) == 1:
+	switch len(m) {
+	case 1:
 		return true
-	case len(m) == 3 && hasName && hasVersion:
-		return name != "" && len(name) <= 200 && version != "" && len(version) <= 64
+	case 2:
+		c, _ := m["label_commitment"].(string)
+		return isDigest(c)
 	}
 	return false
 }
@@ -880,6 +883,7 @@ func dealShareableIDs(events []sealedEvent, audience string) []string {
 // never the values the local line was written from.
 var dealShareAnomaly = map[string]string{
 	"changed_identifier":       "A payee or contact detail changed after first contact",
+	"materiality_changed":      "The rule for which of the agent's picks need an answer changed during the deal",
 	"recourse_changed":         "The way to pay changed after it was agreed",
 	"irreversible_rail":        "Payment by a rail with no card protection",
 	"domain_recent":            "The website was registered recently",

@@ -157,14 +157,16 @@
     "pack_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*/[0-9]+\\.[0-9]+\\.[0-9]+$" },
 
     "materiality_ref": {
-      "description": "A materiality predicate: its name, version and digest (SHA-256 of its JCS bytes), or digest none when none was configured and every pick of the agent's pauses.",
+      "description": "A materiality predicate: its digest (SHA-256 of its JCS bytes), or none when none was configured and every pick of the agent's pauses; and label_commitment, a commitment to its name and version (the user's own policy: opened only in the user's own copy). A verdict sealed before the name and version were committed carries them in the clear instead.",
       "type": "object", "additionalProperties": false, "required": ["digest"],
       "properties": {
         "digest": { "type": "string", "pattern": "^([0-9a-f]{64}|none)$" },
+        "label_commitment": { "$ref": "#/$defs/hex64" },
         "name": { "type": "string", "minLength": 1, "maxLength": 200 },
         "version": { "type": "string", "minLength": 1, "maxLength": 64 }
       },
-      "dependentRequired": { "name": ["version"], "version": ["name"] }
+      "dependentRequired": { "name": ["version"], "version": ["name"] },
+      "not": { "required": ["label_commitment", "name"] }
     },
 
     "body_baseline": {
