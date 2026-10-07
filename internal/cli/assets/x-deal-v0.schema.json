@@ -285,6 +285,16 @@
       "required": ["result", "differences", "options"],
       "properties": {
         "result": { "enum": ["pass", "pause"] },
+        "materiality": {
+          "description": "The materiality predicate that decided which of the agent's own picks pause: its name, version and digest (SHA-256 of its JCS bytes), or digest none when no predicate was configured and every pick paused. Absent on verdicts sealed before it was recorded.",
+          "type": "object", "additionalProperties": false, "required": ["digest"],
+          "properties": {
+            "digest": { "type": "string", "pattern": "^([0-9a-f]{64}|none)$" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "version": { "type": "string", "minLength": 1, "maxLength": 64 }
+          },
+          "dependentRequired": { "name": ["version"], "version": ["name"] }
+        },
         "pack_id": { "$ref": "#/$defs/pack_id" },
         "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
         "unverified": { "type": "array", "items": { "$ref": "#/$defs/short_text" } },

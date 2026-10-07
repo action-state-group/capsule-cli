@@ -665,13 +665,9 @@ func dealInitCommand() *cobra.Command {
 		p.Checkpoint.Signing.File = filepath.Join(dir, "checkpoint.seed")
 		p.Checkpoint.TrustedKeys = []string{signer.KeyID()}
 		if predicate, _ := c.Flags().GetString("materiality"); predicate != "" {
-			if predicate, err = filepath.Abs(predicate); err != nil {
+			if err = pinMateriality(&p, predicate); err != nil {
 				return err
 			}
-			if _, err = loadMaterialityPredicate(predicate); err != nil {
-				return err
-			}
-			p.Materiality.Predicate = predicate
 		}
 		witness := "not_configured"
 		if noWitness, _ := c.Flags().GetBool("no-witness"); !noWitness {
@@ -1182,13 +1178,11 @@ func dealCheckCommand() *cobra.Command {
 			if dealFinallyClosed(events) {
 				return inputError("this deal is closed and takes no more steps; start a new one with `deal open`")
 			}
-			// The materiality predicate, read before anything is sealed: one
-			// that cannot be read refuses the check, never falls back.
-			predicatePath, _ := c.Flags().GetString("materiality")
-			if predicatePath == "" {
-				predicatePath = s.p.Materiality.Predicate
-			}
-			predicate, err := loadMaterialityPredicate(predicatePath)
+			// The profile's pinned materiality predicate, read before anything
+			// is sealed: one that cannot be read, or no longer has the pinned
+			// digest, refuses the check and never falls back. The check run
+			// cannot choose another: which picks pause is the user's policy.
+			predicate, err := pinnedMateriality(s.p)
 			if err != nil {
 				return err
 			}
@@ -1272,6 +1266,7 @@ func dealCheckCommand() *cobra.Command {
 			}
 			state.materiality = predicate
 			result := evaluateDeal(state, snap)
+			result.Materiality = predicate.ref()
 			if result.Remote, err = dealRemoteCheck(ctx, state, snap, result); err != nil {
 				return err
 			}
@@ -1307,6 +1302,7 @@ func dealCheckCommand() *cobra.Command {
 			out["unverified"] = result.Unverified
 			out["asked_attributes"] = result.Asked
 			out["picked_by_agent"] = result.Picked
+			out["materiality"] = result.Materiality
 			if rc := result.Recipient; rc != nil {
 				out["recipient"] = rc
 				if len(rc.Repeat) > 0 {
@@ -1330,7 +1326,6 @@ func dealCheckCommand() *cobra.Command {
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("input", "", "Snapshot JSON: the action and exactly what is about to happen")
-	cmd.Flags().String("materiality", "", "A materiality predicate (materiality-predicate/v0 JSON) for this check, instead of the profile's")
 	cmd.Flags().Duration("stale-after", 15*time.Minute, "How long the check stays current; the approval text says when it goes stale")
 	return cmd
 }

@@ -180,6 +180,10 @@ type dealCheckResult struct {
 	// Recipient is what the counterparty memory says about them: absent on
 	// checks made before there was one.
 	Recipient *dealRecipient `json:"recipient,omitempty"`
+	// Materiality is which predicate decided the pauses on the agent's picks
+	// (digest "none": no predicate, every pick paused). Absent on checks
+	// sealed before it was recorded.
+	Materiality dealMateriality `json:"materiality,omitzero"`
 }
 
 // dealAttribute is one attribute of what is about to happen, and its value.

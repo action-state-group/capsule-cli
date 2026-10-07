@@ -25,15 +25,14 @@ func materialityFixture(t *testing.T, args ...string) {
 
 // flightCheck opens a flight purchase whose dates, place and fare the agent
 // filled in (the user's terms name none of them) and checks the payment.
-func flightCheck(t *testing.T, extra ...string) map[string]any {
+func flightCheck(t *testing.T) map[string]any {
 	t.Helper()
 	id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
 		"intent":{"verbatim":"book me a flight","allowed":["pay"]},
 		"who":{"name":"Example Air","domain":"air.example"},
 		"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"currency":"USD","conditions":{"fare":"Basic"}},
 		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
-	args := append([]string{"check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"conditions":{"fare":"Basic"}},"recourse":{"rail":"card","refundable":true}}`)}, extra...)
-	return dealRun(t, args...)
+	return dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"conditions":{"fare":"Basic"}},"recourse":{"rail":"card","refundable":true}}`))
 }
 
 func pausedOn(check map[string]any) []string {
@@ -44,6 +43,13 @@ func pausedOn(check map[string]any) []string {
 		}
 	}
 	return fields
+}
+
+// pin sets the deal profile's materiality predicate, as the user does.
+func pin(t *testing.T, path string) {
+	t.Helper()
+	out, err := invoke(t, "", "--profile", "deal", "profile", "update", "--materiality", path)
+	require.NoError(t, err, out)
 }
 
 func writePredicate(t *testing.T, body string) string {
@@ -89,27 +95,24 @@ func TestADigitInADateStillPausesWithNoPredicate(t *testing.T) {
 // one that names nothing lets every pick through, listed as the agent's.
 func TestThePredicateDecidesWhichPicksPause(t *testing.T) {
 	materialityFixture(t)
-	dates := writePredicate(t, `{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[{"field":"when"}]}`)
-	check := flightCheck(t, "--materiality", dates)
+	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[{"field":"when"}]}`))
+	check := flightCheck(t)
 	assert.Equal(t, []string{"when"}, pausedOn(check))
 	assert.Contains(t, check["card"], "picked by the agent, not by you: item WN 1234")
 
-	nothing := writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing","version":"1","material":[]}`)
-	check = flightCheck(t, "--materiality", nothing)
+	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing","version":"1","material":[]}`))
+	check = flightCheck(t)
 	assert.Equal(t, "pass", check["verdict"], check["card"])
 	assert.Empty(t, pausedOn(check))
 
-	sizeOnly := writePredicate(t, `{"type":"materiality-predicate/v0","name":"fare","version":"1","material":[{"field_prefix":"conditions.","name_contains_any":["FARE"]}]}`)
-	assert.Equal(t, []string{"conditions.fare"}, pausedOn(flightCheck(t, "--materiality", sizeOnly)), "names match case-insensitively")
+	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"fare","version":"1","material":[{"field_prefix":"conditions.","name_contains_any":["FARE"]}]}`))
+	assert.Equal(t, []string{"conditions.fare"}, pausedOn(flightCheck(t)), "names match case-insensitively")
 }
 
-// A predicate that cannot be read refuses the check and seals nothing: it
-// never falls back to anything.
-func TestAMalformedPredicateRefusesTheCheck(t *testing.T) {
+// A predicate that cannot be read is refused when the user pins it, and
+// never pinned: it never falls back to anything.
+func TestAMalformedPredicateCannotBePinned(t *testing.T) {
 	materialityFixture(t)
-	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
-	steps := func() string { return dealRun(t, "report", "--deal", id)["trail"].(string) }
-	before := steps()
 	for name, body := range map[string]string{
 		"unknown member":            `{"type":"materiality-predicate/v0","name":"x","version":"1","material":[],"extra":1}`,
 		"other type":                `{"type":"materiality-predicate/v1","name":"x","version":"1","material":[]}`,
@@ -121,14 +124,92 @@ func TestAMalformedPredicateRefusesTheCheck(t *testing.T) {
 		"an empty word":             `{"type":"materiality-predicate/v0","name":"x","version":"1","material":[{"field_prefix":"conditions.","name_contains_any":[" "]}]}`,
 		"two documents":             `{"type":"materiality-predicate/v0","name":"x","version":"1","material":[]} {}`,
 	} {
-		_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"), "--materiality", writePredicate(t, body))
+		_, err := invoke(t, "", "--profile", "deal", "profile", "update", "--materiality", writePredicate(t, body))
 		assert.ErrorIs(t, err, ErrInput, name)
 	}
-	assert.Equal(t, before, steps(), "a refused check seals nothing")
+	assert.Equal(t, "pause", flightCheck(t)["verdict"], "the profile still pins none: every pick pauses")
 
 	_, err := invoke(t, "", "deal", "init", "--profile", "other", "--dir", filepath.Join(t.TempDir(), "other"), "--no-witness",
 		"--materiality", writePredicate(t, `{"type":"materiality-predicate/v0"}`))
 	assert.ErrorIs(t, err, ErrInput, "deal init refuses a predicate it cannot read")
+}
+
+// Whoever runs a check cannot choose the predicate: there is no per-check
+// override, so an agent cannot hand the check an empty predicate to silence
+// every pause. Only the profile's pinned predicate applies.
+func TestAnAgentCannotSilenceThePausesWithItsOwnPredicate(t *testing.T) {
+	materialityFixture(t)
+	empty := writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing","version":"1","material":[]}`)
+	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"), "--materiality", empty)
+	require.Error(t, err, "deal check takes no predicate of its own")
+	assert.Contains(t, err.Error(), "has no flag --materiality")
+	check := flightCheck(t)
+	assert.Equal(t, "pause", check["verdict"], "the profile pins none: every pick still pauses")
+	assert.Equal(t, "none", check["materiality"].(map[string]any)["digest"])
+}
+
+// A pinned predicate that changed on disk refuses the check, which seals
+// nothing; so does a predicate path with no pinned digest (a profile written
+// before predicates were pinned). Re-pinning is the user's profile update.
+func TestAChangedOrUnpinnedPredicateRefusesTheCheck(t *testing.T) {
+	materialityFixture(t)
+	path := writePredicate(t, `{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[{"field":"when"}]}`)
+	pin(t, path)
+	assert.Equal(t, []string{"when"}, pausedOn(flightCheck(t)))
+
+	require.NoError(t, os.WriteFile(path, []byte(`{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[]}`), 0o600))
+	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+	trail := func() string { return dealRun(t, "report", "--deal", id)["trail"].(string) }
+	before := trail()
+	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "materiality predicate changed since it was pinned")
+	assert.Contains(t, err.Error(), "profile update --materiality")
+	assert.Equal(t, before, trail(), "a refused check seals nothing")
+
+	pin(t, path)
+	assert.Equal(t, "pass", flightCheck(t)["verdict"], "re-pinned by the user, the new predicate applies")
+
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	p.Materiality.Digest = ""
+	require.NoError(t, saveProfile(p, true))
+	_, err = invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "not pinned")
+
+	pin(t, "")
+	assert.Equal(t, "pause", flightCheck(t)["verdict"], "removing the predicate falls back to every pick pausing")
+}
+
+// The check says which predicate decided, in its output and in its sealed
+// verdict, so a verifier knows what applied: name, version and digest, or
+// digest "none" when every pick paused.
+func TestTheSealedCheckCarriesThePredicate(t *testing.T) {
+	materialityFixture(t, "--materiality", neutralMateriality)
+	raw, err := os.ReadFile(neutralMateriality)
+	require.NoError(t, err)
+	example, err := parseMaterialityPredicate("", raw)
+	require.NoError(t, err)
+
+	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+	check := dealRun(t, "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	assert.Equal(t, map[string]any{"name": example.Name, "version": example.Version, "digest": example.Digest}, check["materiality"])
+	pin(t, "")
+	dealRun(t, "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+
+	records, export := exportRecords(t, id)
+	var sealed []any
+	for _, r := range records {
+		if r["x-deal-v0"].(map[string]any)["record_type"] == "verdict" {
+			sealed = append(sealed, r["body"].(map[string]any)["materiality"])
+		}
+	}
+	require.Len(t, sealed, 2)
+	assert.Equal(t, map[string]any{"name": example.Name, "version": example.Version, "digest": example.Digest}, sealed[0])
+	assert.Equal(t, map[string]any{"digest": "none"}, sealed[1])
+	checkProfile(t, export)
 }
 
 // The predicate's identity is the SHA-256 of its JCS bytes: key order and
@@ -169,6 +250,15 @@ func TestNoMaterialityPolicyInTheCheck(t *testing.T) {
 // doctor says when a deal profile has no predicate (a notice: checks fail
 // safe) and names the one it has.
 func TestDoctorReportsTheMaterialityPredicate(t *testing.T) {
+	t.Run("changed since pinned", func(t *testing.T) {
+		materialityFixture(t)
+		path := writePredicate(t, `{"type":"materiality-predicate/v0","name":"x","version":"1","material":[]}`)
+		pin(t, path)
+		require.NoError(t, os.WriteFile(path, []byte(`{"type":"materiality-predicate/v0","name":"x","version":"2","material":[]}`), 0o600))
+		out, err := invoke(t, "", "doctor", "--profile", "deal")
+		require.ErrorIs(t, err, ErrPartial)
+		assert.Contains(t, out, "changed since it was pinned")
+	})
 	materialityFixture(t)
 	report := func() map[string]any {
 		out, err := invoke(t, "", "doctor", "--profile", "deal")

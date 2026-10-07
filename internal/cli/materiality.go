@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -106,6 +107,63 @@ func loadMaterialityPredicate(path string) (*materialityPredicate, error) {
 		return nil, err
 	}
 	return parseMaterialityPredicate(path, raw)
+}
+
+// pinMateriality sets p's materiality predicate to the one at path, pinned by
+// its digest, or removes it when path is empty. Only the user does this (deal
+// init, profile update): which picks pause is policy.
+func pinMateriality(p *Profile, path string) error {
+	if path == "" {
+		p.Materiality.Predicate, p.Materiality.Digest = "", ""
+		return nil
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	predicate, err := loadMaterialityPredicate(abs)
+	if err != nil {
+		return err
+	}
+	p.Materiality.Predicate, p.Materiality.Digest = abs, predicate.Digest
+	return nil
+}
+
+// pinnedMateriality is the predicate a check of p evaluates: the one p
+// pins, refused unless it still has the pinned digest; nil when p pins none
+// (the check fails safe). Nothing about the check run can choose another.
+func pinnedMateriality(p Profile) (*materialityPredicate, error) {
+	m := p.Materiality
+	switch {
+	case m.Predicate == "" && m.Digest == "":
+		return nil, nil
+	case m.Predicate == "" || m.Digest == "":
+		return nil, inputError("the profile's materiality predicate is not pinned: set it with `capsulectl --profile " + p.Name + " profile update --materiality FILE` (the user's to run)")
+	}
+	predicate, err := loadMaterialityPredicate(m.Predicate)
+	if err != nil {
+		return nil, err
+	}
+	if predicate.Digest != m.Digest {
+		return nil, inputError("materiality predicate changed since it was pinned (" + m.Predicate + "): re-pin it with `capsulectl --profile " + p.Name + " profile update --materiality FILE`, which is the user's to run")
+	}
+	return predicate, nil
+}
+
+// dealMateriality is which predicate decided a check's pauses on the agent's
+// picks: its name, version and digest, or digest "none" when no predicate
+// was configured and every pick paused (fail safe).
+type dealMateriality struct {
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
+	Digest  string `json:"digest"`
+}
+
+func (p *materialityPredicate) ref() dealMateriality {
+	if p == nil {
+		return dealMateriality{Digest: "none"}
+	}
+	return dealMateriality{Name: p.Name, Version: p.Version, Digest: p.Digest}
 }
 
 // material reports whether an attribute the agent picked is material. With

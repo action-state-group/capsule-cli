@@ -29,7 +29,7 @@ host runs `deal check` from a pre-action hook. Without one:
 
 | Command | What it does |
 |---|---|
-| `deal init --dir DIR [--no-witness] [--materiality FILE]` | Creates a SQLite deal profile: store plus signing and checkpoint seeds, each mode 0600, and the profile's cadence log. The public witness is configured by default. `--materiality` names the materiality predicate its checks evaluate (see `profile/materiality-predicate/`); without one, every attribute the agent picked pauses a check. |
+| `deal init --dir DIR [--no-witness] [--materiality FILE]` | Creates a SQLite deal profile: store plus signing and checkpoint seeds, each mode 0600, and the profile's cadence log. The public witness is configured by default. `--materiality` pins the materiality predicate its checks evaluate, by digest (see `profile/materiality-predicate/`; change it later with `profile update --materiality FILE`, the user's to run); without one, every attribute the agent picked pauses a check. |
 | `deal tick [--wait-up-to D]` | Run every minute from a timer (or every D with `--wait-up-to D`). When a tick is due (hourly with random jitter by default), cuts every deal's checkpoint locally, appends one entry to the cadence log and publishes its checkpoint to the witness; retries any delivery still pending. Deal steps never publish. |
 | `deal open --input FILE` | Seals the baseline: the user's verbatim words, who, terms, claims (each with its source) and recourse. Cuts a checkpoint. |
 | `deal note --kind message\|claim\|evidence\|change --input FILE` | Seals what happened. |
