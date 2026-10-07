@@ -1,9 +1,9 @@
 {
-  "fixture": "neg-typed-task-authority-ref",
+  "fixture": "neg-typed-materiality-missing",
   "expect": "invalid",
-  "description": "The evaluation's task_authority_ref names a message instead of the task authority in force.",
-  "expected_stage": "chain",
-  "expected_error_contains": "task_authority_ref is not the task authority in force",
+  "description": "An evaluation without materiality_digest: no predicate is stated as null with mode none_fail_safe, never by absence.",
+  "expected_stage": "schema",
+  "expected_error_contains": "materiality_digest",
   "chain_dir": "positive-typed",
   "chain_prefix": [
     "01-baseline.json",
@@ -57,11 +57,10 @@
       "task_authority_ref": {
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "3c5054ec2b99b6ea3bee414c1d14df7a383adc5d8cd8f85583c748a9e0400095"
+        "digest": "d1962067c88f4e8f32294fd84d3fca31120a5a5584511a8bd4385b2a0e44a3e2"
       },
       "ruleset_digest": "668bcfe7faee070446240df4d797e7864e7f95e247d2de8f3c78ccf0de73b959",
       "materiality": "predicate",
-      "materiality_digest": "53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1",
       "valid_until": "2026-10-06T09:28:00Z",
       "authority_basis": [
         {
@@ -69,7 +68,7 @@
           "ref": {
             "type": "record",
             "digest_alg": "SHA-256",
-            "digest": "3c5054ec2b99b6ea3bee414c1d14df7a383adc5d8cd8f85583c748a9e0400095"
+            "digest": "d1962067c88f4e8f32294fd84d3fca31120a5a5584511a8bd4385b2a0e44a3e2"
           }
         }
       ]

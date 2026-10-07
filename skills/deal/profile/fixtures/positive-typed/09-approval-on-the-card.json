@@ -11,7 +11,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "1a0a82a7f0ab55fd97df67acbe5432c47021ee468374582eceaf4eccefaa20ee"
+      "digest": "e2de397c0d2e5eb5be9e3a6f85e54c086e2b9d8dae753540ac1b7319834a4193"
     },
     "chain_root": {
       "type": "record",
@@ -23,7 +23,7 @@
         "rel": "approves",
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "1d31b582b69410445ca7c474f16e35dc5b7d16d776ac89905aa13183be1f2918"
+        "digest": "9616f0095d607db07fe0a03df45c0519c46632d8ca480e597fc644942199666d"
       }
     ],
     "body": {
@@ -34,5 +34,5 @@
       "rendering_commitment": "6d02a586e32eac5366b1dbc685561d5a7bfad317e7c3fbed1bbebd287d3eec21"
     }
   },
-  "expected_digest": "3f22ff8357a8b066c957c3d2619df7d030981662ef3c5b83293d991fa33e6f74"
+  "expected_digest": "a49c16ab8ac79a6aa0f8e758a321e925345cf0071888bacae2b32ef4c32ec182"
 }

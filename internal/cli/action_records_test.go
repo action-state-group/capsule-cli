@@ -219,6 +219,7 @@ func TestTypedMerchantChangedPlatformApprovalDoesNotAnswerTheAsk(t *testing.T) {
 	assert.Equal(t, ta, digestOfRef(evaluation["task_authority_ref"]))
 	assert.Equal(t, "2026-09-27T18:15:00Z", evaluation["valid_until"], "15 minutes from the evaluation")
 	assert.Equal(t, neutralMaterialityDigest, evaluation["materiality_digest"], "the predicate the check evaluated")
+	assert.Equal(t, "predicate", evaluation["materiality"])
 	rules, err := rulesetDigest(neutralMaterialityDigest)
 	require.NoError(t, err)
 	assert.Equal(t, rules, evaluation["ruleset_digest"])
@@ -407,6 +408,7 @@ func TestTypedApprovalDoesNotSurviveAChangedProposedAction(t *testing.T) {
 // check-request/v0 and check-response/v0 round-trip every field of the
 // contract, and each validates against its schema.
 func TestCheckContractRoundTrips(t *testing.T) {
+	predicateDigest := strings.Repeat("8", 64)
 	ref := func(c string) *CheckRef {
 		return &CheckRef{Type: typedRecordRef, DigestAlg: "SHA-256", Digest: strings.Repeat(c, 64)}
 	}
@@ -421,7 +423,8 @@ func TestCheckContractRoundTrips(t *testing.T) {
 		Type: typeCheckResponse, Disposition: "ASK", ValidUntil: "2026-10-06T09:28:00Z", ProposedActionDigest: strings.Repeat("6", 64),
 		Findings:       []CheckFinding{{Question: "who", Rule: "payee_or_contact_changed", Field: "payee"}},
 		AuthorityBasis: []CheckAuthority{{Type: "task_authority", Ref: *ref("2")}},
-		EvaluationRef:  *ref("7"), RulesetDigest: strings.Repeat("1", 64), TaskAuthorityRef: *ref("2"), MaterialityDigest: strings.Repeat("8", 64),
+		EvaluationRef:  *ref("7"), RulesetDigest: strings.Repeat("1", 64), TaskAuthorityRef: *ref("2"),
+		Materiality: materialityModePredicate, MaterialityDigest: &predicateDigest,
 	}
 	for typeName, v := range map[string]any{typeCheckRequest: &req, typeCheckResponse: &resp} {
 		raw, err := json.Marshal(v)
@@ -437,9 +440,27 @@ func TestCheckContractRoundTrips(t *testing.T) {
 	var back CheckResponse
 	require.NoError(t, json.Unmarshal(raw, &back))
 	assert.Equal(t, resp, back)
-	for _, field := range []string{"valid_until", "authority_basis", "proposed_action_digest", "evaluation_ref", "ruleset_digest", "task_authority_ref", "materiality_digest"} {
+	for _, field := range []string{"valid_until", "authority_basis", "proposed_action_digest", "evaluation_ref", "ruleset_digest", "task_authority_ref", "materiality", "materiality_digest"} {
 		assert.Contains(t, string(raw), `"`+field+`"`)
 	}
+	// No predicate is stated, not left out: null with the fail-safe mode.
+	none := resp
+	none.Materiality, none.MaterialityDigest = materialityModeNone, nil
+	raw, err = json.Marshal(none)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"materiality":"none_fail_safe"`)
+	assert.Contains(t, string(raw), `"materiality_digest":null`)
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	require.NoError(t, err)
+	schema, err := recordSchema(typeCheckResponse)
+	require.NoError(t, err)
+	require.NoError(t, schema.Validate(doc))
+	none.Materiality = materialityModePredicate
+	raw, err = json.Marshal(none)
+	require.NoError(t, err)
+	doc, err = jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	require.NoError(t, err)
+	assert.Error(t, schema.Validate(doc), "mode predicate names its digest")
 	raw, err = json.Marshal(req)
 	require.NoError(t, err)
 	var backReq CheckRequest
@@ -605,12 +626,16 @@ func TestTypedEvaluationNamesThePredicateEvaluated(t *testing.T) {
 	id := openTypedSticker(t)
 	c := checkPay(t, id, 600)
 	evaluation := bodyOf(chainRecords(t, id)[c["check_id"].(string)])
-	assert.NotContains(t, evaluation, "materiality_digest")
+	require.Contains(t, evaluation, "materiality_digest", "stated, not absent")
+	assert.Nil(t, evaluation["materiality_digest"])
+	assert.Equal(t, "none_fail_safe", evaluation["materiality"])
 	none, err := rulesetDigest("")
 	require.NoError(t, err)
-	assert.Equal(t, none, evaluation["ruleset_digest"])
+	assert.Equal(t, none, evaluation["ruleset_digest"], "ruleset_digest covers the null")
 	resp := c["check_response"].(map[string]any)
-	assert.NotContains(t, resp, "materiality_digest")
+	require.Contains(t, resp, "materiality_digest")
+	assert.Nil(t, resp["materiality_digest"])
+	assert.Equal(t, "none_fail_safe", resp["materiality"])
 
 	other := writePredicate(t, `{"type":"materiality-predicate/v0","name":"another example","version":"0.0.1","material":[{"field":"quantity"}]}`)
 	given, err := loadMaterialityPredicate(other)
@@ -619,6 +644,7 @@ func TestTypedEvaluationNamesThePredicateEvaluated(t *testing.T) {
 		`{"action":"pay","amount_minor":600,"terms":{"item":"otter sticker","price_minor":600}}`))
 	evaluation = bodyOf(chainRecords(t, id)[c["check_id"].(string)])
 	assert.Equal(t, given.Digest, evaluation["materiality_digest"])
+	assert.Equal(t, "predicate", evaluation["materiality"])
 	rules, err := rulesetDigest(given.Digest)
 	require.NoError(t, err)
 	assert.Equal(t, rules, evaluation["ruleset_digest"])

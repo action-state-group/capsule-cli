@@ -22,7 +22,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "1d31b582b69410445ca7c474f16e35dc5b7d16d776ac89905aa13183be1f2918"
+      "digest": "9616f0095d607db07fe0a03df45c0519c46632d8ca480e597fc644942199666d"
     },
     "chain_root": {
       "type": "record",

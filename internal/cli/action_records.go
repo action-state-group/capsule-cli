@@ -316,10 +316,7 @@ func evaluationBody(ev dealEvent, events []sealedEvent, v0 map[string]interface{
 		"ruleset_digest": ck.RulesetDigest, "valid_until": ck.ValidUntil,
 		"authority_basis": []interface{}{map[string]interface{}{"type": "task_authority", "ref": task}},
 	}
-	// None when no predicate was configured: every agent pick was material.
-	if ck.MaterialityDigest != "" {
-		out["materiality_digest"] = ck.MaterialityDigest
-	}
+	out["materiality"], out["materiality_digest"] = materialityMode(ck.MaterialityDigest)
 	for _, k := range []string{"unverified", "notes", "judge"} {
 		if v, ok := v0[k]; ok {
 			out[k] = v
@@ -416,6 +413,23 @@ func addAuthority(body map[string]interface{}, events []sealedEvent, authorizedB
 	body["evaluation_ref"] = typedRef(evalDigest)
 	body["authority_basis"] = basis
 	return nil
+}
+
+// Materiality modes an evaluation states, so that no predicate is told apart
+// from a missing field.
+const (
+	materialityModePredicate = "predicate"
+	materialityModeNone      = "none_fail_safe"
+)
+
+// materialityMode is how an evaluation states the materiality it ran under:
+// the predicate's digest, or, with none configured, null and the fail-safe
+// mode (every pick the agent made alone pauses).
+func materialityMode(digest string) (string, interface{}) {
+	if digest == "" {
+		return materialityModeNone, nil
+	}
+	return materialityModePredicate, digest
 }
 
 // platformObservationKind names the platform approval observation shape.
@@ -532,7 +546,8 @@ type CheckResponse struct {
 	EvaluationRef        CheckRef         `json:"evaluation_ref"`
 	RulesetDigest        string           `json:"ruleset_digest"`
 	TaskAuthorityRef     CheckRef         `json:"task_authority_ref"`
-	MaterialityDigest    string           `json:"materiality_digest,omitempty"`
+	MaterialityDigest    *string          `json:"materiality_digest"`
+	Materiality          string           `json:"materiality"`
 }
 
 // checkResponseFor is the check response of a sealed evaluation step.
@@ -544,7 +559,12 @@ func checkResponseFor(ev dealEvent, events []sealedEvent, digest string) CheckRe
 		ValidUntil: ck.ValidUntil, Findings: []CheckFinding{},
 		AuthorityBasis: []CheckAuthority{{Type: "task_authority", Ref: task}},
 		EvaluationRef:  CheckRef{Type: typedRecordRef, DigestAlg: "SHA-256", Digest: digest},
-		RulesetDigest:  ck.RulesetDigest, TaskAuthorityRef: task, MaterialityDigest: ck.MaterialityDigest,
+		RulesetDigest:  ck.RulesetDigest, TaskAuthorityRef: task,
+	}
+	if mode, d := materialityMode(ck.MaterialityDigest); d != nil {
+		resp.Materiality, resp.MaterialityDigest = mode, &ck.MaterialityDigest
+	} else {
+		resp.Materiality = mode
 	}
 	for _, se := range events {
 		if se.CapsuleID == ck.Snapshot {

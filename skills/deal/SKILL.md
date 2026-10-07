@@ -503,6 +503,17 @@ Act only if that returns `"proceed": true`. If it says details changed, or
 that the check was already answered, run the check again. A check takes one
 answer: to change your mind after "Hold", check again.
 
+In a deal opened with `deal open --records typed`, the steps are sealed as
+typed action records. A passing check is itself the authority to act (no
+`approval_id`), and the user's answer to a paused check needs `--said` and
+`--shown-card`. If another platform also showed the user its own approval
+prompt for the same action, record what it displayed (and the user's reply, if
+it returned one) as an observation. It never answers the check:
+
+```sh
+capsulectl --profile deal deal note --deal ID --kind platform_approval --check CHECK_ID --platform example-platform --mechanism native-gate --displayed-text 'Approve $558.80 purchase' --user-text 'Approve' --amount-minor 55880 --currency USD
+```
+
 When the user picks **Call the number I found**, seal that choice
 (`--choice verify_contact`; it does not proceed), then call the number from
 first contact that the option shows, never a number from a later message.

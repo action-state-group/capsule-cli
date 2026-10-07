@@ -1276,7 +1276,7 @@ def regen():
         "disposition": "ASK", "findings": [{"question": "who", "rule": "payee_or_contact_changed", "field": "payee"}],
         "options": ["hold", "proceed"], "rendering_commitment": com1["flight-card"], "judge": {"kind": "rules"},
         "proposed_action_digest": record_digest(records1[fk]), "task_authority_ref": tref(fta),
-        "ruleset_digest": record_digest(rules), "materiality_digest": materiality, "valid_until": "2026-10-06T09:28:00Z",
+        "ruleset_digest": record_digest(rules), "materiality": "predicate", "materiality_digest": materiality, "valid_until": "2026-10-06T09:28:00Z",
         "authority_basis": [{"type": "task_authority", "ref": tref(fta)}]}, refs=[("checks", fk)])
     fp = add_typed("platform-approval-observation", "action-approval/v0", {
         "authority": "platform_approval", "kind": "platform-approval-observation",
@@ -1570,6 +1570,14 @@ def regen():
     r = copy.deepcopy(records1[fp]); r["body"]["proposed_action_ref"] = tref(fm)
     negt("neg-typed-observation-not-of-a-proposed-action", "chain", "proposed_action_ref names no earlier proposed action", r, fp,
          "A platform approval observation whose proposed_action_ref names a message.")
+
+    r = copy.deepcopy(records1[fv]); del r["body"]["materiality_digest"]
+    negt("neg-typed-materiality-missing", "schema", "materiality_digest", r, fv,
+         "An evaluation without materiality_digest: no predicate is stated as null with mode none_fail_safe, never by absence.")
+
+    r = copy.deepcopy(records1[fv]); r["body"]["materiality"] = "none_fail_safe"
+    negt("neg-typed-materiality-mode-with-a-digest", "schema", "materiality_digest", r, fv,
+         "Mode none_fail_safe (no predicate configured) with a predicate digest.")
 
     r = copy.deepcopy(records1[fv]); r["body"]["proposed_action_digest"] = record_digest(records1[fm])
     negt("neg-typed-proposed-action-digest", "chain", "proposed_action_digest is not the digest of the proposed action", r, fv,

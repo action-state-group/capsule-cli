@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentactioncapsule.org/records/action-evaluation-v0.schema.json",
   "title": "action-evaluation/v0",
-  "description": "One evaluation of a ProposedAction (the check contract's response): disposition DO or ASK (NEVER and ASK_UNVERIFIED reserved), findings, and proposed_action_digest, task_authority_ref, ruleset_digest (covers the rule table and the materiality predicate), materiality_digest (the materiality predicate evaluated; absent when none was configured, so every agent pick was material), valid_until and the proposed-phase authority_basis ([task_authority]). rendering_commitment commits to what was rendered for the person. refs: exactly one checks -> the proposed-action/v0.",
+  "description": "One evaluation of a ProposedAction (the check contract's response): disposition DO or ASK (NEVER and ASK_UNVERIFIED reserved), findings, and proposed_action_digest, task_authority_ref, ruleset_digest (covers the rule table and the materiality predicate), materiality and materiality_digest (the materiality predicate evaluated: mode predicate with its digest, or mode none_fail_safe with null when none was configured, so every pick the agent made alone paused), valid_until and the proposed-phase authority_basis ([task_authority]). rendering_commitment commits to what was rendered for the person. refs: exactly one checks -> the proposed-action/v0.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -61,6 +61,8 @@
         "proposed_action_digest",
         "task_authority_ref",
         "ruleset_digest",
+        "materiality",
+        "materiality_digest",
         "valid_until",
         "authority_basis"
       ],
@@ -111,8 +113,11 @@
         "ruleset_digest": {
           "$ref": "record-common-v0.schema.json#/$defs/hex64"
         },
+        "materiality": {
+          "$ref": "record-common-v0.schema.json#/$defs/materiality"
+        },
         "materiality_digest": {
-          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+          "$ref": "record-common-v0.schema.json#/$defs/materiality_digest"
         },
         "valid_until": {
           "$ref": "record-common-v0.schema.json#/$defs/when"
@@ -140,6 +145,9 @@
         }
       },
       "allOf": [
+        {
+          "$ref": "record-common-v0.schema.json#/$defs/materiality_pair"
+        },
         {
           "if": {
             "properties": {

@@ -376,11 +376,12 @@ fingerprint as section 4). Digests are over the record's JCS bytes, as for x-dea
 **The evaluation's contract fields.** `proposed_action_digest` is the digest of the
 `proposed-action/v0` it evaluates; `task_authority_ref` names the task authority in force;
 `ruleset_digest` is the digest of the rule table the evaluator ran (`{evaluator, rules,
-materiality_digest}`), so it also covers the materiality predicate; `materiality_digest` is
-the digest (SHA-256 of the JCS bytes) of the `materiality-predicate/v0` document the check
-evaluated, the profile's or the one the check was given; it is absent when none was configured
-(every pick the agent made alone was material, fail safe), and `ruleset_digest` then covers
-`null`; `valid_until` is when the evaluation
+materiality_digest}`), so it also covers the materiality predicate; `materiality` and
+`materiality_digest` state the predicate the check evaluated, always, never by absence: mode
+`predicate` with the digest (SHA-256 of the JCS bytes) of the `materiality-predicate/v0`
+document, the profile's or the one the check was given; or, with none configured, mode
+`none_fail_safe` (every pick the agent made alone pauses) with `materiality_digest: null`, which
+`ruleset_digest` then covers; `valid_until` is when the evaluation
 stops covering a step; `authority_basis` is `[{type: "task_authority", ref}]`;
 `rendering_commitment` commits to the card the evaluation rendered.
 
@@ -424,5 +425,5 @@ policy-change confirmation's `rendering_commitment`, and an observation's
 not. A request carries the `phase`, the ruleset and task authority it is checked against, the
 proposed action, history refs and any platform approvals; a response carries the
 `disposition`, `valid_until`, `proposed_action_digest`, findings, `authority_basis`,
-`evaluation_ref`, `ruleset_digest`, `task_authority_ref` and `materiality_digest`.
+`evaluation_ref`, `ruleset_digest`, `task_authority_ref`, `materiality` and `materiality_digest`.
 `capsulectl deal check` returns the response for the evaluation it sealed (`check_response`).

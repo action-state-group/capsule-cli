@@ -226,6 +226,52 @@
         "$ref": "#/$defs/authority_entry"
       }
     },
+    "materiality": {
+      "description": "The materiality an evaluation ran under: predicate (a materiality-predicate/v0 document, by materiality_digest), or none_fail_safe (none was configured: every pick the agent made alone pauses; materiality_digest is null).",
+      "enum": [
+        "predicate",
+        "none_fail_safe"
+      ]
+    },
+    "materiality_digest": {
+      "description": "SHA-256 of the JCS bytes of the materiality predicate evaluated; null when none was configured.",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "materiality_pair": {
+      "if": {
+        "properties": {
+          "materiality": {
+            "const": "predicate"
+          }
+        },
+        "required": [
+          "materiality"
+        ]
+      },
+      "then": {
+        "properties": {
+          "materiality_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "materiality_digest": {
+            "type": "null"
+          }
+        }
+      }
+    },
     "disclosed": {
       "type": "object",
       "additionalProperties": false,

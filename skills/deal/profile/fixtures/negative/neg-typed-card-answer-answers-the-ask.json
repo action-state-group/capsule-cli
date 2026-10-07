@@ -24,7 +24,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "faa5df80e04d0bcb2359bc679d2625260e69e0cc6c6eb5e16529b3cea3f79238"
+      "digest": "3cb7542552b09cc0d6e3e3fe845b61d2b43a9f4a8ad3b0d9b15f876de6cdd0bf"
     },
     "chain_root": {
       "type": "record",
@@ -36,7 +36,7 @@
         "rel": "authorized_by",
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "faa5df80e04d0bcb2359bc679d2625260e69e0cc6c6eb5e16529b3cea3f79238"
+        "digest": "3cb7542552b09cc0d6e3e3fe845b61d2b43a9f4a8ad3b0d9b15f876de6cdd0bf"
       }
     ],
     "body": {
@@ -53,7 +53,7 @@
       "evaluation_ref": {
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "1d31b582b69410445ca7c474f16e35dc5b7d16d776ac89905aa13183be1f2918"
+        "digest": "9616f0095d607db07fe0a03df45c0519c46632d8ca480e597fc644942199666d"
       },
       "authority_basis": [
         {
@@ -69,7 +69,7 @@
           "ref": {
             "type": "record",
             "digest_alg": "SHA-256",
-            "digest": "faa5df80e04d0bcb2359bc679d2625260e69e0cc6c6eb5e16529b3cea3f79238"
+            "digest": "3cb7542552b09cc0d6e3e3fe845b61d2b43a9f4a8ad3b0d9b15f876de6cdd0bf"
           }
         },
         {
@@ -77,7 +77,7 @@
           "ref": {
             "type": "record",
             "digest_alg": "SHA-256",
-            "digest": "a2c42fc34300f62a8fc5de05a30aac021dd20629331eea920b8aa83eef4150fd"
+            "digest": "ce1c24709bacb1c8c47fa6156702006797a9e675f34b1aabe0dde14d0a2a4268"
           }
         }
       ]
@@ -93,7 +93,7 @@
       "prev": {
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "1a0a82a7f0ab55fd97df67acbe5432c47021ee468374582eceaf4eccefaa20ee"
+        "digest": "e2de397c0d2e5eb5be9e3a6f85e54c086e2b9d8dae753540ac1b7319834a4193"
       },
       "chain_root": {
         "type": "record",
@@ -105,7 +105,7 @@
           "rel": "approves",
           "type": "record",
           "digest_alg": "SHA-256",
-          "digest": "1d31b582b69410445ca7c474f16e35dc5b7d16d776ac89905aa13183be1f2918"
+          "digest": "9616f0095d607db07fe0a03df45c0519c46632d8ca480e597fc644942199666d"
         }
       ],
       "body": {

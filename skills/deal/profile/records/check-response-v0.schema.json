@@ -14,7 +14,9 @@
     "authority_basis",
     "evaluation_ref",
     "ruleset_digest",
-    "task_authority_ref"
+    "task_authority_ref",
+    "materiality",
+    "materiality_digest"
   ],
   "properties": {
     "type": {
@@ -52,8 +54,16 @@
     "task_authority_ref": {
       "$ref": "record-common-v0.schema.json#/$defs/ref"
     },
+    "materiality": {
+      "$ref": "record-common-v0.schema.json#/$defs/materiality"
+    },
     "materiality_digest": {
-      "$ref": "record-common-v0.schema.json#/$defs/hex64"
+      "$ref": "record-common-v0.schema.json#/$defs/materiality_digest"
     }
-  }
+  },
+  "allOf": [
+    {
+      "$ref": "record-common-v0.schema.json#/$defs/materiality_pair"
+    }
+  ]
 }
