@@ -4,8 +4,17 @@ A deal check pauses for the user's nod on an attribute the agent picked on its o
 (a size, a delivery option the user never named) when that attribute is
 **material**. Which attributes are material is policy, so capsulectl does not
 decide it: it evaluates a **materiality predicate**, a `materiality-predicate/v0`
-JSON document, that the profile names (`deal init --materiality FILE`, stored as
-`materiality.predicate`) or that a check is given (`deal check --materiality FILE`).
+JSON document, that the profile names and **pins by its digest**: `deal init
+--materiality FILE`, or `profile update --materiality FILE` later (stored as
+`materiality.predicate` and `materiality.digest`). A check takes no predicate of
+its own: whoever runs it cannot choose another.
+
+**Setting or changing the predicate is the user's, never the agent's: it is
+policy.** A check refuses, and seals nothing, when the pinned file no longer has
+the pinned digest ("materiality predicate changed since it was pinned"); the
+user re-pins it with `profile update --materiality FILE`. Every check records
+which predicate decided its pauses (name, version and digest, or digest `none`)
+in its output and in its sealed verdict (`materiality`).
 
 **With no predicate configured, every attribute the agent picked pauses the check.**
 That is the safe default: nothing the agent chose alone goes through unasked.

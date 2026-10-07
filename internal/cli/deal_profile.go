@@ -628,6 +628,15 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		block["refs"] = []interface{}{relRef("checks", digestOf(ck.Snapshot))}
 		body["result"] = ck.Verdict
 		body["differences"] = differencesBody(ck.Differences)
+		// Which materiality predicate decided the pauses on the agent's
+		// picks: a verifier knows what applied ("none": every pick paused).
+		if m := ck.Materiality; m.Digest != "" {
+			mb := map[string]interface{}{"digest": m.Digest}
+			if m.Name != "" {
+				mb["name"], mb["version"] = m.Name, m.Version
+			}
+			body["materiality"] = mb
+		}
 		options := make([]interface{}, len(ck.Options))
 		for i, o := range ck.Options {
 			options[i] = o.ID

@@ -363,10 +363,13 @@ sealed step is an x-deal-v0 record (see `profile/PROFILE.md`) that carries
 only fingerprints of identifiers and commitments to text.
 
 Which of your own picks (a size, a delivery option the user never named)
-pause a check is set by a materiality predicate the profile names:
-`deal init --materiality FILE` (see `profile/materiality-predicate/`). With
-none configured, every attribute you picked pauses the check and the user is
-asked about it.
+pause a check is set by a materiality predicate the profile pins:
+`deal init --materiality FILE` or `profile update --materiality FILE` (see
+`profile/materiality-predicate/`). With none configured, every attribute you
+picked pauses the check and the user is asked about it. **Setting or changing
+the predicate is the user's policy: never do it yourself.** If a check refuses
+because the predicate changed since it was pinned, tell the user; re-pinning is
+theirs to run.
 
 Then run `capsulectl --profile deal deal tick` **every minute** from a timer
 on this machine (a cron line `* * * * *`, or the host's scheduler at a

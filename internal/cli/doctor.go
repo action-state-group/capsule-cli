@@ -130,8 +130,8 @@ func doctorCommand() *cobra.Command {
 			unreadablePredicate := false
 			if p.Namespace == "deal" {
 				materiality := map[string]any{"configured": p.Materiality.Predicate != ""}
-				switch predicate, err := loadMaterialityPredicate(p.Materiality.Predicate); {
-				case p.Materiality.Predicate == "":
+				switch predicate, err := pinnedMateriality(p); {
+				case p.Materiality.Predicate == "" && p.Materiality.Digest == "":
 					materiality["notice"] = "no materiality predicate: every attribute the agent picks pauses the check (set one with deal init --materiality)"
 				case err != nil:
 					materiality["ok"], materiality["issue"] = false, SafeError(err)
