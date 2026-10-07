@@ -357,3 +357,29 @@ func TestVerifyBundleFailsADisclosureThatDoesNotMatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "VALID", result["verdict"], "nothing disclosed: the verdict is as before")
 }
+
+// More disclosures a bundle must not carry: an edited agent_output (the
+// other disclosable member), and an overlay naming a record the bundle does
+// not hold. Each fails the bundle.
+func TestVerifyBundleFailsAnEditedOutputOrADisclosureForNoRecord(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	for name, edit := range map[string]func(map[string]interface{}){
+		"an agent_output the record did not seal": func(b map[string]interface{}) {
+			b["disclosures"] = map[string]interface{}{b["root"].(string): map[string]interface{}{"agent_output": map[string]interface{}{"result": "edited"}}}
+		},
+		"a disclosure for a record the bundle does not hold": func(b map[string]interface{}) {
+			b["disclosures"] = map[string]interface{}{strings.Repeat("ab", 32): map[string]interface{}{"agent_input": map[string]interface{}{"result": "edited"}}}
+		},
+	} {
+		result, err := verifyBundleOutput(t, producedBundle(t, edit))
+		assert.ErrorIs(t, err, ErrBundleInvalid, name)
+		assert.Equal(t, "INVALID", result["verdict"], name)
+		assert.Equal(t, 1, ExitCode(err), name)
+		var statuses []string
+		for _, d := range result["disclosures"].([]interface{}) {
+			statuses = append(statuses, d.(map[string]interface{})["status"].(string))
+		}
+		assert.Contains(t, statuses, "disclosure_mismatch", "%s: failed for its disclosure", name)
+		assert.Equal(t, "pass", status(result, "graph_closure"), name)
+	}
+}
