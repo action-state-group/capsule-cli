@@ -21,9 +21,13 @@ var signedCheckpointFields = []string{"log_id", "mmr_size", "root", "key_id", "t
 
 // checkpointClaim holds the bundle's checkpoint to its signature: the COSE
 // checkpoint must verify, and every signed field the JSON copy carries must
-// equal the signed value (log_id, mmr_size and root must be carried). A
-// bundle with no checkpoint.cose is not shown ("withheld"). The verified
-// statement's bytes are returned when the claim passes, else nil.
+// equal the signed value (mmr_size and root must be carried). The log id
+// may be stated in the completeness certificate, the checkpoint, or both:
+// the bundle draft requires the signed log identifier to equal "the
+// certificate and checkpoint values", so at least one copy must be stated
+// and every stated copy must equal the signed one. A bundle with no
+// checkpoint.cose is not shown ("withheld"). The verified statement's bytes
+// are returned when the claim passes, else nil.
 func checkpointClaim(value map[string]interface{}) (aacbundle.ClaimResult, []byte) {
 	stated, _ := value["checkpoint"].(map[string]interface{})
 	encoded, present := stated["cose"].(string)
@@ -40,9 +44,15 @@ func checkpointClaim(value map[string]interface{}) (aacbundle.ClaimResult, []byt
 	}
 	var findings []string
 	for _, field := range signedCheckpointFields {
+		if field == "log_id" {
+			if finding := logIDFinding(value, stated, signed[field]); finding != "" {
+				findings = append(findings, finding)
+			}
+			continue
+		}
 		got, carried := stated[field]
 		if !carried {
-			if field == "log_id" || field == "mmr_size" || field == "root" {
+			if field == "mmr_size" || field == "root" {
 				findings = append(findings, "checkpoint_field_missing:"+field)
 			}
 			continue
@@ -55,6 +65,28 @@ func checkpointClaim(value map[string]interface{}) (aacbundle.ClaimResult, []byt
 		return aacbundle.ClaimResult{Status: "fail", Findings: findings}, nil
 	}
 	return aacbundle.ClaimResult{Status: "pass"}, raw
+}
+
+// logIDFinding holds every log id the bundle states (the completeness
+// certificate's and the checkpoint's) to the signed one: at least one must be
+// stated, and each stated copy must equal it.
+func logIDFinding(value, stated map[string]interface{}, signed interface{}) string {
+	certificate, _ := value["completeness_certificate"].(map[string]interface{})
+	copies := 0
+	for _, holder := range []map[string]interface{}{certificate, stated} {
+		got, carried := holder["log_id"]
+		if !carried {
+			continue
+		}
+		copies++
+		if !sameJSONValue(got, signed) {
+			return "checkpoint_field_mismatch:log_id"
+		}
+	}
+	if copies == 0 {
+		return "checkpoint_field_missing:log_id"
+	}
+	return ""
 }
 
 // producerSignatureClaim checks each record's inline producer signature
