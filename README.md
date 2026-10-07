@@ -648,7 +648,7 @@ append, publish, create checkpoints, or initialize storage.
 
 ## Example: a self-checking report of records you sealed
 
-Turn records you sealed into one portable report: a bundle (`report.json`) and a
+Turn records you sealed into one portable report: a bundle (`bundle.json`) and a
 self-contained page (`report.html`) that checks itself when opened, with no network.
 The report is itself a sealed record, a `report/v1` root whose rows cite the records,
 so the page shows each row with the record behind it.
@@ -657,63 +657,84 @@ Use a **SQLite** profile with a log. Its bundles carry the sealed records themse
 A JSONL profile's bundles carry its evidence book's records about them instead, so a
 report root's rows cannot be shown from one.
 
+Run this in an empty directory (it needs `jq`). It is the script CI runs:
+
 ```bash
-capsulectl key generate --output ./seed            # prints the public key
+public=$(capsulectl key generate --output ./seed | jq -r .public_key)
 capsulectl profile create --name example --type sqlite --sqlite-path ./store.db \
-  --operator "Example Operator" --signing-key-file ./seed --trusted-key <public-key-hex> \
-  --log-id example-log --checkpoint-signing-key-file ./seed --checkpoint-trusted-key <public-key-hex>
+  --operator "Example Operator" --signing-key-file ./seed --trusted-key "$public" \
+  --log-id example-log --checkpoint-signing-key-file ./seed --checkpoint-trusted-key "$public"
 capsulectl store init --profile example
 
-# Each record: a capsule-seal-request/v1 file; `publish` prints its capsule_id.
-capsulectl publish --profile example --request check-config.json
-capsulectl publish --profile example --request check-permissions.json
+# Two records, each a capsule-seal-request/v1 file; publish prints its capsule_id.
+cat > check-config.json <<'EOF'
+{"spec_version": "capsule-seal-request/v1",
+ "capsule": {"ActionID": "check-config", "ActionType": "fyi", "Operator": "example-operator",
+             "Developer": "example-developer", "Timestamp": "2026-10-07T00:00:00Z"},
+ "payload": {"check": "config file", "result": "same"}}
+EOF
+cat > check-permissions.json <<'EOF'
+{"spec_version": "capsule-seal-request/v1",
+ "capsule": {"ActionID": "check-permissions", "ActionType": "fyi", "Operator": "example-operator",
+             "Developer": "example-developer", "Timestamp": "2026-10-07T00:00:00Z"},
+ "payload": {"check": "permissions", "result": "different"}}
+EOF
+config=$(capsulectl publish --profile example --request check-config.json | jq -r .capsule_id)
+permissions=$(capsulectl publish --profile example --request check-permissions.json | jq -r .capsule_id)
 
-# The report root: cites each record in capsule.References (so the bundle
-# carries it) and in its rows (so the page shows it).
-capsulectl publish --profile example --request report.json
+# The report root cites each record twice: in capsule.References, so the bundle
+# carries the record, and in its row, so the page shows it.
+jq -n --arg config "$config" --arg permissions "$permissions" '
+  def cite($id): {type: "agent-action-capsule", digest_alg: "sha256", digest: $id, citation_purpose: "acted_on"};
+  {spec_version: "capsule-seal-request/v1",
+   capsule: {ActionID: "report", ActionType: "fyi", Operator: "example-operator",
+             Developer: "example-developer", Timestamp: "2026-10-07T00:01:00Z",
+             References: [$config, $permissions] | map({Type: "agent-action-capsule", DigestAlg: "sha256",
+                                                        Digest: ., CitationPurpose: "acted_on"})},
+   payload: {spec_version: "report/v1", title: "Example checks", rows: [
+     {row_id: "config", label: "Config file", status: "same", reason: "unchanged since the last run",
+      references: [cite($config)]},
+     {row_id: "permissions", label: "Permissions", status: "different", references: [cite($permissions)]}]}}' \
+  > report-request.json
+report=$(capsulectl publish --profile example --request report-request.json | jq -r .capsule_id)
 
 capsulectl cll checkpoint create --profile example
-capsulectl disclose --profile example --root <report-capsule-id> --out report.json --html report.html
-capsulectl verify --bundle report.json
+capsulectl disclose --profile example --root "$report" --out bundle.json --html report.html
+capsulectl verify --bundle bundle.json
 ```
 
-The report request's `payload` is the report, and each reference names a record's
-`capsule_id`:
+**What `verify --bundle` checks.** It says `VALID` (exit 0) when all of these check out:
 
-```json
-{
-  "spec_version": "capsule-seal-request/v1",
-  "capsule": {
-    "ActionID": "report", "ActionType": "fyi", "Operator": "example-operator",
-    "Developer": "example-developer", "Timestamp": "2026-10-07T00:01:00Z",
-    "References": [
-      {"Type": "agent-action-capsule", "DigestAlg": "sha256", "Digest": "<check-config id>", "CitationPurpose": "acted_on"},
-      {"Type": "agent-action-capsule", "DigestAlg": "sha256", "Digest": "<check-permissions id>", "CitationPurpose": "acted_on"}
-    ]
-  },
-  "payload": {
-    "spec_version": "report/v1",
-    "title": "Example checks",
-    "rows": [
-      {"row_id": "config", "label": "Config file", "status": "same", "reason": "unchanged since the last run",
-       "references": [{"type": "agent-action-capsule", "digest_alg": "sha256", "digest": "<check-config id>", "citation_purpose": "acted_on"}]},
-      {"row_id": "permissions", "label": "Permissions", "status": "different",
-       "references": [{"type": "agent-action-capsule", "digest_alg": "sha256", "digest": "<check-permissions id>", "citation_purpose": "acted_on"}]}
-    ]
-  }
-}
+- the checkpoint's signature;
+- the interval coverage;
+- each record's place in the log;
+- the citation closure;
+- the records' signatures;
+- every disclosed payload against what its record sealed.
+
+A record or payload changed after sealing makes it `INVALID` (exit 1). `INCOMPLETE`
+(exit 3) names what the bundle does not show.
+
+**What VALID rests on.** It means the signatures verify under the keys the bundle
+itself carries: each record's `key_id`, and the key in the checkpoint's signed
+statement. It does not mean they are keys you already trust. To trust the signer,
+compare those keys with the producer's public key, obtained some other way:
+
+```bash
+jq -r '.records[].key_id, .checkpoint.key_id' bundle.json | sort -u   # here: "$public"
 ```
 
-**What `verify --bundle` checks:**
+This example has no witness receipt. That does not lower the verdict, and nobody
+but the producer has vouched for the checkpoint.
 
-- It says `VALID` (exit 0) when the checkpoint signature, the interval coverage,
-  each record's membership, the citation closure, the records' signatures and every
-  disclosed payload all check out.
-- A record or payload changed after sealing makes it `INVALID` (exit 1).
-- `INCOMPLETE` (exit 3) names what the bundle does not show.
+**What the page checks.** In the browser, the page checks the records, the disclosed
+payloads, the citation closure and the log proofs. It does **not** check:
 
-**What the page checks:** the same records, payloads and proofs, in the browser.
-The checkpoint's signature is checked by `verify --bundle`, not by the page.
+- the checkpoint's signature;
+- the records' signatures.
+
+It says "Bundle verification passed" for a bundle that `verify --bundle` calls
+`INCOMPLETE` too. Run `verify --bundle` for the verdict.
 
 **Order matters.** Publish everything and cut the checkpoint before you disclose.
 Each `disclose` puts the disclosure on the log, so for another report later,
