@@ -379,7 +379,8 @@ fingerprint as section 4). Digests are over the record's JCS bytes, as for x-dea
 materiality_digest}`), so it also covers the materiality predicate; `materiality` and
 `materiality_digest` state the predicate the check evaluated, always, never by absence: mode
 `predicate` with the digest (SHA-256 of the JCS bytes) of the `materiality-predicate/v0`
-document, the profile's or the one the check was given; or, with none configured, mode
+document the profile pins (`deal init` / `profile update --materiality`; a check cannot
+choose another); or, with none configured, mode
 `none_fail_safe` (every pick the agent made alone pauses) with `materiality_digest: null`, which
 `ruleset_digest` then covers; `valid_until` is when the evaluation
 stops covering a step; `authority_basis` is `[{type: "task_authority", ref}]`;

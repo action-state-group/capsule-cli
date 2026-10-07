@@ -184,11 +184,10 @@ type dealCheckResult struct {
 	Remote      dealRemoteResult `json:"remote"`
 	// The check contract's fields fixed when the evaluation is sealed (typed
 	// records), so a later release re-derives the same record: when it stops
-	// covering the action, the rule table that evaluated, and the
-	// materiality predicate that decides a material change.
-	ValidUntil        string `json:"valid_until,omitempty"`
-	RulesetDigest     string `json:"ruleset_digest,omitempty"`
-	MaterialityDigest string `json:"materiality_digest,omitempty"`
+	// covering the action, and the rule table that evaluated (with the
+	// materiality predicate, Materiality, the one source of which applied).
+	ValidUntil    string `json:"valid_until,omitempty"`
+	RulesetDigest string `json:"ruleset_digest,omitempty"`
 	// Asked are the attributes of what is about to happen that the user
 	// specified (in their own words, or by choosing, sealed as an intent);
 	// Picked are the ones the agent chose and the user never said.

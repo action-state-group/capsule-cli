@@ -672,7 +672,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			body["notes"] = notes
 		}
 		if ck.Card != "" {
-			if body["card_commitment"], err = commit("card"); err != nil {
+			// The rendering commitment to the card (renderingCommitment, the
+			// one mechanism for what a person was shown).
+			if body["card_commitment"], err = renderingCommitment(ev.Nonces["card"], ck.Card); err != nil {
 				return nil, err
 			}
 		}
@@ -700,12 +702,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if a.ShownCard != "" {
 			// Under the check's own card nonce: equal commitments mean the
 			// card shown is the card checked, recomputable without the text.
-			verdict, _, ok := checkedCard(events, a.Check)
-			nonce := verdict.Event.Nonces["card"]
-			if !ok || nonce == "" {
-				return nil, inputError("the card shown has no checked card to commit against")
-			}
-			if body["card_commitment"], err = commitText(nonce, a.ShownCard); err != nil {
+			if body["card_commitment"], err = shownCommitment(events, a.Check, a.ShownCard); err != nil {
 				return nil, err
 			}
 		}

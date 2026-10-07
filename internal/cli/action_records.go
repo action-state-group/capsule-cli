@@ -316,7 +316,11 @@ func evaluationBody(ev dealEvent, events []sealedEvent, v0 map[string]interface{
 		"ruleset_digest": ck.RulesetDigest, "valid_until": ck.ValidUntil,
 		"authority_basis": []interface{}{map[string]interface{}{"type": "task_authority", "ref": task}},
 	}
-	out["materiality"], out["materiality_digest"] = materialityMode(ck.MaterialityDigest)
+	mode, digest := ck.Materiality.mode()
+	out["materiality"], out["materiality_digest"] = mode, nil
+	if digest != nil {
+		out["materiality_digest"] = *digest
+	}
 	for _, k := range []string{"unverified", "notes", "judge"} {
 		if v, ok := v0[k]; ok {
 			out[k] = v
@@ -422,14 +426,23 @@ const (
 	materialityModeNone      = "none_fail_safe"
 )
 
-// materialityMode is how an evaluation states the materiality it ran under:
-// the predicate's digest, or, with none configured, null and the fail-safe
-// mode (every pick the agent made alone pauses).
-func materialityMode(digest string) (string, interface{}) {
-	if digest == "" {
-		return materialityModeNone, nil
+// predicateDigest is the digest of the predicate that applied, "" when none
+// was configured (digest "none": every pick the agent made alone paused).
+func (m dealMateriality) predicateDigest() string {
+	if m.Digest == "none" {
+		return ""
 	}
-	return materialityModePredicate, digest
+	return m.Digest
+}
+
+// mode is how typed records state the materiality a check ran under, from
+// the check's Materiality, the same value its output shows: the predicate's
+// digest, or, with none configured, null and the fail-safe mode.
+func (m dealMateriality) mode() (string, *string) {
+	if d := m.predicateDigest(); d != "" {
+		return materialityModePredicate, &d
+	}
+	return materialityModeNone, nil
 }
 
 // platformObservationKind names the platform approval observation shape.
@@ -561,11 +574,7 @@ func checkResponseFor(ev dealEvent, events []sealedEvent, digest string) CheckRe
 		EvaluationRef:  CheckRef{Type: typedRecordRef, DigestAlg: "SHA-256", Digest: digest},
 		RulesetDigest:  ck.RulesetDigest, TaskAuthorityRef: task,
 	}
-	if mode, d := materialityMode(ck.MaterialityDigest); d != nil {
-		resp.Materiality, resp.MaterialityDigest = mode, &ck.MaterialityDigest
-	} else {
-		resp.Materiality = mode
-	}
+	resp.Materiality, resp.MaterialityDigest = ck.Materiality.mode()
 	for _, se := range events {
 		if se.CapsuleID == ck.Snapshot {
 			resp.ProposedActionDigest = se.Digest

@@ -173,8 +173,9 @@
           "pattern": "^([a-z][a-z0-9_]{0,63}|[a-z0-9-]+(\\.[a-z0-9-]+)+\\.[a-z][a-z0-9_]{0,63})$"
         },
         "field": {
+          "description": "The attribute, as the x-deal-v0 difference names it (e.g. payee, conditions.size).",
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)?$"
         }
       }
     },

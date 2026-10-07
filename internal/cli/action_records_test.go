@@ -618,9 +618,11 @@ func TestNeutralMaterialityDigestIsTheExampleFile(t *testing.T) {
 	assert.Equal(t, neutralMaterialityDigest, p.Digest)
 }
 
-// An evaluation names the predicate the check actually evaluated: the one a
-// check is given over the profile's; with none configured (fail safe) it
-// names none, and its ruleset_digest says so.
+// An evaluation states the predicate the check evaluated, the profile's
+// pinned one; with none configured (fail safe) it states none_fail_safe and
+// null, and its ruleset_digest covers that null. The check output's
+// materiality, the evaluation record and the check response are one source:
+// they never disagree.
 func TestTypedEvaluationNamesThePredicateEvaluated(t *testing.T) {
 	materialityFixture(t)
 	id := openTypedSticker(t)
@@ -632,22 +634,74 @@ func TestTypedEvaluationNamesThePredicateEvaluated(t *testing.T) {
 	none, err := rulesetDigest("")
 	require.NoError(t, err)
 	assert.Equal(t, none, evaluation["ruleset_digest"], "ruleset_digest covers the null")
-	resp := c["check_response"].(map[string]any)
-	require.Contains(t, resp, "materiality_digest")
-	assert.Nil(t, resp["materiality_digest"])
-	assert.Equal(t, "none_fail_safe", resp["materiality"])
+	sameMateriality(t, c, evaluation)
 
 	other := writePredicate(t, `{"type":"materiality-predicate/v0","name":"another example","version":"0.0.1","material":[{"field":"quantity"}]}`)
-	given, err := loadMaterialityPredicate(other)
+	pinned, err := loadMaterialityPredicate(other)
 	require.NoError(t, err)
-	c = dealRun(t, "check", "--deal", id, "--materiality", other, "--input", writeJSON(t,
-		`{"action":"pay","amount_minor":600,"terms":{"item":"otter sticker","price_minor":600}}`))
+	out, err := invoke(t, "", "--profile", "deal", "profile", "update", "--materiality", other)
+	require.NoError(t, err, out)
+	c = checkPay(t, id, 600)
 	evaluation = bodyOf(chainRecords(t, id)[c["check_id"].(string)])
-	assert.Equal(t, given.Digest, evaluation["materiality_digest"])
+	assert.Equal(t, pinned.Digest, evaluation["materiality_digest"])
 	assert.Equal(t, "predicate", evaluation["materiality"])
-	rules, err := rulesetDigest(given.Digest)
+	rules, err := rulesetDigest(pinned.Digest)
 	require.NoError(t, err)
 	assert.Equal(t, rules, evaluation["ruleset_digest"])
+	sameMateriality(t, c, evaluation)
+	checkerPasses(t, id)
+}
+
+// sameMateriality asserts that a typed check's output states one materiality:
+// its materiality object (digest "none" with no predicate), its check
+// response and its evaluation record agree.
+func sameMateriality(t *testing.T, check, evaluation map[string]any) {
+	t.Helper()
+	shown := check["materiality"].(map[string]any)["digest"]
+	resp := check["check_response"].(map[string]any)
+	require.Contains(t, resp, "materiality_digest")
+	assert.Equal(t, evaluation["materiality"], resp["materiality"])
+	assert.Equal(t, evaluation["materiality_digest"], resp["materiality_digest"])
+	if shown == "none" {
+		assert.Equal(t, "none_fail_safe", resp["materiality"])
+		assert.Nil(t, resp["materiality_digest"])
+	} else {
+		assert.Equal(t, "predicate", resp["materiality"])
+		assert.Equal(t, shown, resp["materiality_digest"])
+	}
+}
+
+// With a predicate that calls a change immaterial, an approval still covers
+// only the proposed action its evaluation names: the predicate decides which
+// picks pause, and never extends an approval to a different
+// proposed_action_digest.
+func TestTypedImmaterialChangeDoesNotExtendAnApproval(t *testing.T) {
+	materialityFixture(t)
+	predicate := writePredicate(t, `{"type":"materiality-predicate/v0","name":"only quantity","version":"0.0.1","material":[{"field":"quantity"}]}`)
+	out, err := invoke(t, "", "--profile", "deal", "profile", "update", "--materiality", predicate)
+	require.NoError(t, err, out)
+	id := openTypedFlight(t)
+	seat := func(s string) string {
+		return strings.Replace(merchantCheck, `"terms":{"item":"SJC-HOU flight",`, `"terms":{"item":"SJC-HOU flight","conditions":{"seat":"`+s+`"},`, 1)
+	}
+	first := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, seat("window")))
+	require.Equal(t, "pause", first["verdict"], "the merchant changed")
+	_, err = answerCheck(t, id, first["check_id"].(string), "yes, the new site is fine", first["card"].(string))
+	require.NoError(t, err)
+
+	second := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, seat("aisle")))
+	evaluation := bodyOf(chainRecords(t, id)[second["check_id"].(string)])
+	for _, f := range evaluation["findings"].([]any) {
+		assert.NotEqual(t, "agent_picked", f.(map[string]any)["rule"], "the predicate calls the seat immaterial: %v", f)
+	}
+	assert.Equal(t, "predicate", evaluation["materiality"])
+	a := first["check_response"].(map[string]any)["proposed_action_digest"]
+	b := second["check_response"].(map[string]any)["proposed_action_digest"]
+	require.NotEqual(t, a, b, "an immaterial change is still another proposed action")
+
+	paid := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, merchantPay))
+	assert.Equal(t, true, paid["unchecked"], "the earlier answer was for another proposed action")
+	assert.Equal(t, "no_sealed_approval", paid["rule"])
 	checkerPasses(t, id)
 }
 

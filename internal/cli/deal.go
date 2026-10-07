@@ -1354,12 +1354,10 @@ func dealCheckCommand() *cobra.Command {
 			if dealRecordSet(dealEvent{}, events) == recordsTyped {
 				// The check contract's fields, fixed when the evaluation is sealed.
 				result.ValidUntil = dealClock().UTC().Truncate(time.Second).Add(staleAfter).Format(time.RFC3339)
-				// The predicate this check evaluated; with none configured
-				// (every pick material, fail safe) the evaluation names none.
-				if predicate != nil {
-					result.MaterialityDigest = predicate.Digest
-				}
-				if result.RulesetDigest, err = rulesetDigest(result.MaterialityDigest); err != nil {
+				// The rule table and the predicate this check evaluated
+				// (result.Materiality, the one source the output, the record
+				// and the check response all state).
+				if result.RulesetDigest, err = rulesetDigest(result.Materiality.predicateDigest()); err != nil {
 					return err
 				}
 			}
