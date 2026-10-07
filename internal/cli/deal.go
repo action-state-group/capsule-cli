@@ -664,6 +664,15 @@ func dealInitCommand() *cobra.Command {
 		p.TrustedKeys = []string{public}
 		p.Checkpoint.Signing.File = filepath.Join(dir, "checkpoint.seed")
 		p.Checkpoint.TrustedKeys = []string{signer.KeyID()}
+		if predicate, _ := c.Flags().GetString("materiality"); predicate != "" {
+			if predicate, err = filepath.Abs(predicate); err != nil {
+				return err
+			}
+			if _, err = loadMaterialityPredicate(predicate); err != nil {
+				return err
+			}
+			p.Materiality.Predicate = predicate
+		}
 		witness := "not_configured"
 		if noWitness, _ := c.Flags().GetBool("no-witness"); !noWitness {
 			p.Checkpoint.Endpoint, p.Checkpoint.PublicKey = dealDefaultWitness, dealDefaultWitnessKey
@@ -694,6 +703,7 @@ func dealInitCommand() *cobra.Command {
 	}}
 	cmd.Flags().String("dir", "", "Directory for the store and seeds (created 0700)")
 	cmd.Flags().Bool("no-witness", false, "Do not configure the default public witness; deals are sealed on this device only")
+	cmd.Flags().String("materiality", "", "A materiality predicate (materiality-predicate/v0 JSON) for this profile's checks to evaluate; without one, every attribute the agent picks pauses the check")
 	return cmd
 }
 
@@ -1172,6 +1182,16 @@ func dealCheckCommand() *cobra.Command {
 			if dealFinallyClosed(events) {
 				return inputError("this deal is closed and takes no more steps; start a new one with `deal open`")
 			}
+			// The materiality predicate, read before anything is sealed: one
+			// that cannot be read refuses the check, never falls back.
+			predicatePath, _ := c.Flags().GetString("materiality")
+			if predicatePath == "" {
+				predicatePath = s.p.Materiality.Predicate
+			}
+			predicate, err := loadMaterialityPredicate(predicatePath)
+			if err != nil {
+				return err
+			}
 			open := events[0].Event.Open
 			if !slices.Contains(dealPointsOfNoReturn[open.Type], snap.Action) {
 				return inputError("action is not a point of no return for a " + open.Type + " deal; use one of " + strings.Join(dealPointsOfNoReturn[open.Type], ", "))
@@ -1250,6 +1270,7 @@ func dealCheckCommand() *cobra.Command {
 			if state.memory, err = s.counterpartyMemory(ctx, dealID); err != nil {
 				return err
 			}
+			state.materiality = predicate
 			result := evaluateDeal(state, snap)
 			if result.Remote, err = dealRemoteCheck(ctx, state, snap, result); err != nil {
 				return err
@@ -1309,6 +1330,7 @@ func dealCheckCommand() *cobra.Command {
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("input", "", "Snapshot JSON: the action and exactly what is about to happen")
+	cmd.Flags().String("materiality", "", "A materiality predicate (materiality-predicate/v0 JSON) for this check, instead of the profile's")
 	cmd.Flags().Duration("stale-after", 15*time.Minute, "How long the check stays current; the approval text says when it goes stale")
 	return cmd
 }

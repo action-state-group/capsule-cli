@@ -125,6 +125,12 @@ type Profile struct {
 		Jitter    string `yaml:"jitter,omitempty" mapstructure:"jitter"`
 		PadBucket uint64 `yaml:"pad_bucket,omitempty" mapstructure:"pad_bucket"`
 	} `yaml:"cadence,omitempty" mapstructure:"cadence"`
+	// Materiality names the materiality predicate (a materiality-predicate/v0
+	// document) a deal check evaluates to decide which of the agent's own
+	// picks pause. None configured: every pick pauses.
+	Materiality struct {
+		Predicate string `yaml:"predicate,omitempty" mapstructure:"predicate"`
+	} `yaml:"materiality,omitempty" mapstructure:"materiality"`
 }
 
 // isBook reports whether the profile is an evidence book: a jsonl profile with

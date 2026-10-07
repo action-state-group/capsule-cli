@@ -20,6 +20,9 @@ const jetSkiDemo = "../../skills/deal/demo/jet-ski"
 const bookingFixture = "testdata/deal/booking"
 
 // dealFixture creates a fresh deal profile named "deal" in a temp config dir.
+// neutralMateriality is the example predicate the deal skill's profile docs ship.
+const neutralMateriality = "../../skills/deal/profile/materiality-predicate/neutral.json"
+
 func dealFixture(t *testing.T) string {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -29,8 +32,10 @@ func dealFixture(t *testing.T) string {
 	dealClock = func() time.Time { return fixed }
 	t.Cleanup(func() { dealClock = old })
 	dir := filepath.Join(t.TempDir(), "deal")
-	// Most tests run without a witness; the witness tests configure one.
-	out, err := invoke(t, "", "deal", "init", "--profile", "deal", "--dir", dir, "--no-witness")
+	// Most tests run without a witness; the witness tests configure one. They
+	// run under the neutral example predicate, which reproduces what the
+	// check paused on before predicates; the materiality tests set their own.
+	out, err := invoke(t, "", "deal", "init", "--profile", "deal", "--dir", dir, "--no-witness", "--materiality", neutralMateriality)
 	require.NoError(t, err, out)
 	return dir
 }
@@ -517,11 +522,11 @@ const otterFixture = "testdata/deal/otter"
 //
 // What the user chose (the item) and what the agent picked on its own (the
 // size) are told apart. A size the agent picked is material: the check asks
-// the user ("I picked size ...; price varies by size") rather than passing
+// the user ("I picked size ...; you didn't choose it") rather than passing
 // on an empty card. Once the user's pick names the size too, it passes.
 func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 	const item = "Otterly Chaos - Unsupervised and Thriving Funny Otter Design Sticker"
-	const pickedSize = "I picked size small 3.8in x 2.4in; price varies by size"
+	const pickedSize = "I picked size small 3.8in x 2.4in; you didn't choose it"
 	run := func(t *testing.T, intent, check string) map[string]any {
 		dealFixture(t)
 		dealID := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)

@@ -1,0 +1,9 @@
+{
+  "type": "materiality-predicate/v0",
+  "name": "example, not policy: the attributes capsulectl paused on before predicates",
+  "version": "0.1.0",
+  "material": [
+    {"field": "quantity", "except_values": ["1"]},
+    {"field_prefix": "conditions.", "name_contains_any": ["size", "variant", "shipping", "delivery", "quantity", "qty"]}
+  ]
+}
