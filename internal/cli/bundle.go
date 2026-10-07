@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -619,6 +620,15 @@ func sealDisclosure(ctx context.Context, t *target, p Profile, bundle map[string
 	if err != nil {
 		return Publication{}, err
 	}
+	// The capsule commits to the record by an unsalted digest, which a later
+	// bundle shows. The record's other fields have few possible values, so
+	// without a nonce a party could confirm a guess at what was disclosed to
+	// another; with one, two identical disclosures seal different digests.
+	nonce := make([]byte, 32)
+	if _, err = rand.Read(nonce); err != nil {
+		return Publication{}, err
+	}
+	record["nonce"] = hex.EncodeToString(nonce)
 	operator := p.Operator
 	if operator == "" {
 		operator = "capsulectl"

@@ -166,8 +166,9 @@ func TestADisclosureIsASealedCapsuleOfIdsAndDigestsOnly(t *testing.T) {
 		}
 	}
 	for key := range record {
-		assert.Contains(t, []string{"type", "root", "payloads_mode", "suppressed_fields", "revealed"}, key, "only ids, digests and labels")
+		assert.Contains(t, []string{"type", "root", "payloads_mode", "suppressed_fields", "revealed", "nonce"}, key, "only ids, digests, labels and the nonce")
 	}
+	assert.Regexp(t, hex64, record["nonce"], "a 256-bit random nonce")
 }
 
 // One report never reveals what another disclosed: in a later bundle, an
@@ -223,4 +224,27 @@ func TestALegacyBareDisclosureDigestIsNamed(t *testing.T) {
 	assert.Equal(t, 2, ExitCode(err))
 	assert.Contains(t, err.Error(), "log entry 2 is checkpointed but not in this profile's store: either a disclosure an earlier release appended as a bare digest, or a lost record; no bundle over this log can include it; start a new profile (or log id) for new reports")
 	assert.False(t, strings.Contains(err.Error(), "sensitive details suppressed"))
+}
+
+// The disclosure capsule commits to its record by digest, and anyone with a
+// later bundle sees that digest. Without a nonce, a party could confirm a
+// guess at what was disclosed to another (the record's other fields have
+// few possible values); with one, two identical disclosures seal different
+// digests.
+func TestTwoIdenticalDisclosuresSealDifferentDigests(t *testing.T) {
+	d := newDisclosureProfile(t)
+	root := d.publish("check-config", `{"check":"config file","result":"same"}`)
+	d.checkpoint()
+	d.report("disclose", root)
+	d.report("disclose", root)
+	ids := d.logIDs()
+	require.Len(t, ids, 3)
+	digest := func(id string) string {
+		capsule := d.run("get", "--profile", "rep", "--capsule-id", id)["capsule"].(map[string]any)
+		compute := capsule["model_attestation"].(map[string]any)["compute_attestation"].(map[string]any)
+		return compute["agent_input_digest"].(string)
+	}
+	first, second := digest(ids[1]), digest(ids[2])
+	assert.NotEmpty(t, first)
+	assert.NotEqual(t, first, second, "the same disclosure twice seals two different input digests")
 }

@@ -11,7 +11,8 @@
   disclosure record, kept nowhere else, which no later bundle could supply. It now seals the
   disclosure record as an ordinary `fyi` capsule (`action_id: capsulectl-disclosure`) with the
   profile's signing key, stores it, and appends its capsule id. Its input holds only ids, digests
-  and labels, never disclosed payload bytes.
+  and labels, never disclosed payload bytes, plus a random 256-bit nonce, so the digest a later
+  bundle shows cannot confirm a guess at what was disclosed.
 - **A later bundle** proves an earlier disclosure capsule's place in the log but withholds its
   input, so a copy made for one party never shows what was disclosed to another. Such a bundle
   states `payloads_mode: selected`.
