@@ -74,6 +74,12 @@
         "taxonomy_version": {
           "$ref": "record-common-v0.schema.json#/$defs/taxonomy_version"
         },
+        "spend_minor": {
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
+        "fee_minor": {
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
         "amount_minor": {
           "$ref": "record-common-v0.schema.json#/$defs/uint"
         },

@@ -71,3 +71,33 @@ func dealActionClass(dealType, action, direction string) string {
 	}
 	return classExternalCommitOther
 }
+
+// dealSpendMinor is the amount of an action a spend cap evaluates, sealed as
+// spend_minor beside its class: what the action pays out. Stopping a
+// commitment is never spend, so every cancel is 0, whether it returns a
+// payment, returns part of one, or costs a fee (a fee is recorded as its own
+// fee_minor, and no cap evaluates it). Any other action spends its amount,
+// unless it moved money in. With no amount and no cancel, there is none.
+func dealSpendMinor(action, direction string, amount *int64) (int64, bool) {
+	switch {
+	case action == "cancel":
+		return 0, true
+	case amount == nil || direction == "in":
+		return 0, false
+	}
+	return *amount, true
+}
+
+// checkFee refuses a fee on anything but a cancel, or a negative one.
+func checkFee(action string, fee *int64) error {
+	if fee == nil {
+		return nil
+	}
+	if action != "cancel" {
+		return inputError("fee_minor is a cancellation fee: only a cancel carries one")
+	}
+	if *fee < 0 {
+		return inputError("fee_minor must not be negative")
+	}
+	return nil
+}

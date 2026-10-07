@@ -355,6 +355,14 @@
         "taxonomy_version": {
           "$ref": "#/$defs/taxonomy_version"
         },
+        "spend_minor": {
+          "description": "The amount a spend cap evaluates: what the action pays out. 0 on every cancel.",
+          "$ref": "#/$defs/uint"
+        },
+        "fee_minor": {
+          "description": "On a cancel only: a fee the cancellation costs, never the amount a spend cap evaluates.",
+          "$ref": "#/$defs/uint"
+        },
         "amount_minor": {
           "type": "integer",
           "minimum": 0,
