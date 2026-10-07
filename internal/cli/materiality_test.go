@@ -2,8 +2,11 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -158,8 +161,8 @@ func TestAChangedOrUnpinnedPredicateRefusesTheCheck(t *testing.T) {
 	pin(t, path)
 	assert.Equal(t, []string{"when"}, pausedOn(flightCheck(t)))
 
-	require.NoError(t, os.WriteFile(path, []byte(`{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[]}`), 0o600))
 	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+	require.NoError(t, os.WriteFile(path, []byte(`{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[]}`), 0o600))
 	trail := func() string { return dealRun(t, "report", "--deal", id)["trail"].(string) }
 	before := trail()
 	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
@@ -207,7 +210,8 @@ func TestTheSealedCheckCarriesThePredicate(t *testing.T) {
 		}
 	}
 	require.Len(t, sealed, 2)
-	assert.Equal(t, map[string]any{"name": example.Name, "version": example.Version, "digest": example.Digest}, sealed[0])
+	assert.Equal(t, example.Digest, sealed[0].(map[string]any)["digest"])
+	assert.Equal(t, []string{"digest", "label_commitment"}, slices.Sorted(maps.Keys(sealed[0].(map[string]any))), "the name and version are committed, never sealed in the clear")
 	assert.Equal(t, map[string]any{"digest": "none"}, sealed[1])
 	checkProfile(t, export)
 }
@@ -279,4 +283,178 @@ func TestDoctorReportsTheMaterialityPredicate(t *testing.T) {
 	p, err := parseMaterialityPredicate("", example)
 	require.NoError(t, err)
 	assert.Equal(t, p.Digest, set["digest"])
+}
+
+// The deal's opening seals the predicate pinned then, from the profile and
+// never from the input. A check under another one (a re-pin mid-deal) is
+// flagged on its card and pauses; one under the same predicate is not.
+func TestARepinMidDealIsFlagged(t *testing.T) {
+	materialityFixture(t, "--materiality", neutralMateriality)
+	raw, err := os.ReadFile(filepath.Join(otterFixture, "open.json"))
+	require.NoError(t, err)
+	var open map[string]any
+	require.NoError(t, json.Unmarshal(raw, &open))
+	open["materiality"] = map[string]any{"digest": "none"}
+	claimed, err := json.Marshal(open)
+	require.NoError(t, err)
+	id := dealRun(t, "open", "--input", writeJSON(t, string(claimed)))["deal_id"].(string)
+
+	example, err := os.ReadFile(neutralMateriality)
+	require.NoError(t, err)
+	p, err := parseMaterialityPredicate("", example)
+	require.NoError(t, err)
+	records, _ := exportRecords(t, id)
+	assert.Equal(t, p.Digest, records[0]["body"].(map[string]any)["materiality"].(map[string]any)["digest"], "the profile's predicate, not the input's claim")
+
+	rules := func(check map[string]any) []string {
+		var out []string
+		for _, d := range check["differences"].([]any) {
+			out = append(out, d.(map[string]any)["rule"].(string))
+		}
+		return out
+	}
+	same := dealRun(t, "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	assert.NotContains(t, rules(same), "materiality_changed")
+
+	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing","version":"2","material":[]}`))
+	changed := dealRun(t, "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	assert.Equal(t, "pause", changed["verdict"])
+	assert.Contains(t, rules(changed), "materiality_changed")
+	assert.Contains(t, changed["card"], "The rule for which of the agent's picks need your answer changed since this deal opened ("+p.Name+" "+p.Version+" → nothing 2)")
+	assert.Empty(t, pausedOn(changed), "the new predicate itself pauses on nothing: only the change is flagged")
+	_, export := exportRecords(t, id)
+	checkProfile(t, export)
+}
+
+// A pinned predicate whose file is gone refuses with a message that says so,
+// at a check and at a deal's opening.
+func TestAMissingPredicateFileRefusesWithItsOwnMessage(t *testing.T) {
+	materialityFixture(t)
+	path := writePredicate(t, `{"type":"materiality-predicate/v0","name":"x","version":"1","material":[]}`)
+	pin(t, path)
+	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+	require.NoError(t, os.Remove(path))
+	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "materiality predicate file missing")
+	assert.Contains(t, err.Error(), "profile update --materiality")
+	_, err = invoke(t, "", "--profile", "deal", "deal", "open", "--input", filepath.Join(otterFixture, "open.json"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "materiality predicate file missing")
+}
+
+// A shared copy carries the materiality the opening and every check
+// A counterparty's copy discloses only which predicate applied, by digest:
+// the opening and check records are shared (their name and version are a
+// commitment), with no opening of it. The user's own copy opens it: name and
+// version, checked against the sealed commitment.
+func TestTheMaterialityLabelIsTheUsersOwnCopyOnly(t *testing.T) {
+	materialityFixture(t, "--materiality", neutralMateriality)
+	raw, err := os.ReadFile(neutralMateriality)
+	require.NoError(t, err)
+	example, err := parseMaterialityPredicate("", raw)
+	require.NoError(t, err)
+	id := openCeilingDeal(t, false)
+
+	shared, sharedRaw := sharedCopy(t, id, dealAudienceCounterparty, "x")
+	sharedExt := shared["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	for _, s := range sharedExt["steps"].([]any) {
+		step := s.(map[string]any)
+		if step["kind"] == "open" || step["kind"] == "check" {
+			assert.Equal(t, false, step["withheld"], "step %v (%v)", step["n"], step["kind"])
+		}
+	}
+	assert.Contains(t, sharedRaw, example.Digest)
+	assert.Contains(t, sharedRaw, "label_commitment")
+	assert.NotContains(t, sharedRaw, example.Name, "the counterparty's copy carries no predicate name")
+	assert.NotContains(t, sharedExt, "materiality_openings")
+
+	path := filepath.Join(t.TempDir(), "own.json")
+	dealRun(t, "report", "--deal", id, "--bundle", path)
+	ownRaw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var own map[string]any
+	require.NoError(t, json.Unmarshal(ownRaw, &own))
+	ownExt := own["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	openings := ownExt["materiality_openings"].([]any)
+	seqOf := map[string]string{}
+	for _, s := range ownExt["steps"].([]any) {
+		seqOf[s.(map[string]any)["capsule_id"].(string)] = fmt.Sprint(s.(map[string]any)["n"])
+	}
+	records, _ := exportRecords(t, id)
+	committed := map[string]string{}
+	for _, r := range records {
+		if m, ok := r["body"].(map[string]any)["materiality"].(map[string]any); ok {
+			committed[fmt.Sprint(r["x-deal-v0"].(map[string]any)["seq"])] = m["label_commitment"].(string)
+		}
+	}
+	require.Len(t, committed, 2, "the opening and the check")
+	require.Len(t, openings, 2)
+	for _, o := range openings {
+		o := o.(map[string]any)
+		assert.Equal(t, example.Name, o["name"])
+		assert.Equal(t, example.Version, o["version"])
+		c, err := commitText(o["nonce"].(string), materialityLabelText(dealMateriality{Name: example.Name, Version: example.Version}))
+		require.NoError(t, err)
+		assert.Equal(t, committed[seqOf[o["step"].(string)]], c, "the user's copy opens the sealed commitment")
+	}
+}
+
+// A verdict sealed in the clear (by a build before the label was committed)
+// still re-derives in the clear, and a shared copy withholds it whole.
+func TestAMaterialityLabelInTheClearIsWithheldFromSharedCopies(t *testing.T) {
+	m := dealMateriality{Name: "x", Version: "1", Digest: strings.Repeat("a", 64)}
+	commit := func(string) (string, error) { return strings.Repeat("b", 64), nil }
+	legacy, err := materialityBody(m, map[string]string{}, commit)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{"digest": m.Digest, "name": "x", "version": "1"}, legacy)
+	assert.False(t, shareableMateriality(legacy))
+	committed, err := materialityBody(m, map[string]string{"materiality": "00"}, commit)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{"digest": m.Digest, "label_commitment": strings.Repeat("b", 64)}, committed)
+	assert.True(t, shareableMateriality(committed))
+	assert.True(t, shareableMateriality(map[string]any{"digest": "none"}))
+	for _, bad := range []any{
+		map[string]any{"digest": "abc"},
+		map[string]any{"digest": "none", "label_commitment": "xyz"},
+		map[string]any{"digest": "none", "label_commitment": strings.Repeat("b", 64), "name": "x"},
+		"none",
+	} {
+		assert.False(t, shareableMateriality(bad), "%v", bad)
+	}
+}
+
+// No shared copy names the predicates a re-pin mid-deal changed between: the
+// counterparty's and the adjudicator's copies say it in fixed words, in the
+// step line and in the anomalies; the user's own copy names them.
+func TestARepinMidDealIsNamedOnlyInTheUsersOwnCopy(t *testing.T) {
+	materialityFixture(t, "--materiality", neutralMateriality)
+	raw, err := os.ReadFile(neutralMateriality)
+	require.NoError(t, err)
+	example, err := parseMaterialityPredicate("", raw)
+	require.NoError(t, err)
+	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing at all","version":"2.7","material":[]}`))
+	check := dealRun(t, "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	require.Contains(t, check["card"], "nothing at all 2.7")
+
+	for _, audience := range []string{dealAudienceAdjudicator, dealAudienceCounterparty} {
+		b, sharedRaw := sharedCopy(t, id, audience, "x")
+		for _, leak := range []string{example.Name, "nothing at all", "2.7"} {
+			assert.NotContains(t, sharedRaw, leak, "%s copy", audience)
+		}
+		ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+		var kinds []string
+		for _, a := range ext["anomalies"].([]any) {
+			kinds = append(kinds, a.(map[string]any)["kind"].(string))
+		}
+		assert.Contains(t, kinds, "materiality_changed", "%s copy", audience)
+		assert.Contains(t, sharedRaw, dealShareAnomaly["materiality_changed"], "%s copy", audience)
+	}
+
+	path := filepath.Join(t.TempDir(), "own.json")
+	dealRun(t, "report", "--deal", id, "--bundle", path)
+	own, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(own), "nothing at all 2.7", "the user's own copy names them")
 }

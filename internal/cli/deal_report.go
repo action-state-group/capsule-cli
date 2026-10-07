@@ -149,7 +149,11 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 			// The opening of the user's own words, so the page can check them
 			// against the baseline's sealed verbatim_commitment.
 			"asked_opening": map[string]interface{}{"nonce": events[0].Event.Nonces["verbatim"], "text": events[0].Event.Open.Intent.Verbatim},
-			"did":           items(report.Did), "anomalies": items(report.Anomalies),
+			// The openings of the materiality predicates' names and versions,
+			// committed in the records (label_commitment): the user's own
+			// copy says which predicate decided, a shared copy only its digest.
+			"materiality_openings": materialityOpenings(events),
+			"did":                  items(report.Did), "anomalies": items(report.Anomalies),
 			"told":     toldItems(report.Told, true),
 			"did_line": dealDidLine(dealDidSources(events)),
 			// Which builds sealed the steps, and which one made this page:

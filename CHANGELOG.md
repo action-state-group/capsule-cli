@@ -18,6 +18,18 @@
   check takes no predicate of its own.
 - A profile that names a predicate without a pinned digest (written by a build between
   the two changes) refuses checks until it is pinned the same way.
-- Every check records which predicate decided (name, version and digest, or digest
-  `none`) in its output and its sealed verdict (`materiality`, an additive x-deal-v0
-  field).
+- Every check says which predicate decided (name, version and digest, or digest
+  `none`) in its output, and seals it in its verdict (`materiality`, an additive
+  x-deal-v0 field).
+- `deal open` seals the predicate pinned when the deal opened into the baseline
+  (`materiality`, additive), from the profile and never from the input. A later check
+  under another predicate (a re-pin mid-deal) carries a `materiality_changed`
+  difference: it shows on the card and pauses the check.
+- A pinned predicate whose file is gone refuses with its own message ("materiality
+  predicate file missing; re-pin it with profile update").
+- Sealed records carry the predicate's digest and a commitment to its name and
+  version (`label_commitment`); the user's own copy opens it (`materiality_openings`).
+  A copy shared with a counterparty discloses the digest only: the name and version
+  describe the user's own policy. This also fixes shared copies, which withheld every
+  check step once the verdict began recording `materiality` in v0.1.0-rc8. Verdicts
+  rc8 sealed with the name and version in the clear stay withheld from shared copies.

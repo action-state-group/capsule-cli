@@ -98,6 +98,11 @@ type dealOpen struct {
 	// (YYYY-MM-DD); the default depends on the deal type (deal_late.go).
 	// `deal deadlines` lists an open deal against it.
 	ExpectCloseBy string `json:"expect_close_by,omitempty"`
+	// Materiality is the materiality predicate the profile pinned when the
+	// deal opened (digest "none": none). Set by `deal open` from the
+	// profile, never from the input file. A later check under another one
+	// is flagged. Absent on deals opened before it was recorded.
+	Materiality dealMateriality `json:"materiality,omitzero"`
 }
 
 type dealMessage struct {
@@ -943,6 +948,12 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	// 1. Asked?
 	intent := s.intent
 	r.Asked, r.Picked = attributeProvenance(intent.Asked, proposed)
+	// The predicate deciding these pauses is the one pinned when the deal
+	// opened, or the check says it is not: a re-pin mid-deal is never
+	// silent.
+	if opened, now := s.open.Materiality.Digest, s.materiality.ref(); opened != "" && opened != now.Digest {
+		add("safety", "materiality_changed", "", fmt.Sprintf("The rule for which of the agent's picks need your answer changed since this deal opened (%s → %s)", materialityLabel(s.open.Materiality), materialityLabel(now)))
+	}
 	// A material attribute the agent picked needs the user's nod: it pauses
 	// the check, so "proceed" is never true on an empty card. Which picks are
 	// material is the materiality predicate's to say, not this code's; with
@@ -1801,7 +1812,7 @@ func pauseCauseKind(rule string) (side, kind string) {
 		return "counterparty", "code_request"
 	case "off_platform_early":
 		return "counterparty", "channel_hop"
-	case "pay_before_seeing", "credentials_requested", "agent_picked", "first_disclosure":
+	case "pay_before_seeing", "credentials_requested", "agent_picked", "first_disclosure", "materiality_changed":
 		return "agent", rule
 	}
 	return "counterparty", rule
@@ -2015,7 +2026,7 @@ var dealBuiltinRules = []struct {
 	{"who", []string{"payee_or_contact_changed", "first_disclosure"}},
 	{"terms", []string{"terms_changed"}},
 	{"recourse", []string{"recourse_changed", "irreversible_rail"}},
-	{"safety", []string{"pay_before_seeing", "credentials_requested", "verification_code_request", "off_platform_early", "domain_recent"}},
+	{"safety", []string{"pay_before_seeing", "credentials_requested", "verification_code_request", "off_platform_early", "domain_recent", "materiality_changed"}},
 }
 
 // rulesetDigest is the digest of what evaluated: the built-in rule table and

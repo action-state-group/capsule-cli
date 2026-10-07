@@ -3,7 +3,10 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -140,6 +143,9 @@ func pinnedMateriality(p Profile) (*materialityPredicate, error) {
 	case m.Predicate == "" || m.Digest == "":
 		return nil, inputError("the profile's materiality predicate is not pinned: set it with `capsulectl --profile " + p.Name + " profile update --materiality FILE` (the user's to run)")
 	}
+	if _, err := os.Stat(m.Predicate); errors.Is(err, fs.ErrNotExist) {
+		return nil, inputError("materiality predicate file missing (" + m.Predicate + "): re-pin it with `capsulectl --profile " + p.Name + " profile update --materiality FILE`, which is the user's to run")
+	}
 	predicate, err := loadMaterialityPredicate(m.Predicate)
 	if err != nil {
 		return nil, err
@@ -157,6 +163,15 @@ type dealMateriality struct {
 	Name    string `json:"name,omitempty"`
 	Version string `json:"version,omitempty"`
 	Digest  string `json:"digest"`
+}
+
+// materialityLabel names a predicate for the card: its name and version, or
+// that none was configured.
+func materialityLabel(m dealMateriality) string {
+	if m.Digest == "none" || m.Name == "" {
+		return "none: every pick asked about"
+	}
+	return m.Name + " " + m.Version
 }
 
 func (p *materialityPredicate) ref() dealMateriality {
@@ -208,4 +223,29 @@ func (m materialityMatcher) matches(a dealAttribute) bool {
 		}
 	}
 	return true
+}
+
+// materialityOpenings are, for each step that committed a materiality
+// predicate's name and version, the step and the opening of its
+// label_commitment: the nonce, name and version. Only the user's own copy
+// carries them.
+func materialityOpenings(events []sealedEvent) []interface{} {
+	out := []interface{}{}
+	for _, se := range events {
+		nonce := se.Event.Nonces["materiality"]
+		if nonce == "" {
+			continue
+		}
+		var m dealMateriality
+		switch {
+		case se.Event.Open != nil:
+			m = se.Event.Open.Materiality
+		case se.Event.Check != nil:
+			m = se.Event.Check.Materiality
+		default:
+			continue
+		}
+		out = append(out, map[string]interface{}{"step": se.CapsuleID, "nonce": nonce, "name": m.Name, "version": m.Version})
+	}
+	return out
 }

@@ -749,6 +749,16 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 				// The user's spending limit: never the counterparty's to see.
 				return false
 			}
+			if k == "materiality" {
+				// Which materiality predicate applied: shareable as its
+				// digest and the commitment to its name and version only.
+				// The name and version describe the user's own policy, so a
+				// record sealing them in the clear is withheld.
+				if !shareableMateriality(child) {
+					return false
+				}
+				continue
+			}
 			if k == "producer" {
 				// The software build that sealed the record: shareable in
 				// exactly its own shape, without opening "name" to every
@@ -802,6 +812,31 @@ func shareableProducer(v interface{}) bool {
 	return producerName.MatchString(name) && producerVersion.MatchString(version) && producerCommit.MatchString(commit)
 }
 
+// shareableMateriality reports whether v is a materiality reference a shared
+// copy may carry: a 64-hex digest or "none", and at most a 64-hex commitment
+// to the predicate's name and version. A name or version in the clear (a
+// verdict sealed before they were committed), or anything else, withholds the
+// record.
+func shareableMateriality(v interface{}) bool {
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	isDigest := func(s string) bool { return len(s) == 64 && isLowerHex(s) }
+	digest, _ := m["digest"].(string)
+	if digest != "none" && !isDigest(digest) {
+		return false
+	}
+	switch len(m) {
+	case 1:
+		return true
+	case 2:
+		c, _ := m["label_commitment"].(string)
+		return isDigest(c)
+	}
+	return false
+}
+
 // dealWithholdRecords picks the records a shared copy withholds.
 func (s *dealSession) dealWithholdRecords(events []sealedEvent, audience string, p dealPrivate) (map[string]bool, error) {
 	withhold := map[string]bool{}
@@ -846,8 +881,20 @@ func dealShareableIDs(events []sealedEvent, audience string) []string {
 
 // dealShareAnomaly is a counterparty-copy anomaly line: fixed words per kind,
 // never the values the local line was written from.
+// sharedDifferenceText is a difference's text as any shared copy carries it.
+// A materiality change names the user's own predicates (their names and
+// versions describe the user's policy), so every shared copy says it in
+// fixed words instead.
+func sharedDifferenceText(rule, text string) string {
+	if rule == "materiality_changed" {
+		return dealShareAnomaly[rule]
+	}
+	return text
+}
+
 var dealShareAnomaly = map[string]string{
 	"changed_identifier":       "A payee or contact detail changed after first contact",
+	"materiality_changed":      "The rule for which of the agent's picks need an answer changed during the deal",
 	"recourse_changed":         "The way to pay changed after it was agreed",
 	"irreversible_rail":        "Payment by a rail with no card protection",
 	"domain_recent":            "The website was registered recently",
@@ -914,7 +961,7 @@ func dealShareStepLine(e dealEvent, audience string, p dealPrivate, currency str
 			var texts []string
 			for _, d := range e.Check.Differences {
 				if d.Text != "" {
-					texts = append(texts, p.scrub(d.Text))
+					texts = append(texts, p.scrub(sharedDifferenceText(d.Rule, d.Text)))
 				}
 			}
 			return "Check flagged: " + strings.Join(texts, " · ")
@@ -1002,6 +1049,8 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 						text += " ⚠️"
 					}
 				}
+			case item.Kind == "materiality_changed":
+				text = sharedDifferenceText(item.Kind, item.Text)
 			case anomalies && audience == dealAudienceCounterparty:
 				words, ok := dealShareAnomaly[item.Kind]
 				if !ok {

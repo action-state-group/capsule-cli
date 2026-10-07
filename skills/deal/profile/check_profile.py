@@ -1220,7 +1220,7 @@ def regen():
         {"question": "terms", "rules": ["terms_changed"]},
         {"question": "recourse", "rules": ["recourse_changed", "irreversible_rail"]},
         {"question": "safety", "rules": ["pay_before_seeing", "credentials_requested", "verification_code_request",
-                                         "off_platform_early", "domain_recent"]}]}
+                                         "off_platform_early", "domain_recent", "materiality_changed"]}]}
     records1, names1 = [], []
     clock1 = iter([f"2026-10-06T09:{m:02d}:00Z" for m in (2, 2, 10, 11, 13, 13, 14, 15, 16, 17)])
 
