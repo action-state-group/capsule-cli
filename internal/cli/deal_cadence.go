@@ -74,7 +74,7 @@ func cadenceChainOf(b map[string]interface{}) map[string]interface{} {
 }
 
 // dealWitnessSees is said wherever the witness is configured.
-const dealWitnessSees = "The witness sees one checkpoint per tick of this profile's cadence log: hashes, a size that grows by the same amount every tick, and a time on the cadence. It never sees content, how many deals there are, or when they happen."
+const dealWitnessSees = "The witness sees one checkpoint per tick of this profile's checkpoint cadence: hashes, a size that grows by the same amount every tick, and a time on the cadence. It never sees content, how many deals there are, or when they happen."
 
 var dealCadenceSchema = `CREATE TABLE IF NOT EXISTS deal_cadence (
 	tick INTEGER PRIMARY KEY,
@@ -92,7 +92,9 @@ type dealCadenceConfig struct {
 }
 
 func (p Profile) dealCadence() (dealCadenceConfig, error) {
-	cfg := dealCadenceConfig{interval: time.Hour, jitter: 10 * time.Minute, padBucket: 1}
+	// The checkpoint cadence by default: a tick every 5m, give or take 1m
+	// (288 a day). The jitter must stay under half the interval.
+	cfg := dealCadenceConfig{interval: 5 * time.Minute, jitter: time.Minute, padBucket: 1}
 	var err error
 	if p.Cadence.Interval != "" {
 		if cfg.interval, err = time.ParseDuration(p.Cadence.Interval); err != nil {
@@ -725,7 +727,7 @@ var dealSleep = func(ctx context.Context, d time.Duration) error {
 // The waiting happens with the store unlocked, and every publish re-checks
 // the due time under the lock.
 func dealTickCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "tick", Short: "Publish the profile's cadence checkpoint to its witness when a tick is due (run it every minute; deal events never publish)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "tick", Short: "The checkpoint cadence's poll: when a tick is due, publish the profile's cadence checkpoint to its witness; a run that is not due publishes nothing (schedule it every 5 minutes with --wait-up-to 5m; deal events never publish)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		wait, _ := c.Flags().GetDuration("wait-up-to")
 		if wait < 0 {
 			return inputError("--wait-up-to must not be negative")
@@ -758,7 +760,7 @@ func dealTickCommand() *cobra.Command {
 			}
 		}
 	}}
-	cmd.Flags().Duration("wait-up-to", 0, "When the scheduler cannot run this every minute: wait for each tick due within this long (the scheduler's period) and publish it on time; the run stays alive up to this long")
+	cmd.Flags().Duration("wait-up-to", 0, "The scheduler's period (for example 5m): wait for each tick due within this long and publish it on time, so the cadence keeps its jitter; the run stays alive up to this long")
 	return cmd
 }
 
@@ -774,6 +776,20 @@ func (s *dealSession) cadenceWords() string {
 		words += ", give or take " + shortDuration(cfg.jitter)
 	}
 	return words
+}
+
+// aboutDuration writes a wait for a reader: 1h10m, 1h, 7m or 30s.
+func aboutDuration(d time.Duration) string {
+	switch {
+	case d >= time.Hour && d%time.Hour == 0:
+		return fmt.Sprintf("%dh", d/time.Hour)
+	case d >= time.Hour && d%time.Minute == 0:
+		return fmt.Sprintf("%dh%dm", d/time.Hour, d%time.Hour/time.Minute)
+	case d%time.Minute == 0:
+		return fmt.Sprintf("%dm", d/time.Minute)
+	default:
+		return d.String()
+	}
 }
 
 // shortDuration writes 1h, 90m, 5m or 30s, never "1h0m0s".

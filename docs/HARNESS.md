@@ -47,13 +47,13 @@ So the receipt carries what the install was when the deal ran.
 ## 2. The verdict from outside, in two halves
 
 A deal profile publishes on a fixed cadence: its cadence log grows by one entry
-every tick (hourly with jitter by default), whether or not any deal happened.
+every tick (every 5m, give or take 1m, by default), whether or not any deal happened.
 That keeps a witness from learning how many deals there are, and it means the
 witness can show that an install is alive, but never whether a given deal took
 place. Per-deal logs (`deal/<id>`) are never published.
 
 **Liveness, from the witness.** `capsulectl canary watch` per account, against
-the account's cadence log id (`deal tick` prints it as `cadence_log`). A
+the account's cadence log id (`cll checkpoint cadence` prints it as `cadence_log`). A
 scheduled GitHub Actions job (`examples/deal-harness-watch.yml`, no secrets)
 runs it for every account, prints one verdict per account in the run summary,
 and fails the run when any log stopped advancing or was rewritten. It catches

@@ -12,7 +12,7 @@ needs no access to the host, the account or the agent.
   `demo: true`, never real money), `deal note --kind evidence` (the binary
   version and the skill file's sha256), `deal check` (it passes, so the
   standing intent's approval is sealed with it), `deal report`, and finally
-  `deal tick`. **It ticks only if every step before it succeeded.** Any step
+  a tick of the checkpoint cadence. **It ticks only if every step before it succeeded.** Any step
   that fails stops the run with one line naming the verb and its message, and
   nothing is published.
 - A deal profile's cadence log grows by one entry per tick, whether or not
@@ -45,7 +45,7 @@ needs no access to the host, the account or the agent.
 ## The expected time
 
 `--expect-every` is the canary's schedule, plus the cadence interval and its
-jitter (default 1h ± 10m), plus slack for a slow witness. A tick is due only
+jitter (default 5m ± 1m), plus slack for a slow witness. A tick is due only
 once per interval, so a run that comes before it is due publishes nothing new
 (`"tick": "not_due"`).
 
