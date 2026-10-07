@@ -196,10 +196,12 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		if !found {
 			record, err = getCapsule(ctx, artifacts, id)
 			if errors.Is(err, artifact.ErrNotFound) {
-				// Before disclosures were sealed as capsules, disclose appended
-				// a disclosure record's bare digest, kept nowhere else: no
-				// bundle can supply it, and the verifier requires every entry.
-				return nil, inputError(fmt.Sprintf("log entry %d is a disclosure record an earlier release appended as a bare digest; no bundle over this log can include it: start a new profile (or log id) for new reports", entry.Seq))
+				// A checkpointed entry the store does not hold: before
+				// disclosures were sealed as capsules, disclose appended a
+				// disclosure record's bare digest, kept nowhere else; or a record
+				// was lost. The two cannot be told apart here, and either way no
+				// bundle can supply it, since the verifier requires every entry.
+				return nil, inputError(fmt.Sprintf("log entry %d is checkpointed but not in this profile's store: either a disclosure an earlier release appended as a bare digest, or a lost record; no bundle over this log can include it; start a new profile (or log id) for new reports", entry.Seq))
 			}
 			if err != nil {
 				return nil, fmt.Errorf("checkpointed record %s is unavailable: %w", id, err)

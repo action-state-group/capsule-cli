@@ -221,6 +221,6 @@ func TestALegacyBareDisclosureDigestIsNamed(t *testing.T) {
 	_, err = invoke(t, "", "bundle", "--profile", "rep", "--root", root, "--out", filepath.Join(d.dir, "x.json"))
 	require.ErrorIs(t, err, ErrInput)
 	assert.Equal(t, 2, ExitCode(err))
-	assert.Contains(t, err.Error(), "log entry 2 is a disclosure record an earlier release appended as a bare digest; no bundle over this log can include it: start a new profile (or log id) for new reports")
+	assert.Contains(t, err.Error(), "log entry 2 is checkpointed but not in this profile's store: either a disclosure an earlier release appended as a bare digest, or a lost record; no bundle over this log can include it; start a new profile (or log id) for new reports")
 	assert.False(t, strings.Contains(err.Error(), "sensitive details suppressed"))
 }

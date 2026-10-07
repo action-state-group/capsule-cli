@@ -16,9 +16,19 @@
   input, so a copy made for one party never shows what was disclosed to another. Such a bundle
   states `payloads_mode: selected`.
 - **Logs written by an earlier release** that disclosed and then checkpointed cannot be bundled
-  over: the record behind a bare digest is gone. The error now says so ("log entry N is a
-  disclosure record an earlier release appended as a bare digest; no bundle over this log can
-  include it: start a new profile (or log id) for new reports"), exit 2.
+  over: the record behind a bare digest is gone. The error now says what it can know, exit 2:
+  "log entry N is checkpointed but not in this profile's store: either a disclosure an earlier
+  release appended as a bare digest, or a lost record; no bundle over this log can include it;
+  start a new profile (or log id) for new reports".
+
+### `verify --capsule` reads a bare capsule
+
+- `verify --capsule` also reads a bare Agent Action Capsule as capsule-emit seals it (the
+  capsule's own fields with an inline `signature` and `key_id`), with the same checks as the
+  artifact.Record wrapper. The file's shape is read from its members, never guessed, and named
+  in the output (`shape`); a file with the members of both shapes, or of neither, is refused.
+
+## v0.1.0-rc9
 
 ### The checkpoint cadence: every 5m by default
 
@@ -33,6 +43,10 @@
   5 minutes with `--wait-up-to 5m`. A run with no tick due publishes nothing.
 
 ### Deal checks: which agent picks pause is a pinned materiality predicate
+
+The pinned predicate itself first shipped in v0.1.0-rc8, whose release notes did not describe
+it. v0.1.0-rc9 added sealing it at a deal's opening, flagging a re-pin mid-deal, the
+missing-file message, and the commitment to its name and version.
 
 - **Behaviour change for existing deal profiles.** Which attributes the agent picked
   on its own (a size, a delivery option the user never named) pause a deal check is
