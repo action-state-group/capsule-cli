@@ -1,0 +1,29 @@
+{
+ "action_id": "seal/d0fa6952-a0bc-4c76-82cd-3fa589688958",
+ "action_type": "decide",
+ "assurance": {
+  "attestation_mode": "self_attested",
+  "effect_mode": "not_applicable",
+  "ledger_mode": "standalone"
+ },
+ "canonicalization_id": "jcs",
+ "capsule_id": "846094f08e050a03a2f6d31b49146066dd10ea3e5182ffcba356983cfa2b6293",
+ "developer": "example-developer",
+ "disposition": {
+  "approver": "policy",
+  "decision": "accept",
+  "human_disposed": false,
+  "verdict_class": "executed"
+ },
+ "format_version": "4",
+ "key_id": "b15be7157d9b1b77ce3e92d0e62f08fa5b6cadf50e99a8613d04ac40e5b18974",
+ "model_attestation": {
+  "compute_attestation": {
+   "agent_input_digest": "b328fd489e2ad2484679073d623ea3df9b34c900b3608203ca4b90331b706905"
+  }
+ },
+ "operator": "example-operator",
+ "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820b15be7157d9b1b77ce3e92d0e62f08fa5b6cadf50e99a8613d04ac40e5b189740127a05820846094f08e050a03a2f6d31b49146066dd10ea3e5182ffcba356983cfa2b62935840ebae1f23416e4ccc7ed8af4d4ed9e7fc638751e155245955ef6221e371c1f125fc4fac4005fc416d99a4f1ee95afbd3fb280f5a17168728744fe807ed0f5c102",
+ "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+ "timestamp": "2026-10-07T20:29:45.562216Z"
+}
