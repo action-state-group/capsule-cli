@@ -809,8 +809,9 @@ profile and no network are used. It checks:
 - interval coverage and each record's inclusion under that checkpoint;
 - disclosures.
 
-It prints each claim's status and the bundle digest, and lists extensions and
-countersignatures it carried but did not check. Exit codes:
+It prints each claim's status and the bundle digest. A `composed/v1` extension is verified
+(composed digest, each member, closure, joins) and counts toward the verdict; any other
+extension, and any countersignature, is listed as carried but not checked. Exit codes:
 
 - 0: every claim passed;
 - 3: nothing failed, but something is not shown (no checkpoint signature, an

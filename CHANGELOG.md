@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### `verify --bundle` verifies composed/v1
+
+- **Changed:** a bundle carrying a `composed/v1` extension (Evidence Bundle -01 §7.2) is now
+  verified instead of being listed as uninterpreted: the composed digest, each member (with a full
+  per-member assessment for carried member bundles), composition closure, joins and the
+  redundancy flag. It counts toward the verdict: a failed block or an INVALID member bundle makes
+  the bundle INVALID; a declared-missing member, a join that can't be derived or an unverified
+  refusal signature makes it INCOMPLETE. Uses agent-action-capsule go/v0.7.0. Other extensions are
+  still listed as carried but not checked.
+
 ### A second report on a profile works after a checkpoint covers a disclosure
 
 - **Fixed:** once a checkpoint covered a disclosure, every later `bundle` and `disclose` on that
