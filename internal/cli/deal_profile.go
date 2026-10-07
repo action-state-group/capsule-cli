@@ -83,6 +83,13 @@ func dealTexts(ev dealEvent) map[string]string {
 		t["card"] = ev.Check.Card
 	case ev.Approval != nil && ev.Approval.Approver == "user":
 		t["said"] = ev.Approval.Said
+	case ev.TaskAuthority != nil:
+		t["verbatim"] = ev.TaskAuthority.Verbatim
+	case ev.Platform != nil:
+		t["displayed_text"] = ev.Platform.DisplayedText
+		if ev.Platform.UserText != "" {
+			t["returned_user_text"] = ev.Platform.UserText
+		}
 	case ev.Act != nil:
 		if ev.Act.Reference != "" {
 			t["reference"] = ev.Act.Reference
@@ -665,7 +672,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			body["notes"] = notes
 		}
 		if ck.Card != "" {
-			if body["card_commitment"], err = commit("card"); err != nil {
+			// The rendering commitment to the card (renderingCommitment, the
+			// one mechanism for what a person was shown).
+			if body["card_commitment"], err = renderingCommitment(ev.Nonces["card"], ck.Card); err != nil {
 				return nil, err
 			}
 		}
@@ -693,12 +702,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if a.ShownCard != "" {
 			// Under the check's own card nonce: equal commitments mean the
 			// card shown is the card checked, recomputable without the text.
-			verdict, _, ok := checkedCard(events, a.Check)
-			nonce := verdict.Event.Nonces["card"]
-			if !ok || nonce == "" {
-				return nil, inputError("the card shown has no checked card to commit against")
-			}
-			if body["card_commitment"], err = commitText(nonce, a.ShownCard); err != nil {
+			if body["card_commitment"], err = shownCommitment(events, a.Check, a.ShownCard); err != nil {
 				return nil, err
 			}
 		}
@@ -785,11 +789,27 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			}
 			body["carried_obligations"] = carried
 		}
+	case "task_authority":
+		return taskAuthorityRecord(ev, events, commit, block)
+	case "platform_approval":
+		return platformApprovalRecord(ev, events, commit, block, currency)
 	default:
 		return nil, inputError("unknown step kind " + ev.Kind)
 	}
 	block["record_type"] = rtype
-	return map[string]interface{}{"x-deal-v0": block, "body": body}, nil
+	record := map[string]interface{}{"x-deal-v0": block, "body": body}
+	// A deal sealed in the typed action records carries the typed record of
+	// each step of a consequential action; its evidence steps stay x-deal-v0.
+	if dealRecordSet(ev, events) == recordsTyped {
+		typed, err := typedRecord(ev, events, record)
+		if err != nil {
+			return nil, err
+		}
+		if typed != nil {
+			return typed, nil
+		}
+	}
+	return record, nil
 }
 
 // encodeDealRecord returns the sealed payload (the record's JCS bytes) and its
@@ -813,11 +833,16 @@ func encodeDealRecord(ev dealEvent, events []sealedEvent, key []byte) ([]byte, s
 		return nil, "", err
 	}
 	schema, err := compiledDealSchema()
+	profile := "the x-deal-v0 profile"
+	if typeName, ok := docMap["type"].(string); ok {
+		schema, err = recordSchema(typeName)
+		profile = "the " + typeName + " record schema"
+	}
 	if err != nil {
 		return nil, "", err
 	}
 	if err = schema.Validate(doc); err != nil {
-		return nil, "", inputError("refusing to seal: the step does not fit the x-deal-v0 profile: " + firstSchemaError(err))
+		return nil, "", inputError("refusing to seal: the step does not fit " + profile + ": " + firstSchemaError(err))
 	}
 	payload, err := canonical.JCS(doc)
 	if err != nil {

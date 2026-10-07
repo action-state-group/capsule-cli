@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/records/action-evaluation-v0.schema.json",
+  "title": "action-evaluation/v0",
+  "description": "One evaluation of a ProposedAction (the check contract's response): disposition DO or ASK (NEVER and ASK_UNVERIFIED reserved), findings, and proposed_action_digest, task_authority_ref, ruleset_digest (covers the rule table and the materiality predicate), materiality and materiality_digest (the materiality predicate evaluated: mode predicate with its digest, or mode none_fail_safe with null when none was configured, so every pick the agent made alone paused), valid_until and the proposed-phase authority_basis ([task_authority]). rendering_commitment commits to what was rendered for the person. refs: exactly one checks -> the proposed-action/v0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "canonicalization",
+    "chain_id",
+    "seq",
+    "at",
+    "prev",
+    "chain_root",
+    "refs",
+    "body"
+  ],
+  "properties": {
+    "type": {
+      "const": "action-evaluation/v0"
+    },
+    "canonicalization": {
+      "const": "jcs"
+    },
+    "chain_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,15}-[0-9a-f]{16,64}$"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 9007199254740991
+    },
+    "at": {
+      "$ref": "record-common-v0.schema.json#/$defs/when"
+    },
+    "prev": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "chain_root": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "record-common-v0.schema.json#/$defs/rel_ref"
+      }
+    },
+    "producer": {
+      "$ref": "record-common-v0.schema.json#/$defs/producer"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposition",
+        "findings",
+        "options",
+        "proposed_action_digest",
+        "task_authority_ref",
+        "ruleset_digest",
+        "materiality",
+        "materiality_digest",
+        "valid_until",
+        "authority_basis"
+      ],
+      "properties": {
+        "disposition": {
+          "enum": [
+            "DO",
+            "ASK"
+          ]
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "record-common-v0.schema.json#/$defs/finding"
+          }
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "record-common-v0.schema.json#/$defs/token"
+          }
+        },
+        "unverified": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "$ref": "record-common-v0.schema.json#/$defs/token"
+          }
+        },
+        "rendering_commitment": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "judge": {
+          "type": "object"
+        },
+        "proposed_action_digest": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "task_authority_ref": {
+          "$ref": "record-common-v0.schema.json#/$defs/ref"
+        },
+        "ruleset_digest": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "materiality": {
+          "$ref": "record-common-v0.schema.json#/$defs/materiality"
+        },
+        "materiality_digest": {
+          "$ref": "record-common-v0.schema.json#/$defs/materiality_digest"
+        },
+        "valid_until": {
+          "$ref": "record-common-v0.schema.json#/$defs/when"
+        },
+        "authority_basis": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "ref"
+            ],
+            "properties": {
+              "type": {
+                "const": "task_authority"
+              },
+              "ref": {
+                "$ref": "record-common-v0.schema.json#/$defs/ref"
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "record-common-v0.schema.json#/$defs/materiality_pair"
+        },
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "DO"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "findings": {
+                "maxItems": 0
+              },
+              "options": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "ASK"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "findings": {
+                "minItems": 1
+              },
+              "options": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

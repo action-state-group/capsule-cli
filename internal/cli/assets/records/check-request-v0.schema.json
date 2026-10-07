@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/records/check-request-v0.schema.json",
+  "title": "check-request/v0",
+  "description": "A request to evaluate one ProposedAction. Platform identity is instance data. ruleset_ref names the RuleSet where the caller keeps it; the sealed evaluation binds only its digest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "phase",
+    "ruleset_digest",
+    "task_authority_ref",
+    "proposed_action"
+  ],
+  "properties": {
+    "type": {
+      "const": "check-request/v0"
+    },
+    "phase": {
+      "enum": [
+        "proposed",
+        "executed"
+      ]
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "record-common-v0.schema.json#/$defs/caller_name"
+        },
+        "display_name": {
+          "type": "string",
+          "maxLength": 64
+        }
+      }
+    },
+    "ruleset_ref": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "ruleset_digest": {
+      "$ref": "record-common-v0.schema.json#/$defs/hex64"
+    },
+    "task_authority_ref": {
+      "oneOf": [
+        {
+          "$ref": "record-common-v0.schema.json#/$defs/ref"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "root_intent_ref": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "parent_delegation_ref": {
+      "oneOf": [
+        {
+          "$ref": "record-common-v0.schema.json#/$defs/ref"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "proposed_action": {
+      "type": "object"
+    },
+    "history_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "record-common-v0.schema.json#/$defs/ref"
+      }
+    },
+    "agent_assessment": {
+      "type": "object"
+    },
+    "platform_approval_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "record-common-v0.schema.json#/$defs/ref"
+      }
+    }
+  }
+}

@@ -1,0 +1,428 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/records/action-approval-v0.schema.json",
+  "title": "action-approval/v0",
+  "description": "One approval artifact of a stated authority. user_approval: the user's own answer to an ASK, with their words (said_commitment) and what they were shown (rendering_commitment, equal to the evaluation's). card_answer: a card was answered with no words of the user's; it satisfies no ask. platform_approval: a platform approval observation (kind platform-approval-observation): that another platform's approval interaction for the proposed action (proposed_action_ref) happened with these bytes, when it was observed (observed_at): the text the platform displayed (displayed_text_digest, a rendering commitment, the same primitive as rendering_commitment) and the user's text it returned (returned_user_text_digest); platform and mechanism are names the caller gives. It claims nothing about whether the platform authorized anything or any rule is satisfied, and never answers a check. policy_change: the user's confirmation of a policy change, binding what they were shown (rendering_commitment), the effective policy (effective_policy_digest) and the semantic diff (semantic_diff_digest). one_shot_override: reserved.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "canonicalization",
+    "chain_id",
+    "seq",
+    "at",
+    "prev",
+    "chain_root",
+    "body"
+  ],
+  "properties": {
+    "type": {
+      "const": "action-approval/v0"
+    },
+    "canonicalization": {
+      "const": "jcs"
+    },
+    "chain_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,15}-[0-9a-f]{16,64}$"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 9007199254740991
+    },
+    "at": {
+      "$ref": "record-common-v0.schema.json#/$defs/when"
+    },
+    "prev": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "chain_root": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "record-common-v0.schema.json#/$defs/rel_ref"
+      }
+    },
+    "producer": {
+      "$ref": "record-common-v0.schema.json#/$defs/producer"
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority"
+      ],
+      "properties": {
+        "authority": {
+          "enum": [
+            "user_approval",
+            "card_answer",
+            "platform_approval",
+            "policy_change",
+            "one_shot_override"
+          ]
+        },
+        "choice": {
+          "enum": [
+            "hold",
+            "verify_contact",
+            "proceed"
+          ]
+        },
+        "proceed": {
+          "type": "boolean"
+        },
+        "said_commitment": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "rendering_commitment": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "kind": {
+          "const": "platform-approval-observation"
+        },
+        "platform": {
+          "$ref": "record-common-v0.schema.json#/$defs/caller_name"
+        },
+        "mechanism": {
+          "$ref": "record-common-v0.schema.json#/$defs/caller_name"
+        },
+        "displayed_text_digest": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "returned_user_text_digest": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "proposed_action_ref": {
+          "$ref": "record-common-v0.schema.json#/$defs/ref"
+        },
+        "observed_at": {
+          "$ref": "record-common-v0.schema.json#/$defs/when"
+        },
+        "amount_minor": {
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
+        "currency": {
+          "$ref": "record-common-v0.schema.json#/$defs/currency"
+        },
+        "effective_policy_digest": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "semantic_diff_digest": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "authority": {
+                "const": "user_approval"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "choice",
+              "proceed",
+              "said_commitment",
+              "rendering_commitment"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "kind"
+                  ]
+                },
+                {
+                  "required": [
+                    "platform"
+                  ]
+                },
+                {
+                  "required": [
+                    "mechanism"
+                  ]
+                },
+                {
+                  "required": [
+                    "displayed_text_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "returned_user_text_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "proposed_action_ref"
+                  ]
+                },
+                {
+                  "required": [
+                    "observed_at"
+                  ]
+                },
+                {
+                  "required": [
+                    "effective_policy_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "semantic_diff_digest"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "authority": {
+                "const": "card_answer"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "choice",
+              "proceed"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "said_commitment"
+                  ]
+                },
+                {
+                  "required": [
+                    "kind"
+                  ]
+                },
+                {
+                  "required": [
+                    "platform"
+                  ]
+                },
+                {
+                  "required": [
+                    "mechanism"
+                  ]
+                },
+                {
+                  "required": [
+                    "displayed_text_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "returned_user_text_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "proposed_action_ref"
+                  ]
+                },
+                {
+                  "required": [
+                    "observed_at"
+                  ]
+                },
+                {
+                  "required": [
+                    "effective_policy_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "semantic_diff_digest"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "authority": {
+                "const": "platform_approval"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "kind",
+              "platform",
+              "mechanism",
+              "displayed_text_digest",
+              "proposed_action_ref",
+              "observed_at"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "choice"
+                  ]
+                },
+                {
+                  "required": [
+                    "proceed"
+                  ]
+                },
+                {
+                  "required": [
+                    "said_commitment"
+                  ]
+                },
+                {
+                  "required": [
+                    "rendering_commitment"
+                  ]
+                },
+                {
+                  "required": [
+                    "effective_policy_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "semantic_diff_digest"
+                  ]
+                }
+              ]
+            },
+            "dependentRequired": {
+              "amount_minor": [
+                "currency"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "authority": {
+                "const": "policy_change"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "said_commitment",
+              "rendering_commitment",
+              "effective_policy_digest",
+              "semantic_diff_digest"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "choice"
+                  ]
+                },
+                {
+                  "required": [
+                    "proceed"
+                  ]
+                },
+                {
+                  "required": [
+                    "kind"
+                  ]
+                },
+                {
+                  "required": [
+                    "platform"
+                  ]
+                },
+                {
+                  "required": [
+                    "mechanism"
+                  ]
+                },
+                {
+                  "required": [
+                    "displayed_text_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "returned_user_text_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "proposed_action_ref"
+                  ]
+                },
+                {
+                  "required": [
+                    "observed_at"
+                  ]
+                },
+                {
+                  "required": [
+                    "amount_minor"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "choice": {
+                "const": "proceed"
+              }
+            },
+            "required": [
+              "choice"
+            ]
+          },
+          "then": {
+            "properties": {
+              "proceed": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "choice": {
+                "enum": [
+                  "hold",
+                  "verify_contact"
+                ]
+              }
+            },
+            "required": [
+              "choice"
+            ]
+          },
+          "then": {
+            "properties": {
+              "proceed": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

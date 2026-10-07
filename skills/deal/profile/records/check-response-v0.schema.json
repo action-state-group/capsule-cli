@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/records/check-response-v0.schema.json",
+  "title": "check-response/v0",
+  "description": "One evaluation, as returned: the fields its action-evaluation/v0 record seals, plus evaluation_ref (that record's digest).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "disposition",
+    "valid_until",
+    "proposed_action_digest",
+    "findings",
+    "authority_basis",
+    "evaluation_ref",
+    "ruleset_digest",
+    "task_authority_ref",
+    "materiality",
+    "materiality_digest"
+  ],
+  "properties": {
+    "type": {
+      "const": "check-response/v0"
+    },
+    "disposition": {
+      "enum": [
+        "DO",
+        "ASK",
+        "NEVER",
+        "ASK_UNVERIFIED"
+      ]
+    },
+    "valid_until": {
+      "$ref": "record-common-v0.schema.json#/$defs/when"
+    },
+    "proposed_action_digest": {
+      "$ref": "record-common-v0.schema.json#/$defs/hex64"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "record-common-v0.schema.json#/$defs/finding"
+      }
+    },
+    "authority_basis": {
+      "$ref": "record-common-v0.schema.json#/$defs/authority_basis"
+    },
+    "evaluation_ref": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "ruleset_digest": {
+      "$ref": "record-common-v0.schema.json#/$defs/hex64"
+    },
+    "task_authority_ref": {
+      "$ref": "record-common-v0.schema.json#/$defs/ref"
+    },
+    "materiality": {
+      "$ref": "record-common-v0.schema.json#/$defs/materiality"
+    },
+    "materiality_digest": {
+      "$ref": "record-common-v0.schema.json#/$defs/materiality_digest"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "record-common-v0.schema.json#/$defs/materiality_pair"
+    }
+  ]
+}

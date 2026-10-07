@@ -1,0 +1,51 @@
+{
+  "fixture": "neg-typed-observation-claims-a-decision",
+  "expect": "invalid",
+  "description": "A platform approval observation that states a choice: an observation records bytes, never a decision.",
+  "expected_stage": "schema",
+  "expected_error_contains": "body",
+  "chain_dir": "positive-typed",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json",
+    "03-message-site-switch.json",
+    "04-detail-change-merchant.json",
+    "05-proposed-action.json",
+    "06-action-evaluation.json"
+  ],
+  "record": {
+    "type": "action-approval/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-7a1e5c0d9b2f4e68",
+    "seq": 7,
+    "at": "2026-10-06T09:14:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "9616f0095d607db07fe0a03df45c0519c46632d8ca480e597fc644942199666d"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+    },
+    "body": {
+      "authority": "platform_approval",
+      "kind": "platform-approval-observation",
+      "platform": "example-platform",
+      "mechanism": "native-gate",
+      "displayed_text_digest": "a9307b607262a2ea16a67c1d6507aaa8a00ea346cc1b193189297cdf670746d2",
+      "returned_user_text_digest": "6f1cdd074c705725ce46bf1d21acc2293c4c70844cf5f33fa1fc9df0b05c24dc",
+      "proposed_action_ref": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "179c5868bd5c5fcf9c372f706fafce8dd951018f151d88bc020304e1524108b0"
+      },
+      "observed_at": "2026-10-06T09:13:40Z",
+      "amount_minor": 55880,
+      "currency": "USD",
+      "choice": "proceed",
+      "proceed": true
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "fixture": "06-action-evaluation.json",
+  "expect": "valid",
+  "story": "The deal check asks (ASK): the payee changed since first contact. It names the proposed action, the task authority, the rule table and materiality predicate, and how long it is valid.",
+  "record": {
+    "type": "action-evaluation/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-7a1e5c0d9b2f4e68",
+    "seq": 6,
+    "at": "2026-10-06T09:13:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "179c5868bd5c5fcf9c372f706fafce8dd951018f151d88bc020304e1524108b0"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+    },
+    "refs": [
+      {
+        "rel": "checks",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "179c5868bd5c5fcf9c372f706fafce8dd951018f151d88bc020304e1524108b0"
+      }
+    ],
+    "body": {
+      "disposition": "ASK",
+      "findings": [
+        {
+          "question": "who",
+          "rule": "payee_or_contact_changed",
+          "field": "payee"
+        }
+      ],
+      "options": [
+        "hold",
+        "proceed"
+      ],
+      "rendering_commitment": "6d02a586e32eac5366b1dbc685561d5a7bfad317e7c3fbed1bbebd287d3eec21",
+      "judge": {
+        "kind": "rules"
+      },
+      "proposed_action_digest": "179c5868bd5c5fcf9c372f706fafce8dd951018f151d88bc020304e1524108b0",
+      "task_authority_ref": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "d1962067c88f4e8f32294fd84d3fca31120a5a5584511a8bd4385b2a0e44a3e2"
+      },
+      "ruleset_digest": "668bcfe7faee070446240df4d797e7864e7f95e247d2de8f3c78ccf0de73b959",
+      "materiality": "predicate",
+      "materiality_digest": "53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1",
+      "valid_until": "2026-10-06T09:28:00Z",
+      "authority_basis": [
+        {
+          "type": "task_authority",
+          "ref": {
+            "type": "record",
+            "digest_alg": "SHA-256",
+            "digest": "d1962067c88f4e8f32294fd84d3fca31120a5a5584511a8bd4385b2a0e44a3e2"
+          }
+        }
+      ]
+    }
+  },
+  "expected_digest": "9616f0095d607db07fe0a03df45c0519c46632d8ca480e597fc644942199666d"
+}

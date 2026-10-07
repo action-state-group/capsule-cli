@@ -1,0 +1,38 @@
+{
+  "fixture": "09-approval-on-the-card.json",
+  "expect": "valid",
+  "story": "An approval artifact of a stated authority: here an observation of the platform's own approval interaction (what it displayed and the text it returned, by commitment; it authorizes nothing and never answers the check), or the user's own answer on the card the check rendered.",
+  "record": {
+    "type": "action-approval/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-7a1e5c0d9b2f4e68",
+    "seq": 9,
+    "at": "2026-10-06T09:16:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "e2de397c0d2e5eb5be9e3a6f85e54c086e2b9d8dae753540ac1b7319834a4193"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+    },
+    "refs": [
+      {
+        "rel": "approves",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "9616f0095d607db07fe0a03df45c0519c46632d8ca480e597fc644942199666d"
+      }
+    ],
+    "body": {
+      "authority": "user_approval",
+      "choice": "proceed",
+      "proceed": true,
+      "said_commitment": "60b5b2b1237a12666ec051e57927dd948948e6c6bca112b8a28df78f0c224224",
+      "rendering_commitment": "6d02a586e32eac5366b1dbc685561d5a7bfad317e7c3fbed1bbebd287d3eec21"
+    }
+  },
+  "expected_digest": "a49c16ab8ac79a6aa0f8e758a321e925345cf0071888bacae2b32ef4c32ec182"
+}

@@ -8,6 +8,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 )
 
 // This file is the deterministic half of `capsulectl deal`: the deal record
@@ -84,6 +87,13 @@ type dealOpen struct {
 	Recourse dealRecourse `json:"recourse"`
 	// Skill is set by `deal open --skill`, never from the input file.
 	Skill *dealSkill `json:"skill,omitempty"`
+	// Records is the record set this deal is sealed in, set by `deal open`
+	// (never from the input file): "" for x-deal-v0 records throughout, or
+	// recordsTyped for the typed action records (task-authority/v0,
+	// proposed-action/v0, action-evaluation/v0, action-approval/v0,
+	// action-record/v0, action-outcome/v0) beside x-deal-v0 evidence records,
+	// in one chain. Fixed for the deal, so its records always re-derive.
+	Records string `json:"records,omitempty"`
 	// ExpectCloseBy is the day this deal is expected to be closed
 	// (YYYY-MM-DD); the default depends on the deal type (deal_late.go).
 	// `deal deadlines` lists an open deal against it.
@@ -172,6 +182,12 @@ type dealCheckResult struct {
 	Card        string           `json:"card"`
 	Options     []dealOption     `json:"options"`
 	Remote      dealRemoteResult `json:"remote"`
+	// The check contract's fields fixed when the evaluation is sealed (typed
+	// records), so a later release re-derives the same record: when it stops
+	// covering the action, and the rule table that evaluated (with the
+	// materiality predicate, Materiality, the one source of which applied).
+	ValidUntil    string `json:"valid_until,omitempty"`
+	RulesetDigest string `json:"ruleset_digest,omitempty"`
 	// Asked are the attributes of what is about to happen that the user
 	// specified (in their own words, or by choosing, sealed as an intent);
 	// Picked are the ones the agent chose and the user never said.
@@ -278,8 +294,8 @@ type dealApproval struct {
 	Said     string `json:"said,omitempty"`
 	// ShownCard is the exact card text the answer was given on (deal note
 	// --shown-card). The record commits to it under the check's own card
-	// nonce, so its card_commitment equals the check's exactly when the card
-	// shown is the card checked.
+	// nonce, so its card_commitment (in typed records, rendering_commitment)
+	// equals the check's exactly when the card shown is the card checked.
 	ShownCard string `json:"shown_card,omitempty"`
 	Proceed   bool   `json:"proceed"`
 	Reason    string `json:"reason,omitempty"`
@@ -452,6 +468,12 @@ type dealEvent struct {
 	Close    *dealCloseResult `json:"close,omitempty"`
 	// Disclosure is something the agent told someone about the user.
 	Disclosure *dealDisclosure `json:"disclosure,omitempty"`
+	// TaskAuthority is the user's task authority as opened (typed records):
+	// sealed as its own task-authority/v0 step right after the baseline.
+	TaskAuthority *dealIntent `json:"task_authority,omitempty"`
+	// Platform is an observation of another platform's own approval interaction,
+	// as observed (typed records). It never answers a check.
+	Platform *dealPlatformApproval `json:"platform,omitempty"`
 	// Confirms is set on a record sealed after the deal was closed: the
 	// capsule id of that close. Its Capsule chains to the close with the
 	// registered relation `confirms`, never `follows`, and its record
@@ -461,6 +483,24 @@ type dealEvent struct {
 	// Producer is the capsulectl build that sealed the step, kept with the
 	// step so that a later build re-derives the same record.
 	Producer *dealProducer `json:"producer,omitempty"`
+}
+
+// dealPlatformApproval is an observation of another platform's own approval
+// interaction for a checked action, as the caller saw it: the platform and
+// mechanism as the caller names them, the text the platform displayed and
+// the user's text it returned (each committed, never stored in the record),
+// when it was observed, and the amount the displayed text stated. It records
+// that the interaction happened with these bytes; it says nothing about
+// whether the platform authorized anything or any rule is satisfied.
+type dealPlatformApproval struct {
+	Check         string `json:"check"`
+	Platform      string `json:"platform"`
+	Mechanism     string `json:"mechanism"`
+	DisplayedText string `json:"displayed_text"`
+	UserText      string `json:"user_text,omitempty"`
+	ObservedAt    string `json:"observed_at"`
+	AmountMinor   *int64 `json:"amount_minor,omitempty"`
+	Currency      string `json:"currency,omitempty"`
 }
 
 // dealProducer names the build that sealed a step. A development build says
@@ -1124,8 +1164,16 @@ func renderCard(r dealCheckResult, demo bool) string {
 // amount, rail and payee match what was done. Anything else is an unchecked
 // action: it is sealed anyway, as an outcome, and shown in the report. rule is
 // the token the sealed outcome carries.
-func authorizeAct(events []sealedEvent, act dealAct) (approval, reason, rule string) {
-	// One approval covers at most one step: an action or a disclosure.
+// In typed records (the check contract) the rules are stricter: a DO
+// evaluation authorizes the step on the task authority alone (no approval is
+// sealed), an ASK is answered only by the user's own approval given on the
+// card shown, a platform's approval never answers it, and an evaluation
+// covers the step only until its valid_until (now is when the step is being
+// sealed) and only under the terms and refund terms it was made under.
+func authorizeAct(events []sealedEvent, act dealAct, now time.Time) (approval, reason, rule string) {
+	typed := dealRecordSet(dealEvent{}, events) == recordsTyped
+	// One approval (or, typed, one DO evaluation) covers at most one step:
+	// an action or a disclosure.
 	used := map[string]bool{}
 	for _, se := range events {
 		if se.Event.Kind == "act" && !se.Event.Act.Unchecked {
@@ -1144,8 +1192,31 @@ func authorizeAct(events []sealedEvent, act dealAct) (approval, reason, rule str
 			continue
 		}
 		verdict := events[i]
+		if typed && verdict.Event.Check.ValidUntil != "" {
+			if until, err := time.Parse(time.RFC3339, verdict.Event.Check.ValidUntil); err == nil && now.After(until) {
+				return "", "the check went stale at " + verdict.Event.Check.ValidUntil + ": check again before acting", "stale_check"
+			}
+		}
 		if mismatch := actMismatch(events, verdict.Event.Check.Snapshot, act); mismatch != "" {
 			return "", mismatch, "differs_from_check"
+		}
+		if typed {
+			// Only a change step moves the terms in force, and
+			// changed_after_check catches that first; this keeps the scope
+			// explicit for any other path.
+			atCheck, err1 := foldDeal(events[:i])
+			current, err2 := foldDeal(events)
+			if err1 == nil && err2 == nil {
+				if mismatch := scopeMismatch(atCheck, current); mismatch != "" {
+					return "", mismatch, "differs_from_check"
+				}
+			}
+			if verdict.Event.Check.Verdict == "pass" {
+				if used[verdict.CapsuleID] {
+					return "", "that check already covered an earlier step", "approval_already_used"
+				}
+				return verdict.CapsuleID, "", ""
+			}
 		}
 		for _, later := range events[i+1:] {
 			a := later.Event.Approval
@@ -1158,9 +1229,16 @@ func authorizeAct(events []sealedEvent, act dealAct) (approval, reason, rule str
 			if used[later.CapsuleID] {
 				return "", "that approval already covered an earlier step", "approval_already_used"
 			}
+			if typed && a.Approver != "user" {
+				return "", "the card was answered, but the deal check asked, and an ask needs your own approval, in your words", "ask_needs_your_words"
+			}
 			return later.CapsuleID, "", ""
 		}
-		return "", "the check paused and there is no sealed approval", "no_sealed_approval"
+		reason = "the check paused and there is no sealed approval"
+		if typed && platformObserved(events[i+1:], verdict.CapsuleID) {
+			reason += " of yours: a platform's approval does not answer the deal check"
+		}
+		return "", reason, "no_sealed_approval"
 	}
 	return "", "no check before this action", "no_check"
 }
@@ -1834,4 +1912,80 @@ func (d dealDisclosure) validate() error {
 		action = a
 	}
 	return nil
+}
+
+// recordsTyped is the record set of a deal sealed in the typed action
+// records (dealOpen.Records).
+const recordsTyped = "typed/v0"
+
+// dealRecordSet is the record set of the deal ev belongs to: the one its
+// opening step names, "" (x-deal-v0 throughout) when it names none.
+func dealRecordSet(ev dealEvent, events []sealedEvent) string {
+	open := ev.Open
+	if open == nil && len(events) > 0 {
+		open = events[0].Event.Open
+	}
+	if open == nil {
+		return ""
+	}
+	return open.Records
+}
+
+// scopeMismatch compares the deal's terms and refund terms in force when a
+// check was made (atCheck) with those in force now: an evaluation covers the
+// action only as it stood when it was checked.
+func scopeMismatch(atCheck, now dealState) string {
+	if !reflect.DeepEqual(termsBody(atCheck.terms), termsBody(now.terms)) {
+		return "the terms differ from the ones checked"
+	}
+	if !reflect.DeepEqual(atCheck.recourse.Refundable, now.recourse.Refundable) {
+		return "the refund terms differ from the ones checked"
+	}
+	return ""
+}
+
+// platformObserved reports a platform approval sealed for the check.
+func platformObserved(events []sealedEvent, check string) bool {
+	for _, se := range events {
+		if p := se.Event.Platform; se.Event.Kind == "platform_approval" && p != nil && p.Check == check {
+			return true
+		}
+	}
+	return false
+}
+
+// dealBuiltinRules is the rule table capsulectl's own deal check evaluates, by
+// question, in the order evaluateDeal asks them. A test keeps it equal to the
+// rules evaluateDeal emits.
+var dealBuiltinRules = []struct {
+	Question string
+	Rules    []string
+}{
+	{"asked", []string{"agent_picked", "not_asked", "over_limit"}},
+	{"who", []string{"payee_or_contact_changed", "first_disclosure"}},
+	{"terms", []string{"terms_changed"}},
+	{"recourse", []string{"recourse_changed", "irreversible_rail"}},
+	{"safety", []string{"pay_before_seeing", "credentials_requested", "verification_code_request", "off_platform_early", "domain_recent"}},
+}
+
+// rulesetDigest is the digest of what evaluated: the built-in rule table and
+// the materiality predicate (by its digest; "" when none was configured), so
+// a change to either changes it.
+func rulesetDigest(materialityDigest string) (string, error) {
+	table := make([]interface{}, len(dealBuiltinRules))
+	for i, q := range dealBuiltinRules {
+		rules := make([]interface{}, len(q.Rules))
+		for j, r := range q.Rules {
+			rules[j] = r
+		}
+		table[i] = map[string]interface{}{"question": q.Question, "rules": rules}
+	}
+	// No predicate configured (every agent pick material, fail safe) is null.
+	var materiality interface{}
+	if materialityDigest != "" {
+		materiality = materialityDigest
+	}
+	return canonical.JSONDigest(map[string]interface{}{
+		"evaluator": "capsulectl deal check", "rules": table, "materiality_digest": materiality,
+	})
 }

@@ -1,0 +1,38 @@
+{
+  "fixture": "02-task-authority.json",
+  "expect": "valid",
+  "story": "The user's task authority as asked: their words by commitment, the limit and the allowed action.",
+  "record": {
+    "type": "task-authority/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-7a1e5c0d9b2f4e68",
+    "seq": 2,
+    "at": "2026-10-06T09:02:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+    },
+    "refs": [
+      {
+        "rel": "source",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+      }
+    ],
+    "body": {
+      "verbatim_commitment": "ff56f9733e6f5a78625cc3dd2adf95964292edee3cbd2b9218d8576d36bde7c7",
+      "max_total_minor": 60000,
+      "allowed": [
+        "pay"
+      ]
+    }
+  },
+  "expected_digest": "d1962067c88f4e8f32294fd84d3fca31120a5a5584511a8bd4385b2a0e44a3e2"
+}

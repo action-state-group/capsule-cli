@@ -69,6 +69,36 @@
       "raw": "+1 (555) 010-2044",
       "normalized": "+15550102044",
       "fp": "27b44ee87bc61fd0fdd482712c8f5333637476f086b0cd28daf3afd0e9519220"
+    },
+    {
+      "kind": "name",
+      "raw": "Example Air",
+      "normalized": "example air",
+      "fp": "7dca0e2b6b59e9256837ce12e65450348b9974288ceee9536ae0392a308c0919"
+    },
+    {
+      "kind": "payee",
+      "raw": "Example Air",
+      "normalized": "example air",
+      "fp": "6cc0d40410f3746e2e28e16169b4c64d38a366fbe034fd8f1a9f01bf617f3437"
+    },
+    {
+      "kind": "domain",
+      "raw": "air.example",
+      "normalized": "air.example",
+      "fp": "9a0651742692fae8c8770d949de847c5aae2528642e23c10b98128781d8bca58"
+    },
+    {
+      "kind": "payee",
+      "raw": "Travel Super Discount",
+      "normalized": "travel super discount",
+      "fp": "68ab55d32e00c3dacc8ccc52e6407c9207522f688114f2bb7010f2d01871870a"
+    },
+    {
+      "kind": "domain",
+      "raw": "travel-super-discount.example",
+      "normalized": "travel-super-discount.example",
+      "fp": "09ae4c64d04bf1744d69f125f2c68392de7e2b8754372ddab5466a117b79fa23"
     }
   ],
   "commitments": [
@@ -125,6 +155,42 @@
       "nonce": "d895fb7d42b85fcf6a5e450317f285825a323e8ce2c89baab6010a594e59df59",
       "text": "lakeside marina, slip 14, by the fuel dock",
       "commitment": "bb4e6d271a14e6afc4fa3a8fbe603db6558f4f3e27a88b4bc1151d35a463dcd2"
+    },
+    {
+      "label": "flight-intent",
+      "nonce": "1f8b900764ee75aeefd2ac8177f987b5d7f0c440e727132718465b49de4283f0",
+      "text": "book the SJC to HOU flight under $600",
+      "commitment": "ff56f9733e6f5a78625cc3dd2adf95964292edee3cbd2b9218d8576d36bde7c7"
+    },
+    {
+      "label": "flight-message",
+      "nonce": "8f4767e024b1727ee8396c65dbf0b73b2c77e1efc859a59513c69477e72d1c1f",
+      "text": "Checkout continues on travel-super-discount.example for this fare.",
+      "commitment": "f18c244123679031c2b25ad67fe7319b23d1a7ecf535faf9dab543065d7f7421"
+    },
+    {
+      "label": "flight-card",
+      "nonce": "41034ea1c1b0ac38eb474372c517af5c49d72613fae20bf3e4b7bbcb87ae7bea",
+      "text": "Payee changed since first contact (Example Air → Travel Super Discount) · [Hold] [Pay anyway]",
+      "commitment": "6d02a586e32eac5366b1dbc685561d5a7bfad317e7c3fbed1bbebd287d3eec21"
+    },
+    {
+      "label": "flight-platform",
+      "nonce": "5ca6dd265cde10f0123cde94adb36089fd191ce1a446e914fce3541020e2efd5",
+      "text": "Approve $558.80 purchase",
+      "commitment": "a9307b607262a2ea16a67c1d6507aaa8a00ea346cc1b193189297cdf670746d2"
+    },
+    {
+      "label": "flight-platform-user",
+      "nonce": "409835c053ec37b0b461e67f74aac62e8ac8df8ea5e3ab21db3109779953e4aa",
+      "text": "Approve",
+      "commitment": "6f1cdd074c705725ce46bf1d21acc2293c4c70844cf5f33fa1fc9df0b05c24dc"
+    },
+    {
+      "label": "flight-said",
+      "nonce": "bb889b00a3c303181ebaa49a2bb74456623240e18ac97b9d40a11e75c5f0efa8",
+      "text": "yes, the new site is fine",
+      "commitment": "60b5b2b1237a12666ec051e57927dd948948e6c6bca112b8a28df78f0c224224"
     }
   ]
 }
