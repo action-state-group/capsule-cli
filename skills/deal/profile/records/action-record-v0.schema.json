@@ -69,6 +69,8 @@
               "$ref": "record-common-v0.schema.json#/$defs/authority_basis"
             },
             "action": true,
+            "action_class": true,
+            "taxonomy_version": true,
             "amount_minor": true,
             "currency": true,
             "rail": true,

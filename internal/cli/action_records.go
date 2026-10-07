@@ -181,6 +181,11 @@ func typedRecord(ev dealEvent, events []sealedEvent, v0 map[string]interface{}) 
 		typeName = typeActionRecord
 		d := ev.Disclosure
 		out = map[string]interface{}{"action": d.action(), "disclosed": map[string]interface{}{"to": body["to"], "fields": body["fields"]}}
+		for _, k := range []string{"action_class", "taxonomy_version"} {
+			if v, ok := body[k]; ok {
+				out[k] = v
+			}
+		}
 		if ch, ok := block["channel"]; ok {
 			out["channel"] = ch
 		}

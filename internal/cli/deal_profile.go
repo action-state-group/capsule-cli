@@ -458,9 +458,18 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 	if ev.Producer != nil {
 		block["producer"] = map[string]interface{}{"name": ev.Producer.Name, "version": ev.Producer.Version, "commit": ev.Producer.Commit}
 	}
-	var currency string
+	var currency, dealType string
 	if len(events) > 0 {
 		currency = events[0].Event.Open.Terms.Currency
+		dealType = events[0].Event.Open.Type
+	}
+	// classify seals the action's taxonomy class beside it, for a step that
+	// carries a taxonomy version (dealActionClass).
+	classify := func(m map[string]interface{}, action, direction string) {
+		if ev.TaxonomyVersion != "" {
+			m["action_class"] = dealActionClass(dealType, action, direction)
+			m["taxonomy_version"] = ev.TaxonomyVersion
+		}
 	}
 	setIDs := func(ids map[string]interface{}) {
 		if len(ids) > 0 {
@@ -637,6 +646,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			setIDs(counterpartyIDs(key, *sn.Who))
 		}
 		body["action"] = sn.Action
+		var snapCurrency string
 		if sn.AmountMinor != nil {
 			body["amount_minor"] = *sn.AmountMinor
 			cur := currency
@@ -646,7 +656,12 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			if cur != "" {
 				body["currency"] = cur
 			}
+			snapCurrency = cur
 		}
+		// The checked action's direction, as its act would be sealed with: a
+		// cancel that returns a sealed payment is a refund.
+		direction, _ := actDirection(events, dealAct{Action: sn.Action, AmountMinor: sn.AmountMinor, Currency: snapCurrency}, currency)
+		classify(body, sn.Action, direction)
 		if sn.SeenItem != nil {
 			body["seen_item"] = *sn.SeenItem
 		}
@@ -772,6 +787,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			if ev.Act.Payee != "" {
 				setIDs(counterpartyIDs(key, dealWho{Payee: ev.Act.Payee}))
 			}
+			classify(act, ev.Act.Action, ev.Act.Direction)
 			body = act
 		}
 	case "outcome":
@@ -806,6 +822,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			fields[i] = map[string]interface{}{"class": f.Class, "value_commitment": c}
 		}
 		body = map[string]interface{}{"to": d.To, "fields": fields, "authority": "approval"}
+		classify(body, d.action(), "")
 		if d.AuthorizedBy != "" {
 			block["refs"] = []interface{}{relRef("authorized_by", digestOf(d.AuthorizedBy))}
 		} else {

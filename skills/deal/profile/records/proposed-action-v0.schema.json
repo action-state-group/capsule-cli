@@ -56,9 +56,23 @@
       "required": [
         "action"
       ],
+      "dependentRequired": {
+        "action_class": [
+          "taxonomy_version"
+        ],
+        "taxonomy_version": [
+          "action_class"
+        ]
+      },
       "properties": {
         "action": {
           "$ref": "record-common-v0.schema.json#/$defs/action"
+        },
+        "action_class": {
+          "$ref": "record-common-v0.schema.json#/$defs/action_class"
+        },
+        "taxonomy_version": {
+          "$ref": "record-common-v0.schema.json#/$defs/taxonomy_version"
         },
         "amount_minor": {
           "$ref": "record-common-v0.schema.json#/$defs/uint"

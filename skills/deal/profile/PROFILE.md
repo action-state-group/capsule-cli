@@ -102,13 +102,44 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text` (≤ 200 chars, no identifiers), `source` | none beyond the chain. |
 | `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). After the deal's final close, the only record type allowed: later evidence linked to that close. | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. At most one `confirms` → the deal's final `close` (required after it, not allowed before it). Optional `resolves_obligation` (a digest ref) → an earlier record holding a cancel-by date. |
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
-| `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor`, `currency`, `seen_item`, `terms`, `recourse`, `pack_id`, `pack_digest`, and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
+| `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor`, `currency`, `seen_item`, `terms`, `recourse`, `pack_id`, `pack_digest`, `action_class` + `taxonomy_version` (see Action classes, below), and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
 | `verdict` | The answer to one check: pass, or pause with the differences. | `result` (`pass`\|`pause`), `differences[]`, `options[]`; `materiality` (the predicate that decided which of the agent's own picks pause: its `digest`, and `label_commitment`, a commitment to its name and version, opened only in the user's own copy (`materiality_openings`); `digest: "none"` when none was configured and every pick paused; verdicts sealed by v0.1.0-rc8 carry `name` and `version` in the clear instead, and shared copies withhold them) | exactly one `checks` → a `check`; one verdict per check; optional `pack_id`, equal to the check's when either names one. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. |
 | `approval` | What authorizes, or declines, the next step; or the user's confirmation of the limits an intent proposed. | `choice` (`hold`\|`verify_contact`\|`proceed`\|`confirm_limits`), `proceed` (`true` on `proceed`, `false` on `hold` and `verify_contact`), `approver` (`user`\|`standing_intent`\|`agent_card`); on `confirm_limits` only, `limits` (`previous` and `new`, each `max_total_minor` and `allowed`) | `confirm_limits`: exactly one `approves` → the proposing `intent`, `approver: user`, and section 6, rule 6. Otherwise exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment` (the user's own words), and on a pause the choice is one of the verdict's options. `agent_card` ⇒ no `said_commitment`: a card the agent composed was answered, and no words of the user's are on record; never on `confirm_limits`. Optional `card_commitment` (on an answer to a verdict, never on `confirm_limits` or `standing_intent`): the card text the answer was given on, committed under the verdict's own card nonce, so it MUST equal the verdict's `card_commitment`: equal means the card shown is the card checked, recomputable without the text. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
-| `action` | A point-of-no-return step actually taken. | `action`; optional `direction` (`out`: paid by the user; `in`: back to the user) | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). An action that returns money (`direction: in`) carries exactly one `reverses` → the `pay` action it undoes (section 6, rule 8). |
+| `action` | A point-of-no-return step actually taken. | `action`; optional `direction` (`out`: paid by the user; `in`: back to the user); optional `action_class` + `taxonomy_version` (see Action classes, below) | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). An action that returns money (`direction: in`) carries exactly one `reverses` → the `pay` action it undoes (section 6, rule 8). |
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. |
 | `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. Optional `carried_obligations`: the cancel-by dates still open at the close, each `{obligation: digest ref, cancel_by}`. |
-| `disclosure` | Something the agent told someone about the user: what kind of thing, to whom, when, under what authority. | `to` (`counterparty`\|`other`), `fields[]` (each `class` + `value_commitment`), `authority` (`approval`\|`none`) | `authority: approval` ⇒ exactly one `authorized_by` → an `approval`, under the same rules as an `action` (section 6); `none` ⇒ no `authorized_by`, and `rule` says why. All `fields` share one covering action: contact classes `share_contact`, credential classes `share_credentials`. Optional `channel`; `counterparty` when the recipient is someone new. |
+| `disclosure` | Something the agent told someone about the user: what kind of thing, to whom, when, under what authority. | `to` (`counterparty`\|`other`), `fields[]` (each `class` + `value_commitment`), `authority` (`approval`\|`none`) | `authority: approval` ⇒ exactly one `authorized_by` → an `approval`, under the same rules as an `action` (section 6); `none` ⇒ no `authorized_by`, and `rule` says why. All `fields` share one covering action: contact classes `share_contact`, credential classes `share_credentials`. Optional `action_class` + `taxonomy_version` (see Action classes, below); optional `channel`; `counterparty` when the recipient is someone new. |
+
+### Action classes
+
+A `check`, an `action` and a `disclosure` sealed by this release carry `action_class`: the
+action's class in version `taxonomy_version` (`"2"`) of the action taxonomy published in
+capsule-engine, `capsule_engine/guards/action_taxonomy.json`
+(github.com/action-state-group/capsule-engine at `2521ee6`). The two members come together or
+not at all. Steps sealed before carry neither, and re-derive without them. A reader that keys a
+limit on an action's class (a per-action or rolling spend cap, for example) selects on
+`action_class`, and resolves it against the taxonomy version it names.
+
+| Action | `purchase` | `rental` | `booking` | `service` |
+|---|---|---|---|---|
+| `pay` | `money.purchase` | `money.purchase` | `booking.create` | `money.purchase` |
+| `commit` | `money.purchase` | `agreement.accept` | `booking.create` | `agreement.accept` |
+| `sign` | | `agreement.accept` | | `agreement.accept` |
+| `cancel` that returns a payment (`direction: in`) | `money.refund` | `money.refund` | `money.refund` | `money.refund` |
+| any other `cancel` | `external_commitment.other` | `external_commitment.other` | `booking.cancel` | `external_commitment.other` |
+| `share_contact` | `disclosure.personal` | `disclosure.personal` | `disclosure.personal` | `disclosure.personal` |
+| `share_credentials` | `disclosure.secret` | `disclosure.secret` | `disclosure.secret` | `disclosure.secret` |
+
+- Committing to a purchase is the same class as paying for it, so a limit keyed on the class
+  cannot be stepped around by committing first.
+- A cancel that returns a payment is money arriving, not leaving: `money.refund`. A cancel is
+  never spend. A `check` states no `direction`; its class is the one its `action` would carry,
+  from the same sealed payments.
+- A deal type or an action this table does not name is `external_commitment.other`, the
+  taxonomy's explicit class for a consequential commitment it does not otherwise name; never
+  no class, and never the non-consequential `info.query`.
+- `action_class` sits beside the Capsule's AAC fields and changes none of them: a `pay` is
+  still `decide` with `effect.type: send_payment`.
 
 Field details:
 

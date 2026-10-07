@@ -488,6 +488,11 @@ type dealEvent struct {
 	// Producer is the capsulectl build that sealed the step, kept with the
 	// step so that a later build re-derives the same record.
 	Producer *dealProducer `json:"producer,omitempty"`
+	// TaxonomyVersion is the action-class taxonomy (dealTaxonomyVersion) the
+	// step's record classes its action by, kept with the step like Producer:
+	// a step sealed before records carried an action_class has none and
+	// re-derives without one.
+	TaxonomyVersion string `json:"taxonomy_version,omitempty"`
 }
 
 // dealPlatformApproval is an observation of another platform's own approval
