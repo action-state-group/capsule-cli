@@ -736,7 +736,7 @@ func bundleCommands() []*cobra.Command {
 			if err != nil {
 				return err
 			}
-			if htmlPath != "" && profile.Type == "jsonl" {
+			if htmlPath != "" && profile.Type == "jsonl" && use == "disclose" {
 				return errJSONLPage // before anything is opened or put on record
 			}
 			root, _ := c.Flags().GetString("root")
@@ -778,11 +778,19 @@ func bundleCommands() []*cobra.Command {
 			} else if value, err = AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink, ProducerKey: producerKey}); err != nil {
 				return err
 			}
+			// The page's verdict, before anything is put on record. A refused
+			// page is never written. disclose then stops, so no disclosure
+			// goes on record without its page; bundle still writes the JSON
+			// (verify --bundle states its verdict) and exits with the refusal.
+			var pageErr error
 			if htmlPath != "" {
-				// The page's verdict before anything is put on record: a
-				// refused page leaves no disclosure behind.
-				if err := pageGate(value); err != nil {
-					return err
+				if profile.Type == "jsonl" {
+					pageErr = errJSONLPage
+				} else {
+					pageErr = pageGate(value)
+				}
+				if pageErr != nil && use == "disclose" {
+					return pageErr
 				}
 			}
 			if use == "disclose" && target.book == nil {
@@ -811,7 +819,7 @@ func bundleCommands() []*cobra.Command {
 				_, err = fmt.Fprintln(c.OutOrStdout(), strings.TrimRight(base, "#")+"#"+fragment)
 				return err
 			}
-			if htmlPath != "" {
+			if htmlPath != "" && pageErr == nil {
 				// One self-contained page: the bundle embedded and
 				// agent-action-capsule's own evidence-graph verifier, vendored
 				// (assets/evidence-graph.iife.js), which checks it with no
@@ -831,10 +839,10 @@ func bundleCommands() []*cobra.Command {
 				}
 			}
 			if out != "" {
-				return atomicFile(out, encoded, false)
+				return errors.Join(atomicFile(out, encoded, false), pageErr)
 			}
 			_, err = c.OutOrStdout().Write(append(encoded, '\n'))
-			return err
+			return errors.Join(err, pageErr)
 		}}
 		command.Flags().String("root", "", "Root Capsule ID")
 		command.Flags().String("deal", "", "A deal on a deal profile: the whole deal from its own log, built as `deal report` builds it (disclose also needs --share and --to; a deal is not shared as a link)")

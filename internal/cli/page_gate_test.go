@@ -60,6 +60,7 @@ const (
 	readmeJSONL      = "--type jsonl --jsonl-path ./store --namespace example"
 	readmeDiscloseOK = `capsulectl disclose --profile example --root "$report" --out bundle.json --html report.html`
 	readmeOutOnly    = `capsulectl disclose --profile example --root "$report" --out bundle.json`
+	readmeBundleHTML = `capsulectl bundle --profile example --root "$report" --out bundle.json --html report.html`
 )
 
 // The README's VALID bundle passes the gate: its page is the one CI renders.
@@ -80,7 +81,16 @@ func TestPageGateRefusesAJSONLProfilesPage(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, out, "no page written: a jsonl profile's bundle carries its evidence book's records")
 	assert.NoFileExists(t, filepath.Join(dir, "report.html"))
-	assert.NoFileExists(t, filepath.Join(dir, "bundle.json"), "refused before the bundle was built or put on record")
+	assert.NoFileExists(t, filepath.Join(dir, "bundle.json"), "disclose is refused before the bundle is built or put on record")
+
+	// bundle --html on a jsonl profile writes the bundle and refuses the page.
+	dir, out, err = runReportVariant(t, func(s string) string {
+		return replaced(t, s, readmeSQLite, readmeJSONL, readmeDiscloseOK, readmeBundleHTML)
+	})
+	require.Error(t, err)
+	assert.Contains(t, out, "no page written: a jsonl profile's bundle carries its evidence book's records")
+	assert.NoFileExists(t, filepath.Join(dir, "report.html"))
+	assert.FileExists(t, filepath.Join(dir, "bundle.json"))
 
 	dir, out, err = runReportVariant(t, func(s string) string {
 		return replaced(t, s, readmeSQLite, readmeJSONL, readmeDiscloseOK, readmeOutOnly)
@@ -115,11 +125,17 @@ func TestPageGateRefusesAReportMissingARow(t *testing.T) {
 	require.ErrorIs(t, gate, ErrPartial)
 	assert.Contains(t, gate.Error(), "would show 1 of 2 rows")
 
+	// disclose --html writes neither: no disclosure goes on record without
+	// its page.
 	dir, out, err = runReportVariant(t, missing)
 	require.Equal(t, 3, exitCode(err), "disclose --html is refused:\n%s", out)
 	assert.Contains(t, out, "would show 1 of 2 rows")
 	assert.NoFileExists(t, filepath.Join(dir, "report.html"))
 	assert.NoFileExists(t, filepath.Join(dir, "bundle.json"))
+
+	// (bundle carries no payloads, so its page shows no report rows to count;
+	// bundle's own refusal, JSON written and page refused, is tested on a
+	// jsonl profile above.)
 }
 
 // A deal's receipt still writes its page: every deal page measured is VALID,

@@ -327,9 +327,10 @@ carries its bundle in the link and takes no `--html`; a deal's page is its
 receipt, `deal report --html`.
 
 A page is written only for a bundle `verify --bundle` calls VALID, and only when a
-`report/v1` root shows every row; otherwise no page is written and nothing is put on
-record. A jsonl profile writes no page: its bundle carries its evidence book's records
-about what you sealed, not the records themselves. `--out` still writes the bundle.
+disclosed `report/v1` root shows every row. Otherwise no page is written: `bundle`
+still writes the bundle (`verify --bundle` states its verdict), and `disclose` writes
+nothing and puts no disclosure on record. A jsonl profile writes no page: its bundle
+carries its evidence book's records about what you sealed, not the records themselves.
 
 Every bundle `bundle`, `disclose`, `permalink` and `countersign request --root`
 build declares the producer's own Ed25519 key in the `producer-key/v1` bundle
