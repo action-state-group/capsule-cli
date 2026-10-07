@@ -403,7 +403,7 @@ override is enabled.
 | `action.yml` | the `Seal PR Capsule` GitHub Action ([below](#github-action-seal-a-capsule-per-pull-request)); its profile is [docs/PR-CAPSULE-PROFILE.md](docs/PR-CAPSULE-PROFILE.md), and `scripts/pr-capsule-*.sh` are its steps |
 | `docs/` | plugins, release transparency, backfill, canary, the test-account harness, and the PR capsule profile |
 | `examples/` | workflow files to copy: adopting the PR-capsule action, a canary watch, a deal-harness watch |
-| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, the confusables tools, and `build-evidence-graph-iife.sh`, which rebuilds the vendored verifier |
+| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, the confusables tools, `build-evidence-graph-iife.sh`, which rebuilds the vendored verifier, and `check-html-render.sh`, which opens the report example's page in headless Chrome |
 | `third_party/unicode/` | Unicode's confusables data, vendored unmodified with its terms of use |
 
 ## Profile setup
@@ -646,6 +646,100 @@ This read-only profile can run `cll list` against an existing log and read
 checkpoint status from CLL witness rows without initialization. It cannot
 append, publish, create checkpoints, or initialize storage.
 
+## Example: a self-checking report of records you sealed
+
+Turn records you sealed into one portable report: a bundle (`bundle.json`) and a
+self-contained page (`report.html`) that checks itself when opened, with no network.
+The report is itself a sealed record, a `report/v1` root whose rows cite the records,
+so the page shows each row with the record behind it.
+
+Use a **SQLite** profile with a log. Its bundles carry the sealed records themselves.
+A JSONL profile's bundles carry its evidence book's records about them instead, so a
+report root's rows cannot be shown from one.
+
+Run this in an empty directory (it needs `jq`). It is the script CI runs:
+
+```bash
+public=$(capsulectl key generate --output ./seed | jq -r .public_key)
+capsulectl profile create --name example --type sqlite --sqlite-path ./store.db \
+  --operator "Example Operator" --signing-key-file ./seed --trusted-key "$public" \
+  --log-id example-log --checkpoint-signing-key-file ./seed --checkpoint-trusted-key "$public"
+capsulectl store init --profile example
+
+# Two records, each a capsule-seal-request/v1 file; publish prints its capsule_id.
+cat > check-config.json <<'EOF'
+{"spec_version": "capsule-seal-request/v1",
+ "capsule": {"ActionID": "check-config", "ActionType": "fyi", "Operator": "example-operator",
+             "Developer": "example-developer", "Timestamp": "2026-10-07T00:00:00Z"},
+ "payload": {"check": "config file", "result": "same"}}
+EOF
+cat > check-permissions.json <<'EOF'
+{"spec_version": "capsule-seal-request/v1",
+ "capsule": {"ActionID": "check-permissions", "ActionType": "fyi", "Operator": "example-operator",
+             "Developer": "example-developer", "Timestamp": "2026-10-07T00:00:00Z"},
+ "payload": {"check": "permissions", "result": "different"}}
+EOF
+config=$(capsulectl publish --profile example --request check-config.json | jq -r .capsule_id)
+permissions=$(capsulectl publish --profile example --request check-permissions.json | jq -r .capsule_id)
+
+# The report root cites each record twice: in capsule.References, so the bundle
+# carries the record, and in its row, so the page shows it.
+jq -n --arg config "$config" --arg permissions "$permissions" '
+  def cite($id): {type: "agent-action-capsule", digest_alg: "sha256", digest: $id, citation_purpose: "acted_on"};
+  {spec_version: "capsule-seal-request/v1",
+   capsule: {ActionID: "report", ActionType: "fyi", Operator: "example-operator",
+             Developer: "example-developer", Timestamp: "2026-10-07T00:01:00Z",
+             References: [$config, $permissions] | map({Type: "agent-action-capsule", DigestAlg: "sha256",
+                                                        Digest: ., CitationPurpose: "acted_on"})},
+   payload: {spec_version: "report/v1", title: "Example checks", rows: [
+     {row_id: "config", label: "Config file", status: "same", reason: "unchanged since the last run",
+      references: [cite($config)]},
+     {row_id: "permissions", label: "Permissions", status: "different", references: [cite($permissions)]}]}}' \
+  > report-request.json
+report=$(capsulectl publish --profile example --request report-request.json | jq -r .capsule_id)
+
+capsulectl cll checkpoint create --profile example
+capsulectl disclose --profile example --root "$report" --out bundle.json --html report.html
+capsulectl verify --bundle bundle.json
+```
+
+**What `verify --bundle` checks.** It says `VALID` (exit 0) when all of these check out:
+
+- the checkpoint's signature;
+- the interval coverage;
+- each record's place in the log;
+- the citation closure;
+- the records' signatures;
+- every disclosed payload against what its record sealed.
+
+A record or payload changed after sealing makes it `INVALID` (exit 1). `INCOMPLETE`
+(exit 3) names what the bundle does not show.
+
+**What VALID rests on.** It means the signatures verify under the keys the bundle
+itself carries: each record's `key_id`, and the key in the checkpoint's signed
+statement. It does not mean they are keys you already trust. To trust the signer,
+compare those keys with the producer's public key, obtained some other way:
+
+```bash
+jq -r '.records[].key_id, .checkpoint.key_id' bundle.json | sort -u   # here: "$public"
+```
+
+This example has no witness receipt. That does not lower the verdict, and nobody
+but the producer has vouched for the checkpoint.
+
+**What the page checks.** In the browser, the page checks the records, the disclosed
+payloads, the citation closure and the log proofs. It does **not** check:
+
+- the checkpoint's signature;
+- the records' signatures.
+
+It says "Bundle verification passed" for a bundle that `verify --bundle` calls
+`INCOMPLETE` too. Run `verify --bundle` for the verdict.
+
+**Order matters.** Publish everything and cut the checkpoint before you disclose.
+Each `disclose` puts the disclosure on the log, so for another report later,
+publish, checkpoint and disclose again.
+
 ## Publication and recovery
 
 `cll append` accepts an existing artifact file, persists it through the SDK,
@@ -866,7 +960,9 @@ than skipping integration tests.
 
 GitHub Actions runs on pull requests and pushes to `main`, with manual dispatch
 also available. It checks formatting, module-file consistency, vet, and the CLI
-build. Tests run with the race detector against a disposable MySQL 8.4 service;
+build. It also builds the report above and opens its page in headless Chrome
+(`scripts/check-html-render.sh`): the page must render the report and say it
+verified, and a copy with one payload edited must say it failed. Tests run with the race detector against a disposable MySQL 8.4 service;
 `CAPSULE_CLI_TEST_MYSQL_PORT` is set so MySQL integration tests are not skipped.
 No production credentials or database tunnels are used.
 

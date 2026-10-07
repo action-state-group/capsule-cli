@@ -101,6 +101,27 @@ jobs:
       - name: Tests passed
         run: test "${{ needs.tests.result }}" = success
 
+  report-page:
+    # The README's report of sealed records, opened in headless Chrome (the
+    # runner's own): the page must render the report and say it verified, and
+    # a copy with one payload edited must say it failed. See
+    # scripts/check-html-render.sh.
+    name: report page renders and checks itself
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build the report and check its page
+        env:
+          CHROME: google-chrome
+        run: bash scripts/check-html-render.sh
+
   interop-at-resolved-versions:
     # evidencebook's own CI runs this Go <-> Python round trip against ITS pins;
     # capsulectl links newer ones (minimal version selection), so here the same
