@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -195,6 +196,14 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		record, found := recordsByID[id]
 		if !found {
 			record, err = getCapsule(ctx, artifacts, id)
+			if errors.Is(err, artifact.ErrNotFound) {
+				// A checkpointed entry the store does not hold: before
+				// disclosures were sealed as capsules, disclose appended a
+				// disclosure record's bare digest, kept nowhere else; or a record
+				// was lost. The two cannot be told apart here, and either way no
+				// bundle can supply it, since the verifier requires every entry.
+				return nil, inputError(fmt.Sprintf("log entry %d is checkpointed but not in this profile's store: either a disclosure an earlier release appended as a bare digest, or a lost record; no bundle over this log can include it; start a new profile (or log id) for new reports", entry.Seq))
+			}
 			if err != nil {
 				return nil, fmt.Errorf("checkpointed record %s is unavailable: %w", id, err)
 			}
@@ -241,6 +250,28 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 	for i, w := range rangeP.Witness {
 		witnessJSON[i] = hex.EncodeToString(w)
 	}
+	// A disclosure capsule's input says what was disclosed to someone. A
+	// later bundle proves its place in the log but withholds its input, so a
+	// copy made for one party never shows what was disclosed to another; the
+	// bundle then states payloads selected, which is what it is.
+	payloads, withhold := options.Payloads, options.Withhold
+	if options.WithDisclosure {
+		for id, record := range recordsByID {
+			if record["action_id"] != disclosureActionID || record["action_type"] != "fyi" {
+				continue
+			}
+			if len(withhold) == len(options.Withhold) {
+				withhold = make(map[string]bool, len(options.Withhold)+1)
+				for k, v := range options.Withhold {
+					withhold[k] = v
+				}
+			}
+			withhold[id] = true
+		}
+		if payloads == "all" && len(withhold) != len(options.Withhold) {
+			payloads = "selected"
+		}
+	}
 	missingIDs := make([]interface{}, len(missing))
 	for i := range missing {
 		missingIDs[i] = missing[i]
@@ -260,7 +291,7 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		"records":        records,
 		"completeness": map[string]interface{}{
 			"closure_depth": integer(uint64(options.ClosureDepth)), "records_mode": mode,
-			"payloads_mode": options.Payloads, "suppressed_fields": suppressed(options.Suppress), "missing": missingIDs,
+			"payloads_mode": payloads, "suppressed_fields": suppressed(options.Suppress), "missing": missingIDs,
 		},
 		"completeness_certificate": map[string]interface{}{
 			"log_id": logID, "range_root": hex.EncodeToString(rangeRoot), "first_seq": integer(1), "last_seq": integer(checkpointSeq),
@@ -272,14 +303,14 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		"verification": map[string]interface{}{"producer": "capsulectl", "checks": []interface{}{"graph_closure", "interval_coverage", "per_record_membership"}},
 	}
 	if options.WithDisclosure {
-		overlay, disclosureErr := disclosureOverlay(ctx, artifacts, ids, options.Suppress, options.Withhold)
+		overlay, disclosureErr := disclosureOverlay(ctx, artifacts, ids, options.Suppress, withhold)
 		if disclosureErr != nil {
 			return nil, disclosureErr
 		}
 		// payloads=all is a claim to disclose EVERY committed eligible member that
 		// is not suppressed. If any such member's original is not retained it would
 		// verify as WITHHELD, making "all" a false claim -- refuse rather than emit it.
-		if options.Payloads == "all" {
+		if payloads == "all" {
 			for _, id := range ids {
 				members, _ := overlay[id].(map[string]interface{})
 				for _, member := range committedEligibleMembers(recordsByID[id]) {
@@ -544,7 +575,7 @@ func verifyProducedBundle(value map[string]interface{}, disclosuresRequired bool
 // was disclosed, in what payloads mode, which fields were suppressed, and —
 // for every member actually revealed — the digest DE-3 already binds it to,
 // not the content itself. AssembleBundle stays a pure builder; only this
-// command-layer helper (and appendDisclosureRecord below) knows about the log.
+// command-layer helper (and sealDisclosure below) knows about the log.
 func disclosureRecord(bundle map[string]interface{}) (map[string]interface{}, error) {
 	completeness, _ := bundle["completeness"].(map[string]interface{})
 	overlay, _ := bundle["disclosures"].(map[string]interface{})
@@ -580,16 +611,51 @@ func disclosureRecord(bundle map[string]interface{}) (map[string]interface{}, er
 	}, nil
 }
 
-// appendDisclosureRecord seals the disclose act onto the CLL: it appends the
-// disclosure_record's own digest as a new log entry, the same way a Capsule's
-// ID (itself a content digest) is appended by publish/append. Emitting the
-// bundle file is not enough on its own -- every disclose act must be on record.
-func appendDisclosureRecord(ctx context.Context, log cll.Backend, bundle map[string]interface{}) (cll.Entry, error) {
+// sealDisclosure puts a disclose act on the log: the disclosure record (ids,
+// digests and labels only) sealed as an fyi capsule with the profile's
+// signing key, stored, and appended like any record. A later bundle supplies
+// it as a record, so a checkpoint over it never stops another report.
+func sealDisclosure(ctx context.Context, t *target, p Profile, bundle map[string]interface{}) (Publication, error) {
 	record, err := disclosureRecord(bundle)
 	if err != nil {
-		return cll.Entry{}, err
+		return Publication{}, err
 	}
-	return appendRecordDigest(ctx, log, record)
+	// The capsule commits to the record by an unsalted digest, which a later
+	// bundle shows. The record's other fields have few possible values, so
+	// without a nonce a party could confirm a guess at what was disclosed to
+	// another; with one, two identical disclosures seal different digests.
+	nonce := make([]byte, 32)
+	if _, err = rand.Read(nonce); err != nil {
+		return Publication{}, err
+	}
+	record["nonce"] = hex.EncodeToString(nonce)
+	operator := p.Operator
+	if operator == "" {
+		operator = "capsulectl"
+	}
+	raw, err := json.Marshal(map[string]interface{}{
+		"spec_version": "capsule-seal-request/v1",
+		"capsule": map[string]interface{}{
+			"ActionID": disclosureActionID, "ActionType": "fyi", "Operator": operator, "Developer": "capsulectl",
+			"Timestamp": time.Now().UTC().Truncate(time.Second).Format(time.RFC3339),
+		},
+		"payload": record,
+	})
+	if err != nil {
+		return Publication{}, err
+	}
+	request, err := parseRequest(raw)
+	if err != nil {
+		return Publication{}, err
+	}
+	private, err := privateKey(p.Signing)
+	if err != nil {
+		return Publication{}, err
+	}
+	if err = requirePublisherKey(p, private); err != nil {
+		return Publication{}, err
+	}
+	return t.publish(ctx, request, private)
 }
 
 // appendRecordDigest appends a disclosure record's own digest as a log entry.
@@ -608,6 +674,11 @@ func appendRecordDigest(ctx context.Context, log cll.Backend, record map[string]
 	}
 	return result.Entry, nil
 }
+
+// disclosureActionID is the action_id of the capsule a disclose seals to put
+// the disclosure act on the log: an fyi capsule whose input is the
+// disclosure record (ids, digests and labels, never a disclosed byte).
+const disclosureActionID = "capsulectl-disclosure"
 
 const producerKeyFlagUsage = "Ed25519 public key (hex) to declare in the producer-key/v1 extension (default: the profile's signing key)"
 
@@ -705,9 +776,9 @@ func bundleCommands() []*cobra.Command {
 				return err
 			}
 			if use == "disclose" && target.book == nil {
-				// Every disclose act goes on record: the CLL append must succeed
-				// before the bundle is emitted, not merely alongside it.
-				if _, err := appendDisclosureRecord(c.Context(), target.log, value); err != nil {
+				// Every disclose act goes on record: sealed as a capsule and
+				// appended before the bundle is emitted, not merely alongside it.
+				if _, err := sealDisclosure(c.Context(), target, profile, value); err != nil {
 					return err
 				}
 			}
