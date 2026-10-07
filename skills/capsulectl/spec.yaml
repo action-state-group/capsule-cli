@@ -98,7 +98,9 @@ verbs:
     when: >-
       Confirm a Capsule's identity, signature, trust and bound artifacts
       before treating it as authentic — including a record another verb in
-      this same run just fetched with `get --raw`.
+      this same run just fetched with `get --raw`, or a bare capsule another
+      implementation sealed (its shape is read from the file and named in
+      the output).
     emits: (no capsule — checking a bundle is local validation, not a consequential action)
     emission_mode: not-consequential
 

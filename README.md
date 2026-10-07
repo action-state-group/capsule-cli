@@ -252,7 +252,7 @@ capsulectl store init --profile NAME
 capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
-capsulectl verify --profile NAME --capsule ARTIFACT.json
+capsulectl verify --profile NAME --capsule ARTIFACT.json|CAPSULE.json
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl publish --profile NAME --request INPUT.json
 capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100] [--log-id LOG]
@@ -574,6 +574,16 @@ An artifact file is the SDK's `artifact.Record` JSON: `capsule_id`, `capsule`,
 `producer_envelope`, and `artifacts`. Byte fields use JSON base64, preserving exact
 sealed bytes and exact originals. It is **not** raw Capsule JSON alone. CLL entries
 contain only the decoded 32-byte Capsule ID and ordered position/time.
+
+`verify --capsule` also reads a bare Agent Action Capsule, as capsule-emit seals
+it: the capsule's own fields with an inline `signature` (the hex COSE_Sign1
+producer envelope over `capsule_id`) and `key_id`. The file's shape is read from
+its members, never guessed, and named in the output (`shape`: `artifact-record`
+or `capsule`); a file with the members of both, or of neither, is refused. A
+bare capsule gets the same checks: its `capsule_id` recomputed, its signature
+under its `key_id`, and that key held to the profile's trusted keys. It carries
+no retained originals, so its committed digests are not rehashed, and the
+output says so.
 
 `get` uses the SDK directly, including signature trust, inventory integrity and
 bound-original verification. Reading artifacts requires only read access to the store (SELECT on the artifact SDK tables for MySQL; read permission on the file or directory for SQLite and JSONL).
