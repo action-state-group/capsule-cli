@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/action-state-group/cll-go/checkpoint"
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

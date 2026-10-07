@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/action-state-group/cll-go/checkpoint"
-	"github.com/action-state-group/cll-go/cll"
-	clljsonl "github.com/action-state-group/cll-go/store/jsonl"
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
+	"github.com/action-state-group/checkpointed-local-log/go/cll"
+	clljsonl "github.com/action-state-group/checkpointed-local-log/go/store/jsonl"
 	"github.com/action-state-group/evidencebook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

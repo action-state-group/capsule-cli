@@ -9,8 +9,8 @@ import (
 	"strconv"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
-	"github.com/action-state-group/cll-go/checkpoint"
-	"github.com/action-state-group/cll-go/mmr"
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
+	"github.com/action-state-group/checkpointed-local-log/go/mmr"
 )
 
 // cadenceClaim checks a bundle's x-cadence-witness/v0 chain: the bundle's

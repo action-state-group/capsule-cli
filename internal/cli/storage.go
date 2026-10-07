@@ -18,10 +18,10 @@ import (
 	artifactjsonl "github.com/action-state-group/capsule-emit-go/artifact/jsonl"
 	artifactmysql "github.com/action-state-group/capsule-emit-go/artifact/mysql"
 	artifactsqlite "github.com/action-state-group/capsule-emit-go/artifact/sqlite"
-	"github.com/action-state-group/cll-go/cll"
-	clljsonl "github.com/action-state-group/cll-go/store/jsonl"
-	cllmysql "github.com/action-state-group/cll-go/store/mysql"
-	cllsqlite "github.com/action-state-group/cll-go/store/sqlite"
+	"github.com/action-state-group/checkpointed-local-log/go/cll"
+	clljsonl "github.com/action-state-group/checkpointed-local-log/go/store/jsonl"
+	cllmysql "github.com/action-state-group/checkpointed-local-log/go/store/mysql"
+	cllsqlite "github.com/action-state-group/checkpointed-local-log/go/store/sqlite"
 	driver "github.com/go-sql-driver/mysql"
 )
 

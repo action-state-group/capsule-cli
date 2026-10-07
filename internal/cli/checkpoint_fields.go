@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/action-state-group/cll-go/checkpoint"
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/fxamacker/cbor/v2"
 )
 

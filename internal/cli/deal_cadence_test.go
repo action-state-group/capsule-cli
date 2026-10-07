@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/action-state-group/cll-go/checkpoint"
-	"github.com/action-state-group/cll-go/cll"
-	"github.com/action-state-group/cll-go/witness"
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
+	"github.com/action-state-group/checkpointed-local-log/go/cll"
+	"github.com/action-state-group/checkpointed-local-log/go/witness"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
