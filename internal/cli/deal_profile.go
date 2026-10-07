@@ -478,6 +478,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if spend, ok := dealSpendMinor(action, direction, amount); ok {
 			m["spend_minor"] = spend
 		}
+		if action == "cancel" {
+			sealCancelAmount(m, direction)
+		}
 	}
 	setIDs := func(ids map[string]interface{}) {
 		if len(ids) > 0 {
@@ -782,7 +785,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			return nil, err
 		}
 		if ev.Act.Unchecked {
-			// Not authorized: sealed as an outcome, never as an action.
+			// Not authorized: sealed as an outcome, never as an action. A
+			// cancel's amount still never reads as money paid out.
+			if ev.TaxonomyVersion != "" && ev.Act.Action == "cancel" {
+				sealCancelAmount(act, ev.Act.Direction)
+			}
 			rtype = "outcome"
 			body = map[string]interface{}{
 				"status": "unchecked_action", "outcome": "mismatch", "unchecked": act,

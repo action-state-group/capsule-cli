@@ -101,3 +101,21 @@ func checkFee(action string, fee *int64) error {
 	}
 	return nil
 }
+
+// sealCancelAmount states a cancel's amount in a sealed record so that nothing
+// reads it as money paid out. A cancel with an amount carries direction "in".
+// An amount that returns a sealed payment stays amount_minor: the refund, the
+// pay it reverses named by reverses. Any other amount (part of a payment, or
+// one that matches none) moves to cancelled_amount_minor, which states what
+// the cancel was about and is neither money moved nor spend.
+func sealCancelAmount(m map[string]interface{}, direction string) {
+	amount, ok := m["amount_minor"]
+	if !ok {
+		return
+	}
+	if direction != "in" {
+		delete(m, "amount_minor")
+		m["cancelled_amount_minor"] = amount
+	}
+	m["direction"] = "in"
+}

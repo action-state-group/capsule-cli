@@ -139,8 +139,12 @@ limit on an action's class (a per-action or rolling spend cap, for example) sele
   cap evaluates, what the action pays out. It is `amount_minor` for an action that moves money
   out, absent when there is no amount, and **`0` on every `cancel`**: stopping a commitment is
   never spend, whether the cancel returns a payment, returns part of one, or costs a fee. A
-  cancel keeps its `amount_minor` as recorded, and a fee the cancellation costs is its own
-  `fee_minor` (only a `cancel` carries one); no cap evaluates either.
+  cancel's amount never reads as money paid out: a `cancel` with an amount carries
+  `direction: "in"` on its `check` and its `action`. An amount that returns a sealed payment
+  stays `amount_minor` (the refund; the `action` names the payment with `reverses`, rule 8).
+  Any other amount (part of a payment, or one that matches none) is `cancelled_amount_minor`:
+  what the cancel was about, neither money moved nor spend. A fee the cancellation costs is its
+  own `fee_minor` (only a `cancel` carries one). No cap evaluates any of them.
 - A deal type or an action this table does not name is `external_commitment.other`, the
   taxonomy's explicit class for a consequential commitment it does not otherwise name; never
   no class, and never the non-consequential `info.query`.
@@ -348,7 +352,7 @@ A verifier holding one deal's records in `seq` order checks:
    after it, only `evidence` records that `confirms` that close may follow. A close with `open`
    MAY be followed by later `outcome` and `close` records. Each `carried_obligations` entry names
    an earlier record holding that `cancel_by`.
-8. **Reversals.** An `action` with `direction: "in"` returns money the user paid: it carries
+8. **Reversals.** An `action` with `direction: "in"` and an `amount_minor` returns money the user paid: it carries
    exactly one `reverses` ref to an earlier `action` with `action: "pay"` (direction `out`, or
    none, as records sealed before `direction` was recorded carry), with the same `amount_minor`
    and `currency`. A payment is reversed at most once. Summing amounts by direction gives what a

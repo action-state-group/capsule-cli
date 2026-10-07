@@ -101,7 +101,7 @@ func TestDealPurchaseAndItsCancelCarryTheirTaxonomyClass(t *testing.T) {
 	assert.Equal(t, []step{
 		{"x-deal-v0:check", "pay", "money.purchase", "", 55880},
 		{"x-deal-v0:action", "pay", "money.purchase", "out", 55880},
-		{"x-deal-v0:check", "cancel", "money.refund", "", 0},
+		{"x-deal-v0:check", "cancel", "money.refund", "in", 0},
 		{"x-deal-v0:action", "cancel", "money.refund", "in", 0},
 	}, got)
 	assert.NotContains(t, capsV3Classes, "money.refund", "a refund is money arriving: no spend cap covers it")
@@ -161,10 +161,12 @@ func TestDealStepSealedBeforeTheClassReDerivesWithoutOne(t *testing.T) {
 	}
 }
 
-// Carrying the class withholds nothing a shared copy disclosed before: every
-// step is shared, or withheld, exactly as it is without the class, and every
-// class the table can seal is a value a shared copy may carry.
-func TestDealShareIsUnchangedByTheClass(t *testing.T) {
+// The class never discloses what a shared copy withheld without it, and every
+// class the table can seal is a value a shared copy may carry. The one record
+// it newly withholds is a cancel's check with an amount, which now carries
+// direction in (a key shared copies do not disclose): more withheld, never
+// less.
+func TestDealShareNeverDisclosesMoreForTheClass(t *testing.T) {
 	id := cancelAfterPurchase(t)
 	events := chainSteps(t, id)
 	p, err := loadProfile("deal")
@@ -186,7 +188,13 @@ func TestDealShareIsUnchangedByTheClass(t *testing.T) {
 			require.NoError(t, json.Unmarshal(raw, &record))
 			shareable[version] = dealRecordShareable(record, "", dealAudienceCounterparty, private)
 		}
-		assert.Equal(t, shareable[""], shareable[dealTaxonomyVersion], "step %d (%s)", se.Event.N, se.Event.Kind)
+		if shareable[dealTaxonomyVersion] {
+			assert.True(t, shareable[""], "step %d (%s): the class discloses nothing withheld without it", se.Event.N, se.Event.Kind)
+		}
+		if shareable[""] && !shareable[dealTaxonomyVersion] {
+			assert.Equal(t, "snapshot", se.Event.Kind, "step %d: only a cancel's check is newly withheld", se.Event.N)
+			assert.Equal(t, "cancel", se.Event.Snapshot.Action, "step %d", se.Event.N)
+		}
 		if se.Event.TaxonomyVersion != "" {
 			classed++
 		}
@@ -244,26 +252,33 @@ func cancelBodies(t *testing.T, dealID string) (check, action map[string]any) {
 	return check, action
 }
 
-// Stopping a commitment is never spend: a cancel's spend_minor is 0 however
-// it is stated. One that returns part of a payment, or one that costs a fee,
-// carries its amounts as recorded; a cap evaluates neither.
+// Stopping a commitment is never spend, and no amount on a cancel reads as
+// money paid out. Its spend_minor is 0 however it is stated. A cancel with an
+// amount carries direction in: one that returns a sealed payment keeps it as
+// amount_minor (the refund); any other moves it to cancelled_amount_minor,
+// neither money moved nor spend. A fee is its own fee_minor; a cap evaluates
+// none of them.
 func TestDealCancelIsNeverSpend(t *testing.T) {
 	for _, tc := range []struct {
 		name, dealType, check, act, class string
-		amount, fee                       any
+		amount, cancelled, fee, direction any
 	}{
-		{"a partial refund, matching no payment", "purchase", `"amount_minor":30000`, `"amount_minor":30000,"currency":"USD","rail":"card"`, "external_commitment.other", float64(30000), nil},
-		{"a booking cancel with an amount", "booking", `"amount_minor":30000`, `"amount_minor":30000,"currency":"USD","rail":"card"`, "booking.cancel", float64(30000), nil},
-		{"a full refund less a fee", "purchase", `"amount_minor":55880,"fee_minor":5000`, `"amount_minor":55880,"currency":"USD","rail":"card","fee_minor":5000`, "money.refund", float64(55880), float64(5000)},
-		{"a fee and nothing returned", "purchase", `"fee_minor":5000`, `"fee_minor":5000`, "external_commitment.other", nil, float64(5000)},
+		{"a partial refund, matching no payment", "purchase", `"amount_minor":30000`, `"amount_minor":30000,"currency":"USD","rail":"card"`, "external_commitment.other", nil, float64(30000), nil, "in"},
+		{"a booking cancel with an amount", "booking", `"amount_minor":30000`, `"amount_minor":30000,"currency":"USD","rail":"card"`, "booking.cancel", nil, float64(30000), nil, "in"},
+		{"a full refund less a fee", "purchase", `"amount_minor":55880,"fee_minor":5000`, `"amount_minor":55880,"currency":"USD","rail":"card","fee_minor":5000`, "money.refund", float64(55880), nil, float64(5000), "in"},
+		{"a fee and nothing returned", "purchase", `"fee_minor":5000`, `"fee_minor":5000`, "external_commitment.other", nil, nil, float64(5000), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			check, action := cancelBodies(t, purchaseThenCancel(t, tc.dealType, tc.check, tc.act))
+			id := purchaseThenCancel(t, tc.dealType, tc.check, tc.act)
+			checkerPasses(t, id)
+			check, action := cancelBodies(t, id)
 			for _, body := range []map[string]any{check, action} {
 				assert.Equal(t, tc.class, body["action_class"])
 				assert.Equal(t, float64(0), body["spend_minor"], "a cancel is never spend")
-				assert.Equal(t, tc.amount, body["amount_minor"], "the amount stays as recorded")
+				assert.Equal(t, tc.amount, body["amount_minor"], "amount_minor only for a payment returned")
+				assert.Equal(t, tc.cancelled, body["cancelled_amount_minor"], "any other amount is what the cancel was about")
 				assert.Equal(t, tc.fee, body["fee_minor"], "a fee is its own recorded amount")
+				assert.Equal(t, tc.direction, body["direction"], "no amount on a cancel reads as money out")
 			}
 		})
 	}

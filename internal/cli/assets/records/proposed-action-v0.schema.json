@@ -80,6 +80,14 @@
         "fee_minor": {
           "$ref": "record-common-v0.schema.json#/$defs/uint"
         },
+        "cancelled_amount_minor": {
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
+        "direction": {
+          "enum": [
+            "in"
+          ]
+        },
         "amount_minor": {
           "$ref": "record-common-v0.schema.json#/$defs/uint"
         },

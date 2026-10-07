@@ -363,6 +363,10 @@
           "description": "On a cancel only: a fee the cancellation costs, never the amount a spend cap evaluates.",
           "$ref": "#/$defs/uint"
         },
+        "cancelled_amount_minor": {
+          "description": "On a cancel only: the amount the cancel was about when it returns no sealed payment. Neither money moved nor spend.",
+          "$ref": "#/$defs/uint"
+        },
         "amount_minor": {
           "type": "integer",
           "minimum": 0,
