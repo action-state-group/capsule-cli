@@ -136,12 +136,57 @@ func TestVerifyBundleHoldsEveryCheckpointFieldToItsSignature(t *testing.T) {
 		assert.Equal(t, "INVALID", result["verdict"], field)
 		assert.Contains(t, result["checkpoint"].(map[string]interface{})["findings"], "checkpoint_field_mismatch:"+field)
 	}
-	path := producedBundle(t, func(b map[string]interface{}) {
-		delete(b["checkpoint"].(map[string]interface{}), "log_id")
+}
+
+// The signed log id must equal the log id the bundle states: the bundle
+// draft has the verifier "require its log identifier, MMR size, and root to
+// equal the certificate and checkpoint values", so the log id may be stated
+// in the completeness certificate, the checkpoint, or both, and every copy
+// stated must equal the signed one.
+func TestVerifyBundleTakesTheLogIDFromTheCertificateOrTheCheckpoint(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	checkpoint := func(result map[string]interface{}) map[string]interface{} {
+		return result["checkpoint"].(map[string]interface{})
+	}
+
+	t.Run("both copies, equal to the signed one", func(t *testing.T) {
+		result, err := verifyBundleOutput(t, producedBundle(t, nil))
+		require.NoError(t, err)
+		assert.Equal(t, "pass", checkpoint(result)["status"])
 	})
-	result, err := verifyBundleOutput(t, path)
-	assert.ErrorIs(t, err, ErrBundleInvalid)
-	assert.Contains(t, result["checkpoint"].(map[string]interface{})["findings"], "checkpoint_field_missing:log_id")
+
+	t.Run("only the certificate's", func(t *testing.T) {
+		result, err := verifyBundleOutput(t, producedBundle(t, func(b map[string]interface{}) {
+			delete(b["checkpoint"].(map[string]interface{}), "log_id")
+		}))
+		require.NoError(t, err)
+		assert.Equal(t, "pass", checkpoint(result)["status"], "a log id stated in the certificate is enough")
+	})
+
+	t.Run("the certificate's differs from the signed one", func(t *testing.T) {
+		for name, edit := range map[string]func(map[string]interface{}){
+			"checkpoint copy absent": func(b map[string]interface{}) {
+				delete(b["checkpoint"].(map[string]interface{}), "log_id")
+				b["completeness_certificate"].(map[string]interface{})["log_id"] = "another-log"
+			},
+			"checkpoint copy equal to the signed one": func(b map[string]interface{}) {
+				b["completeness_certificate"].(map[string]interface{})["log_id"] = "another-log"
+			},
+		} {
+			result, err := verifyBundleOutput(t, producedBundle(t, edit))
+			assert.ErrorIs(t, err, ErrBundleInvalid, name)
+			assert.Contains(t, checkpoint(result)["findings"], "checkpoint_field_mismatch:log_id", name)
+		}
+	})
+
+	t.Run("neither", func(t *testing.T) {
+		result, err := verifyBundleOutput(t, producedBundle(t, func(b map[string]interface{}) {
+			delete(b["checkpoint"].(map[string]interface{}), "log_id")
+			delete(b["completeness_certificate"].(map[string]interface{}), "log_id")
+		}))
+		assert.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Contains(t, checkpoint(result)["findings"], "checkpoint_field_missing:log_id")
+	})
 }
 
 func TestVerifyBundleChecksProducerSignatures(t *testing.T) {
