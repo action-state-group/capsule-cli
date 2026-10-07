@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"testing"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -335,4 +336,57 @@ func numbered(t *testing.T, v any) map[string]any {
 	var out map[string]any
 	require.NoError(t, dec.Decode(&out))
 	return out
+}
+
+// An unchecked cancel is sealed as an outcome, never as an action, and its
+// amount still never reads as money paid out: direction in, the amount that
+// returns a sealed payment as amount_minor, any other as
+// cancelled_amount_minor. An outcome carries no class and no spend.
+func TestDealUncheckedCancelAmountNeverReadsAsMoneyOut(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		pay               bool
+		amount, cancelled any
+	}{
+		{"matching no payment", false, nil, float64(30000)},
+		{"returning a sealed payment", true, float64(55880), nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dealFixture(t)
+			const item = "Southwest WN 1234 HOU-SJC, Oct 21 to Oct 24, Basic"
+			id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+				"intent":{"verbatim":"book me Southwest HOU to SJC Oct 21 to Oct 24, Basic fare","asked":{"item":"`+item+`"},"allowed":["pay"]},
+				"who":{"name":"Southwest Airlines","domain":"southwest.example"},
+				"terms":{"item":"`+item+`","price_minor":55880,"currency":"USD"},
+				"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+			amount := 30000
+			if tc.pay {
+				amount = 55880
+				check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"terms":{"item":"`+item+`","price_minor":55880},"recourse":{"rail":"card","refundable":true}}`))
+				if check["verdict"] != "pass" {
+					dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "yes, book it")
+				}
+				dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"currency":"USD","rail":"card"}`))
+			}
+			cancel := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t,
+				`{"action":"cancel","amount_minor":`+strconv.Itoa(amount)+`,"currency":"USD","rail":"card"}`))
+			require.Equal(t, true, cancel["unchecked"], "no check before this cancel")
+			checkerPasses(t, id)
+
+			_, records := recordsOf(t, id)
+			var attempted map[string]any
+			for _, r := range records {
+				if typeOf(r) == "x-deal-v0:outcome" && bodyOf(r)["status"] == "unchecked_action" {
+					attempted = bodyOf(r)["unchecked"].(map[string]any)
+				}
+			}
+			require.NotNil(t, attempted)
+			assert.Equal(t, "cancel", attempted["action"])
+			assert.Equal(t, "in", attempted["direction"])
+			assert.Equal(t, tc.amount, attempted["amount_minor"])
+			assert.Equal(t, tc.cancelled, attempted["cancelled_amount_minor"])
+			assert.NotContains(t, attempted, "action_class", "an outcome is not an action")
+			assert.NotContains(t, attempted, "spend_minor")
+		})
+	}
 }
