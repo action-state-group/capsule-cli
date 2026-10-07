@@ -69,7 +69,6 @@
           "enum": [
             "checks",
             "approves",
-            "about",
             "authorized_by",
             "observes",
             "reverses",
@@ -180,7 +179,7 @@
       }
     },
     "authority_entry": {
-      "description": "One authority layer relied on: task_authority -> a task-authority/v0; action_state_approval, platform_approval, one_shot_override -> an action-approval/v0 of that authority. scope mismatch: a platform approval that stated another amount.",
+      "description": "One authority layer relied on: task_authority -> a task-authority/v0; user_approval, platform_approval, one_shot_override -> an action-approval/v0 of that authority. scope mismatch: a platform approval that stated another amount.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -191,7 +190,7 @@
         "type": {
           "enum": [
             "task_authority",
-            "action_state_approval",
+            "user_approval",
             "platform_approval",
             "one_shot_override"
           ]

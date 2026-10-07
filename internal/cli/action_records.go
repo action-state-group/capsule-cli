@@ -41,15 +41,6 @@ const (
 	typedFPAlg           = "hmac-sha256-chain-key"
 )
 
-// materialityPredicateDigest is the digest of the materiality predicate an
-// evaluation is made under (it decides when a change to the action is
-// material). It is also covered by ruleset_digest.
-//
-// PLACEHOLDER until the example predicate's PR merges: set it to that file's
-// digest as read from origin/main (path and commit in the PR body). This PR
-// stays a draft until then.
-const materialityPredicateDigest = "0000000000000000000000000000000000000000000000000000000000000000"
-
 // The record schemas ship in skills/deal/profile/records/; these are
 // byte-identical copies (a test keeps them equal).
 //
@@ -152,7 +143,7 @@ func typedRecord(ev dealEvent, events []sealedEvent, v0 map[string]interface{}) 
 		out = map[string]interface{}{"choice": body["choice"], "proceed": body["proceed"]}
 		switch a.Approver {
 		case "user":
-			out["authority"] = "action_state_approval"
+			out["authority"] = "user_approval"
 			out["said_commitment"] = body["said_commitment"]
 		case "agent_card":
 			out["authority"] = "card_answer"
@@ -160,7 +151,7 @@ func typedRecord(ev dealEvent, events []sealedEvent, v0 map[string]interface{}) 
 			return nil, inputError("a typed record has no " + a.Approver + " approval: a DO evaluation authorizes on the task authority")
 		}
 		if a.ShownCard != "" {
-			c, err := renderingCommitment(events, a.Check, a.ShownCard)
+			c, err := shownCommitment(events, a.Check, a.ShownCard)
 			if err != nil {
 				return nil, err
 			}
@@ -322,8 +313,12 @@ func evaluationBody(ev dealEvent, events []sealedEvent, v0 map[string]interface{
 	out := map[string]interface{}{
 		"disposition": disposition, "findings": v0["differences"], "options": v0["options"],
 		"proposed_action_digest": proposed, "task_authority_ref": task,
-		"ruleset_digest": ck.RulesetDigest, "materiality_digest": ck.MaterialityDigest, "valid_until": ck.ValidUntil,
+		"ruleset_digest": ck.RulesetDigest, "valid_until": ck.ValidUntil,
 		"authority_basis": []interface{}{map[string]interface{}{"type": "task_authority", "ref": task}},
+	}
+	// None when no predicate was configured: every agent pick was material.
+	if ck.MaterialityDigest != "" {
+		out["materiality_digest"] = ck.MaterialityDigest
 	}
 	for _, k := range []string{"unverified", "notes", "judge"} {
 		if v, ok := v0[k]; ok {
@@ -336,17 +331,26 @@ func evaluationBody(ev dealEvent, events []sealedEvent, v0 map[string]interface{
 	return out, nil
 }
 
-// renderingCommitment commits to what the person was shown when they answered
-// an evaluation, under that evaluation's own rendering nonce: equal to the
-// evaluation's rendering_commitment exactly when what was shown is what was
-// checked.
-func renderingCommitment(events []sealedEvent, check, shown string) (string, error) {
+// renderingCommitment is the one commitment to text a person was shown: the
+// text under the nonce of its rendering. It has three call sites, one
+// mechanism: an evaluation's card and the user's answer to it (equal exactly
+// when what was shown is what was checked), a policy-change confirmation, and
+// a platform approval observation (the text the platform displayed).
+func renderingCommitment(nonce, text string) (string, error) {
+	if nonce == "" {
+		return "", inputError("a rendering commitment needs its rendering's nonce")
+	}
+	return commitText(nonce, text)
+}
+
+// shownCommitment commits to what the person was shown when they answered an
+// evaluation, under that evaluation's own rendering nonce.
+func shownCommitment(events []sealedEvent, check, shown string) (string, error) {
 	verdict, _, ok := checkedCard(events, check)
-	nonce := verdict.Event.Nonces["card"]
-	if !ok || nonce == "" {
+	if !ok {
 		return "", inputError("what was shown has no rendered check to commit against")
 	}
-	return commitText(nonce, shown)
+	return renderingCommitment(verdict.Event.Nonces["card"], shown)
 }
 
 // taskAuthorityAt is the record digest of the task authority in force before
@@ -396,7 +400,7 @@ func addAuthority(body map[string]interface{}, events []sealedEvent, authorizedB
 	}
 	basis := []interface{}{map[string]interface{}{"type": "task_authority", "ref": typedRef(taskAuthorityAt(events, evaluation))}}
 	if approval != "" {
-		basis = append(basis, map[string]interface{}{"type": "action_state_approval", "ref": typedRef(approvalDigest)})
+		basis = append(basis, map[string]interface{}{"type": "user_approval", "ref": typedRef(approvalDigest)})
 	}
 	for _, se := range events {
 		p := se.Event.Platform
@@ -414,16 +418,40 @@ func addAuthority(body map[string]interface{}, events []sealedEvent, authorizedB
 	return nil
 }
 
-// platformApprovalRecord is an approval the user gave on another platform's
-// own gate, as observed: recorded beside the evaluation, never as its answer.
+// platformObservationKind names the platform approval observation shape.
+const platformObservationKind = "platform-approval-observation"
+
+// platformApprovalRecord is a platform approval observation: that another
+// platform's approval interaction for the proposed action happened with
+// these bytes (what it displayed, by rendering commitment; the user's text it
+// returned, by commitment), and when. It claims nothing about whether the
+// platform authorized anything or a rule is satisfied: it is listed beside
+// the evaluation's authority, never as its answer.
 func platformApprovalRecord(ev dealEvent, events []sealedEvent, commit func(string) (string, error), block map[string]interface{}, currency string) (map[string]interface{}, error) {
 	p := ev.Platform
-	text, err := commit("approval_text")
+	displayed, err := renderingCommitment(ev.Nonces["displayed_text"], p.DisplayedText)
 	if err != nil {
 		return nil, err
 	}
-	body := map[string]interface{}{"authority": "platform_approval", "provider": p.Provider, "mechanism": p.Mechanism,
-		"actor": "user", "approval_text_commitment": text}
+	proposed := ""
+	if verdict, _, ok := checkedCard(events, p.Check); ok {
+		for _, se := range events {
+			if se.CapsuleID == verdict.Event.Check.Snapshot {
+				proposed = se.Digest
+			}
+		}
+	}
+	if proposed == "" {
+		return nil, inputError("a platform approval observation names the proposed action of a sealed check")
+	}
+	body := map[string]interface{}{"authority": "platform_approval", "kind": platformObservationKind,
+		"platform": p.Platform, "mechanism": p.Mechanism, "displayed_text_digest": displayed,
+		"proposed_action_ref": typedRef(proposed), "observed_at": p.ObservedAt}
+	if p.UserText != "" {
+		if body["returned_user_text_digest"], err = commit("returned_user_text"); err != nil {
+			return nil, err
+		}
+	}
 	if p.AmountMinor != nil {
 		body["amount_minor"] = *p.AmountMinor
 		cur := p.Currency
@@ -431,11 +459,6 @@ func platformApprovalRecord(ev dealEvent, events []sealedEvent, commit func(stri
 			cur = currency
 		}
 		body["currency"] = cur
-	}
-	for _, se := range events {
-		if se.CapsuleID == p.Check {
-			block["refs"] = []interface{}{relRef("about", se.Digest)}
-		}
 	}
 	return typedHeader(typeActionApproval, block, body), nil
 }
@@ -509,7 +532,7 @@ type CheckResponse struct {
 	EvaluationRef        CheckRef         `json:"evaluation_ref"`
 	RulesetDigest        string           `json:"ruleset_digest"`
 	TaskAuthorityRef     CheckRef         `json:"task_authority_ref"`
-	MaterialityDigest    string           `json:"materiality_digest"`
+	MaterialityDigest    string           `json:"materiality_digest,omitempty"`
 }
 
 // checkResponseFor is the check response of a sealed evaluation step.

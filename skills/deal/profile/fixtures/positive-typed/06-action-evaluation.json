@@ -49,8 +49,8 @@
         "digest_alg": "SHA-256",
         "digest": "d1962067c88f4e8f32294fd84d3fca31120a5a5584511a8bd4385b2a0e44a3e2"
       },
-      "ruleset_digest": "0cb3eea32376c94fc649b0c169ed94c94b7bfb54b7c24628b84ef299d275ce1a",
-      "materiality_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "ruleset_digest": "668bcfe7faee070446240df4d797e7864e7f95e247d2de8f3c78ccf0de73b959",
+      "materiality_digest": "53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1",
       "valid_until": "2026-10-06T09:28:00Z",
       "authority_basis": [
         {
@@ -64,5 +64,5 @@
       ]
     }
   },
-  "expected_digest": "4d8f7d001b7d67c4ff3b15c3b949ca6e70cdd547a5c42d8aaa3a91782f8cd744"
+  "expected_digest": "1d31b582b69410445ca7c474f16e35dc5b7d16d776ac89905aa13183be1f2918"
 }

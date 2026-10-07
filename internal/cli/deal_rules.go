@@ -472,7 +472,7 @@ type dealEvent struct {
 	// TaskAuthority is the user's task authority as opened (typed records):
 	// sealed as its own task-authority/v0 step right after the baseline.
 	TaskAuthority *dealIntent `json:"task_authority,omitempty"`
-	// Platform is an approval the user gave on another platform's own gate,
+	// Platform is an observation of another platform's own approval interaction,
 	// as observed (typed records). It never answers a check.
 	Platform *dealPlatformApproval `json:"platform,omitempty"`
 	// Confirms is set on a record sealed after the deal was closed: the
@@ -486,17 +486,22 @@ type dealEvent struct {
 	Producer *dealProducer `json:"producer,omitempty"`
 }
 
-// dealPlatformApproval is an approval the user gave on another platform's
-// own gate, as the caller observed it: the platform and mechanism as the
-// caller names them, the approval text as returned (committed, never stored
-// in the record), and the amount it stated.
+// dealPlatformApproval is an observation of another platform's own approval
+// interaction for a checked action, as the caller saw it: the platform and
+// mechanism as the caller names them, the text the platform displayed and
+// the user's text it returned (each committed, never stored in the record),
+// when it was observed, and the amount the displayed text stated. It records
+// that the interaction happened with these bytes; it says nothing about
+// whether the platform authorized anything or any rule is satisfied.
 type dealPlatformApproval struct {
-	Check       string `json:"check"`
-	Provider    string `json:"provider"`
-	Mechanism   string `json:"mechanism"`
-	Text        string `json:"text"`
-	AmountMinor *int64 `json:"amount_minor,omitempty"`
-	Currency    string `json:"currency,omitempty"`
+	Check         string `json:"check"`
+	Platform      string `json:"platform"`
+	Mechanism     string `json:"mechanism"`
+	DisplayedText string `json:"displayed_text"`
+	UserText      string `json:"user_text,omitempty"`
+	ObservedAt    string `json:"observed_at"`
+	AmountMinor   *int64 `json:"amount_minor,omitempty"`
+	Currency      string `json:"currency,omitempty"`
 }
 
 // dealProducer names the build that sealed a step. A development build says
@@ -1965,7 +1970,8 @@ var dealBuiltinRules = []struct {
 }
 
 // rulesetDigest is the digest of what evaluated: the built-in rule table and
-// the materiality predicate (by its digest), so a change to either changes it.
+// the materiality predicate (by its digest; "" when none was configured), so
+// a change to either changes it.
 func rulesetDigest(materialityDigest string) (string, error) {
 	table := make([]interface{}, len(dealBuiltinRules))
 	for i, q := range dealBuiltinRules {
@@ -1975,7 +1981,12 @@ func rulesetDigest(materialityDigest string) (string, error) {
 		}
 		table[i] = map[string]interface{}{"question": q.Question, "rules": rules}
 	}
+	// No predicate configured (every agent pick material, fail safe) is null.
+	var materiality interface{}
+	if materialityDigest != "" {
+		materiality = materialityDigest
+	}
 	return canonical.JSONDigest(map[string]interface{}{
-		"evaluator": "capsulectl deal check", "rules": table, "materiality_digest": materialityDigest,
+		"evaluator": "capsulectl deal check", "rules": table, "materiality_digest": materiality,
 	})
 }

@@ -12,7 +12,7 @@
     "04-detail-change-merchant.json",
     "05-proposed-action.json",
     "06-action-evaluation.json",
-    "07-platform-approval.json",
+    "07-platform-approval-observation.json",
     "08-outcome-platform-only.json",
     "09-approval-on-the-card.json"
   ],
@@ -25,7 +25,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "c080f2c0c88921e48342ed12b0bd33cec87bb92a44b14fccac863d5b88126b75"
+      "digest": "3f22ff8357a8b066c957c3d2619df7d030981662ef3c5b83293d991fa33e6f74"
     },
     "chain_root": {
       "type": "record",
@@ -37,7 +37,7 @@
         "rel": "authorized_by",
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "cfeed3cb4249fc25ea341a5c0a28837403db6e9203ef278cdc6f9badc5e16b98"
+        "digest": "a2c42fc34300f62a8fc5de05a30aac021dd20629331eea920b8aa83eef4150fd"
       }
     ],
     "body": {
@@ -54,7 +54,7 @@
       "evaluation_ref": {
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "4d8f7d001b7d67c4ff3b15c3b949ca6e70cdd547a5c42d8aaa3a91782f8cd744"
+        "digest": "1d31b582b69410445ca7c474f16e35dc5b7d16d776ac89905aa13183be1f2918"
       },
       "authority_basis": [
         {
@@ -70,7 +70,7 @@
           "ref": {
             "type": "record",
             "digest_alg": "SHA-256",
-            "digest": "cfeed3cb4249fc25ea341a5c0a28837403db6e9203ef278cdc6f9badc5e16b98"
+            "digest": "a2c42fc34300f62a8fc5de05a30aac021dd20629331eea920b8aa83eef4150fd"
           }
         }
       ]

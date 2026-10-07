@@ -14,8 +14,7 @@
     "authority_basis",
     "evaluation_ref",
     "ruleset_digest",
-    "task_authority_ref",
-    "materiality_digest"
+    "task_authority_ref"
   ],
   "properties": {
     "type": {

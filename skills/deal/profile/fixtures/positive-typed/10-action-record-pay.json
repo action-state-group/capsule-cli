@@ -11,7 +11,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "c080f2c0c88921e48342ed12b0bd33cec87bb92a44b14fccac863d5b88126b75"
+      "digest": "3f22ff8357a8b066c957c3d2619df7d030981662ef3c5b83293d991fa33e6f74"
     },
     "chain_root": {
       "type": "record",
@@ -23,7 +23,7 @@
         "rel": "authorized_by",
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "c080f2c0c88921e48342ed12b0bd33cec87bb92a44b14fccac863d5b88126b75"
+        "digest": "3f22ff8357a8b066c957c3d2619df7d030981662ef3c5b83293d991fa33e6f74"
       }
     ],
     "body": {
@@ -40,7 +40,7 @@
       "evaluation_ref": {
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "4d8f7d001b7d67c4ff3b15c3b949ca6e70cdd547a5c42d8aaa3a91782f8cd744"
+        "digest": "1d31b582b69410445ca7c474f16e35dc5b7d16d776ac89905aa13183be1f2918"
       },
       "authority_basis": [
         {
@@ -52,11 +52,11 @@
           }
         },
         {
-          "type": "action_state_approval",
+          "type": "user_approval",
           "ref": {
             "type": "record",
             "digest_alg": "SHA-256",
-            "digest": "c080f2c0c88921e48342ed12b0bd33cec87bb92a44b14fccac863d5b88126b75"
+            "digest": "3f22ff8357a8b066c957c3d2619df7d030981662ef3c5b83293d991fa33e6f74"
           }
         },
         {
@@ -64,11 +64,11 @@
           "ref": {
             "type": "record",
             "digest_alg": "SHA-256",
-            "digest": "cfeed3cb4249fc25ea341a5c0a28837403db6e9203ef278cdc6f9badc5e16b98"
+            "digest": "a2c42fc34300f62a8fc5de05a30aac021dd20629331eea920b8aa83eef4150fd"
           }
         }
       ]
     }
   },
-  "expected_digest": "6ffbcec514330f0b2d948ebde4617bf6675f720e9cb5ba90c2dc1f17836cdac8"
+  "expected_digest": "da1a3e2fe03829c0bb4d5b3ab41148e79ea624574ceb8a9f0d5bad426f97ace1"
 }

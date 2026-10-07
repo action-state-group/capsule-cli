@@ -886,14 +886,21 @@ func dealNoteCommand() *cobra.Command {
 		case kind == "platform_approval":
 			p := &dealPlatformApproval{}
 			p.Check, _ = c.Flags().GetString("check")
-			p.Provider, _ = c.Flags().GetString("provider")
+			p.Platform, _ = c.Flags().GetString("platform")
 			p.Mechanism, _ = c.Flags().GetString("mechanism")
-			p.Text, _ = c.Flags().GetString("text")
-			if p.Check == "" || p.Provider == "" || p.Mechanism == "" || strings.TrimSpace(p.Text) == "" {
-				return inputError("platform_approval needs --check, --provider, --mechanism and --text (the approval text exactly as the platform returned it)")
+			p.DisplayedText, _ = c.Flags().GetString("displayed-text")
+			p.UserText, _ = c.Flags().GetString("user-text")
+			p.ObservedAt, _ = c.Flags().GetString("observed-at")
+			if p.Check == "" || p.Platform == "" || p.Mechanism == "" || strings.TrimSpace(p.DisplayedText) == "" {
+				return inputError("platform_approval needs --check, --platform, --mechanism and --displayed-text (the text exactly as the platform displayed it)")
 			}
-			if !callerToken.MatchString(p.Provider) || !callerToken.MatchString(p.Mechanism) {
-				return inputError("--provider and --mechanism are names you give the platform and its approval: lowercase letters, digits and . _ - (at most 64)")
+			if !callerToken.MatchString(p.Platform) || !callerToken.MatchString(p.Mechanism) {
+				return inputError("--platform and --mechanism are names you give the platform and its approval: lowercase letters, digits and . _ - (at most 64)")
+			}
+			if p.ObservedAt == "" {
+				p.ObservedAt = dealClock().UTC().Format(time.RFC3339)
+			} else if at, err := time.Parse(time.RFC3339, p.ObservedAt); err != nil || at.UTC().Format(time.RFC3339) != p.ObservedAt || at.After(dealClock()) {
+				return inputError("--observed-at is when you observed it, in UTC (2026-10-06T09:14:00Z), not in the future")
 			}
 			if c.Flags().Changed("amount-minor") {
 				amount, _ := c.Flags().GetInt64("amount-minor")
@@ -1065,7 +1072,7 @@ func dealNoteCommand() *cobra.Command {
 				}
 			case "platform_approval":
 				out["answers_check"] = false
-				out["note"] = "recorded as " + ev.Platform.Provider + "'s own approval; it does not answer the deal check"
+				out["note"] = "recorded as an observation of " + ev.Platform.Platform + "'s own approval interaction; it authorizes nothing and does not answer the deal check"
 			case "approval":
 				out["proceed"] = ev.Approval.Proceed && ev.Approval.Reason == ""
 				out["reason"] = ev.Approval.Reason
@@ -1139,10 +1146,12 @@ func dealNoteCommand() *cobra.Command {
 	cmd.Flags().String("choice", "", "approval: the option id the user chose, or confirm_limits for an intent note")
 	cmd.Flags().String("said", "", "approval: the user's own words")
 	cmd.Flags().String("shown-card", "", "approval: a file holding the exact card text the answer was given on, as `deal check` returned it")
-	cmd.Flags().String("provider", "", "platform_approval: the platform whose own gate the user approved on (a name you choose)")
+	cmd.Flags().String("platform", "", "platform_approval: the platform whose own approval interaction you observed (a name you choose)")
 	cmd.Flags().String("mechanism", "", "platform_approval: that platform's approval mechanism (a name you choose)")
-	cmd.Flags().String("text", "", "platform_approval: the approval text exactly as the platform returned it (committed, never stored)")
-	cmd.Flags().Int64("amount-minor", 0, "platform_approval: the amount the platform's approval stated, in minor units")
+	cmd.Flags().String("displayed-text", "", "platform_approval: the text exactly as the platform displayed it (committed, never stored)")
+	cmd.Flags().String("user-text", "", "platform_approval: the user's text exactly as the platform returned it, if any (committed, never stored)")
+	cmd.Flags().String("observed-at", "", "platform_approval: when you observed it, UTC RFC 3339 (default: now)")
+	cmd.Flags().Int64("amount-minor", 0, "platform_approval: the amount the displayed text stated, in minor units")
 	cmd.Flags().String("currency", "", "platform_approval: the currency of --amount-minor (default: the deal's)")
 	return cmd
 }
@@ -1345,7 +1354,11 @@ func dealCheckCommand() *cobra.Command {
 			if dealRecordSet(dealEvent{}, events) == recordsTyped {
 				// The check contract's fields, fixed when the evaluation is sealed.
 				result.ValidUntil = dealClock().UTC().Truncate(time.Second).Add(staleAfter).Format(time.RFC3339)
-				result.MaterialityDigest = materialityPredicateDigest
+				// The predicate this check evaluated; with none configured
+				// (every pick material, fail safe) the evaluation names none.
+				if predicate != nil {
+					result.MaterialityDigest = predicate.Digest
+				}
 				if result.RulesetDigest, err = rulesetDigest(result.MaterialityDigest); err != nil {
 					return err
 				}

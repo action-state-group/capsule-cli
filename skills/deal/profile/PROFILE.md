@@ -368,7 +368,7 @@ fingerprint as section 4). Digests are over the record's JCS bytes, as for x-dea
 | `task-authority/v0` | The user's task authority: their words by commitment, `max_total_minor`, `allowed`. Sealed after the baseline (`source` ref), and again when the user confirms new limits (`approves` the intent, `previous_ref`, `said_commitment`). | the baseline intent; `approval` with `confirm_limits` |
 | `proposed-action/v0` | The action about to be taken, exactly as checked. | `check` |
 | `action-evaluation/v0` | The deal check's disposition (`DO` or `ASK`) and findings, with the contract fields below. | `verdict` |
-| `action-approval/v0` | An approval artifact of one stated `authority`: `action_state_approval` (the user's own answer, with their words and the `rendering_commitment` of what they were shown), `card_answer` (a card answered with no words), `platform_approval` (a platform's own gate, as observed), `policy_change` (the user confirming a policy change: `rendering_commitment`, `effective_policy_digest`, `semantic_diff_digest`), `one_shot_override` (reserved). | `approval` |
+| `action-approval/v0` | An approval artifact of one stated `authority`: `user_approval` (the user's own answer, with their words and the `rendering_commitment` of what they were shown), `card_answer` (a card answered with no words), `platform_approval` (a platform approval observation, below), `policy_change` (the user confirming a policy change: `rendering_commitment`, `effective_policy_digest`, `semantic_diff_digest`), `one_shot_override` (reserved). | `approval` |
 | `action-record/v0` | What the agent did, with `evaluation_ref` and `authority_basis`; a disclosure that needed approval is an `action-record/v0` with `disclosed`. | `action`; `disclosure` with authority `approval` |
 | `action-outcome/v0` | What was observed (`attempted` names an unchecked action). | `outcome` |
 | `action-report/v0` | Reserved for the report a chain is summarized into. | — |
@@ -376,8 +376,11 @@ fingerprint as section 4). Digests are over the record's JCS bytes, as for x-dea
 **The evaluation's contract fields.** `proposed_action_digest` is the digest of the
 `proposed-action/v0` it evaluates; `task_authority_ref` names the task authority in force;
 `ruleset_digest` is the digest of the rule table the evaluator ran (`{evaluator, rules,
-materiality_digest}`), so it also covers the materiality predicate; `materiality_digest` names
-the predicate that decides which changes are material; `valid_until` is when the evaluation
+materiality_digest}`), so it also covers the materiality predicate; `materiality_digest` is
+the digest (SHA-256 of the JCS bytes) of the `materiality-predicate/v0` document the check
+evaluated, the profile's or the one the check was given; it is absent when none was configured
+(every pick the agent made alone was material, fail safe), and `ruleset_digest` then covers
+`null`; `valid_until` is when the evaluation
 stops covering a step; `authority_basis` is `[{type: "task_authority", ref}]`;
 `rendering_commitment` commits to the card the evaluation rendered.
 
@@ -388,7 +391,7 @@ stops covering a step; `authority_basis` is `[{type: "task_authority", ref}]`;
   `proposed_action_digest`, and the task authority in force by `task_authority_ref`;
 - a `DO` evaluation authorizes one step on the task authority alone (`authorized_by` names
   the evaluation); no approval is sealed;
-- an `ASK` is answered only by an `action_state_approval`, the user's first answer to that
+- an `ASK` is answered only by a `user_approval`, the user's first answer to that
   evaluation. Its `rendering_commitment`, when present, equals the evaluation's. A
   `card_answer` and a `platform_approval` never answer it;
 - a step after the evaluation's `valid_until` is not covered;
@@ -397,8 +400,24 @@ stops covering a step; `authority_basis` is `[{type: "task_authority", ref}]`;
   to it, and the materiality predicate never extends one;
 - the step's `evaluation_ref` names the evaluation it relied on, and its `authority_basis`
   lists, in order: the evaluation's task authority; on an `ASK`, the user's answer it cites;
-  every `platform_approval` sealed `about` that evaluation, with `scope: "mismatch"` exactly
-  when that approval stated another amount. `one_shot_override` is refused.
+  every platform approval observation whose `proposed_action_ref` is that evaluation's proposed
+  action, with `scope: "mismatch"` exactly when the displayed text stated another amount.
+  `one_shot_override` is refused.
+
+**Platform approval observation.** An `action-approval/v0` with `authority: "platform_approval"`
+and `kind: "platform-approval-observation"` records that another platform's own approval
+interaction for a proposed action happened with these bytes: `platform` and `mechanism` (names
+the caller gives), `displayed_text_digest` (what the platform displayed),
+`returned_user_text_digest` (the user's text it returned, when there is one),
+`proposed_action_ref` and `observed_at`, and the amount the displayed text stated. It proves
+only that this interaction was recorded with these bytes. It does not say that the platform
+authorized anything or that any rule is satisfied, carries no choice, and never answers a check.
+
+**One rendering commitment.** What a person was shown is committed one way: the text under the
+nonce of its rendering (`{nonce, text}`, JCS, SHA-256). An evaluation's `rendering_commitment`
+and the user's answer to it (equal exactly when what was shown is what was checked), a
+policy-change confirmation's `rendering_commitment`, and an observation's
+`displayed_text_digest` are that one commitment.
 
 **The check request and response.** `records/check-request-v0.schema.json` and
 `records/check-response-v0.schema.json` are the shapes an evaluator takes and returns, sealed or

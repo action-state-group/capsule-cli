@@ -181,6 +181,12 @@
       "commitment": "a9307b607262a2ea16a67c1d6507aaa8a00ea346cc1b193189297cdf670746d2"
     },
     {
+      "label": "flight-platform-user",
+      "nonce": "409835c053ec37b0b461e67f74aac62e8ac8df8ea5e3ab21db3109779953e4aa",
+      "text": "Approve",
+      "commitment": "6f1cdd074c705725ce46bf1d21acc2293c4c70844cf5f33fa1fc9df0b05c24dc"
+    },
+    {
       "label": "flight-said",
       "nonce": "bb889b00a3c303181ebaa49a2bb74456623240e18ac97b9d40a11e75c5f0efa8",
       "text": "yes, the new site is fine",

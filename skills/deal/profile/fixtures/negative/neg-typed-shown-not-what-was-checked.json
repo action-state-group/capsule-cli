@@ -12,7 +12,7 @@
     "04-detail-change-merchant.json",
     "05-proposed-action.json",
     "06-action-evaluation.json",
-    "07-platform-approval.json",
+    "07-platform-approval-observation.json",
     "08-outcome-platform-only.json"
   ],
   "record": {
@@ -24,7 +24,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "f30d143a6c3c299b4c83d730835d662912354d338acdfec58a91b52e483ab096"
+      "digest": "1a0a82a7f0ab55fd97df67acbe5432c47021ee468374582eceaf4eccefaa20ee"
     },
     "chain_root": {
       "type": "record",
@@ -36,11 +36,11 @@
         "rel": "approves",
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "4d8f7d001b7d67c4ff3b15c3b949ca6e70cdd547a5c42d8aaa3a91782f8cd744"
+        "digest": "1d31b582b69410445ca7c474f16e35dc5b7d16d776ac89905aa13183be1f2918"
       }
     ],
     "body": {
-      "authority": "action_state_approval",
+      "authority": "user_approval",
       "choice": "proceed",
       "proceed": true,
       "said_commitment": "60b5b2b1237a12666ec051e57927dd948948e6c6bca112b8a28df78f0c224224",

@@ -79,7 +79,7 @@
                 "enum": [
                   "task_authority",
                   "action_evaluation",
-                  "action_state_approval",
+                  "user_approval",
                   "platform_approval",
                   "one_shot_override",
                   "action_record"

@@ -86,7 +86,10 @@ func dealTexts(ev dealEvent) map[string]string {
 	case ev.TaskAuthority != nil:
 		t["verbatim"] = ev.TaskAuthority.Verbatim
 	case ev.Platform != nil:
-		t["approval_text"] = ev.Platform.Text
+		t["displayed_text"] = ev.Platform.DisplayedText
+		if ev.Platform.UserText != "" {
+			t["returned_user_text"] = ev.Platform.UserText
+		}
 	case ev.Act != nil:
 		if ev.Act.Reference != "" {
 			t["reference"] = ev.Act.Reference

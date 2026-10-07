@@ -23,18 +23,18 @@ import (
 // recorded as the platform's approval and does not answer the deal check's
 // question; only the user's own answer, on the card the check showed, does.
 
-const flightOpen = `{"type":"purchase","channel":"web",
+const merchantOpen = `{"type":"purchase","channel":"web",
 	"intent":{"verbatim":"book the SJC to HOU flight under $600","max_total_minor":60000,"allowed":["pay"]},
 	"who":{"name":"Example Air","domain":"air.example","payee":"Example Air"},
 	"terms":{"item":"SJC-HOU flight","price_minor":55880,"currency":"USD"},
 	"recourse":{"rail":"card","refundable":true}}`
 
-const flightCheck = `{"action":"pay","amount_minor":55880,
+const merchantCheck = `{"action":"pay","amount_minor":55880,
 	"who":{"domain":"travel-super-discount.example","payee":"Travel Super Discount"},
 	"terms":{"item":"SJC-HOU flight","price_minor":55880},
 	"recourse":{"rail":"card","refundable":true}}`
 
-const flightPay = `{"action":"pay","amount_minor":55880,"payee":"Travel Super Discount","rail":"card"}`
+const merchantPay = `{"action":"pay","amount_minor":55880,"payee":"Travel Super Discount","rail":"card"}`
 
 func openTyped(t *testing.T, input string) string {
 	t.Helper()
@@ -43,7 +43,7 @@ func openTyped(t *testing.T, input string) string {
 
 func openTypedFlight(t *testing.T) string {
 	t.Helper()
-	id := openTyped(t, flightOpen)
+	id := openTyped(t, merchantOpen)
 	dealRun(t, "note", "--deal", id, "--kind", "change", "--input", writeJSON(t,
 		`{"source":"checkout page","who":{"domain":"travel-super-discount.example","payee":"Travel Super Discount"}}`))
 	return id
@@ -72,7 +72,7 @@ func payNow(t *testing.T, dealID string, amount int) map[string]any {
 func platformApproval(t *testing.T, dealID, check, text, amount string) map[string]any {
 	t.Helper()
 	args := []string{"note", "--deal", dealID, "--kind", "platform_approval", "--check", check,
-		"--provider", "example-platform", "--mechanism", "native-gate", "--text", text}
+		"--platform", "example-platform", "--mechanism", "native-gate", "--displayed-text", text, "--user-text", "Approve"}
 	if amount != "" {
 		args = append(args, "--amount-minor", amount, "--currency", "USD")
 	}
@@ -177,7 +177,7 @@ func checkerPasses(t *testing.T, dealID string) {
 func TestTypedMerchantChangedPlatformApprovalDoesNotAnswerTheAsk(t *testing.T) {
 	dealFixture(t)
 	id := openTypedFlight(t)
-	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, flightCheck))
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, merchantCheck))
 	require.Equal(t, "pause", c["verdict"], "the merchant changed")
 	check := c["check_id"].(string)
 	assert.Nil(t, c["approval_id"])
@@ -185,14 +185,14 @@ func TestTypedMerchantChangedPlatformApprovalDoesNotAnswerTheAsk(t *testing.T) {
 	platform := platformApproval(t, id, check, "Approve $558.80 purchase", "55880")
 	assert.Equal(t, false, platform["answers_check"], "a platform's approval never answers the deal check")
 
-	paid := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, flightPay))
+	paid := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, merchantPay))
 	require.Equal(t, true, paid["unchecked"], "the platform click alone authorizes nothing")
 	assert.Equal(t, "no_sealed_approval", paid["rule"])
 	assert.Contains(t, paid["reason"], "a platform's approval does not answer the deal check")
 
 	approval, err := answerCheck(t, id, check, "yes, the new site is fine", c["card"].(string))
 	require.NoError(t, err)
-	paid = dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, flightPay))
+	paid = dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, merchantPay))
 	require.Equal(t, false, paid["unchecked"])
 	require.Equal(t, approval["capsule_id"], paid["authorized_by"])
 
@@ -218,25 +218,43 @@ func TestTypedMerchantChangedPlatformApprovalDoesNotAnswerTheAsk(t *testing.T) {
 	assert.Equal(t, steps[3].Digest, evaluation["proposed_action_digest"], "the ProposedAction as checked")
 	assert.Equal(t, ta, digestOfRef(evaluation["task_authority_ref"]))
 	assert.Equal(t, "2026-09-27T18:15:00Z", evaluation["valid_until"], "15 minutes from the evaluation")
-	assert.Equal(t, materialityPredicateDigest, evaluation["materiality_digest"])
-	rules, err := rulesetDigest(materialityPredicateDigest)
+	assert.Equal(t, neutralMaterialityDigest, evaluation["materiality_digest"], "the predicate the check evaluated")
+	rules, err := rulesetDigest(neutralMaterialityDigest)
 	require.NoError(t, err)
 	assert.Equal(t, rules, evaluation["ruleset_digest"])
 	assert.Equal(t, []any{map[string]any{"type": "task_authority", "ref": evaluation["task_authority_ref"]}}, evaluation["authority_basis"])
 
 	answerBody := bodyOf(records[approval["capsule_id"].(string)])
-	assert.Equal(t, "action_state_approval", answerBody["authority"])
+	assert.Equal(t, "user_approval", answerBody["authority"])
 	assert.Equal(t, evaluation["rendering_commitment"], answerBody["rendering_commitment"], "what was shown is what was checked")
+	// The observation records the interaction's bytes, by the same rendering
+	// commitment as the card, and claims no decision.
 	platformBody := bodyOf(records[platform["capsule_id"].(string)])
 	assert.Equal(t, "platform_approval", platformBody["authority"])
-	assert.Equal(t, "user", platformBody["actor"])
+	assert.Equal(t, "platform-approval-observation", platformBody["kind"])
+	assert.Equal(t, "example-platform", platformBody["platform"])
+	assert.Equal(t, steps[3].Digest, digestOfRef(platformBody["proposed_action_ref"]))
+	assert.Equal(t, "2026-09-27T18:00:00Z", platformBody["observed_at"])
 	assert.EqualValues(t, 55880, platformBody["amount_minor"])
+	for _, k := range []string{"choice", "proceed", "said_commitment", "rendering_commitment"} {
+		assert.NotContains(t, platformBody, k)
+	}
+	for _, se := range steps {
+		if se.CapsuleID == platform["capsule_id"] {
+			displayed, err := renderingCommitment(se.Event.Nonces["displayed_text"], "Approve $558.80 purchase")
+			require.NoError(t, err)
+			assert.Equal(t, displayed, platformBody["displayed_text_digest"])
+			returned, err := commitText(se.Event.Nonces["returned_user_text"], "Approve")
+			require.NoError(t, err)
+			assert.Equal(t, returned, platformBody["returned_user_text_digest"])
+		}
+	}
 
 	action := bodyOf(records[paid["capsule_id"].(string)])
 	assert.Equal(t, stepDigest(t, id, check), digestOfRef(action["evaluation_ref"]))
 	assert.Equal(t, []any{
 		map[string]any{"type": "task_authority", "ref": typedRef(ta)},
-		map[string]any{"type": "action_state_approval", "ref": typedRef(stepDigest(t, id, approval["capsule_id"].(string)))},
+		map[string]any{"type": "user_approval", "ref": typedRef(stepDigest(t, id, approval["capsule_id"].(string)))},
 		map[string]any{"type": "platform_approval", "ref": typedRef(stepDigest(t, id, platform["capsule_id"].(string)))},
 	}, toPlain(t, action["authority_basis"]))
 
@@ -262,10 +280,10 @@ func toPlain(t *testing.T, v any) any {
 func TestTypedCardAnswerDoesNotAnswerAnAsk(t *testing.T) {
 	dealFixture(t)
 	id := openTypedFlight(t)
-	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, flightCheck))
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, merchantCheck))
 	card, err := answerCheck(t, id, c["check_id"].(string), "", c["card"].(string))
 	require.NoError(t, err)
-	paid := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, flightPay))
+	paid := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, merchantPay))
 	assert.Equal(t, true, paid["unchecked"])
 	assert.Equal(t, "ask_needs_your_words", paid["rule"])
 	assert.Equal(t, "card_answer", bodyOf(chainRecords(t, id)[card["capsule_id"].(string)])["authority"])
@@ -276,7 +294,7 @@ func TestTypedCardAnswerDoesNotAnswerAnAsk(t *testing.T) {
 func TestTypedAnswerToAnAskNeedsTheShownCard(t *testing.T) {
 	dealFixture(t)
 	id := openTypedFlight(t)
-	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, flightCheck))
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, merchantCheck))
 	_, err := answerCheck(t, id, c["check_id"].(string), "yes", "")
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "--shown-card")
@@ -371,16 +389,16 @@ func TestTypedStaleCheckIsRefused(t *testing.T) {
 func TestTypedApprovalDoesNotSurviveAChangedProposedAction(t *testing.T) {
 	dealFixture(t)
 	id := openTypedFlight(t)
-	first := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, flightCheck))
+	first := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, merchantCheck))
 	_, err := answerCheck(t, id, first["check_id"].(string), "yes, the new site is fine", first["card"].(string))
 	require.NoError(t, err)
-	changed := strings.Replace(flightCheck, "55880", "61000", 1)
+	changed := strings.Replace(merchantCheck, "55880", "61000", 1)
 	second := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, changed))
 	require.Equal(t, "pause", second["verdict"])
 	a := first["check_response"].(map[string]any)["proposed_action_digest"]
 	b := second["check_response"].(map[string]any)["proposed_action_digest"]
 	assert.NotEqual(t, a, b)
-	paid := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, strings.Replace(flightPay, "55880", "61000", 1)))
+	paid := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, strings.Replace(merchantPay, "55880", "61000", 1)))
 	assert.Equal(t, true, paid["unchecked"], "the earlier answer was for another ProposedAction")
 	assert.Equal(t, "no_sealed_approval", paid["rule"])
 	checkerPasses(t, id)
@@ -522,8 +540,8 @@ func TestTypedFixturesNameTheSealedRuleset(t *testing.T) {
 		} `json:"record"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &f))
-	assert.Equal(t, materialityPredicateDigest, f.Record.Body["materiality_digest"])
-	rules, err := rulesetDigest(materialityPredicateDigest)
+	assert.Equal(t, neutralMaterialityDigest, f.Record.Body["materiality_digest"])
+	rules, err := rulesetDigest(neutralMaterialityDigest)
 	require.NoError(t, err)
 	assert.Equal(t, rules, f.Record.Body["ruleset_digest"])
 }
@@ -533,14 +551,14 @@ func TestTypedFixturesNameTheSealedRuleset(t *testing.T) {
 // every one.
 func TestTypedOnePromptForSeveralFindings(t *testing.T) {
 	dealFixture(t)
-	id := openTyped(t, flightOpen)
+	id := openTyped(t, merchantOpen)
 	check := strings.NewReplacer(`"price_minor":55880}`, `"price_minor":57900}`, `"amount_minor":55880`, `"amount_minor":57900`,
-		`"refundable":true}}`, `"refundable":false}}`, `"domain":"travel-super-discount.example",`, ``).Replace(flightCheck)
+		`"refundable":true}}`, `"refundable":false}}`, `"domain":"travel-super-discount.example",`, ``).Replace(merchantCheck)
 	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, check))
 	require.Equal(t, "pause", c["verdict"])
 	approval, err := answerCheck(t, id, c["check_id"].(string), "yes to all of it", c["card"].(string))
 	require.NoError(t, err)
-	paid := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, strings.Replace(flightPay, "55880", "57900", 1)))
+	paid := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, strings.Replace(merchantPay, "55880", "57900", 1)))
 	require.Equal(t, false, paid["unchecked"])
 
 	records := chainRecords(t, id)
@@ -549,7 +567,7 @@ func TestTypedOnePromptForSeveralFindings(t *testing.T) {
 		switch {
 		case r["type"] == typeActionEvaluation:
 			evaluations = append(evaluations, r)
-		case r["type"] == typeActionApproval && bodyOf(r)["authority"] == "action_state_approval":
+		case r["type"] == typeActionApproval && bodyOf(r)["authority"] == "user_approval":
 			prompts = append(prompts, r)
 		}
 	}
@@ -566,4 +584,59 @@ func TestTypedOnePromptForSeveralFindings(t *testing.T) {
 		"the one answer cites the evaluation that lists every finding")
 	assert.Equal(t, approval["capsule_id"], paid["authorized_by"])
 	checkerPasses(t, id)
+}
+
+// neutralMaterialityDigest is the digest of the example materiality predicate
+// (skills/deal/profile/materiality-predicate/neutral.json) the deal tests
+// configure: the SHA-256 of its JCS bytes.
+const neutralMaterialityDigest = "53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1"
+
+func TestNeutralMaterialityDigestIsTheExampleFile(t *testing.T) {
+	p, err := loadMaterialityPredicate(neutralMateriality)
+	require.NoError(t, err)
+	assert.Equal(t, neutralMaterialityDigest, p.Digest)
+}
+
+// An evaluation names the predicate the check actually evaluated: the one a
+// check is given over the profile's; with none configured (fail safe) it
+// names none, and its ruleset_digest says so.
+func TestTypedEvaluationNamesThePredicateEvaluated(t *testing.T) {
+	materialityFixture(t)
+	id := openTypedSticker(t)
+	c := checkPay(t, id, 600)
+	evaluation := bodyOf(chainRecords(t, id)[c["check_id"].(string)])
+	assert.NotContains(t, evaluation, "materiality_digest")
+	none, err := rulesetDigest("")
+	require.NoError(t, err)
+	assert.Equal(t, none, evaluation["ruleset_digest"])
+	resp := c["check_response"].(map[string]any)
+	assert.NotContains(t, resp, "materiality_digest")
+
+	other := writePredicate(t, `{"type":"materiality-predicate/v0","name":"another example","version":"0.0.1","material":[{"field":"quantity"}]}`)
+	given, err := loadMaterialityPredicate(other)
+	require.NoError(t, err)
+	c = dealRun(t, "check", "--deal", id, "--materiality", other, "--input", writeJSON(t,
+		`{"action":"pay","amount_minor":600,"terms":{"item":"otter sticker","price_minor":600}}`))
+	evaluation = bodyOf(chainRecords(t, id)[c["check_id"].(string)])
+	assert.Equal(t, given.Digest, evaluation["materiality_digest"])
+	rules, err := rulesetDigest(given.Digest)
+	require.NoError(t, err)
+	assert.Equal(t, rules, evaluation["ruleset_digest"])
+	checkerPasses(t, id)
+}
+
+// A platform approval observation is refused without the text the platform
+// displayed, and for a step that is not a check.
+func TestPlatformApprovalObservationNeedsItsBytes(t *testing.T) {
+	dealFixture(t)
+	id := openTypedSticker(t)
+	c := checkPay(t, id, 600)
+	_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "platform_approval", "--check", c["check_id"].(string),
+		"--platform", "example-platform", "--mechanism", "native-gate")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "--displayed-text")
+	_, err = invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "platform_approval", "--check", c["check_id"].(string),
+		"--platform", "example-platform", "--mechanism", "native-gate", "--displayed-text", "Approve", "--observed-at", "2099-01-01T00:00:00Z")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "--observed-at")
 }

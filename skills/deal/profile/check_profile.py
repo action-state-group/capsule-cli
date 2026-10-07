@@ -34,9 +34,9 @@ SCHEMA_PATH = HERE / "x-deal-v0.schema.json"
 # The typed action records (one schema per type, sharing record-common-v0). A chain
 # sealed in them carries x-deal-v0 evidence records and typed records side by side.
 RECORDS_DIR = HERE / "records"
-# The materiality predicate digest capsulectl seals into every evaluation (internal/cli
-# materialityPredicateDigest); the typed fixtures name it.
-MATERIALITY_DIGEST = "0" * 64
+# The example materiality predicate the typed fixtures' evaluations name, as capsulectl's
+# tests configure it.
+EXAMPLE_PREDICATE = HERE / "materiality-predicate" / "neutral.json"
 TYPED_TYPES = {"task-authority/v0": "task_authority", "proposed-action/v0": "check",
                "action-evaluation/v0": "verdict", "action-approval/v0": "approval",
                "action-record/v0": "action", "action-outcome/v0": "outcome", "action-report/v0": "report"}
@@ -369,8 +369,8 @@ def typed_view(rec):
             body["card_commitment"] = body["rendering_commitment"]
     elif t == "action-approval/v0":
         a = body["authority"]
-        if a in ("action_state_approval", "card_answer"):
-            body["approver"] = {"action_state_approval": "user", "card_answer": "agent_card"}[a]
+        if a in ("user_approval", "card_answer"):
+            body["approver"] = {"user_approval": "user", "card_answer": "agent_card"}[a]
         else:
             blk["record_type"] = a  # platform_approval, policy_change, one_shot_override
     elif t == "action-outcome/v0":
@@ -544,7 +544,7 @@ def check_chain(records):
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by", "reverses"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"},
-                    "task_authority": {"source", "approves"}, "platform_approval": {"about"}, "policy_change": set()}
+                    "task_authority": {"source", "approves"}, "platform_approval": set(), "policy_change": set()}
     # The user's limits in force. Absent allowed = no restriction; present and
     # empty = nothing allowed. An intent may narrow them; only the user's
     # confirm_limits answer to an intent that asks for more puts a new version
@@ -688,10 +688,10 @@ def check_chain(records):
                 fail(i, "authority_basis starts with exactly one task_authority")
             if basis[0]["ref"]["digest"] != v["task_authority_ref"]["digest"]:
                 fail(i, "task_authority is not the evaluation's task_authority_ref")
-            asa = [e for e in basis if e["type"] == "action_state_approval"]
+            asa = [e for e in basis if e["type"] == "user_approval"]
             if ja is not None:
                 if len(asa) != 1 or asa[0]["ref"]["digest"] != digests[ja]:
-                    fail(i, "the action_state_approval entry is the user's answer the step cites (authorized_by)")
+                    fail(i, "the user_approval entry is the user's answer the step cites (authorized_by)")
             elif asa:
                 fail(i, "a DO evaluation needs no approval: the step rests on the task authority")
             seen = []
@@ -708,7 +708,7 @@ def check_chain(records):
                 seen.append(jp)
             if sorted(seen) != sorted(platform_for_verdict.get(jv, [])):
                 fail(i, "authority_basis lists every platform approval observed for the evaluation, and only those")
-            want = ["task_authority"] + (["action_state_approval"] if ja is not None else []) + ["platform_approval"] * len(seen)
+            want = ["task_authority"] + (["user_approval"] if ja is not None else []) + ["platform_approval"] * len(seen)
             if types != want:
                 fail(i, "authority_basis lists task_authority, then the user's answer, then platform approvals")
 
@@ -746,8 +746,18 @@ def check_chain(records):
                 max_total, allowed = new.get("max_total_minor"), new.get("allowed")
             task_idx = i
         elif t == "platform_approval":
-            # Recorded beside the evaluation, never as its answer.
-            platform_for_verdict.setdefault(one("about", ("verdict",)), []).append(i)
+            # An observation of another platform's approval interaction for a proposed
+            # action: listed beside that action's evaluation, never as its answer.
+            j = by_digest.get(body["proposed_action_ref"]["digest"])
+            if j is None or j >= i or records[j]["x-deal-v0"]["record_type"] != "check":
+                fail(i, "proposed_action_ref names no earlier proposed action of this chain")
+            jv = next((k for k in range(j + 1, i) if records[k]["x-deal-v0"]["record_type"] == "verdict"
+                       and records[k]["x-deal-v0"]["refs"][0]["digest"] == digests[j]), None)
+            if jv is None:
+                fail(i, "a platform approval observation follows the evaluation of its proposed action")
+            if body["observed_at"] > b["at"]:
+                fail(i, "observed_at is later than the record")
+            platform_for_verdict.setdefault(jv, []).append(i)
         elif t == "policy_change":
             pass  # its bindings are structural (the schema); no chain step depends on it yet
         elif t == "intent":
@@ -1198,11 +1208,12 @@ def regen():
               "flight-message": "Checkout continues on travel-super-discount.example for this fare.",
               "flight-card": "Payee changed since first contact (Example Air → Travel Super Discount) · [Hold] [Pay anyway]",
               "flight-platform": "Approve $558.80 purchase",
+              "flight-platform-user": "Approve",
               "flight-said": "yes, the new site is fine"}
     com1 = {k: commitment(nonce(k), v) for k, v in texts1.items()}
-    # The materiality predicate's digest capsulectl seals (internal/cli materialityPredicateDigest);
-    # regenerate these fixtures when it changes (a Go test keeps the two equal).
-    materiality = MATERIALITY_DIGEST
+    # The digest of the materiality predicate the check evaluated (here the example one);
+    # regenerate these fixtures when it or the rule table changes (a Go test keeps them equal).
+    materiality = record_digest(load(EXAMPLE_PREDICATE))
     rules = {"evaluator": "capsulectl deal check", "materiality_digest": materiality, "rules": [
         {"question": "asked", "rules": ["agent_picked", "not_asked", "over_limit"]},
         {"question": "who", "rules": ["payee_or_contact_changed", "first_disclosure"]},
@@ -1267,21 +1278,24 @@ def regen():
         "proposed_action_digest": record_digest(records1[fk]), "task_authority_ref": tref(fta),
         "ruleset_digest": record_digest(rules), "materiality_digest": materiality, "valid_until": "2026-10-06T09:28:00Z",
         "authority_basis": [{"type": "task_authority", "ref": tref(fta)}]}, refs=[("checks", fk)])
-    fp = add_typed("platform-approval", "action-approval/v0", {
-        "authority": "platform_approval", "provider": "example-platform", "mechanism": "native-gate", "actor": "user",
-        "approval_text_commitment": com1["flight-platform"], "amount_minor": 55880, "currency": "USD"}, refs=[("about", fv)])
+    fp = add_typed("platform-approval-observation", "action-approval/v0", {
+        "authority": "platform_approval", "kind": "platform-approval-observation",
+        "platform": "example-platform", "mechanism": "native-gate",
+        "displayed_text_digest": com1["flight-platform"], "returned_user_text_digest": com1["flight-platform-user"],
+        "proposed_action_ref": tref(fk), "observed_at": "2026-10-06T09:13:40Z",
+        "amount_minor": 55880, "currency": "USD"})
     add_typed("outcome-platform-only", "action-outcome/v0", {
         "status": "unchecked_action", "outcome": "mismatch",
         "findings": [{"question": "asked", "rule": "no_sealed_approval"}],
         "attempted": {"action": "pay", "amount_minor": 55880, "currency": "USD", "rail": "card"}})
     fa = add_typed("approval-on-the-card", "action-approval/v0", {
-        "authority": "action_state_approval", "choice": "proceed", "proceed": True,
+        "authority": "user_approval", "choice": "proceed", "proceed": True,
         "said_commitment": com1["flight-said"], "rendering_commitment": com1["flight-card"]}, refs=[("approves", fv)])
     add_typed("action-record-pay", "action-record/v0", {
         "action": "pay", "amount_minor": 55880, "currency": "USD", "rail": "card", "counterparty": cpt(("payee", "second")),
         "evaluation_ref": tref(fv),
         "authority_basis": [{"type": "task_authority", "ref": tref(fta)},
-                            {"type": "action_state_approval", "ref": tref(fa)},
+                            {"type": "user_approval", "ref": tref(fa)},
                             {"type": "platform_approval", "ref": tref(fp)}]}, refs=[("authorized_by", fa)])
     stories1 = {
         "baseline": "First contact: the user asks for the SJC-HOU flight under $600 from Example Air.",
@@ -1291,8 +1305,9 @@ def regen():
         "proposed-action/v0": "The payment about to be made, exactly as checked.",
         "action-evaluation/v0": "The deal check asks (ASK): the payee changed since first contact. It names the proposed action, "
                                 "the task authority, the rule table and materiality predicate, and how long it is valid.",
-        "action-approval/v0": "An approval artifact of a stated authority: here the platform's own approval (observed, never "
-                              "the check's answer), or the user's own answer on the card the check rendered.",
+        "action-approval/v0": "An approval artifact of a stated authority: here an observation of the platform's own approval "
+                              "interaction (what it displayed and the text it returned, by commitment; it authorizes nothing "
+                              "and never answers the check), or the user's own answer on the card the check rendered.",
         "action-outcome/v0": "Paying on the platform's approval alone is an unchecked action: it did not answer the ask.",
         "action-record/v0": "The payment, with the evaluation it relied on and every authority layer, in order.",
     }
@@ -1512,7 +1527,7 @@ def regen():
     last = len(records1) - 1
     r = copy.deepcopy(pay)
     r["refs"] = [{"rel": "authorized_by", **tref(fp)}]
-    r["body"]["authority_basis"] = [e for e in r["body"]["authority_basis"] if e["type"] != "action_state_approval"]
+    r["body"]["authority_basis"] = [e for e in r["body"]["authority_basis"] if e["type"] != "user_approval"]
     negt("neg-typed-platform-approval-as-the-answer", "chain", "must point at a approval or verdict record", r, last,
          "The payment cites the platform's approval as its authority: a platform approval never answers the deal check.")
 
@@ -1547,6 +1562,14 @@ def regen():
     r = copy.deepcopy(pay); r["body"]["evaluation_ref"] = tref(fk)
     negt("neg-typed-evaluation-ref", "chain", "evaluation_ref is not the evaluation", r, last,
          "The payment's evaluation_ref names the proposed action, not the evaluation.")
+
+    r = copy.deepcopy(records1[fp]); r["body"].update(choice="proceed", proceed=True)
+    negt("neg-typed-observation-claims-a-decision", "schema", "body", r, fp,
+         "A platform approval observation that states a choice: an observation records bytes, never a decision.")
+
+    r = copy.deepcopy(records1[fp]); r["body"]["proposed_action_ref"] = tref(fm)
+    negt("neg-typed-observation-not-of-a-proposed-action", "chain", "proposed_action_ref names no earlier proposed action", r, fp,
+         "A platform approval observation whose proposed_action_ref names a message.")
 
     r = copy.deepcopy(records1[fv]); r["body"]["proposed_action_digest"] = record_digest(records1[fm])
     negt("neg-typed-proposed-action-digest", "chain", "proposed_action_digest is not the digest of the proposed action", r, fv,
