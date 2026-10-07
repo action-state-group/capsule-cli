@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### A page is written only when it can stand behind what it shows
+
+- **Behaviour change.** `bundle --html`, `disclose --html` and `deal report --html`
+  write a page only for a bundle that `verify --bundle` calls VALID. For an INCOMPLETE
+  or INVALID bundle no page is written: the command exits as `verify --bundle` would
+  (3 or 1) and names the claims that did not pass. The page's viewer would otherwise
+  have said "Bundle verification passed" for a bundle the CLI calls INCOMPLETE.
+  Nothing is put on record for a refused page.
+- A page whose `report/v1` root would show fewer rows than it has (a row cites a
+  record the bundle does not carry) is refused, naming how many rows it would show.
+- A jsonl profile writes no page: its bundle carries its evidence book's records about
+  what was sealed, not the records themselves, so a page cannot show them. Publish on
+  a sqlite profile for a page; `--out` still writes the bundle.
+- Every page path measured on the previous release was VALID and is unchanged: deal
+  receipts (own and shared copies) and the README's self-checking report.
+
 ### `profile retire NAME`: free a profile's name without touching its records
 
 - Renames the profile to `NAME-retired-YYYYMMDD` (`-2`, `-3` … the same day), with

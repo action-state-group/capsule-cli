@@ -736,6 +736,9 @@ func bundleCommands() []*cobra.Command {
 			if err != nil {
 				return err
 			}
+			if htmlPath != "" && profile.Type == "jsonl" {
+				return errJSONLPage // before anything is opened or put on record
+			}
 			root, _ := c.Flags().GetString("root")
 			closureDepth, _ := c.Flags().GetInt("closure-depth")
 			if profile, err = bundleLog(c, profile, use, root); err != nil {
@@ -774,6 +777,13 @@ func bundleCommands() []*cobra.Command {
 				encoded = bundle.JSON
 			} else if value, err = AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink, ProducerKey: producerKey}); err != nil {
 				return err
+			}
+			if htmlPath != "" {
+				// The page's verdict before anything is put on record: a
+				// refused page leaves no disclosure behind.
+				if err := pageGate(value); err != nil {
+					return err
+				}
 			}
 			if use == "disclose" && target.book == nil {
 				// Every disclose act goes on record: sealed as a capsule and

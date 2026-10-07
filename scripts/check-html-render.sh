@@ -131,4 +131,46 @@ else
   echo "skip the page's verdict against verify --bundle's: the vendored viewer sets no data-verdict yet (see agent-action-capsule's issue on the viewer's verdict wording)"
 fi
 
+
+# A page is written only for a bundle `verify --bundle` calls VALID whose
+# report shows every row (internal/cli/page_gate.go). Each variant of the
+# README's example below runs as written up to its refused step.
+variant() { # name, then perl substitutions applied to the README's example
+  local name="$1"; shift
+  mkdir "$name"
+  perl -0p "$@" example.sh >"$name/example.sh"
+  # Its own config directory: each variant creates the README's profile anew.
+  (cd "$name" && XDG_CONFIG_HOME="$work/$name/config" bash -e -o pipefail example.sh >log 2>&1) && echo 0 >"$name/exit" || echo $? >"$name/exit"
+}
+refused() { # name, words the refusal must carry
+  [[ $(cat "$1/exit") -ne 0 ]] && [[ ! -e "$1/report.html" ]] && contains "$1/log" "$2"
+}
+
+# legacy-jsonl-profile: an rc7/rc8-style jsonl profile's bundle carries its
+# evidence book's records, not the records sealed, so its page could show
+# none of the report's rows (it once said "verification passed" over 0 of 6).
+variant legacy-jsonl-profile -e 's#--type sqlite --sqlite-path \./store\.db#--type jsonl --jsonl-path ./store --namespace example#'
+check "legacy-jsonl-profile: no page is written" refused legacy-jsonl-profile "a jsonl profile's bundle carries its evidence book's records"
+
+# zero-rows: a VALID bundle whose report row cites a record it does not carry.
+variant zero-rows -e 's#references: \[cite\(\$permissions\)\]#references: [cite("0000000000000000000000000000000000000000000000000000000000000000")]#'
+check "zero-rows: no page is written for a report that would show 1 of 2 rows" refused zero-rows "would show 1 of 2 rows"
+
+# incomplete-bundle: the README page with its records' producer signatures
+# removed is INCOMPLETE by `verify --bundle`; its page must never say the
+# bundle passed. capsulectl writes no such page; this checks the vendored
+# viewer itself, once it states a verdict (data-verdict).
+jq -c '.records |= map(del(.signature, .key_id))' bundle.json >incomplete.json
+perl -0pe 'BEGIN{open my $f,"<","incomplete.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' report.html >incomplete.html
+check "incomplete-bundle: the page carries the changed bundle" differs report.html incomplete.html
+capsulectl verify --bundle incomplete.html >incomplete-verify.json 2>/dev/null && verdict=0 || verdict=$?
+check "incomplete-bundle: verify --bundle calls it INCOMPLETE, exit 3" test "$verdict" -eq 3
+render incomplete.html
+if contains incomplete.html.dom 'data-verdict='; then
+  check "incomplete-bundle: the page's verdict claims no more than verify --bundle's" claims_no_more incomplete.html.dom incomplete-verify.json
+  check "incomplete-bundle: the page never says the bundle passed" lacks incomplete.html.dom 'Bundle verification passed'
+else
+  echo "skip incomplete-bundle's page: the vendored viewer sets no data-verdict yet, and says 'passed' for it (agent-action-capsule's issue on the viewer's verdict wording)"
+fi
+
 exit "$fail"
