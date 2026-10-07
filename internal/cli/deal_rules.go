@@ -1976,7 +1976,7 @@ var dealBuiltinRules = []struct {
 	{"who", []string{"payee_or_contact_changed", "first_disclosure"}},
 	{"terms", []string{"terms_changed"}},
 	{"recourse", []string{"recourse_changed", "irreversible_rail"}},
-	{"safety", []string{"pay_before_seeing", "credentials_requested", "verification_code_request", "off_platform_early", "domain_recent"}},
+	{"safety", []string{"pay_before_seeing", "credentials_requested", "verification_code_request", "off_platform_early", "domain_recent", "materiality_changed"}},
 }
 
 // rulesetDigest is the digest of what evaluated: the built-in rule table and

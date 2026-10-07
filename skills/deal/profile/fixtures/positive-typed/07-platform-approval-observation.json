@@ -11,7 +11,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "9616f0095d607db07fe0a03df45c0519c46632d8ca480e597fc644942199666d"
+      "digest": "95ea3fa86c33f5072b341e933d87585080a1736886809f4e057aa3cd361ce5c8"
     },
     "chain_root": {
       "type": "record",
@@ -35,5 +35,5 @@
       "currency": "USD"
     }
   },
-  "expected_digest": "ce1c24709bacb1c8c47fa6156702006797a9e675f34b1aabe0dde14d0a2a4268"
+  "expected_digest": "d53355e0b9e0655649a2a7c15cdee1464b543f02787c8f2abbdcd295838c3607"
 }
