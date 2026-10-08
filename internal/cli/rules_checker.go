@@ -520,7 +520,13 @@ func findingField(id string) string {
 // amount, from every deal, in the same shape), as data. capsulectl names no
 // rule: a checker with a limit over a rolling window evaluates it over the
 // history, and reports it not_evaluable when that is not enough.
-func (s *dealSession) rulesInput(ctx context.Context, capsuleID string) ([]byte, *dealRulesHistory, error) {
+//
+// In a typed deal it also carries task_authority: the sealed task-authority
+// record the check's task_authority_ref names (its digest is the ref's), so a
+// checker can bind the plan it reads to the record. It is absent when the
+// task authority in force is not a task-authority record (limits confirmed
+// later in an approval), and in a deal with none.
+func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events []sealedEvent) ([]byte, *dealRulesHistory, error) {
 	record, err := s.capsuleWithInput(ctx, capsuleID)
 	if err != nil {
 		return nil, nil, err
@@ -532,8 +538,22 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string) ([]byte,
 	if err != nil {
 		return nil, nil, err
 	}
-	raw, err := json.Marshal(map[string]interface{}{"schema": externalCheckInput, "record": record, "history": history,
-		"history_scope": map[string]interface{}{"days": scope.Days, "max_records": rulesHistoryMax, "complete": scope.Complete}})
+	input := map[string]interface{}{"schema": externalCheckInput, "record": record, "history": history,
+		"history_scope": map[string]interface{}{"days": scope.Days, "max_records": rulesHistoryMax, "complete": scope.Complete}}
+	if task := taskAuthorityAt(events, ""); task != "" {
+		for _, se := range events {
+			if se.Digest == task && se.Event.Kind == "task_authority" {
+				ta, err := s.capsuleWithInput(ctx, se.CapsuleID)
+				if err != nil {
+					return nil, nil, err
+				}
+				if ta != nil {
+					input["task_authority"] = ta
+				}
+			}
+		}
+	}
+	raw, err := json.Marshal(input)
 	return raw, scope, err
 }
 

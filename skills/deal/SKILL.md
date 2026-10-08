@@ -499,6 +499,11 @@ price: `authorized_max_minor` equal to `amount_minor`. Never pass the estimate
 when a larger maximum is shown. A pay by card, wallet, PayPal, or any rail that
 can hold more than it charges is refused without it.
 
+Always state `recourse` on a pay: the `rail` and whether it is `refundable`, as
+the checkout shows them. The user's rules read both; left out, the rule on a
+non-refundable payment cannot be checked. If the checkout asks for a deposit,
+put it in `terms` as `deposit_minor`.
+
 Every check also returns `approval_text` (a short, paste-ready summary),
 `checked_at` and `stale_after_minutes`, and `rules`: what the profile's rules
 checker said (see "Your rules" below).

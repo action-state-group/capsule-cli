@@ -126,6 +126,90 @@
         "recourse": {
           "type": "object"
         },
+        "upfront_amount_minor": {
+          "$ref": "record-common-v0.schema.json#/$defs/uint",
+          "description": "What the action asks for up front, in minor units: the deposit the check's own terms state (terms.deposit_minor), and only that. Absent when the check states no deposit; never inferred."
+        },
+        "recipient_role": {
+          "enum": [
+            "fulfilling_merchant",
+            "third_party",
+            "self"
+          ],
+          "description": "Who receives a share, by role: fulfilling_merchant (the deal's counterparty), third_party (anyone else) or self. A role, never a name. Absent when not a share or not known."
+        },
+        "channel": {
+          "description": "The channel kind in use at this check (x-deal-v0's channel set): the latest sealed message's, else first contact's. A kind, never an address.",
+          "anyOf": [
+            {
+              "enum": [
+                "marketplace",
+                "web",
+                "sms",
+                "phone_call",
+                "email",
+                "app_chat",
+                "whatsapp",
+                "telegram",
+                "signal",
+                "in_person",
+                "other"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+\\.[a-z][a-z0-9_]{0,63}$"
+            }
+          ]
+        },
+        "first_contact_channel": {
+          "description": "The channel kind the relationship started on (the baseline's channel). A kind, never an address.",
+          "anyOf": [
+            {
+              "enum": [
+                "marketplace",
+                "web",
+                "sms",
+                "phone_call",
+                "email",
+                "app_chat",
+                "whatsapp",
+                "telegram",
+                "signal",
+                "in_person",
+                "other"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+\\.[a-z][a-z0-9_]{0,63}$"
+            }
+          ]
+        },
+        "material_fields_changed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 11,
+          "description": "How many of the material fields (the list material_fields_basis names: terms.item, terms.quantity, terms.price_minor, terms.deposit_minor, terms.currency, terms.when, terms.place, terms.conditions, recourse.rail, recourse.refundable, who.payee) the proposal changes from what was agreed. A key counts when present on one side and absent on the other, or present on both with unequal JCS values; terms.conditions counts as one key."
+        },
+        "material_fields_basis": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64",
+          "description": "Lowercase hex SHA-256 of the JCS bytes of the material field list, in order."
+        },
+        "offer_fields_changed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6,
+          "description": "How many of the offer fields (terms.item, terms.quantity, terms.price_minor, terms.deposit_minor, terms.conditions, recourse.refundable) differ from what the user's own words stated (intent.asked), counted as for material_fields_changed."
+        },
+        "offer_fields_basis": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64",
+          "description": "Lowercase hex SHA-256 of the JCS bytes of the offer field list, in order."
+        },
+        "task_authority_ref": {
+          "$ref": "record-common-v0.schema.json#/$defs/ref",
+          "description": "The task authority in force when the action was proposed: the task-authority record, or the approval that confirmed newer limits. An opaque reference a rules checker binds the plan it is given to."
+        },
         "description_commitment": {
           "$ref": "record-common-v0.schema.json#/$defs/hex64"
         },

@@ -118,6 +118,13 @@ func typedRecord(ev dealEvent, events []sealedEvent, v0 map[string]interface{}) 
 	case "check":
 		typeName, out = typeProposedAction, cloneBody(body)
 		moveCounterparty(block, out)
+		// The task authority in force, as an opaque reference a rules
+		// checker binds the plan it is given to.
+		if ev.RuleInputs != "" {
+			if task := taskAuthorityAt(events, ""); task != "" {
+				out["task_authority_ref"] = typedRef(task)
+			}
+		}
 	case "verdict":
 		typeName = typeActionEvaluation
 		ev, err := evaluationBody(ev, events, body)
@@ -262,6 +269,13 @@ func taskAuthorityRecord(ev dealEvent, events []sealedEvent, commit func(string)
 			allowed[i] = a
 		}
 		body["allowed"] = allowed
+		// The same bounds in the plan shape a rules checker reads: the
+		// actions the task allows, and its preconditions (none are stated
+		// here). Absent, like allowed, when nothing restricts the task.
+		if ev.RuleInputs != "" {
+			body["allowed_actions"] = allowed
+			body["preconditions"] = []interface{}{}
+		}
 	}
 	block["refs"] = []interface{}{relRef("source", events[0].Digest)}
 	return typedHeader(typeTaskAuthority, block, body), nil

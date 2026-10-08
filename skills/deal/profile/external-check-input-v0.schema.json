@@ -19,6 +19,10 @@
       "$ref": "#/$defs/record",
       "description": "The step being checked."
     },
+    "task_authority": {
+      "$ref": "#/$defs/record",
+      "description": "Optional, in a deal sealed as typed records: the task-authority record the checked step's task_authority_ref names, in the same shape as record. Its record's digest equals that ref's digest; a checker uses it only then. Its body carries the plan shape (allowed_actions, preconditions). Absent when the task authority in force is not a task-authority record, or the deal has none."
+    },
     "history": {
       "description": "The profile's earlier sealed acts with an amount, newest first. It can hold acts of the deal being checked. An act the agent took after a check carries the act in agent_input.body (action, amount_minor, currency, direction out or in, rail); one taken without a check is sealed as an unchecked action and carries it in agent_input.body.unchecked. Both count as spending.",
       "type": "array",

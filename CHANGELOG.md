@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### A check carries the inputs a rules checker reads
+
+- **Added (wire, additive):** a check sealed from this version carries scalars a rules checker
+  reads. They go on the `x-deal-v0` check and the typed `proposed-action/v0`, and each is absent
+  when not known:
+  - `recipient_role` (`fulfilling_merchant` or `third_party`, on a share);
+  - `channel` and `first_contact_channel` (channel kinds);
+  - `upfront_amount_minor` (the stated deposit, never inferred);
+  - `material_fields_changed` and `offer_fields_changed` (counts over two fixed field lists, against
+    what was agreed and against the user's own words), with `material_fields_basis` and
+    `offer_fields_basis` (each list's digest);
+  - on typed records, `task_authority_ref`.
+
+  None carries a name, a contact detail or free text. Records sealed before re-derive unchanged.
+- **Added:** a typed deal's `task-authority/v0` also carries its allowed actions as `allowed_actions`
+  with `preconditions: []`. The external-check input gains an optional `task_authority` member: that
+  record, whose digest is the check's `task_authority_ref`.
+- **The deal skill** now says to always state `recourse` (the rail and whether it is refundable) on
+  a pay, and to put a deposit the checkout asks for in `terms`.
+
 ### A rules checker's answer that cannot be sealed pauses the check instead of failing it
 
 - **Fixed:** on the second purchase in a week, a checker's finding value such as "2000 authorised

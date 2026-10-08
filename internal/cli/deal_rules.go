@@ -514,6 +514,11 @@ type dealEvent struct {
 	// commitments use, kept with the step like Producer: a step sealed
 	// before records declared it has none and re-derives without one.
 	CommitAlg string `json:"commit_alg,omitempty"`
+	// RuleInputs (dealRuleInputsVersion) marks a step whose record carries
+	// the scalars a rules checker reads (deal_rule_inputs.go), kept with the
+	// step like Producer: a step sealed before has none and re-derives
+	// without them.
+	RuleInputs string `json:"rule_inputs,omitempty"`
 }
 
 // dealPlatformApproval is an observation of another platform's own approval

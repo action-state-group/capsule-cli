@@ -73,6 +73,36 @@
           },
           "uniqueItems": true
         },
+        "allowed_actions": {
+          "description": "The same actions as allowed, in the plan shape a rules checker reads (allowed_actions). Absent, like allowed, when nothing restricts the task.",
+          "type": "array",
+          "items": {
+            "$ref": "record-common-v0.schema.json#/$defs/action"
+          },
+          "uniqueItems": true
+        },
+        "preconditions": {
+          "description": "The plan's preconditions: each an action and the step it must cite. capsulectl states none.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "action",
+              "citing"
+            ],
+            "properties": {
+              "action": {
+                "$ref": "record-common-v0.schema.json#/$defs/action"
+              },
+              "citing": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              }
+            }
+          }
+        },
         "asked": {
           "type": "object"
         },
