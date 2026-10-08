@@ -27,7 +27,7 @@ one the rc9 and rc10 cuts used.
 3. the companion plugin and skill, if you serve them.
 
 A tag can be cut and published while installs stay on the previous triple. A release is shipped
-when the install page moves to the new triple (step 5).
+when the install page moves to the new triple (step 6).
 
 | Part | Where it comes from | What is verified |
 | --- | --- | --- |
@@ -37,19 +37,22 @@ when the install page moves to the new triple (step 5).
 
 ## Before the tag
 
-1. **Everything the tag must carry has merged.** That means every code change, and every change
+The checks before the tag are lettered A to C; the release steps after them are numbered 1 to 8.
+
+A. **Everything the tag must carry has merged.** That means every code change, and every change
    to `skills/deal/` (see the box above).
    - If the companion plugin embeds definitions this release depends on, their inputs are final
      first. A plugin that embeds a digest re-cuts when that digest moves.
-2. **CI on `main` is green.** In particular, these jobs block a release:
-   - `iife`: the pinned report viewer is on the upstream main it claims to be;
+B. **CI on `main` is green.** In particular, these jobs block a release:
+   - `iife`: the vendored report viewer (the evidence-graph IIFE) equals a fresh build from the
+     upstream commit it pins, and that commit is on the upstream main;
    - `interop at the resolved versions (Go <-> Python)`: the resolved dependency versions agree
      across implementations;
    - `report page renders and checks itself`: the shipped page renders and verifies its own
      bundle.
 
    `quality`, `test` and `seal-pr-capsule` must be green too.
-3. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tagged commit, move
+C. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tagged commit, move
    everything under `## Unreleased` under a new `## v0.1.0-rcNN` heading. Leave `## Unreleased`
    empty. A version shipped without this leaves its changes under Unreleased. Then the release
    state has to be rebuilt from the tags (`git log v0.1.0-rcPREV..v0.1.0-rcNN`).
@@ -73,10 +76,11 @@ when the install page moves to the new triple (step 5).
 2. **Release CI is green.** It builds, checks the version each binary reports, attests the
    binaries, registers the release statement in the transparency log, and publishes the
    pre-release.
-3. **Verify from the downloaded assets, not from the build.** In an empty directory:
+3. **Verify from the downloaded assets, not from the build.** In an empty directory, with a clone
+   of this repository at `$CLONE` (for the tagged commit's `SKILL.md`):
 
    ```sh
-   V=v0.1.0-rcNN; R=action-state-group/capsule-cli
+   V=v0.1.0-rcNN; R=action-state-group/capsule-cli; CLONE=~/src/capsule-cli
    gh release download "$V" --repo "$R"
    sha256sum -c SHA256SUMS
    for f in capsulectl-"$V"-*-*; do
@@ -87,7 +91,8 @@ when the install page moves to the new triple (step 5).
    curl -sSL -o a2.tar.gz "https://github.com/$R/archive/refs/tags/$V.tar.gz"
    sha256sum a1.tar.gz a2.tar.gz          # the skill archive: the same twice
    tar -xzf a1.tar.gz --to-stdout "capsule-cli-${V#v}/skills/deal/SKILL.md" | sha256sum
-   git show "$V:skills/deal/SKILL.md" | sha256sum   # must equal the line above
+   git -C "$CLONE" fetch --tags origin
+   git -C "$CLONE" show "$V:skills/deal/SKILL.md" | sha256sum   # must equal the line above
    ```
 
    Record the tag, its commit, each binary's SHA-256, the attestation bundle's, the skill
@@ -112,7 +117,7 @@ when the install page moves to the new triple (step 5).
    - the title and every row;
    - no console error;
    - a tampered copy reads as failing verification.
-8. **One deploy** (maintainer decision), held until steps 1 to 7 are reported.
+8. **One deploy** (maintainer decision), held until A to C and steps 1 to 7 are reported.
 
 **Acceptance is a fresh install on a clean machine,** running a real deal check end to end against
 the new triple. It is the maintainer's own run, not a fixture. If a previous release left profiles
