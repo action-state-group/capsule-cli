@@ -292,6 +292,13 @@ type reportBuildResult struct {
 	BundleDigest      string   `json:"bundle_digest"`
 	Verification      string   `json:"verification"`
 	Draft             bool     `json:"draft"`
+	// Verdict is `verify --bundle`'s own verdict on the bundle (VALID,
+	// INCOMPLETE or INVALID), and UnmetClaims the claims that kept it from
+	// VALID. Page says whether the page was written: only for a VALID
+	// bundle (pageGate), else "not written".
+	Verdict     string   `json:"verdict"`
+	UnmetClaims []string `json:"unmet_claims,omitempty"`
+	Page        string   `json:"page"`
 }
 
 func reportCommands() *cobra.Command {
@@ -365,17 +372,35 @@ func reportCommands() *cobra.Command {
 				return err
 			}
 		}
-		html, err := emitter.EmitEvidenceGraphHTML(value, evidenceGraphIIFE)
-		if err != nil {
-			return err
-		}
 		// Everything the output reports is computed before the page is
 		// written, so a failure here leaves nothing on disk.
 		digest, err := aacbundle.BundleDigest(value)
 		if err != nil {
 			return err
 		}
-		result := reportBuildResult{Root: root.id, Form: root.form, Member: root.member, Card: card, Claims: len(checked.claims), UnsupportedClaims: unsupportedClaims(value, checked), ContractRefs: checked.contracts, Report: out, BundleDigest: digest, Verification: verification, Draft: dryRun}
+		result := reportBuildResult{Root: root.id, Form: root.form, Member: root.member, Card: card, Claims: len(checked.claims), UnsupportedClaims: unsupportedClaims(value, checked), ContractRefs: checked.contracts, Report: out, BundleDigest: digest, Verification: verification, Draft: dryRun, Page: "written"}
+		if reread, err := json.Marshal(value); err == nil {
+			if judged, err := decodeBundleJSON(reread); err == nil {
+				verdict, claims := bundleVerdict(judged, nil)
+				result.Verdict, result.UnmetClaims = verdict, unmetClaims(claims)
+			}
+		}
+		// A page is written only when it can stand behind what it shows, as
+		// for every other page this tool writes: the bundle must be VALID by
+		// `verify --bundle`'s own verdict (pageGate), which also checks every
+		// record's signature and the checkpoint's. Otherwise the result is
+		// still reported, and the refusal says why.
+		if err := pageGate(value); err != nil {
+			result.Page, result.Report = "not written", ""
+			if outErr := output(c, result); outErr != nil {
+				return outErr
+			}
+			return err
+		}
+		html, err := emitter.EmitEvidenceGraphHTML(value, evidenceGraphIIFE)
+		if err != nil {
+			return err
+		}
 		if permalink && !dryRun {
 			// Over the same map the page embeds, so both carriers hold
 			// identical bytes.
