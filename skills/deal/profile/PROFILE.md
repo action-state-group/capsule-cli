@@ -448,14 +448,26 @@ A deal profile may pin an external rules checker: the user's policy (`profile up
 under a trusted plugin root, and the profile pins its SHA-256.
 
 At every check, after the `check` record is sealed:
-- **What the checker gets.** The command runs exactly as pinned, with only `PATH` and `HOME` in
-  its environment. On stdin it gets one JSON object: that `check` capsule, with its disclosed
-  `agent_input` (the deal record, whose body is what is about to happen). It gets no history,
-  so a limit over a rolling window is evaluated over this one action.
+- **What the checker gets.** The command runs exactly as pinned, from a private copy of the
+  executable bytes that were hashed, with only `PATH` and `HOME` in its environment. On stdin it
+  gets one `external-check-input/v0` object (`external-check-input-v0.schema.json`, beside this
+  file):
+  - `record`: that `check` capsule, with its disclosed `agent_input` (the deal record, whose
+    body is what is about to happen);
+  - `history`: the profile's earlier sealed acts with an amount, from every deal on this
+    profile's own store, sealed in the last 31 days, newest first, at most 1,000 of them, in the
+    same shape;
+  - `history_scope`: `{days, max_records, complete}`.
+
+  A rolling window is evaluated over the history the deal check supplies. A checker given no
+  history, or too little (`complete` false, or a window longer than `days`), reports that rule
+  `not_evaluable`.
 - **What it prints.** Exit 0 means it printed one `external-check-result/v0` object
   (`external-check-result-v0.schema.json`, beside this file): `ruleset_id`, `definition_digest`,
   `verdict` (`allow`\|`deny`\|`escalate`\|`not_evaluable`) and `findings[]` (`{id, check,
-  verdict: pass|fail|not_applicable|not_evaluable, reason, limit, value}`, passes included).
+  verdict: pass|fail|not_applicable|not_evaluable, reason, limit, value}`, passes included;
+  `limit` and `value` are each a number, or a string of at most 64 characters with no line
+  break).
   Members outside the schema are refused. Any other exit is a refusal of the input, with the
   cause on stderr.
 - **What the check does with it.** It folds the answer into its one verdict:
@@ -469,7 +481,8 @@ At every check, after the `check` record is sealed:
 
 The verdict's `rules` seals the outcome as data:
 - `status: evaluated`, with `ruleset_id`, `definition_digest`, `checker_sha256`, `verdict`,
-  `findings` (each `{id, check, verdict, limit, value}`), and `window: this_action_only`;
+  `findings` (each `{id, check, verdict, limit, value}`), and `history` (`{days, acts, complete}`:
+  what the checker was given beside the record);
 - `status: not_evaluated`, with `cause` (`checker_unavailable`, `checker_changed`, `refused`,
   `timeout`, `unreadable` or `ruleset_changed`) and `checker_sha256`;
 - `status: not_configured`, when no checker is pinned. That check does not pause for it, but its

@@ -538,8 +538,10 @@ checker is configured, the check does not pause for it, and its text says
 "Your rules were not checked: no rules checker configured." If a configured
 checker fails, times out or was changed since it was pinned, the check pauses
 and says "Your rules were not checked:" with the reason. A limit over a week
-is checked against this one action alone, and the text says so: never tell
-the user a weekly total was checked.
+is checked against the profile's earlier payments, which the check gives the
+checker; when it could not be, the text says the rules were not fully
+checked. Never tell the user a limit was checked when the text does not say
+so.
 
 In a deal opened with `deal open --records typed`, the steps are sealed as
 typed action records. A passing check is itself the authority to act (no

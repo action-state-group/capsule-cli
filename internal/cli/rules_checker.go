@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -39,10 +40,20 @@ const (
 	rulesTimeoutDefault = 10 * time.Second
 	rulesTimeoutMax     = 60 * time.Second
 	rulesMaxOutput      = 1 << 20
-	// The checker is given this one record and no history, so a limit over
-	// a rolling window is evaluated over this action alone: sealed and said.
-	rulesWindowThisActionOnly = "this_action_only"
+	rulesMaxExecutable  = 256 << 20
+	externalCheckInput  = "external-check-input/v0"
+	// The history a checker is given: the profile's sealed acts with an
+	// amount, from every deal, sealed in the last rulesHistoryDays days, the
+	// most recent rulesHistoryMax of them.
+	rulesHistoryDays = 31
 )
+
+// rulesHistoryMax is the most acts a checker's history holds (a variable
+// for tests).
+var rulesHistoryMax = 1000
+
+// rulesBeforeExec runs between hashing the checker and running it (tests).
+var rulesBeforeExec = func() {}
 
 // rulesCheckerPin is the file `profile update --rules-checker` reads.
 type rulesCheckerPin struct {
@@ -140,7 +151,17 @@ type dealRules struct {
 	CheckerSHA256    string             `json:"checker_sha256,omitempty"`
 	Verdict          string             `json:"verdict,omitempty"`
 	Findings         []dealRulesFinding `json:"findings,omitempty"`
-	Window           string             `json:"window,omitempty"`
+	// History is what the checker was given beside the record.
+	History *dealRulesHistory `json:"history,omitempty"`
+}
+
+// dealRulesHistory states the history a checker was given: how many earlier
+// acts, over how many days, and whether that is all of them (false when
+// more than the cap were sealed, or some could not be read).
+type dealRulesHistory struct {
+	Days     int  `json:"days"`
+	Acts     int  `json:"acts"`
+	Complete bool `json:"complete"`
 }
 
 // externalCheckResult is the neutral shape a checker prints.
@@ -208,10 +229,14 @@ func parseExternalCheck(out []byte) (externalCheckResult, error) {
 	return r, nil
 }
 
-// runRulesChecker runs the profile's pinned checker on one record (the
-// capsule with its disclosed input) and says what came of it. It never
-// errors: a checker that could not answer is a result too.
-func runRulesChecker(ctx context.Context, p Profile, record []byte) dealRules {
+// runRulesChecker runs the profile's pinned checker on its input (the
+// record of what is about to happen, with the history) and says what came of
+// it. It never errors: a checker that could not answer is a result too.
+//
+// It runs exactly the bytes it hashed: the executable is read once, hashed,
+// and run from a private copy, so a file swapped after the check is not what
+// runs.
+func runRulesChecker(ctx context.Context, p Profile, input []byte, history *dealRulesHistory) dealRules {
 	pin := p.RulesChecker
 	if len(pin.Command) == 0 {
 		return dealRules{Status: "not_configured"}
@@ -219,22 +244,24 @@ func runRulesChecker(ctx context.Context, p Profile, record []byte) dealRules {
 	notEvaluated := func(cause, why string) dealRules {
 		return dealRules{Status: "not_evaluated", Cause: cause, Reason: why, CheckerSHA256: pin.SHA256}
 	}
-	sum, err := trustedExecutableDigest(pin.Command[0])
+	copied, sum, cleanup, err := privateExecutableCopy(pin.Command[0])
+	defer cleanup()
 	switch {
 	case err != nil:
 		return notEvaluated("checker_unavailable", "the pinned rules checker cannot be run: "+SafeError(err))
 	case sum != pin.SHA256:
 		return notEvaluated("checker_changed", "the rules checker changed since it was pinned; re-pin it with profile update --rules-checker FILE")
 	}
+	rulesBeforeExec()
 	timeout, err := rulesTimeout(pin.Timeout)
 	if err != nil {
 		return notEvaluated("checker_unavailable", SafeError(err))
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, pin.Command[0], pin.Command[1:]...)
+	cmd := exec.CommandContext(ctx, copied, pin.Command[1:]...)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME")}
-	cmd.Stdin = bytes.NewReader(record)
+	cmd.Stdin = bytes.NewReader(input)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &limitedWriter{w: &stdout, n: rulesMaxOutput}, &limitedWriter{w: &stderr, n: 4096}
 	killGroupOnCancel(cmd)
@@ -258,7 +285,59 @@ func runRulesChecker(ctx context.Context, p Profile, record []byte) dealRules {
 		return notEvaluated("ruleset_changed", "the ruleset changed since it was pinned ("+result.RulesetID+" reports another definition digest); re-pin it with profile update --rules-checker FILE")
 	}
 	return dealRules{Status: "evaluated", RulesetID: result.RulesetID, DefinitionDigest: result.DefinitionDigest, CheckerSHA256: pin.SHA256,
-		Verdict: result.Verdict, Findings: result.Findings, Window: rulesWindowThisActionOnly}
+		Verdict: result.Verdict, Findings: result.Findings, History: history}
+}
+
+// privateExecutableCopy reads the executable at path once (under a trusted
+// plugin root), hashes those bytes and writes them to a new file in a private
+// directory: the copy runs, so what runs is what was hashed. cleanup removes
+// it.
+func privateExecutableCopy(path string) (copied, sum string, cleanup func(), err error) {
+	cleanup = func() {}
+	if err = verifyTrustedPath(path); err != nil {
+		return "", "", cleanup, err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", "", cleanup, err
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, rulesMaxExecutable+1))
+	f.Close()
+	if err != nil {
+		return "", "", cleanup, err
+	}
+	if len(raw) > rulesMaxExecutable {
+		return "", "", cleanup, errors.New("the rules checker is larger than 256 MiB")
+	}
+	digest := sha256.Sum256(raw)
+	sum = hex.EncodeToString(digest[:])
+	base := ""
+	if cache, e := os.UserCacheDir(); e == nil {
+		// Under the user's cache, not the system temp directory, which may
+		// not allow running files.
+		base = filepath.Join(cache, "capsulectl")
+		if e = os.MkdirAll(base, 0o700); e != nil {
+			base = ""
+		}
+	}
+	dir, err := os.MkdirTemp(base, "rules-checker-")
+	if err != nil {
+		return "", "", cleanup, err
+	}
+	cleanup = func() { _ = os.RemoveAll(dir) }
+	copied = filepath.Join(dir, filepath.Base(path))
+	out, err := os.OpenFile(copied, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
+	if err != nil {
+		return "", "", cleanup, err
+	}
+	if _, err = out.Write(raw); err != nil {
+		out.Close()
+		return "", "", cleanup, err
+	}
+	if err = out.Close(); err != nil {
+		return "", "", cleanup, err
+	}
+	return copied, sum, cleanup, nil
 }
 
 func firstLine(s string) string {
@@ -303,7 +382,11 @@ func rulesStatusLine(r *dealRules) string {
 			short = short[:8]
 		}
 		words := map[string]string{"allow": "allowed", "deny": "not allowed", "escalate": "needs your approval", "not_evaluable": "not fully checked"}[r.Verdict]
-		return fmt.Sprintf("Your rules (%s, digest %s): %s. Any weekly limit was checked against this action alone.", r.RulesetID, short, words)
+		line := fmt.Sprintf("Your rules (%s, digest %s): %s.", r.RulesetID, short, words)
+		if h := r.History; h != nil && !h.Complete {
+			line += fmt.Sprintf(" They were given only %d of your earlier payments from the last %d days.", h.Acts, h.Days)
+		}
+		return line
 	case "not_configured":
 		return "Your rules were not checked: no rules checker configured."
 	default:
@@ -359,6 +442,10 @@ func compactJSON(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return "not stated"
 	}
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		return text
+	}
 	var b bytes.Buffer
 	if json.Compact(&b, raw) != nil {
 		return "not stated"
@@ -377,10 +464,33 @@ func findingField(id string) string {
 	return f
 }
 
-// rulesInput is the one record a rules checker reads: the sealed capsule of
-// the step about to be checked, with its disclosed agent_input (the deal
-// record, whose body is what is about to happen), as a bundle carries it.
-func (s *dealSession) rulesInput(ctx context.Context, capsuleID string) ([]byte, error) {
+// rulesInput is what a rules checker reads on stdin, one
+// external-check-input/v0 object: the record (the sealed capsule of the step
+// about to be checked, with its disclosed agent_input, whose body is what is
+// about to happen) and the history (the profile's earlier sealed acts with an
+// amount, from every deal, in the same shape), as data. capsulectl names no
+// rule: a checker with a limit over a rolling window evaluates it over the
+// history, and reports it not_evaluable when that is not enough.
+func (s *dealSession) rulesInput(ctx context.Context, capsuleID string) ([]byte, *dealRulesHistory, error) {
+	record, err := s.capsuleWithInput(ctx, capsuleID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if record == nil {
+		return nil, nil, errors.New("the checked step's record is not retained")
+	}
+	history, scope, err := s.rulesHistory(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	raw, err := json.Marshal(map[string]interface{}{"schema": externalCheckInput, "record": record, "history": history,
+		"history_scope": map[string]interface{}{"days": scope.Days, "max_records": rulesHistoryMax, "complete": scope.Complete}})
+	return raw, scope, err
+}
+
+// capsuleWithInput is a sealed capsule with its disclosed agent_input; nil
+// when the input is not retained.
+func (s *dealSession) capsuleWithInput(ctx context.Context, capsuleID string) (map[string]interface{}, error) {
 	capsule, err := getCapsule(ctx, s.t.artifacts, capsuleID)
 	if err != nil {
 		return nil, err
@@ -392,8 +502,58 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string) ([]byte,
 	members, _ := overlay[capsuleID].(map[string]interface{})
 	input, ok := members["agent_input"]
 	if !ok {
-		return nil, errors.New("the checked step's record is not retained")
+		return nil, nil
 	}
 	capsule["agent_input"] = input
-	return json.Marshal(capsule)
+	return capsule, nil
+}
+
+// rulesHistory is the profile's sealed acts with an amount, from every deal
+// on this profile's own store, sealed in the last rulesHistoryDays days,
+// newest first and at most rulesHistoryMax of them, with what it covers.
+func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRulesHistory, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT capsule_id, local FROM deal_steps WHERE kind='act'`)
+	if err != nil {
+		return nil, nil, err
+	}
+	type act struct {
+		id string
+		at time.Time
+	}
+	var acts []act
+	since := dealClock().Add(-rulesHistoryDays * 24 * time.Hour)
+	for rows.Next() {
+		var id, local string
+		if err = rows.Scan(&id, &local); err != nil {
+			return nil, nil, errors.Join(err, rows.Close())
+		}
+		var ev dealEvent
+		if json.Unmarshal([]byte(local), &ev) != nil || ev.Act == nil || ev.Act.AmountMinor == nil {
+			continue
+		}
+		at, e := time.Parse(time.RFC3339, ev.At)
+		if e != nil || at.Before(since) {
+			continue
+		}
+		acts = append(acts, act{id, at})
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, nil, err
+	}
+	sort.SliceStable(acts, func(i, j int) bool { return acts[i].at.After(acts[j].at) })
+	scope := &dealRulesHistory{Days: rulesHistoryDays, Complete: true}
+	if len(acts) > rulesHistoryMax {
+		acts, scope.Complete = acts[:rulesHistoryMax], false
+	}
+	history := []interface{}{}
+	for _, a := range acts {
+		record, err := s.capsuleWithInput(ctx, a.id)
+		if err != nil || record == nil {
+			scope.Complete = false
+			continue
+		}
+		history = append(history, record)
+	}
+	scope.Acts = len(history)
+	return history, scope, nil
 }

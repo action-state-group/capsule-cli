@@ -316,7 +316,7 @@ func rulesBody(r dealRules) (map[string]interface{}, error) {
 	// value. The card the user saw, with every reason, is committed to.
 	m := map[string]interface{}{"status": r.Status}
 	for k, v := range map[string]string{"cause": r.Cause, "ruleset_id": r.RulesetID, "definition_digest": r.DefinitionDigest,
-		"checker_sha256": r.CheckerSHA256, "verdict": r.Verdict, "window": r.Window} {
+		"checker_sha256": r.CheckerSHA256, "verdict": r.Verdict} {
 		if v != "" {
 			m[k] = v
 		}
@@ -343,6 +343,9 @@ func rulesBody(r dealRules) (map[string]interface{}, error) {
 			findings[i] = fm
 		}
 		m["findings"] = findings
+		if h := r.History; h != nil {
+			m["history"] = map[string]interface{}{"days": h.Days, "acts": h.Acts, "complete": h.Complete}
+		}
 	}
 	return m, nil
 }

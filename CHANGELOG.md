@@ -8,12 +8,20 @@
   FILE`): a command under a trusted plugin root, pinned by its executable's SHA-256 and,
   optionally, by the definition digest of the ruleset it must report. It is the user's policy,
   never the agent's.
-  - **What it gets.** Every `deal check` runs it on one record, the capsule of the step being
-    checked with its disclosed record, on stdin.
+  - **What it gets.** Every `deal check` runs it, from a private copy of the exact bytes it
+    hashed, with one `external-check-input/v0` object on stdin
+    (`skills/deal/profile/external-check-input-v0.schema.json`):
+    - the capsule of the step being checked, with its disclosed record;
+    - as history, the profile's sealed acts with an amount from every deal in the last 31
+      days (at most 1,000), stating whether that is all of them.
+
+    A rolling limit is evaluated over that history. A checker given too little reports it
+    `not_evaluable`, and the check pauses.
   - **What it prints.** One `external-check-result/v0` object: the ruleset's id and definition
-    digest, a verdict (`allow`, `deny`, `escalate` or `not_evaluable`), and its findings. The
-    schema ships at `skills/deal/profile/external-check-result-v0.schema.json`, and output
-    outside it is refused.
+    digest, a verdict (`allow`, `deny`, `escalate` or `not_evaluable`), and its findings, each
+    limit and value a number or a short line. The schema ships at
+    `skills/deal/profile/external-check-result-v0.schema.json`, and output outside it is
+    refused.
 - **One verdict, one prompt.** The checker's answer folds into the check's own differences.
   - **`deny`** is a new verdict: the card names the rule, its limit and the value, and offers
     only "Hold". An approval to proceed is refused.
@@ -27,8 +35,8 @@
 - **Sealed (wire, additive).**
   - The `x-deal-v0` verdict gains `result: "deny"` and `rules`: the status, the ruleset id and
     definition digest, the checker's SHA-256, the verdict, every finding (id, verdict, limit,
-    value), and `window: "this_action_only"`. The checker is given one action, so a weekly
-    limit is evaluated over that action alone. A checker that was not evaluated seals a
+    value), and `history` (how many earlier acts the checker was given, over how many days, and
+    whether that is all of them). A checker that was not evaluated seals a
     `cause` token. No words the checker wrote are sealed in the clear: they reach the card,
     which is committed to.
   - Typed records: `action-evaluation/v0` gains disposition `DENY` and `rules_checks`, and

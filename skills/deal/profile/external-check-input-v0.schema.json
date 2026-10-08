@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/profiles/x-deal-v0/external-check-input-v0.schema.json",
+  "title": "external-check-input/v0",
+  "description": "What a deal check writes to an external rules checker's stdin, as one JSON object: the record of what is about to happen and, as history, the profile's earlier sealed acts with an amount, from every deal on the profile's own store, sealed in the last history_scope.days days, newest first and at most history_scope.max_records of them. Each record is a sealed capsule with its disclosed agent_input (the deal record, whose body holds the step): the shape of one record of a deal export. The checker answers with one external-check-result/v0 (external-check-result-v0.schema.json). A rolling window is evaluated over this history; when history_scope.complete is false, or the window is longer than history_scope.days, a rule over it is not_evaluable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "record",
+    "history",
+    "history_scope"
+  ],
+  "properties": {
+    "schema": {
+      "const": "external-check-input/v0"
+    },
+    "record": {
+      "$ref": "#/$defs/record",
+      "description": "The step being checked."
+    },
+    "history": {
+      "description": "The profile's earlier sealed acts with an amount, newest first. It can hold acts of the deal being checked. An act the agent took after a check carries the act in agent_input.body (action, amount_minor, currency, direction out or in, rail); one taken without a check is sealed as an unchecked action and carries it in agent_input.body.unchecked. Both count as spending.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    "history_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "days",
+        "max_records",
+        "complete"
+      ],
+      "properties": {
+        "days": {
+          "description": "How far back the history reaches, in days.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_records": {
+          "description": "The most acts the history holds.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "complete": {
+          "description": "true: every such act sealed in those days is in the history. false: more were sealed than max_records, or some could not be read.",
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "record": {
+      "type": "object",
+      "required": [
+        "capsule_id",
+        "agent_input"
+      ],
+      "properties": {
+        "capsule_id": {
+          "type": "string"
+        },
+        "agent_input": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

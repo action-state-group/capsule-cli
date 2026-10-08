@@ -1450,15 +1450,15 @@ func dealCheckCommand() *cobra.Command {
 			result.Differences = append(result.Differences, result.Remote.Differences...)
 			// The profile's rules, by its pinned checker, on the record of
 			// what is about to happen (the capsule just sealed, with its
-			// disclosed record). One verdict and one prompt with the check's
-			// own differences.
+			// disclosed record) and the profile's recent acts. One verdict and
+			// one prompt with the check's own differences.
 			rules := dealRules{Status: "not_configured"}
 			if len(s.p.RulesChecker.Command) > 0 {
-				input, err := s.rulesInput(ctx, snapped.CapsuleID)
+				input, history, err := s.rulesInput(ctx, snapped.CapsuleID)
 				if err != nil {
 					return err
 				}
-				rules = runRulesChecker(ctx, s.p, input)
+				rules = runRulesChecker(ctx, s.p, input, history)
 			}
 			result.Rules = &rules
 			result.Differences = append(result.Differences, rulesDifferences(&rules)...)

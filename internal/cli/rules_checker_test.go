@@ -3,15 +3,18 @@ package cli
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-const exampleRulesDigest = "61a3c8954f2b8e7d0c1a6b5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c"
+// An arbitrary digest: no real ruleset has it.
+const exampleRulesDigest = "abababababababababababababababababababababababababababababababab"
 
 // stubChecker writes an executable checker script into a trusted plugin root
 // (the test's own) and returns its path. It saves the record it is given
@@ -34,8 +37,8 @@ func checkerPrints(verdict string, findings string) string {
 }
 
 const (
-	passFinding = `{"id":"per-purchase","check":"caps/1","verdict":"pass","limit":{"per_action_minor":2500},"value":{"field":"spend_authorized_minor","minor":480}}`
-	denyFinding = `{"id":"per-purchase","check":"caps/1","verdict":"fail","reason":"over the per-purchase limit","limit":{"per_action_minor":2500},"value":{"field":"spend_authorized_minor","minor":55880}}`
+	passFinding = `{"id":"per-purchase","check":"caps/1","verdict":"pass","limit":2500,"value":480}`
+	denyFinding = `{"id":"per-purchase","check":"caps/1","verdict":"fail","reason":"over the per-purchase limit","limit":2500,"value":55880}`
 )
 
 func writePin(t *testing.T, pin map[string]any) string {
@@ -76,9 +79,9 @@ func TestADealCheckRunsThePinnedRulesChecker(t *testing.T) {
 	assert.Equal(t, "example-rules/1.0.0", rules["ruleset_id"])
 	assert.Equal(t, exampleRulesDigest, rules["definition_digest"])
 	assert.Equal(t, "allow", rules["verdict"])
-	assert.Equal(t, "this_action_only", rules["window"])
+	assert.Equal(t, map[string]any{"days": float64(31), "acts": float64(0), "complete": true}, rules["history"])
 	text := approvalText(check)
-	assert.True(t, strings.HasPrefix(text, "Your rules (example-rules/1.0.0, digest 61a3c895): allowed. Any weekly limit was checked against this action alone."), text)
+	assert.True(t, strings.HasPrefix(text, "Your rules (example-rules/1.0.0, digest abababab): allowed.\n"), text)
 	assert.Contains(t, text, "Before you go ahead: no differences.")
 	assert.NotContains(t, text, "Deal check")
 	assert.NotContains(t, text, "Stale after", "the stale line stays in the record, out of the prompt")
@@ -87,8 +90,24 @@ func TestADealCheckRunsThePinnedRulesChecker(t *testing.T) {
 	require.NoError(t, err)
 	var input map[string]any
 	require.NoError(t, json.Unmarshal(raw, &input))
-	assert.Equal(t, check["snapshot_id"], input["capsule_id"], "one capsule: the record of what is about to happen")
-	assert.Equal(t, "pay", input["agent_input"].(map[string]any)["body"].(map[string]any)["action"], "with its disclosed record")
+	assert.Equal(t, "external-check-input/v0", input["schema"])
+	record := input["record"].(map[string]any)
+	assert.Equal(t, check["snapshot_id"], record["capsule_id"], "one capsule: the record of what is about to happen")
+	assert.Equal(t, "pay", record["agent_input"].(map[string]any)["body"].(map[string]any)["action"], "with its disclosed record")
+	assert.Equal(t, []any{}, input["history"])
+	assert.Equal(t, map[string]any{"days": float64(31), "max_records": float64(1000), "complete": true}, input["history_scope"])
+	assert.NotContains(t, text, "weekly", "the prompt makes no claim about a window")
+	inputSchema, err := os.ReadFile(filepath.Join(dealProfileDir, "external-check-input-v0.schema.json"))
+	require.NoError(t, err)
+	doc, err := jsonschema.UnmarshalJSON(strings.NewReader(string(inputSchema)))
+	require.NoError(t, err)
+	c := jsonschema.NewCompiler()
+	require.NoError(t, c.AddResource("input.json", doc))
+	compiled, err := c.Compile("input.json")
+	require.NoError(t, err)
+	given, err := jsonschema.UnmarshalJSON(strings.NewReader(string(raw)))
+	require.NoError(t, err)
+	assert.NoError(t, compiled.Validate(given), "what the checker is given fits external-check-input/v0")
 
 	records, export := exportRecords(t, id)
 	var sealed map[string]any
@@ -120,8 +139,8 @@ func TestADenyFromTheRulesOffersNoWayToProceed(t *testing.T) {
 		options = append(options, o.(map[string]any)["id"].(string))
 	}
 	assert.Equal(t, []string{"hold"}, options, "no proceed option")
-	assert.Contains(t, check["card"], `Not allowed by your rules: per-purchase: over the per-purchase limit (limit {"per_action_minor":2500}; value {"field":"spend_authorized_minor","minor":55880})`)
-	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest 61a3c895): not allowed.")
+	assert.Contains(t, check["card"], `Not allowed by your rules: per-purchase: over the per-purchase limit (limit 2500; value 55880)`)
+	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not allowed.")
 	_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "go ahead")
 	require.ErrorIs(t, err, ErrInput, "a denied check cannot be approved past")
 	report := dealRun(t, "report", "--deal", id)
@@ -161,6 +180,57 @@ func TestAnEscalationPausesWithPayAnyway(t *testing.T) {
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Contains(t, check["card"], "Your rules ask for approval: per-purchase")
 	assert.Contains(t, check["card"], "[Pay anyway]")
+}
+
+// The checker's own not_evaluable pauses, naming the rule it could not
+// evaluate; proceeding over it is an override.
+func TestANotEvaluableFromTheRulesPauses(t *testing.T) {
+	id := stickerDeal(t, "card", false)
+	finding := `{"id":"weekly","check":"window","verdict":"not_evaluable","reason":"the record carries no week of history"}`
+	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-unevaluable", checkerPrints("not_evaluable", passFinding+","+finding))}})
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
+	assert.Equal(t, "pause", check["verdict"])
+	assert.Contains(t, check["card"], "Your rules were not fully checked: weekly: the record carries no week of history")
+	assert.Contains(t, check["card"], "[Pay anyway]")
+	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not fully checked.")
+	var rules []string
+	for _, d := range check["differences"].([]any) {
+		rules = append(rules, d.(map[string]any)["rule"].(string))
+	}
+	assert.Equal(t, []string{"rules_not_evaluable"}, rules)
+	_, export := exportRecords(t, id)
+	checkProfile(t, export)
+}
+
+// A finding's limit and value are a number or a short line: anything else
+// (an object, prose) is malformed output, and the check pauses.
+func TestAFindingsLimitAndValueAreScalars(t *testing.T) {
+	for name, finding := range map[string]string{
+		"an object":   `{"id":"cap","verdict":"pass","limit":{"minor":2500}}`,
+		"a long text": `{"id":"cap","verdict":"pass","value":"` + strings.Repeat("x", 65) + `"}`,
+		"two lines":   `{"id":"cap","verdict":"pass","value":"a\nb"}`,
+	} {
+		_, err := parseExternalCheck([]byte(`{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"allow","findings":[` + finding + `]}`))
+		assert.Error(t, err, name)
+	}
+	_, err := parseExternalCheck([]byte(`{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"allow","findings":[{"id":"cap","verdict":"pass","limit":2500,"value":"USD 4.80"}]}`))
+	assert.NoError(t, err)
+}
+
+// The bytes that were hashed are the bytes that run: a checker swapped
+// after its digest was checked is not what executes.
+func TestTheHashedCheckerIsTheOneThatRuns(t *testing.T) {
+	id := stickerDeal(t, "card", false)
+	checker := stubChecker(t, "rules", checkerPrints("allow", passFinding))
+	pinChecker(t, map[string]any{"command": []string{checker}})
+	old := rulesBeforeExec
+	rulesBeforeExec = func() {
+		require.NoError(t, os.WriteFile(checker, []byte("#!/bin/sh\n"+checkerPrints("deny", denyFinding)+"\n"), 0o700))
+	}
+	t.Cleanup(func() { rulesBeforeExec = old })
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
+	assert.Equal(t, "pass", check["verdict"], "the pinned bytes ran, not the swapped file")
+	assert.Equal(t, "allow", check["rules"].(map[string]any)["verdict"])
 }
 
 // A configured checker that cannot answer pauses the check, saying why, and
@@ -251,27 +321,86 @@ func TestTheExternalCheckResultSchemaShips(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// The shipped stub checker (testdata), run as a profile pins it: it allows
-// under its limit and denies over it, naming the limit and the value.
-func TestTheStubCheckerAllowsAndDenies(t *testing.T) {
-	stub, err := os.ReadFile("testdata/rules-checker/stub-checker.sh")
+// pinStub pins the shipped stub checker (testdata) with its limits.
+func pinStub(t *testing.T, limits ...string) {
+	t.Helper()
+	stub, err := os.ReadFile("testdata/rules-checker/stub-checker.py")
 	require.NoError(t, err)
+	root := t.TempDir()
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	path := filepath.Join(root, "stub-checker")
+	require.NoError(t, os.WriteFile(path, stub, 0o700))
+	pinChecker(t, map[string]any{"command": append([]string{path}, limits...), "definition_digest": strings.Repeat("0", 63) + "1"})
+}
+
+// The shipped stub checker, run as a profile pins it: it allows under its
+// per-action limit and denies over it, naming the limit and the value.
+func TestTheStubCheckerAllowsAndDenies(t *testing.T) {
 	for limit, want := range map[string]string{"1000": "pass", "100": "deny"} {
 		t.Run(limit, func(t *testing.T) {
 			id := stickerDeal(t, "card", false)
-			root := t.TempDir()
-			t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
-			path := filepath.Join(root, "stub-checker")
-			require.NoError(t, os.WriteFile(path, stub, 0o700))
-			pinChecker(t, map[string]any{"command": []string{path, limit}, "definition_digest": strings.Repeat("0", 63) + "1"})
+			pinStub(t, limit)
 			check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 			assert.Equal(t, want, check["verdict"])
 			assert.Equal(t, "stub-rules/0.1.0", check["rules"].(map[string]any)["ruleset_id"])
 			if want == "deny" {
-				assert.Contains(t, check["card"], `Not allowed by your rules: per-action: over the per-action limit (limit {"per_action_minor":100}; value {"minor":480})`)
+				assert.Contains(t, check["card"], `Not allowed by your rules: per-action: over the per-action limit (limit 100; value 480)`)
 			}
 		})
 	}
+}
+
+// A rolling window is evaluated over the history the check supplies: the
+// profile's earlier sealed acts, from every deal. Under the 7-day limit the
+// check passes; with an earlier payment that takes the week over it, the
+// check denies, naming the week's total.
+func TestARollingLimitIsCheckedOverTheHistory(t *testing.T) {
+	id := stickerDeal(t, "card", false)
+	pinStub(t, "2500", "10000")
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
+	assert.Equal(t, "pass", check["verdict"], "no earlier payment: 480 of 10000")
+
+	// Another deal on the same profile.
+	other := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+		"intent":{"verbatim":"buy a pack of stickers","max_total_minor":10000,"allowed":["pay"]},
+		"who":{"name":"Sticker Marketplace","domain":"stickers.example"},
+		"terms":{"item":"sticker pack","price_minor":9800,"currency":"USD"},
+		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	dealRun(t, "note", "--deal", other, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":9800,"payee":"Sticker Marketplace","rail":"card","reference":"r1"}`))
+	check = dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
+	assert.Equal(t, "deny", check["verdict"])
+	assert.Equal(t, map[string]any{"days": float64(31), "acts": float64(1), "complete": true}, check["rules"].(map[string]any)["history"])
+	assert.Contains(t, check["card"], "Not allowed by your rules: weekly: over the 7-day limit (limit 10000; value 10280)")
+}
+
+// A checker given no history, or history it is told is not complete,
+// reports the window not_evaluable, and the check pauses saying the rules
+// were not fully checked. The prompt says how much history was given.
+func TestARollingLimitWithTooLittleHistoryIsNotFullyChecked(t *testing.T) {
+	stub, err := filepath.Abs("testdata/rules-checker/stub-checker.py")
+	require.NoError(t, err)
+	cmd := exec.Command(stub, "2500", "10000")
+	cmd.Stdin = strings.NewReader(`{"schema":"external-check-input/v0","record":{"capsule_id":"c","agent_input":{"body":{"action":"pay","amount_minor":480}}}}`)
+	out, err := cmd.Output()
+	require.NoError(t, err)
+	result, err := parseExternalCheck(out)
+	require.NoError(t, err)
+	assert.Equal(t, "not_evaluable", result.Verdict, "no history: the week cannot be evaluated")
+
+	old := rulesHistoryMax
+	rulesHistoryMax = 1
+	t.Cleanup(func() { rulesHistoryMax = old })
+	id := stickerDeal(t, "card", false)
+	pinStub(t, "2500", "10000")
+	for _, ref := range []string{"r1", "r2"} {
+		dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":100,"payee":"Sticker Marketplace","rail":"card","reference":"`+ref+`"}`))
+	}
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
+	assert.Equal(t, "pause", check["verdict"])
+	assert.Contains(t, check["card"], "Your rules were not fully checked: weekly: the 7-day total needs every earlier payment of the week")
+	assert.Contains(t, approvalText(check), "Your rules (stub-rules/0.1.0, digest 00000000): not fully checked. They were given only 1 of your earlier payments from the last 31 days.")
+	_, export := exportRecords(t, id)
+	checkProfile(t, export)
 }
 
 // The schema a checker vendors is the one the check validates against.
@@ -300,7 +429,7 @@ func TestASharedCopyCarriesNoneOfTheUsersRules(t *testing.T) {
 	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
 		_, raw := sharedCopy(t, id, audience, "the shop's support desk")
 		assert.NotContains(t, raw, "example-rules/", audience)
-		assert.NotContains(t, raw, "per_action_minor", audience)
+		assert.NotContains(t, raw, "limit 2500", audience)
 		assert.NotContains(t, raw, "over the per-purchase limit", audience)
 	}
 	own := filepath.Join(t.TempDir(), "own.json")
