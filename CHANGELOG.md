@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### A deal receipt's words for where the deal stands and the merchant's receipt
+
+Consumer wording only, on the receipt page and in the emailed receipt. No record type, field or verb
+changes. "receipt" is wording here, never a field, record type or key: a test keeps every deal and
+external-check schema free of one.
+- **An open deal** with no merchant email sealed yet reads "Open: waiting for the merchant's
+  receipt." One with the merchant's email sealed reads "Open: the merchant's email is sealed; no
+  close is sealed on this deal yet." Both are followed by the expected close date, as before.
+- **A completed close** reads "Closed at …: matched, nothing left to match." Other outcomes are
+  unchanged.
+- **A merchant email sealed after the close** reads "The merchant's receipt arrived. It matches what
+  you approved." or "The merchant's receipt arrived. It differs: you approved $48.00; their receipt
+  says $64.00." This applies only when an approved amount is on record (not only a limit). A copy
+  not confirmed by the merchant's signature says so. Shared copies keep their fixed words.
+- **The user's choice on a check** reads as the option was shown: "you chose Pay anyway" over a
+  finding, "you chose Hold". It used to read the option's id ("proceed", "hold").
+
 ### `deal check` runs the user's pinned rules checker and seals what it said
 
 - **Added:** a deal profile may pin an external rules checker (`profile update --rules-checker

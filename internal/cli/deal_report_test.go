@@ -48,7 +48,7 @@ func TestDealReportThreeParts(t *testing.T) {
 	report := dealRun(t, "report", "--deal", dealID)
 	assert.Equal(t, "rent me 2 jet skis Saturday", report["asked"])
 	assert.Equal(t, []string{
-		"check: Checked before paying: flagged (you asked for: item jet ski rental · quantity 2 · dates Saturday); you chose hold",
+		"check: Checked before paying: flagged (you asked for: item jet ski rental · quantity 2 · dates Saturday); you chose Hold",
 		"act: Did: pay $200.00 to M. Torres by Zelle ⚠️",
 	}, reportTexts(t, report, "did"))
 	assert.Equal(t, []string{
