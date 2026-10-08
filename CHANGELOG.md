@@ -24,6 +24,8 @@
 - **The deal skill** now says to always state `recourse` (the rail and whether it is refundable) on
   a pay, and to put a deposit the checkout asks for in `terms`.
 
+## v0.1.0-rc11
+
 ### A rules checker's answer that cannot be sealed pauses the check instead of failing it
 
 - **Fixed:** on the second purchase in a week, a checker's finding value such as "2000 authorised
@@ -35,6 +37,61 @@
   unchanged.
 - **Numeric limits and values:** a checker that reports `limit` and `value` as numbers (as the
   contract allows) is never caught this way.
+
+### `result build` and `report build`
+
+- `result build` seals a caller-supplied Evidence Result v0 into a jsonl profile's evidence book
+  as one `evidence_result` record, after checking it against the vendored schema, recomputing its
+  headline values, resolving every citation in the book, and walking each close claim's Close.
+  Only UNILATERAL close claims can be sealed end to end today; see `capsulectl result build
+  --help`.
+- `report build` verifies a held, disclosed bundle rooted at a sealed Result v0 and renders an
+  offline `report.html` (and, with `--permalink`, a viewer fragment over the same bytes), through
+  the same vendored evidence-graph viewer `deal report` embeds.
+- `disclose` / `permalink --attach-input-originals` (jsonl profiles): carry each published
+  capsule's retained agent_input original in the bundle, in the
+  `capsulectl/agent-input-originals/v1` extension, checked against the capsule's
+  `agent_input_digest`. Opt-in at disclose time; the book never stores an original.
+- **Changed:** `close --capsule-out`: a file already holding exactly the Close's bytes is now left
+  alone, so a repeat with the same flags succeeds as a no-op; a file holding anything else is
+  refused by name and nothing is overwritten. Before, any existing file at that path failed the
+  command.
+- **Changed:** `disclose --suppress agent_input` also withholds an agent_input original a book
+  record commits as a payload (records written by a pre-release build that stored originals in
+  the book); under `--payloads all` it refuses instead, since that mode cannot withhold a payload.
+- **Removed:** the `--html` flag on `bundle`, `disclose` and `permalink`. It was a stub that never
+  rendered a page; `report build` replaces it.
+
+### `book` verbs read another party's evidence book through a mesh node
+
+- **Added:** a `mesh-plugin` profile type, and read-only `book list|get|request|head` verbs that
+  ask another party's evidence book through a mesh node's `evidence-request/1` tool.
+  - Requests are sent and digested in canonical form, so a signed refusal binds to the request
+    that was sent.
+  - A refusal is accepted only if its Ed25519 signature verifies offline and it names that request.
+    `--responder-key` pins its signer.
+  - `book head` verifies the newest reported checkpoint's COSE statement and matches every reported
+    field to it. `--responder-checkpoint-key` pins its signer.
+- **The node token** is optional, redacted in `profile show`, sent only over https or to a loopback
+  address, and never follows a redirect. Storage verbs refuse the new profile type.
+
+### `book head` checks its pinned keys and requester id before sending
+
+- **Fixed:** `--responder-checkpoint-key` is checked like `--responder-key` (a 32-byte Ed25519 key in
+  hex) before anything is sent. A malformed one used to reach the node and fail only as a mismatch.
+- **Changed:** a requester id the request names must be a node's full peer id (64 lowercase hex),
+  not any non-empty string.
+
+### Dependencies
+
+- **The checkpointed-log library** moves from `github.com/action-state-group/cll-go` (an untagged
+  pseudo-version) to its successor module `github.com/action-state-group/checkpointed-local-log/go`
+  v0.1.0.
+- **Pinned at untagged commits:** `github.com/action-state-group/agent-action-capsule/go` v0.7.0 →
+  `v0.7.1-0.20261008155852-5d80d40097f6`, and `github.com/action-state-group/evidencebook` v0.1.1 →
+  `v0.1.2-0.20261008160739-b970240ce88a`.
+
+## v0.1.0-rc10
 
 ### A deal receipt's words for where the deal stands and the merchant's receipt
 
@@ -248,30 +305,6 @@ external-check schema free of one.
   capsule's own fields with an inline `signature` and `key_id`), with the same checks as the
   artifact.Record wrapper. The file's shape is read from its members, never guessed, and named
   in the output (`shape`); a file with the members of both shapes, or of neither, is refused.
-
-### `result build` and `report build`
-
-- `result build` seals a caller-supplied Evidence Result v0 into a jsonl profile's evidence book
-  as one `evidence_result` record, after checking it against the vendored schema, recomputing its
-  headline values, resolving every citation in the book, and walking each close claim's Close.
-  Only UNILATERAL close claims can be sealed end to end today; see `capsulectl result build
-  --help`.
-- `report build` verifies a held, disclosed bundle rooted at a sealed Result v0 and renders an
-  offline `report.html` (and, with `--permalink`, a viewer fragment over the same bytes), through
-  the same vendored evidence-graph viewer `deal report` embeds.
-- `disclose` / `permalink --attach-input-originals` (jsonl profiles): carry each published
-  capsule's retained agent_input original in the bundle, in the
-  `capsulectl/agent-input-originals/v1` extension, checked against the capsule's
-  `agent_input_digest`. Opt-in at disclose time; the book never stores an original.
-- **Changed:** `close --capsule-out`: a file already holding exactly the Close's bytes is now left
-  alone, so a repeat with the same flags succeeds as a no-op; a file holding anything else is
-  refused by name and nothing is overwritten. Before, any existing file at that path failed the
-  command.
-- **Changed:** `disclose --suppress agent_input` also withholds an agent_input original a book
-  record commits as a payload (records written by a pre-release build that stored originals in
-  the book); under `--payloads all` it refuses instead, since that mode cannot withhold a payload.
-- **Removed:** the `--html` flag on `bundle`, `disclose` and `permalink`. It was a stub that never
-  rendered a page; `report build` replaces it.
 
 ## v0.1.0-rc9
 
