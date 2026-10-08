@@ -452,11 +452,12 @@ sealed before carries none and re-derives unchanged.
 | `channel`, `first_contact_channel` | Channel kinds (the `channel` set above): the one in use at this check (the latest sealed message's, else first contact's) and the baseline's. |
 | `upfront_amount_minor` | The deposit the check's own terms state (`terms.deposit_minor`), in minor units. Never inferred. |
 | `material_fields_changed`, `material_fields_basis` | How many of `terms.item`, `terms.quantity`, `terms.price_minor`, `terms.deposit_minor`, `terms.currency`, `terms.when`, `terms.place`, `terms.conditions`, `recourse.rail`, `recourse.refundable`, `who.payee` the proposal (the deal as it stands with the check on top) changes from what was agreed (payee: the first contact's payee, else its name), and the hex SHA-256 of that list's JCS bytes. |
-| `offer_fields_changed`, `offer_fields_basis` | The same over `terms.item`, `terms.quantity`, `terms.price_minor`, `terms.deposit_minor`, `terms.conditions`, `recourse.refundable`, against the terms the user's own words state (`intent.asked`). |
+| `offer_fields_changed`, `offer_fields_basis` | How many of the offer fields (`terms.item`, `terms.quantity`, `terms.price_minor`, `terms.deposit_minor`, `terms.conditions`, `recourse.refundable`) the user's own words state (`intent.asked`) that the proposal does not match, and the list's digest. Only the keys the user's words state are compared: a key they never state is not a change. Both are absent when the user's words state none of them. |
 | `task_authority_ref` | Typed records only: the task authority in force, as on the evaluation. |
 
-**Counting.** A key counts as changed when it is present on one side and absent on the other, or
-present on both with unequal JCS values. `terms.conditions` counts as one key, so a count is never
+**Counting.** For the material count, a key counts as changed when it is present on one side and
+absent on the other, or present on both with unequal JCS values. For the offer count, only a key the
+user's words state counts, when the proposal lacks it or differs. `terms.conditions` counts as one key, so a count is never
 more than its list is long. The record also keeps the separate `recourse {rail, refundable}` block,
 which a rules checker reads as the rail and refundability; a pay check always states it.
 

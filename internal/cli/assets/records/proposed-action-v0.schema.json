@@ -200,7 +200,7 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 6,
-          "description": "How many of the offer fields (terms.item, terms.quantity, terms.price_minor, terms.deposit_minor, terms.conditions, recourse.refundable) differ from what the user's own words stated (intent.asked), counted as for material_fields_changed."
+          "description": "How many of the offer fields (terms.item, terms.quantity, terms.price_minor, terms.deposit_minor, terms.conditions, recourse.refundable) that the user's own words state (intent.asked) the proposal does not match: absent, or present with an unequal JCS value. A key their words do not state is not counted. Absent when their words state none of these keys."
         },
         "offer_fields_basis": {
           "$ref": "record-common-v0.schema.json#/$defs/hex64",

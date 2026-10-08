@@ -20,8 +20,9 @@ import (
 //   - material_fields_changed, material_fields_basis: how many of the
 //     material fields the proposal changes from what was agreed, and the
 //     digest of that field list.
-//   - offer_fields_changed, offer_fields_basis: the same over the offer
-//     fields, against what the user's own words stated.
+//   - offer_fields_changed, offer_fields_basis: how many of the offer
+//     fields the user's own words state the proposal does not match; absent
+//     when their words state none.
 //   - task_authority_ref (typed records): the task authority in force.
 //
 // A step sealed before records carried them has no RuleInputs and
@@ -194,9 +195,30 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 	agreed := dealFieldValues(state.agreed, &agreedRecourse, payeeOf(open.Who))
 	body["material_fields_changed"] = changedFields(materialFields, agreed, proposed)
 	body["material_fields_basis"] = materialFieldsBasis
-	// The user's own words state terms only (intent.asked); a key they do not
-	// state counts as changed if the proposal states it, as the rule reads.
+	// Against the user's own words (intent.asked), only over the offer keys
+	// those words state: a key they never state (refundability, which they
+	// cannot) is not a change. With none stated there is nothing to compare,
+	// so the count is absent, never a fabricated one.
 	asked := dealFieldValues(state.intent.Asked, nil, "")
-	body["offer_fields_changed"] = changedFields(offerFields, asked, proposed)
-	body["offer_fields_basis"] = offerFieldsBasis
+	if n, ok := statedChanges(offerFields, asked, proposed); ok {
+		body["offer_fields_changed"] = n
+		body["offer_fields_basis"] = offerFieldsBasis
+	}
+}
+
+// statedChanges counts the keys of list that stated states and proposed
+// does not match (absent, or present with an unequal JCS value); ok is false
+// when stated states none of them.
+func statedChanges(list []string, stated, proposed map[string]interface{}) (n int, ok bool) {
+	for _, k := range list {
+		x, has := stated[k]
+		if !has {
+			continue
+		}
+		ok = true
+		if y, in := proposed[k]; !in || !jcsEqual(x, y) {
+			n++
+		}
+	}
+	return n, ok
 }

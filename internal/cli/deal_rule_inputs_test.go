@@ -87,13 +87,11 @@ func TestACheckCarriesTheRuleInputs(t *testing.T) {
 				assert.Equal(t, "web", b["first_contact_channel"])
 				assert.Equal(t, float64(0), b["material_fields_changed"], "what was agreed")
 				assert.Equal(t, materialFieldsBasis, b["material_fields_basis"])
-				assert.Equal(t, offerFieldsBasis, b["offer_fields_basis"])
+				assert.NotContains(t, b, "offer_fields_basis", "the user's words state no offer key")
+				assert.NotContains(t, b, "offer_fields_changed")
 				assert.NotContains(t, b, "recipient_role", "a pay has no recipient role")
 				assert.NotContains(t, b, "upfront_amount_minor", "no deposit stated")
 			}
-			// The user's words state no terms here, so every offer field the
-			// proposal states counts: item, price and refundability.
-			assert.Equal(t, float64(3), sealed["offer_fields_changed"])
 			if !typed {
 				assert.NotContains(t, sealed, "task_authority_ref", "no task-authority record in an x-deal-v0 deal")
 				assert.NotContains(t, input, "task_authority_record")
@@ -133,9 +131,10 @@ func TestTheRuleInputsFollowTheDeal(t *testing.T) {
 	assert.Equal(t, "whatsapp", sealed["channel"], "the channel in use now")
 	assert.Equal(t, "marketplace", sealed["first_contact_channel"])
 	assert.Equal(t, float64(2), sealed["material_fields_changed"], "price and refundability")
-	// Against the user's words (item, price): the price differs, and
-	// refundability is stated only by the proposal.
-	assert.Equal(t, float64(2), sealed["offer_fields_changed"])
+	// Against the user's words (item, price): the price differs; the
+	// refundability their words never state is not counted.
+	assert.Equal(t, float64(1), sealed["offer_fields_changed"])
+	assert.Equal(t, offerFieldsBasis, sealed["offer_fields_basis"])
 }
 
 // A share says who receives it, by role.
@@ -185,4 +184,40 @@ func TestAStepWithoutRuleInputsReDerivesUnchanged(t *testing.T) {
 			assert.False(t, strings.Contains(string(raw), `"`+field+`"`), field)
 		}
 	}
+}
+
+// The offer count compares only the keys the user's own words state.
+func TestStatedChanges(t *testing.T) {
+	price := func(v int64) *int64 { return &v }
+	yes := true
+	proposal := dealFieldValues(dealTerms{Item: "otter sticker", PriceMinor: price(480), Quantity: 2}, &dealRecourse{Rail: "card", Refundable: &yes}, "Sticker Marketplace")
+	for name, tc := range map[string]struct {
+		asked dealTerms
+		want  int
+		ok    bool
+	}{
+		"nothing stated":                {dealTerms{}, 0, false},
+		"only a key outside the list":   {dealTerms{Currency: "USD", When: "Saturday"}, 0, false},
+		"the price, matched":            {dealTerms{PriceMinor: price(480)}, 0, true},
+		"the price only, changed":       {dealTerms{PriceMinor: price(454)}, 1, true},
+		"item and price, price changed": {dealTerms{Item: "otter sticker", PriceMinor: price(454)}, 1, true},
+		"a key the proposal lacks":      {dealTerms{DepositMinor: price(100)}, 1, true},
+		"all stated keys changed":       {dealTerms{Item: "cat sticker", Quantity: 1, PriceMinor: price(1), Conditions: map[string]string{"size": "small"}}, 4, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			n, ok := statedChanges(offerFields, dealFieldValues(tc.asked, nil, ""), proposal)
+			assert.Equal(t, tc.ok, ok)
+			assert.Equal(t, tc.want, n)
+		})
+	}
+}
+
+// task_authority_record is sent only when a sealed task-authority record
+// exists: an x-deal-v0 deal has none, so its checker input never carries one
+// (and its check no task_authority_ref).
+func TestAnXDealCheckSendsNoTaskAuthorityRecord(t *testing.T) {
+	id := stickerDeal(t, "card", false)
+	sealed, _, input := ruleInputs(t, id, stickerPay)
+	assert.NotContains(t, input, "task_authority_record")
+	assert.NotContains(t, sealed, "task_authority_ref")
 }

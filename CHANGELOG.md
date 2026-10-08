@@ -10,9 +10,9 @@
   - `recipient_role` (`fulfilling_merchant` or `third_party`, on a share);
   - `channel` and `first_contact_channel` (channel kinds);
   - `upfront_amount_minor` (the stated deposit, never inferred);
-  - `material_fields_changed` and `offer_fields_changed` (counts over two fixed field lists, against
-    what was agreed and against the user's own words), with `material_fields_basis` and
-    `offer_fields_basis` (each list's digest);
+  - `material_fields_changed` and `offer_fields_changed` (counts over two fixed field lists: against
+    what was agreed, and against the keys the user's own words state, absent when they state none),
+    with `material_fields_basis` and `offer_fields_basis` (each list's digest);
   - on typed records, `task_authority_ref`.
 
   None carries a name, a contact detail or free text. Records sealed before re-derive unchanged.
