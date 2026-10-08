@@ -380,6 +380,29 @@ func (l *limitedWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// sealableRules is r, or, when what the checker said cannot be sealed (it
+// would carry a phone number, an email address, a counterparty's details or
+// a word a record may not carry), the rules not evaluated: the check pauses
+// and says why, and is sealed. A checker's answer never fails the check.
+func sealableRules(r dealRules, localValues []string) dealRules {
+	if r.Status != "evaluated" {
+		return r
+	}
+	body, err := rulesBody(r)
+	if err == nil {
+		err = scanRecord(map[string]interface{}{"body": map[string]interface{}{"rules": body}}, localValues)
+	}
+	if err == nil {
+		return r
+	}
+	why := SafeError(err)
+	if i := strings.Index(why, "refusing to seal: "); i >= 0 {
+		why = why[i+len("refusing to seal: "):]
+	}
+	return dealRules{Status: "not_evaluated", Cause: "unreadable", CheckerSHA256: r.CheckerSHA256,
+		Reason: "the rules checker's answer could not be sealed (" + why + ")"}
+}
+
 // rulesStatusLine is the rules line every check prompt leads with.
 func rulesStatusLine(r *dealRules) string {
 	if r == nil {

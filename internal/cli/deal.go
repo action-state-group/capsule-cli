@@ -1459,6 +1459,7 @@ func dealCheckCommand() *cobra.Command {
 					return err
 				}
 				rules = runRulesChecker(ctx, s.p, input, history)
+				rules = sealableRules(rules, dealLocalValues(events, dealEvent{}))
 			}
 			result.Rules = &rules
 			result.Differences = append(result.Differences, rulesDifferences(&rules)...)

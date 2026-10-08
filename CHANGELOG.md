@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### A rules checker's answer that cannot be sealed pauses the check instead of failing it
+
+- **Fixed:** on the second purchase in a week, a checker's finding value such as "2000 authorised
+  (capture 2000); 7d total 4000 (2000 earlier)" reads as a phone number to the personal-data scan.
+  `deal check` refused to seal its verdict and exited 2, with no verdict and no prompt.
+- **Now:** a checker answer that cannot be sealed never fails the check. The check pauses with
+  "Your rules were not checked: the rules checker's answer could not be sealed (…)", and the verdict
+  seals the rules as not evaluated, with cause `unreadable`. The personal-data scan itself is
+  unchanged.
+- **Numeric limits and values:** a checker that reports `limit` and `value` as numbers (as the
+  contract allows) is never caught this way.
+
 ### A deal receipt's words for where the deal stands and the merchant's receipt
 
 Consumer wording only, on the receipt page and in the emailed receipt. No record type, field or verb
