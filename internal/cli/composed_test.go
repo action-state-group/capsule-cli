@@ -227,3 +227,36 @@ func TestVerifyBundleComposedRefusalMember(t *testing.T) {
 	assert.Equal(t, "one_sided", join["derived"])
 	assert.Equal(t, "not_applicable", composed["corroboration"].([]interface{})[0].(map[string]interface{})["result"])
 }
+
+// The page gate refuses a composed/v1 bundle with the verdict verify --bundle
+// gives it, member bundles included: a page can never claim more than verify
+// --bundle does about a composition.
+func TestPageGateAgreesWithVerifyOnComposedBundles(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cases := map[string]map[string]interface{}{}
+	for _, vector := range composedVectors(t) {
+		cases[vector.ID] = vector.Container
+	}
+	tampered := composedVectors(t)[0].Container
+	block := tampered["extensions"].(map[string]interface{})["composed/v1"].(map[string]interface{})
+	block["members"].([]interface{})[0].(map[string]interface{})["bundle"].(map[string]interface{})["verification"] = map[string]interface{}{"note": "added"}
+	cases["tampered-member"] = tampered
+
+	for id, container := range cases {
+		t.Run(id, func(t *testing.T) {
+			path := writeBundle(t, container)
+			result, verifyErr := verifyBundleOutput(t, path)
+			raw, err := os.ReadFile(path)
+			require.NoError(t, err)
+			value, err := decodeBundleJSON(raw)
+			require.NoError(t, err)
+			gate := pageGate(value)
+			verdict := result["verdict"].(string)
+			require.NotEqual(t, "VALID", verdict, "no composed vector carries a checkpoint")
+			require.Error(t, gate)
+			assert.Contains(t, gate.Error(), "calls this bundle "+verdict)
+			assert.Equal(t, ExitCode(verifyErr), ExitCode(gate), "the gate exits as verify --bundle does")
+		})
+	}
+	assert.Len(t, cases, 4)
+}

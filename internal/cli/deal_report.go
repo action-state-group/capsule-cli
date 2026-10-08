@@ -250,6 +250,9 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // (the page cannot check a signature against a directory); it rides as JSON
 // beside the bundle, never inside it, so the bundle's digest is unchanged.
 func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (string, error) {
+	if err := pageGate(b); err != nil {
+		return "", err
+	}
 	countersign = dealCountersignForPage(b, countersign)
 	page, err := emitter.EmitEvidenceGraphHTML(b, evidenceGraphIIFE)
 	if err != nil {

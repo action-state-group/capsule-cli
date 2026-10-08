@@ -185,8 +185,7 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if value["bundle_kind"] != "evidence-bundle/v2" || value["bundle_version"] != "2" {
 		return inputError("--bundle is not an evidence-bundle/v2 file (bundle_kind \"evidence-bundle/v2\", bundle_version \"2\")")
 	}
-	result := aacbundle.VerifyBundleWithOptions(value, aacbundle.Options{RefusalSignature: verifyRefusalSignature})
-	report, verdict := assessBundle(value, result, directory)
+	verdict, report := bundleVerdict(value, directory)
 	if err := output(c, report); err != nil {
 		return err
 	}
@@ -198,6 +197,17 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	default:
 		return ErrBundleInvalid
 	}
+}
+
+// bundleVerdict is `verify --bundle`'s verdict on an Evidence Bundle (VALID,
+// INCOMPLETE or INVALID) and the result it prints, from the bundle's value
+// and an optional witness directory. A page that checks itself is written
+// only after this same verdict is VALID (pageGate), so the page can never
+// claim more than verify --bundle does about the bundle it carries.
+func bundleVerdict(value map[string]interface{}, directory []witnessRow) (string, map[string]any) {
+	result := aacbundle.VerifyBundleWithOptions(value, aacbundle.Options{RefusalSignature: verifyRefusalSignature})
+	report, verdict := assessBundle(value, result, directory)
+	return verdict, report
 }
 
 // assessBundle reports one Evidence Bundle's claims and its verdict. A
