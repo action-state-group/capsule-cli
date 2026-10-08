@@ -20,8 +20,10 @@
   - **What it prints.** One `external-check-result/v0` object: the ruleset's id and definition
     digest, a verdict (`allow`, `deny`, `escalate` or `not_evaluable`), and its findings, each
     limit and value a number or a short line, and optionally how it reached the verdict (`tier`:
-    `recomputed`, `judged` or `human`; absent reads as judged, never recomputed). The tier is
-    sealed as reported and named in the approval text; it changes nothing. The schema ships at
+    `recomputed` or `judged`, as in Result v0; absent reads as judged, never recomputed) and
+    the grade of its evidence (`grade`: `self-attested`, `witnessed` or `countersigned`, by
+    reference to Result v0's Grade). The tier and grade are
+    sealed as reported and named in the approval text; they change nothing. The schema ships at
     `skills/deal/profile/external-check-result-v0.schema.json`, and output outside it is
     refused.
 - **One verdict, one prompt.** The checker's answer folds into the check's own differences.

@@ -155,6 +155,10 @@ type dealRules struct {
 	// judged or human), as reported; empty when it did not say, which reads
 	// as judged. It is recorded and shown, and changes nothing.
 	Tier string `json:"tier,omitempty"`
+	// Grade is the grade of the evidence behind the result (self-attested,
+	// witnessed or countersigned), as reported; empty when none was stated.
+	// Recorded and shown; it changes nothing.
+	Grade string `json:"grade,omitempty"`
 	// History is what the checker was given beside the record.
 	History *dealRulesHistory `json:"history,omitempty"`
 }
@@ -175,6 +179,7 @@ type externalCheckResult struct {
 	DefinitionDigest string             `json:"definition_digest"`
 	Verdict          string             `json:"verdict"`
 	Tier             string             `json:"tier"`
+	Grade            string             `json:"grade"`
 	Findings         []dealRulesFinding `json:"findings"`
 }
 
@@ -290,7 +295,7 @@ func runRulesChecker(ctx context.Context, p Profile, input []byte, history *deal
 		return notEvaluated("ruleset_changed", "the ruleset changed since it was pinned ("+result.RulesetID+" reports another definition digest); re-pin it with profile update --rules-checker FILE")
 	}
 	return dealRules{Status: "evaluated", RulesetID: result.RulesetID, DefinitionDigest: result.DefinitionDigest, CheckerSHA256: pin.SHA256,
-		Verdict: result.Verdict, Tier: result.Tier, Findings: result.Findings, History: history}
+		Verdict: result.Verdict, Tier: result.Tier, Grade: result.Grade, Findings: result.Findings, History: history}
 }
 
 // privateExecutableCopy reads the executable at path once (under a trusted
@@ -387,7 +392,7 @@ func rulesStatusLine(r *dealRules) string {
 			short = short[:8]
 		}
 		words := map[string]string{"allow": "allowed", "deny": "not allowed", "escalate": "needs your approval", "not_evaluable": "not fully checked"}[r.Verdict]
-		line := fmt.Sprintf("Your rules (%s, digest %s): %s, %s.", r.RulesetID, short, words, rulesProvenance(r.Tier))
+		line := fmt.Sprintf("Your rules (%s, digest %s): %s, %s.", r.RulesetID, short, words, rulesProvenance(r.Tier, r.Grade))
 		if h := r.History; h != nil && !h.Complete {
 			line += fmt.Sprintf(" They were given only %d of your earlier payments from the last %d days.", h.Acts, h.Days)
 		}
@@ -399,17 +404,20 @@ func rulesStatusLine(r *dealRules) string {
 	}
 }
 
-// rulesProvenance says how the checker reached its verdict, as it said.
-func rulesProvenance(tier string) string {
+// rulesProvenance says how the checker reached its verdict, and the grade of
+// the evidence behind it, as it said.
+func rulesProvenance(tier, grade string) string {
+	words := "judged (not stated)"
 	switch tier {
 	case "recomputed":
-		return "computed by your rules"
-	case "human":
-		return "judged by a person"
+		words = "computed by your rules"
 	case "judged":
-		return "judged"
+		words = "judged"
 	}
-	return "judged (not stated)"
+	if grade != "" {
+		words += ", " + grade
+	}
+	return words
 }
 
 // rulesDifferences are the differences the rules add to a check: a deny, an
