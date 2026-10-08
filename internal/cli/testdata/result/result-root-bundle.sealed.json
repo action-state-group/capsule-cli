@@ -1,0 +1,452 @@
+{
+  "bundle_version": "2",
+  "bundle_kind": "evidence-bundle/v2",
+  "completeness": {
+    "closure_depth": 2,
+    "records_mode": "complete",
+    "payloads_mode": "all",
+    "suppressed_fields": [],
+    "missing": []
+  },
+  "root": "563befb2a36a677ca9f1f5fd90335b54bfe16dfd7f563d51891607dbc9ccf71a",
+  "records": [
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-04",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_type": "fyi",
+      "operator": "sealed-fixture",
+      "developer": "sealed-fixture@v1",
+      "timestamp": "2026-09-14T00:00:00Z",
+      "assurance": {
+        "effect_mode": "not_applicable",
+        "attestation_mode": "self_attested",
+        "ledger_mode": "standalone"
+      },
+      "action_id": "result",
+      "references": [
+        {
+          "digest_alg": "SHA-256",
+          "type": "agent-action-capsule",
+          "citation_purpose": "acted_on",
+          "digest": "992821e083cacc53a5f874e4c08f11758cd5d6600c14df98050dfd4b4e6a085d"
+        },
+        {
+          "digest_alg": "SHA-256",
+          "type": "agent-action-capsule",
+          "citation_purpose": "acted_on",
+          "digest": "403757ad689566b30511ee25361b13efe42e78a7c5164ea19381ee5ca9a56e4f"
+        },
+        {
+          "digest_alg": "SHA-256",
+          "type": "agent-action-capsule",
+          "citation_purpose": "acted_on",
+          "digest": "d04ca55c1b9340ac40aa2646c34dbda1a3654223c7a1c4399dfffc490de99095"
+        }
+      ],
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "f6f4de9e1faa7102b2d217afef9adbbca2f1441b1dab1f1d8506bdc25fc9b0a3"
+        }
+      },
+      "capsule_id": "563befb2a36a677ca9f1f5fd90335b54bfe16dfd7f563d51891607dbc9ccf71a"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-04",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_type": "fyi",
+      "operator": "sealed-fixture",
+      "developer": "sealed-fixture@v1",
+      "timestamp": "2026-09-14T00:00:00Z",
+      "assurance": {
+        "effect_mode": "not_applicable",
+        "attestation_mode": "self_attested",
+        "ledger_mode": "standalone"
+      },
+      "action_id": "day-1",
+      "occurred_at": "2026-09-14T23:59:00Z",
+      "references": [
+        {
+          "digest_alg": "SHA-256",
+          "type": "agent-action-capsule",
+          "citation_purpose": "acted_on",
+          "digest": "f5bfd4fd9de3ff1b028984fabc6bdc24510a23a5e06893174a30a4204da24b1d"
+        }
+      ],
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "b305a967346a37c62fe44b1cedc6820c6a554ca1ed3153dc300f3b985c22e0f7"
+        }
+      },
+      "capsule_id": "992821e083cacc53a5f874e4c08f11758cd5d6600c14df98050dfd4b4e6a085d"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-04",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_type": "fyi",
+      "operator": "sealed-fixture",
+      "developer": "sealed-fixture@v1",
+      "timestamp": "2026-09-14T00:00:00Z",
+      "assurance": {
+        "effect_mode": "not_applicable",
+        "attestation_mode": "self_attested",
+        "ledger_mode": "standalone"
+      },
+      "action_id": "day-2",
+      "occurred_at": "2026-09-15T23:59:00Z",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "11010e65de996ab54c77c3ea1441feb55a3cbf03e8caf1385a8992534510aaae"
+        }
+      },
+      "capsule_id": "403757ad689566b30511ee25361b13efe42e78a7c5164ea19381ee5ca9a56e4f"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-04",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_type": "fyi",
+      "operator": "sealed-fixture",
+      "developer": "sealed-fixture@v1",
+      "timestamp": "2026-09-14T00:00:00Z",
+      "assurance": {
+        "effect_mode": "not_applicable",
+        "attestation_mode": "self_attested",
+        "ledger_mode": "standalone"
+      },
+      "action_id": "case-1",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "e8b7ce3dd3ce8f6e7c79fe4114ad506748b40070070270bfdae03373e1bac957"
+        }
+      },
+      "capsule_id": "d04ca55c1b9340ac40aa2646c34dbda1a3654223c7a1c4399dfffc490de99095"
+    },
+    {
+      "spec_version": "draft-mih-scitt-agent-action-capsule-04",
+      "format_version": "4",
+      "canonicalization_id": "jcs",
+      "action_type": "fyi",
+      "operator": "sealed-fixture",
+      "developer": "sealed-fixture@v1",
+      "timestamp": "2026-09-14T00:00:00Z",
+      "assurance": {
+        "effect_mode": "not_applicable",
+        "attestation_mode": "self_attested",
+        "ledger_mode": "standalone"
+      },
+      "action_id": "act-1",
+      "occurred_at": "2026-09-14T10:15:00Z",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "86820dfbff59b2f294159e1a9630d1c6b2bc5f65024e1c7e38d0a88326db0623",
+          "agent_output_digest": "352e9b15cc2e74b516abc4fd219b14793292c1c713f65a379fbd40ae6c9a0f54"
+        }
+      },
+      "capsule_id": "f5bfd4fd9de3ff1b028984fabc6bdc24510a23a5e06893174a30a4204da24b1d"
+    }
+  ],
+  "disclosures": {
+    "403757ad689566b30511ee25361b13efe42e78a7c5164ea19381ee5ca9a56e4f": {
+      "agent_input": {
+        "spec_version": "evaluation-report/v1",
+        "date": "2026-09-15",
+        "outcomes": [
+          {
+            "outcome_id": "booking-confirmed",
+            "role": "required",
+            "aggregate": "pass"
+          }
+        ],
+        "cases": []
+      }
+    },
+    "d04ca55c1b9340ac40aa2646c34dbda1a3654223c7a1c4399dfffc490de99095": {
+      "agent_input": {
+        "task_id": "airline-2",
+        "trial": 1,
+        "case_aggregate": "fail",
+        "axis_judgments": [
+          {
+            "axis_id": "refund-policy",
+            "outcome_id": "refund-quoted",
+            "status": "fail",
+            "rationale": "the quoted fee did not match the fare rules"
+          }
+        ]
+      }
+    },
+    "f5bfd4fd9de3ff1b028984fabc6bdc24510a23a5e06893174a30a4204da24b1d": {
+      "agent_input": {
+        "case": {
+          "conversation_id": "conv-1",
+          "turn_idx": 0,
+          "task_id": "airline-1",
+          "trial": 1
+        },
+        "prompt": "change my flight to the fourteenth"
+      },
+      "agent_output": {
+        "reply": "your flight is now on the fourteenth"
+      }
+    },
+    "992821e083cacc53a5f874e4c08f11758cd5d6600c14df98050dfd4b4e6a085d": {
+      "agent_input": {
+        "spec_version": "evaluation-report/v1",
+        "date": "2026-09-14",
+        "outcomes": [
+          {
+            "outcome_id": "booking-confirmed",
+            "role": "required",
+            "aggregate": "pass"
+          }
+        ],
+        "cases": [
+          {
+            "task_id": "airline-1",
+            "trial": 1,
+            "case_aggregate": "pass"
+          }
+        ]
+      }
+    },
+    "563befb2a36a677ca9f1f5fd90335b54bfe16dfd7f563d51891607dbc9ccf71a": {
+      "agent_input": {
+        "result_version": "evidence-result-v0",
+        "generated_at": "2026-09-16T00:00:00Z",
+        "claims": [
+          {
+            "id": "claim-1",
+            "contract_ref": "ec:airline-week:2026-09-14@1",
+            "requirement_ref": "req-1",
+            "tier": "recomputed",
+            "grade": "witnessed",
+            "sufficiency": "SATISFIED",
+            "verdict": "met",
+            "evidence": [
+              {
+                "digest_alg": "SHA-256",
+                "digest": "992821e083cacc53a5f874e4c08f11758cd5d6600c14df98050dfd4b4e6a085d"
+              },
+              {
+                "digest_alg": "SHA-256",
+                "digest": "403757ad689566b30511ee25361b13efe42e78a7c5164ea19381ee5ca9a56e4f"
+              }
+            ],
+            "proofs": [
+              {
+                "kind": "inclusion_proof",
+                "digest_alg": "SHA-256",
+                "digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+              }
+            ],
+            "presentation": {
+              "kind": "disclosure",
+              "status": "SATISFIED",
+              "evidence": [
+                {
+                  "digest_alg": "SHA-256",
+                  "digest": "992821e083cacc53a5f874e4c08f11758cd5d6600c14df98050dfd4b4e6a085d"
+                },
+                {
+                  "digest_alg": "SHA-256",
+                  "digest": "403757ad689566b30511ee25361b13efe42e78a7c5164ea19381ee5ca9a56e4f"
+                }
+              ]
+            }
+          },
+          {
+            "id": "claim-2",
+            "contract_ref": "ec:airline-week:2026-09-14@1",
+            "requirement_ref": "req-2",
+            "tier": "judged",
+            "grade": "self-attested",
+            "sufficiency": "SATISFIED",
+            "verdict": "not_met",
+            "evidence": [
+              {
+                "digest_alg": "SHA-256",
+                "digest": "d04ca55c1b9340ac40aa2646c34dbda1a3654223c7a1c4399dfffc490de99095"
+              }
+            ],
+            "proofs": [],
+            "presentation": {
+              "kind": "disclosure",
+              "status": "SATISFIED",
+              "evidence": [
+                {
+                  "digest_alg": "SHA-256",
+                  "digest": "d04ca55c1b9340ac40aa2646c34dbda1a3654223c7a1c4399dfffc490de99095"
+                }
+              ]
+            }
+          },
+          {
+            "id": "claim-3",
+            "contract_ref": "ec:airline-week:2026-09-14@1",
+            "requirement_ref": "req-3",
+            "tier": "recomputed",
+            "grade": "countersigned",
+            "sufficiency": "GAP",
+            "verdict": "not_evaluable",
+            "evidence": [
+              {
+                "digest_alg": "SHA-256",
+                "digest": "403757ad689566b30511ee25361b13efe42e78a7c5164ea19381ee5ca9a56e4f"
+              }
+            ],
+            "proofs": [],
+            "presentation": {
+              "kind": "analysis",
+              "status": "WITHHELD",
+              "summary": "the counterparty confirmed the record exists and declined disclosure under its own policy"
+            }
+          }
+        ],
+        "aggregate": {
+          "coverage": {
+            "evaluated_population": 3,
+            "excluded_not_applicable": 1,
+            "unknown_count": 0
+          },
+          "buckets": {
+            "met": ["claim-1"],
+            "not_met": ["claim-2"],
+            "not_evaluable": ["claim-3"]
+          }
+        }
+      }
+    }
+  },
+  "completeness_certificate": {
+    "log_id": "sealed-fixture-log",
+    "range_root": "4e7995d97423cc4cfaa8cd9ba10b977e78d5f50c7c28978e483b62ddaced2690",
+    "first_seq": 1,
+    "last_seq": 5,
+    "body_digests": [
+      "563befb2a36a677ca9f1f5fd90335b54bfe16dfd7f563d51891607dbc9ccf71a",
+      "992821e083cacc53a5f874e4c08f11758cd5d6600c14df98050dfd4b4e6a085d",
+      "403757ad689566b30511ee25361b13efe42e78a7c5164ea19381ee5ca9a56e4f",
+      "d04ca55c1b9340ac40aa2646c34dbda1a3654223c7a1c4399dfffc490de99095",
+      "f5bfd4fd9de3ff1b028984fabc6bdc24510a23a5e06893174a30a4204da24b1d"
+    ],
+    "range_proof": {
+      "from_seq": 1,
+      "to_seq": 5,
+      "size": 8,
+      "from_index": 0,
+      "to_index": 4,
+      "witness": []
+    },
+    "memberships": {
+      "563befb2a36a677ca9f1f5fd90335b54bfe16dfd7f563d51891607dbc9ccf71a": {
+        "log_coordinates": {
+          "log_id": "sealed-fixture-log",
+          "seq": 1,
+          "leaf_index": 0
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 8,
+          "leaf_index": 0,
+          "witness": [
+            "2f4226947e21d851b17b35da1dbd32398fca1da249e0febd80a612438377c3db",
+            "b980b7756707dd86009d661e09b97c0a690503609b037288ac59c5c3163dbf5b"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "54a9b7b1b5457f0c540e4c0d37d518061921a49962e37eb1aec490b6b20b68af"
+          ]
+        }
+      },
+      "992821e083cacc53a5f874e4c08f11758cd5d6600c14df98050dfd4b4e6a085d": {
+        "log_coordinates": {
+          "log_id": "sealed-fixture-log",
+          "seq": 2,
+          "leaf_index": 1
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 8,
+          "leaf_index": 1,
+          "witness": [
+            "c147fac213da66635e58c39b1db0864ebb15dc0e80bf11717fab8a66dbcb009c",
+            "b980b7756707dd86009d661e09b97c0a690503609b037288ac59c5c3163dbf5b"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "54a9b7b1b5457f0c540e4c0d37d518061921a49962e37eb1aec490b6b20b68af"
+          ]
+        }
+      },
+      "403757ad689566b30511ee25361b13efe42e78a7c5164ea19381ee5ca9a56e4f": {
+        "log_coordinates": {
+          "log_id": "sealed-fixture-log",
+          "seq": 3,
+          "leaf_index": 2
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 8,
+          "leaf_index": 2,
+          "witness": [
+            "b399042b2e81fa2d50066eca568fbb9b71325bad929fb4e737a6f91f8f2bd99b",
+            "d4c76b4bddc003b487b99b5f572c777c5334f6359b9cc299b9bb378b6767ea8f"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "54a9b7b1b5457f0c540e4c0d37d518061921a49962e37eb1aec490b6b20b68af"
+          ]
+        }
+      },
+      "d04ca55c1b9340ac40aa2646c34dbda1a3654223c7a1c4399dfffc490de99095": {
+        "log_coordinates": {
+          "log_id": "sealed-fixture-log",
+          "seq": 4,
+          "leaf_index": 3
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 8,
+          "leaf_index": 3,
+          "witness": [
+            "f87f65c668aa5cd2154368562c14467944879d2dbb2c8d2326111cc0b4656f58",
+            "d4c76b4bddc003b487b99b5f572c777c5334f6359b9cc299b9bb378b6767ea8f"
+          ],
+          "peaks_left": [],
+          "peaks_right": [
+            "54a9b7b1b5457f0c540e4c0d37d518061921a49962e37eb1aec490b6b20b68af"
+          ]
+        }
+      },
+      "f5bfd4fd9de3ff1b028984fabc6bdc24510a23a5e06893174a30a4204da24b1d": {
+        "log_coordinates": {
+          "log_id": "sealed-fixture-log",
+          "seq": 5,
+          "leaf_index": 4
+        },
+        "inclusion_proof": {
+          "v": 1,
+          "kind": "inclusion",
+          "size": 8,
+          "leaf_index": 4,
+          "witness": [],
+          "peaks_left": [
+            "9f6b2727c25662f381552917571baf7c2e7a25caf069b6467b7d873ad0e3df2b"
+          ],
+          "peaks_right": []
+        }
+      }
+    }
+  },
+  "checkpoint": {
+    "root": "4e7995d97423cc4cfaa8cd9ba10b977e78d5f50c7c28978e483b62ddaced2690",
+    "mmr_size": 8
+  }
+}

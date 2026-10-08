@@ -1,0 +1,155 @@
+{
+  "aggregate": {
+    "buckets": {
+      "met": [
+        "claim-1"
+      ],
+      "not_evaluable": [
+        "reconcile-2"
+      ],
+      "not_met": [
+        "reconcile-1"
+      ]
+    },
+    "coverage": {
+      "evaluated_population": 3,
+      "excluded_not_applicable": 0,
+      "unknown_count": 0
+    }
+  },
+  "claims": [
+    {
+      "contract_ref": "ec:example-org-claims-eval:2026-09-22@1",
+      "evidence": [
+        {
+          "digest": "087f64cf513c5007850428f20b7cd483877c46d549e28972ffcff465492ecd14",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "grade": "witnessed",
+      "id": "claim-1",
+      "presentation": {
+        "evidence": [
+          {
+            "digest": "087f64cf513c5007850428f20b7cd483877c46d549e28972ffcff465492ecd14",
+            "digest_alg": "SHA-256"
+          }
+        ],
+        "kind": "disclosure",
+        "status": "SATISFIED"
+      },
+      "proofs": [
+        {
+          "digest": "5c6575f42edc922190df6f50077e10911611995aa53655826987e3ab081017f9",
+          "digest_alg": "SHA-256",
+          "kind": "inclusion_proof"
+        }
+      ],
+      "requirement_ref": "req-claim-1",
+      "sufficiency": "SATISFIED",
+      "tier": "recomputed",
+      "verdict": "met"
+    },
+    {
+      "contract_ref": "ec:example-org-outcomes-reconcile:2026-09-25@1",
+      "evidence": [
+        {
+          "digest": "92d9f6990a31aeb9241d40a37a71e6528017ce45164dd5d029a239e4d74235d0",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "grade": "self-attested",
+      "id": "reconcile-1",
+      "presentation": {
+        "evidence": [
+          {
+            "digest": "92d9f6990a31aeb9241d40a37a71e6528017ce45164dd5d029a239e4d74235d0",
+            "digest_alg": "SHA-256"
+          }
+        ],
+        "kind": "disclosure",
+        "status": "SATISFIED"
+      },
+      "proofs": [
+        {
+          "digest": "8d3d93771a7721f1d720bdfb93349a88c9777fe77b9b8b751a35fd26c420f900",
+          "digest_alg": "SHA-256",
+          "kind": "inclusion_proof"
+        }
+      ],
+      "reconcile": {
+        "join_key": "reservation_id",
+        "peer": "example-org-sor",
+        "period": {
+          "end": "2026-10-01T00:00:00Z",
+          "start": "2026-09-01T00:00:00Z"
+        },
+        "state_of_record": "B",
+        "tallies": {
+          "a_only": 2,
+          "b_only": 1,
+          "conflicting": 1,
+          "insufficient": 0,
+          "matched": 408
+        }
+      },
+      "requirement_ref": "refund-lands",
+      "sufficiency": "SATISFIED",
+      "tier": "recomputed",
+      "type": "reconcile",
+      "verdict": "not_met"
+    },
+    {
+      "contract_ref": "ec:example-org-outcomes-reconcile:2026-09-25@1",
+      "evidence": [
+        {
+          "digest": "d6545bdf670b774e0d91318b37b7be57a87218f4909b9f81ec19d41e525e5cc9",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "grade": "self-attested",
+      "id": "reconcile-2",
+      "presentation": {
+        "kind": "analysis",
+        "status": "INSUFFICIENT",
+        "summary": "EXAMPLE-ORG peer connector produced no system_of_record_fact rows on three days of the period; the join could not be evaluated for those days."
+      },
+      "proofs": [
+        {
+          "digest": "75ffa292749be1458b881677993d21329150bc6c3d43c81f9c989d931e47da8f",
+          "digest_alg": "SHA-256",
+          "kind": "inclusion_proof"
+        }
+      ],
+      "reconcile": {
+        "join_key": "reservation_id",
+        "peer": "example-org-sor",
+        "period": {
+          "end": "2026-10-01T00:00:00Z",
+          "start": "2026-09-01T00:00:00Z"
+        },
+        "state_of_record": "B",
+        "tallies": {
+          "a_only": 0,
+          "b_only": 0,
+          "conflicting": 0,
+          "insufficient": 3,
+          "matched": 380,
+          "unresolved": 0
+        }
+      },
+      "requirement_ref": "change-lands",
+      "sufficiency": "GAP",
+      "tier": "recomputed",
+      "type": "reconcile",
+      "verdict": "not_evaluable"
+    }
+  ],
+  "generated_at": "2026-09-22T00:00:00Z",
+  "result_version": "evidence-result-v0",
+  "view": {
+    "producer_name": "EXAMPLE-ORG",
+    "spec_version": "presentation/v1",
+    "title": "EXAMPLE-ORG Outcomes Reconcile -- September"
+  }
+}
