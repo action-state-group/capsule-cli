@@ -203,9 +203,25 @@ jq -c '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_i
 perl -0pe 'BEGIN{open my $f,"<","receipt-edited.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-edited.html
 check "deal-receipt-edited: the page carries the edited line" contains receipt-edited.html 'A line nobody sealed.'
 render receipt-edited.html
-check "deal-receipt-edited: the page says the report did not verify" contains receipt-edited.html.dom 'This report did not verify'
+# The rendered warning (the page's own script also carries the words).
+check "deal-receipt-edited: the page says the report did not verify" contains receipt-edited.html.dom '<p class="deal-bad">⚠️ This report did not verify'
 check "deal-receipt-edited: the page shows no edited line" lacks receipt-edited.html.dom '<p class="deal-note">A line nobody sealed.</p>'
 capsulectl verify --bundle receipt-edited.html >/dev/null 2>&1 && verdict=0 || verdict=$?
 check "deal-receipt-edited: verify --bundle: INVALID, exit 1" test "$verdict" -eq 1
+
+# deal-receipt-downgraded: the sealed report's record kept, its disclosure
+# dropped, and edited text put inline in the extension, as a receipt from
+# before reports were sealed carries it. The page refuses rather than show
+# it under the "not checked" label; verify --bundle calls it INVALID.
+jq -c '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report as $text
+  | .extensions["x-deal-v0"] = ($text | .did_line = "A line nobody sealed.") | del(.disclosures[$id])' receipt.json >receipt-downgraded.json
+perl -0pe 'BEGIN{open my $f,"<","receipt-downgraded.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-downgraded.html
+check "deal-receipt-downgraded: the page carries the inline line" contains receipt-downgraded.html 'A line nobody sealed.'
+render receipt-downgraded.html
+check "deal-receipt-downgraded: the page says the text could not be checked" contains receipt-downgraded.html.dom "<p class=\"deal-bad\">⚠️ The deal's text could not be checked against its sealed record"
+check "deal-receipt-downgraded: the page shows no inline line" lacks receipt-downgraded.html.dom '<p class="deal-note">A line nobody sealed.</p>'
+check "deal-receipt-downgraded: no \"not checked\" label" lacks receipt-downgraded.html.dom 'data-unchecked="x-deal-v0"'
+capsulectl verify --bundle receipt-downgraded.html >/dev/null 2>&1 && verdict=0 || verdict=$?
+check "deal-receipt-downgraded: verify --bundle: INVALID, exit 1" test "$verdict" -eq 1
 
 exit "$fail"

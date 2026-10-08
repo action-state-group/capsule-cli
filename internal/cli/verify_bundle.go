@@ -397,8 +397,10 @@ func nonNilStrings(values []string) []string {
 // then that record's disclosed input, which the disclosure check binds:
 //   - pass: the extension names a deal_report record whose input is
 //     disclosed and matches, and no other deal_report's input is disclosed;
-//   - fail: it names anything else, or the bundle discloses a deal_report
-//     the extension does not name (the extension was replaced or removed);
+//   - fail: it names anything else, the bundle discloses a deal_report the
+//     extension does not name, or the bundle holds a deal_report record at
+//     all and the extension names none (it was replaced or removed, whether
+//     or not the record's input was dropped);
 //   - a bundle written before reports were sealed carries the text in the
 //     extension itself, which no record seals: uninterpreted, with the
 //     finding extension_unbound (editing it leaves the verdict VALID).
@@ -433,7 +435,10 @@ func dealReportEntry(value map[string]interface{}, result aacbundle.Verification
 		return fail("sealed_report_unverified")
 	case sealed:
 		return map[string]any{"kind": dealProfile, "status": "pass", dealReportPointer: id}
-	case len(disclosed) > 0:
+	case len(reports) > 0:
+		// A bundle that holds a sealed report was written after reports were
+		// sealed: text in the extension instead of a pointer is a downgrade
+		// (the record kept, its disclosure dropped, edited text inline).
 		return fail("sealed_report_not_named")
 	}
 	return map[string]any{

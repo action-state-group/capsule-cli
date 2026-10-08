@@ -831,8 +831,10 @@ extension, and any countersignature, is listed as carried but not checked. Exit 
 as a record on the deal's log when the receipt is written. The bundle's
 `x-deal-v0` extension names that record (`sealed_report`), and its `extensions`
 entry is `pass` when the record's disclosed text matches. Editing the text,
-removing the extension, or naming another record makes the bundle INVALID
-(`sealed_report_unverified`, `sealed_report_not_named`). Each copy seals its own
+removing the extension, naming another record, or replacing the pointer with
+text (even with the record's disclosure dropped) makes the bundle INVALID
+(`sealed_report_unverified`, `sealed_report_not_named`): a bundle that holds a
+sealed report must name it. Each copy seals its own
 text and discloses no other copy's. A receipt written before this change carries
 its text in the extension itself: `uninterpreted`, with the finding
 `extension_unbound`, and its page says the text is not checked.

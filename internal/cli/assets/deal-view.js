@@ -67,8 +67,13 @@ function versionBefore(a, b) {
     const input = d.member === "agent_input" ? reportInput(d.capsuleId) : undefined;
     return d.capsuleId !== sealedId && input && input.type === "deal_report";
   });
+  // A sealed report's record stays in every later bundle (it is signed, and
+  // on the log the bundle covers), so a bundle holding one whose extension
+  // names none had its text swapped for unsealed text: refused, never shown
+  // under the "not checked" label.
+  const reportRecords = (bundle.records || []).filter((r) => r && r.action_id === "capsulectl-deal-report");
   let report = dealExt;
-  if (sealedId !== undefined || otherReports.length > 0) {
+  if (sealedId !== undefined || otherReports.length > 0 || reportRecords.length > 0) {
     const matchedReport = verification.disclosures.some((d) => d.capsuleId === sealedId && d.member === "agent_input" && d.status === "disclosure_match");
     const input = matchedReport ? reportInput(sealedId) : undefined;
     if (otherReports.length > 0 || !input || input.type !== "deal_report" || typeof input.report !== "object" || input.report === null) {

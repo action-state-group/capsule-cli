@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -109,17 +110,33 @@ func TestDealReportTextIsSealed(t *testing.T) {
 		assert.Equal(t, "INVALID", result["verdict"], name)
 	}
 
-	// A bundle written before reports were sealed (simulated: the text in
-	// the extension, no sealed report disclosed) is VALID, with its text
-	// reported unbound.
-	legacy := fresh()
-	legacy["extensions"].(map[string]interface{})[dealProfile] = sealedText(fresh())
-	delete(legacy["disclosures"].(map[string]interface{}), reportID)
-	result, err = verifyBundleOutput(t, writeBundleFile(t, legacy))
-	require.NoError(t, err)
+	// The downgrade: keep the report record, drop its disclosure, and put
+	// edited text inline in the extension, as a bundle written before
+	// reports were sealed would carry it. The record is still in the bundle
+	// (signed, and on the log the bundle covers), so it is refused.
+	downgraded := fresh()
+	text := sealedText(fresh())
+	text["did_line"] = "A line nobody sealed."
+	downgraded["extensions"].(map[string]interface{})[dealProfile] = text
+	delete(downgraded["disclosures"].(map[string]interface{}), reportID)
+	result, err = verifyBundleOutput(t, writeBundleFile(t, downgraded))
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, "INVALID", result["verdict"])
 	entry = dealExtensionEntry(t, result)
+	assert.Equal(t, "fail", entry["status"])
+	assert.Equal(t, []any{"sealed_report_not_named"}, entry["findings"])
+}
+
+// A bundle written before reports were sealed holds no deal_report record
+// and carries its text in the extension: reported unbound, never failed.
+func TestDealReportEntryOfABundleBeforeSealing(t *testing.T) {
+	value := map[string]interface{}{
+		"records":    []interface{}{map[string]interface{}{"capsule_id": strings.Repeat("ab", 32), "action_id": "deal-0123456789abcdef/1"}},
+		"extensions": map[string]interface{}{dealProfile: map[string]interface{}{"did_line": "A line from before reports were sealed."}},
+	}
+	entry := dealReportEntry(value, aacbundle.VerificationResult{})
 	assert.Equal(t, "uninterpreted", entry["status"])
-	assert.Equal(t, []any{"extension_unbound"}, entry["findings"])
+	assert.Equal(t, []string{"extension_unbound"}, entry["findings"])
 }
 
 // Each copy seals its own deal section, and a later copy discloses only its
