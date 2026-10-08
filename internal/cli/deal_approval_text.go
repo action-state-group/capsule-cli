@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"strings"
 	"time"
 )
@@ -13,11 +12,11 @@ var approvalVerbs = map[string]string{
 }
 
 // dealApprovalText is the message an agent shows the user when it asks to go
-// ahead: what, who, how much, how it is paid, what the check found, and when
-// the check was made. It is generated from the sealed check so that the
-// agent's request for approval carries the check's own words. A check is a
-// snapshot: the text says when it goes stale, so a payment made later is
-// checked again.
+// ahead: whether the user's rules were checked (and by which ruleset), what,
+// who, how much, how it is paid, and what the check found. It is generated
+// from the sealed check so that the agent's request for approval carries the
+// check's own words. When the check goes stale stays in the sealed record and
+// the check's output (checked_at, stale_after_minutes), out of the prompt.
 func dealApprovalText(state dealState, snap dealSnapshot, result dealCheckResult, checkedAt string, staleAfter time.Duration) string {
 	what := approvalVerbs[snap.Action]
 	if snap.Description != "" {
@@ -87,7 +86,7 @@ func dealApprovalText(state dealState, snap dealSnapshot, result dealCheckResult
 		}
 		line += "\n" + chosen
 	}
-	finding := "Deal check: no differences."
+	finding := "Before you go ahead: no differences."
 	if result.Verdict != "pass" {
 		var texts []string
 		for _, d := range result.Differences {
@@ -95,19 +94,17 @@ func dealApprovalText(state dealState, snap dealSnapshot, result dealCheckResult
 				texts = append(texts, d.Text)
 			}
 		}
-		finding = "Deal check: flagged: " + strings.Join(texts, " · ") + "."
+		finding = "Before you go ahead: flagged: " + strings.Join(texts, " · ") + "."
 	}
 	if len(result.Unverified) > 0 {
 		finding += " Unverified: " + strings.Join(result.Unverified, " · ") + "."
 	}
-	stale := checkedAt
-	if t, err := time.Parse(time.RFC3339, checkedAt); err == nil {
-		stale = t.Add(staleAfter).UTC().Format(time.RFC3339)
-	}
-	minutes := int(staleAfter / time.Minute)
-	when := fmt.Sprintf("Checked at %s. Stale after %d minutes (%s): check again before acting later than that.", checkedAt, minutes, stale)
 	if state.open.Demo {
 		line = "DEMO · " + line
 	}
-	return line + "\n" + finding + "\n" + when
+	text := line + "\n" + finding
+	if rules := rulesStatusLine(result.Rules); rules != "" {
+		text = rules + "\n" + text
+	}
+	return text
 }

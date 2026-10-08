@@ -196,6 +196,10 @@ type dealCheckResult struct {
 	Card        string           `json:"card"`
 	Options     []dealOption     `json:"options"`
 	Remote      dealRemoteResult `json:"remote"`
+	// Rules is what the profile's external rules checker said (evaluated,
+	// not evaluated and why, or not configured): absent on checks sealed
+	// before there was one.
+	Rules *dealRules `json:"rules,omitempty"`
 	// The check contract's fields fixed when the evaluation is sealed (typed
 	// records), so a later release re-derives the same record: when it stops
 	// covering the action, and the rule table that evaluated (with the
@@ -934,6 +938,11 @@ func ageText(days int64) string {
 
 const recentDomainDays = 90
 
+var proceedPlainLabels = map[string]string{
+	"pay": "Pay", "commit": "Confirm", "sign": "Sign", "cancel": "Cancel",
+	"share_contact": "Share", "share_credentials": "Share",
+}
+
 var proceedLabels = map[string]string{
 	"pay": "Pay anyway", "commit": "Confirm anyway", "sign": "Sign anyway", "cancel": "Cancel anyway",
 	"share_contact": "Share anyway", "share_credentials": "Share anyway",
@@ -1155,12 +1164,23 @@ func settleCheck(r *dealCheckResult, s dealState) {
 		r.Options = []dealOption{}
 		return
 	}
-	r.Verdict = "pause"
 	r.Options = []dealOption{{ID: "hold", Label: "Hold"}}
+	// A deny from the user's rules is a deny: no way to proceed.
+	if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == "rules_deny" }) {
+		r.Verdict = "deny"
+		return
+	}
+	r.Verdict = "pause"
 	if s.open.Who.Phone != "" && slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Question == "who" }) {
 		r.Options = append(r.Options, dealOption{ID: "verify_contact", Label: "Call the number I found (" + s.open.Who.Phone + ")"})
 	}
-	r.Options = append(r.Options, dealOption{ID: "proceed", Label: proceedLabels[r.Action]})
+	// "Pay anyway" overrides a finding. A check paused only because the
+	// rules could not be checked has none to override: "Pay".
+	label := proceedLabels[r.Action]
+	if !slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule != "rules_not_checked" }) {
+		label = proceedPlainLabels[r.Action]
+	}
+	r.Options = append(r.Options, dealOption{ID: "proceed", Label: label})
 }
 
 // renderCard writes the difference card: the differences, not a summary, then
@@ -1693,10 +1713,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 				changedWho(*e.Evidence.Who, se.CapsuleID)
 			}
 		case "check":
-			verdict := "no differences"
-			if e.Check.Verdict == "pause" {
-				verdict = "flagged"
-			}
+			verdict := map[string]string{"pass": "no differences", "pause": "flagged", "deny": "not allowed by your rules"}[e.Check.Verdict]
 			checkItem[se.CapsuleID] = len(r.Did)
 			text := fmt.Sprintf("Checked before %s: %s", actionNames[e.Check.Action], verdict)
 			shared := text
@@ -1854,7 +1871,9 @@ func pauseCauseKind(rule string) (side, kind string) {
 		return "counterparty", "code_request"
 	case "off_platform_early":
 		return "counterparty", "channel_hop"
-	case "pay_before_seeing", "credentials_requested", "agent_picked", "first_disclosure", "materiality_changed":
+	case "pay_before_seeing", "credentials_requested", "agent_picked", "first_disclosure", "materiality_changed",
+		"rules_deny", "rules_escalate", "rules_not_evaluable", "rules_not_checked":
+		// The user's rules judged what the agent proposed.
 		return "agent", rule
 	}
 	return "counterparty", rule

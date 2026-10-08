@@ -122,7 +122,7 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). After the deal's final close, the only record type allowed: later evidence linked to that close. | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. At most one `confirms` → the deal's final `close` (required after it, not allowed before it). Optional `resolves_obligation` (a digest ref) → an earlier record holding a cancel-by date. |
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
 | `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor` (the expected charge), on a `pay` `authorized_max_minor` (the most it may take: what a limit binds, at least `amount_minor`), `currency`, `seen_item`, `terms`, `recourse`, `pack_id`, `pack_digest`, `action_class` + `taxonomy_version` and `spend_minor` (see Action classes, below), with `spend_authorized_minor` beside them when `authorized_max_minor` is sealed, on a `cancel` `fee_minor`, `cancelled_amount_minor` and `direction` (`in`), and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
-| `verdict` | The answer to one check: pass, or pause with the differences. | `result` (`pass`\|`pause`), `differences[]`, `options[]`; `materiality` (the predicate that decided which of the agent's own picks pause: its `digest`, and `label_commitment`, a commitment to its name and version, opened only in the user's own copy (`materiality_openings`); `digest: "none"` when none was configured and every pick paused; verdicts sealed by v0.1.0-rc8 carry `name` and `version` in the clear instead, and shared copies withhold them) | exactly one `checks` → a `check`; one verdict per check; optional `pack_id`, equal to the check's when either names one. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. |
+| `verdict` | The answer to one check: pass, pause with the differences, or deny. | `result` (`pass`\|`pause`\|`deny`), `differences[]`, `options[]`; `rules` (what the profile's external rules checker said, §8 "The external rules checker"; absent on verdicts sealed before it was recorded); `materiality` (the predicate that decided which of the agent's own picks pause: its `digest`, and `label_commitment`, a commitment to its name and version, opened only in the user's own copy (`materiality_openings`); `digest: "none"` when none was configured and every pick paused; verdicts sealed by v0.1.0-rc8 carry `name` and `version` in the clear instead, and shared copies withhold them) | exactly one `checks` → a `check`; one verdict per check; optional `pack_id`, equal to the check's when either names one. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. `deny` ⇒ ≥ 1 difference, `rules`, and no option but `hold`. |
 | `approval` | What authorizes, or declines, the next step; or the user's confirmation of the limits an intent proposed. | `choice` (`hold`\|`verify_contact`\|`proceed`\|`confirm_limits`), `proceed` (`true` on `proceed`, `false` on `hold` and `verify_contact`), `approver` (`user`\|`standing_intent`\|`agent_card`); on `confirm_limits` only, `limits` (`previous` and `new`, each `max_total_minor` and `allowed`) | `confirm_limits`: exactly one `approves` → the proposing `intent`, `approver: user`, and section 6, rule 6. Otherwise exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment` (the user's own words), and on a pause the choice is one of the verdict's options. `agent_card` ⇒ no `said_commitment`: a card the agent composed was answered, and no words of the user's are on record; never on `confirm_limits`. Optional `card_commitment` (on an answer to a verdict, never on `confirm_limits` or `standing_intent`): the card text the answer was given on, committed under the verdict's own card nonce, so it MUST equal the verdict's `card_commitment`: equal means the card shown is the card checked, recomputable without the text. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
 | `action` | A point-of-no-return step actually taken. | `action`; optional `direction` (`out`: paid by the user; `in`: back to the user); optional `action_class` + `taxonomy_version` and `spend_minor` (see Action classes, below); on a `cancel`, optional `fee_minor` and `cancelled_amount_minor` (see Action classes, below) | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). An action that returns money (`direction: in`) carries exactly one `reverses` → the `pay` action it undoes (section 6, rule 8). |
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. |
@@ -439,6 +439,45 @@ The story in the fixtures (all fictional; 555-01xx numbers, `.example` domains):
 15. Outcome: nothing delivered, `mismatch`.
 16. Close `mismatch`.
 
+### The external rules checker
+
+A deal profile may pin an external rules checker: the user's policy (`profile update
+--rules-checker FILE`), never the agent's. `FILE` is `{"command": ["/absolute/path", "arg", …],
+"timeout": "10s", "definition_digest": "<64 hex>"}`. `timeout` (default 10s, at most 60s) and
+`definition_digest` (the ruleset the checker must report) are optional. The executable must sit
+under a trusted plugin root, and the profile pins its SHA-256.
+
+At every check, after the `check` record is sealed:
+- **What the checker gets.** The command runs exactly as pinned, with only `PATH` and `HOME` in
+  its environment. On stdin it gets one JSON object: that `check` capsule, with its disclosed
+  `agent_input` (the deal record, whose body is what is about to happen). It gets no history,
+  so a limit over a rolling window is evaluated over this one action.
+- **What it prints.** Exit 0 means it printed one `external-check-result/v0` object
+  (`external-check-result-v0.schema.json`, beside this file): `ruleset_id`, `definition_digest`,
+  `verdict` (`allow`\|`deny`\|`escalate`\|`not_evaluable`) and `findings[]` (`{id, check,
+  verdict: pass|fail|not_applicable|not_evaluable, reason, limit, value}`, passes included).
+  Members outside the schema are refused. Any other exit is a refusal of the input, with the
+  cause on stderr.
+- **What the check does with it.** It folds the answer into its one verdict:
+  - `allow` adds nothing;
+  - `escalate` and `not_evaluable` add a `rules_escalate` or `rules_not_evaluable` difference
+    per failing finding (with its limit and value), and the check pauses;
+  - `deny` adds `rules_deny` differences, and the verdict is `deny` with no way to proceed.
+  - A checker that is configured but changed since it was pinned, refused the input, timed
+    out, printed anything else, or reported another `definition_digest` than the pinned one
+    adds a `rules_not_checked` difference naming why, and the check pauses.
+
+The verdict's `rules` seals the outcome as data:
+- `status: evaluated`, with `ruleset_id`, `definition_digest`, `checker_sha256`, `verdict`,
+  `findings` (each `{id, check, verdict, limit, value}`), and `window: this_action_only`;
+- `status: not_evaluated`, with `cause` (`checker_unavailable`, `checker_changed`, `refused`,
+  `timeout`, `unreadable` or `ruleset_changed`) and `checker_sha256`;
+- `status: not_configured`, when no checker is pinned. That check does not pause for it, but its
+  record and its approval text say the rules were not checked.
+
+No words the checker wrote are sealed in the clear: its reasons and its stderr reach the card and
+the approval text, and the card is committed to.
+
 ## 9. Typed action records and the check contract
 
 A deal opened with `--records typed` seals its authority steps as typed action records, one
@@ -457,7 +496,7 @@ fingerprint as section 4). Digests are over the record's JCS bytes, as for x-dea
 |---|---|---|
 | `task-authority/v0` | The user's task authority: their words by commitment, `max_total_minor`, `allowed`. Sealed after the baseline (`source` ref), and again when the user confirms new limits (`approves` the intent, `previous_ref`, `said_commitment`). | the baseline intent; `approval` with `confirm_limits` |
 | `proposed-action/v0` | The action about to be taken, exactly as checked. | `check` |
-| `action-evaluation/v0` | The deal check's disposition (`DO` or `ASK`) and findings, with the contract fields below. | `verdict` |
+| `action-evaluation/v0` | The deal check's disposition (`DO`, `ASK` or `DENY`) and findings, with the contract fields below. | `verdict` |
 | `action-approval/v0` | An approval artifact of one stated `authority`: `user_approval` (the user's own answer, with their words and the `rendering_commitment` of what they were shown), `card_answer` (a card answered with no words), `platform_approval` (a platform approval observation, below), `policy_change` (the user confirming a policy change: `rendering_commitment`, `effective_policy_digest`, `semantic_diff_digest`), `one_shot_override` (reserved). | `approval` |
 | `action-record/v0` | What the agent did, with `evaluation_ref` and `authority_basis`; a disclosure that needed approval is an `action-record/v0` with `disclosed`. | `action`; `disclosure` with authority `approval` |
 | `action-outcome/v0` | What was observed (`attempted` names an unchecked action). | `outcome` |
@@ -474,7 +513,10 @@ choose another); or, with none configured, mode
 `none_fail_safe` (every pick the agent made alone pauses) with `materiality_digest: null`, which
 `ruleset_digest` then covers; `valid_until` is when the evaluation
 stops covering a step; `authority_basis` is `[{type: "task_authority", ref}]`;
-`rendering_commitment` commits to the card the evaluation rendered.
+`rendering_commitment` commits to the card the evaluation rendered. `rules_checks`, when the
+profile's external rules checker ran, names the ruleset it reported (`ruleset_id`,
+`definition_digest`) and its verdict; `ruleset_digest` stays the built-in rule table's. `DENY`
+(the rules did not allow the action) has ≥ 1 finding, `rules_checks`, and no option but `hold`.
 
 **Typed authorization.** In a chain whose second record is a `task-authority/v0`:
 - every check, verdict, approval, action and outcome step is a typed record, and an approved

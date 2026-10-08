@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentactioncapsule.org/records/action-evaluation-v0.schema.json",
   "title": "action-evaluation/v0",
-  "description": "One evaluation of a ProposedAction (the check contract's response): disposition DO or ASK (NEVER and ASK_UNVERIFIED reserved), findings, and proposed_action_digest, task_authority_ref, ruleset_digest (covers the rule table and the materiality predicate), materiality and materiality_digest (the materiality predicate evaluated: mode predicate with its digest, or mode none_fail_safe with null when none was configured, so every pick the agent made alone paused), valid_until and the proposed-phase authority_basis ([task_authority]). rendering_commitment commits to what was rendered for the person. refs: exactly one checks -> the proposed-action/v0.",
+  "description": "One evaluation of a ProposedAction (the check contract's response): disposition DO, ASK or DENY (DENY: the profile's rules did not allow it, and no option proceeds; NEVER and ASK_UNVERIFIED reserved), findings, and proposed_action_digest, task_authority_ref, ruleset_digest (covers the rule table and the materiality predicate), materiality and materiality_digest (the materiality predicate evaluated: mode predicate with its digest, or mode none_fail_safe with null when none was configured, so every pick the agent made alone paused), rules_checks (the ruleset each external rules checker reported, by id and definition digest, with its verdict; absent when none ran), valid_until and the proposed-phase authority_basis ([task_authority]). rendering_commitment commits to what was rendered for the person. refs: exactly one checks -> the proposed-action/v0.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -73,7 +73,8 @@
         "disposition": {
           "enum": [
             "DO",
-            "ASK"
+            "ASK",
+            "DENY"
           ]
         },
         "findings": {
@@ -115,6 +116,38 @@
         },
         "ruleset_digest": {
           "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "rules_checks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ruleset_id",
+              "definition_digest",
+              "verdict"
+            ],
+            "properties": {
+              "ruleset_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "definition_digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "verdict": {
+                "enum": [
+                  "allow",
+                  "deny",
+                  "escalate",
+                  "not_evaluable"
+                ]
+              }
+            }
+          }
         },
         "materiality": {
           "$ref": "record-common-v0.schema.json#/$defs/materiality"
@@ -185,6 +218,30 @@
               },
               "options": {
                 "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "DENY"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "rules_checks"
+            ],
+            "properties": {
+              "findings": {
+                "minItems": 1
+              },
+              "options": {
+                "items": {
+                  "const": "hold"
+                }
               }
             }
           }

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/profiles/x-deal-v0/external-check-result-v0.schema.json",
+  "title": "external-check-result/v0",
+  "description": "What an external rules checker prints on stdout, as one JSON object, when a deal check runs it on one record: the ruleset it evaluated (an id and the digest of its definition, both the checker's own), one verdict, and a finding for every rule it evaluated, passes included. Exit 0 means a result was printed, whatever its verdict; any other exit is a refusal of the input, named on stderr, and prints no result. The checker is given one record and no history, so a limit over a rolling window is evaluated over that one action. Members not listed here are refused.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "ruleset_id", "definition_digest", "verdict", "findings"],
+  "properties": {
+    "schema": { "const": "external-check-result/v0" },
+    "ruleset_id": {
+      "description": "The ruleset the checker evaluated, as the checker names it, version included.",
+      "type": "string", "minLength": 1, "maxLength": 200
+    },
+    "definition_digest": {
+      "description": "The SHA-256 of the ruleset's definition, as the checker computes it: lowercase hex. A profile may pin it, and a check whose checker reports another does not count as checked.",
+      "type": "string", "pattern": "^[0-9a-f]{64}$"
+    },
+    "verdict": {
+      "description": "allow: nothing in the ruleset stands against the action. deny: the ruleset does not allow it. escalate: the ruleset asks for the person's approval. not_evaluable: the ruleset could not be evaluated on this record.",
+      "enum": ["allow", "deny", "escalate", "not_evaluable"]
+    },
+    "findings": {
+      "description": "One entry per rule evaluated, in the ruleset's order, passes included.",
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "verdict"],
+        "properties": {
+          "id": { "description": "The rule's id within the ruleset.", "type": "string", "minLength": 1, "maxLength": 200 },
+          "check": { "description": "The kind of check the rule is, as the checker names it.", "type": "string", "maxLength": 200 },
+          "verdict": { "enum": ["pass", "fail", "not_applicable", "not_evaluable"] },
+          "reason": { "description": "Why, in words a person reads: shown when the rule fails or cannot be evaluated.", "type": "string", "maxLength": 1000 },
+          "limit": { "description": "The limit the rule applied, as JSON data." },
+          "value": { "description": "The value from the record the rule compared with the limit, as JSON data." }
+        }
+      }
+    }
+  }
+}
