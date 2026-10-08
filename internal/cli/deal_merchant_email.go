@@ -192,7 +192,13 @@ func captureEmail(raw []byte, supplied []dkimKeyRecord) (*merchantEmail, error) 
 		var dnsErr *net.DNSError
 		if err != nil && !(errors.As(err, &dnsErr) && dnsErr.IsNotFound) {
 			// Not sealed: a record we could not read is not a record that is absent.
-			fetchErr = errors.Join(fetchErr, inputError("could not fetch the "+what+" "+name+" ("+err.Error()+"); retry, or pass --key-record"))
+			// The way on is named: the record, obtained some other way and
+			// supplied, is sealed as supplied, which is weaker evidence.
+			flag := "--key-record FILE"
+			if what == "DMARC record" {
+				flag = "--dmarc-record FILE beside --key-record FILE"
+			}
+			fetchErr = errors.Join(fetchErr, inputError("could not reach DNS for the "+what+" "+name+" ("+err.Error()+"): retry, or get that TXT record another way (another resolver, or a lookup the user runs) and pass it with "+flag+"; it is sealed as supplied, which is weaker evidence than a record read from DNS"))
 			return nil, err
 		}
 		return txt, nil

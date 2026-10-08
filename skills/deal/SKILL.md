@@ -561,6 +561,39 @@ promptly: merchants rotate and revoke their keys, and a signature can only
 be checked later against a key that was sealed while it was still published.
 Prompt sealing is the whole protection.
 
+**If DNS cannot be reached.** When the seal is refused because the key
+record could not be read ("could not reach DNS for the DKIM key record …"),
+do not stop. Tell the user plainly and offer the way on, in your own words,
+for example: "I couldn't reach DNS to check the merchant's signature. If you
+can look up the merchant's key record, I can still seal the email with it."
+
+- **Which record.** The error names it: `SELECTOR._domainkey.DOMAIN`, a TXT
+  record. `SELECTOR` and `DOMAIN` are the `s=` and `d=` tags of the email's
+  `DKIM-Signature` header.
+- **Where it can come from.** Any DNS lookup that can reach it: another
+  resolver, or a lookup the user runs on another machine or network (for
+  example `dig +short TXT SELECTOR._domainkey.DOMAIN`). Save the TXT value
+  (`v=DKIM1; k=rsa; p=…`), or a zone-file line naming the record, to a file.
+- **How it is sealed.** Pass the file with `--key-record`. The email is
+  sealed with that record marked **supplied**: the result's `key_source` is
+  `supplied`, and the report and the emailed receipt say "The merchant's key
+  was supplied by hand, not read from the merchant's DNS." Say that to the
+  user, too.
+- **What it is worth.** A supplied record is **weaker evidence** than one this
+  tool read from DNS: whoever supplied it chose it. The signature check still
+  runs, but against the record you were given. Never present it as a
+  resolved one.
+
+```sh
+# The seal was refused: "could not reach DNS for the DKIM key record
+# s2026._domainkey.shop.example (…)". The user looked it up elsewhere:
+#   dig +short TXT s2026._domainkey.shop.example  >  key-record.txt
+capsulectl --profile deal deal note --deal ID --kind evidence --email confirmation.eml \
+  --key-record key-record.txt
+# key_source: "supplied". If the DMARC record could not be read either, pass it
+# with --dmarc-record dmarc-record.txt beside --key-record (also marked supplied).
+```
+
 The result has two separate statements. Report them separately, in their own
 words, and never as one combined badge:
 
