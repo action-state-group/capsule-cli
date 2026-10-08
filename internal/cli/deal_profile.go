@@ -346,6 +346,12 @@ func rulesBody(r dealRules) (map[string]interface{}, error) {
 		if h := r.History; h != nil {
 			m["history"] = map[string]interface{}{"days": h.Days, "acts": h.Acts, "complete": h.Complete}
 		}
+		// The tier as the checker reported it; "not_stated" when it did not
+		// say, which reads as judged.
+		m["tier"] = r.Tier
+		if r.Tier == "" {
+			m["tier"] = "not_stated"
+		}
 	}
 	return m, nil
 }

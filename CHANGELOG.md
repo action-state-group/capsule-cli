@@ -19,7 +19,9 @@
     `not_evaluable`, and the check pauses.
   - **What it prints.** One `external-check-result/v0` object: the ruleset's id and definition
     digest, a verdict (`allow`, `deny`, `escalate` or `not_evaluable`), and its findings, each
-    limit and value a number or a short line. The schema ships at
+    limit and value a number or a short line, and optionally how it reached the verdict (`tier`:
+    `recomputed`, `judged` or `human`; absent reads as judged, never recomputed). The tier is
+    sealed as reported and named in the approval text; it changes nothing. The schema ships at
     `skills/deal/profile/external-check-result-v0.schema.json`, and output outside it is
     refused.
 - **One verdict, one prompt.** The checker's answer folds into the check's own differences.

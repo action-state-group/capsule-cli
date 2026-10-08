@@ -81,7 +81,7 @@ func TestADealCheckRunsThePinnedRulesChecker(t *testing.T) {
 	assert.Equal(t, "allow", rules["verdict"])
 	assert.Equal(t, map[string]any{"days": float64(31), "acts": float64(0), "complete": true}, rules["history"])
 	text := approvalText(check)
-	assert.True(t, strings.HasPrefix(text, "Your rules (example-rules/1.0.0, digest abababab): allowed.\n"), text)
+	assert.True(t, strings.HasPrefix(text, "Your rules (example-rules/1.0.0, digest abababab): allowed, judged (not stated).\n"), text)
 	assert.Contains(t, text, "Before you go ahead: no differences.")
 	assert.NotContains(t, text, "Deal check")
 	assert.NotContains(t, text, "Stale after", "the stale line stays in the record, out of the prompt")
@@ -140,7 +140,7 @@ func TestADenyFromTheRulesOffersNoWayToProceed(t *testing.T) {
 	}
 	assert.Equal(t, []string{"hold"}, options, "no proceed option")
 	assert.Contains(t, check["card"], `Not allowed by your rules: per-purchase: over the per-purchase limit (limit 2500; value 55880)`)
-	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not allowed.")
+	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not allowed, judged (not stated).")
 	_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "go ahead")
 	require.ErrorIs(t, err, ErrInput, "a denied check cannot be approved past")
 	report := dealRun(t, "report", "--deal", id)
@@ -192,7 +192,7 @@ func TestANotEvaluableFromTheRulesPauses(t *testing.T) {
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Contains(t, check["card"], "Your rules were not fully checked: weekly: the record carries no week of history")
 	assert.Contains(t, check["card"], "[Pay anyway]")
-	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not fully checked.")
+	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not fully checked, judged (not stated).")
 	var rules []string
 	for _, d := range check["differences"].([]any) {
 		rules = append(rules, d.(map[string]any)["rule"].(string))
@@ -398,7 +398,7 @@ func TestARollingLimitWithTooLittleHistoryIsNotFullyChecked(t *testing.T) {
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Contains(t, check["card"], "Your rules were not fully checked: weekly: the 7-day total needs every earlier payment of the week")
-	assert.Contains(t, approvalText(check), "Your rules (stub-rules/0.1.0, digest 00000000): not fully checked. They were given only 1 of your earlier payments from the last 31 days.")
+	assert.Contains(t, approvalText(check), "Your rules (stub-rules/0.1.0, digest 00000000): not fully checked, computed by your rules. They were given only 1 of your earlier payments from the last 31 days.")
 	_, export := exportRecords(t, id)
 	checkProfile(t, export)
 }
@@ -456,4 +456,38 @@ func TestNoCheckerWordsAreSealedInTheClear(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), "shoe_size")
 	checkProfile(t, export)
+}
+
+// The tier is recorded as the checker reported it and named in the
+// approval text; an absent one reads as judged. It changes nothing: a deny
+// is a deny whatever its tier.
+func TestTheTierIsRecordedAndShown(t *testing.T) {
+	for tier, want := range map[string][2]string{
+		"recomputed": {"recomputed", "computed by your rules"},
+		"judged":     {"judged", "judged"},
+		"human":      {"human", "judged by a person"},
+		"":           {"not_stated", "judged (not stated)"},
+	} {
+		t.Run(want[0], func(t *testing.T) {
+			id := stickerDeal(t, "card", false)
+			member := ""
+			if tier != "" {
+				member = `"tier":"` + tier + `",`
+			}
+			out := `printf '%s' '{"schema":"external-check-result/v0","ruleset_id":"example-rules/1.0.0","definition_digest":"` + exampleRulesDigest + `","verdict":"deny",` + member + `"findings":[` + denyFinding + `]}'`
+			pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules", out)}})
+			check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
+			assert.Equal(t, "deny", check["verdict"], "the tier changes nothing")
+			assert.Contains(t, approvalText(check), "not allowed, "+want[1]+".")
+			records, export := exportRecords(t, id)
+			for _, r := range records {
+				if r["x-deal-v0"].(map[string]any)["record_type"] == "verdict" {
+					assert.Equal(t, want[0], r["body"].(map[string]any)["rules"].(map[string]any)["tier"])
+				}
+			}
+			checkProfile(t, export)
+		})
+	}
+	_, err := parseExternalCheck([]byte(`{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"allow","tier":"vibes","findings":[]}`))
+	assert.Error(t, err, "a tier outside the closed set is malformed")
 }

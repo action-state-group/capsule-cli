@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentactioncapsule.org/profiles/x-deal-v0/external-check-result-v0.schema.json",
   "title": "external-check-result/v0",
-  "description": "What an external rules checker prints on stdout, as one JSON object, when a deal check runs it on an external-check-input/v0 (external-check-input-v0.schema.json): the ruleset it evaluated (an id and the digest of its definition, both the checker's own), one verdict, and a finding for every rule it evaluated, passes included. Exit 0 means a result was printed, whatever its verdict; any other exit is a refusal of the input, named on stderr, and prints no result. A rolling window is evaluated over the history the deal check supplies; a checker given no history, or too little (history_scope.complete false, or fewer days than the window), reports that rule not_evaluable. Members not listed here are refused.",
+  "description": "What an external rules checker prints on stdout, as one JSON object, when a deal check runs it on an external-check-input/v0 (external-check-input-v0.schema.json): the ruleset it evaluated (an id and the digest of its definition, both the checker's own), one verdict, and a finding for every rule it evaluated, passes included. Exit 0 means a result was printed, whatever its verdict; any other exit is a refusal of the input, named on stderr, and prints no result. A rolling window is evaluated over the history the deal check supplies; a checker given no history, or too little (history_scope.complete false, or fewer days than the window), reports that rule not_evaluable. Members not listed here are refused. An absent tier reads as judged, never recomputed.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -34,6 +34,14 @@
         "deny",
         "escalate",
         "not_evaluable"
+      ]
+    },
+    "tier": {
+      "description": "How the verdict was reached: recomputed (computed from the record by a procedure anyone can rerun), judged (a model's judgement) or human (a person's). Optional. An absent tier reads as judged, never recomputed.",
+      "enum": [
+        "recomputed",
+        "judged",
+        "human"
       ]
     },
     "findings": {

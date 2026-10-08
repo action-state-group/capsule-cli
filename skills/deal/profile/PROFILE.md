@@ -464,7 +464,9 @@ At every check, after the `check` record is sealed:
   `not_evaluable`.
 - **What it prints.** Exit 0 means it printed one `external-check-result/v0` object
   (`external-check-result-v0.schema.json`, beside this file): `ruleset_id`, `definition_digest`,
-  `verdict` (`allow`\|`deny`\|`escalate`\|`not_evaluable`) and `findings[]` (`{id, check,
+  `verdict` (`allow`\|`deny`\|`escalate`\|`not_evaluable`), an optional `tier`
+  (`recomputed`\|`judged`\|`human`; an absent tier reads as judged, never recomputed) and
+  `findings[]` (`{id, check,
   verdict: pass|fail|not_applicable|not_evaluable, reason, limit, value}`, passes included;
   `limit` and `value` are each a number, or a string of at most 64 characters with no line
   break).
@@ -481,7 +483,8 @@ At every check, after the `check` record is sealed:
 
 The verdict's `rules` seals the outcome as data:
 - `status: evaluated`, with `ruleset_id`, `definition_digest`, `checker_sha256`, `verdict`,
-  `findings` (each `{id, check, verdict, limit, value}`), and `history` (`{days, acts, complete}`:
+  `tier` (as reported, or `not_stated`; recorded and shown in the approval text, it changes
+  nothing), `findings` (each `{id, check, verdict, limit, value}`), and `history` (`{days, acts, complete}`:
   what the checker was given beside the record);
 - `status: not_evaluated`, with `cause` (`checker_unavailable`, `checker_changed`, `refused`,
   `timeout`, `unreadable` or `ruleset_changed`) and `checker_sha256`;

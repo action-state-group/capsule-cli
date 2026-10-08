@@ -325,6 +325,7 @@
             "definition_digest": { "$ref": "#/$defs/hex64" },
             "checker_sha256": { "$ref": "#/$defs/hex64" },
             "verdict": { "enum": ["allow", "deny", "escalate", "not_evaluable"] },
+            "tier": { "enum": ["recomputed", "judged", "human", "not_stated"], "description": "How the checker said it reached its verdict, as reported; not_stated when it did not say, which reads as judged, never recomputed. Recorded only: it changes nothing about the verdict." },
             "history": {
               "description": "The history the checker was given beside the record: how many earlier acts, over how many days, and whether that is every one of them.",
               "type": "object", "additionalProperties": false, "required": ["days", "acts", "complete"],
