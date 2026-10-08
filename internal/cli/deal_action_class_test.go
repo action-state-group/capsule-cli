@@ -44,7 +44,7 @@ func checkAct(t *testing.T, dealID, action string, amount int) map[string]any {
 	t.Helper()
 	body := `{"action":"` + action + `","terms":{"item":"otter sticker","price_minor":` + strconv.Itoa(amount) + `}`
 	if action == "pay" {
-		body += `,"amount_minor":` + strconv.Itoa(amount)
+		body += `,"amount_minor":` + strconv.Itoa(amount) + `,"authorized_max_minor":` + strconv.Itoa(amount)
 	}
 	return dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, body+`}`))
 }

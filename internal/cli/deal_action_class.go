@@ -1,5 +1,7 @@
 package cli
 
+import "fmt"
+
 // dealTaxonomyVersion is the action-class taxonomy a deal record's
 // action_class is drawn from: version 2 of capsule-engine's
 // capsule_engine/guards/action_taxonomy.json
@@ -86,6 +88,39 @@ func dealSpendMinor(action, direction string, amount *int64) (int64, bool) {
 		return 0, false
 	}
 	return *amount, true
+}
+
+// checkAuthorizedMax holds a check's authorized maximum to its shape, and
+// fails safe: a pay on a rail that can hold more than it charges (a card, a
+// wallet, PayPal, or any rail not known to be holdless) must state the most
+// it may take, since a limit binds that, not the expected charge.
+func checkAuthorizedMax(snap dealSnapshot, dealRail string) error {
+	if m := snap.AuthorizedMaxMinor; m != nil {
+		switch {
+		case snap.Action != "pay":
+			return inputError("authorized_max_minor is the most a payment may take: only a pay carries one")
+		case *m < 0:
+			return inputError("authorized_max_minor must not be negative")
+		case snap.AmountMinor != nil && *m < *snap.AmountMinor:
+			return inputError(fmt.Sprintf("authorized_max_minor (%d) is less than amount_minor (%d): it is the most the payment may take, so at least the expected charge", *m, *snap.AmountMinor))
+		}
+		return nil
+	}
+	if snap.Action != "pay" {
+		return nil
+	}
+	rail := dealRail
+	if snap.Recourse != nil && snap.Recourse.Rail != "" {
+		rail = snap.Recourse.Rail
+	}
+	if railsWithoutRecourse[normRail(rail)] {
+		return nil
+	}
+	name := railName(rail)
+	if name == "" {
+		name = "an unstated rail"
+	}
+	return inputError("a pay by " + name + " must state authorized_max_minor: the most the payment may take, as the approval or the card hold shows it (the same as amount_minor when no larger maximum is shown)")
 }
 
 // checkFee refuses a fee on anything but a cancel, or a negative one.

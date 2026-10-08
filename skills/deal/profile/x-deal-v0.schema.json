@@ -282,12 +282,14 @@
     "body_check": {
       "type": "object", "additionalProperties": false,
       "required": ["action"],
-      "dependentRequired": { "action_class": ["taxonomy_version"], "taxonomy_version": ["action_class"] },
+      "dependentRequired": { "action_class": ["taxonomy_version"], "taxonomy_version": ["action_class"], "spend_authorized_minor": ["authorized_max_minor", "spend_minor"] },
       "properties": {
         "action": { "$ref": "#/$defs/point_of_no_return" },
         "action_class": { "$ref": "#/$defs/action_class" },
         "taxonomy_version": { "$ref": "#/$defs/taxonomy_version" },
         "spend_minor": { "description": "The amount a spend cap evaluates: what the action pays out. 0 on every cancel. Sealed with action_class.", "$ref": "#/$defs/safe_uint" },
+        "authorized_max_minor": { "description": "On a pay: the most the counterparty may take under the payment's authorization (a card hold, a pre-authorization with a buffer settled later), at least amount_minor, which stays the expected charge. A limit binds it.", "$ref": "#/$defs/safe_uint" },
+        "spend_authorized_minor": { "description": "The authorized maximum beside spend_minor: what a per-action spend cap reads. Sealed with action_class and authorized_max_minor.", "$ref": "#/$defs/safe_uint" },
         "direction": { "description": "On a cancel with an amount: in. Sealed with action_class.", "enum": ["in"] },
         "fee_minor": { "description": "On a cancel only: a fee the cancellation costs, recorded as its own amount and never the amount a spend cap evaluates.", "$ref": "#/$defs/safe_uint" },
         "cancelled_amount_minor": { "description": "On a cancel only: the amount the cancel was about when it returns no sealed payment (part of one, or one it matches none of). Neither money moved nor spend; sealed with direction in.", "$ref": "#/$defs/safe_uint" },

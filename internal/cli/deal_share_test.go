@@ -80,7 +80,7 @@ func openPrivateDeal(t *testing.T) string {
 	// digits, a zero-width space, inside a URL.
 	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t,
 		`{"from":"counterparty","channel":"web","text":"`+unicodeEvasions+`"}`))
-	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":627,"recourse":{"rail":"card","refundable":true}}`))
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":627,"authorized_max_minor":627,"recourse":{"rail":"card","refundable":true}}`))
 	if check["verdict"] == "pause" {
 		dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed")
 	}

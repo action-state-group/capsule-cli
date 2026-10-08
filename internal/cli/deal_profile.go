@@ -676,6 +676,14 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			body["fee_minor"] = *sn.FeeMinor
 		}
 		classify(body, sn.Action, direction, sn.AmountMinor)
+		// The most the payment may take, beside the expected charge: what a
+		// limit binds, and (beside spend_minor) what a per-action cap reads.
+		if sn.AuthorizedMaxMinor != nil {
+			body["authorized_max_minor"] = *sn.AuthorizedMaxMinor
+			if _, classed := body["spend_minor"]; classed {
+				body["spend_authorized_minor"] = *sn.AuthorizedMaxMinor
+			}
+		}
 		if sn.SeenItem != nil {
 			body["seen_item"] = *sn.SeenItem
 		}

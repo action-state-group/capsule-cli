@@ -29,7 +29,7 @@ const merchantOpen = `{"type":"purchase","channel":"web",
 	"terms":{"item":"SJC-HOU flight","price_minor":55880,"currency":"USD"},
 	"recourse":{"rail":"card","refundable":true}}`
 
-const merchantCheck = `{"action":"pay","amount_minor":55880,
+const merchantCheck = `{"action":"pay","amount_minor":55880,"authorized_max_minor":55880,
 	"who":{"domain":"travel-super-discount.example","payee":"Travel Super Discount"},
 	"terms":{"item":"SJC-HOU flight","price_minor":55880},
 	"recourse":{"rail":"card","refundable":true}}`
@@ -61,7 +61,7 @@ func openTypedSticker(t *testing.T) string {
 func checkPay(t *testing.T, dealID string, amount int) map[string]any {
 	t.Helper()
 	return dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t,
-		`{"action":"pay","amount_minor":`+strconv.Itoa(amount)+`,"terms":{"item":"otter sticker","price_minor":`+strconv.Itoa(amount)+`}}`))
+		`{"action":"pay","amount_minor":`+strconv.Itoa(amount)+`,"authorized_max_minor":`+strconv.Itoa(amount)+`,"terms":{"item":"otter sticker","price_minor":`+strconv.Itoa(amount)+`}}`))
 }
 
 func payNow(t *testing.T, dealID string, amount int) map[string]any {
@@ -393,7 +393,7 @@ func TestTypedApprovalDoesNotSurviveAChangedProposedAction(t *testing.T) {
 	first := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, merchantCheck))
 	_, err := answerCheck(t, id, first["check_id"].(string), "yes, the new site is fine", first["card"].(string))
 	require.NoError(t, err)
-	changed := strings.Replace(merchantCheck, "55880", "61000", 1)
+	changed := strings.NewReplacer(`"amount_minor":55880`, `"amount_minor":61000`, `"authorized_max_minor":55880`, `"authorized_max_minor":61000`).Replace(merchantCheck)
 	second := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, changed))
 	require.Equal(t, "pause", second["verdict"])
 	a := first["check_response"].(map[string]any)["proposed_action_digest"]
@@ -573,7 +573,7 @@ func TestTypedFixturesNameTheSealedRuleset(t *testing.T) {
 func TestTypedOnePromptForSeveralFindings(t *testing.T) {
 	dealFixture(t)
 	id := openTyped(t, merchantOpen)
-	check := strings.NewReplacer(`"price_minor":55880}`, `"price_minor":57900}`, `"amount_minor":55880`, `"amount_minor":57900`,
+	check := strings.NewReplacer(`"price_minor":55880}`, `"price_minor":57900}`, `"amount_minor":55880`, `"amount_minor":57900`, `"authorized_max_minor":55880`, `"authorized_max_minor":57900`,
 		`"refundable":true}}`, `"refundable":false}}`, `"domain":"travel-super-discount.example",`, ``).Replace(merchantCheck)
 	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, check))
 	require.Equal(t, "pause", c["verdict"])

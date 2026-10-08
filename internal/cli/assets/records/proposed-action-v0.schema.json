@@ -77,6 +77,14 @@
         "spend_minor": {
           "$ref": "record-common-v0.schema.json#/$defs/uint"
         },
+        "authorized_max_minor": {
+          "description": "On a pay: the most the counterparty may take under the payment's authorization, at least amount_minor (the expected charge). A limit binds it.",
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
+        "spend_authorized_minor": {
+          "description": "The authorized maximum beside spend_minor: what a per-action spend cap reads.",
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
         "fee_minor": {
           "$ref": "record-common-v0.schema.json#/$defs/uint"
         },

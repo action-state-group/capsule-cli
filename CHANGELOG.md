@@ -27,6 +27,28 @@
   refusal signature makes it INCOMPLETE. Uses agent-action-capsule go/v0.7.0. Other extensions are
   still listed as carried but not checked.
 
+### A spend limit binds the most a payment may take
+
+- **Fixed: an authorization buffer evaded every limit.** A pay check carried only the expected
+  charge, so a $4.54 order passed a $5 limit while the card approval let the merchant take up to
+  $9.54.
+- **New check field `authorized_max_minor`:** on a `pay`, the most the counterparty may take
+  under the payment's authorization (a card hold, a pre-authorization with a buffer for tax
+  settled later). It must be at least `amount_minor`, which stays the expected charge. The intent
+  limit evaluates it, and the difference names it ("up to $9.54 may be taken (the authorized
+  maximum; the expected charge is $4.54)", field `authorized_max_minor`).
+- **Behaviour change, fail safe:** a pay by card, wallet, PayPal, or any rail not known to be
+  holdless is refused (exit 2) unless it states `authorized_max_minor` (the same as
+  `amount_minor` when no larger maximum is shown). A pay on a holdless rail (bank transfer,
+  Zelle, wire, cash and the like) defaults it to the amount.
+- **Sealed:** the check carries `authorized_max_minor`, and `spend_authorized_minor` beside
+  `spend_minor` (which a per-action cap reads; a rolling cap sums the actions' `spend_minor`). A
+  typed `proposed-action/v0` carries it, so an approval never extends to a larger maximum.
+  Optional members, kept per step: records already sealed re-derive unchanged.
+- **The capture:** an action that takes more than the authorized maximum differs from its
+  check; one below it, though not the estimate, is what a hold is for.
+- The deal skill tells the agent to read the maximum from the approval or card hold and pass it.
+
 ### A second report on a profile works after a checkpoint covers a disclosure
 
 - **Fixed:** once a checkpoint covered a disclosure, every later `bundle` and `disclose` on that

@@ -265,7 +265,7 @@ func TestOverLimitExceptionWording(t *testing.T) {
 			"terms":{"item":"Otterly Chaos poster","price_minor":6000,"currency":"USD"},
 			"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
 	}
-	check := `{"action":"pay","amount_minor":6000,"terms":{"item":"Otterly Chaos poster","price_minor":6000}}`
+	check := `{"action":"pay","amount_minor":6000,"authorized_max_minor":6000,"terms":{"item":"Otterly Chaos poster","price_minor":6000}}`
 	c := dealRun(t, "check", "--deal", open(`{"item":"Otterly Chaos poster","price_minor":6000}`), "--input", writeJSON(t, check))
 	require.Equal(t, "pause", c["verdict"], "the rule still asks")
 	assert.Contains(t, c["card"], "Your rules normally ask above $25.00. You asked for this $60.00 purchase specifically. Approve this exception?")

@@ -225,7 +225,7 @@ func purchaseThenCancel(t *testing.T, dealType, checkInput, actInput string) str
 			dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", said)
 		}
 	}
-	answer(dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"terms":{"item":"`+item+`","price_minor":55880},"recourse":{"rail":"card","refundable":true}}`)), "yes, book it")
+	answer(dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"authorized_max_minor":55880,"terms":{"item":"`+item+`","price_minor":55880},"recourse":{"rail":"card","refundable":true}}`)), "yes, book it")
 	dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"currency":"USD","rail":"card"}`))
 	dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"cancel this ticket for me please","allowed":["pay","cancel"]}`))
 	answer(dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"cancel","description":"cancel the ticket",`+checkInput+`}`)), "yes, cancel it")
@@ -290,7 +290,7 @@ func TestDealCancelIsNeverSpend(t *testing.T) {
 func TestDealFeeIsACancelsOnly(t *testing.T) {
 	dealFixture(t)
 	id := openSticker(t, true)
-	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":600,"fee_minor":100}`))
+	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":600,"authorized_max_minor":600,"fee_minor":100}`))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "only a cancel carries one")
 	_, err = invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", writeJSON(t, `{"action":"cancel","fee_minor":-1}`))
@@ -362,7 +362,7 @@ func TestDealUncheckedCancelAmountNeverReadsAsMoneyOut(t *testing.T) {
 			amount := 30000
 			if tc.pay {
 				amount = 55880
-				check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"terms":{"item":"`+item+`","price_minor":55880},"recourse":{"rail":"card","refundable":true}}`))
+				check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"authorized_max_minor":55880,"terms":{"item":"`+item+`","price_minor":55880},"recourse":{"rail":"card","refundable":true}}`))
 				if check["verdict"] != "pass" {
 					dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "yes, book it")
 				}
