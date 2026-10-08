@@ -328,9 +328,6 @@ func rulesBody(r dealRules) (map[string]interface{}, error) {
 			if f.Check != "" {
 				fm["check"] = f.Check
 			}
-			if f.Tier != "" {
-				fm["tier"] = f.Tier
-			}
 			for k, raw := range map[string]json.RawMessage{"limit": f.Limit, "value": f.Value} {
 				if len(raw) == 0 {
 					continue
@@ -348,15 +345,6 @@ func rulesBody(r dealRules) (map[string]interface{}, error) {
 		m["findings"] = findings
 		if h := r.History; h != nil {
 			m["history"] = map[string]interface{}{"days": h.Days, "acts": h.Acts, "complete": h.Complete}
-		}
-		if r.Tier != "" {
-			m["tier"] = r.Tier
-		}
-		if j := r.Judge; j != nil {
-			m["judge"] = map[string]interface{}{"model_id": j.ModelID, "prompt_digest": j.PromptDigest, "template_id": j.TemplateID}
-		}
-		if d := r.Degraded; d != nil {
-			m["degraded"] = map[string]interface{}{"from": d.From, "cause": d.Cause}
 		}
 	}
 	return m, nil

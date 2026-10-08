@@ -327,7 +327,7 @@ func evaluationBody(ev dealEvent, events []sealedEvent, v0 map[string]interface{
 	// The ruleset the profile's external checker ran, when it ran: the
 	// ruleset_digest above stays the built-in rule table's.
 	if r := ck.Rules; r != nil && r.Status == "evaluated" {
-		out["rules_checks"] = []interface{}{map[string]interface{}{"ruleset_id": r.RulesetID, "definition_digest": r.DefinitionDigest, "verdict": r.Verdict, "tier": r.Tier}}
+		out["rules_checks"] = []interface{}{map[string]interface{}{"ruleset_id": r.RulesetID, "definition_digest": r.DefinitionDigest, "verdict": r.Verdict}}
 	}
 	mode, digest := ck.Materiality.mode()
 	out["materiality"], out["materiality_digest"] = mode, nil

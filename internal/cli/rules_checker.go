@@ -60,10 +60,6 @@ type rulesCheckerPin struct {
 	Command          []string `json:"command"`
 	Timeout          string   `json:"timeout,omitempty"`
 	DefinitionDigest string   `json:"definition_digest,omitempty"`
-	// AllowJudgedDeny lets a deny the checker did not recompute (judged by
-	// a model or a person) refuse the action outright. Off by default: such
-	// a deny asks for the user's approval instead.
-	AllowJudgedDeny bool `json:"allow_judged_deny,omitempty"`
 }
 
 var hex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -97,7 +93,7 @@ func pinRulesChecker(p *Profile, path string) error {
 	if err != nil {
 		return err
 	}
-	p.RulesChecker = ProfileRulesChecker{Command: pin.Command, SHA256: sum, Timeout: pin.Timeout, DefinitionDigest: pin.DefinitionDigest, AllowJudgedDeny: pin.AllowJudgedDeny}
+	p.RulesChecker = ProfileRulesChecker{Command: pin.Command, SHA256: sum, Timeout: pin.Timeout, DefinitionDigest: pin.DefinitionDigest}
 	return nil
 }
 
@@ -135,7 +131,6 @@ type dealRulesFinding struct {
 	ID      string          `json:"id"`
 	Check   string          `json:"check,omitempty"`
 	Verdict string          `json:"verdict"`
-	Tier    string          `json:"tier,omitempty"`
 	Reason  string          `json:"reason,omitempty"`
 	Limit   json.RawMessage `json:"limit,omitempty"`
 	Value   json.RawMessage `json:"value,omitempty"`
@@ -156,21 +151,8 @@ type dealRules struct {
 	CheckerSHA256    string             `json:"checker_sha256,omitempty"`
 	Verdict          string             `json:"verdict,omitempty"`
 	Findings         []dealRulesFinding `json:"findings,omitempty"`
-	// Tier is how the verdict was reached (recomputed, judged or human;
-	// judged when the checker did not say), and Judge the model's pin.
-	Tier  string          `json:"tier,omitempty"`
-	Judge *dealRulesJudge `json:"judge,omitempty"`
-	// Degraded says the checker's verdict was softened, from what and why.
-	Degraded *dealRulesDegraded `json:"degraded,omitempty"`
 	// History is what the checker was given beside the record.
 	History *dealRulesHistory `json:"history,omitempty"`
-}
-
-// dealRulesDegraded is a checker's verdict softened at the boundary: a deny
-// not recomputed asks for approval instead.
-type dealRulesDegraded struct {
-	From  string `json:"from"`
-	Cause string `json:"cause"`
 }
 
 // dealRulesHistory states the history a checker was given: how many earlier
@@ -188,49 +170,10 @@ type externalCheckResult struct {
 	RulesetID        string             `json:"ruleset_id"`
 	DefinitionDigest string             `json:"definition_digest"`
 	Verdict          string             `json:"verdict"`
-	Tier             string             `json:"tier"`
-	Judge            *dealRulesJudge    `json:"judge"`
 	Findings         []dealRulesFinding `json:"findings"`
 }
 
-// dealRulesJudge pins the model that judged: its id, and the id and digest
-// of the prompt template (never the prompt as filled in).
-type dealRulesJudge struct {
-	ModelID      string `json:"model_id"`
-	PromptDigest string `json:"prompt_digest"`
-	TemplateID   string `json:"template_id"`
-}
-
-// The tiers a verdict is reached by. An absent tier reads as judged: the
-// weaker claim, never recomputed.
-const (
-	tierRecomputed = "recomputed"
-	tierJudged     = "judged"
-	tierHuman      = "human"
-)
-
-// recomputedDeny reports whether a deny rests on a rule the checker
-// recomputed: a failing finding whose tier (its own, else the result's,
-// else judged) is recomputed; with no failing finding, the result's tier.
-func recomputedDeny(r externalCheckResult) bool {
-	failing := false
-	for _, f := range r.Findings {
-		if f.Verdict != "fail" {
-			continue
-		}
-		failing = true
-		tier := f.Tier
-		if tier == "" {
-			tier = r.Tier
-		}
-		if tier == tierRecomputed {
-			return true
-		}
-	}
-	return !failing && r.Tier == tierRecomputed
-}
-
-//go:embed assets/external-check/v0/result.schema.json
+//go:embed assets/external-check-result-v0.schema.json
 var externalCheckSchemaJSON []byte
 
 var (
@@ -247,7 +190,7 @@ func compiledExternalCheckSchema() (*jsonschema.Schema, error) {
 			return
 		}
 		c := jsonschema.NewCompiler()
-		const id = "result.schema.json"
+		const id = "external-check-result-v0.schema.json"
 		if err = c.AddResource(id, doc); err != nil {
 			externalCheckErr = err
 			return
@@ -341,18 +284,8 @@ func runRulesChecker(ctx context.Context, p Profile, input []byte, history *deal
 	if pin.DefinitionDigest != "" && result.DefinitionDigest != pin.DefinitionDigest {
 		return notEvaluated("ruleset_changed", "the ruleset changed since it was pinned ("+result.RulesetID+" reports another definition digest); re-pin it with profile update --rules-checker FILE")
 	}
-	rules := dealRules{Status: "evaluated", RulesetID: result.RulesetID, DefinitionDigest: result.DefinitionDigest, CheckerSHA256: pin.SHA256,
-		Verdict: result.Verdict, Tier: result.Tier, Judge: result.Judge, Findings: result.Findings, History: history}
-	if rules.Tier == "" {
-		rules.Tier = tierJudged
-	}
-	// Only a recomputed rule refuses outright. A deny judged by a model or a
-	// person asks for the user's approval instead, unless the profile opts
-	// in, and the record says it was degraded and why.
-	if result.Verdict == "deny" && !recomputedDeny(result) && !pin.AllowJudgedDeny {
-		rules.Verdict, rules.Degraded = "escalate", &dealRulesDegraded{From: "deny", Cause: "not_recomputed"}
-	}
-	return rules
+	return dealRules{Status: "evaluated", RulesetID: result.RulesetID, DefinitionDigest: result.DefinitionDigest, CheckerSHA256: pin.SHA256,
+		Verdict: result.Verdict, Findings: result.Findings, History: history}
 }
 
 // privateExecutableCopy reads the executable at path once (under a trusted
@@ -449,10 +382,7 @@ func rulesStatusLine(r *dealRules) string {
 			short = short[:8]
 		}
 		words := map[string]string{"allow": "allowed", "deny": "not allowed", "escalate": "needs your approval", "not_evaluable": "not fully checked"}[r.Verdict]
-		line := fmt.Sprintf("Your rules (%s, digest %s): %s, %s.", r.RulesetID, short, words, rulesProvenance(r))
-		if r.Degraded != nil {
-			line += " They would not allow it, but only a computed rule can refuse outright: the choice is yours."
-		}
+		line := fmt.Sprintf("Your rules (%s, digest %s): %s.", r.RulesetID, short, words)
 		if h := r.History; h != nil && !h.Complete {
 			line += fmt.Sprintf(" They were given only %d of your earlier payments from the last %d days.", h.Acts, h.Days)
 		}
@@ -462,19 +392,6 @@ func rulesStatusLine(r *dealRules) string {
 	default:
 		return "Your rules were not checked: " + r.Reason + "."
 	}
-}
-
-// rulesProvenance says how the rules reached their verdict.
-func rulesProvenance(r *dealRules) string {
-	switch {
-	case r.Tier == tierRecomputed:
-		return "computed by your rules"
-	case r.Tier == tierHuman:
-		return "judged by a person"
-	case r.Judge != nil:
-		return "judged by " + r.Judge.ModelID
-	}
-	return "judged (the checker named no model)"
 }
 
 // rulesDifferences are the differences the rules add to a check: a deny, an
@@ -504,11 +421,7 @@ func rulesDifferences(r *dealRules) []dealDifference {
 		case "deny":
 			text = "Not allowed by your rules: " + text
 		case "escalate":
-			if r.Degraded != nil && f.Verdict == "fail" {
-				text = "Your rules would not allow this (" + rulesProvenance(r) + ", not computed): " + text
-			} else {
-				text = "Your rules ask for approval: " + text
-			}
+			text = "Your rules ask for approval: " + text
 		default:
 			rule, text = "rules_not_evaluable", "Your rules were not fully checked: "+text
 		}

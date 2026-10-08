@@ -325,21 +325,6 @@
             "definition_digest": { "$ref": "#/$defs/hex64" },
             "checker_sha256": { "$ref": "#/$defs/hex64" },
             "verdict": { "enum": ["allow", "deny", "escalate", "not_evaluable"] },
-            "tier": { "enum": ["recomputed", "judged", "human"], "description": "How the checker reached its verdict; judged when it did not say." },
-            "judge": {
-              "description": "The pin of the model that judged: its id and the id and digest of the prompt template.",
-              "type": "object", "additionalProperties": false, "required": ["model_id", "prompt_digest", "template_id"],
-              "properties": {
-                "model_id": { "type": "string", "minLength": 1, "maxLength": 200 },
-                "prompt_digest": { "$ref": "#/$defs/hex64" },
-                "template_id": { "type": "string", "minLength": 1, "maxLength": 200 }
-              }
-            },
-            "degraded": {
-              "description": "The checker's verdict was softened: a deny it did not recompute asks for the user's approval (verdict escalate), unless the profile allows judged denies.",
-              "type": "object", "additionalProperties": false, "required": ["from", "cause"],
-              "properties": { "from": { "const": "deny" }, "cause": { "const": "not_recomputed" } }
-            },
             "history": {
               "description": "The history the checker was given beside the record: how many earlier acts, over how many days, and whether that is every one of them.",
               "type": "object", "additionalProperties": false, "required": ["days", "acts", "complete"],
@@ -357,7 +342,6 @@
                   "id": { "type": "string", "minLength": 1, "maxLength": 200 },
                   "check": { "type": "string", "maxLength": 200 },
                   "verdict": { "enum": ["pass", "fail", "not_applicable", "not_evaluable"] },
-                  "tier": { "enum": ["recomputed", "judged", "human"] },
                   "limit": { "$ref": "#/$defs/rules_scalar" },
                   "value": { "$ref": "#/$defs/rules_scalar" }
                 },
@@ -366,7 +350,7 @@
             }
           },
           "allOf": [
-            { "if": { "properties": { "status": { "const": "evaluated" } } }, "then": { "required": ["ruleset_id", "definition_digest", "checker_sha256", "verdict", "tier", "findings", "history"] } },
+            { "if": { "properties": { "status": { "const": "evaluated" } } }, "then": { "required": ["ruleset_id", "definition_digest", "checker_sha256", "verdict", "findings", "history"] } },
             { "if": { "properties": { "status": { "const": "not_evaluated" } } }, "then": { "required": ["cause"] } }
           ]
         },

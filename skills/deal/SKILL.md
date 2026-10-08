@@ -528,10 +528,7 @@ they are.
 
 - `"verdict": "deny"`: the user's rules do not allow this. The card names
   the rule, its limit and the value, and offers only "Hold". Do not act, and
-  do not look for a way around it: tell the user what the card says. Only
-  a rule the checker computed refuses outright. When a model or a person
-  judged it, the check pauses instead and its text says who judged: show
-  the card and let the user answer.
+  do not look for a way around it: tell the user what the card says.
 
 **Your rules.** A deal profile may pin a rules checker (the user's policy,
 set with `profile update --rules-checker FILE`; never yours to change). Every

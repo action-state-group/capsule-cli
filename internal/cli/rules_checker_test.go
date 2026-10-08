@@ -31,20 +31,10 @@ func stubChecker(t *testing.T, name, body string) string {
 	return path
 }
 
-// checkerPrints is a checker body that prints one recomputed
-// external-check-result/v0.
+// checkerPrints is a checker body that prints one external-check-result/v0.
 func checkerPrints(verdict string, findings string) string {
-	return checkerPrintsAs(verdict, `"tier":"recomputed",`, findings)
+	return `printf '%s' '{"schema":"external-check-result/v0","ruleset_id":"example-rules/1.0.0","definition_digest":"` + exampleRulesDigest + `","verdict":"` + verdict + `","findings":[` + findings + `]}'`
 }
-
-// checkerPrintsAs prints one with the given tier members (`"tier":...,`, a
-// judge pin, or nothing).
-func checkerPrintsAs(verdict, tier, findings string) string {
-	return `printf '%s' '{"schema":"external-check-result/v0","ruleset_id":"example-rules/1.0.0","definition_digest":"` + exampleRulesDigest + `","verdict":"` + verdict + `",` + tier + `"findings":[` + findings + `]}'`
-}
-
-// contractDir holds the external-check contract's normative files.
-const contractDir = "../../docs/contracts/external-check/v0"
 
 const (
 	passFinding = `{"id":"per-purchase","check":"caps/1","verdict":"pass","limit":2500,"value":480}`
@@ -91,7 +81,7 @@ func TestADealCheckRunsThePinnedRulesChecker(t *testing.T) {
 	assert.Equal(t, "allow", rules["verdict"])
 	assert.Equal(t, map[string]any{"days": float64(31), "acts": float64(0), "complete": true}, rules["history"])
 	text := approvalText(check)
-	assert.True(t, strings.HasPrefix(text, "Your rules (example-rules/1.0.0, digest abababab): allowed, computed by your rules.\n"), text)
+	assert.True(t, strings.HasPrefix(text, "Your rules (example-rules/1.0.0, digest abababab): allowed.\n"), text)
 	assert.Contains(t, text, "Before you go ahead: no differences.")
 	assert.NotContains(t, text, "Deal check")
 	assert.NotContains(t, text, "Stale after", "the stale line stays in the record, out of the prompt")
@@ -107,7 +97,7 @@ func TestADealCheckRunsThePinnedRulesChecker(t *testing.T) {
 	assert.Equal(t, []any{}, input["history"])
 	assert.Equal(t, map[string]any{"days": float64(31), "max_records": float64(1000), "complete": true}, input["history_scope"])
 	assert.NotContains(t, text, "weekly", "the prompt makes no claim about a window")
-	inputSchema, err := os.ReadFile(filepath.Join(contractDir, "input.schema.json"))
+	inputSchema, err := os.ReadFile(filepath.Join(dealProfileDir, "external-check-input-v0.schema.json"))
 	require.NoError(t, err)
 	doc, err := jsonschema.UnmarshalJSON(strings.NewReader(string(inputSchema)))
 	require.NoError(t, err)
@@ -150,7 +140,7 @@ func TestADenyFromTheRulesOffersNoWayToProceed(t *testing.T) {
 	}
 	assert.Equal(t, []string{"hold"}, options, "no proceed option")
 	assert.Contains(t, check["card"], `Not allowed by your rules: per-purchase: over the per-purchase limit (limit 2500; value 55880)`)
-	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not allowed, computed by your rules.")
+	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not allowed.")
 	_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "go ahead")
 	require.ErrorIs(t, err, ErrInput, "a denied check cannot be approved past")
 	report := dealRun(t, "report", "--deal", id)
@@ -177,7 +167,7 @@ func TestATypedDenyIsDENYAndNamesTheRuleset(t *testing.T) {
 	}
 	require.NotNil(t, evaluation)
 	assert.Equal(t, "DENY", evaluation["disposition"])
-	assert.Equal(t, []any{map[string]any{"ruleset_id": "example-rules/1.0.0", "definition_digest": exampleRulesDigest, "verdict": "deny", "tier": "recomputed"}}, evaluation["rules_checks"])
+	assert.Equal(t, []any{map[string]any{"ruleset_id": "example-rules/1.0.0", "definition_digest": exampleRulesDigest, "verdict": "deny"}}, evaluation["rules_checks"])
 	_, export := exportRecords(t, id)
 	checkProfile(t, export)
 }
@@ -202,7 +192,7 @@ func TestANotEvaluableFromTheRulesPauses(t *testing.T) {
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Contains(t, check["card"], "Your rules were not fully checked: weekly: the record carries no week of history")
 	assert.Contains(t, check["card"], "[Pay anyway]")
-	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not fully checked, computed by your rules.")
+	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not fully checked.")
 	var rules []string
 	for _, d := range check["differences"].([]any) {
 		rules = append(rules, d.(map[string]any)["rule"].(string))
@@ -322,7 +312,7 @@ func TestARulesCheckerMustBePinnedFromATrustedRoot(t *testing.T) {
 // The neutral result's schema ships with the skill, and a checker's output
 // of that shape is what the check reads.
 func TestTheExternalCheckResultSchemaShips(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join(contractDir, "result.schema.json"))
+	raw, err := os.ReadFile(filepath.Join(dealProfileDir, "external-check-result-v0.schema.json"))
 	require.NoError(t, err)
 	var schema map[string]any
 	require.NoError(t, json.Unmarshal(raw, &schema))
@@ -408,14 +398,14 @@ func TestARollingLimitWithTooLittleHistoryIsNotFullyChecked(t *testing.T) {
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Contains(t, check["card"], "Your rules were not fully checked: weekly: the 7-day total needs every earlier payment of the week")
-	assert.Contains(t, approvalText(check), "Your rules (stub-rules/0.1.0, digest 00000000): not fully checked, computed by your rules. They were given only 1 of your earlier payments from the last 31 days.")
+	assert.Contains(t, approvalText(check), "Your rules (stub-rules/0.1.0, digest 00000000): not fully checked. They were given only 1 of your earlier payments from the last 31 days.")
 	_, export := exportRecords(t, id)
 	checkProfile(t, export)
 }
 
 // The schema a checker vendors is the one the check validates against.
 func TestTheExternalCheckResultSchemaIsTheEmbeddedOne(t *testing.T) {
-	shipped, err := os.ReadFile(filepath.Join(contractDir, "result.schema.json"))
+	shipped, err := os.ReadFile(filepath.Join(dealProfileDir, "external-check-result-v0.schema.json"))
 	require.NoError(t, err)
 	assert.Equal(t, string(shipped), string(externalCheckSchemaJSON))
 	for name, out := range map[string]string{
@@ -466,101 +456,4 @@ func TestNoCheckerWordsAreSealedInTheClear(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), "shoe_size")
 	checkProfile(t, export)
-}
-
-const judgePin = `"tier":"judged","judge":{"model_id":"example-model-1","prompt_digest":"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","template_id":"example-template/1"},`
-
-// Only a recomputed rule refuses outright. A deny judged by a model (or a
-// person, or by a checker that did not say) asks for the user's approval:
-// the check pauses with "Pay anyway", and the record says the deny was
-// degraded and why, with the tier and the judge's pin.
-func TestAJudgedDenyAsksForApproval(t *testing.T) {
-	for name, tier := range map[string]string{"judged": judgePin, "human": `"tier":"human",`, "no tier": ``} {
-		t.Run(name, func(t *testing.T) {
-			id := stickerDeal(t, "card", false)
-			pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules", checkerPrintsAs("deny", tier, denyFinding))}})
-			check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
-			assert.Equal(t, "pause", check["verdict"], "a deny not recomputed is not a refusal")
-			assert.Contains(t, check["card"], "[Pay anyway]")
-			rules := check["rules"].(map[string]any)
-			assert.Equal(t, "escalate", rules["verdict"])
-			assert.Equal(t, map[string]any{"from": "deny", "cause": "not_recomputed"}, rules["degraded"])
-			want := map[string]string{"judged": "judged", "human": "human", "no tier": "judged"}[name]
-			assert.Equal(t, want, rules["tier"], "an absent tier reads as judged")
-			provenance := map[string]string{"judged": "judged by example-model-1", "human": "judged by a person", "no tier": "judged (the checker named no model)"}[name]
-			assert.Contains(t, approvalText(check), "needs your approval, "+provenance+". They would not allow it, but only a computed rule can refuse outright")
-			assert.Contains(t, check["card"], "Your rules would not allow this ("+provenance+", not computed): per-purchase")
-			records, export := exportRecords(t, id)
-			for _, r := range records {
-				if r["x-deal-v0"].(map[string]any)["record_type"] == "verdict" {
-					sealed := r["body"].(map[string]any)["rules"].(map[string]any)
-					assert.Equal(t, map[string]any{"from": "deny", "cause": "not_recomputed"}, sealed["degraded"])
-					assert.Equal(t, want, sealed["tier"])
-					if name == "judged" {
-						assert.Equal(t, "example-model-1", sealed["judge"].(map[string]any)["model_id"])
-					}
-				}
-			}
-			checkProfile(t, export)
-		})
-	}
-}
-
-// A profile that allows judged denies lets them refuse.
-func TestAJudgedDenyRefusesWhenTheProfileAllowsIt(t *testing.T) {
-	id := stickerDeal(t, "card", false)
-	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules", checkerPrintsAs("deny", judgePin, denyFinding))}, "allow_judged_deny": true})
-	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
-	assert.Equal(t, "deny", check["verdict"])
-	assert.Nil(t, check["rules"].(map[string]any)["degraded"])
-	assert.Contains(t, approvalText(check), "not allowed, judged by example-model-1.")
-}
-
-// A deny resting on a recomputed finding refuses, whatever the result's
-// tier; one resting only on judged findings is degraded.
-func TestADenyRestsOnItsFailingFindings(t *testing.T) {
-	recomputedFail := `{"id":"cap","verdict":"fail","tier":"recomputed","limit":2500,"value":55880}`
-	judgedFail := `{"id":"tone","verdict":"fail","tier":"judged"}`
-	for name, tc := range map[string]struct {
-		findings, want string
-	}{
-		"a recomputed failing finding": {recomputedFail + "," + judgedFail, "deny"},
-		"only judged failing findings": {judgedFail, "pause"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			id := stickerDeal(t, "card", false)
-			pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules", checkerPrintsAs("deny", judgePin, tc.findings))}})
-			check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
-			assert.Equal(t, tc.want, check["verdict"])
-		})
-	}
-}
-
-// Anything judged needs the judge's pin: without it the output is
-// malformed, and the check pauses saying the rules were not checked.
-func TestAJudgedResultWithoutAPinIsMalformed(t *testing.T) {
-	for name, out := range map[string]string{
-		"a judged result":  checkerPrintsAs("allow", `"tier":"judged",`, passFinding),
-		"a judged finding": checkerPrintsAs("allow", `"tier":"recomputed",`, `{"id":"tone","verdict":"pass","tier":"judged"}`),
-		"an unknown tier":  checkerPrintsAs("allow", `"tier":"vibes",`, passFinding),
-	} {
-		t.Run(name, func(t *testing.T) {
-			id := stickerDeal(t, "card", false)
-			pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules", out)}})
-			check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
-			assert.Equal(t, "pause", check["verdict"])
-			assert.Contains(t, check["card"], "Your rules were not checked: the rules checker's answer could not be read")
-		})
-	}
-}
-
-// The contract lives at its own address, and skills/deal points there.
-func TestTheContractHasANeutralAddress(t *testing.T) {
-	for _, f := range []string{"input.schema.json", "result.schema.json", "README.md"} {
-		_, err := os.Stat(filepath.Join(contractDir, f))
-		assert.NoError(t, err, f)
-	}
-	profile, err := os.ReadFile(filepath.Join(dealProfileDir, "PROFILE.md"))
-	require.NoError(t, err)
-	assert.Contains(t, string(profile), "docs/contracts/external-check/v0/")
 }

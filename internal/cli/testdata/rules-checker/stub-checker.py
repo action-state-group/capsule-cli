@@ -67,5 +67,4 @@ if weekly is not None:
         if over:
             verdict = "deny"
 print(json.dumps({"schema": "external-check-result/v0", "ruleset_id": "stub-rules/0.1.0",
-                  "definition_digest": "0" * 63 + "1", "verdict": verdict, "tier": "recomputed",
-                  "findings": findings}))
+                  "definition_digest": "0" * 63 + "1", "verdict": verdict, "findings": findings}))
