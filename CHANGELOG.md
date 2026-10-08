@@ -2,20 +2,17 @@
 
 ## Unreleased
 
-### A rules checker's week total no longer fails `deal check`
+### A rules checker's answer that cannot be sealed pauses the check instead of failing it
 
 - **Fixed:** on the second purchase in a week, a checker's finding value such as "2000 authorised
-  (capture 2000); 7d total 4000 (2000 earlier)" read as a phone number to the personal-data scan.
+  (capture 2000); 7d total 4000 (2000 earlier)" reads as a phone number to the personal-data scan.
   `deal check` refused to seal its verdict and exited 2, with no verdict and no prompt.
-- **What the scan does now:** a finding's `limit` and `value` (never counterparty data, by
-  contract) are scanned by token. A plain amount passes. A phone-shaped token, an email address, or
-  the digits of the counterparty's details (with or without a country code) are still refused.
-  Every other string keeps the general scan, and the deal profile checker applies the same rule.
-- **A checker answer that cannot be sealed never fails the check.** The check pauses with "Your
-  rules were not checked: the rules checker's answer could not be sealed (…)", and the verdict
-  seals `rules.cause: "unsealable"` (additive).
-- **Schema text:** `external-check-result/v0`'s limit and value descriptions now state that they
-  never carry counterparty data. No validation changes.
+- **Now:** a checker answer that cannot be sealed never fails the check. The check pauses with
+  "Your rules were not checked: the rules checker's answer could not be sealed (…)", and the verdict
+  seals the rules as not evaluated, with cause `unreadable`. The personal-data scan itself is
+  unchanged.
+- **Numeric limits and values:** a checker that reports `limit` and `value` as numbers (as the
+  contract allows) is never caught this way.
 
 ### A deal receipt's words for where the deal stands and the merchant's receipt
 

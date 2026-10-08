@@ -493,46 +493,13 @@ def _strings(v, path="$"):
             yield from _strings(x, f"{path}[{i}]")
 
 
-# A rules checker's finding limit and value are schema-bounded scalars that
-# never carry counterparty data by contract: an amount or a count, or a short
-# line of them ("2000 authorised (capture 2000); 7d total 4000 (2000
-# earlier)"). The general phone shape joins neighbouring amounts, so they are
-# scanned by token: a plain amount passes, a phone-shaped token does not, and
-# a local-store value is caught by its digits however it is written.
-_CHECKER_SCALAR_PATH = re.compile(r"^\$\.body\.rules\.findings\[\d+\]\.(limit|value)$")
-_SCALAR_SPLIT = re.compile(r"[\s;,()\[\]]+")
-_SCALAR_PLAIN = re.compile(r"^\d+(\.\d+)?$")
-_SCALAR_PHONE = re.compile(r"(^|\D)(\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}|\d{3}[.-]\d{4})(\D|$)")
-
-
-def _checker_scalar_phone(s):
-    if _SCALAR_PHONE.search(s):
-        return True
-    for tok in _SCALAR_SPLIT.split(s):
-        digits = len(re.sub(r"\D", "", tok))
-        if _SCALAR_PLAIN.match(tok) and digits <= 9:
-            continue
-        if digits >= 7:
-            return True
-    return False
-
-
 def stage_personal_data(rec, local_store_values=()):
     for path, s in _strings(rec):
-        if _CHECKER_SCALAR_PATH.match(path):
-            if _checker_scalar_phone(s):
-                raise StageError("personal_data", f"raw phone number at {path}")
-            digits = re.sub(r"\D", "", s)
-            for raw in local_store_values:
-                d = re.sub(r"\D", "", raw or "")[-10:]
-                if len(d) >= 7 and d in digits:
-                    raise StageError("personal_data", f"raw local-store identifier at {path}")
-        elif _EXEMPT.match(s):
+        if _EXEMPT.match(s):
             continue
-        else:
-            for m in _PHONE.finditer(s):
-                if len(re.sub(r"\D", "", m.group())) >= 7:
-                    raise StageError("personal_data", f"raw phone number at {path}")
+        for m in _PHONE.finditer(s):
+            if len(re.sub(r"\D", "", m.group())) >= 7:
+                raise StageError("personal_data", f"raw phone number at {path}")
         if _EMAIL.search(s):
             raise StageError("personal_data", f"raw email address at {path}")
         low = s.casefold()

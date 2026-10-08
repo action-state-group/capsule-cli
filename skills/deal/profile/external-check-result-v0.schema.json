@@ -88,11 +88,11 @@
             "maxLength": 1000
           },
           "limit": {
-            "description": "The limit the rule applied: a number, or a string of at most 64 characters with no line break. Never counterparty data: a limit and the value from the record the rule compared with it (an amount, a count, a window total), never a name, a contact detail or an identifier. capsulectl refuses to seal one shaped like a phone number or an email address, or holding the digits of the deal's counterparty details, and the check then pauses with the rules not checked.",
+            "description": "The limit the rule applied: a number, or a string of at most 64 characters with no line break.",
             "$ref": "#/$defs/scalar"
           },
           "value": {
-            "description": "The value the rule compared with the limit: a number, or a string of at most 64 characters with no line break. Never counterparty data: a limit and the value from the record the rule compared with it (an amount, a count, a window total), never a name, a contact detail or an identifier. capsulectl refuses to seal one shaped like a phone number or an email address, or holding the digits of the deal's counterparty details, and the check then pauses with the rules not checked.",
+            "description": "The value the rule compared with the limit: a number, or a string of at most 64 characters with no line break.",
             "$ref": "#/$defs/scalar"
           }
         }

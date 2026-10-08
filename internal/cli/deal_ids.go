@@ -219,67 +219,6 @@ var (
 	}
 )
 
-// A rules checker's finding limit and value (body.rules.findings[].limit and
-// .value) are schema-bounded scalars a pinned checker reports: an amount or a
-// count, or a short line of them ("2000 authorised (capture 2000); 7d total
-// 4000 (2000 earlier)"). By contract they never carry counterparty data. The
-// general phone shape joins neighbouring amounts into a "number", so these
-// are scanned by token instead: a plain amount passes, and a token shaped
-// like a phone number does not.
-var (
-	scalarSplit = regexp.MustCompile(`[\s;,()\[\]]+`)
-	scalarPlain = regexp.MustCompile(`^\d+(\.\d+)?$`)
-	scalarPhone = regexp.MustCompile(`(^|\D)(\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}|\d{3}[.-]\d{4})(\D|$)`)
-)
-
-// scanCheckerScalar refuses a checker limit or value that is shaped like a
-// phone number, or that holds the digits of a counterparty value on record.
-func scanCheckerScalar(s string, localValues []string) error {
-	phone := inputError("refusing to seal: the rules checker's answer would carry a raw phone number")
-	if scalarPhone.MatchString(s) {
-		return phone
-	}
-	for _, tok := range scalarSplit.Split(s, -1) {
-		digits := len(nonDigit.ReplaceAllString(tok, ""))
-		switch {
-		case scalarPlain.MatchString(tok) && digits <= 9:
-		case digits >= 7:
-			return phone
-		}
-	}
-	// A counterparty's number however it is written: by its digits, with or
-	// without a country code (its last ten).
-	all := nonDigit.ReplaceAllString(s, "")
-	for _, raw := range localValues {
-		d := nonDigit.ReplaceAllString(raw, "")
-		if len(d) > 10 {
-			d = d[len(d)-10:]
-		}
-		if len(d) >= 7 && strings.Contains(all, d) {
-			return inputError("refusing to seal: the record would carry a raw counterparty identifier")
-		}
-	}
-	return nil
-}
-
-// checkerScalars sets aside, from a record's strings, a rules checker's
-// finding limits and values, which are scanned by scanCheckerScalar.
-func checkerScalars(record map[string]interface{}) map[string]int {
-	out := map[string]int{}
-	body, _ := record["body"].(map[string]interface{})
-	rules, _ := body["rules"].(map[string]interface{})
-	findings, _ := rules["findings"].([]interface{})
-	for _, f := range findings {
-		fm, _ := f.(map[string]interface{})
-		for _, k := range []string{"limit", "value"} {
-			if s, ok := fm[k].(string); ok {
-				out[s]++
-			}
-		}
-	}
-	return out
-}
-
 func recordStrings(v interface{}, out *[]string) {
 	switch tv := v.(type) {
 	case string:
@@ -301,29 +240,7 @@ func recordStrings(v interface{}, out *[]string) {
 func scanRecord(record map[string]interface{}, localValues []string) error {
 	var strs []string
 	recordStrings(record, &strs)
-	scalars := checkerScalars(record)
 	for _, s := range strs {
-		if scalars[s] > 0 {
-			scalars[s]--
-			if err := scanCheckerScalar(s, localValues); err != nil {
-				return err
-			}
-			if scanEmail.MatchString(s) {
-				return inputError("refusing to seal: the record would carry a raw email address")
-			}
-			for _, tok := range scanWords.Split(strings.ToLower(s), -1) {
-				if bannedWord[tok] {
-					return inputError("refusing to seal: a record may not label or grade anyone (" + tok + ")")
-				}
-			}
-			low := foldCase.String(s)
-			for _, raw := range localValues {
-				if raw != "" && strings.Contains(low, foldCase.String(raw)) {
-					return inputError("refusing to seal: the record would carry a raw counterparty identifier")
-				}
-			}
-			continue
-		}
 		for _, tok := range scanWords.Split(strings.ToLower(s), -1) {
 			if bannedWord[tok] {
 				return inputError("refusing to seal: a record may not label or grade anyone (" + tok + ")")

@@ -399,7 +399,7 @@ func sealableRules(r dealRules, localValues []string) dealRules {
 	if i := strings.Index(why, "refusing to seal: "); i >= 0 {
 		why = why[i+len("refusing to seal: "):]
 	}
-	return dealRules{Status: "not_evaluated", Cause: "unsealable", CheckerSHA256: r.CheckerSHA256,
+	return dealRules{Status: "not_evaluated", Cause: "unreadable", CheckerSHA256: r.CheckerSHA256,
 		Reason: "the rules checker's answer could not be sealed (" + why + ")"}
 }
 
