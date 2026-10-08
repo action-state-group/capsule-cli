@@ -81,7 +81,7 @@ func renderResultText(aggregate, coverage map[string]interface{}) string {
 // result viewer exists, this validates the one settled shape requirement and
 // prints the aggregate/coverage statement itself rather than rendering it.
 func resultCommands() *cobra.Command {
-	group := &cobra.Command{Use: "result", Short: "Inspect a Result v0 document"}
+	group := &cobra.Command{Use: "result", Short: "Inspect a Result v0 document, or seal one into the book"}
 	open := &cobra.Command{
 		Use:   "open FILE",
 		Short: "Validate + print a Result v0's aggregate and coverage statement (text mode)",
@@ -114,6 +114,6 @@ func resultCommands() *cobra.Command {
 		},
 	}
 	open.Flags().String("format", "text", "Output format: text or json")
-	group.AddCommand(open)
+	group.AddCommand(open, resultBuildCommand())
 	return group
 }

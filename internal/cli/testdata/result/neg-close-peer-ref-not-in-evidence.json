@@ -1,0 +1,111 @@
+{
+  "aggregate": {
+    "buckets": {
+      "met": [
+        "claim-1",
+        "close-1"
+      ],
+      "not_evaluable": [],
+      "not_met": []
+    },
+    "coverage": {
+      "evaluated_population": 2,
+      "excluded_not_applicable": 0,
+      "unknown_count": 0
+    }
+  },
+  "claims": [
+    {
+      "contract_ref": "ec:example-org-claims-eval:2026-09-22@1",
+      "evidence": [
+        {
+          "digest": "087f64cf513c5007850428f20b7cd483877c46d549e28972ffcff465492ecd14",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "grade": "witnessed",
+      "id": "claim-1",
+      "presentation": {
+        "evidence": [
+          {
+            "digest": "087f64cf513c5007850428f20b7cd483877c46d549e28972ffcff465492ecd14",
+            "digest_alg": "SHA-256"
+          }
+        ],
+        "kind": "disclosure",
+        "status": "SATISFIED"
+      },
+      "proofs": [
+        {
+          "digest": "5c6575f42edc922190df6f50077e10911611995aa53655826987e3ab081017f9",
+          "digest_alg": "SHA-256",
+          "kind": "inclusion_proof"
+        }
+      ],
+      "requirement_ref": "req-claim-1",
+      "sufficiency": "SATISFIED",
+      "tier": "recomputed",
+      "verdict": "met"
+    },
+    {
+      "close": {
+        "close_ref": {
+          "digest": "761923a4e7b90174ee1a8a5b8bd878b33c3316da8fa348c6f77d37a47c2a9b0d",
+          "digest_alg": "SHA-256"
+        },
+        "close_state": "AGREED",
+        "peer": "example-org-sor",
+        "peer_close_ref": {
+          "digest": "a6747053e3fe05f618475eb6e4a317c6d98b8750e87aaca674f6e47c40560df0",
+          "digest_alg": "SHA-256"
+        },
+        "period": {
+          "end": "2026-09-02T00:00:00Z",
+          "start": "2026-09-01T00:00:00Z"
+        }
+      },
+      "contract_ref": "ec:example-org-outcomes-reconcile:2026-09-25@1",
+      "evidence": [
+        {
+          "digest": "761923a4e7b90174ee1a8a5b8bd878b33c3316da8fa348c6f77d37a47c2a9b0d",
+          "digest_alg": "SHA-256"
+        }
+      ],
+      "grade": "self-attested",
+      "id": "close-1",
+      "presentation": {
+        "evidence": [
+          {
+            "digest": "761923a4e7b90174ee1a8a5b8bd878b33c3316da8fa348c6f77d37a47c2a9b0d",
+            "digest_alg": "SHA-256"
+          },
+          {
+            "digest": "a6747053e3fe05f618475eb6e4a317c6d98b8750e87aaca674f6e47c40560df0",
+            "digest_alg": "SHA-256"
+          }
+        ],
+        "kind": "disclosure",
+        "status": "SATISFIED"
+      },
+      "proofs": [
+        {
+          "digest": "360e311df854226aa31c3849435ee7820c01ae0c829c6914a65b8c74abbadb5d",
+          "digest_alg": "SHA-256",
+          "kind": "inclusion_proof"
+        }
+      ],
+      "requirement_ref": "close",
+      "sufficiency": "SATISFIED",
+      "tier": "recomputed",
+      "type": "close",
+      "verdict": "met"
+    }
+  ],
+  "generated_at": "2026-09-22T00:00:00Z",
+  "result_version": "evidence-result-v0",
+  "view": {
+    "producer_name": "EXAMPLE-ORG",
+    "spec_version": "presentation/v1",
+    "title": "EXAMPLE-ORG Close -- 2026-09-01 (agreed)"
+  }
+}

@@ -1,0 +1,51 @@
+[
+  {
+    "committed_at": "2026-09-02T00:05:00Z",
+    "epistemic_type": "producer_claim",
+    "event_time_claim": "2026-09-02T00:00:00Z",
+    "links": [
+      {
+        "target": "5653a61b4ed088f818552f3e386bfdbc0c4272f99d8fc5084ce38b86e7f4398b",
+        "type": "closes"
+      }
+    ],
+    "record_type": "close",
+    "seq": 41,
+    "statement": {
+      "note": "EXAMPLE-ORG own Close record for 2026-09-01, v0 placeholder",
+      "period": {
+        "end": "2026-09-02T00:00:00Z",
+        "start": "2026-09-01T00:00:00Z"
+      }
+    },
+    "subject_ref": "ec:example-org-outcomes-reconcile:2026-09-25@1",
+    "v": 1
+  },
+  {
+    "book_id": "example-org-sor",
+    "committed_at": "2026-09-02T01:00:00Z",
+    "epistemic_type": "producer_claim",
+    "event_time_claim": "2026-09-02T00:00:00Z",
+    "links": [
+      {
+        "target": "090f837b3e131ec037c3f10d5c66d1d790bb4e700338e995448607f252f1decf",
+        "type": "closes"
+      },
+      {
+        "target": "0170864abb04144ab901cfa5e5582953cef5d648ceabc89683d766d96f5ac1e9",
+        "type": "acknowledges"
+      }
+    ],
+    "record_type": "close",
+    "seq": 20,
+    "statement": {
+      "note": "EXAMPLE-ORG peer (example-org-sor) Close record acknowledging EXAMPLE-ORG's book-less Close, v0 placeholder",
+      "period": {
+        "end": "2026-09-02T00:00:00Z",
+        "start": "2026-09-01T00:00:00Z"
+      }
+    },
+    "subject_ref": "ec:example-org-outcomes-reconcile:2026-09-25@1",
+    "v": 1
+  }
+]
