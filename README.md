@@ -826,12 +826,16 @@ extension, and any countersignature, is listed as carried but not checked. Exit 
 - 1: a claim failed (an edited record, a signature that does not verify, a
   checkpoint field that differs from its signature).
 
-**A deal receipt's text is not verified.** A deal receipt's readable text (the
-summary lines, each step's line, the amounts and what was told) rides in the
-bundle's `x-deal-v0` extension, which no record seals. Its `extensions` entry is
-`uninterpreted` with the finding `extension_unbound`, and the receipt page says
-so at the top: editing that text, or removing it, does not change the verdict.
-The sealed records the page lists under each item are verified.
+**A deal receipt's text is sealed with it.** A deal receipt's readable text
+(the summary lines, each step's line, the amounts and what was told) is sealed
+as a record on the deal's log when the receipt is written. The bundle's
+`x-deal-v0` extension names that record (`sealed_report`), and its `extensions`
+entry is `pass` when the record's disclosed text matches. Editing the text,
+removing the extension, or naming another record makes the bundle INVALID
+(`sealed_report_unverified`, `sealed_report_not_named`). Each copy seals its own
+text and discloses no other copy's. A receipt written before this change carries
+its text in the extension itself: `uninterpreted`, with the finding
+`extension_unbound`, and its page says the text is not checked.
 
 **composed/v1.** A bundle carrying the `composed/v1` extension
 (draft-mih-zhang-agent-disclosure-bundle-01 §7.2: one evidence set built from

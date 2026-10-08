@@ -37,7 +37,7 @@ func TestDealSpendingLimitIsPrivateFromTheCounterparty(t *testing.T) {
 	// Without a limit, the counterparty's copy discloses the opening record.
 	twin := openCeilingDeal(t, false)
 	b, _ := sharedCopy(t, twin, dealAudienceCounterparty, "x")
-	ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ext := dealReportOf(b)
 	require.Equal(t, false, ext["steps"].([]any)[0].(map[string]any)["withheld"])
 
 	dealID := openCeilingDeal(t, true)
@@ -45,7 +45,7 @@ func TestDealSpendingLimitIsPrivateFromTheCounterparty(t *testing.T) {
 	assert.NotContains(t, raw, "max_total_minor")
 	assert.NotContains(t, raw, "$50.00")
 	assert.NotContains(t, raw, "50.00")
-	ext = b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ext = dealReportOf(b)
 	assert.Equal(t, true, ext["steps"].([]any)[0].(map[string]any)["withheld"], "the opening record carries the limit: withheld")
 	assert.Contains(t, ext["withheld"], "your spending limit")
 
@@ -106,9 +106,9 @@ func TestDealSharedMerchantEmailIsDigestAndVerdict(t *testing.T) {
 	dealFixture(t)
 	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})
 	dealID := openShortMerchantDeal(t)
-	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
+	for i, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
 		b, raw := sharedCopy(t, dealID, audience, "x")
-		require.Len(t, b["records"], 5)
+		require.Len(t, b["records"], 5+i+1, "the 5 steps and every copy's sealed report so far")
 		assert.Contains(t, raw, `"message_digest":"`)
 		assert.Contains(t, raw, `"key_records_digest":"`)
 		assert.Contains(t, raw, `"dkim":"pass"`)

@@ -265,16 +265,15 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 		claims = append(claims, witnesses)
 	}
 	extensions := make([]map[string]any, 0, len(result.Extensions))
+	dealSeen := false
 	for _, x := range result.Extensions {
 		entry := map[string]any{"kind": x.Kind, "status": x.Status}
-		// A deal report's readable text (its summary lines, step lines,
-		// amounts and what was told) rides in x-deal-v0, which no record
-		// seals: editing it, or removing it, leaves the verdict VALID. Said
-		// on the entry, so no reader takes that text as verified; the verdict
-		// is unchanged.
 		if x.Kind == dealProfile && x.Status == "uninterpreted" {
-			entry["findings"] = []string{"extension_unbound"}
-			entry["note"] = "written by the producer when the bundle was made and sealed by no record: its text is not verified, and editing it does not change the verdict"
+			dealSeen = true
+			entry = dealReportEntry(value, result)
+			if entry["status"] == "fail" {
+				claims = append(claims, aacbundle.ClaimResult{Status: "fail", Findings: entry["findings"].([]string)})
+			}
 		}
 		if x.Composed != nil {
 			composed, memberVerdicts := composedOutput(value, x.Composed, directory)
@@ -285,6 +284,14 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 			}
 		}
 		extensions = append(extensions, entry)
+	}
+	// A deal bundle that discloses a sealed report but carries no x-deal-v0
+	// extension at all had it removed.
+	if !dealSeen {
+		if entry := dealReportEntry(value, result); entry["status"] == "fail" {
+			extensions = append(extensions, entry)
+			claims = append(claims, aacbundle.ClaimResult{Status: "fail", Findings: entry["findings"].([]string)})
+		}
 	}
 	verdict := "VALID"
 	for _, r := range claims {
@@ -381,4 +388,56 @@ func nonNilStrings(values []string) []string {
 		return []string{}
 	}
 	return values
+}
+
+// dealReportEntry is verify --bundle's entry for a deal bundle's x-deal-v0
+// extension. A deal report seals each copy's readable text (its summary
+// lines, step lines, amounts and what was told) as a deal_report record on
+// the deal's log, and the extension names it (sealed_report); its text is
+// then that record's disclosed input, which the disclosure check binds:
+//   - pass: the extension names a deal_report record whose input is
+//     disclosed and matches, and no other deal_report's input is disclosed;
+//   - fail: it names anything else, or the bundle discloses a deal_report
+//     the extension does not name (the extension was replaced or removed);
+//   - a bundle written before reports were sealed carries the text in the
+//     extension itself, which no record seals: uninterpreted, with the
+//     finding extension_unbound (editing it leaves the verdict VALID).
+func dealReportEntry(value map[string]interface{}, result aacbundle.VerificationResult) map[string]any {
+	reports := map[string]bool{}
+	records, _ := value["records"].([]interface{})
+	for _, raw := range records {
+		r, _ := raw.(map[string]interface{})
+		if id, _ := r["capsule_id"].(string); id != "" && r["action_id"] == dealReportActionID {
+			reports[id] = true
+		}
+	}
+	matched := map[string]bool{}
+	var disclosed []string
+	for _, d := range result.Disclosures {
+		if d.Member != "agent_input" || !reports[d.CapsuleID] || d.Status == "withheld" {
+			continue
+		}
+		disclosed = append(disclosed, d.CapsuleID)
+		if d.Status == disclosure.Match {
+			matched[d.CapsuleID] = true
+		}
+	}
+	ext, _ := value["extensions"].(map[string]interface{})
+	deal, _ := ext[dealProfile].(map[string]interface{})
+	fail := func(finding string) map[string]any {
+		return map[string]any{"kind": dealProfile, "status": "fail", "findings": []string{finding}}
+	}
+	id, sealed := deal[dealReportPointer].(string)
+	switch {
+	case sealed && (!matched[id] || len(disclosed) != 1):
+		return fail("sealed_report_unverified")
+	case sealed:
+		return map[string]any{"kind": dealProfile, "status": "pass", dealReportPointer: id}
+	case len(disclosed) > 0:
+		return fail("sealed_report_not_named")
+	}
+	return map[string]any{
+		"kind": dealProfile, "status": "uninterpreted", "findings": []string{"extension_unbound"},
+		"note": "written by the producer when the bundle was made and sealed by no record: its text is not verified, and editing it does not change the verdict",
+	}
 }

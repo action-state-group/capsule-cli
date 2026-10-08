@@ -173,7 +173,7 @@ func TestDealShareCounterpartyCarriesNoPrivateValues(t *testing.T) {
 	raw, err := os.ReadFile(keep)
 	require.NoError(t, err)
 	assert.Contains(t, string(raw), "Larkspur Lane", "the baseline record holds the home address")
-	keepExt := embeddedBundle(t, string(raw))["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	keepExt := dealReportOf(embeddedBundle(t, string(raw)))
 	assert.Equal(t, "keep", keepExt["audience"])
 	assertScope(t, string(raw), keepExt)
 	kept, _ := sharedRecords(t, dealID)
@@ -205,7 +205,7 @@ func TestDealShareCounterpartyCarriesNoPrivateValues(t *testing.T) {
 	require.NoError(t, err, out)
 	assert.Contains(t, out, `"verdict":"VALID"`)
 
-	ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ext := dealReportOf(b)
 	assert.Equal(t, "counterparty", ext["audience"])
 	assertScope(t, html, ext)
 	assert.Contains(t, html, "What the agent did is the agent's own report", "what was done is not independently confirmed")
@@ -257,7 +257,7 @@ func TestDealShareAdjudicatorAddsMessagesAndSources(t *testing.T) {
 	assert.Contains(t, html, "(from checkout page)", "claim sources")
 
 	b := embeddedBundle(t, html)
-	assertScope(t, html, b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any))
+	assertScope(t, html, dealReportOf(b))
 	v := aacbundle.VerifyBundle(b)
 	assert.Equal(t, "pass", v.IntervalCoverage.Status)
 	assert.Equal(t, "pass", v.PerRecordMembership.Status)
@@ -402,7 +402,7 @@ func TestDealShareMerchantEmail(t *testing.T) {
 	for _, v := range private {
 		assertNoPrivateValue(t, html, v)
 	}
-	ext := embeddedBundle(t, html)["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ext := dealReportOf(embeddedBundle(t, html))
 	rows := ext["merchant"].([]any)
 	require.Len(t, rows, 1)
 	row := rows[0].(map[string]any)
@@ -421,7 +421,7 @@ func TestDealShareMerchantEmail(t *testing.T) {
 	for _, v := range append(private, "SE-104233", "104233") {
 		assertNoPrivateValue(t, string(raw), v)
 	}
-	ext = embeddedBundle(t, string(raw))["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ext = dealReportOf(embeddedBundle(t, string(raw)))
 	assert.NotContains(t, ext["merchant"].([]any)[0], "order_id", "no order number in the adjudicator's copy")
 }
 

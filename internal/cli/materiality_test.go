@@ -357,7 +357,7 @@ func TestTheMaterialityLabelIsTheUsersOwnCopyOnly(t *testing.T) {
 	id := openCeilingDeal(t, false)
 
 	shared, sharedRaw := sharedCopy(t, id, dealAudienceCounterparty, "x")
-	sharedExt := shared["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	sharedExt := dealReportOf(shared)
 	for _, s := range sharedExt["steps"].([]any) {
 		step := s.(map[string]any)
 		if step["kind"] == "open" || step["kind"] == "check" {
@@ -375,7 +375,7 @@ func TestTheMaterialityLabelIsTheUsersOwnCopyOnly(t *testing.T) {
 	require.NoError(t, err)
 	var own map[string]any
 	require.NoError(t, json.Unmarshal(ownRaw, &own))
-	ownExt := own["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ownExt := dealReportOf(own)
 	openings := ownExt["materiality_openings"].([]any)
 	seqOf := map[string]string{}
 	for _, s := range ownExt["steps"].([]any) {
@@ -450,7 +450,7 @@ func TestARepinMidDealIsNamedOnlyInTheUsersOwnCopy(t *testing.T) {
 				assert.NotEqual(t, "2.7", strings.Trim(word, `"'(),.:;`), "%s copy: %q", audience, v)
 			}
 		}
-		ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+		ext := dealReportOf(b)
 		var kinds []string
 		for _, a := range ext["anomalies"].([]any) {
 			kinds = append(kinds, a.(map[string]any)["kind"].(string))

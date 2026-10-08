@@ -146,7 +146,7 @@ func TestDealDisclosureSharedCopiesCarryNoDisclosedValue(t *testing.T) {
 		require.NoError(t, err)
 		html := string(raw)
 		assertNoDisclosedValue(t, html)
-		ext := embeddedBundle(t, html)["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+		ext := dealReportOf(embeddedBundle(t, html))
 		told := ext["told"].([]any)
 		require.Len(t, told, 2, audience)
 		for i, want := range [][2]string{{"pickup_location", "approval"}, {"phone", "none"}} {

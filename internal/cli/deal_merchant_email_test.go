@@ -310,7 +310,7 @@ func TestDealMerchantEmailSealVerifyAndMismatch(t *testing.T) {
 	assert.Contains(t, string(html), "Merchant's signature: ")
 	assert.Contains(t, string(html), "Our seal: ")
 	b := embeddedBundle(t, string(html))
-	deal := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
+	deal := dealReportOf(b)
 	assert.Contains(t, string(html), dealScopeLine, "the receipt states its scope on its face")
 	assert.Contains(t, deal["did_line"], "independent source attached")
 	assert.Equal(t, emailScopeLine, deal["email_scope"])
@@ -322,7 +322,15 @@ func TestDealMerchantEmailSealVerifyAndMismatch(t *testing.T) {
 	for _, ours := range []string{string(ext), dealViewJS} {
 		assert.NotContains(t, strings.ToLower(ours), "bilateral", "never one combined attestation badge")
 	}
-	disclosed, err := json.Marshal(b["disclosures"])
+	// The deal's step records; the user's own sealed report, which holds the
+	// page's own text, is checked as the page is.
+	steps := map[string]any{}
+	for id, d := range b["disclosures"].(map[string]any) {
+		if input, _ := d.(map[string]any)["agent_input"].(map[string]any); input["type"] != "deal_report" {
+			steps[id] = d
+		}
+	}
+	disclosed, err := json.Marshal(steps)
 	require.NoError(t, err)
 	for _, private := range []string{"sam.customer@mail.example", "Sam Customer", "SE-104233", "Sticker pack (3 designs)", "DKIM-Signature"} {
 		assert.NotContains(t, string(disclosed), private, "the sealed records carry digests, not the email")

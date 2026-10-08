@@ -80,8 +80,7 @@ func dealDidSources(events []sealedEvent) []string { return merchantDidSources(e
 // dealDidLineOf reads the did line the report bundle carries, so the page and
 // the email say the same thing.
 func dealDidLineOf(b map[string]interface{}) string {
-	ext, _ := b["extensions"].(map[string]interface{})
-	deal, _ := ext["x-deal-v0"].(map[string]interface{})
+	deal := dealReportOf(b)
 	if line, ok := deal["did_line"].(string); ok && line != "" {
 		return line
 	}
@@ -100,8 +99,7 @@ func dealAssurance(b map[string]interface{}) map[string]any {
 		out["text"] = out["text"].(string) + " " + line
 		out["produced_by"] = line
 	}
-	ext, _ := b["extensions"].(map[string]interface{})
-	deal, _ := ext["x-deal-v0"].(map[string]interface{})
+	deal := dealReportOf(b)
 	if line, _ := deal["instructions"].(string); line != "" {
 		out["text"] = out["text"].(string) + " " + line
 		out["instructions"] = line
@@ -112,8 +110,7 @@ func dealAssurance(b map[string]interface{}) map[string]any {
 // dealProducedByLine is "Produced by capsulectl <version> (<commit>)." from
 // the bundle's x-deal-v0 extension, or "" when it names none.
 func dealProducedByLine(b map[string]interface{}) string {
-	ext, _ := b["extensions"].(map[string]interface{})
-	deal, _ := ext["x-deal-v0"].(map[string]interface{})
+	deal := dealReportOf(b)
 	list, _ := deal["produced_by"].([]interface{})
 	var names []string
 	for _, v := range list {
@@ -171,9 +168,11 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 	// deal, which the bundle shows the current one extends (a consistency
 	// proof, checked by capsulectl verify). The steps after it are sealed on
 	// this device only until a later tick covers them.
-	if cadence["extent"] == "part" {
-		k, _ := jsonUint(cadence["steps_witnessed"])
-		n, _ := jsonUint(cadence["steps"])
+	// (An earlier checkpoint that already held every step, with only sealed
+	// reports after it, witnesses them all.)
+	k, _ := jsonUint(cadence["steps_witnessed"])
+	n, _ := jsonUint(cadence["steps"])
+	if cadence["extent"] == "part" && k < n {
 		out["rung"] = "witnessed_in_part"
 		out["steps_witnessed"], out["steps"] = k, n
 		rest := "Witness pending for the rest. "
@@ -194,8 +193,7 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 // steps hold, from the deal extension's witness_coverage, or "" when the
 // steps hold no act.
 func coverageSentence(b map[string]interface{}, k, n uint64) string {
-	ext, _ := b["extensions"].(map[string]interface{})
-	deal, _ := ext["x-deal-v0"].(map[string]interface{})
+	deal := dealReportOf(b)
 	c, _ := deal["witness_coverage"].(map[string]interface{})
 	var out string
 	if s, _ := c["witnessed_acts"].(string); s != "" {

@@ -99,7 +99,7 @@ func TestAuthorityBlockListsEveryLayerWithItsTime(t *testing.T) {
 	v := aacbundle.VerifyBundle(b)
 	assert.Equal(t, "pass", v.GraphClosure.Status)
 	assert.Equal(t, "pass", v.PerRecordMembership.Status, v.PerRecordMembership.Findings)
-	ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ext := dealReportOf(b)
 	assert.Equal(t, toPlain(t, report["authority"]), toPlain(t, ext["authority"]))
 	assert.Contains(t, string(raw), `host.append(el("h2", "Authority"))`)
 }
@@ -229,7 +229,7 @@ func TestAuthorityBlockStaysInTheUsersCopy(t *testing.T) {
 	dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, merchantPay))
 
 	b, raw := sharedCopy(t, id, dealAudienceCounterparty, "x")
-	ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ext := dealReportOf(b)
 	assert.NotContains(t, ext, "authority")
 	for _, private := range []string{"book the SJC to HOU flight", "yes, the new site is fine", "Approve $558.80 purchase", "max_total_minor", "$600.00"} {
 		assert.NotContains(t, raw, private)

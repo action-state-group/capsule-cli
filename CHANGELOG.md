@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### A deal receipt's text is sealed with it
+
+- **Fixed:** a deal receipt's readable text (summary lines, step lines, amounts, what was told)
+  is now sealed. Writing a receipt (`deal report --html/--bundle/--email`, `bundle --deal`,
+  `disclose --deal`) seals that copy's own text as a `deal_report` record on the deal's log,
+  salted with a fresh nonce. The bundle's `x-deal-v0` extension only names it.
+  - **What fails:** editing a line, removing the extension, or naming another record makes
+    `verify --bundle` INVALID, and the page says the report did not verify.
+  - **What the page says:** for a sealed copy, that it checked the text has not changed since
+    it was sealed.
+- **Changed (wire):**
+  - The deal's log now holds a sealed report after its steps for each receipt written. A
+    report that writes no file seals nothing.
+  - Later copies carry every earlier report's record with its text withheld: a copy
+    discloses its own text and no other copy's, and a shared copy seals the text already
+    rewritten for its audience.
+  - Witness coverage is counted in steps. A tick that holds the deal's steps, with only
+    reports after them, still shows as witnessed, or as pending for its reason.
+- Receipts written before this change verify as before, with their text reported
+  `extension_unbound`.
+
 ### A deal receipt says its text is not verified; records declare their commitments' construction
 
 - **Changed:** a deal receipt's readable text (summary lines, step lines, amounts, what was

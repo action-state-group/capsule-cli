@@ -173,4 +173,39 @@ else
   echo "skip incomplete-bundle's page: the vendored viewer sets no data-verdict yet, and says 'passed' for it (agent-action-capsule's issue on the viewer's verdict wording)"
 fi
 
+# A deal receipt: its deal text (summary lines, step lines, amounts) is
+# sealed as a record in the bundle (internal/cli/deal_sealed_report.go). The
+# page renders it and says it checked it; a copy with one sealed line edited
+# says it did not verify and shows none of it, and verify --bundle calls it
+# INVALID. The deal is the synthetic retail-checkout demo.
+demo="$root/skills/deal/demo/retail-checkout"
+mkdir deal-receipt
+(
+  cd deal-receipt
+  export XDG_CONFIG_HOME="$work/deal-receipt/config" CAPSULE_DEAL_CHECK_URL=
+  capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
+  id=$(capsulectl --profile deal deal open --input "$demo/open.json" | jq -r .deal_id)
+  capsulectl --profile deal deal check --deal "$id" --input "$demo/check-pay.json" >/dev/null
+  capsulectl --profile deal deal note --deal "$id" --kind act --input "$demo/act-pay.json" >/dev/null
+  capsulectl --profile deal deal report --deal "$id" --html receipt.html >/dev/null
+) >deal-receipt/log 2>&1 || { echo "FAIL deal-receipt: the demo deal's receipt was written" >&2; cat deal-receipt/log >&2; exit 1; }
+cp deal-receipt/receipt.html receipt.html
+render receipt.html
+check "deal-receipt: no console.error, uncaught error or unhandled rejection" no_render_errors receipt.html.dom
+check "deal-receipt: the page renders the deal" contains receipt.html.dom '<h1>Deal report</h1>'
+check "deal-receipt: the page says its text is sealed and checked" contains receipt.html.dom 'data-sealed="x-deal-v0"'
+capsulectl verify --bundle receipt.html >receipt-verify.json && verdict=0 || verdict=$?
+check "deal-receipt: verify --bundle: VALID, exit 0" test "$verdict" -eq 0
+perl -0ne 'print $1 if /window\.__BUNDLE__ = (.*?);<\/script>/s' receipt.html >receipt.json
+did_line=$(jq -r '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report.did_line' receipt.json)
+check "deal-receipt: the page renders its sealed summary line" contains receipt.html.dom "<p class=\"deal-note\">$did_line</p>"
+jq -c '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report.did_line = "A line nobody sealed."' receipt.json >receipt-edited.json
+perl -0pe 'BEGIN{open my $f,"<","receipt-edited.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-edited.html
+check "deal-receipt-edited: the page carries the edited line" contains receipt-edited.html 'A line nobody sealed.'
+render receipt-edited.html
+check "deal-receipt-edited: the page says the report did not verify" contains receipt-edited.html.dom 'This report did not verify'
+check "deal-receipt-edited: the page shows no edited line" lacks receipt-edited.html.dom '<p class="deal-note">A line nobody sealed.</p>'
+capsulectl verify --bundle receipt-edited.html >/dev/null 2>&1 && verdict=0 || verdict=$?
+check "deal-receipt-edited: verify --bundle: INVALID, exit 1" test "$verdict" -eq 1
+
 exit "$fail"

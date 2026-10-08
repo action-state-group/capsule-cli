@@ -561,12 +561,31 @@ func (s *dealSession) dealWitnessState(ctx context.Context, dealID string, state
 		}
 		return state, state.Receipt != nil && verifyWitness(s.p, state) == nil, nil
 	}
-	// This very checkpoint, in the newest tick whose receipt verifies.
+	// This very checkpoint, in the newest tick whose receipt verifies. A tick
+	// that holds an earlier checkpoint with the same steps (only the deal's
+	// sealed reports came after it) is where those steps wait for the witness:
+	// its pending state is this deal's.
+	steps, err := s.stepsIn(ctx, dealID, mmrLeafCount(current.MMRSize))
+	if err != nil {
+		return nil, err
+	}
 	var held *dealTick
 	var heldState cll.WitnessState
 	for i := range ticks {
 		leaf, ok := ticks[i].leaves.Deals[dealID]
-		if !ok || leaf.CheckpointSHA256 != want {
+		if !ok {
+			continue
+		}
+		if leaf.CheckpointSHA256 != want {
+			if held == nil && leaf.Size < current.MMRSize {
+				same, err := s.stepsIn(ctx, dealID, mmrLeafCount(leaf.Size))
+				if err != nil {
+					return nil, err
+				}
+				if state, err := t.log.GetWitness(ctx, service, ticks[i].size); same == steps && (err == nil || errors.Is(err, cll.ErrNotFound)) && (state.Receipt == nil || verifyWitness(s.p, state) != nil) {
+					held, heldState = &ticks[i], state
+				}
+			}
 			continue
 		}
 		state, ok, err := witnessed(ticks[i])
@@ -680,9 +699,19 @@ func (s *dealSession) cadenceChain(ctx context.Context, t *target, tick dealTick
 	if err != nil {
 		return nil, nil
 	}
+	// Counted in steps: the deal's log also holds its sealed reports, which
+	// are not steps.
+	witnessedSteps, err := s.stepsIn(ctx, dealID, mmrLeafCount(record.MMRSize))
+	if err != nil {
+		return nil, err
+	}
+	steps, err := s.stepsIn(ctx, dealID, mmrLeafCount(current.MMRSize))
+	if err != nil {
+		return nil, err
+	}
 	out["extent"] = "part"
-	out["steps_witnessed"] = integer(mmrLeafCount(record.MMRSize))
-	out["steps"] = integer(mmrLeafCount(current.MMRSize))
+	out["steps_witnessed"] = integer(witnessedSteps)
+	out["steps"] = integer(steps)
 	out["earlier"] = map[string]interface{}{
 		"checkpoint":        map[string]interface{}{"cose": leaf.Statement},
 		"consistency_proof": consistencyJSON(consistency),

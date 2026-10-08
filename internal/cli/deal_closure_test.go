@@ -36,7 +36,7 @@ func TestDealBundleClaimsClosureOverEveryStep(t *testing.T) {
 		} else {
 			require.NoError(t, json.Unmarshal(raw, &b))
 		}
-		steps := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)["steps"].([]any)
+		steps := dealReportOf(b)["steps"].([]any)
 		require.Len(t, steps, 16, name)
 		completeness := b["completeness"].(map[string]any)
 		assert.Equal(t, "15", fmt.Sprint(completeness["closure_depth"]), "%s: every hop from the latest step back to the opening", name)
@@ -76,7 +76,7 @@ func TestDealBundleClosureCoversStepsAfterAClose(t *testing.T) {
 	require.NoError(t, err)
 	var b map[string]any
 	require.NoError(t, json.Unmarshal(raw, &b))
-	steps := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)["steps"].([]any)
+	steps := dealReportOf(b)["steps"].([]any)
 	assert.Equal(t, lateID, b["root"], "the late step is the root")
 	assert.Equal(t, fmt.Sprint(len(steps)-1), fmt.Sprint(b["completeness"].(map[string]any)["closure_depth"]))
 	records := map[string]bool{}
@@ -85,7 +85,7 @@ func TestDealBundleClosureCoversStepsAfterAClose(t *testing.T) {
 	}
 	assert.True(t, records[closeID], "the close is inside the closure")
 	assert.True(t, records[lateID], "the late step is inside the closure")
-	assert.Len(t, records, len(steps), "every step, before and after the close")
+	assert.Len(t, records, len(steps)+1, "every step, before and after the close, and the copy's sealed report")
 	out, err := invoke(t, "", "verify", "--bundle", path)
 	require.NoError(t, err, out)
 	var verified map[string]any

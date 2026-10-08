@@ -78,7 +78,7 @@ func TestDealDiscloseCarriesARecordedTrackingNumber(t *testing.T) {
 	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--email", email)
 
 	b, shared := sharedCopy(t, dealID, "counterparty", "the shop")
-	rows := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)["merchant"].([]any)
+	rows := dealReportOf(b)["merchant"].([]any)
 	require.Len(t, rows, 1)
 	assert.Equal(t, tracking, rows[0].(map[string]any)["tracking"])
 	assert.Contains(t, shared, tracking)
