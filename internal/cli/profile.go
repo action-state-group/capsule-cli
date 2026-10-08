@@ -386,7 +386,7 @@ func profileCommands() *cobra.Command {
 		p.Checkpoint.Token = p.Checkpoint.Token.redact()
 		return output(c, p)
 	}}
-	group.AddCommand(list, show)
+	group.AddCommand(list, show, profileRetireCommand())
 	for _, update := range []bool{false, true} {
 		verb := "create"
 		if update {

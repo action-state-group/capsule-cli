@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### `profile retire NAME`: free a profile's name without touching its records
+
+- Renames the profile to `NAME-retired-YYYYMMDD` (`-2`, `-3` … the same day), with
+  its log id, keys and data directory unchanged: every record, checkpoint and witness
+  receipt stays in its own log, and the retired profile still bundles and verifies
+  them. Nothing is deleted, moved or re-logged. The freed name can be created anew,
+  for example as a sqlite profile.
+- The retired profile is not made read-only: a jsonl profile's bundle puts itself on
+  record, which a read-only profile refuses.
+- `--move-data NEW_DIR` also renames a jsonl profile's data directory (to a new path
+  on the same filesystem), for an install that wants the old path. It refuses a sqlite
+  profile, an existing path, and a key file inside the data directory.
+- Anything that runs capsulectl with `--profile NAME` (a scheduled checkpoint cadence,
+  a plugin) is not changed; the command says so.
+
 ### `verify --bundle` verifies composed/v1
 
 - **Changed:** a bundle carrying a `composed/v1` extension (Evidence Bundle -01 §7.2) is now

@@ -248,6 +248,7 @@ capsulectl profile create --name NAME [configuration flags | --interactive]
 capsulectl profile list
 capsulectl profile show NAME
 capsulectl profile update --profile NAME [configuration flags]
+capsulectl profile retire NAME [--move-data NEW_DIR]   # rename to NAME-retired-YYYYMMDD; nothing recorded changes
 capsulectl store init --profile NAME
 capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
