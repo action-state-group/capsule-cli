@@ -1,0 +1,7 @@
+{
+  "emitted_by": "fixture 6 bundle + extensions[\"x-example-unknown/v1\"]; no capsulectl command renders a bundle file, so its page is emitted by the gate and renderer disclose --html uses (see the golden test)",
+  "kind": "generic-fallback-unknown-extension",
+  "page": "written",
+  "rerender": "page",
+  "verify": "VALID"
+}

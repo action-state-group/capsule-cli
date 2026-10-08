@@ -1,0 +1,77 @@
+{
+  "verification": {
+    "verify": [
+      "verified"
+    ],
+    "verdict": [],
+    "sealed": [],
+    "unchecked": []
+  },
+  "views": {
+    "page": [
+      "verification"
+    ],
+    "notice": [
+      "no-aggregate"
+    ],
+    "section": []
+  },
+  "evidence_ids": [
+    "4d87439768bb3507835ca6f0ed0b728300549bd8109e0943b9e3b8db516a7047",
+    "767a4cc3ebac02f70d077578e94fc607170580beb7ad2930cd3b80ac83ca2c4b",
+    "cd04a94d2fb5381d5d1b7aabb5c438a224c2c49246204a727135550ec505fc2b"
+  ],
+  "text": [
+    "Bundle verification passed",
+    "This bundle carries no evaluation summary, so there is no aggregate view. The records and their verification are below.",
+    "Verification",
+    "bundle digest",
+    "\"cd04a94d2fb5381d5d1b7aabb5c438a224c2c49246204a727135550ec505fc2b\"",
+    "checkpoint root",
+    "\"4d87439768bb3507835ca6f0ed0b728300549bd8109e0943b9e3b8db516a7047\"",
+    "checkpoint size",
+    "1",
+    "Receipts",
+    "no receipts disclosed",
+    "self-witnessed: no transparency-service receipt",
+    "Checkpoint coverage",
+    "0 records uncheckpointed of 1 record supplied",
+    "1 record checkpointed",
+    "1 record, by capsule id",
+    "767a4cc3ebac02f70d077578e94fc607170580beb7ad2930cd3b80ac83ca2c4b ·",
+    "checkpointed",
+    "Countersignatures",
+    "Countersigned: none",
+    "Completeness statement",
+    "closure depth",
+    "2",
+    "records mode",
+    "\"complete\"",
+    "payloads mode",
+    "\"all\"",
+    "suppressed fields",
+    "[]",
+    "The ten checks",
+    "Required fields",
+    ": passed with no errors found",
+    "Capsule identity",
+    ": passed with no errors found",
+    "Effect consistency",
+    ": passed with no errors found",
+    "Verdict conflict",
+    ": passed with no errors found",
+    "Chain parent",
+    ": passed with no errors found",
+    "Assurance claims",
+    ": passed with no errors found",
+    "Bundle digest",
+    ": passed with no errors found",
+    "Graph closure",
+    ": passed with no errors found",
+    "Interval coverage",
+    ": passed with no errors found",
+    "Per-record membership",
+    ": passed with no errors found",
+    "verify independently at verify.agentactioncapsule.org or with the CLI"
+  ]
+}

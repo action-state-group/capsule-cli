@@ -1,0 +1,3175 @@
+{
+  "bundle_kind": "evidence-bundle/v2",
+  "bundle_version": "2",
+  "checkpoint": {
+    "cose": "0oRYZ6QBJwN4H2FwcGxpY2F0aW9uL2NsbC1jaGVja3BvaW50K2Nib3IEWCCZPblV2Wtp9HxcfpbwRzd8FPiAdUowlnc5itjfOmRhtQ-iAWtleGFtcGxlLWxvZwJuZXhhbXBsZS1sb2cjNjSgWLKmZGtpbmRuY2xsLWNoZWNrcG9pbnRobG9nX3NpemUYQGlpc3N1ZWRfYXR4GDIwMjYtMTAtMDhUMjM6MzU6NDguODY1WmlwcmV2X3NpemUAamNvbW1pdG1lbnRYRYJYIETh8ch1weyvcvoIlAkA6nyn_MxSPCLqLDiZu7ulhzyZWCAo49dKoYvaWySQCsLrkL15CdDU5d_K65XHU1pkXOjwUG9wcmV2X2NvbW1pdG1lbnRAWEDtH5QvYePJM3R2puIDCEIOZu4hWFs2-ojLSRV0IhK-7nY4PV53eL6txOm9sdl5LN5V55lSezUyxjI3jKSZtQ4F",
+    "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+    "kind": "mmr_checkpoint",
+    "log_id": "example-log",
+    "mmr_size": 64,
+    "prev_root": "",
+    "prev_size": 0,
+    "root": "e032ebcd342b64e3f48806cecd1cf2d46d615d34f24e979852c1274fe3df4494",
+    "statement": "0oRYZ6QBJwN4H2FwcGxpY2F0aW9uL2NsbC1jaGVja3BvaW50K2Nib3IEWCCZPblV2Wtp9HxcfpbwRzd8FPiAdUowlnc5itjfOmRhtQ+iAWtleGFtcGxlLWxvZwJuZXhhbXBsZS1sb2cjNjSgWLKmZGtpbmRuY2xsLWNoZWNrcG9pbnRobG9nX3NpemUYQGlpc3N1ZWRfYXR4GDIwMjYtMTAtMDhUMjM6MzU6NDguODY1WmlwcmV2X3NpemUAamNvbW1pdG1lbnRYRYJYIETh8ch1weyvcvoIlAkA6nyn/MxSPCLqLDiZu7ulhzyZWCAo49dKoYvaWySQCsLrkL15CdDU5d/K65XHU1pkXOjwUG9wcmV2X2NvbW1pdG1lbnRAWEDtH5QvYePJM3R2puIDCEIOZu4hWFs2+ojLSRV0IhK+7nY4PV53eL6txOm9sdl5LN5V55lSezUyxjI3jKSZtQ4F",
+    "timestamp": "2026-10-08T23:35:48.865Z",
+    "v": 1
+  },
+  "completeness": {
+    "closure_depth": 2,
+    "missing": [],
+    "payloads_mode": "all",
+    "records_mode": "complete",
+    "suppressed_fields": []
+  },
+  "completeness_certificate": {
+    "body_digests": [
+      "21baed49c80a672c0116f3f987877cda80cda72b70a941adc799e9699783b579",
+      "400fb16811f7d3986609b0b4efe876a7ca16a97818996b9ceeb40b5690b6bacc",
+      "a1c2bd148780e5e2e8430cedef2b987d10fd7edd78a6028059f93519b1cacfc8",
+      "155e06fb4dee5c2ec1ca804a2a5157457fb16d8bf44c923b68e081cefdab386a",
+      "7fc0f5c6b99a93ae99749c9f7bdd9ce9dc70261124c848a1c5243a5fc577560e",
+      "27674e9977df7e9a95874bcc8a708b9967fa3878584a86dcfead99591f9ed365",
+      "8e3d8020f8c82238277fc5b78572e8c1ad7521392b608cd98d04204d00cf3320",
+      "1e07c91198c13f9dc414e1d4e67e159b796b90f4f6be3f68faaf01390af39aef",
+      "5772fe1d5973a8f6b5000cebf6f205559046b3ccb033fb0bef53fcb3bc6ba2be",
+      "b11ae4f0260a555a1ed784fae0a142efe24f5b91590856a3400d5ec7e736dd03",
+      "bea950b2fda8ba83f3fcd1663c7034b42515149c9ec6f748ec91a074251c9944",
+      "acf8f976ef6c85433d3afe8acc237686418bbfa4c929838ac563af4927d247c5",
+      "4165a9e0a8189ee7a331f84bc6cb1c123a2020f3e04534c6f35adf29c2c7c439",
+      "872444011ca132a9c2b171b16944b15e2ca372881da7bb62f00a15f712d1e23b",
+      "b1389f597602556cecaf79214161cdf052d4065414253d325cb86f94114829e3",
+      "67712fce1e0b9e141f3b9527b438603ddc93c390dce94cfd46433751b1216eb6",
+      "7b2e78ba4133b1166413bd1adaf78627b310ac1d166363618041b23c05ee819c",
+      "f02cb61fc19d14d1cfc70ae70f677f17bc558c35aced315473926d732abcb6ff",
+      "9dbac5f5d186a5802cbd1afdfce27b79062dd235c801b07519c1e4126eeb8feb",
+      "014d1ccc6abe1fcac51870ed60423058dacd7b49fcd30d68addf39127eeff87f",
+      "624881e54f2ffee3844986a27ce47f85cd2568059a61a720bc848e9e378ebe2d",
+      "495383d3d4509dbb5eaab798905fed40c2c3a82b39ec734339bf41f73de41250",
+      "ab5d173a28156a6702c7a1038352179fc15d947402f1d5fe8367b86ef091c3e8",
+      "63326844444ae6cceedf74f77f559bf1cf0b048484a5f540de06964a8df7c3a1",
+      "9ba1d0ee2502112691eb2a9206dc034a8de1c5060b9b78aa4e66deeadec1c636",
+      "99c2a52f3877874dab010bd589a99c6dc8ffbbfef98c6b8b048f9ac036348c15",
+      "c0ed716a41e083b3153c761529a8493446cea4fb7166585abfab028607cd11e3",
+      "bf2e0eeb40d98ab0472d729bd31df57e0c46f68fd5376d86c95490bfffca14c6",
+      "c7e268eebfbaa06234bd276ea34b854d90be79d62d12516d311b90bae5a00e39",
+      "481b32121a0f7ebcc761a23a22606c759f2c411f2534ee90c59ad66dabca1154",
+      "1d537923ba694b95ab91d31913f66d0f1102b796a5487dca084eea9b9e13b8fc",
+      "aec46fccfd5084354d05e03dae4f54c5c615e129eff255e588dc6c7cf1cc9e5c",
+      "d01cd7574b74cd8df47db7c67ea38d7f234e00e11fe896958b0dc0114c73338b"
+    ],
+    "first_seq": 1,
+    "last_seq": 33,
+    "log_id": "example-log",
+    "memberships": {
+      "014d1ccc6abe1fcac51870ed60423058dacd7b49fcd30d68addf39127eeff87f": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 19,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "9d437c9e7489366dedbf8757f789c41dd2ec2acfacd9a2d8b34e5c3386a1da72",
+            "61a28a628e8cb823253b12ee637511b450b03101f38423a8b6c47a56c37e65a4",
+            "cbc629dd4fe71c671a94213008b60a854eee4e86d29d274651fc80729d5b9694",
+            "00739ecd112bf56daca3155504e80942a180e57b75a9a5553bb3ea943a112dfb",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 19,
+          "log_id": "example-log",
+          "seq": 20
+        }
+      },
+      "155e06fb4dee5c2ec1ca804a2a5157457fb16d8bf44c923b68e081cefdab386a": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 3,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "cc892e9836d301b088712d9009040080f1b73e9792a65b55239804dd3297fc99",
+            "14cf523b180b7098e4548320094d6514b2ecd11b2277b94727708443c634c99e",
+            "f567f54e6cfee32de759ef4b312e351a6e2d45e32b6a445d9dd9b19e130412b7",
+            "d935afe4a4206062f521f7b267d8997e360506420a4cc9860d4aecc26d518415",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 3,
+          "log_id": "example-log",
+          "seq": 4
+        }
+      },
+      "1d537923ba694b95ab91d31913f66d0f1102b796a5487dca084eea9b9e13b8fc": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 30,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "5ae8961c6b25cf0527cbb1faf0dee11d8f4934edd98b94699dae0e8e82471ca6",
+            "2b73b0ae8d4867b941de571190fe8f512846653343a3d3b02fc055ddd2b4eb56",
+            "e12a441b9dc1b5245ad49bd93fca542ddc7a7fd8d4060ecdd6586f24d9c373e2",
+            "7c1ed5048b8a5578914b40f29876712e1fd7b3b1a8b5493a44287ea1d3c0513c",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 30,
+          "log_id": "example-log",
+          "seq": 31
+        }
+      },
+      "1e07c91198c13f9dc414e1d4e67e159b796b90f4f6be3f68faaf01390af39aef": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 7,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "c06e6f07914eb07db4bf96bad7cb7e66e04b4b0035783c58207446ee5610078b",
+            "2de986c3d71be29a7f89f1ea74a430fcbf5cc47fafb01b8ccba0fed5d6bf25cd",
+            "4eff96406e661dc902cbc75e3ccd6627b31a549e4e7f5f6d64e5c3839377028e",
+            "d935afe4a4206062f521f7b267d8997e360506420a4cc9860d4aecc26d518415",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 7,
+          "log_id": "example-log",
+          "seq": 8
+        }
+      },
+      "21baed49c80a672c0116f3f987877cda80cda72b70a941adc799e9699783b579": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 0,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "fe3c130410aacd9992e0bbfba9682a81c8af6e2ce1888b0c35b3f95a249a48ca",
+            "7172b3323d7a9ba122281801a7e81808d76dfe668ca396c1a9c2c92a49283daf",
+            "f567f54e6cfee32de759ef4b312e351a6e2d45e32b6a445d9dd9b19e130412b7",
+            "d935afe4a4206062f521f7b267d8997e360506420a4cc9860d4aecc26d518415",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 0,
+          "log_id": "example-log",
+          "seq": 1
+        }
+      },
+      "27674e9977df7e9a95874bcc8a708b9967fa3878584a86dcfead99591f9ed365": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 5,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "cc830ab2f8758a42576794ef858e3c21e444e1362089c3eec8405b75b29c65b4",
+            "a9583be7ba61a3b49792478cd34bb200e96461ba76a059643af6da75e73055a4",
+            "4eff96406e661dc902cbc75e3ccd6627b31a549e4e7f5f6d64e5c3839377028e",
+            "d935afe4a4206062f521f7b267d8997e360506420a4cc9860d4aecc26d518415",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 5,
+          "log_id": "example-log",
+          "seq": 6
+        }
+      },
+      "400fb16811f7d3986609b0b4efe876a7ca16a97818996b9ceeb40b5690b6bacc": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 1,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "ef423818397db9065759d4e6095ed3440cf0331a04b21d0fc28e9fb40efd2384",
+            "7172b3323d7a9ba122281801a7e81808d76dfe668ca396c1a9c2c92a49283daf",
+            "f567f54e6cfee32de759ef4b312e351a6e2d45e32b6a445d9dd9b19e130412b7",
+            "d935afe4a4206062f521f7b267d8997e360506420a4cc9860d4aecc26d518415",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 1,
+          "log_id": "example-log",
+          "seq": 2
+        }
+      },
+      "4165a9e0a8189ee7a331f84bc6cb1c123a2020f3e04534c6f35adf29c2c7c439": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 12,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "17d963a12e57852ce053715fc771c2fb164d8ed9a5f724fa8424730f4dc007b5",
+            "1fbadadee4b2a1608a259b4d2f27ca57d39796f4357833479320dea309a71673",
+            "72a7eb3e16cc15b3e0b721529a115072f007d3d7c771a89e9aaa9525b5a2546e",
+            "dd9add712b2f2020491a485e2c57bb45d2cf3b4f7738e52a771a76aff154baed",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 12,
+          "log_id": "example-log",
+          "seq": 13
+        }
+      },
+      "481b32121a0f7ebcc761a23a22606c759f2c411f2534ee90c59ad66dabca1154": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 29,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "dbe082214638c38604f9e7d44feee6a32e73f6fbf41b1582ba4e9205a24f8ea4",
+            "ad8f08d2d8f2f402cd505dcd483e808851d91b8f861efa108ac777fddce79c8e",
+            "e12a441b9dc1b5245ad49bd93fca542ddc7a7fd8d4060ecdd6586f24d9c373e2",
+            "7c1ed5048b8a5578914b40f29876712e1fd7b3b1a8b5493a44287ea1d3c0513c",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 29,
+          "log_id": "example-log",
+          "seq": 30
+        }
+      },
+      "495383d3d4509dbb5eaab798905fed40c2c3a82b39ec734339bf41f73de41250": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 21,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "ad70e5121c41e939c25fad8e7584aaa862f069b18e4061cefb42bb87e56353e7",
+            "842649e2b6e97c9d158352efc49eb54b2852571388b101f9891647145327b1a5",
+            "d8ffe2b309093948dffbbc53e7e9851699f5a6f0b7964738e14e8ede96325c06",
+            "00739ecd112bf56daca3155504e80942a180e57b75a9a5553bb3ea943a112dfb",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 21,
+          "log_id": "example-log",
+          "seq": 22
+        }
+      },
+      "5772fe1d5973a8f6b5000cebf6f205559046b3ccb033fb0bef53fcb3bc6ba2be": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 8,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "2aa6cb82d08eab54b13f11de84941023a51c30db50f47a2a7820c41787725444",
+            "7bac29e912fb25e7750447aa208b88d8235ea97007c5c37fc37ff9426138f8b1",
+            "4df05eaa70433f3f45e18964d8be67a2bd21d7966a98d49bd052ebfd5fec74ba",
+            "dd9add712b2f2020491a485e2c57bb45d2cf3b4f7738e52a771a76aff154baed",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 8,
+          "log_id": "example-log",
+          "seq": 9
+        }
+      },
+      "624881e54f2ffee3844986a27ce47f85cd2568059a61a720bc848e9e378ebe2d": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 20,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "8eb804188269af49bc0385e959e93df62c42c45409fd150e46561cd3c5f16179",
+            "842649e2b6e97c9d158352efc49eb54b2852571388b101f9891647145327b1a5",
+            "d8ffe2b309093948dffbbc53e7e9851699f5a6f0b7964738e14e8ede96325c06",
+            "00739ecd112bf56daca3155504e80942a180e57b75a9a5553bb3ea943a112dfb",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 20,
+          "log_id": "example-log",
+          "seq": 21
+        }
+      },
+      "63326844444ae6cceedf74f77f559bf1cf0b048484a5f540de06964a8df7c3a1": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 23,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "47eadfe12c14d9a65205ba3b7f2ec2b14f8c632dfcec5ca039ce0841d5e884b9",
+            "56bc75e490cd4b5cb85d24fdbb62ec53ceb26dbb706b81d81cf32eef4aed169e",
+            "d8ffe2b309093948dffbbc53e7e9851699f5a6f0b7964738e14e8ede96325c06",
+            "00739ecd112bf56daca3155504e80942a180e57b75a9a5553bb3ea943a112dfb",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 23,
+          "log_id": "example-log",
+          "seq": 24
+        }
+      },
+      "67712fce1e0b9e141f3b9527b438603ddc93c390dce94cfd46433751b1216eb6": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 15,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "47107a777ce27ca2ddbb39a6eec67c6d45aaada4a2c4b41b50c493f580055869",
+            "9f58773d0b4680dad7fde7a9c0e57d4b019d1c1970a768274f3ee5149c739b75",
+            "72a7eb3e16cc15b3e0b721529a115072f007d3d7c771a89e9aaa9525b5a2546e",
+            "dd9add712b2f2020491a485e2c57bb45d2cf3b4f7738e52a771a76aff154baed",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 15,
+          "log_id": "example-log",
+          "seq": 16
+        }
+      },
+      "7b2e78ba4133b1166413bd1adaf78627b310ac1d166363618041b23c05ee819c": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 16,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "eb2e1f58ef08697c551b4f127b022db7b7fe5ffd36ecb307126af8095d80bcbe",
+            "e5e1ca8c7ae7c0c3197050575de72c7287abbbe1fb1c25b5e1e18c55100be8a5",
+            "cbc629dd4fe71c671a94213008b60a854eee4e86d29d274651fc80729d5b9694",
+            "00739ecd112bf56daca3155504e80942a180e57b75a9a5553bb3ea943a112dfb",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 16,
+          "log_id": "example-log",
+          "seq": 17
+        }
+      },
+      "7fc0f5c6b99a93ae99749c9f7bdd9ce9dc70261124c848a1c5243a5fc577560e": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 4,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "199318286df90fe8343fd86614892e9051b865e616fd20b202d7dff3472ca276",
+            "a9583be7ba61a3b49792478cd34bb200e96461ba76a059643af6da75e73055a4",
+            "4eff96406e661dc902cbc75e3ccd6627b31a549e4e7f5f6d64e5c3839377028e",
+            "d935afe4a4206062f521f7b267d8997e360506420a4cc9860d4aecc26d518415",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 4,
+          "log_id": "example-log",
+          "seq": 5
+        }
+      },
+      "872444011ca132a9c2b171b16944b15e2ca372881da7bb62f00a15f712d1e23b": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 13,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "17542236fd19ebb044c67a9d4ebd58a80c3e888c6a85edf3d6d2ecc9fc074eca",
+            "1fbadadee4b2a1608a259b4d2f27ca57d39796f4357833479320dea309a71673",
+            "72a7eb3e16cc15b3e0b721529a115072f007d3d7c771a89e9aaa9525b5a2546e",
+            "dd9add712b2f2020491a485e2c57bb45d2cf3b4f7738e52a771a76aff154baed",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 13,
+          "log_id": "example-log",
+          "seq": 14
+        }
+      },
+      "8e3d8020f8c82238277fc5b78572e8c1ad7521392b608cd98d04204d00cf3320": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 6,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "1d06e586c18432d47f8a1b79320fe6707a7be067b3c8ff8b129d0740ae448d04",
+            "2de986c3d71be29a7f89f1ea74a430fcbf5cc47fafb01b8ccba0fed5d6bf25cd",
+            "4eff96406e661dc902cbc75e3ccd6627b31a549e4e7f5f6d64e5c3839377028e",
+            "d935afe4a4206062f521f7b267d8997e360506420a4cc9860d4aecc26d518415",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 6,
+          "log_id": "example-log",
+          "seq": 7
+        }
+      },
+      "99c2a52f3877874dab010bd589a99c6dc8ffbbfef98c6b8b048f9ac036348c15": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 25,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "252d56278a15540050237967602ba16901fc285bceaf9fc81d5d2d56c29065aa",
+            "c4fa487f7d6653003baa5393d221bdb0e434d0e7c689a34874577bfdfdb61a97",
+            "082ae30e557ac6494582ff078ae66b2b013c9770fee7d439e19033814394d130",
+            "7c1ed5048b8a5578914b40f29876712e1fd7b3b1a8b5493a44287ea1d3c0513c",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 25,
+          "log_id": "example-log",
+          "seq": 26
+        }
+      },
+      "9ba1d0ee2502112691eb2a9206dc034a8de1c5060b9b78aa4e66deeadec1c636": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 24,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "65a67ce1c8d4f724b59e9082187879957840a4091b43a67776dbc97f10876906",
+            "c4fa487f7d6653003baa5393d221bdb0e434d0e7c689a34874577bfdfdb61a97",
+            "082ae30e557ac6494582ff078ae66b2b013c9770fee7d439e19033814394d130",
+            "7c1ed5048b8a5578914b40f29876712e1fd7b3b1a8b5493a44287ea1d3c0513c",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 24,
+          "log_id": "example-log",
+          "seq": 25
+        }
+      },
+      "9dbac5f5d186a5802cbd1afdfce27b79062dd235c801b07519c1e4126eeb8feb": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 18,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "d78b553b57bef1c166127a89c503384e65e09f3491e87a073a998492f51c0edc",
+            "61a28a628e8cb823253b12ee637511b450b03101f38423a8b6c47a56c37e65a4",
+            "cbc629dd4fe71c671a94213008b60a854eee4e86d29d274651fc80729d5b9694",
+            "00739ecd112bf56daca3155504e80942a180e57b75a9a5553bb3ea943a112dfb",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 18,
+          "log_id": "example-log",
+          "seq": 19
+        }
+      },
+      "a1c2bd148780e5e2e8430cedef2b987d10fd7edd78a6028059f93519b1cacfc8": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 2,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "083277d9b513bbb6c2ed6d5b5eb30ea0a8c2dee5c222d87d19630e3a5f85aaa9",
+            "14cf523b180b7098e4548320094d6514b2ecd11b2277b94727708443c634c99e",
+            "f567f54e6cfee32de759ef4b312e351a6e2d45e32b6a445d9dd9b19e130412b7",
+            "d935afe4a4206062f521f7b267d8997e360506420a4cc9860d4aecc26d518415",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 2,
+          "log_id": "example-log",
+          "seq": 3
+        }
+      },
+      "ab5d173a28156a6702c7a1038352179fc15d947402f1d5fe8367b86ef091c3e8": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 22,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "44e8063d42746f79fc03eda8772be779bec1a6778dda52648e800ee855c0d992",
+            "56bc75e490cd4b5cb85d24fdbb62ec53ceb26dbb706b81d81cf32eef4aed169e",
+            "d8ffe2b309093948dffbbc53e7e9851699f5a6f0b7964738e14e8ede96325c06",
+            "00739ecd112bf56daca3155504e80942a180e57b75a9a5553bb3ea943a112dfb",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 22,
+          "log_id": "example-log",
+          "seq": 23
+        }
+      },
+      "acf8f976ef6c85433d3afe8acc237686418bbfa4c929838ac563af4927d247c5": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 11,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "cf41e1773665f63fbe7e23ba4914f147648c7ca42ab1cfea2dcdb99c8164f1af",
+            "4933f26b4355911ff46a3938109d872ee894d475b5eb896643cdf076b19b36f3",
+            "4df05eaa70433f3f45e18964d8be67a2bd21d7966a98d49bd052ebfd5fec74ba",
+            "dd9add712b2f2020491a485e2c57bb45d2cf3b4f7738e52a771a76aff154baed",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 11,
+          "log_id": "example-log",
+          "seq": 12
+        }
+      },
+      "aec46fccfd5084354d05e03dae4f54c5c615e129eff255e588dc6c7cf1cc9e5c": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 31,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "9d9b647a8fa7db1432b7675c84aff963542195f322200f621f34de65f3c456f6",
+            "2b73b0ae8d4867b941de571190fe8f512846653343a3d3b02fc055ddd2b4eb56",
+            "e12a441b9dc1b5245ad49bd93fca542ddc7a7fd8d4060ecdd6586f24d9c373e2",
+            "7c1ed5048b8a5578914b40f29876712e1fd7b3b1a8b5493a44287ea1d3c0513c",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 31,
+          "log_id": "example-log",
+          "seq": 32
+        }
+      },
+      "b11ae4f0260a555a1ed784fae0a142efe24f5b91590856a3400d5ec7e736dd03": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 9,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "0dcc38bc0d3d59b9d38f0872bf5b29b3d7d73d298ca4510e348a0313b0c7963e",
+            "7bac29e912fb25e7750447aa208b88d8235ea97007c5c37fc37ff9426138f8b1",
+            "4df05eaa70433f3f45e18964d8be67a2bd21d7966a98d49bd052ebfd5fec74ba",
+            "dd9add712b2f2020491a485e2c57bb45d2cf3b4f7738e52a771a76aff154baed",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 9,
+          "log_id": "example-log",
+          "seq": 10
+        }
+      },
+      "b1389f597602556cecaf79214161cdf052d4065414253d325cb86f94114829e3": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 14,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "80eccfd9f23d3133beaa257434e8233888da256789ee25eb46dd0cdd26eba9f1",
+            "9f58773d0b4680dad7fde7a9c0e57d4b019d1c1970a768274f3ee5149c739b75",
+            "72a7eb3e16cc15b3e0b721529a115072f007d3d7c771a89e9aaa9525b5a2546e",
+            "dd9add712b2f2020491a485e2c57bb45d2cf3b4f7738e52a771a76aff154baed",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 14,
+          "log_id": "example-log",
+          "seq": 15
+        }
+      },
+      "bea950b2fda8ba83f3fcd1663c7034b42515149c9ec6f748ec91a074251c9944": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 10,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "870a0f4a75146f5faf482ce5912a0bd2af6f3cbcea5074c2a984ffb11bcfb4b3",
+            "4933f26b4355911ff46a3938109d872ee894d475b5eb896643cdf076b19b36f3",
+            "4df05eaa70433f3f45e18964d8be67a2bd21d7966a98d49bd052ebfd5fec74ba",
+            "dd9add712b2f2020491a485e2c57bb45d2cf3b4f7738e52a771a76aff154baed",
+            "569a346ca317a40c2a5af699b20ecee78adc55e033fc3d83d6116c0c79c9831f"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 10,
+          "log_id": "example-log",
+          "seq": 11
+        }
+      },
+      "bf2e0eeb40d98ab0472d729bd31df57e0c46f68fd5376d86c95490bfffca14c6": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 27,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "16019b2840a6ddf79fcc9d85171be24d3ea685a5bf7ea9df8ec129345092bb46",
+            "d18e715ddf858ce38a95904e43b5c0a452f527cad8dca3e8006881e3fd1dd018",
+            "082ae30e557ac6494582ff078ae66b2b013c9770fee7d439e19033814394d130",
+            "7c1ed5048b8a5578914b40f29876712e1fd7b3b1a8b5493a44287ea1d3c0513c",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 27,
+          "log_id": "example-log",
+          "seq": 28
+        }
+      },
+      "c0ed716a41e083b3153c761529a8493446cea4fb7166585abfab028607cd11e3": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 26,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "96e3fe9796e9094cdcae3749d35b9acb8d05737391efec1f59a61468673f4b0c",
+            "d18e715ddf858ce38a95904e43b5c0a452f527cad8dca3e8006881e3fd1dd018",
+            "082ae30e557ac6494582ff078ae66b2b013c9770fee7d439e19033814394d130",
+            "7c1ed5048b8a5578914b40f29876712e1fd7b3b1a8b5493a44287ea1d3c0513c",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 26,
+          "log_id": "example-log",
+          "seq": 27
+        }
+      },
+      "c7e268eebfbaa06234bd276ea34b854d90be79d62d12516d311b90bae5a00e39": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 28,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "254773b4c3551942c00f02315fb4f68611b211390f059de6812d6a5ecf6d7a8c",
+            "ad8f08d2d8f2f402cd505dcd483e808851d91b8f861efa108ac777fddce79c8e",
+            "e12a441b9dc1b5245ad49bd93fca542ddc7a7fd8d4060ecdd6586f24d9c373e2",
+            "7c1ed5048b8a5578914b40f29876712e1fd7b3b1a8b5493a44287ea1d3c0513c",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 28,
+          "log_id": "example-log",
+          "seq": 29
+        }
+      },
+      "d01cd7574b74cd8df47db7c67ea38d7f234e00e11fe896958b0dc0114c73338b": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 32,
+          "peaks_left": [
+            "44e1f1c875c1ecaf72fa08940900ea7ca7fccc523c22ea2c3899bbbba5873c99"
+          ],
+          "peaks_right": [],
+          "size": 64,
+          "v": 1,
+          "witness": []
+        },
+        "log_coordinates": {
+          "leaf_index": 32,
+          "log_id": "example-log",
+          "seq": 33
+        }
+      },
+      "f02cb61fc19d14d1cfc70ae70f677f17bc558c35aced315473926d732abcb6ff": {
+        "inclusion_proof": {
+          "kind": "inclusion",
+          "leaf_index": 17,
+          "peaks_left": [],
+          "peaks_right": [
+            "28e3d74aa18bda5b24900ac2eb90bd7909d0d4e5dfcaeb95c7535a645ce8f050"
+          ],
+          "size": 64,
+          "v": 1,
+          "witness": [
+            "9b61ff7d7c41b457ce7812a95cf53cb6e8004c4d2f91ba7a52b6ace58188af24",
+            "e5e1ca8c7ae7c0c3197050575de72c7287abbbe1fb1c25b5e1e18c55100be8a5",
+            "cbc629dd4fe71c671a94213008b60a854eee4e86d29d274651fc80729d5b9694",
+            "00739ecd112bf56daca3155504e80942a180e57b75a9a5553bb3ea943a112dfb",
+            "a3a299484cd69f925fd426b5aad37b41077aecbd9ba3cc896006884de96342fa"
+          ]
+        },
+        "log_coordinates": {
+          "leaf_index": 17,
+          "log_id": "example-log",
+          "seq": 18
+        }
+      }
+    },
+    "range_proof": {
+      "from_index": 0,
+      "from_seq": 1,
+      "size": 64,
+      "to_index": 32,
+      "to_seq": 33,
+      "witness": []
+    },
+    "range_root": "e032ebcd342b64e3f48806cecd1cf2d46d615d34f24e979852c1274fe3df4494"
+  },
+  "disclosures": {
+    "014d1ccc6abe1fcac51870ed60423058dacd7b49fcd30d68addf39127eeff87f": {
+      "agent_input": {
+        "case_id": "example:support:case-5:trial-0",
+        "clause_claim": "The agent states no fee, rule or deadline that is not in the example policy.",
+        "clause_id": "communication.no_invented_terms",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-16",
+        "rationale": "Synthetic not met judgment for communication.no_invented_terms on example:support:case-5:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "not_met"
+      }
+    },
+    "155e06fb4dee5c2ec1ca804a2a5157457fb16d8bf44c923b68e081cefdab386a": {
+      "agent_input": {
+        "case_id": "example:support:case-1:trial-0",
+        "clause_claim": "The agent states no fee, rule or deadline that is not in the example policy.",
+        "clause_id": "communication.no_invented_terms",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-02",
+        "rationale": "Synthetic met judgment for communication.no_invented_terms on example:support:case-1:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "1d537923ba694b95ab91d31913f66d0f1102b796a5487dca084eea9b9e13b8fc": {
+      "agent_input": {
+        "case_id": "example:support:case-8:trial-0",
+        "clause_claim": "The agent confirms with the customer before a consequential action.",
+        "clause_id": "policy.confirmed_before_acting",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-29",
+        "rationale": "Synthetic not met judgment for policy.confirmed_before_acting on example:support:case-8:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "not_met"
+      }
+    },
+    "1e07c91198c13f9dc414e1d4e67e159b796b90f4f6be3f68faaf01390af39aef": {
+      "agent_input": {
+        "case_id": "example:support:case-2:trial-0",
+        "clause_claim": "The agent states no fee, rule or deadline that is not in the example policy.",
+        "clause_id": "communication.no_invented_terms",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-04",
+        "rationale": "Synthetic met judgment for communication.no_invented_terms on example:support:case-2:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "21baed49c80a672c0116f3f987877cda80cda72b70a941adc799e9699783b579": {
+      "agent_input": {
+        "case_id": "example:support:case-1:trial-0",
+        "clause_claim": "The customer's request is completed in full.",
+        "clause_id": "resolution.done_in_full",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-02",
+        "rationale": "Synthetic met judgment for resolution.done_in_full on example:support:case-1:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "27674e9977df7e9a95874bcc8a708b9967fa3878584a86dcfead99591f9ed365": {
+      "agent_input": {
+        "case_id": "example:support:case-2:trial-0",
+        "clause_claim": "The change made is the one the customer asked for.",
+        "clause_id": "resolution.right_change",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-04",
+        "rationale": "Synthetic not evaluable judgment for resolution.right_change on example:support:case-2:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "not_evaluable"
+      }
+    },
+    "400fb16811f7d3986609b0b4efe876a7ca16a97818996b9ceeb40b5690b6bacc": {
+      "agent_input": {
+        "case_id": "example:support:case-1:trial-0",
+        "clause_claim": "The change made is the one the customer asked for.",
+        "clause_id": "resolution.right_change",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-02",
+        "rationale": "Synthetic met judgment for resolution.right_change on example:support:case-1:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "4165a9e0a8189ee7a331f84bc6cb1c123a2020f3e04534c6f35adf29c2c7c439": {
+      "agent_input": {
+        "case_id": "example:support:case-4:trial-0",
+        "clause_claim": "The customer's request is completed in full.",
+        "clause_id": "resolution.done_in_full",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-11",
+        "rationale": "Synthetic met judgment for resolution.done_in_full on example:support:case-4:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "481b32121a0f7ebcc761a23a22606c759f2c411f2534ee90c59ad66dabca1154": {
+      "agent_input": {
+        "case_id": "example:support:case-8:trial-0",
+        "clause_claim": "The change made is the one the customer asked for.",
+        "clause_id": "resolution.right_change",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-29",
+        "rationale": "Synthetic met judgment for resolution.right_change on example:support:case-8:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "495383d3d4509dbb5eaab798905fed40c2c3a82b39ec734339bf41f73de41250": {
+      "agent_input": {
+        "case_id": "example:support:case-6:trial-0",
+        "clause_claim": "The change made is the one the customer asked for.",
+        "clause_id": "resolution.right_change",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-18",
+        "rationale": "Synthetic met judgment for resolution.right_change on example:support:case-6:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "5772fe1d5973a8f6b5000cebf6f205559046b3ccb033fb0bef53fcb3bc6ba2be": {
+      "agent_input": {
+        "case_id": "example:support:case-3:trial-0",
+        "clause_claim": "The customer's request is completed in full.",
+        "clause_id": "resolution.done_in_full",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-09",
+        "rationale": "Synthetic met judgment for resolution.done_in_full on example:support:case-3:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "624881e54f2ffee3844986a27ce47f85cd2568059a61a720bc848e9e378ebe2d": {
+      "agent_input": {
+        "case_id": "example:support:case-6:trial-0",
+        "clause_claim": "The customer's request is completed in full.",
+        "clause_id": "resolution.done_in_full",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-18",
+        "rationale": "Synthetic not met judgment for resolution.done_in_full on example:support:case-6:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "not_met"
+      }
+    },
+    "63326844444ae6cceedf74f77f559bf1cf0b048484a5f540de06964a8df7c3a1": {
+      "agent_input": {
+        "case_id": "example:support:case-6:trial-0",
+        "clause_claim": "The agent states no fee, rule or deadline that is not in the example policy.",
+        "clause_id": "communication.no_invented_terms",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-18",
+        "rationale": "Synthetic not met judgment for communication.no_invented_terms on example:support:case-6:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "not_met"
+      }
+    },
+    "67712fce1e0b9e141f3b9527b438603ddc93c390dce94cfd46433751b1216eb6": {
+      "agent_input": {
+        "case_id": "example:support:case-4:trial-0",
+        "clause_claim": "The agent states no fee, rule or deadline that is not in the example policy.",
+        "clause_id": "communication.no_invented_terms",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-11",
+        "rationale": "Synthetic met judgment for communication.no_invented_terms on example:support:case-4:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "7b2e78ba4133b1166413bd1adaf78627b310ac1d166363618041b23c05ee819c": {
+      "agent_input": {
+        "case_id": "example:support:case-5:trial-0",
+        "clause_claim": "The customer's request is completed in full.",
+        "clause_id": "resolution.done_in_full",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-16",
+        "rationale": "Synthetic not evaluable judgment for resolution.done_in_full on example:support:case-5:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "not_evaluable"
+      }
+    },
+    "7fc0f5c6b99a93ae99749c9f7bdd9ce9dc70261124c848a1c5243a5fc577560e": {
+      "agent_input": {
+        "case_id": "example:support:case-2:trial-0",
+        "clause_claim": "The customer's request is completed in full.",
+        "clause_id": "resolution.done_in_full",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-04",
+        "rationale": "Synthetic met judgment for resolution.done_in_full on example:support:case-2:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "872444011ca132a9c2b171b16944b15e2ca372881da7bb62f00a15f712d1e23b": {
+      "agent_input": {
+        "case_id": "example:support:case-4:trial-0",
+        "clause_claim": "The change made is the one the customer asked for.",
+        "clause_id": "resolution.right_change",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-11",
+        "rationale": "Synthetic met judgment for resolution.right_change on example:support:case-4:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "8e3d8020f8c82238277fc5b78572e8c1ad7521392b608cd98d04204d00cf3320": {
+      "agent_input": {
+        "case_id": "example:support:case-2:trial-0",
+        "clause_claim": "The agent confirms with the customer before a consequential action.",
+        "clause_id": "policy.confirmed_before_acting",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-04",
+        "rationale": "Synthetic met judgment for policy.confirmed_before_acting on example:support:case-2:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "99c2a52f3877874dab010bd589a99c6dc8ffbbfef98c6b8b048f9ac036348c15": {
+      "agent_input": {
+        "case_id": "example:support:case-7:trial-0",
+        "clause_claim": "The change made is the one the customer asked for.",
+        "clause_id": "resolution.right_change",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-23",
+        "rationale": "Synthetic met judgment for resolution.right_change on example:support:case-7:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "9ba1d0ee2502112691eb2a9206dc034a8de1c5060b9b78aa4e66deeadec1c636": {
+      "agent_input": {
+        "case_id": "example:support:case-7:trial-0",
+        "clause_claim": "The customer's request is completed in full.",
+        "clause_id": "resolution.done_in_full",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-23",
+        "rationale": "Synthetic met judgment for resolution.done_in_full on example:support:case-7:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "9dbac5f5d186a5802cbd1afdfce27b79062dd235c801b07519c1e4126eeb8feb": {
+      "agent_input": {
+        "case_id": "example:support:case-5:trial-0",
+        "clause_claim": "The agent confirms with the customer before a consequential action.",
+        "clause_id": "policy.confirmed_before_acting",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-16",
+        "rationale": "Synthetic met judgment for policy.confirmed_before_acting on example:support:case-5:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "a1c2bd148780e5e2e8430cedef2b987d10fd7edd78a6028059f93519b1cacfc8": {
+      "agent_input": {
+        "case_id": "example:support:case-1:trial-0",
+        "clause_claim": "The agent confirms with the customer before a consequential action.",
+        "clause_id": "policy.confirmed_before_acting",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-02",
+        "rationale": "Synthetic met judgment for policy.confirmed_before_acting on example:support:case-1:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "ab5d173a28156a6702c7a1038352179fc15d947402f1d5fe8367b86ef091c3e8": {
+      "agent_input": {
+        "case_id": "example:support:case-6:trial-0",
+        "clause_claim": "The agent confirms with the customer before a consequential action.",
+        "clause_id": "policy.confirmed_before_acting",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-18",
+        "rationale": "Synthetic met judgment for policy.confirmed_before_acting on example:support:case-6:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "acf8f976ef6c85433d3afe8acc237686418bbfa4c929838ac563af4927d247c5": {
+      "agent_input": {
+        "case_id": "example:support:case-3:trial-0",
+        "clause_claim": "The agent states no fee, rule or deadline that is not in the example policy.",
+        "clause_id": "communication.no_invented_terms",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-09",
+        "rationale": "Synthetic met judgment for communication.no_invented_terms on example:support:case-3:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "aec46fccfd5084354d05e03dae4f54c5c615e129eff255e588dc6c7cf1cc9e5c": {
+      "agent_input": {
+        "case_id": "example:support:case-8:trial-0",
+        "clause_claim": "The agent states no fee, rule or deadline that is not in the example policy.",
+        "clause_id": "communication.no_invented_terms",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-29",
+        "rationale": "Synthetic met judgment for communication.no_invented_terms on example:support:case-8:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "b11ae4f0260a555a1ed784fae0a142efe24f5b91590856a3400d5ec7e736dd03": {
+      "agent_input": {
+        "case_id": "example:support:case-3:trial-0",
+        "clause_claim": "The change made is the one the customer asked for.",
+        "clause_id": "resolution.right_change",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-09",
+        "rationale": "Synthetic not met judgment for resolution.right_change on example:support:case-3:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "not_met"
+      }
+    },
+    "b1389f597602556cecaf79214161cdf052d4065414253d325cb86f94114829e3": {
+      "agent_input": {
+        "case_id": "example:support:case-4:trial-0",
+        "clause_claim": "The agent confirms with the customer before a consequential action.",
+        "clause_id": "policy.confirmed_before_acting",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-11",
+        "rationale": "Synthetic met judgment for policy.confirmed_before_acting on example:support:case-4:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "bea950b2fda8ba83f3fcd1663c7034b42515149c9ec6f748ec91a074251c9944": {
+      "agent_input": {
+        "case_id": "example:support:case-3:trial-0",
+        "clause_claim": "The agent confirms with the customer before a consequential action.",
+        "clause_id": "policy.confirmed_before_acting",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-09",
+        "rationale": "Synthetic met judgment for policy.confirmed_before_acting on example:support:case-3:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "bf2e0eeb40d98ab0472d729bd31df57e0c46f68fd5376d86c95490bfffca14c6": {
+      "agent_input": {
+        "case_id": "example:support:case-7:trial-0",
+        "clause_claim": "The agent states no fee, rule or deadline that is not in the example policy.",
+        "clause_id": "communication.no_invented_terms",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-23",
+        "rationale": "Synthetic met judgment for communication.no_invented_terms on example:support:case-7:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "c0ed716a41e083b3153c761529a8493446cea4fb7166585abfab028607cd11e3": {
+      "agent_input": {
+        "case_id": "example:support:case-7:trial-0",
+        "clause_claim": "The agent confirms with the customer before a consequential action.",
+        "clause_id": "policy.confirmed_before_acting",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-23",
+        "rationale": "Synthetic met judgment for policy.confirmed_before_acting on example:support:case-7:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "c7e268eebfbaa06234bd276ea34b854d90be79d62d12516d311b90bae5a00e39": {
+      "agent_input": {
+        "case_id": "example:support:case-8:trial-0",
+        "clause_claim": "The customer's request is completed in full.",
+        "clause_id": "resolution.done_in_full",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-29",
+        "rationale": "Synthetic met judgment for resolution.done_in_full on example:support:case-8:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    },
+    "d01cd7574b74cd8df47db7c67ea38d7f234e00e11fe896958b0dc0114c73338b": {
+      "agent_input": {
+        "aggregate": {
+          "buckets": {
+            "met": [
+              "example:support:case-1:trial-0::resolution.done_in_full",
+              "example:support:case-1:trial-0::resolution.right_change",
+              "example:support:case-1:trial-0::policy.confirmed_before_acting",
+              "example:support:case-1:trial-0::communication.no_invented_terms",
+              "example:support:case-2:trial-0::resolution.done_in_full",
+              "example:support:case-2:trial-0::policy.confirmed_before_acting",
+              "example:support:case-2:trial-0::communication.no_invented_terms",
+              "example:support:case-3:trial-0::resolution.done_in_full",
+              "example:support:case-3:trial-0::policy.confirmed_before_acting",
+              "example:support:case-3:trial-0::communication.no_invented_terms",
+              "example:support:case-4:trial-0::resolution.done_in_full",
+              "example:support:case-4:trial-0::resolution.right_change",
+              "example:support:case-4:trial-0::policy.confirmed_before_acting",
+              "example:support:case-4:trial-0::communication.no_invented_terms",
+              "example:support:case-5:trial-0::resolution.right_change",
+              "example:support:case-5:trial-0::policy.confirmed_before_acting",
+              "example:support:case-6:trial-0::resolution.right_change",
+              "example:support:case-6:trial-0::policy.confirmed_before_acting",
+              "example:support:case-7:trial-0::resolution.done_in_full",
+              "example:support:case-7:trial-0::resolution.right_change",
+              "example:support:case-7:trial-0::policy.confirmed_before_acting",
+              "example:support:case-7:trial-0::communication.no_invented_terms",
+              "example:support:case-8:trial-0::resolution.done_in_full",
+              "example:support:case-8:trial-0::resolution.right_change",
+              "example:support:case-8:trial-0::communication.no_invented_terms"
+            ],
+            "not_evaluable": [
+              "example:support:case-2:trial-0::resolution.right_change",
+              "example:support:case-5:trial-0::resolution.done_in_full"
+            ],
+            "not_met": [
+              "example:support:case-3:trial-0::resolution.right_change",
+              "example:support:case-5:trial-0::communication.no_invented_terms",
+              "example:support:case-6:trial-0::resolution.done_in_full",
+              "example:support:case-6:trial-0::communication.no_invented_terms",
+              "example:support:case-8:trial-0::policy.confirmed_before_acting"
+            ]
+          },
+          "coverage": {
+            "evaluated_population": 32,
+            "excluded_not_applicable": 0,
+            "unknown_count": 0
+          }
+        },
+        "claims": [
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "21baed49c80a672c0116f3f987877cda80cda72b70a941adc799e9699783b579",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-1:trial-0::resolution.done_in_full",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "21baed49c80a672c0116f3f987877cda80cda72b70a941adc799e9699783b579",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.done_in_full",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "400fb16811f7d3986609b0b4efe876a7ca16a97818996b9ceeb40b5690b6bacc",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-1:trial-0::resolution.right_change",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "400fb16811f7d3986609b0b4efe876a7ca16a97818996b9ceeb40b5690b6bacc",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.right_change",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "a1c2bd148780e5e2e8430cedef2b987d10fd7edd78a6028059f93519b1cacfc8",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-1:trial-0::policy.confirmed_before_acting",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "a1c2bd148780e5e2e8430cedef2b987d10fd7edd78a6028059f93519b1cacfc8",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "policy.confirmed_before_acting",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "155e06fb4dee5c2ec1ca804a2a5157457fb16d8bf44c923b68e081cefdab386a",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-1:trial-0::communication.no_invented_terms",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "155e06fb4dee5c2ec1ca804a2a5157457fb16d8bf44c923b68e081cefdab386a",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "communication.no_invented_terms",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "7fc0f5c6b99a93ae99749c9f7bdd9ce9dc70261124c848a1c5243a5fc577560e",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-2:trial-0::resolution.done_in_full",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "7fc0f5c6b99a93ae99749c9f7bdd9ce9dc70261124c848a1c5243a5fc577560e",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.done_in_full",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "27674e9977df7e9a95874bcc8a708b9967fa3878584a86dcfead99591f9ed365",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-2:trial-0::resolution.right_change",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "27674e9977df7e9a95874bcc8a708b9967fa3878584a86dcfead99591f9ed365",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "INSUFFICIENT"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.right_change",
+            "sufficiency": "GAP",
+            "tier": "judged",
+            "verdict": "not_evaluable"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "8e3d8020f8c82238277fc5b78572e8c1ad7521392b608cd98d04204d00cf3320",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-2:trial-0::policy.confirmed_before_acting",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "8e3d8020f8c82238277fc5b78572e8c1ad7521392b608cd98d04204d00cf3320",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "policy.confirmed_before_acting",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "1e07c91198c13f9dc414e1d4e67e159b796b90f4f6be3f68faaf01390af39aef",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-2:trial-0::communication.no_invented_terms",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "1e07c91198c13f9dc414e1d4e67e159b796b90f4f6be3f68faaf01390af39aef",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "communication.no_invented_terms",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "5772fe1d5973a8f6b5000cebf6f205559046b3ccb033fb0bef53fcb3bc6ba2be",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-3:trial-0::resolution.done_in_full",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "5772fe1d5973a8f6b5000cebf6f205559046b3ccb033fb0bef53fcb3bc6ba2be",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.done_in_full",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "b11ae4f0260a555a1ed784fae0a142efe24f5b91590856a3400d5ec7e736dd03",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-3:trial-0::resolution.right_change",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "b11ae4f0260a555a1ed784fae0a142efe24f5b91590856a3400d5ec7e736dd03",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.right_change",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "not_met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "bea950b2fda8ba83f3fcd1663c7034b42515149c9ec6f748ec91a074251c9944",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-3:trial-0::policy.confirmed_before_acting",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "bea950b2fda8ba83f3fcd1663c7034b42515149c9ec6f748ec91a074251c9944",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "policy.confirmed_before_acting",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "acf8f976ef6c85433d3afe8acc237686418bbfa4c929838ac563af4927d247c5",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-3:trial-0::communication.no_invented_terms",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "acf8f976ef6c85433d3afe8acc237686418bbfa4c929838ac563af4927d247c5",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "communication.no_invented_terms",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "4165a9e0a8189ee7a331f84bc6cb1c123a2020f3e04534c6f35adf29c2c7c439",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-4:trial-0::resolution.done_in_full",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "4165a9e0a8189ee7a331f84bc6cb1c123a2020f3e04534c6f35adf29c2c7c439",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.done_in_full",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "872444011ca132a9c2b171b16944b15e2ca372881da7bb62f00a15f712d1e23b",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-4:trial-0::resolution.right_change",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "872444011ca132a9c2b171b16944b15e2ca372881da7bb62f00a15f712d1e23b",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.right_change",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "b1389f597602556cecaf79214161cdf052d4065414253d325cb86f94114829e3",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-4:trial-0::policy.confirmed_before_acting",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "b1389f597602556cecaf79214161cdf052d4065414253d325cb86f94114829e3",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "policy.confirmed_before_acting",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "67712fce1e0b9e141f3b9527b438603ddc93c390dce94cfd46433751b1216eb6",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-4:trial-0::communication.no_invented_terms",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "67712fce1e0b9e141f3b9527b438603ddc93c390dce94cfd46433751b1216eb6",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "communication.no_invented_terms",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "7b2e78ba4133b1166413bd1adaf78627b310ac1d166363618041b23c05ee819c",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-5:trial-0::resolution.done_in_full",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "7b2e78ba4133b1166413bd1adaf78627b310ac1d166363618041b23c05ee819c",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "INSUFFICIENT"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.done_in_full",
+            "sufficiency": "GAP",
+            "tier": "judged",
+            "verdict": "not_evaluable"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "f02cb61fc19d14d1cfc70ae70f677f17bc558c35aced315473926d732abcb6ff",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-5:trial-0::resolution.right_change",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "f02cb61fc19d14d1cfc70ae70f677f17bc558c35aced315473926d732abcb6ff",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.right_change",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "9dbac5f5d186a5802cbd1afdfce27b79062dd235c801b07519c1e4126eeb8feb",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-5:trial-0::policy.confirmed_before_acting",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "9dbac5f5d186a5802cbd1afdfce27b79062dd235c801b07519c1e4126eeb8feb",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "policy.confirmed_before_acting",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "014d1ccc6abe1fcac51870ed60423058dacd7b49fcd30d68addf39127eeff87f",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-5:trial-0::communication.no_invented_terms",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "014d1ccc6abe1fcac51870ed60423058dacd7b49fcd30d68addf39127eeff87f",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "communication.no_invented_terms",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "not_met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "624881e54f2ffee3844986a27ce47f85cd2568059a61a720bc848e9e378ebe2d",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-6:trial-0::resolution.done_in_full",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "624881e54f2ffee3844986a27ce47f85cd2568059a61a720bc848e9e378ebe2d",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.done_in_full",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "not_met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "495383d3d4509dbb5eaab798905fed40c2c3a82b39ec734339bf41f73de41250",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-6:trial-0::resolution.right_change",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "495383d3d4509dbb5eaab798905fed40c2c3a82b39ec734339bf41f73de41250",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.right_change",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "ab5d173a28156a6702c7a1038352179fc15d947402f1d5fe8367b86ef091c3e8",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-6:trial-0::policy.confirmed_before_acting",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "ab5d173a28156a6702c7a1038352179fc15d947402f1d5fe8367b86ef091c3e8",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "policy.confirmed_before_acting",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "63326844444ae6cceedf74f77f559bf1cf0b048484a5f540de06964a8df7c3a1",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-6:trial-0::communication.no_invented_terms",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "63326844444ae6cceedf74f77f559bf1cf0b048484a5f540de06964a8df7c3a1",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "communication.no_invented_terms",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "not_met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "9ba1d0ee2502112691eb2a9206dc034a8de1c5060b9b78aa4e66deeadec1c636",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-7:trial-0::resolution.done_in_full",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "9ba1d0ee2502112691eb2a9206dc034a8de1c5060b9b78aa4e66deeadec1c636",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.done_in_full",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "99c2a52f3877874dab010bd589a99c6dc8ffbbfef98c6b8b048f9ac036348c15",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-7:trial-0::resolution.right_change",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "99c2a52f3877874dab010bd589a99c6dc8ffbbfef98c6b8b048f9ac036348c15",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.right_change",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "c0ed716a41e083b3153c761529a8493446cea4fb7166585abfab028607cd11e3",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-7:trial-0::policy.confirmed_before_acting",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "c0ed716a41e083b3153c761529a8493446cea4fb7166585abfab028607cd11e3",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "policy.confirmed_before_acting",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "bf2e0eeb40d98ab0472d729bd31df57e0c46f68fd5376d86c95490bfffca14c6",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-7:trial-0::communication.no_invented_terms",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "bf2e0eeb40d98ab0472d729bd31df57e0c46f68fd5376d86c95490bfffca14c6",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "communication.no_invented_terms",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "c7e268eebfbaa06234bd276ea34b854d90be79d62d12516d311b90bae5a00e39",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-8:trial-0::resolution.done_in_full",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "c7e268eebfbaa06234bd276ea34b854d90be79d62d12516d311b90bae5a00e39",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.done_in_full",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "481b32121a0f7ebcc761a23a22606c759f2c411f2534ee90c59ad66dabca1154",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-8:trial-0::resolution.right_change",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "481b32121a0f7ebcc761a23a22606c759f2c411f2534ee90c59ad66dabca1154",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "resolution.right_change",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "1d537923ba694b95ab91d31913f66d0f1102b796a5487dca084eea9b9e13b8fc",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-8:trial-0::policy.confirmed_before_acting",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "1d537923ba694b95ab91d31913f66d0f1102b796a5487dca084eea9b9e13b8fc",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "policy.confirmed_before_acting",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "not_met"
+          },
+          {
+            "contract_ref": "example-support-outcomes/v1@1",
+            "evidence": [
+              {
+                "digest": "aec46fccfd5084354d05e03dae4f54c5c615e129eff255e588dc6c7cf1cc9e5c",
+                "digest_alg": "SHA-256"
+              }
+            ],
+            "grade": "self-attested",
+            "id": "example:support:case-8:trial-0::communication.no_invented_terms",
+            "presentation": {
+              "evidence": [
+                {
+                  "digest": "aec46fccfd5084354d05e03dae4f54c5c615e129eff255e588dc6c7cf1cc9e5c",
+                  "digest_alg": "SHA-256"
+                }
+              ],
+              "kind": "disclosure",
+              "status": "SATISFIED"
+            },
+            "proofs": [],
+            "requirement_ref": "communication.no_invented_terms",
+            "sufficiency": "SATISFIED",
+            "tier": "judged",
+            "verdict": "met"
+          }
+        ],
+        "generated_at": "2026-09-30T23:59:59Z",
+        "result_version": "evidence-result-v0",
+        "view": {
+          "spec_version": "presentation/v1",
+          "title": "Example support outcomes, September 2026 (synthetic)"
+        }
+      }
+    },
+    "f02cb61fc19d14d1cfc70ae70f677f17bc558c35aced315473926d732abcb6ff": {
+      "agent_input": {
+        "case_id": "example:support:case-5:trial-0",
+        "clause_claim": "The change made is the one the customer asked for.",
+        "clause_id": "resolution.right_change",
+        "contract": "example-support-outcomes/v1",
+        "epistemic_type": "semantic_judgment",
+        "judge_pin_digest": "5af8fd6c74d5906f63b64639f6588d76ad8a65f5aeaccd94be60af7c0b31902a",
+        "period": "day:2026-09-16",
+        "rationale": "Synthetic met judgment for resolution.right_change on example:support:case-5:trial-0.",
+        "record_type": "evaluation-report/v1",
+        "verdict": "met"
+      }
+    }
+  },
+  "extensions": {
+    "producer-key/v1": {
+      "public_key": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5"
+    },
+    "outcome-report/v1": {
+      "enabled": true,
+      "percentages": false
+    }
+  },
+  "records": [
+    {
+      "action_id": "eval/example:support:case-1:trial-0/resolution.done_in_full",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "21baed49c80a672c0116f3f987877cda80cda72b70a941adc799e9699783b579",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "c212c56acee134a5e39ca811d59cb40664c3d725eae4c6d698603b0585f15ab0"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a0582021baed49c80a672c0116f3f987877cda80cda72b70a941adc799e9699783b57958408bea9d93f03ed2e6393c225b8ec0045e6ea6e3de7d62a8b625e9ffba6080ef7383196066041a7c29f3cee2692dbcb6d6cec2f7fbb798eaca2fed737acfd09f05",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-02T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-1:trial-0/resolution.right_change",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "400fb16811f7d3986609b0b4efe876a7ca16a97818996b9ceeb40b5690b6bacc",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "0df62140508327f2c57eea561ecb2b235a794c6e0f9a8dec52c6559cfc40542c"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820400fb16811f7d3986609b0b4efe876a7ca16a97818996b9ceeb40b5690b6bacc5840b794e81203ba92d02dcd96e64b4251e1a66e499ffd31ff560214f46a87af21ea105ec806b6d867eb1d7e47ec64e6956a1d41e4cd479760dcc56b80b3ae171e05",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-02T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-1:trial-0/policy.confirmed_before_acting",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "a1c2bd148780e5e2e8430cedef2b987d10fd7edd78a6028059f93519b1cacfc8",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "69af4cb47dcdb93fee23de3f4a8544aa0c9e296db2c31356513be29621996595"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820a1c2bd148780e5e2e8430cedef2b987d10fd7edd78a6028059f93519b1cacfc858401799005d74bf3c013b79c1e884b142cdae60bdbcb47dca7bd345f7a6e8591d9ec0b5dfa5a1c710bec2f894797fa9b4c875831ba191cb1015a104b34ae028c506",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-02T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-1:trial-0/communication.no_invented_terms",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "155e06fb4dee5c2ec1ca804a2a5157457fb16d8bf44c923b68e081cefdab386a",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "1a82fc6016410b2e1ec537bcfbb0369e5df2c0144328d9a9283bd9e0b06db329"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820155e06fb4dee5c2ec1ca804a2a5157457fb16d8bf44c923b68e081cefdab386a584044675bc108ba5e1bb5c6588afc1d36fed378e8a2e45280b02d8959ffa5241c9f47f97a14c96a9d211ad97f31543c27774cb3d1344c1b3d1d5f1288aa9b5f3706",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-02T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-2:trial-0/resolution.done_in_full",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "7fc0f5c6b99a93ae99749c9f7bdd9ce9dc70261124c848a1c5243a5fc577560e",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "0f625a88bbeb25d9e3e6f8a449d65989f102c3e001081e04574b57eee5600dd9"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a058207fc0f5c6b99a93ae99749c9f7bdd9ce9dc70261124c848a1c5243a5fc577560e5840016e0031e06e9b5b4c2686a4ce832ba2fc1b31c2d607c6aa7f4fa12a56f2c1b87a3bfbc53432d6ef230d24aee673c23449e2953fcb14184f084c7c64cca54b0b",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-04T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-2:trial-0/resolution.right_change",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "27674e9977df7e9a95874bcc8a708b9967fa3878584a86dcfead99591f9ed365",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "f954f048866504e577be1f511bf64c39fad1f6d3611cfb1e6abe57fa5ea93042"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a0582027674e9977df7e9a95874bcc8a708b9967fa3878584a86dcfead99591f9ed3655840348ff9bb25e9c38e015987a459ed205716d2ea76719bdbc3c60d7f85dce280e961dd3da3f92f30daa3fa875da5e45e907882b90b478768a9798d38023f6c230d",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-04T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-2:trial-0/policy.confirmed_before_acting",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "8e3d8020f8c82238277fc5b78572e8c1ad7521392b608cd98d04204d00cf3320",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "9af921ad4770f7f3e5bc32904481eb156597b2de53406c628caf067f1a5d75f1"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a058208e3d8020f8c82238277fc5b78572e8c1ad7521392b608cd98d04204d00cf33205840d78154fe369c4bd0c7c6097645296488aa6c727a612bc84d07f842e06ebc42bdebe666d1061ad0364b067a338c221bf6dd9c8734e750dad53eb536d819d9d803",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-04T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-2:trial-0/communication.no_invented_terms",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "1e07c91198c13f9dc414e1d4e67e159b796b90f4f6be3f68faaf01390af39aef",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "d67694cb68624c502ab394d43edbb18527408287fa609d4064022bae46fbe6f4"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a058201e07c91198c13f9dc414e1d4e67e159b796b90f4f6be3f68faaf01390af39aef58403d598a0e04007d14e5ccf0530bfe46a44b7f2df533beb467a168a4a0cbfdd80609a80076e50b300bc562aeba0640f8cfb6c14be65c7f1a66927e5104077b3d0c",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-04T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-3:trial-0/resolution.done_in_full",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "5772fe1d5973a8f6b5000cebf6f205559046b3ccb033fb0bef53fcb3bc6ba2be",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "41acec1f3b229e49e6101fc167f5b9b8e6ca7dcfb02c9a21aee7421ff08fdea4"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a058205772fe1d5973a8f6b5000cebf6f205559046b3ccb033fb0bef53fcb3bc6ba2be584036beb952d6f167a449dd35cc5561144f93d7f73de64e89280e9258bd39dbe7fe15f3e8a453f8cd2cf3fcb162b8ccf3a51f77f83eff5fd2691403611864d40a06",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-09T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-3:trial-0/resolution.right_change",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "b11ae4f0260a555a1ed784fae0a142efe24f5b91590856a3400d5ec7e736dd03",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "1bae222ef75bac22a2b139ad67b3647abeec733d79ec24cffb127f44aae111bf"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820b11ae4f0260a555a1ed784fae0a142efe24f5b91590856a3400d5ec7e736dd0358407f4fba8a1ea77c771d812a690ca42a1074d2b7bd4b6e027cf99a620ae21580f9ef43c39381c7d4975476b8de1aefb7fa0b0fcc8757d94151830e35fe14e8c601",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-09T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-3:trial-0/policy.confirmed_before_acting",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "bea950b2fda8ba83f3fcd1663c7034b42515149c9ec6f748ec91a074251c9944",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "653a948c6bdc3eb25b5edbb115097b2d6618b9d7fcc7961b20722147c8af2d24"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820bea950b2fda8ba83f3fcd1663c7034b42515149c9ec6f748ec91a074251c99445840007037a88b1d3897e0578805051d3b700d72ef0c5abb2d2ebbe460a173fc53cff720eea252ecf6dc52e4a47934fa6371a6b196d64d1f0d16ec85b768229f6802",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-09T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-3:trial-0/communication.no_invented_terms",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "acf8f976ef6c85433d3afe8acc237686418bbfa4c929838ac563af4927d247c5",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "42349c3ae571f2872e43841af9c4f85978f3b9b539548c2c4d8c28543a447849"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820acf8f976ef6c85433d3afe8acc237686418bbfa4c929838ac563af4927d247c5584029c5db0495242b88213a201999c084979f5cf642020b5523e1c50852baafcf9a22f7117ed31e785dbc68e36f5e050bf33795ca51d12c67219f41f8cecd39520c",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-09T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-4:trial-0/resolution.done_in_full",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "4165a9e0a8189ee7a331f84bc6cb1c123a2020f3e04534c6f35adf29c2c7c439",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "cb2481b30805f1081ecfff93f1a31311e1b120c3495c564866e48b8f56382298"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a058204165a9e0a8189ee7a331f84bc6cb1c123a2020f3e04534c6f35adf29c2c7c4395840a7103d820b97c948a84db81aca0410f1e20bdc6b3f6c16d1367bcb1f7a16db9bf29c25666d416d952fdb0286e80ada9a78be073f8da612d88778a76e004a110b",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-11T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-4:trial-0/resolution.right_change",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "872444011ca132a9c2b171b16944b15e2ca372881da7bb62f00a15f712d1e23b",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "18add21746babe95a16d8cc40b63696abed5861ff1816df7451213c183b70e63"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820872444011ca132a9c2b171b16944b15e2ca372881da7bb62f00a15f712d1e23b58408f91fdd056551546115670aa1bd598249783f8d25f1e64eb89b8c239b90b3ad582124d7972e4fa6e792298eb808d4a69371ce0fa672ef9e8389abf228d1eec0e",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-11T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-4:trial-0/policy.confirmed_before_acting",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "b1389f597602556cecaf79214161cdf052d4065414253d325cb86f94114829e3",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "5f7e015d6ba074b2a1e935e4c6f11da76f27c019034b0fb829917ca448858a6e"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820b1389f597602556cecaf79214161cdf052d4065414253d325cb86f94114829e35840dcf85ab65b4bfce84cd81ed515b34fa80edc1168d6be94e6a93800d705fade1cf9d43fc7bd9de39f2eb0e858137f9a65ade41ea4642eacfa4e1b0894a7523707",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-11T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-4:trial-0/communication.no_invented_terms",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "67712fce1e0b9e141f3b9527b438603ddc93c390dce94cfd46433751b1216eb6",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "73d5096cf67f5ffb1ef97fe0f7b3bee5e6424af9c8e95a35e77abf36c9a4b373"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a0582067712fce1e0b9e141f3b9527b438603ddc93c390dce94cfd46433751b1216eb65840c4595186f90a4cd417825411da35313608bfbfaec57148eaf38faea1731779ebd9ddfdf60f6099427ef70ac44f1bdcf6c2066cbb2c48e5e3814de0d60f337504",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-11T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-5:trial-0/resolution.done_in_full",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "7b2e78ba4133b1166413bd1adaf78627b310ac1d166363618041b23c05ee819c",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "7aa289ea725868377208bf75244c530ee0dd21ce4a1799f8f0f0da0a69d018ee"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a058207b2e78ba4133b1166413bd1adaf78627b310ac1d166363618041b23c05ee819c58402b1f89664a7ccd84341a98070025f7d5bfd8cd58db8366a418a6685006e0b367a166f3493f162a911c1ef99e8e652b06a3c40389072c46783e1fac74bf495a0c",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-16T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-5:trial-0/resolution.right_change",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "f02cb61fc19d14d1cfc70ae70f677f17bc558c35aced315473926d732abcb6ff",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "a8f2d91a2974334b9f98b0721b220d6a38c2b86fc4a27dee65c6368d367f5def"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820f02cb61fc19d14d1cfc70ae70f677f17bc558c35aced315473926d732abcb6ff58400a71ef61a886d931c542ffdbda8239d3759fa574bcb7fea37c64dca5d7308ceaab55d0c7efb6401e312b2342671f8434b3ce4d71eab2b53cbe9c58138a94090a",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-16T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-5:trial-0/policy.confirmed_before_acting",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "9dbac5f5d186a5802cbd1afdfce27b79062dd235c801b07519c1e4126eeb8feb",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "9e1605ae4ee5c2285b8ce3ea7318aa61d5f000f590197582d656ee2d428263ec"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a058209dbac5f5d186a5802cbd1afdfce27b79062dd235c801b07519c1e4126eeb8feb58401fc31b2ca036552b3d01380e97a007b7fbf854e5f3f531f24c86efa8b8c7de96c94204361c16ce0ca0128e89e1d9b41ae287b9f906db419001e90f0566160906",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-16T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-5:trial-0/communication.no_invented_terms",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "014d1ccc6abe1fcac51870ed60423058dacd7b49fcd30d68addf39127eeff87f",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "dc1af765f6ce43cf71aa9af971d28deb38ae3533f7257c4bd49c4ff756d8d2ad"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820014d1ccc6abe1fcac51870ed60423058dacd7b49fcd30d68addf39127eeff87f5840828e733f40169ebc77e4a204e95bdfdd70f4b7aeaf21465fd1eee0693fbe6d10d0e77672d5ae656ca724da465aea45d188dcc6969569f7ca411cb84a1bd79603",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-16T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-6:trial-0/resolution.done_in_full",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "624881e54f2ffee3844986a27ce47f85cd2568059a61a720bc848e9e378ebe2d",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "60099ed0a6c0d63568793d28bdcae772032d66ad55c1fe7ae4117fce672ec0b9"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820624881e54f2ffee3844986a27ce47f85cd2568059a61a720bc848e9e378ebe2d5840a36ed1e454c03e838d66d88fdd66bab794dd7d138fdeefa1217da2785727b29a1fdf79d445a3811b107b1781a5bead0e2de1b68fbf2efda18f8d3e5c9f3d7f00",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-18T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-6:trial-0/resolution.right_change",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "495383d3d4509dbb5eaab798905fed40c2c3a82b39ec734339bf41f73de41250",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "05690fd15881777c957a38cf68b3d4bcd783a56dae697aea994a5039161a7fc5"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820495383d3d4509dbb5eaab798905fed40c2c3a82b39ec734339bf41f73de412505840836d057786bb636feee7c0d51eb37a437c3dd7dff0a1186ed3ab73f5e8ec2ca267143dbf08c45fb7b878fb0642e17a1e843704bb4ed645b17c986b8bb0297902",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-18T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-6:trial-0/policy.confirmed_before_acting",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "ab5d173a28156a6702c7a1038352179fc15d947402f1d5fe8367b86ef091c3e8",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "9a68cb0d2ca965a69899f1faf97fc4acae2535758f68177fd49e00e2ee7daec8"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820ab5d173a28156a6702c7a1038352179fc15d947402f1d5fe8367b86ef091c3e8584072fa4ef27d4e2f855908850281a69d4217a543ed2ff13619429c5233d7c3af4f726c1455152a95e530585004162e63861ca9c9e2a46daf5c5c2148b8e6331907",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-18T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-6:trial-0/communication.no_invented_terms",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "63326844444ae6cceedf74f77f559bf1cf0b048484a5f540de06964a8df7c3a1",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "066c88368d38ba60d10b45b0bbb2868ded24d60d33cf1eb78dcbb873a62cb501"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a0582063326844444ae6cceedf74f77f559bf1cf0b048484a5f540de06964a8df7c3a158408227b2a3855805c3203446eccb72bc134a2d9544ed4a55815142e899960e09389be32866b2b958601ca7108287cf73ca2917547e8d24e4595401d6a4297d6608",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-18T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-7:trial-0/resolution.done_in_full",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "9ba1d0ee2502112691eb2a9206dc034a8de1c5060b9b78aa4e66deeadec1c636",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "fc78f708ed8ddc29ff556741809440cadce15bf3ee99802c1c480cf8b957ffc7"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a058209ba1d0ee2502112691eb2a9206dc034a8de1c5060b9b78aa4e66deeadec1c6365840dfe0e26e87a9e4348b3523930f3c6e22edb0004903eff4bd27f8162bdd60018312ae68bab36ced14d0c47124ad077fc9d237e455cd46396efcf070b18cbc4b05",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-23T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-7:trial-0/resolution.right_change",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "99c2a52f3877874dab010bd589a99c6dc8ffbbfef98c6b8b048f9ac036348c15",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "d51d460bf6c2abd426fafc66d36a9a77311e22d57985afd688535be6b4060ee3"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a0582099c2a52f3877874dab010bd589a99c6dc8ffbbfef98c6b8b048f9ac036348c1558400452daf376a61ad241104ec65b3211b096259e09b7529e6d6a6ad5366510650dabec2f14e3091ff6bd60cd02af7490f8de6df2b6b5a540ab65f36ce33d6f4601",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-23T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-7:trial-0/policy.confirmed_before_acting",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "c0ed716a41e083b3153c761529a8493446cea4fb7166585abfab028607cd11e3",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "9e27a87563a2a724739ba157f676a5ee1098a9d7a0378ee097138a2f38182989"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820c0ed716a41e083b3153c761529a8493446cea4fb7166585abfab028607cd11e35840eb5f8b4e477b1eb53a31e69c7de79e85a0d5efc0678ab91e9cd298da4fa34c6500737b9b3798930078dbd9f69445a0a82afa496c73cba3dc0e0eb5abcd8ab60e",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-23T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-7:trial-0/communication.no_invented_terms",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "bf2e0eeb40d98ab0472d729bd31df57e0c46f68fd5376d86c95490bfffca14c6",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "a10e97d4ead4c01a09b78570b62f6b0012a1a63dc71c16a58d00d0a75ed04186"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820bf2e0eeb40d98ab0472d729bd31df57e0c46f68fd5376d86c95490bfffca14c65840e070ed9ae058e8add657a05a7be3a6ff9daeb8dd26a9535110726fb3eb2aef41e86b5c232f6de4bad603c4139d29a3e82e5367741f3906087f8217206ac43802",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-23T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-8:trial-0/resolution.done_in_full",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "c7e268eebfbaa06234bd276ea34b854d90be79d62d12516d311b90bae5a00e39",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "ef53152a3c4c9bd60700f43b32eda7be2e3ca03939cf04cbafdd5f2b7b9a2381"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820c7e268eebfbaa06234bd276ea34b854d90be79d62d12516d311b90bae5a00e395840167849dc4d589f0dea9aab0c79ad8ab464ecb5651b905309da035a2b311d4b76bc67225bfe675ffe450a62f90f87c9f6293e33b3abe4c2036344d10a51886c08",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-29T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-8:trial-0/resolution.right_change",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "481b32121a0f7ebcc761a23a22606c759f2c411f2534ee90c59ad66dabca1154",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "fd2afbccff51a584790a8299645ae0c87201ebb99f67e89c9383b427997e4786"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820481b32121a0f7ebcc761a23a22606c759f2c411f2534ee90c59ad66dabca11545840497ca2bb077e9e24769f16bddf8028967c93985472bbe4505c2d1ee13915d1da6e9cc72ce59a1f0a6f5c6188e993aabdefd0b4b2c07d57a649df1376bdfac301",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-29T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-8:trial-0/policy.confirmed_before_acting",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "1d537923ba694b95ab91d31913f66d0f1102b796a5487dca084eea9b9e13b8fc",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "c980c2366cb3955b5db9746052a23f8a6ad0ac9ae61c06a37b844c31f734358a"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a058201d537923ba694b95ab91d31913f66d0f1102b796a5487dca084eea9b9e13b8fc584038ef8e297048458d6397be7a73f22cc19c3b8d857bb91c4c9f6320c19e360956e6608538ad7c1f935f5cb4e672fa3691e14fc1ad5a65ba2265d03c55bc3c2b01",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-29T18:00:00Z"
+    },
+    {
+      "action_id": "eval/example:support:case-8:trial-0/communication.no_invented_terms",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "aec46fccfd5084354d05e03dae4f54c5c615e129eff255e588dc6c7cf1cc9e5c",
+      "developer": "example-judge@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "edc97f118bbf38e50df690d5294cfddd37a3a25051884ec98e3d4feb693808ee"
+        }
+      },
+      "operator": "example-operator",
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820aec46fccfd5084354d05e03dae4f54c5c615e129eff255e588dc6c7cf1cc9e5c5840e7493b8d999c74c944310dea3b7d701b6330c4d32b5b6741f313772dc1ec7b88517424e8d641d9d93eba3d072d062c1d40c000b377e026916554bf114423b600",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-29T18:00:00Z"
+    },
+    {
+      "action_id": "result/outcome/2026-09",
+      "action_type": "fyi",
+      "assurance": {
+        "attestation_mode": "self_attested",
+        "effect_mode": "not_applicable",
+        "ledger_mode": "standalone"
+      },
+      "canonicalization_id": "jcs",
+      "capsule_id": "d01cd7574b74cd8df47db7c67ea38d7f234e00e11fe896958b0dc0114c73338b",
+      "developer": "example-rollup@1",
+      "format_version": "4",
+      "key_id": "993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b5",
+      "model_attestation": {
+        "compute_attestation": {
+          "agent_input_digest": "0d6b8c80bd953a39148d6c5f0e56b83b0c193444f1cf981103a627db790b48b5"
+        }
+      },
+      "operator": "example-operator",
+      "references": [
+        {
+          "citation_purpose": "acted_on",
+          "digest": "21baed49c80a672c0116f3f987877cda80cda72b70a941adc799e9699783b579",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "400fb16811f7d3986609b0b4efe876a7ca16a97818996b9ceeb40b5690b6bacc",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "a1c2bd148780e5e2e8430cedef2b987d10fd7edd78a6028059f93519b1cacfc8",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "155e06fb4dee5c2ec1ca804a2a5157457fb16d8bf44c923b68e081cefdab386a",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "7fc0f5c6b99a93ae99749c9f7bdd9ce9dc70261124c848a1c5243a5fc577560e",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "27674e9977df7e9a95874bcc8a708b9967fa3878584a86dcfead99591f9ed365",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "8e3d8020f8c82238277fc5b78572e8c1ad7521392b608cd98d04204d00cf3320",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "1e07c91198c13f9dc414e1d4e67e159b796b90f4f6be3f68faaf01390af39aef",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "5772fe1d5973a8f6b5000cebf6f205559046b3ccb033fb0bef53fcb3bc6ba2be",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "b11ae4f0260a555a1ed784fae0a142efe24f5b91590856a3400d5ec7e736dd03",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "bea950b2fda8ba83f3fcd1663c7034b42515149c9ec6f748ec91a074251c9944",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "acf8f976ef6c85433d3afe8acc237686418bbfa4c929838ac563af4927d247c5",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "4165a9e0a8189ee7a331f84bc6cb1c123a2020f3e04534c6f35adf29c2c7c439",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "872444011ca132a9c2b171b16944b15e2ca372881da7bb62f00a15f712d1e23b",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "b1389f597602556cecaf79214161cdf052d4065414253d325cb86f94114829e3",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "67712fce1e0b9e141f3b9527b438603ddc93c390dce94cfd46433751b1216eb6",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "7b2e78ba4133b1166413bd1adaf78627b310ac1d166363618041b23c05ee819c",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "f02cb61fc19d14d1cfc70ae70f677f17bc558c35aced315473926d732abcb6ff",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "9dbac5f5d186a5802cbd1afdfce27b79062dd235c801b07519c1e4126eeb8feb",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "014d1ccc6abe1fcac51870ed60423058dacd7b49fcd30d68addf39127eeff87f",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "624881e54f2ffee3844986a27ce47f85cd2568059a61a720bc848e9e378ebe2d",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "495383d3d4509dbb5eaab798905fed40c2c3a82b39ec734339bf41f73de41250",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "ab5d173a28156a6702c7a1038352179fc15d947402f1d5fe8367b86ef091c3e8",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "63326844444ae6cceedf74f77f559bf1cf0b048484a5f540de06964a8df7c3a1",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "9ba1d0ee2502112691eb2a9206dc034a8de1c5060b9b78aa4e66deeadec1c636",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "99c2a52f3877874dab010bd589a99c6dc8ffbbfef98c6b8b048f9ac036348c15",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "c0ed716a41e083b3153c761529a8493446cea4fb7166585abfab028607cd11e3",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "bf2e0eeb40d98ab0472d729bd31df57e0c46f68fd5376d86c95490bfffca14c6",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "c7e268eebfbaa06234bd276ea34b854d90be79d62d12516d311b90bae5a00e39",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "481b32121a0f7ebcc761a23a22606c759f2c411f2534ee90c59ad66dabca1154",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "1d537923ba694b95ab91d31913f66d0f1102b796a5487dca084eea9b9e13b8fc",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        },
+        {
+          "citation_purpose": "acted_on",
+          "digest": "aec46fccfd5084354d05e03dae4f54c5c615e129eff255e588dc6c7cf1cc9e5c",
+          "digest_alg": "sha256",
+          "type": "agent-action-capsule"
+        }
+      ],
+      "signature": "d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820993db955d96b69f47c5c7e96f047377c14f880754a309677398ad8df3a6461b50127a05820d01cd7574b74cd8df47db7c67ea38d7f234e00e11fe896958b0dc0114c73338b5840754a3eda37ad3b07d5b875d4f5a71e835d008baa070ec41bb105e1dc1b03c940e42af156a95969c91051457705ed039bbf1ede3799e3d33c829adf59b2fd550d",
+      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+      "timestamp": "2026-09-30T23:59:59Z"
+    }
+  ],
+  "root": "d01cd7574b74cd8df47db7c67ea38d7f234e00e11fe896958b0dc0114c73338b",
+  "verification": {
+    "checks": [
+      "graph_closure",
+      "interval_coverage",
+      "per_record_membership"
+    ],
+    "producer": "capsulectl"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "emitted_by": "capsulectl disclose --root REPORT --out bundle.json --html page.html",
+  "kind": "rules-comparison",
+  "page": "written",
+  "rerender": "page",
+  "verify": "VALID"
+}
