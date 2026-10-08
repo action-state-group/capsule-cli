@@ -80,6 +80,7 @@ exactly two members.
 | `counterparty` | object | REQUIRED on `baseline`; per section 3 elsewhere | `{"fp_alg": "hmac-sha256-deal-key", "ids": {<kind>: <fingerprint>}}`. Kinds: `payee`, `name`, `domain`, `phone`, `email`, `relay_address`, `profile_id`. Each value is a 64-hex fingerprint (section 4). |
 | `refs` | array of rel refs | per section 3 | Typed citations of earlier records of the same deal. |
 | `producer` | object | OPTIONAL (absent on records sealed before it was recorded) | `{"name", "version", "commit"}`: the software build that sealed this record, for example `{"name": "capsulectl", "version": "v0.1.0-rc4", "commit": "<40 hex>"}`. A development build says so (`"0.1.0-dev"`, `"unknown"`). Fixed when the record is sealed: a later build re-derives the same record. |
+| `commit_alg` | `"sha256-jcs-nonce256"` | OPTIONAL (absent on records sealed before it was declared) | The construction of every `*_commitment` value in this record (section 4, Commitment). Fixed when the record is sealed, like `producer`. |
 
 A **digest ref** is `{"type": "deal-record", "digest_alg": "SHA-256", "digest": <64 lowercase
 hex>}`: the typed digest reference shape AAC `references[]` uses. The digest alone is the
@@ -271,7 +272,27 @@ producer fingerprints the first-contact name under kind `payee`.
 The nonce and text stay in the local store. To disclose, the user reveals the `{nonce, text}`
 pair for that one commitment. Fields: `verbatim_commitment`, `content_commitment`,
 `detail_commitment`, `description_commitment`, `reference_commitment`, `card_commitment`,
-`said_commitment`, `note_commitment`.
+`said_commitment`, `note_commitment`, `value_commitment`, `label_commitment`, and in typed
+records `rendering_commitment`.
+
+A record declares this construction as `commit_alg: "sha256-jcs-nonce256"` (section 2; in a
+typed record, in its header), next to the fingerprints' `fp_alg`. What it states:
+
+- **Construction:** SHA-256 over the JCS bytes of `{"nonce": N, "text": T}`, as above.
+- **Nonce scope:** one fresh 256-bit random nonce per committed text, drawn when its step is
+  sealed: never per deal or per store. The one reuse is deliberate: what a person was shown
+  is committed under the nonce of the card it answers (section 9, One rendering commitment),
+  so equal values mean the same text. A guess of `T` cannot be tested without `N`.
+- **Key scope:** none. Unlike a fingerprint (`fp_alg: "hmac-sha256-deal-key"`), a commitment
+  uses no store secret or deal key.
+- **Recomputable by:** whoever holds the opening `{N, T}`, and nobody else. A record alone
+  never lets anyone recompute or test a commitment.
+- **Where openings travel:** nowhere by default. The user's own report carries two:
+  `asked_opening` (the baseline's `verbatim_commitment`) and `materiality_openings` (each
+  verdict's `label_commitment`). A shared copy carries none.
+
+A record without `commit_alg` was sealed before it was declared. Its commitments use the same
+construction.
 
 **What a fingerprint allows:**
 - Within one deal, anyone holding the records can see that two identifiers are equal or
@@ -409,7 +430,8 @@ sit in ONE chain: one `seq`, one `prev` chain, one root. No typed record type ca
 
 Every typed record has the common header (`records/record-common-v0.schema.json`): `type`,
 `canonicalization` (`"jcs"`), `chain_id` (the deal's id), `seq`, `at`, `prev`, `chain_root`
-(the baseline), optional `refs` (`{rel, type: "record", digest_alg, digest}`) and `body`.
+(the baseline), optional `refs` (`{rel, type: "record", digest_alg, digest}`), optional
+`producer` and `commit_alg` (as in section 2) and `body`.
 Counterparty fingerprints in a typed body name `fp_alg: "hmac-sha256-chain-key"` (the same keyed
 fingerprint as section 4). Digests are over the record's JCS bytes, as for x-deal-v0.
 

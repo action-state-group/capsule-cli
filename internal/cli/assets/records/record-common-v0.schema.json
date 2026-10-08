@@ -97,6 +97,10 @@
         }
       }
     },
+    "commit_alg": {
+      "description": "The construction of this record's *_commitment values: SHA-256 over the RFC 8785 (JCS) bytes of {\"nonce\": N, \"text\": T}, N a fresh random 256-bit nonce (64 lowercase hex) per commitment, no key. Recomputable only by a holder of the opening (N and T). Absent on records sealed before it was declared.",
+      "const": "sha256-jcs-nonce256"
+    },
     "producer": {
       "type": "object",
       "additionalProperties": false,

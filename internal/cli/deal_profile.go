@@ -461,6 +461,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 	if ev.Producer != nil {
 		block["producer"] = map[string]interface{}{"name": ev.Producer.Name, "version": ev.Producer.Version, "commit": ev.Producer.Commit}
 	}
+	// The construction of the record's *_commitment values; absent, like
+	// producer, on a step sealed before it was declared.
+	if ev.CommitAlg != "" {
+		block["commit_alg"] = ev.CommitAlg
+	}
 	var currency, dealType string
 	if len(events) > 0 {
 		currency = events[0].Event.Open.Terms.Currency

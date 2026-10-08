@@ -508,6 +508,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	}
 	ev.Producer = currentProducer()
 	ev.TaxonomyVersion = dealTaxonomyVersion
+	ev.CommitAlg = dealCommitAlg
 	ev.Nonces = map[string]string{}
 	for name := range dealTexts(ev) {
 		nonce := make([]byte, 32)

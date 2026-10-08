@@ -51,6 +51,9 @@
     "producer": {
       "$ref": "record-common-v0.schema.json#/$defs/producer"
     },
+    "commit_alg": {
+      "$ref": "record-common-v0.schema.json#/$defs/commit_alg"
+    },
     "body": {
       "allOf": [
         {

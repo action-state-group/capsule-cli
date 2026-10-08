@@ -267,6 +267,15 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	extensions := make([]map[string]any, 0, len(result.Extensions))
 	for _, x := range result.Extensions {
 		entry := map[string]any{"kind": x.Kind, "status": x.Status}
+		// A deal report's readable text (its summary lines, step lines,
+		// amounts and what was told) rides in x-deal-v0, which no record
+		// seals: editing it, or removing it, leaves the verdict VALID. Said
+		// on the entry, so no reader takes that text as verified; the verdict
+		// is unchanged.
+		if x.Kind == dealProfile && x.Status == "uninterpreted" {
+			entry["findings"] = []string{"extension_unbound"}
+			entry["note"] = "written by the producer when the bundle was made and sealed by no record: its text is not verified, and editing it does not change the verdict"
+		}
 		if x.Composed != nil {
 			composed, memberVerdicts := composedOutput(value, x.Composed, directory)
 			entry["composed"] = composed
