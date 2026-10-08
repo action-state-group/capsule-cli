@@ -172,6 +172,23 @@
   release appended as a bare digest, or a lost record; no bundle over this log can include it;
   start a new profile (or log id) for new reports".
 
+### A merchant email whose key record DNS could not reach: offer a supplied record
+
+- **Fixed:** when DNS could not be reached, sealing a merchant email (`deal note --kind evidence
+  --email`) stopped with an error that only said to retry or pass `--key-record`, and the deal
+  skill never mentioned `--key-record`, so an agent stopped there.
+- **The error now names the record it needed and the way on:** "could not reach DNS for the DKIM
+  key record SELECTOR._domainkey.DOMAIN (…): retry, or get that TXT record another way (another
+  resolver, or a lookup the user runs) and pass it with --key-record FILE; it is sealed as
+  supplied, which is weaker evidence than a record read from DNS". A DMARC record it could not
+  read names `--dmarc-record FILE` beside `--key-record FILE` (it used to name `--key-record`
+  alone).
+- **The deal skill** tells the agent to offer that way on instead of stopping. It says:
+  - which record is needed, and where it can come from;
+  - that the email is sealed as supplied (`key_source: supplied`), and the report and the emailed
+    receipt say so;
+  - that a supplied record is weaker evidence than one read from DNS.
+
 ### `verify --capsule` reads a bare capsule
 
 - `verify --capsule` also reads a bare Agent Action Capsule as capsule-emit seals it (the
