@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
 	"github.com/action-state-group/checkpointed-local-log/go/mmr"
@@ -823,7 +824,7 @@ func checkpointBook(ctx context.Context, p Profile, book *evidencebook.Book, ser
 // header and no payload; `disclose` and `permalink` disclose headers and the
 // payloads --payloads names. A book record has no agent_output member, so
 // suppressing it is refused rather than silently meaning nothing.
-func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth int, payloads string, suppress map[string]bool, disclose bool, producerKey ed25519.PublicKey) (evidencebook.Bundle, error) {
+func bookBundle(ctx context.Context, book *evidencebook.Book, artifacts bundleArtifacts, root string, depth int, payloads string, suppress map[string]bool, disclose, attachOriginals bool, producerKey ed25519.PublicKey) (evidencebook.Bundle, error) {
 	if depth < 1 {
 		// The book reads a zero depth as its default; it has no root-only
 		// closure, so a zero is refused rather than silently widened.
@@ -858,6 +859,34 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth
 			}
 			request.Suppress = []string{evidencebook.HeaderMember}
 		}
+		closure, err := bookClosure(ctx, book, request.Root, depth)
+		if err != nil {
+			return evidencebook.Bundle{}, err
+		}
+		// A published record written by an earlier build may commit its
+		// capsule's agent_input original as a third payload. Suppressing
+		// agent_input withholds those bytes too, never only the header.
+		if suppress["agent_input"] {
+			for _, record := range closure {
+				if record.Header.RecordType != recordTypePublished || len(record.Header.PayloadCommitments) <= 2 {
+					continue
+				}
+				if request.Payloads == evidencebook.PayloadsAll {
+					return evidencebook.Bundle{}, hint(ErrInput, fmt.Sprintf("record %s commits its capsule's agent_input original as a payload; --suppress agent_input withholds it, which needs --payloads selected", record.RecordID))
+				}
+				request.Withhold = append(request.Withhold, record.Header.PayloadCommitments[2:]...)
+			}
+		}
+		if attachOriginals {
+			if suppress["agent_input"] {
+				return evidencebook.Bundle{}, hint(ErrInput, "--attach-input-originals and --suppress agent_input contradict each other; pass one")
+			}
+			extension, err := inputOriginals(ctx, artifacts, closure)
+			if err != nil {
+				return evidencebook.Bundle{}, err
+			}
+			request.Extensions = map[string]json.RawMessage{inputOriginalsExtension: extension}
+		}
 	}
 	if producerKey != nil {
 		// Passed to the book, not added afterwards: the book digests the
@@ -866,7 +895,10 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth
 		if err != nil {
 			return evidencebook.Bundle{}, err
 		}
-		request.Extensions = make(map[string]json.RawMessage, len(extensions))
+		// Add to, never replace, extensions set above (--attach-input-originals).
+		if request.Extensions == nil {
+			request.Extensions = make(map[string]json.RawMessage, len(extensions))
+		}
 		for kind, block := range extensions {
 			if request.Extensions[kind], err = json.Marshal(block); err != nil {
 				return evidencebook.Bundle{}, err
@@ -881,4 +913,112 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, root string, depth
 		return evidencebook.Bundle{}, err
 	}
 	return bundle, nil
+}
+
+// inputOriginalsExtension is the bundle extension that carries, on opt-in at
+// disclose time (--attach-input-originals), the agent_input original of each
+// published capsule in the bundle: a JSON object from capsule_id to the
+// original's exact bytes, base64url without padding. The book itself never
+// stores an original; the extension is part of the bundle the disclosure
+// record commits to, and a reader checks each original end to end -- the
+// capsule's bytes against the record's first payload commitment, then the
+// original's JSON-DIGEST against the capsule's agent_input_digest.
+const inputOriginalsExtension = "capsulectl/agent-input-originals/v1"
+
+// bookClosure is the set of records a bundle on root carries disclosed: the
+// root and every record its links reach within depth hops (the book's own
+// closure walk; targets the book does not hold are skipped here, and the
+// book declares them missing).
+func bookClosure(ctx context.Context, book *evidencebook.Book, root string, depth int) ([]evidencebook.Record, error) {
+	first, err := book.Get(ctx, root)
+	if err != nil {
+		return nil, bookError(err)
+	}
+	seen := map[string]bool{root: true}
+	closure := []evidencebook.Record{first}
+	frontier := []evidencebook.Record{first}
+	for range depth {
+		var next []evidencebook.Record
+		for _, record := range frontier {
+			for _, link := range record.Header.Links {
+				if seen[link.Target] {
+					continue
+				}
+				target, err := book.Get(ctx, link.Target)
+				if errors.Is(err, evidencebook.ErrNotFound) {
+					continue
+				}
+				if err != nil {
+					return nil, err
+				}
+				seen[link.Target] = true
+				closure = append(closure, target)
+				next = append(next, target)
+			}
+		}
+		frontier = next
+	}
+	return closure, nil
+}
+
+// inputOriginals builds the inputOriginalsExtension for the published
+// records in closure. A capsule whose original is not retained is left out
+// (a reader shows it withheld); a retained original that does not hash to
+// the capsule's agent_input_digest refuses the bundle.
+func inputOriginals(ctx context.Context, artifacts bundleArtifacts, closure []evidencebook.Record) (json.RawMessage, error) {
+	originals := make(map[string]string)
+	for _, record := range closure {
+		if record.Header.RecordType != recordTypePublished {
+			continue
+		}
+		stored, err := artifacts.Get(ctx, record.Header.SubjectRef)
+		if err != nil {
+			return nil, err
+		}
+		original, err := verifiedInputOriginal(stored)
+		if err != nil {
+			return nil, err
+		}
+		if original != nil {
+			originals[stored.CapsuleID] = base64.RawURLEncoding.EncodeToString(original)
+		}
+	}
+	return json.Marshal(originals)
+}
+
+// verifiedInputOriginal is the record's retained agent_input original -- the
+// one artifact bound to the capsule's agent_input_digest -- after checking
+// that its JSON-DIGEST is that digest; nil when none is retained (purged,
+// never retained, or undeclared). An original that does not hash to the
+// capsule's commitment is an error, never attached.
+func verifiedInputOriginal(record artifact.Record) ([]byte, error) {
+	var original []byte
+	for _, a := range record.Artifacts {
+		if a.Binding == artifact.PayloadDigest && a.State == artifact.Present && len(a.Content) > 0 {
+			original = a.Content
+			break
+		}
+	}
+	if original == nil {
+		return nil, nil
+	}
+	var capsule map[string]interface{}
+	if err := decodeJSONPreserveNumbers("the stored capsule", record.Capsule, &capsule); err != nil {
+		return nil, fmt.Errorf("capsule %s: %w", record.CapsuleID, err)
+	}
+	attestation, _ := capsule["model_attestation"].(map[string]interface{})
+	compute, _ := attestation["compute_attestation"].(map[string]interface{})
+	committed, _ := compute["agent_input_digest"].(string)
+	var decoded interface{}
+	if err := decodeJSONPreserveNumbers("the stored agent_input original", original, &decoded); err != nil {
+		return nil, fmt.Errorf("capsule %s: stored agent_input original: %w", record.CapsuleID, err)
+	}
+	digest, err := canonical.JSONDigest(decoded)
+	if err != nil {
+		return nil, fmt.Errorf("capsule %s: stored agent_input original: %w", record.CapsuleID, err)
+	}
+	if committed == "" || digest != committed {
+		return nil, fmt.Errorf("capsule %s: the stored agent_input original does not hash to the capsule's agent_input_digest; nothing was attached", record.CapsuleID)
+	}
+	return original, nil
 }
