@@ -1,0 +1,91 @@
+{
+  "deal_key_hex": "e138aa956a109f67b57b5600fd85fbf6e9a26e5d50ccaa5269ce2b8cd59ccc69",
+  "events": [
+    {
+      "CapsuleID": "588642d3c0ab93e3a75198bd717a870779f9bd04a14d04e50bf6709b3ffa72a7",
+      "Digest": "2d219920d83fbfa0bba9b1c25d190726b6473c74b1b2886663060a81339d28dc",
+      "Sequence": 1,
+      "Event": {
+        "deal_id": "deal-66cb45fb7ccfdf82",
+        "n": 1,
+        "kind": "open",
+        "at": "2026-09-27T18:00:00Z",
+        "open": {
+          "type": "purchase",
+          "channel": "web",
+          "intent": {
+            "verbatim": "buy me a funny otter sticker for at most 5 dollars",
+            "asked": {},
+            "max_total_minor": 500,
+            "allowed": [
+              "pay"
+            ]
+          },
+          "who": {
+            "name": "Sticker Marketplace",
+            "domain": "stickers.example"
+          },
+          "terms": {
+            "item": "otter sticker",
+            "price_minor": 454,
+            "currency": "USD"
+          },
+          "recourse": {
+            "rail": "card",
+            "refundable": true
+          },
+          "records": "typed/v0",
+          "expect_close_by": "2026-10-11",
+          "materiality": {
+            "name": "example, not policy: the attributes capsulectl paused on before predicates",
+            "version": "0.1.0",
+            "digest": "53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1"
+          }
+        },
+        "nonces": {
+          "materiality": "c56c937ff1b843e3d08b0e85c54e132fe869d6fefae9bc138246c524db08f94d",
+          "verbatim": "c503e734f8d47868a93f1217517b973912900b56eff8203c84aa460b7d90810a"
+        },
+        "producer": {
+          "name": "capsulectl",
+          "version": "0.1.0-dev",
+          "commit": "unknown"
+        },
+        "taxonomy_version": "2",
+        "commit_alg": "sha256-jcs-nonce256",
+        "rule_inputs": "1"
+      }
+    },
+    {
+      "CapsuleID": "1a7f7a7d3611b19dee377203095696886b09bdef1846ea99c0a53a1c580d409e",
+      "Digest": "2edcc1dc2db366c671eeef0807c7a1b123dfe42edeacd0e0b7e6a9b7f0156236",
+      "Sequence": 2,
+      "Event": {
+        "deal_id": "deal-66cb45fb7ccfdf82",
+        "n": 2,
+        "kind": "task_authority",
+        "prev": "2d219920d83fbfa0bba9b1c25d190726b6473c74b1b2886663060a81339d28dc",
+        "at": "2026-09-27T18:00:00Z",
+        "task_authority": {
+          "verbatim": "buy me a funny otter sticker for at most 5 dollars",
+          "asked": {},
+          "max_total_minor": 500,
+          "allowed": [
+            "pay"
+          ]
+        },
+        "nonces": {
+          "verbatim": "61446ec945ece0294a1131fdbd56eded3d7acc6674d9dcc1e850e2414bf3680e"
+        },
+        "producer": {
+          "name": "capsulectl",
+          "version": "0.1.0-dev",
+          "commit": "unknown"
+        },
+        "taxonomy_version": "2",
+        "commit_alg": "sha256-jcs-nonce256",
+        "rule_inputs": "1"
+      }
+    }
+  ]
+}

@@ -538,6 +538,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	ev.Producer = currentProducer()
 	ev.TaxonomyVersion = dealTaxonomyVersion
 	ev.CommitAlg = dealCommitAlg
+	ev.RuleInputs = dealRuleInputsVersion
 	ev.Nonces = map[string]string{}
 	for name := range dealTexts(ev) {
 		nonce := make([]byte, 32)
@@ -1454,7 +1455,7 @@ func dealCheckCommand() *cobra.Command {
 			// one prompt with the check's own differences.
 			rules := dealRules{Status: "not_configured"}
 			if len(s.p.RulesChecker.Command) > 0 {
-				input, history, err := s.rulesInput(ctx, snapped.CapsuleID)
+				input, history, err := s.rulesInput(ctx, snapped.CapsuleID, events)
 				if err != nil {
 					return err
 				}

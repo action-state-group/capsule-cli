@@ -767,6 +767,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				return nil, err
 			}
 		}
+		if ev.RuleInputs != "" {
+			sealRuleInputs(body, events, sn)
+		}
 	case "check":
 		rtype = "verdict"
 		ck := ev.Check
