@@ -13,7 +13,8 @@ so a disagreement between the two implementations fails the Go tests.
 | `no_such_record.*` | a record the ledger does not hold: a signed refusal |
 
 Each `*.request.json` is the exact request the responder digested; the refusal's
-`request_digest` is the SHA-256 of that file's bytes.
+`request_digest` is the SHA-256 of that file's bytes. Every request names its
+requester (`requester_id`, the test profiles' id), as the `book` verbs send it.
 
 The stub witness never contacts a Transparency Service, so these checkpoints are
 self-attested only. They test encoding and signatures, not witnessing.

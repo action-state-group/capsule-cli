@@ -21,6 +21,9 @@ from capsule_emit import seal, witness
 from capsule_emit.evidence_request import answer
 
 NOW = "2026-09-27T00:00:00Z"
+# Every request names its requester, as capsulectl's book verbs send it (a
+# test profile's requester id), so the party digests the bytes sent.
+REQUESTER_ID = "11" * 32
 
 
 def main(out: Path) -> None:
@@ -36,10 +39,10 @@ def main(out: Path) -> None:
     assert witness.push(str(ledger)) is not None
 
     requests = {
-        "record": {"subject": {"kind": "record", "capsule_id": ids[1]}},
-        "range": {"subject": {"kind": "range", "selector": f"{ids[0]}..{ids[2]}"}, "page": {"size": 2}},
-        "chain_segment": {"subject": {"kind": "chain_segment", "last": 1}},
-        "no_such_record": {"subject": {"kind": "record", "capsule_id": "0" * 64}},
+        "record": {"subject": {"kind": "record", "capsule_id": ids[1]}, "requester_id": REQUESTER_ID},
+        "range": {"subject": {"kind": "range", "selector": f"{ids[0]}..{ids[2]}"}, "page": {"size": 2}, "requester_id": REQUESTER_ID},
+        "chain_segment": {"subject": {"kind": "chain_segment", "last": 1}, "requester_id": REQUESTER_ID},
+        "no_such_record": {"subject": {"kind": "record", "capsule_id": "0" * 64}, "requester_id": REQUESTER_ID},
     }
     for name, request in requests.items():
         request_bytes = json.dumps(request, sort_keys=True, separators=(",", ":")).encode()

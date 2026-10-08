@@ -537,12 +537,19 @@ management API (for example `http://127.0.0.1:3131`), and the read-only `book`
 verbs ask another party's book through that node's evidence-request/1 tool:
 
 ```
-capsulectl profile create --name my-node --type mesh-plugin --url http://127.0.0.1:3131
+capsulectl profile create --name my-node --type mesh-plugin --url http://127.0.0.1:3131 --requester-id <node-peer-id>
 capsulectl book head    --profile my-node --party <peer-id> [--responder-checkpoint-key <hex>]
 capsulectl book get     --profile my-node --party <peer-id> --capsule-id <id>
 capsulectl book list    --profile my-node --party <peer-id> --selector <id1..id2> [--page-size N] [--page-token T]
 capsulectl book request --profile my-node --party <peer-id> --request request.json
 ```
+
+`--requester-id` is the node's own full peer id (64 lowercase hex; not the
+short id its status shows). Each request names it as `requester_id` unless the
+request already names one. The node would otherwise add its own id before
+forwarding, and the party would digest a request other than the one sent, so
+its refusal would not bind. capsulectl never derives the id: a profile without
+one sends nothing until the request names a requester.
 
 Each verb sends the request in canonical form: sorted keys, compact,
 printable ASCII, 64-bit integers only. That is the form the party digests

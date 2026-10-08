@@ -20,15 +20,19 @@ import (
 // openEvidenceDoor.
 
 // remoteProfileType is the profile type that reads a counterparty's book
-// through a mesh node's admission-policy plugin.
+// through a mesh node's capsules plugin.
 const remoteProfileType = "mesh-plugin"
 
 // meshEvidenceRequestPath is the host's generic plugin tool route for the
-// plugin's evidence-request/1 requester. The host answers 200 with the
-// party's answer JSON as the plugin re-encodes it (signatures cover parsed
-// fields and hex, so that is lossless for them), or 502 when the party could
-// not be reached.
-const meshEvidenceRequestPath = "/api/plugins/admission-policy/tools/mesh_evidence_request"
+// capsules plugin's evidence-request/1 requester. Called with "verify":
+// false, the host answers 200 with the party's answer JSON alone, as the
+// plugin re-encodes it (signatures cover parsed fields and hex, so that is
+// lossless for them), or 502 when the party could not be reached. (Without
+// it the plugin wraps the answer with its own verification; the book verbs
+// verify everything themselves.) The plugin names its node as the
+// request's requester_id when the request names none, which would change
+// the bytes the party digests: the book verbs always name it themselves.
+const meshEvidenceRequestPath = "/api/plugins/capsules/tools/mesh_evidence_request"
 
 // maxMeshAnswerBytes bounds one answer read from the node. A range answer is
 // capped by the responder's page size, so a larger body is not an answer.
@@ -43,6 +47,9 @@ func validateRemoteConnection(p Profile) error {
 	u, e := url.Parse(p.Connection.URL)
 	if e != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 		return inputError(remoteProfileType + " profile needs connection.url: an http(s) base URL with no path, credentials or query")
+	}
+	if id := p.Connection.RequesterID; id != "" && !hex64.MatchString(id) {
+		return inputError(remoteProfileType + " profile's requester_id must be the node's own full peer id: 64 lowercase hex (not the short id the node's status shows)")
 	}
 	hasToken := p.Credentials.Token != Secret{}
 	if hasToken && u.Scheme == "http" && !loopbackHost(u.Hostname()) {
@@ -98,7 +105,8 @@ func (d meshPluginDoor) ask(ctx context.Context, party string, request []byte) (
 	if e := enc.Encode(struct {
 		PeerID  string          `json:"peer_id"`
 		Request json.RawMessage `json:"request"`
-	}{party, request}); e != nil {
+		Verify  bool            `json:"verify"`
+	}{party, request, false}); e != nil {
 		return nil, e
 	}
 	req, e := http.NewRequestWithContext(ctx, http.MethodPost, d.endpoint, &body)

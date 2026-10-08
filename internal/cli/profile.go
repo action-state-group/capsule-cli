@@ -105,6 +105,10 @@ type Profile struct {
 		// URL is the base address of a remote profile type's transport; the
 		// storage-backed types leave it empty.
 		URL string `yaml:"url,omitempty" mapstructure:"url"`
+		// RequesterID is the requester id a remote profile's evidence
+		// requests name: the node's own full peer id, set by the operator
+		// (never derived), so the party digests the exact request sent.
+		RequesterID string `yaml:"requester_id,omitempty" mapstructure:"requester_id"`
 	} `yaml:"connection" mapstructure:"connection"`
 	Credentials struct {
 		Username string `yaml:"username" mapstructure:"username"`
@@ -418,7 +422,7 @@ func profileCommands() *cobra.Command {
 		f := c.Flags()
 		f.String("name", "", "New profile name")
 		f.Bool("interactive", false, "Ask for missing nonsecret connection fields")
-		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator", "clock-tolerance": "clock_tolerance", "url": "connection.url"}
+		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator", "clock-tolerance": "clock_tolerance", "url": "connection.url", "requester-id": "connection.requester_id"}
 		for flag := range fields {
 			f.String(flag, "", "Profile setting")
 		}
@@ -503,7 +507,7 @@ func profileCommands() *cobra.Command {
 				case "jsonl":
 					prompts = append(prompts, prompt{"JSONL storage directory", &p.Connection.Database})
 				case remoteProfileType:
-					prompts = append(prompts, prompt{"Base URL", &p.Connection.URL})
+					prompts = append(prompts, prompt{"Base URL", &p.Connection.URL}, prompt{"The node's own full peer id (64 hex)", &p.Connection.RequesterID})
 				default:
 					prompts = append(prompts, prompt{"MySQL host", &p.Connection.Host}, prompt{"Database", &p.Connection.Database})
 				}

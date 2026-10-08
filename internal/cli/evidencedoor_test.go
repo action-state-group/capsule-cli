@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -27,19 +28,31 @@ func evidenceVector(t *testing.T, name string) []byte {
 	return b
 }
 
-// fakeNode serves the plugin tool route. answer maps the request it receives
-// to the bytes it returns; seen records every call.
+// testRequesterID is the requester id the test profiles name; the answer
+// vectors' requests name it too. fakeNodeSelfID is the id the fake node names
+// when a request names none, as the capsules plugin does.
+var (
+	testRequesterID = strings.Repeat("11", 32)
+	fakeNodeSelfID  = strings.Repeat("22", 32)
+)
+
+// fakeNode serves the capsules plugin's tool route as the current plugin
+// does: a request that names no requester_id gets the node's own id before
+// it is forwarded (answer maps the forwarded request to the party's answer
+// bytes), and unless the call says "verify": false the answer is wrapped
+// with the plugin's own verification. seen records every call as received.
 type nodeCall struct {
 	Auth    string
 	PeerID  string
 	Request json.RawMessage
+	Verify  bool
 }
 
 func fakeNode(t *testing.T, answer func(request []byte) (int, []byte)) (*httptest.Server, *[]nodeCall) {
 	t.Helper()
 	var seen []nodeCall
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != meshEvidenceRequestPath {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/plugins/capsules/tools/mesh_evidence_request" {
 			http.NotFound(w, r)
 			return
 		}
@@ -48,10 +61,24 @@ func fakeNode(t *testing.T, answer func(request []byte) (int, []byte)) (*httptes
 		var args struct {
 			PeerID  string          `json:"peer_id"`
 			Request json.RawMessage `json:"request"`
+			Verify  *bool           `json:"verify"`
 		}
 		require.NoError(t, json.Unmarshal(body, &args))
-		seen = append(seen, nodeCall{Auth: r.Header.Get("Authorization"), PeerID: args.PeerID, Request: args.Request})
-		status, out := answer(args.Request)
+		verify := args.Verify == nil || *args.Verify
+		seen = append(seen, nodeCall{Auth: r.Header.Get("Authorization"), PeerID: args.PeerID, Request: args.Request, Verify: verify})
+		forwarded := []byte(args.Request)
+		var fields map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(forwarded, &fields))
+		if _, named := fields["requester_id"]; !named {
+			fields["requester_id"] = json.RawMessage(`"` + fakeNodeSelfID + `"`)
+			forwarded, e = json.Marshal(fields)
+			require.NoError(t, e)
+		}
+		status, out := answer(forwarded)
+		if status == http.StatusOK && verify {
+			out, e = json.Marshal(map[string]any{"answer": json.RawMessage(out), "request_digest": sha256Hex(forwarded), "verification": map[string]string{"state": "no_announced_key"}})
+			require.NoError(t, e)
+		}
 		w.WriteHeader(status)
 		_, _ = w.Write(out)
 	}))
@@ -84,7 +111,7 @@ func serveVectors(t *testing.T) func([]byte) (int, []byte) {
 
 func meshProfile(t *testing.T, url string, extra ...string) {
 	t.Helper()
-	args := append([]string{"profile", "create", "--name", "node", "--type", "mesh-plugin", "--url", url}, extra...)
+	args := append([]string{"profile", "create", "--name", "node", "--type", "mesh-plugin", "--url", url, "--requester-id", testRequesterID}, extra...)
 	_, e := invoke(t, "", args...)
 	require.NoError(t, e)
 }
@@ -157,7 +184,7 @@ func TestBookVerbsAgainstPythonResponderVectors(t *testing.T) {
 		Response:      compactVector(t, evidenceVector(t, "record.answer.json")),
 	}
 	assert.Equal(t, want, got)
-	wantCalls := []nodeCall{{Auth: "Bearer node-token-value", PeerID: "peer-a", Request: json.RawMessage(pythonRecordRequest)}}
+	wantCalls := []nodeCall{{Auth: "Bearer node-token-value", PeerID: "peer-a", Request: json.RawMessage(pythonRecordRequest), Verify: false}}
 	assert.Equal(t, wantCalls, *seen)
 	assert.NotContains(t, out, "node-token-value")
 
@@ -173,7 +200,7 @@ func TestBookVerbsAgainstPythonResponderVectors(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(rangeVector, &ranged))
 	require.Len(t, ranged.Bundles, 2)
-	sentRange := `{"page":{"size":2},"subject":{"kind":"range","selector":"a..b"}}`
+	sentRange := `{"page":{"size":2},"requester_id":"` + testRequesterID + `","subject":{"kind":"range","selector":"a..b"}}`
 	want = evidenceAnswer{
 		RequestDigest: sha256Hex([]byte(sentRange)),
 		Answer:        "artifact",
@@ -205,8 +232,9 @@ func TestBookVerbsAgainstPythonResponderVectors(t *testing.T) {
 	wantHead.Pinned = true
 	assert.Equal(t, wantHead, head.Head)
 
-	// A request file in any key order and spacing is sent in the canonical
-	// form the Python responder digested, so its signed refusal binds to it.
+	// A request file in any key order and spacing, naming no requester, is
+	// sent in the canonical form the Python responder digested, with the
+	// profile's requester id, so its signed refusal binds to it.
 	pythonRefusalRequest := evidenceVector(t, "no_such_record.request.json")
 	reordered := filepath.Join(t.TempDir(), "request.json")
 	require.NoError(t, os.WriteFile(reordered, []byte("{\n  \"subject\": {\n    \"capsule_id\": \""+strings.Repeat("0", 64)+"\",\n    \"kind\": \"record\"\n  }\n}\n"), 0o600))
@@ -354,7 +382,7 @@ func TestBookVerbsRefuseWhatTheyCannotStandBehind(t *testing.T) {
 		serve = func(r []byte) (int, []byte) { sent = r; return http.StatusOK, evidenceVector(t, "range.answer.json") }
 		_, e := invoke(t, "", "book", "list", "--profile", "node", "--party", "peer-a", "--selector", "a<b&c")
 		require.NoError(t, e)
-		assert.Equal(t, `{"subject":{"kind":"range","selector":"a<b&c"}}`, string(sent))
+		assert.Equal(t, `{"requester_id":"`+testRequesterID+`","subject":{"kind":"range","selector":"a<b&c"}}`, string(sent))
 	})
 	t.Run("the integer range edges are sent as themselves", func(t *testing.T) {
 		for _, n := range []string{"18446744073709551615", "-9223372036854775808"} {
@@ -368,7 +396,7 @@ func TestBookVerbsRefuseWhatTheyCannotStandBehind(t *testing.T) {
 			require.NoError(t, os.WriteFile(req, []byte(body), 0o600))
 			_, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", req)
 			require.NoError(t, e)
-			assert.Equal(t, body, string(sent))
+			assert.Equal(t, `{"requester_id":"`+testRequesterID+`",`+body[1:], string(sent))
 		}
 	})
 	t.Run("party id must be printable and present", func(t *testing.T) {
@@ -514,4 +542,103 @@ func TestStorageVerbsRejectARemoteProfile(t *testing.T) {
 		require.ErrorIs(t, e, ErrInput, "%v", args)
 	}
 	assert.Empty(t, *seen)
+}
+
+// partyRefusal is a responder's refusal of request, signed by key over the
+// responder's signing body (the three signed fields, sorted and compact).
+func partyRefusal(t *testing.T, key ed25519.PrivateKey, request []byte) []byte {
+	t.Helper()
+	digest := sha256Hex(request)
+	body := `{"issued_at":"2026-10-08T00:00:00Z","reason":"no_such_subject","request_digest":"` + digest + `"}`
+	out, e := json.Marshal(map[string]string{
+		"issued_at": "2026-10-08T00:00:00Z", "reason": "no_such_subject", "request_digest": digest,
+		"key_id": hex.EncodeToString(key.Public().(ed25519.PublicKey)), "sig": hex.EncodeToString(ed25519.Sign(key, []byte(body))),
+	})
+	require.NoError(t, e)
+	return out
+}
+
+// The book verbs speak the capsules plugin's current tool: its route, the
+// bare answer ("verify": false, since they verify everything themselves),
+// and a request that already names its requester, so the plugin forwards
+// exactly the bytes sent and a genuine refusal binds to them.
+func TestBookVerbsUseTheCurrentPluginTool(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, key, e := ed25519.GenerateKey(nil)
+	require.NoError(t, e)
+	var forwarded []byte
+	srv, seen := fakeNode(t, func(r []byte) (int, []byte) { forwarded = r; return http.StatusOK, partyRefusal(t, key, r) })
+	meshProfile(t, srv.URL)
+	request := filepath.Join(t.TempDir(), "request.json")
+	require.NoError(t, os.WriteFile(request, []byte(`{"subject":{"kind":"record","capsule_id":"`+strings.Repeat("0", 64)+`"}}`), 0o600))
+
+	out, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", request)
+	require.NoError(t, e, "a genuine refusal of the request sent binds")
+	var got evidenceAnswer
+	require.NoError(t, json.Unmarshal([]byte(out), &got))
+	require.Len(t, *seen, 1)
+	call := (*seen)[0]
+	assert.False(t, call.Verify, "the bare answer is asked for")
+	assert.Contains(t, string(call.Request), `"requester_id":"`+testRequesterID+`"`)
+	assert.Equal(t, string(call.Request), string(forwarded), "the node forwards the request unchanged")
+	assert.Equal(t, sha256Hex(call.Request), got.RequestDigest)
+	assert.Equal(t, "refusal", got.Answer)
+	assert.Equal(t, hex.EncodeToString(key.Public().(ed25519.PublicKey)), got.Signer)
+
+	// A request that names its own requester is sent as named.
+	named := filepath.Join(t.TempDir(), "named.json")
+	other := strings.Repeat("33", 32)
+	require.NoError(t, os.WriteFile(named, []byte(`{"requester_id":"`+other+`","subject":{"kind":"chain_segment","last":1}}`), 0o600))
+	_, e = invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", named)
+	require.NoError(t, e)
+	assert.Contains(t, string((*seen)[1].Request), `"requester_id":"`+other+`"`)
+}
+
+// A refusal that does not name the request the verb sent never counts: a
+// node that names another requester (as the plugin does for a request naming
+// none) changes the bytes the party digests, and the party's refusal of that
+// other request is rejected; so is one whose signature was altered.
+func TestBookVerbsRejectARefusalOfAnotherRequest(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, key, e := ed25519.GenerateKey(nil)
+	require.NoError(t, e)
+	var serve func([]byte) (int, []byte)
+	srv, _ := fakeNode(t, func(r []byte) (int, []byte) { return serve(r) })
+	meshProfile(t, srv.URL)
+	request := filepath.Join(t.TempDir(), "request.json")
+	require.NoError(t, os.WriteFile(request, []byte(`{"subject":{"kind":"record","capsule_id":"`+strings.Repeat("0", 64)+`"}}`), 0o600))
+
+	serve = func(r []byte) (int, []byte) {
+		relabelled := replaceOnce(t, r, `"requester_id":"`+testRequesterID+`"`, `"requester_id":"`+fakeNodeSelfID+`"`)
+		return http.StatusOK, partyRefusal(t, key, relabelled)
+	}
+	_, e = invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", request)
+	require.ErrorIs(t, e, ErrConflict, "a refusal of the request with another requester names a different request")
+
+	serve = func(r []byte) (int, []byte) {
+		refusal := partyRefusal(t, key, r)
+		var w refusalWire
+		require.NoError(t, json.Unmarshal(refusal, &w))
+		return http.StatusOK, replaceOnce(t, refusal, `"sig":"`+w.Sig+`"`, `"sig":"`+flipLastHexByte(t, w.Sig)+`"`)
+	}
+	_, e = invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", request)
+	require.ErrorIs(t, e, ErrPartial, "a refusal whose signature was altered")
+}
+
+// The requester id is the operator's to set, never derived: a profile that
+// names none sends nothing until the request names one, and a malformed one
+// (a short id, or uppercase) is refused when the profile is saved.
+func TestBookVerbsNeedARequesterID(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	srv, seen := fakeNode(t, serveVectors(t))
+	_, e := invoke(t, "", "profile", "create", "--name", "bare", "--type", "mesh-plugin", "--url", srv.URL)
+	require.NoError(t, e)
+	_, e = invoke(t, "", "book", "head", "--profile", "bare", "--party", "peer-a")
+	require.ErrorIs(t, e, ErrInput)
+	assert.Contains(t, e.Error(), "--requester-id")
+	assert.Empty(t, *seen)
+	for _, bad := range []string{"abc123", strings.Repeat("AB", 32), testRequesterID + "00"} {
+		_, e = invoke(t, "", "profile", "create", "--name", "badid", "--type", "mesh-plugin", "--url", srv.URL, "--requester-id", bad)
+		require.ErrorIs(t, e, ErrInput, bad)
+	}
 }

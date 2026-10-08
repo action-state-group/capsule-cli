@@ -314,6 +314,9 @@ func askParty(c *cobra.Command, request []byte) (evidenceAnswer, error) {
 			return evidenceAnswer{}, e
 		}
 	}
+	if request, e = withRequesterID(request, p); e != nil {
+		return evidenceAnswer{}, e
+	}
 	canonical, kind, e := canonicalRequest(request)
 	if e != nil {
 		return evidenceAnswer{}, e
@@ -327,6 +330,35 @@ func askParty(c *cobra.Command, request []byte) (evidenceAnswer, error) {
 		return evidenceAnswer{}, e
 	}
 	return classifyAnswer(canonical, response, kind, responderKey)
+}
+
+// withRequesterID names the profile's requester_id in a request that names
+// none. The party digests the request it receives, and a transport may name
+// a requester itself when the request does not; naming it here keeps the
+// sent bytes the ones the party digests, so its refusal binds this request.
+// A request that already names one is sent as it is. The id is the
+// operator's to set; it is never derived.
+func withRequesterID(request []byte, p Profile) ([]byte, error) {
+	var fields map[string]json.RawMessage
+	if e := json.Unmarshal(request, &fields); e != nil {
+		return nil, inputError("evidence request is not a JSON object")
+	}
+	if named, ok := fields["requester_id"]; ok {
+		var id string
+		if json.Unmarshal(named, &id) != nil || id == "" {
+			return nil, inputError("evidence request's requester_id must be a non-empty string")
+		}
+		return request, nil
+	}
+	if p.Connection.RequesterID == "" {
+		return nil, inputError("profile " + p.Name + " names no requester id: set the node's own full peer id (64 hex, not the short id its status shows) with `capsulectl profile update --profile " + p.Name + " --requester-id <id>`, or name requester_id in the request")
+	}
+	id, e := json.Marshal(p.Connection.RequesterID)
+	if e != nil {
+		return nil, e
+	}
+	fields["requester_id"] = id
+	return json.Marshal(fields)
 }
 
 // evidenceRequest is the request map the book verbs build themselves.
