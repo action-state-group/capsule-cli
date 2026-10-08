@@ -192,7 +192,28 @@ jobs:
           rev=$(sed -n 's/.*evidenceGraphIIFESource = "agent-action-capsule [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' internal/cli/report.go)
           test -n "$rev"
           echo "rev=$rev" >> "$GITHUB_OUTPUT"
-      - name: Check out agent-action-capsule at that commit
+      - name: Check out agent-action-capsule's main (ancestor check only, no build)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: action-state-group/agent-action-capsule
+          ref: main
+          path: aac-main-check
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse a pin that is not on agent-action-capsule's main
+        # The pin must name a commit merged on agent-action-capsule's main,
+        # never an open PR's or a fork's head: the vendored IIFE ships in
+        # report.html, and the next step installs and runs that commit's
+        # package scripts. The sed above already limits the value to 40 hex.
+        working-directory: aac-main-check
+        env:
+          REV: ${{ steps.pin.outputs.rev }}
+        run: |
+          if ! git merge-base --is-ancestor "$REV" HEAD; then
+            echo "::error file=internal/cli/report.go::evidenceGraphIIFESource pins $REV, which is not on agent-action-capsule's main. Pin a merged commit."
+            exit 1
+          fi
+      - name: Check out agent-action-capsule at the pinned commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: action-state-group/agent-action-capsule
