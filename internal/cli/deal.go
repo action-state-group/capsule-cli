@@ -1077,7 +1077,7 @@ func dealNoteCommand() *cobra.Command {
 				// Typed records: the user's answer to an ask is bound to what
 				// they were shown, so it can stand as the check's approval.
 				if verdict, _, ok := checkedCard(events, ev.Approval.Check); ok && dealRecordSet(dealEvent{}, events) == recordsTyped &&
-					ev.Approval.Approver == "user" && verdict.Event.Check.Verdict == "pause" && ev.Approval.ShownCard == "" {
+					ev.Approval.Approver == "user" && verdict.Event.Check.Verdict != "pass" && ev.Approval.ShownCard == "" {
 					return inputError("in a typed deal the user's answer to a paused check is bound to the card it was given on: pass that card with --shown-card")
 				}
 			case "platform_approval":
@@ -1448,6 +1448,20 @@ func dealCheckCommand() *cobra.Command {
 				return err
 			}
 			result.Differences = append(result.Differences, result.Remote.Differences...)
+			// The profile's rules, by its pinned checker, on the record of
+			// what is about to happen (the capsule just sealed, with its
+			// disclosed record) and the profile's recent acts. One verdict and
+			// one prompt with the check's own differences.
+			rules := dealRules{Status: "not_configured"}
+			if len(s.p.RulesChecker.Command) > 0 {
+				input, history, err := s.rulesInput(ctx, snapped.CapsuleID)
+				if err != nil {
+					return err
+				}
+				rules = runRulesChecker(ctx, s.p, input, history)
+			}
+			result.Rules = &rules
+			result.Differences = append(result.Differences, rulesDifferences(&rules)...)
 			settleCheck(&result, state)
 			result.Snapshot = snapped.CapsuleID
 			result.Card = renderCard(result, open.Demo)
@@ -1494,6 +1508,7 @@ func dealCheckCommand() *cobra.Command {
 			out["asked_attributes"] = result.Asked
 			out["picked_by_agent"] = result.Picked
 			out["materiality"] = result.Materiality
+			out["rules"] = result.Rules
 			if rc := result.Recipient; rc != nil {
 				out["recipient"] = rc
 				if len(rc.Repeat) > 0 {

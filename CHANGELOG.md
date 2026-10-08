@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+### `deal check` runs the user's pinned rules checker and seals what it said
+
+- **Added:** a deal profile may pin an external rules checker (`profile update --rules-checker
+  FILE`): a command under a trusted plugin root, pinned by its executable's SHA-256 and,
+  optionally, by the definition digest of the ruleset it must report. It is the user's policy,
+  never the agent's.
+  - **What it gets.** Every `deal check` runs it, from a private copy of the exact bytes it
+    hashed, with one `external-check-input/v0` object on stdin
+    (`skills/deal/profile/external-check-input-v0.schema.json`):
+    - the capsule of the step being checked, with its disclosed record;
+    - as history, the profile's sealed acts with an amount from every deal in the last 31
+      days (at most 1,000), stating whether that is all of them.
+
+    A rolling limit is evaluated over that history. A checker given too little reports it
+    `not_evaluable`, and the check pauses.
+  - **What it prints.** One `external-check-result/v0` object: the ruleset's id and definition
+    digest, a verdict (`allow`, `deny`, `escalate` or `not_evaluable`), and its findings, each
+    limit and value a number or a short line, and optionally how it reached the verdict (`tier`:
+    `recomputed`, `judged` or `human`; absent reads as judged, never recomputed). The tier is
+    sealed as reported and named in the approval text; it changes nothing. The schema ships at
+    `skills/deal/profile/external-check-result-v0.schema.json`, and output outside it is
+    refused.
+- **One verdict, one prompt.** The checker's answer folds into the check's own differences.
+  - **`deny`** is a new verdict: the card names the rule, its limit and the value, and offers
+    only "Hold". An approval to proceed is refused.
+  - **`escalate` and `not_evaluable`** pause.
+  - **A checker that cannot answer pauses**, saying "Your rules were not checked:" and why. That
+    covers a checker that changed since it was pinned, refused the record, timed out (10s by
+    default, at most 60s), printed anything else, or reported another ruleset digest than the
+    pinned one.
+  - **No checker configured** does not pause, but the text says "Your rules were not checked:
+    no rules checker configured."
+- **Sealed (wire, additive).**
+  - The `x-deal-v0` verdict gains `result: "deny"` and `rules`: the status, the ruleset id and
+    definition digest, the checker's SHA-256, the verdict, every finding (id, verdict, limit,
+    value), and `history` (how many earlier acts the checker was given, over how many days, and
+    whether that is all of them). A checker that was not evaluated seals a
+    `cause` token. No words the checker wrote are sealed in the clear: they reach the card,
+    which is committed to.
+  - Typed records: `action-evaluation/v0` gains disposition `DENY` and `rules_checks`, and
+    `check-response/v0` gains `DENY`.
+  - Shared copies carry none of the user's rules: the verdict record is withheld, and its
+    findings read in fixed words.
+- **Changed:** `approval_text` leads with the rules line and then "Before you go ahead:" in
+  place of "Deal check:". The "Checked at … Stale after …" line has left the text; staleness
+  stays in `checked_at`, `stale_after_minutes` and the sealed record.
+- **Changed:** a card whose only finding is that the rules could not be checked offers "Pay" (or
+  "Confirm", and so on), not "Pay anyway": there is nothing to override.
+
 ### A deal receipt's text is sealed with it
 
 - **Fixed:** a deal receipt's readable text (summary lines, step lines, amounts, what was told)

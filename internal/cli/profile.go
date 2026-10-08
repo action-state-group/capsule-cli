@@ -135,6 +135,18 @@ type Profile struct {
 		Predicate string `yaml:"predicate,omitempty" mapstructure:"predicate"`
 		Digest    string `yaml:"digest,omitempty" mapstructure:"digest"`
 	} `yaml:"materiality,omitempty" mapstructure:"materiality"`
+	// RulesChecker is a deal profile's external rules checker, run at every
+	// deal check (rules_checker.go): the user's policy (profile update
+	// --rules-checker), pinned by its executable's SHA-256.
+	RulesChecker ProfileRulesChecker `yaml:"rules_checker,omitempty" mapstructure:"rules_checker"`
+}
+
+// ProfileRulesChecker is a pinned external rules checker.
+type ProfileRulesChecker struct {
+	Command          []string `yaml:"command,omitempty" mapstructure:"command"`
+	SHA256           string   `yaml:"sha256,omitempty" mapstructure:"sha256"`
+	Timeout          string   `yaml:"timeout,omitempty" mapstructure:"timeout"`
+	DefinitionDigest string   `yaml:"definition_digest,omitempty" mapstructure:"definition_digest"`
 }
 
 // isBook reports whether the profile is an evidence book: a jsonl profile with
@@ -407,6 +419,7 @@ func profileCommands() *cobra.Command {
 		f.StringSlice("trusted-key", nil, "Trusted producer public key hex (repeatable)")
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
 		f.String("materiality", "", "A deal profile's materiality predicate (materiality-predicate/v0 JSON), pinned by its digest; empty to remove it (every agent pick then pauses). Policy: the user's to set, never the agent's")
+		f.String("rules-checker", "", "A deal profile's external rules checker: a JSON file {\"command\": [\"/absolute/path\", \"arg\", ...], \"timeout\": \"10s\", \"definition_digest\": \"...\"}, its executable under a trusted plugin root and pinned by its SHA-256; empty to remove it. Policy: the user's to set, never the agent's")
 		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token"}
 		for flag := range secrets {
 			f.String(flag, "", "Literal secret; prefer file/env reference")
@@ -524,6 +537,12 @@ func profileCommands() *cobra.Command {
 			if c.Flags().Changed("materiality") {
 				path, _ := c.Flags().GetString("materiality")
 				if e := pinMateriality(&p, path); e != nil {
+					return e
+				}
+			}
+			if c.Flags().Changed("rules-checker") {
+				path, _ := c.Flags().GetString("rules-checker")
+				if e := pinRulesChecker(&p, path); e != nil {
 					return e
 				}
 			}

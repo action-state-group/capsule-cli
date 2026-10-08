@@ -234,6 +234,13 @@ for every later email.
    made. A deal that was never closed reads "Open: no close is sealed on this
    deal", with its expected date. Pass that on as written; it is not a sign
    that anything went wrong.
+5. In your own words to the user: an open deal still waiting on the
+   merchant's confirmation is "waiting for the merchant's receipt"; at the
+   close, say "matched" or "nothing left to match". When the merchant's email
+   arrives after the close, say "The merchant's receipt arrived. It matches
+   what you approved." or, when it does not, "The merchant's receipt arrived.
+   It differs: you approved $4.54; their receipt says $5.20." with the real
+   amounts.
 
 ### Cancellation (proving "I cancelled")
 
@@ -326,11 +333,15 @@ The final review asks four questions:
   leaving it out only makes the record wrong.
 - **Never hold silently.** A `pause` always goes to the user with the card.
 - **Ask with the check's own text.** Every `deal check` returns
-  `approval_text`: what, who, the amount, how it is paid, what the check
-  found, when it was checked, and when the check goes stale (15 minutes by
-  default, `--stale-after`). When you ask the user to go ahead, in your own
-  message or ahead of the host's approval card, show that text as it is. If
-  the action happens after the stale time, check again first.
+  `approval_text`: whether the user's rules were checked, what, who, the
+  amount, how it is paid, and what the check found. When you ask the user to
+  go ahead, in your own message or ahead of the host's approval card, show
+  that text as it is. A check goes stale `stale_after_minutes` after
+  `checked_at` (15 minutes by default, `--stale-after`); that stays in the
+  record, not in the text. If the action happens after it, check again first.
+- **Never say the rules ran when they did not.** When `approval_text` says
+  "Your rules were not checked: …", say exactly that. Say the user's rules
+  were checked only when it names them.
 - **This upgrades your host's own confirmation; it never replaces it or
   bypasses it.**
 - Use plain words with the user: "checked", "changed", "unverified",
@@ -488,9 +499,9 @@ price: `authorized_max_minor` equal to `amount_minor`. Never pass the estimate
 when a larger maximum is shown. A pay by card, wallet, PayPal, or any rail that
 can hold more than it charges is refused without it.
 
-Every check also returns `approval_text` (a short, paste-ready summary with
-the check time and when it goes stale), `checked_at` and
-`stale_after_minutes`.
+Every check also returns `approval_text` (a short, paste-ready summary),
+`checked_at` and `stale_after_minutes`, and `rules`: what the profile's rules
+checker said (see "Your rules" below).
 
 - `"verdict": "pass"`, `"proceed": true`: go ahead. Say nothing extra. The
   pass is approved by what the user already allowed, and that approval is
@@ -509,6 +520,28 @@ capsulectl --profile deal deal note --deal ID --kind approval --check CHECK_ID -
 Act only if that returns `"proceed": true`. If it says details changed, or
 that the check was already answered, run the check again. A check takes one
 answer: to change your mind after "Hold", check again.
+
+The card's proceed option reads "Pay anyway" (or "Confirm anyway", and so
+on) only when there is a finding to override; when the check paused only
+because the rules could not be checked, it reads "Pay". Show the labels as
+they are.
+
+- `"verdict": "deny"`: the user's rules do not allow this. The card names
+  the rule, its limit and the value, and offers only "Hold". Do not act, and
+  do not look for a way around it: tell the user what the card says.
+
+**Your rules.** A deal profile may pin a rules checker (the user's policy,
+set with `profile update --rules-checker FILE`; never yours to change). Every
+check runs it on the record of what is about to happen and seals its answer:
+the ruleset it ran, by id and digest, its verdict and every finding. If no
+checker is configured, the check does not pause for it, and its text says
+"Your rules were not checked: no rules checker configured." If a configured
+checker fails, times out or was changed since it was pinned, the check pauses
+and says "Your rules were not checked:" with the reason. A limit over a week
+is checked against the profile's earlier payments, which the check gives the
+checker; when it could not be, the text says the rules were not fully
+checked. Never tell the user a limit was checked when the text does not say
+so.
 
 In a deal opened with `deal open --records typed`, the steps are sealed as
 typed action records. A passing check is itself the authority to act (no

@@ -309,6 +309,53 @@ func limitSetBody(l dealLimitSet) map[string]interface{} {
 	return m
 }
 
+// rulesBody is what a verdict record carries about the profile's rules.
+func rulesBody(r dealRules) (map[string]interface{}, error) {
+	// No words the checker wrote are sealed in the clear: why it was not
+	// evaluated is a token, and a finding is its id, verdict, limit and
+	// value. The card the user saw, with every reason, is committed to.
+	m := map[string]interface{}{"status": r.Status}
+	for k, v := range map[string]string{"cause": r.Cause, "ruleset_id": r.RulesetID, "definition_digest": r.DefinitionDigest,
+		"checker_sha256": r.CheckerSHA256, "verdict": r.Verdict} {
+		if v != "" {
+			m[k] = v
+		}
+	}
+	if r.Status == "evaluated" {
+		findings := make([]interface{}, len(r.Findings))
+		for i, f := range r.Findings {
+			fm := map[string]interface{}{"id": f.ID, "verdict": f.Verdict}
+			if f.Check != "" {
+				fm["check"] = f.Check
+			}
+			for k, raw := range map[string]json.RawMessage{"limit": f.Limit, "value": f.Value} {
+				if len(raw) == 0 {
+					continue
+				}
+				decoder := json.NewDecoder(bytes.NewReader(raw))
+				decoder.UseNumber()
+				var v interface{}
+				if err := decoder.Decode(&v); err != nil {
+					return nil, err
+				}
+				fm[k] = v
+			}
+			findings[i] = fm
+		}
+		m["findings"] = findings
+		if h := r.History; h != nil {
+			m["history"] = map[string]interface{}{"days": h.Days, "acts": h.Acts, "complete": h.Complete}
+		}
+		// The tier as the checker reported it; "not_stated" when it did not
+		// say, which reads as judged.
+		m["tier"] = r.Tier
+		if r.Tier == "" {
+			m["tier"] = "not_stated"
+		}
+	}
+	return m, nil
+}
+
 // materialityBody is a materiality predicate as a record carries it: its
 // digest, and a commitment to its name and version when there is one. A
 // verdict sealed before the name and version were committed (with no nonce
@@ -727,6 +774,15 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		// picks: a verifier knows what applied ("none": every pick paused).
 		if m := ck.Materiality; m.Digest != "" {
 			if body["materiality"], err = materialityBody(m, ev.Nonces, commit); err != nil {
+				return nil, err
+			}
+		}
+		// What the profile's rules said, as data: the ruleset the pinned
+		// checker reported (by id and definition digest), its verdict and
+		// findings; or that they were not evaluated, and why; or that no
+		// checker is configured.
+		if ck.Rules != nil {
+			if body["rules"], err = rulesBody(*ck.Rules); err != nil {
 				return nil, err
 			}
 		}
