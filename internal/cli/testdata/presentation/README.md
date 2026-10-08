@@ -11,8 +11,8 @@ sha256 `008d4c2c…090cdd`). `TestPresentationGoldens`
 - **With `CAPSULECTL_CHROME` set:** it also opens each page headless. At 1280px its
   DOM must match `snapshot.json`: the verification state, the views, the evidence
   identifiers, and the words in order. Layout is not compared. At 390px, 1280px and in
-  print, the page must not be wider than its viewport, except for the views
-  `known-overflow.json` lists.
+  print, the page must not be wider than its viewport. The views
+  `known-overflow.json` lists may be wider.
 
 Every fixture is synthetic: example operators, example cases, example criteria,
 generated keys. `scripts/presentation-goldens/build-fixtures.sh` rebuilds them all
@@ -41,7 +41,8 @@ through the real CLI. Run it only to change a fixture on purpose.
   writes no page for them.
 - **Fixture 6-unknown-extension renders exactly as fixture 6** except for the bundle
   digest on the verification page: the viewer ignores an extension it does not know.
-- **Five pages overflow a 390px viewport** (`known-overflow.json`). Nothing overflows
-  at 1280px or in print.
+- **Pages overflow a 390px viewport** (`known-overflow.json`). Five of the six do with
+  macOS fonts; the outcome page's 25px overflow does not happen with the CI runner's.
+  Nothing overflows at 1280px or in print.
 - **The outcome card says "all nine criteria met"** for a pack with four criteria.
   The snapshot records the text as the viewer prints it today.

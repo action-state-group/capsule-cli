@@ -156,11 +156,11 @@ func TestPresentationGoldens(t *testing.T) {
 					Over        []string `json:"over"`
 				}
 				opened.eval(t, overflowScript, &width)
-				overflows := width.ScrollWidth > width.Width
-				if knownToOverflow(knownOverflow, entry.Name(), view.name) {
-					assert.True(t, overflows, "%s: the page no longer overflows its viewport: remove it from known-overflow.json", view.name)
-				} else {
-					assert.False(t, overflows, "%s: the page is %dpx wide in a %dpx viewport (%v)", view.name, width.ScrollWidth, width.Width, width.Over)
+				// A listed view may overflow (how much depends on the
+				// platform's fonts: the outcome page overflows by 25px with
+				// macOS fonts and fits with the CI runner's); any other must not.
+				if !knownToOverflow(knownOverflow, entry.Name(), view.name) {
+					assert.LessOrEqual(t, width.ScrollWidth, width.Width, "%s: the page is %dpx wide in a %dpx viewport (%v)", view.name, width.ScrollWidth, width.Width, width.Over)
 				}
 				if renders != "" {
 					ext := ".png"
@@ -219,7 +219,7 @@ func rerenderPresentationPage(t *testing.T, dir string, meta presentationMeta, b
 }
 
 // knownToOverflow: known-overflow.json lists this fixture's view as one
-// that overflowed when the goldens were taken.
+// that overflowed when the goldens were taken, so it may still.
 func knownToOverflow(known map[string]any, fixture, view string) bool {
 	views, _ := known[fixture].([]any)
 	for _, v := range views {
