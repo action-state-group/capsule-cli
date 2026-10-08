@@ -96,12 +96,12 @@ func TestACheckCarriesTheRuleInputs(t *testing.T) {
 			assert.Equal(t, float64(3), sealed["offer_fields_changed"])
 			if !typed {
 				assert.NotContains(t, sealed, "task_authority_ref", "no task-authority record in an x-deal-v0 deal")
-				assert.NotContains(t, input, "task_authority")
+				assert.NotContains(t, input, "task_authority_record")
 				return
 			}
 			ref := sealed["task_authority_ref"].(map[string]any)
-			ta := input["task_authority"].(map[string]any)
-			rawTA, err := json.Marshal(ta["agent_input"])
+			ta := input["task_authority_record"].(map[string]any)
+			rawTA, err := json.Marshal(ta)
 			require.NoError(t, err)
 			decoder := json.NewDecoder(bytes.NewReader(rawTA))
 			decoder.UseNumber()
@@ -110,7 +110,8 @@ func TestACheckCarriesTheRuleInputs(t *testing.T) {
 			digest, err := canonical.JSONDigest(record)
 			require.NoError(t, err)
 			assert.Equal(t, ref["digest"], digest, "the task authority given is the one the ref names")
-			body := ta["agent_input"].(map[string]any)["body"].(map[string]any)
+			body := ta["body"].(map[string]any)
+			assert.Equal(t, "capsulectl.deal.purchase/1.0.0", body["outcome_id"], "the plan's outcome, by deal type")
 			assert.Equal(t, []any{"pay"}, body["allowed_actions"])
 			assert.Equal(t, body["allowed"], body["allowed_actions"])
 			assert.Equal(t, []any{}, body["preconditions"])

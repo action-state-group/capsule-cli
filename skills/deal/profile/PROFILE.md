@@ -479,9 +479,9 @@ At every check, after the `check` record is sealed:
     profile's own store, sealed in the last 31 days, newest first, at most 1,000 of them, in the
     same shape;
   - `history_scope`: `{days, max_records, complete}`.
-  - `task_authority` (typed deals): the task-authority record the check's `task_authority_ref`
-    names, in the same shape as `record`; its record's digest is the ref's. Its body carries the
-    plan shape `allowed_actions` + `preconditions`. Absent when the limits in force were confirmed
+  - `task_authority_record` (typed deals): the whole sealed task-authority record the check's
+    `task_authority_ref` names, exactly as sealed: SHA-256 over its JCS bytes is the ref's digest,
+    and its plan (`outcome_id`, `allowed_actions`, `preconditions`) is at `body`. Absent when the limits in force were confirmed
     later in an approval, and in a deal with no task-authority record.
 
   A rolling window is evaluated over the history the deal check supplies. A checker given no
@@ -545,7 +545,7 @@ fingerprint as section 4). Digests are over the record's JCS bytes, as for x-dea
 
 | Type | Sealed for | Replaces (x-deal-v0) |
 |---|---|---|
-| `task-authority/v0` | The user's task authority: their words by commitment, `max_total_minor`, `allowed` (and, from this version, the same actions as `allowed_actions` with `preconditions: []`, the plan shape a rules checker reads). Sealed after the baseline (`source` ref), and again when the user confirms new limits (`approves` the intent, `previous_ref`, `said_commitment`). | the baseline intent; `approval` with `confirm_limits` |
+| `task-authority/v0` | The user's task authority: their words by commitment, `max_total_minor`, `allowed` (and, from this version, the plan shape a rules checker reads: `outcome_id`, a fixed id per deal type such as `capsulectl.deal.purchase/1.0.0`, the same actions as `allowed_actions`, and `preconditions: []`). Sealed after the baseline (`source` ref), and again when the user confirms new limits (`approves` the intent, `previous_ref`, `said_commitment`). | the baseline intent; `approval` with `confirm_limits` |
 | `proposed-action/v0` | The action about to be taken, exactly as checked. | `check` |
 | `action-evaluation/v0` | The deal check's disposition (`DO`, `ASK` or `DENY`) and findings, with the contract fields below. | `verdict` |
 | `action-approval/v0` | An approval artifact of one stated `authority`: `user_approval` (the user's own answer, with their words and the `rendering_commitment` of what they were shown), `card_answer` (a card answered with no words), `platform_approval` (a platform approval observation, below), `policy_change` (the user confirming a policy change: `rendering_commitment`, `effective_policy_digest`, `semantic_diff_digest`), `one_shot_override` (reserved). | `approval` |

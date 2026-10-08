@@ -521,11 +521,12 @@ func findingField(id string) string {
 // rule: a checker with a limit over a rolling window evaluates it over the
 // history, and reports it not_evaluable when that is not enough.
 //
-// In a typed deal it also carries task_authority: the sealed task-authority
-// record the check's task_authority_ref names (its digest is the ref's), so a
-// checker can bind the plan it reads to the record. It is absent when the
-// task authority in force is not a task-authority record (limits confirmed
-// later in an approval), and in a deal with none.
+// In a typed deal it also carries task_authority_record: the whole sealed
+// task-authority record the check's task_authority_ref names, exactly as
+// sealed (SHA-256 of its JCS bytes is the ref's digest; its plan is at
+// body), so a checker recomputes the binding before it reads the plan. It
+// is absent when the task authority in force is not a task-authority record
+// (limits confirmed later in an approval), and in a deal with none.
 func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events []sealedEvent) ([]byte, *dealRulesHistory, error) {
 	record, err := s.capsuleWithInput(ctx, capsuleID)
 	if err != nil {
@@ -547,8 +548,8 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 				if err != nil {
 					return nil, nil, err
 				}
-				if ta != nil {
-					input["task_authority"] = ta
+				if record, ok := ta["agent_input"]; ok {
+					input["task_authority_record"] = record
 				}
 			}
 		}

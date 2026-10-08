@@ -270,9 +270,12 @@ func taskAuthorityRecord(ev dealEvent, events []sealedEvent, commit func(string)
 		}
 		body["allowed"] = allowed
 		// The same bounds in the plan shape a rules checker reads: the
-		// actions the task allows, and its preconditions (none are stated
-		// here). Absent, like allowed, when nothing restricts the task.
+		// plan's outcome (a fixed id per deal type, part of the plan's own
+		// digest, so never changed), the actions the task allows, and its
+		// preconditions (none are stated here). Absent, like allowed, when
+		// nothing restricts the task.
 		if ev.RuleInputs != "" {
+			body["outcome_id"] = dealOutcomeID(events[0].Event.Open.Type)
 			body["allowed_actions"] = allowed
 			body["preconditions"] = []interface{}{}
 		}

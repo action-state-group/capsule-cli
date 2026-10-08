@@ -73,6 +73,15 @@
           },
           "uniqueItems": true
         },
+        "outcome_id": {
+          "description": "The plan's outcome, a fixed id per deal type (part of the plan's own digest, so never changed). Present with allowed_actions.",
+          "enum": [
+            "capsulectl.deal.purchase/1.0.0",
+            "capsulectl.deal.rental/1.0.0",
+            "capsulectl.deal.booking/1.0.0",
+            "capsulectl.deal.service/1.0.0"
+          ]
+        },
         "allowed_actions": {
           "description": "The same actions as allowed, in the plan shape a rules checker reads (allowed_actions). Absent, like allowed, when nothing restricts the task.",
           "type": "array",

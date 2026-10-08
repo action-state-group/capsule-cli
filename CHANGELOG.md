@@ -16,9 +16,11 @@
   - on typed records, `task_authority_ref`.
 
   None carries a name, a contact detail or free text. Records sealed before re-derive unchanged.
-- **Added:** a typed deal's `task-authority/v0` also carries its allowed actions as `allowed_actions`
-  with `preconditions: []`. The external-check input gains an optional `task_authority` member: that
-  record, whose digest is the check's `task_authority_ref`.
+- **Added:** a typed deal's `task-authority/v0` also carries its plan: `outcome_id` (a fixed id per
+  deal type, `capsulectl.deal.<purchase|rental|booking|service>/1.0.0`), its allowed actions as
+  `allowed_actions`, and `preconditions: []`. The external-check input gains an optional `task_authority_record`
+  member: that whole sealed record, whose SHA-256 over its JCS bytes is the check's
+  `task_authority_ref` digest; its plan is at `body`.
 - **The deal skill** now says to always state `recourse` (the rail and whether it is refundable) on
   a pay, and to put a deposit the checkout asks for in `terms`.
 

@@ -40,6 +40,14 @@ var (
 		"recourse.refundable"}
 )
 
+// dealOutcomeID is a typed task authority's plan outcome, by deal type
+// (purchase, rental, booking or service): fixed once, never changed, since
+// it is part of the plan's own digest. A kind of task, never a description
+// of this one.
+func dealOutcomeID(dealType string) string {
+	return "capsulectl.deal." + dealType + "/1.0.0"
+}
+
 func fieldListBasis(list []string) string {
 	items := make([]interface{}, len(list))
 	for i, k := range list {
