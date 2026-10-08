@@ -320,7 +320,7 @@
           "type": "object", "additionalProperties": false, "required": ["status"],
           "properties": {
             "status": { "enum": ["evaluated", "not_evaluated", "not_configured"] },
-            "cause": { "enum": ["checker_unavailable", "checker_changed", "refused", "timeout", "unreadable", "ruleset_changed"], "description": "Why a configured checker's answer was not evaluated. The checker's own words are not sealed in the clear; the card that showed them is committed to." },
+            "cause": { "enum": ["checker_unavailable", "checker_changed", "refused", "timeout", "unreadable", "ruleset_changed", "unsealable"], "description": "Why a configured checker's answer was not evaluated. The checker's own words are not sealed in the clear; the card that showed them is committed to." },
             "ruleset_id": { "type": "string", "minLength": 1, "maxLength": 200 },
             "definition_digest": { "$ref": "#/$defs/hex64" },
             "checker_sha256": { "$ref": "#/$defs/hex64" },

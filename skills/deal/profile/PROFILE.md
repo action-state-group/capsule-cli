@@ -489,7 +489,14 @@ The verdict's `rules` seals the outcome as data:
   shown in the approval text, changing nothing), `findings` (each `{id, check, verdict, limit, value}`), and `history` (`{days, acts, complete}`:
   what the checker was given beside the record);
 - `status: not_evaluated`, with `cause` (`checker_unavailable`, `checker_changed`, `refused`,
-  `timeout`, `unreadable` or `ruleset_changed`) and `checker_sha256`;
+  `timeout`, `unreadable`, `ruleset_changed`, or `unsealable`: an answer that would carry a phone
+  number, an email address, the counterparty's details or a word a record may not carry, so the
+  check pauses instead of sealing it) and `checker_sha256`;
+
+A finding's `limit` and `value` are never counterparty data, by contract (an amount, a count, a
+window total). The personal-data scan reads them by token: a plain amount passes, while a
+phone-shaped token, an email address, or the digits of the counterparty's details make the answer
+`unsealable`. Every other string in a record keeps the general scan.
 - `status: not_configured`, when no checker is pinned. That check does not pause for it, but its
   record and its approval text say the rules were not checked.
 
