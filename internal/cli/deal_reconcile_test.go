@@ -115,9 +115,9 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 			check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(retailDemo, "check-pay.json"))
 			assert.Equal(t, "pass", check["verdict"], "a known merchant at the agreed price passes quietly")
 			assert.Equal(t, "", check["card"])
-			assert.Equal(t, "DEMO · Pay: Place order: 1 cat sticker, $6.27 total, saved card · $6.27 · to Example Stickers (stickers.example) · by card · refundable\n"+
-				"Deal check: no differences.\n"+
-				"Checked at 2026-09-27T18:00:00Z. Stale after 15 minutes (2026-09-27T18:15:00Z): check again before acting later than that.", check["approval_text"])
+			assert.Equal(t, "Your rules were not checked: no rules checker configured.\n"+
+				"DEMO · Pay: Place order: 1 cat sticker, $6.27 total, saved card · $6.27 · to Example Stickers (stickers.example) · by card · refundable\n"+
+				"Before you go ahead: no differences.", check["approval_text"])
 			assert.Equal(t, "2026-09-27T18:00:00Z", check["checked_at"])
 			proceed = check["proceed"] == true
 		case strings.Contains(step, "place the order"):
@@ -166,14 +166,18 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 	assert.Equal(t, map[string]any{"id": "a1", "at": "2026-09-27T18:00:00Z", "decision": "approved"}, result["recorded"].([]any)[0].(map[string]any)["host_approval"])
 }
 
+// The approval text leads with whether the rules were checked, then the
+// action and the finding. When the check goes stale is in the check's output
+// and its sealed record, not in the prompt.
 func TestDealCheckApprovalTextCarriesTheFindingAndWhenItGoesStale(t *testing.T) {
 	dealFixture(t)
 	dealID := openJetSki(t)
 	check := dealRun(t, "check", "--deal", dealID, "--stale-after", "5m", "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
-	assert.Equal(t, "DEMO · Pay: $200 deposit to hold 2 jet skis on Saturday · $200.00 · to M. Torres (coastal-jet-rentals.example) · by Zelle · not refundable\n"+
-		"Deal check: flagged: Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle) · Payment changed since it was agreed (card → Zelle, not refundable) · Zelle = no card protection · Site registered 3 weeks ago. Unverified: they have 2 jet skis for Saturday.\n"+
-		"Checked at 2026-09-27T18:00:00Z. Stale after 5 minutes (2026-09-27T18:05:00Z): check again before acting later than that.", check["approval_text"])
+	assert.Equal(t, "Your rules were not checked: no rules checker configured.\n"+
+		"DEMO · Pay: $200 deposit to hold 2 jet skis on Saturday · $200.00 · to M. Torres (coastal-jet-rentals.example) · by Zelle · not refundable\n"+
+		"Before you go ahead: flagged: Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle) · Payment changed since it was agreed (card → Zelle, not refundable) · Zelle = no card protection · Site registered 3 weeks ago. Unverified: they have 2 jet skis for Saturday.", check["approval_text"])
 	assert.Equal(t, float64(5), check["stale_after_minutes"])
+	assert.Equal(t, "2026-09-27T18:00:00Z", check["checked_at"])
 	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--stale-after", "10s", "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
 	require.ErrorIs(t, err, ErrInput)
 }

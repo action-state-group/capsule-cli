@@ -248,11 +248,12 @@ capsulectl profile create --name NAME [configuration flags | --interactive]
 capsulectl profile list
 capsulectl profile show NAME
 capsulectl profile update --profile NAME [configuration flags]
+capsulectl profile retire NAME [--move-data NEW_DIR]   # rename to NAME-retired-YYYYMMDD; nothing recorded changes
 capsulectl store init --profile NAME
 capsulectl seal --profile NAME --request INPUT.json --output ARTIFACT.json
 capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
-capsulectl verify --profile NAME --capsule ARTIFACT.json
+capsulectl verify --profile NAME --capsule ARTIFACT.json|CAPSULE.json
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
 capsulectl publish --profile NAME --request INPUT.json
 capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100] [--log-id LOG]
@@ -264,6 +265,8 @@ capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
 capsulectl doctor --install-check --profile NAME --expect-version TAG --expect-commit SHA --skills-dir DIR [--expect-skill-sha256 HEX] [--evidence-out FILE]
 capsulectl result open FILE [--format text|json]
+capsulectl result build --profile NAME --result RESULT.json --out SEALED.json [--contract REF] [--capsule-out RECORD.json]
+capsulectl report build --bundle BUNDLE.json --card CARD --out report.html [--presentation P.json] [--permalink] [--base-url URL] [--dry-run]
 capsulectl <plugin> [args passed to the plugin]   # a discovered capsulectl-<plugin> launcher
 capsulectl plugin ls
 capsulectl store migrate --profile NAME [--log-id NEW_LOG_ID]
@@ -304,6 +307,27 @@ plugin trust, profile presence, signing-key-file permissions, and (only with
 checkpoint endpoint. `result open` validates and prints a Result v0
 document's aggregate/coverage statement as text (or `--format json`); the
 Result v0 schema is still DRAFT, so this is a structural check, not schema
+validation, and it stands in for the `capsule-viewer` build. `result build`
+seals a caller-supplied Result v0 into a jsonl profile's evidence book as an
+`evidence_result` record whose statement is the document and whose `cites`
+links name every book record the claims cite: it validates against the
+vendored `evidence-result-v0` schema (`internal/cli/schema/`, digest pinned
+in code), refuses headline values that do not recompute from the claims, a
+citation the book does not hold, or a close/reconcile claim whose state or
+tallies differ from what the cited Close's links and statement read, and
+then checkpoints so `disclose --root <record id>` can build a bundle on it.
+Only UNILATERAL close claims can be sealed end to end today: a book holds
+only its own records, and its own links to its Close never count, so AGREED
+and CONTESTED wait on a way to bring the peer's record into the book.
+`report build` verifies a held, disclosed bundle whose root is a sealed
+Result (either carrier: the document itself, or the book record header
+whose statement is the document), records `--card` and the optional
+`presentation/v1` header in the embedded copy, and renders an offline
+`report.html` through agent-action-capsule's Go emitter with the vendored
+browser runtime (`internal/cli/assets/`, digest pinned; refresh with
+`scripts/iife-sync.sh`); `--permalink` mints the viewer fragment over the
+same bytes and `--dry-run` writes the page marked draft.
+
 validation, and it stands in for the `capsule-viewer` build. A plugin is an
 executable named `capsulectl-<name>` on a trusted plugin root: discovery wires
 it up as `capsulectl <name>`, `plugin ls` lists what was found and what was
@@ -325,6 +349,12 @@ with no network when the page is opened. The file must be new. A permalink
 carries its bundle in the link and takes no `--html`; a deal's page is its
 receipt, `deal report --html`.
 
+A page is written only for a bundle `verify --bundle` calls VALID, and only when a
+disclosed `report/v1` root shows every row. Otherwise no page is written: `bundle`
+still writes the bundle (`verify --bundle` states its verdict), and `disclose` writes
+nothing and puts no disclosure on record. A jsonl profile writes no page: its bundle
+carries its evidence book's records about what you sealed, not the records themselves.
+
 Every bundle `bundle`, `disclose`, `permalink` and `countersign request --root`
 build declares the producer's own Ed25519 key in the `producer-key/v1` bundle
 extension, `{"extensions": {"producer-key/v1": {"public_key": "<64 lowercase hex>"}}}`:
@@ -345,8 +375,10 @@ unresolved signer, and the command exits partial (3).
 `deal` seals a deal's baseline and, when the host calls it, checks each point
 of no return (pay, commit, sign, share) against it. The check is advisory: it
 holds an action only where the host runs it from a pre-action hook. A deal
-profile is witnessed by default on a fixed cadence (`deal tick`, run every
-minute from a timer): one checkpoint of hashes per tick, never on activity.
+profile is witnessed by default on a fixed schedule, its checkpoint cadence:
+one checkpoint of hashes per tick (every 5m, give or take 1m, by default),
+never on activity. `cll checkpoint cadence --wait-up-to 5m`, scheduled every
+5 minutes, is its poll: a run with no tick due publishes nothing.
 `deal reconcile` reads the host's execution records afterwards and lists
 consequential actions that have no deal record; see
 [skills/deal](skills/deal/README.md).
@@ -494,9 +526,9 @@ checkpoint:
 
 Each secret supports exactly one of `value`, `file`, or `env`. Flag parity:
 `--mysql-password[-file|-env]`, `--signing-key[-file|-env]`,
-`--checkpoint-signing-key[-file|-env]`, `--checkpoint-token[-file|-env]`.
+`--checkpoint-signing-key[-file|-env]`, `--checkpoint-token[-file|-env]`, `--token[-file|-env]`.
 Other configuration flags include `--trusted-key`, `--checkpoint-trusted-key`,
-`--checkpoint-endpoint`, `--checkpoint-public-key`, `--mysql-tls`, `--read-only`.
+`--checkpoint-endpoint`, `--checkpoint-public-key`, `--mysql-tls`, `--read-only`, `--url`.
 To change secret source on update, explicitly clear the previous source flag;
 conflicting sources are rejected instead of silently taking precedence.
 
@@ -523,6 +555,51 @@ selects one with `--type`:
 - MySQL uses transactional row locking and supports multiple processes.
   Artifact and CLL data share one database.
 
+A `mesh-plugin` profile holds no storage. It points `--url` at a mesh node's
+management API (for example `http://127.0.0.1:3131`), and the read-only `book`
+verbs ask another party's book through that node's evidence-request/1 tool:
+
+```
+capsulectl profile create --name my-node --type mesh-plugin --url http://127.0.0.1:3131 --requester-id <node-peer-id>
+capsulectl book head    --profile my-node --party <peer-id> [--responder-checkpoint-key <hex>]
+capsulectl book get     --profile my-node --party <peer-id> --capsule-id <id>
+capsulectl book list    --profile my-node --party <peer-id> --selector <id1..id2> [--page-size N] [--page-token T]
+capsulectl book request --profile my-node --party <peer-id> --request request.json
+```
+
+`--requester-id` is the node's own full peer id (64 lowercase hex; not the
+short id its status shows). Each request names it as `requester_id` unless the
+request already names one. The node would otherwise add its own id before
+forwarding, and the party would digest a request other than the one sent, so
+its refusal would not bind. capsulectl never derives the id: a profile without
+one sends nothing until the request names a requester.
+
+Each verb sends the request in canonical form: sorted keys, compact,
+printable ASCII, 64-bit integers only. That is the form the party digests
+after the node re-encodes it; a request that cannot be sent that way is
+rejected before anything is sent. Each verb prints the party's answer
+(`response`, re-encoded compactly, so check its signed fields rather than
+hashing it) and the SHA-256 of the request it sent (`request_digest`), and
+classifies the answer:
+
+- An `artifact` must answer the subject kind that was asked. Its bundles are
+  carried, not verified: verify them with the party's keys before relying on
+  them. `book get` also checks the bundle's stated `capsule_id`.
+- A `refusal` is accepted only if its Ed25519 signature verifies offline and it
+  names that exact request. That proves the holder of its `signer` key refused
+  this request. It does not prove who that key belongs to: pass `--responder-key`
+  (the party's signing key, obtained independently) and a refusal under any other
+  key is rejected, and `signer_pinned` is true.
+
+`book head` verifies the signed statement of the newest checkpoint the party
+reports and checks every reported field against it. It cannot tell whether the
+party is withholding a newer one. With `--responder-checkpoint-key`, it rejects
+a head signed by any other key.
+
+An optional node token (`--token[-file|-env]`) is sent as a bearer token only
+over https or to a loopback address, and redirects are never followed.
+Profiles of this type cannot `store`, `publish` or list a log; those verbs
+reject them.
 Several profiles may share a physical database or reference the same log. The CLI
 does not bind a log to a single artifact namespace; callers must consistently
 select the intended namespace when writing and reading a log's artifacts.
@@ -572,6 +649,16 @@ An artifact file is the SDK's `artifact.Record` JSON: `capsule_id`, `capsule`,
 `producer_envelope`, and `artifacts`. Byte fields use JSON base64, preserving exact
 sealed bytes and exact originals. It is **not** raw Capsule JSON alone. CLL entries
 contain only the decoded 32-byte Capsule ID and ordered position/time.
+
+`verify --capsule` also reads a bare Agent Action Capsule, as capsule-emit seals
+it: the capsule's own fields with an inline `signature` (the hex COSE_Sign1
+producer envelope over `capsule_id`) and `key_id`. The file's shape is read from
+its members, never guessed, and named in the output (`shape`: `artifact-record`
+or `capsule`); a file with the members of both, or of neither, is refused. A
+bare capsule gets the same checks: its `capsule_id` recomputed, its signature
+under its `key_id`, and that key held to the profile's trusted keys. It carries
+no retained originals, so its committed digests are not rehashed, and the
+output says so.
 
 `get` uses the SDK directly, including signature trust, inventory integrity and
 bound-original verification. Reading artifacts requires only read access to the store (SELECT on the artifact SDK tables for MySQL; read permission on the file or directory for SQLite and JSONL).
@@ -736,9 +823,12 @@ payloads, the citation closure and the log proofs. It does **not** check:
 It says "Bundle verification passed" for a bundle that `verify --bundle` calls
 `INCOMPLETE` too. Run `verify --bundle` for the verdict.
 
-**Order matters.** Publish everything and cut the checkpoint before you disclose.
-Each `disclose` puts the disclosure on the log, so for another report later,
-publish, checkpoint and disclose again.
+**Order matters.** Publish everything and cut the checkpoint before you disclose:
+a bundle proves the records its checkpoint covers. Each `disclose` puts the
+disclosure on the log as a sealed capsule (`action_id` `capsulectl-disclosure`,
+its input the disclosure record: ids, digests, labels and a random nonce, never
+a disclosed byte). A later report carries that capsule, proven in the log, with its input
+withheld, so one party's copy never shows what was disclosed to another.
 
 ## Publication and recovery
 
@@ -794,14 +884,56 @@ profile and no network are used. It checks:
 - interval coverage and each record's inclusion under that checkpoint;
 - disclosures.
 
-It prints each claim's status and the bundle digest, and lists extensions and
-countersignatures it carried but did not check. Exit codes:
+It prints each claim's status and the bundle digest. A `composed/v1` extension is verified
+(composed digest, each member, closure, joins) and counts toward the verdict; any other
+extension, and any countersignature, is listed as carried but not checked. Exit codes:
 
 - 0: every claim passed;
 - 3: nothing failed, but something is not shown (no checkpoint signature, an
   unsigned record, declared-missing citations);
 - 1: a claim failed (an edited record, a signature that does not verify, a
   checkpoint field that differs from its signature).
+
+**A deal receipt's text is sealed with it.** A deal receipt's readable text
+(the summary lines, each step's line, the amounts and what was told) is sealed
+as a record on the deal's log when the receipt is written. The bundle's
+`x-deal-v0` extension names that record (`sealed_report`), and its `extensions`
+entry is `pass` when the record's disclosed text matches. Editing the text,
+removing the extension, naming another record, or replacing the pointer with
+text (even with the record's disclosure dropped) makes the bundle INVALID
+(`sealed_report_unverified`, `sealed_report_not_named`): a bundle that holds a
+sealed report must name it. Each copy seals its own
+text and discloses no other copy's. A receipt written before this change carries
+its text in the extension itself: `uninterpreted`, with the finding
+`extension_unbound`, and its page says the text is not checked.
+
+**composed/v1.** A bundle carrying the `composed/v1` extension
+(draft-mih-zhang-agent-disclosure-bundle-01 §7.2: one evidence set built from
+several responders' answers to Evidence Requests) is checked too, through the
+agent-action-capsule Go library (v0.7.0). Its `extensions` entry has `status`
+(`pass`, `withheld` or `fail`) and a `composed` object reporting, separately:
+
+- `composed_digest`: the digest recomputed from the block's declarations, the
+  declared one, and whether they match;
+- `members`: each member's `outcome` (`artifact`, `refusal` or `absence`),
+  `body` (`carried`, `declared_missing` or `absent`), `digest` (`reproduced`,
+  `mismatch` or `not_shown`), and, for a carried member bundle, `bundle`: that
+  bundle's own full report (its own verdict and claims, never merged with the
+  containing bundle's). A refusal's signature is checked when it carries
+  `key_id` and `signature` (`ed25519-jcs`: Ed25519 over the JCS of the refusal
+  without `signature`); any other refusal is `signature_unverified`, not failed;
+- `composition_closure`: `pass`, `withheld` (`declared_incomplete`) or `fail`;
+- `joins`: each join's `declared` and re-`derived` state and `result`
+  (`derived_matches`, `join_state_mismatch` or `not_derivable`), with each
+  member's value at each differing pointer on a derived mismatch;
+- `corroboration`: per join, `redundant` (with `reason`: same observer, custody
+  domain or key) and the report "redundant, not corroborating", `corroborating`
+  (qualified `custody_declared`), or `not_applicable`.
+
+A failed block or member bundle makes the verdict `INVALID`; a declared-missing
+member, a non-derivable join or an unverified refusal signature makes it
+`INCOMPLETE`. Composition closure covers the declared members only; it is not
+completeness of participation.
 
 **Witness receipts.** A checkpoint can carry witness receipts
 (`checkpoint.witnesses`). With `--witness-directory WITNESSES.json` (capsule-emit's

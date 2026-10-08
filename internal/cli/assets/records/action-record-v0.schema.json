@@ -51,6 +51,9 @@
     "producer": {
       "$ref": "record-common-v0.schema.json#/$defs/producer"
     },
+    "commit_alg": {
+      "$ref": "record-common-v0.schema.json#/$defs/commit_alg"
+    },
     "body": {
       "allOf": [
         {
@@ -69,6 +72,11 @@
               "$ref": "record-common-v0.schema.json#/$defs/authority_basis"
             },
             "action": true,
+            "action_class": true,
+            "taxonomy_version": true,
+            "spend_minor": true,
+            "fee_minor": true,
+            "cancelled_amount_minor": true,
             "amount_minor": true,
             "currency": true,
             "rail": true,

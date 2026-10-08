@@ -26,6 +26,7 @@
       "enum": [
         "DO",
         "ASK",
+        "DENY",
         "NEVER",
         "ASK_UNVERIFIED"
       ]

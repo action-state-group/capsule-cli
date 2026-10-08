@@ -250,6 +250,8 @@ func SafeError(err error) string {
 	case errors.Is(err, ErrBreaking):
 		// Like ErrSchemaInvalid: `contract diff` already printed the changes.
 		return ErrBreaking.Error()
+	case errors.Is(err, ErrNoAnswer):
+		return ErrNoAnswer.Error()
 	case errors.Is(err, ErrSchemaInvalid):
 		// The detailed per-issue report was already printed by `contract
 		// validate` itself; this is only the trailing summary line.
@@ -307,6 +309,7 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(backfillCommands())
 	root.AddCommand(canaryCommands())
 	root.AddCommand(closeCommand(), reconcileCommand(), requestCommand(), respondCommand())
+	root.AddCommand(bookCommands())
 	store := &cobra.Command{Use: "store", Short: "Initialize and verify the profile's artifact and CLL store"}
 	init := &cobra.Command{Use: "init", Short: "Initialize the store and pin its store_id into the profile", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
@@ -394,8 +397,19 @@ func NewCommand() *cobra.Command {
 			return e
 		}
 		path, _ := c.Flags().GetString("capsule")
-		r, e := readRecord(path)
+		raw, e := readInput(path)
 		if e != nil {
+			return e
+		}
+		shape, e := capsuleFileShape(path, raw)
+		if e != nil {
+			return e
+		}
+		if shape == capsuleShapeBare {
+			return verifyBareCapsule(c, p, path, raw)
+		}
+		var r artifact.Record
+		if e = decodeJSONAs("--capsule "+path, raw, &r); e != nil {
 			return e
 		}
 		keys, e := parseKeys(p.TrustedKeys)
@@ -403,20 +417,20 @@ func NewCommand() *cobra.Command {
 			return e
 		}
 		if len(keys) == 0 {
-			if e = output(c, map[string]string{"producer_trust": "not_performed: no trusted key", "cll_inclusion": "not_performed", "business_truth": "not_performed"}); e != nil {
+			if e = output(c, map[string]string{"shape": capsuleShapeRecord, "producer_trust": "not_performed: no trusted key", "cll_inclusion": "not_performed", "business_truth": "not_performed"}); e != nil {
 				return e
 			}
 			return ErrPartial
 		}
 		checks, e := artifact.Verify(r, keys)
 		if e != nil {
-			if outErr := output(c, map[string]string{"capsule_and_artifacts": "failed", "cll_inclusion": "not_performed"}); outErr != nil {
+			if outErr := output(c, map[string]string{"shape": capsuleShapeRecord, "capsule_and_artifacts": "failed", "cll_inclusion": "not_performed"}); outErr != nil {
 				return outErr
 			}
 			return e
 		}
 		missing := missingBindings(r)
-		if e = output(c, map[string]any{"capsule_identity": "passed", "producer_signature_and_trust": "passed", "artifacts": checks, "missing_originals": missing, "cll_inclusion": "not_performed", "business_truth": "not_performed"}); e != nil {
+		if e = output(c, map[string]any{"shape": capsuleShapeRecord, "capsule_identity": "passed", "producer_signature_and_trust": "passed", "artifacts": checks, "missing_originals": missing, "cll_inclusion": "not_performed", "business_truth": "not_performed"}); e != nil {
 			return e
 		}
 		if len(missing) > 0 {
@@ -429,7 +443,7 @@ func NewCommand() *cobra.Command {
 		}
 		return nil
 	}}
-	verify.Flags().String("capsule", "", "artifact.Record JSON file")
+	verify.Flags().String("capsule", "", "A capsule file: an artifact.Record (as `seal --output` and `get --raw` write) or a bare Agent Action Capsule with an inline signature and key_id (as capsule-emit seals); its shape is read from its members and named in the output")
 	verify.Flags().String("bundle", "", "Evidence Bundle (evidence-bundle/v2) JSON file, verified offline from the file alone")
 	verify.Flags().String("witness-directory", "", "With --bundle: a witness directory (witnesses.json format) naming the witnesses and keys whose receipts to check; without it no receipt is checked")
 	verify.MarkFlagsMutuallyExclusive("capsule", "bundle")
@@ -594,6 +608,7 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(mapCommand())
 	root.AddCommand(doctorCommand())
 	root.AddCommand(resultCommands())
+	root.AddCommand(reportCommands())
 	addPluginCommands(root)
 	root.SetHelpCommand(&cobra.Command{Use: "help [command]", Short: "Help about any command", RunE: func(c *cobra.Command, args []string) error {
 		target, _, e := root.Find(args)

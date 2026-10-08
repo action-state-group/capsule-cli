@@ -43,7 +43,8 @@ var dealClock = func() time.Time { return time.Now().UTC() }
 
 // The local store, in the profile's SQLite file. It never leaves the device:
 // deal_steps.local holds each step's raw values and commitment nonces,
-// deal_disclosures each shared copy's disclosure record,
+// deal_disclosures each shared copy's disclosure record, deal_reports the
+// sealed report capsule of each copy written (dealSealReport),
 // deal_keys each deal's key, and deal_store the store secret the keys derive
 // from. What is sealed is only the x-deal-v0 record derived from them.
 var dealIndexSchema = []string{
@@ -64,6 +65,13 @@ var dealIndexSchema = []string{
 	cll_sequence INTEGER NOT NULL,
 	record TEXT NOT NULL,
 	PRIMARY KEY (deal_id, n)
+)`,
+	`CREATE TABLE IF NOT EXISTS deal_reports (
+	deal_id TEXT NOT NULL,
+	capsule_id TEXT NOT NULL,
+	audience TEXT NOT NULL,
+	cll_sequence INTEGER NOT NULL,
+	PRIMARY KEY (deal_id, capsule_id)
 )`,
 	`CREATE TABLE IF NOT EXISTS deal_keys (deal_id TEXT PRIMARY KEY, deal_key BLOB NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS deal_store (id INTEGER PRIMARY KEY CHECK (id = 1), secret BLOB NOT NULL)`,
@@ -199,6 +207,26 @@ func (s *dealSession) close() error {
 	return errors.Join(e, s.unlock())
 }
 
+// stepEntries reads the deal's log, in order, without the entries of its
+// sealed reports: the steps alone.
+func (s *dealSession) stepEntries(ctx context.Context, dealID string) ([]cll.Entry, error) {
+	entries, err := s.logEntries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reports, err := s.reportIDs(ctx, dealID)
+	if err != nil {
+		return nil, err
+	}
+	steps := entries[:0:0]
+	for _, e := range entries {
+		if !reports[hex.EncodeToString(e.Value)] {
+			steps = append(steps, e)
+		}
+	}
+	return steps, nil
+}
+
 // logEntries reads the deal's whole log, in order.
 func (s *dealSession) logEntries(ctx context.Context) ([]cll.Entry, error) {
 	var out []cll.Entry
@@ -216,7 +244,8 @@ func (s *dealSession) logEntries(ctx context.Context) ([]cll.Entry, error) {
 }
 
 // load reads a deal's steps back and re-verifies each one against the deal's
-// own log: the log must hold exactly one entry per indexed step, in order,
+// own log: the log, less its sealed reports' entries, must hold exactly one
+// entry per indexed step, in order,
 // so a lost or deleted step is a conflict, never a silently shorter deal.
 // Then, per step: the Capsule signature and trust, the payload binding, the
 // local step re-derived into exactly the sealed record bytes, and the prev
@@ -245,7 +274,7 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	entries, err := s.logEntries(ctx)
+	entries, err := s.stepEntries(ctx, dealID)
 	if err != nil {
 		return nil, err
 	}
@@ -507,6 +536,8 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 		ev.Prev = events[len(events)-1].Digest
 	}
 	ev.Producer = currentProducer()
+	ev.TaxonomyVersion = dealTaxonomyVersion
+	ev.CommitAlg = dealCommitAlg
 	ev.Nonces = map[string]string{}
 	for name := range dealTexts(ev) {
 		nonce := make([]byte, 32)
@@ -577,7 +608,7 @@ func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEv
 	}
 	published, err := s.publishStep(ctx, request, se)
 	if err != nil {
-		if entries, scanErr := s.logEntries(ctx); scanErr == nil && int64(len(entries)) < se.Event.N {
+		if entries, scanErr := s.stepEntries(ctx, dealID); scanErr == nil && int64(len(entries)) < se.Event.N {
 			_, delErr := s.db.ExecContext(ctx, `DELETE FROM deal_steps WHERE deal_id=? AND n=?`, dealID, se.Event.N)
 			err = errors.Join(err, delErr)
 		}
@@ -740,7 +771,14 @@ func dealInitCommand() *cobra.Command {
 		}
 		if witness == "scheduled" {
 			out["witness_endpoint"], out["witness_sees"] = dealDefaultWitness, dealWitnessSees
-			out["next"] = "run `capsulectl --profile " + name + " deal tick` every minute from a timer (a run that is not due exits at once; every minute keeps the cadence's jitter: see `deal tick --help` for schedulers that cannot run every minute)"
+			cadence := "its cadence"
+			if cfg, err := p.dealCadence(); err == nil {
+				cadence = "every " + shortDuration(cfg.interval)
+				if cfg.jitter > 0 {
+					cadence += ", give or take " + shortDuration(cfg.jitter)
+				}
+			}
+			out["next"] = "set up the checkpoint cadence: schedule `capsulectl --profile " + name + " cll checkpoint cadence --wait-up-to 5m` every 5 minutes. Each run is a poll: it waits for a tick due within its 5 minutes and publishes it on time, and a run with none due publishes nothing. The witness hears from this profile once per tick (" + cadence + ")"
 		}
 		return output(c, out)
 	}}
@@ -853,6 +891,10 @@ type dealActInput struct {
 	Payee       string `json:"payee,omitempty"`
 	Rail        string `json:"rail,omitempty"`
 	Reference   string `json:"reference,omitempty"`
+	// FeeMinor is, on a cancel only, a fee the cancellation costs, recorded
+	// as its own amount: never the amount a spend cap evaluates (spend_minor
+	// is 0 on every cancel).
+	FeeMinor *int64 `json:"fee_minor,omitempty"`
 }
 
 func dealNoteCommand() *cobra.Command {
@@ -1035,7 +1077,7 @@ func dealNoteCommand() *cobra.Command {
 				// Typed records: the user's answer to an ask is bound to what
 				// they were shown, so it can stand as the check's approval.
 				if verdict, _, ok := checkedCard(events, ev.Approval.Check); ok && dealRecordSet(dealEvent{}, events) == recordsTyped &&
-					ev.Approval.Approver == "user" && verdict.Event.Check.Verdict == "pause" && ev.Approval.ShownCard == "" {
+					ev.Approval.Approver == "user" && verdict.Event.Check.Verdict != "pass" && ev.Approval.ShownCard == "" {
 					return inputError("in a typed deal the user's answer to a paused check is bound to the card it was given on: pass that card with --shown-card")
 				}
 			case "platform_approval":
@@ -1049,7 +1091,10 @@ func dealNoteCommand() *cobra.Command {
 				if !slices.Contains(dealPointsOfNoReturn[events[0].Event.Open.Type], act.Action) {
 					return inputError("act.action is not a point of no return for this deal type")
 				}
-				ev.Act = &dealAct{Action: act.Action, Description: act.Description, AmountMinor: act.AmountMinor, Currency: act.Currency, Payee: act.Payee, Rail: act.Rail, Reference: act.Reference}
+				if err := checkFee(act.Action, act.FeeMinor); err != nil {
+					return err
+				}
+				ev.Act = &dealAct{Action: act.Action, Description: act.Description, AmountMinor: act.AmountMinor, Currency: act.Currency, Payee: act.Payee, Rail: act.Rail, Reference: act.Reference, FeeMinor: act.FeeMinor}
 				ev.Act.AuthorizedBy, ev.Act.Reason, ev.Act.Rule = authorizeAct(events, *ev.Act, dealClock().UTC())
 				ev.Act.Unchecked = ev.Act.AuthorizedBy == ""
 				ev.Act.Direction, ev.Act.Reverses = actDirection(events, *ev.Act, events[0].Event.Open.Terms.Currency)
@@ -1316,6 +1361,12 @@ func dealCheckCommand() *cobra.Command {
 			if !slices.Contains(dealPointsOfNoReturn[open.Type], snap.Action) {
 				return inputError("action is not a point of no return for a " + open.Type + " deal; use one of " + strings.Join(dealPointsOfNoReturn[open.Type], ", "))
 			}
+			if err := checkFee(snap.Action, snap.FeeMinor); err != nil {
+				return err
+			}
+			if err := checkAuthorizedMax(snap, open.Recourse.Rail); err != nil {
+				return err
+			}
 			if err := normalizeTerms(snap.Terms); err != nil {
 				return err
 			}
@@ -1397,6 +1448,21 @@ func dealCheckCommand() *cobra.Command {
 				return err
 			}
 			result.Differences = append(result.Differences, result.Remote.Differences...)
+			// The profile's rules, by its pinned checker, on the record of
+			// what is about to happen (the capsule just sealed, with its
+			// disclosed record) and the profile's recent acts. One verdict and
+			// one prompt with the check's own differences.
+			rules := dealRules{Status: "not_configured"}
+			if len(s.p.RulesChecker.Command) > 0 {
+				input, history, err := s.rulesInput(ctx, snapped.CapsuleID)
+				if err != nil {
+					return err
+				}
+				rules = runRulesChecker(ctx, s.p, input, history)
+				rules = sealableRules(rules, dealLocalValues(events, dealEvent{}))
+			}
+			result.Rules = &rules
+			result.Differences = append(result.Differences, rulesDifferences(&rules)...)
 			settleCheck(&result, state)
 			result.Snapshot = snapped.CapsuleID
 			result.Card = renderCard(result, open.Demo)
@@ -1443,6 +1509,7 @@ func dealCheckCommand() *cobra.Command {
 			out["asked_attributes"] = result.Asked
 			out["picked_by_agent"] = result.Picked
 			out["materiality"] = result.Materiality
+			out["rules"] = result.Rules
 			if rc := result.Recipient; rc != nil {
 				out["recipient"] = rc
 				if len(rc.Repeat) > 0 {
@@ -1611,7 +1678,7 @@ func dealReportCommand() *cobra.Command {
 					out["assurance"] = dealAssurance(map[string]interface{}{})
 					return output(c, out)
 				}
-				b, err := s.dealReportBundle(ctx, events, report, dealAudienceKeep, "")
+				b, err := s.dealReportBundle(ctx, events, report, dealAudienceKeep, "", false)
 				if err != nil {
 					return err
 				}
@@ -1626,7 +1693,7 @@ func dealReportCommand() *cobra.Command {
 			if fromBundle != "" {
 				b, err = s.dealBundleOf(fromBundle, dealID, events)
 			} else {
-				b, err = s.dealReportBundle(ctx, events, report, audience, dealVerifyCommand(htmlPath))
+				b, err = s.dealReportBundle(ctx, events, report, audience, dealVerifyCommand(htmlPath), true)
 			}
 			if err != nil {
 				return err

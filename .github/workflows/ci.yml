@@ -48,6 +48,8 @@ jobs:
           git diff --exit-code -- go.mod go.sum
       - name: Vet
         run: go vet ./...
+      - name: Check the rendered skill files match spec.yaml
+        run: go run ./cmd/skillgen --check
       - name: Build CLI
         run: make build
 
@@ -175,6 +177,32 @@ jobs:
           python -m pip check
       - name: The round trip, both ways, with the tampered copies refused
         run: bash scripts/interop-resolved.sh .interop/evidencebook
+
+  iife:
+    # The vendored evidence-graph IIFE (internal/cli/assets) must equal a
+    # fresh build from the agent-action-capsule commit report.go pins.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read the pinned agent-action-capsule commit
+        id: pin
+        run: |
+          rev=$(sed -n 's/.*evidenceGraphIIFESource = "agent-action-capsule [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' internal/cli/report.go)
+          test -n "$rev"
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+      - name: Check out agent-action-capsule at that commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: action-state-group/agent-action-capsule
+          ref: ${{ steps.pin.outputs.rev }}
+          path: aac
+          persist-credentials: false
+      - name: Rebuild the IIFE and compare with the vendored copy
+        run: |
+          node --version
+          make iife-check AAC="$GITHUB_WORKSPACE/aac"
 
   seal-pr-capsule:
     # Same-repo PRs only: a fork PR's pull_request event carries no repository

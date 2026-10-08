@@ -234,6 +234,13 @@ for every later email.
    made. A deal that was never closed reads "Open: no close is sealed on this
    deal", with its expected date. Pass that on as written; it is not a sign
    that anything went wrong.
+5. In your own words to the user: an open deal still waiting on the
+   merchant's confirmation is "waiting for the merchant's receipt"; at the
+   close, say "matched" or "nothing left to match". When the merchant's email
+   arrives after the close, say "The merchant's receipt arrived. It matches
+   what you approved." or, when it does not, "The merchant's receipt arrived.
+   It differs: you approved $4.54; their receipt says $5.20." with the real
+   amounts.
 
 ### Cancellation (proving "I cancelled")
 
@@ -326,11 +333,15 @@ The final review asks four questions:
   leaving it out only makes the record wrong.
 - **Never hold silently.** A `pause` always goes to the user with the card.
 - **Ask with the check's own text.** Every `deal check` returns
-  `approval_text`: what, who, the amount, how it is paid, what the check
-  found, when it was checked, and when the check goes stale (15 minutes by
-  default, `--stale-after`). When you ask the user to go ahead, in your own
-  message or ahead of the host's approval card, show that text as it is. If
-  the action happens after the stale time, check again first.
+  `approval_text`: whether the user's rules were checked, what, who, the
+  amount, how it is paid, and what the check found. When you ask the user to
+  go ahead, in your own message or ahead of the host's approval card, show
+  that text as it is. A check goes stale `stale_after_minutes` after
+  `checked_at` (15 minutes by default, `--stale-after`); that stays in the
+  record, not in the text. If the action happens after it, check again first.
+- **Never say the rules ran when they did not.** When `approval_text` says
+  "Your rules were not checked: …", say exactly that. Say the user's rules
+  were checked only when it names them.
 - **This upgrades your host's own confirmation; it never replaces it or
   bypasses it.**
 - Use plain words with the user: "checked", "changed", "unverified",
@@ -371,18 +382,16 @@ the predicate is the user's policy: never do it yourself.** If a check refuses
 because the predicate changed since it was pinned, tell the user; re-pinning is
 theirs to run.
 
-Then run `capsulectl --profile deal deal tick` **every minute** from a timer
-on this machine (a cron line `* * * * *`, or the host's scheduler at a
-one-minute interval). It publishes only when a tick is due, on its own
-hourly clock with a random jitter; a run that is not due exits at once. The
-jitter only shows if `deal tick` runs near each due time: a scheduler that
-runs it every 5 or 60 minutes would publish on its own grid instead. If the
-host can only schedule every N minutes, run
-`capsulectl --profile deal deal tick --wait-up-to Nm` at that interval: each
-run waits for the ticks due inside its window and publishes them on time.
-Such a run stays alive up to N minutes (an hour for `--wait-up-to 60m`); if
-the host caps how long a scheduled job may run, use a smaller N or schedule
-every minute. Deal steps never publish anything
+Then set up the **checkpoint cadence**: schedule
+`capsulectl --profile deal cll checkpoint cadence --wait-up-to 5m` **every 5
+minutes** on this machine (a cron line `*/5 * * * *`, or the host's scheduler
+at a five-minute interval). Each run is a poll: it waits for a tick due within
+its 5 minutes and publishes it on time, on the profile's own clock (every 5m,
+give or take 1m, by default), and a run with no tick due publishes nothing. A
+run stays alive up to 5 minutes; if the host caps how long a scheduled job may
+run, schedule more often with a matching smaller `--wait-up-to`. Never drop
+`--wait-up-to`: without it a scheduled run publishes on the scheduler's grid,
+which hides the cadence's jitter. Deal steps never publish anything
 themselves. If your agent host asks before a program reaches a website, the
 first tick raises that question for the witness's site: tell the user to
 choose **"Always allow this site"**, not "allow once", because later ticks
@@ -481,9 +490,18 @@ capsulectl --profile deal deal check --deal ID --input snapshot.json
 about to use. For an item from a private seller, add `seen_item` (true or
 false); leave it out for a retail order.
 
-Every check also returns `approval_text` (a short, paste-ready summary with
-the check time and when it goes stale), `checked_at` and
-`stale_after_minutes`.
+For a `pay`, also state `authorized_max_minor`: **the most the payment may
+take**, which is what the user's limit binds. Read it from the approval or the
+card hold before you check: "the approval will ask for a maximum of $9.54" (a
+$4.54 order plus up to $5 for tax settled later) means `amount_minor` 454 and
+`authorized_max_minor` 954. When nothing shows a larger maximum, pass the
+price: `authorized_max_minor` equal to `amount_minor`. Never pass the estimate
+when a larger maximum is shown. A pay by card, wallet, PayPal, or any rail that
+can hold more than it charges is refused without it.
+
+Every check also returns `approval_text` (a short, paste-ready summary),
+`checked_at` and `stale_after_minutes`, and `rules`: what the profile's rules
+checker said (see "Your rules" below).
 
 - `"verdict": "pass"`, `"proceed": true`: go ahead. Say nothing extra. The
   pass is approved by what the user already allowed, and that approval is
@@ -502,6 +520,28 @@ capsulectl --profile deal deal note --deal ID --kind approval --check CHECK_ID -
 Act only if that returns `"proceed": true`. If it says details changed, or
 that the check was already answered, run the check again. A check takes one
 answer: to change your mind after "Hold", check again.
+
+The card's proceed option reads "Pay anyway" (or "Confirm anyway", and so
+on) only when there is a finding to override; when the check paused only
+because the rules could not be checked, it reads "Pay". Show the labels as
+they are.
+
+- `"verdict": "deny"`: the user's rules do not allow this. The card names
+  the rule, its limit and the value, and offers only "Hold". Do not act, and
+  do not look for a way around it: tell the user what the card says.
+
+**Your rules.** A deal profile may pin a rules checker (the user's policy,
+set with `profile update --rules-checker FILE`; never yours to change). Every
+check runs it on the record of what is about to happen and seals its answer:
+the ruleset it ran, by id and digest, its verdict and every finding. If no
+checker is configured, the check does not pause for it, and its text says
+"Your rules were not checked: no rules checker configured." If a configured
+checker fails, times out or was changed since it was pinned, the check pauses
+and says "Your rules were not checked:" with the reason. A limit over a week
+is checked against the profile's earlier payments, which the check gives the
+checker; when it could not be, the text says the rules were not fully
+checked. Never tell the user a limit was checked when the text does not say
+so.
 
 In a deal opened with `deal open --records typed`, the steps are sealed as
 typed action records. A passing check is itself the authority to act (no
@@ -553,6 +593,39 @@ from DNS **now**, seals that key with it, and checkpoints at once. Do it
 promptly: merchants rotate and revoke their keys, and a signature can only
 be checked later against a key that was sealed while it was still published.
 Prompt sealing is the whole protection.
+
+**If DNS cannot be reached.** When the seal is refused because the key
+record could not be read ("could not reach DNS for the DKIM key record …"),
+do not stop. Tell the user plainly and offer the way on, in your own words,
+for example: "I couldn't reach DNS to check the merchant's signature. If you
+can look up the merchant's key record, I can still seal the email with it."
+
+- **Which record.** The error names it: `SELECTOR._domainkey.DOMAIN`, a TXT
+  record. `SELECTOR` and `DOMAIN` are the `s=` and `d=` tags of the email's
+  `DKIM-Signature` header.
+- **Where it can come from.** Any DNS lookup that can reach it: another
+  resolver, or a lookup the user runs on another machine or network (for
+  example `dig +short TXT SELECTOR._domainkey.DOMAIN`). Save the TXT value
+  (`v=DKIM1; k=rsa; p=…`), or a zone-file line naming the record, to a file.
+- **How it is sealed.** Pass the file with `--key-record`. The email is
+  sealed with that record marked **supplied**: the result's `key_source` is
+  `supplied`, and the report and the emailed receipt say "The merchant's key
+  was supplied by hand, not read from the merchant's DNS." Say that to the
+  user, too.
+- **What it is worth.** A supplied record is **weaker evidence** than one this
+  tool read from DNS: whoever supplied it chose it. The signature check still
+  runs, but against the record you were given. Never present it as a
+  resolved one.
+
+```sh
+# The seal was refused: "could not reach DNS for the DKIM key record
+# s2026._domainkey.shop.example (…)". The user looked it up elsewhere:
+#   dig +short TXT s2026._domainkey.shop.example  >  key-record.txt
+capsulectl --profile deal deal note --deal ID --kind evidence --email confirmation.eml \
+  --key-record key-record.txt
+# key_source: "supplied". If the DMARC record could not be read either, pass it
+# with --dmarc-record dmarc-record.txt beside --key-record (also marked supplied).
+```
 
 The result has two separate statements. Report them separately, in their own
 words, and never as one combined badge:
@@ -643,8 +716,9 @@ the agent host's own email tool to the user's own address. Never send it
 through any other service, and never paste its contents anywhere else. The
 assurance line says "Sealed by my agent" unless a configured witness signed
 a receipt for the deal's checkpoint, and then "Witnessed". A new deal is not
-witnessed at once: until the next tick of the profile's cadence (the receipt
-says how often, for example "every 5m, give or take 2m") its receipt says
+witnessed at once: until the next tick of the profile's checkpoint cadence
+(the receipt says how long at most, for example "within about 7m (every 5m,
+give or take 2m)") its receipt says
 "Sealed, witness pending". Steps added after a tick read "Witnessed in part"
 (steps 1 to k of n witnessed, the rest pending). Say it that way to the
 user; never say a deal was witnessed when it happened. The receipt

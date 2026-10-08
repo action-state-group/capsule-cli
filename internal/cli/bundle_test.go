@@ -116,12 +116,12 @@ func TestPayloadsAllRequiresEveryOriginalAtDepthZero(t *testing.T) {
 	require.ErrorContains(t, err, "not retained")
 }
 
-// TestAppendDisclosureRecordSealsDiscloseActOnLog is the mutant-catching test
-// for the "every act is on record" requirement: it recomputes the expected
-// disclosure_record digest independently of production code and asserts the
-// CLL actually grew by exactly one entry carrying that exact value. A mutant
-// that drops the log.Append (or appends the wrong bytes) turns this red.
-func TestAppendDisclosureRecordSealsDiscloseActOnLog(t *testing.T) {
+// TestDisclosureRecordCommitsToExactlyWhatWasDisclosed recomputes the
+// disclosure record independently of production code: a disclose seals it
+// as its capsule's input (TestADisclosureIsASealedCapsuleOfIdsAndDigestsOnly
+// checks that the log grows by that capsule), so it must name exactly what
+// was disclosed, by digest.
+func TestDisclosureRecordCommitsToExactlyWhatWasDisclosed(t *testing.T) {
 	profile, key := profileFixture(t)
 	store := mapArtifactStore{}
 	rec := bundleRecord(t, key, nil, nil)
@@ -141,20 +141,8 @@ func TestAppendDisclosureRecordSealsDiscloseActOnLog(t *testing.T) {
 	_, err = runner.RunOnce(t.Context(), time.Now().UTC())
 	require.NoError(t, err)
 
-	before, err := log.ScanEntries(t.Context(), 0, cll.MaxScanLimit)
-	require.NoError(t, err)
-	require.Len(t, before, 1, "only the capsule is on the log before disclose")
-
 	bundle, err := AssembleBundle(t.Context(), store, log, profile.LogID, BundleOptions{Root: rec.CapsuleID, ClosureDepth: 2, Payloads: "all", WithDisclosure: true})
 	require.NoError(t, err)
-
-	entry, err := appendDisclosureRecord(t.Context(), log, bundle)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(2), entry.Seq, "the disclosure_record must be the NEXT log entry, not a substitute for it")
-
-	after, err := log.ScanEntries(t.Context(), 0, cll.MaxScanLimit)
-	require.NoError(t, err)
-	require.Len(t, after, 2, "disclose must append to the log, not merely emit the bundle")
 
 	// Recompute the expected digest independently of disclosureRecord()'s
 	// implementation, straight from the disclosed overlay and completeness block.
@@ -175,13 +163,17 @@ func TestAppendDisclosureRecordSealsDiscloseActOnLog(t *testing.T) {
 	}
 	expectedDigest, err := canonical.JSONDigest(expected)
 	require.NoError(t, err)
-	assert.Equal(t, expectedDigest, hex.EncodeToString(after[1].Value), "the appended entry must commit to exactly what was disclosed")
+	record, err := disclosureRecord(bundle)
+	require.NoError(t, err)
+	recordDigest, err := canonical.JSONDigest(record)
+	require.NoError(t, err)
+	assert.Equal(t, expectedDigest, recordDigest, "the sealed record must commit to exactly what was disclosed")
 }
 
-// TestAppendDisclosureRecordRejectsUnrecordedSuppression is the negative on the
+// TestDisclosureRecordNamesEverySuppressedField is the negative on the
 // trusted path: a disclose that suppresses a member must not silently drop it
 // from the sealed record -- the commitment must name every suppressed field.
-func TestAppendDisclosureRecordRejectsUnrecordedSuppression(t *testing.T) {
+func TestDisclosureRecordNamesEverySuppressedField(t *testing.T) {
 	profile, key := profileFixture(t)
 	store := mapArtifactStore{}
 	rec := bundleRecord(t, key, nil, nil)
@@ -204,18 +196,12 @@ func TestAppendDisclosureRecordRejectsUnrecordedSuppression(t *testing.T) {
 	bundle, err := AssembleBundle(t.Context(), store, log, profile.LogID, BundleOptions{Root: rec.CapsuleID, ClosureDepth: 2, Payloads: "selected", Suppress: map[string]bool{"agent_input": true}, WithDisclosure: true})
 	require.NoError(t, err)
 
-	entry, err := appendDisclosureRecord(t.Context(), log, bundle)
-	require.NoError(t, err)
-
 	record, err := disclosureRecord(bundle)
 	require.NoError(t, err)
 	assert.Equal(t, []interface{}{"agent_input"}, record["suppressed_fields"])
 	revealed := record["revealed"].(map[string]interface{})[rec.CapsuleID].(map[string]interface{})
 	_, stillRevealed := revealed["agent_input"]
 	assert.False(t, stillRevealed, "a suppressed member must not appear as revealed in the sealed record")
-	digest, err := canonical.JSONDigest(record)
-	require.NoError(t, err)
-	assert.Equal(t, digest, hex.EncodeToString(entry.Value))
 }
 
 func bundleRecord(t *testing.T, key ed25519.PrivateKey, chain *emit.Chain, references []emit.Reference) artifact.Record {

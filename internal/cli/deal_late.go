@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -74,16 +75,59 @@ func openDealListing(events []sealedEvent, now time.Time) *dealOpenListing {
 	o := events[0].Event.Open
 	asOf := now.UTC().Format("2006-01-02T15:04:05Z")
 	l := &dealOpenListing{DealID: events[0].Event.DealID, State: "open", OpenedAt: events[0].Event.At, ExpectCloseBy: o.ExpectCloseBy, AsOf: asOf}
+	// An open deal with no merchant email sealed yet is waiting for the
+	// merchant's receipt; one that has it is waiting only to be closed.
+	l.Text = "Open: waiting for the merchant's receipt."
+	if hasMerchantEmail(events) {
+		l.Text = "Open: the merchant's email is sealed; no close is sealed on this deal yet."
+	}
 	switch {
 	case o.ExpectCloseBy == "":
-		l.Text = "Open: no close is sealed on this deal, and no close date was expected."
+		l.Text += " No close date was expected."
 	case now.UTC().Format("2006-01-02") > o.ExpectCloseBy:
 		l.PastExpected = true
-		l.Text = fmt.Sprintf("Open: no close is sealed on this deal. It was expected to close by %s, which has passed (as of %s).", o.ExpectCloseBy, asOf)
+		l.Text += fmt.Sprintf(" It was expected to close by %s, which has passed (as of %s).", o.ExpectCloseBy, asOf)
 	default:
-		l.Text = fmt.Sprintf("Open: no close is sealed on this deal yet. It is expected to close by %s.", o.ExpectCloseBy)
+		l.Text += fmt.Sprintf(" It is expected to close by %s.", o.ExpectCloseBy)
 	}
 	return l
+}
+
+func hasMerchantEmail(events []sealedEvent) bool {
+	for _, se := range events {
+		if e := se.Event.Evidence; e != nil && e.Email != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// lateReceiptLine is what a receipt says about a merchant email sealed after
+// the close, set beside what the user approved: it matches, or it differs
+// with both amounts. "" when there is no charge in it, or nothing approved
+// to set it beside (only a limit is not an approval of an amount).
+func lateReceiptLine(events []sealedEvent, i int) string {
+	m := events[i].Event.Evidence.Email
+	if m.Parsed.TotalMinor == nil {
+		return ""
+	}
+	state, err := foldDeal(events[:i])
+	if err != nil {
+		return ""
+	}
+	approved, currency, _, _, limit := approvedAmount(events[:i], state)
+	if approved == nil || limit {
+		return ""
+	}
+	line := "The merchant's receipt arrived. It matches what you approved."
+	sameCurrency := m.Parsed.Currency == "" || currency == "" || strings.EqualFold(m.Parsed.Currency, currency)
+	if !sameCurrency || *m.Parsed.TotalMinor != *approved {
+		line = fmt.Sprintf("The merchant's receipt arrived. It differs: you approved %s; their receipt says %s.", formatMoney(*approved, currency), formatMoney(*m.Parsed.TotalMinor, m.Parsed.Currency))
+	}
+	if !(m.DKIM.Result == "pass" && m.DKIM.Merchant) {
+		line += " (This copy is not confirmed by the merchant's signature.)"
+	}
+	return line
 }
 
 // dealLifecycle is what a receipt says about where the deal stands: open
@@ -145,11 +189,18 @@ func buildDealLifecycle(events []sealedEvent, now time.Time) dealLifecycle {
 	}
 	c := events[i]
 	l.State, l.ClosedAt, l.Outcome = "closed", c.Event.At, c.Event.Close.Outcome
-	for _, se := range events[i+1:] {
+	for j := i + 1; j < len(events); j++ {
+		se := events[j]
 		if se.Event.Confirms == "" {
 			continue
 		}
-		l.Later = append(l.Later, dealLateRecord{Step: se.Event.N, CapsuleID: se.CapsuleID, At: se.Event.At, Relation: "confirms", Text: trailLine(se.Event)})
+		text := trailLine(se.Event)
+		if e := se.Event.Evidence; e != nil && e.Email != nil {
+			if line := lateReceiptLine(events, j); line != "" {
+				text = line
+			}
+		}
+		l.Later = append(l.Later, dealLateRecord{Step: se.Event.N, CapsuleID: se.CapsuleID, At: se.Event.At, Relation: "confirms", Text: text})
 	}
 	for _, d := range dealDeadlines(events, now, 2) {
 		if d.Carried {
@@ -157,6 +208,10 @@ func buildDealLifecycle(events []sealedEvent, now time.Time) dealLifecycle {
 		}
 	}
 	l.Text = fmt.Sprintf("Closed at %s (%s).", c.Event.At, c.Event.Close.Outcome)
+	if c.Event.Close.Outcome == "completed" {
+		// What was delivered matched what was agreed, with nothing open.
+		l.Text = fmt.Sprintf("Closed at %s: matched, nothing left to match.", c.Event.At)
+	}
 	switch n := len(l.Later); n {
 	case 0:
 		l.Text += " No record has been linked to the close yet."

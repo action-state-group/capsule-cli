@@ -56,7 +56,7 @@ func TestDealPageComparesBuildsWithoutFetching(t *testing.T) {
 	page := filepath.Join(t.TempDir(), "r.html")
 	dealRun(t, "report", "--deal", dealID, "--html", page)
 	html := string(mustRead(t, page))
-	ext := embeddedBundle(t, html)["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ext := dealReportOf(embeddedBundle(t, html))
 	assert.Equal(t, "v0.1.0-rc4", ext["page_version"])
 	assert.Equal(t, []any{"capsulectl v0.1.0-rc3 (d3c6a9b)"}, ext["produced_by"])
 	assert.Contains(t, html, "Produced by an older version")
@@ -78,7 +78,7 @@ func TestDealSharedRecordsKeepTheProducer(t *testing.T) {
 	found := 0
 	for _, d := range b["disclosures"].(map[string]any) {
 		rec, _ := d.(map[string]any)["agent_input"].(map[string]any)
-		if rec == nil {
+		if rec == nil || rec["type"] == "deal_report" {
 			continue
 		}
 		if p, ok := rec["x-deal-v0"].(map[string]any)["producer"]; ok {

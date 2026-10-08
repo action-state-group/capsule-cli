@@ -279,6 +279,9 @@ func actionBody(a dealAct, currency string, commit func(string) (string, error))
 	if a.Direction != "" {
 		m["direction"] = a.Direction
 	}
+	if a.FeeMinor != nil {
+		m["fee_minor"] = *a.FeeMinor
+	}
 	for name, field := range map[string]string{"reference": "reference_commitment", "description": "description_commitment"} {
 		if (name == "reference" && a.Reference == "") || (name == "description" && a.Description == "") {
 			continue
@@ -304,6 +307,56 @@ func limitSetBody(l dealLimitSet) map[string]interface{} {
 		m["allowed"] = l.Allowed
 	}
 	return m
+}
+
+// rulesBody is what a verdict record carries about the profile's rules.
+func rulesBody(r dealRules) (map[string]interface{}, error) {
+	// No words the checker wrote are sealed in the clear: why it was not
+	// evaluated is a token, and a finding is its id, verdict, limit and
+	// value. The card the user saw, with every reason, is committed to.
+	m := map[string]interface{}{"status": r.Status}
+	for k, v := range map[string]string{"cause": r.Cause, "ruleset_id": r.RulesetID, "definition_digest": r.DefinitionDigest,
+		"checker_sha256": r.CheckerSHA256, "verdict": r.Verdict} {
+		if v != "" {
+			m[k] = v
+		}
+	}
+	if r.Status == "evaluated" {
+		findings := make([]interface{}, len(r.Findings))
+		for i, f := range r.Findings {
+			fm := map[string]interface{}{"id": f.ID, "verdict": f.Verdict}
+			if f.Check != "" {
+				fm["check"] = f.Check
+			}
+			for k, raw := range map[string]json.RawMessage{"limit": f.Limit, "value": f.Value} {
+				if len(raw) == 0 {
+					continue
+				}
+				decoder := json.NewDecoder(bytes.NewReader(raw))
+				decoder.UseNumber()
+				var v interface{}
+				if err := decoder.Decode(&v); err != nil {
+					return nil, err
+				}
+				fm[k] = v
+			}
+			findings[i] = fm
+		}
+		m["findings"] = findings
+		if h := r.History; h != nil {
+			m["history"] = map[string]interface{}{"days": h.Days, "acts": h.Acts, "complete": h.Complete}
+		}
+		// The tier as the checker reported it; "not_stated" when it did not
+		// say, which reads as judged.
+		m["tier"] = r.Tier
+		if r.Tier == "" {
+			m["tier"] = "not_stated"
+		}
+		if r.Grade != "" {
+			m["grade"] = r.Grade
+		}
+	}
+	return m, nil
 }
 
 // materialityBody is a materiality predicate as a record carries it: its
@@ -458,9 +511,31 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 	if ev.Producer != nil {
 		block["producer"] = map[string]interface{}{"name": ev.Producer.Name, "version": ev.Producer.Version, "commit": ev.Producer.Commit}
 	}
-	var currency string
+	// The construction of the record's *_commitment values; absent, like
+	// producer, on a step sealed before it was declared.
+	if ev.CommitAlg != "" {
+		block["commit_alg"] = ev.CommitAlg
+	}
+	var currency, dealType string
 	if len(events) > 0 {
 		currency = events[0].Event.Open.Terms.Currency
+		dealType = events[0].Event.Open.Type
+	}
+	// classify seals the action's taxonomy class beside it, and the amount a
+	// spend cap evaluates (dealSpendMinor), for a step that carries a
+	// taxonomy version (dealActionClass).
+	classify := func(m map[string]interface{}, action, direction string, amount *int64) {
+		if ev.TaxonomyVersion == "" {
+			return
+		}
+		m["action_class"] = dealActionClass(dealType, action, direction)
+		m["taxonomy_version"] = ev.TaxonomyVersion
+		if spend, ok := dealSpendMinor(action, direction, amount); ok {
+			m["spend_minor"] = spend
+		}
+		if action == "cancel" {
+			sealCancelAmount(m, direction)
+		}
 	}
 	setIDs := func(ids map[string]interface{}) {
 		if len(ids) > 0 {
@@ -637,6 +712,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			setIDs(counterpartyIDs(key, *sn.Who))
 		}
 		body["action"] = sn.Action
+		var snapCurrency string
 		if sn.AmountMinor != nil {
 			body["amount_minor"] = *sn.AmountMinor
 			cur := currency
@@ -645,6 +721,22 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			}
 			if cur != "" {
 				body["currency"] = cur
+			}
+			snapCurrency = cur
+		}
+		// The checked action's direction, as its act would be sealed with: a
+		// cancel that returns a sealed payment is a refund.
+		direction, _ := actDirection(events, dealAct{Action: sn.Action, AmountMinor: sn.AmountMinor, Currency: snapCurrency}, currency)
+		if sn.FeeMinor != nil {
+			body["fee_minor"] = *sn.FeeMinor
+		}
+		classify(body, sn.Action, direction, sn.AmountMinor)
+		// The most the payment may take, beside the expected charge: what a
+		// limit binds, and (beside spend_minor) what a per-action cap reads.
+		if sn.AuthorizedMaxMinor != nil {
+			body["authorized_max_minor"] = *sn.AuthorizedMaxMinor
+			if _, classed := body["spend_minor"]; classed {
+				body["spend_authorized_minor"] = *sn.AuthorizedMaxMinor
 			}
 		}
 		if sn.SeenItem != nil {
@@ -685,6 +777,15 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		// picks: a verifier knows what applied ("none": every pick paused).
 		if m := ck.Materiality; m.Digest != "" {
 			if body["materiality"], err = materialityBody(m, ev.Nonces, commit); err != nil {
+				return nil, err
+			}
+		}
+		// What the profile's rules said, as data: the ruleset the pinned
+		// checker reported (by id and definition digest), its verdict and
+		// findings; or that they were not evaluated, and why; or that no
+		// checker is configured.
+		if ck.Rules != nil {
+			if body["rules"], err = rulesBody(*ck.Rules); err != nil {
 				return nil, err
 			}
 		}
@@ -756,7 +857,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			return nil, err
 		}
 		if ev.Act.Unchecked {
-			// Not authorized: sealed as an outcome, never as an action.
+			// Not authorized: sealed as an outcome, never as an action. A
+			// cancel's amount still never reads as money paid out.
+			if ev.TaxonomyVersion != "" && ev.Act.Action == "cancel" {
+				sealCancelAmount(act, ev.Act.Direction)
+			}
 			rtype = "outcome"
 			body = map[string]interface{}{
 				"status": "unchecked_action", "outcome": "mismatch", "unchecked": act,
@@ -772,6 +877,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			if ev.Act.Payee != "" {
 				setIDs(counterpartyIDs(key, dealWho{Payee: ev.Act.Payee}))
 			}
+			classify(act, ev.Act.Action, ev.Act.Direction, ev.Act.AmountMinor)
 			body = act
 		}
 	case "outcome":
@@ -806,6 +912,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			fields[i] = map[string]interface{}{"class": f.Class, "value_commitment": c}
 		}
 		body = map[string]interface{}{"to": d.To, "fields": fields, "authority": "approval"}
+		classify(body, d.action(), "", nil)
 		if d.AuthorizedBy != "" {
 			block["refs"] = []interface{}{relRef("authorized_by", digestOf(d.AuthorizedBy))}
 		} else {

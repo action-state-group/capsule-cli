@@ -1,6 +1,6 @@
 {
   "action": "pay",
-  "amount_minor": 300,
+  "amount_minor": 300, "authorized_max_minor": 300,
   "terms": {
     "item": "Otter Nonsense - Funny Otter Sticker",
     "price_minor": 300,

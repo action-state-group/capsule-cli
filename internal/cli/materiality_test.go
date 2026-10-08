@@ -35,7 +35,7 @@ func flightCheck(t *testing.T) map[string]any {
 		"who":{"name":"Example Air","domain":"air.example"},
 		"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"currency":"USD","conditions":{"fare":"Basic"}},
 		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
-	return dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"conditions":{"fare":"Basic"}},"recourse":{"rail":"card","refundable":true}}`))
+	return dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"authorized_max_minor":55880,"terms":{"item":"WN 1234","when":"Oct 21 to Oct 24","place":"HOU/SJC","price_minor":55880,"conditions":{"fare":"Basic"}},"recourse":{"rail":"card","refundable":true}}`))
 }
 
 func pausedOn(check map[string]any) []string {
@@ -88,7 +88,7 @@ func TestADigitInADateStillPausesWithNoPredicate(t *testing.T) {
 		"who":{"name":"Example Tickets","domain":"tickets.example"},
 		"terms":{"item":"show ticket","when":"Oct 2","price_minor":9000,"currency":"USD"},
 		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
-	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":9000,"terms":{"item":"show ticket","quantity":2,"when":"Oct 2","price_minor":9000},"recourse":{"rail":"card","refundable":true}}`))
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":9000,"authorized_max_minor":9000,"terms":{"item":"show ticket","quantity":2,"when":"Oct 2","price_minor":9000},"recourse":{"rail":"card","refundable":true}}`))
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Contains(t, pausedOn(check), "quantity")
 	assert.Contains(t, check["card"], "I picked quantity 2")
@@ -357,7 +357,7 @@ func TestTheMaterialityLabelIsTheUsersOwnCopyOnly(t *testing.T) {
 	id := openCeilingDeal(t, false)
 
 	shared, sharedRaw := sharedCopy(t, id, dealAudienceCounterparty, "x")
-	sharedExt := shared["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	sharedExt := dealReportOf(shared)
 	for _, s := range sharedExt["steps"].([]any) {
 		step := s.(map[string]any)
 		if step["kind"] == "open" || step["kind"] == "check" {
@@ -375,7 +375,7 @@ func TestTheMaterialityLabelIsTheUsersOwnCopyOnly(t *testing.T) {
 	require.NoError(t, err)
 	var own map[string]any
 	require.NoError(t, json.Unmarshal(ownRaw, &own))
-	ownExt := own["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ownExt := dealReportOf(own)
 	openings := ownExt["materiality_openings"].([]any)
 	seqOf := map[string]string{}
 	for _, s := range ownExt["steps"].([]any) {
@@ -440,10 +440,17 @@ func TestARepinMidDealIsNamedOnlyInTheUsersOwnCopy(t *testing.T) {
 
 	for _, audience := range []string{dealAudienceAdjudicator, dealAudienceCounterparty} {
 		b, sharedRaw := sharedCopy(t, id, audience, "x")
-		for _, leak := range []string{example.Name, "nothing at all", "2.7"} {
+		for _, leak := range []string{example.Name, "nothing at all"} {
 			assert.NotContains(t, sharedRaw, leak, "%s copy", audience)
 		}
-		ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+		// The version is matched as a value and as a word of a value, never as
+		// a substring of the file: "2.7" is inside a timestamp like 22.769Z.
+		for _, v := range stringValues(b) {
+			for _, word := range strings.Fields(v) {
+				assert.NotEqual(t, "2.7", strings.Trim(word, `"'(),.:;`), "%s copy: %q", audience, v)
+			}
+		}
+		ext := dealReportOf(b)
 		var kinds []string
 		for _, a := range ext["anomalies"].([]any) {
 			kinds = append(kinds, a.(map[string]any)["kind"].(string))
@@ -457,4 +464,26 @@ func TestARepinMidDealIsNamedOnlyInTheUsersOwnCopy(t *testing.T) {
 	own, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Contains(t, string(own), "nothing at all 2.7", "the user's own copy names them")
+}
+
+// stringValues is every string value in v (a decoded JSON value), at any
+// depth, map keys excluded.
+func stringValues(v any) []string {
+	switch x := v.(type) {
+	case string:
+		return []string{x}
+	case map[string]any:
+		var out []string
+		for _, e := range x {
+			out = append(out, stringValues(e)...)
+		}
+		return out
+	case []any:
+		var out []string
+		for _, e := range x {
+			out = append(out, stringValues(e)...)
+		}
+		return out
+	}
+	return nil
 }

@@ -192,6 +192,13 @@ func fingerprintID(dealKey []byte, kind, raw string) (string, error) {
 	return hex.EncodeToString(hmacSHA256(dealKey, "x-deal-v0/fp\x00", kind, "\x00", n)), nil
 }
 
+// dealCommitAlg names commitText's construction, sealed as commit_alg on
+// each record: SHA-256 over the RFC 8785 (JCS) bytes of {"nonce", "text"},
+// with nonce a fresh random 256-bit value (64 lowercase hex) for each
+// commitment. No key: whoever holds a commitment's opening (its nonce and
+// text) recomputes it, and nobody else can test a guess against it.
+const dealCommitAlg = "sha256-jcs-nonce256"
+
 // commitText is the salted commitment SHA-256(JCS({"nonce","text"})).
 func commitText(nonceHex, text string) (string, error) {
 	return canonical.JSONDigest(map[string]interface{}{"nonce": nonceHex, "text": text})

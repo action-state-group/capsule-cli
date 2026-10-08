@@ -48,7 +48,7 @@ func TestDealReportThreeParts(t *testing.T) {
 	report := dealRun(t, "report", "--deal", dealID)
 	assert.Equal(t, "rent me 2 jet skis Saturday", report["asked"])
 	assert.Equal(t, []string{
-		"check: Checked before paying: flagged (you asked for: item jet ski rental · quantity 2 · dates Saturday); you chose hold",
+		"check: Checked before paying: flagged (you asked for: item jet ski rental · quantity 2 · dates Saturday); you chose Hold",
 		"act: Did: pay $200.00 to M. Torres by Zelle ⚠️",
 	}, reportTexts(t, report, "did"))
 	assert.Equal(t, []string{
@@ -114,14 +114,18 @@ func TestDealReportIsOneLocalVerifyingPage(t *testing.T) {
 	assert.Equal(t, "pass", v.GraphClosure.Status)
 	assert.Equal(t, "pass", v.IntervalCoverage.Status, v.IntervalCoverage.Findings)
 	assert.Equal(t, "pass", v.PerRecordMembership.Status, v.PerRecordMembership.Findings)
-	assert.Len(t, b["records"], 8, "exactly this deal's steps, nothing from any other deal")
+	assert.Len(t, b["records"], 9, "exactly this deal's 8 steps and this copy's sealed report, nothing from any other deal")
 	for _, d := range v.Disclosures {
 		assert.Equal(t, "disclosure_match", string(d.Status), "every step's record is disclosed: it carries no raw values")
 	}
-	for _, r := range b["records"].([]interface{}) {
-		_ = r
+	// The step records; the copy's sealed report holds the page's own text.
+	stepRecords := map[string]interface{}{}
+	for id, d := range b["disclosures"].(map[string]interface{}) {
+		if input, _ := d.(map[string]interface{})["agent_input"].(map[string]interface{}); input["type"] != "deal_report" {
+			stepRecords[id] = d
+		}
 	}
-	disclosed, err := json.Marshal(b["disclosures"])
+	disclosed, err := json.Marshal(stepRecords)
 	require.NoError(t, err)
 	for _, private := range []string{"M. Torres", "Coastal Jet", "rent me 2 jet skis", "office line"} {
 		assert.NotContains(t, string(disclosed), private, "sealed records carry fingerprints and commitments only")
@@ -170,7 +174,7 @@ func TestDealRecordsFollowTheProfile(t *testing.T) {
 	dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"share_contact","description":"sent the number"}`))
 	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","channel":"sms","text":"Card machine is down, pay M. Torres by Zelle.","who":{"phone":"+1 555 010 2044"}}`))
 	dealRun(t, "note", "--deal", dealID, "--kind", "change", "--input", writeJSON(t, `{"source":"hotel message","who":{"payee":"M. Torres","phone":"+1 555 010 2044"},"recourse":{"rail":"zelle","refundable":false}}`))
-	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":38000,"recourse":{"rail":"zelle","refundable":false}}`))
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":38000,"authorized_max_minor":38000,"recourse":{"rail":"zelle","refundable":false}}`))
 	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "hold", "--said", "hold on")
 	// A second answer to the same check is sealed as said, but authorizes nothing.
 	late := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "pay anyway")
@@ -229,7 +233,7 @@ func TestDealReportAskedIsCheckable(t *testing.T) {
 	raw, err := os.ReadFile(page)
 	require.NoError(t, err)
 	b := embeddedBundle(t, string(raw))
-	ext := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
+	ext := dealReportOf(b)
 	opening, ok := ext["asked_opening"].(map[string]interface{})
 	require.True(t, ok, "the report carries the opening of the user's words")
 	commitment, err := commitText(opening["nonce"].(string), opening["text"].(string))

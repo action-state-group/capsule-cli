@@ -2127,7 +2127,7 @@ var EvidenceGraph = (() => {
     }
   });
 
-  // node_modules/@action-state-group/cll/dist/chunk-X37KTVJ5.js
+  // node_modules/@action-state-group/cll/dist/chunk-JR35ZH2C.js
   function shape(leaves) {
     const meta = [], peaks = [], positions = [];
     for (let i = 0; i < leaves; i += 1) {
@@ -2154,6 +2154,61 @@ var EvidenceGraph = (() => {
       p = q;
     }
     return r;
+  }
+  function heightAt(pos) {
+    let pos1 = pos + 1, h = 0;
+    while (2 ** (h + 1) - 1 < pos1) h += 1;
+    while (h > 0) {
+      if (pos1 === 2 ** (h + 1) - 1) return h;
+      const leftSize = 2 ** h - 1;
+      if (pos1 > leftSize) pos1 -= leftSize;
+      h -= 1;
+    }
+    return 0;
+  }
+  function nodeCount(leaves) {
+    let bits = 0;
+    for (let n = leaves; n > 0; n = Math.floor(n / 2)) bits += n & 1;
+    return 2 * leaves - bits;
+  }
+  function peakPositions(size) {
+    const result = [];
+    let remaining = size, offset = 0, prevHeight = Number.POSITIVE_INFINITY;
+    while (remaining > 0) {
+      let h = 0;
+      while (2 ** (h + 2) - 1 <= remaining) h += 1;
+      if (h >= prevHeight) break;
+      const mountain = 2 ** (h + 1) - 1;
+      offset += mountain;
+      result.push(offset - 1);
+      remaining -= mountain;
+      prevHeight = h;
+    }
+    return result;
+  }
+  function findContainingPeak(pos, peaks) {
+    for (let i = 0; i < peaks.length; i += 1) {
+      const peakPos = peaks[i], mountain = 2 ** (heightAt(peakPos) + 1) - 1;
+      if (peakPos - mountain + 1 <= pos && pos <= peakPos) return i;
+    }
+    return -1;
+  }
+  function locatePath(rootPos, height, target) {
+    const topDown = [];
+    let curRoot = rootPos, curHeight = height;
+    while (curHeight > 0 && curRoot !== target) {
+      const leftChild = curRoot - (2 ** curHeight - 1) - 1, rightChild = curRoot - 1;
+      if (target <= leftChild) {
+        topDown.push({ targetIsRight: false, parent: curRoot });
+        curRoot = leftChild;
+      } else {
+        topDown.push({ targetIsRight: true, parent: curRoot });
+        curRoot = rightChild;
+      }
+      curHeight -= 1;
+    }
+    topDown.reverse();
+    return topDown;
   }
   function leafCount(size) {
     if (size < 0n || size > BigInt(Number.MAX_SAFE_INTEGER)) return void 0;
@@ -2214,23 +2269,23 @@ var EvidenceGraph = (() => {
   }
   async function verifyInclusionValue(hash2, root, size, leafIndex, value, proof) {
     const leaves = leafCount(size);
-    if (!ok(root) || !ok(value) || leaves === void 0 || leafIndex < 0n || leafIndex >= leaves || proof.some((x) => !ok(x)))
+    if (!ok(root) || !ok(value) || leaves === void 0 || size >= MAX_MMR_SIZE || leafIndex < 0n || leafIndex >= leaves || proof.some((x) => !ok(x)))
       return false;
-    const s = shape(Number(leaves)), leaf = s.leaves[Number(leafIndex)];
-    let p = leaf, v = await hash2(Uint8Array.of(0), value), i = 0;
-    while (s.meta[p].parent !== void 0) {
-      const q = s.meta[p].parent, m = s.meta[q], x = proof[i++];
+    const peaks = peakPositions(Number(size)), leafPos = nodeCount(Number(leafIndex)), peakIndex = findContainingPeak(leafPos, peaks);
+    if (peakIndex < 0) return false;
+    const peakPos = peaks[peakIndex], steps = locatePath(peakPos, heightAt(peakPos), leafPos);
+    let v = await hash2(Uint8Array.of(0), value), i = 0;
+    for (const step of steps) {
+      const x = proof[i++];
       if (!x) return false;
-      v = m.left === p ? await parent(hash2, v, x, q) : await parent(hash2, x, v, q);
-      p = q;
+      v = step.targetIsRight ? await parent(hash2, x, v, step.parent) : await parent(hash2, v, x, step.parent);
     }
-    const peak = s.peaks.indexOf(p);
-    if (peak < s.peaks.length - 1) {
+    if (peakIndex < peaks.length - 1) {
       const right = proof[i++];
       if (!right) return false;
       v = await hash2(right, v);
     }
-    for (let left = peak - 1; left >= 0; left -= 1) {
+    for (let left = peakIndex - 1; left >= 0; left -= 1) {
       const item = proof[i++];
       if (!item) return false;
       v = await hash2(v, item);
@@ -2243,22 +2298,25 @@ var EvidenceGraph = (() => {
   }
   async function verifyConsistency(hash2, oldRoot, newRoot, proof) {
     const a = leafCount(proof.oldSize), b = leafCount(proof.newSize);
-    if (!a || b === void 0 || proof.oldSize > proof.newSize || proof.witness.length !== proof.oldPeaks.length || proof.oldPeaks.some((x) => !ok(x)) || proof.newPeaks.some((x) => !ok(x)))
+    if (!a || b === void 0 || proof.oldSize > proof.newSize || proof.newSize >= MAX_MMR_SIZE || proof.witness.length !== proof.oldPeaks.length || proof.oldPeaks.some((x) => !ok(x)) || proof.newPeaks.some((x) => !ok(x)))
       return false;
     if (!same(await rootFromPeaks(hash2, proof.oldPeaks), oldRoot) || !same(await rootFromPeaks(hash2, proof.newPeaks), newRoot))
       return false;
-    const old = shape(Number(a)), next = shape(Number(b));
-    for (let j = 0; j < old.peaks.length; j += 1) {
-      let p = old.peaks[j], v = proof.oldPeaks[j], k = 0;
-      while (next.meta[p].parent !== void 0) {
-        const q = next.meta[p].parent, m = next.meta[q], x = proof.witness[j][k++];
+    const oldPositions = peakPositions(Number(proof.oldSize)), newPositions = peakPositions(Number(proof.newSize));
+    if (proof.oldPeaks.length !== oldPositions.length || proof.newPeaks.length !== newPositions.length)
+      return false;
+    for (let j = 0; j < oldPositions.length; j += 1) {
+      const containing = findContainingPeak(oldPositions[j], newPositions);
+      if (containing < 0) return false;
+      const newPeak = newPositions[containing], steps = locatePath(newPeak, heightAt(newPeak), oldPositions[j]);
+      if (steps.length !== proof.witness[j].length) return false;
+      let v = proof.oldPeaks[j], k = 0;
+      for (const step of steps) {
+        const x = proof.witness[j][k++];
         if (!x || !ok(x)) return false;
-        v = m.left === p ? await parent(hash2, v, x, q) : await parent(hash2, x, v, q);
-        p = q;
+        v = step.targetIsRight ? await parent(hash2, x, v, step.parent) : await parent(hash2, v, x, step.parent);
       }
-      const peak = next.peaks.indexOf(p);
-      if (k !== proof.witness[j].length || !same(v, proof.newPeaks[peak]))
-        return false;
+      if (!same(v, proof.newPeaks[containing])) return false;
     }
     return true;
   }
@@ -2300,7 +2358,7 @@ var EvidenceGraph = (() => {
         return false;
       if (proof.size !== Number(size) || proof.from_index !== Number(fromIndex) || proof.to_index !== Number(toIndex))
         return false;
-      if (size < 0n || size >= 2n ** 50n || fromIndex < 0n || toIndex < fromIndex)
+      if (size < 0n || size >= MAX_MMR_SIZE || fromIndex < 0n || toIndex < fromIndex)
         return false;
       if (!Array.isArray(proof.witness) || !Array.isArray(bodyDigests))
         return false;
@@ -2314,7 +2372,7 @@ var EvidenceGraph = (() => {
         if (!b) return false;
         witnessBytes.push(b);
       }
-      const s = shape(Number(leaves)), lo = Number(fromIndex), hi = Number(toIndex), cursor = { index: 0 };
+      const peaks = peakPositions(Number(size)), lo = Number(fromIndex), hi = Number(toIndex), cursor = { index: 0 };
       const reconstruct = async (pos, height, leafStart2) => {
         const span2 = 2 ** height, leafEnd = leafStart2 + span2 - 1;
         if (leafEnd < lo || leafStart2 > hi) {
@@ -2330,8 +2388,8 @@ var EvidenceGraph = (() => {
       };
       const reconstructedPeaks = [];
       let leafStart = 0;
-      for (const p of s.peaks) {
-        const h = s.meta[p].height;
+      for (const p of peaks) {
+        const h = heightAt(p);
         reconstructedPeaks.push(await reconstruct(p, h, leafStart));
         leafStart += 2 ** h;
       }
@@ -2341,9 +2399,9 @@ var EvidenceGraph = (() => {
       return false;
     }
   }
-  var ok, same, be64, parent, toHex, hex, MmrTree;
-  var init_chunk_X37KTVJ5 = __esm({
-    "node_modules/@action-state-group/cll/dist/chunk-X37KTVJ5.js"() {
+  var ok, same, be64, parent, toHex, hex, MAX_MMR_SIZE, MmrTree;
+  var init_chunk_JR35ZH2C = __esm({
+    "node_modules/@action-state-group/cll/dist/chunk-JR35ZH2C.js"() {
       init_cborg();
       ok = (x) => x.length === 32;
       same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -2355,6 +2413,7 @@ var EvidenceGraph = (() => {
       parent = (hash2, l, r, p) => hash2(be64(BigInt(p + 1)), l, r);
       toHex = (x) => Array.from(x, (b) => b.toString(16).padStart(2, "0")).join("");
       hex = (x) => /^[0-9a-f]{64}$/u.test(x) ? Uint8Array.from(x.match(/../gu), (b) => Number.parseInt(b, 16)) : void 0;
+      MAX_MMR_SIZE = 2n ** 50n;
       MmrTree = class {
         constructor(hash2, nodes = []) {
           this.hash = hash2;
@@ -2501,7 +2560,7 @@ var EvidenceGraph = (() => {
   var join, hash, MmrTree2, rootFromPeaks2, verifyInclusionValue2, verifyHexInclusion2, verifyConsistency2, verifyRange2;
   var init_browser = __esm({
     "node_modules/@action-state-group/cll/dist/browser.js"() {
-      init_chunk_X37KTVJ5();
+      init_chunk_JR35ZH2C();
       join = (...parts) => {
         const value = new Uint8Array(
           parts.reduce((length, part) => length + part.length, 0)

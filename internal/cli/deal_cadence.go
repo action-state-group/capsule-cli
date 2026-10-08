@@ -74,7 +74,7 @@ func cadenceChainOf(b map[string]interface{}) map[string]interface{} {
 }
 
 // dealWitnessSees is said wherever the witness is configured.
-const dealWitnessSees = "The witness sees one checkpoint per tick of this profile's cadence log: hashes, a size that grows by the same amount every tick, and a time on the cadence. It never sees content, how many deals there are, or when they happen."
+const dealWitnessSees = "The witness sees one checkpoint per tick of this profile's checkpoint cadence: hashes, a size that grows by the same amount every tick, and a time on the cadence. It never sees content, how many deals there are, or when they happen."
 
 var dealCadenceSchema = `CREATE TABLE IF NOT EXISTS deal_cadence (
 	tick INTEGER PRIMARY KEY,
@@ -92,7 +92,9 @@ type dealCadenceConfig struct {
 }
 
 func (p Profile) dealCadence() (dealCadenceConfig, error) {
-	cfg := dealCadenceConfig{interval: time.Hour, jitter: 10 * time.Minute, padBucket: 1}
+	// The checkpoint cadence by default: a tick every 5m, give or take 1m
+	// (288 a day). The jitter must stay under half the interval.
+	cfg := dealCadenceConfig{interval: 5 * time.Minute, jitter: time.Minute, padBucket: 1}
 	var err error
 	if p.Cadence.Interval != "" {
 		if cfg.interval, err = time.ParseDuration(p.Cadence.Interval); err != nil {
@@ -110,8 +112,16 @@ func (p Profile) dealCadence() (dealCadenceConfig, error) {
 	switch {
 	case cfg.interval < time.Minute:
 		return cfg, inputError("cadence.interval must be at least 1m")
-	case cfg.jitter < 0 || 2*cfg.jitter >= cfg.interval:
-		return cfg, inputError("cadence.jitter must be at least 0 and under half of cadence.interval")
+	case cfg.jitter < 0:
+		return cfg, inputError("cadence.jitter must be at least 0")
+	case 2*cfg.jitter >= cfg.interval:
+		// A profile that set a jitter for an earlier default and no interval
+		// is told the interval it now gets.
+		interval := "cadence.interval is " + shortDuration(cfg.interval)
+		if p.Cadence.Interval == "" {
+			interval = "cadence.interval is not set, so it is the default " + shortDuration(cfg.interval)
+		}
+		return cfg, inputError("cadence.jitter is " + shortDuration(cfg.jitter) + " but " + interval + ", and the jitter must be under half the interval: set cadence.interval (for example 1h), or a cadence.jitter under " + shortDuration(cfg.interval/2))
 	case cfg.padBucket > 1024:
 		return cfg, inputError("cadence.pad_bucket must be at most 1024")
 	}
@@ -551,12 +561,31 @@ func (s *dealSession) dealWitnessState(ctx context.Context, dealID string, state
 		}
 		return state, state.Receipt != nil && verifyWitness(s.p, state) == nil, nil
 	}
-	// This very checkpoint, in the newest tick whose receipt verifies.
+	// This very checkpoint, in the newest tick whose receipt verifies. A tick
+	// that holds an earlier checkpoint with the same steps (only the deal's
+	// sealed reports came after it) is where those steps wait for the witness:
+	// its pending state is this deal's.
+	steps, err := s.stepsIn(ctx, dealID, mmrLeafCount(current.MMRSize))
+	if err != nil {
+		return nil, err
+	}
 	var held *dealTick
 	var heldState cll.WitnessState
 	for i := range ticks {
 		leaf, ok := ticks[i].leaves.Deals[dealID]
-		if !ok || leaf.CheckpointSHA256 != want {
+		if !ok {
+			continue
+		}
+		if leaf.CheckpointSHA256 != want {
+			if held == nil && leaf.Size < current.MMRSize {
+				same, err := s.stepsIn(ctx, dealID, mmrLeafCount(leaf.Size))
+				if err != nil {
+					return nil, err
+				}
+				if state, err := t.log.GetWitness(ctx, service, ticks[i].size); same == steps && (err == nil || errors.Is(err, cll.ErrNotFound)) && (state.Receipt == nil || verifyWitness(s.p, state) != nil) {
+					held, heldState = &ticks[i], state
+				}
+			}
 			continue
 		}
 		state, ok, err := witnessed(ticks[i])
@@ -670,9 +699,19 @@ func (s *dealSession) cadenceChain(ctx context.Context, t *target, tick dealTick
 	if err != nil {
 		return nil, nil
 	}
+	// Counted in steps: the deal's log also holds its sealed reports, which
+	// are not steps.
+	witnessedSteps, err := s.stepsIn(ctx, dealID, mmrLeafCount(record.MMRSize))
+	if err != nil {
+		return nil, err
+	}
+	steps, err := s.stepsIn(ctx, dealID, mmrLeafCount(current.MMRSize))
+	if err != nil {
+		return nil, err
+	}
 	out["extent"] = "part"
-	out["steps_witnessed"] = integer(mmrLeafCount(record.MMRSize))
-	out["steps"] = integer(mmrLeafCount(current.MMRSize))
+	out["steps_witnessed"] = integer(witnessedSteps)
+	out["steps"] = integer(steps)
 	out["earlier"] = map[string]interface{}{
 		"checkpoint":        map[string]interface{}{"cose": leaf.Statement},
 		"consistency_proof": consistencyJSON(consistency),
@@ -717,15 +756,16 @@ var dealSleep = func(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// A tick is published when `deal tick` runs at or after its due time, so the
-// jitter in the due time only shows if something runs `deal tick` near it.
-// Run it every minute (a run that is not due exits at once); a scheduler
-// that can run it only every N minutes passes --wait-up-to N, and the run
-// then waits for each due time inside that window and publishes on time.
-// The waiting happens with the store unlocked, and every publish re-checks
-// the due time under the lock.
+// The checkpoint cadence's poll (`cll checkpoint cadence`, also `deal
+// tick`). A tick is published when the poll runs at or after its due time,
+// so the jitter in the due time only shows if the poll runs near it: a
+// scheduler that runs it every N minutes passes --wait-up-to N (5m by the
+// documented schedule), and the run then waits for each due time inside
+// that window and publishes on time. A run with no tick due publishes
+// nothing. The waiting happens with the store unlocked, and every publish
+// re-checks the due time under the lock.
 func dealTickCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "tick", Short: "Publish the profile's cadence checkpoint to its witness when a tick is due (run it every minute; deal events never publish)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "tick", Short: "The checkpoint cadence's poll: when a tick is due, publish the profile's cadence checkpoint to its witness; a run that is not due publishes nothing (schedule it every 5 minutes with --wait-up-to 5m; deal events never publish)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		wait, _ := c.Flags().GetDuration("wait-up-to")
 		if wait < 0 {
 			return inputError("--wait-up-to must not be negative")
@@ -758,7 +798,7 @@ func dealTickCommand() *cobra.Command {
 			}
 		}
 	}}
-	cmd.Flags().Duration("wait-up-to", 0, "When the scheduler cannot run this every minute: wait for each tick due within this long (the scheduler's period) and publish it on time; the run stays alive up to this long")
+	cmd.Flags().Duration("wait-up-to", 0, "The scheduler's period (for example 5m): wait for each tick due within this long and publish it on time, so the cadence keeps its jitter; the run stays alive up to this long")
 	return cmd
 }
 
@@ -774,6 +814,20 @@ func (s *dealSession) cadenceWords() string {
 		words += ", give or take " + shortDuration(cfg.jitter)
 	}
 	return words
+}
+
+// aboutDuration writes a wait for a reader: 1h10m, 1h, 7m or 30s.
+func aboutDuration(d time.Duration) string {
+	switch {
+	case d >= time.Hour && d%time.Hour == 0:
+		return fmt.Sprintf("%dh", d/time.Hour)
+	case d >= time.Hour && d%time.Minute == 0:
+		return fmt.Sprintf("%dh%dm", d/time.Hour, d%time.Hour/time.Minute)
+	case d%time.Minute == 0:
+		return fmt.Sprintf("%dm", d/time.Minute)
+	default:
+		return d.String()
+	}
 }
 
 // shortDuration writes 1h, 90m, 5m or 30s, never "1h0m0s".

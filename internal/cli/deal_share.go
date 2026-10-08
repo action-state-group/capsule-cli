@@ -63,6 +63,11 @@ var dealShareKeys = map[string]bool{
 	"question": true, "rule": true, "field": true, "options": true, "notes": true, "changed": true,
 	"choice": true, "approver": true, "status": true, "outcome": true, "from": true, "kind": true,
 	"response_digest": true,
+	// The action's taxonomy class and the taxonomy's version: vocabulary
+	// tokens, never the user's data.
+	"action_class": true, "taxonomy_version": true,
+	// The commitments' construction: a vocabulary token.
+	"commit_alg": true,
 	// A sealed merchant email's record: digests, the DKIM and DMARC verdicts,
 	// where the keys came from, and dates.
 	"key_source": true, "dkim": true, "dmarc_policy": true, "dmarc_source": true, "method": true,
@@ -883,11 +888,15 @@ func dealShareableIDs(events []sealedEvent, audience string) []string {
 // never the values the local line was written from.
 // sharedDifferenceText is a difference's text as any shared copy carries it.
 // A materiality change names the user's own predicates (their names and
-// versions describe the user's policy), so every shared copy says it in
+// versions describe the user's policy), and a finding of the user's rules
+// names their ruleset, limits and values, so every shared copy says those in
 // fixed words instead.
 func sharedDifferenceText(rule, text string) string {
-	if rule == "materiality_changed" {
-		return dealShareAnomaly[rule]
+	if rule == "materiality_changed" || strings.HasPrefix(rule, "rules_") {
+		if words, ok := dealShareAnomaly[rule]; ok {
+			return words
+		}
+		return dealShareAnomaly["rules_not_checked"]
 	}
 	return text
 }
@@ -913,6 +922,10 @@ var dealShareAnomaly = map[string]string{
 	"quantity_differs":         "The merchant's email lists a different quantity than agreed",
 	"duplicate_charge":         "Possibly charged twice, by the merchant's own emails",
 	"unapproved_disclosure":    "Told the other party about you without your approval",
+	"rules_deny":               "Your own rules did not allow this",
+	"rules_escalate":           "Your own rules asked for your approval",
+	"rules_not_evaluable":      "Your own rules could not be fully checked",
+	"rules_not_checked":        "Your own rules were not checked",
 }
 
 // dealShareStepLine is one step in plain words for a shared copy.
@@ -1049,7 +1062,7 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 						text += " ⚠️"
 					}
 				}
-			case item.Kind == "materiality_changed":
+			case item.Kind == "materiality_changed" || strings.HasPrefix(item.Kind, "rules_"):
 				text = sharedDifferenceText(item.Kind, item.Text)
 			case anomalies && audience == dealAudienceCounterparty:
 				words, ok := dealShareAnomaly[item.Kind]

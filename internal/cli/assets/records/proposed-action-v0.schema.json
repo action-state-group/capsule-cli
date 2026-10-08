@@ -50,15 +50,54 @@
     "producer": {
       "$ref": "record-common-v0.schema.json#/$defs/producer"
     },
+    "commit_alg": {
+      "$ref": "record-common-v0.schema.json#/$defs/commit_alg"
+    },
     "body": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "action"
       ],
+      "dependentRequired": {
+        "action_class": [
+          "taxonomy_version"
+        ],
+        "taxonomy_version": [
+          "action_class"
+        ]
+      },
       "properties": {
         "action": {
           "$ref": "record-common-v0.schema.json#/$defs/action"
+        },
+        "action_class": {
+          "$ref": "record-common-v0.schema.json#/$defs/action_class"
+        },
+        "taxonomy_version": {
+          "$ref": "record-common-v0.schema.json#/$defs/taxonomy_version"
+        },
+        "spend_minor": {
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
+        "authorized_max_minor": {
+          "description": "On a pay: the most the counterparty may take under the payment's authorization, at least amount_minor (the expected charge). A limit binds it.",
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
+        "spend_authorized_minor": {
+          "description": "The authorized maximum beside spend_minor: what a per-action spend cap reads.",
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
+        "fee_minor": {
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
+        "cancelled_amount_minor": {
+          "$ref": "record-common-v0.schema.json#/$defs/uint"
+        },
+        "direction": {
+          "enum": [
+            "in"
+          ]
         },
         "amount_minor": {
           "$ref": "record-common-v0.schema.json#/$defs/uint"

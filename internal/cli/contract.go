@@ -405,8 +405,8 @@ func schemaIsURL(loc string) bool {
 // document (discriminatorValues has no use for a compiled *Schema), and once
 // through the compiler (which needs to resolve internal $refs). Never reads
 // from a path or URL other than the one the caller supplied in --schema (the
-// one built-in schema, for `contract diff`, is loaded by
-// loadEmbeddedContractSchema instead).
+// built-in schemas are loaded elsewhere: `contract diff`'s by
+// loadEmbeddedContractSchema, `result build`'s by resultschema.go).
 func loadSchema(loc string) (*jsonschema.Schema, any, error) {
 	raw, e := fetchSchemaBytes(loc)
 	if e != nil {

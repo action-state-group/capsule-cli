@@ -157,6 +157,15 @@ type dealSnapshot struct {
 	// An approval covers a telling only to the party its check was about.
 	DisclosingTo string   `json:"disclosing_to,omitempty"`
 	Recipient    *dealWho `json:"recipient,omitempty"`
+	// FeeMinor is, on a cancel only, a fee the cancellation costs, recorded
+	// as its own amount: never the amount a spend cap evaluates (spend_minor
+	// is 0 on every cancel).
+	FeeMinor *int64 `json:"fee_minor,omitempty"`
+	// AuthorizedMaxMinor is, on a pay, the most the counterparty may take
+	// under the payment's authorization (a card hold, a pre-authorization
+	// with a buffer for tax settled later): what a limit binds. AmountMinor
+	// stays the expected charge.
+	AuthorizedMaxMinor *int64 `json:"authorized_max_minor,omitempty"`
 }
 
 type dealDifference struct {
@@ -187,6 +196,10 @@ type dealCheckResult struct {
 	Card        string           `json:"card"`
 	Options     []dealOption     `json:"options"`
 	Remote      dealRemoteResult `json:"remote"`
+	// Rules is what the profile's external rules checker said (evaluated,
+	// not evaluated and why, or not configured): absent on checks sealed
+	// before there was one.
+	Rules *dealRules `json:"rules,omitempty"`
 	// The check contract's fields fixed when the evaluation is sealed (typed
 	// records), so a later release re-derives the same record: when it stops
 	// covering the action, and the rule table that evaluated (with the
@@ -386,6 +399,10 @@ type dealAct struct {
 	// neither; a pay among them moved money out.
 	Direction string `json:"direction,omitempty"`
 	Reverses  string `json:"reverses,omitempty"`
+	// FeeMinor is, on a cancel only, a fee the cancellation costs, recorded
+	// as its own amount: never the amount a spend cap evaluates (spend_minor
+	// is 0 on every cancel).
+	FeeMinor *int64 `json:"fee_minor,omitempty"`
 }
 
 // actDirection is which way an act's amount moved, and the act it reverses.
@@ -488,6 +505,15 @@ type dealEvent struct {
 	// Producer is the capsulectl build that sealed the step, kept with the
 	// step so that a later build re-derives the same record.
 	Producer *dealProducer `json:"producer,omitempty"`
+	// TaxonomyVersion is the action-class taxonomy (dealTaxonomyVersion) the
+	// step's record classes its action by, kept with the step like Producer:
+	// a step sealed before records carried an action_class has none and
+	// re-derives without one.
+	TaxonomyVersion string `json:"taxonomy_version,omitempty"`
+	// CommitAlg is the construction (dealCommitAlg) the step's record's
+	// commitments use, kept with the step like Producer: a step sealed
+	// before records declared it has none and re-derives without one.
+	CommitAlg string `json:"commit_alg,omitempty"`
 }
 
 // dealPlatformApproval is an observation of another platform's own approval
@@ -912,6 +938,11 @@ func ageText(days int64) string {
 
 const recentDomainDays = 90
 
+var proceedPlainLabels = map[string]string{
+	"pay": "Pay", "commit": "Confirm", "sign": "Sign", "cancel": "Cancel",
+	"share_contact": "Share", "share_credentials": "Share",
+}
+
 var proceedLabels = map[string]string{
 	"pay": "Pay anyway", "commit": "Confirm anyway", "sign": "Sign anyway", "cancel": "Cancel anyway",
 	"share_contact": "Share anyway", "share_credentials": "Share anyway",
@@ -981,9 +1012,22 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 		if total == nil {
 			total = snap.AmountMinor
 		}
+		// A limit binds the most that may be taken: the authorized maximum,
+		// when it is more than the price or the expected charge.
+		field := "price"
+		if m := snap.AuthorizedMaxMinor; m != nil && (total == nil || *m > *total) {
+			total, field = m, "authorized_max_minor"
+		}
 		if total != nil && *total > *intent.MaxTotalMinor {
 			limit, amount := formatMoney(*intent.MaxTotalMinor, proposed.Currency), formatMoney(*total, proposed.Currency)
 			text := fmt.Sprintf("Over your limit of %s (%s)", limit, amount)
+			if field == "authorized_max_minor" {
+				expected := ""
+				if snap.AmountMinor != nil {
+					expected = "; the expected charge is " + formatMoney(*snap.AmountMinor, proposed.Currency)
+				}
+				text = fmt.Sprintf("Over your limit of %s: up to %s may be taken (the authorized maximum%s)", limit, amount, expected)
+			}
 			// The user's own words named this very purchase, the item and its
 			// price: the rule still asks, and says why this is an exception to
 			// it rather than skipping the ask.
@@ -991,7 +1035,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 				strings.EqualFold(strings.TrimSpace(a.Item), strings.TrimSpace(proposed.Item)) {
 				text = fmt.Sprintf("Your rules normally ask above %s. You asked for this %s purchase specifically. Approve this exception?", limit, amount)
 			}
-			add("asked", "over_limit", "price", text)
+			add("asked", "over_limit", field, text)
 			askedFields["price"] = true
 		}
 	}
@@ -1120,12 +1164,23 @@ func settleCheck(r *dealCheckResult, s dealState) {
 		r.Options = []dealOption{}
 		return
 	}
-	r.Verdict = "pause"
 	r.Options = []dealOption{{ID: "hold", Label: "Hold"}}
+	// A deny from the user's rules is a deny: no way to proceed.
+	if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == "rules_deny" }) {
+		r.Verdict = "deny"
+		return
+	}
+	r.Verdict = "pause"
 	if s.open.Who.Phone != "" && slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Question == "who" }) {
 		r.Options = append(r.Options, dealOption{ID: "verify_contact", Label: "Call the number I found (" + s.open.Who.Phone + ")"})
 	}
-	r.Options = append(r.Options, dealOption{ID: "proceed", Label: proceedLabels[r.Action]})
+	// "Pay anyway" overrides a finding. A check paused only because the
+	// rules could not be checked has none to override: "Pay".
+	label := proceedLabels[r.Action]
+	if !slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule != "rules_not_checked" }) {
+		label = proceedPlainLabels[r.Action]
+	}
+	r.Options = append(r.Options, dealOption{ID: "proceed", Label: label})
 }
 
 // renderCard writes the difference card: the differences, not a summary, then
@@ -1270,7 +1325,14 @@ func actMismatch(events []sealedEvent, snapshotID string, act dealAct) string {
 			continue
 		}
 		snap := se.Event.Snapshot
-		if act.AmountMinor != nil && snap.AmountMinor != nil && *act.AmountMinor != *snap.AmountMinor {
+		// What was taken is held to what may be taken: above the authorized
+		// maximum it differs from the check; below it, though not the
+		// estimate, is what a hold is for.
+		if act.AmountMinor != nil && snap.AuthorizedMaxMinor != nil {
+			if *act.AmountMinor > *snap.AuthorizedMaxMinor {
+				return "the amount is more than the authorized maximum checked"
+			}
+		} else if act.AmountMinor != nil && snap.AmountMinor != nil && *act.AmountMinor != *snap.AmountMinor {
 			return "the amount differs from the one checked"
 		}
 		if act.Payee != "" && snap.Who != nil && snap.Who.Payee != "" && !sameID("payee", act.Payee, snap.Who.Payee) {
@@ -1651,10 +1713,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 				changedWho(*e.Evidence.Who, se.CapsuleID)
 			}
 		case "check":
-			verdict := "no differences"
-			if e.Check.Verdict == "pause" {
-				verdict = "flagged"
-			}
+			verdict := map[string]string{"pass": "no differences", "pause": "flagged", "deny": "not allowed by your rules"}[e.Check.Verdict]
 			checkItem[se.CapsuleID] = len(r.Did)
 			text := fmt.Sprintf("Checked before %s: %s", actionNames[e.Check.Action], verdict)
 			shared := text
@@ -1722,7 +1781,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 				} else if e.Approval.Approver == "agent_card" {
 					r.Did[i].Text += "; the card was answered " + e.Approval.Choice
 				} else {
-					r.Did[i].Text += "; you chose " + e.Approval.Choice
+					r.Did[i].Text += "; you chose " + optionLabel(events, e.Approval.Check, e.Approval.Choice)
 				}
 			}
 		case "platform_approval":
@@ -1812,10 +1871,33 @@ func pauseCauseKind(rule string) (side, kind string) {
 		return "counterparty", "code_request"
 	case "off_platform_early":
 		return "counterparty", "channel_hop"
-	case "pay_before_seeing", "credentials_requested", "agent_picked", "first_disclosure", "materiality_changed":
+	case "pay_before_seeing", "credentials_requested", "agent_picked", "first_disclosure", "materiality_changed",
+		"rules_deny", "rules_escalate", "rules_not_evaluable", "rules_not_checked":
+		// The user's rules judged what the agent proposed.
 		return "agent", rule
 	}
 	return "counterparty", rule
+}
+
+// optionLabel is the label the user saw for a choice on a check's card
+// ("Pay anyway" over a finding, "Pay" over none, "Hold"); the choice's id
+// otherwise. Only hold and proceed: another option's label can carry a
+// contact detail ("Call the number I found (…)").
+func optionLabel(events []sealedEvent, check, choice string) string {
+	if choice != "hold" && choice != "proceed" {
+		return choice
+	}
+	for _, se := range events {
+		if se.CapsuleID != check || se.Event.Check == nil {
+			continue
+		}
+		for _, o := range se.Event.Check.Options {
+			if o.ID == choice && o.Label != "" {
+				return o.Label
+			}
+		}
+	}
+	return choice
 }
 
 // appendNew appends the steps not already in list, keeping order.

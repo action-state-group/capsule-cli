@@ -251,10 +251,11 @@ func TestBundleCommandDeclaresProducerKeyOnSQLite(t *testing.T) {
 // bundle --html writes the bundle as one self-contained page: the bundle
 // embedded and the vendored verifier, which checks it offline.
 func TestBundleHTMLWritesASelfCheckingPage(t *testing.T) {
+	// A sqlite profile: a jsonl profile writes no page (page_gate_test.go).
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, key := profileFixture(t)
-	p.Type = "jsonl"
-	p.Connection.Database = filepath.Join(t.TempDir(), "store")
+	p.Type = "sqlite"
+	p.Connection.Database = filepath.Join(t.TempDir(), "store.db")
 	require.NoError(t, saveProfile(p, false))
 	_, err := invoke(t, "", "store", "init", "--profile", p.Name)
 	require.NoError(t, err)
@@ -265,6 +266,8 @@ func TestBundleHTMLWritesASelfCheckingPage(t *testing.T) {
 	published, err := target.publish(t.Context(), request, key)
 	require.NoError(t, err)
 	require.NoError(t, target.close())
+	_, err = invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
+	require.NoError(t, err)
 
 	page := filepath.Join(t.TempDir(), "bundle.html")
 	out, err := invoke(t, "", "bundle", "--profile", p.Name, "--root", published.CapsuleID, "--html", page)

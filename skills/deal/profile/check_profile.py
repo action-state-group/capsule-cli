@@ -363,7 +363,7 @@ def typed_view(rec):
     if "counterparty" in body:
         blk["counterparty"] = body.pop("counterparty")
     if t == "action-evaluation/v0":
-        body["result"] = {"DO": "pass", "ASK": "pause"}[body["disposition"]]
+        body["result"] = {"DO": "pass", "ASK": "pause", "DENY": "deny"}[body["disposition"]]
         body["differences"] = body["findings"]
         if "rendering_commitment" in body:
             body["card_commitment"] = body["rendering_commitment"]
@@ -838,7 +838,7 @@ def check_chain(records):
                     fail(i, "a standing-intent approval needs a passing verdict; a pause needs the user's answer")
                 if allowed is not None and chk["action"] not in allowed:
                     fail(i, "standing-intent approval for an action the intent does not allow")
-            elif v["result"] == "pause" and body["choice"] not in v["options"]:
+            elif v["result"] in ("pause", "deny") and body["choice"] not in v["options"]:
                 fail(i, "the user's choice is not one of the verdict's options")
             # The card the answer was given on is committed under the verdict's own card nonce,
             # so equal commitments mean the card shown is the card checked.
@@ -875,6 +875,8 @@ def check_chain(records):
             cb = chk["body"]
             if "amount_minor" in body and "amount_minor" in cb and body["amount_minor"] != cb["amount_minor"]:
                 fail(i, "the amount differs from the one checked")
+            if "cancelled_amount_minor" in body and "cancelled_amount_minor" in cb and body["cancelled_amount_minor"] != cb["cancelled_amount_minor"]:
+                fail(i, "the cancelled amount differs from the one checked")
             if "currency" in body and "currency" in cb and body["currency"] != cb["currency"]:
                 fail(i, "the currency differs from the one checked")
             crail = cb.get("recourse", {}).get("rail")
@@ -898,7 +900,10 @@ def check_chain(records):
                 if j in reversed_actions:
                     fail(i, "a payment is reversed at most once")
                 reversed_actions.add(j)
-            elif body.get("direction") == "in":
+            elif body.get("direction") == "in" and "amount_minor" in body:
+                # A cancel that returns no sealed payment carries direction in
+                # with its amount as cancelled_amount_minor: nothing returned,
+                # nothing to name.
                 fail(i, "an action with direction in names the pay it reverses (reverses)")
         elif t == "outcome":
             one("observes", ("action",), required=False)

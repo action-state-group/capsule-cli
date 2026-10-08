@@ -99,7 +99,7 @@ func TestAuthorityBlockListsEveryLayerWithItsTime(t *testing.T) {
 	v := aacbundle.VerifyBundle(b)
 	assert.Equal(t, "pass", v.GraphClosure.Status)
 	assert.Equal(t, "pass", v.PerRecordMembership.Status, v.PerRecordMembership.Findings)
-	ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ext := dealReportOf(b)
 	assert.Equal(t, toPlain(t, report["authority"]), toPlain(t, ext["authority"]))
 	assert.Contains(t, string(raw), `host.append(el("h2", "Authority"))`)
 }
@@ -229,7 +229,7 @@ func TestAuthorityBlockStaysInTheUsersCopy(t *testing.T) {
 	dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, merchantPay))
 
 	b, raw := sharedCopy(t, id, dealAudienceCounterparty, "x")
-	ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
+	ext := dealReportOf(b)
 	assert.NotContains(t, ext, "authority")
 	for _, private := range []string{"book the SJC to HOU flight", "yes, the new site is fine", "Approve $558.80 purchase", "max_total_minor", "$600.00"} {
 		assert.NotContains(t, raw, private)
@@ -265,7 +265,7 @@ func TestOverLimitExceptionWording(t *testing.T) {
 			"terms":{"item":"Otterly Chaos poster","price_minor":6000,"currency":"USD"},
 			"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
 	}
-	check := `{"action":"pay","amount_minor":6000,"terms":{"item":"Otterly Chaos poster","price_minor":6000}}`
+	check := `{"action":"pay","amount_minor":6000,"authorized_max_minor":6000,"terms":{"item":"Otterly Chaos poster","price_minor":6000}}`
 	c := dealRun(t, "check", "--deal", open(`{"item":"Otterly Chaos poster","price_minor":6000}`), "--input", writeJSON(t, check))
 	require.Equal(t, "pause", c["verdict"], "the rule still asks")
 	assert.Contains(t, c["card"], "Your rules normally ask above $25.00. You asked for this $60.00 purchase specifically. Approve this exception?")

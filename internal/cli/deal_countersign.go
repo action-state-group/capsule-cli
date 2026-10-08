@@ -185,8 +185,7 @@ func (s *dealSession) dealBundleOf(path, dealID string, events []sealedEvent) (m
 	if !found {
 		return nil, notThis("its root is not a step of this deal")
 	}
-	ext, _ := b["extensions"].(map[string]interface{})
-	deal, _ := ext["x-deal-v0"].(map[string]interface{})
+	deal := dealReportOf(b)
 	if deal["deal_id"] != dealID {
 		return nil, notThis("its x-deal-v0 extension names another deal")
 	}

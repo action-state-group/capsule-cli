@@ -64,6 +64,24 @@ exactly two members.
 - Records are closed. Unknown members fail the schema. A new member means a new profile
   version (`x-deal-v1`).
 
+**Sealed reports are not steps.** Each copy of a deal report that is written to a file
+(the user's own receipt, or a shared copy) seals its readable text as one more Capsule on the
+deal's log:
+- **The Capsule:** `action_id: "capsulectl-deal-report"`, `action_type: "fyi"`, not chained.
+- **Its payload:** `{"type": "deal_report", "profile": "x-deal-v0", "deal_id", "audience",
+  "nonce", "report"}`.
+  - `report` is that copy's deal section: summary lines, step lines, amounts, what was told,
+    anomalies. A shared copy seals the section already rewritten for its audience.
+  - `nonce` is a fresh 256-bit random value, so the Capsule's `agent_input_digest` confirms
+    no guess at the text.
+- **In the bundle:** the `x-deal-v0` extension only names the Capsule:
+  `{"sealed_report": "<capsule id>"}`. The text is its disclosed payload, and any edit fails
+  the disclosure check.
+- **Later bundles:** they cover the deal's whole log, so they carry every earlier report's
+  Capsule with its payload withheld. A copy discloses its own text and no other copy's.
+- **Not steps:** a sealed report has no `seq` and no record in the step chain. A verifier
+  checking a deal's steps (section 6) sets these Capsules aside.
+
 ## 2. The extension block `x-deal-v0`
 
 | Field | Type | Req | Meaning |
@@ -80,6 +98,7 @@ exactly two members.
 | `counterparty` | object | REQUIRED on `baseline`; per section 3 elsewhere | `{"fp_alg": "hmac-sha256-deal-key", "ids": {<kind>: <fingerprint>}}`. Kinds: `payee`, `name`, `domain`, `phone`, `email`, `relay_address`, `profile_id`. Each value is a 64-hex fingerprint (section 4). |
 | `refs` | array of rel refs | per section 3 | Typed citations of earlier records of the same deal. |
 | `producer` | object | OPTIONAL (absent on records sealed before it was recorded) | `{"name", "version", "commit"}`: the software build that sealed this record, for example `{"name": "capsulectl", "version": "v0.1.0-rc4", "commit": "<40 hex>"}`. A development build says so (`"0.1.0-dev"`, `"unknown"`). Fixed when the record is sealed: a later build re-derives the same record. |
+| `commit_alg` | `"sha256-jcs-nonce256"` | OPTIONAL (absent on records sealed before it was declared) | The construction of every `*_commitment` value in this record (section 4, Commitment). Fixed when the record is sealed, like `producer`. |
 
 A **digest ref** is `{"type": "deal-record", "digest_alg": "SHA-256", "digest": <64 lowercase
 hex>}`: the typed digest reference shape AAC `references[]` uses. The digest alone is the
@@ -102,13 +121,58 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text` (≤ 200 chars, no identifiers), `source` | none beyond the chain. |
 | `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). After the deal's final close, the only record type allowed: later evidence linked to that close. | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. At most one `confirms` → the deal's final `close` (required after it, not allowed before it). Optional `resolves_obligation` (a digest ref) → an earlier record holding a cancel-by date. |
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
-| `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor`, `currency`, `seen_item`, `terms`, `recourse`, `pack_id`, `pack_digest`, and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
-| `verdict` | The answer to one check: pass, or pause with the differences. | `result` (`pass`\|`pause`), `differences[]`, `options[]`; `materiality` (the predicate that decided which of the agent's own picks pause: its `digest`, and `label_commitment`, a commitment to its name and version, opened only in the user's own copy (`materiality_openings`); `digest: "none"` when none was configured and every pick paused; verdicts sealed by v0.1.0-rc8 carry `name` and `version` in the clear instead, and shared copies withhold them) | exactly one `checks` → a `check`; one verdict per check; optional `pack_id`, equal to the check's when either names one. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. |
+| `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor` (the expected charge), on a `pay` `authorized_max_minor` (the most it may take: what a limit binds, at least `amount_minor`), `currency`, `seen_item`, `terms`, `recourse`, `pack_id`, `pack_digest`, `action_class` + `taxonomy_version` and `spend_minor` (see Action classes, below), with `spend_authorized_minor` beside them when `authorized_max_minor` is sealed, on a `cancel` `fee_minor`, `cancelled_amount_minor` and `direction` (`in`), and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
+| `verdict` | The answer to one check: pass, pause with the differences, or deny. | `result` (`pass`\|`pause`\|`deny`), `differences[]`, `options[]`; `rules` (what the profile's external rules checker said, §8 "The external rules checker"; absent on verdicts sealed before it was recorded); `materiality` (the predicate that decided which of the agent's own picks pause: its `digest`, and `label_commitment`, a commitment to its name and version, opened only in the user's own copy (`materiality_openings`); `digest: "none"` when none was configured and every pick paused; verdicts sealed by v0.1.0-rc8 carry `name` and `version` in the clear instead, and shared copies withhold them) | exactly one `checks` → a `check`; one verdict per check; optional `pack_id`, equal to the check's when either names one. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. `deny` ⇒ ≥ 1 difference, `rules`, and no option but `hold`. |
 | `approval` | What authorizes, or declines, the next step; or the user's confirmation of the limits an intent proposed. | `choice` (`hold`\|`verify_contact`\|`proceed`\|`confirm_limits`), `proceed` (`true` on `proceed`, `false` on `hold` and `verify_contact`), `approver` (`user`\|`standing_intent`\|`agent_card`); on `confirm_limits` only, `limits` (`previous` and `new`, each `max_total_minor` and `allowed`) | `confirm_limits`: exactly one `approves` → the proposing `intent`, `approver: user`, and section 6, rule 6. Otherwise exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment` (the user's own words), and on a pause the choice is one of the verdict's options. `agent_card` ⇒ no `said_commitment`: a card the agent composed was answered, and no words of the user's are on record; never on `confirm_limits`. Optional `card_commitment` (on an answer to a verdict, never on `confirm_limits` or `standing_intent`): the card text the answer was given on, committed under the verdict's own card nonce, so it MUST equal the verdict's `card_commitment`: equal means the card shown is the card checked, recomputable without the text. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
-| `action` | A point-of-no-return step actually taken. | `action`; optional `direction` (`out`: paid by the user; `in`: back to the user) | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). An action that returns money (`direction: in`) carries exactly one `reverses` → the `pay` action it undoes (section 6, rule 8). |
+| `action` | A point-of-no-return step actually taken. | `action`; optional `direction` (`out`: paid by the user; `in`: back to the user); optional `action_class` + `taxonomy_version` and `spend_minor` (see Action classes, below); on a `cancel`, optional `fee_minor` and `cancelled_amount_minor` (see Action classes, below) | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). An action that returns money (`direction: in`) carries exactly one `reverses` → the `pay` action it undoes (section 6, rule 8). |
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. |
 | `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. Optional `carried_obligations`: the cancel-by dates still open at the close, each `{obligation: digest ref, cancel_by}`. |
-| `disclosure` | Something the agent told someone about the user: what kind of thing, to whom, when, under what authority. | `to` (`counterparty`\|`other`), `fields[]` (each `class` + `value_commitment`), `authority` (`approval`\|`none`) | `authority: approval` ⇒ exactly one `authorized_by` → an `approval`, under the same rules as an `action` (section 6); `none` ⇒ no `authorized_by`, and `rule` says why. All `fields` share one covering action: contact classes `share_contact`, credential classes `share_credentials`. Optional `channel`; `counterparty` when the recipient is someone new. |
+| `disclosure` | Something the agent told someone about the user: what kind of thing, to whom, when, under what authority. | `to` (`counterparty`\|`other`), `fields[]` (each `class` + `value_commitment`), `authority` (`approval`\|`none`) | `authority: approval` ⇒ exactly one `authorized_by` → an `approval`, under the same rules as an `action` (section 6); `none` ⇒ no `authorized_by`, and `rule` says why. All `fields` share one covering action: contact classes `share_contact`, credential classes `share_credentials`. Optional `action_class` + `taxonomy_version` (see Action classes, below); optional `channel`; `counterparty` when the recipient is someone new. |
+
+### Action classes
+
+A `check`, an `action` and a `disclosure` sealed by this release carry `action_class`: the
+action's class in version `taxonomy_version` (`"2"`) of the action taxonomy published in
+capsule-engine, `capsule_engine/guards/action_taxonomy.json`
+(github.com/action-state-group/capsule-engine at `2521ee6`). The two members come together or
+not at all. Steps sealed before carry neither, and re-derive without them. A reader that keys a
+limit on an action's class (a per-action or rolling spend cap, for example) selects on
+`action_class`, and resolves it against the taxonomy version it names.
+
+| Action | `purchase` | `rental` | `booking` | `service` |
+|---|---|---|---|---|
+| `pay` | `money.purchase` | `money.purchase` | `booking.create` | `money.purchase` |
+| `commit` | `money.purchase` | `agreement.accept` | `booking.create` | `agreement.accept` |
+| `sign` | | `agreement.accept` | | `agreement.accept` |
+| `cancel` that returns a payment (`direction: in`) | `money.refund` | `money.refund` | `money.refund` | `money.refund` |
+| any other `cancel` | `external_commitment.other` | `external_commitment.other` | `booking.cancel` | `external_commitment.other` |
+| `share_contact` | `disclosure.personal` | `disclosure.personal` | `disclosure.personal` | `disclosure.personal` |
+| `share_credentials` | `disclosure.secret` | `disclosure.secret` | `disclosure.secret` | `disclosure.secret` |
+
+- Committing to a purchase is the same class as paying for it, so a limit keyed on the class
+  cannot be stepped around by committing first.
+- A cancel that returns a payment is money arriving, not leaving: `money.refund`. A `check`
+  states no `direction`; its class is the one its `action` would carry, from the same sealed
+  payments.
+- **`spend_authorized_minor`** is sealed on a `check` beside `spend_minor` when the check
+  states `authorized_max_minor`: the most the payment may take, which a per-action cap reads.
+  `spend_minor` stays the expected charge on a check and what was taken on an `action`, which a
+  rolling (weekly) cap sums.
+- **`spend_minor`** is sealed with the class on a `check` and an `action`: the amount a spend
+  cap evaluates, what the action pays out. It is `amount_minor` for an action that moves money
+  out, absent when there is no amount, and **`0` on every `cancel`**: stopping a commitment is
+  never spend, whether the cancel returns a payment, returns part of one, or costs a fee. A
+  cancel's amount never reads as money paid out: a `cancel` with an amount carries
+  `direction: "in"` on its `check` and its `action`. An amount that returns a sealed payment
+  stays `amount_minor` (the refund; the `action` names the payment with `reverses`, rule 8).
+  Any other amount (part of a payment, or one that matches none) is `cancelled_amount_minor`:
+  what the cancel was about, neither money moved nor spend. A fee the cancellation costs is its
+  own `fee_minor` (only a `cancel` carries one). No cap evaluates any of them.
+- A deal type or an action this table does not name is `external_commitment.other`, the
+  taxonomy's explicit class for a consequential commitment it does not otherwise name; never
+  no class, and never the non-consequential `info.query`.
+- `action_class` sits beside the Capsule's AAC fields and changes none of them: a `pay` is
+  still `decide` with `effect.type: send_payment`.
 
 Field details:
 
@@ -226,7 +290,27 @@ producer fingerprints the first-contact name under kind `payee`.
 The nonce and text stay in the local store. To disclose, the user reveals the `{nonce, text}`
 pair for that one commitment. Fields: `verbatim_commitment`, `content_commitment`,
 `detail_commitment`, `description_commitment`, `reference_commitment`, `card_commitment`,
-`said_commitment`, `note_commitment`.
+`said_commitment`, `note_commitment`, `value_commitment`, `label_commitment`, and in typed
+records `rendering_commitment`.
+
+A record declares this construction as `commit_alg: "sha256-jcs-nonce256"` (section 2; in a
+typed record, in its header), next to the fingerprints' `fp_alg`. What it states:
+
+- **Construction:** SHA-256 over the JCS bytes of `{"nonce": N, "text": T}`, as above.
+- **Nonce scope:** one fresh 256-bit random nonce per committed text, drawn when its step is
+  sealed: never per deal or per store. The one reuse is deliberate: what a person was shown
+  is committed under the nonce of the card it answers (section 9, One rendering commitment),
+  so equal values mean the same text. A guess of `T` cannot be tested without `N`.
+- **Key scope:** none. Unlike a fingerprint (`fp_alg: "hmac-sha256-deal-key"`), a commitment
+  uses no store secret or deal key.
+- **Recomputable by:** whoever holds the opening `{N, T}`, and nobody else. A record alone
+  never lets anyone recompute or test a commitment.
+- **Where openings travel:** nowhere by default. The user's own report carries two:
+  `asked_opening` (the baseline's `verbatim_commitment`) and `materiality_openings` (each
+  verdict's `label_commitment`). A shared copy carries none.
+
+A record without `commit_alg` was sealed before it was declared. Its commitments use the same
+construction.
 
 **What a fingerprint allows:**
 - Within one deal, anyone holding the records can see that two identifiers are equal or
@@ -311,7 +395,7 @@ A verifier holding one deal's records in `seq` order checks:
    after it, only `evidence` records that `confirms` that close may follow. A close with `open`
    MAY be followed by later `outcome` and `close` records. Each `carried_obligations` entry names
    an earlier record holding that `cancel_by`.
-8. **Reversals.** An `action` with `direction: "in"` returns money the user paid: it carries
+8. **Reversals.** An `action` with `direction: "in"` and an `amount_minor` returns money the user paid: it carries
    exactly one `reverses` ref to an earlier `action` with `action: "pay"` (direction `out`, or
    none, as records sealed before `direction` was recorded carry), with the same `amount_minor`
    and `currency`. A payment is reversed at most once. Summing amounts by direction gives what a
@@ -355,6 +439,71 @@ The story in the fixtures (all fictional; 555-01xx numbers, `.example` domains):
 15. Outcome: nothing delivered, `mismatch`.
 16. Close `mismatch`.
 
+### The external rules checker
+
+A deal profile may pin an external rules checker: the user's policy (`profile update
+--rules-checker FILE`), never the agent's. `FILE` is `{"command": ["/absolute/path", "arg", …],
+"timeout": "10s", "definition_digest": "<64 hex>"}`. `timeout` (default 10s, at most 60s) and
+`definition_digest` (the ruleset the checker must report) are optional. The executable must sit
+under a trusted plugin root, and the profile pins its SHA-256.
+
+At every check, after the `check` record is sealed:
+- **What the checker gets.** The command runs exactly as pinned, from a private copy of the
+  executable bytes that were hashed, with only `PATH` and `HOME` in its environment. On stdin it
+  gets one `external-check-input/v0` object (`external-check-input-v0.schema.json`, beside this
+  file):
+  - `record`: that `check` capsule, with its disclosed `agent_input` (the deal record, whose
+    body is what is about to happen);
+  - `history`: the profile's earlier sealed acts with an amount, from every deal on this
+    profile's own store, sealed in the last 31 days, newest first, at most 1,000 of them, in the
+    same shape;
+  - `history_scope`: `{days, max_records, complete}`.
+
+  A rolling window is evaluated over the history the deal check supplies. A checker given no
+  history, or too little (`complete` false, or a window longer than `days`), reports that rule
+  `not_evaluable`.
+- **What it prints.** Exit 0 means it printed one `external-check-result/v0` object
+  (`external-check-result-v0.schema.json`, beside this file): `ruleset_id`, `definition_digest`,
+  `verdict` (`allow`\|`deny`\|`escalate`\|`not_evaluable`), an optional `tier`
+  (`recomputed`\|`judged`, as in Result v0; an absent tier reads as judged, never recomputed), an
+  optional `grade` (`self-attested`\|`witnessed`\|`countersigned`, by reference to Result v0's
+  Grade) and
+  `findings[]` (`{id, check,
+  verdict: pass|fail|not_applicable|not_evaluable, reason, limit, value}`, passes included;
+  `limit` and `value` are each a number, or a string of at most 64 characters with no line
+  break).
+  Members outside the schema are refused. Any other exit is a refusal of the input, with the
+  cause on stderr.
+- **What the check does with it.** It folds the answer into its one verdict:
+  - `allow` adds nothing;
+  - `escalate` and `not_evaluable` add a `rules_escalate` or `rules_not_evaluable` difference
+    per failing finding (with its limit and value), and the check pauses;
+  - `deny` adds `rules_deny` differences, and the verdict is `deny` with no way to proceed.
+  - A checker that is configured but changed since it was pinned, refused the input, timed
+    out, printed anything else, or reported another `definition_digest` than the pinned one
+    adds a `rules_not_checked` difference naming why, and the check pauses.
+
+The verdict's `rules` seals the outcome as data:
+- `status: evaluated`, with `ruleset_id`, `definition_digest`, `checker_sha256`, `verdict`,
+  `tier` (as reported, or `not_stated`), `grade` (as reported, or absent; both recorded and
+  shown in the approval text, changing nothing), `findings` (each `{id, check, verdict, limit, value}`), and `history` (`{days, acts, complete}`:
+  what the checker was given beside the record);
+- `status: not_evaluated`, with `cause` (`checker_unavailable`, `checker_changed`, `refused`,
+  `timeout`, `unreadable` or `ruleset_changed`) and `checker_sha256`;
+
+A finding's `limit` and `value` never carry counterparty data: they are the limit and the value from
+the record the rule compared with it (an amount, a count, a window total), never a name, a contact
+detail or an identifier. A checker should report them as numbers. A string there is scanned like
+every other string in a record, and an answer that cannot be sealed (one that would carry a phone
+number, an email address, the counterparty's details or a word a record may not carry, including a
+run of amounts that reads like a phone number) never fails the check. The check pauses with the
+rules not checked, cause `unreadable`, and its reason says it could not be sealed.
+- `status: not_configured`, when no checker is pinned. That check does not pause for it, but its
+  record and its approval text say the rules were not checked.
+
+No words the checker wrote are sealed in the clear: its reasons and its stderr reach the card and
+the approval text, and the card is committed to.
+
 ## 9. Typed action records and the check contract
 
 A deal opened with `--records typed` seals its authority steps as typed action records, one
@@ -364,7 +513,8 @@ sit in ONE chain: one `seq`, one `prev` chain, one root. No typed record type ca
 
 Every typed record has the common header (`records/record-common-v0.schema.json`): `type`,
 `canonicalization` (`"jcs"`), `chain_id` (the deal's id), `seq`, `at`, `prev`, `chain_root`
-(the baseline), optional `refs` (`{rel, type: "record", digest_alg, digest}`) and `body`.
+(the baseline), optional `refs` (`{rel, type: "record", digest_alg, digest}`), optional
+`producer` and `commit_alg` (as in section 2) and `body`.
 Counterparty fingerprints in a typed body name `fp_alg: "hmac-sha256-chain-key"` (the same keyed
 fingerprint as section 4). Digests are over the record's JCS bytes, as for x-deal-v0.
 
@@ -372,7 +522,7 @@ fingerprint as section 4). Digests are over the record's JCS bytes, as for x-dea
 |---|---|---|
 | `task-authority/v0` | The user's task authority: their words by commitment, `max_total_minor`, `allowed`. Sealed after the baseline (`source` ref), and again when the user confirms new limits (`approves` the intent, `previous_ref`, `said_commitment`). | the baseline intent; `approval` with `confirm_limits` |
 | `proposed-action/v0` | The action about to be taken, exactly as checked. | `check` |
-| `action-evaluation/v0` | The deal check's disposition (`DO` or `ASK`) and findings, with the contract fields below. | `verdict` |
+| `action-evaluation/v0` | The deal check's disposition (`DO`, `ASK` or `DENY`) and findings, with the contract fields below. | `verdict` |
 | `action-approval/v0` | An approval artifact of one stated `authority`: `user_approval` (the user's own answer, with their words and the `rendering_commitment` of what they were shown), `card_answer` (a card answered with no words), `platform_approval` (a platform approval observation, below), `policy_change` (the user confirming a policy change: `rendering_commitment`, `effective_policy_digest`, `semantic_diff_digest`), `one_shot_override` (reserved). | `approval` |
 | `action-record/v0` | What the agent did, with `evaluation_ref` and `authority_basis`; a disclosure that needed approval is an `action-record/v0` with `disclosed`. | `action`; `disclosure` with authority `approval` |
 | `action-outcome/v0` | What was observed (`attempted` names an unchecked action). | `outcome` |
@@ -389,7 +539,10 @@ choose another); or, with none configured, mode
 `none_fail_safe` (every pick the agent made alone pauses) with `materiality_digest: null`, which
 `ruleset_digest` then covers; `valid_until` is when the evaluation
 stops covering a step; `authority_basis` is `[{type: "task_authority", ref}]`;
-`rendering_commitment` commits to the card the evaluation rendered.
+`rendering_commitment` commits to the card the evaluation rendered. `rules_checks`, when the
+profile's external rules checker ran, names the ruleset it reported (`ruleset_id`,
+`definition_digest`) and its verdict; `ruleset_digest` stays the built-in rule table's. `DENY`
+(the rules did not allow the action) has ≥ 1 finding, `rules_checks`, and no option but `hold`.
 
 **Typed authorization.** In a chain whose second record is a `task-authority/v0`:
 - every check, verdict, approval, action and outcome step is a typed record, and an approved

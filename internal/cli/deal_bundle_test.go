@@ -13,7 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// dealLogEntries reads a deal's own log: the capsule ids of its steps.
+// dealLogEntries reads a deal's own log: the capsule ids of its steps and of
+// the reports sealed for it, in order.
 func dealLogEntries(t *testing.T, dealID string) []string {
 	t.Helper()
 	p, err := loadProfile("deal")
@@ -61,17 +62,19 @@ func TestDealBundleIsTheDealsOwnLog(t *testing.T) {
 	require.NoError(t, json.Unmarshal(mustRead(t, path), &bundle))
 	cert := bundle["completeness_certificate"].(map[string]any)
 	assert.Equal(t, dealLogID(dealID), cert["log_id"], "the bundle's log is the deal's own")
-	steps := dealLogEntries(t, dealID)
+	onLog := dealLogEntries(t, dealID)
 	records := bundle["records"].([]any)
-	require.Len(t, records, len(steps), "the whole deal")
+	require.Len(t, records, len(onLog), "the whole deal: its steps and this copy's sealed report")
 	for _, r := range records {
-		assert.Contains(t, steps, r.(map[string]any)["capsule_id"], "every record is a step of this deal")
+		assert.Contains(t, onLog, r.(map[string]any)["capsule_id"], "every record is on this deal's log")
 	}
+	reportID := bundle["extensions"].(map[string]any)[dealProfile].(map[string]any)[dealReportPointer]
+	assert.Equal(t, onLog[len(onLog)-1], reportID, "the copy's sealed report is the last entry")
 	// The cadence chain rides as its own extension (it anchors the deal's
 	// checkpoint to the witness); nothing else names the cadence log.
 	ext := bundle["extensions"].(map[string]any)
 	require.Contains(t, ext, dealCadenceExtension)
-	assert.Equal(t, dealAudienceKeep, ext["x-deal-v0"].(map[string]any)["audience"])
+	assert.Equal(t, dealAudienceKeep, dealReportOf(bundle)["audience"])
 	rest := map[string]any{}
 	for k, v := range bundle {
 		rest[k] = v
@@ -126,7 +129,7 @@ func TestDealDiscloseCarriesNoPrivateValues(t *testing.T) {
 	for i, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
 		b, raw := sharedCopy(t, dealID, audience, "the shop's support desk")
 		assertCarriesNone(t, raw)
-		assert.Equal(t, audience, b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)["audience"])
+		assert.Equal(t, audience, dealReportOf(b)["audience"])
 		linked := filepath.Join(t.TempDir(), "copy.json")
 		require.NoError(t, os.WriteFile(linked, []byte(raw), 0o600))
 		verified, err := verifyWithDirectory(t, linked, "")
@@ -138,7 +141,7 @@ func TestDealDiscloseCarriesNoPrivateValues(t *testing.T) {
 		assert.NotEmpty(t, records[i]["withheld_records"])
 		assert.Len(t, onLog, i+1)
 	}
-	assert.Len(t, dealLogEntries(t, dealID), steps, "the deal's own log takes steps only")
+	assert.Len(t, dealLogEntries(t, dealID), steps+2, "the deal's own log takes its steps and one sealed report per copy, never a disclosure record")
 }
 
 // disclose --deal is a share too: it writes the shared bundle file, and its
@@ -162,8 +165,9 @@ func TestDealDiscloseIsAShareOnTheDisclosureLog(t *testing.T) {
 	require.Len(t, records, 1)
 	assert.Equal(t, "adjudicator", records[0]["audience"])
 	assert.Len(t, onLog, 1, "the disclosure record is on deal/<id>/disclosures")
-	assert.Len(t, dealLogEntries(t, dealID), steps, "the deal's own log takes steps only")
+	assert.Len(t, dealLogEntries(t, dealID), steps+1, "the deal's own log takes its steps and the copy's sealed report, never the disclosure record")
 	dealRun(t, "report", "--deal", dealID)
+	assert.Len(t, dealLogEntries(t, dealID), steps+1, "a report that writes no file seals nothing")
 }
 
 func TestDealBundleNamesWhatItNeeds(t *testing.T) {
@@ -217,7 +221,7 @@ func TestDealDiscloseCarriesTheShareableOrderID(t *testing.T) {
 	for _, v := range []string{"Sam Customer", "sam.customer@mail.example", "orders@shop.example", "card ending 4242", "99812", "Customer"} {
 		assertNoPrivateValue(t, raw, v)
 	}
-	rows := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)["merchant"].([]any)
+	rows := dealReportOf(b)["merchant"].([]any)
 	require.Len(t, rows, 1)
 	assert.Equal(t, "SE-104233", rows[0].(map[string]any)["order_id"])
 

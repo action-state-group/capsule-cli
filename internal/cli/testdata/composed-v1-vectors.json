@@ -1,0 +1,654 @@
+{
+  "draft": "draft-mih-zhang-agent-disclosure-bundle-01 (The composed/v1 Extension)",
+  "provenance": "spec-derived",
+  "status": "registered in REGISTRY.md section 14; held for ratification with -01",
+  "kind": "composed/v1",
+  "digest_rule": "composed_digest = lowercase hex SHA-256 of the UTF-8 RFC 8785 (JCS) serialization of the digest input object (CPB canonicalization algorithm 'jcs'); see canonical_preimage in each case.",
+  "envelope_profile": "AAC Producer Envelope: tagged COSE_Sign1, protected {1: -8, 3: 'application/agent-action-capsule-id', 4: raw Ed25519 public key}, empty unprotected map, attached payload = raw 32-byte capsule_id.",
+  "keys": {
+    "composer": {
+      "seed_hex": "ce309ca12c3951fda313ccba5cbf86cb693c30fb413d4a5439a7a86f1892aa3b",
+      "public_key_hex": "8cfc9a0f292235507636960d2b3b9ebea36a7f6008010320264570701585c445"
+    },
+    "responder-a": {
+      "seed_hex": "81e3d1a9bbf855784e3974729f26d41b77d0fb6e764ca4b832a181b44b9be5eb",
+      "public_key_hex": "67d9de60491efa8eb3c78913fe22d0d8a92e41662d6c95c2c85596df676a36af"
+    },
+    "responder-b": {
+      "seed_hex": "26345bf165956f357858796e821ecab3fa5d5e0a5b371857382aa97df4f71c34",
+      "public_key_hex": "bf86c315f76c58d7f6419e85f0e61949b7ef96bfb94b6b7669cdf96e6a149fc4"
+    },
+    "runtime observer": {
+      "seed_hex": "de4ef5301122f22b5ac6a6129d95264e0f2606e3b94762aed817c093157b1b4d",
+      "public_key_hex": "3fbc1f5944f52d8e7dcd13d0de26d29039aabd8fefde0a2711151fca93421516"
+    },
+    "boundary observer": {
+      "seed_hex": "0e17b7bcaa100d943420a988bd2af2bdaa05c7b10a2867b1e27dd374cd8da119",
+      "public_key_hex": "00ff69d6f32a6f3dc6f3c2014ab1f4654696f4c79e68892244387527200401c3"
+    }
+  },
+  "count": 3,
+  "cases": [
+    {
+      "id": "agree",
+      "section": [
+        "composed/v1: Block",
+        "composed/v1: Members and Outcomes",
+        "composed/v1: Joins",
+        "composed/v1: Observers and Redundancy",
+        "composed/v1: Composed Digest",
+        "composed/v1: Composition Closure"
+      ],
+      "description": "Two responders granted an Evidence Bundle each. Both root records carry the pre-agreed exchange identifier and the same transcript digest, so the join derives agree. The observers declare different custody domains and the records carry different keys, so the agreement is reported as corroborating (on declared custody).",
+      "container": {
+        "bundle_version": "2",
+        "bundle_kind": "evidence-bundle/v2",
+        "root": "33e065087e9d96f89b56da191aeb914e1beb57f06566854388759df0e4b96cd5",
+        "records": [
+          {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "example-run-0001/compose",
+            "action_type": "fyi",
+            "operator": "composer.example",
+            "developer": "composed-example-agent@1",
+            "timestamp": "2026-10-02T12:30:00Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "capsule_id": "33e065087e9d96f89b56da191aeb914e1beb57f06566854388759df0e4b96cd5",
+            "key_id": "8cfc9a0f292235507636960d2b3b9ebea36a7f6008010320264570701585c445",
+            "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458208cfc9a0f292235507636960d2b3b9ebea36a7f6008010320264570701585c445a0582033e065087e9d96f89b56da191aeb914e1beb57f06566854388759df0e4b96cd55840826baeece8595bd78c13a703ea65b47363396c7e4d52b09e0d1b332699b158e0df728ae22dc26e2657c43a98f794deaf7e57f598ed570ea59338e13323d73c03"
+          }
+        ],
+        "completeness": {
+          "closure_depth": 0,
+          "records_mode": "complete",
+          "payloads_mode": "all"
+        },
+        "extensions": {
+          "composed/v1": {
+            "members": [
+              {
+                "id": "responder-a",
+                "observer": "obs-a",
+                "request_digest": "9c785bd673591d47171b69dfde6924cc1b9cc27e26606b19125326b3ec0b9f12",
+                "outcome": "artifact",
+                "digest": "595c070afb10f17aebc088b1eb578d85f82f97904b4c1457177f6a9b8ddb0795",
+                "bundle": {
+                  "bundle_version": "2",
+                  "bundle_kind": "evidence-bundle/v2",
+                  "root": "443733b4177ab91f01095840e926630209ef37854e398fa22427d66044c6398b",
+                  "records": [
+                    {
+                      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+                      "format_version": "4",
+                      "canonicalization_id": "jcs",
+                      "action_id": "example-run-0001/responder-a",
+                      "action_type": "fyi",
+                      "operator": "responder-a.example",
+                      "developer": "composed-example-agent@1",
+                      "timestamp": "2026-10-02T12:10:00Z",
+                      "assurance": {
+                        "attestation_mode": "self_attested",
+                        "effect_mode": "not_applicable",
+                        "ledger_mode": "standalone"
+                      },
+                      "model_attestation": {
+                        "compute_attestation": {
+                          "agent_input_digest": "0edfc9959ac786349dfd2e07e41bb73fa91d31113c64655836da2ee4e75da408",
+                          "agent_output_digest": "1e22a3578e1de8e7ec2b137b0dd14eb49730c5de7e8d4ce64a9cb4c72160d609",
+                          "x-example-exchange-v1": {
+                            "exchange_id": "example-run-0001",
+                            "transcript_digest": "07ead5b991047e91b5bc2d5e696b145cd3392e9abbab78d27b81b78ae6f7de87"
+                          }
+                        }
+                      },
+                      "capsule_id": "443733b4177ab91f01095840e926630209ef37854e398fa22427d66044c6398b",
+                      "key_id": "67d9de60491efa8eb3c78913fe22d0d8a92e41662d6c95c2c85596df676a36af",
+                      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582067d9de60491efa8eb3c78913fe22d0d8a92e41662d6c95c2c85596df676a36afa05820443733b4177ab91f01095840e926630209ef37854e398fa22427d66044c6398b58400e6d1426561a70e79da41e4c68842b33ecfd222d114a9c34e8bba7005097ada331dd5fae0a1f8d83481b5052c2b7fe23ac1a0c570a1a695c944675f77f96ac01"
+                    }
+                  ],
+                  "completeness": {
+                    "closure_depth": 0,
+                    "records_mode": "complete",
+                    "payloads_mode": "all"
+                  }
+                }
+              },
+              {
+                "id": "responder-b",
+                "observer": "obs-b",
+                "request_digest": "269b234128508191730b9211b6fcebca8d966ee12f97b5211d7b3acf6415aa75",
+                "outcome": "artifact",
+                "digest": "690c028cc5dc1a859a592f41e78291cfebcbfa4e999c181afde11e96542e4c08",
+                "bundle": {
+                  "bundle_version": "2",
+                  "bundle_kind": "evidence-bundle/v2",
+                  "root": "7692340a11c2c3bb8374e0afbed85408cffd39c41aa262b552948e8a6ff89175",
+                  "records": [
+                    {
+                      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+                      "format_version": "4",
+                      "canonicalization_id": "jcs",
+                      "action_id": "example-run-0001/responder-b",
+                      "action_type": "fyi",
+                      "operator": "responder-b.example",
+                      "developer": "composed-example-agent@1",
+                      "timestamp": "2026-10-02T12:11:00Z",
+                      "assurance": {
+                        "attestation_mode": "self_attested",
+                        "effect_mode": "not_applicable",
+                        "ledger_mode": "standalone"
+                      },
+                      "model_attestation": {
+                        "compute_attestation": {
+                          "agent_input_digest": "4d0c2ac3b851f692b652985e349e55268be73d0b8ecf815df8654d8a97df4cc7",
+                          "agent_output_digest": "f4b4e5e121309c1f13475ce0a60fd8acd33e418fbeb370bb740de596c490edfc",
+                          "x-example-exchange-v1": {
+                            "exchange_id": "example-run-0001",
+                            "transcript_digest": "07ead5b991047e91b5bc2d5e696b145cd3392e9abbab78d27b81b78ae6f7de87"
+                          }
+                        }
+                      },
+                      "capsule_id": "7692340a11c2c3bb8374e0afbed85408cffd39c41aa262b552948e8a6ff89175",
+                      "key_id": "bf86c315f76c58d7f6419e85f0e61949b7ef96bfb94b6b7669cdf96e6a149fc4",
+                      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820bf86c315f76c58d7f6419e85f0e61949b7ef96bfb94b6b7669cdf96e6a149fc4a058207692340a11c2c3bb8374e0afbed85408cffd39c41aa262b552948e8a6ff8917558403cd2597f164bf560620bf4db5813f6ee88b58ac67b3a285a88f4f21e50aa43f07acc84d96bb7721f63530e7fb06e92dfad8f9a870cc0307c0ab28d840badb400"
+                    }
+                  ],
+                  "completeness": {
+                    "closure_depth": 0,
+                    "records_mode": "complete",
+                    "payloads_mode": "all"
+                  }
+                }
+              }
+            ],
+            "observers": [
+              {
+                "id": "obs-a",
+                "role": "responder",
+                "custody_domain": "custody-a.example"
+              },
+              {
+                "id": "obs-b",
+                "role": "responder",
+                "custody_domain": "custody-b.example"
+              }
+            ],
+            "joins": [
+              {
+                "members": [
+                  "responder-a",
+                  "responder-b"
+                ],
+                "basis": "pre_agreed_identifier",
+                "pointer": "/model_attestation/compute_attestation/x-example-exchange-v1/exchange_id",
+                "identifier_digest": "e006d2f0045534fa35912ea3c7e3210c50a8cba21bb17b64360fa3d697a629a9",
+                "compare": [
+                  "/model_attestation/compute_attestation/x-example-exchange-v1/transcript_digest"
+                ],
+                "state": "agree"
+              }
+            ],
+            "composed_digest": "6e52f26bb542f226118db99956d6a68bcab7f00bb7f0ad0db30e5490ef396f9a"
+          }
+        }
+      },
+      "expect": {
+        "composed_digest": "6e52f26bb542f226118db99956d6a68bcab7f00bb7f0ad0db30e5490ef396f9a",
+        "canonical_preimage": "{\"joins\":[{\"basis\":\"pre_agreed_identifier\",\"compare\":[\"/model_attestation/compute_attestation/x-example-exchange-v1/transcript_digest\"],\"identifier_digest\":\"e006d2f0045534fa35912ea3c7e3210c50a8cba21bb17b64360fa3d697a629a9\",\"members\":[\"responder-a\",\"responder-b\"],\"pointer\":\"/model_attestation/compute_attestation/x-example-exchange-v1/exchange_id\",\"state\":\"agree\"}],\"kind\":\"composed/v1\",\"members\":[{\"digest\":\"595c070afb10f17aebc088b1eb578d85f82f97904b4c1457177f6a9b8ddb0795\",\"id\":\"responder-a\",\"observer\":\"obs-a\",\"outcome\":\"artifact\",\"request_digest\":\"9c785bd673591d47171b69dfde6924cc1b9cc27e26606b19125326b3ec0b9f12\"},{\"digest\":\"690c028cc5dc1a859a592f41e78291cfebcbfa4e999c181afde11e96542e4c08\",\"id\":\"responder-b\",\"observer\":\"obs-b\",\"outcome\":\"artifact\",\"request_digest\":\"269b234128508191730b9211b6fcebca8d966ee12f97b5211d7b3acf6415aa75\"}],\"not_requested\":[],\"observers\":[{\"custody_domain\":\"custody-a.example\",\"id\":\"obs-a\",\"role\":\"responder\"},{\"custody_domain\":\"custody-b.example\",\"id\":\"obs-b\",\"role\":\"responder\"}]}",
+        "members": {
+          "responder-a": {
+            "outcome": "artifact",
+            "body": "carried",
+            "digest": "reproduced",
+            "claims": {
+              "graph_closure": "pass",
+              "interval_coverage": "withheld",
+              "per_record_membership": "withheld"
+            }
+          },
+          "responder-b": {
+            "outcome": "artifact",
+            "body": "carried",
+            "digest": "reproduced",
+            "claims": {
+              "graph_closure": "pass",
+              "interval_coverage": "withheld",
+              "per_record_membership": "withheld"
+            }
+          }
+        },
+        "composition_closure": {
+          "status": "pass",
+          "missing": []
+        },
+        "joins": [
+          {
+            "members": [
+              "responder-a",
+              "responder-b"
+            ],
+            "declared": "agree",
+            "derived": "agree",
+            "result": "derived_matches"
+          }
+        ],
+        "corroboration": [
+          {
+            "members": [
+              "responder-a",
+              "responder-b"
+            ],
+            "result": "corroborating",
+            "qualifier": "custody_declared"
+          }
+        ]
+      }
+    },
+    {
+      "id": "one-member-missing",
+      "section": [
+        "composed/v1: Members and Outcomes",
+        "composed/v1: Composed Digest",
+        "composed/v1: Composition Closure",
+        "composed/v1: Joins"
+      ],
+      "description": "The agree composition with responder-b's Evidence Bundle not carried and declared in missing. The composed digest is identical to the agree case: it covers member digests, outcomes, observers and join declarations, never member bodies. Composition closure is withheld (declared incomplete), not failed; the join is declared but cannot be re-derived, and no corroboration is reported.",
+      "container": {
+        "bundle_version": "2",
+        "bundle_kind": "evidence-bundle/v2",
+        "root": "33e065087e9d96f89b56da191aeb914e1beb57f06566854388759df0e4b96cd5",
+        "records": [
+          {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "example-run-0001/compose",
+            "action_type": "fyi",
+            "operator": "composer.example",
+            "developer": "composed-example-agent@1",
+            "timestamp": "2026-10-02T12:30:00Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "capsule_id": "33e065087e9d96f89b56da191aeb914e1beb57f06566854388759df0e4b96cd5",
+            "key_id": "8cfc9a0f292235507636960d2b3b9ebea36a7f6008010320264570701585c445",
+            "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458208cfc9a0f292235507636960d2b3b9ebea36a7f6008010320264570701585c445a0582033e065087e9d96f89b56da191aeb914e1beb57f06566854388759df0e4b96cd55840826baeece8595bd78c13a703ea65b47363396c7e4d52b09e0d1b332699b158e0df728ae22dc26e2657c43a98f794deaf7e57f598ed570ea59338e13323d73c03"
+          }
+        ],
+        "completeness": {
+          "closure_depth": 0,
+          "records_mode": "complete",
+          "payloads_mode": "all"
+        },
+        "extensions": {
+          "composed/v1": {
+            "members": [
+              {
+                "id": "responder-a",
+                "observer": "obs-a",
+                "request_digest": "9c785bd673591d47171b69dfde6924cc1b9cc27e26606b19125326b3ec0b9f12",
+                "outcome": "artifact",
+                "digest": "595c070afb10f17aebc088b1eb578d85f82f97904b4c1457177f6a9b8ddb0795",
+                "bundle": {
+                  "bundle_version": "2",
+                  "bundle_kind": "evidence-bundle/v2",
+                  "root": "443733b4177ab91f01095840e926630209ef37854e398fa22427d66044c6398b",
+                  "records": [
+                    {
+                      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+                      "format_version": "4",
+                      "canonicalization_id": "jcs",
+                      "action_id": "example-run-0001/responder-a",
+                      "action_type": "fyi",
+                      "operator": "responder-a.example",
+                      "developer": "composed-example-agent@1",
+                      "timestamp": "2026-10-02T12:10:00Z",
+                      "assurance": {
+                        "attestation_mode": "self_attested",
+                        "effect_mode": "not_applicable",
+                        "ledger_mode": "standalone"
+                      },
+                      "model_attestation": {
+                        "compute_attestation": {
+                          "agent_input_digest": "0edfc9959ac786349dfd2e07e41bb73fa91d31113c64655836da2ee4e75da408",
+                          "agent_output_digest": "1e22a3578e1de8e7ec2b137b0dd14eb49730c5de7e8d4ce64a9cb4c72160d609",
+                          "x-example-exchange-v1": {
+                            "exchange_id": "example-run-0001",
+                            "transcript_digest": "07ead5b991047e91b5bc2d5e696b145cd3392e9abbab78d27b81b78ae6f7de87"
+                          }
+                        }
+                      },
+                      "capsule_id": "443733b4177ab91f01095840e926630209ef37854e398fa22427d66044c6398b",
+                      "key_id": "67d9de60491efa8eb3c78913fe22d0d8a92e41662d6c95c2c85596df676a36af",
+                      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582067d9de60491efa8eb3c78913fe22d0d8a92e41662d6c95c2c85596df676a36afa05820443733b4177ab91f01095840e926630209ef37854e398fa22427d66044c6398b58400e6d1426561a70e79da41e4c68842b33ecfd222d114a9c34e8bba7005097ada331dd5fae0a1f8d83481b5052c2b7fe23ac1a0c570a1a695c944675f77f96ac01"
+                    }
+                  ],
+                  "completeness": {
+                    "closure_depth": 0,
+                    "records_mode": "complete",
+                    "payloads_mode": "all"
+                  }
+                }
+              },
+              {
+                "id": "responder-b",
+                "observer": "obs-b",
+                "request_digest": "269b234128508191730b9211b6fcebca8d966ee12f97b5211d7b3acf6415aa75",
+                "outcome": "artifact",
+                "digest": "690c028cc5dc1a859a592f41e78291cfebcbfa4e999c181afde11e96542e4c08"
+              }
+            ],
+            "observers": [
+              {
+                "id": "obs-a",
+                "role": "responder",
+                "custody_domain": "custody-a.example"
+              },
+              {
+                "id": "obs-b",
+                "role": "responder",
+                "custody_domain": "custody-b.example"
+              }
+            ],
+            "joins": [
+              {
+                "members": [
+                  "responder-a",
+                  "responder-b"
+                ],
+                "basis": "pre_agreed_identifier",
+                "pointer": "/model_attestation/compute_attestation/x-example-exchange-v1/exchange_id",
+                "identifier_digest": "e006d2f0045534fa35912ea3c7e3210c50a8cba21bb17b64360fa3d697a629a9",
+                "compare": [
+                  "/model_attestation/compute_attestation/x-example-exchange-v1/transcript_digest"
+                ],
+                "state": "agree"
+              }
+            ],
+            "missing": [
+              "responder-b"
+            ],
+            "composed_digest": "6e52f26bb542f226118db99956d6a68bcab7f00bb7f0ad0db30e5490ef396f9a"
+          }
+        }
+      },
+      "expect": {
+        "composed_digest": "6e52f26bb542f226118db99956d6a68bcab7f00bb7f0ad0db30e5490ef396f9a",
+        "composed_digest_equals_case": "agree",
+        "canonical_preimage": "{\"joins\":[{\"basis\":\"pre_agreed_identifier\",\"compare\":[\"/model_attestation/compute_attestation/x-example-exchange-v1/transcript_digest\"],\"identifier_digest\":\"e006d2f0045534fa35912ea3c7e3210c50a8cba21bb17b64360fa3d697a629a9\",\"members\":[\"responder-a\",\"responder-b\"],\"pointer\":\"/model_attestation/compute_attestation/x-example-exchange-v1/exchange_id\",\"state\":\"agree\"}],\"kind\":\"composed/v1\",\"members\":[{\"digest\":\"595c070afb10f17aebc088b1eb578d85f82f97904b4c1457177f6a9b8ddb0795\",\"id\":\"responder-a\",\"observer\":\"obs-a\",\"outcome\":\"artifact\",\"request_digest\":\"9c785bd673591d47171b69dfde6924cc1b9cc27e26606b19125326b3ec0b9f12\"},{\"digest\":\"690c028cc5dc1a859a592f41e78291cfebcbfa4e999c181afde11e96542e4c08\",\"id\":\"responder-b\",\"observer\":\"obs-b\",\"outcome\":\"artifact\",\"request_digest\":\"269b234128508191730b9211b6fcebca8d966ee12f97b5211d7b3acf6415aa75\"}],\"not_requested\":[],\"observers\":[{\"custody_domain\":\"custody-a.example\",\"id\":\"obs-a\",\"role\":\"responder\"},{\"custody_domain\":\"custody-b.example\",\"id\":\"obs-b\",\"role\":\"responder\"}]}",
+        "members": {
+          "responder-a": {
+            "outcome": "artifact",
+            "body": "carried",
+            "digest": "reproduced",
+            "claims": {
+              "graph_closure": "pass",
+              "interval_coverage": "withheld",
+              "per_record_membership": "withheld"
+            }
+          },
+          "responder-b": {
+            "outcome": "artifact",
+            "body": "declared_missing",
+            "digest": "not_shown",
+            "claims": null
+          }
+        },
+        "composition_closure": {
+          "status": "withheld",
+          "finding": "declared_incomplete",
+          "missing": [
+            "responder-b"
+          ]
+        },
+        "joins": [
+          {
+            "members": [
+              "responder-a",
+              "responder-b"
+            ],
+            "declared": "agree",
+            "derived": null,
+            "result": "not_derivable"
+          }
+        ],
+        "corroboration": [
+          {
+            "members": [
+              "responder-a",
+              "responder-b"
+            ],
+            "result": "not_applicable"
+          }
+        ]
+      }
+    },
+    {
+      "id": "same-custody-redundant",
+      "section": [
+        "composed/v1: Observers and Redundancy",
+        "composed/v1: Joins",
+        "composed/v1: Composed Digest"
+      ],
+      "description": "A runtime observer and a network-boundary observer agree on one egress, but both observers declare the same custody domain. Different signing keys do not change that. The join derives agree; the verifier reports the pair as redundant, not corroborating.",
+      "container": {
+        "bundle_version": "2",
+        "bundle_kind": "evidence-bundle/v2",
+        "root": "33e065087e9d96f89b56da191aeb914e1beb57f06566854388759df0e4b96cd5",
+        "records": [
+          {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "example-run-0001/compose",
+            "action_type": "fyi",
+            "operator": "composer.example",
+            "developer": "composed-example-agent@1",
+            "timestamp": "2026-10-02T12:30:00Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "capsule_id": "33e065087e9d96f89b56da191aeb914e1beb57f06566854388759df0e4b96cd5",
+            "key_id": "8cfc9a0f292235507636960d2b3b9ebea36a7f6008010320264570701585c445",
+            "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458208cfc9a0f292235507636960d2b3b9ebea36a7f6008010320264570701585c445a0582033e065087e9d96f89b56da191aeb914e1beb57f06566854388759df0e4b96cd55840826baeece8595bd78c13a703ea65b47363396c7e4d52b09e0d1b332699b158e0df728ae22dc26e2657c43a98f794deaf7e57f598ed570ea59338e13323d73c03"
+          }
+        ],
+        "completeness": {
+          "closure_depth": 0,
+          "records_mode": "complete",
+          "payloads_mode": "all"
+        },
+        "extensions": {
+          "composed/v1": {
+            "members": [
+              {
+                "id": "boundary",
+                "observer": "obs-boundary",
+                "request_digest": "9ca5947a0e08ec5e7d5948ae5b597b6fe776329b3181d8befc741106d615d986",
+                "outcome": "artifact",
+                "digest": "0fa3bc7f1bba6234b8fe6bbef4c38bfaabe49386152bb68af6ce9fd42433e6e2",
+                "bundle": {
+                  "bundle_version": "2",
+                  "bundle_kind": "evidence-bundle/v2",
+                  "root": "0ce54a05bbb895892abf84a84b339a1a67764946c5f37d58127513d070df0620",
+                  "records": [
+                    {
+                      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+                      "format_version": "4",
+                      "canonicalization_id": "jcs",
+                      "action_id": "example-run-0001/boundary",
+                      "action_type": "fyi",
+                      "operator": "operator.example",
+                      "developer": "composed-example-agent@1",
+                      "timestamp": "2026-10-02T12:10:00Z",
+                      "assurance": {
+                        "attestation_mode": "self_attested",
+                        "effect_mode": "not_applicable",
+                        "ledger_mode": "standalone"
+                      },
+                      "model_attestation": {
+                        "compute_attestation": {
+                          "agent_input_digest": "0f1a895219a2f51ad0b5e45c48bd918f25ae02d7979e074eabedf5d55b4fb931",
+                          "agent_output_digest": "0eaf1408a8c48bad03f3c31c0e9153b744ec86143e4fa18e0e4baa65f6b79647",
+                          "x-example-exchange-v1": {
+                            "exchange_id": "example-run-0001",
+                            "transcript_digest": "7461423a5897b5d5fdb6e1fbd61ea986a18dfb443ca7608325d605483f544571"
+                          }
+                        }
+                      },
+                      "capsule_id": "0ce54a05bbb895892abf84a84b339a1a67764946c5f37d58127513d070df0620",
+                      "key_id": "00ff69d6f32a6f3dc6f3c2014ab1f4654696f4c79e68892244387527200401c3",
+                      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d696404582000ff69d6f32a6f3dc6f3c2014ab1f4654696f4c79e68892244387527200401c3a058200ce54a05bbb895892abf84a84b339a1a67764946c5f37d58127513d070df062058400ea8f333e36240714ff51f0aa28e65ab982d1921951c5a9912e1d311654fc726750e857e0e17c28861e54da976a522ef64ec094045819d2127ff7bb28bfcea08"
+                    }
+                  ],
+                  "completeness": {
+                    "closure_depth": 0,
+                    "records_mode": "complete",
+                    "payloads_mode": "all"
+                  }
+                }
+              },
+              {
+                "id": "runtime",
+                "observer": "obs-runtime",
+                "request_digest": "8fa293c8f45dad5faa19fb18526a0b52e2a166fd26c50842cc8544283d60a94d",
+                "outcome": "artifact",
+                "digest": "0e3e3bd68cd280819d0bb936a2e18e9bc9a23c357276209839922e21c520b558",
+                "bundle": {
+                  "bundle_version": "2",
+                  "bundle_kind": "evidence-bundle/v2",
+                  "root": "47b4bb3db06026fe7e4ee95bb43e014586d7a73eecb4af68b228925c77d9e689",
+                  "records": [
+                    {
+                      "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+                      "format_version": "4",
+                      "canonicalization_id": "jcs",
+                      "action_id": "example-run-0001/runtime",
+                      "action_type": "fyi",
+                      "operator": "operator.example",
+                      "developer": "composed-example-agent@1",
+                      "timestamp": "2026-10-02T12:10:00Z",
+                      "assurance": {
+                        "attestation_mode": "self_attested",
+                        "effect_mode": "not_applicable",
+                        "ledger_mode": "standalone"
+                      },
+                      "model_attestation": {
+                        "compute_attestation": {
+                          "agent_input_digest": "55dac5dfcb5c1a1675f24be4e232058f67a54c3f847a480c976aaa3027c6e2ff",
+                          "agent_output_digest": "2b5069966ce785151d0a4f46b5532c1c276531bc112f5954ada6d2705b268e41",
+                          "x-example-exchange-v1": {
+                            "exchange_id": "example-run-0001",
+                            "transcript_digest": "7461423a5897b5d5fdb6e1fbd61ea986a18dfb443ca7608325d605483f544571"
+                          }
+                        }
+                      },
+                      "capsule_id": "47b4bb3db06026fe7e4ee95bb43e014586d7a73eecb4af68b228925c77d9e689",
+                      "key_id": "3fbc1f5944f52d8e7dcd13d0de26d29039aabd8fefde0a2711151fca93421516",
+                      "signature": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458203fbc1f5944f52d8e7dcd13d0de26d29039aabd8fefde0a2711151fca93421516a0582047b4bb3db06026fe7e4ee95bb43e014586d7a73eecb4af68b228925c77d9e689584056a0f53c4915c900faae652e2a71b229528e40f74a8cf87ad450748c6d6cccd873a7a5f9705bba89974b8239efa01981a66c2daac45c42d48ae2aca9cccb1004"
+                    }
+                  ],
+                  "completeness": {
+                    "closure_depth": 0,
+                    "records_mode": "complete",
+                    "payloads_mode": "all"
+                  }
+                }
+              }
+            ],
+            "observers": [
+              {
+                "id": "obs-boundary",
+                "role": "network_boundary",
+                "custody_domain": "operator.example"
+              },
+              {
+                "id": "obs-runtime",
+                "role": "runtime",
+                "custody_domain": "operator.example"
+              }
+            ],
+            "joins": [
+              {
+                "members": [
+                  "boundary",
+                  "runtime"
+                ],
+                "basis": "pre_agreed_identifier",
+                "pointer": "/model_attestation/compute_attestation/x-example-exchange-v1/exchange_id",
+                "identifier_digest": "e006d2f0045534fa35912ea3c7e3210c50a8cba21bb17b64360fa3d697a629a9",
+                "compare": [
+                  "/model_attestation/compute_attestation/x-example-exchange-v1/transcript_digest"
+                ],
+                "state": "agree"
+              }
+            ],
+            "composed_digest": "3d80da4014840585c51724d3a19eb14a20364b55256d2a355f772a2d73bff9d5"
+          }
+        }
+      },
+      "expect": {
+        "composed_digest": "3d80da4014840585c51724d3a19eb14a20364b55256d2a355f772a2d73bff9d5",
+        "canonical_preimage": "{\"joins\":[{\"basis\":\"pre_agreed_identifier\",\"compare\":[\"/model_attestation/compute_attestation/x-example-exchange-v1/transcript_digest\"],\"identifier_digest\":\"e006d2f0045534fa35912ea3c7e3210c50a8cba21bb17b64360fa3d697a629a9\",\"members\":[\"boundary\",\"runtime\"],\"pointer\":\"/model_attestation/compute_attestation/x-example-exchange-v1/exchange_id\",\"state\":\"agree\"}],\"kind\":\"composed/v1\",\"members\":[{\"digest\":\"0fa3bc7f1bba6234b8fe6bbef4c38bfaabe49386152bb68af6ce9fd42433e6e2\",\"id\":\"boundary\",\"observer\":\"obs-boundary\",\"outcome\":\"artifact\",\"request_digest\":\"9ca5947a0e08ec5e7d5948ae5b597b6fe776329b3181d8befc741106d615d986\"},{\"digest\":\"0e3e3bd68cd280819d0bb936a2e18e9bc9a23c357276209839922e21c520b558\",\"id\":\"runtime\",\"observer\":\"obs-runtime\",\"outcome\":\"artifact\",\"request_digest\":\"8fa293c8f45dad5faa19fb18526a0b52e2a166fd26c50842cc8544283d60a94d\"}],\"not_requested\":[],\"observers\":[{\"custody_domain\":\"operator.example\",\"id\":\"obs-boundary\",\"role\":\"network_boundary\"},{\"custody_domain\":\"operator.example\",\"id\":\"obs-runtime\",\"role\":\"runtime\"}]}",
+        "members": {
+          "boundary": {
+            "outcome": "artifact",
+            "body": "carried",
+            "digest": "reproduced",
+            "claims": {
+              "graph_closure": "pass",
+              "interval_coverage": "withheld",
+              "per_record_membership": "withheld"
+            }
+          },
+          "runtime": {
+            "outcome": "artifact",
+            "body": "carried",
+            "digest": "reproduced",
+            "claims": {
+              "graph_closure": "pass",
+              "interval_coverage": "withheld",
+              "per_record_membership": "withheld"
+            }
+          }
+        },
+        "composition_closure": {
+          "status": "pass",
+          "missing": []
+        },
+        "joins": [
+          {
+            "members": [
+              "boundary",
+              "runtime"
+            ],
+            "declared": "agree",
+            "derived": "agree",
+            "result": "derived_matches"
+          }
+        ],
+        "corroboration": [
+          {
+            "members": [
+              "boundary",
+              "runtime"
+            ],
+            "result": "redundant",
+            "reason": "same_custody_domain",
+            "report": "redundant, not corroborating"
+          }
+        ]
+      }
+    }
+  ]
+}

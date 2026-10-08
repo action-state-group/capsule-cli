@@ -284,6 +284,11 @@ func addCheckpointCommands(logs *cobra.Command) {
 	logs.AddCommand(verify)
 	group := &cobra.Command{Use: "checkpoint", Short: "Create signed checkpoints over the log"}
 	logs.AddCommand(group)
+	// A deal profile's checkpoint cadence, under the CLI's checkpoint verbs:
+	// the same command as `deal tick`, which stays callable.
+	cadence := dealTickCommand()
+	cadence.Use = "cadence"
+	group.AddCommand(cadence)
 	create := &cobra.Command{Use: "create", Short: "Cut a signed checkpoint at the current log tip", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := selected(c)
 		if e != nil {

@@ -131,4 +131,97 @@ else
   echo "skip the page's verdict against verify --bundle's: the vendored viewer sets no data-verdict yet (see agent-action-capsule's issue on the viewer's verdict wording)"
 fi
 
+
+# A page is written only for a bundle `verify --bundle` calls VALID whose
+# report shows every row (internal/cli/page_gate.go). Each variant of the
+# README's example below runs as written up to its refused step.
+variant() { # name, then perl substitutions applied to the README's example
+  local name="$1"; shift
+  mkdir "$name"
+  perl -0p "$@" example.sh >"$name/example.sh"
+  # Its own config directory: each variant creates the README's profile anew.
+  (cd "$name" && XDG_CONFIG_HOME="$work/$name/config" bash -e -o pipefail example.sh >log 2>&1) && echo 0 >"$name/exit" || echo $? >"$name/exit"
+}
+refused() { # name, words the refusal must carry
+  [[ $(cat "$1/exit") -ne 0 ]] && [[ ! -e "$1/report.html" ]] && contains "$1/log" "$2"
+}
+
+# legacy-jsonl-profile: an rc7/rc8-style jsonl profile's bundle carries its
+# evidence book's records, not the records sealed, so its page could show
+# none of the report's rows (it once said "verification passed" over 0 of 6).
+variant legacy-jsonl-profile -e 's#--type sqlite --sqlite-path \./store\.db#--type jsonl --jsonl-path ./store --namespace example#'
+check "legacy-jsonl-profile: no page is written" refused legacy-jsonl-profile "a jsonl profile's bundle carries its evidence book's records"
+
+# zero-rows: a VALID bundle whose report row cites a record it does not carry.
+variant zero-rows -e 's#references: \[cite\(\$permissions\)\]#references: [cite("0000000000000000000000000000000000000000000000000000000000000000")]#'
+check "zero-rows: no page is written for a report that would show 1 of 2 rows" refused zero-rows "would show 1 of 2 rows"
+
+# incomplete-bundle: the README page with its records' producer signatures
+# removed is INCOMPLETE by `verify --bundle`; its page must never say the
+# bundle passed. capsulectl writes no such page; this checks the vendored
+# viewer itself, once it states a verdict (data-verdict).
+jq -c '.records |= map(del(.signature, .key_id))' bundle.json >incomplete.json
+perl -0pe 'BEGIN{open my $f,"<","incomplete.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' report.html >incomplete.html
+check "incomplete-bundle: the page carries the changed bundle" differs report.html incomplete.html
+capsulectl verify --bundle incomplete.html >incomplete-verify.json 2>/dev/null && verdict=0 || verdict=$?
+check "incomplete-bundle: verify --bundle calls it INCOMPLETE, exit 3" test "$verdict" -eq 3
+render incomplete.html
+if contains incomplete.html.dom 'data-verdict='; then
+  check "incomplete-bundle: the page's verdict claims no more than verify --bundle's" claims_no_more incomplete.html.dom incomplete-verify.json
+  check "incomplete-bundle: the page never says the bundle passed" lacks incomplete.html.dom 'Bundle verification passed'
+else
+  echo "skip incomplete-bundle's page: the vendored viewer sets no data-verdict yet, and says 'passed' for it (agent-action-capsule's issue on the viewer's verdict wording)"
+fi
+
+# A deal receipt: its deal text (summary lines, step lines, amounts) is
+# sealed as a record in the bundle (internal/cli/deal_sealed_report.go). The
+# page renders it and says it checked it; a copy with one sealed line edited
+# says it did not verify and shows none of it, and verify --bundle calls it
+# INVALID. The deal is the synthetic retail-checkout demo.
+demo="$root/skills/deal/demo/retail-checkout"
+mkdir deal-receipt
+(
+  cd deal-receipt
+  export XDG_CONFIG_HOME="$work/deal-receipt/config" CAPSULE_DEAL_CHECK_URL=
+  capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
+  id=$(capsulectl --profile deal deal open --input "$demo/open.json" | jq -r .deal_id)
+  capsulectl --profile deal deal check --deal "$id" --input "$demo/check-pay.json" >/dev/null
+  capsulectl --profile deal deal note --deal "$id" --kind act --input "$demo/act-pay.json" >/dev/null
+  capsulectl --profile deal deal report --deal "$id" --html receipt.html >/dev/null
+) >deal-receipt/log 2>&1 || { echo "FAIL deal-receipt: the demo deal's receipt was written" >&2; cat deal-receipt/log >&2; exit 1; }
+cp deal-receipt/receipt.html receipt.html
+render receipt.html
+check "deal-receipt: no console.error, uncaught error or unhandled rejection" no_render_errors receipt.html.dom
+check "deal-receipt: the page renders the deal" contains receipt.html.dom '<h1>Deal report</h1>'
+check "deal-receipt: the page says its text is sealed and checked" contains receipt.html.dom 'data-sealed="x-deal-v0"'
+capsulectl verify --bundle receipt.html >receipt-verify.json && verdict=0 || verdict=$?
+check "deal-receipt: verify --bundle: VALID, exit 0" test "$verdict" -eq 0
+perl -0ne 'print $1 if /window\.__BUNDLE__ = (.*?);<\/script>/s' receipt.html >receipt.json
+did_line=$(jq -r '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report.did_line' receipt.json)
+check "deal-receipt: the page renders its sealed summary line" contains receipt.html.dom "<p class=\"deal-note\">$did_line</p>"
+jq -c '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report.did_line = "A line nobody sealed."' receipt.json >receipt-edited.json
+perl -0pe 'BEGIN{open my $f,"<","receipt-edited.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-edited.html
+check "deal-receipt-edited: the page carries the edited line" contains receipt-edited.html 'A line nobody sealed.'
+render receipt-edited.html
+# The rendered warning (the page's own script also carries the words).
+check "deal-receipt-edited: the page says the report did not verify" contains receipt-edited.html.dom '<p class="deal-bad">⚠️ This report did not verify'
+check "deal-receipt-edited: the page shows no edited line" lacks receipt-edited.html.dom '<p class="deal-note">A line nobody sealed.</p>'
+capsulectl verify --bundle receipt-edited.html >/dev/null 2>&1 && verdict=0 || verdict=$?
+check "deal-receipt-edited: verify --bundle: INVALID, exit 1" test "$verdict" -eq 1
+
+# deal-receipt-downgraded: the sealed report's record kept, its disclosure
+# dropped, and edited text put inline in the extension, as a receipt from
+# before reports were sealed carries it. The page refuses rather than show
+# it under the "not checked" label; verify --bundle calls it INVALID.
+jq -c '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report as $text
+  | .extensions["x-deal-v0"] = ($text | .did_line = "A line nobody sealed.") | del(.disclosures[$id])' receipt.json >receipt-downgraded.json
+perl -0pe 'BEGIN{open my $f,"<","receipt-downgraded.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-downgraded.html
+check "deal-receipt-downgraded: the page carries the inline line" contains receipt-downgraded.html 'A line nobody sealed.'
+render receipt-downgraded.html
+check "deal-receipt-downgraded: the page says the text could not be checked" contains receipt-downgraded.html.dom "<p class=\"deal-bad\">⚠️ The deal's text could not be checked against its sealed record"
+check "deal-receipt-downgraded: the page shows no inline line" lacks receipt-downgraded.html.dom '<p class="deal-note">A line nobody sealed.</p>'
+check "deal-receipt-downgraded: no \"not checked\" label" lacks receipt-downgraded.html.dom 'data-unchecked="x-deal-v0"'
+capsulectl verify --bundle receipt-downgraded.html >/dev/null 2>&1 && verdict=0 || verdict=$?
+check "deal-receipt-downgraded: verify --bundle: INVALID, exit 1" test "$verdict" -eq 1
+
 exit "$fail"

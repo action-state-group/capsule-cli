@@ -156,8 +156,10 @@ func claim(result aacbundle.ClaimResult) claimOutput {
 // verifyBundleFile checks an Evidence Bundle (evidence-bundle/v2) offline, from
 // the file alone: every record's identity, citation closure, interval
 // coverage and per-record membership under the checkpoint (authenticated
-// when the bundle carries checkpoint.cose), disclosures, and which extensions
-// and countersignatures were carried but not verified here. No profile, no
+// when the bundle carries checkpoint.cose), disclosures, a composed/v1
+// extension (bundle -01 §7.2, with each member bundle assessed as its own
+// Evidence Bundle), and which other extensions and countersignatures were
+// carried but not verified here. No profile, no
 // network. Exit 0 when every claim passes, 3 (ErrPartial) when nothing failed
 // but something is not shown, 1 (ErrBundleInvalid) when a claim failed.
 func verifyBundleFile(c *cobra.Command, path string) error {
@@ -183,8 +185,37 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if value["bundle_kind"] != "evidence-bundle/v2" || value["bundle_version"] != "2" {
 		return inputError("--bundle is not an evidence-bundle/v2 file (bundle_kind \"evidence-bundle/v2\", bundle_version \"2\")")
 	}
-	result := aacbundle.VerifyBundle(value)
+	verdict, report := bundleVerdict(value, directory)
+	if err := output(c, report); err != nil {
+		return err
+	}
+	switch verdict {
+	case "VALID":
+		return nil
+	case "INCOMPLETE":
+		return ErrPartial
+	default:
+		return ErrBundleInvalid
+	}
+}
 
+// bundleVerdict is `verify --bundle`'s verdict on an Evidence Bundle (VALID,
+// INCOMPLETE or INVALID) and the result it prints, from the bundle's value
+// and an optional witness directory. A page that checks itself is written
+// only after this same verdict is VALID (pageGate), so the page can never
+// claim more than verify --bundle does about the bundle it carries.
+func bundleVerdict(value map[string]interface{}, directory []witnessRow) (string, map[string]any) {
+	result := aacbundle.VerifyBundleWithOptions(value, aacbundle.Options{RefusalSignature: verifyRefusalSignature})
+	report, verdict := assessBundle(value, result, directory)
+	return verdict, report
+}
+
+// assessBundle reports one Evidence Bundle's claims and its verdict. A
+// composed/v1 block's member bundles are assessed the same way and reported
+// on their member; their claims are never merged into the containing
+// Bundle's, but a failed member or block fails the verdict, and one with
+// something not shown makes it INCOMPLETE.
+func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, directory []witnessRow) (map[string]any, string) {
 	records := map[string]string{}
 	ids := make([]string, 0, len(result.CapsuleResults))
 	for id := range result.CapsuleResults {
@@ -212,10 +243,6 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 			disclosuresOK = false
 		}
 	}
-	extensions := make([]map[string]string, 0, len(result.Extensions))
-	for _, x := range result.Extensions {
-		extensions = append(extensions, map[string]string{"kind": x.Kind, "status": x.Status})
-	}
 	countersignatures := make([]string, 0, len(result.Countersignatures))
 	for _, s := range result.Countersignatures {
 		countersignatures = append(countersignatures, s.Status)
@@ -237,6 +264,35 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if witnesses.Status == "fail" {
 		claims = append(claims, witnesses)
 	}
+	extensions := make([]map[string]any, 0, len(result.Extensions))
+	dealSeen := false
+	for _, x := range result.Extensions {
+		entry := map[string]any{"kind": x.Kind, "status": x.Status}
+		if x.Kind == dealProfile && x.Status == "uninterpreted" {
+			dealSeen = true
+			entry = dealReportEntry(value, result)
+			if entry["status"] == "fail" {
+				claims = append(claims, aacbundle.ClaimResult{Status: "fail", Findings: entry["findings"].([]string)})
+			}
+		}
+		if x.Composed != nil {
+			composed, memberVerdicts := composedOutput(value, x.Composed, directory)
+			entry["composed"] = composed
+			claims = append(claims, aacbundle.ClaimResult{Status: x.Composed.Status, Findings: x.Composed.Findings})
+			for _, memberVerdict := range memberVerdicts {
+				claims = append(claims, verdictClaim(memberVerdict))
+			}
+		}
+		extensions = append(extensions, entry)
+	}
+	// A deal bundle that discloses a sealed report but carries no x-deal-v0
+	// extension at all had it removed.
+	if !dealSeen {
+		if entry := dealReportEntry(value, result); entry["status"] == "fail" {
+			extensions = append(extensions, entry)
+			claims = append(claims, aacbundle.ClaimResult{Status: "fail", Findings: entry["findings"].([]string)})
+		}
+	}
 	verdict := "VALID"
 	for _, r := range claims {
 		if r.Status == "fail" {
@@ -253,7 +309,7 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if result.BundleDigest != nil {
 		digest = *result.BundleDigest
 	}
-	if err := output(c, map[string]any{
+	return map[string]any{
 		"verdict":               verdict,
 		"bundle_digest":         digest,
 		"record_identity":       records,
@@ -267,16 +323,18 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 		"producer_signatures":   claim(signatures),
 		"record_signatures":     signatureStates,
 		"witnesses":             map[string]any{"status": witnesses.Status, "findings": nonNilStrings(witnesses.Findings), "receipts": witnessReceipts},
-	}); err != nil {
-		return err
-	}
+	}, verdict
+}
+
+// verdictClaim folds a member bundle's verdict into the containing verdict.
+func verdictClaim(verdict string) aacbundle.ClaimResult {
 	switch verdict {
 	case "VALID":
-		return nil
+		return aacbundle.ClaimResult{Status: "pass"}
 	case "INCOMPLETE":
-		return ErrPartial
+		return aacbundle.ClaimResult{Status: "withheld"}
 	default:
-		return ErrBundleInvalid
+		return aacbundle.ClaimResult{Status: "fail"}
 	}
 }
 
@@ -330,4 +388,61 @@ func nonNilStrings(values []string) []string {
 		return []string{}
 	}
 	return values
+}
+
+// dealReportEntry is verify --bundle's entry for a deal bundle's x-deal-v0
+// extension. A deal report seals each copy's readable text (its summary
+// lines, step lines, amounts and what was told) as a deal_report record on
+// the deal's log, and the extension names it (sealed_report); its text is
+// then that record's disclosed input, which the disclosure check binds:
+//   - pass: the extension names a deal_report record whose input is
+//     disclosed and matches, and no other deal_report's input is disclosed;
+//   - fail: it names anything else, the bundle discloses a deal_report the
+//     extension does not name, or the bundle holds a deal_report record at
+//     all and the extension names none (it was replaced or removed, whether
+//     or not the record's input was dropped);
+//   - a bundle written before reports were sealed carries the text in the
+//     extension itself, which no record seals: uninterpreted, with the
+//     finding extension_unbound (editing it leaves the verdict VALID).
+func dealReportEntry(value map[string]interface{}, result aacbundle.VerificationResult) map[string]any {
+	reports := map[string]bool{}
+	records, _ := value["records"].([]interface{})
+	for _, raw := range records {
+		r, _ := raw.(map[string]interface{})
+		if id, _ := r["capsule_id"].(string); id != "" && r["action_id"] == dealReportActionID {
+			reports[id] = true
+		}
+	}
+	matched := map[string]bool{}
+	var disclosed []string
+	for _, d := range result.Disclosures {
+		if d.Member != "agent_input" || !reports[d.CapsuleID] || d.Status == "withheld" {
+			continue
+		}
+		disclosed = append(disclosed, d.CapsuleID)
+		if d.Status == disclosure.Match {
+			matched[d.CapsuleID] = true
+		}
+	}
+	ext, _ := value["extensions"].(map[string]interface{})
+	deal, _ := ext[dealProfile].(map[string]interface{})
+	fail := func(finding string) map[string]any {
+		return map[string]any{"kind": dealProfile, "status": "fail", "findings": []string{finding}}
+	}
+	id, sealed := deal[dealReportPointer].(string)
+	switch {
+	case sealed && (!matched[id] || len(disclosed) != 1):
+		return fail("sealed_report_unverified")
+	case sealed:
+		return map[string]any{"kind": dealProfile, "status": "pass", dealReportPointer: id}
+	case len(reports) > 0:
+		// A bundle that holds a sealed report was written after reports were
+		// sealed: text in the extension instead of a pointer is a downgrade
+		// (the record kept, its disclosure dropped, edited text inline).
+		return fail("sealed_report_not_named")
+	}
+	return map[string]any{
+		"kind": dealProfile, "status": "uninterpreted", "findings": []string{"extension_unbound"},
+		"note": "written by the producer when the bundle was made and sealed by no record: its text is not verified, and editing it does not change the verdict",
+	}
 }

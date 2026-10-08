@@ -11,10 +11,12 @@ set -euo pipefail
 #   - the five NOT-CONSEQUENTIAL actions (verify, contract validate,
 #     plugin ls, cll list, get) run and produce no capsule at all — this
 #     script never calls `capsulectl seal` for any of them;
-#   - the book verbs (request, respond, close) each return the id of the
-#     signed book record that is their evidence, and reconcile adds no
-#     record; the counterparty's Close verifies with `verify` and its
-#     bundle with the neutral AAC bundle verifier;
+#   - the book verbs (request, respond, close, result build) each return
+#     the id of the signed book record that is their evidence, and
+#     reconcile adds no record; the counterparty's Close verifies with
+#     `verify` and its bundle with the neutral AAC bundle verifier; the
+#     sealed Result roots a disclosed bundle that `report build` verifies
+#     and renders to an offline report.html, adding no record;
 #   - a failed evidence record fails closed (this skill's evidence policy:
 #     "report evidence unavailable, stop before the next consequential
 #     action") rather than silently continuing.
@@ -73,7 +75,7 @@ EOF
 scope="$work/scope.yaml"
 printf 'roots:\n  - %q\n' "$scan_root" >"$scope"
 
-echo "== 0/15 evidence-failure-fails-closed check (not a numbered action) ==" >&2
+echo "== 0/17 evidence-failure-fails-closed check (not a numbered action) ==" >&2
 # The evidence policy: "if evidence generation fails, report `evidence
 # unavailable`, stop before the next consequential action." Point
 # --seal-output at a directory this process cannot write to (it exists, so
@@ -99,7 +101,7 @@ capsules_file="$work/capsules.txt"
 : >"$capsules_file"
 parent=""
 
-echo "== 1/15 discover (self-sealing; consequential) ==" >&2
+echo "== 1/17 discover (self-sealing; consequential) ==" >&2
 discover_out="$work/discover-scan.json"
 "$bin" discover --profile "$profile" --scope "$scope" --format json --seal-output "$discover_out" >"$work/discover-stdout.json"
 discover_capsule=$(jq -r .sealed.capsule_id "$work/discover-stdout.json")
@@ -109,7 +111,7 @@ echo "$discover_capsule" >>"$capsules_file"
 parent="$discover_capsule"
 echo "  self-sealed + verified: discover -> $discover_capsule" >&2
 
-echo "== 2/15 publish (primary action; consequential) ==" >&2
+echo "== 2/17 publish (primary action; consequential) ==" >&2
 ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 jq -n --arg op "$profile" --arg ts "$ts" --arg parent "$parent" '
   {spec_version:"capsule-seal-request/v1",
@@ -121,17 +123,17 @@ published_id=$(jq -r .capsule_id "$work/publish-result.json")
 echo "$published_id" >>"$capsules_file"
 echo "  published: publish -> $published_id" >&2
 
-echo "== 3/15 get (not-consequential; no capsule) ==" >&2
+echo "== 3/17 get (not-consequential; no capsule) ==" >&2
 "$bin" get --profile "$profile" --capsule-id "$published_id" >"$work/get-result.json"
 echo "  ran, no seal call made — get is local inspection per the evidence policy" >&2
 
-echo "== 4/15 verify (not-consequential; no capsule) ==" >&2
+echo "== 4/17 verify (not-consequential; no capsule) ==" >&2
 "$bin" get --profile "$profile" --capsule-id "$published_id" --raw --output "$work/published-raw.json" >"$work/get-raw-result.json"
 "$bin" verify --profile "$profile" --capsule "$work/published-raw.json" >"$work/verify-of-published.json"
 jq -e '.producer_signature_and_trust=="passed" and .capsule_identity=="passed"' "$work/verify-of-published.json" >/dev/null
 echo "  ran + passed, no seal call made — checking a bundle is local validation per the evidence policy" >&2
 
-echo "== 5/15 cll list (not-consequential; no capsule) ==" >&2
+echo "== 5/17 cll list (not-consequential; no capsule) ==" >&2
 "$bin" cll list --profile "$profile" >"$work/cll-list-result.json"
 jq -e --arg id "$published_id" 'any(.entries[]; .record_type=="published_capsule" and .capsule_id==$id and .capsule_carried)' \
   "$work/cll-list-result.json" >/dev/null || {
@@ -139,7 +141,7 @@ jq -e --arg id "$published_id" 'any(.entries[]; .record_type=="published_capsule
 [[ ! -e "$store/cll.jsonl" ]] || { echo "FAIL: a jsonl profile must have one log, but cll.jsonl exists" >&2; exit 1; }
 echo "  ran, no seal call made — the published capsule is in the profile's one log (its evidence book)" >&2
 
-echo "== 6/15 contract validate (not-consequential; no capsule) ==" >&2
+echo "== 6/17 contract validate (not-consequential; no capsule) ==" >&2
 schema="$work/demo-schema.json"
 doc="$work/demo-doc.json"
 cat >"$schema" <<'EOF'
@@ -151,11 +153,11 @@ EOF
 "$bin" contract validate "$doc" --schema "$schema" --json >"$work/contract-result.json"
 echo "  ran, no seal call made — this is the local validation the evidence policy names explicitly" >&2
 
-echo "== 7/15 plugin ls (not-consequential; no capsule) ==" >&2
+echo "== 7/17 plugin ls (not-consequential; no capsule) ==" >&2
 "$bin" plugin ls >"$work/plugin-ls-result.json"
 echo "  ran, no seal call made — listing discovered plugins is local inspection per the evidence policy" >&2
 
-echo "== 8/15 cll append (primary action; consequential) ==" >&2
+echo "== 8/17 cll append (primary action; consequential) ==" >&2
 "$bin" cll append --profile "$profile" --capsule "$discover_out" >"$work/cll-append-result.json"
 appended_seq=$(jq -r .sequence "$work/cll-append-result.json")
 # append's own job is to persist an EXISTING capsule, not create a new one --
@@ -169,7 +171,7 @@ echo "  appended discover scan (capsule $discover_capsule) at CLL sequence $appe
 # needs --profile, a store, or a signing key -- pure computation over
 # caller-supplied files, same as contract validate.
 
-echo "== 9/15 judge pin (not-consequential; no capsule) ==" >&2
+echo "== 9/17 judge pin (not-consequential; no capsule) ==" >&2
 pin_input="$work/judge-pin-input.json"
 cat >"$pin_input" <<'EOF'
 {"model_id":"gpt-eval/1.0","prompt_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","axes_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
@@ -179,7 +181,7 @@ pin_digest=$(jq -r .judge_pin_digest "$work/judge-pin-result.json")
 [[ "$pin_digest" =~ ^[0-9a-f]{64}$ ]] || { echo "FAIL: judge pin did not print a 64-hex-char digest" >&2; exit 1; }
 echo "  ran, no seal call made — computing a pin is local computation per the evidence policy" >&2
 
-echo "== 10/15 judge drift (not-consequential; no capsule) ==" >&2
+echo "== 10/17 judge drift (not-consequential; no capsule) ==" >&2
 drift_input_b="$work/judge-pin-input-b.json"
 cat >"$drift_input_b" <<'EOF'
 {"model_id":"gpt-eval/1.0","model_version":"v2","prompt_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","axes_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
@@ -200,7 +202,7 @@ jq -e '.drifted==1 and .cases[0].pin_matches==true and .cases[0].label_matches==
   echo "FAIL: a same-pin, different-verdict rerun must seal a real delta, not a silent disagreement" >&2; exit 1; }
 echo "  ran, no seal call made — comparing pins/report sets is local comparison per the evidence policy" >&2
 
-echo "== 11/15 calibration summarize (not-consequential; no capsule) ==" >&2
+echo "== 11/17 calibration summarize (not-consequential; no capsule) ==" >&2
 ratings="$work/ratings.json"
 cat >"$ratings" <<'EOF'
 [{"case_id":"case-1","agrees_with_judge":true}]
@@ -240,7 +242,7 @@ record_of() { # FILE: log the record_id a consequential book verb returned, or f
   echo "$id" >>"$book_records_file"
 }
 
-echo "== 12/15 request + respond (each a signed book record; consequential) ==" >&2
+echo "== 12/17 request + respond (each a signed book record; consequential) ==" >&2
 cat >"$work/evidence-request.json" <<'EOF'
 {"subject":{"kind":"full_history"},"coverage":{"min_freshness":{"size":1}}}
 EOF
@@ -260,7 +262,7 @@ jq -e '.outcome=="artifact"' "$work/response-recorded.json" >/dev/null || {
   echo "FAIL: the requester did not record the verified artifact" >&2; exit 1; }
 echo "  asked, answered, and recorded the answer: three book records" >&2
 
-echo "== 13/15 the counterparty closes first, no peer bundle (primary action; signs) ==" >&2
+echo "== 13/17 the counterparty closes first, no peer bundle (primary action; signs) ==" >&2
 # A book's counterparty is named by its book id (the other profile's
 # log_id). The peer holds only its own account, so every exchange reads
 # INSUFFICIENT; its bundle is what it hands over.
@@ -278,7 +280,7 @@ jq -e --arg id "$(jq -r .record_id "$work/peer-close-result.json")" '.already_cl
   echo "FAIL: a second close of the same period and counterparty must return the first, not seal another" >&2; exit 1; }
 echo "  sealed; verify accepts the Close; the AAC bundle verifier passes its bundle; a repeat seals no second Close" >&2
 
-echo "== 14/15 close against the counterparty's held bundle (primary action; signs) ==" >&2
+echo "== 14/17 close against the counterparty's held bundle (primary action; signs) ==" >&2
 "$bin" close --profile "$profile" --period day --date "$yesterday" --counterparty skill-demo-peer \
   --peer "$work/peer-close-bundle.json" --peer-checkpoint-key "$peer_checkpoint_key" >"$work/close-peer-result.json"
 record_of "$work/close-peer-result.json"
@@ -287,7 +289,7 @@ jq -e '.reconciliation.peer_complete==true and .reconciliation.states.MATCHED==1
   echo "FAIL: one matching and one differing exchange should reconcile MATCHED + CONFLICTING against a complete peer account" >&2; exit 1; }
 echo "  one exchange MATCHED, one CONFLICTING, from the held bundle alone" >&2
 
-echo "== 15/15 reconcile (not-consequential; adds no record) ==" >&2
+echo "== 15/17 reconcile (not-consequential; adds no record) ==" >&2
 "$bin" reconcile --profile "$profile" --period day --date "$yesterday" --counterparty skill-demo-peer \
   --peer "$work/peer-close-bundle.json" --peer-checkpoint-key "$peer_checkpoint_key" >"$work/reconcile-result.json"
 jq -e --slurpfile closed "$work/close-peer-result.json" '.reconciliation.states==$closed[0].reconciliation.states' \
@@ -306,6 +308,59 @@ for wrong in "--peer-checkpoint-key $checkpoint_public_key --counterparty skill-
 done
 echo "  same states as the sealed Close; a bundle under the wrong key or from another book is refused" >&2
 
+echo "== 16/17 result build (primary action; signs) ==" >&2
+# A Result the skill did not write: one requirement claim citing the
+# published capsule, one close claim citing the Close sealed in 14/17 by
+# close_ref (REQUIRED, and among the claim's evidence) -- UNILATERAL, since
+# no record of the named peer's book acknowledges or rebuts that Close.
+close_record=$(jq -r .record_id "$work/close-peer-result.json")
+today=$(date -u +%Y-%m-%d)
+jq -n --arg capsule "$published_id" --arg close "$close_record" --arg start "${yesterday}T00:00:00Z" --arg end "${today}T00:00:00Z" '
+  def ref($d): {digest_alg:"SHA-256", digest:$d};
+  {result_version:"evidence-result-v0", generated_at:($end),
+   claims:[
+     {id:"req-1", contract_ref:"ec:skill-demo:2026@1", requirement_ref:"published-once", tier:"recomputed", grade:"self-attested",
+      sufficiency:"SATISFIED", verdict:"met", evidence:[ref($capsule)], proofs:[],
+      presentation:{kind:"disclosure", status:"SATISFIED", evidence:[ref($capsule)]}},
+     {id:"close-1", type:"close", contract_ref:"ec:skill-demo:2026@1", requirement_ref:"close", tier:"recomputed", grade:"self-attested",
+      sufficiency:"SATISFIED", verdict:"met", evidence:[ref($close)], proofs:[],
+      presentation:{kind:"disclosure", status:"SATISFIED", evidence:[ref($close)]},
+      close:{period:{start:$start, end:$end}, close_state:"UNILATERAL", close_ref:ref($close), peer:"skill-demo-peer"}}],
+   aggregate:{coverage:{evaluated_population:2, excluded_not_applicable:0, unknown_count:0},
+              buckets:{met:["req-1","close-1"], not_met:[], not_evaluable:[]}}}' >"$work/result.json"
+"$bin" result build --profile "$profile" --result "$work/result.json" --contract "ec:skill-demo:2026@1" \
+  --out "$work/result.sealed.json" --capsule-out "$work/result-record.json" >"$work/result-build.json"
+record_of "$work/result-build.json"
+"$bin" verify --profile "$profile" --capsule "$work/result-record.json" >"$work/result-verify.json"
+jq -e '.already_built==false and .claims==2 and (.cites|length)==2' "$work/result-build.json" >/dev/null || {
+  echo "FAIL: result build should seal a two-claim Result citing two book records" >&2; exit 1; }
+set +e
+jq '.aggregate.buckets.met=["req-1"] | .aggregate.buckets.not_met=["close-1"]' "$work/result.json" >"$work/result-bad.json"
+"$bin" result build --profile "$profile" --result "$work/result-bad.json" --out "$work/result-bad.sealed.json" >/dev/null 2>"$work/result-bad.err"
+bad_status=$?
+set -e
+[[ "$bad_status" -eq 2 ]] && grep -q 'do not cross-check' "$work/result-bad.err" || {
+  echo "FAIL: a Result whose buckets do not match its verdicts must be refused (exit 2), got $bad_status" >&2; exit 1; }
+echo "  sealed; verify accepts the record; a Result whose headline values do not recompute is refused" >&2
+
+echo "== 17/17 disclose on the Result + report build (not-consequential; adds no record) ==" >&2
+result_record=$(jq -r .record_id "$work/result-build.json")
+"$bin" disclose --profile "$profile" --root "$result_record" --payloads selected --out "$work/result-bundle.json" >/dev/null
+"$bookdemo" aac-verify "$work/result-bundle.json" >"$work/result-bundle-verify.json"
+"$bin" report build --bundle "$work/result-bundle.json" --card outcome --permalink --out "$work/report.html" >"$work/report-build.json"
+jq -e '.verification=="pass" and .form=="book" and .claims==2 and .unsupported_claims==0 and (.permalink|startswith("https://"))' \
+  "$work/report-build.json" >/dev/null || {
+  echo "FAIL: report build should verify the book-form Result bundle and render both claims supported" >&2; exit 1; }
+grep -q 'renderEvidenceGraph(window.__BUNDLE__' "$work/report.html" && ! grep -q 'https\?://' "$work/report.html" || {
+  echo "FAIL: report.html must be self-contained (inline runtime, nothing loaded from the network)" >&2; exit 1; }
+set +e
+"$bin" report build --bundle "$work/peer-close-bundle.json" --card outcome --out "$work/report-wrong.html" >/dev/null 2>&1
+wrong_status=$?
+set -e
+[[ "$wrong_status" -eq 2 && ! -e "$work/report-wrong.html" ]] || {
+  echo "FAIL: a bundle rooted at a Close, not a Result, must be refused (exit 2) with nothing written, got $wrong_status" >&2; exit 1; }
+echo "  the Result roots a verified bundle; report.html rendered offline; a non-Result root is refused" >&2
+
 end_epoch=$(date +%s)
 elapsed=$((end_epoch - start_epoch))
 consequential_actions=$(wc -l <"$capsules_file" | tr -d ' ')
@@ -317,8 +372,8 @@ echo "consequential actions (discover, publish, cll append): $consequential_acti
 echo "distinct capsules: $distinct_capsules (2 -- cll append's action maps onto discover's existing capsule, by design; it creates none of its own)" >&2
 echo "not-consequential actions (verify, contract validate, plugin ls, cll list, get, judge pin, judge drift pin, judge drift reports, calibration summarize): 9, ran, zero seal calls made for any of them" >&2
 book_records=$(wc -l <"$book_records_file" | tr -d ' ')
-echo "book records from consequential book verbs (request x2, respond, close x2): $book_records (target: 5)" >&2
-echo "not-consequential book verb (reconcile): ran, added no record" >&2
+echo "book records from consequential book verbs (request x2, respond, close x2, result build): $book_records (target: 6)" >&2
+echo "not-consequential book verbs (reconcile, report build): ran, added no record" >&2
 echo "elapsed: ${elapsed}s from a fresh capsulectl build through the last verb (target: under 3600s)" >&2
 
 if [[ "$consequential_actions" -ne 3 ]]; then
@@ -329,8 +384,8 @@ if [[ "$distinct_capsules" -ne 2 ]]; then
   echo "FAIL: expected exactly 2 distinct capsules (discover + publish), got $distinct_capsules" >&2
   exit 1
 fi
-if [[ "$book_records" -ne 5 ]]; then
-  echo "FAIL: expected exactly 5 book records from consequential book verbs, got $book_records" >&2
+if [[ "$book_records" -ne 6 ]]; then
+  echo "FAIL: expected exactly 6 book records from consequential book verbs, got $book_records" >&2
   exit 1
 fi
 if [[ "$elapsed" -ge 3600 ]]; then

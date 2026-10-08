@@ -156,7 +156,7 @@ func TestDealLateEvidenceConfirmsTheClose(t *testing.T) {
 
 	// A shared copy says where the deal stands too, in fixed words.
 	shared, raw := sharedCopy(t, dealID, dealAudienceCounterparty, "the shop")
-	sl := shared["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)["lifecycle"].(map[string]any)
+	sl := dealReportOf(shared)["lifecycle"].(map[string]any)
 	assert.Equal(t, "closed", sl["state"])
 	require.Len(t, sl["later"], 1)
 	assert.Equal(t, "a record sealed after the close", sl["later"].([]any)[0].(map[string]any)["text"])
@@ -170,7 +170,7 @@ func TestDealLateEvidenceConfirmsTheClose(t *testing.T) {
 		_, err := invoke(t, "", append([]string{"--profile", "deal", "deal", "note", "--deal", dealID}, args...)...)
 		require.ErrorIs(t, err, ErrInput, args[1])
 	}
-	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":100}`))
+	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":100,"authorized_max_minor":100}`))
 	require.ErrorIs(t, err, ErrInput)
 }
 
@@ -190,7 +190,7 @@ func TestDealPurchaseLifecycleReadsHonestly(t *testing.T) {
 
 	at0 := lifecycle()
 	assert.Equal(t, "open", at0["state"])
-	assert.Equal(t, "Open: no close is sealed on this deal yet. It is expected to close by 2026-10-17.", at0["text"])
+	assert.Equal(t, "Open: waiting for the merchant's receipt. It is expected to close by 2026-10-17.", at0["text"])
 	assert.Len(t, openDeals(), 1)
 
 	setDealClock(t, "2026-10-03T22:00:00Z")
@@ -213,7 +213,7 @@ func TestDealPurchaseLifecycleReadsHonestly(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(cal), "SUMMARY:Close deal "+dealID+"? (open\\, expected to close by 2026-10-17)")
 	late := lifecycle()
-	assert.Equal(t, "Open: no close is sealed on this deal. It was expected to close by 2026-10-17, which has passed (as of 2026-10-24T09:00:00Z).", late["text"])
+	assert.Equal(t, "Open: the merchant's email is sealed; no close is sealed on this deal yet. It was expected to close by 2026-10-17, which has passed (as of 2026-10-24T09:00:00Z).", late["text"])
 	assertStatesHoldingsOnly(t, late["text"].(string))
 
 	// Closed at delivery, the deal leaves the listing.

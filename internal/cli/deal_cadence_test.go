@@ -376,7 +376,7 @@ func TestDealIsWitnessPendingUntilATick(t *testing.T) {
 	a := report["assurance"].(map[string]any)
 	assert.Equal(t, "scheduled", a["witness_state"])
 	assert.Equal(t, "self_attested", a["rung"])
-	assert.Contains(t, a["text"], "Witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence (every 5m, give or take 2m)")
+	assert.Contains(t, a["text"], "Witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's checkpoint cadence, within about 7m (every 5m, give or take 2m)")
 	assert.NotContains(t, a["text"], "an hour by default", "the profile's own cadence, not the default")
 	html := string(mustRead(t, page))
 	assert.Contains(t, html, "Sealed by my agent, witness pending.")
@@ -543,4 +543,139 @@ func TestMMRLeafCount(t *testing.T) {
 	for leaves, size := range []uint64{0, 1, 3, 4, 7, 8, 10, 11, 15} {
 		assert.Equal(t, uint64(leaves), mmrLeafCount(size), "size %d", size)
 	}
+}
+
+// The poll: a `deal tick` that is not due publishes nothing. With every
+// cadence delivery complete, it makes no connection to the witness at all,
+// however often it runs. The one thing a poll may send is a retry of a
+// cadence delivery still pending (the witness was down at its tick), once
+// that delivery's backoff has passed: the checkpoint it carries was cut at
+// its tick, so only the retry's time follows the poll, never a deal.
+func TestAPollThatIsNotDueDoesNotContactTheWitness(t *testing.T) {
+	public, key, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	endpoint, connections := countingWitness(t)
+	p := cadenceFixture(t, endpoint, public, "1h", "0s", 0)
+	retailDeal(t)
+
+	tick := dealRun(t, "tick")
+	require.Equal(t, "ticked", tick["state"])
+	require.Len(t, tick["pending"], 1, "the counting witness accepts nothing: the delivery is pending")
+	deliver(t, p, cadenceSize(t, p), key)
+	before := connections.Load()
+	for range 3 {
+		poll := dealRun(t, "tick")
+		assert.Equal(t, "not_due", poll["state"])
+		assert.Empty(t, poll["pending"])
+	}
+	assert.Equal(t, before, connections.Load(), "a poll that is not due, with nothing pending, makes no connection to the witness")
+}
+
+// The checkpoint cadence by default: a tick every 5m, give or take 1m (288
+// a day), and a jitter its own validation accepts. A profile that sets its
+// own keeps it.
+func TestTheCheckpointCadenceDefaultsToFiveMinutes(t *testing.T) {
+	cfg, err := Profile{}.dealCadence()
+	require.NoError(t, err, "the default passes the cadence's own validation (jitter under half the interval)")
+	assert.Equal(t, 5*time.Minute, cfg.interval)
+	assert.Equal(t, time.Minute, cfg.jitter)
+	var p Profile
+	p.Cadence.Interval, p.Cadence.Jitter = "1h", "10m"
+	own, err := p.dealCadence()
+	require.NoError(t, err)
+	assert.Equal(t, time.Hour, own.interval, "a profile's own cadence is kept")
+}
+
+// The cadence's consumer name is "checkpoint cadence", in what a user or an
+// agent reads: the init hint, both verbs' help and the receipt, which never
+// say "deal tick" or "every minute". Its consumer verb is `cll checkpoint
+// cadence` (beside the CLI's other checkpoint verbs); `deal tick` stays
+// callable. The schedule is a 5-minute poll that waits for each tick due in
+// its window; the time to a witness is computed from the profile's cadence.
+// Wire names do not change: the cadence log is still deal-cadence/<id>.
+func TestTheCheckpointCadenceIsNamedAndTimedFromTheProfile(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	init := dealRun(t, "init", "--profile", "deal", "--dir", filepath.Join(t.TempDir(), "d"), "--materiality", neutralMateriality)
+	assert.Regexp(t, `^deal-cadence/[0-9a-f]{16}$`, init["cadence_log"], "the wire log id is unchanged")
+	next := init["next"].(string)
+	assert.Contains(t, next, "checkpoint cadence")
+	assert.Contains(t, next, "every 5m, give or take 1m", "the profile's cadence, from its configuration")
+	assert.Contains(t, next, "capsulectl --profile deal cll checkpoint cadence --wait-up-to 5m")
+	assert.Contains(t, next, "every 5 minutes")
+	for _, words := range []string{init["witness_sees"].(string), next} {
+		assert.NotContains(t, words, "deal tick")
+		assert.NotContains(t, words, "every minute")
+	}
+
+	for _, verb := range [][]string{{"deal", "tick"}, {"cll", "checkpoint", "cadence"}} {
+		help, err := invoke(t, "", append(verb, "--help")...)
+		require.NoError(t, err)
+		// The copy: the description and the flags' help, not the usage
+		// line, which names the command as typed.
+		usage := strings.Index(help, "\nUsage:")
+		flags := strings.Index(help, "\nFlags:")
+		require.True(t, usage > 0 && flags > usage, help)
+		help = help[:usage] + help[flags:]
+		assert.Contains(t, help, "checkpoint cadence", verb)
+		assert.NotContains(t, help, "deal tick", verb)
+		assert.NotContains(t, help, "every minute", verb)
+	}
+
+	for words, within := range map[string]string{
+		"every 5m, give or take 1m":  "within about 6m",
+		"every 1h, give or take 10m": "within about 1h10m",
+		"every 30m":                  "within about 30m",
+		"every 90m, give or take 1m": "within about 1h31m",
+	} {
+		assert.Equal(t, ", "+within+" ("+words+")", cadencePhrase(map[string]interface{}{"cadence": words}), words)
+	}
+	assert.Equal(t, " (unreadable)", cadencePhrase(map[string]interface{}{"cadence": "unreadable"}), "words it cannot read are shown as they are")
+}
+
+// `cll checkpoint cadence` is the checkpoint cadence's verb: on a deal
+// profile it ticks exactly as `deal tick` does, and is not due again at once.
+func TestTheCadenceVerbTicks(t *testing.T) {
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	endpoint, _ := countingWitness(t)
+	cadenceFixture(t, endpoint, public, "", "", 0)
+	run := func() map[string]any {
+		out, err := invoke(t, "", "--profile", "deal", "cll", "checkpoint", "cadence")
+		require.NoError(t, err, out)
+		var m map[string]any
+		require.NoError(t, json.Unmarshal([]byte(out), &m), out)
+		return m
+	}
+	first := run()
+	assert.Equal(t, "ticked", first["state"])
+	assert.Regexp(t, `^deal-cadence/[0-9a-f]{16}$`, first["cadence_log"])
+	assert.Equal(t, "not_due", run()["state"])
+	assert.Equal(t, "not_due", dealRun(t, "tick")["state"], "deal tick is the same cadence")
+}
+
+// A jitter that is not under half the interval is refused with both values
+// and the fix. A profile that set a jitter for the old 1h default and no
+// interval is told the interval is now the 5m default.
+func TestACadenceJitterTooLargeForItsIntervalSaysWhy(t *testing.T) {
+	var onlyJitter Profile
+	onlyJitter.Cadence.Jitter = "10m"
+	_, err := onlyJitter.dealCadence()
+	require.ErrorIs(t, err, ErrInput)
+	for _, part := range []string{"cadence.jitter is 10m", "cadence.interval is not set, so it is the default 5m", "under half the interval", "set cadence.interval", "a cadence.jitter under 2m30s"} {
+		assert.Contains(t, err.Error(), part)
+	}
+
+	var both Profile
+	both.Cadence.Interval, both.Cadence.Jitter = "15m", "8m"
+	_, err = both.dealCadence()
+	require.ErrorIs(t, err, ErrInput)
+	for _, part := range []string{"cadence.jitter is 8m", "cadence.interval is 15m", "under 7m30s"} {
+		assert.Contains(t, err.Error(), part)
+	}
+
+	var negative Profile
+	negative.Cadence.Jitter = "-1m"
+	_, err = negative.dealCadence()
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "cadence.jitter must be at least 0")
 }

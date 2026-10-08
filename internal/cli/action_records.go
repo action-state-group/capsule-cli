@@ -181,6 +181,11 @@ func typedRecord(ev dealEvent, events []sealedEvent, v0 map[string]interface{}) 
 		typeName = typeActionRecord
 		d := ev.Disclosure
 		out = map[string]interface{}{"action": d.action(), "disclosed": map[string]interface{}{"to": body["to"], "fields": body["fields"]}}
+		for _, k := range []string{"action_class", "taxonomy_version"} {
+			if v, ok := body[k]; ok {
+				out[k] = v
+			}
+		}
 		if ch, ok := block["channel"]; ok {
 			out["channel"] = ch
 		}
@@ -216,6 +221,9 @@ func typedHeader(typeName string, block, body map[string]interface{}) map[string
 	}
 	if p, ok := block["producer"]; ok {
 		r["producer"] = p
+	}
+	if a, ok := block["commit_alg"]; ok {
+		r["commit_alg"] = a
 	}
 	return r
 }
@@ -302,7 +310,7 @@ func confirmedAuthorityBody(ev dealEvent, events []sealedEvent, body map[string]
 // under, and its proposed-phase authority basis.
 func evaluationBody(ev dealEvent, events []sealedEvent, v0 map[string]interface{}) (map[string]interface{}, error) {
 	ck := ev.Check
-	disposition := map[string]string{"pass": "DO", "pause": "ASK"}[ck.Verdict]
+	disposition := map[string]string{"pass": "DO", "pause": "ASK", "deny": "DENY"}[ck.Verdict]
 	task := typedRef(taskAuthorityAt(events, ""))
 	proposed := ""
 	for _, se := range events {
@@ -315,6 +323,11 @@ func evaluationBody(ev dealEvent, events []sealedEvent, v0 map[string]interface{
 		"proposed_action_digest": proposed, "task_authority_ref": task,
 		"ruleset_digest": ck.RulesetDigest, "valid_until": ck.ValidUntil,
 		"authority_basis": []interface{}{map[string]interface{}{"type": "task_authority", "ref": task}},
+	}
+	// The ruleset the profile's external checker ran, when it ran: the
+	// ruleset_digest above stays the built-in rule table's.
+	if r := ck.Rules; r != nil && r.Status == "evaluated" {
+		out["rules_checks"] = []interface{}{map[string]interface{}{"ruleset_id": r.RulesetID, "definition_digest": r.DefinitionDigest, "verdict": r.Verdict}}
 	}
 	mode, digest := ck.Materiality.mode()
 	out["materiality"], out["materiality_digest"] = mode, nil
@@ -568,7 +581,7 @@ func checkResponseFor(ev dealEvent, events []sealedEvent, digest string) CheckRe
 	ck := ev.Check
 	task := CheckRef{Type: typedRecordRef, DigestAlg: "SHA-256", Digest: taskAuthorityAt(events, "")}
 	resp := CheckResponse{
-		Type: typeCheckResponse, Disposition: map[string]string{"pass": "DO", "pause": "ASK"}[ck.Verdict],
+		Type: typeCheckResponse, Disposition: map[string]string{"pass": "DO", "pause": "ASK", "deny": "DENY"}[ck.Verdict],
 		ValidUntil: ck.ValidUntil, Findings: []CheckFinding{},
 		AuthorityBasis: []CheckAuthority{{Type: "task_authority", Ref: task}},
 		EvaluationRef:  CheckRef{Type: typedRecordRef, DigestAlg: "SHA-256", Digest: digest},

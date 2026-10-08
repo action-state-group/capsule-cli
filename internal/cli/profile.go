@@ -102,10 +102,19 @@ type Profile struct {
 		Port     int    `yaml:"port" mapstructure:"port"`
 		Database string `yaml:"database" mapstructure:"database"`
 		TLS      string `yaml:"tls" mapstructure:"tls"`
+		// URL is the base address of a remote profile type's transport; the
+		// storage-backed types leave it empty.
+		URL string `yaml:"url,omitempty" mapstructure:"url"`
+		// RequesterID is the requester id a remote profile's evidence
+		// requests name: the node's own full peer id, set by the operator
+		// (never derived), so the party digests the exact request sent.
+		RequesterID string `yaml:"requester_id,omitempty" mapstructure:"requester_id"`
 	} `yaml:"connection" mapstructure:"connection"`
 	Credentials struct {
 		Username string `yaml:"username" mapstructure:"username"`
 		Password Secret `yaml:"password,omitempty" mapstructure:"password"`
+		// Token is an optional bearer token for a remote profile type's URL.
+		Token Secret `yaml:"token,omitempty" mapstructure:"token"`
 	} `yaml:"credentials" mapstructure:"credentials"`
 	Signing     Secret   `yaml:"signing,omitempty" mapstructure:"signing"`
 	TrustedKeys []string `yaml:"trusted_keys,omitempty" mapstructure:"trusted_keys"`
@@ -116,9 +125,9 @@ type Profile struct {
 		PublicKey   string   `yaml:"public_key,omitempty" mapstructure:"public_key"`
 		Token       Secret   `yaml:"token,omitempty" mapstructure:"token"`
 	} `yaml:"checkpoint,omitempty" mapstructure:"checkpoint"`
-	// Cadence is when a deal profile publishes to its witness: on time alone
-	// (Interval, default 1h, each tick moved by a random amount within
-	// +/-Jitter, default 10m), never on activity. PadBucket (default 1) pads
+	// Cadence is when a deal profile publishes to its witness, its checkpoint
+	// cadence: on time alone (Interval, default 5m, each tick moved by a
+	// random amount within +/-Jitter, default 1m), never on activity. PadBucket (default 1) pads
 	// each tick's entries to a multiple of it with padding records.
 	Cadence struct {
 		Interval  string `yaml:"interval,omitempty" mapstructure:"interval"`
@@ -135,6 +144,18 @@ type Profile struct {
 		Predicate string `yaml:"predicate,omitempty" mapstructure:"predicate"`
 		Digest    string `yaml:"digest,omitempty" mapstructure:"digest"`
 	} `yaml:"materiality,omitempty" mapstructure:"materiality"`
+	// RulesChecker is a deal profile's external rules checker, run at every
+	// deal check (rules_checker.go): the user's policy (profile update
+	// --rules-checker), pinned by its executable's SHA-256.
+	RulesChecker ProfileRulesChecker `yaml:"rules_checker,omitempty" mapstructure:"rules_checker"`
+}
+
+// ProfileRulesChecker is a pinned external rules checker.
+type ProfileRulesChecker struct {
+	Command          []string `yaml:"command,omitempty" mapstructure:"command"`
+	SHA256           string   `yaml:"sha256,omitempty" mapstructure:"sha256"`
+	Timeout          string   `yaml:"timeout,omitempty" mapstructure:"timeout"`
+	DefinitionDigest string   `yaml:"definition_digest,omitempty" mapstructure:"definition_digest"`
 }
 
 // isBook reports whether the profile is an evidence book: a jsonl profile with
@@ -173,8 +194,8 @@ func (p Profile) validate() error {
 	if _, err := p.clockTolerance(); err != nil {
 		return err
 	}
-	if !profileName.MatchString(p.Name) || (p.Type != "mysql" && p.Type != "sqlite" && p.Type != "jsonl") {
-		return inputError("profile needs a valid name and mysql, sqlite, or jsonl type")
+	if !profileName.MatchString(p.Name) || (p.Type != "mysql" && p.Type != "sqlite" && p.Type != "jsonl" && p.Type != remoteProfileType) {
+		return inputError("profile needs a valid name and a mysql, sqlite, jsonl, or " + remoteProfileType + " type")
 	}
 	if (p.LogID != "" && !logName.MatchString(p.LogID)) || (p.Namespace != "" && !profileName.MatchString(p.Namespace)) {
 		return inputError("log_id must be lowercase letters, digits and ._:/- (starting with a letter or digit, at most 191 characters); namespace must be letters, digits, _ and - (at most 64)")
@@ -182,7 +203,11 @@ func (p Profile) validate() error {
 	if p.LogID == "" && p.Namespace == "" {
 		return inputError("configure an artifact namespace, a log_id, or both")
 	}
-	if p.Type == "sqlite" || p.Type == "jsonl" {
+	if p.Type == remoteProfileType {
+		if e := validateRemoteConnection(p); e != nil {
+			return e
+		}
+	} else if p.Type == "sqlite" || p.Type == "jsonl" {
 		// SQLite and JSONL are local backends: connection.database is a filesystem
 		// path (a file for sqlite; a directory holding artifacts.jsonl and
 		// cll.jsonl for jsonl) and no host/port/TLS applies.
@@ -197,7 +222,7 @@ func (p Profile) validate() error {
 			return inputError("mysql TLS must be true or false; insecure fallback is unsupported")
 		}
 	}
-	for _, s := range []Secret{p.Credentials.Password, p.Signing, p.Checkpoint.Signing, p.Checkpoint.Token} {
+	for _, s := range []Secret{p.Credentials.Password, p.Credentials.Token, p.Signing, p.Checkpoint.Signing, p.Checkpoint.Token} {
 		if e := s.validate(); e != nil {
 			return e
 		}
@@ -381,12 +406,13 @@ func profileCommands() *cobra.Command {
 			return errors.Join(ErrInput, e)
 		}
 		p.Credentials.Password = p.Credentials.Password.redact()
+		p.Credentials.Token = p.Credentials.Token.redact()
 		p.Signing = p.Signing.redact()
 		p.Checkpoint.Signing = p.Checkpoint.Signing.redact()
 		p.Checkpoint.Token = p.Checkpoint.Token.redact()
 		return output(c, p)
 	}}
-	group.AddCommand(list, show)
+	group.AddCommand(list, show, profileRetireCommand())
 	for _, update := range []bool{false, true} {
 		verb := "create"
 		if update {
@@ -396,7 +422,7 @@ func profileCommands() *cobra.Command {
 		f := c.Flags()
 		f.String("name", "", "New profile name")
 		f.Bool("interactive", false, "Ask for missing nonsecret connection fields")
-		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator", "clock-tolerance": "clock_tolerance"}
+		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator", "clock-tolerance": "clock_tolerance", "url": "connection.url", "requester-id": "connection.requester_id"}
 		for flag := range fields {
 			f.String(flag, "", "Profile setting")
 		}
@@ -407,7 +433,8 @@ func profileCommands() *cobra.Command {
 		f.StringSlice("trusted-key", nil, "Trusted producer public key hex (repeatable)")
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
 		f.String("materiality", "", "A deal profile's materiality predicate (materiality-predicate/v0 JSON), pinned by its digest; empty to remove it (every agent pick then pauses). Policy: the user's to set, never the agent's")
-		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token"}
+		f.String("rules-checker", "", "A deal profile's external rules checker: a JSON file {\"command\": [\"/absolute/path\", \"arg\", ...], \"timeout\": \"10s\", \"definition_digest\": \"...\"}, its executable under a trusted plugin root and pinned by its SHA-256; empty to remove it. Policy: the user's to set, never the agent's")
+		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token", "token": "credentials.token"}
 		for flag := range secrets {
 			f.String(flag, "", "Literal secret; prefer file/env reference")
 			f.String(flag+"-file", "", "Owner-protected secret file")
@@ -479,6 +506,8 @@ func profileCommands() *cobra.Command {
 					prompts = append(prompts, prompt{"SQLite database file path", &p.Connection.Database})
 				case "jsonl":
 					prompts = append(prompts, prompt{"JSONL storage directory", &p.Connection.Database})
+				case remoteProfileType:
+					prompts = append(prompts, prompt{"Base URL", &p.Connection.URL}, prompt{"The node's own full peer id (64 hex)", &p.Connection.RequesterID})
 				default:
 					prompts = append(prompts, prompt{"MySQL host", &p.Connection.Host}, prompt{"Database", &p.Connection.Database})
 				}
@@ -524,6 +553,12 @@ func profileCommands() *cobra.Command {
 			if c.Flags().Changed("materiality") {
 				path, _ := c.Flags().GetString("materiality")
 				if e := pinMateriality(&p, path); e != nil {
+					return e
+				}
+			}
+			if c.Flags().Changed("rules-checker") {
+				path, _ := c.Flags().GetString("rules-checker")
+				if e := pinRulesChecker(&p, path); e != nil {
 					return e
 				}
 			}

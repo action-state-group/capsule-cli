@@ -30,7 +30,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | Command | What it does |
 |---|---|
 | `deal init --dir DIR [--no-witness] [--materiality FILE]` | Creates a SQLite deal profile: store plus signing and checkpoint seeds, each mode 0600, and the profile's cadence log. The public witness is configured by default. `--materiality` pins the materiality predicate its checks evaluate, by digest (see `profile/materiality-predicate/`; change it later with `profile update --materiality FILE`, the user's to run); without one, every attribute the agent picked pauses a check. |
-| `deal tick [--wait-up-to D]` | Run every minute from a timer (or every D with `--wait-up-to D`). When a tick is due (hourly with random jitter by default), cuts every deal's checkpoint locally, appends one entry to the cadence log and publishes its checkpoint to the witness; retries any delivery still pending. Deal steps never publish. |
+| `cll checkpoint cadence [--wait-up-to D]` | The checkpoint cadence's poll. Schedule it every 5 minutes with `--wait-up-to 5m` (or every D with `--wait-up-to D`); a run with no tick due publishes nothing new. When a tick is due (every 5m, give or take 1m, by default), cuts every deal's checkpoint locally, appends one entry to the cadence log and publishes its checkpoint to the witness; retries any delivery still pending once its backoff has passed. Deal steps never publish. |
 | `deal open --input FILE` | Seals the baseline: the user's verbatim words, who, terms, claims (each with its source) and recourse. Cuts a checkpoint. |
 | `deal open --input FILE --records typed` | The same, sealing the deal's authority steps as typed action records (`task-authority/v0`, `proposed-action/v0`, `action-evaluation/v0`, `action-approval/v0`, `action-record/v0`, `action-outcome/v0`) beside its x-deal-v0 evidence records; the user's task authority is sealed right after the baseline, and the user's answer to a check that asked needs `--shown-card`. Without the flag a deal is x-deal-v0 throughout. See the profile, section 9. |
 | `deal note --kind message\|claim\|evidence\|change --input FILE` | Seals what happened. |
@@ -148,24 +148,24 @@ Checkpoints are checkpoints of a log at a size, not a registration of each
 record: the witness never receives a record, a record id or a deal id. And
 no deal's own log is ever published. If it were, the witness would learn how
 many deals there are (one log each), when each starts, and how many steps
-each has. Instead the profile has one cadence log (its `log_id`), and
-`deal tick`, run from a timer, publishes on time alone:
+each has. Instead the profile has one cadence log (its `log_id`), and its **checkpoint
+cadence** (`cll checkpoint cadence`, scheduled) publishes on time alone:
 
-- A tick is due at the previous tick plus `cadence.interval` (default `1h`)
-  moved by a random amount within `cadence.jitter` (default `10m`). Deal
+- A tick is due at the previous tick plus `cadence.interval` (default `5m`)
+  moved by a random amount within `cadence.jitter` (default `1m`). Deal
   activity never brings a tick forward, and an explicit
   `cll checkpoint publish` is the only other way anything reaches the
   witness.
-- A tick is published when `deal tick` runs at or after its due time, so
-  run `deal tick` **every minute**: a run that is not due exits at once, and
-  publication then lands within a minute of the jittered due time. A
-  scheduler that runs it less often publishes on its own grid, which hides
-  the jitter and can push a tick to a later run. Where the host can only
-  schedule every N minutes, use `deal tick --wait-up-to Nm`: each run waits,
-  with the store unlocked, for every tick due inside its window, and
-  publishes it on time. Such a run stays alive up to N (an hour for
-  `--wait-up-to 60m`): on a host that caps how long a scheduled job may run,
-  use a smaller N or schedule every minute instead.
+- A tick is published when the poll runs at or after its due time. Schedule
+  `cll checkpoint cadence --wait-up-to 5m` every 5 minutes: each run waits,
+  with the store unlocked, for every tick due inside its window and publishes
+  it on time, so the jitter survives the scheduler's grid. A run with no tick
+  due sends the witness nothing, except a retry of a delivery still pending
+  once its backoff has passed. A run stays alive up to its `--wait-up-to`: on a
+  host that caps how long a scheduled job may run, schedule more often with a
+  matching smaller value. Without `--wait-up-to`, a scheduled run publishes on
+  the scheduler's grid, which hides the jitter and can push a tick to a later
+  run.
 - At a tick, every deal's checkpoint is cut locally and becomes a leaf of a
   fixed-depth (16) Merkle tree, with a fresh random salt at a fresh random
   position, plus one random filler leaf. The tree's root is appended as
@@ -180,11 +180,12 @@ each has. Instead the profile has one cadence log (its `log_id`), and
   padding is never an action and never counted, and nothing that reads a
   deal reads it.
 - A witness that is slow or down never stops a deal. The delivery stays
-  pending and is retried at every `deal tick`, or by hand with
+  pending and is retried by a later poll once its backoff has passed,
+  or by hand with
   `capsulectl --profile deal cll checkpoint publish --checkpoint SIZE`.
 - A delivery whose request never reached the witness (refused, unresolved,
   timed out, or stopped by a proxy) is reported as "pending: network consent
-  needed, or no network", in `deal tick`'s output and on the receipt: on an
+  needed, or no network", in the poll's output and on the receipt: on an
   agent host that asks before network access, that is what a missing grant
   looks like. Ticks run unattended, so choose "Always allow this site" for
   the witness's site, not "allow once". That grant covers the site and all
@@ -194,12 +195,12 @@ each has. Instead the profile has one cadence log (its `log_id`), and
   `capsulectl doctor --check-witness` says the same.
 
 A deal is **not witnessed at the moment it happens**. Its receipt says
-"Sealed, witness pending" until the next cadence tick has carried its
+"Sealed, witness pending" until the next tick of the checkpoint cadence has carried its
 checkpoint to the witness and a receipt has come back; only then does it say
 "Witnessed". How long that is depends on the profile's cadence
-(`cadence.interval`, give or take `cadence.jitter`; 1h and 10m by default),
-and the receipt names the profile's own, for example "every 5m, give or take
-2m". The states, as
+(`cadence.interval`, give or take `cadence.jitter`; 5m and 1m by default),
+and the receipt names the profile's own and the longest wait it allows, for
+example "within about 7m (every 5m, give or take 2m)". The states, as
 the receipt and `deal report` name them: **scheduled** (not yet in a tick),
 **pending** (in a tick, no receipt back yet; both read "Sealed, witness
 pending") and **witnessed**.
@@ -543,7 +544,7 @@ uncheckable next month, once the merchant has replaced its key. `deal note
 --email` therefore reads the key record (`selector._domainkey.domain`) from
 DNS when the email is sealed, seals it alongside the message, and cuts a
 checkpoint at once. When a witness is configured, that checkpoint reaches it
-at the next due tick (`deal tick`), like every deal checkpoint, normally
+at the next tick of the checkpoint cadence, like every deal checkpoint, normally
 within one cadence interval plus its jitter; until the witness is reached the
 receipt reads pending.
 `deal verify-email` then checks against the sealed key only, never against

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -39,18 +40,20 @@ var (
 // that carries more than that audience may see, rewrites the deal section
 // for it; the command then checks the final page (dealPageGate). Every copy
 // states its scope and carries the command that verifies it.
-func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent, report dealReport, audience, verifyCommand string) (map[string]interface{}, error) {
+//
+// With sealReport, the copy's deal section is sealed as its own record on
+// the deal's log (dealSealReport) and the bundle's x-deal-v0 extension only
+// points at it; every earlier report's record is withheld, so a copy
+// discloses its own text and no other copy's. Without it (a report that
+// writes no file), nothing is put on the log and the section rides
+// unsealed.
+func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent, report dealReport, audience, verifyCommand string, sealReport bool) (map[string]interface{}, error) {
 	if s.dp.Checkpoint.Signing == (Secret{}) {
 		return nil, inputError("a deal report needs the profile's checkpoint key (see `deal init`)")
 	}
-	// Cut locally: a report, like every deal event, never queues anything
-	// for the witness; only a due tick does.
-	if _, err := cutCheckpoint(ctx, localOnly(s.dp), s.t.log); err != nil {
-		return nil, err
-	}
 	shared := audience != dealAudienceKeep
 	var private dealPrivate
-	var withhold map[string]bool
+	withhold := map[string]bool{}
 	if shared {
 		private = dealPrivateValues(events)
 		var err error
@@ -58,18 +61,67 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 			return nil, err
 		}
 	}
+	dealID := events[0].Event.DealID
+	reports, err := s.reportIDs(ctx, dealID)
+	if err != nil {
+		return nil, err
+	}
+	for id := range reports {
+		withhold[id] = true
+	}
+	b, cadence, err := s.dealAssemble(ctx, events, withhold)
+	if err != nil {
+		return nil, err
+	}
+	coverage := witnessCoverage(events, cadence)
+	ext, err := s.dealReportExtension(events, report, audience, verifyCommand, private, withhold, coverage)
+	if err != nil {
+		return nil, err
+	}
+	if sealReport {
+		id, err := s.dealSealReport(ctx, dealID, audience, ext)
+		if err != nil {
+			return nil, err
+		}
+		if b, cadence, err = s.dealAssemble(ctx, events, withhold); err != nil {
+			return nil, err
+		}
+		// The sealed section states the witness coverage of the steps, which
+		// the report's own entry, after them, cannot change; a tick between
+		// the two reads could, and the report is then made again.
+		if after := witnessCoverage(events, cadence); !reflect.DeepEqual(after, coverage) {
+			return nil, hint(ErrConflict, "the deal's witness state changed while the report was sealed: run the report again")
+		}
+		ext = map[string]interface{}{dealReportPointer: id}
+	}
+	b["extensions"] = map[string]interface{}{dealCadenceExtension: cadence, dealProfile: ext}
+	if err = verifyProducedBundle(b, true); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// dealAssemble cuts the deal's checkpoint and assembles its bundle with the
+// records in withhold withheld, the checkpoint's portable signature, a held
+// witness receipt, and the deal's witness state through the cadence log.
+func (s *dealSession) dealAssemble(ctx context.Context, events []sealedEvent, withhold map[string]bool) (map[string]interface{}, map[string]interface{}, error) {
+	// Cut locally: a report, like every deal event, never queues anything
+	// for the witness; only a due tick does.
+	if _, err := cutCheckpoint(ctx, localOnly(s.dp), s.t.log); err != nil {
+		return nil, nil, err
+	}
 	b, err := AssembleBundle(ctx, s.t.artifacts, s.t.log, s.dp.LogID, BundleOptions{
 		Root: events[len(events)-1].CapsuleID, ClosureDepth: len(events) - 1, Payloads: "selected", WithDisclosure: true, Withhold: withhold,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// The portable checkpoint signature lets a verifier authenticate the
 	// checkpoint in the page instead of labelling it producer-asserted.
 	cp, _ := b["checkpoint"].(map[string]interface{})
 	statement, err := base64.StdEncoding.DecodeString(fmt.Sprint(cp["statement"]))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	cp["cose"] = base64.RawURLEncoding.EncodeToString(statement)
 	// A witness receipt already held for this checkpoint, re-verified now
@@ -79,7 +131,7 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	// so a shared copy keeps it too.
 	entry, err := s.heldWitnessReceipt(ctx, statement)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if entry != nil {
 		cp["witnesses"] = []interface{}{entry}
@@ -89,21 +141,22 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	// shared copy carries it too.
 	cadence, err := s.dealWitnessState(ctx, events[0].Event.DealID, statement)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	coverage := witnessCoverage(events, cadence)
-	if shared {
+	return b, cadence, nil
+}
+
+// dealReportExtension is a copy's deal section: for a shared copy, the one
+// rewritten for its audience; for the user's own copy, the full report.
+func (s *dealSession) dealReportExtension(events []sealedEvent, report dealReport, audience, verifyCommand string, private dealPrivate, withhold map[string]bool, coverage map[string]interface{}) (map[string]interface{}, error) {
+	if audience != dealAudienceKeep {
 		ext := dealShareExtension(events, report, audience, private, withhold)
 		if coverage != nil {
 			ext["witness_coverage"] = coverage
 		}
 		ext["did_line"] = dealDidLine(dealDidSources(events))
 		ext["verify_command"] = verifyCommand
-		b["extensions"] = map[string]interface{}{dealCadenceExtension: cadence, "x-deal-v0": ext}
-		if err = verifyProducedBundle(b, true); err != nil {
-			return nil, err
-		}
-		return b, nil
+		return ext, nil
 	}
 	cited := map[string]bool{}
 	for _, item := range report.Anomalies {
@@ -142,27 +195,24 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 		}
 		return out
 	}
-	b["extensions"] = map[string]interface{}{
-		dealCadenceExtension: cadence,
-		"x-deal-v0": map[string]interface{}{
-			"deal_id": events[0].Event.DealID, "steps": steps, "asked": report.Asked, "asked_step": report.AskedStep,
-			// The opening of the user's own words, so the page can check them
-			// against the baseline's sealed verbatim_commitment.
-			"asked_opening": map[string]interface{}{"nonce": events[0].Event.Nonces["verbatim"], "text": events[0].Event.Open.Intent.Verbatim},
-			// The openings of the materiality predicates' names and versions,
-			// committed in the records (label_commitment): the user's own
-			// copy says which predicate decided, a shared copy only its digest.
-			"materiality_openings": materialityOpenings(events),
-			"did":                  items(report.Did), "anomalies": items(report.Anomalies),
-			"told":     toldItems(report.Told, true),
-			"did_line": dealDidLine(dealDidSources(events)),
-			// Which builds sealed the steps, and which one made this page:
-			// the page compares the two from data it already holds. Nothing
-			// is fetched to do it.
-			"instructions": report.Instructions,
-			"produced_by":  stringList(dealProducers(events)), "page_built_by": currentProducer().String(), "page_version": cliVersion,
-			"scope": dealScopeLine, "audience": dealAudienceKeep, "verify_command": verifyCommand,
-		},
+	ext := map[string]interface{}{
+		"deal_id": events[0].Event.DealID, "steps": steps, "asked": report.Asked, "asked_step": report.AskedStep,
+		// The opening of the user's own words, so the page can check them
+		// against the baseline's sealed verbatim_commitment.
+		"asked_opening": map[string]interface{}{"nonce": events[0].Event.Nonces["verbatim"], "text": events[0].Event.Open.Intent.Verbatim},
+		// The openings of the materiality predicates' names and versions,
+		// committed in the records (label_commitment): the user's own
+		// copy says which predicate decided, a shared copy only its digest.
+		"materiality_openings": materialityOpenings(events),
+		"did":                  items(report.Did), "anomalies": items(report.Anomalies),
+		"told":     toldItems(report.Told, true),
+		"did_line": dealDidLine(dealDidSources(events)),
+		// Which builds sealed the steps, and which one made this page:
+		// the page compares the two from data it already holds. Nothing
+		// is fetched to do it.
+		"instructions": report.Instructions,
+		"produced_by":  stringList(dealProducers(events)), "page_built_by": currentProducer().String(), "page_version": cliVersion,
+		"scope": dealScopeLine, "audience": dealAudienceKeep, "verify_command": verifyCommand,
 	}
 	// The merchant rows carry only strings and booleans; round-trip them to
 	// the generic JSON shape the bundle encoder takes.
@@ -174,7 +224,6 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	if err = json.Unmarshal(raw, &merchant); err != nil {
 		return nil, err
 	}
-	ext := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
 	ext["merchant"] = merchant
 	ext["email_scope"] = emailScopeLine
 	if coverage != nil {
@@ -202,10 +251,7 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 		}
 		ext[key] = generic
 	}
-	if err = verifyProducedBundle(b, true); err != nil {
-		return nil, err
-	}
-	return b, nil
+	return ext, nil
 }
 
 // witnessCoverage names, in the user's terms, what a receipt covering only
@@ -250,6 +296,9 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // (the page cannot check a signature against a directory); it rides as JSON
 // beside the bundle, never inside it, so the bundle's digest is unchanged.
 func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (string, error) {
+	if err := pageGate(b); err != nil {
+		return "", err
+	}
 	countersign = dealCountersignForPage(b, countersign)
 	page, err := emitter.EmitEvidenceGraphHTML(b, evidenceGraphIIFE)
 	if err != nil {
