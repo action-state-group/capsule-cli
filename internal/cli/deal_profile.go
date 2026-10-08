@@ -352,6 +352,9 @@ func rulesBody(r dealRules) (map[string]interface{}, error) {
 		if r.Tier == "" {
 			m["tier"] = "not_stated"
 		}
+		if r.Grade != "" {
+			m["grade"] = r.Grade
+		}
 	}
 	return m, nil
 }

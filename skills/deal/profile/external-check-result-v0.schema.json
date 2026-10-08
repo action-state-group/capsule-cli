@@ -37,11 +37,18 @@
       ]
     },
     "tier": {
-      "description": "How the verdict was reached: recomputed (computed from the record by a procedure anyone can rerun), judged (a model's judgement) or human (a person's). Optional. An absent tier reads as judged, never recomputed.",
+      "description": "How the verdict was reached, as in Result v0's Tier (agent-action-capsule: spec/evidence-result-v0.md section 1, schemas/evidence-result-v0.json $defs/Tier): recomputed (computed from the record by a procedure anyone can rerun) or judged. Optional. An absent tier reads as judged, never recomputed.",
       "enum": [
         "recomputed",
-        "judged",
-        "human"
+        "judged"
+      ]
+    },
+    "grade": {
+      "description": "The grade of the evidence behind the result, by reference to Result v0's Grade (agent-action-capsule: spec/evidence-result-v0.md section 1, schemas/evidence-result-v0.json $defs/Grade), mirrored, never redefined: self-attested, witnessed or countersigned. Optional; absent states no grade.",
+      "enum": [
+        "self-attested",
+        "witnessed",
+        "countersigned"
       ]
     },
     "findings": {

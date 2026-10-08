@@ -1781,7 +1781,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 				} else if e.Approval.Approver == "agent_card" {
 					r.Did[i].Text += "; the card was answered " + e.Approval.Choice
 				} else {
-					r.Did[i].Text += "; you chose " + e.Approval.Choice
+					r.Did[i].Text += "; you chose " + optionLabel(events, e.Approval.Check, e.Approval.Choice)
 				}
 			}
 		case "platform_approval":
@@ -1877,6 +1877,27 @@ func pauseCauseKind(rule string) (side, kind string) {
 		return "agent", rule
 	}
 	return "counterparty", rule
+}
+
+// optionLabel is the label the user saw for a choice on a check's card
+// ("Pay anyway" over a finding, "Pay" over none, "Hold"); the choice's id
+// otherwise. Only hold and proceed: another option's label can carry a
+// contact detail ("Call the number I found (…)").
+func optionLabel(events []sealedEvent, check, choice string) string {
+	if choice != "hold" && choice != "proceed" {
+		return choice
+	}
+	for _, se := range events {
+		if se.CapsuleID != check || se.Event.Check == nil {
+			continue
+		}
+		for _, o := range se.Event.Check.Options {
+			if o.ID == choice && o.Label != "" {
+				return o.Label
+			}
+		}
+	}
+	return choice
 }
 
 // appendNew appends the steps not already in list, keeping order.
