@@ -344,9 +344,10 @@ func withRequesterID(request []byte, p Profile) ([]byte, error) {
 		return nil, inputError("evidence request is not a JSON object")
 	}
 	if named, ok := fields["requester_id"]; ok {
+		// Held to the same form as the profile's: a node's full peer id.
 		var id string
-		if json.Unmarshal(named, &id) != nil || id == "" {
-			return nil, inputError("evidence request's requester_id must be a non-empty string")
+		if json.Unmarshal(named, &id) != nil || !hex64.MatchString(id) {
+			return nil, inputError("evidence request's requester_id must be a node's full peer id: 64 lowercase hex")
 		}
 		return request, nil
 	}
@@ -444,6 +445,12 @@ func bookCommands() *cobra.Command {
 
 	head := &cobra.Command{Use: "head", Short: "Read the newest checkpoint the party reports and verify its signature offline (a withheld newer checkpoint is not detected)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		pin, _ := c.Flags().GetString("responder-checkpoint-key")
+		// Checked like --responder-key, before anything is sent.
+		if pin != "" {
+			if _, e := parseKeys([]string{pin}); e != nil {
+				return e
+			}
+		}
 		answer, e := askPartyFor(c, evidenceRequest{Subject: evidenceSubject{Kind: "chain_segment", Last: 1}})
 		if e != nil {
 			return e

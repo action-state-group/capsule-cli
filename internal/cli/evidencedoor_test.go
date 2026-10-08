@@ -642,3 +642,33 @@ func TestBookVerbsNeedARequesterID(t *testing.T) {
 		require.ErrorIs(t, e, ErrInput, bad)
 	}
 }
+
+// The keys and ids a caller names are checked before anything is sent:
+// --responder-checkpoint-key like --responder-key (a 32-byte Ed25519 key in
+// hex), and a requester_id the request names like the profile's (a node's
+// full peer id, 64 lowercase hex).
+func TestBookVerbsCheckWhatTheCallerNamesBeforeSending(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	srv, seen := fakeNode(t, serveVectors(t))
+	meshProfile(t, srv.URL)
+	for _, bad := range []string{"not-hex", strings.Repeat("ab", 31), strings.Repeat("ab", 33)} {
+		_, e := invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a", "--responder-checkpoint-key", bad)
+		require.ErrorIs(t, e, ErrInput, bad)
+	}
+	for _, bad := range []string{"", "abc123", strings.Repeat("AB", 32), strings.Repeat("11", 33)} {
+		request := filepath.Join(t.TempDir(), "request.json")
+		require.NoError(t, os.WriteFile(request, []byte(`{"requester_id":"`+bad+`","subject":{"kind":"chain_segment","last":1}}`), 0o600))
+		_, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", request)
+		require.ErrorIs(t, e, ErrInput, bad)
+	}
+	request := filepath.Join(t.TempDir(), "request.json")
+	require.NoError(t, os.WriteFile(request, []byte(`{"requester_id":42,"subject":{"kind":"chain_segment","last":1}}`), 0o600))
+	_, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", request)
+	require.ErrorIs(t, e, ErrInput, "a requester_id that is not a string")
+	assert.Empty(t, *seen, "nothing reaches the node")
+
+	// A well-formed key, in either case, still pins the head.
+	cp := chainVectorLink(t, evidenceVector(t, "chain_segment.answer.json")).Checkpoint
+	_, e = invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a", "--responder-checkpoint-key", strings.ToUpper(cp.KeyID))
+	require.NoError(t, e)
+}
