@@ -506,6 +506,10 @@ type dealEvent struct {
 	// a step sealed before records carried an action_class has none and
 	// re-derives without one.
 	TaxonomyVersion string `json:"taxonomy_version,omitempty"`
+	// CommitAlg is the construction (dealCommitAlg) the step's record's
+	// commitments use, kept with the step like Producer: a step sealed
+	// before records declared it has none and re-derives without one.
+	CommitAlg string `json:"commit_alg,omitempty"`
 }
 
 // dealPlatformApproval is an observation of another platform's own approval

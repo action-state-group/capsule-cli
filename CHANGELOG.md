@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### A deal receipt says its text is not verified; records declare their commitments' construction
+
+- **Changed:** a deal receipt's readable text (summary lines, step lines, amounts, what was
+  told) rides in the bundle's `x-deal-v0` extension, which no record seals: editing it left
+  `verify --bundle` VALID and the page showing the edited text. `verify --bundle` now reports
+  that extension with the finding `extension_unbound` and a note (the verdict is unchanged),
+  and the receipt page says first that it does not check that text. Binding the text to a
+  sealed record is planned.
+- **Wire change (schema-visible, additive):** every deal record sealed from now on carries
+  `commit_alg: "sha256-jcs-nonce256"` (in the `x-deal-v0` block; in a typed record's header),
+  naming the construction of its `*_commitment` values: SHA-256 over the JCS of
+  `{"nonce", "text"}`, a fresh 256-bit nonce per commitment, no key, recomputable only from the
+  opening. Records sealed before carry none and re-derive unchanged. PROFILE.md section 4
+  states the construction, its nonce and key scope, and where openings travel.
+
 ### A page is written only when it can stand behind what it shows
 
 - **Behaviour change.** `bundle --html`, `disclose --html` and `deal report --html`

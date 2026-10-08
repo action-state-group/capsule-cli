@@ -222,6 +222,9 @@ func typedHeader(typeName string, block, body map[string]interface{}) map[string
 	if p, ok := block["producer"]; ok {
 		r["producer"] = p
 	}
+	if a, ok := block["commit_alg"]; ok {
+		r["commit_alg"] = a
+	}
 	return r
 }
 

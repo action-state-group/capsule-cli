@@ -69,6 +69,20 @@ function versionBefore(a, b) {
   // from what the file itself carries, what the "did" part rests on, what
   // the receipt does not claim, and the command that checks it.
   const header = el("section", undefined, "deal-assurance");
+  // Every line this page shows about the deal is read from the bundle's
+  // x-deal-v0 extension, which capsulectl wrote when it made the page and
+  // which no record seals: an edited line still shows here, and the bundle
+  // still verifies. Said first, on every copy.
+  const unchecked = el(
+    "p",
+    "The text on this page was written by capsulectl when the page was made, and this page does not check it: " +
+      "the summary lines, each step's line, the amounts and what was told. " +
+      "This page checks the sealed records in this file, not those words." +
+      (shared ? "" : " Only the words you asked, marked ✓, are checked against their sealed record."),
+    "deal-note",
+  );
+  unchecked.dataset.unchecked = "x-deal-v0";
+  header.append(unchecked);
   header.append(el("p", report.scope || "This receipt covers this one deal. It is not a record of everything the agent did.", "deal-scope"));
   // A witness receipt rides in checkpoint.witnesses, or (the default) in the
   // cadence chain, x-cadence-witness/v0 (earlier bundles: cadence-witness/v0
@@ -240,8 +254,8 @@ function versionBefore(a, b) {
   host.append(
     el(
       "p",
-      "The summary lines below are written by capsulectl on this device and are not checked by this page. " +
-        "Open an item to see the steps it was read from; each step's record is checked.",
+      "The summary lines below, and each step's line, are written by capsulectl on this device and are not checked by this page. " +
+        "Open an item to see the steps it was read from; each step's sealed record is checked, not its line.",
       "deal-note",
     ),
   );
