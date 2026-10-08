@@ -119,7 +119,7 @@ func TestDealCancelByDateAndCancellationProof(t *testing.T) {
 	html, err := os.ReadFile(page)
 	require.NoError(t, err)
 	b := embeddedBundle(t, string(html))
-	ext := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
+	ext := dealReportOf(b)
 	assert.Len(t, ext["cancellations"], 1)
 	assert.Len(t, ext["deadlines"], 1)
 	mail := report["email"].(map[string]any)

@@ -43,7 +43,8 @@ var dealClock = func() time.Time { return time.Now().UTC() }
 
 // The local store, in the profile's SQLite file. It never leaves the device:
 // deal_steps.local holds each step's raw values and commitment nonces,
-// deal_disclosures each shared copy's disclosure record,
+// deal_disclosures each shared copy's disclosure record, deal_reports the
+// sealed report capsule of each copy written (dealSealReport),
 // deal_keys each deal's key, and deal_store the store secret the keys derive
 // from. What is sealed is only the x-deal-v0 record derived from them.
 var dealIndexSchema = []string{
@@ -64,6 +65,13 @@ var dealIndexSchema = []string{
 	cll_sequence INTEGER NOT NULL,
 	record TEXT NOT NULL,
 	PRIMARY KEY (deal_id, n)
+)`,
+	`CREATE TABLE IF NOT EXISTS deal_reports (
+	deal_id TEXT NOT NULL,
+	capsule_id TEXT NOT NULL,
+	audience TEXT NOT NULL,
+	cll_sequence INTEGER NOT NULL,
+	PRIMARY KEY (deal_id, capsule_id)
 )`,
 	`CREATE TABLE IF NOT EXISTS deal_keys (deal_id TEXT PRIMARY KEY, deal_key BLOB NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS deal_store (id INTEGER PRIMARY KEY CHECK (id = 1), secret BLOB NOT NULL)`,
@@ -199,6 +207,26 @@ func (s *dealSession) close() error {
 	return errors.Join(e, s.unlock())
 }
 
+// stepEntries reads the deal's log, in order, without the entries of its
+// sealed reports: the steps alone.
+func (s *dealSession) stepEntries(ctx context.Context, dealID string) ([]cll.Entry, error) {
+	entries, err := s.logEntries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reports, err := s.reportIDs(ctx, dealID)
+	if err != nil {
+		return nil, err
+	}
+	steps := entries[:0:0]
+	for _, e := range entries {
+		if !reports[hex.EncodeToString(e.Value)] {
+			steps = append(steps, e)
+		}
+	}
+	return steps, nil
+}
+
 // logEntries reads the deal's whole log, in order.
 func (s *dealSession) logEntries(ctx context.Context) ([]cll.Entry, error) {
 	var out []cll.Entry
@@ -216,7 +244,8 @@ func (s *dealSession) logEntries(ctx context.Context) ([]cll.Entry, error) {
 }
 
 // load reads a deal's steps back and re-verifies each one against the deal's
-// own log: the log must hold exactly one entry per indexed step, in order,
+// own log: the log, less its sealed reports' entries, must hold exactly one
+// entry per indexed step, in order,
 // so a lost or deleted step is a conflict, never a silently shorter deal.
 // Then, per step: the Capsule signature and trust, the payload binding, the
 // local step re-derived into exactly the sealed record bytes, and the prev
@@ -245,7 +274,7 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	entries, err := s.logEntries(ctx)
+	entries, err := s.stepEntries(ctx, dealID)
 	if err != nil {
 		return nil, err
 	}
@@ -579,7 +608,7 @@ func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEv
 	}
 	published, err := s.publishStep(ctx, request, se)
 	if err != nil {
-		if entries, scanErr := s.logEntries(ctx); scanErr == nil && int64(len(entries)) < se.Event.N {
+		if entries, scanErr := s.stepEntries(ctx, dealID); scanErr == nil && int64(len(entries)) < se.Event.N {
 			_, delErr := s.db.ExecContext(ctx, `DELETE FROM deal_steps WHERE deal_id=? AND n=?`, dealID, se.Event.N)
 			err = errors.Join(err, delErr)
 		}
@@ -1633,7 +1662,7 @@ func dealReportCommand() *cobra.Command {
 					out["assurance"] = dealAssurance(map[string]interface{}{})
 					return output(c, out)
 				}
-				b, err := s.dealReportBundle(ctx, events, report, dealAudienceKeep, "")
+				b, err := s.dealReportBundle(ctx, events, report, dealAudienceKeep, "", false)
 				if err != nil {
 					return err
 				}
@@ -1648,7 +1677,7 @@ func dealReportCommand() *cobra.Command {
 			if fromBundle != "" {
 				b, err = s.dealBundleOf(fromBundle, dealID, events)
 			} else {
-				b, err = s.dealReportBundle(ctx, events, report, audience, dealVerifyCommand(htmlPath))
+				b, err = s.dealReportBundle(ctx, events, report, audience, dealVerifyCommand(htmlPath), true)
 			}
 			if err != nil {
 				return err

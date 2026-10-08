@@ -56,7 +56,33 @@ function versionBefore(a, b) {
   const matched = new Set(
     verification.disclosures.filter((d) => d.status === "disclosure_match" && d.member === "agent_input").map((d) => d.capsuleId),
   );
-  const report = (bundle.extensions || {})["x-deal-v0"] || {};
+  // The deal's text: the input of the sealed report the x-deal-v0 extension
+  // points at, checked like every record (its disclosure matched). A bundle
+  // written before reports were sealed carries the text in the extension
+  // itself, which no record seals, and the page says so.
+  const dealExt = (bundle.extensions || {})["x-deal-v0"] || {};
+  const sealedId = typeof dealExt.sealed_report === "string" ? dealExt.sealed_report : undefined;
+  const reportInput = (id) => ((bundle.disclosures || {})[id] || {}).agent_input;
+  const otherReports = verification.disclosures.filter((d) => {
+    const input = d.member === "agent_input" ? reportInput(d.capsuleId) : undefined;
+    return d.capsuleId !== sealedId && input && input.type === "deal_report";
+  });
+  // A sealed report's record stays in every later bundle (it is signed, and
+  // on the log the bundle covers), so a bundle holding one whose extension
+  // names none had its text swapped for unsealed text: refused, never shown
+  // under the "not checked" label.
+  const reportRecords = (bundle.records || []).filter((r) => r && r.action_id === "capsulectl-deal-report");
+  let report = dealExt;
+  if (sealedId !== undefined || otherReports.length > 0 || reportRecords.length > 0) {
+    const matchedReport = verification.disclosures.some((d) => d.capsuleId === sealedId && d.member === "agent_input" && d.status === "disclosure_match");
+    const input = matchedReport ? reportInput(sealedId) : undefined;
+    if (otherReports.length > 0 || !input || input.type !== "deal_report" || typeof input.report !== "object" || input.report === null) {
+      host.append(el("p", "⚠️ The deal's text could not be checked against its sealed record. Do not rely on it.", "deal-bad"));
+      return;
+    }
+    report = input.report;
+  }
+  const sealed = sealedId !== undefined;
   const shared = report.audience === "counterparty" || report.audience === "adjudicator";
   const byId = new Map((report.steps || []).map((s) => [s.capsule_id, s]));
   const base = matched.has(report.asked_step) ? bundle.disclosures[report.asked_step].agent_input : undefined;
@@ -69,20 +95,31 @@ function versionBefore(a, b) {
   // from what the file itself carries, what the "did" part rests on, what
   // the receipt does not claim, and the command that checks it.
   const header = el("section", undefined, "deal-assurance");
-  // Every line this page shows about the deal is read from the bundle's
-  // x-deal-v0 extension, which capsulectl wrote when it made the page and
-  // which no record seals: an edited line still shows here, and the bundle
-  // still verifies. Said first, on every copy.
-  const unchecked = el(
-    "p",
-    "The text on this page was written by capsulectl when the page was made, and this page does not check it: " +
-      "the summary lines, each step's line, the amounts and what was told. " +
-      "This page checks the sealed records in this file, not those words." +
-      (shared ? "" : " Only the words you asked, marked ✓, are checked against their sealed record."),
-    "deal-note",
-  );
-  unchecked.dataset.unchecked = "x-deal-v0";
-  header.append(unchecked);
+  // What the deal's text rests on, said first, on every copy: sealed with
+  // the page and checked unchanged, or (a bundle written before reports were
+  // sealed) read from the x-deal-v0 extension, which no record seals, so an
+  // edited line would still show here.
+  if (sealed) {
+    const checked = el(
+      "p",
+      "The text on this page was written by capsulectl when the page was made and sealed as a record in this file: " +
+        "this page checked that it has not changed since. It is capsulectl's summary of the steps, not the steps themselves.",
+      "deal-note",
+    );
+    checked.dataset.sealed = "x-deal-v0";
+    header.append(checked);
+  } else {
+    const unchecked = el(
+      "p",
+      "The text on this page was written by capsulectl when the page was made, and this page does not check it: " +
+        "the summary lines, each step's line, the amounts and what was told. " +
+        "This page checks the sealed records in this file, not those words." +
+        (shared ? "" : " Only the words you asked, marked ✓, are checked against their sealed record."),
+      "deal-note",
+    );
+    unchecked.dataset.unchecked = "x-deal-v0";
+    header.append(unchecked);
+  }
   header.append(el("p", report.scope || "This receipt covers this one deal. It is not a record of everything the agent did.", "deal-scope"));
   // A witness receipt rides in checkpoint.witnesses, or (the default) in the
   // cadence chain, x-cadence-witness/v0 (earlier bundles: cadence-witness/v0
@@ -102,7 +139,9 @@ function versionBefore(a, b) {
       // not a URL: show it as written
     }
     const cut = typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : "";
-    const part = cadence.state === "witnessed" && cadence.extent === "part";
+    // An earlier checkpoint that already held every step (only sealed
+    // reports after it) witnesses them all.
+    const part = cadence.state === "witnessed" && cadence.extent === "part" && Number(cadence.steps_witnessed) < Number(cadence.steps);
     // What those steps hold, in the user's terms, as capsulectl named them.
     const wc = report.witness_coverage || {};
     const coverage =
@@ -254,8 +293,11 @@ function versionBefore(a, b) {
   host.append(
     el(
       "p",
-      "The summary lines below, and each step's line, are written by capsulectl on this device and are not checked by this page. " +
-        "Open an item to see the steps it was read from; each step's sealed record is checked, not its line.",
+      sealed
+        ? "The summary lines below, and each step's line, were written by capsulectl on this device and sealed with this page: " +
+            "this page checked they were not changed since, not that they are right. Open an item to see the steps it was read from; each step's sealed record is checked."
+        : "The summary lines below, and each step's line, are written by capsulectl on this device and are not checked by this page. " +
+            "Open an item to see the steps it was read from; each step's sealed record is checked, not its line.",
       "deal-note",
     ),
   );

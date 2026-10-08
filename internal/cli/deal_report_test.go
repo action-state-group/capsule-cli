@@ -114,14 +114,18 @@ func TestDealReportIsOneLocalVerifyingPage(t *testing.T) {
 	assert.Equal(t, "pass", v.GraphClosure.Status)
 	assert.Equal(t, "pass", v.IntervalCoverage.Status, v.IntervalCoverage.Findings)
 	assert.Equal(t, "pass", v.PerRecordMembership.Status, v.PerRecordMembership.Findings)
-	assert.Len(t, b["records"], 8, "exactly this deal's steps, nothing from any other deal")
+	assert.Len(t, b["records"], 9, "exactly this deal's 8 steps and this copy's sealed report, nothing from any other deal")
 	for _, d := range v.Disclosures {
 		assert.Equal(t, "disclosure_match", string(d.Status), "every step's record is disclosed: it carries no raw values")
 	}
-	for _, r := range b["records"].([]interface{}) {
-		_ = r
+	// The step records; the copy's sealed report holds the page's own text.
+	stepRecords := map[string]interface{}{}
+	for id, d := range b["disclosures"].(map[string]interface{}) {
+		if input, _ := d.(map[string]interface{})["agent_input"].(map[string]interface{}); input["type"] != "deal_report" {
+			stepRecords[id] = d
+		}
 	}
-	disclosed, err := json.Marshal(b["disclosures"])
+	disclosed, err := json.Marshal(stepRecords)
 	require.NoError(t, err)
 	for _, private := range []string{"M. Torres", "Coastal Jet", "rent me 2 jet skis", "office line"} {
 		assert.NotContains(t, string(disclosed), private, "sealed records carry fingerprints and commitments only")
@@ -229,7 +233,7 @@ func TestDealReportAskedIsCheckable(t *testing.T) {
 	raw, err := os.ReadFile(page)
 	require.NoError(t, err)
 	b := embeddedBundle(t, string(raw))
-	ext := b["extensions"].(map[string]interface{})["x-deal-v0"].(map[string]interface{})
+	ext := dealReportOf(b)
 	opening, ok := ext["asked_opening"].(map[string]interface{})
 	require.True(t, ok, "the report carries the opening of the user's words")
 	commitment, err := commitText(opening["nonce"].(string), opening["text"].(string))

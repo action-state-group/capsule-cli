@@ -156,7 +156,7 @@ func TestDealLateEvidenceConfirmsTheClose(t *testing.T) {
 
 	// A shared copy says where the deal stands too, in fixed words.
 	shared, raw := sharedCopy(t, dealID, dealAudienceCounterparty, "the shop")
-	sl := shared["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)["lifecycle"].(map[string]any)
+	sl := dealReportOf(shared)["lifecycle"].(map[string]any)
 	assert.Equal(t, "closed", sl["state"])
 	require.Len(t, sl["later"], 1)
 	assert.Equal(t, "a record sealed after the close", sl["later"].([]any)[0].(map[string]any)["text"])

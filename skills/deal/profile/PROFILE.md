@@ -64,6 +64,24 @@ exactly two members.
 - Records are closed. Unknown members fail the schema. A new member means a new profile
   version (`x-deal-v1`).
 
+**Sealed reports are not steps.** Each copy of a deal report that is written to a file
+(the user's own receipt, or a shared copy) seals its readable text as one more Capsule on the
+deal's log:
+- **The Capsule:** `action_id: "capsulectl-deal-report"`, `action_type: "fyi"`, not chained.
+- **Its payload:** `{"type": "deal_report", "profile": "x-deal-v0", "deal_id", "audience",
+  "nonce", "report"}`.
+  - `report` is that copy's deal section: summary lines, step lines, amounts, what was told,
+    anomalies. A shared copy seals the section already rewritten for its audience.
+  - `nonce` is a fresh 256-bit random value, so the Capsule's `agent_input_digest` confirms
+    no guess at the text.
+- **In the bundle:** the `x-deal-v0` extension only names the Capsule:
+  `{"sealed_report": "<capsule id>"}`. The text is its disclosed payload, and any edit fails
+  the disclosure check.
+- **Later bundles:** they cover the deal's whole log, so they carry every earlier report's
+  Capsule with its payload withheld. A copy discloses its own text and no other copy's.
+- **Not steps:** a sealed report has no `seq` and no record in the step chain. A verifier
+  checking a deal's steps (section 6) sets these Capsules aside.
+
 ## 2. The extension block `x-deal-v0`
 
 | Field | Type | Req | Meaning |
