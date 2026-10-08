@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
+	emit "github.com/action-state-group/capsule-emit-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -46,8 +48,57 @@ func runReportBuild(t *testing.T, bundlePath string, extra ...string) (reportBui
 	var result reportBuildResult
 	if err == nil {
 		require.NoError(t, json.Unmarshal([]byte(stdout), &result))
+	} else if strings.HasPrefix(strings.TrimSpace(stdout), "{") {
+		// A refused page still reports the result, with page "not written".
+		require.NoError(t, json.Unmarshal([]byte(stdout), &result))
 	}
 	return result, out, err
+}
+
+// signBundleRecords writes a copy of a bundle whose every record carries its
+// producer signature inline (signature: the hex COSE_Sign1 envelope over its
+// capsule_id; key_id: the signer's public key), the form `verify --bundle`
+// checks. A book's bundle does not carry them yet, so it verifies INCOMPLETE
+// (producer_signature_unclaimed); signed, it is VALID.
+func signBundleRecords(t *testing.T, path string, key ed25519.PrivateKey) string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	value, err := decodeBundleJSON(raw)
+	require.NoError(t, err)
+	identity, err := emit.NewEd25519SigningIdentity(key)
+	require.NoError(t, err)
+	public := hex.EncodeToString(key.Public().(ed25519.PublicKey))
+	for _, r := range value["records"].([]interface{}) {
+		record := r.(map[string]interface{})
+		body, err := json.Marshal(record)
+		require.NoError(t, err)
+		envelope, err := emit.Sign(emit.BuiltPayload{CapsuleID: record["capsule_id"].(string), JSON: body}, identity)
+		require.NoError(t, err)
+		record["signature"], record["key_id"] = hex.EncodeToString(envelope), public
+	}
+	encoded, err := json.Marshal(value)
+	require.NoError(t, err)
+	signed := filepath.Join(t.TempDir(), "signed-bundle.json")
+	require.NoError(t, os.WriteFile(signed, encoded, 0o600))
+	return signed
+}
+
+// signedBookBundle is a book-form Result-root bundle, signed so that
+// `verify --bundle` calls it VALID, and the unsigned bundle it came from.
+func signedBookBundle(t *testing.T) (signed, unsigned string, root string) {
+	t.Helper()
+	b := newResultBook(t)
+	built, _, err := runResultBuild(t, b.profile, resultDoc(testClaim("claim-1", "met", b.capsules[0]), testClaim("claim-2", "not_evaluable", b.capsules[1])))
+	require.NoError(t, err)
+	unsigned = filepath.Join(t.TempDir(), "bundle.json")
+	_, err = invoke(t, "", "disclose", "--profile", b.profile.Name, "--root", built.RecordID, "--payloads", "selected", "--out", unsigned)
+	require.NoError(t, err)
+	signed = signBundleRecords(t, unsigned, b.key)
+	result, err := verifyBundleOutput(t, signed)
+	require.NoError(t, err)
+	require.Equal(t, "VALID", result["verdict"])
+	return signed, unsigned, built.RecordID
 }
 
 // embeddedBundle reads the bundle a report page embeds, as the shell does.
@@ -71,72 +122,76 @@ func jcs(t *testing.T, value interface{}) string {
 	return string(encoded)
 }
 
-func TestReportBuildRendersAPayloadFormResultRoot(t *testing.T) {
+// The payload-form fixture carries no checkpoint signature and no producer
+// signatures: `verify --bundle` calls it INCOMPLETE, so no page is written
+// (the viewer's banner would say it passed). The result is still reported,
+// with the verdict, and nothing is on disk.
+func TestReportBuildWritesNoPageForAnIncompleteBundle(t *testing.T) {
 	result, out, err := runReportBuild(t, sealedResultFixture, "--card", "outcome", "--permalink")
-	require.NoError(t, err)
+	require.ErrorIs(t, err, ErrPartial)
+	assert.Equal(t, 3, ExitCode(err))
+	assert.Contains(t, SafeError(err), "no page written")
+	assert.NoFileExists(t, out)
+	assert.Equal(t, "not written", result.Page)
+	assert.Equal(t, "INCOMPLETE", result.Verdict)
+	assert.Equal(t, []string{"checkpoint withheld", "producer_signatures withheld"}, result.UnmetClaims)
 	assert.Equal(t, "payload", result.Form)
 	assert.Equal(t, "agent_input", result.Member)
-	assert.Equal(t, "outcome", result.Card)
 	assert.Equal(t, 3, result.Claims)
-	assert.Equal(t, 0, result.UnsupportedClaims, "every cited digest is a record in the fixture")
 	assert.Equal(t, []string{"ec:airline-week:2026-09-14@1"}, result.ContractRefs)
-	assert.Equal(t, "pass", result.Verification)
-	assert.False(t, result.Draft)
-	assert.Equal(t, out, result.Report)
+	assert.Empty(t, result.Report)
+	assert.Empty(t, result.Permalink, "no page, no permalink")
+}
 
-	raw, err := os.ReadFile(out)
-	require.NoError(t, err)
-	html := string(raw)
-	assert.Contains(t, html, `renderEvidenceGraph(window.__BUNDLE__, document.getElementById("app"))`)
-	assert.Contains(t, html, `<div id="app"></div>`)
-	assert.Contains(t, html, "globalThis.renderEvidenceGraph", "the runtime is inline")
-	assert.NotContains(t, html, "http://")
-	assert.NotContains(t, html, "https://", "the page loads nothing from the network")
+// A book's bundle as it is built today carries no producer signatures:
+// INCOMPLETE, no page. One whose record signature does not verify is
+// INVALID: no page either, and the refusal says so.
+func TestReportBuildWritesNoPageUnlessTheBundleIsValid(t *testing.T) {
+	signed, unsigned, _ := signedBookBundle(t)
+	result, out, err := runReportBuild(t, unsigned, "--card", "obligation")
+	require.ErrorIs(t, err, ErrPartial)
+	assert.NoFileExists(t, out)
+	assert.Equal(t, "INCOMPLETE", result.Verdict)
+	assert.Equal(t, []string{"producer_signatures withheld"}, result.UnmetClaims, "a book's bundle carries no producer signatures yet")
 
-	embedded := reportEmbeddedBundle(t, html)
-	assert.Equal(t, result.Root, embedded["root"])
-	extensions, _ := embedded["extensions"].(map[string]interface{})
-	assert.Equal(t, map[string]interface{}{"card": "outcome"}, extensions[cardExtension])
-	_, hasPresentation := extensions[presentationExtension]
-	assert.False(t, hasPresentation)
-	digest, err := aacbundle.BundleDigest(embedded)
+	raw, err := os.ReadFile(signed)
 	require.NoError(t, err)
-	assert.Equal(t, digest, result.BundleDigest)
-	verdict := aacbundle.VerifyBundle(embedded)
-	assert.Equal(t, "pass", verdict.IntervalCoverage.Status, "the embedded copy still verifies; extensions sit outside the proofs")
-
-	// The permalink carries the same bytes the page embeds.
-	require.True(t, strings.HasPrefix(result.Permalink, defaultBundleURL+"#"))
-	decoded, err := aacbundle.DecodeFragment(strings.TrimPrefix(result.Permalink, defaultBundleURL+"#"))
+	value, err := decodeBundleJSON(raw)
 	require.NoError(t, err)
-	assert.Equal(t, jcs(t, embedded), jcs(t, decoded))
-
-	// Rendering is local: the same input renders the same page again.
-	_, again, err := runReportBuild(t, sealedResultFixture, "--card", "outcome", "--base-url", "https://example.invalid/v", "--permalink")
+	record := value["records"].([]interface{})[0].(map[string]interface{})
+	sig := []byte(record["signature"].(string))
+	if sig[len(sig)-1] == '0' {
+		sig[len(sig)-1] = '1'
+	} else {
+		sig[len(sig)-1] = '0'
+	}
+	record["signature"] = string(sig)
+	encoded, err := json.Marshal(value)
 	require.NoError(t, err)
-	rawAgain, err := os.ReadFile(again)
-	require.NoError(t, err)
-	assert.Equal(t, raw, rawAgain)
+	tampered := filepath.Join(t.TempDir(), "tampered.json")
+	require.NoError(t, os.WriteFile(tampered, encoded, 0o600))
+	result, out, err = runReportBuild(t, tampered, "--card", "obligation")
+	require.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, 1, ExitCode(err))
+	assert.NoFileExists(t, out)
+	assert.Equal(t, "INVALID", result.Verdict)
+	assert.Equal(t, []string{"producer_signatures fail"}, result.UnmetClaims)
 }
 
 // The book form, end to end: result build -> disclose -> report build ->
 // both verifiers over the written bundle.
 func TestReportBuildRendersABookFormResultRoot(t *testing.T) {
-	b := newResultBook(t)
-	p := b.profile
-	built, _, err := runResultBuild(t, p, resultDoc(testClaim("claim-1", "met", b.capsules[0]), testClaim("claim-2", "not_evaluable", b.capsules[1])))
-	require.NoError(t, err)
-	bundlePath := filepath.Join(t.TempDir(), "bundle.json")
-	_, err = invoke(t, "", "disclose", "--profile", p.Name, "--root", built.RecordID, "--payloads", "selected", "--out", bundlePath)
-	require.NoError(t, err)
-	verifyTestBundleFile(t, bundlePath)
+	bundlePath, unsigned, rootID := signedBookBundle(t)
+	verifyTestBundleFile(t, unsigned)
 
 	presentation := writeTestJSON(t, "presentation.json", map[string]any{"producer_display_name": "Demo Co", "title": "Week 38"})
 	result, out, err := runReportBuild(t, bundlePath, "--card", "obligation", "--presentation", presentation, "--permalink")
 	require.NoError(t, err)
+	assert.Equal(t, "written", result.Page)
+	assert.Equal(t, "VALID", result.Verdict)
 	assert.Equal(t, "book", result.Form)
 	assert.Equal(t, "agent_input", result.Member)
-	assert.Equal(t, built.RecordID, result.Root)
+	assert.Equal(t, rootID, result.Root)
 	assert.Equal(t, 2, result.Claims)
 	assert.Equal(t, 0, result.UnsupportedClaims, "a claim citing a published capsule resolves through the disclosed record header's subject")
 	assert.Equal(t, []string{testContract}, result.ContractRefs)
@@ -144,21 +199,37 @@ func TestReportBuildRendersABookFormResultRoot(t *testing.T) {
 
 	raw, err := os.ReadFile(out)
 	require.NoError(t, err)
-	embedded := reportEmbeddedBundle(t, string(raw))
+	html := string(raw)
+	assert.Contains(t, html, `renderEvidenceGraph(window.__BUNDLE__, document.getElementById("app"))`)
+	assert.Contains(t, html, "globalThis.renderEvidenceGraph", "the runtime is inline")
+	assert.NotContains(t, html, "http://")
+	assert.NotContains(t, html, "https://", "the page loads nothing from the network")
+	embedded := reportEmbeddedBundle(t, html)
+	digest, err := aacbundle.BundleDigest(embedded)
+	require.NoError(t, err)
+	assert.Equal(t, digest, result.BundleDigest)
 	extensions, _ := embedded["extensions"].(map[string]interface{})
 	assert.Equal(t, map[string]interface{}{"card": "obligation"}, extensions[cardExtension])
 	assert.Equal(t, map[string]interface{}{"producer_display_name": "Demo Co", "title": "Week 38"}, extensions[presentationExtension])
 	_, hasPayloads := extensions["evidencebook/payloads"]
 	assert.True(t, hasPayloads, "the book's own extensions are kept")
 	disclosures, _ := embedded["disclosures"].(map[string]interface{})
-	header, _ := disclosures[built.RecordID].(map[string]interface{})["agent_input"].(map[string]interface{})
+	header, _ := disclosures[rootID].(map[string]interface{})["agent_input"].(map[string]interface{})
 	statement, _ := header["statement"].(map[string]interface{})
 	assert.Equal(t, resultVersion, statement["result_version"], "the page embeds the record header whose statement is the Result")
 
 	// The written bundle on disk is untouched by the report.
-	value, _ := verifyTestBundleFile(t, bundlePath)
+	onDisk, err := os.ReadFile(bundlePath)
+	require.NoError(t, err)
+	value, err := decodeBundleJSON(onDisk)
+	require.NoError(t, err)
 	_, decorated := value["extensions"].(map[string]interface{})[cardExtension]
 	assert.False(t, decorated)
+
+	// The permalink carries the same bytes the page embeds.
+	decoded, err := aacbundle.DecodeFragment(strings.TrimPrefix(result.Permalink, defaultBundleURL+"#"))
+	require.NoError(t, err)
+	assert.Equal(t, jcs(t, embedded), jcs(t, decoded))
 
 	// A second build must state the same card and header, or none.
 	_, _, err = runReportBuild(t, bundlePath, "--card", "process")
@@ -176,7 +247,8 @@ func TestReportBuildRendersABookFormResultRoot(t *testing.T) {
 }
 
 func TestReportBuildDryRunWritesADraftAndNoPermalink(t *testing.T) {
-	result, out, err := runReportBuild(t, sealedResultFixture, "--card", "human_role", "--permalink", "--dry-run")
+	bundle, _, _ := signedBookBundle(t)
+	result, out, err := runReportBuild(t, bundle, "--card", "human_role", "--permalink", "--dry-run")
 	require.NoError(t, err)
 	assert.True(t, result.Draft)
 	assert.Empty(t, result.Permalink)
@@ -184,7 +256,7 @@ func TestReportBuildDryRunWritesADraftAndNoPermalink(t *testing.T) {
 	require.NoError(t, err)
 	extensions, _ := reportEmbeddedBundle(t, string(raw))["extensions"].(map[string]interface{})
 	assert.Equal(t, map[string]interface{}{"card": "human_role", "draft": true}, extensions[cardExtension])
-	stamped, _, err := runReportBuild(t, sealedResultFixture, "--card", "human_role")
+	stamped, _, err := runReportBuild(t, bundle, "--card", "human_role")
 	require.NoError(t, err)
 	assert.NotEqual(t, stamped.BundleDigest, result.BundleDigest, "a draft page never has a stamped page's digest")
 }
@@ -350,7 +422,8 @@ func TestReportBuildRefusesABadCardOrPresentation(t *testing.T) {
 			assert.NoFileExists(t, out)
 		})
 	}
-	_, _, err = runReportBuild(t, sealedResultFixture, "--card", "outcome", "--presentation", writeTestJSON(t, "p.json", map[string]any{"logo_data_url": "data:image/png;base64,AAAA"}))
+	valid, _, _ := signedBookBundle(t)
+	_, _, err = runReportBuild(t, valid, "--card", "outcome", "--presentation", writeTestJSON(t, "p.json", map[string]any{"logo_data_url": "data:image/png;base64,AAAA"}))
 	require.NoError(t, err)
 
 	_, err = invoke(t, "", "report", "build", "--card", "outcome")
@@ -386,7 +459,8 @@ func TestHeldBundleAcceptanceNamesAWithheldClosure(t *testing.T) {
 func TestReportBuildRefusesAnExistingOut(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "report.html")
 	require.NoError(t, os.WriteFile(out, []byte("keep"), 0o600))
-	_, err := invoke(t, "", "report", "build", "--bundle", sealedResultFixture, "--card", "outcome", "--out", out)
+	valid, _, _ := signedBookBundle(t)
+	_, err := invoke(t, "", "report", "build", "--bundle", valid, "--card", "outcome", "--out", out)
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "--out "+out+" already exists")
 	kept, err := os.ReadFile(out)
