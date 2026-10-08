@@ -147,6 +147,7 @@ type ProfileRulesChecker struct {
 	SHA256           string   `yaml:"sha256,omitempty" mapstructure:"sha256"`
 	Timeout          string   `yaml:"timeout,omitempty" mapstructure:"timeout"`
 	DefinitionDigest string   `yaml:"definition_digest,omitempty" mapstructure:"definition_digest"`
+	AllowJudgedDeny  bool     `yaml:"allow_judged_deny,omitempty" mapstructure:"allow_judged_deny"`
 }
 
 // isBook reports whether the profile is an evidence book: a jsonl profile with

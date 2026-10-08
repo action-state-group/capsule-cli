@@ -10,7 +10,7 @@
   never the agent's.
   - **What it gets.** Every `deal check` runs it, from a private copy of the exact bytes it
     hashed, with one `external-check-input/v0` object on stdin
-    (`skills/deal/profile/external-check-input-v0.schema.json`):
+    (`docs/contracts/external-check/v0/input.schema.json`):
     - the capsule of the step being checked, with its disclosed record;
     - as history, the profile's sealed acts with an amount from every deal in the last 31
       days (at most 1,000), stating whether that is all of them.
@@ -19,12 +19,17 @@
     `not_evaluable`, and the check pauses.
   - **What it prints.** One `external-check-result/v0` object: the ruleset's id and definition
     digest, a verdict (`allow`, `deny`, `escalate` or `not_evaluable`), and its findings, each
-    limit and value a number or a short line. The schema ships at
-    `skills/deal/profile/external-check-result-v0.schema.json`, and output outside it is
-    refused.
+    limit and value a number or a short line, and a `tier` (`recomputed`, `judged` with the
+    model's pin, or `human`; judged when absent). The schema ships at
+    `docs/contracts/external-check/v0/result.schema.json`, with a README on versioning, and
+    output outside it is refused.
 - **One verdict, one prompt.** The checker's answer folds into the check's own differences.
   - **`deny`** is a new verdict: the card names the rule, its limit and the value, and offers
     only "Hold". An approval to proceed is refused.
+  - **Only a recomputed rule refuses.** A deny the checker judged, or did not say how it
+    reached, pauses instead, and the record says it was degraded. A profile can opt in to
+    judged denies (`allow_judged_deny`). The prompt says how the verdict was reached
+    ("computed by your rules" or "judged by <model>").
   - **`escalate` and `not_evaluable`** pause.
   - **A checker that cannot answer pauses**, saying "Your rules were not checked:" and why. That
     covers a checker that changed since it was pinned, refused the record, timed out (10s by

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentactioncapsule.org/profiles/x-deal-v0/external-check-input-v0.schema.json",
+  "$id": "https://agentactioncapsule.org/contracts/external-check/v0/input.schema.json",
   "title": "external-check-input/v0",
-  "description": "What a deal check writes to an external rules checker's stdin, as one JSON object: the record of what is about to happen and, as history, the profile's earlier sealed acts with an amount, from every deal on the profile's own store, sealed in the last history_scope.days days, newest first and at most history_scope.max_records of them. Each record is a sealed capsule with its disclosed agent_input (the deal record, whose body holds the step): the shape of one record of a deal export. The checker answers with one external-check-result/v0 (external-check-result-v0.schema.json). A rolling window is evaluated over this history; when history_scope.complete is false, or the window is longer than history_scope.days, a rule over it is not_evaluable.",
+  "description": "What a deal check writes to an external rules checker's stdin, as one JSON object: the record of what is about to happen and, as history, the profile's earlier sealed acts with an amount, from every deal on the profile's own store, sealed in the last history_scope.days days, newest first and at most history_scope.max_records of them. Each record is a sealed capsule with its disclosed agent_input (the deal record, whose body holds the step): the shape of one record of a deal export. The checker answers with one external-check-result/v0 (result.schema.json, beside this file). A rolling window is evaluated over this history; when history_scope.complete is false, or the window is longer than history_scope.days, a rule over it is not_evaluable.",
   "type": "object",
   "additionalProperties": false,
   "required": [

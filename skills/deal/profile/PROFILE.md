@@ -450,8 +450,9 @@ under a trusted plugin root, and the profile pins its SHA-256.
 At every check, after the `check` record is sealed:
 - **What the checker gets.** The command runs exactly as pinned, from a private copy of the
   executable bytes that were hashed, with only `PATH` and `HOME` in its environment. On stdin it
-  gets one `external-check-input/v0` object (`external-check-input-v0.schema.json`, beside this
-  file):
+  gets one `external-check-input/v0` object. The contract's normative copies live at
+  `docs/contracts/external-check/v0/` in capsule-cli (`input.schema.json`, `result.schema.json`,
+  and a README on versioning). The input object holds:
   - `record`: that `check` capsule, with its disclosed `agent_input` (the deal record, whose
     body is what is about to happen);
   - `history`: the profile's earlier sealed acts with an amount, from every deal on this
@@ -463,9 +464,13 @@ At every check, after the `check` record is sealed:
   history, or too little (`complete` false, or a window longer than `days`), reports that rule
   `not_evaluable`.
 - **What it prints.** Exit 0 means it printed one `external-check-result/v0` object
-  (`external-check-result-v0.schema.json`, beside this file): `ruleset_id`, `definition_digest`,
-  `verdict` (`allow`\|`deny`\|`escalate`\|`not_evaluable`) and `findings[]` (`{id, check,
-  verdict: pass|fail|not_applicable|not_evaluable, reason, limit, value}`, passes included;
+  (`result.schema.json`) with these members:
+  - `ruleset_id` and `definition_digest`;
+  - `verdict`: `allow`\|`deny`\|`escalate`\|`not_evaluable`;
+  - `tier`: `recomputed`\|`judged`\|`human`. An absent tier reads as `judged`;
+  - `judge`: `{model_id, prompt_digest, template_id}`, required when anything is judged;
+  - `findings[]`: `{id, check, verdict: pass|fail|not_applicable|not_evaluable, tier, reason,
+    limit, value}`, passes included;
   `limit` and `value` are each a number, or a string of at most 64 characters with no line
   break).
   Members outside the schema are refused. Any other exit is a refusal of the input, with the
@@ -474,14 +479,20 @@ At every check, after the `check` record is sealed:
   - `allow` adds nothing;
   - `escalate` and `not_evaluable` add a `rules_escalate` or `rules_not_evaluable` difference
     per failing finding (with its limit and value), and the check pauses;
-  - `deny` adds `rules_deny` differences, and the verdict is `deny` with no way to proceed.
+  - `deny` adds `rules_deny` differences, and the verdict is `deny` with no way to proceed, but
+    only when a failing finding was recomputed (its own tier, else the result's). A deny the
+    checker judged (or did not say how it reached) is degraded to `escalate`: the check pauses
+    and the user may answer, and `rules.degraded` says so (`{from: deny, cause:
+    not_recomputed}`). A profile can opt in to judged denies with `allow_judged_deny: true` in
+    its `--rules-checker` file (default off).
   - A checker that is configured but changed since it was pinned, refused the input, timed
     out, printed anything else, or reported another `definition_digest` than the pinned one
     adds a `rules_not_checked` difference naming why, and the check pauses.
 
 The verdict's `rules` seals the outcome as data:
 - `status: evaluated`, with `ruleset_id`, `definition_digest`, `checker_sha256`, `verdict`,
-  `findings` (each `{id, check, verdict, limit, value}`), and `history` (`{days, acts, complete}`:
+  `tier`, `judge` (when the checker named one), `degraded` (when it was), `findings` (each
+  `{id, check, verdict, tier, limit, value}`), and `history` (`{days, acts, complete}`:
   what the checker was given beside the record);
 - `status: not_evaluated`, with `cause` (`checker_unavailable`, `checker_changed`, `refused`,
   `timeout`, `unreadable` or `ruleset_changed`) and `checker_sha256`;

@@ -126,7 +126,8 @@
             "required": [
               "ruleset_id",
               "definition_digest",
-              "verdict"
+              "verdict",
+              "tier"
             ],
             "properties": {
               "ruleset_id": {
@@ -144,6 +145,13 @@
                   "deny",
                   "escalate",
                   "not_evaluable"
+                ]
+              },
+              "tier": {
+                "enum": [
+                  "recomputed",
+                  "judged",
+                  "human"
                 ]
               }
             }

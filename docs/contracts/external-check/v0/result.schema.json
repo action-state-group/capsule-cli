@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/contracts/external-check/v0/result.schema.json",
+  "title": "external-check-result/v0",
+  "description": "What an external rules checker prints on stdout, as one JSON object, when a deal check runs it on an external-check-input/v0 (input.schema.json, beside this file): the ruleset it evaluated (an id and the digest of its definition, both the checker's own), one verdict, and a finding for every rule it evaluated, passes included. Exit 0 means a result was printed, whatever its verdict; any other exit is a refusal of the input, named on stderr, and prints no result. A rolling window is evaluated over the history the deal check supplies; a checker given no history, or too little (history_scope.complete false, or fewer days than the window), reports that rule not_evaluable. Members not listed here are refused. tier says how the verdict was reached: recomputed (computed from the record by a deterministic procedure anyone can rerun), judged (a model's judgement, which must be pinned in judge) or human (a person's). An absent tier reads as judged, never as recomputed. A consumer may treat a deny that was not recomputed as a request for approval.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ruleset_id",
+    "definition_digest",
+    "verdict",
+    "findings"
+  ],
+  "properties": {
+    "schema": {
+      "const": "external-check-result/v0"
+    },
+    "ruleset_id": {
+      "description": "The ruleset the checker evaluated, as the checker names it, version included.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "definition_digest": {
+      "description": "The SHA-256 of the ruleset's definition, as the checker computes it: lowercase hex. A profile may pin it, and a check whose checker reports another does not count as checked.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "verdict": {
+      "description": "allow: nothing in the ruleset stands against the action. deny: the ruleset does not allow it. escalate: the ruleset asks for the person's approval. not_evaluable: the ruleset could not be evaluated on this record.",
+      "enum": [
+        "allow",
+        "deny",
+        "escalate",
+        "not_evaluable"
+      ]
+    },
+    "tier": {
+      "$ref": "#/$defs/tier",
+      "description": "How the verdict was reached. Absent: judged."
+    },
+    "judge": {
+      "description": "The pin of the model that judged, required when the result or any finding is judged: the model's id, the digest of the prompt template, and the template's id. Never the prompt as filled in for this record.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "prompt_digest",
+        "template_id"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "prompt_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "template_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "findings": {
+      "description": "One entry per rule evaluated, in the ruleset's order, passes included.",
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "verdict"
+        ],
+        "properties": {
+          "id": {
+            "description": "The rule's id within the ruleset.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "check": {
+            "description": "The kind of check the rule is, as the checker names it.",
+            "type": "string",
+            "maxLength": 200
+          },
+          "verdict": {
+            "enum": [
+              "pass",
+              "fail",
+              "not_applicable",
+              "not_evaluable"
+            ]
+          },
+          "tier": {
+            "$ref": "#/$defs/tier",
+            "description": "How this rule's verdict was reached, when it differs from the result's."
+          },
+          "reason": {
+            "description": "Why, in words a person reads: shown when the rule fails or cannot be evaluated.",
+            "type": "string",
+            "maxLength": 1000
+          },
+          "limit": {
+            "description": "The limit the rule applied: a number, or a string of at most 64 characters with no line break.",
+            "$ref": "#/$defs/scalar"
+          },
+          "value": {
+            "description": "The value the rule compared with the limit: a number, or a string of at most 64 characters with no line break.",
+            "$ref": "#/$defs/scalar"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "scalar": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[^\\r\\n]*$"
+        }
+      ]
+    },
+    "tier": {
+      "enum": [
+        "recomputed",
+        "judged",
+        "human"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": {
+              "tier": {
+                "const": "judged"
+              }
+            },
+            "required": [
+              "tier"
+            ]
+          },
+          {
+            "properties": {
+              "findings": {
+                "contains": {
+                  "properties": {
+                    "tier": {
+                      "const": "judged"
+                    }
+                  },
+                  "required": [
+                    "tier"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "findings"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "required": [
+          "judge"
+        ]
+      }
+    }
+  ]
+}
