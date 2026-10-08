@@ -533,7 +533,7 @@ To change secret source on update, explicitly clear the previous source flag;
 conflicting sources are rejected instead of silently taking precedence.
 
 JSONL, SQLite, and MySQL are peer backends (the same three
-[cll-go](https://github.com/action-state-group/cll-go) provides); each profile
+[CLL Go](https://github.com/action-state-group/checkpointed-local-log/tree/main/go) provides); each profile
 selects one with `--type`:
 
 - JSONL is an inspectable, single-writer append-only journal. `--jsonl-path`

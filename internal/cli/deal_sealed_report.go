@@ -10,7 +10,7 @@ import (
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	emit "github.com/action-state-group/capsule-emit-go"
-	"github.com/action-state-group/cll-go/cll"
+	"github.com/action-state-group/checkpointed-local-log/go/cll"
 )
 
 // dealReportActionID is the action_id of the capsule a deal report seals its

@@ -144,7 +144,13 @@ jobs:
           cache: true
       - name: The evidencebook version this module resolves
         id: resolved
-        run: echo "evidencebook=$(go list -m -f '{{.Version}}' github.com/action-state-group/evidencebook)" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(go list -m -f '{{.Version}}' github.com/action-state-group/evidencebook)
+          # Module pseudo-versions are not Git refs. Origin identifies the same
+          # source commit for both tagged releases and preparation revisions.
+          commit=$(go mod download -json "github.com/action-state-group/evidencebook@$version" | jq -er '.Origin.Hash')
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          echo "evidencebook=$commit" >> "$GITHUB_OUTPUT"
       - name: Check out evidencebook at that version (its Python verifier scripts)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/action-state-group/capsule-emit-go/artifact"
-	"github.com/action-state-group/cll-go/checkpoint"
-	"github.com/action-state-group/cll-go/cll"
-	"github.com/action-state-group/cll-go/mmr"
-	"github.com/action-state-group/cll-go/store/memory"
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
+	"github.com/action-state-group/checkpointed-local-log/go/cll"
+	"github.com/action-state-group/checkpointed-local-log/go/mmr"
+	"github.com/action-state-group/checkpointed-local-log/go/store/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

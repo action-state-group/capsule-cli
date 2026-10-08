@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	"github.com/action-state-group/cll-go/checkpoint"
-	"github.com/action-state-group/cll-go/cll"
-	"github.com/action-state-group/cll-go/mmr"
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
+	"github.com/action-state-group/checkpointed-local-log/go/cll"
+	"github.com/action-state-group/checkpointed-local-log/go/mmr"
 	"github.com/spf13/cobra"
 )
 

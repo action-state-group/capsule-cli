@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/action-state-group/cll-go/checkpoint"
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/spf13/cobra"
 )
 

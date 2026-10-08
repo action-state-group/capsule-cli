@@ -19,8 +19,8 @@ import (
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
 	"github.com/action-state-group/agent-action-capsule/go/envelope"
 	"github.com/action-state-group/capsule-emit-go/artifact"
-	"github.com/action-state-group/cll-go/cll"
-	"github.com/action-state-group/cll-go/mmr"
+	"github.com/action-state-group/checkpointed-local-log/go/cll"
+	"github.com/action-state-group/checkpointed-local-log/go/mmr"
 	"github.com/spf13/cobra"
 )
 

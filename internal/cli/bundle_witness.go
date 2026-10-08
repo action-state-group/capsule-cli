@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
-	"github.com/action-state-group/cll-go/witness"
+	"github.com/action-state-group/checkpointed-local-log/go/witness"
 )
 
 // witnessRow is one row of a witness directory (capsule-emit's

@@ -7,7 +7,8 @@
 #   scripts/build-evidence-graph-iife.sh --write   # rebuild and replace
 #
 # Needs git, node and npm. Install scripts are disabled; the one git
-# dependency (cll-ts) is built from the commit the TS lockfile pins.
+# dependency is built only for historical AAC locks that pin CLL from Git.
+# Registry locks install the published package, including its built dist/.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,18 +22,22 @@ export npm_config_userconfig="$work/npmrc"
 git clone -q https://github.com/action-state-group/agent-action-capsule.git "$work/aac"
 git -C "$work/aac" checkout -q "$aac_commit"
 cd "$work/aac/ts"
-cll_commit=$(node -e 'const l=require("./package-lock.json");console.log(l.packages["node_modules/@action-state-group/cll"].resolved.split("#")[1])')
+cll_resolved=$(node -e 'const l=require("./package-lock.json");console.log(l.packages["node_modules/@action-state-group/cll"].resolved)')
 npm ci --ignore-scripts --no-audit --no-fund >/dev/null
 
-git clone -q https://github.com/action-state-group/cll-ts.git "$work/cll"
-git -C "$work/cll" fetch -q origin "$cll_commit"
-git -C "$work/cll" checkout -q "$cll_commit"
-(cd "$work/cll" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null && npm run -s build >/dev/null)
-cp -R "$work/cll/dist" node_modules/@action-state-group/cll/dist
+if [[ "$cll_resolved" == git+* ]]; then
+  # Preserve reproducibility of the pre-migration AAC commit and its Git pin.
+  cll_commit="${cll_resolved##*#}"
+  git clone -q https://github.com/action-state-group/cll-ts.git "$work/cll"
+  git -C "$work/cll" fetch -q origin "$cll_commit"
+  git -C "$work/cll" checkout -q "$cll_commit"
+  (cd "$work/cll" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null && npm run -s build >/dev/null)
+  cp -R "$work/cll/dist" node_modules/@action-state-group/cll/dist
+fi
 
 npm run -s emitter:iife >/dev/null 2>&1
 built="$work/aac/ts/dist/evidence-graph.iife.js"
-printf 'agent-action-capsule %s, cll-ts %s\n' "$aac_commit" "$cll_commit"
+printf 'agent-action-capsule %s, CLL %s\n' "$aac_commit" "$cll_resolved"
 shasum -a 256 "$built" | cut -d' ' -f1
 if [[ "${1:-}" == "--write" ]]; then
   cp "$built" "$asset"
