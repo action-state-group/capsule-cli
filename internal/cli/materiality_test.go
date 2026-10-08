@@ -440,8 +440,15 @@ func TestARepinMidDealIsNamedOnlyInTheUsersOwnCopy(t *testing.T) {
 
 	for _, audience := range []string{dealAudienceAdjudicator, dealAudienceCounterparty} {
 		b, sharedRaw := sharedCopy(t, id, audience, "x")
-		for _, leak := range []string{example.Name, "nothing at all", "2.7"} {
+		for _, leak := range []string{example.Name, "nothing at all"} {
 			assert.NotContains(t, sharedRaw, leak, "%s copy", audience)
+		}
+		// The version is matched as a value and as a word of a value, never as
+		// a substring of the file: "2.7" is inside a timestamp like 22.769Z.
+		for _, v := range stringValues(b) {
+			for _, word := range strings.Fields(v) {
+				assert.NotEqual(t, "2.7", strings.Trim(word, `"'(),.:;`), "%s copy: %q", audience, v)
+			}
 		}
 		ext := b["extensions"].(map[string]any)["x-deal-v0"].(map[string]any)
 		var kinds []string
@@ -457,4 +464,26 @@ func TestARepinMidDealIsNamedOnlyInTheUsersOwnCopy(t *testing.T) {
 	own, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Contains(t, string(own), "nothing at all 2.7", "the user's own copy names them")
+}
+
+// stringValues is every string value in v (a decoded JSON value), at any
+// depth, map keys excluded.
+func stringValues(v any) []string {
+	switch x := v.(type) {
+	case string:
+		return []string{x}
+	case map[string]any:
+		var out []string
+		for _, e := range x {
+			out = append(out, stringValues(e)...)
+		}
+		return out
+	case []any:
+		var out []string
+		for _, e := range x {
+			out = append(out, stringValues(e)...)
+		}
+		return out
+	}
+	return nil
 }
