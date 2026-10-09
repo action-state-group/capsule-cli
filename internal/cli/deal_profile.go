@@ -587,6 +587,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		// different bytes.
 		role := dealRole(events)
 		m["action_class"] = dealRoleActionClass(role, dealType, action, direction)
+		if action == offerAction && ev.OfferClass != "" {
+			m["action_class"] = classMarketplaceOffer
+		}
 		m["taxonomy_version"] = ev.TaxonomyVersion
 		if spend, ok := dealRoleSpendMinor(role, action, direction, amount); ok {
 			m["spend_minor"] = spend
