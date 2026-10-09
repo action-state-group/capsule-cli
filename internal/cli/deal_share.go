@@ -374,7 +374,10 @@ func dealPrivateValues(events []sealedEvent) dealPrivate {
 	// An amount the deal states in the clear (a price, an amount checked or
 	// paid) is no secret where the user's own words happen to say it ("ask
 	// 1900" for a 1900.00 offer): the copy shows it on the record anyway.
-	public := dealPublicAmounts(events)
+	public := map[string]bool{}
+	if p.seller {
+		public = dealPublicAmounts(events)
+	}
 	kept := p.values[:0]
 	for _, v := range p.values {
 		if !public[v] {
@@ -837,6 +840,15 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 				// digest and the commitment to its name and version only.
 				// The name and version describe the user's own policy, so a
 				// record sealing them in the clear is withheld.
+				// A typed evaluation names which kind of materiality ran,
+				// from a closed set, beside its materiality_digest: shared
+				// where the user sells.
+				if s, ok := child.(string); ok {
+					if !p.seller || s != "predicate" && s != "none_fail_safe" {
+						return false
+					}
+					continue
+				}
 				if !shareableMateriality(child) {
 					return false
 				}
@@ -864,9 +876,12 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 		}
 		return true
 	case string:
-		allowed := dealShareKeys[key] || dealTypedShareKeys[key] || strings.HasSuffix(key, "_commitment") || strings.HasSuffix(key, "_digest") ||
-			strings.HasSuffix(key, "_basis") && len(x) == 64 && isLowerHex(x) || // a digest of a field list
-			key == "item" && p.seller || // a seller's listing
+		allowed := dealShareKeys[key] || strings.HasSuffix(key, "_commitment") || strings.HasSuffix(key, "_digest") ||
+			// Where the user sells, the typed records, a field list's
+			// digest and the seller's own listing too: the buyer sees the
+			// offer they accepted. A buyer's deal shares as it always has.
+			p.seller && (dealTypedShareKeys[key] || key == "item" ||
+				strings.HasSuffix(key, "_basis") && len(x) == 64 && isLowerHex(x)) ||
 			(audience == dealAudienceAdjudicator && dealAdjudicatorKeys[key]) ||
 			key == "source" && x == "merchant_email" || // a fixed token, not a claim's source
 			key == "class" && dealClaimClasses[x] // a claim's kind of representation
@@ -904,11 +919,6 @@ func shareableProducer(v interface{}) bool {
 // verdict sealed before they were committed), or anything else, withholds the
 // record.
 func shareableMateriality(v interface{}) bool {
-	// A typed evaluation names which kind of materiality ran, from a closed
-	// set, beside its materiality_digest.
-	if s, ok := v.(string); ok {
-		return s == "predicate" || s == "none_fail_safe"
-	}
 	m, ok := v.(map[string]interface{})
 	if !ok {
 		return false

@@ -454,7 +454,11 @@ func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 			}
 		}
 	}
-	public := dealPublicAmounts(events)
+	// Where the user sells only: a buyer's deal is gated as it always was.
+	public := map[string]bool{}
+	if dealRole(events) == dealRoleSeller {
+		public = dealPublicAmounts(events)
+	}
 	for _, t := range texts {
 		t = foldText(t)
 		// Every number of four digits or more, as written and digits only,
