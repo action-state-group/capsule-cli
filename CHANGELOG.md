@@ -19,6 +19,19 @@
   for each earlier act (from its approval's check). It is supplied beside the sealed capsule and
   never part of it. Acts checked before this release carry none.
 
+### New deal records seal action taxonomy version 5
+
+- **Changed (wire; records sealed before re-derive unchanged).** A deal record's
+  `taxonomy_version` is now `"5"`: capsule-engine's `capsule_engine/guards/action_taxonomy.json`
+  at `e5ec2c1ba84f9d9269cbb164eb6a92400e4d5d49` (file sha256
+  `7d31e892cdea7352d0485c89430dba028bf02ce91fb0e932f4752c1f4066022f`, JCS sha256
+  `af3a054cae880e13ce5d8d8bdaa64383e6f3af14fa2bf2ddb88aab226865b13a`).
+- **Every `action_class` is unchanged.** Against version 4 (`5300e0b`), version 5 changes only
+  `approver_role` (to `account_holder`) on `communication.send`, a class no deal record carries;
+  no class is renamed, removed or added, and none changes trigger class.
+- **Each step keeps its own version.** A record sealed under `"2"`, `"3"` or `"4"` re-derives with
+  it.
+
 ### `deal checkpoint status`: a deal log's latest checkpoint, read-only
 
 - **Added:** `capsulectl deal checkpoint status --deal ID` returns, as JSON:

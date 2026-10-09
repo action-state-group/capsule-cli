@@ -3,26 +3,28 @@ package cli
 import "fmt"
 
 // dealTaxonomyVersion is the action-class taxonomy a new deal record's
-// action_class is drawn from: version 4 of capsule-engine's
+// action_class is drawn from: version 5 of capsule-engine's
 // capsule_engine/guards/action_taxonomy.json
 // (github.com/action-state-group/capsule-engine at
-// 5300e0be262fa2d878b18eca630cbf539f785752, file sha256
-// 9e10156647792a0e3fe6cf24e5211ebb8757cb8362c1e868dcfe6db6e8d891a7, JCS sha256
-// 1ddce1235c3445b4ec92890d903934b08831c993f1b562e7f00082f87ca4c859). A
+// e5ec2c1ba84f9d9269cbb164eb6a92400e4d5d49, file sha256
+// 7d31e892cdea7352d0485c89430dba028bf02ce91fb0e932f4752c1f4066022f, JCS sha256
+// af3a054cae880e13ce5d8d8bdaa64383e6f3af14fa2bf2ddb88aab226865b13a). A
 // record sealed with an action_class also seals this version, so a reader
 // resolves the class against the table that was live when it was sealed.
 // Each step keeps the version it was sealed with: a step sealed under
-// version 2 (at 2521ee6) or version 3 (at a5e9e30) re-derives with its own.
+// version 2 (at 2521ee6), version 3 (at a5e9e30) or version 4 (at 5300e0b)
+// re-derives with its own.
 //
-// Versions 2, 3 and 4 name the same classes, each with the same trigger
-// class. Version 3 adds approver_role account_holder to money.purchase,
+// Versions 2 to 5 name the same classes, each with the same trigger class.
+// Version 3 adds approver_role account_holder to money.purchase,
 // money.subscription, booking.create and booking.modify; version 4 adds it to
-// booking.cancel, data.delete, communication.publish and disclosure.personal.
-// So the mapping below is the same under all three.
-const dealTaxonomyVersion = "4"
+// booking.cancel, data.delete, communication.publish and disclosure.personal;
+// version 5 adds it to communication.send, a class no deal record carries.
+// So the mapping below is the same under all four.
+const dealTaxonomyVersion = "5"
 
-// The taxonomy-v4 classes a deal record can carry. Each is a row of
-// action_taxonomy.json at 5300e0b; none is invented here.
+// The taxonomy-v5 classes a deal record can carry. Each is a row of
+// action_taxonomy.json at e5ec2c1; none is invented here.
 const (
 	classMoneyPurchase       = "money.purchase"
 	classMoneyRefund         = "money.refund"
@@ -34,7 +36,7 @@ const (
 	classExternalCommitOther = "external_commitment.other"
 )
 
-// dealActionClasses maps a deal action, per deal type, to its taxonomy-v4
+// dealActionClasses maps a deal action, per deal type, to its taxonomy-v5
 // class. A cancel is mapped here only for a cancel that returns no money; one
 // that returns money is classed by dealActionClass. A pair absent from the
 // table (a deal type or action added later) is classed
@@ -65,7 +67,7 @@ var dealActionClasses = map[string]map[string]string{
 	},
 }
 
-// dealActionClass is the taxonomy-v4 class of a deal action. direction is the
+// dealActionClass is the taxonomy-v5 class of a deal action. direction is the
 // way its amount moved (actDirection): a cancel whose amount returns a sealed
 // payment ("in") is a refund, money arriving rather than leaving, whatever the
 // deal type. The two disclosures are classed by what is given, in every deal
