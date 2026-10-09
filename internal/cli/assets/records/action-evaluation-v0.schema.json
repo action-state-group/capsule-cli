@@ -96,6 +96,26 @@
             "maxLength": 200
           }
         },
+        "unverified_claims": {
+          "description": "The claims the check found unverified, by reference: the record each was sealed in, and for a baseline claim its index.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "claim"
+            ],
+            "properties": {
+              "claim": {
+                "$ref": "record-common-v0.schema.json#/$defs/ref"
+              },
+              "index": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
         "notes": {
           "type": "array",
           "items": {

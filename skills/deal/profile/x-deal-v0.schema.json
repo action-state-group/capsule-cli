@@ -148,10 +148,7 @@
       "type": "object", "additionalProperties": false, "minProperties": 1,
       "properties": { "domain_age_days": { "$ref": "#/$defs/safe_uint" } }
     },
-    "claim": {
-      "type": "object", "additionalProperties": false, "required": ["text", "source"],
-      "properties": { "text": { "$ref": "#/$defs/short_text" }, "source": { "$ref": "#/$defs/ns_token" } }
-    },
+    "claim": {"description": "A claim: in the clear as {text, source} on a step sealed before claims were committed; from then on its words (text_commitment) and its source note (source_ref_commitment, when given) are salted commitments, and only whose it is (source_kind) is in the clear.", "oneOf": [{"type": "object", "additionalProperties": false, "required": ["text", "source"], "properties": {"text": {"$ref": "#/$defs/short_text"}, "source": {"$ref": "#/$defs/ns_token"}}}, {"type": "object", "additionalProperties": false, "required": ["text_commitment", "source_kind"], "properties": {"text_commitment": {"$ref": "#/$defs/hex64"}, "source_kind": {"enum": ["merchant", "agent", "platform", "user", "external"]}, "source_ref_commitment": {"$ref": "#/$defs/hex64"}}}]},
     "difference": {
       "type": "object", "additionalProperties": false, "required": ["question", "rule"],
       "properties": {
@@ -367,6 +364,7 @@
         "pack_id": { "$ref": "#/$defs/pack_id" },
         "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
         "unverified": { "type": "array", "items": { "$ref": "#/$defs/short_text" } },
+        "unverified_claims": { "description": "The claims the check found unverified, by reference: the record each was sealed in, and for a baseline claim its index. Their words are commitments in those records.", "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["claim"], "properties": { "claim": { "$ref": "#/$defs/digest_ref" }, "index": { "type": "integer", "minimum": 0 } } } },
         "notes": { "type": "array", "items": { "$ref": "#/$defs/token" } },
         "options": { "type": "array", "uniqueItems": true, "items": { "enum": ["hold", "verify_contact", "proceed"] } },
         "card_commitment": { "$ref": "#/$defs/hex64" },

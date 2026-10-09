@@ -32,7 +32,8 @@
   "claims": [
     {
       "text": "free cancellation until October 1",
-      "source": "booking page"
+      "source": "booking page",
+      "source_kind": "merchant"
     }
   ],
   "recourse": {

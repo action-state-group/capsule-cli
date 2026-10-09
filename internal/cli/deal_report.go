@@ -204,7 +204,10 @@ func (s *dealSession) dealReportExtension(events []sealedEvent, report dealRepor
 		// committed in the records (label_commitment): the user's own
 		// copy says which predicate decided, a shared copy only its digest.
 		"materiality_openings": materialityOpenings(events),
-		"did":                  items(report.Did), "anomalies": items(report.Anomalies),
+		// The openings of the claims' words and source notes, committed in
+		// the records (text_commitment, source_ref_commitment).
+		"claim_openings": claimOpenings(events, func(dealClaim) bool { return true }),
+		"did":            items(report.Did), "anomalies": items(report.Anomalies),
 		"told":     toldItems(report.Told, true),
 		"did_line": dealDidLine(dealDidSources(events)),
 		// Which builds sealed the steps, and which one made this page:

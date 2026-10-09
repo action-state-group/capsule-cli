@@ -118,7 +118,7 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | `baseline` | First contact: what the user asked, who the counterparty is, the terms and the way back. The deal's contract. | `deal_type` (`purchase`\|`rental`\|`booking`\|`service`), `intent` (as the intent body), `terms`, `recourse.rail` + `recourse.refundable`; `materiality` (the materiality predicate pinned when the deal opened, as on a verdict; a verdict under another one carries a `materiality_changed` difference) | `seq` = 1; `channel`; `counterparty` (≥ 1 id). No `prev`, no `baseline_ref`. Optional `claims[]`, `counterparty_facts`, `demo`, `skill` (`{"skill_md_digest": <64 hex>, "other_copies": <int ≥ 0>}`: the SHA-256 of the SKILL.md the agent reported following, and how many other copies of that skill sat beside it; a boundary marker for accidents, not proof the instructions were followed). |
 | `intent` | The user restates or picks within the ask. Replaces `verbatim` / `asked` from here on. `allowed` and `max_total_minor` carry forward unchanged: an intent may lower the limit or drop actions, and a higher limit or a new action is only a proposal (section 6, rule 6). | `verbatim_commitment` | `baseline_ref`, `prev`. |
 | `message` | One message in the thread. The text stays local. | `from` (`counterparty`\|`user`\|`agent`), `content_commitment` | `channel`. `counterparty` when the message shows identifiers (for example, a new phone number). |
-| `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text` (≤ 200 chars, no identifiers), `source` | none beyond the chain. |
+| `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text_commitment` (the claim's words, ≤ 200 chars, committed), `source_kind` (whose it is: `merchant`\|`agent`\|`platform`\|`user`\|`external`), optional `source_ref_commitment` (the caller's note of where it was read, committed). A claim sealed before claims were committed carries `text` and `source` in the clear instead, and re-derives unchanged (see "Claims"). | none beyond the chain. |
 | `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). After the deal's final close, the only record type allowed: later evidence linked to that close. | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. At most one `confirms` → the deal's final `close` (required after it, not allowed before it). Optional `resolves_obligation` (a digest ref) → an earlier record holding a cancel-by date. |
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
 | `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor` (the expected charge), on a `pay` `authorized_max_minor` (the most it may take: what a limit binds, at least `amount_minor`), `currency`, `seen_item`, `terms`, `recourse`, the rule inputs (below), `pack_id`, `pack_digest`, `action_class` + `taxonomy_version` and `spend_minor` (see Action classes, below), with `spend_authorized_minor` beside them when `authorized_max_minor` is sealed, on a `cancel` `fee_minor`, `cancelled_amount_minor` and `direction` (`in`), and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
@@ -305,9 +305,29 @@ typed record, in its header), next to the fingerprints' `fp_alg`. What it states
   uses no store secret or deal key.
 - **Recomputable by:** whoever holds the opening `{N, T}`, and nobody else. A record alone
   never lets anyone recompute or test a commitment.
-- **Where openings travel:** nowhere by default. The user's own report carries two:
-  `asked_opening` (the baseline's `verbatim_commitment`) and `materiality_openings` (each
-  verdict's `label_commitment`). A shared copy carries none.
+- **Where openings travel:** nowhere by default. The user's own report carries three:
+  - `asked_opening` (the baseline's `verbatim_commitment`);
+  - `materiality_openings` (each verdict's `label_commitment`);
+  - `claim_openings` (each claim's `text_commitment` and `source_ref_commitment`).
+
+  An adjudicator's copy carries the `claim_openings` of claims whose words and source note hold
+  none of the user's private details. A counterparty's copy carries none.
+
+**Claims.** A claim's words and its source note are sealed as commitments; only whose it is,
+`source_kind`, is in the clear.
+- **On a claim step and on each of the baseline's `claims[]`:** `{text_commitment, source_kind,
+  source_ref_commitment?}`.
+- **`source_kind`** is stated by the caller. A source that can only mean the counterparty
+  (`counterparty`, `seller_message`, `merchant_email` and the like) is taken as `merchant`. Any
+  other source (a page, a photo, a snapshot: the merchant's own or a marketplace's) must state it,
+  and a claim that leaves it open is refused.
+- **`claim_openings`** in a copy are `{record_digest, index (a baseline claim), text: {nonce,
+  text}, source: {nonce, text}}`. `check_profile.py --openings=FILE` recomputes each against the
+  sealed record.
+- **A verdict** names the claims it found unverified by reference, as `unverified_claims`
+  (`{claim: <digest ref>, index?}`), not by their words.
+- **Older records:** a step sealed before this carries `text` and `source` (and a verdict
+  `unverified`) in the clear, and re-derives unchanged.
 
 A record without `commit_alg` was sealed before it was declared. Its commitments use the same
 construction.

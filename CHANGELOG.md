@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### A deal claim's words are sealed as a commitment; only whose it is shows
+
+- **Changed (wire, additive; records sealed before re-derive unchanged).** A claim, on a `claim`
+  step and in the baseline's `claims[]`, is now sealed as:
+  - `text_commitment`: the claim's words, salted, like every other text a deal record carries;
+  - `source_kind`: whose it is (`merchant`, `agent`, `platform`, `user` or `external`), in the
+    clear;
+  - optional `source_ref_commitment`: the free-form note of where it was read, committed.
+
+  A verdict names the claims it found unverified by reference (`unverified_claims`), not by their
+  words. The typed `action-evaluation/v0` does the same.
+- **`source_kind` is stated by the caller.** A source that can only mean the other party
+  (`counterparty`, `seller_message`, `merchant_email`) is taken as `merchant`. Any other source (a
+  page, a photo, a snapshot) must state it, and a claim that leaves it open is refused, naming the
+  field. The deal skill says how to choose.
+- **Openings:**
+  - the user's own report carries `claim_openings`;
+  - an adjudicator's copy carries those of claims holding none of the user's private details;
+  - a counterparty's copy shows each disclosed claim record (its `source_kind` and salted
+    commitments) and no opening.
+- **The profile checker:** `check_profile.py --openings=FILE` recomputes each opening against the
+  sealed record. A shared vector (claim words and source note) is checked by both the Go and the
+  Python implementation.
+
 ### A check carries the inputs a rules checker reads
 
 - **Added (wire, additive):** a check sealed from this version carries scalars a rules checker

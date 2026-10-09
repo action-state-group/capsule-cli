@@ -356,6 +356,18 @@ func evaluationBody(ev dealEvent, events []sealedEvent, v0 map[string]interface{
 			out[k] = v
 		}
 	}
+	if refs, ok := v0["unverified_claims"].([]interface{}); ok {
+		typed := make([]interface{}, len(refs))
+		for i, r := range refs {
+			m := r.(map[string]interface{})
+			t := map[string]interface{}{"claim": typedRef(m["claim"].(map[string]interface{})["digest"].(string))}
+			if idx, ok := m["index"]; ok {
+				t["index"] = idx
+			}
+			typed[i] = t
+		}
+		out["unverified_claims"] = typed
+	}
 	if c, ok := v0["card_commitment"]; ok {
 		out["rendering_commitment"] = c
 	}

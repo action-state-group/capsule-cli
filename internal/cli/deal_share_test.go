@@ -64,7 +64,7 @@ func openPrivateDeal(t *testing.T) string {
 		},
 		"who":      map[string]any{"name": shopName, "domain": "stickers.example", "email": shopEmail, "phone": shopPhone},
 		"terms":    map[string]any{"item": "sticker", "price_minor": 627, "currency": "USD", "place": homeAddress},
-		"claims":   []any{map[string]any{"text": "order held under code " + verifyCode, "source": "checkout page"}},
+		"claims":   []any{map[string]any{"text": "order held under code " + verifyCode, "source": "checkout page", "source_kind": "merchant"}},
 		"recourse": map[string]any{"rail": "card", "refundable": true},
 	}
 	raw, err := json.Marshal(open)
