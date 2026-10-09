@@ -2,10 +2,10 @@ package cli
 
 import (
 	"encoding/json"
-	"regexp"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -274,4 +274,3 @@ func TestTheProfileCheckerHoldsASalesLog(t *testing.T) {
 		})
 	}
 }
-
