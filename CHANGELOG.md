@@ -24,15 +24,6 @@
   stays valid in the profile schema, re-derives, and is labelled as before on the page.
 - The page labels every class; the deal skill and the profile list them.
 
-### A seller's offer is classed `marketplace.offer`
-
-- **Changed (wire; records sealed before re-derive unchanged).** An offer is now classed
-  `marketplace.offer`; before this, `external_commitment.other`. It is the taxonomy-version-6 class a
-  seller's rules select on: under the old class no seller rule reached an offer, so an offer below the
-  floor was not held to it.
-- **No taxonomy change.** Version 6 already has `marketplace.offer`. Each step keeps its own class:
-  an offer sealed before this change re-derives as `external_commitment.other`.
-
 ## v0.1.0-rc14
 
 ### A typed deal's history acts carry the profile payee key
