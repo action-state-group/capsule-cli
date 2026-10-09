@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc12
+
 ### New deal records seal action taxonomy version 4
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
