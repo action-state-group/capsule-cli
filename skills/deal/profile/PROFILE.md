@@ -587,7 +587,10 @@ At every check, after the `check` record is sealed:
     (act → approval → verdict → check → that check's `counterparty_profile` record), and none
     when it has none (an act done without approval, or one checked before checks had a
     companion). A rule keyed on who was paid before reads one merchant as one payee across the
-    profile's deals from there on; acts checked before keep only their per-deal fingerprints;
+    profile's deals from there on; acts checked before keep only their per-deal fingerprints.
+    An act on a sale's thread also carries `item_ref`, the sale's item reference (the same plain
+    value as the top-level `item_ref` below, beside the record and never in it), so a rule sees an
+    earlier thread's acceptance of the same item; an act of any other deal carries none;
   - `history_scope`: `{days, max_records, complete}`.
   - `party_role`: `buyer` or `seller`, the side of the deal the user is on, as the deal's opening
     intent sealed it (`buyer` when it names none). Sent on every check, always explicit.

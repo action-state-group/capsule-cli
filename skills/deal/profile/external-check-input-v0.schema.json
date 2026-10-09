@@ -127,6 +127,11 @@
         "agent_input": {
           "type": "object"
         },
+        "item_ref": {
+          "description": "Optional, on a history entry only, supplied by capsulectl beside the sealed capsule (never part of it): when the act's deal is a sale's thread, the sale's opaque item reference, the same plain value the top-level item_ref carries on a check of that sale's threads. Absent on an act of any other deal.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
         "counterparty_profile": {
           "description": "Optional, supplied by capsulectl beside the sealed capsule (never part of it): the payee fingerprinted under the profile's own key, the value the check's x-deal-v0 counterparty_profile companion record seals. On the record, the check being decided; on a history entry, the act's, resolved act -> its approval -> the verdict -> the check -> that check's companion. Absent when there is none (an act without approval, a check with no payee, or one sealed before checks had a companion).",
           "type": "object",

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### A history act on a sale's thread carries the sale's item reference
+
+- **Added (checker input, additive).** In `external-check-input/v0`, each `history` entry whose
+  act was on a sale's thread carries `item_ref`: the sale's item reference, the same plain value
+  the top-level `item_ref` carries on a check of that sale's threads. A rule on a second buyer's
+  thread can see the first thread's acceptance of the same item. An act of any other deal carries
+  none. It is beside the record, as `counterparty_profile` is, never in it: no record changes.
+  History entries are open objects, so a checker that does not read it is unaffected.
+
 ### New deal records seal action taxonomy version 6
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
