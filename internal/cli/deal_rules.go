@@ -557,6 +557,17 @@ type dealEvent struct {
 	// names the pay it reverses (reverses_ref), kept with the step like
 	// Producer: a step sealed before has none and re-derives without it.
 	ReversesRef string `json:"reverses_ref,omitempty"`
+	// CounterpartyProfile is a counterparty_profile step: the check's payee
+	// fingerprinted under the profile's key (profileKeyFor), sealed right
+	// after the check, for this profile's own records only.
+	CounterpartyProfile *dealCounterpartyProfile `json:"counterparty_profile,omitempty"`
+}
+
+// dealCounterpartyProfile names a check by capsule id and its payee's
+// profile-scoped fingerprint.
+type dealCounterpartyProfile struct {
+	Check string `json:"check"`
+	Payee string `json:"payee"`
 }
 
 // dealPlatformApproval is an observation of another platform's own approval
@@ -1566,6 +1577,8 @@ func typedActBasis(events []sealedEvent, authorizedBy string) string {
 // trailLine is the one-line, plain-words account of a step for the report.
 func trailLine(e dealEvent) string {
 	switch e.Kind {
+	case "counterparty_profile":
+		return "noted the payee for this profile's own history (never shared)"
 	case "open":
 		line := fmt.Sprintf("opened %s deal: %q", e.Open.Type, e.Open.Intent.Verbatim)
 		if e.Open.Demo {

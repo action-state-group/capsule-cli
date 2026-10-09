@@ -108,7 +108,7 @@ func TestDealSharedMerchantEmailIsDigestAndVerdict(t *testing.T) {
 	dealID := openShortMerchantDeal(t)
 	for i, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
 		b, raw := sharedCopy(t, dealID, audience, "x")
-		require.Len(t, b["records"], 5+i+1, "the 5 steps and every copy's sealed report so far")
+		require.Len(t, b["records"], 6+i+1, "the 6 steps (the check's counterparty_profile among them, withheld) and every copy's sealed report so far")
 		assert.Contains(t, raw, `"message_digest":"`)
 		assert.Contains(t, raw, `"key_records_digest":"`)
 		assert.Contains(t, raw, `"dkim":"pass"`)

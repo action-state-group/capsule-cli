@@ -758,6 +758,11 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 	switch x := v.(type) {
 	case map[string]interface{}:
 		for k, child := range x {
+			if k == "counterparty_profile" {
+				// The payee keyed per profile: it links the user's deals with
+				// one merchant, so no shared copy carries it.
+				return false
+			}
 			if k == "ids" {
 				// Counterparty fingerprints: keyed HMACs, not the identifiers.
 				ids, ok := child.(map[string]interface{})
@@ -955,6 +960,8 @@ var dealShareAnomaly = map[string]string{
 func dealShareStepLine(e dealEvent, audience string, p dealPrivate, currency string) string {
 	adjudicator := audience == dealAudienceAdjudicator
 	switch e.Kind {
+	case "counterparty_profile":
+		return "A note for the user's own history (withheld)"
 	case "open":
 		return "Opened a " + e.Open.Type + " deal (details withheld)"
 	case "intent":

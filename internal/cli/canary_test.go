@@ -240,7 +240,7 @@ func TestCanaryRunSealsTheFlowThenTicks(t *testing.T) {
 	for _, r := range records {
 		kinds = append(kinds, r.Header.RecordType)
 	}
-	assert.Equal(t, []string{"baseline", "evidence", "check", "verdict", "approval"}, kinds)
+	assert.Equal(t, []string{"baseline", "evidence", "check", "counterparty_profile", "verdict", "approval"}, kinds)
 	assert.Equal(t, "capsulectl_canary_run", records[1].Body["source"])
 	assert.NotEmpty(t, records[1].Body["detail_commitment"])
 }

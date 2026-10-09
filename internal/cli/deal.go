@@ -1445,6 +1445,20 @@ func dealCheckCommand() *cobra.Command {
 				return err
 			}
 			events = append(events, snapped)
+			// The payee keyed per profile, sealed right after the check it
+			// is about, before any checker runs.
+			companion, err := s.counterpartyProfileStep(snap)
+			if err != nil {
+				return err
+			}
+			if companion != nil {
+				companion.Check = snapped.CapsuleID
+				sealed, err := s.seal(ctx, dealID, events, dealEvent{Kind: "counterparty_profile", CounterpartyProfile: companion})
+				if err != nil {
+					return err
+				}
+				events = append(events, sealed)
+			}
 			// -> diff
 			state, err := foldDeal(events)
 			if err != nil {

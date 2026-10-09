@@ -548,7 +548,8 @@ def check_chain(records):
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by", "reverses"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"},
-                    "task_authority": {"source", "approves"}, "platform_approval": set(), "policy_change": set()}
+                    "task_authority": {"source", "approves"}, "platform_approval": set(), "policy_change": set(),
+                    "counterparty_profile": {"about"}}
     # The user's limits in force. Absent allowed = no restriction; present and
     # empty = nothing allowed. An intent may narrow them; only the user's
     # confirm_limits answer to an intent that asks for more puts a new version
@@ -572,7 +573,7 @@ def check_chain(records):
     def without_unknown_bounds(d):
         return d if bounds_known else {k: v for k, v in d.items() if k != "bounds_commitment"}
     confirmed_intents = set()
-    used_approvals, verdict_for_check = set(), set()
+    used_approvals, verdict_for_check, profile_for_check = set(), set(), set()
     reversed_actions = set()
     first_answer = {}  # verdict index -> index of its first approval
     last_outcome = None
@@ -795,6 +796,15 @@ def check_chain(records):
                 bounds_known = False
             if body.get("allowed") is not None:
                 allowed = [a for a in body["allowed"] if allowed is None or a in allowed]
+        elif t == "counterparty_profile":
+            # The payee keyed per profile, sealed right after the check it is
+            # about: one per check.
+            j = one("about", ("check",))
+            if j is not None and j != i - 1:
+                fail(i, "a counterparty_profile record follows the check it is about")
+            if j in profile_for_check:
+                fail(i, "a check has at most one counterparty_profile record")
+            profile_for_check.add(j)
         elif t == "evidence":
             one("about", ("claim", "baseline"))
             one("confirms", ("close",), required=False)
