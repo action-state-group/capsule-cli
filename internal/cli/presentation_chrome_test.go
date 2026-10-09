@@ -230,7 +230,7 @@ func (c *headlessChrome) externalRequests(session string) []string {
 	return out
 }
 
-// version is the browser's product string, e.g. "HeadlessChrome/155.0.8059.39".
+// version is the browser's product string, e.g. "Chrome/155.0.8059.39".
 func (c *headlessChrome) version(t *testing.T) string {
 	t.Helper()
 	var v struct {

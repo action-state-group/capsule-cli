@@ -119,8 +119,9 @@ func TestPresentationGoldens(t *testing.T) {
 	pinned := os.Getenv("CAPSULECTL_PRESENTATION_PINNED") == "1"
 	if pinned {
 		require.NotNil(t, chrome, "CAPSULECTL_PRESENTATION_PINNED needs CAPSULECTL_CHROME")
-		require.Equal(t, "HeadlessChrome/"+baseline.Environment.Chrome, chrome.version(t),
-			"the pinned Chrome is the one known-overflow.json was measured with")
+		product := chrome.version(t)
+		require.Equal(t, baseline.Environment.Chrome, product[strings.LastIndex(product, "/")+1:],
+			"the pinned Chrome (%s) is the one known-overflow.json was measured with", product)
 	}
 	measured := map[string]map[string]int{}
 	defer func() {
