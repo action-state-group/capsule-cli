@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -133,11 +134,14 @@ func opensTo(opening map[string]any, sealed string) (int64, bool) {
 
 var lowerHex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-// capsule-engine's price_floor/2.0.1, over its vectors, and this CLI's own
-// construction agree on every opening: the engine evaluates the floor
-// exactly when the opening opens to the sealed commitment here, and fails
-// it as a mismatch exactly when it does not. And the checker input this CLI
-// sends for a floor in force opens.
+// capsule-engine's price_floor/2.0.1, over its vectors (generated at that
+// version), and this CLI's own construction agree on every opening: the
+// engine evaluates the floor exactly when the opening opens to the sealed
+// commitment here, and fails it as a mismatch exactly when it does not. Its
+// n/a cases are scoped as 2.0.1 scopes them: a task authority committing to
+// no floor, or an action class the rule does not cover, is out of scope; a
+// floor with no opening is in scope, naming the missing opening. And the
+// checker input this CLI sends for a floor in force opens.
 func TestTheEngineAgreesOnTheFloorsOpening(t *testing.T) {
 	var vectors struct {
 		PriceFloor []struct {
@@ -149,8 +153,9 @@ func TestTheEngineAgreesOnTheFloorsOpening(t *testing.T) {
 			Record  map[string]any `json:"task_authority_record"`
 			Opening map[string]any `json:"commercial_bounds_opening"`
 			Expect  struct {
-				Result string `json:"result"`
-				Reason string `json:"reason"`
+				Result   string         `json:"result"`
+				Reason   string         `json:"reason"`
+				Evidence map[string]any `json:"evidence"`
 			} `json:"expect"`
 		} `json:"price_floor"`
 		ItemRef []struct {
@@ -165,10 +170,19 @@ func TestTheEngineAgreesOnTheFloorsOpening(t *testing.T) {
 	evaluated, mismatched := 0, 0
 	for _, c := range vectors.PriceFloor {
 		sealed, _ := c.Record["body"].(map[string]any)["bounds_commitment"].(string)
-		if c.Opening == nil || sealed == "" || c.Expect.Result == "n/a" {
-			assert.Equal(t, "n/a", c.Expect.Result, "%s: nothing to open, or not in scope", c.Name)
+		floorClass := slices.Contains([]string{"marketplace.offer", "marketplace.sale", "agreement.accept"}, c.Action.ActionClass)
+		switch {
+		case sealed == "" || !floorClass:
+			assert.Equal(t, "n/a", c.Expect.Result, c.Name)
+			assert.Equal(t, false, c.Expect.Evidence["in_scope"], "%s: no floor committed, or a class the rule does not cover: out of scope", c.Name)
+			continue
+		case c.Opening == nil:
+			assert.Equal(t, "n/a", c.Expect.Result, c.Name)
+			assert.Equal(t, true, c.Expect.Evidence["in_scope"], "%s: a floor with no opening is in scope", c.Name)
+			assert.Equal(t, "commercial_bounds_opening", c.Expect.Evidence["missing_field"], c.Name)
 			continue
 		}
+		require.NotEqual(t, "n/a", c.Expect.Result, "%s: a floor with an opening is evaluated", c.Name)
 		if !lowerHex64.MatchString(sealed) {
 			assert.Equal(t, "fail", c.Expect.Result, "%s: a malformed sealed commitment fails", c.Name)
 			continue

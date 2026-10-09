@@ -1,5 +1,5 @@
 {
-  "description": "capsule-engine price_floor opening outcomes, generated at price_floor/2.0.0 (retired). price_floor/2.0.1 keeps every outcome here; it changes only a task authority that commits to no floor, now n/a out of scope (engine-price-floor-2.0.1-scope.json). Reference outcomes for the Go mirror: check_price_floor(action, task_authority_record, commercial_bounds_opening). bounds_commitment = SHA-256 over JCS({nonce, text}), text = JCS(commercial-bounds/v0 document). Golden vectors from capsule-cli 553e5414e480a55ddb3f39eedd2b2af85bfb6e32. item_ref: top-level checker-input item_ref -> Action.item_ref when 64 lowercase hex, else ignored and named in ignored_inputs.",
+  "description": "price_floor/2.0.1 (capsule-engine 97a2aff) reference outcomes for the Go mirror: check_price_floor(action, task_authority_record, commercial_bounds_opening). bounds_commitment = SHA-256 over JCS({nonce, text}), text = JCS(commercial-bounds/v0 document). Golden vectors from capsule-cli 553e5414e480a55ddb3f39eedd2b2af85bfb6e32. item_ref: top-level checker-input item_ref -> Action.item_ref when 64 lowercase hex, else ignored and named in ignored_inputs.",
   "item_ref": [
     {
       "expect": {
@@ -607,8 +607,8 @@
       "expect": {
         "evidence": {
           "constraint_id": "price_floor",
-          "in_scope": true,
-          "missing_field": "bounds_commitment"
+          "in_scope": false,
+          "missing_field": null
         },
         "method": "committed_floor_threshold_v1",
         "reason": "the task-authority record commits to no floor at body.bounds_commitment",
