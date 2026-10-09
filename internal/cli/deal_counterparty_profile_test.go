@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -293,4 +295,89 @@ func TestTheProfileVectorsHold(t *testing.T) {
 	}
 	assert.Equal(t, targets[0], targets[1], "one merchant, one target across the profile's deals")
 	assert.NotEqual(t, perDeal[0], perDeal[1], "each deal's own fingerprint differs")
+}
+
+// The engine's bridge, run over this repository's vectors, keys each check
+// on the target the vectors expect; and the checker-input schema accepts
+// exactly the counterparty_profile values the engine takes, refusing every
+// one it ignores. The two halves agree on the wire.
+func TestTheEngineAgreesWithTheProfileVectors(t *testing.T) {
+	var ours struct {
+		Cases []profileVector `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(mustRead(t, profileVectorsPath), &ours))
+	var engine struct {
+		Replay map[string]struct {
+			Decisions []struct {
+				RecordType    string   `json:"record_type"`
+				Target        *string  `json:"target"`
+				IgnoredInputs []string `json:"ignored_inputs"`
+				DedupeResult  string   `json:"dedupe_result"`
+			} `json:"decisions"`
+		} `json:"replay"`
+		LiveTarget map[string]struct {
+			Entry         map[string]any `json:"entry"`
+			Target        string         `json:"target"`
+			IgnoredInputs []string       `json:"ignored_inputs"`
+		} `json:"live_target"`
+		LiveSeenBefore map[string]struct {
+			SeenBeforeResult   string `json:"seen_before_result"`
+			SeenBeforeEvidence struct {
+				FoldKey struct {
+					Value string `json:"value"`
+				} `json:"fold_key"`
+				PriorCount int `json:"prior_count"`
+			} `json:"seen_before_evidence"`
+		} `json:"live_seen_before"`
+	}
+	require.NoError(t, json.Unmarshal(mustRead(t, filepath.Join("testdata", "payee-fp-profile", "engine-vectors.json")), &engine))
+	want := ours.Cases[0].ExpectedTarget
+
+	// Replay: both deals' checks key on the profile target the vectors expect.
+	var checks []string
+	for _, d := range engine.Replay["two-deals-with-companions"].Decisions {
+		if d.RecordType == "check" {
+			require.NotNil(t, d.Target)
+			checks = append(checks, *d.Target)
+			assert.Empty(t, d.IgnoredInputs)
+		}
+	}
+	assert.Equal(t, []string{ours.Cases[0].ExpectedTarget, ours.Cases[1].ExpectedTarget}, checks)
+	// Live: deal 2's payee was seen before, on the profile target.
+	seen := engine.LiveSeenBefore["with-profile"]
+	assert.Equal(t, "pass", seen.SeenBeforeResult)
+	assert.Equal(t, want, seen.SeenBeforeEvidence.FoldKey.Value)
+	assert.Equal(t, 1, seen.SeenBeforeEvidence.PriorCount)
+
+	// Live input: the schema accepts what the engine keys on, and refuses
+	// every value the engine ignores.
+	compiler := jsonschema.NewCompiler()
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(mustRead(t, filepath.Join("..", "..", "skills", "deal", "profile", "external-check-input-v0.schema.json"))))
+	require.NoError(t, err)
+	require.NoError(t, compiler.AddResource("external-check-input-v0.schema.json", doc))
+	schema, err := compiler.Compile("external-check-input-v0.schema.json")
+	require.NoError(t, err)
+	require.Len(t, engine.LiveTarget, 8)
+	for name, c := range engine.LiveTarget {
+		raw, err := json.Marshal(map[string]any{"schema": externalCheckInput, "record": c.Entry, "history": []any{},
+			"history_scope": map[string]any{"days": 31, "max_records": 1000, "complete": true}})
+		require.NoError(t, err)
+		input, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+		require.NoError(t, err)
+		valid := schema.Validate(input) == nil
+		_, present := c.Entry["counterparty_profile"]
+		switch {
+		case name == "good":
+			assert.True(t, valid, name)
+			assert.Equal(t, want, c.Target)
+			assert.Empty(t, c.IgnoredInputs)
+		case !present:
+			assert.True(t, valid, name)
+			assert.True(t, strings.HasPrefix(c.Target, "payee-fp:hmac-sha256-deal-key:"), name)
+		default:
+			assert.False(t, valid, "%s: the engine ignores it, so the schema refuses it", name)
+			assert.Equal(t, []string{"counterparty_profile"}, c.IgnoredInputs, name)
+			assert.True(t, strings.HasPrefix(c.Target, "payee-fp:hmac-sha256-deal-key:"), name)
+		}
+	}
 }
