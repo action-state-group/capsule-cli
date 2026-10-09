@@ -601,6 +601,13 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 			record["counterparty_profile"] = counterpartyProfileBlock(cp.Payee)
 		}
 	}
+	// proposal_at: on a seller's commit resting on an accepted offer, when
+	// that offer was made, so a rule can hold the offer to its expiry.
+	if at, err := s.acceptedProposalAt(ctx, capsuleID, events); err != nil {
+		return nil, nil, err
+	} else if at != "" {
+		record["proposal_at"] = at
+	}
 	// party_role: the side of the deal the user is on, as its opening intent
 	// sealed it (buyer when it names none), sent on every check, always
 	// explicit, so a checker selects its rules without inferring the side.
@@ -634,6 +641,48 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 	}
 	raw, err := json.Marshal(input)
 	return raw, scope, err
+}
+
+// acceptedProposalAt is, for the check of a seller's commit, the sealed `at`
+// of the offer the commit rests on: the latest offer, accepted, with no
+// change of details since (offerAccepted, the commit gate's own reading).
+// The value is the offer's proposed-action record's `at` exactly as sealed.
+// Empty on a buyer's deal, on any other action, and when no acceptance is in
+// force (the commit is then sealed unauthorized, changed_after_acceptance or
+// offer_not_accepted).
+func (s *dealSession) acceptedProposalAt(ctx context.Context, checked string, events []sealedEvent) (string, error) {
+	if dealRole(events) != dealRoleSeller {
+		return "", nil
+	}
+	commit := false
+	for _, se := range events {
+		if se.CapsuleID == checked && se.Event.Snapshot != nil && se.Event.Snapshot.Action == "commit" {
+			commit = true
+		}
+	}
+	if !commit {
+		return "", nil
+	}
+	acceptance, _, _ := offerAccepted(events)
+	offer := ""
+	for _, se := range events {
+		if se.CapsuleID == acceptance && se.Event.Acceptance != nil {
+			offer = se.Event.Acceptance.Offer
+		}
+	}
+	if offer == "" {
+		return "", nil
+	}
+	sealed, err := s.capsuleWithInput(ctx, offer)
+	if err != nil {
+		return "", err
+	}
+	record, _ := sealed["agent_input"].(map[string]interface{})
+	at, _ := record["at"].(string)
+	if at == "" {
+		return "", errors.New("refusing to check: the accepted offer's sealed record is not on this device, so the rules checker cannot be told when it was made")
+	}
+	return at, nil
 }
 
 // boundsOpeningInForce is the opening of the floor in force: its

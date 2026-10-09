@@ -585,7 +585,12 @@ At every check, after the `check` record is sealed:
   - `record`: that `check` capsule, with its disclosed `agent_input` (the deal record, whose
     body is what is about to happen), and `counterparty_profile` when the check names a payee:
     the value its `counterparty_profile` record seals, `{fp_alg: "hmac-sha256-profile-key",
-    ids: {payee: <64 lowercase hex>}}`, supplied beside the capsule and never part of it;
+    ids: {payee: <64 lowercase hex>}}`, supplied beside the capsule and never part of it; and,
+    on the check of a seller's `commit` that rests on an accepted offer (the latest offer, with a
+    recorded acceptance and no change of details since; section 6, rules 9 and 11), `proposal_at`: that
+    offer's proposed-action record's sealed `at`, byte for byte, so a rule can hold the offer to its
+    expiry. It is absent on a buyer's deal, on any other action, with no acceptance in force, and on
+    history entries;
   - `history`: the profile's earlier sealed acts with an amount, from every deal on this
     profile's own store, sealed in the last 31 days, newest first, at most 1,000 of them, in the
     same shape. Each act carries the `counterparty_profile` of the check it rests on (act →
