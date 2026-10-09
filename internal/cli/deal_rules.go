@@ -592,6 +592,11 @@ type dealEvent struct {
 	// names the pay it reverses (reverses_ref), kept with the step like
 	// Producer: a step sealed before has none and re-derives without it.
 	ReversesRef string `json:"reverses_ref,omitempty"`
+	// ThreadCounterparty (dealThreadCounterpartyVersion) marks a step whose
+	// check, on a sale's thread, seals the thread's buyer as its
+	// counterparty when it names no one, kept with the step like Producer:
+	// a step sealed before has none and re-derives with no counterparty.
+	ThreadCounterparty string `json:"thread_counterparty,omitempty"`
 	// OfferClass (dealOfferClassVersion) marks a step whose offer is classed
 	// marketplace.offer, kept with the step like Producer: a step sealed
 	// before has none and re-derives its offer as external_commitment.other.

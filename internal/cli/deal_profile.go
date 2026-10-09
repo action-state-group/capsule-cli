@@ -814,6 +814,16 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 		if sn.Who != nil {
 			setIDs(counterpartyIDs(key, *sn.Who))
+		} else if open := events[0].Event.Open; ev.ThreadCounterparty != "" && open != nil && open.Sale != "" {
+			// A sale's thread is opened for one buyer: a check that names no
+			// one is about that buyer, with exactly the keyed fingerprints the
+			// thread's opening sealed (first contact, its payee read as its
+			// name when it names none).
+			first := open.Who
+			if first.Payee == "" {
+				first.Payee = first.Name
+			}
+			setIDs(counterpartyIDs(key, first))
 		}
 		body["action"] = sn.Action
 		// On a sale's thread, the item it is about, salted per check: equal

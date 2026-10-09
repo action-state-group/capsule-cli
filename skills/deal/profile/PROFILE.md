@@ -498,7 +498,10 @@ A verifier holding one deal's records in `seq` order checks:
     digest of the sale's task authority, committed under that step's own nonce. A thread's
     request and limits are the sale's and do not change per buyer (no `intent` steps). Each
     `check` of a thread carries `item_ref_commitment`: the sale's item reference committed under
-    that check's own nonce. So no value in a thread's records is equal across the sale's threads,
+    that check's own nonce. A thread's `check` that names no one carries the thread's buyer as its
+    `counterparty`: exactly the keyed fingerprints the thread's `baseline` sealed (per deal, as on a
+    purchase's check), so a rule keyed on the counterparty has a target. A check sealed before this
+    carries none. So no value in a thread's records is equal across the sale's threads,
     and a buyer's copy carries the thread's task authority and its offers in full. The user's own
     copy and an adjudicator's carry `sale_authority_opening` (`{record_digest, nonce, text}`, the
     text being the sale's task-authority digest), which ties the thread to the sale; a buyer's
