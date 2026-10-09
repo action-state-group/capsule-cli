@@ -78,6 +78,14 @@ type dealIntent struct {
 	PartyRole     string    `json:"party_role,omitempty"`
 	Asked         dealTerms `json:"asked,omitempty"`
 	MaxTotalMinor *int64    `json:"max_total_minor,omitempty"`
+	// MinTotalMinor is the lowest total the user will take (a seller's
+	// floor). It stays on this device: records seal only bounds_commitment,
+	// a salted commitment to the commercial-bounds/v0 document holding it
+	// (commercialBoundsText), opened in the user's own copy alone.
+	MinTotalMinor *int64 `json:"min_total_minor,omitempty"`
+	// boundsCommit is the bounds_commitment of the floor in force, set
+	// while folding the deal (never stored).
+	boundsCommit string
 	// Allowed absent (nil) means no restriction; present and empty means
 	// nothing is allowed yet ("show me options, don't book").
 	Allowed []string `json:"allowed"`
@@ -338,10 +346,13 @@ type dealLimits struct {
 }
 
 // dealLimitSet is a version of the user's limits. Allowed absent (nil) means
-// no restriction, as in dealIntent.
+// no restriction, as in dealIntent. The floor (MinTotalMinor) is sealed only
+// as BoundsCommitment, the commitment of the step that set it.
 type dealLimitSet struct {
-	MaxTotalMinor *int64   `json:"max_total_minor,omitempty"`
-	Allowed       []string `json:"allowed"`
+	MaxTotalMinor    *int64   `json:"max_total_minor,omitempty"`
+	MinTotalMinor    *int64   `json:"min_total_minor,omitempty"`
+	BoundsCommitment string   `json:"bounds_commitment,omitempty"`
+	Allowed          []string `json:"allowed"`
 }
 
 // String is a version of the limits in plain words, for the trail.
@@ -349,6 +360,9 @@ func (l dealLimitSet) String() string {
 	limit := "no limit"
 	if l.MaxTotalMinor != nil {
 		limit = "limit " + strconv.FormatInt(*l.MaxTotalMinor, 10) + " (minor units)"
+	}
+	if l.MinTotalMinor != nil {
+		limit += ", floor " + strconv.FormatInt(*l.MinTotalMinor, 10) + " (minor units)"
 	}
 	switch {
 	case l.Allowed == nil:
@@ -360,7 +374,7 @@ func (l dealLimitSet) String() string {
 }
 
 func (i dealIntent) limits() dealLimitSet {
-	return dealLimitSet{MaxTotalMinor: i.MaxTotalMinor, Allowed: i.Allowed}
+	return dealLimitSet{MaxTotalMinor: i.MaxTotalMinor, MinTotalMinor: i.MinTotalMinor, BoundsCommitment: i.boundsCommit, Allowed: i.Allowed}
 }
 
 // proposedLimits is what an intent note asks for beyond the limits in force,
@@ -375,6 +389,14 @@ func proposedLimits(cur dealLimitSet, note dealIntent) (dealLimitSet, bool) {
 		}
 		limit := *note.MaxTotalMinor
 		out.MaxTotalMinor = &limit
+	}
+	// The floor runs the other way: a lower floor asks for more.
+	if note.MinTotalMinor != nil {
+		if cur.MinTotalMinor != nil && *note.MinTotalMinor < *cur.MinTotalMinor {
+			more = true
+		}
+		floor := *note.MinTotalMinor
+		out.MinTotalMinor, out.BoundsCommitment = &floor, note.boundsCommit
 	}
 	if note.Allowed != nil {
 		for _, a := range note.Allowed {
@@ -607,6 +629,9 @@ func (o dealOpen) validate() error {
 	if err := validPartyRole(o.Intent.PartyRole); err != nil {
 		return err
 	}
+	if err := o.Intent.validBounds(); err != nil {
+		return err
+	}
 	if o.Who == (dealWho{}) {
 		return inputError("who needs at least one identifying field")
 	}
@@ -622,6 +647,43 @@ func (o dealOpen) validate() error {
 	}
 	if o.Recourse.Rail == "" || o.Recourse.Refundable == nil {
 		return inputError("recourse needs the payment rail and whether it is refundable")
+	}
+	return nil
+}
+
+// commercialBoundsKind names the private document a floor lives in: sealed
+// records carry only its salted commitment (bounds_commitment).
+const commercialBoundsKind = "commercial-bounds/v0"
+
+// commercialBoundsText is the text a bounds_commitment binds: the JCS bytes
+// of the commercial-bounds/v0 document holding the floor.
+func commercialBoundsText(min int64) string {
+	doc, err := bundleJSON(map[string]interface{}{"type": commercialBoundsKind, "min_total_minor": min})
+	if err != nil {
+		return ""
+	}
+	b, err := canonical.JCS(doc)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// withBoundsCommit is an intent with the commitment its step sealed to its
+// floor, under that step's own "bounds" nonce.
+func withBoundsCommit(i dealIntent, nonces map[string]string) dealIntent {
+	if i.MinTotalMinor != nil && nonces["bounds"] != "" {
+		i.boundsCommit, _ = commitText(nonces["bounds"], commercialBoundsText(*i.MinTotalMinor))
+	}
+	return i
+}
+
+func (i dealIntent) validBounds() error {
+	switch {
+	case i.MinTotalMinor != nil && *i.MinTotalMinor < 0:
+		return inputError("intent.min_total_minor must not be negative")
+	case i.MinTotalMinor != nil && i.MaxTotalMinor != nil && *i.MinTotalMinor > *i.MaxTotalMinor:
+		return inputError("intent.min_total_minor must not be more than max_total_minor")
 	}
 	return nil
 }
@@ -681,13 +743,14 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		return dealState{}, inputError("this deal has no sealed opening step to check against: start a new deal with `deal open`")
 	}
 	o := *events[0].Event.Open
+	o.Intent = withBoundsCommit(o.Intent, events[0].Event.Nonces)
 	s := dealState{open: o, intent: o.Intent, agreed: o.Terms, who: o.Who, terms: o.Terms, recourse: o.Recourse, agreedRecourse: o.Recourse, claims: slices.Clone(o.Claims), whoSource: map[string]string{}}
 	var lastSnapshot *dealSnapshot
 	for _, se := range events[1:] {
 		e := se.Event
 		switch e.Kind {
 		case "intent":
-			s.intent = laterIntent(s.intent, *e.Intent)
+			s.intent = laterIntent(s.intent, withBoundsCommit(*e.Intent, se.Event.Nonces))
 		case "message":
 			s.messages = append(s.messages, *e.Message)
 			if e.Message.Who != nil && e.Message.From == "counterparty" {
@@ -724,6 +787,8 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 			if e.Approval.Limits != nil {
 				if e.Approval.Proceed && e.Approval.Reason == "" {
 					s.intent.MaxTotalMinor = e.Approval.Limits.New.MaxTotalMinor
+					s.intent.MinTotalMinor = e.Approval.Limits.New.MinTotalMinor
+					s.intent.boundsCommit = e.Approval.Limits.New.BoundsCommitment
 					s.intent.Allowed = slices.Clone(e.Approval.Limits.New.Allowed)
 				}
 				continue
@@ -768,6 +833,14 @@ func laterIntent(cur, next dealIntent) dealIntent {
 	case next.MaxTotalMinor == nil || *next.MaxTotalMinor > *cur.MaxTotalMinor:
 		limit := *cur.MaxTotalMinor
 		out.MaxTotalMinor = &limit
+	}
+	// A higher floor narrows and applies; a lower one, or none, keeps the
+	// floor in force (lowering it is a proposal the user must confirm).
+	switch {
+	case cur.MinTotalMinor == nil:
+	case next.MinTotalMinor == nil || *next.MinTotalMinor < *cur.MinTotalMinor:
+		floor := *cur.MinTotalMinor
+		out.MinTotalMinor, out.boundsCommit = &floor, cur.boundsCommit
 	}
 	switch {
 	case cur.Allowed == nil:
@@ -1081,6 +1154,19 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 				text = fmt.Sprintf("Your rules normally ask above %s. You asked for this %s purchase specifically. Approve this exception?", limit, amount)
 			}
 			add("asked", "over_limit", field, text)
+			askedFields["price"] = true
+		}
+	}
+	// The floor: the lowest total the user will take. Below it, ask. Only
+	// the card shows the amount; records seal the rule (under_floor).
+	if intent.MinTotalMinor != nil {
+		total := proposed.PriceMinor
+		if total == nil {
+			total = snap.AmountMinor
+		}
+		if total != nil && *total < *intent.MinTotalMinor {
+			add("asked", "under_floor", "price", fmt.Sprintf("Below the lowest price you will take, %s (%s)",
+				formatMoney(*intent.MinTotalMinor, proposed.Currency), formatMoney(*total, proposed.Currency)))
 			askedFields["price"] = true
 		}
 	}
@@ -2158,7 +2244,7 @@ var dealBuiltinRules = []struct {
 	Question string
 	Rules    []string
 }{
-	{"asked", []string{"agent_picked", "not_asked", "over_limit"}},
+	{"asked", []string{"agent_picked", "not_asked", "over_limit", "under_floor"}},
 	{"who", []string{"payee_or_contact_changed", "first_disclosure"}},
 	{"terms", []string{"terms_changed"}},
 	{"recourse", []string{"recourse_changed", "irreversible_rail"}},

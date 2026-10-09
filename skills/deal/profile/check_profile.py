@@ -557,6 +557,20 @@ def check_chain(records):
     max_total = records[0]["body"]["intent"].get("max_total_minor")
     # The side of the deal the user is on: set when it opens (absent = buyer), never changed.
     party_role = records[0]["body"]["intent"].get("party_role", "buyer")
+    # The floor in force, as the bounds_commitment that stated it: the floor itself is never in a
+    # record, so it cannot be compared. After an intent states a new floor the producer applies it
+    # only if it is higher, which this checker cannot see: the floor in force is then unknown
+    # (bounds_known False) until a confirmation states it again.
+    bounds, bounds_known = records[0]["body"]["intent"].get("bounds_commitment"), True
+
+    def limits_in_force():
+        out = {k: v for k, v in (("max_total_minor", max_total), ("allowed", allowed)) if v is not None}
+        if bounds_known and bounds is not None:
+            out["bounds_commitment"] = bounds
+        return out
+
+    def without_unknown_bounds(d):
+        return d if bounds_known else {k: v for k, v in d.items() if k != "bounds_commitment"}
     confirmed_intents = set()
     used_approvals, verdict_for_check = set(), set()
     reversed_actions = set()
@@ -728,6 +742,8 @@ def check_chain(records):
                 for k in ("max_total_minor", "allowed"):
                     if body.get(k) != intent0.get(k):
                         fail(i, f"the task authority's {k} is not the one asked at the baseline")
+                if ("bounds_commitment" in body) != ("bounds_commitment" in intent0):
+                    fail(i, "the task authority states a floor exactly when the baseline does")
             else:
                 j = one("approves", ("intent",))
                 prop = records[j]["body"]
@@ -742,6 +758,8 @@ def check_chain(records):
                         new[k] = prop[k]
                 if {k: body[k] for k in ("max_total_minor", "allowed") if k in body} != new:
                     fail(i, "the new task authority is not what the proposal asked for")
+                if "bounds_commitment" in prop and body.get("bounds_commitment") != prop["bounds_commitment"]:
+                    fail(i, "the new task authority's floor is not the one the proposal stated")
                 more = (prop.get("max_total_minor") is not None and max_total is not None
                         and prop["max_total_minor"] > max_total) or \
                        (prop.get("allowed") is not None and allowed is not None
@@ -773,6 +791,8 @@ def check_chain(records):
             # proposal that applies only once the user confirms it.
             if body.get("max_total_minor") is not None and (max_total is None or body["max_total_minor"] < max_total):
                 max_total = body["max_total_minor"]
+            if body.get("bounds_commitment") is not None and body["bounds_commitment"] != bounds:
+                bounds_known = False
             if body.get("allowed") is not None:
                 allowed = [a for a in body["allowed"] if allowed is None or a in allowed]
         elif t == "evidence":
@@ -819,23 +839,28 @@ def check_chain(records):
                 continue
             if not body["proceed"]:
                 fail(i, "a confirmation of a standing proposal proceeds")
-            in_force = {k: v for k, v in (("max_total_minor", max_total), ("allowed", allowed)) if v is not None}
-            if body["limits"]["previous"] != in_force:
+            in_force = limits_in_force()
+            if without_unknown_bounds(body["limits"]["previous"]) != in_force:
                 fail(i, "limits.previous is not the limits in force")
             new = dict(in_force)
-            for k in ("max_total_minor", "allowed"):
+            for k in ("max_total_minor", "allowed", "bounds_commitment"):
                 if prop.get(k) is not None:
                     new[k] = prop[k]
-            if body["limits"]["new"] != new:
+            got = body["limits"]["new"] if "bounds_commitment" in prop else without_unknown_bounds(body["limits"]["new"])
+            if got != new:
                 fail(i, "limits.new is not what the intent proposed")
+            # A floor cannot be compared (only its commitment is sealed): a proposal that states a
+            # floor other than the one in force may be asking for a lower one, so it needs confirming.
             more = (prop.get("max_total_minor") is not None and max_total is not None
                     and prop["max_total_minor"] > max_total) or \
                    (prop.get("allowed") is not None and allowed is not None
-                    and any(a not in allowed for a in prop["allowed"]))
+                    and any(a not in allowed for a in prop["allowed"])) or \
+                   (prop.get("bounds_commitment") is not None and prop["bounds_commitment"] != bounds)
             if not more:
                 fail(i, "the intent asks for no higher limit and no new action: nothing to confirm")
             confirmed_intents.add(j)
             max_total, allowed = new.get("max_total_minor"), new.get("allowed")
+            bounds, bounds_known = body["limits"]["new"].get("bounds_commitment"), True
         elif t == "approval":
             j = one("approves", ("verdict",))
             first_answer.setdefault(j, i)
@@ -984,6 +1009,10 @@ def run_fixtures() -> int:
         ok = commitment(x["nonce"], x["text"]) == x["commitment"]
         bad += not ok
         print(f"{'ok  ' if ok else 'FAIL'} commitment {x['label']:<18} {x['commitment'][:16]}…")
+    for x in load(FIX / "commercial-bounds-vectors.json")["vectors"]:
+        ok = jcs(x["document"]).decode("utf-8") == x["text"] and commitment(x["nonce"], x["text"]) == x["bounds_commitment"]
+        bad += not ok
+        print(f"{'ok  ' if ok else 'FAIL'} commercial-bounds/v0 {x['document']['min_total_minor']:<16} {x['bounds_commitment'][:16]}…")
     store = local_store_values()
 
     # Two positive chains: x-deal-v0 throughout, and one sealed in the typed action
@@ -1260,7 +1289,7 @@ def regen():
     # regenerate these fixtures when it or the rule table changes (a Go test keeps them equal).
     materiality = record_digest(load(EXAMPLE_PREDICATE))
     rules = {"evaluator": "capsulectl deal check", "materiality_digest": materiality, "rules": [
-        {"question": "asked", "rules": ["agent_picked", "not_asked", "over_limit"]},
+        {"question": "asked", "rules": ["agent_picked", "not_asked", "over_limit", "under_floor"]},
         {"question": "who", "rules": ["payee_or_contact_changed", "first_disclosure"]},
         {"question": "terms", "rules": ["terms_changed"]},
         {"question": "recourse", "rules": ["recourse_changed", "irreversible_rail"]},
@@ -1386,6 +1415,18 @@ def regen():
     for k, v in extra + [(k[0], v) for k, v in raw1.items()]:
         vec["vectors"].append({"kind": k, "raw": v, "normalized": normalize(k, v), "fp": fingerprint(dk, k, v)})
     dump(FIX / "fingerprint-vectors.json", vec)
+
+    # commercial-bounds/v0: the private document holding a floor, and the bounds_commitment a
+    # record seals to it. Go recomputes the same values (internal/cli/deal_bounds_test.go).
+    bounds = {"description": "bounds_commitment = SHA-256 over the RFC 8785 (JCS) bytes of {\"nonce\", \"text\"}, "
+                             "with text the JCS bytes of the commercial-bounds/v0 document (commit_alg sha256-jcs-nonce256).",
+              "vectors": []}
+    for label, floor in (("bounds-1", 170000), ("bounds-2", 0), ("bounds-3", 9007199254740991)):
+        doc = {"type": "commercial-bounds/v0", "min_total_minor": floor}
+        text = jcs(doc).decode("utf-8")
+        bounds["vectors"].append({"document": doc, "nonce": nonce(label), "text": text,
+                                  "bounds_commitment": commitment(nonce(label), text)})
+    dump(FIX / "commercial-bounds-vectors.json", bounds)
 
     # --- negatives -------------------------------------------------------------------------
     import copy

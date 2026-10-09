@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/records/commercial-bounds-v0.schema.json",
+  "title": "commercial-bounds/v0",
+  "description": "A private document holding the user's commercial bounds: today the lowest total they will take (min_total_minor, a seller's floor). It is never sealed in a record and never shared: records carry only bounds_commitment, SHA-256 over the RFC 8785 (JCS) bytes of {\"nonce\", \"text\"} where text is this document's own JCS bytes and nonce a fresh 256-bit value (commit_alg sha256-jcs-nonce256). The user's own copy carries the opening, so the floor can be checked against the commitment on the user's own device.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "min_total_minor"
+  ],
+  "properties": {
+    "type": {
+      "const": "commercial-bounds/v0"
+    },
+    "min_total_minor": {
+      "$ref": "record-common-v0.schema.json#/$defs/uint"
+    }
+  }
+}

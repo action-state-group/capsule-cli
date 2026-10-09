@@ -203,6 +203,7 @@
         "party_role": { "description": "Which side of the deal the user is on. Absent means buyer (every deal sealed before it was recorded); set when the deal opens and the same on every later intent.", "enum": ["buyer", "seller"] },
         "asked": { "$ref": "#/$defs/terms" },
         "max_total_minor": { "$ref": "#/$defs/safe_uint" },
+        "bounds_commitment": { "description": "The salted commitment (commit_alg) to the commercial-bounds/v0 document holding the lowest total the user will take (min_total_minor). The floor itself is never in a record; the user's own copy carries its opening.", "$ref": "#/$defs/hex64" },
         "allowed": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/point_of_no_return" } }
       }
     },
@@ -403,6 +404,7 @@
       "type": "object", "additionalProperties": false,
       "properties": {
         "max_total_minor": { "type": "integer", "minimum": 0 },
+        "bounds_commitment": { "description": "The floor in this version, as the bounds_commitment the intent that stated it sealed.", "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "allowed": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
       }
     },

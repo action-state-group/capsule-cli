@@ -220,7 +220,7 @@ Field details:
 - **differences[]**: `{question, rule, field?}`. `question` is one of `asked`, `who`, `terms`,
   `recourse`, `safety`, `delivered`. `rule` is the id of the rule that found the difference.
   `capsulectl`'s deal check writes its own built-in rules, among them `not_asked`, `over_limit`,
-  `agent_picked`, `terms_changed`, `recourse_changed`, `credentials_requested`, `not_delivered`
+  `under_floor` (a price below the user's floor, rule 6), `agent_picked`, `terms_changed`, `recourse_changed`, `credentials_requested`, `not_delivered`
   and `delivered_differs`. Any change of
   `recourse.rail` or `recourse.refundable` from what was agreed is a
   `recourse_changed` difference, for every action. The human card text contains raw values, so it is
@@ -403,6 +403,17 @@ A verifier holding one deal's records in `seq` order checks:
 6. **The user's limits, and standing intent.** The limits in force start as the baseline
    intent's `max_total_minor` and `allowed`. An `intent` record may lower the limit or drop
    actions; a higher limit or an action not in force is a proposal, recorded and not applied.
+   A floor (the lowest total the user will take, a seller's `min_total_minor`) runs the other
+   way: an `intent` may raise it, and a lower floor is a proposal. The floor is never sealed: a
+   record carries `bounds_commitment`, the salted commitment (`commit_alg`) to the
+   `commercial-bounds/v0` document holding it (`records/commercial-bounds-v0.schema.json`; the
+   checker's vector, `fixtures/commercial-bounds-vectors.json`), on the baseline or intent that
+   states it, on a typed `task-authority/v0`, and in a `confirm_limits` approval's `limits`
+   (the commitment of the intent that stated that floor). Only the user's own copy carries its
+   opening (`bounds_openings` in its sealed report), and the profile's own rules checker is
+   given the opening in force (`commercial_bounds_opening`). A floor cannot be compared from its
+   commitment, so a checker treats an intent that states another floor as possibly asking for
+   more.
    Only the user's `approval` with `choice: "confirm_limits"` that `approves` the proposing
    `intent` puts it in force, as a new version: its `limits.previous` equals the limits in force,
    its `limits.new` is what the intent proposed (a field the intent leaves out keeps its value),

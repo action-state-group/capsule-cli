@@ -1,0 +1,32 @@
+{
+  "description": "bounds_commitment = SHA-256 over the RFC 8785 (JCS) bytes of {\"nonce\", \"text\"}, with text the JCS bytes of the commercial-bounds/v0 document (commit_alg sha256-jcs-nonce256).",
+  "vectors": [
+    {
+      "document": {
+        "type": "commercial-bounds/v0",
+        "min_total_minor": 170000
+      },
+      "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67",
+      "text": "{\"min_total_minor\":170000,\"type\":\"commercial-bounds/v0\"}",
+      "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998"
+    },
+    {
+      "document": {
+        "type": "commercial-bounds/v0",
+        "min_total_minor": 0
+      },
+      "nonce": "37c6372baa51d290d62b83349d1c4db9711b656f662a28d08c5b5ace32fc0a5f",
+      "text": "{\"min_total_minor\":0,\"type\":\"commercial-bounds/v0\"}",
+      "bounds_commitment": "e02e4e9ef4ccc2e5159571d49fb316276310faf47c55b38de8497fec3c682889"
+    },
+    {
+      "document": {
+        "type": "commercial-bounds/v0",
+        "min_total_minor": 9007199254740991
+      },
+      "nonce": "15aca378373bdf75f4a89eb6e13335c47d45b85d9a284012268b20785426094a",
+      "text": "{\"min_total_minor\":9007199254740991,\"type\":\"commercial-bounds/v0\"}",
+      "bounds_commitment": "c366ae5c6e9932458b3cc34e2e9786317f319de5a05e158b7eb0876d776aebf8"
+    }
+  ]
+}

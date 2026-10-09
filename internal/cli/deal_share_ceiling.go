@@ -6,13 +6,19 @@ import (
 	"strings"
 )
 
-// The user's spending limit (intent.max_total_minor) is private from the
-// counterparty: a seller who learns the buyer's maximum learns what to ask
-// for. The adjudicator's copy may carry it (it is how "over your limit" is
-// judged). A counterparty copy withholds any record that carries it, leaves
-// it out of the merchant section, and the gate refuses a counterparty page or
-// bundle that names it, as the field or as money, unless it equals an amount
-// the copy may show anyway (the price the seller asked, an amount paid).
+// The user's bounds are private from the counterparty, whichever side the
+// user is on: a seller who learns the buyer's maximum (intent.max_total_minor)
+// learns what to ask for, and a buyer who learns the seller's floor
+// (intent.min_total_minor) learns what to offer. The floor is never sealed at
+// all (only its commitment). The adjudicator's copy may carry the maximum (it
+// is how "over your limit" is judged). A counterparty copy withholds any
+// record that carries either bound, leaves them out of the merchant section,
+// and the gate refuses a counterparty page or bundle that names either, as
+// the field or as money, unless it equals an amount the copy may show anyway
+// (the price asked, an amount paid). The party role changes only the words.
+
+// dealPrivateBoundKeys are the bound fields no counterparty copy carries.
+var dealPrivateBoundKeys = map[string]bool{"max_total_minor": true, "min_total_minor": true}
 
 // dealBasisYourLimit is the merchant section's basis when what was approved
 // is only the user's spending limit.
@@ -33,11 +39,19 @@ func dealCeilings(events []sealedEvent) []dealCeiling {
 	}
 	for _, se := range events {
 		e := se.Event
-		if e.Open != nil && e.Open.Intent.MaxTotalMinor != nil {
-			out = append(out, dealCeiling{*e.Open.Intent.MaxTotalMinor, currency})
+		var intents []dealIntent
+		if e.Open != nil {
+			intents = append(intents, e.Open.Intent)
 		}
-		if e.Intent != nil && e.Intent.MaxTotalMinor != nil {
-			out = append(out, dealCeiling{*e.Intent.MaxTotalMinor, currency})
+		if e.Intent != nil {
+			intents = append(intents, *e.Intent)
+		}
+		for _, i := range intents {
+			for _, v := range []*int64{i.MaxTotalMinor, i.MinTotalMinor} {
+				if v != nil {
+					out = append(out, dealCeiling{*v, currency})
+				}
+			}
 		}
 	}
 	return out
@@ -86,8 +100,13 @@ func dealCeilingGate(data []byte, events []sealedEvent, audience string) error {
 	}
 	text := strings.ToLower(foldText(string(data)))
 	refuse := inputError("refusing to write the shared copy: the counterparty's copy would carry your spending limit")
-	if strings.Contains(text, "max_total_minor") {
-		return refuse
+	if dealRole(events) == dealRoleSeller {
+		refuse = inputError("refusing to write the shared copy: the counterparty's copy would carry the lowest price you will take, or a limit you set")
+	}
+	for k := range dealPrivateBoundKeys {
+		if strings.Contains(text, k) {
+			return refuse
+		}
 	}
 	shown := dealShownAmounts(events)
 	for _, c := range dealCeilings(events) {

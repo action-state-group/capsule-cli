@@ -1163,7 +1163,7 @@ func dealNoteCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if proposed, more := proposedLimits(state.intent.limits(), *ev.Intent); more {
+				if proposed, more := proposedLimits(state.intent.limits(), withBoundsCommit(*ev.Intent, se.Event.Nonces)); more {
 					out["proposed"] = proposed
 					out["in_force"] = state.intent.limits()
 					out["next"] = "this note asks for a higher limit or a new action: it is recorded as a proposal and not applied. " +
@@ -1324,7 +1324,7 @@ func judgeLimitsConfirmation(events []sealedEvent, i int, a *dealApproval) error
 		return err
 	}
 	cur := state.intent.limits()
-	proposed, more := proposedLimits(cur, *events[i].Event.Intent)
+	proposed, more := proposedLimits(cur, withBoundsCommit(*events[i].Event.Intent, events[i].Event.Nonces))
 	for _, later := range events[i+1:] {
 		switch {
 		case later.Event.Kind == "intent":
@@ -1736,7 +1736,7 @@ func dealReportCommand() *cobra.Command {
 				// Sharing is a disclose act: it is on record before the file
 				// exists, and the output carries none of the local report's
 				// raw text.
-				share, err := s.recordShare(ctx, dealID, b, audience, recipient, []byte(page))
+				share, err := s.recordShare(ctx, dealID, b, audience, recipient, dealRole(events), []byte(page))
 				if err != nil {
 					return err
 				}
