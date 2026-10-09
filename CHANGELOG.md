@@ -57,7 +57,8 @@
   seal `bounds_commitment`, a salted commitment (`sha256-jcs-nonce256`) to a
   `commercial-bounds/v0` document. Only the user's own copy carries its openings, and only the
   user's own rules checker is given the opening in force (`commercial_bounds_opening`). No
-  shared copy, for any audience, carries the floor. A check below the floor asks (`under_floor`).
+  shared copy, for any audience, carries the floor (see "Not yet"). A check below the floor asks
+  (`under_floor`).
 - **An exact acceptance.** `offer` is a check, allowed only where the user sells; a later offer
   supersedes the earlier one (`supersedes`). `deal note --kind acceptance` seals the buyer's
   acceptance of the exact offer by its digest. A seller's `commit` needs an acceptance of the
@@ -70,8 +71,9 @@
   words hold none of the user's private details. A buyer's deal is shared exactly as before.
 - **One item, several buyers.** `deal sale new` seals a sale's own log; `deal open --sale ID`
   opens a buyer's thread under it. Each thread seals the item reference and the sale's task
-  authority only as per-thread salted commitments, so no value links two buyers' copies. The
-  user's own rules checker is given the plain `item_ref`.
+  authority only as per-thread salted commitments, so no digest or commitment links two buyers'
+  copies; both still show the item's name and the offer, which are the seller's own listing.
+  The user's own rules checker is given the plain `item_ref`.
 - **Not yet:** the check that keeps the floor out of written text misses some formats
   ("$1,700.00", bare amounts); a fix follows.
 
