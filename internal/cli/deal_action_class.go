@@ -2,16 +2,24 @@ package cli
 
 import "fmt"
 
-// dealTaxonomyVersion is the action-class taxonomy a deal record's
-// action_class is drawn from: version 2 of capsule-engine's
+// dealTaxonomyVersion is the action-class taxonomy a new deal record's
+// action_class is drawn from: version 3 of capsule-engine's
 // capsule_engine/guards/action_taxonomy.json
-// (github.com/action-state-group/capsule-engine at 2521ee6). A record sealed
-// with an action_class also seals this version, so a reader resolves the
-// class against the table that was live when it was sealed.
-const dealTaxonomyVersion = "2"
+// (github.com/action-state-group/capsule-engine at a5e9e30, file sha256
+// 8d6ce5917cd76e239ce5675ba88b4257f537974f8605e848d15713f646956e64). A record
+// sealed with an action_class also seals this version, so a reader resolves
+// the class against the table that was live when it was sealed. Each step
+// keeps the version it was sealed with: a step sealed under version 2 (at
+// 2521ee6) re-derives with "2".
+//
+// Version 3 names the same classes as version 2, each with the same trigger
+// class; it adds approver_role account_holder to money.purchase,
+// money.subscription, booking.create and booking.modify. So the mapping below
+// is the same under both.
+const dealTaxonomyVersion = "3"
 
-// The taxonomy-v2 classes a deal record can carry. Each is a row of
-// action_taxonomy.json at 2521ee6; none is invented here.
+// The taxonomy-v3 classes a deal record can carry. Each is a row of
+// action_taxonomy.json at a5e9e30; none is invented here.
 const (
 	classMoneyPurchase       = "money.purchase"
 	classMoneyRefund         = "money.refund"
@@ -23,7 +31,7 @@ const (
 	classExternalCommitOther = "external_commitment.other"
 )
 
-// dealActionClasses maps a deal action, per deal type, to its taxonomy-v2
+// dealActionClasses maps a deal action, per deal type, to its taxonomy-v3
 // class. A cancel is mapped here only for a cancel that returns no money; one
 // that returns money is classed by dealActionClass. A pair absent from the
 // table (a deal type or action added later) is classed
@@ -54,7 +62,7 @@ var dealActionClasses = map[string]map[string]string{
 	},
 }
 
-// dealActionClass is the taxonomy-v2 class of a deal action. direction is the
+// dealActionClass is the taxonomy-v3 class of a deal action. direction is the
 // way its amount moved (actDirection): a cancel whose amount returns a sealed
 // payment ("in") is a refund, money arriving rather than leaving, whatever the
 // deal type. The two disclosures are classed by what is given, in every deal
