@@ -207,6 +207,10 @@
           "$ref": "record-common-v0.schema.json#/$defs/hex64",
           "description": "Lowercase hex SHA-256 of the JCS bytes of the offer field list, in order."
         },
+        "reverses_ref": {
+          "$ref": "record-common-v0.schema.json#/$defs/ref",
+          "description": "On a cancel that returns a sealed payment (a refund): the pay act it reverses, by its record digest. An opaque reference; the same digest as the refund act's reverses reference."
+        },
         "task_authority_ref": {
           "$ref": "record-common-v0.schema.json#/$defs/ref",
           "description": "The task authority in force when the action was proposed: the task-authority record, or the approval that confirmed newer limits. An opaque reference a rules checker binds the plan it is given to."

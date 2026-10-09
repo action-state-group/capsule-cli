@@ -160,9 +160,10 @@ func TestABuyersCopyShowsTheOfferAndDoesNotLinkTheSalesThreads(t *testing.T) {
 		copies = append(copies, shared)
 		recs := recordsByType(disclosedRecords(b))
 		var offer map[string]any
+		offerDigest := ""
 		for _, r := range recs["proposed-action/v0"] {
 			if body := r["body"].(map[string]any); body["action"] == "offer" {
-				offer = body
+				offer, offerDigest = body, recordDigest(t, r)
 			}
 		}
 		require.NotNil(t, offer, "the buyer's copy carries the offer they accepted")
@@ -172,8 +173,16 @@ func TestABuyersCopyShowsTheOfferAndDoesNotLinkTheSalesThreads(t *testing.T) {
 		assert.NotEmpty(t, offer["item_ref_commitment"])
 		require.Len(t, recs["task-authority/v0"], 1, "and the task authority, in full")
 		assert.NotEmpty(t, recs["task-authority/v0"][0]["body"].(map[string]any)["sale_authority_commitment"])
-		assert.Len(t, recs["counterparty-acceptance-observation"], 0)
-		assert.NotEmpty(t, recs["action-approval/v0"], "and the acceptance")
+		// And the acceptance, bound to that exact offer.
+		var accepted []map[string]any
+		for _, r := range recs["action-approval/v0"] {
+			if body := r["body"].(map[string]any); body["authority"] == "counterparty_acceptance" {
+				accepted = append(accepted, body)
+			}
+		}
+		require.Len(t, accepted, 1, "the buyer's copy carries the acceptance")
+		assert.Equal(t, "counterparty-acceptance-observation", accepted[0]["kind"])
+		assert.Equal(t, offerDigest, digestOfRef(accepted[0]["proposed_action_ref"]), "of the offer it shows")
 		assert.NotContains(t, shared, saleItemRef(t, saleID))
 		assert.NotContains(t, shared, authority)
 		assert.NotContains(t, shared, "sale_authority_opening")

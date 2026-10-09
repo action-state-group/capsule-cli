@@ -133,7 +133,8 @@ type dealOpen struct {
 	ItemRef string `json:"item_ref,omitempty"`
 	// Sale is, on a buyer thread, the id of the sale it was opened under,
 	// and SaleAuthority the digest of that sale's one task authority, which
-	// the thread's task authority records (sale_authority_ref). Set by
+	// the thread's task authority commits to under its own nonce
+	// (sale_authority_commitment). Set by
 	// `deal open --sale`, never from the input file.
 	Sale          string `json:"sale,omitempty"`
 	SaleAuthority string `json:"sale_authority,omitempty"`
@@ -587,6 +588,10 @@ type dealEvent struct {
 	// kept with the step like Producer: a step sealed before has none and
 	// re-derives its claims in clear, unchanged.
 	ClaimCommit string `json:"claim_commit,omitempty"`
+	// ReversesRef (dealReversesRefVersion) marks a step whose refund check
+	// names the pay it reverses (reverses_ref), kept with the step like
+	// Producer: a step sealed before has none and re-derives without it.
+	ReversesRef string `json:"reverses_ref,omitempty"`
 }
 
 // dealPlatformApproval is an observation of another platform's own approval
