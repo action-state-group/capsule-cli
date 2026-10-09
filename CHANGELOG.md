@@ -94,8 +94,10 @@
   itself stays shareable.
 - **The rules checker gets it:** `external-check-input/v0` gives the checker
   `record.counterparty_profile` for the check being decided, and `history[i].counterparty_profile`
-  for each earlier act (from its approval's check). It is supplied beside the sealed capsule and
-  never part of it. Acts checked before this release carry none.
+  for each earlier act, from the check the act rests on: the one its approval answers, or, in a
+  deal sealed in typed records, a check that needed no approval and authorized the act itself, so
+  a repeated payment in a typed deal reads as a repeat too. It is supplied beside the sealed
+  capsule and never part of it. Acts checked before this release carry none.
 
 ### New deal records seal action taxonomy version 5
 
