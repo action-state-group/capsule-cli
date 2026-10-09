@@ -141,6 +141,12 @@
               "properties": { "payee": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
             }
           }
+        },
+        "proposal_at": {
+          "description": "Optional, supplied by capsulectl beside the sealed capsule (never part of it), on the checked record only: on the check of a seller's commit that rests on an accepted offer (the latest offer, with a recorded acceptance and no change of details since), the offer's proposed-action record's sealed `at`, byte for byte. Absent on a buyer's deal, on any other action, with no acceptance in force, and on history entries. Never null.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
         }
       }
     }

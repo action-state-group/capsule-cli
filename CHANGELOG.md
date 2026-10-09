@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### A seller's commit tells the rules checker when the accepted offer was made
+
+- **Added (checker input only; nothing sealed changes).** The check of a seller's `commit` that rests
+  on an accepted offer now carries `record.proposal_at`. That is the offer's proposed-action record's
+  sealed `at`, so a rule on an offer's expiry can be evaluated: before, it could not be checked on
+  any commit.
+- It is the latest offer, with a recorded acceptance and no change of details since: the same
+  acceptance the commit gate requires. It is absent on a buyer's deal, on any other action, with no
+  acceptance in force, and on history entries.
+- `record` is open in `external-check-input-v0.schema.json`, so a checker that predates the member
+  ignores it.
+
 ## v0.1.0-rc14
 
 ### A typed deal's history acts carry the profile payee key
