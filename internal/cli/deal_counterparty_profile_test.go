@@ -541,3 +541,38 @@ func TestADealSealedBeforeCompanionsReDerivesUnchanged(t *testing.T) {
 	report := dealRun(t, "report", "--deal", id)
 	assert.NotEmpty(t, report["did"], "and it still reports what was done")
 }
+
+// In a sale thread, a seller's check naming a payee is followed by its
+// counterparty_profile companion, and neither the buyer's copy nor the
+// adjudicator's carries it; a check naming none seals none.
+func TestASaleThreadCheckNamingAPayeeSealsAWithheldCompanion(t *testing.T) {
+	dealFixture(t)
+	saleID, _ := newSale(t)
+	named := buyerThread(t, saleID, "buyer-a.example")
+	dealRun(t, "check", "--deal", named, "--input", writeJSON(t,
+		`{"action":"offer","amount_minor":190000,"who":{"payee":"acct-buyer-a-7731"},"terms":{"item":"example bicycle","quantity":1,"price_minor":190000}}`))
+	steps := profileSteps(t, named)
+	require.Len(t, steps, 1, "the offer check names a payee")
+	payee := steps[0].payee
+
+	var companion string
+	for _, se := range chainSteps(t, named) {
+		if se.Event.Kind == "counterparty_profile" {
+			companion = se.CapsuleID
+		}
+	}
+	require.NotEmpty(t, companion)
+	private := dealPrivateValues(chainSteps(t, named))
+	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
+		assert.False(t, dealRecordShareable(steps[0].record, "", audience, private), audience)
+		b, raw := sharedCopy(t, named, audience, "x")
+		disclosures, _ := b["disclosures"].(map[string]any)
+		assert.NotContains(t, disclosures, companion, "%s: the companion is withheld", audience)
+		assert.NotContains(t, raw, payee, audience)
+		assert.NotContains(t, raw, dealProfileFPAlg, audience)
+	}
+
+	none := buyerThread(t, saleID, "buyer-b.example")
+	dealRun(t, "check", "--deal", none, "--input", writeJSON(t, offerInput))
+	assert.Empty(t, profileSteps(t, none), "a check naming no payee seals no companion")
+}
