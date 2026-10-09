@@ -7,3 +7,7 @@ package cli
 func lockDealStore(string) (func() error, error) {
 	return nil, inputError("deal commands are supported on Linux and macOS only")
 }
+
+func lockDealStoreShared(string) (func() error, error) {
+	return nil, inputError("deal commands are supported on Linux and macOS only")
+}
