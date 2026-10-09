@@ -487,7 +487,7 @@ sealed before carries none and re-derives unchanged.
 
 | Field | Value |
 | --- | --- |
-| `recipient_role` | A share's recipient, by role: `fulfilling_merchant` (`disclosing_to: counterparty`) or `third_party` (`disclosing_to: other`). `self` is in the set and never derived. Absent on other actions. |
+| `recipient_role` | A share's recipient, by role: `fulfilling_merchant` (`disclosing_to: counterparty`, on a deal where the user buys or states no `party_role`), `buyer` (`disclosing_to: counterparty`, where the user sells) or `third_party` (`disclosing_to: other`). `self` is in the set and never derived. Absent on other actions. |
 | `channel`, `first_contact_channel` | Channel kinds (the `channel` set above): the one in use at this check (the latest sealed message's, else first contact's) and the baseline's. |
 | `upfront_amount_minor` | The deposit the check's own terms state (`terms.deposit_minor`), in minor units. Never inferred. |
 | `material_fields_changed`, `material_fields_basis` | How many of `terms.item`, `terms.quantity`, `terms.price_minor`, `terms.deposit_minor`, `terms.currency`, `terms.when`, `terms.place`, `terms.conditions`, `recourse.rail`, `recourse.refundable`, `who.payee` the proposal (the deal as it stands with the check on top) changes from what was agreed (payee: the first contact's payee, else its name), and the hex SHA-256 of that list's JCS bytes. |

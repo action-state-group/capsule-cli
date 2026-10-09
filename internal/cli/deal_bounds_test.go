@@ -240,3 +240,18 @@ func TestASellersShareWithholdsBothBounds(t *testing.T) {
 	assert.Contains(t, shared, "the lowest price you will take, and any limit you set")
 	assert.NotContains(t, shared, "your spending limit")
 }
+
+// A seller's share with the counterparty names its recipient as the buyer;
+// a buyer's still names the fulfilling merchant.
+func TestASellersCounterpartyIsTheBuyer(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	share := `{"action":"share_contact","disclosing_to":"counterparty","description":"give the buyer my phone for pickup","disclosing":["phone"]}`
+	sealed, given, _ := ruleInputs(t, id, share)
+	assert.Equal(t, "buyer", sealed["recipient_role"])
+	assert.Equal(t, "buyer", given["recipient_role"])
+
+	other := stickerDeal(t, "card", false)
+	sealed, _, _ = ruleInputs(t, other, share)
+	assert.Equal(t, "fulfilling_merchant", sealed["recipient_role"])
+}
