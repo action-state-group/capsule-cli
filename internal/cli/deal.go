@@ -1590,7 +1590,7 @@ func dealCheckCommand() *cobra.Command {
 			// A floor in force goes to the rules checker opened, or the check
 			// does not run: refused here, before anything is sealed.
 			if len(s.p.RulesChecker.Command) > 0 {
-				if _, err := boundsOpeningInForce(events); err != nil {
+				if _, err := dealBoundsOpening(events); err != nil {
 					return err
 				}
 			}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -52,7 +53,13 @@ func TestAFloorWhoseOpeningCannotBeBuiltRefusesTheCheck(t *testing.T) {
 		Choice: "confirm_limits", Approver: "user", Proceed: true,
 		Limits: &dealLimits{New: dealLimitSet{MinTotalMinor: &floor, BoundsCommitment: strings.Repeat("ab", 32)}},
 	}}})
+	// Limits confirmed with a floor but no commitment to it.
+	uncommitted := append(append([]sealedEvent{}, events...), sealedEvent{Event: dealEvent{Kind: "approval", Approval: &dealApproval{
+		Choice: "confirm_limits", Approver: "user", Proceed: true,
+		Limits: &dealLimits{New: dealLimitSet{MinTotalMinor: &floor}},
+	}}})
 	for name, damaged := range map[string][]sealedEvent{
+		"a floor with no commitment":         uncommitted,
 		"no opening":                         withBoundsNonce(events, ""),
 		"an opening that does not recompute": confirmed,
 		"limits that cannot be read":         events[1:],
@@ -69,8 +76,13 @@ func TestAFloorWhoseOpeningCannotBeBuiltRefusesTheCheck(t *testing.T) {
 	}
 
 	other := stickerDeal(t, "card", false)
-	none, err := boundsOpeningInForce(chainSteps(t, other))
+	otherEvents := chainSteps(t, other)
+	none, err := boundsOpeningInForce(otherEvents)
 	require.NoError(t, err, "no floor in force: nothing to open")
+	assert.Nil(t, none)
+	// No floor: limits that cannot be read change nothing, as before.
+	none, err = boundsOpeningInForce(otherEvents[1:])
+	require.NoError(t, err, "no step set a floor")
 	assert.Nil(t, none)
 }
 
@@ -121,7 +133,7 @@ func opensTo(opening map[string]any, sealed string) (int64, bool) {
 
 var lowerHex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-// capsule-engine's price_floor/2.0.0, over its vectors, and this CLI's own
+// capsule-engine's price_floor/2.0.1, over its vectors, and this CLI's own
 // construction agree on every opening: the engine evaluates the floor
 // exactly when the opening opens to the sealed commitment here, and fails
 // it as a mismatch exactly when it does not. And the checker input this CLI
@@ -199,4 +211,142 @@ func TestTheEngineAgreesOnTheFloorsOpening(t *testing.T) {
 	saleID, _ := newSale(t)
 	_, _, thread := ruleInputs(t, buyerThread(t, saleID, "buyer-a.example"), offerInput)
 	assert.Regexp(t, lowerHex64, thread["item_ref"])
+}
+
+// An opening is a commercial-bounds document, or the check is refused.
+func TestABoundsOpeningIsACommercialBoundsDocument(t *testing.T) {
+	nonce := strings.Repeat("ab", 32)
+	for name, text := range map[string]string{"not JSON": "1700", "another type": `{"type":"commercial-bounds/v1","min_total_minor":170000}`, "no type": `{"min_total_minor":170000}`} {
+		opening, err := boundsOpening(text, nonce, nonce)
+		require.Error(t, err, name)
+		assert.Nil(t, opening, name)
+		assert.Contains(t, err.Error(), "refusing to check", name)
+	}
+	opening, err := boundsOpening(commercialBoundsText(170000), nonce, nonce)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"type": commercialBoundsKind, "min_total_minor": json.Number("170000")}, normalizedNumbers(opening["document"]))
+}
+
+func normalizedNumbers(v any) any {
+	raw, _ := json.Marshal(v)
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.UseNumber()
+	var out any
+	_ = dec.Decode(&out)
+	return out
+}
+
+// deal check with a floor in force whose opening cannot be built exits
+// non-zero, runs no checker and seals nothing: the store is byte for byte
+// as it was.
+func TestADealCheckWithAnUnbuildableFloorOpeningSealsNothing(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	checker := stubChecker(t, "rules", checkerPrints("allow", passFinding))
+	pinChecker(t, map[string]any{"command": []string{checker}})
+	old := dealBoundsOpening
+	dealBoundsOpening = func([]sealedEvent) (map[string]interface{}, error) {
+		return nil, errors.New("refusing to check: a floor is in force but no opening on this device recomputes to its bounds_commitment, so the rules checker cannot be given it")
+	}
+	defer func() { dealBoundsOpening = old }()
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	before := storeFiles(t, p)
+	steps := len(chainSteps(t, id))
+	_, err = invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", writeJSON(t, `{"action":"commit","terms":{"item":"example bicycle","price_minor":175000}}`))
+	require.Error(t, err, "the check exits non-zero")
+	assert.Contains(t, err.Error(), "refusing to check")
+	assert.Equal(t, before, storeFiles(t, p), "nothing sealed: the store is unchanged")
+	assert.Len(t, chainSteps(t, id), steps)
+	assert.NoFileExists(t, checker+".input", "the checker was not run")
+}
+
+// price_floor/2.0.1's scope: a task authority committing to no floor puts
+// the action out of scope; a floor with no opening is not applicable, in
+// scope, naming the missing opening; an opening is evaluated only when it
+// opens to the sealed commitment. This CLI never sends the second case: it
+// refuses the check instead.
+func TestTheEngineScopesTheFloorAsThisCLIDoes(t *testing.T) {
+	var scope struct {
+		WicketID string `json:"wicket_id"`
+		Cases    []struct {
+			Name   string `json:"name"`
+			Action struct {
+				AmountMinor int64 `json:"amount_minor"`
+			} `json:"action"`
+			Record  map[string]any `json:"task_authority_record"`
+			Opening map[string]any `json:"commercial_bounds_opening"`
+			Expect  struct {
+				Result   string         `json:"result"`
+				Evidence map[string]any `json:"evidence"`
+			} `json:"expect"`
+		} `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(mustRead(t, filepath.Join("testdata", "commercial-bounds", "engine-price-floor-2.0.1-scope.json")), &scope))
+	require.Equal(t, "price_floor/2.0.1", scope.WicketID)
+	require.NotEmpty(t, scope.Cases)
+	for _, c := range scope.Cases {
+		sealed, _ := c.Record["body"].(map[string]any)["bounds_commitment"].(string)
+		switch {
+		case sealed == "":
+			assert.Equal(t, "n/a", c.Expect.Result, c.Name)
+			assert.Equal(t, false, c.Expect.Evidence["in_scope"], "%s: no floor, out of scope", c.Name)
+		case c.Opening == nil:
+			assert.Equal(t, "n/a", c.Expect.Result, c.Name)
+			assert.Equal(t, "commercial_bounds_opening", c.Expect.Evidence["missing_field"], c.Name)
+		default:
+			min, opens := opensTo(c.Opening, sealed)
+			require.True(t, opens, c.Name)
+			want := "fail"
+			if c.Action.AmountMinor >= min {
+				want = "pass"
+			}
+			assert.Equal(t, want, c.Expect.Result, c.Name)
+		}
+	}
+
+	var whole struct {
+		Cases []struct {
+			Name     string         `json:"name"`
+			TypedRef map[string]any `json:"typed_ref"`
+			Expect   struct {
+				TaskAuthorityRef any `json:"task_authority_ref"`
+			} `json:"expect"`
+		} `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(mustRead(t, filepath.Join("testdata", "commercial-bounds", "engine-typed-ref-whole-value.json")), &whole))
+	for _, c := range whole.Cases {
+		d, _ := c.TypedRef["digest"].(string)
+		assert.Equal(t, c.Expect.TaskAuthorityRef != nil, lowerHex64.MatchString(d), "%s: a digest is the whole value or nothing", c.Name)
+	}
+}
+
+// Every digest, commitment and nonce the checker input carries is exactly 64
+// lowercase hex: no whitespace, nothing trailing.
+func TestEveryDigestTheCheckerIsGivenIsWhole(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	_, _, input := ruleInputs(t, id, `{"action":"commit","terms":{"item":"example bicycle","price_minor":175000}}`)
+	checked := 0
+	var walk func(key string, v any)
+	walk = func(key string, v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			for k, c := range x {
+				walk(k, c)
+			}
+		case []any:
+			for _, c := range x {
+				walk(key, c)
+			}
+		case string:
+			if key == "digest" || key == "nonce" || strings.HasSuffix(key, "_commitment") || strings.HasSuffix(key, "_digest") {
+				checked++
+				assert.Regexp(t, lowerHex64, x, key)
+				assert.Equal(t, strings.TrimSpace(x), x, key)
+			}
+		}
+	}
+	walk("", input)
+	assert.Positive(t, checked)
 }

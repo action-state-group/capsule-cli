@@ -616,7 +616,7 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 			}
 		}
 	}
-	opening, err := boundsOpeningInForce(events)
+	opening, err := dealBoundsOpening(events)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -649,6 +649,11 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 func boundsOpeningInForce(events []sealedEvent) (map[string]interface{}, error) {
 	state, err := foldDeal(events)
 	if err != nil {
+		// Limits that cannot be read are only a reason to refuse when a step
+		// of the deal set a floor: with none, nothing changes.
+		if !dealSetsAFloor(events) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("refusing to check: the deal's limits could not be read, so a floor in force could not be opened for the rules checker: %w", err)
 	}
 	if state.intent.MinTotalMinor == nil {
@@ -686,15 +691,41 @@ func boundsOpeningInForce(events []sealedEvent) (map[string]interface{}, error) 
 			continue
 		}
 		if c, err := commitText(nonce, text); err == nil && c == commitment {
-			var doc map[string]interface{}
-			if json.Unmarshal([]byte(text), &doc) != nil {
-				return nil, errors.New("refusing to check: the floor in force opens to something other than a commercial-bounds document, so the rules checker cannot be given it")
-			}
-			return map[string]interface{}{"document": doc, "nonce": nonce, "bounds_commitment": c}, nil
+			return boundsOpening(text, nonce, c)
 		}
 	}
 	return nil, errors.New("refusing to check: a floor is in force but no opening on this device recomputes to its bounds_commitment, so the rules checker cannot be given it")
 }
+
+// boundsOpening is the opening a checker is given for a floor sealed as
+// commitment over text under nonce, or an error when text is not a
+// commercial-bounds document.
+func boundsOpening(text, nonce, commitment string) (map[string]interface{}, error) {
+	var doc map[string]interface{}
+	if json.Unmarshal([]byte(text), &doc) != nil || doc["type"] != commercialBoundsKind {
+		return nil, errors.New("refusing to check: the floor in force opens to something other than a commercial-bounds document, so the rules checker cannot be given it")
+	}
+	return map[string]interface{}{"document": doc, "nonce": nonce, "bounds_commitment": commitment}, nil
+}
+
+// dealSetsAFloor reports whether any step of the deal set a floor.
+func dealSetsAFloor(events []sealedEvent) bool {
+	for _, se := range events {
+		e := se.Event
+		switch {
+		case e.Open != nil && e.Open.Intent.MinTotalMinor != nil,
+			e.Intent != nil && e.Intent.MinTotalMinor != nil,
+			e.TaskAuthority != nil && e.TaskAuthority.MinTotalMinor != nil,
+			e.Approval != nil && e.Approval.Limits != nil && e.Approval.Limits.New.MinTotalMinor != nil:
+			return true
+		}
+	}
+	return false
+}
+
+// dealBoundsOpening builds the opening of the floor in force for a check; a
+// test replaces it to stand in for a store whose opening cannot be built.
+var dealBoundsOpening = boundsOpeningInForce
 
 // capsuleWithInput is a sealed capsule with its disclosed agent_input; nil
 // when the input is not retained.
