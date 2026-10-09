@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -267,6 +268,13 @@ func TestDealCloseCarriesOpenObligations(t *testing.T) {
 	require.Len(t, carried, 1)
 	assert.Equal(t, "2026-10-16", carried[0].(map[string]any)["cancel_by"])
 	checkProfile(t, export)
+	obligationStep := 0
+	for _, r := range records {
+		if _, ok := r["body"].(map[string]any)["obligation"]; ok {
+			obligationStep = int(r["x-deal-v0"].(map[string]any)["seq"].(float64))
+		}
+	}
+	require.NotZero(t, obligationStep)
 
 	ics := filepath.Join(t.TempDir(), "carried.ics")
 	listing := dealRun(t, "deadlines", "--ics", ics)
@@ -290,7 +298,7 @@ func TestDealCloseCarriesOpenObligations(t *testing.T) {
 	// (3a) A later record that confirms the close resolves it.
 	setDealClock(t, "2026-10-04T16:10:00Z")
 	resolved := dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--email", filepath.Join(merchantFixture, "cancelled.eml"),
-		"--input", writeJSON(t, `{"about":"Plus cancelled","source":"merchant_email","resolves_step":6}`))
+		"--input", writeJSON(t, `{"about":"Plus cancelled","source":"merchant_email","resolves_step":`+strconv.Itoa(obligationStep)+`}`))
 	assert.NotEmpty(t, resolved["capsule_id"])
 	assert.Empty(t, dealRun(t, "deadlines")["deadlines"], "a resolved date leaves the open list")
 	all := dealRun(t, "deadlines", "--all")["deadlines"].([]any)

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### The payee keyed per profile, for the user's own history
+
+- **Added (wire, additive; records sealed before re-derive unchanged).** A check that names a
+  payee is now followed, before any rules checker runs, by a `counterparty_profile` record.
+  - **What it holds:** only `{"fp_alg": "hmac-sha256-profile-key", "ids": {"payee": …}}`, the
+    payee fingerprinted with the same construction as the per-deal fingerprints. Its key is
+    derived from the profile store's own secret, so one merchant has one value across the
+    profile's deals and another in any other profile.
+  - **Where it points:** it names its check with an `about` ref. Each deal record's per-deal
+    `counterparty` fingerprints are unchanged.
+- **Never shared:** no shared copy, for the counterparty or an adjudicator, carries it; the check
+  itself stays shareable.
+- **The rules checker gets it:** `external-check-input/v0` gives the checker
+  `record.counterparty_profile` for the check being decided, and `history[i].counterparty_profile`
+  for each earlier act (from its approval's check). It is supplied beside the sealed capsule and
+  never part of it. Acts checked before this release carry none.
+
 ### The user's floor and limit are recognised in any written form
 
 - **Fixed:** the check that keeps a seller's floor (`min_total_minor`) and a spending limit

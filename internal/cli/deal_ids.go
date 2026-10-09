@@ -182,6 +182,18 @@ func dealKeyFor(storeSecret []byte, dealID string) []byte {
 	return hmacSHA256(storeSecret, "x-deal-v0/deal-key\x00", dealID)
 }
 
+// dealProfileFPAlg names the profile-scoped fingerprints a counterparty_profile
+// record seals: fingerprintID under profileKeyFor's key.
+const dealProfileFPAlg = "hmac-sha256-profile-key"
+
+// profileKeyFor is the key of a profile's own fingerprints, from the profile
+// store's secret: one merchant has one such fingerprint across the profile's
+// deals, unlike a deal key's, and another in any other profile's store. Like
+// the store secret, it never leaves the device.
+func profileKeyFor(storeSecret []byte) []byte {
+	return hmacSHA256(storeSecret, "x-deal-v0/profile-key\x00")
+}
+
 // fingerprintID is the profile fingerprint of one raw identifier, or
 // errNotNormalizable, in which case the value is not recorded.
 func fingerprintID(dealKey []byte, kind, raw string) (string, error) {
@@ -265,4 +277,25 @@ func scanRecord(record map[string]interface{}, localValues []string) error {
 		}
 	}
 	return nil
+}
+
+// dealSealsCounterpartyProfile is whether a check is followed by its
+// counterparty_profile step; a test turns it off to stand in for a release
+// from before the step existed.
+var dealSealsCounterpartyProfile = true
+
+// counterpartyProfileStep is the counterparty_profile step for a check, or
+// nil when the check names no payee (or one that does not normalize).
+func (s *dealSession) counterpartyProfileStep(snap dealSnapshot) (*dealCounterpartyProfile, error) {
+	if !dealSealsCounterpartyProfile || snap.Who == nil || snap.Who.Payee == "" {
+		return nil, nil
+	}
+	fp, err := fingerprintID(profileKeyFor(s.secret), "payee", snap.Who.Payee)
+	if errors.Is(err, errNotNormalizable) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &dealCounterpartyProfile{Payee: fp}, nil
 }

@@ -203,7 +203,7 @@ func TestTypedMerchantChangedPlatformApprovalDoesNotAnswerTheAsk(t *testing.T) {
 		types[i] = typeOf(records[se.CapsuleID])
 	}
 	assert.Equal(t, []string{"x-deal-v0:baseline", "task-authority/v0", "x-deal-v0:detail_change", "proposed-action/v0",
-		"action-evaluation/v0", "action-approval/v0", "action-outcome/v0", "action-approval/v0", "action-record/v0"}, types,
+		"x-deal-v0:counterparty_profile", "action-evaluation/v0", "action-approval/v0", "action-outcome/v0", "action-approval/v0", "action-record/v0"}, types,
 		"one chain: evidence records and the typed action records")
 	for _, r := range records {
 		if tn, ok := r["type"].(string); ok {
