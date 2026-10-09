@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -11,16 +12,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// taxonomyV5 is every action name in version 5 of capsule-engine's
+// taxonomyV6 is every action name in version 6 of capsule-engine's
 // capsule_engine/guards/action_taxonomy.json
 // (github.com/action-state-group/capsule-engine at
-// e5ec2c1ba84f9d9269cbb164eb6a92400e4d5d49, file sha256
-// 7d31e892cdea7352d0485c89430dba028bf02ce91fb0e932f4752c1f4066022f, JCS sha256
-// af3a054cae880e13ce5d8d8bdaa64383e6f3af14fa2bf2ddb88aab226865b13a), copied
+// 7ae6b95b37a3a1c4955af90f56ae4c1c0c404aa9, file sha256
+// 7563fcaeb6c192a27877fae3131bca1021526046c8976475c46eebf4fb374272, JCS sha256
+// fc12eb90bc2b3c85bb49c4d3d7be8f384c6e0b8e189bc3b68a753a4f1af5cd94), copied
 // here so a class this CLI seals is checked against the table, not against
-// itself. Version 2 (at 2521ee6), version 3 (at a5e9e30) and version 4 (at
-// 5300e0b) name the same 19.
-var taxonomyV5 = []string{
+// itself. Version 2 (at 2521ee6), version 3 (at a5e9e30), version 4 (at
+// 5300e0b) and version 5 (at e5ec2c1) name the same 19.
+var taxonomyV6 = []string{
 	"money.purchase", "money.transfer", "money.subscription", "money.refund",
 	"booking.create", "booking.modify", "booking.cancel",
 	"communication.send", "communication.publish",
@@ -39,17 +40,17 @@ var capsV3Classes = []string{
 	"agreement.accept", "marketplace.offer", "external_commitment.other",
 }
 
-// Every action a deal type allows is classed by a taxonomy-v5 name, never the
+// Every action a deal type allows is classed by a taxonomy-v6 name, never the
 // one non-consequential class; a pair the table does not name falls back to
 // external_commitment.other, never to no class.
-func TestDealActionClassTableIsTaxonomyV5(t *testing.T) {
-	require.Equal(t, "5", dealTaxonomyVersion)
-	require.Len(t, taxonomyV5, 19)
+func TestDealActionClassTableIsTaxonomyV6(t *testing.T) {
+	require.Equal(t, "6", dealTaxonomyVersion)
+	require.Len(t, taxonomyV6, 19)
 	for dealType, actions := range dealPointsOfNoReturn {
 		for _, action := range actions {
 			for _, direction := range []string{"", "out", "in"} {
 				class := dealActionClass(dealType, action, direction)
-				assert.Contains(t, taxonomyV5, class, "%s %s %q", dealType, action, direction)
+				assert.Contains(t, taxonomyV6, class, "%s %s %q", dealType, action, direction)
 				assert.NotEqual(t, "info.query", class, "%s %s: a deal action is consequential", dealType, action)
 			}
 		}
@@ -79,7 +80,7 @@ func recordsOf(t *testing.T, dealID string) ([]sealedEvent, []map[string]any) {
 }
 
 // The acceptance case: a $558.80 card purchase seals action_class
-// money.purchase on its check and on its act, under taxonomy version 5, and
+// money.purchase on its check and on its act, under taxonomy version 6, and
 // is over caps/3.0.0's per-action limit. The cancel that returns it is a
 // refund, which no cap covers, so a spend cap can never deny it.
 func TestDealPurchaseAndItsCancelCarryTheirTaxonomyClass(t *testing.T) {
@@ -96,7 +97,7 @@ func TestDealPurchaseAndItsCancelCarryTheirTaxonomyClass(t *testing.T) {
 			continue
 		}
 		body := bodyOf(records[i])
-		assert.Equal(t, "5", body["taxonomy_version"], "step %d", se.Event.N)
+		assert.Equal(t, "6", body["taxonomy_version"], "step %d", se.Event.N)
 		direction, _ := body["direction"].(string)
 		got = append(got, step{rt, body["action"].(string), body["action_class"].(string), direction, body["spend_minor"].(float64)})
 		if body["action"] == "pay" {
@@ -140,11 +141,11 @@ func TestTypedProposedActionSealsTheTaxonomyClass(t *testing.T) {
 	require.NotNil(t, evaluation)
 	require.NotNil(t, action)
 	assert.Equal(t, "money.purchase", bodyOf(proposed)["action_class"])
-	assert.Equal(t, "5", bodyOf(proposed)["taxonomy_version"])
+	assert.Equal(t, "6", bodyOf(proposed)["taxonomy_version"])
 	evaluated, _ := json.Marshal(bodyOf(evaluation))
 	assert.Contains(t, string(evaluated), proposedDigest, "the evaluation names the proposed action, class and all, by digest")
 	assert.Equal(t, "money.purchase", bodyOf(action)["action_class"])
-	assert.Equal(t, "5", bodyOf(action)["taxonomy_version"])
+	assert.Equal(t, "6", bodyOf(action)["taxonomy_version"])
 }
 
 // A step sealed before records carried a class re-derives byte for byte
@@ -168,9 +169,9 @@ func TestDealStepSealedBeforeTheClassReDerivesWithoutOne(t *testing.T) {
 	}
 }
 
-// A step sealed under an earlier taxonomy version (2, 3 or 4) re-derives with
-// that version and the same class: the version is the step's own, never this
-// release's. Its record is the version-5 record with only the version
+// A step sealed under an earlier taxonomy version (2, 3, 4 or 5) re-derives
+// with that version and the same class: the version is the step's own, never
+// this release's. Its record is the version-6 record with only the version
 // changed, since every version names the same classes.
 func TestDealStepSealedUnderAnEarlierTaxonomyReDerivesWithIt(t *testing.T) {
 	id := cancelAfterPurchase(t)
@@ -181,13 +182,13 @@ func TestDealStepSealedUnderAnEarlierTaxonomyReDerivesWithIt(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, s.close()) }()
 	require.NoError(t, s.useDeal(t.Context(), id, false))
-	current := []byte(`"taxonomy_version":"5"`)
-	for _, version := range []string{"2", "3", "4"} {
+	current := []byte(`"taxonomy_version":"6"`)
+	for _, version := range []string{"2", "3", "4", "5"} {
 		t.Run("version "+version, func(t *testing.T) {
 			stored := []byte(`"taxonomy_version":"` + version + `"`)
 			classed := 0
 			for i, se := range events {
-				require.Equal(t, "5", se.Event.TaxonomyVersion, "step %d", se.Event.N)
+				require.Equal(t, "6", se.Event.TaxonomyVersion, "step %d", se.Event.N)
 				now, _, err := encodeDealRecord(se.Event, events[:i], s.dkey)
 				require.NoError(t, err, "step %d", se.Event.N)
 				old := se.Event
@@ -246,7 +247,7 @@ func TestDealShareNeverDisclosesMoreForTheClass(t *testing.T) {
 		}
 	}
 	assert.Equal(t, len(events), classed, "every step of a new deal carries the taxonomy version")
-	for _, class := range taxonomyV5 {
+	for _, class := range taxonomyV6 {
 		assert.True(t, private.clean(class), "%s is a value a shared copy may carry", class)
 	}
 	assert.True(t, private.clean(dealTaxonomyVersion))
@@ -433,5 +434,25 @@ func TestDealUncheckedCancelAmountNeverReadsAsMoneyOut(t *testing.T) {
 			assert.NotContains(t, attempted, "action_class", "an outcome is not an action")
 			assert.NotContains(t, attempted, "spend_minor")
 		})
+	}
+}
+
+// A seller's steps, in every deal type: an offer is external_commitment.other,
+// a commit (accepting a buyer) agreement.accept, and telling where the item
+// is disclosure.personal. No deal step, on either side, is ever classed
+// marketplace.offer or marketplace.sale.
+func TestASellersStepsAndNoMarketplaceClass(t *testing.T) {
+	for dealType := range dealPointsOfNoReturn {
+		assert.Equal(t, "external_commitment.other", dealRoleActionClass(dealRoleSeller, dealType, offerAction, ""), dealType)
+		assert.Equal(t, "agreement.accept", dealRoleActionClass(dealRoleSeller, dealType, "commit", ""), dealType)
+		assert.Equal(t, "disclosure.personal", dealRoleActionClass(dealRoleSeller, dealType, "share_contact", ""), dealType)
+		for _, role := range []string{"", dealRoleSeller} {
+			for _, action := range dealPointsOfNoReturn[dealType] {
+				for _, direction := range []string{"", "out", "in"} {
+					class := dealRoleActionClass(role, dealType, action, direction)
+					assert.False(t, strings.HasPrefix(class, "marketplace."), "%s %s %s %q: %s", role, dealType, action, direction, class)
+				}
+			}
+		}
 	}
 }
