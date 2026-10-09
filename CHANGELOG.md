@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc13
+
 ### The payee keyed per profile, for the user's own history
 
 - **Added (wire, additive; records sealed before re-derive unchanged).** A check that names a
