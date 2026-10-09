@@ -136,6 +136,7 @@ func TestPresentationBuildCarriesAPluginsModule(t *testing.T) {
 	assert.Contains(t, string(page), string(script))
 	assert.Contains(t, string(page), sha256CSPSource(script))
 	assert.Contains(t, string(page), sha256CSPSource(fixtureStyle))
+	assert.Contains(t, string(page), `"sha256":"`+hexSHA256(fixtureWording)+`"`, "the module's wording pack is the page's")
 
 	binary := os.Getenv("CAPSULECTL_CHROME")
 	if binary == "" {
@@ -379,4 +380,20 @@ func TestPresentationBuildWritesNoPageForABundleThatDoesNotVerify(t *testing.T) 
 	require.Error(t, err)
 	assert.Equal(t, "not written", decodeBuild(t, stdout).Page)
 	assert.NoFileExists(t, out)
+}
+
+// Section 4.5's first three conditions: one bundle kind, a common audience
+// ("*" meets every one) and a common format.
+func TestCoMatchableNeedsOneKindAudienceAndFormat(t *testing.T) {
+	pair := func(edit func(b map[string]any)) bool {
+		a, b := exampleDealManifest(strings.Repeat("0", 64)), exampleDealManifest(strings.Repeat("0", 64))
+		a["audiences"], b["audiences"] = []any{"buyer"}, []any{"buyer"}
+		edit(b)
+		return coMatchable(a, b)
+	}
+	assert.True(t, pair(func(map[string]any) {}))
+	assert.False(t, pair(func(b map[string]any) { b["requires"] = map[string]any{"bundle_kind": "evidence-bundle/v3"} }))
+	assert.False(t, pair(func(b map[string]any) { b["audiences"] = []any{"seller"} }))
+	assert.True(t, pair(func(b map[string]any) { b["audiences"] = []any{"*"} }))
+	assert.False(t, pair(func(b map[string]any) { b["formats"] = []any{"fragment"} }))
 }
