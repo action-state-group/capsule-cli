@@ -27,6 +27,16 @@
   - the share gate's removal of the two vendored scripts before it scans a shared page is retired in
     a later change.
 
+## v0.1.0-rc14
+
+### A typed deal's history acts carry the profile payee key
+
+- **Fixed (checker input only; nothing sealed changes).** A history act in a deal recorded with typed
+  records now carries `counterparty_profile`, resolved from the check its authorization rests on,
+  whether that act needed an approval or not. Before, it was resolved only through an approval, so a
+  repeated payment in a typed deal was not seen as a repeat by a rules checker. Untyped deals are
+  unchanged.
+
 ### New deal records seal action taxonomy version 6
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
