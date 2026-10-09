@@ -583,9 +583,10 @@ At every check, after the `check` record is sealed:
     ids: {payee: <64 lowercase hex>}}`, supplied beside the capsule and never part of it;
   - `history`: the profile's earlier sealed acts with an amount, from every deal on this
     profile's own store, sealed in the last 31 days, newest first, at most 1,000 of them, in the
-    same shape. Each act carries the `counterparty_profile` of the check its approval answered
-    (act → approval → verdict → check → that check's `counterparty_profile` record), and none
-    when it has none (an act done without approval, or one checked before checks had a
+    same shape. Each act carries the `counterparty_profile` of the check it rests on (act →
+    approval → verdict → check → that check's `counterparty_profile` record; in typed records a
+    verdict that needed no approval authorizes the act itself: act → verdict → check → record),
+    and none when it has none (an act done without a check, or one checked before checks had a
     companion). A rule keyed on who was paid before reads one merchant as one payee across the
     profile's deals from there on; acts checked before keep only their per-deal fingerprints;
   - `history_scope`: `{days, max_records, complete}`.

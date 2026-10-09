@@ -128,7 +128,7 @@
           "type": "object"
         },
         "counterparty_profile": {
-          "description": "Optional, supplied by capsulectl beside the sealed capsule (never part of it): the payee fingerprinted under the profile's own key, the value the check's x-deal-v0 counterparty_profile companion record seals. On the record, the check being decided; on a history entry, the act's, resolved act -> its approval -> the verdict -> the check -> that check's companion. Absent when there is none (an act without approval, a check with no payee, or one sealed before checks had a companion).",
+          "description": "Optional, supplied by capsulectl beside the sealed capsule (never part of it): the payee fingerprinted under the profile's own key, the value the check's x-deal-v0 counterparty_profile companion record seals. On the record, the check being decided; on a history entry, the act's, resolved act -> its approval -> the verdict -> the check -> that check's companion (in typed records, a verdict that needed no approval authorizes the act itself: act -> the verdict -> the check -> that check's companion). Absent when there is none (an act without a check, a check with no payee, or one sealed before checks had a companion).",
           "type": "object",
           "additionalProperties": false,
           "required": ["fp_alg", "ids"],
