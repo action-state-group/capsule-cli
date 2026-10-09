@@ -1,0 +1,269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentactioncapsule.org/schemas/presentation-manifest-v0.json",
+  "title": "Presentation Manifest v0",
+  "description": "Companion schema for spec/presentation-contract-v0.md. The root schema validates one presentation manifest (namespace aac.presentation-manifest/v0). $defs/WordingPack validates a wording pack. The schema checks each manifest on its own; whether two manifests are ambiguous is decided by the resolution test in schemas/check_presentation_manifest_examples.py (spec section 4.5), never by this schema. Where this schema and the document disagree, the document governs.",
+  "$ref": "#/$defs/PresentationManifest",
+  "$defs": {
+    "HexDigest": {
+      "description": "Lowercase hex SHA-256, the form of a .sha256 pin.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "PresentationApi": {
+      "description": "The presentation ABI a module is written against (spec section 3.2): aac.presentation-api/v<major>. Versioned on its own, independent of spec_version, of bundle and capsule formats, of package versions and of any command-line tool's plugin interface. A schema-valid value the runtime does not implement is refused at resolution (and reported), not rejected here.",
+      "type": "string",
+      "pattern": "^aac\\.presentation-api/v(0|[1-9][0-9]*)$"
+    },
+    "RuntimeVersion": {
+      "description": "MAJOR.MINOR.PATCH, compared numerically component by component (spec section 3.2).",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "ManifestId": {
+      "description": "The module id. Dotted name, then a slash and a major version: org.example.view/v0. The aac. prefix is reserved for modules this repository ships. There is no separate module_id member: id is the module's identity (spec section 4.1).",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(\\.[a-z0-9_-]+)+/v[0-9]+$"
+    },
+    "BundleKind": {
+      "description": "An Evidence Bundle kind (spec/REGISTRY.md section 13), compared by string equality.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*/v[0-9]+$"
+    },
+    "ProfileToken": {
+      "description": "<profile key>:<value>. A profile key is one of the root-document version keys of spec section 4.2; a root carries at most one token per key.",
+      "type": "string",
+      "pattern": "^(spec_version|result_version):[A-Za-z0-9][A-Za-z0-9._/@+-]*$"
+    },
+    "ExtensionKind": {
+      "description": "An Evidence Bundle extension kind (spec/REGISTRY.md section 14), or a private x- kind.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "Audience": {
+      "description": "An audience token, or * for every audience.",
+      "type": "string",
+      "pattern": "^(\\*|[a-z][a-z0-9_-]*)$"
+    },
+    "Format": {
+      "description": "html: one offline file. fragment: a page whose bundle travels in the URL fragment. embedded: a region inside a host page. Spec section 8, invariant I4.",
+      "enum": ["html", "fragment", "embedded"]
+    },
+    "TokenSet": {
+      "type": "array",
+      "uniqueItems": true
+    },
+    "Requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle_kind"],
+      "properties": {
+        "bundle_kind": { "$ref": "#/$defs/BundleKind" },
+        "profiles": {
+          "$ref": "#/$defs/TokenSet",
+          "items": { "$ref": "#/$defs/ProfileToken" }
+        },
+        "extensions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required"],
+          "properties": {
+            "required": {
+              "$ref": "#/$defs/TokenSet",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/ExtensionKind" }
+            }
+          }
+        }
+      }
+    },
+    "Forbids": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "profiles": {
+          "$ref": "#/$defs/TokenSet",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/ProfileToken" }
+        },
+        "extensions": {
+          "$ref": "#/$defs/TokenSet",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/ExtensionKind" }
+        }
+      }
+    },
+    "Executable": {
+      "description": "Trusted-executable carrier (spec section 5.1). core-runtime: the module ships inside the core runtime and is covered by the core runtime's own pin. module-slot: the module is a separate script the builder inlines in MODULE_SLOT; script_sha256 is its pin and the CSP lists the same digest.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["carrier"],
+      "properties": {
+        "carrier": { "enum": ["core-runtime", "module-slot"] },
+        "script_sha256": { "$ref": "#/$defs/HexDigest" },
+        "style_sha256": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/HexDigest" }
+        },
+        "wording_sha256": { "$ref": "#/$defs/HexDigest" }
+      },
+      "if": { "properties": { "carrier": { "const": "module-slot" } } },
+      "then": { "required": ["script_sha256"] },
+      "else": { "not": { "anyOf": [ { "required": ["script_sha256"] }, { "required": ["style_sha256"] } ] } }
+    },
+    "JsonPointer": {
+      "description": "RFC 6901 JSON Pointer.",
+      "type": "string",
+      "pattern": "^(/([^/~]|~[01])*)*$"
+    },
+    "WordingKey": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "DeclarativeColumn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "kind", "label_key"],
+      "properties": {
+        "source": { "$ref": "#/$defs/JsonPointer" },
+        "kind": { "enum": ["enum", "count", "digest", "identifier"] },
+        "label_key": { "$ref": "#/$defs/WordingKey" },
+        "value_key_prefix": { "$ref": "#/$defs/WordingKey" }
+      },
+      "if": { "properties": { "kind": { "const": "enum" } } },
+      "then": { "required": ["value_key_prefix"] },
+      "else": { "not": { "required": ["value_key_prefix"] } }
+    },
+    "DeclarativeField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "source", "kind", "label_key"],
+      "properties": {
+        "level": { "enum": ["L0", "L1"] },
+        "source": { "$ref": "#/$defs/JsonPointer" },
+        "kind": { "enum": ["enum", "count", "digest", "identifier", "rows"] },
+        "label_key": { "$ref": "#/$defs/WordingKey" },
+        "value_key_prefix": { "$ref": "#/$defs/WordingKey" },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/DeclarativeColumn" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "rows" } } },
+          "then": { "required": ["columns"], "not": { "required": ["value_key_prefix"] } },
+          "else": { "not": { "required": ["columns"] } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "enum" } } },
+          "then": { "required": ["value_key_prefix"] }
+        },
+        {
+          "if": { "properties": { "kind": { "enum": ["count", "digest", "identifier"] } } },
+          "then": { "not": { "required": ["value_key_prefix"] } }
+        }
+      ]
+    },
+    "Declarative": {
+      "description": "Declarative module body (spec section 5.2): no code; interpreted by the donated renderer. There is no free-text kind: a declarative module never displays prose from the payload.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer", "wording_sha256", "fields"],
+      "properties": {
+        "renderer": { "const": "aac.declarative-renderer/v0" },
+        "wording_sha256": { "$ref": "#/$defs/HexDigest" },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/DeclarativeField" }
+        }
+      }
+    },
+    "PresentationManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spec_version",
+        "id",
+        "presentation_api",
+        "runtime_min",
+        "trust_class",
+        "requires",
+        "audiences",
+        "formats",
+        "fallback"
+      ],
+      "properties": {
+        "spec_version": {
+          "description": "The manifest namespace. Not presentation/v1, which is a bundle extension kind (header chrome) and is not a manifest.",
+          "const": "aac.presentation-manifest/v0"
+        },
+        "id": { "$ref": "#/$defs/ManifestId" },
+        "presentation_api": { "$ref": "#/$defs/PresentationApi" },
+        "runtime_min": {
+          "description": "The lowest presentation runtime version the module needs within its presentation_api. A runtime older than this refuses the module and says so (spec section 3.2).",
+          "$ref": "#/$defs/RuntimeVersion"
+        },
+        "trust_class": { "enum": ["trusted-executable", "declarative"] },
+        "requires": { "$ref": "#/$defs/Requires" },
+        "forbids": { "$ref": "#/$defs/Forbids" },
+        "audiences": {
+          "$ref": "#/$defs/TokenSet",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Audience" }
+        },
+        "formats": {
+          "$ref": "#/$defs/TokenSet",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Format" }
+        },
+        "fallback": { "type": "boolean" },
+        "priority": {
+          "description": "Spec section 4.4. Required on a specific module (fallback false), absent on a fallback. It ranks a specific module above every fallback and does nothing else: two matching specific modules are an ambiguity error whatever their priorities.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "executable": { "$ref": "#/$defs/Executable" },
+        "declarative": { "$ref": "#/$defs/Declarative" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "fallback": { "const": true } } },
+          "then": { "not": { "required": ["priority"] } },
+          "else": { "required": ["priority"] }
+        },
+        {
+          "if": { "properties": { "trust_class": { "const": "trusted-executable" } } },
+          "then": { "required": ["executable"], "not": { "required": ["declarative"] } },
+          "else": { "required": ["declarative"], "not": { "required": ["executable"] } }
+        }
+      ]
+    },
+    "WordingPack": {
+      "description": "A wording pack (spec section 7.4): presentation words only, never sealed. wording_sha256 is the lowercase hex SHA-256 of the pack's exact bytes as distributed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wording_pack_version", "id", "locale", "entries"],
+      "properties": {
+        "wording_pack_version": { "const": "aac.wording-pack/v0" },
+        "id": { "$ref": "#/$defs/ManifestId" },
+        "locale": {
+          "description": "BCP 47 language tag.",
+          "type": "string",
+          "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"
+        },
+        "entries": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/WordingKey" },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

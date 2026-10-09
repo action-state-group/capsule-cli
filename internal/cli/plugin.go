@@ -108,7 +108,13 @@ type pluginInfo struct {
 	Version     string   `json:"version"`
 	PluginAPI   string   `json:"plugin_api"`
 	Subcommands []string `json:"subcommands,omitempty"`
-	path        string
+	// Presentations are the modules the plugin offers a page builder
+	// (plugin_presentations.go). An older capsulectl ignores the member.
+	Presentations []pluginPresentation `json:"presentations,omitempty"`
+	path          string
+	// presentations are the checked modules, or refusal why there are none.
+	presentations []presentationModule
+	refusal       string
 }
 
 // pluginMetadata runs the launcher's cli-plugin-metadata handshake. A launcher
@@ -190,6 +196,10 @@ func discoverPluginsAndRefusals() ([]pluginInfo, []refusedPlugin) {
 				refused = append(refused, refusedPlugin{Path: path, Reason: err.Error()})
 				continue
 			}
+			// A plugin whose presentations are refused still dispatches.
+			if info.presentations, err = loadPresentations(info); err != nil {
+				info.presentations, info.refusal = nil, err.Error()
+			}
 			seen[name] = true
 			plugins = append(plugins, info)
 		}
@@ -262,8 +272,20 @@ func pluginGroup() *cobra.Command {
 			plugins, refused := discoverPluginsAndRefusals()
 			rows := make([]map[string]any, 0, len(plugins))
 			for _, p := range plugins {
-				rows = append(rows, map[string]any{"name": p.Name, "vendor": p.Vendor, "version": p.Version,
-					"plugin_api": p.PluginAPI, "subcommands": p.Subcommands, "path": p.path})
+				row := map[string]any{"name": p.Name, "vendor": p.Vendor, "version": p.Version,
+					"plugin_api": p.PluginAPI, "subcommands": p.Subcommands, "path": p.path}
+				if len(p.Presentations) > 0 {
+					modules := []map[string]any{}
+					for _, m := range p.presentations {
+						modules = append(modules, map[string]any{"id": m.ID, "trust_class": m.TrustClass,
+							"presentation_api": m.Manifest["presentation_api"], "runtime_min": m.Manifest["runtime_min"]})
+					}
+					row["presentations"] = modules
+					if p.refusal != "" {
+						row["presentations_refused"] = p.refusal
+					}
+				}
+				rows = append(rows, row)
 			}
 			if refused == nil {
 				refused = []refusedPlugin{}
