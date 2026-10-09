@@ -38,6 +38,15 @@ func trustedPluginRoots() []string {
 	return roots
 }
 
+// The ways a path fails the trust walk, wrapped in its error so a caller can
+// tell them apart with errors.Is.
+var (
+	errNotRegularFile  = errors.New("not a regular file")
+	errOutsideRoots    = errors.New("outside the trusted plugin roots")
+	errNotTrustedOwner = errors.New("owned by neither the current user nor root")
+	errWritable        = errors.New("writable by others")
+)
+
 // verifyTrustedPath rejects a launcher whose real path, or any directory between
 // it and the matched trusted root (inclusive), is group-writable, other-writable,
 // or owned by neither the current user nor root; and rejects any launcher whose
@@ -45,6 +54,12 @@ func trustedPluginRoots() []string {
 // to an untrusted target) or is not a regular file. The root's own parents are
 // system directories, trusted by definition, so the walk stops at the root.
 func verifyTrustedPath(path string) error {
+	return verifyTrustedPathUnder(path, trustedPluginRoots())
+}
+
+// verifyTrustedPathUnder is verifyTrustedPath against the given roots: the
+// path must resolve inside one of them, and the walk stops at that root.
+func verifyTrustedPathUnder(path string, roots []string) error {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return fmt.Errorf("cannot resolve %s: %w", path, err)
@@ -52,10 +67,10 @@ func verifyTrustedPath(path string) error {
 	if info, err := os.Lstat(resolved); err != nil {
 		return err
 	} else if !info.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", resolved)
+		return fmt.Errorf("%s is %w", resolved, errNotRegularFile)
 	}
 	realRoot := ""
-	for _, root := range trustedPluginRoots() {
+	for _, root := range roots {
 		rr, err := filepath.EvalSymlinks(root)
 		if err != nil {
 			continue
@@ -66,7 +81,7 @@ func verifyTrustedPath(path string) error {
 		}
 	}
 	if realRoot == "" {
-		return fmt.Errorf("%s resolves to %s, outside the trusted plugin roots", path, resolved)
+		return fmt.Errorf("%s resolves to %s, %w", path, resolved, errOutsideRoots)
 	}
 	// Walk from the launcher up to and including the trusted root: the root's own
 	// parents are system directories trusted by definition, but any directory
@@ -83,12 +98,12 @@ func verifyTrustedPath(path string) error {
 			return fmt.Errorf("cannot read ownership of %s", p)
 		}
 		if int(stat.Uid) != uid && stat.Uid != 0 {
-			return fmt.Errorf("%s is owned by neither the current user nor root", p)
+			return fmt.Errorf("%s is %w", p, errNotTrustedOwner)
 		}
 		if mode := info.Mode(); mode&0o020 != 0 {
-			return fmt.Errorf("%s is group-writable", p)
+			return fmt.Errorf("%s is group-writable: %w", p, errWritable)
 		} else if mode&0o002 != 0 {
-			return fmt.Errorf("%s is other-writable", p)
+			return fmt.Errorf("%s is other-writable: %w", p, errWritable)
 		}
 		if p == realRoot {
 			break
@@ -108,7 +123,13 @@ type pluginInfo struct {
 	Version     string   `json:"version"`
 	PluginAPI   string   `json:"plugin_api"`
 	Subcommands []string `json:"subcommands,omitempty"`
-	path        string
+	// Presentations are the modules the plugin offers a page builder
+	// (plugin_presentations.go). An older capsulectl ignores the member.
+	Presentations []pluginPresentation `json:"presentations,omitempty"`
+	path          string
+	// presentations are the checked modules, or refusal why there are none.
+	presentations []presentationModule
+	refusal       *presentationRefusal
 }
 
 // pluginMetadata runs the launcher's cli-plugin-metadata handshake. A launcher
@@ -190,6 +211,10 @@ func discoverPluginsAndRefusals() ([]pluginInfo, []refusedPlugin) {
 				refused = append(refused, refusedPlugin{Path: path, Reason: err.Error()})
 				continue
 			}
+			// A plugin whose presentations are refused still dispatches.
+			if info.presentations, err = loadPresentations(info); err != nil {
+				info.presentations, info.refusal = nil, asRefusal(err)
+			}
 			seen[name] = true
 			plugins = append(plugins, info)
 		}
@@ -262,8 +287,20 @@ func pluginGroup() *cobra.Command {
 			plugins, refused := discoverPluginsAndRefusals()
 			rows := make([]map[string]any, 0, len(plugins))
 			for _, p := range plugins {
-				rows = append(rows, map[string]any{"name": p.Name, "vendor": p.Vendor, "version": p.Version,
-					"plugin_api": p.PluginAPI, "subcommands": p.Subcommands, "path": p.path})
+				row := map[string]any{"name": p.Name, "vendor": p.Vendor, "version": p.Version,
+					"plugin_api": p.PluginAPI, "subcommands": p.Subcommands, "path": p.path}
+				if len(p.Presentations) > 0 {
+					modules := []map[string]any{}
+					for _, m := range p.presentations {
+						modules = append(modules, map[string]any{"id": m.ID, "trust_class": m.TrustClass,
+							"presentation_api": m.Manifest["presentation_api"], "runtime_min": m.Manifest["runtime_min"]})
+					}
+					row["presentations"] = modules
+					if p.refusal != nil {
+						row["presentations_refused"] = p.refusal
+					}
+				}
+				rows = append(rows, row)
 			}
 			if refused == nil {
 				refused = []refusedPlugin{}
