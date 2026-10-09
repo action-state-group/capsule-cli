@@ -1,0 +1,17 @@
+{
+  "draft": "draft-mih-agent-settlement-records-00",
+  "provenance": "spec-derived",
+  "generator": "python/scripts/generate_settlement_vectors.py",
+  "files": [
+    {
+      "path": "cases.json",
+      "sha256": "455e7401013f6392cddc361ebc953dcc2cfe0475bcd278cd3e976f81f3d08fe9",
+      "count": 19
+    },
+    {
+      "path": "registry.json",
+      "sha256": "8b27ca5b67dcff565c9058b8d35415046165e8a4b2e4e33e3ed83103b5a3dab7",
+      "count": null
+    }
+  ]
+}
