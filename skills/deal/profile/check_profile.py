@@ -555,7 +555,7 @@ def check_sale_chain(records):
         fail(1, "the sale's task authority follows its root in the same log")
     if [(r["rel"], r["digest"]) for r in ta.get("refs", [])] != [("source", d0)]:
         fail(1, "the sale's task authority names the sale's root as its source, and nothing else")
-    if "sale_authority_ref" in ta["body"]:
+    if "sale_authority_commitment" in ta["body"]:
         fail(1, "a sale's own task authority names no other sale")
     if root["body"]["intent"].get("bounds_commitment") is not None and "bounds_commitment" not in ta["body"]:
         fail(1, "the sale's task authority carries the floor its root states")

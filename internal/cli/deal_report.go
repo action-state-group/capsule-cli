@@ -234,6 +234,9 @@ func (s *dealSession) dealReportExtension(events []sealedEvent, report dealRepor
 	}
 	ext["merchant"] = merchant
 	ext["email_scope"] = emailScopeLine
+	if opening := saleAuthorityOpening(events); opening != nil {
+		ext["sale_authority_opening"] = opening
+	}
 	if coverage != nil {
 		ext["witness_coverage"] = coverage
 	}

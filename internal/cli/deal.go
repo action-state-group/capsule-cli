@@ -934,7 +934,7 @@ func dealOpenCommand() *cobra.Command {
 			// right after the baseline it was asked in.
 			if o.Records == recordsTyped {
 				intent := o.Intent
-				if _, err = s.seal(ctx, dealID, []sealedEvent{se}, dealEvent{Kind: "task_authority", TaskAuthority: &intent}); err != nil {
+				if _, err = s.seal(ctx, dealID, []sealedEvent{se}, dealEvent{Kind: "task_authority", TaskAuthority: &intent, SaleAuthority: o.SaleAuthority}); err != nil {
 					return err
 				}
 			}

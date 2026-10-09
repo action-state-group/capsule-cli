@@ -125,9 +125,9 @@
         "said_commitment": {
           "$ref": "record-common-v0.schema.json#/$defs/hex64"
         },
-        "sale_authority_ref": {
-          "description": "On a buyer's thread of a sale: the sale's one task authority (in the sale's own log), by digest. Every thread of the sale names the same one.",
-          "$ref": "record-common-v0.schema.json#/$defs/ref"
+        "sale_authority_commitment": {
+          "description": "On a buyer's thread of a sale: the digest of the sale's one task authority (in the sale's own log), committed under this step's own nonce, so the threads of one sale carry no equal value. The opening is in the user's own copy and an adjudicator's.",
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
         }
       },
       "dependentRequired": {

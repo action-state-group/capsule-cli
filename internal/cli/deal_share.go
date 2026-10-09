@@ -100,6 +100,15 @@ var dealShareKeys = map[string]bool{
 // The adjudicator's copy adds claim text and sources.
 var dealAdjudicatorKeys = map[string]bool{"text": true, "source": true, "unverified": true}
 
+// dealTypedShareKeys are the typed action records' own members a shared copy
+// may carry as is: the chain's id, and vocabulary from closed sets
+// (disposition, authority, outcome_id, materiality, party_role, the actions
+// a task allows) or timestamps. None is the user's data.
+var dealTypedShareKeys = map[string]bool{
+	"chain_id": true, "disposition": true, "authority": true, "valid_until": true, "observed_at": true,
+	"outcome_id": true, "first_contact_channel": true, "party_role": true, "allowed": true, "allowed_actions": true,
+}
+
 var (
 	shareAddress = regexp.MustCompile(`(?i)\b\d{1,6}[a-z]?\s+(?:[a-z0-9.'-]+\s+){0,4}(?:street|st|avenue|ave|road|rd|lane|ln|drive|dr|boulevard|blvd|court|ct|way|place|pl|terrace|circle|highway|hwy|parkway|pkwy)\b\.?(?:,?\s*(?:apt|apartment|unit|suite|ste|#)\.?\s*[a-z0-9-]+)?`)
 	// shareNumberish is a run of letters and digits holding a digit, such
@@ -273,6 +282,40 @@ type dealPrivate struct {
 	// "739142". A text that spells one, whatever stands between the
 	// characters (L-a-r-k-s-p-u-r, 7/3/9/1/4/2), has that stretch withheld.
 	spelled []spelledForm
+	// seller is whether the user sells on this deal: then the item's name is
+	// the seller's own listing, which both shared copies may carry, so the
+	// buyer sees what they accepted.
+	seller bool
+}
+
+// dealPublicAmounts are the amounts a deal seals in the clear, as a
+// number reads in text: whole units ("1900") and with cents ("1900.00").
+func dealPublicAmounts(events []sealedEvent) map[string]bool {
+	out := map[string]bool{}
+	add := func(m *int64) {
+		if m != nil && *m >= 0 {
+			out[fmt.Sprintf("%d.%02d", *m/100, *m%100)] = true
+			if *m%100 == 0 {
+				out[fmt.Sprintf("%d", *m/100)] = true
+			}
+		}
+	}
+	for _, se := range events {
+		e := se.Event
+		if e.Open != nil {
+			add(e.Open.Terms.PriceMinor)
+		}
+		if sn := e.Snapshot; sn != nil {
+			add(sn.AmountMinor)
+			if sn.Terms != nil {
+				add(sn.Terms.PriceMinor)
+			}
+		}
+		if e.Act != nil {
+			add(e.Act.AmountMinor)
+		}
+	}
+	return out
 }
 
 func dealPrivateValues(events []sealedEvent) dealPrivate {
@@ -284,6 +327,7 @@ func dealPrivateValues(events []sealedEvent) dealPrivate {
 	}
 	seen := map[string]bool{}
 	var p dealPrivate
+	p.seller = dealRole(events) == dealRoleSeller
 	add := func(v string) {
 		v = strings.TrimSpace(v)
 		if len(v) < 4 || seen[foldCase.String(v)] {
@@ -327,6 +371,17 @@ func dealPrivateValues(events []sealedEvent) dealPrivate {
 		sort.Slice(words, func(i, j int) bool { return len(words[i]) > len(words[j]) })
 		p.fragments = regexp.MustCompile(`(?i)\b(?:` + strings.Join(words, "|") + `)\b`)
 	}
+	// An amount the deal states in the clear (a price, an amount checked or
+	// paid) is no secret where the user's own words happen to say it ("ask
+	// 1900" for a 1900.00 offer): the copy shows it on the record anyway.
+	public := dealPublicAmounts(events)
+	kept := p.values[:0]
+	for _, v := range p.values {
+		if !public[v] {
+			kept = append(kept, v)
+		}
+	}
+	p.values = kept
 	// Longest first, so a value is withheld whole before any part of it.
 	sort.SliceStable(p.values, func(i, j int) bool { return len(p.values[i]) > len(p.values[j]) })
 	spelledSeen := map[string]bool{}
@@ -777,11 +832,6 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 				// the floor is in no shared copy at all.
 				return false
 			}
-			if k == "sale_authority_ref" && audience == dealAudienceCounterparty {
-				// The same digest on every thread of a sale: two buyers
-				// comparing their copies would learn they bid for one item.
-				return false
-			}
 			if k == "materiality" {
 				// Which materiality predicate applied: shareable as its
 				// digest and the commitment to its name and version only.
@@ -814,7 +864,9 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 		}
 		return true
 	case string:
-		allowed := dealShareKeys[key] || strings.HasSuffix(key, "_commitment") || strings.HasSuffix(key, "_digest") ||
+		allowed := dealShareKeys[key] || dealTypedShareKeys[key] || strings.HasSuffix(key, "_commitment") || strings.HasSuffix(key, "_digest") ||
+			strings.HasSuffix(key, "_basis") && len(x) == 64 && isLowerHex(x) || // a digest of a field list
+			key == "item" && p.seller || // a seller's listing
 			(audience == dealAudienceAdjudicator && dealAdjudicatorKeys[key]) ||
 			key == "source" && x == "merchant_email" || // a fixed token, not a claim's source
 			key == "class" && dealClaimClasses[x] // a claim's kind of representation
@@ -852,6 +904,11 @@ func shareableProducer(v interface{}) bool {
 // verdict sealed before they were committed), or anything else, withholds the
 // record.
 func shareableMateriality(v interface{}) bool {
+	// A typed evaluation names which kind of materiality ran, from a closed
+	// set, beside its materiality_digest.
+	if s, ok := v.(string); ok {
+		return s == "predicate" || s == "none_fail_safe"
+	}
 	m, ok := v.(map[string]interface{})
 	if !ok {
 		return false
@@ -1186,6 +1243,11 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 	clean := func(c dealClaim) bool { return p.clean(c.Text) && p.clean(c.Source) }
 	if audience == dealAudienceAdjudicator {
 		ext["claim_openings"] = claimOpenings(events, clean)
+		// The adjudicator can tie a sale's thread to its sale; the buyer
+		// cannot.
+		if opening := saleAuthorityOpening(events); opening != nil {
+			ext["sale_authority_opening"] = opening
+		}
 	}
 	// Where the user sells, the agent's own claims are what it represented
 	// to the buyer: both shared copies open those whose words carry none of

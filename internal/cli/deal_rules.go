@@ -554,6 +554,11 @@ type dealEvent struct {
 	// Acceptance is an observation of the counterparty accepting one exact
 	// offer (typed records). It authorizes nothing by itself.
 	Acceptance *dealAcceptance `json:"acceptance,omitempty"`
+	// SaleAuthority is, on the task authority of a sale's thread, the digest
+	// of the sale's one task authority: sealed only as a commitment under
+	// this step's own nonce (sale_authority_commitment), so no two threads
+	// carry an equal value.
+	SaleAuthority string `json:"sale_authority,omitempty"`
 	// Confirms is set on a record sealed after the deal was closed: the
 	// capsule id of that close. Its Capsule chains to the close with the
 	// registered relation `confirms`, never `follows`, and its record

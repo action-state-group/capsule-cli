@@ -454,6 +454,7 @@ func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 			}
 		}
 	}
+	public := dealPublicAmounts(events)
 	for _, t := range texts {
 		t = foldText(t)
 		// Every number of four digits or more, as written and digits only,
@@ -466,8 +467,9 @@ func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 				inKept = inKept || loc[0] >= k[0] && loc[1] <= k[1]
 			}
 			// A date, a time or a money amount is not a secret; a shared
-			// copy shows them.
-			if !inKept && !gateDate.MatchString(m) && !gateAmount.MatchString(m) {
+			// copy shows them. Nor is a number that is an amount the deal
+			// states in the clear ("ask 1900" for a 1900.00 offer).
+			if !inKept && !gateDate.MatchString(m) && !gateAmount.MatchString(m) && !public[m] {
 				add(m)
 				add(nonDigit.ReplaceAllString(m, ""))
 			}

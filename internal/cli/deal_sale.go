@@ -200,6 +200,19 @@ func underSale(o *dealOpen, sale dealOpen, saleID, authority string) error {
 	return nil
 }
 
+// saleAuthorityOpening is, on a sale's thread, the opening of its
+// sale_authority_commitment: the record that carries it, its nonce, and the
+// sale's task-authority digest. Only the user's own copy and an
+// adjudicator's carry it: with it, a reader can tie the thread to the sale.
+func saleAuthorityOpening(events []sealedEvent) map[string]interface{} {
+	for _, se := range events {
+		if se.Event.Kind == "task_authority" && se.Event.SaleAuthority != "" {
+			return map[string]interface{}{"record_digest": se.Digest, "nonce": se.Event.Nonces["sale_authority"], "text": se.Event.SaleAuthority}
+		}
+	}
+	return nil
+}
+
 // saleUnchanged refuses a step on a sale's thread when the sale's task
 // authority is no longer the one the thread was opened under.
 func (s *dealSession) saleUnchanged(ctx context.Context, events []sealedEvent) error {

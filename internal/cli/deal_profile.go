@@ -115,6 +115,9 @@ func dealTexts(ev dealEvent) map[string]string {
 	case ev.TaskAuthority != nil:
 		t["verbatim"] = ev.TaskAuthority.Verbatim
 		boundsText(t, *ev.TaskAuthority)
+		if ev.SaleAuthority != "" {
+			t["sale_authority"] = ev.SaleAuthority
+		}
 	case ev.Acceptance != nil:
 		t["accepted_words"] = ev.Acceptance.Words
 	case ev.Platform != nil:

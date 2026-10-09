@@ -477,17 +477,22 @@ A verifier holding one deal's records in `seq` order checks:
    authority: `authority_basis` is unchanged.
 10. **A sale to one of several buyers.** A sale's own log is a `sale` record and then its one
     `task-authority/v0` (`source` → the sale record, the floor's `bounds_commitment` when the
-    sale states one, no `sale_authority_ref`), and nothing else. Each buyer's negotiation is a
-    deal of its own, a thread, whose task authority carries `sale_authority_ref`: the digest of
-    the sale's task authority, the same on every thread of the sale. A thread's request and
-    limits are the sale's and do not change per buyer (no `intent` steps). Each `check` of a
-    thread carries `item_ref_commitment`: the sale's item reference committed under that check's
-    own nonce, so no value in a thread's records but `sale_authority_ref` is equal across threads,
-    and a buyer's copy withholds the record that carries it. A thread verifies alone: the
-    referenced task authority is in the sale's log, and the producer checks, before each check,
-    that the sale's task authority is still the one the thread opened under. The profile's own
-    rules checker is given the plain reference (`item_ref`), the same on every thread, which is
-    how it holds a sale to one accepted commitment; no record carries it.
+    sale states one, no `sale_authority_commitment`), and nothing else. Each buyer's negotiation
+    is a deal of its own, a thread, whose task authority carries `sale_authority_commitment`: the
+    digest of the sale's task authority, committed under that step's own nonce. A thread's
+    request and limits are the sale's and do not change per buyer (no `intent` steps). Each
+    `check` of a thread carries `item_ref_commitment`: the sale's item reference committed under
+    that check's own nonce. So no value in a thread's records is equal across the sale's threads,
+    and a buyer's copy carries the thread's task authority and its offers in full. The user's own
+    copy and an adjudicator's carry `sale_authority_opening` (`{record_digest, nonce, text}`, the
+    text being the sale's task-authority digest), which ties the thread to the sale; a buyer's
+    copy does not. A thread verifies alone, and the producer checks, before each check, that the
+    sale's task authority is still the one the thread opened under. The profile's own rules
+    checker is given the plain reference (`item_ref`), the same on every thread, which is how it
+    holds a sale to one accepted commitment; no record carries it.
+11. **A seller commits on the accepted terms.** A seller's `commit` rests on its check, which
+    seals exactly the `amount_minor`, `currency`, `terms` and `recourse` of the offer the other
+    party accepted; a commit on other terms is refused (`changed_after_acceptance`).
 
 ## 7. Outcome conventions: `completed | mismatch | open`
 

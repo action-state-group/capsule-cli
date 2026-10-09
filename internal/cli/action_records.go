@@ -288,10 +288,13 @@ func taskAuthorityRecord(ev dealEvent, events []sealedEvent, commit func(string)
 			body["preconditions"] = []interface{}{}
 		}
 	}
-	// A sale's thread is under the sale's one task authority: it names it,
-	// by digest.
-	if sale := events[0].Event.Open.SaleAuthority; sale != "" {
-		body["sale_authority_ref"] = typedRef(sale)
+	// A sale's thread is under the sale's one task authority: it names its
+	// digest, salted under this step's own nonce, so the threads of one sale
+	// carry no equal value.
+	if ev.SaleAuthority != "" {
+		if body["sale_authority_commitment"], err = commit("sale_authority"); err != nil {
+			return nil, err
+		}
 	}
 	block["refs"] = []interface{}{relRef("source", events[0].Digest)}
 	return typedHeader(typeTaskAuthority, block, body), nil

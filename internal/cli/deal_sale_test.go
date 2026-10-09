@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"regexp"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,8 +79,8 @@ func TestASaleHoldsItsOneTaskAuthority(t *testing.T) {
 	checkProfile(t, path)
 }
 
-// Each buyer's thread is under the sale's one task authority (by digest),
-// and each of its checks seals the item reference salted per check: equal
+// Each buyer's thread is under the sale's one task authority, and each of
+// its checks seals the item reference: both salted per step, so equal
 // across threads only to whoever holds the openings. The profile's own
 // rules checker is given the plain reference, the same on every thread.
 func TestEveryThreadOfASaleCitesItsOneAuthority(t *testing.T) {
@@ -89,18 +90,25 @@ func TestEveryThreadOfASaleCitesItsOneAuthority(t *testing.T) {
 	a := buyerThread(t, saleID, "buyer-a.example")
 	b := buyerThread(t, saleID, "buyer-b.example")
 
-	var commitments []string
+	var commitments, authorities []string
 	for _, id := range []string{a, b} {
 		sealed, _, input := ruleInputs(t, id, offerInput)
 		assert.Equal(t, item, input["item_ref"], "the local checker is given the plain reference")
 		commitments = append(commitments, sealed["item_ref_commitment"].(string))
 		recs := records(t, id)
 		assert.Equal(t, "task-authority/v0", recs[1]["type"])
-		ref := recs[1]["body"].(map[string]any)["sale_authority_ref"].(map[string]any)
-		assert.Equal(t, authority, ref["digest"])
-		assert.NotContains(t, mustJSONString(t, recs), item, "no record carries the plain reference")
+		sealedAuthority := recs[1]["body"].(map[string]any)["sale_authority_commitment"].(string)
+		authorities = append(authorities, sealedAuthority)
+		// It opens, with the step's own nonce, to the sale's authority digest.
+		opened, err := commitText(dealNonceOf(t, id, chainSteps(t, id)[1].CapsuleID, "sale_authority"), authority)
+		require.NoError(t, err)
+		assert.Equal(t, sealedAuthority, opened)
+		raw := mustJSONString(t, recs)
+		assert.NotContains(t, raw, item, "no record carries the plain reference")
+		assert.NotContains(t, raw, authority, "nor the sale's authority digest")
 	}
 	assert.NotEqual(t, commitments[0], commitments[1], "salted per check: nothing equal across threads")
+	assert.NotEqual(t, authorities[0], authorities[1], "salted per thread")
 
 	// The commitment opens with the check's own nonce.
 	var snapshot string
@@ -114,18 +122,80 @@ func TestEveryThreadOfASaleCitesItsOneAuthority(t *testing.T) {
 	assert.Equal(t, commitments[0], opened)
 }
 
-// A buyer's copy carries neither the reference nor the sale's authority
-// digest, the one value equal on every thread.
-func TestABuyersCopyDoesNotLinkTheSalesThreads(t *testing.T) {
+// recordsByType groups records by type (an x-deal-v0 record by its
+// record_type).
+func recordsByType(recs []map[string]any) map[string][]map[string]any {
+	out := map[string][]map[string]any{}
+	for _, r := range recs {
+		name, _ := r["type"].(string)
+		if blk, ok := r["x-deal-v0"].(map[string]any); ok {
+			name = blk["record_type"].(string)
+		}
+		out[name] = append(out[name], r)
+	}
+	return out
+}
+
+// hexValues are the 64-hex strings in a text: digests and commitments.
+func hexValues(text string) map[string]bool {
+	out := map[string]bool{}
+	for _, m := range regexp.MustCompile(`[0-9a-f]{64}`).FindAllString(text, -1) {
+		out[m] = true
+	}
+	return out
+}
+
+// The buyer sees the offer they accepted, and the task authority it was
+// made under, in full; and nothing in two buyers' copies of one sale's
+// threads is equal that is not equal between any two deals of the profile.
+func TestABuyersCopyShowsTheOfferAndDoesNotLinkTheSalesThreads(t *testing.T) {
 	dealFixture(t)
 	saleID, authority := newSale(t)
-	a := buyerThread(t, saleID, "buyer-a.example")
-	_, err := acceptOffer(t, a, makeOffer(t, a, "190000"))
+	threads := []string{buyerThread(t, saleID, "buyer-a.example"), buyerThread(t, saleID, "buyer-b.example")}
+	copies := []string{}
+	for _, id := range threads {
+		_, err := acceptOffer(t, id, makeOffer(t, id, "190000"))
+		require.NoError(t, err)
+		b, shared := sharedCopy(t, id, dealAudienceCounterparty, "the buyer")
+		copies = append(copies, shared)
+		recs := recordsByType(disclosedRecords(b))
+		var offer map[string]any
+		for _, r := range recs["proposed-action/v0"] {
+			if body := r["body"].(map[string]any); body["action"] == "offer" {
+				offer = body
+			}
+		}
+		require.NotNil(t, offer, "the buyer's copy carries the offer they accepted")
+		assert.Equal(t, float64(190000), offer["amount_minor"])
+		assert.Equal(t, "USD", offer["currency"])
+		assert.Equal(t, "example bicycle", offer["terms"].(map[string]any)["item"])
+		assert.NotEmpty(t, offer["item_ref_commitment"])
+		require.Len(t, recs["task-authority/v0"], 1, "and the task authority, in full")
+		assert.NotEmpty(t, recs["task-authority/v0"][0]["body"].(map[string]any)["sale_authority_commitment"])
+		assert.Len(t, recs["counterparty-acceptance-observation"], 0)
+		assert.NotEmpty(t, recs["action-approval/v0"], "and the acceptance")
+		assert.NotContains(t, shared, saleItemRef(t, saleID))
+		assert.NotContains(t, shared, authority)
+		assert.NotContains(t, shared, "sale_authority_opening")
+	}
+	// An unrelated deal of the same profile: what it shares with a thread
+	// (the profile's materiality predicate, the ruleset) links nothing.
+	other := openTyped(t, sellerTyped)
+	_, err := acceptOffer(t, other, makeOffer(t, other, "190000"))
 	require.NoError(t, err)
-	_, shared := sharedCopy(t, a, dealAudienceCounterparty, "the buyer")
-	assert.NotContains(t, shared, saleItemRef(t, saleID))
-	assert.NotContains(t, shared, authority)
-	assert.NotContains(t, shared, "sale_authority_ref")
+	_, unrelated := sharedCopy(t, other, dealAudienceCounterparty, "the buyer")
+	profileWide := hexValues(unrelated)
+	a, b := hexValues(copies[0]), hexValues(copies[1])
+	for v := range a {
+		if b[v] && !profileWide[v] {
+			t.Errorf("%s is in both buyers' copies of one sale's threads, and in no unrelated deal's", v)
+		}
+	}
+
+	// The adjudicator holds the opening that ties the thread to the sale.
+	adjudicator, _ := sharedCopy(t, threads[0], dealAudienceAdjudicator, "an adjudicator")
+	opening := dealReportOf(adjudicator)["sale_authority_opening"].(map[string]any)
+	assert.Equal(t, authority, opening["text"])
 }
 
 func TestAThreadIsUnderTheSale(t *testing.T) {
@@ -190,7 +260,7 @@ func TestTheProfileCheckerHoldsASalesLog(t *testing.T) {
 		"the task authority dropped": {recs[:1], "its root and its one task authority"},
 		"a second task authority":    {append(append([]map[string]any{}, recs...), recs[1]), "its root and its one task authority"},
 		"the authority names a sale": {relinked(t, recs, nil, map[int]func(map[string]any){1: func(r map[string]any) {
-			r["body"].(map[string]any)["sale_authority_ref"] = map[string]any{"type": "record", "digest_alg": "SHA-256", "digest": recordDigest(t, recs[0])}
+			r["body"].(map[string]any)["sale_authority_commitment"] = recordDigest(t, recs[0])
 		}}), "names no other sale"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -205,11 +275,3 @@ func TestTheProfileCheckerHoldsASalesLog(t *testing.T) {
 	}
 }
 
-// The sale's authority digest is the one value equal on every thread: a
-// record that carries it is never in a buyer's copy, whatever else it holds.
-func TestTheSalesAuthorityDigestIsNeverTheBuyers(t *testing.T) {
-	record := map[string]any{"body": map[string]any{"sale_authority_ref": map[string]any{
-		"type": "record", "digest_alg": "SHA-256", "digest": "0c5151aa765aa415630a06b4bd5d09a2fc56b24d44a5883684e3f63e20b7b5c9"}}}
-	assert.False(t, dealRecordShareable(record, "", dealAudienceCounterparty, dealPrivate{}))
-	assert.True(t, dealRecordShareable(record, "", dealAudienceAdjudicator, dealPrivate{}))
-}
