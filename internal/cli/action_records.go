@@ -543,6 +543,38 @@ func platformApprovalRecord(ev dealEvent, events []sealedEvent, commit func(stri
 	return typedHeader(typeActionApproval, block, body), nil
 }
 
+// counterpartyAcceptanceKind names the acceptance observation shape.
+const counterpartyAcceptanceKind = "counterparty-acceptance-observation"
+
+// acceptanceRecord is a counterparty acceptance observation: that the
+// counterparty accepted one exact offer, the proposed action its
+// proposed_action_ref names (the same registered mechanism a platform
+// approval observation uses), on which channel and when, with their words by
+// commitment. It authorizes nothing by itself: an act that rests on the
+// offer cites it beside the evaluation it relied on.
+func acceptanceRecord(ev dealEvent, events []sealedEvent, commit func(string) (string, error), block map[string]interface{}) (map[string]interface{}, error) {
+	a := ev.Acceptance
+	proposed := ""
+	for _, se := range events {
+		if se.CapsuleID == a.Offer {
+			proposed = se.Digest
+		}
+	}
+	if proposed == "" {
+		return nil, inputError("an acceptance names the proposed action of a sealed offer")
+	}
+	words, err := commit("accepted_words")
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]interface{}{"authority": "counterparty_acceptance", "kind": counterpartyAcceptanceKind,
+		"proposed_action_ref": typedRef(proposed), "observed_at": a.ObservedAt, "content_commitment": words}
+	if a.Channel != "" {
+		body["channel"] = a.Channel
+	}
+	return typedHeader(typeActionApproval, block, body), nil
+}
+
 // policyChangeApproval is the body of the user's confirmation of a policy
 // change: their words, what they were shown, the policy that takes effect and
 // the semantic diff from the one it replaces. capsulectl seals none itself

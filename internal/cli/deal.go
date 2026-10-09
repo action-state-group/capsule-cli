@@ -406,6 +406,57 @@ func checkedCard(events []sealedEvent, check string) (sealedEvent, string, bool)
 	return sealedEvent{}, "", false
 }
 
+// acceptableOffer is the snapshot (the proposed action) of the offer the
+// check names, when the counterparty may accept it: the check is of an
+// offer, the offer was made (an offer act rests on it), and no later offer
+// superseded it.
+func acceptableOffer(events []sealedEvent, check string) (string, error) {
+	verdict, _, ok := checkedCard(events, check)
+	if !ok {
+		return "", inputError("--check names no check of this deal: an acceptance names the check of the offer it accepts")
+	}
+	snapshot := verdict.Event.Check.Snapshot
+	var offer *dealSnapshot
+	for _, se := range events {
+		if se.CapsuleID == snapshot {
+			offer = se.Event.Snapshot
+		}
+	}
+	if offer == nil || offer.Action != offerAction {
+		return "", inputError("--check names a check that is not of an offer")
+	}
+	made, later := false, false
+	for _, se := range events {
+		if a := se.Event.Act; se.Event.Kind == "act" && a != nil && a.Action == offerAction && !a.Unchecked && authorizesCheck(events, a.AuthorizedBy, check) {
+			made = true
+		}
+		if p := se.Event.Snapshot; se.Event.Kind == "snapshot" && p != nil && p.Action == offerAction && se.Event.N > verdict.Event.N {
+			later = true
+		}
+	}
+	switch {
+	case later:
+		return "", inputError("a later offer superseded that one: only the latest offer can be accepted")
+	case !made:
+		return "", inputError("that offer was checked but never made: record the offer act before its acceptance")
+	}
+	return snapshot, nil
+}
+
+// authorizesCheck is whether authorizedBy (an act's authority: the check
+// itself when it passed, or an approval of it) rests on that check.
+func authorizesCheck(events []sealedEvent, authorizedBy, check string) bool {
+	if authorizedBy == check {
+		return true
+	}
+	for _, se := range events {
+		if a := se.Event.Approval; se.CapsuleID == authorizedBy && a != nil && a.Check == check {
+			return true
+		}
+	}
+	return false
+}
+
 // shownCardMatches refuses an answer given on a card other than the one the
 // check rendered: a card_commitment must equal the check's, never differ.
 func shownCardMatches(events []sealedEvent, a dealApproval) error {
@@ -1005,8 +1056,24 @@ func dealNoteCommand() *cobra.Command {
 				p.Currency, _ = c.Flags().GetString("currency")
 			}
 			ev.Platform = p
+		case kind == "acceptance":
+			a := &dealAcceptance{}
+			a.Offer, _ = c.Flags().GetString("check")
+			a.Words, _ = c.Flags().GetString("words")
+			channel, _ := c.Flags().GetString("channel")
+			a.Channel = channelToken(channel)
+			a.ObservedAt, _ = c.Flags().GetString("observed-at")
+			if a.Offer == "" || strings.TrimSpace(a.Words) == "" {
+				return inputError("acceptance needs --check (the offer's check) and --words (the counterparty's words, exactly as they were given)")
+			}
+			if a.ObservedAt == "" {
+				a.ObservedAt = dealClock().UTC().Format(time.RFC3339)
+			} else if at, err := time.Parse(time.RFC3339, a.ObservedAt); err != nil || at.UTC().Format(time.RFC3339) != a.ObservedAt || at.After(dealClock()) {
+				return inputError("--observed-at is when you observed it, in UTC (2026-10-06T09:14:00Z), not in the future")
+			}
+			ev.Acceptance = a
 		default:
-			return inputError("--kind must be message, claim, evidence, change, intent, approval, act, disclosure or platform_approval")
+			return inputError("--kind must be message, claim, evidence, change, intent, approval, act, disclosure, platform_approval or acceptance")
 		}
 		if emailPath != "" {
 			// Captured before the deal is locked: the key records are read
@@ -1085,6 +1152,15 @@ func dealNoteCommand() *cobra.Command {
 					ev.Approval.Approver == "user" && verdict.Event.Check.Verdict != "pass" && ev.Approval.ShownCard == "" {
 					return inputError("in a typed deal the user's answer to a paused check is bound to the card it was given on: pass that card with --shown-card")
 				}
+			case "acceptance":
+				if dealRecordSet(dealEvent{}, events) != recordsTyped {
+					return inputError("an acceptance is recorded in typed deals (deal open --records typed)")
+				}
+				offer, err := acceptableOffer(events, ev.Acceptance.Offer)
+				if err != nil {
+					return err
+				}
+				ev.Acceptance.Offer = offer
 			case "platform_approval":
 				if dealRecordSet(dealEvent{}, events) != recordsTyped {
 					return inputError("platform approvals are recorded in typed deals (deal open --records typed)")
@@ -1095,6 +1171,9 @@ func dealNoteCommand() *cobra.Command {
 			case "act":
 				if !slices.Contains(dealPointsOfNoReturn[events[0].Event.Open.Type], act.Action) {
 					return inputError("act.action is not a point of no return for this deal type")
+				}
+				if act.Action == offerAction && dealRole(events) != dealRoleSeller {
+					return inputError("an offer is made on a deal where the user sells (intent.party_role seller)")
 				}
 				if err := checkFee(act.Action, act.FeeMinor); err != nil {
 					return err
@@ -1112,6 +1191,13 @@ func dealNoteCommand() *cobra.Command {
 					return inputError("this deal type has no " + d.action() + " point of no return")
 				}
 				d.AuthorizedBy, d.Reason, d.Rule = authorizeAct(events, dealAct{Action: d.action()}, dealClock().UTC())
+				// A seller gives out where the item is only for an offer the
+				// other party accepted, as a commit is.
+				if d.AuthorizedBy != "" && d.addressed() && dealRole(events) == dealRoleSeller && dealRecordSet(dealEvent{}, events) == recordsTyped {
+					if reason, rule := offerAccepted(events); rule != "" {
+						d.AuthorizedBy, d.Reason, d.Rule = "", reason, rule
+					}
+				}
 				// An approval covers a telling only to the party its check was
 				// about: approving the address for the seller is not approving
 				// it for a courier.
@@ -1170,6 +1256,9 @@ func dealNoteCommand() *cobra.Command {
 						"Ask the user; only on their explicit yes, seal deal note --kind approval --check " + se.CapsuleID +
 						" --choice confirm_limits --said \"<their words>\""
 				}
+			case "acceptance":
+				out["accepts"] = ev.Acceptance.Offer
+				out["note"] = "recorded as an observation that the other party accepted that exact offer; it authorizes nothing by itself. A commit rests on it while no later offer and no change of details leave it behind"
 			case "platform_approval":
 				out["answers_check"] = false
 				out["note"] = "recorded as an observation of " + ev.Platform.Platform + "'s own approval interaction; it authorizes nothing and does not answer the deal check"
@@ -1243,7 +1332,9 @@ func dealNoteCommand() *cobra.Command {
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
-	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval, act, disclosure or platform_approval")
+	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval, act, disclosure, platform_approval or acceptance")
+	cmd.Flags().String("words", "", "acceptance: the counterparty's words accepting the offer, exactly as given (committed, never stored)")
+	cmd.Flags().String("channel", "", "acceptance: the channel the counterparty accepted on (x-deal-v0's channel set)")
 	cmd.Flags().String("input", "", "JSON body for message, claim, evidence, change, intent or act (optional for evidence with --email)")
 	cmd.Flags().String("email", "", "evidence: a merchant's email as a raw RFC 822 file (.eml), headers intact; sealed with its DKIM key records")
 	cmd.Flags().String("key-record", "", "evidence: the DKIM key record to check --email against instead of DNS (marked supplied)")
@@ -1371,6 +1462,9 @@ func dealCheckCommand() *cobra.Command {
 			open := events[0].Event.Open
 			if !slices.Contains(dealPointsOfNoReturn[open.Type], snap.Action) {
 				return inputError("action is not a point of no return for a " + open.Type + " deal; use one of " + strings.Join(dealPointsOfNoReturn[open.Type], ", "))
+			}
+			if snap.Action == offerAction && dealRole(events) != dealRoleSeller {
+				return inputError("an offer is made on a deal where the user sells (intent.party_role seller)")
 			}
 			if err := checkFee(snap.Action, snap.FeeMinor); err != nil {
 				return err

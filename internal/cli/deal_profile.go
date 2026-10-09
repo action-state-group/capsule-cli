@@ -107,6 +107,8 @@ func dealTexts(ev dealEvent) map[string]string {
 	case ev.TaskAuthority != nil:
 		t["verbatim"] = ev.TaskAuthority.Verbatim
 		boundsText(t, *ev.TaskAuthority)
+	case ev.Acceptance != nil:
+		t["accepted_words"] = ev.Acceptance.Words
 	case ev.Platform != nil:
 		t["displayed_text"] = ev.Platform.DisplayedText
 		if ev.Platform.UserText != "" {
@@ -757,6 +759,16 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 	case "snapshot":
 		rtype = "check"
 		sn := ev.Snapshot
+		if sn.Action == offerAction {
+			// A later offer supersedes the one before it (the registered
+			// relation): only the latest offer can be accepted.
+			for i := len(events) - 1; i >= 0; i-- {
+				if p := events[i].Event.Snapshot; events[i].Event.Kind == "snapshot" && p != nil && p.Action == offerAction {
+					block["refs"] = []interface{}{relRef("supersedes", events[i].Digest)}
+					break
+				}
+			}
+		}
 		if sn.Who != nil {
 			setIDs(counterpartyIDs(key, *sn.Who))
 		}
@@ -1008,6 +1020,8 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		return taskAuthorityRecord(ev, events, commit, block)
 	case "platform_approval":
 		return platformApprovalRecord(ev, events, commit, block, currency)
+	case "acceptance":
+		return acceptanceRecord(ev, events, commit, block)
 	default:
 		return nil, inputError("unknown step kind " + ev.Kind)
 	}

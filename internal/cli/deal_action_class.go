@@ -79,10 +79,12 @@ func dealActionClass(dealType, action, direction string) string {
 // commitment is never spend, so every cancel is 0, whether it returns a
 // payment, returns part of one, or costs a fee (a fee is recorded as its own
 // fee_minor, and no cap evaluates it). Any other action spends its amount,
-// unless it moved money in. With no amount and no cancel, there is none.
+// unless it moved money in. An offer is a seller's proposal: its amount is
+// what the buyer would pay, never the user's spend. With no amount and no
+// cancel, there is none.
 func dealSpendMinor(action, direction string, amount *int64) (int64, bool) {
 	switch {
-	case action == "cancel":
+	case action == "cancel", action == offerAction:
 		return 0, true
 	case amount == nil || direction == "in":
 		return 0, false

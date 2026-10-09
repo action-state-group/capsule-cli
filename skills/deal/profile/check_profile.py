@@ -53,6 +53,8 @@ DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "hom
                                                   "pickup_location", "other_contact")}
 DISCLOSURE_ACTION.update({c: "share_credentials" for c in ("credential", "verification_code",
                                                            "payment_card", "id_document")})
+# The classes that give a place: a seller gives one out only for an accepted offer.
+ADDRESS_CLASSES = {"home_address", "address", "pickup_location"}
 IDENTIFIER_KINDS = ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id"]
 SAFE_INT = 2**53 - 1
 
@@ -548,7 +550,8 @@ def check_chain(records):
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by", "reverses"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"},
-                    "task_authority": {"source", "approves"}, "platform_approval": set(), "policy_change": set()}
+                    "task_authority": {"source", "approves"}, "platform_approval": set(), "policy_change": set(),
+                    "check": {"supersedes"}, "counterparty_acceptance": set()}
     # The user's limits in force. Absent allowed = no restriction; present and
     # empty = nothing allowed. An intent may narrow them; only the user's
     # confirm_limits answer to an intent that asks for more puts a new version
@@ -577,6 +580,10 @@ def check_chain(records):
     first_answer = {}  # verdict index -> index of its first approval
     last_outcome = None
     unchecked = 0
+    # A seller's offers: each later offer supersedes the one before, and only the
+    # latest can be accepted. accepted is the index of the acceptance of the latest
+    # offer, None until there is one.
+    latest_offer, accepted = None, None
     closed_final = None  # index of the final close, once there is one
     for i, rec in enumerate(records):
         b, body = rec["x-deal-v0"], rec["body"]
@@ -631,6 +638,27 @@ def check_chain(records):
             if js and records[js[0]]["x-deal-v0"]["record_type"] not in types:
                 fail(i, f"{rel!r} must point at a {' or '.join(types)} record")
             return js[0] if js else None
+
+        def offer_check_of(k):
+            """The check an authorizing record (a DO evaluation, or an approval of
+            one) rests on."""
+            if records[k]["x-deal-v0"]["record_type"] == "approval":
+                k = by_digest[records[k]["x-deal-v0"]["refs"][0]["digest"]]
+            return by_digest[records[k]["x-deal-v0"]["refs"][0]["digest"]]
+
+        def seller_needs_acceptance(what):
+            """A seller commits, or gives out a place, only for the latest offer the
+            counterparty accepted, with no change of details since."""
+            if latest_offer is None:
+                fail(i, f"no offer is on record: a seller's {what} rests on an offer the other party accepted")
+            if accepted is None:
+                fail(i, f"the latest offer has no recorded acceptance: the {what} needs one")
+            for k in range(accepted + 1, i):
+                kb = records[k]["x-deal-v0"]
+                identity = kb["record_type"] in ("message", "evidence") and (
+                    "counterparty" in kb or "counterparty_facts" in records[k]["body"])
+                if kb["record_type"] == "detail_change" or identity:
+                    fail(i, f"details changed after the other party accepted; the {what} needs the offer made and accepted again")
 
         def authorized_check(ja, action, what):
             """Section 6, rule 5: the approval proceeds, is unused, is the
@@ -782,6 +810,33 @@ def check_chain(records):
             if body["observed_at"] > b["at"]:
                 fail(i, "observed_at is later than the record")
             platform_for_verdict.setdefault(jv, []).append(i)
+        elif t == "check" and body.get("action") == "offer":
+            if party_role != "seller":
+                fail(i, "an offer is made on a deal where the user sells (party_role seller)")
+            j = one("supersedes", ("check",), required=latest_offer is not None)
+            if j != latest_offer:
+                fail(i, "an offer supersedes exactly the latest earlier offer")
+            latest_offer, accepted = i, None
+        elif t == "check":
+            if "supersedes" in by_rel:
+                fail(i, "only an offer supersedes an earlier offer")
+        elif t == "counterparty_acceptance":
+            # An observation that the counterparty accepted one exact offer. It
+            # authorizes nothing by itself; a seller's commit rests on it.
+            j = by_digest.get(body["proposed_action_ref"]["digest"])
+            if j is None or j >= i or records[j]["x-deal-v0"]["record_type"] != "check" \
+                    or records[j]["body"]["action"] != "offer":
+                fail(i, "proposed_action_ref names no earlier offer of this chain")
+            if j != latest_offer:
+                fail(i, "a later offer superseded that one: only the latest offer can be accepted")
+            if not any(records[k]["x-deal-v0"]["record_type"] == "action" and records[k]["body"]["action"] == "offer"
+                       and any(r["rel"] == "authorized_by" and offer_check_of(by_digest[r["digest"]]) == j
+                               for r in records[k]["x-deal-v0"].get("refs", []))
+                       for k in range(j + 1, i)):
+                fail(i, "that offer was checked but never made: the offer action comes before its acceptance")
+            if body["observed_at"] > b["at"]:
+                fail(i, "observed_at is later than the record")
+            accepted = i
         elif t == "policy_change":
             pass  # its bindings are structural (the schema); no chain step depends on it yet
         elif t == "intent":
@@ -903,6 +958,11 @@ def check_chain(records):
                     actions = {DISCLOSURE_ACTION[f["class"]] for f in body["disclosed"]["fields"]}
                     if actions != {body["action"]}:
                         fail(i, "the disclosed classes are not the ones this action covers")
+                if party_role == "seller":
+                    if body["action"] == "commit":
+                        seller_needs_acceptance("commit")
+                    elif any(f["class"] in ADDRESS_CLASSES for f in body.get("disclosed", {}).get("fields", [])):
+                        seller_needs_acceptance("address")
             else:
                 chk = authorized_check(one("authorized_by", ("approval",)), body["action"], "action")
             cb = chk["body"]

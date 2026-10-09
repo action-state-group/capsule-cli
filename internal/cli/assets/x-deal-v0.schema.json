@@ -53,7 +53,7 @@
     "record_type": {
       "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure"]
     },
-    "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials"] },
+    "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer"] },
     "outcome_value": { "description": "completed, mismatch or open; or not_selected: the other side was not chosen, and nothing was done on the deal (no action is on record). Every value but open is final at a close.", "enum": ["completed", "mismatch", "open", "not_selected"] },
     "identifier_kind": { "enum": ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id"] },
     "channel": {
@@ -76,7 +76,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["rel", "type", "digest_alg", "digest"],
       "properties": {
-        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome", "confirms", "reverses"] },
+        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome", "confirms", "reverses", "supersedes"] },
         "type": { "const": "deal-record" },
         "digest_alg": { "const": "SHA-256" },
         "digest": { "$ref": "#/$defs/hex64" }

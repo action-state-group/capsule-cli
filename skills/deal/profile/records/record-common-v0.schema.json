@@ -82,7 +82,8 @@
             "authorized_by",
             "observes",
             "reverses",
-            "source"
+            "source",
+            "supersedes"
           ]
         },
         "type": {
@@ -167,7 +168,8 @@
         "commit",
         "cancel",
         "share_contact",
-        "share_credentials"
+        "share_credentials",
+        "offer"
       ]
     },
     "finding": {
