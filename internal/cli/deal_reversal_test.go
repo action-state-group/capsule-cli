@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -14,6 +15,14 @@ import (
 // cancelAfterPurchase runs a purchase, then the user's "cancel this ticket"
 // and an authorized cancel that returns the payment, and returns the deal id.
 func cancelAfterPurchase(t *testing.T) string {
+	t.Helper()
+	return cancelAfterPurchaseOf(t, 55880)
+}
+
+// cancelAfterPurchaseOf is cancelAfterPurchase with a cancel of cancelled
+// minor units: 55880 returns the whole payment (a refund), less is a partial
+// cancel that returns no sealed payment.
+func cancelAfterPurchaseOf(t *testing.T, cancelled int) string {
 	t.Helper()
 	dealFixture(t)
 	const item = "Southwest WN 1234 HOU-SJC, Oct 21 to Oct 24, Basic"
@@ -30,8 +39,8 @@ func cancelAfterPurchase(t *testing.T) string {
 	answer(dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"authorized_max_minor":55880,"terms":{"item":"`+item+`","price_minor":55880},"recourse":{"rail":"card","refundable":true}}`)), "yes, book it")
 	dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":55880,"currency":"USD","rail":"card"}`))
 	dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"cancel this ticket for me please","allowed":["pay","cancel"]}`))
-	answer(dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"cancel","description":"cancel the ticket","amount_minor":55880,"recourse":{"rail":"card","refundable":true}}`)), "yes, cancel it")
-	act := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"cancel","amount_minor":55880,"currency":"USD","rail":"card"}`))
+	answer(dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"cancel","description":"cancel the ticket","amount_minor":`+strconv.Itoa(cancelled)+`,"recourse":{"rail":"card","refundable":true}}`)), "yes, cancel it")
+	act := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"cancel","amount_minor":`+strconv.Itoa(cancelled)+`,"currency":"USD","rail":"card"}`))
 	require.Equal(t, false, act["unchecked"], "the cancel is authorized by the user's answer")
 	return id
 }

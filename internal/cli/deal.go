@@ -540,6 +540,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	ev.CommitAlg = dealCommitAlg
 	ev.RuleInputs = dealRuleInputsVersion
 	ev.ClaimCommit = dealClaimCommitVersion
+	ev.ReversesRef = dealReversesRefVersion
 	ev.Nonces = map[string]string{}
 	for name := range dealTexts(ev) {
 		nonce := make([]byte, 32)

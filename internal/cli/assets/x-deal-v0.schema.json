@@ -63,6 +63,16 @@
         { "type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+\\.[a-z][a-z0-9_]{0,63}$" }
       ]
     },
+    "record_ref": {
+      "description": "A reference to a sealed record by its record digest, in the shape a typed record's references take.",
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "digest_alg", "digest"],
+      "properties": {
+        "type": { "const": "record" },
+        "digest_alg": { "const": "SHA-256" },
+        "digest": { "$ref": "#/$defs/hex64" }
+      }
+    },
     "digest_ref": {
       "type": "object", "additionalProperties": false,
       "required": ["type", "digest_alg", "digest"],
@@ -283,7 +293,7 @@
     "body_check": {
       "type": "object", "additionalProperties": false,
       "required": ["action"],
-      "dependentRequired": { "action_class": ["taxonomy_version"], "taxonomy_version": ["action_class"], "spend_authorized_minor": ["authorized_max_minor", "spend_minor"] },
+      "dependentRequired": { "action_class": ["taxonomy_version"], "taxonomy_version": ["action_class"], "spend_authorized_minor": ["authorized_max_minor", "spend_minor"], "reverses_ref": ["direction", "amount_minor"] },
       "properties": {
         "action": { "$ref": "#/$defs/point_of_no_return" },
         "action_class": { "$ref": "#/$defs/action_class" },
@@ -292,6 +302,7 @@
         "authorized_max_minor": { "description": "On a pay: the most the counterparty may take under the payment's authorization (a card hold, a pre-authorization with a buffer settled later), at least amount_minor, which stays the expected charge. A limit binds it.", "$ref": "#/$defs/safe_uint" },
         "spend_authorized_minor": { "description": "The authorized maximum beside spend_minor: what a per-action spend cap reads. Sealed with action_class and authorized_max_minor.", "$ref": "#/$defs/safe_uint" },
         "direction": { "description": "On a cancel with an amount: in. Sealed with action_class.", "enum": ["in"] },
+        "reverses_ref": { "description": "On a cancel that returns a sealed payment (a refund): the pay act it reverses, by its record digest. The same digest as the refund act's refs[rel=reverses]. Absent on a check sealed before it was recorded.", "$ref": "#/$defs/record_ref" },
         "fee_minor": { "description": "On a cancel only: a fee the cancellation costs, recorded as its own amount and never the amount a spend cap evaluates.", "$ref": "#/$defs/safe_uint" },
         "cancelled_amount_minor": { "description": "On a cancel only: the amount the cancel was about when it returns no sealed payment (part of one, or one it matches none of). Neither money moved nor spend; sealed with direction in.", "$ref": "#/$defs/safe_uint" },
         "amount_minor": { "$ref": "#/$defs/safe_uint" },

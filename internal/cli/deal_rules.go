@@ -527,6 +527,10 @@ type dealEvent struct {
 	// kept with the step like Producer: a step sealed before has none and
 	// re-derives its claims in clear, unchanged.
 	ClaimCommit string `json:"claim_commit,omitempty"`
+	// ReversesRef (dealReversesRefVersion) marks a step whose refund check
+	// names the pay it reverses (reverses_ref), kept with the step like
+	// Producer: a step sealed before has none and re-derives without it.
+	ReversesRef string `json:"reverses_ref,omitempty"`
 }
 
 // dealPlatformApproval is an observation of another platform's own approval
