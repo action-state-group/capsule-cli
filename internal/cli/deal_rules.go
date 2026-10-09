@@ -66,6 +66,9 @@ type dealClaim struct {
 	Source     string `json:"source,omitempty"`
 	SourceKind string `json:"source_kind,omitempty"`
 	Verified   bool   `json:"verified,omitempty"`
+	// Class is what kind of representation an agent's claim is (dealClaimClasses),
+	// so a page can label it; optional, and sealed in the clear.
+	Class string `json:"class,omitempty"`
 }
 
 type dealRecourse struct {
@@ -2165,8 +2168,8 @@ type dealDisclosure struct {
 	// Accepted is, on a seller's address, the sealed acceptance of the offer
 	// it rests on; the record cites it (rel source).
 	Accepted string `json:"accepted,omitempty"`
-	Reason       string `json:"reason,omitempty"`
-	Rule         string `json:"rule,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+	Rule     string `json:"rule,omitempty"`
 }
 
 type dealDisclosureField struct {

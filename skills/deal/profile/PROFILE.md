@@ -320,12 +320,16 @@ typed record, in its header), next to the fingerprints' `fp_alg`. What it states
   - `claim_openings` (each claim's `text_commitment` and `source_ref_commitment`).
 
   An adjudicator's copy carries the `claim_openings` of claims whose words and source note hold
-  none of the user's private details. A counterparty's copy carries none.
+  none of the user's private details. A counterparty's copy carries none, except where the user
+  sells: there it opens the agent's own claims (its representations to the buyer) whose words
+  and source note hold none of the user's private details, and no other claim.
 
 **Claims.** A claim's words and its source note are sealed as commitments; only whose it is,
 `source_kind`, is in the clear.
 - **On a claim step and on each of the baseline's `claims[]`:** `{text_commitment, source_kind,
-  source_ref_commitment?}`.
+  source_ref_commitment?, class?}`. `class` says what kind of representation the claim is, so a
+  page can label it: `condition`, `warranty`, `refund_terms`, `delivery_promise` or `other`. It
+  is optional and in the clear; a claim without one re-derives unchanged.
 - **`source_kind`** is stated by the caller. A source that can only mean the counterparty
   (`counterparty`, `seller_message`, `merchant_email` and the like) is taken as `merchant`. Any
   other source (a page, a photo, a snapshot: the merchant's own or a marketplace's) must state it,
@@ -333,6 +337,11 @@ typed record, in its header), next to the fingerprints' `fp_alg`. What it states
 - **`claim_openings`** in a copy are `{record_digest, index (a baseline claim), text: {nonce,
   text}, source: {nonce, text}}`. `check_profile.py --openings=FILE` recomputes each against the
   sealed record.
+- **`representations`**, where the user sells: the agent's own claims (`source_kind: agent`), as
+  `{step, index (a baseline claim), class?, nonce, text}`, in the user's copy and, for those whose
+  words hold none of the user's private details, in both shared copies. The page checks each
+  against its sealed `text_commitment` and labels it by the sealed `class`. A buyer's deal has
+  none: there, the agent's claims are its own notes.
 - **A verdict** names the claims it found unverified by reference, as `unverified_claims`
   (`{claim: <digest ref>, index?}`), not by their words.
 - **Older records:** a step sealed before this carries `text` and `source` (and a verdict

@@ -19,6 +19,11 @@ const dealClaimCommitVersion = "1"
 // dealSourceKinds is whose a claim is.
 var dealSourceKinds = map[string]bool{"merchant": true, "agent": true, "platform": true, "user": true, "external": true}
 
+// dealClaimClasses are the kinds of representation a claim may be labelled
+// as: what the agent said of the item's condition, a warranty, the refund
+// terms, a delivery promise, or another.
+var dealClaimClasses = map[string]bool{"condition": true, "warranty": true, "refund_terms": true, "delivery_promise": true, "other": true}
+
 // merchantSources are the source notes that can only mean the counterparty
 // said it. Any other note (a page, a photo, a snapshot: the merchant's own
 // or a marketplace's) does not say whose it is, so its kind must be stated.
@@ -49,6 +54,10 @@ func normalizeClaim(c *dealClaim) error {
 	default:
 		return inputError(fmt.Sprintf("state the claim's source_kind (merchant, agent, platform, user or external): its source %q does not say whose it is", c.Source))
 	}
+	c.Class = strings.ToLower(strings.TrimSpace(c.Class))
+	if c.Class != "" && !dealClaimClasses[c.Class] {
+		return inputError("a claim's class must be one of condition, warranty, refund_terms, delivery_promise or other")
+	}
 	return c.validate()
 }
 
@@ -68,6 +77,9 @@ func claimBody(c dealClaim, textName, sourceName string, commit func(string) (st
 		return nil, err
 	}
 	m := map[string]interface{}{"text_commitment": text, "source_kind": c.SourceKind}
+	if c.Class != "" {
+		m["class"] = c.Class
+	}
 	if c.Source != "" {
 		if m["source_ref_commitment"], err = commit(sourceName); err != nil {
 			return nil, err
@@ -109,6 +121,46 @@ func claimOpenings(events []sealedEvent, keep func(dealClaim) bool) []interface{
 			}
 		case se.Event.Claim != nil:
 			add(se, *se.Event.Claim, -1, "claim_text", "claim_source")
+		}
+	}
+	return out
+}
+
+// representations are the openings of what the agent of a user who sells
+// told the buyer: its own claims (source_kind agent), each by the step that
+// seals it (and, for the baseline's claims, index), its class when given,
+// and its words with their nonce, so a page checks them against the sealed
+// text_commitment. keep says whether a claim is opened in this copy. A
+// buyer's deal has none: there, the agent's claims are its own notes.
+func representations(events []sealedEvent, keep func(dealClaim) bool) []interface{} {
+	out := []interface{}{}
+	if dealRole(events) != dealRoleSeller {
+		return out
+	}
+	add := func(se sealedEvent, c dealClaim, index int, textName string) {
+		if c.SourceKind != "agent" || !keep(c) {
+			return
+		}
+		m := map[string]interface{}{"step": se.CapsuleID, "nonce": se.Event.Nonces[textName], "text": c.Text}
+		if index >= 0 {
+			m["index"] = index
+		}
+		if c.Class != "" {
+			m["class"] = c.Class
+		}
+		out = append(out, m)
+	}
+	for _, se := range events {
+		if se.Event.ClaimCommit == "" {
+			continue
+		}
+		switch {
+		case se.Event.Open != nil:
+			for i, c := range se.Event.Open.Claims {
+				add(se, c, i, fmt.Sprintf("claim_text_%d", i))
+			}
+		case se.Event.Claim != nil:
+			add(se, *se.Event.Claim, -1, "claim_text")
 		}
 	}
 	return out

@@ -811,7 +811,8 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 	case string:
 		allowed := dealShareKeys[key] || strings.HasSuffix(key, "_commitment") || strings.HasSuffix(key, "_digest") ||
 			(audience == dealAudienceAdjudicator && dealAdjudicatorKeys[key]) ||
-			key == "source" && x == "merchant_email" // a fixed token, not a claim's source
+			key == "source" && x == "merchant_email" || // a fixed token, not a claim's source
+			key == "class" && dealClaimClasses[x] // a claim's kind of representation
 		return allowed && p.clean(x)
 	default:
 		return true
@@ -1177,8 +1178,18 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 	// An adjudicator's copy opens the claims whose words and source note
 	// carry none of the user's private details (an opening cannot be
 	// scrubbed and still check); a counterparty's opens none.
+	clean := func(c dealClaim) bool { return p.clean(c.Text) && p.clean(c.Source) }
 	if audience == dealAudienceAdjudicator {
-		ext["claim_openings"] = claimOpenings(events, func(c dealClaim) bool { return p.clean(c.Text) && p.clean(c.Source) })
+		ext["claim_openings"] = claimOpenings(events, clean)
+	}
+	// Where the user sells, the agent's own claims are what it represented
+	// to the buyer: both shared copies open those whose words carry none of
+	// the user's private details. The buyer's copy opens no other claim.
+	if dealRole(events) == dealRoleSeller {
+		ext["representations"] = representations(events, clean)
+		if audience == dealAudienceCounterparty {
+			ext["claim_openings"] = claimOpenings(events, func(c dealClaim) bool { return c.SourceKind == "agent" && clean(c) })
+		}
 	}
 	return ext
 }
