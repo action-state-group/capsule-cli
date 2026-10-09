@@ -9,6 +9,7 @@ import (
 	"golang.org/x/net/publicsuffix"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -136,10 +137,22 @@ func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, e
 		if witness.IsRetryable(e) {
 			status = 503
 		}
-		return r, &witness.HTTPError{StatusCode: status, Body: "checkpoint submission failed; response details suppressed"}
+		// The witness's own status (never its body) is kept, so a pending
+		// delivery can say what the witness answered.
+		return r, &witness.HTTPError{StatusCode: status, Body: witnessFailureBody(answered.StatusCode)}
 	}
 	return r, nil
 }
+
+// witnessFailureBody is what a delivery the witness answered with an error
+// records: its HTTP status, never its body.
+func witnessFailureBody(status int) string {
+	return fmt.Sprintf("checkpoint submission failed (the witness answered HTTP %d); response details suppressed", status)
+}
+
+// witnessAnswered reads the witness's own HTTP status from a delivery's
+// recorded error (safeSubmitter keeps it, never the response body).
+var witnessAnswered = regexp.MustCompile(`the witness answered HTTP (\d{3})`)
 
 // witnessNotReached marks a delivery whose request never got an answer from
 // the witness.
@@ -186,6 +199,9 @@ func witnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 	}
 	if state.Attempts == 0 {
 		return "not_attempted", "pending: not sent yet; it goes at the next tick."
+	}
+	if m := witnessAnswered.FindStringSubmatch(state.LastError); m != nil {
+		return "witness_error", "pending: the witness answered with an error (HTTP " + m[1] + "); it is retried at every tick."
 	}
 	return "witness_error", "pending: the witness answered with an error; it is retried at every tick."
 }

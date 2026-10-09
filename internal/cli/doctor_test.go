@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -100,7 +101,8 @@ func TestDoctorWitnessReachabilityIsOptInAndNeverSendsAuth(t *testing.T) {
 	var sawAuth bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sawAuth = r.Header.Get("Authorization") != ""
-		assert.Equal(t, http.MethodHead, r.Method)
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/health", r.URL.Path)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
@@ -119,13 +121,14 @@ func TestDoctorWitnessReachabilityIsOptInAndNeverSendsAuth(t *testing.T) {
 	assert.Equal(t, false, witness["checked"])
 	assert.False(t, sawAuth)
 
-	// With --check-witness: an unauthenticated HEAD reaches the server.
+	// With --check-witness: an unauthenticated GET of /health reaches the server.
 	report = doctorReport(t, "--profile", p.Name, "--check-witness")
 	witness, _ = report["witness"].(map[string]any)
 	assert.Equal(t, true, witness["checked"])
 	assert.Equal(t, true, witness["reachable"])
 	request, _ := witness["request"].(map[string]any)
-	assert.Equal(t, server.URL, request["url"])
+	assert.Equal(t, server.URL+"/health", request["url"])
+	assert.Equal(t, "GET", request["method"])
 	assert.False(t, sawAuth, "doctor must never attach a token to its reachability probe")
 	assert.Equal(t, true, witness["ok"])
 
@@ -192,4 +195,24 @@ func TestDoctorNeverPrintsAPrivateKeySeed(t *testing.T) {
 	assert.NotContains(t, string(raw), p.Signing.Value)
 	_, err := hex.DecodeString(p.Signing.Value)
 	require.NoError(t, err, "sanity: fixture signing value is a real hex seed, not an already-safe placeholder")
+}
+
+// A witness that answers the probe with a 4xx or 5xx is reachable but not ok,
+// and the output says what it answered, to which request.
+func TestDoctorWitnessErrorStatusIsNotOK(t *testing.T) {
+	for _, status := range []int{http.StatusMethodNotAllowed, http.StatusNotFound, http.StatusInternalServerError} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(status) }))
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		p, _ := profileFixture(t)
+		p.Checkpoint.Endpoint = server.URL
+		p.Checkpoint.PublicKey = p.TrustedKeys[0]
+		require.NoError(t, saveProfile(p, false))
+		report := doctorReport(t, "--profile", p.Name, "--check-witness")
+		witness, _ := report["witness"].(map[string]any)
+		assert.Equal(t, true, witness["reachable"])
+		assert.Equal(t, float64(status), witness["status_code"])
+		assert.Equal(t, false, witness["ok"], "HTTP %d is not ok", status)
+		assert.Contains(t, witness["issue"], fmt.Sprintf("answered HTTP %d to GET %s/health", status, server.URL))
+		server.Close()
+	}
 }

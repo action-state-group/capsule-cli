@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,15 +13,19 @@ import (
 )
 
 // checkpointReachability is a doctor-only best-effort probe: an unauthenticated
-// HEAD request against the profile's checkpoint endpoint, with no Authorization
-// header attached (doctor never carries a token onto the wire, so a captured
-// request never discloses one) and a short timeout so a misconfigured or
-// unreachable witness cannot hang the whole report.
+// GET of the witness's health endpoint (<endpoint>/health), read-only, with
+// no Authorization header attached (doctor never carries a token onto the
+// wire, so a captured request never discloses one) and a short timeout so a
+// misconfigured or unreachable witness cannot hang the whole report. A
+// witness that answers is reachable; only a 2xx answer is ok (a HEAD, or a
+// path the service does not serve, can be answered 405 by a witness that is
+// up, and that is not a witness that works).
 func checkpointReachability(ctx context.Context, endpoint string) map[string]any {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	request := map[string]any{"method": http.MethodHead, "url": endpoint}
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, endpoint, nil)
+	url := strings.TrimRight(endpoint, "/") + "/health"
+	request := map[string]any{"method": http.MethodGet, "url": url}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return map[string]any{"checked": true, "request": request, "reachable": false}
 	}
@@ -164,11 +169,17 @@ func doctorCommand() *cobra.Command {
 					}
 					return ErrPartial
 				}
-				// ok needs both a well-formed key and an endpoint that answered.
+				// ok needs both a well-formed key and an endpoint that answered
+				// the probe with success: any 4xx or 5xx is not ok, and says so.
 				witness["public_key"] = map[string]any{"ok": true}
-				witness["ok"] = witness["reachable"] == true
-				if witness["ok"] != true {
+				status, _ := witness["status_code"].(int)
+				witness["ok"] = witness["reachable"] == true && status >= 200 && status < 300
+				switch {
+				case witness["reachable"] != true:
 					witness["issue"] = "the checkpoint endpoint did not answer the probe: check the URL and the network"
+				case witness["ok"] != true:
+					req, _ := witness["request"].(map[string]any)
+					witness["issue"] = fmt.Sprintf("the checkpoint endpoint answered HTTP %d to %s %s: a witness that works answers it with success; check the URL", status, req["method"], req["url"])
 				}
 				report["witness"] = witness
 			}
@@ -184,6 +195,6 @@ func doctorCommand() *cobra.Command {
 	cmd.Flags().String("evidence-out", "", "With --install-check: also write the body for `deal note --kind evidence --input FILE`, which seals this result")
 	cmd.Flags().String("expect-skill-sha256", "", "With --install-check: the sha256 of the release's deal SKILL.md")
 	cmd.Flags().String("skills-dir", "", "With --install-check: the directory the agent loads skills from")
-	cmd.Flags().Bool("check-witness", false, "Also probe the profile's checkpoint endpoint with an unauthenticated HEAD request (opt-in; prints exactly what would leave)")
+	cmd.Flags().Bool("check-witness", false, "Also probe the profile's checkpoint endpoint with an unauthenticated, read-only GET of its /health (opt-in; prints exactly what would leave); ok only on a 2xx answer")
 	return cmd
 }
