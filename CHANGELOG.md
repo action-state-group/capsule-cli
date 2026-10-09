@@ -12,6 +12,8 @@
 - **Amounts unchanged:** a refund's `check` and `action` both keep `amount_minor`. A partial
   cancel's keep `cancelled_amount_minor` and name no payment. No `returned_minor` is sealed.
 
+## v0.1.0-rc12
+
 ### New deal records seal action taxonomy version 4
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
