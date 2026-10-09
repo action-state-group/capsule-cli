@@ -11,6 +11,16 @@
   none. It is beside the record, as `counterparty_profile` is, never in it: no record changes.
   History entries are open objects, so a checker that does not read it is unaffected.
 
+## v0.1.0-rc14
+
+### A typed deal's history acts carry the profile payee key
+
+- **Fixed (checker input only; nothing sealed changes).** A history act in a deal recorded with typed
+  records now carries `counterparty_profile`, resolved from the check its authorization rests on,
+  whether that act needed an approval or not. Before, it was resolved only through an approval, so a
+  repeated payment in a typed deal was not seen as a repeat by a rules checker. Untyped deals are
+  unchanged.
+
 ### New deal records seal action taxonomy version 6
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
@@ -103,10 +113,8 @@
   itself stays shareable.
 - **The rules checker gets it:** `external-check-input/v0` gives the checker
   `record.counterparty_profile` for the check being decided, and `history[i].counterparty_profile`
-  for each earlier act, from the check the act rests on: the one its approval answers, or, in a
-  deal sealed in typed records, a check that needed no approval and authorized the act itself, so
-  a repeated payment in a typed deal reads as a repeat too. It is supplied beside the sealed
-  capsule and never part of it. Acts checked before this release carry none.
+  for each earlier act (from its approval's check). It is supplied beside the sealed capsule and
+  never part of it. Acts checked before this release carry none.
 
 ### New deal records seal action taxonomy version 5
 
