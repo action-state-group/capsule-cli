@@ -1,0 +1,142 @@
+{
+  "cases": [
+    {
+      "action": {
+        "action_class": "marketplace.sale",
+        "amount_minor": 150000,
+        "task_authority_ref": "dd3472a644170af786a0265d7eccdcf8e147edc9cd51da5fc985f95412943ebc"
+      },
+      "commercial_bounds_opening": null,
+      "expect": {
+        "evidence": {
+          "constraint_id": "price_floor",
+          "in_scope": false,
+          "missing_field": null
+        },
+        "evidence_digest": "9d548b915de1ff97c046aa15d2f13fae31884894ff36be4ddba1fc9106988bed",
+        "result": "n/a"
+      },
+      "name": "unfloored-sale-no-opening",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.sale",
+        "amount_minor": 150000,
+        "task_authority_ref": "dd3472a644170af786a0265d7eccdcf8e147edc9cd51da5fc985f95412943ebc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "constraint_id": "price_floor",
+          "in_scope": false,
+          "missing_field": null
+        },
+        "evidence_digest": "9d548b915de1ff97c046aa15d2f13fae31884894ff36be4ddba1fc9106988bed",
+        "result": "n/a"
+      },
+      "name": "unfloored-sale-with-opening",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.sale",
+        "amount_minor": 150000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": null,
+      "expect": {
+        "evidence": {
+          "constraint_id": "price_floor",
+          "in_scope": true,
+          "missing_field": "commercial_bounds_opening"
+        },
+        "evidence_digest": "2db61759404ff7c755dfd36065a31bc10f6aecf71b46b43330bcc333e23a47f5",
+        "result": "n/a"
+      },
+      "name": "floored-sale-no-opening",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.sale",
+        "amount_minor": 168000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "amount_minor": 168000,
+          "below_floor": true,
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "evidence_digest": "2242168e30242a9a4a868c07dde3f7ba0a6383cbc6b3318ec9071b0e84d2915a",
+        "result": "fail"
+      },
+      "name": "floored-sale-below",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    }
+  ],
+  "definition_digest": "c39f858b52a9697a70450680d90d0bbd0cb4e4eb79925d18e67623d587404977",
+  "retired": {
+    "price_floor/2.0.0": "52fd588ea62ce467ad5ee59cef4347a4a0fbb0836d20ebfe783923805230bc9b"
+  },
+  "wicket_id": "price_floor/2.0.1"
+}

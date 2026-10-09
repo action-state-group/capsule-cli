@@ -15,6 +15,10 @@
     "schema": {
       "const": "external-check-input/v0"
     },
+    "party_role": {
+      "description": "The side of the deal the user is on: buyer or seller, as the deal's opening intent sealed it (buyer when it names none). Sent on every deal check, always explicit.",
+      "enum": ["buyer", "seller"]
+    },
     "record": {
       "$ref": "#/$defs/record",
       "description": "The step being checked."

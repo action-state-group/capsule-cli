@@ -589,6 +589,8 @@ At every check, after the `check` record is sealed:
     companion). A rule keyed on who was paid before reads one merchant as one payee across the
     profile's deals from there on; acts checked before keep only their per-deal fingerprints;
   - `history_scope`: `{days, max_records, complete}`.
+  - `party_role`: `buyer` or `seller`, the side of the deal the user is on, as the deal's opening
+    intent sealed it (`buyer` when it names none). Sent on every check, always explicit.
   - `task_authority_record` (typed deals): the whole sealed task-authority record the check's
     `task_authority_ref` names, exactly as sealed: SHA-256 over its JCS bytes is the ref's digest,
     and its plan (`outcome_id`, `allowed_actions`, `preconditions`) is at `body`. Absent when the limits in force were confirmed

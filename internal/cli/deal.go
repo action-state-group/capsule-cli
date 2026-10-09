@@ -1587,6 +1587,13 @@ func dealCheckCommand() *cobra.Command {
 					snap.Who.Payee = payee
 				}
 			}
+			// A floor in force goes to the rules checker opened, or the check
+			// does not run: refused here, before anything is sealed.
+			if len(s.p.RulesChecker.Command) > 0 {
+				if _, err := dealBoundsOpening(events); err != nil {
+					return err
+				}
+			}
 			// snapshot -> seal
 			snapped, err := s.seal(ctx, dealID, events, dealEvent{Kind: "snapshot", Snapshot: &snap})
 			if err != nil {

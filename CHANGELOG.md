@@ -22,6 +22,43 @@
   `"6"` needs a checker that holds version 6. The next release from `main` ships with such a
   checker; none is cut from `main` before one is available.
 
+### A rules checker is told which side of the deal the user is on
+
+- **Changed (checker input).** Every deal check now sends `party_role` (`buyer` or `seller`) at the
+  top level of `external-check-input/v0`. It is the side the deal's opening intent sealed, or
+  `buyer` when it names none, and it is always explicit, so a checker selects its rules without
+  inferring the side.
+- **Release pairing.** The input's top level refuses members it does not list, so a checker built
+  before this change refuses every check that carries `party_role`. A release that sends it ships
+  with a checker that accepts it.
+- **The deal id has one source per record:** an x-deal-v0 record's `deal_id`, or a typed record's
+  `chain_id`, which is exactly that value. No record carries both, and a test now holds it.
+
+### A shared copy lists the counterparty_profile step under a neutral kind
+
+- **Changed:** a shared copy (counterparty or adjudicator) lists every step of the log, withheld
+  ones included, so a verifier can tell withheld from missing. The check's `counterparty_profile`
+  companion was listed by that kind, which tells the reader the user keeps a fingerprint of
+  merchants across deals. It is now listed as kind `private`, still withheld, with the line "A
+  record kept for the user only (withheld)".
+- **Unchanged:** the record itself, and the user's own copy, which names it as it is.
+
+### A floor in force goes to the rules checker opened, or the check is refused
+
+- **Fixed (fail closed).** A rules checker reads a floor only from its verified
+  `commercial_bounds_opening`, and given none it finds the floor rule not applicable. When a floor
+  was in force but its opening could not be built, the checker was run without it. Now:
+  - `deal check` refuses before sealing anything, naming the cause and never the floor. The causes
+    are: the deal's limits cannot be read, no opening on this device recomputes to the commitment,
+    or the opening is not a commercial-bounds document.
+  - A floor is in force when the limits in force set one, whatever can be recomputed from its
+    opening.
+  - With no floor in force, nothing changes.
+- **Fixed: typed deals sent the wrong opening.** In a typed deal, the opening sent was the open
+  step's, but a checker verifies it against the task authority it is given, which seals the floor
+  under its own nonce. The two never matched, so a checker verifying the opening failed every such
+  check. The task authority's own opening is now sent.
+
 ### The user's floor and limit are recognised in any written form
 
 - **Fixed:** the check that keeps a seller's floor (`min_total_minor`) and a spending limit
