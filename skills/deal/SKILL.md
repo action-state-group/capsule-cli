@@ -276,6 +276,46 @@ merchant's word when the merchant's own email says so.
 
    The date then reads RESOLVED and leaves the open list.
 
+### Where the user sells: payment received, and what was delivered
+
+On a deal where the user sells (typed records), the user is the payee and seals
+two settlement legs. Each answers the buyer's terms leg (`--terms`, the
+buyer's own capsule file) and never restates it. Neither requests or moves
+money.
+
+1. **Payment received** (x402). Pass the facilitator's settlement response
+   exactly as it came back, and your own payment requirements for the request.
+   Every value is read from those files, never typed. The account you were paid
+   to is sealed only as its per-deal fingerprint, and a later payment to another
+   account is refused:
+
+   ```sh
+   capsulectl --profile deal deal note --deal ID --kind payment_received --terms terms.json \
+     --settle-response settle.json --requirements requirements.json [--receipt receipt.jws]
+   ```
+
+2. **Delivered**: what you handed over (`--content FILE`, only its SHA-256 is
+   sealed) or shipped (`--carrier`, `--tracking-number`, which is sealed only as
+   a salted commitment). Name the `deliver_by` or `perform_by` date it resolves:
+
+   ```sh
+   capsulectl --profile deal deal note --deal ID --kind delivered --terms terms.json --content dataset.bin --resolves 4
+   ```
+
+   This is the seller's own statement of a handoff, **never proof of receipt**.
+   Never tell the user the buyer received anything on this leg alone.
+
+3. **Read the state** with the buyer's legs you hold:
+
+   ```sh
+   capsulectl --profile deal deal settlement --deal ID --leg terms.json --leg buyer-payment.json --leg buyer-received.json
+   ```
+
+   Report the `readings` as they are written. A one-sided state is a stated
+   claim. Delivery names its sources separately: the seller's handoff, a
+   carrier's document (carried, not verified), and the buyer's receipt. It is
+   matched only when the buyer's own leg names the same content.
+
 ## Sub-tasks
 
 Payments, bookings and signatures usually happen inside a sub-task (a

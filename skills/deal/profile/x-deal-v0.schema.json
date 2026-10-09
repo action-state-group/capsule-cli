@@ -268,7 +268,16 @@
         "counterparty_facts": { "$ref": "#/$defs/counterparty_facts" },
         "merchant_email": { "$ref": "#/$defs/merchant_email" },
         "obligation": { "$ref": "#/$defs/obligation" },
-        "resolves_obligation": { "$ref": "#/$defs/digest_ref" }
+        "resolves_obligation": { "$ref": "#/$defs/digest_ref" },
+        "received_to": {
+          "description": "On evidence of a payment the user received (a settlement leg's step): the account it was received to, as its per-deal fingerprint. The user's own account, never a counterparty identifier.",
+          "type": "object", "additionalProperties": false,
+          "required": ["fp_alg", "payee"],
+          "properties": {
+            "fp_alg": { "const": "hmac-sha256-deal-key" },
+            "payee": { "$ref": "#/$defs/hex64" }
+          }
+        }
       }
     },
     "obligation": {

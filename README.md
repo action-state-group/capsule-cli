@@ -298,6 +298,7 @@ capsulectl judge drift pin FILE_A FILE_B
 capsulectl judge drift reports FILE_A FILE_B
 capsulectl calibration summarize REPORTS_FILE RATINGS_FILE
 capsulectl deal init|open|note|check|close|report|countersign|reconcile|tick --profile NAME [...]
+capsulectl deal settlement --profile NAME --deal ID [--leg LEG.json ...] [--object OCTETS ...] [--payer-key HEX ...] [--payee-key HEX ...]   # a deal's own legs with the buyer's
 capsulectl settlement status --leg LEG.json [--leg ...] [--object OCTETS ...] [--payer-key HEX ...] [--payee-key HEX ...]   # settlement legs, checked offline
 capsulectl backfill run|status --profile NAME [...]
 capsulectl canary run --profile NAME [--skill FILE] [--expect-version TAG] [--expect-skill-sha256 HEX]
