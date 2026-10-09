@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### A seller's offer is classed `marketplace.offer`
+
+- **Changed (wire; records sealed before re-derive unchanged).** An offer is now classed
+  `marketplace.offer`; before this, `external_commitment.other`. It is the taxonomy-version-6 class a
+  seller's rules select on: under the old class no seller rule reached an offer, so an offer below the
+  floor was not held to it.
+- **No taxonomy change.** Version 6 already has `marketplace.offer`. Each step keeps its own class:
+  an offer sealed before this change re-derives as `external_commitment.other`.
+
 ## v0.1.0-rc14
 
 ### A typed deal's history acts carry the profile payee key
@@ -22,25 +31,15 @@
 - **Every `action_class` is unchanged.** Against version 5 (`e5ec2c1`), version 6 changes only
   `approver_role` (to `account_holder`) on `agreement.accept`, `marketplace.offer` and
   `marketplace.sale`. No class is renamed, removed or added, and none changes trigger class.
-  - A seller's steps carry: an offer `marketplace.offer` (below; an offer sealed before carries
-    `external_commitment.other`), a commit (accepting a buyer) `agreement.accept`, and telling the
-    buyer where the item is `disclosure.personal`. A rental's or service's commit or sign is also
-    `agreement.accept`, whose meaning is unchanged.
-  - Deal records never carry `marketplace.sale`.
+  - A seller's steps carry: an offer `external_commitment.other`, a commit (accepting a buyer)
+    `agreement.accept`, and telling the buyer where the item is `disclosure.personal`. A rental's
+    or service's commit or sign is also `agreement.accept`, whose meaning is unchanged.
+  - Deal records never carry `marketplace.offer` or `marketplace.sale`.
 - **Each step keeps its own version.** A record sealed under `"2"`, `"3"`, `"4"` or `"5"` re-derives
   with it.
 - **Release pairing.** A rules checker compares `taxonomy_version` exactly, so a record sealing
   `"6"` needs a checker that holds version 6. The next release from `main` ships with such a
   checker; none is cut from `main` before one is available.
-
-### A seller's offer is classed `marketplace.offer`
-
-- **Changed (wire; records sealed before re-derive unchanged).** A seller's offer now seals
-  `action_class` `marketplace.offer`, the taxonomy-version-6 class a seller's rules select on.
-  Before, it sealed `external_commitment.other`, which no seller rule reached, so an offer below
-  the floor was not held to it.
-- **No taxonomy change.** Version 6 already has `marketplace.offer`. Each step keeps its own class:
-  an offer sealed before this change re-derives as `external_commitment.other`.
 
 ### A rules checker is told which side of the deal the user is on
 
