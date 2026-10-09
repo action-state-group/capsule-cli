@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -183,7 +184,9 @@ func TestPresentationGoldens(t *testing.T) {
 					measured[entry.Name()][view.name] = width.ScrollWidth
 				}
 				if pinned {
-					baseline.check(t, entry.Name(), view.name, width.ScrollWidth, width.Width, width.Over)
+					if problem := baseline.check(entry.Name(), view.name, width.ScrollWidth, width.Width); problem != "" {
+						t.Errorf("%s: %s (%v)", view.name, problem, width.Over)
+					}
 				}
 				if renders != "" {
 					ext := ".png"
@@ -253,20 +256,46 @@ type overflowBaseline struct {
 	Views map[string]map[string]int `json:"views"`
 }
 
-// check fails a view that overflows and is not listed, a listed view that
-// is now wider than recorded beyond the tolerance, and a listed view that
-// no longer overflows (the list would go stale and could hide a later
-// regression).
-func (b overflowBaseline) check(t *testing.T, fixture, view string, scrollWidth, width int, over []string) {
-	t.Helper()
+// check names what is wrong with one view's width, or returns "": a view
+// that overflows and is not listed, a listed view now wider than recorded
+// beyond the tolerance, or a listed view that no longer overflows (the
+// list would go stale and could hide a later regression).
+func (b overflowBaseline) check(fixture, view string, scrollWidth, width int) string {
 	recorded, listed := b.Views[fixture][view]
 	switch {
-	case !listed:
-		assert.LessOrEqual(t, scrollWidth, width, "%s: the page is %dpx wide in a %dpx viewport (%v); it is not in known-overflow.json", view, scrollWidth, width, over)
-	case scrollWidth <= width:
-		t.Errorf("%s: the page no longer overflows (known-overflow.json records %dpx): remove it from the list", view, recorded)
-	case scrollWidth > recorded+b.TolerancePx:
-		t.Errorf("%s: the page is %dpx wide, worse than the %dpx known-overflow.json records (tolerance %dpx; %v)", view, scrollWidth, recorded, b.TolerancePx, over)
+	case !listed && scrollWidth > width:
+		return fmt.Sprintf("the page is %dpx wide in a %dpx viewport; it is not in known-overflow.json", scrollWidth, width)
+	case listed && scrollWidth <= width:
+		return fmt.Sprintf("the page no longer overflows (known-overflow.json records %dpx): remove it from the list", recorded)
+	case listed && scrollWidth > recorded+b.TolerancePx:
+		return fmt.Sprintf("the page is %dpx wide, worse than the %dpx known-overflow.json records (tolerance %dpx)", scrollWidth, recorded, b.TolerancePx)
+	}
+	return ""
+}
+
+func TestOverflowBaselineCheck(t *testing.T) {
+	b := overflowBaseline{TolerancePx: 4, Views: map[string]map[string]int{"wide": {"390": 600}}}
+	for _, c := range []struct {
+		name, fixture string
+		scrollWidth   int
+		want          string
+	}{
+		{"an unlisted view that fits", "narrow", 390, ""},
+		{"an unlisted view that overflows", "narrow", 391, "not in known-overflow.json"},
+		{"a listed view as recorded", "wide", 600, ""},
+		{"a listed view within the tolerance", "wide", 604, ""},
+		{"a listed view that got better but still overflows", "wide", 500, ""},
+		{"a listed view worse beyond the tolerance", "wide", 605, "worse than the 600px"},
+		{"a listed view that no longer overflows", "wide", 390, "remove it from the list"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := b.check(c.fixture, "390", c.scrollWidth, 390)
+			if c.want == "" {
+				assert.Empty(t, got)
+			} else {
+				assert.Contains(t, got, c.want)
+			}
+		})
 	}
 }
 

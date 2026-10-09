@@ -147,7 +147,7 @@ jobs:
           CAPSULECTL_PRESENTATION_PINNED: "1"
           CAPSULECTL_PRESENTATION_RENDERS: ${{ runner.temp }}/presentation-renders
           FONTCONFIG_FILE: ${{ github.workspace }}/internal/cli/testdata/presentation/fonts.conf
-        run: go test -count=1 -v -run TestPresentationGoldens ./internal/cli
+        run: go test -count=1 -v -run 'TestPresentation|TestOverflowBaselineCheck' ./internal/cli
       - name: Keep the presentation renders
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

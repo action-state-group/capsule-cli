@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -186,6 +188,20 @@ const rendered = `(async () => {
 
 func (c *headlessChrome) open(t *testing.T, url string, view pageView) openedPage {
 	t.Helper()
+	p := c.load(t, url, view)
+	var ok bool
+	p.eval(t, rendered, &ok)
+	require.True(t, ok, "the page did not finish rendering its verification page in 30s (%s, %s)", url, view.name)
+	var errs []string
+	p.eval(t, `window.__renderErrors || ["the error hook did not run"]`, &errs)
+	require.Empty(t, errs, "console errors, uncaught errors or unhandled rejections (%s)", view.name)
+	require.Empty(t, c.externalRequests(p.session), "the page asked for something outside itself (%s)", view.name)
+	return p
+}
+
+// load opens url in a new page in view and waits for its load event.
+func (c *headlessChrome) load(t *testing.T, url string, view pageView) openedPage {
+	t.Helper()
 	var target struct {
 		TargetID string `json:"targetId"`
 	}
@@ -205,14 +221,27 @@ func (c *headlessChrome) open(t *testing.T, url string, view pageView) openedPag
 	require.NoError(t, c.call(s, "Emulation.setEmulatedMedia", map[string]any{"media": view.media}, nil))
 	require.NoError(t, c.call(s, "Page.navigate", map[string]any{"url": url}, nil))
 	c.waitFor(t, s, "Page.loadEventFired")
-	var ok bool
-	p.eval(t, rendered, &ok)
-	require.True(t, ok, "the page did not finish rendering its verification page in 30s (%s, %s)", url, view.name)
-	var errs []string
-	p.eval(t, `window.__renderErrors || ["the error hook did not run"]`, &errs)
-	require.Empty(t, errs, "console errors, uncaught errors or unhandled rejections (%s)", view.name)
-	require.Empty(t, c.externalRequests(s), "the page asked for something outside itself (%s)", view.name)
 	return p
+}
+
+// A page that asks for anything outside itself is caught, and no host
+// name resolves.
+func TestPresentationChromeSeesExternalRequests(t *testing.T) {
+	binary := os.Getenv("CAPSULECTL_CHROME")
+	if binary == "" {
+		t.Skip("CAPSULECTL_CHROME is not set")
+	}
+	c := startHeadlessChrome(t, binary)
+	page := filepath.Join(t.TempDir(), "page.html")
+	require.NoError(t, os.WriteFile(page, []byte(`<!doctype html><title>t</title><img src="https://example.com/pixel.png"><script>fetch("https://example.org/x").then(()=>{document.title="reached"},()=>{document.title="blocked"})</script>`), 0o600))
+	p := c.load(t, "file://"+page, presentationViews[1])
+	var title string
+	for i := 0; i < 50 && title != "reached" && title != "blocked"; i++ {
+		time.Sleep(100 * time.Millisecond)
+		p.eval(t, "document.title", &title)
+	}
+	assert.Equal(t, "blocked", title, "no host name resolves")
+	assert.Subset(t, c.externalRequests(p.session), []string{"https://example.com/pixel.png", "https://example.org/x"})
 }
 
 // externalRequests is every URL a page session asked for that is not the
