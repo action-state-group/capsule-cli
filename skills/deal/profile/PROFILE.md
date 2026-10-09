@@ -132,10 +132,16 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 ### Action classes
 
 A `check`, an `action` and a `disclosure` sealed by this release carry `action_class`: the
-action's class in version `taxonomy_version` (`"2"`) of the action taxonomy published in
+action's class in version `taxonomy_version` (`"4"`) of the action taxonomy published in
 capsule-engine, `capsule_engine/guards/action_taxonomy.json`
-(github.com/action-state-group/capsule-engine at `2521ee6`). The two members come together or
-not at all. Steps sealed before carry neither, and re-derive without them. A reader that keys a
+(github.com/action-state-group/capsule-engine at `5300e0b`). The two members come together or not at all.
+Steps sealed before carry neither, and re-derive without them. Steps sealed by an earlier
+release under version `"2"` (at `2521ee6`) or `"3"` (at `a5e9e30`) keep their own version.
+All three name the same classes:
+- version 3 adds `approver_role` `account_holder` to `money.purchase`, `money.subscription`,
+  `booking.create` and `booking.modify`;
+- version 4 adds it to `booking.cancel`, `data.delete`, `communication.publish` and
+  `disclosure.personal`. A reader that keys a
 limit on an action's class (a per-action or rolling spend cap, for example) selects on
 `action_class`, and resolves it against the taxonomy version it names.
 

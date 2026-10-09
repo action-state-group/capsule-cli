@@ -11,11 +11,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// taxonomyV2 is every action name in version 2 of capsule-engine's
+// taxonomyV4 is every action name in version 4 of capsule-engine's
 // capsule_engine/guards/action_taxonomy.json
-// (github.com/action-state-group/capsule-engine at 2521ee6), copied here so
-// a class this CLI seals is checked against the table, not against itself.
-var taxonomyV2 = []string{
+// (github.com/action-state-group/capsule-engine at
+// 5300e0be262fa2d878b18eca630cbf539f785752, file sha256
+// 9e10156647792a0e3fe6cf24e5211ebb8757cb8362c1e868dcfe6db6e8d891a7), copied
+// here so a class this CLI seals is checked against the table, not against
+// itself. Version 2 (at
+// 2521ee6) and version 3 (at a5e9e30) name the same 19.
+var taxonomyV4 = []string{
 	"money.purchase", "money.transfer", "money.subscription", "money.refund",
 	"booking.create", "booking.modify", "booking.cancel",
 	"communication.send", "communication.publish",
@@ -34,16 +38,17 @@ var capsV3Classes = []string{
 	"agreement.accept", "marketplace.offer", "external_commitment.other",
 }
 
-// Every action a deal type allows is classed by a taxonomy-v2 name, never the
+// Every action a deal type allows is classed by a taxonomy-v4 name, never the
 // one non-consequential class; a pair the table does not name falls back to
 // external_commitment.other, never to no class.
-func TestDealActionClassTableIsTaxonomyV2(t *testing.T) {
-	require.Len(t, taxonomyV2, 19)
+func TestDealActionClassTableIsTaxonomyV4(t *testing.T) {
+	require.Equal(t, "4", dealTaxonomyVersion)
+	require.Len(t, taxonomyV4, 19)
 	for dealType, actions := range dealPointsOfNoReturn {
 		for _, action := range actions {
 			for _, direction := range []string{"", "out", "in"} {
 				class := dealActionClass(dealType, action, direction)
-				assert.Contains(t, taxonomyV2, class, "%s %s %q", dealType, action, direction)
+				assert.Contains(t, taxonomyV4, class, "%s %s %q", dealType, action, direction)
 				assert.NotEqual(t, "info.query", class, "%s %s: a deal action is consequential", dealType, action)
 			}
 		}
@@ -73,7 +78,7 @@ func recordsOf(t *testing.T, dealID string) ([]sealedEvent, []map[string]any) {
 }
 
 // The acceptance case: a $558.80 card purchase seals action_class
-// money.purchase on its check and on its act, under taxonomy version 2, and
+// money.purchase on its check and on its act, under taxonomy version 4, and
 // is over caps/3.0.0's per-action limit. The cancel that returns it is a
 // refund, which no cap covers, so a spend cap can never deny it.
 func TestDealPurchaseAndItsCancelCarryTheirTaxonomyClass(t *testing.T) {
@@ -90,7 +95,7 @@ func TestDealPurchaseAndItsCancelCarryTheirTaxonomyClass(t *testing.T) {
 			continue
 		}
 		body := bodyOf(records[i])
-		assert.Equal(t, "2", body["taxonomy_version"], "step %d", se.Event.N)
+		assert.Equal(t, "4", body["taxonomy_version"], "step %d", se.Event.N)
 		direction, _ := body["direction"].(string)
 		got = append(got, step{rt, body["action"].(string), body["action_class"].(string), direction, body["spend_minor"].(float64)})
 		if body["action"] == "pay" {
@@ -134,11 +139,11 @@ func TestTypedProposedActionSealsTheTaxonomyClass(t *testing.T) {
 	require.NotNil(t, evaluation)
 	require.NotNil(t, action)
 	assert.Equal(t, "money.purchase", bodyOf(proposed)["action_class"])
-	assert.Equal(t, "2", bodyOf(proposed)["taxonomy_version"])
+	assert.Equal(t, "4", bodyOf(proposed)["taxonomy_version"])
 	evaluated, _ := json.Marshal(bodyOf(evaluation))
 	assert.Contains(t, string(evaluated), proposedDigest, "the evaluation names the proposed action, class and all, by digest")
 	assert.Equal(t, "money.purchase", bodyOf(action)["action_class"])
-	assert.Equal(t, "2", bodyOf(action)["taxonomy_version"])
+	assert.Equal(t, "4", bodyOf(action)["taxonomy_version"])
 }
 
 // A step sealed before records carried a class re-derives byte for byte
@@ -159,6 +164,45 @@ func TestDealStepSealedBeforeTheClassReDerivesWithoutOne(t *testing.T) {
 		require.NoError(t, err, "step %d", se.Event.N)
 		assert.NotContains(t, string(raw), "action_class", "step %d", se.Event.N)
 		assert.NotContains(t, string(raw), "taxonomy_version", "step %d", se.Event.N)
+	}
+}
+
+// A step sealed under an earlier taxonomy version (2 or 3) re-derives with
+// that version and the same class: the version is the step's own, never this
+// release's. Its record is the version-4 record with only the version
+// changed, since every version names the same classes.
+func TestDealStepSealedUnderAnEarlierTaxonomyReDerivesWithIt(t *testing.T) {
+	id := cancelAfterPurchase(t)
+	events := chainSteps(t, id)
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, s.close()) }()
+	require.NoError(t, s.useDeal(t.Context(), id, false))
+	current := []byte(`"taxonomy_version":"4"`)
+	for _, version := range []string{"2", "3"} {
+		t.Run("version "+version, func(t *testing.T) {
+			stored := []byte(`"taxonomy_version":"` + version + `"`)
+			classed := 0
+			for i, se := range events {
+				require.Equal(t, "4", se.Event.TaxonomyVersion, "step %d", se.Event.N)
+				now, _, err := encodeDealRecord(se.Event, events[:i], s.dkey)
+				require.NoError(t, err, "step %d", se.Event.N)
+				old := se.Event
+				old.TaxonomyVersion = version
+				raw, _, err := encodeDealRecord(old, events[:i], s.dkey)
+				require.NoError(t, err, "step %d", se.Event.N)
+				if !bytes.Contains(now, current) {
+					assert.Equal(t, string(now), string(raw), "step %d carries no class", se.Event.N)
+					continue
+				}
+				classed++
+				assert.NotContains(t, string(raw), string(current), "step %d", se.Event.N)
+				assert.Equal(t, string(bytes.ReplaceAll(now, current, stored)), string(raw), "step %d", se.Event.N)
+			}
+			assert.Equal(t, 4, classed, "the pay and the cancel, each checked and done")
+		})
 	}
 }
 
@@ -201,7 +245,7 @@ func TestDealShareNeverDisclosesMoreForTheClass(t *testing.T) {
 		}
 	}
 	assert.Equal(t, len(events), classed, "every step of a new deal carries the taxonomy version")
-	for _, class := range taxonomyV2 {
+	for _, class := range taxonomyV4 {
 		assert.True(t, private.clean(class), "%s is a value a shared copy may carry", class)
 	}
 	assert.True(t, private.clean(dealTaxonomyVersion))
