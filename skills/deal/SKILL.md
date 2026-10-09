@@ -474,6 +474,12 @@ capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   #
 capsulectl --profile deal deal note --deal ID --kind disclosure --input d.json # {"fields":[{"class":"phone","value":"..."}]}
 ```
 
+When you sell, label each thing you tell the buyer with its `class`: one of
+`price`, `condition`, `features`, `authenticity`, `availability`,
+`delivery_date`, `service_scope`, `warranty`, `refund_terms`,
+`payment_methods`, `pickup`, `deadline`, `address` or `other`. Any other
+class is refused.
+
 Seal an `intent` whenever the user changes what they asked (for example,
 "go ahead and share my number"), and whenever the user picks from options
 you offered (see "The user picked from options"). It replaces `verbatim` and

@@ -347,8 +347,12 @@ typed record, in its header), next to the fingerprints' `fp_alg`. What it states
 `source_kind`, is in the clear.
 - **On a claim step and on each of the baseline's `claims[]`:** `{text_commitment, source_kind,
   source_ref_commitment?, class?}`. `class` says what kind of representation the claim is, so a
-  page can label it: `condition`, `warranty`, `refund_terms`, `delivery_promise` or `other`. It
-  is optional and in the clear; a claim without one re-derives unchanged.
+  page can label it, from a seller's representation classes: `price`, `condition`, `features`,
+  `authenticity`, `availability`, `delivery_date`, `service_scope`, `warranty`, `refund_terms`,
+  `payment_methods`, `pickup`, `deadline`, `address` or `other`. It is optional and in the clear;
+  a claim without one re-derives unchanged. `delivery_promise` is valid only on a claim sealed
+  before `delivery_date` replaced it; an input that says `delivery_promise` is sealed as
+  `delivery_date`.
 - **`source_kind`** is stated by the caller. A source that can only mean the counterparty
   (`counterparty`, `seller_message`, `merchant_email` and the like) is taken as `merchant`. Any
   other source (a page, a photo, a snapshot: the merchant's own or a marketplace's) must state it,
