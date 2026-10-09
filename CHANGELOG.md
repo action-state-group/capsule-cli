@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### `verify --bundle` prints the same bytes on every run
+
+- **Fixed.** Each `disclosures` array in `verify --bundle`'s result is now ordered by capsule id,
+  then member, then status. That covers the containing bundle's array and each composed member
+  bundle's. Before, a record that withheld both `agent_input` and `agent_output` listed them in
+  either order, so the same bundle could print differently from run to run. The verdict was
+  never affected.
+
 ### New deal records seal action taxonomy version 6
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
