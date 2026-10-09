@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Rules a checker declares but does not measure are said quietly, not as a warning
+
+- **Fixed:** a rules checker reports the rules its ruleset declares but it does not measure as
+  `not_evaluable` with the reason `declared, not measured`. On every escalated purchase, the deal
+  card listed each one as a reason to ask ("Your rules ask for approval: …: declared, not
+  measured"); under an overall `not_evaluable` it would read "not fully checked".
+- **Now:** such a finding is never a difference.
+  - The approval text names the rules quietly beside the verdict: "3 rules are declared by the
+    ruleset but not measured by this checker (r14, r24, r25)."
+  - So does the user's own receipt, on the check's line. A shared copy does not name them.
+  - The verdict is unchanged: an allowed purchase stays allowed.
+  - Any other `not_evaluable` is still a difference, said as before.
+- **Presentation goldens:** a new fixture, `7-receipt-declared-rules`.
+
 ### `doctor --check-witness` is ok only when the witness answers with success
 
 - **Fixed:** the witness probe sent a HEAD to the endpoint and called any answer ok. A witness that
