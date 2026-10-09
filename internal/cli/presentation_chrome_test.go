@@ -51,26 +51,58 @@ func startHeadlessChrome(t *testing.T, binary string) *headlessChrome {
 	require.NoError(t, err)
 	replies, fromChrome, err := os.Pipe()
 	require.NoError(t, err)
+	// The profile directory is the test's own, removed only once every
+	// Chrome process has exited (a child process can still be writing to it
+	// after the browser process is gone).
+	profile, err := os.MkdirTemp("", "capsulectl-chrome-")
+	require.NoError(t, err)
 	// No page may reach the network: every host name resolves to nothing,
 	// and each page's requests are checked as well (see open).
 	cmd := exec.Command(binary, "--headless=new", "--remote-debugging-pipe", "--no-sandbox",
 		"--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
 		"--host-resolver-rules=MAP * ~NOTFOUND", "--disable-background-networking",
 		"--disable-component-update", "--disable-sync",
-		"--user-data-dir="+t.TempDir(), "about:blank")
+		"--user-data-dir="+profile, "about:blank")
 	cmd.ExtraFiles = []*os.File{toChrome, fromChrome}
+	chromeProcessGroup(cmd)
 	require.NoError(t, cmd.Start())
 	require.NoError(t, toChrome.Close())
 	require.NoError(t, fromChrome.Close())
 	c := &headlessChrome{cmd: cmd, in: commands, reply: map[int]chan cdpMessage{},
 		events: make(chan cdpMessage, 1024), done: make(chan struct{}), requests: map[string][]string{}}
 	go c.read(replies)
-	t.Cleanup(func() {
-		_ = commands.Close()
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-	})
+	t.Cleanup(func() { stopHeadlessChrome(t, cmd, commands, profile) })
 	return c
+}
+
+// stopHeadlessChrome closes the DevTools pipe, on which Chrome exits, and
+// waits for it; past a deadline it kills it. Then it kills whatever is left
+// of Chrome's process group (its renderer and helper processes) and removes
+// the profile directory, retrying while a process that was just killed
+// releases its files. A directory that still will not go is logged, not a
+// failure: it is a leftover in the temporary directory, not a test result.
+func stopHeadlessChrome(t *testing.T, cmd *exec.Cmd, commands *os.File, profile string) {
+	_ = commands.Close()
+	exited := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(exited)
+	}()
+	select {
+	case <-exited:
+	case <-time.After(5 * time.Second):
+		killChromeProcessGroup(cmd)
+		<-exited
+	}
+	killChromeProcessGroup(cmd)
+	var err error
+	for range 20 {
+		if err = os.RemoveAll(profile); err == nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Logf("the Chrome profile directory %s was left behind: %v", profile, err)
 }
 
 func (c *headlessChrome) read(replies *os.File) {
