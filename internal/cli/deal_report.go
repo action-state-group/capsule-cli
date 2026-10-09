@@ -31,6 +31,14 @@ var (
 	dealViewJSSHA256 string
 )
 
+// dealSellerExtension is the bundle extension kind every copy of a deal the
+// user sells engages (its own, the counterparty's and an adjudicator's), so
+// a viewer can choose a seller's presentation from the engaged kinds alone.
+// It is packaging: its block is empty and it is never authority. Which side
+// the user is on is what the deal's opening intent sealed (party_role),
+// which a reader re-reads; a buyer's copy engages nothing new.
+const dealSellerExtension = "x-deal-seller/v0"
+
 // dealReportBundle builds the deal's Evidence Bundle: every step of the deal's
 // own log with membership proofs, the chain closed from the last step back to
 // the opening one, and every step's x-deal-v0 record disclosed (records carry
@@ -98,7 +106,11 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 		}
 		ext = map[string]interface{}{dealReportPointer: id}
 	}
-	b["extensions"] = map[string]interface{}{dealCadenceExtension: cadence, dealProfile: ext}
+	extensions := map[string]interface{}{dealCadenceExtension: cadence, dealProfile: ext}
+	if dealRole(events) == dealRoleSeller {
+		extensions[dealSellerExtension] = map[string]interface{}{}
+	}
+	b["extensions"] = extensions
 	if err = verifyProducedBundle(b, true); err != nil {
 		return nil, err
 	}
