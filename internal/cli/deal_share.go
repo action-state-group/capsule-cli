@@ -1029,12 +1029,27 @@ var dealShareAnomaly = map[string]string{
 	"rules_not_checked":        "Your own rules were not checked",
 }
 
+// dealSharePrivateKind is the kind a shared copy gives a step that only the
+// user's own copy may describe: it is listed, withheld, so the copy accounts
+// for every record of the log, but it does not say what it is.
+const dealSharePrivateKind = "private"
+
+// dealShareKind is the kind a shared copy states for a step: its own kind,
+// except a counterparty_profile, whose name would tell the reader the user
+// keeps a fingerprint of merchants across deals.
+func dealShareKind(kind string) string {
+	if kind == "counterparty_profile" {
+		return dealSharePrivateKind
+	}
+	return kind
+}
+
 // dealShareStepLine is one step in plain words for a shared copy.
 func dealShareStepLine(e dealEvent, audience string, p dealPrivate, currency string) string {
 	adjudicator := audience == dealAudienceAdjudicator
 	switch e.Kind {
 	case "counterparty_profile":
-		return "A note for the user's own history (withheld)"
+		return "A record kept for the user only (withheld)"
 	case "open":
 		return "Opened a " + e.Open.Type + " deal (details withheld)"
 	case "intent":
@@ -1134,7 +1149,7 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 			line = "You said again what you asked, unchanged (your words withheld)"
 		}
 		steps[i] = map[string]interface{}{
-			"n": integer(uint64(se.Event.N)), "kind": se.Event.Kind, "capsule_id": se.CapsuleID, "at": se.Event.At,
+			"n": integer(uint64(se.Event.N)), "kind": dealShareKind(se.Event.Kind), "capsule_id": se.CapsuleID, "at": se.Event.At,
 			"line": p.scrub(line), "withheld": withhold[se.CapsuleID],
 		}
 	}
