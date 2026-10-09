@@ -59,7 +59,7 @@ func mustJSON(t *testing.T, v any) []byte {
 // asked about when an offer goes below it, and kept from the buyer.
 func TestASellersFloorStaysPrivate(t *testing.T) {
 	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
 
 	// Every deal record carries the commitment, never the floor; the own copy's
 	// sealed report opens it, and the opening recomputes the commitment.
@@ -67,8 +67,10 @@ func TestASellersFloorStaysPrivate(t *testing.T) {
 	assert.NotContains(t, chain, "min_total_minor")
 	assert.NotContains(t, chain, "170000")
 	assert.Contains(t, chain, "bounds_commitment")
+	// One opening per step that states the floor: the baseline, and the
+	// typed task authority it is in force under.
 	openings := report["bounds_openings"].([]any)
-	require.Len(t, openings, 1)
+	require.Len(t, openings, 2)
 	o := openings[0].(map[string]any)
 	doc := o["document"].(map[string]any)
 	assert.Equal(t, "commercial-bounds/v0", doc["type"])
@@ -100,7 +102,7 @@ func mustJSONString(t *testing.T, v any) string {
 // it asks for more and is only a proposal until the user confirms it.
 func TestRaisingTheFloorAppliesLoweringItIsAProposal(t *testing.T) {
 	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
 
 	raised := dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim": "Not under 1800 now", "min_total_minor": 180000, "allowed": ["commit"]}`))
 	assert.Nil(t, raised["proposed"], "a higher floor narrows and applies")
@@ -142,7 +144,7 @@ func ownReportAndChain(t *testing.T, dealID string) (map[string]any, string) {
 func TestAFloorAboveTheLimitIsRefused(t *testing.T) {
 	dealFixture(t)
 	bad := strings.Replace(sellerWithFloor, `"min_total_minor": 170000`, `"min_total_minor": 170000, "max_total_minor": 150000`, 1)
-	_, err := invoke(t, "", "--profile", "deal", "deal", "open", "--input", writeJSON(t, bad))
+	_, err := invoke(t, "", "--profile", "deal", "deal", "open", "--records", "typed", "--input", writeJSON(t, bad))
 	require.ErrorIs(t, err, ErrInput)
 }
 
@@ -193,7 +195,7 @@ func dealNonceOf(t *testing.T, dealID, capsuleID, name string) string {
 // with no floor sends none.
 func TestTheLocalRulesCheckerIsGivenTheFloorsOpening(t *testing.T) {
 	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
 	_, _, input := ruleInputs(t, id, `{"action":"commit","terms":{"item":"example bicycle","price_minor":175000}}`)
 	o := input["commercial_bounds_opening"].(map[string]any)
 	doc := o["document"].(map[string]any)
@@ -232,7 +234,7 @@ func TestTheShareGateKeepsASellersFloor(t *testing.T) {
 func TestASellersShareWithholdsBothBounds(t *testing.T) {
 	dealFixture(t)
 	both := strings.Replace(sellerWithFloor, `"min_total_minor": 170000`, `"min_total_minor": 170000, "max_total_minor": 250000`, 1)
-	id := dealRun(t, "open", "--input", writeJSON(t, both))["deal_id"].(string)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, both))["deal_id"].(string)
 	_, shared := sharedCopy(t, id, dealAudienceCounterparty, "the buyer")
 	for _, hidden := range []string{"min_total_minor", "max_total_minor", "250000", "2500.00", "1700.00"} {
 		assert.NotContains(t, shared, hidden)
@@ -245,7 +247,7 @@ func TestASellersShareWithholdsBothBounds(t *testing.T) {
 // a buyer's still names the fulfilling merchant.
 func TestASellersCounterpartyIsTheBuyer(t *testing.T) {
 	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
 	share := `{"action":"share_contact","disclosing_to":"counterparty","description":"give the buyer my phone for pickup","disclosing":["phone"]}`
 	sealed, given, _ := ruleInputs(t, id, share)
 	assert.Equal(t, "buyer", sealed["recipient_role"])
@@ -261,7 +263,7 @@ func TestASellersCounterpartyIsTheBuyer(t *testing.T) {
 // counterparty only (the adjudicator judges "over your limit" with it).
 func TestNoSharedCopyCarriesTheFloor(t *testing.T) {
 	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
 	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
 		_, shared := sharedCopy(t, id, audience, "a recipient")
 		for _, hidden := range []string{"170000", "1700.00", "bounds_openings", "commercial_bounds_opening", "min_total_minor"} {

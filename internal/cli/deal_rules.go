@@ -433,6 +433,9 @@ type dealAct struct {
 	// neither; a pay among them moved money out.
 	Direction string `json:"direction,omitempty"`
 	Reverses  string `json:"reverses,omitempty"`
+	// Accepted is, on a seller's commit, the sealed acceptance of the offer
+	// it rests on; the record cites it (rel source).
+	Accepted string `json:"accepted,omitempty"`
 	// FeeMinor is, on a cancel only, a fee the cancellation costs, recorded
 	// as its own amount: never the amount a spend cap evaluates (spend_minor
 	// is 0 on every cancel).
@@ -1401,7 +1404,7 @@ func renderCard(r dealCheckResult, demo bool) string {
 func authorizeAct(events []sealedEvent, act dealAct, now time.Time) (approval, reason, rule string) {
 	typed := dealRecordSet(dealEvent{}, events) == recordsTyped
 	if typed && act.Action == "commit" && dealRole(events) == dealRoleSeller {
-		if reason, rule := offerAccepted(events); rule != "" {
+		if _, reason, rule := offerAccepted(events); rule != "" {
 			return "", reason, rule
 		}
 	}
@@ -1476,12 +1479,13 @@ func authorizeAct(events []sealedEvent, act dealAct, now time.Time) (approval, r
 	return "", "no check before this action", "no_check"
 }
 
-// offerAccepted is why a seller may not yet commit, or "" when they may:
+// offerAccepted is the sealed acceptance a seller's commit rests on, or why
+// there is none:
 // the latest offer (only it is live; each later one supersedes the one
 // before) has a recorded acceptance, and no change of details came after
 // that acceptance. A change leaves the acceptance behind: the offer is made
 // again and accepted again.
-func offerAccepted(events []sealedEvent) (reason, rule string) {
+func offerAccepted(events []sealedEvent) (acceptance, reason, rule string) {
 	latest := ""
 	for _, se := range events {
 		if p := se.Event.Snapshot; se.Event.Kind == "snapshot" && p != nil && p.Action == offerAction {
@@ -1489,7 +1493,7 @@ func offerAccepted(events []sealedEvent) (reason, rule string) {
 		}
 	}
 	if latest == "" {
-		return "no offer is on record: a seller commits to an offer the other party accepted", "no_accepted_offer"
+		return "", "no offer is on record: a seller commits to an offer the other party accepted", "no_accepted_offer"
 	}
 	accepted := -1
 	for i, se := range events {
@@ -1498,14 +1502,14 @@ func offerAccepted(events []sealedEvent) (reason, rule string) {
 		}
 	}
 	if accepted < 0 {
-		return "the latest offer has no recorded acceptance: an earlier offer's acceptance does not carry over", "offer_not_accepted"
+		return "", "the latest offer has no recorded acceptance: an earlier offer's acceptance does not carry over", "offer_not_accepted"
 	}
 	for _, se := range events[accepted+1:] {
 		if changesDetails(se.Event) {
-			return "details changed after the other party accepted: make the offer again and record its acceptance", "changed_after_acceptance"
+			return "", "details changed after the other party accepted: make the offer again and record its acceptance", "changed_after_acceptance"
 		}
 	}
-	return "", ""
+	return events[accepted].CapsuleID, "", ""
 }
 
 // actMismatch compares what was done with the snapshot that was checked.
@@ -2153,6 +2157,9 @@ type dealDisclosure struct {
 	// AuthorizedBy is the sealed approval that covered it; empty when none
 	// did, with Reason and Rule saying why.
 	AuthorizedBy string `json:"authorized_by,omitempty"`
+	// Accepted is, on a seller's address, the sealed acceptance of the offer
+	// it rests on; the record cites it (rel source).
+	Accepted string `json:"accepted,omitempty"`
 	Reason       string `json:"reason,omitempty"`
 	Rule         string `json:"rule,omitempty"`
 }

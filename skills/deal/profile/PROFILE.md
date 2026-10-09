@@ -153,7 +153,8 @@ limit on an action's class (a per-action or rolling spend cap, for example) sele
 - Committing to a purchase is the same class as paying for it, so a limit keyed on the class
   cannot be stepped around by committing first.
 - An `offer` is a seller's proposal: its amount is what the buyer would pay, so its
-  `spend_minor` is 0.
+  `spend_minor` is 0. A seller's `commit` is money coming in: `agreement.accept` in every deal
+  type, with `spend_minor` 0, so a cap's rolling total never counts a sale.
 - A cancel that returns a payment is money arriving, not leaving: `money.refund`. A `check`
   states no `direction`; its class is the one its `action` would carry, from the same sealed
   payments.
@@ -443,8 +444,9 @@ A verifier holding one deal's records in `seq` order checks:
    and `currency`. A payment is reversed at most once. Summing amounts by direction gives what a
    deal moved: a pay and its reversal net to zero. Records sealed before this rule carry no
    `direction`; a `pay` among them moved money out, and no other action states a direction.
-9. **Offers and acceptance (where the user sells).** An `offer` is a `check` (typed: a
-   `proposed-action/v0`) with `action: "offer"`, on a deal whose `party_role` is `seller`; its
+9. **Offers and acceptance (where the user sells).** A deal whose `party_role` is `seller` is
+   sealed in the typed action records (section 9). An `offer` is a `check` (typed: a
+   `proposed-action/v0`) with `action: "offer"`, on such a deal; its
    record is the exact proposal, every material term under this deal's id. Each later offer
    carries exactly one `supersedes` ref, to the latest earlier offer, and the first carries
    none; no other `check` carries one. Only the latest offer can be accepted. A counterparty
@@ -454,7 +456,9 @@ A verifier holding one deal's records in `seq` order checks:
    `pickup_location`), each need: an offer on record, an acceptance of the latest one, and no
    `detail_change`, and no `message` or `evidence` carrying `counterparty` identifiers or
    `counterparty_facts`, after that acceptance. A change leaves the acceptance behind: the
-   offer is made and accepted again.
+   offer is made and accepted again. Such a commit or share action cites the acceptance it rests
+   on with exactly one `source` ref; no other action carries one. The acceptance is not
+   authority: `authority_basis` is unchanged.
 
 ## 7. Outcome conventions: `completed | mismatch | open`
 

@@ -548,7 +548,7 @@ def check_chain(records):
     if blk0["record_type"] != "baseline":
         fail(0, "the first record of a deal must be the baseline")
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
-                    "approval": {"approves"}, "action": {"authorized_by", "reverses"}, "outcome": {"observes"},
+                    "approval": {"approves"}, "action": {"authorized_by", "reverses", "source"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"},
                     "task_authority": {"source", "approves"}, "platform_approval": set(), "policy_change": set(),
                     "check": {"supersedes"}, "counterparty_acceptance": set()}
@@ -560,6 +560,8 @@ def check_chain(records):
     max_total = records[0]["body"]["intent"].get("max_total_minor")
     # The side of the deal the user is on: set when it opens (absent = buyer), never changed.
     party_role = records[0]["body"]["intent"].get("party_role", "buyer")
+    if party_role == "seller" and not typed_chain:
+        fail(0, "a deal where the user sells is sealed in the typed action records")
     # The floor in force, as the bounds_commitment that stated it: the floor itself is never in a
     # record, so it cannot be compared. After an intent states a new floor the producer applies it
     # only if it is higher, which this checker cannot see: the floor in force is then unknown
@@ -659,6 +661,8 @@ def check_chain(records):
                     "counterparty" in kb or "counterparty_facts" in records[k]["body"])
                 if kb["record_type"] == "detail_change" or identity:
                     fail(i, f"details changed after the other party accepted; the {what} needs the offer made and accepted again")
+            if by_rel.get("source") != [accepted]:
+                fail(i, f"a seller's {what} cites the acceptance it rests on (source)")
 
         def authorized_check(ja, action, what):
             """Section 6, rule 5: the approval proceeds, is unused, is the
@@ -951,6 +955,8 @@ def check_chain(records):
         elif t == "action":
             if "authorized_by" not in by_rel:
                 fail(i, "an action must reference the sealed approval that authorized it (authorized_by)")
+            if not b.get("typed") and "source" in by_rel:
+                fail(i, "only a seller's commit or address cites an acceptance (source)")
             if b.get("typed"):
                 jv, ja, chk = authorize_typed(one("authorized_by", ("approval", "verdict")), body["action"], "action")
                 verify_basis(jv, ja, body.get("amount_minor"))
@@ -958,11 +964,12 @@ def check_chain(records):
                     actions = {DISCLOSURE_ACTION[f["class"]] for f in body["disclosed"]["fields"]}
                     if actions != {body["action"]}:
                         fail(i, "the disclosed classes are not the ones this action covers")
-                if party_role == "seller":
-                    if body["action"] == "commit":
-                        seller_needs_acceptance("commit")
-                    elif any(f["class"] in ADDRESS_CLASSES for f in body.get("disclosed", {}).get("fields", [])):
-                        seller_needs_acceptance("address")
+                if party_role == "seller" and body["action"] == "commit":
+                    seller_needs_acceptance("commit")
+                elif party_role == "seller" and any(f["class"] in ADDRESS_CLASSES for f in body.get("disclosed", {}).get("fields", [])):
+                    seller_needs_acceptance("address")
+                elif "source" in by_rel:
+                    fail(i, "only a seller's commit or address cites an acceptance (source)")
             else:
                 chk = authorized_check(one("authorized_by", ("approval",)), body["action"], "action")
             cb = chk["body"]

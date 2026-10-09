@@ -11,7 +11,7 @@ import (
 // nothing taken or delivered, and the close is final.
 func TestADeclinedThreadClosesNotSelected(t *testing.T) {
 	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, sellerOpen))["deal_id"].(string)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerOpen))["deal_id"].(string)
 	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"not_selected"}`))
 	assert.Contains(t, dealOwnBundle(t, id), `"outcome":"not_selected"`)
 

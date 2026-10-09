@@ -564,9 +564,13 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if ev.TaxonomyVersion == "" {
 			return
 		}
-		m["action_class"] = dealActionClass(dealType, action, direction)
+		// The role is fixed when the deal opens, and a seller's deal is
+		// sealed by this build or later: no step sealed before keeps
+		// different bytes.
+		role := dealRole(events)
+		m["action_class"] = dealRoleActionClass(role, dealType, action, direction)
 		m["taxonomy_version"] = ev.TaxonomyVersion
-		if spend, ok := dealSpendMinor(action, direction, amount); ok {
+		if spend, ok := dealRoleSpendMinor(role, action, direction, amount); ok {
 			m["spend_minor"] = spend
 		}
 		if action == "cancel" {
@@ -943,6 +947,10 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			if ev.Act.Reverses != "" {
 				refs = append(refs, relRef("reverses", digestOf(ev.Act.Reverses)))
 			}
+			// A seller's commit cites the acceptance it rests on.
+			if ev.Act.Accepted != "" {
+				refs = append(refs, relRef("source", digestOf(ev.Act.Accepted)))
+			}
 			block["refs"] = refs
 			if ev.Act.Payee != "" {
 				setIDs(counterpartyIDs(key, dealWho{Payee: ev.Act.Payee}))
@@ -985,6 +993,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		classify(body, d.action(), "", nil)
 		if d.AuthorizedBy != "" {
 			block["refs"] = []interface{}{relRef("authorized_by", digestOf(d.AuthorizedBy))}
+			if d.Accepted != "" {
+				block["refs"] = append(block["refs"].([]interface{}), relRef("source", digestOf(d.Accepted)))
+			}
 		} else {
 			body["authority"] = "none"
 			body["rule"] = asToken(d.Rule, "no_check")

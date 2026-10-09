@@ -869,6 +869,11 @@ func dealOpenCommand() *cobra.Command {
 		default:
 			return inputError("--records must be typed or x-deal-v0")
 		}
+		// A deal where the user sells has no untyped path: its offers, the
+		// buyer's acceptance and the commit that rests on it are typed records.
+		if o.Intent.PartyRole == dealRoleSeller && o.Records != recordsTyped {
+			return inputError("a deal where the user sells is recorded in the typed records: open it with deal open --records typed")
+		}
 		skillPath, _ := c.Flags().GetString("skill")
 		if skillPath == "" {
 			skillPath = os.Getenv(dealSkillEnv)
@@ -1181,6 +1186,9 @@ func dealNoteCommand() *cobra.Command {
 				ev.Act = &dealAct{Action: act.Action, Description: act.Description, AmountMinor: act.AmountMinor, Currency: act.Currency, Payee: act.Payee, Rail: act.Rail, Reference: act.Reference, FeeMinor: act.FeeMinor}
 				ev.Act.AuthorizedBy, ev.Act.Reason, ev.Act.Rule = authorizeAct(events, *ev.Act, dealClock().UTC())
 				ev.Act.Unchecked = ev.Act.AuthorizedBy == ""
+				if !ev.Act.Unchecked && ev.Act.Action == "commit" && dealRole(events) == dealRoleSeller {
+					ev.Act.Accepted, _, _ = offerAccepted(events)
+				}
 				ev.Act.Direction, ev.Act.Reverses = actDirection(events, *ev.Act, events[0].Event.Open.Terms.Currency)
 			case "disclosure":
 				// Covered by the same rules as an action: a check of
@@ -1194,8 +1202,8 @@ func dealNoteCommand() *cobra.Command {
 				// A seller gives out where the item is only for an offer the
 				// other party accepted, as a commit is.
 				if d.AuthorizedBy != "" && d.addressed() && dealRole(events) == dealRoleSeller && dealRecordSet(dealEvent{}, events) == recordsTyped {
-					if reason, rule := offerAccepted(events); rule != "" {
-						d.AuthorizedBy, d.Reason, d.Rule = "", reason, rule
+					if d.Accepted, d.Reason, d.Rule = offerAccepted(events); d.Rule != "" {
+						d.AuthorizedBy = ""
 					}
 				}
 				// An approval covers a telling only to the party its check was

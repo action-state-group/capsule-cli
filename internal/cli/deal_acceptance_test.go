@@ -94,6 +94,19 @@ func TestASellerCommitsToTheOfferTheBuyerAccepted(t *testing.T) {
 	require.NotNil(t, accepted)
 	assert.Equal(t, stepDigest(t, id, acc["accepts"].(string)), digestOfRef(accepted["proposed_action_ref"]))
 	assert.Equal(t, "app_chat", accepted["channel"])
+
+	// The commit cites the acceptance it rests on (rel source), beside the
+	// evaluation that authorized it; the acceptance is not authority.
+	var cited []string
+	for _, r := range records(t, id) {
+		if b, ok := r["body"].(map[string]any); ok && r["type"] == "action-record/v0" && b["action"] == "commit" {
+			for _, ref := range r["refs"].([]any) {
+				cited = append(cited, ref.(map[string]any)["rel"].(string)+" "+ref.(map[string]any)["digest"].(string))
+			}
+			assert.NotContains(t, mustJSONString(t, b["authority_basis"]), stepDigest(t, id, acc["capsule_id"].(string)))
+		}
+	}
+	assert.Contains(t, cited, "source "+stepDigest(t, id, acc["capsule_id"].(string)))
 	checkerPasses(t, id)
 }
 
@@ -244,14 +257,38 @@ func TestTheProfileCheckerHoldsTheAcceptanceRules(t *testing.T) {
 	// An offer is its proposed action, evaluation (and answer, if it paused)
 	// and action; then its acceptance.
 	o2, a2 := at["offer1"], at["accept1"]
+	commit := len(recs) - 1
+	// citing points the commit's source ref at the record at j.
+	citing := func(j int) func(map[string]any) {
+		return func(r map[string]any) {
+			for _, ref := range r["refs"].([]any) {
+				if ref := ref.(map[string]any); ref["rel"] == "source" {
+					ref["digest"] = recordDigest(t, recs[j])
+				}
+			}
+		}
+	}
+	uncited := func(r map[string]any) {
+		var kept []any
+		for _, ref := range r["refs"].([]any) {
+			if ref.(map[string]any)["rel"] != "source" {
+				kept = append(kept, ref)
+			}
+		}
+		r["refs"] = kept
+	}
 	cases := []struct {
 		name, want string
 		chain      []map[string]any
 	}{
 		{"the latest offer's acceptance dropped", "the latest offer has no recorded acceptance",
-			relinked(t, recs, map[int]bool{a2: true}, nil)},
+			relinked(t, recs, map[int]bool{a2: true}, map[int]func(map[string]any){commit: uncited})},
+		{"the commit cites no acceptance", "cites the acceptance it rests on",
+			relinked(t, recs, nil, map[int]func(map[string]any){commit: uncited})},
+		{"the commit cites the superseded offer's acceptance", "cites the acceptance it rests on",
+			relinked(t, recs, nil, map[int]func(map[string]any){commit: citing(at["accept0"])})},
 		{"the second offer dropped: the commit rests on an acceptance a change left behind", "details changed after the other party accepted",
-			relinked(t, recs, span(o2, a2), nil)},
+			relinked(t, recs, span(o2, a2), map[int]func(map[string]any){commit: citing(at["accept0"])})},
 		{"the offer's action dropped", "never made",
 			relinked(t, recs, map[int]bool{at["made1"]: true}, nil)},
 		{"the acceptance names the superseded offer", "only the latest offer can be accepted",
@@ -347,6 +384,42 @@ func relinked(t *testing.T, recs []map[string]any, drop map[int]bool, edit map[i
 	return out
 }
 
+// spent is what a weekly cap sums over a deal: the spend_minor of every
+// action taken.
+func spent(t *testing.T, dealID string) float64 {
+	t.Helper()
+	total := 0.0
+	for _, r := range records(t, dealID) {
+		if b, ok := r["body"].(map[string]any); ok && r["type"] == "action-record/v0" {
+			total += b["spend_minor"].(float64)
+		}
+	}
+	return total
+}
+
+// A sale is money in: a seller's commit seals spend 0 and is classed as
+// accepting an agreement, so a weekly total never counts it. A buyer's
+// purchase still counts.
+func TestASellersCommitIsNotSpend(t *testing.T) {
+	dealFixture(t)
+	sale := openTyped(t, sellerTyped)
+	_, err := acceptOffer(t, sale, makeOffer(t, sale, "190000"))
+	require.NoError(t, err)
+	require.Equal(t, false, commitNow(t, sale, "190000")["unchecked"])
+	assert.Equal(t, 0.0, spent(t, sale), "the weekly total is unchanged by a sale")
+	for _, r := range records(t, sale) {
+		if b, ok := r["body"].(map[string]any); ok && b["action"] == "commit" {
+			assert.Equal(t, "agreement.accept", b["action_class"], r["type"])
+			assert.Equal(t, float64(0), b["spend_minor"], r["type"])
+		}
+	}
+
+	buy := openTypedSticker(t)
+	checkPay(t, buy, 600)
+	require.Equal(t, false, payNow(t, buy, 600)["unchecked"])
+	assert.Equal(t, 600.0, spent(t, buy), "a purchase still counts")
+}
+
 // An offer's amount is what the buyer would pay: it is never sealed as the
 // user's spend.
 func TestAnOfferIsNotSpend(t *testing.T) {
@@ -358,4 +431,12 @@ func TestAnOfferIsNotSpend(t *testing.T) {
 			assert.Equal(t, float64(0), b["spend_minor"], r["type"])
 		}
 	}
+}
+
+// A deal where the user sells has no untyped path.
+func TestASellersDealIsTyped(t *testing.T) {
+	dealFixture(t)
+	_, err := invoke(t, "", "--profile", "deal", "deal", "open", "--input", writeJSON(t, sellerTyped))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "--records typed")
 }

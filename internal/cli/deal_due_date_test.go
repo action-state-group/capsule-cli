@@ -15,7 +15,7 @@ import (
 func TestASellersDeliveryIsADueDate(t *testing.T) {
 	dealFixture(t)
 	setDealClock(t, "2026-09-28T10:00:00Z")
-	id := dealRun(t, "open", "--input", writeJSON(t, sellerOpen))["deal_id"].(string)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerOpen))["deal_id"].(string)
 
 	sealed := dealRun(t, "note", "--deal", id, "--kind", "evidence", "--input", writeJSON(t, `{
 		"about": "the sale", "source": "agent",
@@ -46,7 +46,7 @@ func TestASellersDeliveryIsADueDate(t *testing.T) {
 
 func TestADueDateIsNotACancelByDate(t *testing.T) {
 	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, sellerOpen))["deal_id"].(string)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerOpen))["deal_id"].(string)
 	for _, bad := range []string{
 		`{"kind": "deliver_by", "cancel_by": "2026-10-03"}`,
 		`{"kind": "perform_by", "due_by": "2026-10-03", "cancel_by": "2026-10-02"}`,
