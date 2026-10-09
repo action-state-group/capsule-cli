@@ -601,7 +601,10 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 			record["counterparty_profile"] = counterpartyProfileBlock(cp.Payee)
 		}
 	}
-	input := map[string]interface{}{"schema": externalCheckInput, "record": record, "history": history,
+	// party_role: the side of the deal the user is on, as its opening intent
+	// sealed it (buyer when it names none), sent on every check, always
+	// explicit, so a checker selects its rules without inferring the side.
+	input := map[string]interface{}{"schema": externalCheckInput, "party_role": dealRole(events), "record": record, "history": history,
 		"history_scope": map[string]interface{}{"days": scope.Days, "max_records": rulesHistoryMax, "complete": scope.Complete}}
 	if task := taskAuthorityAt(events, ""); task != "" {
 		for _, se := range events {
