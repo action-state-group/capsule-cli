@@ -2,8 +2,124 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-baySdVyvWqoWIs1DaUPJPtZT4L6N12ZSEbS6nqwcR+0=' 'sha256-lV9ImV44oLMn2KFNWeoPHRf6Q7FglvI585fikp6ch78=' 'sha256-qb3uFKNUqyZ7NLuvkLLvBXxbjp1xHGrGxRRbXN7jxu4='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-ne0hHJOVwqIx5zloT48DqIXvD3slCiFPV0OewNmiQSs=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report</title>
+    <style>
+      /*
+       * Base shell stylesheet. It owns the page frame only: theme tokens,
+       * typography baseline, page width, overflow containment, focus and
+       * motion defaults, native details/summary disclosure, the
+       * verification-banner area and print defaults. Every rule sits inside
+       * :where() so it has zero specificity and any presentation module's
+       * own stylesheet wins. No report layout lives here.
+       */
+      :root {
+        --aac-bg: #ffffff;
+        --aac-fg: #1f2733;
+        --aac-muted: #6b7482;
+        --aac-line: #e3ded3;
+        --aac-accent: #232f42;
+        --aac-focus: #2b5a85;
+        --aac-ok: #2e7d5b;
+        --aac-ok-bg: #e3f1ea;
+        --aac-bad: #b5462f;
+        --aac-bad-bg: #f8e6e1;
+        --aac-warn: #8a6a2f;
+        --aac-warn-bg: #fbefd9;
+        --aac-font: system-ui, sans-serif;
+        --aac-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --aac-line-height: 1.5;
+        --aac-page-width: none;
+        --aac-gutter: 0;
+        --aac-radius: 10px;
+      }
+      :where(html) {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      :where(body) {
+        margin: 0;
+        font-family: var(--aac-font);
+        line-height: var(--aac-line-height);
+        color: var(--aac-fg);
+        background: var(--aac-bg);
+        overflow-wrap: break-word;
+      }
+      :where(#app) {
+        box-sizing: border-box;
+        max-width: var(--aac-page-width);
+        margin-inline: auto;
+        padding-inline: var(--aac-gutter);
+      }
+      :where(img, svg, video, canvas) {
+        max-width: 100%;
+        height: auto;
+      }
+      :where(pre) {
+        overflow-x: auto;
+      }
+      :where(code, kbd, samp, pre) {
+        font-family: var(--aac-mono);
+      }
+      :where(summary) {
+        cursor: pointer;
+      }
+      :where(:focus-visible) {
+        outline: 2px solid var(--aac-focus);
+        outline-offset: 2px;
+      }
+      :where(.aac-banner) {
+        display: block;
+        margin: 0 0 1rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--aac-line);
+        border-radius: var(--aac-radius);
+      }
+      :where(.aac-banner[data-state="verified"]) {
+        color: var(--aac-ok);
+        background: var(--aac-ok-bg);
+      }
+      :where(.aac-banner[data-state="failed"]) {
+        color: var(--aac-bad);
+        background: var(--aac-bad-bg);
+      }
+      :where(.aac-banner[data-state="partial"]) {
+        color: var(--aac-warn);
+        background: var(--aac-warn-bg);
+      }
+      @media (max-width: 760px) {
+        :where(table) {
+          display: block;
+          max-width: 100%;
+          overflow-x: auto;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :where(*, *::before, *::after) {
+          animation-duration: 0.01ms !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+      @media print {
+        :where(body) {
+          color: #000;
+          background: #fff;
+        }
+        :where(#app) {
+          max-width: none;
+          padding: 0;
+        }
+        :where(summary, h1, h2, h3, h4) {
+          break-after: avoid;
+        }
+        :where(tr, img, svg, figure) {
+          break-inside: avoid;
+        }
+      }
+    </style>
+    <!-- prettier-ignore -->
     <style>
 :root { --fg: #1b1b1f; --muted: #5d5d66; --bg: #ffffff; --line: #d9d9e0; --warn: #9a3b00; --ok: #1d6b35; }
 @media (prefers-color-scheme: dark) { :root { --fg: #ececf1; --muted: #a3a3ad; --bg: #16161a; --line: #34343c; --warn: #ffb07a; --ok: #7fd49a; } }
@@ -35,15 +151,8 @@ body { background: var(--bg); color: var(--fg); }
 #deal .deal-verify { background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; overflow-x: auto; font-size: 0.85rem; user-select: all; }
 #app { max-width: 760px; margin: 0 auto; padding: 0 16px 16px; overflow-wrap: anywhere; }
 </style>
-    <style>
-      body {
-        margin: 0;
-        font-family: system-ui, sans-serif;
-      }
-    </style>
   </head>
   <body>
-    <div id="deal"></div>
     <div id="app"></div>
     <!-- prettier-ignore -->
     <script>window.__BUNDLE__ = {"bundle_kind":"evidence-bundle/v2","bundle_version":"2","checkpoint":{"cose":"0oRYh6QBJwN4H2FwcGxpY2F0aW9uL2NsbC1jaGVja3BvaW50K2Nib3IEWCCPsgiTRCJZT23kXGBaigbGrplQ16d06BvVZhOcoIWrnQ-iAXgaZGVhbC9kZWFsLTE4ZjY4ZTg1ZGMxOGEzMmICeB1kZWFsL2RlYWwtMThmNjhlODVkYzE4YTMyYiMxMKBZAeWnZGtpbmRuY2xsLWNoZWNrcG9pbnRobG9nX3NpemUKaWlzc3VlZF9hdHgYMjAyNi0xMC0wOVQwNTo0Njo1My4wMTNaaXByZXZfc2l6ZQhqY29tbWl0bWVudFhFglgg_pIElDAoDDJKf6vlH_jcFg93sPDyWM9aOmFwvmS_mwtYIGNxJOcXBvg5ywY5uMmpb02wGEVm3R1i4pPYNW0HVxZZb3ByZXZfY29tbWl0bWVudFhFglgg_pIElDAoDDJKf6vlH_jcFg93sPDyWM9aOmFwvmS_mwtYILuF7GfQvaAtXf4n2OMNH0h8LDJhLhXlmIi0Kmf4AgeYcWNvbnNpc3RlbmN5X3Byb29mpWZzaXplX2EIZnNpemVfYgpnd2l0bmVzc4KAgVggPw6A6qJbpp4Vqu83NW-Fwy8a-tcpdSdR2uQguKp9cUtpbmV3X3BlYWtzglgg_pIElDAoDDJKf6vlH_jcFg93sPDyWM9aOmFwvmS_mwtYIGNxJOcXBvg5ywY5uMmpb02wGEVm3R1i4pPYNW0HVxZZaW9sZF9wZWFrc4JYIP6SBJQwKAwySn-r5R_43BYPd7Dw8ljPWjphcL5kv5sLWCC7hexn0L2gLV3-J9jjDR9IfCwyYS4V5ZiItCpn-AIHmFhASyrKa1pBUcejwlmHb0UAzWyYOoNgeBnRNYxSgqasRV4CWRMf1YukCgH7ignAvD6aue027zN0dhNpkwAAzMkBBw","key_id":"8fb208934422594f6de45c605a8a06c6ae9950d7a774e81bd566139ca085ab9d","kind":"mmr_checkpoint","log_id":"deal/deal-18f68e85dc18a32b","mmr_size":10,"prev_root":"b35be2108eeb88cd08b6504af8e254f522df587943d9f0e597220589af51320f","prev_size":8,"root":"e3ca5a666370c0dea99933bfb9d8fa404ad955346af3e8f3f574045ac0838eaa","statement":"0oRYh6QBJwN4H2FwcGxpY2F0aW9uL2NsbC1jaGVja3BvaW50K2Nib3IEWCCPsgiTRCJZT23kXGBaigbGrplQ16d06BvVZhOcoIWrnQ+iAXgaZGVhbC9kZWFsLTE4ZjY4ZTg1ZGMxOGEzMmICeB1kZWFsL2RlYWwtMThmNjhlODVkYzE4YTMyYiMxMKBZAeWnZGtpbmRuY2xsLWNoZWNrcG9pbnRobG9nX3NpemUKaWlzc3VlZF9hdHgYMjAyNi0xMC0wOVQwNTo0Njo1My4wMTNaaXByZXZfc2l6ZQhqY29tbWl0bWVudFhFglgg/pIElDAoDDJKf6vlH/jcFg93sPDyWM9aOmFwvmS/mwtYIGNxJOcXBvg5ywY5uMmpb02wGEVm3R1i4pPYNW0HVxZZb3ByZXZfY29tbWl0bWVudFhFglgg/pIElDAoDDJKf6vlH/jcFg93sPDyWM9aOmFwvmS/mwtYILuF7GfQvaAtXf4n2OMNH0h8LDJhLhXlmIi0Kmf4AgeYcWNvbnNpc3RlbmN5X3Byb29mpWZzaXplX2EIZnNpemVfYgpnd2l0bmVzc4KAgVggPw6A6qJbpp4Vqu83NW+Fwy8a+tcpdSdR2uQguKp9cUtpbmV3X3BlYWtzglgg/pIElDAoDDJKf6vlH/jcFg93sPDyWM9aOmFwvmS/mwtYIGNxJOcXBvg5ywY5uMmpb02wGEVm3R1i4pPYNW0HVxZZaW9sZF9wZWFrc4JYIP6SBJQwKAwySn+r5R/43BYPd7Dw8ljPWjphcL5kv5sLWCC7hexn0L2gLV3+J9jjDR9IfCwyYS4V5ZiItCpn+AIHmFhASyrKa1pBUcejwlmHb0UAzWyYOoNgeBnRNYxSgqasRV4CWRMf1YukCgH7ignAvD6aue027zN0dhNpkwAAzMkBBw==","timestamp":"2026-10-09T05:46:53.013Z","v":1},"completeness":{"closure_depth":4,"missing":[],"payloads_mode":"selected","records_mode":"complete","suppressed_fields":[]},"completeness_certificate":{"body_digests":["ddc344a19e28b46f7f4978b10ec0f8675ec08646426d07acaf63524ebef50add","e770608394654228d9e674220a75e0af8ccd6963463b84dfb8a553ea7e4ba6ae","f2cc1d43abfbd88f23f41dc4f2f8cc7b8accf665970873da4f52280585d1a729","b013ce5ee2de70cacc799073cb5ae560e771172746ec414523ab0a1ce3d2e695","5fdbef1da33d199bf052fd32c63e2a5959b705e981cf58a2a463125b3b587e53","0af2eecee9953254c714830639c8375bdd0d001cdc8d272a1cfb1647b5ba6058"],"first_seq":1,"last_seq":6,"log_id":"deal/deal-18f68e85dc18a32b","memberships":{"0af2eecee9953254c714830639c8375bdd0d001cdc8d272a1cfb1647b5ba6058":{"inclusion_proof":{"kind":"inclusion","leaf_index":5,"peaks_left":["fe92049430280c324a7fabe51ff8dc160f77b0f0f258cf5a3a6170be64bf9b0b"],"peaks_right":[],"size":10,"v":1,"witness":["bb85ec67d0bda02d5dfe27d8e30d1f487c2c32612e15e59888b42a67f8020798"]},"log_coordinates":{"leaf_index":5,"log_id":"deal/deal-18f68e85dc18a32b","seq":6}},"5fdbef1da33d199bf052fd32c63e2a5959b705e981cf58a2a463125b3b587e53":{"inclusion_proof":{"kind":"inclusion","leaf_index":4,"peaks_left":["fe92049430280c324a7fabe51ff8dc160f77b0f0f258cf5a3a6170be64bf9b0b"],"peaks_right":[],"size":10,"v":1,"witness":["3f0e80eaa25ba69e15aaef37356f85c32f1afad729752751dae420b8aa7d714b"]},"log_coordinates":{"leaf_index":4,"log_id":"deal/deal-18f68e85dc18a32b","seq":5}},"b013ce5ee2de70cacc799073cb5ae560e771172746ec414523ab0a1ce3d2e695":{"inclusion_proof":{"kind":"inclusion","leaf_index":3,"peaks_left":[],"peaks_right":["637124e71706f839cb0639b8c9a96f4db0184566dd1d62e293d8356d07571659"],"size":10,"v":1,"witness":["942b420cd7611e9bb6d482cf795d11979e74a7a350b9ea570650fc78a5d1bf2b","dc0e30f136af88842689f4fcaadc9d65517822cf104b7b37b6ed5311338f8baa"]},"log_coordinates":{"leaf_index":3,"log_id":"deal/deal-18f68e85dc18a32b","seq":4}},"ddc344a19e28b46f7f4978b10ec0f8675ec08646426d07acaf63524ebef50add":{"inclusion_proof":{"kind":"inclusion","leaf_index":0,"peaks_left":[],"peaks_right":["637124e71706f839cb0639b8c9a96f4db0184566dd1d62e293d8356d07571659"],"size":10,"v":1,"witness":["53125c9be09b78120623bd3dbfbcc9a134ce9afd77d64e99fd7df536937f0bcc","1bfbe2215a6793cba93ebaabf127aa8f9ab2363929f6a76f19887d43600c130e"]},"log_coordinates":{"leaf_index":0,"log_id":"deal/deal-18f68e85dc18a32b","seq":1}},"e770608394654228d9e674220a75e0af8ccd6963463b84dfb8a553ea7e4ba6ae":{"inclusion_proof":{"kind":"inclusion","leaf_index":1,"peaks_left":[],"peaks_right":["637124e71706f839cb0639b8c9a96f4db0184566dd1d62e293d8356d07571659"],"size":10,"v":1,"witness":["c2f2707bf88ad38d4ba868719d3a2b0ac39813538c4e4b94ee513ee90e0353de","1bfbe2215a6793cba93ebaabf127aa8f9ab2363929f6a76f19887d43600c130e"]},"log_coordinates":{"leaf_index":1,"log_id":"deal/deal-18f68e85dc18a32b","seq":2}},"f2cc1d43abfbd88f23f41dc4f2f8cc7b8accf665970873da4f52280585d1a729":{"inclusion_proof":{"kind":"inclusion","leaf_index":2,"peaks_left":[],"peaks_right":["637124e71706f839cb0639b8c9a96f4db0184566dd1d62e293d8356d07571659"],"size":10,"v":1,"witness":["272ce9be9998366f6807751da9580b53b8ed6bfa5cfac8c7a8f3db68cc07f585","dc0e30f136af88842689f4fcaadc9d65517822cf104b7b37b6ed5311338f8baa"]},"log_coordinates":{"leaf_index":2,"log_id":"deal/deal-18f68e85dc18a32b","seq":3}}},"range_proof":{"from_index":0,"from_seq":1,"size":10,"to_index":5,"to_seq":6,"witness":[]},"range_root":"e3ca5a666370c0dea99933bfb9d8fa404ad955346af3e8f3f574045ac0838eaa"},"disclosures":{"0af2eecee9953254c714830639c8375bdd0d001cdc8d272a1cfb1647b5ba6058":{"agent_input":{"audience":"keep","deal_id":"deal-18f68e85dc18a32b","nonce":"610c3074367fa0bd574f40c930657499fa5cc277066086ff8fce6cd5697dffe6","profile":"x-deal-v0","report":{"anomalies":[],"asked":"Order the cat sticker in my cart at Example Stickers","asked_opening":{"nonce":"0f2ba0b859d841173e75fa0a78a7f03c334914333329deec990810703f3d5708","text":"Order the cat sticker in my cart at Example Stickers"},"asked_step":"ddc344a19e28b46f7f4978b10ec0f8675ec08646426d07acaf63524ebef50add","audience":"keep","cancellations":null,"claim_openings":[],"deadlines":null,"deal_id":"deal-18f68e85dc18a32b","did":[{"at":"2026-10-09T05:46:52Z","kind":"check","steps":["e770608394654228d9e674220a75e0af8ccd6963463b84dfb8a553ea7e4ba6ae","f2cc1d43abfbd88f23f41dc4f2f8cc7b8accf665970873da4f52280585d1a729","b013ce5ee2de70cacc799073cb5ae560e771172746ec414523ab0a1ce3d2e695"],"text":"Checked before paying: no differences; 3 rules are declared by the ruleset but not measured by this checker (r14, r24, r25) (you asked for: item cat sticker · quantity 1); went ahead on what you already allowed"},{"at":"2026-10-09T05:46:52Z","kind":"act","steps":["b013ce5ee2de70cacc799073cb5ae560e771172746ec414523ab0a1ce3d2e695","5fdbef1da33d199bf052fd32c63e2a5959b705e981cf58a2a463125b3b587e53"],"text":"Did: pay $6.27 to Example Stickers by card"}],"did_line":"What you asked, what was proposed and what you approved are sealed on the agent's device, where they happened. What the agent did is the agent's own report: no independent source, such as the merchant's own email, is attached.","email_scope":"This covers one email from the merchant about this deal. It is not a record of everything the merchant sent or charged.","instructions":"Which skill instructions were present was not recorded (the deal was opened without --skill).","lifecycle":{"as_of":"2026-10-09T05:46:53Z","later":[],"may_change":"Records can be linked to this deal after this receipt was made (a merchant's confirmation, a shipping notice, a refund). This receipt shows those sealed when it was made; to see later ones, make a new report with `capsulectl deal report`.","open":{"as_of":"2026-10-09T05:46:53Z","deal_id":"deal-18f68e85dc18a32b","expect_close_by":"2026-10-23","opened_at":"2026-10-09T05:46:52Z","past_expected":false,"state":"open","text":"Open: waiting for the merchant's receipt. It is expected to close by 2026-10-23."},"state":"open","text":"Open: waiting for the merchant's receipt. It is expected to close by 2026-10-23."},"materiality_openings":[{"name":"example, not policy: the attributes capsulectl paused on before predicates","nonce":"810870100435f92dcd24e54465c35c1506ee57c7dbbb25f2bd36d47715123d0e","step":"ddc344a19e28b46f7f4978b10ec0f8675ec08646426d07acaf63524ebef50add","version":"0.1.0"},{"name":"example, not policy: the attributes capsulectl paused on before predicates","nonce":"25c45935d14a203006d1a970c3d353750f4ee25feb85f491a62210d764ba6cd1","step":"f2cc1d43abfbd88f23f41dc4f2f8cc7b8accf665970873da4f52280585d1a729","version":"0.1.0"}],"merchant":[],"money":{"currency":"USD","net_minor":627,"paid_minor":627,"returned_minor":0,"text":"Paid $6.27, returned $0.00: net $6.27."},"page_built_by":"capsulectl 0.1.0-dev (unknown)","page_version":"0.1.0-dev","produced_by":["capsulectl 0.1.0-dev (unknown)"],"scope":"This receipt covers this one deal. It is not a record of everything the agent did.","steps":[{"at":"2026-10-09T05:46:52Z","capsule_id":"ddc344a19e28b46f7f4978b10ec0f8675ec08646426d07acaf63524ebef50add","kind":"open","line":"Opened: \"Order the cat sticker in my cart at Example Stickers\"","n":1},{"at":"2026-10-09T05:46:52Z","capsule_id":"e770608394654228d9e674220a75e0af8ccd6963463b84dfb8a553ea7e4ba6ae","kind":"snapshot","line":"About to pay: Place order: 1 cat sticker, $6.27 total, saved card","n":2},{"at":"2026-10-09T05:46:52Z","capsule_id":"f2cc1d43abfbd88f23f41dc4f2f8cc7b8accf665970873da4f52280585d1a729","kind":"check","line":"Check: no differences","n":3},{"at":"2026-10-09T05:46:52Z","capsule_id":"b013ce5ee2de70cacc799073cb5ae560e771172746ec414523ab0a1ce3d2e695","kind":"approval","line":"Went ahead on what you already allowed","n":4},{"at":"2026-10-09T05:46:52Z","capsule_id":"5fdbef1da33d199bf052fd32c63e2a5959b705e981cf58a2a463125b3b587e53","kind":"act","line":"Pay done, as checked","n":5}],"told":[],"verify_command":"capsulectl verify --bundle page.html"},"type":"deal_report"}},"5fdbef1da33d199bf052fd32c63e2a5959b705e981cf58a2a463125b3b587e53":{"agent_input":{"body":{"action":"pay","action_class":"money.purchase","amount_minor":627,"currency":"USD","direction":"out","rail":"card","reference_commitment":"884f1a64c6b723c912ca5ac554fdf84c0c36647068d6c423682046b924901f8e","spend_minor":627,"taxonomy_version":"2"},"x-deal-v0":{"at":"2026-10-09T05:46:52Z","baseline_ref":{"digest":"10f13144a5a62c77c55fdeb230c3e182d4e291878a9f0e70dd6bcf45d904699f","digest_alg":"SHA-256","type":"deal-record"},"canonicalization":"jcs","commit_alg":"sha256-jcs-nonce256","counterparty":{"fp_alg":"hmac-sha256-deal-key","ids":{"payee":"7a0bbd2d5442e764e49bff0a6c1514e7adce3f1422938f7dd3f9b2c040a0eb44"}},"deal_id":"deal-18f68e85dc18a32b","prev":{"digest":"c0f9f98cf1add3350b689430eae30f967651b2d416c5ac7eff152807b87de5a1","digest_alg":"SHA-256","type":"deal-record"},"producer":{"commit":"unknown","name":"capsulectl","version":"0.1.0-dev"},"profile":"x-deal-v0","record_type":"action","refs":[{"digest":"c0f9f98cf1add3350b689430eae30f967651b2d416c5ac7eff152807b87de5a1","digest_alg":"SHA-256","rel":"authorized_by","type":"deal-record"}],"seq":5}}},"b013ce5ee2de70cacc799073cb5ae560e771172746ec414523ab0a1ce3d2e695":{"agent_input":{"body":{"approver":"standing_intent","choice":"proceed","proceed":true},"x-deal-v0":{"at":"2026-10-09T05:46:52Z","baseline_ref":{"digest":"10f13144a5a62c77c55fdeb230c3e182d4e291878a9f0e70dd6bcf45d904699f","digest_alg":"SHA-256","type":"deal-record"},"canonicalization":"jcs","commit_alg":"sha256-jcs-nonce256","deal_id":"deal-18f68e85dc18a32b","prev":{"digest":"02034efbb7c68412d967a28fec3f455aceba1a8ac6b7da27acc846ea6c6a9836","digest_alg":"SHA-256","type":"deal-record"},"producer":{"commit":"unknown","name":"capsulectl","version":"0.1.0-dev"},"profile":"x-deal-v0","record_type":"approval","refs":[{"digest":"02034efbb7c68412d967a28fec3f455aceba1a8ac6b7da27acc846ea6c6a9836","digest_alg":"SHA-256","rel":"approves","type":"deal-record"}],"seq":4}}},"ddc344a19e28b46f7f4978b10ec0f8675ec08646426d07acaf63524ebef50add":{"agent_input":{"body":{"deal_type":"purchase","demo":true,"expect_close_by":"2026-10-23","intent":{"allowed":["pay"],"asked":{"item":"cat sticker","quantity":1},"verbatim_commitment":"81e241fe1aada034d842bfde4ef89b621bb75f7688bbb83f26c240707fde6135"},"materiality":{"digest":"53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1","label_commitment":"2c4f824254ecfcd9eed1793c7579818855a41bd70ca05c730399c1c07048b6bc"},"recourse":{"rail":"card","refundable":true},"terms":{"currency":"USD","item":"cat sticker","price_minor":627,"quantity":1}},"x-deal-v0":{"at":"2026-10-09T05:46:52Z","canonicalization":"jcs","channel":"web","commit_alg":"sha256-jcs-nonce256","counterparty":{"fp_alg":"hmac-sha256-deal-key","ids":{"domain":"70d28edc5a0e757da7128e5da8abce1b2b7712f5879e86cfc3387624bb1c0bdf","name":"d783071c2eba4ded3dccc1a7d7c27271bee7ebcf53f781533107befb44fbe2b4","payee":"7a0bbd2d5442e764e49bff0a6c1514e7adce3f1422938f7dd3f9b2c040a0eb44"}},"deal_id":"deal-18f68e85dc18a32b","producer":{"commit":"unknown","name":"capsulectl","version":"0.1.0-dev"},"profile":"x-deal-v0","record_type":"baseline","seq":1}}},"e770608394654228d9e674220a75e0af8ccd6963463b84dfb8a553ea7e4ba6ae":{"agent_input":{"body":{"action":"pay","action_class":"money.purchase","amount_minor":627,"authorized_max_minor":627,"channel":"web","currency":"USD","description_commitment":"f19bee4ac4fa2b4dd64eef375ea4ab1c4725f8de26586ee68c80d13b016ac257","first_contact_channel":"web","material_fields_basis":"effa16bb95192a3208f24daa127a4f0ac387095e139856b7ce390ebd96b772c3","material_fields_changed":0,"offer_fields_basis":"52ddf74622010caba9ef3baf4d9600365e8670169fb4a56a3c5a5a1cea93739d","offer_fields_changed":0,"recourse":{"rail":"card","refundable":true},"spend_authorized_minor":627,"spend_minor":627,"taxonomy_version":"2","terms":{"currency":"USD","item":"cat sticker","price_minor":627,"quantity":1}},"x-deal-v0":{"at":"2026-10-09T05:46:52Z","baseline_ref":{"digest":"10f13144a5a62c77c55fdeb230c3e182d4e291878a9f0e70dd6bcf45d904699f","digest_alg":"SHA-256","type":"deal-record"},"canonicalization":"jcs","commit_alg":"sha256-jcs-nonce256","counterparty":{"fp_alg":"hmac-sha256-deal-key","ids":{"domain":"70d28edc5a0e757da7128e5da8abce1b2b7712f5879e86cfc3387624bb1c0bdf","name":"d783071c2eba4ded3dccc1a7d7c27271bee7ebcf53f781533107befb44fbe2b4","payee":"7a0bbd2d5442e764e49bff0a6c1514e7adce3f1422938f7dd3f9b2c040a0eb44"}},"deal_id":"deal-18f68e85dc18a32b","prev":{"digest":"10f13144a5a62c77c55fdeb230c3e182d4e291878a9f0e70dd6bcf45d904699f","digest_alg":"SHA-256","type":"deal-record"},"producer":{"commit":"unknown","name":"capsulectl","version":"0.1.0-dev"},"profile":"x-deal-v0","record_type":"check","seq":2}}},"f2cc1d43abfbd88f23f41dc4f2f8cc7b8accf665970873da4f52280585d1a729":{"agent_input":{"body":{"differences":[],"judge":{"kind":"rules"},"materiality":{"digest":"53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1","label_commitment":"72430bf8e1a145a3c035c43509f6a87bc5032777be978bc2e3c192f4c91bc281"},"notes":["first_time_counterparty"],"options":[],"result":"pass","rules":{"checker_sha256":"d4acb28b57c0bd0dccb161f2e7555bd56a1b1dd6983bb135d1a9409274a055e2","definition_digest":"abababababababababababababababababababababababababababababababab","findings":[{"check":"caps/1","id":"r05-per-purchase","limit":2500,"value":627,"verdict":"pass"},{"id":"r14-commits-the-user","verdict":"not_evaluable"},{"id":"r24-outside-instructions","verdict":"not_evaluable"},{"id":"r25-no-bypassing","verdict":"not_evaluable"}],"history":{"acts":0,"complete":true,"days":31},"ruleset_id":"example-rules/1.0.0","status":"evaluated","tier":"recomputed","verdict":"allow"}},"x-deal-v0":{"at":"2026-10-09T05:46:52Z","baseline_ref":{"digest":"10f13144a5a62c77c55fdeb230c3e182d4e291878a9f0e70dd6bcf45d904699f","digest_alg":"SHA-256","type":"deal-record"},"canonicalization":"jcs","commit_alg":"sha256-jcs-nonce256","deal_id":"deal-18f68e85dc18a32b","prev":{"digest":"f5a6160f62b9a5a2b682128d32fc4f0d486c77089314e05ef4ea63a86132a51b","digest_alg":"SHA-256","type":"deal-record"},"producer":{"commit":"unknown","name":"capsulectl","version":"0.1.0-dev"},"profile":"x-deal-v0","record_type":"verdict","refs":[{"digest":"f5a6160f62b9a5a2b682128d32fc4f0d486c77089314e05ef4ea63a86132a51b","digest_alg":"SHA-256","rel":"checks","type":"deal-record"}],"seq":3}}}},"extensions":{"x-cadence-witness/v0":{"state":"not_configured"},"x-deal-v0":{"sealed_report":"0af2eecee9953254c714830639c8375bdd0d001cdc8d272a1cfb1647b5ba6058"}},"records":[{"action_id":"deal-18f68e85dc18a32b/1","action_type":"fyi","assurance":{"attestation_mode":"self_attested","effect_mode":"not_applicable","ledger_mode":"standalone"},"canonicalization_id":"jcs","capsule_id":"ddc344a19e28b46f7f4978b10ec0f8675ec08646426d07acaf63524ebef50add","developer":"capsulectl-deal","format_version":"4","key_id":"317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b","model_attestation":{"compute_attestation":{"agent_input_digest":"10f13144a5a62c77c55fdeb230c3e182d4e291878a9f0e70dd6bcf45d904699f"}},"operator":"deal","signature":"d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b0127a05820ddc344a19e28b46f7f4978b10ec0f8675ec08646426d07acaf63524ebef50add5840d3ba8035a23c5bd8610654c61d5967b275d9b5e59393968a2802f7d2ea4c268e4018f2b4b8b9ef7945bc587b4f2ec7d90e4a8aad01223b2cd0daeca8349e9808","spec_version":"draft-mih-scitt-agent-action-capsule-05","timestamp":"2026-10-09T05:46:52Z"},{"action_id":"deal-18f68e85dc18a32b/2","action_type":"fyi","assurance":{"attestation_mode":"self_attested","effect_mode":"not_applicable","ledger_mode":"chained"},"canonicalization_id":"jcs","capsule_id":"e770608394654228d9e674220a75e0af8ccd6963463b84dfb8a553ea7e4ba6ae","chain":{"parent_capsule_id":"ddc344a19e28b46f7f4978b10ec0f8675ec08646426d07acaf63524ebef50add","relation":"follows"},"developer":"capsulectl-deal","format_version":"4","key_id":"317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b","model_attestation":{"compute_attestation":{"agent_input_digest":"f5a6160f62b9a5a2b682128d32fc4f0d486c77089314e05ef4ea63a86132a51b"}},"operator":"deal","signature":"d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b0127a05820e770608394654228d9e674220a75e0af8ccd6963463b84dfb8a553ea7e4ba6ae584068d622c346199a8390d83a7f53397b056892ce8c8e4f29955f338206fb37ee863f0e358e696ccdaf195e865ad0ff499b2d93bf9ac33317e6601c7f4b86994306","spec_version":"draft-mih-scitt-agent-action-capsule-05","timestamp":"2026-10-09T05:46:52Z"},{"action_id":"deal-18f68e85dc18a32b/3","action_type":"fyi","assurance":{"attestation_mode":"self_attested","effect_mode":"not_applicable","ledger_mode":"chained"},"canonicalization_id":"jcs","capsule_id":"f2cc1d43abfbd88f23f41dc4f2f8cc7b8accf665970873da4f52280585d1a729","chain":{"parent_capsule_id":"e770608394654228d9e674220a75e0af8ccd6963463b84dfb8a553ea7e4ba6ae","relation":"follows"},"developer":"capsulectl-deal","format_version":"4","key_id":"317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b","model_attestation":{"compute_attestation":{"agent_input_digest":"02034efbb7c68412d967a28fec3f455aceba1a8ac6b7da27acc846ea6c6a9836"}},"operator":"deal","signature":"d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b0127a05820f2cc1d43abfbd88f23f41dc4f2f8cc7b8accf665970873da4f52280585d1a72958405b6a948b88831d6f80b793a84aa18523eb6493b70c472f1b4c881f67ddc94aa1226634248cbd96624ac81a2a4f7cd53171984016e9a4d284b62e2c2abedeef05","spec_version":"draft-mih-scitt-agent-action-capsule-05","timestamp":"2026-10-09T05:46:52Z"},{"action_id":"deal-18f68e85dc18a32b/4","action_type":"fyi","assurance":{"attestation_mode":"self_attested","effect_mode":"not_applicable","ledger_mode":"chained"},"canonicalization_id":"jcs","capsule_id":"b013ce5ee2de70cacc799073cb5ae560e771172746ec414523ab0a1ce3d2e695","chain":{"parent_capsule_id":"f2cc1d43abfbd88f23f41dc4f2f8cc7b8accf665970873da4f52280585d1a729","relation":"follows"},"developer":"capsulectl-deal","format_version":"4","key_id":"317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b","model_attestation":{"compute_attestation":{"agent_input_digest":"c0f9f98cf1add3350b689430eae30f967651b2d416c5ac7eff152807b87de5a1"}},"operator":"deal","signature":"d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b0127a05820b013ce5ee2de70cacc799073cb5ae560e771172746ec414523ab0a1ce3d2e69558407b1852c800791336b531e7f80531941877630d8b0c96d353bf91606de1e28676106c6fc4478caa0621988930d13aad5af79263ee4256a58e0599eddb3ff57b0c","spec_version":"draft-mih-scitt-agent-action-capsule-05","timestamp":"2026-10-09T05:46:52Z"},{"action_id":"deal-18f68e85dc18a32b/5","action_type":"decide","assurance":{"attestation_mode":"self_attested","effect_mode":"dispatched_unconfirmed","ledger_mode":"chained"},"canonicalization_id":"jcs","capsule_id":"5fdbef1da33d199bf052fd32c63e2a5959b705e981cf58a2a463125b3b587e53","chain":{"parent_capsule_id":"b013ce5ee2de70cacc799073cb5ae560e771172746ec414523ab0a1ce3d2e695","relation":"follows"},"developer":"capsulectl-deal","disposition":{"approver":"policy","decision":"accept","human_disposed":false,"verdict_class":"executed"},"effect":{"effect_attestation":"runtime_claimed","irreversibility_class":"one_way_recoverable","status":"dispatched","type":"send_payment"},"format_version":"4","key_id":"317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b","model_attestation":{"compute_attestation":{"agent_input_digest":"bf2d733039fb5ebc4d9e6477ced102751a37834004710ec184e91bd86515df7c"}},"operator":"deal","signature":"d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b0127a058205fdbef1da33d199bf052fd32c63e2a5959b705e981cf58a2a463125b3b587e5358401e38879a659c2e56fd003dec1d2a10f1e56ca92859313d18e771adf45d47e9569dccbf68ab9d3b0914a9a34e39e0f202e98e0d607197acb2d2b2d9cad2995007","spec_version":"draft-mih-scitt-agent-action-capsule-05","timestamp":"2026-10-09T05:46:52Z"},{"action_id":"capsulectl-deal-report","action_type":"fyi","assurance":{"attestation_mode":"self_attested","effect_mode":"not_applicable","ledger_mode":"standalone"},"canonicalization_id":"jcs","capsule_id":"0af2eecee9953254c714830639c8375bdd0d001cdc8d272a1cfb1647b5ba6058","developer":"capsulectl-deal","format_version":"4","key_id":"317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b","model_attestation":{"compute_attestation":{"agent_input_digest":"4dd6223ba60f34fdb960aba3b3de2a346ca91e22c7aaa999dd5c8988753aabf0"}},"operator":"deal","signature":"d284584ca30378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d6964045820317cbb36bce23874d6e952e4eedbff598261546190d85fea98e3ac7fd5298f1b0127a058200af2eecee9953254c714830639c8375bdd0d001cdc8d272a1cfb1647b5ba605858406d17e3d30d1108e0801d30c1794a6f4ada5760970b04ed763997b7c90aec72fc756886e646fe397715755323b8b413352b5fa3ab0c49a5bedd77588fcff9530d","spec_version":"draft-mih-scitt-agent-action-capsule-05","timestamp":"2026-10-09T05:46:53Z"}],"root":"5fdbef1da33d199bf052fd32c63e2a5959b705e981cf58a2a463125b3b587e53","verification":{"checks":["graph_closure","interval_coverage","per_record_membership"],"producer":"capsulectl"}};</script>
@@ -2677,6 +2786,7 @@ var EvidenceGraph = (() => {
     buildDisclosureEnvelope: () => buildDisclosureEnvelope,
     buildResultRoot: () => buildResultRoot,
     buildVerificationPageModel: () => buildVerificationPageModel,
+    buildVerifiedBundleContext: () => buildVerifiedBundleContext,
     bundleDigest: () => bundleDigest,
     carriedCapsuleCommitment: () => carriedCapsuleCommitment,
     classifyCountersignatures: () => classifyCountersignatures,
@@ -2690,11 +2800,14 @@ var EvidenceGraph = (() => {
     decodeStrictJson: () => decodeStrictJson,
     deriveCloseState: () => deriveCloseState,
     disclosureEligibleFields: () => disclosureEligibleFields,
+    disclosureOf: () => disclosureOf,
+    disclosurePayload: () => disclosurePayload,
     encodeFragment: () => encodeFragment,
     indexCountersigners: () => indexCountersigners,
     isHex64: () => isHex64,
     isResultRoot: () => isResultRoot,
     isV4IrreversibilityClass: () => isV4IrreversibilityClass,
+    isVerifiedBundleContext: () => isVerifiedBundleContext,
     jcs: () => jcs,
     jsonDigest: () => jsonDigest,
     parseCapsule: () => parseCapsule,
@@ -2706,16 +2819,20 @@ var EvidenceGraph = (() => {
     renderEvidenceGraph: () => renderEvidenceGraph,
     renderOutcomeReportPage: () => renderOutcomeReportPage,
     resolveCarriedInput: () => resolveCarriedInput,
+    resolveDisclosure: () => resolveDisclosure,
     sealCapsule: () => sealCapsule,
     sha256Hex: () => sha256Hex,
     unboundRecordIds: () => unboundRecordIds,
     validateEvidenceResult: () => validateEvidenceResult,
+    verifiedBundleContext: () => verifiedBundleContext,
+    verifiedPayload: () => verifiedPayload,
     verifyBundle: () => verifyBundle,
     verifyClass1: () => verifyClass1,
     verifyCountersignV1Signature: () => verifyCountersignV1Signature,
     verifyDisclosureEnvelope: () => verifyDisclosureEnvelope,
     verifyProducerEnvelope: () => verifyProducerEnvelope,
-    verifyStore: () => verifyStore
+    verifyStore: () => verifyStore,
+    withCountersigners: () => withCountersigners
   });
 
   // src/json.ts
@@ -4332,6 +4449,204 @@ var EvidenceGraph = (() => {
       integrityCovered: true
     })) : [];
   }
+  var contexts = /* @__PURE__ */ new WeakSet();
+  var ReadonlyMapView = class {
+    #map;
+    constructor(map) {
+      this.#map = map;
+      Object.freeze(this);
+    }
+    get size() {
+      return this.#map.size;
+    }
+    get(key) {
+      return this.#map.get(key);
+    }
+    has(key) {
+      return this.#map.has(key);
+    }
+    forEach(callback, thisArg) {
+      this.#map.forEach((value, key) => callback.call(thisArg, value, key, this));
+    }
+    entries() {
+      return this.#map.entries();
+    }
+    keys() {
+      return this.#map.keys();
+    }
+    values() {
+      return this.#map.values();
+    }
+    [Symbol.iterator]() {
+      return this.#map.entries();
+    }
+  };
+  Object.freeze(ReadonlyMapView.prototype);
+  var plain = (value) => {
+    const prototype = Object.getPrototypeOf(value);
+    return Array.isArray(value) || prototype === Object.prototype || prototype === null;
+  };
+  function ownedCopy(value, seen = /* @__PURE__ */ new Map()) {
+    if (value === null || typeof value !== "object" || !plain(value))
+      return value;
+    const done = seen.get(value);
+    if (done !== void 0) return done;
+    if (Array.isArray(value)) {
+      const out2 = [];
+      seen.set(value, out2);
+      for (const item of value) out2.push(ownedCopy(item, seen));
+      return out2;
+    }
+    const out = {};
+    seen.set(value, out);
+    for (const key of Object.keys(value))
+      Object.defineProperty(out, key, {
+        value: ownedCopy(value[key], seen),
+        enumerable: true,
+        writable: true,
+        configurable: true
+      });
+    return out;
+  }
+  function deepFreeze(value, seen = /* @__PURE__ */ new WeakSet()) {
+    if (value === null || typeof value !== "object" || seen.has(value))
+      return value;
+    seen.add(value);
+    if (value instanceof ReadonlyMapView) {
+      for (const [key, entry] of value) {
+        deepFreeze(key, seen);
+        deepFreeze(entry, seen);
+      }
+      return value;
+    }
+    if (!plain(value)) return value;
+    Object.freeze(value);
+    for (const descriptor of Object.values(
+      Object.getOwnPropertyDescriptors(value)
+    ))
+      if ("value" in descriptor) deepFreeze(descriptor.value, seen);
+    return value;
+  }
+  function isVerifiedBundleContext(value) {
+    return object3(value) && contexts.has(value);
+  }
+  var WITHHELD = Object.freeze({ state: "withheld" });
+  var MISMATCHED = Object.freeze({
+    state: "disclosure_mismatch"
+  });
+  async function buildVerifiedBundleContext(bundle, options = {}) {
+    const owned = deepFreeze(ownedCopy(bundle));
+    return contextFrom(
+      owned,
+      await verifyBundle(owned),
+      options.countersigners === void 0 ? void 0 : deepFreeze(ownedCopy(options.countersigners))
+    );
+  }
+  async function verifiedBundleContext(input) {
+    return isVerifiedBundleContext(input) ? input : buildVerifiedBundleContext(input);
+  }
+  function withCountersigners(context, countersigners) {
+    return contextFrom(
+      context.bundle,
+      context.verification,
+      countersigners === void 0 ? void 0 : deepFreeze(ownedCopy(countersigners)),
+      context
+    );
+  }
+  function contextFrom(bundle, verification, countersigners, reuse) {
+    let records, recordIndex, resolvedDisclosures;
+    if (reuse !== void 0) {
+      ({ records, recordIndex, resolvedDisclosures } = reuse);
+    } else {
+      const index = /* @__PURE__ */ new Map();
+      if (object3(bundle) && Array.isArray(bundle.records)) {
+        for (const record of bundle.records)
+          if (object3(record) && typeof record.capsule_id === "string" && !index.has(record.capsule_id) && verification.capsuleResults[record.capsule_id]?.ok === true && verification.capsuleResults[record.capsule_id]?.capsuleId === record.capsule_id)
+            index.set(record.capsule_id, record);
+      }
+      records = Object.freeze([...index.values()]);
+      recordIndex = new ReadonlyMapView(index);
+      resolvedDisclosures = resolveFromVerification(
+        bundle,
+        verification.disclosures,
+        index
+      );
+    }
+    const certificate = object3(bundle) ? bundle.completeness_certificate : void 0;
+    deepFreeze(verification);
+    const context = deepFreeze({
+      bundle,
+      root: object3(bundle) && typeof bundle.root === "string" ? bundle.root : void 0,
+      verification,
+      resolvedDisclosures,
+      records,
+      recordIndex,
+      countersignatures: verification.countersignatures,
+      countersigners,
+      extensions: verification.extensions,
+      completeness: {
+        graphClosure: verification.graphClosure,
+        intervalCoverage: verification.intervalCoverage,
+        perRecordMembership: verification.perRecordMembership,
+        memberships: object3(certificate) && object3(certificate.memberships) ? certificate.memberships : {}
+      }
+    });
+    contexts.add(context);
+    return context;
+  }
+  function resolveFromVerification(bundle, results, index) {
+    const status2 = /* @__PURE__ */ new Map();
+    for (const result of results)
+      status2.set(`${result.capsuleId}\0${result.member}`, result.status);
+    const overlay = object3(bundle) && object3(bundle.disclosures) ? bundle.disclosures : {};
+    const resolved = /* @__PURE__ */ new Map();
+    const one = (id, field) => {
+      switch (status2.get(`${id}\0${field}`)) {
+        case DISCLOSURE_MATCH: {
+          const entry = overlay[id];
+          return object3(entry) && Object.hasOwn(entry, field) ? Object.freeze({ state: "disclosed", payload: entry[field] }) : MISMATCHED;
+        }
+        case DISCLOSURE_MISMATCH:
+        case DISCLOSURE_NO_COMMITTED_DIGEST:
+          return MISMATCHED;
+        default:
+          return WITHHELD;
+      }
+    };
+    for (const id of index.keys())
+      resolved.set(
+        id,
+        Object.freeze({
+          agent_input: one(id, "agent_input"),
+          agent_output: one(id, "agent_output")
+        })
+      );
+    return new ReadonlyMapView(resolved);
+  }
+  function disclosureOf(context, capsuleId, field) {
+    return context.resolvedDisclosures.get(capsuleId)?.[field] ?? WITHHELD;
+  }
+  function verifiedPayload(context, capsuleId, field) {
+    return disclosureOf(context, capsuleId, field).payload;
+  }
+  var resolveDisclosure = async (record, disclosures2, field) => {
+    const entry = disclosures2[record.capsule_id];
+    if (!object3(entry) || !Object.hasOwn(entry, field))
+      return { state: "withheld" };
+    const committed = resolveDisclosurePath(
+      record,
+      disclosureEligibleFields[field]
+    );
+    if (isHex64(committed)) {
+      try {
+        if (await jsonDigest(entry[field]) === committed)
+          return { state: "disclosed", payload: entry[field] };
+      } catch {
+      }
+    }
+    return { state: "disclosure_mismatch" };
+  };
+  var disclosurePayload = async (record, disclosures2, field) => (await resolveDisclosure(record, disclosures2, field)).payload;
 
   // src/model.ts
   var CURRENT_SPEC_VERSION = "draft-mih-scitt-agent-action-capsule-05";
@@ -4564,21 +4879,6 @@ var EvidenceGraph = (() => {
   var committedDigest = (record, field) => asString(
     objectOrEmpty(objectOrEmpty(record.model_attestation).compute_attestation)[`${field}_digest`]
   );
-  var resolveDisclosure = async (record, disclosures2, field) => {
-    const entry = disclosures2[record.capsule_id];
-    if (!isObject(entry) || !Object.hasOwn(entry, field))
-      return { state: "withheld" };
-    const committed = committedDigest(record, field);
-    if (isHex64(committed)) {
-      try {
-        if (await jsonDigest(entry[field]) === committed)
-          return { state: "disclosed", payload: entry[field] };
-      } catch {
-      }
-    }
-    return { state: "disclosure_mismatch" };
-  };
-  var disclosurePayload = async (record, disclosures2, field) => (await resolveDisclosure(record, disclosures2, field)).payload;
   var logCoordinates = (memberships2, capsuleId) => {
     const membership = memberships2[capsuleId];
     if (!isObject(membership) || !isObject(membership.log_coordinates))
@@ -4602,28 +4902,27 @@ var EvidenceGraph = (() => {
       ...agentOutputDigest === void 0 ? {} : { agentOutputDigest }
     };
   };
-  async function buildEvidenceGraph(bundle) {
+  async function buildEvidenceGraph(input) {
+    const context = await verifiedBundleContext(input);
+    const bundle = context.bundle;
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures)) {
       throw new EvidenceGraphError("bundle must contain records and disclosures");
     }
-    const disclosures2 = bundle.disclosures;
-    const records = bundle.records.filter(
-      (record) => isObject(record) && asString(record.capsule_id) !== void 0
-    );
-    const root = asString(bundle.root);
-    const rootRecord = records.find((record) => record.capsule_id === root);
+    const records = context.records;
+    const rootRecord = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
     if (rootRecord === void 0) {
-      throw new EvidenceGraphError("root aggregate payload not disclosed");
+      throw new EvidenceGraphError(
+        bundle.records.some(
+          (record) => isObject(record) && record.capsule_id === context.root
+        ) ? "root aggregate payload is not disclosed" : "root aggregate payload not disclosed"
+      );
     }
-    const rootPayload = await disclosurePayload(
-      rootRecord,
-      disclosures2,
-      "agent_input"
-    );
+    const payloadOf = (record) => verifiedPayload(context, record.capsule_id, "agent_input");
+    const rootPayload = payloadOf(rootRecord);
     if (!isObject(rootPayload) || rootPayload.spec_version !== "evaluation-summary/v1") {
       throw new EvidenceGraphError("root aggregate payload is not disclosed");
     }
-    const memberships2 = isObject(bundle.completeness_certificate) ? isObject(bundle.completeness_certificate.memberships) ? bundle.completeness_certificate.memberships : {} : {};
+    const memberships2 = context.completeness.memberships;
     const aggregate = {
       capsuleId: rootRecord.capsule_id,
       ...asString(rootPayload.cross_case_aggregation) === void 0 ? {} : {
@@ -4638,9 +4937,7 @@ var EvidenceGraph = (() => {
       } : {},
       ...Object.hasOwn(rootPayload, "cohort") ? { cohort: rootPayload.cohort } : {}
     };
-    const recordsById = new Map(
-      records.map((record) => [record.capsule_id, record])
-    );
+    const recordsById = context.recordIndex;
     const reportIds = /* @__PURE__ */ new Set();
     const visitedSummaries = /* @__PURE__ */ new Set();
     const collectReports = async (record) => {
@@ -4649,11 +4946,7 @@ var EvidenceGraph = (() => {
       for (const id of actedOnReferences(record)) {
         const referenced = recordsById.get(id);
         if (referenced === void 0) continue;
-        const payload = await disclosurePayload(
-          referenced,
-          disclosures2,
-          "agent_input"
-        );
+        const payload = payloadOf(referenced);
         if (!isObject(payload)) continue;
         if (payload.spec_version === "evaluation-report/v1") reportIds.add(id);
         else if (payload.spec_version === "evaluation-summary/v1")
@@ -4664,7 +4957,7 @@ var EvidenceGraph = (() => {
     const reports = [];
     for (const reportId of reportIds) {
       const record = recordsById.get(reportId);
-      const payload = await disclosurePayload(record, disclosures2, "agent_input");
+      const payload = payloadOf(record);
       if (!isObject(payload) || payload.spec_version !== "evaluation-report/v1")
         continue;
       const date = asString(payload.date);
@@ -4675,17 +4968,13 @@ var EvidenceGraph = (() => {
       for (const actId of actedOnReferences(record)) {
         const actRecord = recordsById.get(actId);
         if (actRecord === void 0) continue;
-        const input = await resolveDisclosure(
-          actRecord,
-          disclosures2,
-          "agent_input"
-        );
-        const output = await resolveDisclosure(
-          actRecord,
-          disclosures2,
+        const input2 = disclosureOf(context, actRecord.capsule_id, "agent_input");
+        const output = disclosureOf(
+          context,
+          actRecord.capsule_id,
           "agent_output"
         );
-        const inputCase = isObject(input.payload) && isObject(input.payload.case) ? input.payload.case : {};
+        const inputCase = isObject(input2.payload) && isObject(input2.payload.case) ? input2.payload.case : {};
         const caseId = asString(inputCase.conversation_id);
         const turnIdx = asNumber(inputCase.turn_idx);
         const actResolvedLogCoordinates = logCoordinates(
@@ -4696,9 +4985,9 @@ var EvidenceGraph = (() => {
           capsuleId: actRecord.capsule_id,
           caseId: caseId ?? actRecord.capsule_id,
           turnIdx: turnIdx ?? Number.MAX_SAFE_INTEGER,
-          ...isObject(input.payload) ? { agentInput: input.payload } : {},
+          ...isObject(input2.payload) ? { agentInput: input2.payload } : {},
           ...output.state === "disclosed" ? { agentOutput: output.payload } : {},
-          agentInputDisclosure: input.state,
+          agentInputDisclosure: input2.state,
           agentOutputDisclosure: output.state,
           ...committedDigests(actRecord),
           ...recordTimes(actRecord),
@@ -4789,7 +5078,7 @@ var EvidenceGraph = (() => {
         continue;
       const reportId = asString(record.chain.parent_capsule_id);
       if (reportId === void 0) continue;
-      const payload = await disclosurePayload(record, disclosures2, "agent_input");
+      const payload = payloadOf(record);
       const ratingVerdict = isObject(payload) ? verdict(payload.verdict) : void 0;
       const report = reports.find(
         (candidate) => candidate.capsuleId === reportId
@@ -4803,7 +5092,7 @@ var EvidenceGraph = (() => {
     }
     let calibration;
     for (const record of records) {
-      const payload = await disclosurePayload(record, disclosures2, "agent_input");
+      const payload = payloadOf(record);
       if (!isObject(payload) || payload.spec_version !== "calibration-summary/v1")
         continue;
       calibration = {
@@ -5114,10 +5403,10 @@ var EvidenceGraph = (() => {
       return void 0;
     return body;
   }
-  async function inboundCloseLinks(records, disclosures2) {
+  async function inboundCloseLinks(context) {
     const inbound = /* @__PURE__ */ new Map();
-    for (const record of records) {
-      const header = await disclosurePayload(record, disclosures2, "agent_input");
+    for (const record of context.records) {
+      const header = verifiedPayload(context, record.capsule_id, "agent_input");
       if (!isObject(header) || !Array.isArray(header.links)) continue;
       const bookId = asString(header.book_id);
       const signer = await signerOf(record);
@@ -5177,13 +5466,13 @@ var EvidenceGraph = (() => {
   var actedOnReferences2 = (record) => Array.isArray(record.references) ? record.references.flatMap(
     (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" && typeof reference.digest === "string" ? [reference.digest] : []
   ) : [];
-  async function resultDocument(root, disclosures2) {
-    return (await resultCarriers(root, disclosures2))[0];
+  function resultDocument(context, root) {
+    return resultCarriers(context, root)[0];
   }
-  async function resultCarriers(record, disclosures2) {
+  function resultCarriers(context, record) {
     const carriers = [];
     for (const member of ["agent_output", "agent_input"]) {
-      const payload = await disclosurePayload(record, disclosures2, member);
+      const payload = verifiedPayload(context, record.capsule_id, member);
       if (!isObject(payload)) continue;
       if (payload.result_version === RESULT_VERSION)
         carriers.push({ member, form: "payload", document: payload });
@@ -5192,19 +5481,18 @@ var EvidenceGraph = (() => {
     }
     return carriers;
   }
-  async function nonResultDescription(root, disclosures2) {
-    const header = await disclosurePayload(root, disclosures2, "agent_input");
+  function nonResultDescription(context, root) {
+    const header = verifiedPayload(context, root.capsule_id, "agent_input");
     const recordType = isObject(header) ? header.record_type : void 0;
     return typeof recordType === "string" ? `agent_input is a book record header of record_type ${JSON.stringify(recordType)}, not ${JSON.stringify(RESULT_RECORD_TYPE)}` : `no disclosed member carries an ${RESULT_VERSION} document or an ${RESULT_RECORD_TYPE} record header`;
   }
-  async function isResultRoot(bundle) {
+  async function isResultRoot(input) {
+    const context = await verifiedBundleContext(input);
+    const bundle = context.bundle;
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures))
       return false;
-    const root = asString(bundle.root);
-    const record = bundle.records.find(
-      (candidate) => isObject(candidate) && candidate.capsule_id === root
-    );
-    return record !== void 0 && await resultDocument(record, bundle.disclosures) !== void 0;
+    const record = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
+    return record !== void 0 && resultDocument(context, record) !== void 0;
   }
   var BOOK_PAYLOADS_EXTENSION = "evidencebook/payloads";
   var AGENT_INPUT_ORIGINALS_EXTENSION = "capsulectl/agent-input-originals/v1";
@@ -5301,22 +5589,24 @@ var EvidenceGraph = (() => {
     }
     return { state: "withheld" };
   }
-  async function buildResultRoot(bundle) {
+  async function buildResultRoot(input) {
+    const context = await verifiedBundleContext(input);
+    const bundle = context.bundle;
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures))
       throw new EvidenceGraphError("bundle must contain records and disclosures");
-    const disclosures2 = bundle.disclosures;
-    const records = bundle.records.filter(
-      (record) => isObject(record) && asString(record.capsule_id) !== void 0
-    );
-    const root = asString(bundle.root);
-    const rootRecord = records.find((record) => record.capsule_id === root);
+    const records = context.records;
+    const rootRecord = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
     if (rootRecord === void 0)
-      throw new EvidenceGraphError("root record not supplied");
-    const rootCarriers = await resultCarriers(rootRecord, disclosures2);
+      throw new EvidenceGraphError(
+        bundle.records.some(
+          (record) => isObject(record) && record.capsule_id === context.root
+        ) ? "root record failed verification" : "root record not supplied"
+      );
+    const rootCarriers = resultCarriers(context, rootRecord);
     const carried = rootCarriers[0];
     if (carried === void 0)
       throw new EvidenceGraphError(
-        `root is not a Result v0: ${await nonResultDescription(rootRecord, disclosures2)}`
+        `root is not a Result v0: ${nonResultDescription(context, rootRecord)}`
       );
     if (rootCarriers.length > 1)
       throw new EvidenceGraphError(
@@ -5324,7 +5614,7 @@ var EvidenceGraph = (() => {
       );
     const otherCarriers = [];
     for (const record of records)
-      if (record !== rootRecord && (await resultCarriers(record, disclosures2)).length > 0)
+      if (record !== rootRecord && resultCarriers(context, record).length > 0)
         otherCarriers.push(record.capsule_id);
     if (otherCarriers.length > 0)
       throw new EvidenceGraphError(
@@ -5340,10 +5630,8 @@ var EvidenceGraph = (() => {
         `root is not a Result v0: ${findings.join("; ")}`
       );
     const document2 = carried.document;
-    const memberships2 = isObject(bundle.completeness_certificate) ? isObject(bundle.completeness_certificate.memberships) ? bundle.completeness_certificate.memberships : {} : {};
-    const recordsById = new Map(
-      records.map((record) => [record.capsule_id, record])
-    );
+    const memberships2 = context.completeness.memberships;
+    const recordsById = context.recordIndex;
     const bookPayloads = isObject(bundle.extensions) && isObject(bundle.extensions[BOOK_PAYLOADS_EXTENSION]) ? bundle.extensions[BOOK_PAYLOADS_EXTENSION] : {};
     const inputOriginals = isObject(bundle.extensions) && isObject(bundle.extensions[AGENT_INPUT_ORIGINALS_EXTENSION]) ? bundle.extensions[AGENT_INPUT_ORIGINALS_EXTENSION] : {};
     let carriersById;
@@ -5351,15 +5639,9 @@ var EvidenceGraph = (() => {
       if (carriersById === void 0) {
         carriersById = /* @__PURE__ */ new Map();
         for (const record of records) {
-          const entry = disclosures2[record.capsule_id];
-          if (!isObject(entry) || !isObject(entry.agent_input) || entry.agent_input.record_type !== PUBLISHED_CAPSULE_RECORD_TYPE)
+          const header = disclosureOf(context, record.capsule_id, "agent_input");
+          if (header.state !== "disclosed" || !isObject(header.payload) || header.payload.record_type !== PUBLISHED_CAPSULE_RECORD_TYPE)
             continue;
-          const header = await resolveDisclosure(
-            record,
-            disclosures2,
-            "agent_input"
-          );
-          if (header.state !== "disclosed" || !isObject(header.payload)) continue;
           const subject = header.payload.subject_ref;
           if (isHex64(subject) && !recordsById.has(subject))
             carriersById.set(subject, record);
@@ -5376,11 +5658,7 @@ var EvidenceGraph = (() => {
       const coordinates = logCoordinates(memberships2, record.capsule_id);
       const agentInputDigest = committedDigest(record, "agent_input");
       const agentOutputDigest = committedDigest(record, "agent_output");
-      const agentInput = await resolveDisclosure(
-        record,
-        disclosures2,
-        "agent_input"
-      );
+      const agentInput = disclosureOf(context, record.capsule_id, "agent_input");
       const carriedInput = agentInput.state === "disclosed" ? await resolveCarriedInput(
         agentInput.payload,
         bookPayloads,
@@ -5397,7 +5675,7 @@ var EvidenceGraph = (() => {
           carriedInputDigest: carriedCapsule.inputDigest
         },
         ...carriedCapsule !== void 0 ? { stated: carriedCapsule.stated } : agentInput.state === "disclosed" && isObject(agentInput.payload) && agentInput.payload.record_type === PUBLISHED_CAPSULE_RECORD_TYPE ? {} : { stated: statedTimes(record) },
-        agentOutput: await resolveDisclosure(record, disclosures2, "agent_output"),
+        agentOutput: disclosureOf(context, record.capsule_id, "agent_output"),
         ...agentInputDigest === void 0 ? {} : { agentInputDigest },
         ...agentOutputDigest === void 0 ? {} : { agentOutputDigest },
         ...coordinates === void 0 ? {} : { logCoordinates: coordinates },
@@ -5409,7 +5687,7 @@ var EvidenceGraph = (() => {
     const hasCloseClaim = document2.claims.some(
       (raw) => raw.type === CLOSE_CLAIM
     );
-    const inbound = hasCloseClaim ? await inboundCloseLinks(records, disclosures2) : /* @__PURE__ */ new Map();
+    const inbound = hasCloseClaim ? await inboundCloseLinks(context) : /* @__PURE__ */ new Map();
     const claims = [];
     for (const raw of document2.claims) {
       const evidence = [];
@@ -5431,7 +5709,7 @@ var EvidenceGraph = (() => {
         const closeRecord = recordsById.get(closeRef);
         const supplied = closeRecord !== void 0;
         const peer = asString(body.peer);
-        const closeHeader = closeRecord === void 0 ? void 0 : await disclosurePayload(closeRecord, disclosures2, "agent_input");
+        const closeHeader = closeRecord === void 0 ? void 0 : verifiedPayload(context, closeRecord.capsule_id, "agent_input");
         const closeBookId = isObject(closeHeader) ? asString(closeHeader.book_id) : void 0;
         const closeSigner = closeRecord === void 0 ? {} : await signerOf(closeRecord);
         const { links, ignored } = counterpartyLinks(
@@ -8364,10 +8642,10 @@ var EvidenceGraph = (() => {
     const key = str(obj?.key);
     const article = str(obj?.article);
     const title = str(obj?.title);
-    const plain = str(obj?.plain);
+    const plain2 = str(obj?.plain);
     const method = str(obj?.method);
     const applicability = readApplicability(obj?.applicability);
-    if (key === void 0 || article === void 0 || title === void 0 || plain === void 0 || method === void 0 || applicability === void 0)
+    if (key === void 0 || article === void 0 || title === void 0 || plain2 === void 0 || method === void 0 || applicability === void 0)
       return void 0;
     const rows = Array.isArray(obj?.rows) ? obj.rows.flatMap((r) => {
       const row = readRow(r);
@@ -8377,7 +8655,7 @@ var EvidenceGraph = (() => {
       key,
       article,
       title,
-      plain,
+      plain: plain2,
       judgedTerms: strArray(obj?.judged_terms),
       applicability,
       method,
@@ -8422,28 +8700,23 @@ var EvidenceGraph = (() => {
   var rowCitationDigests = (row) => Array.isArray(row.references) ? row.references.flatMap(
     (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" ? asString(reference.digest) === void 0 ? [] : [asString(reference.digest)] : []
   ) : [];
-  async function buildReportRows(bundle) {
+  async function buildReportRows(input) {
+    const context = await verifiedBundleContext(input);
+    const bundle = context.bundle;
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures)) {
       return void 0;
     }
-    const disclosures2 = bundle.disclosures;
-    const records = bundle.records.filter(
-      (record) => isObject(record) && asString(record.capsule_id) !== void 0
-    );
-    const root = asString(bundle.root);
-    const rootRecord = records.find((record) => record.capsule_id === root);
+    const rootRecord = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
     if (rootRecord === void 0) return void 0;
-    const rootPayload = await disclosurePayload(
-      rootRecord,
-      disclosures2,
+    const rootPayload = verifiedPayload(
+      context,
+      rootRecord.capsule_id,
       "agent_input"
     );
     if (!isObject(rootPayload) || rootPayload.spec_version !== "report/v1")
       return void 0;
-    const memberships2 = isObject(bundle.completeness_certificate) ? isObject(bundle.completeness_certificate.memberships) ? bundle.completeness_certificate.memberships : {} : {};
-    const recordsById = new Map(
-      records.map((record) => [record.capsule_id, record])
-    );
+    const memberships2 = context.completeness.memberships;
+    const recordsById = context.recordIndex;
     const rows = [];
     for (const raw of Array.isArray(rootPayload.rows) ? rootPayload.rows : []) {
       if (!isObject(raw)) continue;
@@ -8457,11 +8730,7 @@ var EvidenceGraph = (() => {
       for (const digest of rowCitationDigests(raw)) {
         const record = recordsById.get(digest);
         if (record === void 0) continue;
-        const resolved = await resolveDisclosure(
-          record,
-          disclosures2,
-          "agent_input"
-        );
+        const resolved = disclosureOf(context, record.capsule_id, "agent_input");
         const coordinates = logCoordinates(memberships2, record.capsule_id);
         citations2.push({
           capsuleId: record.capsule_id,
@@ -8748,7 +9017,8 @@ var EvidenceGraph = (() => {
     });
     host.append(list);
   }
-  async function renderVerificationPage(root, bundle, verified, countersigners, styled = false) {
+  async function renderVerificationPage(root, context, styled = false) {
+    const { bundle, verification: verified, countersigners } = context;
     const section = element3("section");
     section.dataset.page = "verification";
     let page = section;
@@ -8780,9 +9050,8 @@ var EvidenceGraph = (() => {
       model.uncheckpointedCount,
       model.coverage
     );
-    const countersignatures = object8(bundle).countersignatures;
     const stamps = await classifyCountersignatures(
-      Array.isArray(countersignatures) ? countersignatures : [],
+      context.countersignatures.map((entry) => entry.value),
       verified.bundleDigest,
       declaredProducerKeys(bundle),
       countersigners
@@ -9434,16 +9703,19 @@ var EvidenceGraph = (() => {
     });
     root.append(calendar, detail);
   }
-  async function renderEvidenceGraph(bundle, root, countersigners) {
-    const verification = await verifyBundle(bundle);
+  async function renderEvidenceGraph(input, root, countersigners) {
+    const context = isVerifiedBundleContext(input) ? countersigners === void 0 ? input : withCountersigners(input, countersigners) : await buildVerifiedBundleContext(input, {
+      ...countersigners === void 0 ? {} : { countersigners }
+    });
+    const { bundle, verification } = context;
     const verified = bundleVerified(verification);
-    const reportRows = verified ? await buildReportRows(bundle) : void 0;
-    const result = verified && reportRows === void 0 && await isResultRoot(bundle) ? await buildResultRoot(bundle) : void 0;
+    const reportRows = verified ? await buildReportRows(context) : void 0;
+    const result = verified && reportRows === void 0 && await isResultRoot(context) ? await buildResultRoot(context) : void 0;
     let graph2;
     let noAggregate = false;
     if (verified && reportRows === void 0 && result === void 0) {
       try {
-        graph2 = await buildEvidenceGraph(bundle);
+        graph2 = await buildEvidenceGraph(context);
       } catch (err) {
         if (!(err instanceof EvidenceGraphError)) throw err;
         noAggregate = true;
@@ -9486,27 +9758,24 @@ var EvidenceGraph = (() => {
       note.textContent = "This bundle carries no evaluation summary, so there is no aggregate view. The records and their verification are below.";
       root.append(note);
     }
-    await renderVerificationPage(
-      root,
-      bundle,
-      verification,
-      countersigners,
-      styled
-    );
+    await renderVerificationPage(root, context, styled);
   }
   return __toCommonJS(browser_exports2);
 })();
 globalThis.renderEvidenceGraph = EvidenceGraph.renderEvidenceGraph;
 </script>
     <!-- prettier-ignore -->
-    <script>renderEvidenceGraph(window.__BUNDLE__, document.getElementById("app"));</script>
-  <script type="application/json" id="deal-countersign">{"finding":"not_countersigned","text":"Not countersigned: no other party has signed this record. It stands on the agent's own seal and any witness receipt above."}</script>
-  <script>// deal-view.js: the page `capsulectl deal report --html` writes. Three parts:
+    <script>// deal-view.js: the page `capsulectl deal report --html` writes. Three parts:
 // what you asked, what the agent did, anomalies on either side. Each item
-// expands to its sealed steps. The vendored evidence-graph verifier checks the
-// whole bundle first; a step's line is shown only when the verifier matched
-// the step's sealed record, otherwise the step shows its capsule_id only.
-// All text is set with textContent; nothing from the bundle is parsed as HTML.
+// expands to its sealed steps. It is a digest-pinned module the page builder
+// inlines: it never verifies and never reads the bundle itself. The page's
+// bootstrap builds the verified context once (the vendored evidence-graph
+// runtime's buildVerifiedBundleContext) and hands it here, with what
+// capsulectl checked when it built the page (the countersign line, and the
+// words it recomputed against their sealed commitments). A step's line is
+// shown only when its sealed record's disclosure verified, otherwise the step
+// shows its capsule_id only. All text is set with textContent; nothing from
+// the bundle is parsed as HTML.
 // versionBefore reports whether version a is older than b: "v0.1.0-rc3" style,
 // numbers compared as numbers, a pre-release before its release. An
 // unparsable version, or a development build, is never called older.
@@ -9529,21 +9798,24 @@ function versionBefore(a, b) {
   return x.pre < y.pre;
 }
 
-(async () => {
-  const host = document.getElementById("deal");
-  const bundle = window.__BUNDLE__;
+globalThis.capsulectlDealView = async (context, page) => {
+  const app = document.getElementById("app");
+  const host = document.createElement("div");
+  host.id = "deal";
+  app.before(host);
+  // The context's own frozen copy of the bundle, read only for what no
+  // record seals: the extension blocks and the checkpoint's witnesses.
+  const bundle = context.bundle;
+  const payload = (id) => EvidenceGraph.verifiedPayload(context, id, "agent_input");
   const el = (tag, text, cls) => {
     const node = document.createElement(tag);
     if (text !== undefined) node.textContent = text;
     if (cls) node.className = cls;
     return node;
   };
-  let verification;
-  try {
-    verification = await EvidenceGraph.verifyBundle(bundle);
-  } catch (e) {
-    verification = undefined;
-  }
+  // The one verification the page ran, read from the context. Stricter than
+  // the core's gate in one place: membership must be proven, not unbound.
+  const verification = context.verification;
   const ok =
     verification !== undefined &&
     verification.graphClosure.status === "pass" &&
@@ -9556,8 +9828,11 @@ function versionBefore(a, b) {
     return;
   }
 
+  // In the verifier's disclosure order, as the context resolved each one.
   const matched = new Set(
-    verification.disclosures.filter((d) => d.status === "disclosure_match" && d.member === "agent_input").map((d) => d.capsuleId),
+    verification.disclosures
+      .filter((d) => d.member === "agent_input" && EvidenceGraph.disclosureOf(context, d.capsuleId, "agent_input").state === "disclosed")
+      .map((d) => d.capsuleId),
   );
   // The deal's text: the input of the sealed report the x-deal-v0 extension
   // points at, checked like every record (its disclosure matched). A bundle
@@ -9565,20 +9840,18 @@ function versionBefore(a, b) {
   // itself, which no record seals, and the page says so.
   const dealExt = (bundle.extensions || {})["x-deal-v0"] || {};
   const sealedId = typeof dealExt.sealed_report === "string" ? dealExt.sealed_report : undefined;
-  const reportInput = (id) => ((bundle.disclosures || {})[id] || {}).agent_input;
-  const otherReports = verification.disclosures.filter((d) => {
-    const input = d.member === "agent_input" ? reportInput(d.capsuleId) : undefined;
-    return d.capsuleId !== sealedId && input && input.type === "deal_report";
+  const otherReports = [...matched].filter((id) => {
+    const input = payload(id);
+    return id !== sealedId && input && input.type === "deal_report";
   });
   // A sealed report's record stays in every later bundle (it is signed, and
   // on the log the bundle covers), so a bundle holding one whose extension
   // names none had its text swapped for unsealed text: refused, never shown
   // under the "not checked" label.
-  const reportRecords = (bundle.records || []).filter((r) => r && r.action_id === "capsulectl-deal-report");
+  const reportRecords = context.records.filter((r) => r && r.action_id === "capsulectl-deal-report");
   let report = dealExt;
   if (sealedId !== undefined || otherReports.length > 0 || reportRecords.length > 0) {
-    const matchedReport = verification.disclosures.some((d) => d.capsuleId === sealedId && d.member === "agent_input" && d.status === "disclosure_match");
-    const input = matchedReport ? reportInput(sealedId) : undefined;
+    const input = sealedId !== undefined ? payload(sealedId) : undefined;
     if (otherReports.length > 0 || !input || input.type !== "deal_report" || typeof input.report !== "object" || input.report === null) {
       host.append(el("p", "⚠️ The deal's text could not be checked against its sealed record. Do not rely on it.", "deal-bad"));
       return;
@@ -9588,7 +9861,7 @@ function versionBefore(a, b) {
   const sealed = sealedId !== undefined;
   const shared = report.audience === "counterparty" || report.audience === "adjudicator";
   const byId = new Map((report.steps || []).map((s) => [s.capsule_id, s]));
-  const base = matched.has(report.asked_step) ? bundle.disclosures[report.asked_step].agent_input : undefined;
+  const base = payload(report.asked_step);
   if (!shared && (!base || !base["x-deal-v0"] || base["x-deal-v0"].record_type !== "baseline")) {
     host.append(el("p", "⚠️ The deal's opening step is not in this report.", "deal-bad"));
     return;
@@ -9683,15 +9956,7 @@ function versionBefore(a, b) {
   // carries a countersignature capsulectl did not check says only that.
   // The page renders the line capsulectl wrote; it names no rung itself.
   let countersign = { text: "The countersign line could not be read from this file." };
-  const csNode = document.getElementById("deal-countersign");
-  if (csNode) {
-    try {
-      const parsed = JSON.parse(csNode.textContent);
-      if (parsed && typeof parsed.text === "string") countersign = parsed;
-    } catch (e) {
-      // unreadable: say so, and claim nothing
-    }
-  }
+  if (page && page.countersign && typeof page.countersign.text === "string") countersign = page.countersign;
   header.append(el("p", countersign.text, countersign.flag === true ? "deal-rung deal-bad" : "deal-rung"));
   if (typeof countersign.note === "string" && countersign.note) header.append(el("p", countersign.note, "deal-note"));
   // Written by capsulectl from what the deal recorded (dealDidLine): the
@@ -9719,7 +9984,7 @@ function versionBefore(a, b) {
     header.append(el("p", `A shared copy for ${who}. Left out of this copy: ${(report.withheld || []).join(", ")}.`, "deal-note"));
   }
 
-  const recordOk = (id) => verification.capsuleResults[id] !== undefined && verification.capsuleResults[id].ok;
+  const recordOk = (id) => context.recordIndex.has(id);
   const steps = (ids) => {
     const list = el("ol", undefined, "deal-steps");
     ids.forEach((id) => {
@@ -9753,7 +10018,7 @@ function versionBefore(a, b) {
   const provenance = el("section", undefined, "deal-provenance");
   const builds = [];
   matched.forEach((id) => {
-    const rec = ((bundle.disclosures || {})[id] || {}).agent_input || {};
+    const rec = payload(id) || {};
     // An x-deal-v0 record names its producer in its block; a typed record, in its header.
     const p = (rec["x-deal-v0"] || rec).producer;
     const name = p && typeof p.version === "string" ? `${p.name || "capsulectl"} ${p.version} (${p.commit || "unknown"})` : "an earlier capsulectl that did not record its version";
@@ -9773,23 +10038,17 @@ function versionBefore(a, b) {
     provenance.append(what);
   }
 
-  // The user's words are checked here against the baseline's sealed
-  // commitment: SHA-256 over JCS({"nonce","text"}). For two string members in
-  // this order, JSON.stringify escapes exactly as RFC 8785 does.
+  // The user's words were checked against the baseline's sealed commitment
+  // when this page was built (capsulectl refuses to write a page whose words
+  // do not match); this page does not recompute it.
   const opening = report.asked_opening || {};
-  let askedChecked = false;
-  if (typeof opening.nonce === "string" && typeof opening.text === "string") {
-    const jcs = `{"nonce":${JSON.stringify(opening.nonce)},"text":${JSON.stringify(opening.text)}}`;
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(jcs));
-    const hex = Array.from(new Uint8Array(digest), (x) => x.toString(16).padStart(2, "0")).join("");
-    askedChecked = hex === base.body.intent.verbatim_commitment;
-  }
+  const askedChecked = !!(page && page.openings && page.openings.asked === true) && typeof opening.text === "string";
   host.append(el("h2", "What you asked"));
   if (shared) {
     host.append(el("p", "Withheld from this copy.", "deal-note"));
   } else if (askedChecked) {
     host.append(item(`“${opening.text}”`, [report.asked_step]));
-    host.append(el("p", "✓ These are the exact words sealed when the deal opened.", "deal-note"));
+    host.append(el("p", "✓ These are the exact words sealed when the deal opened, checked when this page was built.", "deal-note"));
   } else {
     host.append(el("p", "⚠️ The words you asked could not be checked against the sealed record.", "deal-bad"));
   }
@@ -9866,16 +10125,13 @@ function versionBefore(a, b) {
     const labels = { condition: "Condition", warranty: "Warranty", refund_terms: "Refund terms", delivery_promise: "Delivery promise", other: "Other" };
     const heading = !shared ? "What your agent told the buyer" : report.audience === "counterparty" ? "What the seller's agent told you" : "What the seller's agent told the buyer";
     host.append(el("h2", heading));
-    for (const r of said) {
-      const rec = matched.has(r.step) ? ((bundle.disclosures || {})[r.step] || {}).agent_input : undefined;
+    const checked = (page && page.openings && page.openings.representations) || [];
+    for (const [i, r] of said.entries()) {
+      const rec = payload(r.step);
       const body = rec && rec.body;
       const claim = body && (Number.isInteger(r.index) ? (body.claims || [])[r.index] : body);
-      let ok = false;
-      if (claim && claim.source_kind === "agent" && typeof r.nonce === "string" && typeof r.text === "string") {
-        const jcs = `{"nonce":${JSON.stringify(r.nonce)},"text":${JSON.stringify(r.text)}}`;
-        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(jcs));
-        ok = Array.from(new Uint8Array(digest), (x) => x.toString(16).padStart(2, "0")).join("") === claim.text_commitment;
-      }
+      // Checked against its sealed commitment when this page was built.
+      const ok = checked[i] === true && !!claim && typeof r.text === "string";
       if (ok) {
         const label = labels[claim.class];
         host.append(item(`${label ? `${label}: ` : ""}“${r.text}” ✓`, [r.step]));
@@ -9883,7 +10139,7 @@ function versionBefore(a, b) {
         host.append(item("⚠️ A statement here could not be checked against its sealed step.", [r.step], "deal-flag"));
       }
     }
-    host.append(el("p", "✓ These are the exact words sealed when the agent said them; this page does not check that they are true.", "deal-note"));
+    host.append(el("p", "✓ These are the exact words sealed when the agent said them, checked when this page was built; this page does not check that they are true.", "deal-note"));
   }
 
   // Cancel-by dates (the point of no return is a date passing) and due
@@ -9982,7 +10238,13 @@ function versionBefore(a, b) {
       "deal-note",
     ),
   );
-})();
+};
 </script>
+    <!-- prettier-ignore -->
+    <script>(async () => {
+  const context = await EvidenceGraph.buildVerifiedBundleContext(window.__BUNDLE__);
+  await renderEvidenceGraph(context, document.getElementById("app"));
+  await capsulectlDealView(context, {"countersign":{"finding":"not_countersigned","text":"Not countersigned: no other party has signed this record. It stands on the agent's own seal and any witness receipt above."},"openings":{"asked":true,"representations":[]}});
+})();</script>
   </body>
 </html>

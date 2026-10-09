@@ -27,6 +27,31 @@
   makes a directory a source of them.
 - **Not in this change:** putting presentations into a page.
 
+### The deal page is built through the emitter's slots, under a per-page CSP
+
+- **Changed:** `deal report --html` builds its page through agent-action-capsule's emitter
+  options (agent-action-capsule `fa49b4d`, with the browser runtime rebuilt from it):
+  - the title;
+  - the deal view's stylesheet (in the theme slot, until module stylesheets can be pinned);
+  - the deal view as a digest-pinned module;
+  - a bootstrap that builds the verified context once.
+
+  The page's Content-Security-Policy lists the digest of every inline script and style and allows
+  no network. Nothing is spliced into the page any more.
+- **Changed: the deal view reads only the verified context.** It no longer verifies the bundle,
+  reads `window.__BUNDLE__` or the bundle's disclosures or records, or recomputes a commitment.
+- **The words a page shows are checked when it is built.** These are the user's words and each
+  statement the agent made. capsulectl recomputes each against its sealed commitment and writes no
+  page whose words do not match. The page now says they were "checked when this page was built".
+- **The sealed-report refusal** stays in the build-time page gate.
+- **Interim:** the deal view's stylesheet rides in the theme slot until the emitter can pin a
+  module's own stylesheet (agent-action-capsule #214).
+- **Not in this change:**
+  - the static, no-script page: capsulectl does not produce it, and will report it as unavailable
+    (`no-document`) for now;
+  - the share gate's removal of the two vendored scripts before it scans a shared page is retired in
+    a later change.
+
 ## v0.1.0-rc14
 
 ### A typed deal's history acts carry the profile payee key

@@ -1,9 +1,14 @@
 // deal-view.js: the page `capsulectl deal report --html` writes. Three parts:
 // what you asked, what the agent did, anomalies on either side. Each item
-// expands to its sealed steps. The vendored evidence-graph verifier checks the
-// whole bundle first; a step's line is shown only when the verifier matched
-// the step's sealed record, otherwise the step shows its capsule_id only.
-// All text is set with textContent; nothing from the bundle is parsed as HTML.
+// expands to its sealed steps. It is a digest-pinned module the page builder
+// inlines: it never verifies and never reads the bundle itself. The page's
+// bootstrap builds the verified context once (the vendored evidence-graph
+// runtime's buildVerifiedBundleContext) and hands it here, with what
+// capsulectl checked when it built the page (the countersign line, and the
+// words it recomputed against their sealed commitments). A step's line is
+// shown only when its sealed record's disclosure verified, otherwise the step
+// shows its capsule_id only. All text is set with textContent; nothing from
+// the bundle is parsed as HTML.
 // versionBefore reports whether version a is older than b: "v0.1.0-rc3" style,
 // numbers compared as numbers, a pre-release before its release. An
 // unparsable version, or a development build, is never called older.
@@ -26,21 +31,24 @@ function versionBefore(a, b) {
   return x.pre < y.pre;
 }
 
-(async () => {
-  const host = document.getElementById("deal");
-  const bundle = window.__BUNDLE__;
+globalThis.capsulectlDealView = async (context, page) => {
+  const app = document.getElementById("app");
+  const host = document.createElement("div");
+  host.id = "deal";
+  app.before(host);
+  // The context's own frozen copy of the bundle, read only for what no
+  // record seals: the extension blocks and the checkpoint's witnesses.
+  const bundle = context.bundle;
+  const payload = (id) => EvidenceGraph.verifiedPayload(context, id, "agent_input");
   const el = (tag, text, cls) => {
     const node = document.createElement(tag);
     if (text !== undefined) node.textContent = text;
     if (cls) node.className = cls;
     return node;
   };
-  let verification;
-  try {
-    verification = await EvidenceGraph.verifyBundle(bundle);
-  } catch (e) {
-    verification = undefined;
-  }
+  // The one verification the page ran, read from the context. Stricter than
+  // the core's gate in one place: membership must be proven, not unbound.
+  const verification = context.verification;
   const ok =
     verification !== undefined &&
     verification.graphClosure.status === "pass" &&
@@ -53,8 +61,11 @@ function versionBefore(a, b) {
     return;
   }
 
+  // In the verifier's disclosure order, as the context resolved each one.
   const matched = new Set(
-    verification.disclosures.filter((d) => d.status === "disclosure_match" && d.member === "agent_input").map((d) => d.capsuleId),
+    verification.disclosures
+      .filter((d) => d.member === "agent_input" && EvidenceGraph.disclosureOf(context, d.capsuleId, "agent_input").state === "disclosed")
+      .map((d) => d.capsuleId),
   );
   // The deal's text: the input of the sealed report the x-deal-v0 extension
   // points at, checked like every record (its disclosure matched). A bundle
@@ -62,20 +73,18 @@ function versionBefore(a, b) {
   // itself, which no record seals, and the page says so.
   const dealExt = (bundle.extensions || {})["x-deal-v0"] || {};
   const sealedId = typeof dealExt.sealed_report === "string" ? dealExt.sealed_report : undefined;
-  const reportInput = (id) => ((bundle.disclosures || {})[id] || {}).agent_input;
-  const otherReports = verification.disclosures.filter((d) => {
-    const input = d.member === "agent_input" ? reportInput(d.capsuleId) : undefined;
-    return d.capsuleId !== sealedId && input && input.type === "deal_report";
+  const otherReports = [...matched].filter((id) => {
+    const input = payload(id);
+    return id !== sealedId && input && input.type === "deal_report";
   });
   // A sealed report's record stays in every later bundle (it is signed, and
   // on the log the bundle covers), so a bundle holding one whose extension
   // names none had its text swapped for unsealed text: refused, never shown
   // under the "not checked" label.
-  const reportRecords = (bundle.records || []).filter((r) => r && r.action_id === "capsulectl-deal-report");
+  const reportRecords = context.records.filter((r) => r && r.action_id === "capsulectl-deal-report");
   let report = dealExt;
   if (sealedId !== undefined || otherReports.length > 0 || reportRecords.length > 0) {
-    const matchedReport = verification.disclosures.some((d) => d.capsuleId === sealedId && d.member === "agent_input" && d.status === "disclosure_match");
-    const input = matchedReport ? reportInput(sealedId) : undefined;
+    const input = sealedId !== undefined ? payload(sealedId) : undefined;
     if (otherReports.length > 0 || !input || input.type !== "deal_report" || typeof input.report !== "object" || input.report === null) {
       host.append(el("p", "⚠️ The deal's text could not be checked against its sealed record. Do not rely on it.", "deal-bad"));
       return;
@@ -85,7 +94,7 @@ function versionBefore(a, b) {
   const sealed = sealedId !== undefined;
   const shared = report.audience === "counterparty" || report.audience === "adjudicator";
   const byId = new Map((report.steps || []).map((s) => [s.capsule_id, s]));
-  const base = matched.has(report.asked_step) ? bundle.disclosures[report.asked_step].agent_input : undefined;
+  const base = payload(report.asked_step);
   if (!shared && (!base || !base["x-deal-v0"] || base["x-deal-v0"].record_type !== "baseline")) {
     host.append(el("p", "⚠️ The deal's opening step is not in this report.", "deal-bad"));
     return;
@@ -180,15 +189,7 @@ function versionBefore(a, b) {
   // carries a countersignature capsulectl did not check says only that.
   // The page renders the line capsulectl wrote; it names no rung itself.
   let countersign = { text: "The countersign line could not be read from this file." };
-  const csNode = document.getElementById("deal-countersign");
-  if (csNode) {
-    try {
-      const parsed = JSON.parse(csNode.textContent);
-      if (parsed && typeof parsed.text === "string") countersign = parsed;
-    } catch (e) {
-      // unreadable: say so, and claim nothing
-    }
-  }
+  if (page && page.countersign && typeof page.countersign.text === "string") countersign = page.countersign;
   header.append(el("p", countersign.text, countersign.flag === true ? "deal-rung deal-bad" : "deal-rung"));
   if (typeof countersign.note === "string" && countersign.note) header.append(el("p", countersign.note, "deal-note"));
   // Written by capsulectl from what the deal recorded (dealDidLine): the
@@ -216,7 +217,7 @@ function versionBefore(a, b) {
     header.append(el("p", `A shared copy for ${who}. Left out of this copy: ${(report.withheld || []).join(", ")}.`, "deal-note"));
   }
 
-  const recordOk = (id) => verification.capsuleResults[id] !== undefined && verification.capsuleResults[id].ok;
+  const recordOk = (id) => context.recordIndex.has(id);
   const steps = (ids) => {
     const list = el("ol", undefined, "deal-steps");
     ids.forEach((id) => {
@@ -250,7 +251,7 @@ function versionBefore(a, b) {
   const provenance = el("section", undefined, "deal-provenance");
   const builds = [];
   matched.forEach((id) => {
-    const rec = ((bundle.disclosures || {})[id] || {}).agent_input || {};
+    const rec = payload(id) || {};
     // An x-deal-v0 record names its producer in its block; a typed record, in its header.
     const p = (rec["x-deal-v0"] || rec).producer;
     const name = p && typeof p.version === "string" ? `${p.name || "capsulectl"} ${p.version} (${p.commit || "unknown"})` : "an earlier capsulectl that did not record its version";
@@ -270,23 +271,17 @@ function versionBefore(a, b) {
     provenance.append(what);
   }
 
-  // The user's words are checked here against the baseline's sealed
-  // commitment: SHA-256 over JCS({"nonce","text"}). For two string members in
-  // this order, JSON.stringify escapes exactly as RFC 8785 does.
+  // The user's words were checked against the baseline's sealed commitment
+  // when this page was built (capsulectl refuses to write a page whose words
+  // do not match); this page does not recompute it.
   const opening = report.asked_opening || {};
-  let askedChecked = false;
-  if (typeof opening.nonce === "string" && typeof opening.text === "string") {
-    const jcs = `{"nonce":${JSON.stringify(opening.nonce)},"text":${JSON.stringify(opening.text)}}`;
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(jcs));
-    const hex = Array.from(new Uint8Array(digest), (x) => x.toString(16).padStart(2, "0")).join("");
-    askedChecked = hex === base.body.intent.verbatim_commitment;
-  }
+  const askedChecked = !!(page && page.openings && page.openings.asked === true) && typeof opening.text === "string";
   host.append(el("h2", "What you asked"));
   if (shared) {
     host.append(el("p", "Withheld from this copy.", "deal-note"));
   } else if (askedChecked) {
     host.append(item(`“${opening.text}”`, [report.asked_step]));
-    host.append(el("p", "✓ These are the exact words sealed when the deal opened.", "deal-note"));
+    host.append(el("p", "✓ These are the exact words sealed when the deal opened, checked when this page was built.", "deal-note"));
   } else {
     host.append(el("p", "⚠️ The words you asked could not be checked against the sealed record.", "deal-bad"));
   }
@@ -363,16 +358,13 @@ function versionBefore(a, b) {
     const labels = { condition: "Condition", warranty: "Warranty", refund_terms: "Refund terms", delivery_promise: "Delivery promise", other: "Other" };
     const heading = !shared ? "What your agent told the buyer" : report.audience === "counterparty" ? "What the seller's agent told you" : "What the seller's agent told the buyer";
     host.append(el("h2", heading));
-    for (const r of said) {
-      const rec = matched.has(r.step) ? ((bundle.disclosures || {})[r.step] || {}).agent_input : undefined;
+    const checked = (page && page.openings && page.openings.representations) || [];
+    for (const [i, r] of said.entries()) {
+      const rec = payload(r.step);
       const body = rec && rec.body;
       const claim = body && (Number.isInteger(r.index) ? (body.claims || [])[r.index] : body);
-      let ok = false;
-      if (claim && claim.source_kind === "agent" && typeof r.nonce === "string" && typeof r.text === "string") {
-        const jcs = `{"nonce":${JSON.stringify(r.nonce)},"text":${JSON.stringify(r.text)}}`;
-        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(jcs));
-        ok = Array.from(new Uint8Array(digest), (x) => x.toString(16).padStart(2, "0")).join("") === claim.text_commitment;
-      }
+      // Checked against its sealed commitment when this page was built.
+      const ok = checked[i] === true && !!claim && typeof r.text === "string";
       if (ok) {
         const label = labels[claim.class];
         host.append(item(`${label ? `${label}: ` : ""}“${r.text}” ✓`, [r.step]));
@@ -380,7 +372,7 @@ function versionBefore(a, b) {
         host.append(item("⚠️ A statement here could not be checked against its sealed step.", [r.step], "deal-flag"));
       }
     }
-    host.append(el("p", "✓ These are the exact words sealed when the agent said them; this page does not check that they are true.", "deal-note"));
+    host.append(el("p", "✓ These are the exact words sealed when the agent said them, checked when this page was built; this page does not check that they are true.", "deal-note"));
   }
 
   // Cancel-by dates (the point of no return is a date passing) and due
@@ -479,4 +471,4 @@ function versionBefore(a, b) {
       "deal-note",
     ),
   );
-})();
+};

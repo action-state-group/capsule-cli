@@ -62,11 +62,20 @@ func pageCountersign(t *testing.T, htmlPath string) dealCountersignView {
 	t.Helper()
 	page, err := os.ReadFile(htmlPath)
 	require.NoError(t, err)
-	m := regexp.MustCompile(`<script type="application/json" id="deal-countersign">(.*?)</script>`).FindSubmatch(page)
-	require.NotNil(t, m, "the page carries the countersign rung")
-	var view dealCountersignView
-	require.NoError(t, json.Unmarshal(m[1], &view))
-	return view
+	var data struct {
+		Countersign dealCountersignView `json:"countersign"`
+	}
+	require.NoError(t, json.Unmarshal(pageData(t, page), &data))
+	return data.Countersign
+}
+
+// pageData is the data the page's bootstrap hands the deal view: what
+// capsulectl checked when it wrote the page.
+func pageData(t *testing.T, page []byte) []byte {
+	t.Helper()
+	m := regexp.MustCompile(`await capsulectlDealView\(context, (.*)\);\n\}\)\(\);`).FindSubmatch(page)
+	require.NotNil(t, m, "the page's bootstrap carries the deal view's data")
+	return m[1]
 }
 
 func asView(t *testing.T, v any) dealCountersignView {
