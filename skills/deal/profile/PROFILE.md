@@ -134,19 +134,22 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 ### Action classes
 
 A `check`, an `action` and a `disclosure` sealed by this release carry `action_class`: the
-action's class in version `taxonomy_version` (`"5"`) of the action taxonomy published in
+action's class in version `taxonomy_version` (`"6"`) of the action taxonomy published in
 capsule-engine, `capsule_engine/guards/action_taxonomy.json`
-(github.com/action-state-group/capsule-engine at `e5ec2c1ba84f9d9269cbb164eb6a92400e4d5d49`,
-file sha256 `7d31e892cdea7352d0485c89430dba028bf02ce91fb0e932f4752c1f4066022f`, JCS sha256
-`af3a054cae880e13ce5d8d8bdaa64383e6f3af14fa2bf2ddb88aab226865b13a`). The two members come
+(github.com/action-state-group/capsule-engine at `7ae6b95b37a3a1c4955af90f56ae4c1c0c404aa9`,
+file sha256 `7563fcaeb6c192a27877fae3131bca1021526046c8976475c46eebf4fb374272`, JCS sha256
+`fc12eb90bc2b3c85bb49c4d3d7be8f384c6e0b8e189bc3b68a753a4f1af5cd94`). The two members come
 together or not at all. Steps sealed before carry neither, and re-derive without them. Steps
-sealed by an earlier release under version `"2"` (at `2521ee6`), `"3"` (at `a5e9e30`) or `"4"`
-(at `5300e0b`) keep their own version. All four name the same classes:
+sealed by an earlier release under version `"2"` (at `2521ee6`), `"3"` (at `a5e9e30`), `"4"`
+(at `5300e0b`) or `"5"` (at `e5ec2c1`) keep their own version. All five name the same classes:
 - version 3 adds `approver_role` `account_holder` to `money.purchase`, `money.subscription`,
   `booking.create` and `booking.modify`;
 - version 4 adds it to `booking.cancel`, `data.delete`, `communication.publish` and
   `disclosure.personal`;
-- version 5 adds it to `communication.send`, a class no deal record carries. A reader that keys a
+- version 5 adds it to `communication.send`, a class no deal record carries;
+- version 6 adds it to `agreement.accept` (a seller's commit, and a rental's or service's commit
+  or sign), `marketplace.offer` and `marketplace.sale` (no deal record carries either: an offer
+  is `external_commitment.other`). A reader that keys a
 limit on an action's class (a per-action or rolling spend cap, for example) selects on
 `action_class`, and resolves it against the taxonomy version it names.
 

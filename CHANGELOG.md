@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### New deal records seal action taxonomy version 6
+
+- **Changed (wire; records sealed before re-derive unchanged).** A deal record's
+  `taxonomy_version` is now `"6"`: capsule-engine's `capsule_engine/guards/action_taxonomy.json`
+  at `7ae6b95b37a3a1c4955af90f56ae4c1c0c404aa9` (file sha256
+  `7563fcaeb6c192a27877fae3131bca1021526046c8976475c46eebf4fb374272`, JCS sha256
+  `fc12eb90bc2b3c85bb49c4d3d7be8f384c6e0b8e189bc3b68a753a4f1af5cd94`).
+- **Every `action_class` is unchanged.** Against version 5 (`e5ec2c1`), version 6 changes only
+  `approver_role` (to `account_holder`) on `agreement.accept`, `marketplace.offer` and
+  `marketplace.sale`. No class is renamed, removed or added, and none changes trigger class.
+  - Deal records carry `agreement.accept` (a seller's commit, and a rental's or service's commit
+    or sign), and its meaning is unchanged.
+  - They never carry `marketplace.offer` or `marketplace.sale`: a seller's offer is
+    `external_commitment.other`.
+- **Each step keeps its own version.** A record sealed under `"2"`, `"3"`, `"4"` or `"5"` re-derives
+  with it.
+- **Release pairing.** A rules checker compares `taxonomy_version` exactly, so a record sealing
+  `"6"` needs a checker that holds version 6. The next release from `main` ships with such a
+  checker; none is cut from `main` before one is available.
+
 ## v0.1.0-rc13
 
 ### The payee keyed per profile, for the user's own history
