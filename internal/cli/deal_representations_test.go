@@ -21,6 +21,9 @@ func TestASellersRepresentationsAreOpenedForTheBuyer(t *testing.T) {
 	claim(`{"text": "Returns accepted within 7 days if unridden", "source_kind": "agent", "class": "refund_terms"}`)
 	claim(`{"text": "Call me on 415-555-0123 to arrange it", "source_kind": "agent", "class": "other"}`)
 	claim(`{"text": "I paid 2400 for it new", "source_kind": "user"}`)
+	claim(`{"text": "Buyer says they can collect on Saturday", "source_kind": "merchant", "source": "seller_message"}`)
+	claim(`{"text": "Listing flagged as a popular item", "source_kind": "platform", "source": "listing_page"}`)
+	claim(`{"text": "Blue book value is about 2100", "source_kind": "external", "source": "price_guide"}`)
 
 	own, _ := ownReportAndChain(t, id)
 	assert.Len(t, own["representations"], 3, "the user's own copy opens every one")
@@ -36,6 +39,11 @@ func TestASellersRepresentationsAreOpenedForTheBuyer(t *testing.T) {
 		assert.Equal(t, "refund_terms", reps[1].(map[string]any)["class"])
 		assert.NotContains(t, shared, "415-555-0123")
 		assert.NotContains(t, shared, "I paid 2400", "the user's own claims are not representations")
+		if audience == dealAudienceCounterparty {
+			for _, closed := range []string{"collect on Saturday", "popular item", "Blue book"} {
+				assert.NotContains(t, shared, closed, "merchant, platform and external claims stay closed for the buyer")
+			}
+		}
 		// The sealed claim the page checks the words against is in the copy,
 		// with its class.
 		assert.Contains(t, shared, `"class":"condition"`)
