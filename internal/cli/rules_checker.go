@@ -616,7 +616,11 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 			}
 		}
 	}
-	if opening := boundsOpeningInForce(events); opening != nil {
+	opening, err := boundsOpeningInForce(events)
+	if err != nil {
+		return nil, nil, err
+	}
+	if opening != nil {
 		input["commercial_bounds_opening"] = opening
 	}
 	// On a sale's thread, the sale's item reference, in the clear for this
@@ -632,12 +636,48 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 // boundsOpeningInForce is the opening of the floor in force: its
 // commercial-bounds/v0 document, the nonce and the bounds_commitment it was
 // sealed as. Only the profile's own rules checker, on this device, gets it:
-// it checks the opening against the commitment, then reads the floor. Nil
-// when the deal states no floor.
-func boundsOpeningInForce(events []sealedEvent) map[string]interface{} {
+// it checks the opening against the commitment, then reads the floor. Nil,
+// with no error, when no floor is in force (the limits in force set no
+// floor).
+//
+// When a floor is in force and its opening cannot be built (the deal's
+// limits cannot be read, no opening on this device recomputes to the
+// commitment, or the one that does is not a commercial-bounds document) it
+// fails closed: a checker given no opening would find the floor rule not
+// applicable, so the check must not run without it. The error names the
+// cause, never the floor.
+func boundsOpeningInForce(events []sealedEvent) (map[string]interface{}, error) {
 	state, err := foldDeal(events)
-	if err != nil || state.intent.MinTotalMinor == nil || state.intent.boundsCommit == "" {
-		return nil
+	if err != nil {
+		return nil, fmt.Errorf("refusing to check: the deal's limits could not be read, so a floor in force could not be opened for the rules checker: %w", err)
+	}
+	if state.intent.MinTotalMinor == nil {
+		return nil, nil
+	}
+	// A floor is in force: its commitment comes from the step that set it.
+	// One that cannot be recomputed here (its opening's nonce is missing)
+	// is no reason to send the checker nothing.
+	commitment := state.intent.boundsCommit
+	// A checker verifies the opening against the task authority it is given
+	// (task_authority_record). A task-authority step seals the floor under
+	// its own nonce, so when one is in force, its own opening is the one
+	// sent, never another step's opening of the same floor.
+	if task := taskAuthorityAt(events, ""); task != "" {
+		for _, se := range events {
+			if se.Digest != task || se.Event.Kind != "task_authority" || se.Event.TaskAuthority == nil || se.Event.TaskAuthority.MinTotalMinor == nil {
+				continue
+			}
+			nonce := se.Event.Nonces["bounds"]
+			if nonce == "" {
+				return nil, errors.New("refusing to check: the task authority in force sets a floor but its opening is not on this device, so the rules checker cannot be given it")
+			}
+			if commitment, err = commitText(nonce, dealTexts(se.Event)["bounds"]); err != nil {
+				return nil, errors.New("refusing to check: the task authority's floor could not be opened for the rules checker")
+			}
+		}
+	}
+	if commitment == "" {
+		return nil, errors.New("refusing to check: a floor is in force but its opening is not on this device, so the rules checker cannot be given it")
 	}
 	for _, se := range events {
 		text, ok := dealTexts(se.Event)["bounds"]
@@ -645,15 +685,15 @@ func boundsOpeningInForce(events []sealedEvent) map[string]interface{} {
 		if !ok || nonce == "" {
 			continue
 		}
-		if c, err := commitText(nonce, text); err == nil && c == state.intent.boundsCommit {
+		if c, err := commitText(nonce, text); err == nil && c == commitment {
 			var doc map[string]interface{}
 			if json.Unmarshal([]byte(text), &doc) != nil {
-				return nil
+				return nil, errors.New("refusing to check: the floor in force opens to something other than a commercial-bounds document, so the rules checker cannot be given it")
 			}
-			return map[string]interface{}{"document": doc, "nonce": nonce, "bounds_commitment": c}
+			return map[string]interface{}{"document": doc, "nonce": nonce, "bounds_commitment": c}, nil
 		}
 	}
-	return nil
+	return nil, errors.New("refusing to check: a floor is in force but no opening on this device recomputes to its bounds_commitment, so the rules checker cannot be given it")
 }
 
 // capsuleWithInput is a sealed capsule with its disclosed agent_input; nil
