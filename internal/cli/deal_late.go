@@ -26,12 +26,14 @@ import (
 //   - rental: when the item is returned;
 //   - service: when the work is done.
 
-// dealCarried is a cancel-by obligation still open when the deal closed,
-// carried by the close (`deal close --carry-open-obligations`).
+// dealCarried is an obligation still open when the deal closed, carried by
+// the close (`deal close --carry-open-obligations`): a cancel-by date, or a
+// due date.
 type dealCarried struct {
 	Step      int64  `json:"step"`
 	CapsuleID string `json:"capsule_id"`
-	CancelBy  string `json:"cancel_by"`
+	CancelBy  string `json:"cancel_by,omitempty"`
+	DueBy     string `json:"due_by,omitempty"`
 }
 
 // finalClose is the index of the deal's final close (a close whose outcome
@@ -208,9 +210,12 @@ func buildDealLifecycle(events []sealedEvent, now time.Time) dealLifecycle {
 		}
 	}
 	l.Text = fmt.Sprintf("Closed at %s (%s).", c.Event.At, c.Event.Close.Outcome)
-	if c.Event.Close.Outcome == "completed" {
+	switch c.Event.Close.Outcome {
+	case "completed":
 		// What was delivered matched what was agreed, with nothing open.
 		l.Text = fmt.Sprintf("Closed at %s: matched, nothing left to match.", c.Event.At)
+	case "not_selected":
+		l.Text = fmt.Sprintf("Closed at %s: not selected; nothing was taken or delivered.", c.Event.At)
 	}
 	switch n := len(l.Later); n {
 	case 0:
@@ -221,7 +226,13 @@ func buildDealLifecycle(events []sealedEvent, now time.Time) dealLifecycle {
 		l.Text += fmt.Sprintf(" %d records sealed after the close are linked to it (each confirms the close).", n)
 	}
 	if len(l.Carried) > 0 {
-		l.Text += fmt.Sprintf(" %d cancel-by date(s) carried at the close; see below.", len(l.Carried))
+		what := "cancel-by date(s)"
+		for _, c := range l.Carried {
+			if c.DueBy != "" {
+				what = "date(s)"
+			}
+		}
+		l.Text += fmt.Sprintf(" %d %s carried at the close; see below.", len(l.Carried), what)
 	}
 	return l
 }

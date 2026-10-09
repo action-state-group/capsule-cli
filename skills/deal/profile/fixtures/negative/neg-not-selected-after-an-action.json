@@ -1,0 +1,50 @@
+{
+  "fixture": "neg-not-selected-after-an-action",
+  "expect": "invalid",
+  "description": "An outcome that says the other side was not chosen, on a deal where an action was taken.",
+  "expected_stage": "chain",
+  "expected_error_contains": "nothing was done on the deal",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-message-quote.json",
+    "03-claim.json",
+    "04-evidence.json",
+    "05-intent.json",
+    "06-approval-confirm-limits.json",
+    "07-check-share-contact.json",
+    "08-verdict-pass.json",
+    "09-approval-standing.json",
+    "10-action-share-contact.json",
+    "11-message-switch.json",
+    "12-detail-change-payee.json",
+    "13-check-pay.json",
+    "14-verdict-pause.json",
+    "15-approval-hold.json",
+    "16-disclosure.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "outcome",
+      "seq": 17,
+      "at": "2026-10-04T09:00:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "218a7793f6dda65189ebba1a6c135f04891d234500ccb3eea20c5f1aa9b8bab8"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      }
+    },
+    "body": {
+      "status": "not_selected",
+      "outcome": "not_selected",
+      "differences": []
+    }
+  }
+}

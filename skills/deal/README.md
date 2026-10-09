@@ -309,7 +309,7 @@ copy, with nothing withheld, so they cannot be combined with `--share`.
 | Audience | What the copy carries |
 |---|---|
 | `keep` (default) | Nothing withheld. No disclosure record: it is the user's own copy. |
-| `counterparty` | Amounts, rails, timestamps and digests only. No home address, no names, payees or contact details, no card or payment identifiers, no verification codes, no message text, no claim text or sources, none of the user's own words, and not the user's spending limit (a record that carries it is withheld; the merchant section leaves out an "approved" amount that is only that limit; the gate refuses it as the field or as money unless it equals the asked price or an amount paid). |
+| `counterparty` | Amounts, rails, timestamps and digests only. No home address, no names, payees or contact details, no card or payment identifiers, no verification codes, no message text, no claim text or sources, none of the user's own words, and not the user's bounds, whichever side they are on: a buyer's spending limit or a seller's floor (a record that carries a bound is withheld; the floor is only ever sealed as a commitment; the merchant section leaves out an "approved" amount that is only that limit; the gate refuses either bound as the field or as money unless it equals the asked price or an amount paid). |
 | `adjudicator` | The counterparty copy plus message text and claim text with sources, and the spending limit. Codes, card numbers, phones, emails and street addresses are replaced with `[withheld]`. |
 
 A sealed record is disclosed whole or not at all, so a shared copy withholds

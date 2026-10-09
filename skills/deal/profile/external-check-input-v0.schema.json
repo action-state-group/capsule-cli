@@ -66,6 +66,42 @@
           "type": "boolean"
         }
       }
+    },
+    "commercial_bounds_opening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document",
+        "nonce",
+        "bounds_commitment"
+      ],
+      "description": "Optional: the opening of the user's floor in force, sent only to the profile's own rules checker on the user's device. document is the commercial-bounds/v0 document (records/commercial-bounds-v0.schema.json); bounds_commitment is SHA-256 over the JCS bytes of {\"nonce\", \"text\"} with text the document's JCS bytes, the value the deal's records seal. A checker recomputes it and reads min_total_minor only when it matches. Absent when the deal states no floor.",
+      "properties": {
+        "document": {
+          "type": "object",
+          "required": [
+            "type",
+            "min_total_minor"
+          ],
+          "properties": {
+            "type": {
+              "const": "commercial-bounds/v0"
+            },
+            "min_total_minor": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "bounds_commitment": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
     }
   },
   "$defs": {

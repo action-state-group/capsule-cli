@@ -148,6 +148,14 @@ func checkFee(action string, fee *int64) error {
 	return nil
 }
 
+// dealReversesRefVersion marks a step whose refund check carries
+// reverses_ref: the pay act the refund reverses, by its record digest, in the
+// typed reference shape (typedRef). It is the same act, by the same digest,
+// as the refund act's refs[rel=reverses] (a deal-record reference), so a
+// reader can key a refund on what it reverses before the act is sealed. A
+// partial cancel reverses no sealed payment and carries none.
+const dealReversesRefVersion = "1"
+
 // sealCancelAmount states a cancel's amount in a sealed record so that nothing
 // reads it as money paid out. A cancel with an amount carries direction "in".
 // An amount that returns a sealed payment stays amount_minor: the refund, the

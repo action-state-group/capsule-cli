@@ -37,6 +37,7 @@ const (
 	typeActionReport     = "action-report/v0"
 	typeCheckRequest     = "check-request/v0"
 	typeCheckResponse    = "check-response/v0"
+	typeCommercialBounds = commercialBoundsKind
 	typedRecordRef       = "record"
 	typedFPAlg           = "hmac-sha256-chain-key"
 )
@@ -80,7 +81,7 @@ func recordSchema(typeName string) (*jsonschema.Schema, error) {
 		}
 		recordSchemas = map[string]*jsonschema.Schema{}
 		for _, t := range []string{typeTaskAuthority, typeProposedAction, typeActionEvaluation, typeActionApproval,
-			typeActionRecord, typeActionOutcome, typeActionReport, typeCheckRequest, typeCheckResponse} {
+			typeActionRecord, typeActionOutcome, typeActionReport, typeCheckRequest, typeCheckResponse, typeCommercialBounds} {
 			s, err := c.Compile("https://agentactioncapsule.org/records/" + schemaFile(t))
 			if err != nil {
 				recordSchemasErr = err
@@ -263,6 +264,13 @@ func taskAuthorityRecord(ev dealEvent, events []sealedEvent, commit func(string)
 	if ta.MaxTotalMinor != nil {
 		body["max_total_minor"] = *ta.MaxTotalMinor
 	}
+	if ta.MinTotalMinor != nil {
+		// The task authority is shared whole: the floor stays private, as
+		// the commitment to its commercial-bounds/v0 document.
+		if body["bounds_commitment"], err = commit("bounds"); err != nil {
+			return nil, err
+		}
+	}
 	if ta.Allowed != nil {
 		allowed := make([]interface{}, len(ta.Allowed))
 		for i, a := range ta.Allowed {
@@ -309,6 +317,9 @@ func confirmedAuthorityBody(ev dealEvent, events []sealedEvent, body map[string]
 	if l := a.Limits; l != nil {
 		if l.New.MaxTotalMinor != nil {
 			out["max_total_minor"] = *l.New.MaxTotalMinor
+		}
+		if l.New.BoundsCommitment != "" {
+			out["bounds_commitment"] = l.New.BoundsCommitment
 		}
 		if l.New.Allowed != nil {
 			allowed := make([]interface{}, len(l.New.Allowed))

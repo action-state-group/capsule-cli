@@ -57,12 +57,21 @@ func compiledDealSchema() (*jsonschema.Schema, error) {
 	return dealSchema, dealSchemaErr
 }
 
+// boundsText adds an intent's commercial-bounds/v0 document to the texts its
+// step commits to, when it states a floor.
+func boundsText(t map[string]string, i dealIntent) {
+	if i.MinTotalMinor != nil {
+		t["bounds"] = commercialBoundsText(*i.MinTotalMinor)
+	}
+}
+
 // The texts a step commits to, by nonce name. Each gets its own nonce.
 func dealTexts(ev dealEvent) map[string]string {
 	t := map[string]string{}
 	switch {
 	case ev.Open != nil:
 		t["verbatim"] = ev.Open.Intent.Verbatim
+		boundsText(t, ev.Open.Intent)
 		// A step sealed before claims were committed carries them in the
 		// clear, so they are no committed text of it.
 		if ev.ClaimCommit != "" {
@@ -76,6 +85,7 @@ func dealTexts(ev dealEvent) map[string]string {
 		}
 	case ev.Intent != nil:
 		t["verbatim"] = ev.Intent.Verbatim
+		boundsText(t, *ev.Intent)
 	case ev.Message != nil:
 		t["content"] = ev.Message.Text
 	case ev.Evidence != nil:
@@ -96,6 +106,7 @@ func dealTexts(ev dealEvent) map[string]string {
 		t["said"] = ev.Approval.Said
 	case ev.TaskAuthority != nil:
 		t["verbatim"] = ev.TaskAuthority.Verbatim
+		boundsText(t, *ev.TaskAuthority)
 	case ev.Platform != nil:
 		t["displayed_text"] = ev.Platform.DisplayedText
 		if ev.Platform.UserText != "" {
@@ -314,6 +325,9 @@ func limitSetBody(l dealLimitSet) map[string]interface{} {
 	if l.MaxTotalMinor != nil {
 		m["max_total_minor"] = *l.MaxTotalMinor
 	}
+	if l.BoundsCommitment != "" {
+		m["bounds_commitment"] = l.BoundsCommitment
+	}
 	if l.Allowed != nil {
 		m["allowed"] = l.Allowed
 	}
@@ -406,11 +420,20 @@ func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]i
 		return nil, err
 	}
 	m := map[string]interface{}{"verbatim_commitment": c}
+	if i.PartyRole != "" {
+		m["party_role"] = i.PartyRole
+	}
 	if asked := termsBody(i.Asked); len(asked) > 0 {
 		m["asked"] = asked
 	}
 	if i.MaxTotalMinor != nil {
 		m["max_total_minor"] = *i.MaxTotalMinor
+	}
+	if i.MinTotalMinor != nil {
+		// The floor itself stays on this device: only its commitment.
+		if m["bounds_commitment"], err = commit("bounds"); err != nil {
+			return nil, err
+		}
 	}
 	if i.Allowed != nil { // present and empty: nothing is allowed yet
 		m["allowed"] = i.Allowed
@@ -659,7 +682,12 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			}
 		}
 		if o := ev.Evidence.Obligation; o != nil {
-			ob := map[string]interface{}{"kind": o.Kind, "cancel_by": o.CancelBy}
+			ob := map[string]interface{}{"kind": o.Kind}
+			if o.due() {
+				ob["due_by"] = o.DueBy
+			} else {
+				ob["cancel_by"] = o.CancelBy
+			}
 			if o.TakesEffect != "" {
 				ob["takes_effect"] = o.TakesEffect
 			}
@@ -747,11 +775,16 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 		// The checked action's direction, as its act would be sealed with: a
 		// cancel that returns a sealed payment is a refund.
-		direction, _ := actDirection(events, dealAct{Action: sn.Action, AmountMinor: sn.AmountMinor, Currency: snapCurrency}, currency)
+		direction, reversed := actDirection(events, dealAct{Action: sn.Action, AmountMinor: sn.AmountMinor, Currency: snapCurrency}, currency)
 		if sn.FeeMinor != nil {
 			body["fee_minor"] = *sn.FeeMinor
 		}
 		classify(body, sn.Action, direction, sn.AmountMinor)
+		// A refund's check names the pay it reverses, as its act will: on a
+		// step that seals the refund's direction (classify).
+		if ev.ReversesRef != "" && ev.TaxonomyVersion != "" && reversed != "" {
+			body["reverses_ref"] = typedRef(digestOf(reversed))
+		}
 		// The most the payment may take, beside the expected charge: what a
 		// limit binds, and (beside spend_minor) what a per-action cap reads.
 		if sn.AuthorizedMaxMinor != nil {
@@ -966,7 +999,13 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if len(cl.Carried) > 0 {
 			carried := make([]interface{}, len(cl.Carried))
 			for i, c := range cl.Carried {
-				carried[i] = map[string]interface{}{"obligation": digestRef(digestOf(c.CapsuleID)), "cancel_by": c.CancelBy}
+				item := map[string]interface{}{"obligation": digestRef(digestOf(c.CapsuleID))}
+				if c.DueBy != "" {
+					item["due_by"] = c.DueBy
+				} else {
+					item["cancel_by"] = c.CancelBy
+				}
+				carried[i] = item
 			}
 			body["carried_obligations"] = carried
 		}
@@ -1160,6 +1199,12 @@ func normalizeNote(ev *dealEvent) error {
 	case ev.Intent != nil:
 		if strings.TrimSpace(ev.Intent.Verbatim) == "" {
 			return inputError("intent.verbatim (the user's own words) is required")
+		}
+		if err = validPartyRole(ev.Intent.PartyRole); err != nil {
+			return err
+		}
+		if err = ev.Intent.validBounds(); err != nil {
+			return err
 		}
 		err = normalizeTerms(&ev.Intent.Asked)
 	}

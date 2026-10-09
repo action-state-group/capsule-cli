@@ -607,8 +607,38 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 			}
 		}
 	}
+	if opening := boundsOpeningInForce(events); opening != nil {
+		input["commercial_bounds_opening"] = opening
+	}
 	raw, err := json.Marshal(input)
 	return raw, scope, err
+}
+
+// boundsOpeningInForce is the opening of the floor in force: its
+// commercial-bounds/v0 document, the nonce and the bounds_commitment it was
+// sealed as. Only the profile's own rules checker, on this device, gets it:
+// it checks the opening against the commitment, then reads the floor. Nil
+// when the deal states no floor.
+func boundsOpeningInForce(events []sealedEvent) map[string]interface{} {
+	state, err := foldDeal(events)
+	if err != nil || state.intent.MinTotalMinor == nil || state.intent.boundsCommit == "" {
+		return nil
+	}
+	for _, se := range events {
+		text, ok := dealTexts(se.Event)["bounds"]
+		nonce := se.Event.Nonces["bounds"]
+		if !ok || nonce == "" {
+			continue
+		}
+		if c, err := commitText(nonce, text); err == nil && c == state.intent.boundsCommit {
+			var doc map[string]interface{}
+			if json.Unmarshal([]byte(text), &doc) != nil {
+				return nil
+			}
+			return map[string]interface{}{"document": doc, "nonce": nonce, "bounds_commitment": c}
+		}
+	}
+	return nil
 }
 
 // capsuleWithInput is a sealed capsule with its disclosed agent_input; nil
