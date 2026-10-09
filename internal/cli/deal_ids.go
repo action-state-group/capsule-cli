@@ -279,10 +279,15 @@ func scanRecord(record map[string]interface{}, localValues []string) error {
 	return nil
 }
 
+// dealSealsCounterpartyProfile is whether a check is followed by its
+// counterparty_profile step; a test turns it off to stand in for a release
+// from before the step existed.
+var dealSealsCounterpartyProfile = true
+
 // counterpartyProfileStep is the counterparty_profile step for a check, or
 // nil when the check names no payee (or one that does not normalize).
 func (s *dealSession) counterpartyProfileStep(snap dealSnapshot) (*dealCounterpartyProfile, error) {
-	if snap.Who == nil || snap.Who.Payee == "" {
+	if !dealSealsCounterpartyProfile || snap.Who == nil || snap.Who.Payee == "" {
 		return nil, nil
 	}
 	fp, err := fingerprintID(profileKeyFor(s.secret), "payee", snap.Who.Payee)

@@ -381,3 +381,166 @@ func TestTheEngineAgreesWithTheProfileVectors(t *testing.T) {
 		}
 	}
 }
+
+// beforeCompanions seals what fn seals as a release from before checks had a
+// counterparty_profile companion would.
+func beforeCompanions(t *testing.T, fn func()) {
+	t.Helper()
+	dealSealsCounterpartyProfile = false
+	defer func() { dealSealsCounterpartyProfile = true }()
+	fn()
+}
+
+// noPayeeOpen opens a purchase whose counterparty is named by its domain
+// only, so its pay check names no payee.
+const noPayeeOpen = `{"type":"purchase","channel":"web",
+	"intent":{"verbatim":"buy me an otter sticker for at most 5 dollars","max_total_minor":500,"allowed":["pay"]},
+	"who":{"domain":"stickers.example"},
+	"terms":{"item":"otter sticker","price_minor":454,"currency":"USD"},
+	"recourse":{"rail":"card","refundable":true}}`
+
+// A check that names no payee seals no companion.
+func TestACheckNamingNoPayeeSealsNoCompanion(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, noPayeeOpen))["deal_id"].(string)
+	dealRun(t, "check", "--deal", id, "--input", writeJSON(t, stickerPay))
+	events := chainSteps(t, id)
+	checked := 0
+	for _, se := range events {
+		assert.NotEqual(t, "counterparty_profile", se.Event.Kind, "step %d", se.Event.N)
+		if se.Event.Kind == "snapshot" {
+			checked++
+			assert.True(t, se.Event.Snapshot.Who == nil || se.Event.Snapshot.Who.Payee == "", "the check names no payee")
+		}
+	}
+	assert.Equal(t, 1, checked)
+}
+
+// payWithChecker opens a deal from open, checks and pays it under a passing
+// rules checker, and returns the authorized act's capsule id.
+func payWithChecker(t *testing.T, open string) string {
+	t.Helper()
+	id := dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
+	require.Equal(t, "pass", dealRun(t, "check", "--deal", id, "--input", writeJSON(t, stickerPay))["verdict"])
+	paid := payNow(t, id, 454)
+	require.Equal(t, false, paid["unchecked"])
+	return paid["capsule_id"].(string)
+}
+
+// History carries no counterparty_profile for an act whose check has no
+// companion: one checked by an earlier release, or one whose check named no
+// payee. Only an act checked with a companion carries one.
+func TestHistoryHasNoProfileFingerprintWithoutACompanion(t *testing.T) {
+	dealFixture(t)
+	checker := stubChecker(t, "rules", checkerPrints("allow", passFinding))
+	pinChecker(t, map[string]any{"command": []string{checker}})
+	stickers := `{"type":"purchase","channel":"web",
+		"intent":{"verbatim":"buy me an otter sticker for at most 5 dollars","max_total_minor":500,"allowed":["pay"]},
+		"who":{"name":"Sticker Marketplace","domain":"stickers.example"},
+		"terms":{"item":"otter sticker","price_minor":454,"currency":"USD"},
+		"recourse":{"rail":"card","refundable":true}}`
+	var old string
+	beforeCompanions(t, func() { old = payWithChecker(t, stickers) })
+	noPayee := payWithChecker(t, noPayeeOpen)
+	current := payWithChecker(t, stickers)
+
+	_, _, input := ruleInputs(t, dealRun(t, "open", "--input", writeJSON(t, stickers))["deal_id"].(string), stickerPay)
+	byID := map[string]map[string]any{}
+	for _, h := range input["history"].([]any) {
+		entry := h.(map[string]any)
+		byID[entry["capsule_id"].(string)] = entry
+	}
+	for name, id := range map[string]string{"an act checked before checks had a companion": old, "an act whose check named no payee": noPayee} {
+		require.Contains(t, byID, id, name)
+		assert.NotContains(t, byID[id], "counterparty_profile", name)
+	}
+	require.Contains(t, byID, current)
+	wantProfileShape(t, byID[current]["counterparty_profile"])
+}
+
+// sharedRecordTypes is the record types a shared copy discloses, in log
+// order, and how many it withholds.
+func sharedRecordTypes(t *testing.T, b map[string]any) ([]string, int) {
+	t.Helper()
+	disclosures, _ := b["disclosures"].(map[string]any)
+	var types []string
+	withheld := 0
+	for _, r := range b["records"].([]any) {
+		rec := r.(map[string]any)
+		d, ok := disclosures[rec["capsule_id"].(string)].(map[string]any)
+		if !ok {
+			withheld++
+			continue
+		}
+		input := d["agent_input"].(map[string]any)
+		if blk, ok := input[dealProfile].(map[string]any); ok {
+			types = append(types, blk["record_type"].(string))
+		} else if typ, ok := input["type"].(string); ok {
+			types = append(types, typ)
+		}
+	}
+	return types, withheld
+}
+
+// A shared copy of a deal with companions discloses the same records as a
+// shared copy of the same deal without: the checks included; only the
+// withheld companions differ.
+func TestASharedCopyShowsTheSameChecksWithCompanions(t *testing.T) {
+	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
+		t.Run(audience, func(t *testing.T) {
+			// A sticker deal: its pay check carries no free text, so a shared
+			// copy shows it.
+			deal := func() string {
+				id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+					"intent":{"verbatim":"buy me an otter sticker for at most 5 dollars","max_total_minor":500,"allowed":["pay"]},
+					"who":{"name":"Sticker Marketplace","domain":"stickers.example"},
+					"terms":{"item":"otter sticker","price_minor":454,"currency":"USD"},
+					"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+				dealRun(t, "check", "--deal", id, "--input", writeJSON(t, stickerPay))
+				payNow(t, id, 454)
+				return id
+			}
+			dealFixture(t)
+			var without string
+			beforeCompanions(t, func() { without = deal() })
+			with := deal()
+			require.Len(t, profileSteps(t, with), 1)
+			require.Empty(t, profileSteps(t, without))
+			bWith, _ := sharedCopy(t, with, audience, "x")
+			bWithout, _ := sharedCopy(t, without, audience, "x")
+			typesWith, withheldWith := sharedRecordTypes(t, bWith)
+			typesWithout, withheldWithout := sharedRecordTypes(t, bWithout)
+			assert.Equal(t, typesWithout, typesWith, "the same records disclosed")
+			assert.Contains(t, typesWith, "check", "the check is shown")
+			assert.Equal(t, withheldWithout+1, withheldWith, "only the companion is added, withheld")
+		})
+	}
+}
+
+// A deal sealed before checks had a companion re-derives, under this
+// release, every record byte for byte: its stored digests still hold.
+func TestADealSealedBeforeCompanionsReDerivesUnchanged(t *testing.T) {
+	dealFixture(t)
+	var id string
+	beforeCompanions(t, func() {
+		id = retailDeal(t)
+		dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received","delivered":{"item":"cat sticker"}}`))
+	})
+	events := chainSteps(t, id)
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	require.NoError(t, s.useDeal(t.Context(), id, false))
+	require.NotEmpty(t, events)
+	for i, se := range events {
+		assert.NotEqual(t, "counterparty_profile", se.Event.Kind)
+		_, digest, err := encodeDealRecord(se.Event, events[:i], s.dkey)
+		require.NoError(t, err, "step %d", se.Event.N)
+		assert.Equal(t, se.Digest, digest, "step %d (%s) re-derives byte for byte", se.Event.N, se.Event.Kind)
+	}
+	// The session holds the store's lock: release it before the next command.
+	require.NoError(t, s.close())
+	report := dealRun(t, "report", "--deal", id)
+	assert.NotEmpty(t, report["steps"], "and it still reports")
+}
