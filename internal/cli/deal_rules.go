@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -162,6 +163,24 @@ type dealEvidence struct {
 	// (its capsule id; ResolvesStep, its step number, is accepted on input).
 	Resolves     string `json:"resolves,omitempty"`
 	ResolvesStep int64  `json:"resolves_step,omitempty"`
+	// Settlement is a settlement leg (draft-mih-agent-settlement-records-00)
+	// that this step's Capsule carries as its top-level settlement member.
+	// Only `deal note --kind payment_received|delivered` sets it, never
+	// --input; it is stored as built so the Capsule re-derives byte for byte.
+	Settlement json.RawMessage `json:"settlement,omitempty"`
+	// SettlementObjects are the octets of the objects the leg wraps by
+	// digest (the rail's own objects), kept on the device only.
+	SettlementObjects map[string][]byte `json:"settlement_objects,omitempty"`
+	// SettlementAccounts are the identifiers the leg's sources carry (the
+	// pay-to, the payer's address, a tracking number): never in a record, a
+	// leg or a shared copy.
+	SettlementAccounts []string `json:"settlement_accounts,omitempty"`
+	// SettlementNonces open the leg's salted commitments (the tracking
+	// number's), kept on the device to open to a party entitled to check.
+	SettlementNonces map[string]string `json:"settlement_nonces,omitempty"`
+	// ReceivedTo is the account a payment was received to (the rail's
+	// pay-to), sealed only as its per-deal fingerprint (received_to).
+	ReceivedTo string `json:"received_to,omitempty"`
 }
 
 // dealChange is a detail the counterparty changed after first contact. It is

@@ -166,8 +166,11 @@ func dealLocalValues(events []sealedEvent, ev dealEvent) []string {
 			whos = append(whos, e.Open.Who)
 		case e.Message != nil && e.Message.Who != nil:
 			whos = append(whos, *e.Message.Who)
-		case e.Evidence != nil && e.Evidence.Who != nil:
-			whos = append(whos, *e.Evidence.Who)
+		case e.Evidence != nil && (e.Evidence.Who != nil || len(e.Evidence.SettlementAccounts) > 0):
+			if e.Evidence.Who != nil {
+				whos = append(whos, *e.Evidence.Who)
+			}
+			out = append(out, e.Evidence.SettlementAccounts...)
 		case e.Change != nil && e.Change.Who != nil:
 			whos = append(whos, *e.Change.Who)
 		case e.Snapshot != nil && e.Snapshot.Who != nil:
@@ -752,6 +755,16 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				}
 			}
 			body["obligation"] = ob
+		}
+		if to := ev.Evidence.ReceivedTo; to != "" {
+			// Where the user was paid, keyed per deal like every identifier
+			// a record carries: not a counterparty id (it is the user's own
+			// account), so it never reads as a change of the other party.
+			fp, err := fingerprintID(key, "payee", to)
+			if err != nil {
+				return nil, inputError("the account the payment was received to cannot be recorded: it does not normalize")
+			}
+			body["received_to"] = map[string]interface{}{"fp_alg": dealFPAlg, "payee": fp}
 		}
 		if ev.Evidence.Who != nil {
 			setIDs(counterpartyIDs(key, *ev.Evidence.Who))

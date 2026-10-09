@@ -30,10 +30,7 @@ func settlementCommands() *cobra.Command {
 		Args: noArgs,
 		RunE: runSettlementStatus,
 	}
-	status.Flags().StringArray("leg", nil, "A leg record file (repeatable): an artifact.Record or a bare Capsule with an inline signature and key_id")
-	status.Flags().StringArray("object", nil, "A wrapped object's exact octets (repeatable), matched to wrapped entries by SHA-256; used to read the x402 scheme and to detect re-signing")
-	status.Flags().StringArray("payer-key", nil, "An Ed25519 public key (hex) accepted for the payer (repeatable)")
-	status.Flags().StringArray("payee-key", nil, "An Ed25519 public key (hex) accepted for the payee (repeatable)")
+	addSettlementStatusFlags(status)
 	group.AddCommand(status)
 	return group
 }
@@ -43,11 +40,32 @@ func runSettlementStatus(c *cobra.Command, _ []string) error {
 	if len(paths) == 0 {
 		return inputError("settlement status needs at least one --leg file")
 	}
-	in := settlement.Input{Objects: map[string][]byte{}}
+	in, err := settlementInput(c, nil, nil)
+	if err != nil {
+		return err
+	}
+	return writeSettlementResult(c, settlement.Verify(in))
+}
+
+func addSettlementStatusFlags(cmd *cobra.Command) {
+	cmd.Flags().StringArray("leg", nil, "A leg record file (repeatable): an artifact.Record or a bare Capsule with an inline signature and key_id")
+	cmd.Flags().StringArray("object", nil, "A wrapped object's exact octets (repeatable), matched to wrapped entries by SHA-256; used to read the x402 scheme and to detect re-signing")
+	cmd.Flags().StringArray("payer-key", nil, "An Ed25519 public key (hex) accepted for the payer (repeatable)")
+	cmd.Flags().StringArray("payee-key", nil, "An Ed25519 public key (hex) accepted for the payee (repeatable)")
+}
+
+// settlementInput is the verifier's input: the given legs and objects, then
+// the --leg and --object files, under the --payer-key/--payee-key policy.
+func settlementInput(c *cobra.Command, legs []settlement.Leg, held map[string][]byte) (settlement.Input, error) {
+	in := settlement.Input{Legs: legs, Objects: map[string][]byte{}}
+	for digest, octets := range held {
+		in.Objects[digest] = octets
+	}
+	paths, _ := c.Flags().GetStringArray("leg")
 	for _, path := range paths {
 		l, err := readSettlementLeg(path)
 		if err != nil {
-			return err
+			return settlement.Input{}, err
 		}
 		in.Legs = append(in.Legs, l)
 	}
@@ -55,7 +73,7 @@ func runSettlementStatus(c *cobra.Command, _ []string) error {
 	for _, path := range objects {
 		octets, err := readInput(path)
 		if err != nil {
-			return err
+			return settlement.Input{}, err
 		}
 		sum := sha256.Sum256(octets)
 		in.Objects[hex.EncodeToString(sum[:])] = octets
@@ -65,15 +83,19 @@ func runSettlementStatus(c *cobra.Command, _ []string) error {
 	for flag, keys := range map[string][]string{"--payer-key": payerKeys, "--payee-key": payeeKeys} {
 		for _, key := range keys {
 			if !publicKeyHexPattern.MatchString(key) {
-				return inputError(flag + " must be a 32-byte Ed25519 public key in lowercase hex (64 characters)")
+				return settlement.Input{}, inputError(flag + " must be a 32-byte Ed25519 public key in lowercase hex (64 characters)")
 			}
 		}
 	}
 	if len(payerKeys) > 0 || len(payeeKeys) > 0 {
 		in.Policy = map[string][]string{settlement.RolePayer: payerKeys, settlement.RolePayee: payeeKeys}
 	}
+	return in, nil
+}
 
-	result := settlement.Verify(in)
+// writeSettlementResult prints the result with its readings, and fails when a
+// leg failed.
+func writeSettlementResult(c *cobra.Command, result settlement.Result) error {
 	readings := make([]map[string]any, 0, len(result.Settlements))
 	for _, s := range result.Settlements {
 		readings = append(readings, map[string]any{"terms": s.Terms, "payment": paymentReading(s), "delivery": deliveryReading(s)})

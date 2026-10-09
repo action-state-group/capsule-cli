@@ -367,6 +367,11 @@ var dealEffectTypes = map[string]string{"pay": "send_payment"}
 // one of them prepared.
 func dealCapsuleInput(events []sealedEvent, ev dealEvent, record []byte, operator string, at time.Time, legacy bool) emit.Input {
 	in := emit.Input{ActionID: fmt.Sprintf("%s/%d", ev.DealID, ev.N), ActionType: emit.ActionTypeFYI, Operator: operator, Developer: "capsulectl-deal", Timestamp: at}
+	if e := ev.Evidence; !legacy && e != nil && len(e.Settlement) > 0 {
+		// A settlement leg rides on its step's Capsule as the top-level
+		// settlement member, exactly as built and stored with the step.
+		in.Extensions = []emit.Extension{{Name: "settlement", Value: e.Settlement}}
+	}
 	if legacy || ev.Kind != "act" || ev.Act == nil || ev.Act.Unchecked {
 		return in
 	}
@@ -697,7 +702,7 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealCountersignCommand(), dealExportCommand(), dealSaleCommands(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand(), dealDeadlinesCommand(), dealCheckpointCommands())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealCountersignCommand(), dealExportCommand(), dealSaleCommands(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand(), dealDeadlinesCommand(), dealCheckpointCommands(), dealSettlementCommand())
 	return deal
 }
 
@@ -992,7 +997,14 @@ func dealNoteCommand() *cobra.Command {
 			return inputError("--key-record goes with --email: the key record is read for that email's DKIM signature")
 		}
 		path, _ := c.Flags().GetString("input")
+		settlementKind := ""
 		switch {
+		case kind == noteKindPaymentReceived || kind == noteKindDelivered:
+			built, err := settlementNoteEvent(c, kind)
+			if err != nil {
+				return err
+			}
+			ev, settlementKind, kind = built, kind, "evidence"
 		case kind == "evidence" && emailPath != "" && path == "":
 			ev.Evidence = &dealEvidence{About: "merchant confirmation email", Source: "merchant_email"}
 		case slices.Contains([]string{"message", "claim", "evidence", "change", "intent", "act", "disclosure"}, kind):
@@ -1024,6 +1036,9 @@ func dealNoteCommand() *cobra.Command {
 				target = ev.Disclosure
 			}
 			if err = decodeJSONAs("--input", raw, target); err != nil {
+				return err
+			}
+			if err = refuseSettlementInput(ev.Evidence); err != nil {
 				return err
 			}
 		case kind == "approval":
@@ -1100,7 +1115,7 @@ func dealNoteCommand() *cobra.Command {
 			}
 			ev.Acceptance = a
 		default:
-			return inputError("--kind must be message, claim, evidence, change, intent, approval, act, disclosure, platform_approval or acceptance")
+			return inputError("--kind must be message, claim, evidence, change, intent, approval, act, disclosure, platform_approval, acceptance, payment_received or delivered")
 		}
 		if emailPath != "" {
 			// Captured before the deal is locked: the key records are read
@@ -1153,6 +1168,11 @@ func dealNoteCommand() *cobra.Command {
 					return inputError("resolves names no step of this deal")
 				}
 				ev.Evidence.Resolves, ev.Evidence.ResolvesStep = target, 0
+			}
+			if settlementKind != "" {
+				if err := checkSettlementNote(events, &ev, settlementKind); err != nil {
+					return err
+				}
 			}
 			open := events[0].Event.Open
 			switch kind {
@@ -1381,7 +1401,8 @@ func dealNoteCommand() *cobra.Command {
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
-	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval, act, disclosure, platform_approval or acceptance")
+	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval, act, disclosure, platform_approval, acceptance, payment_received or delivered")
+	addSettlementNoteFlags(cmd)
 	cmd.Flags().String("words", "", "acceptance: the counterparty's words accepting the offer, exactly as given (committed, never stored)")
 	cmd.Flags().String("channel", "", "acceptance: the channel the counterparty accepted on (x-deal-v0's channel set)")
 	cmd.Flags().String("input", "", "JSON body for message, claim, evidence, change, intent or act (optional for evidence with --email)")

@@ -10,6 +10,8 @@ github.com/action-state-group/agent-action-capsule/go v0.7.1-0.20261008155852-5d
 github.com/action-state-group/agent-action-capsule/go v0.7.1-0.20261008155852-5d80d40097f6/go.mod h1:E27XJeKbb5rmSlYd/OABhNe5dnNJkengaewtgkdwPqo=
 github.com/action-state-group/capsule-emit-go v0.2.0 h1:fRPRHf7SBr2Lf8WqfUg4Qi+X69xTFtfe5SIGMuBkQQY=
 github.com/action-state-group/capsule-emit-go v0.2.0/go.mod h1:KHmfQdA2Utpr05zPzykuAvyly6gRd5Z+JXZyX4ICJ0U=
+github.com/action-state-group/capsule-emit-go v0.2.1-0.20261009025507-6ded4c1c2fb3 h1:BgZZ7ZG1Q6SP4yPeYXaksT0H0axW5Ju7MLMkYAis+9o=
+github.com/action-state-group/capsule-emit-go v0.2.1-0.20261009025507-6ded4c1c2fb3/go.mod h1:iSRSyiWFlsLIMWVRfJx2VHbWcTO7K0W2eqJC26XcJXQ=
 github.com/action-state-group/checkpointed-local-log/go v0.1.0 h1:bDJSW+fy3eZnwneJBOGuvqYXe0VlvDfPKEJ6ecHnTek=
 github.com/action-state-group/checkpointed-local-log/go v0.1.0/go.mod h1:zyHyXVNqA4pMTJ14xtcRoDHZF0n4QyjS5KMDD3KwQ2Q=
 github.com/action-state-group/evidencebook v0.1.2-0.20261008160739-b970240ce88a h1:YJlXlUtAHyEOU8L5Xm9JozFEcsqgEkH858K4EeqkpQM=
