@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### The user's floor and limit are recognised in any written form
+
+- **Fixed:** the check that keeps a seller's floor (`min_total_minor`) and a spending limit
+  (`max_total_minor`) out of a shared copy only matched the form capsulectl writes ("$1700.00").
+  It now reads money as prose writes it, and compares by value:
+  - currency symbols before or after the amount (`$`, `€`, `£`, `¥` and others), ISO codes
+    (`USD 1,700`, `1700 usd`, also written against the number: `USD1,700`, `1700usd`) and
+    currency words (`dollars`, `euros`);
+  - thousands separators as locales use them (comma, dot, space, apostrophe, no-break or thin
+    space), with or without cents (`1.700,00 €`, `1'700.00 CHF`), and `k` (`$1.7k`);
+  - a bare number a few words after a money word ("the lowest I'll take is 1700").
+
+  Dates, times, ids and digests are not read as money. An amount the other party is shown anyway
+  (the asked price, an offer, a payment) is still not protected.
+- **Added:** a message the agent writes (`from: agent`), and, where the user sells, an agent's
+  claim (which the buyer's copy opens), is refused before it is sealed when it states the floor or
+  the limit in any of these forms. The refusal names the field, never the value. The user's own
+  words are recorded as said.
+
 ## v0.1.0-rc13
 
 ### The payee keyed per profile, for the user's own history
