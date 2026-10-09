@@ -1,0 +1,41 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "reverses_ref": "abababababababababababababababababababababababababababababababab",
+        "task_authority_ref": "abababababababababababababababababababababababababababababababab"
+      },
+      "name": "whole",
+      "typed_ref": {
+        "digest": "abababababababababababababababababababababababababababababababab",
+        "digest_alg": "SHA-256",
+        "type": "record"
+      }
+    },
+    {
+      "expect": {
+        "reverses_ref": null,
+        "task_authority_ref": null
+      },
+      "name": "trailing-newline",
+      "typed_ref": {
+        "digest": "abababababababababababababababababababababababababababababababab\n",
+        "digest_alg": "SHA-256",
+        "type": "record"
+      }
+    },
+    {
+      "expect": {
+        "reverses_ref": null,
+        "task_authority_ref": null
+      },
+      "name": "uppercase",
+      "typed_ref": {
+        "digest": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
+        "digest_alg": "SHA-256",
+        "type": "record"
+      }
+    }
+  ],
+  "rule": "a typed ref digest is accepted only when the WHOLE value is 64 lowercase hex; a trailing newline is dropped (Go: use ^[0-9a-f]{64}$ with regexp.MatchString, which has no trailing-newline allowance, or check len==64 plus hex)"
+}
