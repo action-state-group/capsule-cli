@@ -17,7 +17,8 @@
   - A plugin's code module is carried in the module slot.
   - Any failure refuses that plugin's presentations; its subcommands still run. `plugin ls` reports
     the refusal as `presentations_refused: {reason, file, detail}`, with a machine-readable
-    reason: `digest_mismatch`, `path_escape`, `writable`, `oversize`, `invalid_manifest`,
+    reason: `digest_mismatch`, `path_escape`, `not_regular_file`, `writable`, `oversize`,
+    `invalid_manifest`,
     `invalid_files`, `invalid_wording`, `unsupported_carrier`, `duplicate_id`, `missing_file`,
     `untrusted_root` or `unreadable`.
 - **Layout:** a plugin keeps its files under `<launcher>.d/presentations/<module>/`, user-owned

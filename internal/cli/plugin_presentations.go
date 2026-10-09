@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -63,8 +64,8 @@ func builtinPluginRoots() []string {
 // presentationRefusal is why a plugin's presentations were refused: a
 // machine-readable reason, the file it concerns (when one), and the detail.
 // The reasons: untrusted_root, invalid_manifest, invalid_files,
-// unsupported_carrier, duplicate_id, path_escape, writable, missing_file,
-// oversize, digest_mismatch, invalid_wording, unreadable.
+// unsupported_carrier, duplicate_id, path_escape, not_regular_file, writable,
+// missing_file, oversize, digest_mismatch, invalid_wording, unreadable.
 type presentationRefusal struct {
 	Reason string `json:"reason"`
 	File   string `json:"file,omitempty"`
@@ -338,9 +339,14 @@ func readPresentationFile(dir, rel string) ([]byte, error) {
 	if !strings.HasPrefix(resolved, dir+string(os.PathSeparator)) {
 		return nil, refuse("path_escape", rel, "%s resolves to %s, outside the plugin's directory", rel, resolved)
 	}
-	if err = verifyTrustedPath(resolved); err != nil {
-		reason := "path_escape" // outside the roots, or not a regular file
-		if msg := err.Error(); strings.Contains(msg, "writable") || strings.Contains(msg, "owned by") {
+	// The trust walk stops at the built-in root the plugin is under, never at
+	// a root CAPSULECTL_PLUGIN_ROOTS names.
+	if err = verifyTrustedPathUnder(resolved, presentationRoots()); err != nil {
+		reason := "path_escape"
+		switch {
+		case errors.Is(err, errNotRegularFile):
+			reason = "not_regular_file"
+		case errors.Is(err, errWritable), errors.Is(err, errNotTrustedOwner):
 			reason = "writable"
 		}
 		return nil, refuse(reason, rel, "%v", err)

@@ -38,6 +38,15 @@ func trustedPluginRoots() []string {
 	return roots
 }
 
+// The ways a path fails the trust walk, wrapped in its error so a caller can
+// tell them apart with errors.Is.
+var (
+	errNotRegularFile  = errors.New("not a regular file")
+	errOutsideRoots    = errors.New("outside the trusted plugin roots")
+	errNotTrustedOwner = errors.New("owned by neither the current user nor root")
+	errWritable        = errors.New("writable by others")
+)
+
 // verifyTrustedPath rejects a launcher whose real path, or any directory between
 // it and the matched trusted root (inclusive), is group-writable, other-writable,
 // or owned by neither the current user nor root; and rejects any launcher whose
@@ -45,6 +54,12 @@ func trustedPluginRoots() []string {
 // to an untrusted target) or is not a regular file. The root's own parents are
 // system directories, trusted by definition, so the walk stops at the root.
 func verifyTrustedPath(path string) error {
+	return verifyTrustedPathUnder(path, trustedPluginRoots())
+}
+
+// verifyTrustedPathUnder is verifyTrustedPath against the given roots: the
+// path must resolve inside one of them, and the walk stops at that root.
+func verifyTrustedPathUnder(path string, roots []string) error {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return fmt.Errorf("cannot resolve %s: %w", path, err)
@@ -52,10 +67,10 @@ func verifyTrustedPath(path string) error {
 	if info, err := os.Lstat(resolved); err != nil {
 		return err
 	} else if !info.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", resolved)
+		return fmt.Errorf("%s is %w", resolved, errNotRegularFile)
 	}
 	realRoot := ""
-	for _, root := range trustedPluginRoots() {
+	for _, root := range roots {
 		rr, err := filepath.EvalSymlinks(root)
 		if err != nil {
 			continue
@@ -66,7 +81,7 @@ func verifyTrustedPath(path string) error {
 		}
 	}
 	if realRoot == "" {
-		return fmt.Errorf("%s resolves to %s, outside the trusted plugin roots", path, resolved)
+		return fmt.Errorf("%s resolves to %s, %w", path, resolved, errOutsideRoots)
 	}
 	// Walk from the launcher up to and including the trusted root: the root's own
 	// parents are system directories trusted by definition, but any directory
@@ -83,12 +98,12 @@ func verifyTrustedPath(path string) error {
 			return fmt.Errorf("cannot read ownership of %s", p)
 		}
 		if int(stat.Uid) != uid && stat.Uid != 0 {
-			return fmt.Errorf("%s is owned by neither the current user nor root", p)
+			return fmt.Errorf("%s is %w", p, errNotTrustedOwner)
 		}
 		if mode := info.Mode(); mode&0o020 != 0 {
-			return fmt.Errorf("%s is group-writable", p)
+			return fmt.Errorf("%s is group-writable: %w", p, errWritable)
 		} else if mode&0o002 != 0 {
-			return fmt.Errorf("%s is other-writable", p)
+			return fmt.Errorf("%s is other-writable: %w", p, errWritable)
 		}
 		if p == realRoot {
 			break

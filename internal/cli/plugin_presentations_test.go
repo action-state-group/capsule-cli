@@ -322,3 +322,33 @@ func TestPluginLsReportsARefusalByReason(t *testing.T) {
 	assert.Equal(t, []any{"decide"}, ls.Plugins[0]["subcommands"])
 	assert.Equal(t, []any{}, ls.Plugins[0]["presentations"])
 }
+
+// A presentation file that is not a regular file is refused as such.
+func TestAPresentationFileMustBeARegularFile(t *testing.T) {
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	p := moduleSlotFixture()
+	delete(p.files, "view.js")
+	presentationPlugin(t, root, "view", p)
+	require.NoError(t, os.Mkdir(filepath.Join(root, "view.js"), 0o755))
+	got := discovered(t, "view")
+	require.NotNil(t, got.refusal)
+	assert.Equal(t, "not_regular_file", got.refusal.Reason)
+}
+
+// The trust walk is held to the roots it is given: presentation files are
+// walked to the built-in root, whatever CAPSULECTL_PLUGIN_ROOTS names.
+func TestTheTrustWalkStopsAtTheRootsItIsGiven(t *testing.T) {
+	builtin := t.TempDir()
+	require.NoError(t, os.Chmod(builtin, 0o755))
+	file := filepath.Join(builtin, "view.js")
+	require.NoError(t, os.WriteFile(file, fixtureScript, 0o644))
+	require.NoError(t, os.Chmod(file, 0o644))
+	elsewhere := t.TempDir()
+	require.NoError(t, os.Chmod(elsewhere, 0o755))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", elsewhere)
+	assert.ErrorIs(t, verifyTrustedPath(file), errOutsideRoots, "the override's roots do not hold it")
+	assert.NoError(t, verifyTrustedPathUnder(file, []string{builtin}), "walked to the root it is under")
+	require.NoError(t, os.Chmod(file, 0o664))
+	assert.ErrorIs(t, verifyTrustedPathUnder(file, []string{builtin}), errWritable)
+}
