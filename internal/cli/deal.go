@@ -858,6 +858,12 @@ func dealOpenCommand() *cobra.Command {
 		if err = decodeJSONAs("--input", raw, &o); err != nil {
 			return err
 		}
+		// The deal id the other party opened this deal under, when this side
+		// joins it: the same opaque id on both copies, never a description.
+		carried, _ := c.Flags().GetString("deal-id")
+		if carried != "" && !dealIDPattern.MatchString(carried) {
+			return inputError("--deal-id must be a deal id as `deal open` prints it: deal- followed by 16 lowercase hex characters")
+		}
 		// Set from the sale (deal open --sale), never from the input file.
 		o.ItemRef, o.Sale, o.SaleAuthority = "", "", ""
 		if saleID, _ := c.Flags().GetString("sale"); saleID != "" {
@@ -920,11 +926,22 @@ func dealOpenCommand() *cobra.Command {
 				return err
 			}
 			o.Materiality = predicate.ref()
-			id := make([]byte, 8)
-			if _, err := rand.Read(id); err != nil {
-				return err
+			dealID := carried
+			if dealID == "" {
+				id := make([]byte, 8)
+				if _, err := rand.Read(id); err != nil {
+					return err
+				}
+				dealID = "deal-" + hex.EncodeToString(id)
+			} else {
+				var held int
+				if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_keys WHERE deal_id=?`, dealID).Scan(&held); err != nil {
+					return err
+				}
+				if held > 0 {
+					return inputError("this profile already holds deal " + dealID + ": --deal-id opens this side of a deal the other party opened, once")
+				}
 			}
-			dealID := "deal-" + hex.EncodeToString(id)
 			if err := s.useDeal(ctx, dealID, true); err != nil {
 				return err
 			}
@@ -956,6 +973,7 @@ func dealOpenCommand() *cobra.Command {
 		})
 	}}
 	cmd.Flags().String("input", "", "Baseline JSON: type, intent, who, terms, claims, recourse")
+	cmd.Flags().String("deal-id", "", "Open your side of a deal the other party opened, under the deal id it gave you (deal- and 16 hex): both copies then carry one deal id, so they can be composed. Default: a new random id")
 	cmd.Flags().String("skill", "", "The SKILL.md the agent is following (or $"+dealSkillEnv+"): its digest is sealed in the baseline")
 	cmd.Flags().String("records", "", "The record set: x-deal-v0 (the default) or typed (the typed action records, which carry the check contract)")
 	cmd.Flags().String("sale", "", "A sale id from `deal sale new`: open this buyer's thread under the sale's request and task authority (typed records)")
