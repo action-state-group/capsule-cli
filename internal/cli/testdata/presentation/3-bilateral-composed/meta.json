@@ -1,0 +1,8 @@
+{
+  "emitted_by": "composed_mismatch.py over agent-action-capsule 5d80d40097f6 python/scripts/generate_bundle_composed_vectors.py",
+  "kind": "bilateral-composed",
+  "page": "refused",
+  "refused_because": "no capsulectl command renders a bundle file to a page; the page gate refuses this bundle (verify --bundle: INCOMPLETE, no checkpoint), as it does every published composed/v1 vector; the vendored viewer has no composed/v1 view",
+  "rerender": "page",
+  "verify": "INCOMPLETE"
+}

@@ -1,0 +1,8 @@
+{
+  "_note": "Views that are wider than their viewport with the viewer vendored when these goldens were taken (agent-action-capsule 5d80d40). A listed view may overflow; the golden test fails on any other overflow. Remove a view once it is fixed.",
+  "1-rules-comparison": ["390"],
+  "4-monthly-outcome": ["390"],
+  "5-monthly-compliance": ["390"],
+  "6-generic-fallback": ["390"],
+  "6-generic-fallback-unknown-extension": ["390"]
+}

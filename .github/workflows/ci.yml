@@ -123,6 +123,22 @@ jobs:
         env:
           CHROME: google-chrome
         run: bash scripts/check-html-render.sh
+      # Six synthetic bundles' pages (internal/cli/testdata/presentation),
+      # re-emitted and opened at 390px, 1280px and in print: each must show
+      # a reader what its snapshot.json says, and not overflow (see
+      # internal/cli/presentation_golden_test.go).
+      - name: Presentation goldens
+        env:
+          CAPSULECTL_CHROME: google-chrome
+          CAPSULECTL_PRESENTATION_RENDERS: ${{ runner.temp }}/presentation-renders
+        run: go test -count=1 -run TestPresentationGoldens ./internal/cli
+      - name: Keep the presentation renders
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: presentation-renders
+          path: ${{ runner.temp }}/presentation-renders
+          if-no-files-found: ignore
 
   interop-at-resolved-versions:
     # evidencebook's own CI runs this Go <-> Python round trip against ITS pins;
