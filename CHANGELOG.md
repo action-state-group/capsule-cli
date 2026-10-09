@@ -19,6 +19,13 @@
   statement the agent made. capsulectl recomputes each against its sealed commitment and writes no
   page whose words do not match. The page now says they were "checked when this page was built".
 - **The sealed-report refusal** stays in the build-time page gate.
+- **Interim:** the deal view's stylesheet rides in the theme slot until the emitter can pin a
+  module's own stylesheet (agent-action-capsule #214).
+- **Not in this change:**
+  - the static, no-script page: capsulectl does not produce it, and will report it as unavailable
+    (`no-document`) for now;
+  - the share gate's removal of the two vendored scripts before it scans a shared page is retired in
+    a later change.
 
 ### New deal records seal action taxonomy version 6
 

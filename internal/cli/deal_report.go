@@ -308,7 +308,10 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // and nothing is hosted: the agent attaches or hands over the file.
 //
 // The page is built through the emitter's slots: the title, the deal view's
-// stylesheet in the theme slot, the deal view as a digest-pinned module, and
+// stylesheet in the theme slot (interim: the theme slot is for theme tokens;
+// the stylesheet moves to the deal view module, pinned by its own digest, once
+// the emitter can pin a module's stylesheet, agent-action-capsule #214), the
+// deal view as a digest-pinned module, and
 // a bootstrap that builds the verified context once and hands it to both the
 // evidence graph and the deal view. The emitter writes a Content-Security-
 // Policy that lists the digest of every inline script and style it emitted
@@ -339,7 +342,9 @@ func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (
   await capsulectlDealView(context, ` + string(data) + `);
 })();`
 	return emitter.EmitEvidenceGraphHTMLWithOptions(b, evidenceGraphIIFE, emitter.Options{
-		Title:             "Deal report",
+		Title: "Deal report",
+		// Interim, until the emitter pins module stylesheets
+		// (agent-action-capsule #214): then the deal view carries it.
 		ThemeCSS:          dealViewCSS,
 		CoreRuntimeSHA256: strings.TrimSpace(evidenceGraphIIFESHA256),
 		Modules:           []emitter.Module{{Code: []byte(dealViewJS), SHA256: strings.TrimSpace(dealViewJSSHA256)}},
@@ -347,6 +352,10 @@ func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (
 	})
 }
 
+// dealViewCSS is the deal view's stylesheet. It rides in the emitter's theme
+// slot for now (interim): it moves to the deal view module, pinned by its own
+// digest, once the emitter can pin a module's stylesheet (agent-action-capsule
+// #214).
 const dealViewCSS = `
 :root { --fg: #1b1b1f; --muted: #5d5d66; --bg: #ffffff; --line: #d9d9e0; --warn: #9a3b00; --ok: #1d6b35; }
 @media (prefers-color-scheme: dark) { :root { --fg: #ececf1; --muted: #a3a3ad; --bg: #16161a; --line: #34343c; --warn: #ffb07a; --ok: #7fd49a; } }
