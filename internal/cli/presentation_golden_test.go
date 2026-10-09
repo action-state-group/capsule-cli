@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,13 +21,15 @@ import (
 // viewer must reproduce what those pages show a reader -- the same
 // verification state, the same views, the same evidence identifiers and the
 // same words in the same order -- and none may overflow its viewport at
-// 390px, 1280px or in print beyond the views known-overflow.json lists.
+// 390px, 1280px or in print beyond what known-overflow.json records.
 // Layout itself is not held.
 //
 // Every run re-emits each page from its bundle through the path capsulectl
 // takes and checks the page gate's decision. With CAPSULECTL_CHROME set to a
 // Chrome or Chromium binary, each page is also opened headless and its DOM
-// compared with snapshot.json. CAPSULECTL_UPDATE_PRESENTATION_SNAPSHOTS=1
+// compared with snapshot.json; with CAPSULECTL_PRESENTATION_PINNED=1 too
+// (CI's pinned Chrome and fonts), its width in each view is held to
+// known-overflow.json. CAPSULECTL_UPDATE_PRESENTATION_SNAPSHOTS=1
 // rewrites the snapshots (only when a change to what a reader sees is meant);
 // CAPSULECTL_PRESENTATION_RENDERS=DIR also writes each view as a PNG (PDF
 // for print) there.
@@ -109,8 +112,25 @@ func TestPresentationGoldens(t *testing.T) {
 		chrome = startHeadlessChrome(t, chromeBinary)
 	}
 	update := os.Getenv("CAPSULECTL_UPDATE_PRESENTATION_SNAPSHOTS") == "1"
-	var knownOverflow map[string]any
-	readJSONFile(t, filepath.Join(presentationDir, "known-overflow.json"), &knownOverflow)
+	var baseline overflowBaseline
+	readJSONFile(t, filepath.Join(presentationDir, "known-overflow.json"), &baseline)
+	// Pinned: CI's Chrome and fonts, the environment known-overflow.json
+	// was measured in. Only there are widths compared; elsewhere a
+	// platform's own fonts move them, so they are logged.
+	pinned := os.Getenv("CAPSULECTL_PRESENTATION_PINNED") == "1"
+	if pinned {
+		require.NotNil(t, chrome, "CAPSULECTL_PRESENTATION_PINNED needs CAPSULECTL_CHROME")
+		product := chrome.version(t)
+		require.Equal(t, baseline.Environment.Chrome, product[strings.LastIndex(product, "/")+1:],
+			"the pinned Chrome (%s) is the one known-overflow.json was measured with", product)
+	}
+	measured := map[string]map[string]int{}
+	defer func() {
+		if chrome != nil {
+			raw, _ := json.Marshal(measured)
+			t.Logf("overflowing views measured (scroll width, px): %s", raw)
+		}
+	}()
 	renders := os.Getenv("CAPSULECTL_PRESENTATION_RENDERS")
 	seen := 0
 	for _, entry := range entries {
@@ -156,11 +176,17 @@ func TestPresentationGoldens(t *testing.T) {
 					Over        []string `json:"over"`
 				}
 				opened.eval(t, overflowScript, &width)
-				// A listed view may overflow (how much depends on the
-				// platform's fonts: the outcome page overflows by 25px with
-				// macOS fonts and fits with the CI runner's); any other must not.
-				if !knownToOverflow(knownOverflow, entry.Name(), view.name) {
-					assert.LessOrEqual(t, width.ScrollWidth, width.Width, "%s: the page is %dpx wide in a %dpx viewport (%v)", view.name, width.ScrollWidth, width.Width, width.Over)
+				t.Logf("%s: %dpx wide in a %dpx viewport", view.name, width.ScrollWidth, width.Width)
+				if width.ScrollWidth > width.Width {
+					if measured[entry.Name()] == nil {
+						measured[entry.Name()] = map[string]int{}
+					}
+					measured[entry.Name()][view.name] = width.ScrollWidth
+				}
+				if pinned {
+					if problem := baseline.check(entry.Name(), view.name, width.ScrollWidth, width.Width); problem != "" {
+						t.Errorf("%s: %s (%v)", view.name, problem, width.Over)
+					}
 				}
 				if renders != "" {
 					ext := ".png"
@@ -218,16 +244,59 @@ func rerenderPresentationPage(t *testing.T, dir string, meta presentationMeta, b
 	return "", nil
 }
 
-// knownToOverflow: known-overflow.json lists this fixture's view as one
-// that overflowed when the goldens were taken, so it may still.
-func knownToOverflow(known map[string]any, fixture, view string) bool {
-	views, _ := known[fixture].([]any)
-	for _, v := range views {
-		if v == view {
-			return true
-		}
+// overflowBaseline is known-overflow.json: the views wider than their
+// viewport when it was measured, in CI's pinned Chrome and fonts, and by
+// how much.
+type overflowBaseline struct {
+	Environment struct {
+		Chrome string `json:"chrome"`
+	} `json:"environment"`
+	TolerancePx int `json:"tolerance_px"`
+	// Views maps fixture, then view, to its scroll width in px.
+	Views map[string]map[string]int `json:"views"`
+}
+
+// check names what is wrong with one view's width, or returns "": a view
+// that overflows and is not listed, a listed view now wider than recorded
+// beyond the tolerance, or a listed view that no longer overflows (the
+// list would go stale and could hide a later regression).
+func (b overflowBaseline) check(fixture, view string, scrollWidth, width int) string {
+	recorded, listed := b.Views[fixture][view]
+	switch {
+	case !listed && scrollWidth > width:
+		return fmt.Sprintf("the page is %dpx wide in a %dpx viewport; it is not in known-overflow.json", scrollWidth, width)
+	case listed && scrollWidth <= width:
+		return fmt.Sprintf("the page no longer overflows (known-overflow.json records %dpx): remove it from the list", recorded)
+	case listed && scrollWidth > recorded+b.TolerancePx:
+		return fmt.Sprintf("the page is %dpx wide, worse than the %dpx known-overflow.json records (tolerance %dpx)", scrollWidth, recorded, b.TolerancePx)
 	}
-	return false
+	return ""
+}
+
+func TestOverflowBaselineCheck(t *testing.T) {
+	b := overflowBaseline{TolerancePx: 4, Views: map[string]map[string]int{"wide": {"390": 600}}}
+	for _, c := range []struct {
+		name, fixture string
+		scrollWidth   int
+		want          string
+	}{
+		{"an unlisted view that fits", "narrow", 390, ""},
+		{"an unlisted view that overflows", "narrow", 391, "not in known-overflow.json"},
+		{"a listed view as recorded", "wide", 600, ""},
+		{"a listed view within the tolerance", "wide", 604, ""},
+		{"a listed view that got better but still overflows", "wide", 500, ""},
+		{"a listed view worse beyond the tolerance", "wide", 605, "worse than the 600px"},
+		{"a listed view that no longer overflows", "wide", 390, "remove it from the list"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := b.check(c.fixture, "390", c.scrollWidth, 390)
+			if c.want == "" {
+				assert.Empty(t, got)
+			} else {
+				assert.Contains(t, got, c.want)
+			}
+		})
+	}
 }
 
 // sameViewer: the page embeds the viewer this build vendors.

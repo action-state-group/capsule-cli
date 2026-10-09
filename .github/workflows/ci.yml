@@ -109,7 +109,7 @@ jobs:
     # a copy with one payload edited must say it failed. See
     # scripts/check-html-render.sh.
     name: report page renders and checks itself
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check out repository
@@ -125,13 +125,29 @@ jobs:
         run: bash scripts/check-html-render.sh
       # Six synthetic bundles' pages (internal/cli/testdata/presentation),
       # re-emitted and opened at 390px, 1280px and in print: each must show
-      # a reader what its snapshot.json says, and not overflow (see
-      # internal/cli/presentation_golden_test.go).
+      # a reader what its snapshot.json says, and be no wider than
+      # known-overflow.json records (see
+      # internal/cli/presentation_golden_test.go). Widths depend on the
+      # browser and the fonts, so both are pinned: Chrome for Testing at the
+      # version known-overflow.json names, and DejaVu as the only fonts.
+      - name: Set up the pinned Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
+        with:
+          chrome-version: 155.0.8059.39
+          install-dependencies: true
+      - name: Install the pinned fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends fonts-dejavu-core fontconfig
+          FONTCONFIG_FILE="$GITHUB_WORKSPACE/internal/cli/testdata/presentation/fonts.conf" fc-list : family | sort -u
       - name: Presentation goldens
         env:
-          CAPSULECTL_CHROME: google-chrome
+          CAPSULECTL_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+          CAPSULECTL_PRESENTATION_PINNED: "1"
           CAPSULECTL_PRESENTATION_RENDERS: ${{ runner.temp }}/presentation-renders
-        run: go test -count=1 -run TestPresentationGoldens ./internal/cli
+          FONTCONFIG_FILE: ${{ github.workspace }}/internal/cli/testdata/presentation/fonts.conf
+        run: go test -count=1 -v -run 'TestPresentation|TestOverflowBaselineCheck' ./internal/cli
       - name: Keep the presentation renders
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -8,11 +8,20 @@ sha256 `008d4c2c…090cdd`). `TestPresentationGoldens`
 - **Without Chrome:** it re-emits each page from its `bundle.json` the way capsulectl
   does and checks the page gate's decision. While the vendored viewer is unchanged,
   the result must equal `page.html` byte for byte.
-- **With `CAPSULECTL_CHROME` set:** it also opens each page headless. At 1280px its
-  DOM must match `snapshot.json`: the verification state, the views, the evidence
-  identifiers, and the words in order. Layout is not compared. At 390px, 1280px and in
-  print, the page must not be wider than its viewport. The views
-  `known-overflow.json` lists may be wider.
+- **With `CAPSULECTL_CHROME` set:** it also opens each page headless, with no network:
+  Chrome resolves no host name, and a request for anything outside the page fails the
+  test. At 1280px its DOM must match `snapshot.json`: the verification state, the
+  views, the evidence identifiers, and the words in order. Layout is not compared.
+- **With `CAPSULECTL_PRESENTATION_PINNED=1` as well** (CI only), the browser must be the
+  Chrome `known-overflow.json` names. At 390px, 1280px and in print, each page is held
+  to that file:
+  - an overflow it does not list fails;
+  - a listed view wider than recorded by more than `tolerance_px` fails;
+  - a listed view that no longer overflows fails until it is removed from the list.
+
+  Widths depend on the browser and the fonts, so CI pins both: Chrome for Testing at
+  the named version, and DejaVu as the only fonts (`fonts.conf`). Elsewhere widths are
+  logged, not compared.
 
 Every fixture is synthetic: example operators, example cases, example criteria,
 generated keys. `scripts/presentation-goldens/build-fixtures.sh` rebuilds them all
@@ -41,8 +50,9 @@ through the real CLI. Run it only to change a fixture on purpose.
   writes no page for them.
 - **Fixture 6-unknown-extension renders exactly as fixture 6** except for the bundle
   digest on the verification page: the viewer ignores an extension it does not know.
-- **Pages overflow a 390px viewport** (`known-overflow.json`). Five of the six do with
-  macOS fonts; the outcome page's 25px overflow does not happen with the CI runner's.
-  Nothing overflows at 1280px or in print.
+- **Four pages overflow a 390px viewport** in CI's pinned environment
+  (`known-overflow.json`): the compliance page is 793px wide, the fallback page 686px
+  (fixtures 6 and 6-unknown-extension), the rules comparison 682px and the outcome
+  report 421px. Nothing overflows at 1280px or in print.
 - **The outcome card says "all nine criteria met"** for a pack with four criteria.
   The snapshot records the text as the viewer prints it today.

@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,6 +30,8 @@ type headlessChrome struct {
 	reply  map[int]chan cdpMessage
 	events chan cdpMessage
 	done   chan struct{}
+	// requests holds, per page session, every URL the page asked for.
+	requests map[string][]string
 }
 
 type cdpMessage struct {
@@ -46,15 +51,19 @@ func startHeadlessChrome(t *testing.T, binary string) *headlessChrome {
 	require.NoError(t, err)
 	replies, fromChrome, err := os.Pipe()
 	require.NoError(t, err)
+	// No page may reach the network: every host name resolves to nothing,
+	// and each page's requests are checked as well (see open).
 	cmd := exec.Command(binary, "--headless=new", "--remote-debugging-pipe", "--no-sandbox",
 		"--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
+		"--host-resolver-rules=MAP * ~NOTFOUND", "--disable-background-networking",
+		"--disable-component-update", "--disable-sync",
 		"--user-data-dir="+t.TempDir(), "about:blank")
 	cmd.ExtraFiles = []*os.File{toChrome, fromChrome}
 	require.NoError(t, cmd.Start())
 	require.NoError(t, toChrome.Close())
 	require.NoError(t, fromChrome.Close())
 	c := &headlessChrome{cmd: cmd, in: commands, reply: map[int]chan cdpMessage{},
-		events: make(chan cdpMessage, 1024), done: make(chan struct{})}
+		events: make(chan cdpMessage, 1024), done: make(chan struct{}), requests: map[string][]string{}}
 	go c.read(replies)
 	t.Cleanup(func() {
 		_ = commands.Close()
@@ -77,6 +86,18 @@ func (c *headlessChrome) read(replies *os.File) {
 			continue
 		}
 		if m.ID == 0 {
+			if m.Method == "Network.requestWillBeSent" {
+				var sent struct {
+					Request struct {
+						URL string `json:"url"`
+					} `json:"request"`
+				}
+				if json.Unmarshal(m.Params, &sent) == nil {
+					c.mu.Lock()
+					c.requests[m.SessionID] = append(c.requests[m.SessionID], sent.Request.URL)
+					c.mu.Unlock()
+				}
+			}
 			select {
 			case c.events <- m:
 			default:
@@ -167,6 +188,20 @@ const rendered = `(async () => {
 
 func (c *headlessChrome) open(t *testing.T, url string, view pageView) openedPage {
 	t.Helper()
+	p := c.load(t, url, view)
+	var ok bool
+	p.eval(t, rendered, &ok)
+	require.True(t, ok, "the page did not finish rendering its verification page in 30s (%s, %s)", url, view.name)
+	var errs []string
+	p.eval(t, `window.__renderErrors || ["the error hook did not run"]`, &errs)
+	require.Empty(t, errs, "console errors, uncaught errors or unhandled rejections (%s)", view.name)
+	require.Empty(t, c.externalRequests(p.session), "the page asked for something outside itself (%s)", view.name)
+	return p
+}
+
+// load opens url in a new page in view and waits for its load event.
+func (c *headlessChrome) load(t *testing.T, url string, view pageView) openedPage {
+	t.Helper()
 	var target struct {
 		TargetID string `json:"targetId"`
 	}
@@ -179,19 +214,59 @@ func (c *headlessChrome) open(t *testing.T, url string, view pageView) openedPag
 	p := openedPage{c: c, session: s, target: target.TargetID}
 	t.Cleanup(func() { _ = c.call("", "Target.closeTarget", map[string]any{"targetId": target.TargetID}, nil) })
 	require.NoError(t, c.call(s, "Page.enable", map[string]any{}, nil))
+	require.NoError(t, c.call(s, "Network.enable", map[string]any{}, nil))
 	require.NoError(t, c.call(s, "Page.addScriptToEvaluateOnNewDocument", map[string]any{"source": errorHook}, nil))
 	require.NoError(t, c.call(s, "Emulation.setDeviceMetricsOverride", map[string]any{
 		"width": view.width, "height": view.height, "deviceScaleFactor": 1, "mobile": view.mobile}, nil))
 	require.NoError(t, c.call(s, "Emulation.setEmulatedMedia", map[string]any{"media": view.media}, nil))
 	require.NoError(t, c.call(s, "Page.navigate", map[string]any{"url": url}, nil))
 	c.waitFor(t, s, "Page.loadEventFired")
-	var ok bool
-	p.eval(t, rendered, &ok)
-	require.True(t, ok, "the page did not finish rendering its verification page in 30s (%s, %s)", url, view.name)
-	var errs []string
-	p.eval(t, `window.__renderErrors || ["the error hook did not run"]`, &errs)
-	require.Empty(t, errs, "console errors, uncaught errors or unhandled rejections (%s)", view.name)
 	return p
+}
+
+// A page that asks for anything outside itself is caught, and no host
+// name resolves.
+func TestPresentationChromeSeesExternalRequests(t *testing.T) {
+	binary := os.Getenv("CAPSULECTL_CHROME")
+	if binary == "" {
+		t.Skip("CAPSULECTL_CHROME is not set")
+	}
+	c := startHeadlessChrome(t, binary)
+	page := filepath.Join(t.TempDir(), "page.html")
+	require.NoError(t, os.WriteFile(page, []byte(`<!doctype html><title>t</title><img src="https://example.com/pixel.png"><script>fetch("https://example.org/x").then(()=>{document.title="reached"},()=>{document.title="blocked"})</script>`), 0o600))
+	p := c.load(t, "file://"+page, presentationViews[1])
+	var title string
+	for i := 0; i < 50 && title != "reached" && title != "blocked"; i++ {
+		time.Sleep(100 * time.Millisecond)
+		p.eval(t, "document.title", &title)
+	}
+	assert.Equal(t, "blocked", title, "no host name resolves")
+	assert.Subset(t, c.externalRequests(p.session), []string{"https://example.com/pixel.png", "https://example.org/x"})
+}
+
+// externalRequests is every URL a page session asked for that is not the
+// page itself or data it carries.
+func (c *headlessChrome) externalRequests(session string) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []string
+	for _, u := range c.requests[session] {
+		if !strings.HasPrefix(u, "file:") && !strings.HasPrefix(u, "data:") &&
+			!strings.HasPrefix(u, "blob:") && !strings.HasPrefix(u, "about:") {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+// version is the browser's product string, e.g. "Chrome/155.0.8059.39".
+func (c *headlessChrome) version(t *testing.T) string {
+	t.Helper()
+	var v struct {
+		Product string `json:"product"`
+	}
+	require.NoError(t, c.call("", "Browser.getVersion", map[string]any{}, &v))
+	return v.Product
 }
 
 func (c *headlessChrome) waitFor(t *testing.T, session, method string) {
