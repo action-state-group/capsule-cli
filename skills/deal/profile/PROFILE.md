@@ -128,6 +128,7 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. |
 | `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. Optional `carried_obligations`: the cancel-by dates still open at the close, each `{obligation: digest ref, cancel_by}`. |
 | `disclosure` | Something the agent told someone about the user: what kind of thing, to whom, when, under what authority. | `to` (`counterparty`\|`other`), `fields[]` (each `class` + `value_commitment`), `authority` (`approval`\|`none`) | `authority: approval` ⇒ exactly one `authorized_by` → an `approval`, under the same rules as an `action` (section 6); `none` ⇒ no `authorized_by`, and `rule` says why. All `fields` share one covering action: contact classes `share_contact`, credential classes `share_credentials`. Optional `action_class` + `taxonomy_version` (see Action classes, below); optional `channel`; `counterparty` when the recipient is someone new. |
+| `counterparty_profile` | The payee of the `check` just before it, fingerprinted under this profile's own key, for the user's own history: one merchant has one value across the profile's deals. Sealed right after its check, before any rules checker runs; never in a shared copy. | `counterparty_profile` in the header: `{fp_alg: "hmac-sha256-profile-key", ids: {payee}}`; an empty body | exactly one `about` → the `check` it follows. No `counterparty` block. |
 
 ### Action classes
 
@@ -524,10 +525,16 @@ At every check, after the `check` record is sealed:
   gets one `external-check-input/v0` object (`external-check-input-v0.schema.json`, beside this
   file):
   - `record`: that `check` capsule, with its disclosed `agent_input` (the deal record, whose
-    body is what is about to happen);
+    body is what is about to happen), and `counterparty_profile` when the check names a payee:
+    the value its `counterparty_profile` record seals, `{fp_alg: "hmac-sha256-profile-key",
+    ids: {payee: <64 lowercase hex>}}`, supplied beside the capsule and never part of it;
   - `history`: the profile's earlier sealed acts with an amount, from every deal on this
     profile's own store, sealed in the last 31 days, newest first, at most 1,000 of them, in the
-    same shape;
+    same shape. Each act carries the `counterparty_profile` of the check its approval answered
+    (act → approval → verdict → check → that check's `counterparty_profile` record), and none
+    when it has none (an act done without approval, or one checked before checks had a
+    companion). A rule keyed on who was paid before reads one merchant as one payee across the
+    profile's deals from there on; acts checked before keep only their per-deal fingerprints;
   - `history_scope`: `{days, max_records, complete}`.
   - `task_authority_record` (typed deals): the whole sealed task-authority record the check's
     `task_authority_ref` names, exactly as sealed: SHA-256 over its JCS bytes is the ref's digest,

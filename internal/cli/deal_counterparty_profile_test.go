@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -38,8 +40,13 @@ func profileSteps(t *testing.T, dealID string) []profileStep {
 		require.Positive(t, i)
 		check := events[i-1]
 		require.Equal(t, "snapshot", check.Event.Kind, "the companion follows its check")
-		checkBlock := records[i-1][dealProfile].(map[string]any)
-		checkIDs := checkBlock["counterparty"].(map[string]any)["ids"].(map[string]any)
+		// The check's per-deal fingerprints: in its x-deal-v0 block, or in a
+		// typed deal's proposed action, where the typed record carries them.
+		holder, _ := records[i-1][dealProfile].(map[string]any)
+		if holder == nil {
+			holder = bodyOf(records[i-1])
+		}
+		checkIDs := holder["counterparty"].(map[string]any)["ids"].(map[string]any)
 		out = append(out, profileStep{
 			payee: cp["ids"].(map[string]any)["payee"].(string), checkDigest: check.Digest,
 			checkPayee: checkIDs["payee"].(string), record: records[i],
@@ -136,4 +143,154 @@ func mustNormalize(t *testing.T, kind, raw string) string {
 	n, err := normalizeID(kind, raw)
 	require.NoError(t, err)
 	return n
+}
+
+// wantProfileShape holds a counterparty_profile block to exactly the agreed
+// shape: fp_alg hmac-sha256-profile-key and one 64-lowercase-hex payee.
+func wantProfileShape(t *testing.T, v any) string {
+	t.Helper()
+	cp, ok := v.(map[string]any)
+	require.True(t, ok, "a counterparty_profile object")
+	require.Len(t, cp, 2)
+	require.Equal(t, "hmac-sha256-profile-key", cp["fp_alg"])
+	ids, ok := cp["ids"].(map[string]any)
+	require.True(t, ok)
+	require.Len(t, ids, 1)
+	payee, _ := ids["payee"].(string)
+	require.Regexp(t, `^[0-9a-f]{64}$`, payee)
+	return payee
+}
+
+// The rules checker is given the checked record's payee keyed per profile,
+// beside the sealed capsule (never in it), in exactly the agreed shape, the
+// value the check's companion seals right after it.
+func TestTheCheckerIsGivenTheCheckedRecordsProfileFingerprint(t *testing.T) {
+	for name, typed := range map[string]bool{"x-deal-v0": false, "typed": true} {
+		t.Run(name, func(t *testing.T) {
+			id := stickerDeal(t, "card", typed)
+			_, _, input := ruleInputs(t, id, stickerPay)
+			record := input["record"].(map[string]any)
+			payee := wantProfileShape(t, record["counterparty_profile"])
+			steps := profileSteps(t, id)
+			require.Len(t, steps, 1)
+			assert.Equal(t, steps[0].payee, payee, "the companion seals the value the checker was given")
+			sealed, err := json.Marshal(record["agent_input"])
+			require.NoError(t, err)
+			assert.NotContains(t, string(sealed), "counterparty_profile", "envelope-supplied, never in the sealed record")
+		})
+	}
+}
+
+// Each history act carries its own check's companion value, so a merchant
+// paid in an earlier deal is the same payee in this one; an act without an
+// approval (so no check) carries none.
+func TestTheHistoryCarriesEachActsProfileFingerprint(t *testing.T) {
+	first := stickerDeal(t, "card", false)
+	checker := stubChecker(t, "rules", checkerPrints("allow", passFinding))
+	pinChecker(t, map[string]any{"command": []string{checker}})
+	require.Equal(t, "pass", dealRun(t, "check", "--deal", first, "--input", writeJSON(t, stickerPay))["verdict"])
+	approved := payNow(t, first, 454)
+	require.Equal(t, false, approved["unchecked"])
+	unapproved := payNow(t, first, 100)
+	require.Equal(t, true, unapproved["unchecked"])
+
+	second := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+		"intent":{"verbatim":"another otter sticker for at most 5 dollars","max_total_minor":500,"allowed":["pay"]},
+		"who":{"name":"Sticker Marketplace","domain":"stickers.example"},
+		"terms":{"item":"otter sticker","price_minor":454,"currency":"USD"},
+		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	_, _, input := ruleInputs(t, second, stickerPay)
+	now := wantProfileShape(t, input["record"].(map[string]any)["counterparty_profile"])
+	byID := map[string]map[string]any{}
+	for _, h := range input["history"].([]any) {
+		entry := h.(map[string]any)
+		byID[entry["capsule_id"].(string)] = entry
+	}
+	require.Contains(t, byID, approved["capsule_id"])
+	require.Contains(t, byID, unapproved["capsule_id"])
+	assert.Equal(t, now, wantProfileShape(t, byID[approved["capsule_id"].(string)]["counterparty_profile"]), "the same merchant across the profile's deals")
+	assert.NotContains(t, byID[unapproved["capsule_id"].(string)], "counterparty_profile", "no approval, no check, no companion")
+	assert.Equal(t, profileSteps(t, first)[0].payee, now)
+}
+
+// profileVectorsPath holds the bridge vectors for the payee keyed per
+// profile: two deals of one profile paying one merchant, each check and its
+// counterparty_profile companion as their exact sealed (JCS) bytes, and the
+// target a reader keys the check on.
+var profileVectorsPath = filepath.Join("testdata", "payee-fp-profile", "vectors.json")
+
+type profileVector struct {
+	Name           string `json:"name"`
+	CheckJCS       string `json:"check_jcs"`
+	CompanionJCS   string `json:"companion_jcs"`
+	ExpectedTarget string `json:"expected_target"`
+}
+
+// CAPSULECTL_UPDATE_PROFILE_VECTORS=1 seals two real deals and writes them.
+func TestRegenerateProfileVectors(t *testing.T) {
+	if os.Getenv("CAPSULECTL_UPDATE_PROFILE_VECTORS") != "1" {
+		t.Skip("set CAPSULECTL_UPDATE_PROFILE_VECTORS=1 to regenerate")
+	}
+	dealFixture(t)
+	var cases []profileVector
+	for n, id := range []string{retailDeal(t), retailDeal(t)} {
+		events := chainSteps(t, id)
+		p, err := loadProfile("deal")
+		require.NoError(t, err)
+		s, err := openDealSession(t.Context(), p)
+		require.NoError(t, err)
+		require.NoError(t, s.useDeal(t.Context(), id, false))
+		for i, se := range events {
+			if se.Event.Kind != "counterparty_profile" {
+				continue
+			}
+			check, _, err := encodeDealRecord(events[i-1].Event, events[:i-1], s.dkey)
+			require.NoError(t, err)
+			companion, _, err := encodeDealRecord(se.Event, events[:i], s.dkey)
+			require.NoError(t, err)
+			cases = append(cases, profileVector{
+				Name: "deal " + strconv.Itoa(n+1) + ": its pay check", CheckJCS: string(check), CompanionJCS: string(companion),
+				ExpectedTarget: "payee-fp:" + dealProfileFPAlg + ":" + se.Event.CounterpartyProfile.Payee,
+			})
+		}
+		require.NoError(t, s.close())
+	}
+	raw, err := json.MarshalIndent(map[string]any{
+		"description": "Two deals of one profile paying one merchant. Each case: a check's sealed x-deal-v0 record and its counterparty_profile companion, as their exact JCS bytes. The companion's about ref digest is SHA-256 of check_jcs; the target is payee-fp:<fp_alg>:<payee> from the companion; both cases share it, while each check's own (per-deal) payee fingerprint differs.",
+		"cases":       cases,
+	}, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Dir(profileVectorsPath), 0o755))
+	require.NoError(t, os.WriteFile(profileVectorsPath, append(raw, '\n'), 0o644))
+}
+
+// The committed vectors hold: the companion names its check by the SHA-256
+// of the check's exact bytes, the target comes from the companion, one
+// merchant has one target across the two deals, and each check's per-deal
+// fingerprint differs.
+func TestTheProfileVectorsHold(t *testing.T) {
+	var file struct {
+		Cases []profileVector `json:"cases"`
+	}
+	require.NoError(t, json.Unmarshal(mustRead(t, profileVectorsPath), &file))
+	require.Len(t, file.Cases, 2)
+	var targets, perDeal []string
+	for _, c := range file.Cases {
+		var check, companion map[string]any
+		require.NoError(t, json.Unmarshal([]byte(c.CheckJCS), &check), c.Name)
+		require.NoError(t, json.Unmarshal([]byte(c.CompanionJCS), &companion), c.Name)
+		block := companion[dealProfile].(map[string]any)
+		require.Equal(t, "counterparty_profile", block["record_type"])
+		ref := block["refs"].([]any)[0].(map[string]any)
+		require.Equal(t, "about", ref["rel"])
+		sum := sha256.Sum256([]byte(c.CheckJCS))
+		assert.Equal(t, hex.EncodeToString(sum[:]), ref["digest"], c.Name)
+		payee := wantProfileShape(t, block["counterparty_profile"])
+		assert.Equal(t, "payee-fp:hmac-sha256-profile-key:"+payee, c.ExpectedTarget, c.Name)
+		require.Equal(t, "check", check[dealProfile].(map[string]any)["record_type"])
+		perDeal = append(perDeal, check[dealProfile].(map[string]any)["counterparty"].(map[string]any)["ids"].(map[string]any)["payee"].(string))
+		targets = append(targets, c.ExpectedTarget)
+	}
+	assert.Equal(t, targets[0], targets[1], "one merchant, one target across the profile's deals")
+	assert.NotEqual(t, perDeal[0], perDeal[1], "each deal's own fingerprint differs")
 }

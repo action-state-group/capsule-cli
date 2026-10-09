@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -592,6 +593,14 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 	if err != nil {
 		return nil, nil, err
 	}
+	// The payee keyed per profile, as the check's companion seals it: a
+	// rule keyed on who was paid before reads one merchant as one payee
+	// across the profile's deals.
+	for _, se := range events {
+		if cp := se.Event.CounterpartyProfile; se.Event.Kind == "counterparty_profile" && cp != nil && cp.Check == capsuleID {
+			record["counterparty_profile"] = counterpartyProfileBlock(cp.Payee)
+		}
+	}
 	input := map[string]interface{}{"schema": externalCheckInput, "record": record, "history": history,
 		"history_scope": map[string]interface{}{"days": scope.Days, "max_records": rulesHistoryMax, "complete": scope.Complete}}
 	if task := taskAuthorityAt(events, ""); task != "" {
@@ -705,8 +714,67 @@ func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRul
 			scope.Complete = false
 			continue
 		}
+		cp, err := s.actCounterpartyProfile(ctx, a.id)
+		if err != nil {
+			return nil, nil, err
+		}
+		if cp != nil {
+			record["counterparty_profile"] = cp
+		}
 		history = append(history, record)
 	}
 	scope.Acts = len(history)
 	return history, scope, nil
+}
+
+// localStep is a sealed step's local event and its deal, by capsule id.
+func (s *dealSession) localStep(ctx context.Context, capsuleID string) (string, *dealEvent, error) {
+	var dealID, local string
+	err := s.db.QueryRowContext(ctx, `SELECT deal_id, local FROM deal_steps WHERE capsule_id=?`, capsuleID).Scan(&dealID, &local)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil, nil
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	var ev dealEvent
+	if err = json.Unmarshal([]byte(local), &ev); err != nil {
+		return "", nil, err
+	}
+	return dealID, &ev, nil
+}
+
+// actCounterpartyProfile is the payee keyed per profile for an earlier act:
+// the act's approval, the verdict it answers, the check that verdict is of,
+// and that check's companion. Nil when any link is missing: an act without
+// approval, or one checked before checks had a companion.
+func (s *dealSession) actCounterpartyProfile(ctx context.Context, actID string) (map[string]interface{}, error) {
+	dealID, act, err := s.localStep(ctx, actID)
+	if err != nil || act == nil || act.Act == nil || act.Act.AuthorizedBy == "" {
+		return nil, err
+	}
+	_, approval, err := s.localStep(ctx, act.Act.AuthorizedBy)
+	if err != nil || approval == nil || approval.Approval == nil {
+		return nil, err
+	}
+	_, verdict, err := s.localStep(ctx, approval.Approval.Check)
+	if err != nil || verdict == nil || verdict.Check == nil || verdict.Check.Snapshot == "" {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT local FROM deal_steps WHERE deal_id=? AND kind='counterparty_profile'`, dealID)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]interface{}
+	for rows.Next() {
+		var local string
+		if err = rows.Scan(&local); err != nil {
+			return nil, errors.Join(err, rows.Close())
+		}
+		var ev dealEvent
+		if json.Unmarshal([]byte(local), &ev) == nil && ev.CounterpartyProfile != nil && ev.CounterpartyProfile.Check == verdict.Check.Snapshot {
+			out = counterpartyProfileBlock(ev.CounterpartyProfile.Payee)
+		}
+	}
+	return out, errors.Join(rows.Err(), rows.Close())
 }
