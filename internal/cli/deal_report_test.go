@@ -114,7 +114,7 @@ func TestDealReportIsOneLocalVerifyingPage(t *testing.T) {
 	assert.Equal(t, "pass", v.GraphClosure.Status)
 	assert.Equal(t, "pass", v.IntervalCoverage.Status, v.IntervalCoverage.Findings)
 	assert.Equal(t, "pass", v.PerRecordMembership.Status, v.PerRecordMembership.Findings)
-	assert.Len(t, b["records"], 9, "exactly this deal's 8 steps and this copy's sealed report, nothing from any other deal")
+	assert.Len(t, b["records"], 10, "exactly this deal's 9 steps (its check's counterparty_profile among them) and this copy's sealed report, nothing from any other deal")
 	for _, d := range v.Disclosures {
 		assert.Equal(t, "disclosure_match", string(d.Status), "every step's record is disclosed: it carries no raw values")
 	}

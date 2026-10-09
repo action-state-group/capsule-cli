@@ -205,6 +205,13 @@ func dealLocalValues(events []sealedEvent, ev dealEvent) []string {
 	return out
 }
 
+// counterpartyProfileBlock is the sealed shape of a payee's profile-scoped
+// fingerprint, the same in a counterparty_profile record and in a rules
+// checker's input.
+func counterpartyProfileBlock(payee string) map[string]interface{} {
+	return map[string]interface{}{"fp_alg": dealProfileFPAlg, "ids": map[string]interface{}{"payee": payee}}
+}
+
 func digestRef(d string) map[string]interface{} {
 	return map[string]interface{}{"type": dealRecordRef, "digest_alg": "SHA-256", "digest": d}
 }
@@ -876,6 +883,13 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if ev.RuleInputs != "" {
 			sealRuleInputs(body, events, sn)
 		}
+	case "counterparty_profile":
+		// A companion of the check it is about: only the payee's
+		// profile-scoped fingerprint, never in a shared copy.
+		rtype = "counterparty_profile"
+		cp := ev.CounterpartyProfile
+		block["refs"] = []interface{}{relRef("about", digestOf(cp.Check))}
+		block["counterparty_profile"] = counterpartyProfileBlock(cp.Payee)
 	case "check":
 		rtype = "verdict"
 		ck := ev.Check
