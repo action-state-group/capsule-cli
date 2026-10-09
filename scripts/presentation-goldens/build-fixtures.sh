@@ -103,6 +103,34 @@ capsulectl --profile deal deal report --deal "$id" --html page.html --bundle bun
 cp bundle.json page.html "$out/2-unilateral-receipt/"
 meta 2-unilateral-receipt "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "unilateral-receipt", emitted_by: "capsulectl deal report --deal ID --html page.html --bundle bundle.json (share keep)", rerender: "deal-report", page: "written", verify: $v}')"
 
+# --- 7. a receipt whose rules checker declares rules it does not measure ----
+# The same synthetic retail checkout, with a pinned stub rules checker that
+# allows the purchase and reports three rules its ruleset declares and it
+# does not measure (reason "declared, not measured"): the receipt says them
+# quietly beside the passing check, never as a warning. Synthetic ids only.
+fixture 7-receipt-declared-rules
+demo="$root/skills/deal/demo/retail-checkout"
+export CAPSULE_DEAL_CHECK_URL=
+plugins="$work/7-receipt-declared-rules/plugins"
+mkdir -p "$plugins"
+cat >"$plugins/example-rules" <<'STUB'
+#!/bin/sh
+cat >/dev/null
+printf '%s' '{"schema":"external-check-result/v0","ruleset_id":"example-rules/1.0.0","definition_digest":"abababababababababababababababababababababababababababababababab","verdict":"allow","tier":"recomputed","findings":[{"id":"r05-per-purchase","check":"caps/1","verdict":"pass","limit":2500,"value":627},{"id":"r14-commits-the-user","verdict":"not_evaluable","reason":"declared, not measured"},{"id":"r24-outside-instructions","verdict":"not_evaluable","reason":"declared, not measured"},{"id":"r25-no-bypassing","verdict":"not_evaluable","reason":"declared, not measured"}]}'
+STUB
+chmod 0755 "$plugins/example-rules"
+export CAPSULECTL_PLUGIN_ROOTS="$plugins"
+capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
+jq -n --arg c "$plugins/example-rules" '{command: [$c]}' >pin.json
+capsulectl --profile deal profile update --rules-checker pin.json >/dev/null
+id=$(capsulectl --profile deal deal open --input "$demo/open.json" | jq -r .deal_id)
+capsulectl --profile deal deal check --deal "$id" --input "$demo/check-pay.json" >/dev/null
+capsulectl --profile deal deal note --deal "$id" --kind act --input "$demo/act-pay.json" >/dev/null
+capsulectl --profile deal deal report --deal "$id" --html page.html --bundle bundle.json >/dev/null
+cp bundle.json page.html "$out/7-receipt-declared-rules/"
+meta 7-receipt-declared-rules "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "receipt-declared-rules", emitted_by: "capsulectl deal report --deal ID --html page.html --bundle bundle.json (share keep), with a pinned stub rules checker", rerender: "deal-report", page: "written", verify: $v}')"
+unset CAPSULECTL_PLUGIN_ROOTS
+
 # --- 3. bilateral receipt: composed/v1 joined, two members, one mismatch ---
 fixture 3-bilateral-composed
 git -C "$aac" show "${aac_commit}:python/scripts/generate_bundle_composed_vectors.py" >generator.py

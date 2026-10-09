@@ -403,6 +403,51 @@ func sealableRules(r dealRules, localValues []string) dealRules {
 		Reason: "the rules checker's answer could not be sealed (" + why + ")"}
 }
 
+// rulesDeclaredNotMeasured is the reason a checker gives for a rule its
+// ruleset declares and it does not measure (verdict not_evaluable). Such a
+// rule never moves the verdict, so it is said quietly beside it, never as a
+// difference or a warning. Any other not_evaluable is a rule the checker
+// could not evaluate on this record, and stays a difference.
+const rulesDeclaredNotMeasured = "declared, not measured"
+
+func isDeclaredRule(f dealRulesFinding) bool {
+	return f.Verdict == "not_evaluable" && f.Reason == rulesDeclaredNotMeasured
+}
+
+// declaredRules are the ids of the rules the ruleset declares and the checker
+// does not measure.
+func declaredRules(r *dealRules) []string {
+	var ids []string
+	if r == nil || r.Status != "evaluated" {
+		return nil
+	}
+	for _, f := range r.Findings {
+		if isDeclaredRule(f) {
+			ids = append(ids, f.ID)
+		}
+	}
+	return ids
+}
+
+// declaredRulesLine says them, by each id's short form (its first part, when
+// the id is a numbered rule such as r14-...).
+func declaredRulesLine(ids []string) string {
+	short := make([]string, len(ids))
+	for i, id := range ids {
+		short[i] = id
+		if head, _, ok := strings.Cut(id, "-"); ok && numberedRule.MatchString(head) {
+			short[i] = head
+		}
+	}
+	rules := "rules are"
+	if len(ids) == 1 {
+		rules = "rule is"
+	}
+	return fmt.Sprintf("%d %s declared by the ruleset but not measured by this checker (%s).", len(ids), rules, strings.Join(short, ", "))
+}
+
+var numberedRule = regexp.MustCompile(`^[a-z]{0,3}[0-9]{1,4}$`)
+
 // rulesStatusLine is the rules line every check prompt leads with.
 func rulesStatusLine(r *dealRules) string {
 	if r == nil {
@@ -416,6 +461,9 @@ func rulesStatusLine(r *dealRules) string {
 		}
 		words := map[string]string{"allow": "allowed", "deny": "not allowed", "escalate": "needs your approval", "not_evaluable": "not fully checked"}[r.Verdict]
 		line := fmt.Sprintf("Your rules (%s, digest %s): %s, %s.", r.RulesetID, short, words, rulesProvenance(r.Tier, r.Grade))
+		if declared := declaredRules(r); len(declared) > 0 {
+			line += " " + declaredRulesLine(declared)
+		}
 		if h := r.History; h != nil && !h.Complete {
 			line += fmt.Sprintf(" They were given only %d of your earlier payments from the last %d days.", h.Acts, h.Days)
 		}
@@ -458,6 +506,11 @@ func rulesDifferences(r *dealRules) []dealDifference {
 	}
 	var out []dealDifference
 	for _, f := range r.Findings {
+		if isDeclaredRule(f) {
+			// Declared by the ruleset, not measured by this checker: it
+			// never moves the verdict, so it is never a difference.
+			continue
+		}
 		if f.Verdict != "fail" && f.Verdict != "not_evaluable" {
 			continue
 		}
