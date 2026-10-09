@@ -71,7 +71,11 @@ type dealRecourse struct {
 // dealIntent is what the user asked for: their verbatim words plus the parts
 // of the request the agent could make exact.
 type dealIntent struct {
-	Verbatim      string    `json:"verbatim"`
+	Verbatim string `json:"verbatim"`
+	// PartyRole is which side of the deal the user is on: buyer or seller.
+	// Absent means buyer, as for every deal sealed before it was recorded;
+	// it is never written in for one. Set when the deal opens and fixed.
+	PartyRole     string    `json:"party_role,omitempty"`
 	Asked         dealTerms `json:"asked,omitempty"`
 	MaxTotalMinor *int64    `json:"max_total_minor,omitempty"`
 	// Allowed absent (nil) means no restriction; present and empty means
@@ -600,6 +604,9 @@ func (o dealOpen) validate() error {
 	if strings.TrimSpace(o.Intent.Verbatim) == "" {
 		return inputError("intent.verbatim (the user's own words) is required")
 	}
+	if err := validPartyRole(o.Intent.PartyRole); err != nil {
+		return err
+	}
 	if o.Who == (dealWho{}) {
 		return inputError("who needs at least one identifying field")
 	}
@@ -617,6 +624,28 @@ func (o dealOpen) validate() error {
 		return inputError("recourse needs the payment rail and whether it is refundable")
 	}
 	return nil
+}
+
+// Party roles: the side of the deal the user is on (dealIntent.PartyRole).
+const (
+	dealRoleBuyer  = "buyer"
+	dealRoleSeller = "seller"
+)
+
+func validPartyRole(role string) error {
+	if role != "" && role != dealRoleBuyer && role != dealRoleSeller {
+		return inputError("intent.party_role must be buyer or seller")
+	}
+	return nil
+}
+
+// dealRole is the side of the deal the user is on, from the deal's opening:
+// buyer when the deal records none.
+func dealRole(events []sealedEvent) string {
+	if len(events) > 0 && events[0].Event.Open != nil && events[0].Event.Open.Intent.PartyRole != "" {
+		return events[0].Event.Open.Intent.PartyRole
+	}
+	return dealRoleBuyer
 }
 
 func (c dealClaim) validate() error {
@@ -726,6 +755,9 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 // or for one step when the user approves that step's paused check.
 func laterIntent(cur, next dealIntent) dealIntent {
 	out := next
+	// The role is the deal's, set when it opened: a note never changes it
+	// (one that names another role is refused before it is sealed).
+	out.PartyRole = cur.PartyRole
 	// A note that names no terms ("cancel this ticket") changes nothing the
 	// user asked to buy: the terms in force stay.
 	if reflect.DeepEqual(next.Asked, dealTerms{}) {

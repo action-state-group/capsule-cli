@@ -200,6 +200,7 @@
       "required": ["verbatim_commitment"],
       "properties": {
         "verbatim_commitment": { "$ref": "#/$defs/hex64" },
+        "party_role": { "description": "Which side of the deal the user is on. Absent means buyer (every deal sealed before it was recorded); set when the deal opens and the same on every later intent.", "enum": ["buyer", "seller"] },
         "asked": { "$ref": "#/$defs/terms" },
         "max_total_minor": { "$ref": "#/$defs/safe_uint" },
         "allowed": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/point_of_no_return" } }

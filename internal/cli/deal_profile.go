@@ -406,6 +406,9 @@ func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]i
 		return nil, err
 	}
 	m := map[string]interface{}{"verbatim_commitment": c}
+	if i.PartyRole != "" {
+		m["party_role"] = i.PartyRole
+	}
 	if asked := termsBody(i.Asked); len(asked) > 0 {
 		m["asked"] = asked
 	}
@@ -1160,6 +1163,9 @@ func normalizeNote(ev *dealEvent) error {
 	case ev.Intent != nil:
 		if strings.TrimSpace(ev.Intent.Verbatim) == "" {
 			return inputError("intent.verbatim (the user's own words) is required")
+		}
+		if err = validPartyRole(ev.Intent.PartyRole); err != nil {
+			return err
 		}
 		err = normalizeTerms(&ev.Intent.Asked)
 	}

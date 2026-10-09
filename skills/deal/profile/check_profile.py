@@ -555,6 +555,8 @@ def check_chain(records):
     # in force (section 6).
     allowed = records[0]["body"]["intent"].get("allowed")
     max_total = records[0]["body"]["intent"].get("max_total_minor")
+    # The side of the deal the user is on: set when it opens (absent = buyer), never changed.
+    party_role = records[0]["body"]["intent"].get("party_role", "buyer")
     confirmed_intents = set()
     used_approvals, verdict_for_check = set(), set()
     reversed_actions = set()
@@ -765,6 +767,8 @@ def check_chain(records):
         elif t == "policy_change":
             pass  # its bindings are structural (the schema); no chain step depends on it yet
         elif t == "intent":
+            if body.get("party_role", party_role) != party_role:
+                fail(i, f"an intent cannot change the deal's party_role ({party_role}, set when it opened)")
             # An intent narrows the limits in force; asking for more is a
             # proposal that applies only once the user confirms it.
             if body.get("max_total_minor") is not None and (max_total is None or body["max_total_minor"] < max_total):
@@ -1391,6 +1395,10 @@ def regen():
 
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["seq"] = 5
     neg("neg-seq-gap", "chain", "seq gap", r, 2, "seq jumps from 2 to 5.")
+
+    r = copy.deepcopy(records[4]); r["body"]["party_role"] = "seller"
+    neg("neg-intent-changes-party-role", "chain", "cannot change the deal's party_role", r, 4,
+        "An intent note on a deal that opened with no party_role (a buyer's) names seller.")
 
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["seq"] = 2
     neg("neg-seq-regression", "chain", "seq regression", r, 2, "seq repeats 2 after 2.")

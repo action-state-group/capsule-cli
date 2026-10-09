@@ -1031,6 +1031,9 @@ func dealNoteCommand() *cobra.Command {
 			return inputError("change needs its source and at least one of who, terms or recourse")
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
+			if ev.Intent != nil && ev.Intent.PartyRole != "" && ev.Intent.PartyRole != dealRole(events) {
+				return inputError("this deal's party_role is " + dealRole(events) + ", set when it opened; a note cannot change it")
+			}
 			if i := finalClose(events); i >= 0 {
 				// A closed deal takes later evidence only, linked to the close
 				// (it confirms the close); every other step needs a new deal.
