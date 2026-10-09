@@ -229,11 +229,16 @@
       }
     },
     "obligation": {
-      "description": "A commitment that takes effect when a date passes: the last day to cancel, what happens then, and the price. Recorded, never enforced.",
-      "type": "object", "additionalProperties": false, "required": ["kind", "cancel_by"],
+      "description": "A commitment tied to a date. A cancel-by kind (trial_conversion, renewal, cancel_window, payment_due) takes effect when its last day to cancel passes: cancel_by. A due kind (deliver_by, perform_by) is something the user owes by a date: due_by. Recorded, never enforced.",
+      "type": "object", "additionalProperties": false, "required": ["kind"],
+      "oneOf": [
+        { "required": ["cancel_by"], "not": { "required": ["due_by"] }, "properties": { "kind": { "enum": ["trial_conversion", "renewal", "cancel_window", "payment_due"] } } },
+        { "required": ["due_by"], "not": { "required": ["cancel_by"] }, "properties": { "kind": { "enum": ["deliver_by", "perform_by"] } } }
+      ],
       "properties": {
-        "kind": { "enum": ["trial_conversion", "renewal", "cancel_window", "payment_due"] },
+        "kind": { "enum": ["trial_conversion", "renewal", "cancel_window", "payment_due", "deliver_by", "perform_by"] },
         "cancel_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "due_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
         "takes_effect": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
         "amount_minor": { "$ref": "#/$defs/safe_uint" },
         "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
@@ -516,13 +521,18 @@
         "unchecked_actions": { "$ref": "#/$defs/safe_uint" },
         "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
         "carried_obligations": {
-          "description": "Cancel-by obligations still open at the close, carried by it: they stay open after the close until a later record that confirms the close resolves them, or the date passes.",
+          "description": "Obligations still open at the close, carried by it, each with its cancel-by date or its due date: they stay open after the close until a later record that confirms the close resolves them, or the date passes.",
           "type": "array", "minItems": 1,
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["obligation", "cancel_by"],
+            "type": "object", "additionalProperties": false, "required": ["obligation"],
+            "oneOf": [
+              { "required": ["cancel_by"], "not": { "required": ["due_by"] } },
+              { "required": ["due_by"], "not": { "required": ["cancel_by"] } }
+            ],
             "properties": {
               "obligation": { "$ref": "#/$defs/digest_ref" },
-              "cancel_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+              "cancel_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+              "due_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
             }
           }
         }

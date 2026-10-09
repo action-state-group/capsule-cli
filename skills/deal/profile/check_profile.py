@@ -781,7 +781,7 @@ def check_chain(records):
             if "resolves_obligation" in body:
                 j = by_digest.get(body["resolves_obligation"]["digest"])
                 if j is None or j >= i or "obligation" not in records[j]["body"]:
-                    fail(i, "resolves_obligation must name an earlier record holding a cancel-by date")
+                    fail(i, "resolves_obligation must name an earlier record holding an obligation")
         elif t == "detail_change":
             one("source", ("message", "evidence"), required=False)
             kinds = set(b.get("counterparty", {}).get("ids", {}))
@@ -936,8 +936,10 @@ def check_chain(records):
                 closed_final = i
             for c in body.get("carried_obligations", []):
                 j = by_digest.get(c["obligation"]["digest"])
-                if j is None or j >= i or records[j]["body"].get("obligation", {}).get("cancel_by") != c["cancel_by"]:
-                    fail(i, "carried_obligations must name earlier records holding that cancel-by date")
+                held = records[j]["body"].get("obligation", {}) if j is not None else {}
+                date = "due_by" if "due_by" in c else "cancel_by"
+                if j is None or j >= i or held.get(date) != c[date]:
+                    fail(i, "carried_obligations must name earlier records holding that date")
 
 
 def check_record(rec, local_store_values=()):

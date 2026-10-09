@@ -191,12 +191,17 @@ Field details:
   `confirms` ref commits to the close record's digest, so it cannot be reattached to another
   deal. It shows that whoever sealed it held that deal; it does not show the deal expected it.
   `supersedes` (terminal) is not emitted: an expiry is computed when a receipt is made.
-- **obligation** (on `evidence`, optional): a commitment that takes effect when a date passes.
-  `kind` (`trial_conversion` | `renewal` | `cancel_window` | `payment_due`), `cancel_by` (the
-  last day to cancel), optional `takes_effect`, `amount_minor` + `currency`, `period` (`week` |
-  `month` | `year` | `once`) and `terms_commitment` (to the merchant's own wording, kept on the
-  device). The evidence record's `source` says where it came from (`merchant_email`,
-  `page_snapshot`). Recorded, never enforced. Each obligation records one cancel-by date. A recurring renewal after that date is not tracked; seal a new obligation for each later date.
+- **obligation** (on `evidence`, optional): a commitment tied to a date. Either a cancel-by
+  kind, which takes effect when a date passes: `kind` (`trial_conversion` | `renewal` |
+  `cancel_window` | `payment_due`) and `cancel_by` (the last day to cancel); or a due kind,
+  something the user owes the other side by a date: `kind` (`deliver_by` | `perform_by`) and
+  `due_by`. Never both dates. Optional `takes_effect`, `amount_minor` + `currency`, `period`
+  (`week` | `month` | `year` | `once`) and `terms_commitment` (to the merchant's own wording, kept
+  on the device). The evidence record's `source` says where it came from (`merchant_email`,
+  `page_snapshot`). Recorded, never enforced. Each obligation records one date. A recurring
+  renewal after that date is not tracked; seal a new obligation for each later date. A later
+  `evidence` record resolves either kind (`resolves_obligation`); a sealed `cancel` ends a
+  cancel-by obligation, never a due one.
 - **merchant_email** (on `evidence`, optional): a merchant's DKIM-signed email, kept raw on the
   device. `message_digest` (SHA-256 of the exact RFC 822 bytes), `key_records_digest` (SHA-256
   of the JCS array of `{"name","txt"}` key records captured when the email was sealed),
@@ -414,7 +419,7 @@ A verifier holding one deal's records in `seq` order checks:
    number of `unchecked_action` outcomes. A close with `completed` or `mismatch` is terminal:
    after it, only `evidence` records that `confirms` that close may follow. A close with `open`
    MAY be followed by later `outcome` and `close` records. Each `carried_obligations` entry names
-   an earlier record holding that `cancel_by`.
+   an earlier record holding that `cancel_by`, or that `due_by`.
 8. **Reversals.** An `action` with `direction: "in"` and an `amount_minor` returns money the user paid: it carries
    exactly one `reverses` ref to an earlier `action` with `action: "pay"` (direction `out`, or
    none, as records sealed before `direction` was recorded carry), with the same `amount_minor`

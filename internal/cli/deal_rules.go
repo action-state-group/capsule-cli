@@ -1497,7 +1497,11 @@ func trailLine(e dealEvent) string {
 			if line != "" {
 				line += "; "
 			}
-			line += "cancel-by date recorded (" + e.Evidence.Source + "): " + o.sentence("")
+			what := "cancel-by date"
+			if o.due() {
+				what = "due date"
+			}
+			line += what + " recorded (" + e.Evidence.Source + "): " + o.sentence("")
 		}
 		if line != "" {
 			return line

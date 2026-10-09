@@ -22,6 +22,11 @@ import (
 //     host's own scheduler or calendar can use. It records the deadline; it
 //     does not enforce it, and nothing is cancelled for the user.
 //
+//   - A DUE DATE. Something the user owes the other side by a date: a seller's
+//     delivery (deliver_by) or a service performed (perform_by). Recorded,
+//     listed and emitted the same way; a later record resolves it. A cancel
+//     does not end it.
+//
 //   - PROVING A NEGATIVE: "I cancelled on the 4th". A sealed cancel action
 //     plus the merchant's own cancellation email, bound to the deal that
 //     created the obligation. The report says exactly what that proves and
@@ -31,10 +36,14 @@ import (
 type dealObligation struct {
 	// Kind: trial_conversion (a trial becomes paid), renewal (a
 	// subscription renews), cancel_window (free cancellation ends) or
-	// payment_due (a payment is taken on a date).
+	// payment_due (a payment is taken on a date), each with a cancel-by date;
+	// or deliver_by (the user delivers) or perform_by (the user performs a
+	// service), each with a due date.
 	Kind string `json:"kind"`
-	// CancelBy is the last day to cancel (YYYY-MM-DD).
-	CancelBy string `json:"cancel_by"`
+	// CancelBy is the last day to cancel (YYYY-MM-DD), on a cancel-by kind.
+	CancelBy string `json:"cancel_by,omitempty"`
+	// DueBy is the day it is due (YYYY-MM-DD), on a due kind.
+	DueBy string `json:"due_by,omitempty"`
 	// TakesEffect is the day the commitment takes effect, when stated.
 	TakesEffect string `json:"takes_effect,omitempty"`
 	AmountMinor *int64 `json:"amount_minor,omitempty"`
@@ -46,13 +55,30 @@ type dealObligation struct {
 	Terms string `json:"terms,omitempty"`
 }
 
-var obligationKinds = []string{"trial_conversion", "renewal", "cancel_window", "payment_due"}
+var obligationKinds = []string{"trial_conversion", "renewal", "cancel_window", "payment_due", "deliver_by", "perform_by"}
+
+// dueKinds are the obligations with a due date rather than a cancel-by date.
+var dueKinds = []string{"deliver_by", "perform_by"}
 
 var obligationWords = map[string]string{
 	"trial_conversion": "the trial becomes paid",
 	"renewal":          "the subscription renews",
 	"cancel_window":    "free cancellation ends",
 	"payment_due":      "a payment is taken",
+	"deliver_by":       "delivery is due",
+	"perform_by":       "the service is due",
+}
+
+// due is whether the obligation has a due date (deliver_by, perform_by)
+// rather than a cancel-by date.
+func (o dealObligation) due() bool { return slices.Contains(dueKinds, o.Kind) }
+
+// date is the obligation's date: its due date or its cancel-by date.
+func (o dealObligation) date() string {
+	if o.due() {
+		return o.DueBy
+	}
+	return o.CancelBy
 }
 
 const deadlineNotEnforced = "We record this date; we do not enforce it. Nothing is cancelled for you: cancel with the merchant before the date."
@@ -69,8 +95,10 @@ func (o *dealObligation) normalize() error {
 	switch {
 	case !slices.Contains(obligationKinds, o.Kind):
 		return inputError("obligation.kind must be one of " + strings.Join(obligationKinds, ", "))
-	case !validDate(o.CancelBy):
-		return inputError("obligation.cancel_by must be a date, YYYY-MM-DD")
+	case o.due() && (!validDate(o.DueBy) || o.CancelBy != ""):
+		return inputError("obligation." + o.Kind + " needs due_by, a date (YYYY-MM-DD), and no cancel_by")
+	case !o.due() && (!validDate(o.CancelBy) || o.DueBy != ""):
+		return inputError("obligation." + o.Kind + " needs cancel_by, a date (YYYY-MM-DD), and no due_by")
 	case o.TakesEffect != "" && !validDate(o.TakesEffect):
 		return inputError("obligation.takes_effect must be a date, YYYY-MM-DD")
 	case o.Period != "" && !slices.Contains([]string{"week", "month", "year", "once"}, o.Period):
@@ -98,6 +126,9 @@ func (o dealObligation) sentence(currency string) string {
 	if o.TakesEffect != "" {
 		what += " on " + o.TakesEffect
 	}
+	if o.due() {
+		return what + " by " + o.DueBy
+	}
 	return what + " unless cancelled by " + o.CancelBy
 }
 
@@ -118,7 +149,8 @@ type dealDeadline struct {
 	Step      int64  `json:"step"`
 	CapsuleID string `json:"capsule_id"`
 	Kind      string `json:"kind"`
-	CancelBy  string `json:"cancel_by"`
+	CancelBy  string `json:"cancel_by,omitempty"`
+	DueBy     string `json:"due_by,omitempty"`
 	// Status: open (on an open deal), carried_at_close (on a closed deal
 	// that carried it), resolved (a later record resolves it), cancelled (a
 	// cancel is sealed after it), or passed (the date went by and nothing
@@ -142,6 +174,17 @@ type dealDeadline struct {
 	Holds string `json:"holds"`
 	AsOf  string `json:"as_of"`
 	Note  string `json:"note"`
+}
+
+// Date is the deadline's date, for the email template.
+func (d dealDeadline) Date() string { return d.date() }
+
+// date is the deadline's date: its due date or its cancel-by date.
+func (d dealDeadline) date() string {
+	if d.DueBy != "" {
+		return d.DueBy
+	}
+	return d.CancelBy
 }
 
 var deadlineMarkings = map[string]string{
@@ -173,7 +216,7 @@ func dealDeadlines(events []sealedEvent, now time.Time, remindDays int) []dealDe
 		}
 		o := ev.Obligation
 		d := dealDeadline{
-			DealID: se.Event.DealID, Step: se.Event.N, CapsuleID: se.CapsuleID, Kind: o.Kind, CancelBy: o.CancelBy,
+			DealID: se.Event.DealID, Step: se.Event.N, CapsuleID: se.CapsuleID, Kind: o.Kind, CancelBy: o.CancelBy, DueBy: o.DueBy,
 			Text: o.sentence(currency), Source: ev.Source, Confirmed: ev.Email != nil && ev.Verified, Note: deadlineNotEnforced,
 			Carried: carried[se.CapsuleID], DealState: dealState, AsOf: asOf,
 		}
@@ -187,24 +230,32 @@ func dealDeadlines(events []sealedEvent, now time.Time, remindDays int) []dealDe
 				d.Holds = fmt.Sprintf("Resolved: a record sealed at %s resolves it (%s).", later.Event.At, how)
 				break
 			}
-			if a := later.Event.Act; a != nil && a.Action == "cancel" && d.Status == "" {
+			// A cancel ends a cancel-by obligation, not something the user owes.
+			if a := later.Event.Act; a != nil && a.Action == "cancel" && d.Status == "" && !o.due() {
 				d.Status, d.CancelledAt = "cancelled", later.Event.At
 				d.Holds = "A cancel is sealed on this deal at " + later.Event.At + "."
 			}
 		}
+		when := "the last day to cancel is " + o.CancelBy
+		if o.due() {
+			when = "it is due by " + o.DueBy
+		}
 		switch {
 		case d.Status != "":
-		case day > o.CancelBy:
+		case day > o.date() && o.due():
+			d.Status = "passed"
+			d.Holds = fmt.Sprintf("The due date passed (as of %s). Nothing resolving it is sealed on this deal.", asOf)
+		case day > o.date():
 			d.Status = "passed"
 			d.Holds = fmt.Sprintf("The date passed (as of %s). No cancellation confirmation is sealed on this deal.", asOf)
 		default:
 			d.Status = "open"
-			d.Holds = "The last day to cancel is " + o.CancelBy + "; nothing resolving it is sealed on this deal yet."
+			d.Holds = strings.ToUpper(when[:1]) + when[1:] + "; nothing resolving it is sealed on this deal yet."
 			if d.Carried {
 				d.Status = "carried_at_close"
-				d.Holds = "Carried at the close of this deal: the last day to cancel is " + o.CancelBy + "; nothing resolving it is sealed on this deal yet."
+				d.Holds = "Carried at the close of this deal: " + when + "; nothing resolving it is sealed on this deal yet."
 			}
-			by, _ := time.Parse("2006-01-02", o.CancelBy)
+			by, _ := time.Parse("2006-01-02", o.date())
 			today, _ := time.Parse("2006-01-02", day)
 			left := int64(by.Sub(today).Hours() / 24)
 			d.DaysLeft = &left
@@ -248,6 +299,16 @@ func deadlinesICS(ds []dealDeadline, deals []dealOpenListing, remindDays int, no
 	}
 	for _, d := range ds {
 		uid := fmt.Sprintf("%s-%d", d.DealID, d.Step)
+		if d.DueBy != "" {
+			switch d.Status {
+			case "open":
+				event(uid, d.DueBy, "Due ("+d.DealID+"): "+d.Text, d.Holds+" "+d.Note, "Due date: "+d.DueBy)
+			case "carried_at_close":
+				event(uid, d.DueBy, "CARRIED AT CLOSE · "+d.DealID+" · due: "+d.Text,
+					"This deal is closed; this due date was carried at its close and stays open until a record resolves it. "+d.Holds+" "+d.Note, "Carried at close, "+d.DealID+": due "+d.DueBy)
+			}
+			continue
+		}
 		switch d.Status {
 		case "open":
 			event(uid, d.CancelBy, "Last day to cancel ("+d.DealID+"): "+d.Text, d.Holds+" "+d.Note, "Cancel-by date: "+d.CancelBy)
@@ -293,7 +354,7 @@ func dealCancellations(events []sealedEvent) []dealCancellation {
 		c := dealCancellation{CancelStep: se.CapsuleID, SentAt: se.Event.At, Authorized: !a.Unchecked, Steps: []string{se.CapsuleID}}
 		var obligation *sealedEvent
 		for j := i - 1; j >= 0; j-- {
-			if ev := events[j].Event.Evidence; ev != nil && ev.Obligation != nil {
+			if ev := events[j].Event.Evidence; ev != nil && ev.Obligation != nil && !ev.Obligation.due() {
 				obligation = &events[j]
 				break
 			}
@@ -400,7 +461,7 @@ func dealDeadlinesCommand() *cobra.Command {
 				deals = append(deals, *l)
 			}
 		}
-		slices.SortStableFunc(list, func(a, b dealDeadline) int { return strings.Compare(a.CancelBy, b.CancelBy) })
+		slices.SortStableFunc(list, func(a, b dealDeadline) int { return strings.Compare(a.date(), b.date()) })
 		slices.SortStableFunc(deals, func(a, b dealOpenListing) int { return strings.Compare(a.ExpectCloseBy, b.ExpectCloseBy) })
 		out := map[string]any{
 			"deadlines": list, "open_deals": deals, "enforced": false, "note": deadlineNotEnforced,

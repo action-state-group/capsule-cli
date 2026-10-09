@@ -1051,7 +1051,7 @@ func dealNoteCommand() *cobra.Command {
 					if se.Event.N == ev.Evidence.ResolvesStep || (target != "" && se.CapsuleID == target) {
 						target = se.CapsuleID
 						if se.Event.Evidence == nil || se.Event.Evidence.Obligation == nil {
-							return inputError("resolves names a step that holds no cancel-by date")
+							return inputError("resolves names a step that holds no obligation")
 						}
 					}
 				}
@@ -1230,7 +1230,13 @@ func dealNoteCommand() *cobra.Command {
 						}
 						out["checkpoint"] = cp
 					}
-					out["deadline"] = map[string]any{"cancel_by": o.CancelBy, "text": o.sentence(events[0].Event.Open.Terms.Currency), "note": deadlineNotEnforced}
+					deadline := map[string]any{"text": o.sentence(events[0].Event.Open.Terms.Currency), "note": deadlineNotEnforced}
+					if o.due() {
+						deadline["due_by"] = o.DueBy
+					} else {
+						deadline["cancel_by"] = o.CancelBy
+					}
+					out["deadline"] = deadline
 				}
 			}
 			return output(c, out)
@@ -1570,12 +1576,12 @@ func dealCloseCommand() *cobra.Command {
 			carry, _ := c.Flags().GetBool("carry-open-obligations")
 			open := openDeadlines(events, dealClock())
 			if len(open) > 0 && in.Status != "pending" && !carry {
-				return inputError("this deal has an open cancel-by date (" + open[0].CancelBy + ": " + open[0].Text + "); closing would end its record. Close with status pending, close after the cancel is sealed or the date has passed, or close with --carry-open-obligations to keep the date open after the close")
+				return inputError("this deal has an open date (" + open[0].date() + ": " + open[0].Text + "); closing would end its record. Close with status pending, close after the cancel is sealed or the date has passed, or close with --carry-open-obligations to keep the date open after the close")
 			}
 			result := closeDeal(state, in)
 			if in.Status != "pending" {
 				for _, d := range open {
-					result.Carried = append(result.Carried, dealCarried{Step: d.Step, CapsuleID: d.CapsuleID, CancelBy: d.CancelBy})
+					result.Carried = append(result.Carried, dealCarried{Step: d.Step, CapsuleID: d.CapsuleID, CancelBy: d.CancelBy, DueBy: d.DueBy})
 				}
 			}
 			for _, se := range events {

@@ -662,7 +662,12 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			}
 		}
 		if o := ev.Evidence.Obligation; o != nil {
-			ob := map[string]interface{}{"kind": o.Kind, "cancel_by": o.CancelBy}
+			ob := map[string]interface{}{"kind": o.Kind}
+			if o.due() {
+				ob["due_by"] = o.DueBy
+			} else {
+				ob["cancel_by"] = o.CancelBy
+			}
 			if o.TakesEffect != "" {
 				ob["takes_effect"] = o.TakesEffect
 			}
@@ -969,7 +974,13 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if len(cl.Carried) > 0 {
 			carried := make([]interface{}, len(cl.Carried))
 			for i, c := range cl.Carried {
-				carried[i] = map[string]interface{}{"obligation": digestRef(digestOf(c.CapsuleID)), "cancel_by": c.CancelBy}
+				item := map[string]interface{}{"obligation": digestRef(digestOf(c.CapsuleID))}
+				if c.DueBy != "" {
+					item["due_by"] = c.DueBy
+				} else {
+					item["cancel_by"] = c.CancelBy
+				}
+				carried[i] = item
 			}
 			body["carried_obligations"] = carried
 		}

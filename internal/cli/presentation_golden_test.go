@@ -31,6 +31,8 @@ import (
 // (CI's pinned Chrome and fonts), its width in each view is held to
 // known-overflow.json. CAPSULECTL_UPDATE_PRESENTATION_SNAPSHOTS=1
 // rewrites the snapshots (only when a change to what a reader sees is meant);
+// CAPSULECTL_UPDATE_PRESENTATION_PAGES=1 rewrites each page.html from its
+// bundle through the same path (when a page's own script changed on purpose);
 // CAPSULECTL_PRESENTATION_RENDERS=DIR also writes each view as a PNG (PDF
 // for print) there.
 
@@ -159,7 +161,13 @@ func TestPresentationGoldens(t *testing.T) {
 			// While the vendored viewer is the one the fixture's page was
 			// emitted with, re-emitting must give that page byte for byte:
 			// the path re-emitted here is the one capsulectl took.
-			if committed, err := os.ReadFile(filepath.Join(dir, "page.html")); err == nil && sameViewer(committed) {
+			pageFile := filepath.Join(dir, "page.html")
+			if committed, err := os.ReadFile(pageFile); err == nil && os.Getenv("CAPSULECTL_UPDATE_PRESENTATION_PAGES") == "1" {
+				if string(committed) != page {
+					require.NoError(t, os.WriteFile(pageFile, []byte(page), 0o644))
+					t.Logf("rewrote %s from its bundle", pageFile)
+				}
+			} else if err == nil && sameViewer(committed) {
 				require.Equal(t, string(committed), page, "the re-emitted page differs from the one capsulectl emitted")
 			}
 			if chrome == nil {
