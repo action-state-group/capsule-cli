@@ -9,7 +9,7 @@ aac Go module does not carry the repository's `schemas/` directory.
 
 | | |
 |---|---|
-| source | agent-action-capsule main @ `fa49b4d0649303a54a5f1e765dd7253f7f64767a`, the commit `go.mod` pins |
+| source | agent-action-capsule main @ `ab4ee43b71d6e074c6a000b5b19a9caf9720235e`, the commit `go.mod` pins |
 | sha256 | `077a69fd0dc670bdff6f9fe9793540ffb241873fb5687000cc519241e69ef5a1` |
 
 The digest is pinned again in `plugin_presentations_test.go`

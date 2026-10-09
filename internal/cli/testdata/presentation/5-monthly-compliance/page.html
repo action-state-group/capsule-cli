@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jx8hw+oicUVhAZ4+vP/UPwoqd7kyj7H02jxy5NW0ed4=' 'sha256-baySdVyvWqoWIs1DaUPJPtZT4L6N12ZSEbS6nqwcR+0=' 'sha256-AFG9jl8n4fyrxkOkQg8ZaLKsLTDLPtEL+voR1wspDE4='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jx8hw+oicUVhAZ4+vP/UPwoqd7kyj7H02jxy5NW0ed4=' 'sha256-2TQVzs+0jXYZVLBoXJCyHYKst0weVqpt28tmhK7M4Ss=' 'sha256-AFG9jl8n4fyrxkOkQg8ZaLKsLTDLPtEL+voR1wspDE4='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Evidence Graph</title>
     <style>
@@ -616,8 +616,8 @@ var EvidenceGraph = (() => {
   });
 
   // node_modules/cborg/lib/common.js
-  function assertEnoughData(data, pos, need) {
-    if (data.length - pos < need) {
+  function assertEnoughData(data, pos, need2) {
+    if (data.length - pos < need2) {
       throw new Error(`${decodeErrPrefix} not enough data for type`);
     }
   }
@@ -2723,10 +2723,22 @@ var EvidenceGraph = (() => {
     ACCEPTED_SPEC_VERSIONS: () => ACCEPTED_SPEC_VERSIONS,
     AGENT_INPUT_ORIGINALS_EXTENSION: () => AGENT_INPUT_ORIGINALS_EXTENSION,
     BOOK_PAYLOADS_EXTENSION: () => BOOK_PAYLOADS_EXTENSION,
+    BUILTIN_MANIFESTS: () => BUILTIN_MANIFESTS,
+    BUILTIN_MANIFEST_COMPOSED: () => BUILTIN_MANIFEST_COMPOSED,
+    BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH: () => BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH,
+    BUILTIN_MANIFEST_NO_AGGREGATE: () => BUILTIN_MANIFEST_NO_AGGREGATE,
+    BUILTIN_MANIFEST_REPORT_ROWS: () => BUILTIN_MANIFEST_REPORT_ROWS,
+    BUILTIN_MANIFEST_RESULT: () => BUILTIN_MANIFEST_RESULT,
+    BUILTIN_MANIFEST_RESULT_COMPLIANCE: () => BUILTIN_MANIFEST_RESULT_COMPLIANCE,
+    BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT: () => BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT,
+    BUILTIN_PRESENTATIONS: () => BUILTIN_PRESENTATIONS,
+    BUILTIN_SECTIONS: () => BUILTIN_SECTIONS,
+    BUILTIN_SECTION_MANIFESTS: () => BUILTIN_SECTION_MANIFESTS,
     CLAIM_REQUIRED: () => CLAIM_REQUIRED,
     CLOSE_CLAIM: () => CLOSE_CLAIM,
     CLOSE_LINK_TYPES: () => CLOSE_LINK_TYPES,
     CLOSE_STATES: () => CLOSE_STATES,
+    COMPOSED_KIND: () => COMPOSED_KIND,
     COUNTERSIGN_RESULTS: () => COUNTERSIGN_RESULTS,
     COUNTERSIGN_V1: () => COUNTERSIGN_V1,
     CURRENT_SPEC_VERSION: () => CURRENT_SPEC_VERSION,
@@ -2736,13 +2748,30 @@ var EvidenceGraph = (() => {
     DISCLOSURE_MISMATCH: () => DISCLOSURE_MISMATCH,
     DISCLOSURE_NO_COMMITTED_DIGEST: () => DISCLOSURE_NO_COMMITTED_DIGEST,
     EVIDENCE_STATUSES: () => EVIDENCE_STATUSES,
+    EXTENSION_NOT_INTERPRETED: () => EXTENSION_NOT_INTERPRETED,
+    EXTENSION_NOT_INTERPRETED_NOT_COVERED: () => EXTENSION_NOT_INTERPRETED_NOT_COVERED,
+    FRAGMENT_ADDRESS_ALLOWANCE: () => FRAGMENT_ADDRESS_ALLOWANCE,
+    FRAGMENT_TOKEN_DEFAULT_BUDGET: () => FRAGMENT_TOKEN_DEFAULT_BUDGET,
+    FRAGMENT_TOKEN_MAX_LENGTH: () => FRAGMENT_TOKEN_MAX_LENGTH,
+    FRAGMENT_URL_MAX_LENGTH: () => FRAGMENT_URL_MAX_LENGTH,
+    FragmentDecodeError: () => FragmentDecodeError,
+    FragmentTooLargeError: () => FragmentTooLargeError,
     GRADES: () => GRADES,
     JcsFloatError: () => JcsFloatError,
     JcsUnsafeIntegerError: () => JcsUnsafeIntegerError,
     JsonNumber: () => JsonNumber,
+    PRESENTATION_API_V0: () => PRESENTATION_API_V0,
+    PRESENTATION_DEPTHS: () => PRESENTATION_DEPTHS,
+    PRESENTATION_FORMATS: () => PRESENTATION_FORMATS,
+    PRESENTATION_FRAGMENT_VERSION: () => PRESENTATION_FRAGMENT_VERSION,
+    PRESENTATION_MANIFEST_VERSION: () => PRESENTATION_MANIFEST_VERSION,
     PRODUCER_KEY_V1: () => PRODUCER_KEY_V1,
     PROOF_KINDS: () => PROOF_KINDS,
     PUBLISHED_CAPSULE_RECORD_TYPE: () => PUBLISHED_CAPSULE_RECORD_TYPE,
+    PresentationAmbiguityError: () => PresentationAmbiguityError,
+    PresentationRegistrationError: () => PresentationRegistrationError,
+    PresentationRegistry: () => PresentationRegistry,
+    REFERENCE_PRESENTATION_RUNTIME: () => REFERENCE_PRESENTATION_RUNTIME,
     REQUIREMENT_CLAIM: () => REQUIREMENT_CLAIM,
     RESULT_MEMBERS: () => RESULT_MEMBERS,
     RESULT_RECORD_TYPE: () => RESULT_RECORD_TYPE,
@@ -2758,21 +2787,35 @@ var EvidenceGraph = (() => {
     buildVerificationPageModel: () => buildVerificationPageModel,
     buildVerifiedBundleContext: () => buildVerifiedBundleContext,
     bundleDigest: () => bundleDigest,
+    bundleVerified: () => bundleVerified,
     carriedCapsuleCommitment: () => carriedCapsuleCommitment,
+    carriesResultDocument: () => carriesResultDocument,
+    checkPresentationFragment: () => checkPresentationFragment,
     classifyCountersignatures: () => classifyCountersignatures,
+    composedBlockProblem: () => composedBlockProblem,
+    composedDigest: () => composedDigest,
+    composedDigestPreimage: () => composedDigestPreimage,
     computeCapsuleId: () => computeCapsuleId,
     counterpartyLinks: () => counterpartyLinks,
     countersignV1SigningInput: () => countersignV1SigningInput,
     coverageStatement: () => coverageStatement,
+    createPresentationRegistry: () => createPresentationRegistry,
+    createSectionRegistry: () => createSectionRegistry,
     declaredProducerKeys: () => declaredProducerKeys,
     decodeCapsuleJson: () => decodeCapsuleJson,
     decodeFragment: () => decodeFragment,
+    decodeFragmentToken: () => decodeFragmentToken,
+    decodePresentationFragment: () => decodePresentationFragment,
     decodeStrictJson: () => decodeStrictJson,
     deriveCloseState: () => deriveCloseState,
+    describeContext: () => describeContext,
     disclosureEligibleFields: () => disclosureEligibleFields,
     disclosureOf: () => disclosureOf,
     disclosurePayload: () => disclosurePayload,
     encodeFragment: () => encodeFragment,
+    encodeFragmentToken: () => encodeFragmentToken,
+    encodePresentationFragment: () => encodePresentationFragment,
+    extensionRows: () => extensionRows,
     indexCountersigners: () => indexCountersigners,
     isHex64: () => isHex64,
     isResultRoot: () => isResultRoot,
@@ -2780,16 +2823,29 @@ var EvidenceGraph = (() => {
     isVerifiedBundleContext: () => isVerifiedBundleContext,
     jcs: () => jcs,
     jsonDigest: () => jsonDigest,
+    manifestMatches: () => manifestMatches,
+    manifestProblems: () => manifestProblems,
+    manifestsCoMatchable: () => manifestsCoMatchable,
+    mountPresentation: () => mountPresentation,
+    mountPresentationFragment: () => mountPresentationFragment,
     parseCapsule: () => parseCapsule,
     pinnedCountersignerSource: () => pinnedCountersignerSource,
+    presentationRefusalLine: () => presentationRefusalLine,
+    presentationRefusalNotices: () => presentationRefusalNotices,
+    presentationRefusalReason: () => presentationRefusalReason,
+    presentationRefusalRow: () => presentationRefusalRow,
     readPresentationBlock: () => readPresentationBlock,
     recomputeCounts: () => recomputeCounts,
+    registerPresentation: () => registerPresentation,
     registries: () => registries,
     renderCompliancePage: () => renderCompliancePage,
     renderEvidenceGraph: () => renderEvidenceGraph,
     renderOutcomeReportPage: () => renderOutcomeReportPage,
     resolveCarriedInput: () => resolveCarriedInput,
     resolveDisclosure: () => resolveDisclosure,
+    resolveModules: () => resolveModules,
+    resolvePresentation: () => resolvePresentation,
+    scopeDisclosures: () => scopeDisclosures,
     sealCapsule: () => sealCapsule,
     sha256Hex: () => sha256Hex,
     unboundRecordIds: () => unboundRecordIds,
@@ -2798,6 +2854,7 @@ var EvidenceGraph = (() => {
     verifiedPayload: () => verifiedPayload,
     verifyBundle: () => verifyBundle,
     verifyClass1: () => verifyClass1,
+    verifyComposed: () => verifyComposed,
     verifyCountersignV1Signature: () => verifyCountersignV1Signature,
     verifyDisclosureEnvelope: () => verifyDisclosureEnvelope,
     verifyProducerEnvelope: () => verifyProducerEnvelope,
@@ -4030,13 +4087,742 @@ var EvidenceGraph = (() => {
 
   // src/bundle.ts
   init_browser();
-  var text = new TextDecoder("utf-8", { fatal: true });
+
+  // src/compliance-presentation.ts
+  function object3(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  }
+  function str(value) {
+    return typeof value === "string" ? value : void 0;
+  }
+  function strArray(value) {
+    return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
+  }
+  function readFinding(value) {
+    const obj = object3(value);
+    const id = str(obj?.id);
+    const severity = str(obj?.severity);
+    const recommendation = str(obj?.recommendation);
+    const ownerDue = str(obj?.owner_due);
+    if (id === void 0 || severity === void 0 || recommendation === void 0 || ownerDue === void 0)
+      return void 0;
+    return { id, severity, recommendation, ownerDue };
+  }
+  function readRow(value) {
+    const obj = object3(value);
+    const criterionId = str(obj?.criterion_id);
+    const name = str(obj?.name);
+    if (criterionId === void 0 || name === void 0) return void 0;
+    const notEvaluableNote = str(obj?.not_evaluable_note);
+    const finding = obj?.finding === void 0 ? void 0 : readFinding(obj.finding);
+    return {
+      criterionId,
+      name,
+      ...notEvaluableNote === void 0 ? {} : { notEvaluableNote },
+      ...finding === void 0 ? {} : { finding }
+    };
+  }
+  function readApplicability(value) {
+    const obj = object3(value);
+    const status2 = obj?.status === "in_force" || obj?.status === "future" ? obj.status : void 0;
+    const note = str(obj?.note);
+    if (status2 === void 0 || note === void 0) return void 0;
+    return { status: status2, note };
+  }
+  function readObligation(value) {
+    const obj = object3(value);
+    const key = str(obj?.key);
+    const article = str(obj?.article);
+    const title = str(obj?.title);
+    const plain2 = str(obj?.plain);
+    const method = str(obj?.method);
+    const applicability = readApplicability(obj?.applicability);
+    if (key === void 0 || article === void 0 || title === void 0 || plain2 === void 0 || method === void 0 || applicability === void 0)
+      return void 0;
+    const rows = Array.isArray(obj?.rows) ? obj.rows.flatMap((r) => {
+      const row2 = readRow(r);
+      return row2 === void 0 ? [] : [row2];
+    }) : [];
+    return {
+      key,
+      article,
+      title,
+      plain: plain2,
+      judgedTerms: strArray(obj?.judged_terms),
+      applicability,
+      method,
+      rows
+    };
+  }
+  function readQualityProtocol(value) {
+    const obj = object3(value);
+    if (obj === void 0) return void 0;
+    const protocol = str(obj.protocol);
+    const cadence = str(obj.cadence);
+    const note = str(obj.note);
+    if (protocol === void 0 && cadence === void 0 && note === void 0)
+      return void 0;
+    return {
+      ...protocol === void 0 ? {} : { protocol },
+      ...cadence === void 0 ? {} : { cadence },
+      ...note === void 0 ? {} : { note }
+    };
+  }
+  function readCompliancePresentation(bundle) {
+    const top = object3(bundle);
+    const extensions2 = object3(top?.extensions);
+    const block = object3(extensions2?.["eu-ai-act-compliance/v1"]);
+    if (block === void 0 || block.enabled !== true) return void 0;
+    const regulation = str(block.regulation) ?? "Regulation (EU) 2024/1689";
+    const obligations = Array.isArray(block.obligations) ? block.obligations.flatMap((o) => {
+      const obligation = readObligation(o);
+      return obligation === void 0 ? [] : [obligation];
+    }) : [];
+    if (obligations.length === 0) return void 0;
+    const qualityProtocol = readQualityProtocol(block.quality_protocol);
+    return {
+      enabled: true,
+      regulation,
+      obligations,
+      ...qualityProtocol === void 0 ? {} : { qualityProtocol }
+    };
+  }
+
+  // src/composed.ts
+  var COMPOSED_KIND = "composed/v1";
+  var object4 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var isString = (value) => typeof value === "string";
+  var LABEL = /^[A-Za-z0-9._:-]{1,128}$/u;
+  var isLabel = (value) => isString(value) && LABEL.test(value);
+  var OUTCOME_BODY = {
+    artifact: "bundle",
+    refusal: "refusal",
+    absence: "absence"
+  };
+  var JOIN_BASES = /* @__PURE__ */ new Set([
+    "pre_agreed_identifier",
+    "shared_artifact_digest",
+    "issued_receipt",
+    "same_interval"
+  ]);
+  var JOIN_STATES = /* @__PURE__ */ new Set(["agree", "mismatch", "unjoined", "one_sided"]);
+  var ok2 = (value) => ({ ok: true, value });
+  var bad = (reason) => ({ ok: false, reason });
+  function validPointer(pointer) {
+    if (pointer === "") return true;
+    if (pointer[0] !== "/") return false;
+    for (let i = 0; i < pointer.length; i++)
+      if (pointer[i] === "~" && (i + 1 >= pointer.length || pointer[i + 1] !== "0" && pointer[i + 1] !== "1"))
+        return false;
+    return true;
+  }
+  function resolvePointer(document2, pointer) {
+    if (!validPointer(pointer)) return { ok: false };
+    if (pointer === "") return { ok: true, value: document2 };
+    let current = document2;
+    for (const raw of pointer.slice(1).split("/")) {
+      const token = raw.replaceAll("~1", "/").replaceAll("~0", "~");
+      if (Array.isArray(current)) {
+        if (!/^(0|[1-9][0-9]*)$/u.test(token)) return { ok: false };
+        const index = Number(token);
+        if (index >= current.length) return { ok: false };
+        current = current[index];
+      } else if (object4(current)) {
+        if (!Object.hasOwn(current, token)) return { ok: false };
+        current = current[token];
+      } else return { ok: false };
+    }
+    return { ok: true, value: current };
+  }
+  function optionalArray(value, key) {
+    if (!Object.hasOwn(value, key)) return void 0;
+    const raw = value[key];
+    return Array.isArray(raw) ? raw : null;
+  }
+  function labelArray(value, key) {
+    const list = optionalArray(value, key);
+    if (list === null) return bad(key);
+    const labels = [];
+    for (const raw of list ?? []) {
+      if (!isLabel(raw)) return bad(key);
+      labels.push(raw);
+    }
+    return ok2(labels);
+  }
+  function parseMember(raw, observers) {
+    if (!object4(raw)) return bad("not_an_object");
+    const { id, observer, request_digest: requestDigest, outcome, digest } = raw;
+    if (!isLabel(id)) return bad("id");
+    if (!isLabel(observer)) return bad("observer");
+    if (!observers.has(observer)) return bad("observer_undeclared");
+    if (!isHex64(requestDigest)) return bad("request_digest");
+    if (!isHex64(digest)) return bad("digest");
+    if (!isString(outcome) || !Object.hasOwn(OUTCOME_BODY, outcome))
+      return bad("outcome");
+    const bodyKey = OUTCOME_BODY[outcome];
+    for (const other of Object.values(OUTCOME_BODY))
+      if (other !== bodyKey && Object.hasOwn(raw, other))
+        return bad("body_outcome_conflict");
+    const member = {
+      id,
+      observer,
+      requestDigest,
+      outcome,
+      digest
+    };
+    if (!Object.hasOwn(raw, bodyKey)) return ok2(member);
+    const body = raw[bodyKey];
+    if (!object4(body)) return bad("body");
+    if (outcome === "refusal") {
+      if (!isHex64(body.request_digest) || !isString(body.reason) || !isString(body.issued_at))
+        return bad("refusal_body");
+    } else if (outcome === "absence") {
+      const window = body.window;
+      if (!isHex64(body.request_digest) || !object4(window) || !isString(window.from) || !isString(window.to))
+        return bad("absence_body");
+      if (Object.hasOwn(body, "route") && !isString(body.route))
+        return bad("absence_body");
+      if (Object.hasOwn(body, "commitment") && !isHex64(body.commitment))
+        return bad("absence_body");
+    }
+    return ok2({ ...member, body });
+  }
+  function parseJoin(raw, members) {
+    if (!object4(raw)) return bad("not_an_object");
+    const pair = raw.members;
+    if (!Array.isArray(pair) || pair.length !== 2) return bad("members");
+    for (const id of pair)
+      if (!isLabel(id) || !members.has(id)) return bad("members");
+    const [first, second] = pair;
+    if (!(first < second)) return bad("members_order");
+    const { basis, state } = raw;
+    if (!isString(basis) || !JOIN_BASES.has(basis)) return bad("basis");
+    if (!isString(state) || !JOIN_STATES.has(state)) return bad("state");
+    let pointer;
+    if (Object.hasOwn(raw, "pointer")) {
+      if (!isString(raw.pointer) || !validPointer(raw.pointer))
+        return bad("pointer");
+      pointer = raw.pointer;
+    }
+    let identifier;
+    if (Object.hasOwn(raw, "identifier_digest")) {
+      if (!isHex64(raw.identifier_digest)) return bad("identifier_digest");
+      identifier = raw.identifier_digest;
+    }
+    const compare2 = [];
+    let compareCarried = false;
+    if (Object.hasOwn(raw, "compare")) {
+      const list = raw.compare;
+      if (!Array.isArray(list) || list.length === 0) return bad("compare");
+      for (const item of list) {
+        if (!isString(item) || !validPointer(item)) return bad("compare");
+        compare2.push(item);
+      }
+      compareCarried = true;
+    }
+    return ok2({
+      members: [first, second],
+      basis,
+      state,
+      ...pointer === void 0 ? {} : { pointer },
+      ...identifier === void 0 ? {} : { identifier },
+      compare: compare2,
+      compareCarried
+    });
+  }
+  var joinKey = (j) => `${j.members[0]}\0${j.members[1]}\0${j.basis}\0${j.pointer ?? ""}`;
+  function parseComposed(raw) {
+    if (!object4(raw)) return bad("not_an_object");
+    const digest = raw.composed_digest;
+    if (!isHex64(digest)) return bad("composed_digest");
+    const observerList = raw.observers;
+    if (!Array.isArray(observerList) || observerList.length === 0)
+      return bad("observers");
+    const observerIds = /* @__PURE__ */ new Set();
+    const observers = [];
+    for (const [i, o] of observerList.entries()) {
+      if (!object4(o) || !isLabel(o.id) || !isString(o.role) || !isString(o.custody_domain))
+        return bad(`observer:${i}`);
+      if (observerIds.has(o.id)) return bad(`observer_id_duplicate:${o.id}`);
+      observerIds.add(o.id);
+      observers.push({ id: o.id, role: o.role, custodyDomain: o.custody_domain });
+    }
+    const memberList = raw.members;
+    if (!Array.isArray(memberList) || memberList.length === 0)
+      return bad("members");
+    const memberIds = /* @__PURE__ */ new Set();
+    const members = [];
+    for (const [i, rawMember] of memberList.entries()) {
+      const parsed = parseMember(rawMember, observerIds);
+      if (!parsed.ok) return bad(`member:${i}:${parsed.reason}`);
+      if (memberIds.has(parsed.value.id))
+        return bad(`member_id_duplicate:${parsed.value.id}`);
+      memberIds.add(parsed.value.id);
+      members.push(parsed.value);
+    }
+    const joinList = optionalArray(raw, "joins");
+    if (joinList === null) return bad("joins");
+    const seen = /* @__PURE__ */ new Set();
+    const joins = [];
+    for (const [i, rawJoin] of (joinList ?? []).entries()) {
+      const parsed = parseJoin(rawJoin, memberIds);
+      if (!parsed.ok) return bad(`join:${i}:${parsed.reason}`);
+      let key = joinKey(parsed.value);
+      if (parsed.value.pointer === void 0) key += "\0absent";
+      if (seen.has(key)) return bad(`join_duplicate:${i}`);
+      seen.add(key);
+      joins.push(parsed.value);
+    }
+    const notRequested = labelArray(raw, "not_requested");
+    if (!notRequested.ok) return notRequested;
+    for (const id of notRequested.value)
+      if (memberIds.has(id)) return bad(`not_requested_is_member:${id}`);
+    const missing = labelArray(raw, "missing");
+    if (!missing.ok) return missing;
+    return ok2({
+      members,
+      observers,
+      joins,
+      notRequested: notRequested.value,
+      missing: missing.value,
+      digest
+    });
+  }
+  function composedBlockProblem(raw) {
+    const parsed = parseComposed(raw);
+    return parsed.ok ? void 0 : parsed.reason;
+  }
+  var utf82 = new TextEncoder();
+  function octetCompare(a, b) {
+    const x = utf82.encode(a);
+    const y = utf82.encode(b);
+    for (let i = 0; i < Math.min(x.length, y.length); i++)
+      if (x[i] !== y[i]) return x[i] - y[i];
+    return x.length - y.length;
+  }
+  function composedDigestPreimage(raw) {
+    const parsed = parseComposed(raw);
+    if (!parsed.ok)
+      throw new TypeError(`composed/v1 block malformed: ${parsed.reason}`);
+    const block = parsed.value;
+    const byId = (items) => [...items].sort((a, b) => octetCompare(a.id, b.id));
+    return jcs({
+      kind: COMPOSED_KIND,
+      members: byId(block.members).map((m) => ({
+        id: m.id,
+        observer: m.observer,
+        request_digest: m.requestDigest,
+        outcome: m.outcome,
+        digest: m.digest
+      })),
+      observers: byId(block.observers).map((o) => ({
+        id: o.id,
+        role: o.role,
+        custody_domain: o.custodyDomain
+      })),
+      joins: [...block.joins].sort((a, b) => octetCompare(joinKey(a), joinKey(b))).map((j) => ({
+        members: [j.members[0], j.members[1]],
+        basis: j.basis,
+        state: j.state,
+        ...j.pointer === void 0 ? {} : { pointer: j.pointer },
+        ...j.identifier === void 0 ? {} : { identifier_digest: j.identifier },
+        ...j.compareCarried ? { compare: [...j.compare] } : {}
+      })),
+      not_requested: [...block.notRequested].sort(octetCompare)
+    });
+  }
+  async function composedDigest(raw) {
+    return sha256Hex(composedDigestPreimage(raw));
+  }
+  function rootRecord(m) {
+    if (m?.body === void 0) return void 0;
+    const root = m.body.root;
+    if (!isString(root)) return void 0;
+    const records = m.body.records;
+    if (!Array.isArray(records)) return void 0;
+    for (const record of records)
+      if (object4(record) && record.capsule_id === root) return record;
+    return void 0;
+  }
+  function sameJcs(a, b) {
+    try {
+      const x = jcs(a);
+      const y = jcs(b);
+      return x.length === y.length && x.every((byte, i) => byte === y[i]);
+    } catch {
+      return false;
+    }
+  }
+  async function identifierMatches(record, pointer, digest) {
+    const value = resolvePointer(record, pointer);
+    if (!value.ok || !isString(value.value)) return false;
+    return await sha256Hex(utf82.encode(value.value)) === digest;
+  }
+  async function derivedState(j, byId, missing) {
+    const a = byId.get(j.members[0]);
+    const b = byId.get(j.members[1]);
+    const artifacts = [a, b].filter((m) => m.outcome === "artifact").length;
+    if (artifacts === 0) return { derived: "unjoined", differences: [] };
+    if (artifacts === 1) return { derived: "one_sided", differences: [] };
+    if (missing.has(a.id) || missing.has(b.id)) return { differences: [] };
+    const ra = rootRecord(a);
+    const rb = rootRecord(b);
+    if (ra === void 0 || rb === void 0) return { differences: [] };
+    let linked;
+    if (j.basis === "pre_agreed_identifier") {
+      linked = j.pointer !== void 0 && j.identifier !== void 0 && await identifierMatches(ra, j.pointer, j.identifier) && await identifierMatches(rb, j.pointer, j.identifier);
+    } else if (j.basis === "shared_artifact_digest") {
+      linked = false;
+      if (j.pointer !== void 0) {
+        const va = resolvePointer(ra, j.pointer);
+        const vb = resolvePointer(rb, j.pointer);
+        linked = va.ok && vb.ok && isString(va.value) && isString(vb.value) && va.value === vb.value;
+      }
+    } else {
+      return { differences: [] };
+    }
+    if (!linked) return { derived: "unjoined", differences: [] };
+    const differences = [];
+    for (const pointer of j.compare) {
+      const va = resolvePointer(ra, pointer);
+      const vb = resolvePointer(rb, pointer);
+      if (va.ok && vb.ok && sameJcs(va.value, vb.value)) continue;
+      differences.push({
+        pointer,
+        values: [
+          va.ok ? { member: a.id, resolved: true, value: va.value } : { member: a.id, resolved: false },
+          vb.ok ? { member: b.id, resolved: true, value: vb.value } : { member: b.id, resolved: false }
+        ]
+      });
+    }
+    return differences.length > 0 ? { derived: "mismatch", differences } : { derived: "agree", differences: [] };
+  }
+  function corroboration(j, derived, byId, observers) {
+    if (derived !== "agree")
+      return { members: j.members, result: "not_applicable" };
+    const a = byId.get(j.members[0]);
+    const b = byId.get(j.members[1]);
+    const reasons = [];
+    if (a.observer === b.observer) reasons.push("same_observer");
+    if (observers.get(a.observer)?.custodyDomain === observers.get(b.observer)?.custodyDomain)
+      reasons.push("same_custody_domain");
+    const keyA = rootRecord(a)?.key_id;
+    const keyB = rootRecord(b)?.key_id;
+    if (isString(keyA) && isString(keyB) && keyA === keyB)
+      reasons.push("same_key_id");
+    if (reasons.length > 0)
+      return {
+        members: j.members,
+        result: "redundant",
+        reason: reasons[0],
+        reasons,
+        report: "redundant, not corroborating"
+      };
+    return {
+      members: j.members,
+      result: "corroborating",
+      qualifier: "custody_declared"
+    };
+  }
+  async function verifyMember(m, declaredMissing, verifyMemberBundle) {
+    const closure = [];
+    const failed = [];
+    const withheld = [];
+    const findings = [];
+    const base = { id: m.id, observer: m.observer, outcome: m.outcome };
+    if (declaredMissing && m.body === void 0)
+      return {
+        member: {
+          ...base,
+          body: "declared_missing",
+          digest: "not_shown",
+          findings
+        },
+        closure,
+        failed,
+        withheld
+      };
+    if (m.body === void 0) {
+      closure.push(`member_body_absent:${m.id}`);
+      findings.push("member_body_absent");
+      return {
+        member: { ...base, body: "absent", digest: "not_shown", findings },
+        closure,
+        failed,
+        withheld
+      };
+    }
+    if (declaredMissing) closure.push(`missing_member_carries_body:${m.id}`);
+    let computed;
+    let bundle;
+    if (m.outcome === "artifact") {
+      const verification = await verifyMemberBundle(m.body);
+      computed = verification.bundleDigest;
+      bundle = {
+        graphClosure: verification.graphClosure,
+        intervalCoverage: verification.intervalCoverage,
+        perRecordMembership: verification.perRecordMembership
+      };
+    } else {
+      try {
+        computed = await jsonDigest(m.body);
+      } catch {
+        computed = void 0;
+      }
+      if (m.body.request_digest !== m.requestDigest) {
+        findings.push("request_digest_mismatch");
+        failed.push(`member_request_digest_mismatch:${m.id}`);
+      }
+    }
+    let digest = "reproduced";
+    if (computed === void 0 || computed !== m.digest) {
+      digest = "mismatch";
+      findings.push("member_digest_mismatch");
+      closure.push(`member_digest_mismatch:${m.id}`);
+    }
+    let refusalSignature;
+    if (m.outcome === "refusal") {
+      refusalSignature = "signature_unverified";
+      withheld.push(`refusal_signature_unverified:${m.id}`);
+    }
+    return {
+      member: {
+        ...base,
+        body: "carried",
+        digest,
+        findings,
+        ...bundle === void 0 ? {} : { bundle },
+        ...refusalSignature === void 0 ? {} : { refusalSignature }
+      },
+      closure,
+      failed,
+      withheld
+    };
+  }
+  function sortedUnique(values) {
+    return [...new Set(values)].sort(octetCompare);
+  }
+  async function verifyComposed(raw, verifyMemberBundle) {
+    const parsed = parseComposed(raw);
+    if (!parsed.ok)
+      return {
+        status: "fail",
+        malformed: true,
+        findings: [`composed_block_malformed:${parsed.reason}`]
+      };
+    const block = parsed.value;
+    const failed = [];
+    const withheld = [];
+    let recomputed = "";
+    try {
+      recomputed = await composedDigest(raw);
+    } catch {
+      recomputed = "";
+    }
+    const composedDigestResult = {
+      declared: block.digest,
+      recomputed,
+      matches: recomputed !== "" && recomputed === block.digest
+    };
+    if (!composedDigestResult.matches) failed.push("composed_digest_mismatch");
+    const missing = /* @__PURE__ */ new Set();
+    const declared = new Set(block.members.map((m) => m.id));
+    const closureFindings = [];
+    for (const id of block.missing) {
+      if (missing.has(id)) closureFindings.push(`missing_duplicate:${id}`);
+      missing.add(id);
+      if (!declared.has(id))
+        closureFindings.push(`missing_names_undeclared_member:${id}`);
+    }
+    const byId = /* @__PURE__ */ new Map();
+    const members = [];
+    for (const m of block.members) {
+      byId.set(m.id, m);
+      const result = await verifyMember(m, missing.has(m.id), verifyMemberBundle);
+      members.push(result.member);
+      closureFindings.push(...result.closure);
+      failed.push(...result.failed);
+      withheld.push(...result.withheld);
+    }
+    let compositionClosure;
+    const closureMissing = sortedUnique(block.missing);
+    if (closureFindings.length > 0) {
+      compositionClosure = {
+        status: "fail",
+        findings: closureFindings,
+        missing: closureMissing
+      };
+      failed.push("composition_closure_fail");
+    } else if (block.missing.length > 0) {
+      compositionClosure = {
+        status: "withheld",
+        findings: ["declared_incomplete"],
+        missing: closureMissing
+      };
+      withheld.push("declared_incomplete");
+    } else compositionClosure = { status: "pass", findings: [], missing: [] };
+    const observers = new Map(block.observers.map((o) => [o.id, o]));
+    const joins = [];
+    const corroborations = [];
+    for (const j of block.joins) {
+      const { derived, differences } = await derivedState(j, byId, missing);
+      const result = derived === void 0 ? "not_derivable" : derived === j.state ? "derived_matches" : "join_state_mismatch";
+      joins.push({
+        members: j.members,
+        basis: j.basis,
+        declared: j.state,
+        ...derived === void 0 ? {} : { derived },
+        result,
+        differences
+      });
+      const pair = `${j.members[0]},${j.members[1]}`;
+      if (result === "join_state_mismatch")
+        failed.push(`join_state_mismatch:${pair}`);
+      else if (result === "not_derivable")
+        withheld.push(`join_not_derivable:${pair}`);
+      corroborations.push(corroboration(j, derived, byId, observers));
+    }
+    const status2 = failed.length > 0 ? "fail" : withheld.length > 0 ? "withheld" : "pass";
+    return {
+      status: status2,
+      malformed: false,
+      findings: status2 === "fail" ? [...failed, ...withheld] : withheld,
+      composedDigest: composedDigestResult,
+      members,
+      observers: block.observers,
+      compositionClosure,
+      joins,
+      corroboration: corroborations
+    };
+  }
+
+  // src/outcome-report-presentation.ts
+  function object5(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  }
+  var CRITERION_REF = /^[a-z0-9_]+\.[a-z0-9_]+$/u;
+  var MAX_NOTE_LINES = 12;
+  var MAX_NOTE_LINE = 600;
+  var MAX_NOTE_TITLE = 120;
+  var MAX_BADGE = 40;
+  function text(value, max) {
+    return typeof value === "string" && value.trim().length > 0 && value.length <= max ? value : void 0;
+  }
+  function readProducerNote(value) {
+    const note = object5(value);
+    if (note === void 0 || !Array.isArray(note.lines)) return void 0;
+    const raw = note.lines;
+    if (raw.length === 0 || raw.length > MAX_NOTE_LINES) return void 0;
+    const lines = raw.map((line) => text(line, MAX_NOTE_LINE));
+    if (lines.some((line) => line === void 0)) return void 0;
+    return {
+      title: text(note.title, MAX_NOTE_TITLE) ?? "Producer's note",
+      lines
+    };
+  }
+  function readEditedCriteria(value) {
+    if (!Array.isArray(value)) return void 0;
+    const entries = value;
+    const edited = entries.flatMap((entry) => {
+      const item = object5(entry);
+      const criterion = typeof item?.criterion === "string" && CRITERION_REF.test(item.criterion) ? item.criterion : void 0;
+      const badge = text(item?.badge, MAX_BADGE);
+      return criterion === void 0 || badge === void 0 ? [] : [{ criterion, badge }];
+    });
+    return edited.length === 0 ? void 0 : edited;
+  }
+  function readOutcomeReportPresentation(bundle) {
+    const top = object5(bundle);
+    const extensions2 = object5(top?.extensions);
+    const block = object5(extensions2?.["outcome-report/v1"]);
+    if (block === void 0 || block.enabled !== true) return void 0;
+    const percentages = block.percentages === true;
+    const producerNote = readProducerNote(block.producer_note);
+    const editedCriteria = readEditedCriteria(block.edited_criteria);
+    return {
+      enabled: true,
+      percentages,
+      ...producerNote === void 0 ? {} : { producerNote },
+      ...editedCriteria === void 0 ? {} : { editedCriteria }
+    };
+  }
+
+  // src/presentation.ts
+  function object6(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  }
+  var dataImageUrl = /^data:image\//u;
+  function readPresentationBlock(bundle) {
+    const top = object6(bundle);
+    const extensions2 = object6(top?.extensions);
+    const block = object6(extensions2?.["presentation/v1"]);
+    if (block === void 0) return void 0;
+    const name = typeof block.producer_display_name === "string" ? block.producer_display_name : void 0;
+    const logo = typeof block.logo_data_url === "string" && dataImageUrl.test(block.logo_data_url) ? block.logo_data_url : void 0;
+    const title = typeof block.title === "string" ? block.title : void 0;
+    if (name === void 0 && logo === void 0 && title === void 0)
+      return void 0;
+    return {
+      ...name === void 0 ? {} : { producerDisplayName: name },
+      ...logo === void 0 ? {} : { logoDataUrl: logo },
+      ...title === void 0 ? {} : { title }
+    };
+  }
+
+  // src/extension-interpreters.ts
+  var BOOK_PAYLOADS_EXTENSION = "evidencebook/payloads";
+  var AGENT_INPUT_ORIGINALS_EXTENSION = "capsulectl/agent-input-originals/v1";
+  var object7 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var INTERPRETERS = Object.freeze({
+    // evidence-graph-view.ts renderPresentationHeader -> presentation.ts readPresentationBlock
+    "presentation/v1": {
+      id: "presentation-header",
+      accepts: (bundle) => readPresentationBlock(bundle) !== void 0
+    },
+    // evidence-graph-view.ts renderVerificationPage -> countersignature-stamp.ts declaredProducerKeys
+    [PRODUCER_KEY_V1]: {
+      id: "countersignature-stamp",
+      accepts: (bundle) => declaredProducerKeys(bundle).length > 0
+    },
+    // outcome-report-presentation.ts readOutcomeReportPresentation (the outcome-report card)
+    "outcome-report/v1": {
+      id: "outcome-report-card",
+      accepts: (bundle) => readOutcomeReportPresentation(bundle) !== void 0
+    },
+    // compliance-presentation.ts readCompliancePresentation (the compliance card)
+    "eu-ai-act-compliance/v1": {
+      id: "compliance-card",
+      accepts: (bundle) => readCompliancePresentation(bundle) !== void 0
+    },
+    // evidence-graph-view.ts composition section -> composed.ts verifyComposed;
+    // a malformed block yields no composition result, so it is not interpreted.
+    [COMPOSED_KIND]: {
+      id: "aac.builtin.composed/v0",
+      accepts: (bundle) => object7(bundle) && object7(bundle.extensions) && composedBlockProblem(bundle.extensions[COMPOSED_KIND]) === void 0
+    },
+    // result-root.ts buildResultRoot reads both blocks when it is an object
+    [BOOK_PAYLOADS_EXTENSION]: {
+      id: "result-root",
+      accepts: (bundle) => object7(bundle) && object7(bundle.extensions) && object7(bundle.extensions[BOOK_PAYLOADS_EXTENSION])
+    },
+    [AGENT_INPUT_ORIGINALS_EXTENSION]: {
+      id: "result-root",
+      accepts: (bundle) => object7(bundle) && object7(bundle.extensions) && object7(bundle.extensions[AGENT_INPUT_ORIGINALS_EXTENSION])
+    }
+  });
+  function extensionInterpreter(kind, bundle) {
+    const interpreter = Object.hasOwn(INTERPRETERS, kind) ? INTERPRETERS[kind] : void 0;
+    return interpreter !== void 0 && interpreter.accepts(bundle) ? interpreter.id : void 0;
+  }
+
+  // src/bundle.ts
+  var text2 = new TextDecoder("utf-8", { fatal: true });
   var pass = () => ({ status: "pass", findings: [] });
   var fail = (...findings) => ({
     status: "fail",
     findings
   });
-  var object3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var object8 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   var integer = (value) => typeof value === "number" && Number.isSafeInteger(value);
   var hex2 = (value) => Uint8Array.from(value.match(/../gu), (byte) => Number.parseInt(byte, 16));
   function encodeFragment(bundle) {
@@ -4051,7 +4837,7 @@ var EvidenceGraph = (() => {
       const padded = `${fragment}${"=".repeat((4 - fragment.length % 4) % 4)}`;
       const binary = atob(padded.replaceAll("-", "+").replaceAll("_", "/"));
       const value = JSON.parse(
-        text.decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)))
+        text2.decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)))
       );
       return value;
     } catch (error) {
@@ -4069,7 +4855,7 @@ var EvidenceGraph = (() => {
   }
   async function verifyBundle(bundle) {
     const invalid = fail("bundle_malformed");
-    if (!object3(bundle))
+    if (!object8(bundle))
       return {
         graphClosure: invalid,
         intervalCoverage: invalid,
@@ -4098,7 +4884,7 @@ var EvidenceGraph = (() => {
         Object.hasOwn(bundle, "disclosures") ? bundle.disclosures : {},
         collected.records
       ),
-      extensions: extensions(bundle.extensions),
+      extensions: await extensions(bundle, digest !== void 0),
       countersignatures: Array.isArray(bundle.countersignatures) ? bundle.countersignatures.map((value) => ({
         value,
         status: "unverified"
@@ -4117,7 +4903,7 @@ var EvidenceGraph = (() => {
     if (!Array.isArray(raw))
       return { records, results, findings: ["records_malformed"] };
     for (const [index, record] of raw.entries()) {
-      if (!object3(record)) {
+      if (!object8(record)) {
         findings.push(`record_malformed:${index}`);
         continue;
       }
@@ -4148,7 +4934,7 @@ var EvidenceGraph = (() => {
     if (!isHex64(root) || !records.has(root))
       return fail(...findings, "root_not_supplied_with_matching_identity");
     const complete = bundle.completeness;
-    if (!object3(complete)) return fail(...findings, "completeness_malformed");
+    if (!object8(complete)) return fail(...findings, "completeness_malformed");
     const depth = complete.closure_depth ?? 2;
     if (!integer(depth) || depth < 0)
       return fail(...findings, "closure_depth_invalid");
@@ -4173,17 +4959,17 @@ var EvidenceGraph = (() => {
   }
   function citations(record) {
     const targets = [], chain = record.chain;
-    if (object3(chain) && typeof chain.parent_capsule_id === "string")
+    if (object8(chain) && typeof chain.parent_capsule_id === "string")
       targets.push(chain.parent_capsule_id);
     if (Array.isArray(record.references)) {
       for (const reference of record.references)
-        if (object3(reference) && reference.type === "agent-action-capsule" && reference.digest_alg === "SHA-256" && typeof reference.digest === "string")
+        if (object8(reference) && reference.type === "agent-action-capsule" && reference.digest_alg === "SHA-256" && typeof reference.digest === "string")
           targets.push(reference.digest);
     }
     return targets;
   }
   async function completeness(bundle, records) {
-    if (!object3(bundle.completeness_certificate) || !object3(bundle.checkpoint)) {
+    if (!object8(bundle.completeness_certificate) || !object8(bundle.checkpoint)) {
       const absent = {
         status: "withheld",
         findings: ["completeness_evidence_absent"]
@@ -4257,7 +5043,7 @@ var EvidenceGraph = (() => {
     const logId = certificate.log_id, rootHex = certificate.range_root, firstSeq = certificate.first_seq, lastSeq = certificate.last_seq;
     if (typeof logId !== "string" || !isHex64(rootHex) || !integer(firstSeq) || !integer(lastSeq) || firstSeq < 1 || lastSeq < firstSeq || checkpoint.root !== rootHex)
       return void 0;
-    const range = object3(certificate.range_proof) ? certificate.range_proof : void 0, fromSeq = range?.from_seq, toSeq = range?.to_seq, size = range?.size, fromIndex = range?.from_index, toIndex = range?.to_index, witness = range?.witness;
+    const range = object8(certificate.range_proof) ? certificate.range_proof : void 0, fromSeq = range?.from_seq, toSeq = range?.to_seq, size = range?.size, fromIndex = range?.from_index, toIndex = range?.to_index, witness = range?.witness;
     if (!integer(fromSeq) || !integer(toSeq) || !integer(size) || !integer(fromIndex) || !integer(toIndex) || fromSeq < 1 || toSeq < fromSeq || size < 0 || fromIndex < 0 || toIndex < fromIndex || !Array.isArray(witness) || !witness.every(isHex64) || checkpoint.mmr_size !== size)
       return void 0;
     return {
@@ -4299,14 +5085,14 @@ var EvidenceGraph = (() => {
     );
   }
   async function memberships(root, logId, first, last, raw, records, completeness2, checkpointSize) {
-    if (!object3(raw)) return ["memberships_absent"];
+    if (!object8(raw)) return ["memberships_absent"];
     const bySequence = /* @__PURE__ */ new Set(), boundRecords = /* @__PURE__ */ new Set(), findings = [];
     for (const [id, member] of Object.entries(raw)) {
-      if (!isHex64(id) || !records.has(id) || !object3(member)) {
+      if (!isHex64(id) || !records.has(id) || !object8(member)) {
         findings.push(`membership_record_unknown:${id}`);
         continue;
       }
-      const coordinates = object3(member.log_coordinates) ? member.log_coordinates : void 0;
+      const coordinates = object8(member.log_coordinates) ? member.log_coordinates : void 0;
       if (!coordinates) {
         findings.push(`membership_coordinates_missing:${id}`);
         continue;
@@ -4328,14 +5114,14 @@ var EvidenceGraph = (() => {
     }
     for (let seq = first; seq <= last; seq += 1)
       if (!bySequence.has(seq)) findings.push(`membership_record_missing:${seq}`);
-    const declaredMissing = object3(completeness2) && Array.isArray(completeness2.missing) ? new Set(completeness2.missing.filter(isHex64)) : /* @__PURE__ */ new Set();
+    const declaredMissing = object8(completeness2) && Array.isArray(completeness2.missing) ? new Set(completeness2.missing.filter(isHex64)) : /* @__PURE__ */ new Set();
     for (const id of records.keys())
       if (!boundRecords.has(id) && !declaredMissing.has(id))
         findings.push(`membership_record_unbound:${id}`);
     return findings;
   }
   function parseProof(raw) {
-    if (!object3(raw) || raw.v !== 1 || raw.kind !== "inclusion" || !integer(raw.size) || !integer(raw.leaf_index) || raw.size < 0 || raw.leaf_index < 0)
+    if (!object8(raw) || raw.v !== 1 || raw.kind !== "inclusion" || !integer(raw.size) || !integer(raw.leaf_index) || raw.size < 0 || raw.leaf_index < 0)
       return void 0;
     const hashes = (value) => Array.isArray(value) && value.every(isHex64) ? value : void 0;
     const witness = hashes(raw.witness), left = hashes(raw.peaks_left), right = hashes(raw.peaks_right);
@@ -4364,21 +5150,21 @@ var EvidenceGraph = (() => {
   }
   async function disclosures(raw, records) {
     if (raw === void 0) raw = {};
-    if (!object3(raw))
+    if (!object8(raw))
       return [{ capsuleId: "", member: "", status: DISCLOSURE_MISMATCH }];
     const findings = [];
     for (const [id, record] of [...records.entries()].sort(
       ([a], [b]) => a.localeCompare(b)
     )) {
-      if (Object.hasOwn(raw, id) && !object3(raw[id])) continue;
-      const supplied = object3(raw[id]) ? raw[id] : {};
+      if (Object.hasOwn(raw, id) && !object8(raw[id])) continue;
+      const supplied = object8(raw[id]) ? raw[id] : {};
       for (const [member, path2] of Object.entries(disclosureEligibleFields))
         if (!(member in supplied) && typeof resolveDisclosurePath(record, path2) === "string")
           findings.push({ capsuleId: id, member, status: "withheld" });
     }
     for (const id of Object.keys(raw).sort()) {
       const members = raw[id], record = records.get(id);
-      if (!object3(members) || !record) {
+      if (!object8(members) || !record) {
         findings.push({ capsuleId: id, member: "", status: DISCLOSURE_MISMATCH });
         continue;
       }
@@ -4412,12 +5198,29 @@ var EvidenceGraph = (() => {
     }
     return findings;
   }
-  function extensions(raw) {
-    return object3(raw) ? Object.keys(raw).sort().map((kind) => ({
-      kind,
-      status: "uninterpreted",
-      integrityCovered: true
-    })) : [];
+  async function extensions(bundle, covered) {
+    const raw = bundle.extensions;
+    if (!object8(raw)) return [];
+    const results = [];
+    for (const kind of Object.keys(raw).sort()) {
+      const interpreter = extensionInterpreter(kind, bundle);
+      const composed = kind === COMPOSED_KIND ? { composed: await verifyComposed(raw[kind], verifyBundle) } : {};
+      results.push(
+        interpreter === void 0 ? {
+          kind,
+          status: "uninterpreted",
+          integrityCovered: covered,
+          ...composed
+        } : {
+          kind,
+          status: "interpreted",
+          interpreter,
+          integrityCovered: covered,
+          ...composed
+        }
+      );
+    }
+    return results;
   }
   var contexts = /* @__PURE__ */ new WeakSet();
   var ReadonlyMapView = class {
@@ -4498,7 +5301,7 @@ var EvidenceGraph = (() => {
     return value;
   }
   function isVerifiedBundleContext(value) {
-    return object3(value) && contexts.has(value);
+    return object8(value) && contexts.has(value);
   }
   var WITHHELD = Object.freeze({ state: "withheld" });
   var MISMATCHED = Object.freeze({
@@ -4529,9 +5332,9 @@ var EvidenceGraph = (() => {
       ({ records, recordIndex, resolvedDisclosures } = reuse);
     } else {
       const index = /* @__PURE__ */ new Map();
-      if (object3(bundle) && Array.isArray(bundle.records)) {
+      if (object8(bundle) && Array.isArray(bundle.records)) {
         for (const record of bundle.records)
-          if (object3(record) && typeof record.capsule_id === "string" && !index.has(record.capsule_id) && verification.capsuleResults[record.capsule_id]?.ok === true && verification.capsuleResults[record.capsule_id]?.capsuleId === record.capsule_id)
+          if (object8(record) && typeof record.capsule_id === "string" && !index.has(record.capsule_id) && verification.capsuleResults[record.capsule_id]?.ok === true && verification.capsuleResults[record.capsule_id]?.capsuleId === record.capsule_id)
             index.set(record.capsule_id, record);
       }
       records = Object.freeze([...index.values()]);
@@ -4542,11 +5345,11 @@ var EvidenceGraph = (() => {
         index
       );
     }
-    const certificate = object3(bundle) ? bundle.completeness_certificate : void 0;
+    const certificate = object8(bundle) ? bundle.completeness_certificate : void 0;
     deepFreeze(verification);
     const context = deepFreeze({
       bundle,
-      root: object3(bundle) && typeof bundle.root === "string" ? bundle.root : void 0,
+      root: object8(bundle) && typeof bundle.root === "string" ? bundle.root : void 0,
       verification,
       resolvedDisclosures,
       records,
@@ -4558,7 +5361,7 @@ var EvidenceGraph = (() => {
         graphClosure: verification.graphClosure,
         intervalCoverage: verification.intervalCoverage,
         perRecordMembership: verification.perRecordMembership,
-        memberships: object3(certificate) && object3(certificate.memberships) ? certificate.memberships : {}
+        memberships: object8(certificate) && object8(certificate.memberships) ? certificate.memberships : {}
       }
     });
     contexts.add(context);
@@ -4568,13 +5371,13 @@ var EvidenceGraph = (() => {
     const status2 = /* @__PURE__ */ new Map();
     for (const result of results)
       status2.set(`${result.capsuleId}\0${result.member}`, result.status);
-    const overlay = object3(bundle) && object3(bundle.disclosures) ? bundle.disclosures : {};
+    const overlay = object8(bundle) && object8(bundle.disclosures) ? bundle.disclosures : {};
     const resolved = /* @__PURE__ */ new Map();
     const one = (id, field) => {
       switch (status2.get(`${id}\0${field}`)) {
         case DISCLOSURE_MATCH: {
           const entry = overlay[id];
-          return object3(entry) && Object.hasOwn(entry, field) ? Object.freeze({ state: "disclosed", payload: entry[field] }) : MISMATCHED;
+          return object8(entry) && Object.hasOwn(entry, field) ? Object.freeze({ state: "disclosed", payload: entry[field] }) : MISMATCHED;
         }
         case DISCLOSURE_MISMATCH:
         case DISCLOSURE_NO_COMMITTED_DIGEST:
@@ -4601,7 +5404,7 @@ var EvidenceGraph = (() => {
   }
   var resolveDisclosure = async (record, disclosures2, field) => {
     const entry = disclosures2[record.capsule_id];
-    if (!object3(entry) || !Object.hasOwn(entry, field))
+    if (!object8(entry) || !Object.hasOwn(entry, field))
       return { state: "withheld" };
     const committed = resolveDisclosurePath(
       record,
@@ -4654,28 +5457,6 @@ var EvidenceGraph = (() => {
         `non-conforming Capsule: ${result.findings.map((item) => item.code).join(", ")}`
       );
     return Object.freeze(value);
-  }
-
-  // src/presentation.ts
-  function object4(value) {
-    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-  }
-  var dataImageUrl = /^data:image\//u;
-  function readPresentationBlock(bundle) {
-    const top = object4(bundle);
-    const extensions2 = object4(top?.extensions);
-    const block = object4(extensions2?.["presentation/v1"]);
-    if (block === void 0) return void 0;
-    const name = typeof block.producer_display_name === "string" ? block.producer_display_name : void 0;
-    const logo = typeof block.logo_data_url === "string" && dataImageUrl.test(block.logo_data_url) ? block.logo_data_url : void 0;
-    const title = typeof block.title === "string" ? block.title : void 0;
-    if (name === void 0 && logo === void 0 && title === void 0)
-      return void 0;
-    return {
-      ...name === void 0 ? {} : { producerDisplayName: name },
-      ...logo === void 0 ? {} : { logoDataUrl: logo },
-      ...title === void 0 ? {} : { title }
-    };
   }
 
   // src/producer-envelope-verification.ts
@@ -4879,8 +5660,8 @@ var EvidenceGraph = (() => {
       throw new EvidenceGraphError("bundle must contain records and disclosures");
     }
     const records = context.records;
-    const rootRecord = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
-    if (rootRecord === void 0) {
+    const rootRecord2 = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
+    if (rootRecord2 === void 0) {
       throw new EvidenceGraphError(
         bundle.records.some(
           (record) => isObject(record) && record.capsule_id === context.root
@@ -4888,13 +5669,13 @@ var EvidenceGraph = (() => {
       );
     }
     const payloadOf = (record) => verifiedPayload(context, record.capsule_id, "agent_input");
-    const rootPayload = payloadOf(rootRecord);
+    const rootPayload = payloadOf(rootRecord2);
     if (!isObject(rootPayload) || rootPayload.spec_version !== "evaluation-summary/v1") {
       throw new EvidenceGraphError("root aggregate payload is not disclosed");
     }
     const memberships2 = context.completeness.memberships;
     const aggregate = {
-      capsuleId: rootRecord.capsule_id,
+      capsuleId: rootRecord2.capsule_id,
       ...asString(rootPayload.cross_case_aggregation) === void 0 ? {} : {
         crossCaseAggregation: asString(rootPayload.cross_case_aggregation)
       },
@@ -4923,7 +5704,7 @@ var EvidenceGraph = (() => {
           await collectReports(referenced);
       }
     };
-    await collectReports(rootRecord);
+    await collectReports(rootRecord2);
     const reports = [];
     for (const reportId of reportIds) {
       const record = recordsById.get(reportId);
@@ -5461,13 +6242,14 @@ var EvidenceGraph = (() => {
     const bundle = context.bundle;
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures))
       return false;
+    return carriesResultDocument(context);
+  }
+  function carriesResultDocument(context) {
     const record = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
     return record !== void 0 && resultDocument(context, record) !== void 0;
   }
-  var BOOK_PAYLOADS_EXTENSION = "evidencebook/payloads";
-  var AGENT_INPUT_ORIGINALS_EXTENSION = "capsulectl/agent-input-originals/v1";
   var PUBLISHED_CAPSULE_RECORD_TYPE = "published_capsule";
-  var utf82 = new TextDecoder("utf-8", { fatal: true });
+  var utf83 = new TextDecoder("utf-8", { fatal: true });
   function base64UrlBytes(value) {
     if (!/^[A-Za-z0-9_-]*$/u.test(value)) return void 0;
     try {
@@ -5539,7 +6321,7 @@ var EvidenceGraph = (() => {
       const bytes = await verifiedBookPayload(payloads, digest);
       if (bytes === void 0) continue;
       try {
-        const value = JSON.parse(utf82.decode(bytes));
+        const value = JSON.parse(utf83.decode(bytes));
         if (await jsonDigest(value) === committed)
           return { state: "disclosed", payload: value };
       } catch {
@@ -5550,7 +6332,7 @@ var EvidenceGraph = (() => {
       const bytes = base64UrlBytes(attached);
       if (bytes === void 0) return { state: "disclosure_mismatch" };
       try {
-        const value = JSON.parse(utf82.decode(bytes));
+        const value = JSON.parse(utf83.decode(bytes));
         if (await jsonDigest(value) === committed)
           return { state: "disclosed", payload: value };
       } catch {
@@ -5565,30 +6347,30 @@ var EvidenceGraph = (() => {
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures))
       throw new EvidenceGraphError("bundle must contain records and disclosures");
     const records = context.records;
-    const rootRecord = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
-    if (rootRecord === void 0)
+    const rootRecord2 = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
+    if (rootRecord2 === void 0)
       throw new EvidenceGraphError(
         bundle.records.some(
           (record) => isObject(record) && record.capsule_id === context.root
         ) ? "root record failed verification" : "root record not supplied"
       );
-    const rootCarriers = resultCarriers(context, rootRecord);
+    const rootCarriers = resultCarriers(context, rootRecord2);
     const carried = rootCarriers[0];
     if (carried === void 0)
       throw new EvidenceGraphError(
-        `root is not a Result v0: ${nonResultDescription(context, rootRecord)}`
+        `root is not a Result v0: ${nonResultDescription(context, rootRecord2)}`
       );
     if (rootCarriers.length > 1)
       throw new EvidenceGraphError(
-        `root ${rootRecord.capsule_id} carries a Result v0 in both agent_output and agent_input; a bundle has exactly one headline document`
+        `root ${rootRecord2.capsule_id} carries a Result v0 in both agent_output and agent_input; a bundle has exactly one headline document`
       );
     const otherCarriers = [];
     for (const record of records)
-      if (record !== rootRecord && resultCarriers(context, record).length > 0)
+      if (record !== rootRecord2 && resultCarriers(context, record).length > 0)
         otherCarriers.push(record.capsule_id);
     if (otherCarriers.length > 0)
       throw new EvidenceGraphError(
-        `bundle carries ${otherCarriers.length + 1} Result v0 documents: root ${rootRecord.capsule_id} and ${otherCarriers.join(", ")}; a bundle has exactly one headline document`
+        `bundle carries ${otherCarriers.length + 1} Result v0 documents: root ${rootRecord2.capsule_id} and ${otherCarriers.join(", ")}; a bundle has exactly one headline document`
       );
     const findings = carried.form === "book" ? isObject(carried.document) ? validateEvidenceResult(carried.document).map(
       (finding) => `agent_input.statement.${finding}`
@@ -5780,9 +6562,9 @@ var EvidenceGraph = (() => {
       document2,
       new Set(claims.filter((claim) => claim.failed).map((claim) => claim.id))
     );
-    const rootCoordinates = logCoordinates(memberships2, rootRecord.capsule_id);
+    const rootCoordinates = logCoordinates(memberships2, rootRecord2.capsule_id);
     return {
-      capsuleId: rootRecord.capsule_id,
+      capsuleId: rootRecord2.capsule_id,
       member: carried.member,
       form: carried.form,
       generatedAt: document2.generated_at,
@@ -5802,11 +6584,45 @@ var EvidenceGraph = (() => {
       claims,
       records: cited,
       ...rootCoordinates === void 0 ? {} : { logCoordinates: rootCoordinates },
-      ...recordTimes(rootRecord)
+      ...recordTimes(rootRecord2)
     };
   }
 
   // src/verification-page.ts
+  var EXTENSION_NOT_INTERPRETED = "Integrity verified; meaning not interpreted by this viewer";
+  var EXTENSION_NOT_INTERPRETED_NOT_COVERED = "Integrity not verified; meaning not interpreted by this viewer";
+  function extensionRows(extensions2, applied, refused = []) {
+    return extensions2.map((extension) => {
+      const integrity = extension.integrityCovered ? "covered" : "not covered";
+      const refusal = refused.find((r) => r.extensions.includes(extension.kind));
+      if (refusal !== void 0)
+        return {
+          id: extension.kind,
+          integrity,
+          refusal,
+          semantics: presentationRefusalRow(refusal, extension.integrityCovered)
+        };
+      if (extension.status === "interpreted" && (applied === void 0 || applied.has(extension.interpreter)))
+        return {
+          id: extension.kind,
+          integrity,
+          interpreter: extension.interpreter,
+          semantics: `interpreted by ${extension.interpreter}`
+        };
+      return {
+        id: extension.kind,
+        integrity,
+        semantics: extension.integrityCovered ? EXTENSION_NOT_INTERPRETED : EXTENSION_NOT_INTERPRETED_NOT_COVERED
+      };
+    });
+  }
+  function presentationRefusalNotices(refused) {
+    return refused.filter((refusal) => refusal.extensions.length === 0).map((refusal) => ({
+      id: refusal.id,
+      reason: refusal.reason,
+      line: presentationRefusalLine(refusal)
+    }));
+  }
   var UNBOUND = "membership_record_unbound:";
   var INVALID = /^membership_(?:proof_invalid|coordinates_missing|coordinates_invalid|record_unknown):(.+)$/u;
   function invalidRecordIds(verified) {
@@ -5847,7 +6663,7 @@ var EvidenceGraph = (() => {
     const invalid = invalidRecordIds(verified);
     return (Array.isArray(bundle.records) ? bundle.records : []).flatMap(
       (record) => {
-        const capsuleId = object5(record)?.capsule_id;
+        const capsuleId = object9(record)?.capsule_id;
         if (typeof capsuleId !== "string") return [];
         return [
           {
@@ -5865,7 +6681,7 @@ var EvidenceGraph = (() => {
     fail: "failed at least one check",
     not_checked: "not checked no evidence supplied"
   });
-  function object5(value) {
+  function object9(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
   }
   function capsuleGroupStatus(capsuleResults, checks) {
@@ -5884,14 +6700,14 @@ var EvidenceGraph = (() => {
   function receipts(raw) {
     if (!Array.isArray(raw)) return [];
     return raw.flatMap((entry) => {
-      const record = object5(entry);
+      const record = object9(entry);
       if (record === void 0) return [];
       const witness = record.witness, time = record.time, grade = receiptGradeWord(record.grade);
       return typeof witness === "string" && typeof time === "string" && grade !== void 0 ? [{ witness, grade, time }] : [];
     });
   }
   function completenessStatement(raw) {
-    const record = object5(raw);
+    const record = object9(raw);
     if (record === void 0) return void 0;
     return {
       ...typeof record.closure_depth === "number" ? { closureDepth: record.closure_depth } : {},
@@ -5905,9 +6721,9 @@ var EvidenceGraph = (() => {
   function summarize(name, status2) {
     return { name, status: status2, result: FIVE_WORD_RESULT[status2] };
   }
-  function buildVerificationPageModel(bundle, verified) {
-    const top = object5(bundle) ?? {};
-    const checkpoint = object5(top.checkpoint);
+  function buildVerificationPageModel(bundle, verified, appliedInterpreters, refused = []) {
+    const top = object9(bundle) ?? {};
+    const checkpoint = object9(top.checkpoint);
     const checks = [
       summarize(
         "Required fields",
@@ -5950,9 +6766,451 @@ var EvidenceGraph = (() => {
       coverage,
       ...completenessStatement(top.completeness) === void 0 ? {} : { completeness: completenessStatement(top.completeness) },
       checks,
+      extensions: extensionRows(
+        verified.extensions,
+        appliedInterpreters,
+        refused
+      ),
+      presentationRefusals: presentationRefusalNotices(refused),
       verifyIndependentlyLine: VERIFY_INDEPENDENTLY_LINE
     };
   }
+
+  // src/presentation-registry.ts
+  var PRESENTATION_MANIFEST_VERSION = "aac.presentation-manifest/v0";
+  var PRESENTATION_API_V0 = "aac.presentation-api/v0";
+  var REFERENCE_PRESENTATION_RUNTIME = Object.freeze({
+    presentationApis: Object.freeze([PRESENTATION_API_V0]),
+    runtimeVersion: "0.1.0"
+  });
+  var PRESENTATION_FORMATS = [
+    "html",
+    "fragment",
+    "embedded"
+  ];
+  function need(refusal) {
+    return refusal.reason === "presentation_api_unsupported" ? `needs presentation API ${refusal.presentation_api}, which this viewer does not implement` : `needs runtime ${refusal.runtime_min} or later; this viewer is ${refusal.runtimeVersion}`;
+  }
+  function presentationRefusalRow(refusal, covered) {
+    return `${covered ? "Integrity verified" : "Integrity not verified"}; meaning not interpreted: presentation module ${refusal.id} ${need(refusal)}`;
+  }
+  function presentationRefusalLine(refusal) {
+    return `Presentation module ${refusal.id} was not used: it ${need(refusal)}`;
+  }
+  var RUNTIME_VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u;
+  var PRESENTATION_API = /^aac\.presentation-api\/v(0|[1-9][0-9]*)$/u;
+  function compareVersions(a, b) {
+    const left = a.split(".").map(Number);
+    const right = b.split(".").map(Number);
+    for (let i = 0; i < 3; i += 1)
+      if (left[i] !== right[i]) return left[i] - right[i];
+    return 0;
+  }
+  function presentationRefusalReason(manifest, runtime = REFERENCE_PRESENTATION_RUNTIME) {
+    if (!runtime.presentationApis.includes(manifest.presentation_api))
+      return "presentation_api_unsupported";
+    if (compareVersions(runtime.runtimeVersion, manifest.runtime_min) < 0)
+      return "runtime_too_old";
+    return void 0;
+  }
+  function refusalOf(manifest, reason, runtime) {
+    return Object.freeze({
+      id: manifest.id,
+      presentation_api: manifest.presentation_api,
+      runtime_min: manifest.runtime_min,
+      reason,
+      extensions: Object.freeze([
+        ...manifest.requires.extensions?.required ?? []
+      ]),
+      runtimeVersion: runtime.runtimeVersion
+    });
+  }
+  var PresentationAmbiguityError = class extends Error {
+    ids;
+    constructor(ids, message) {
+      super(
+        message ?? `presentation is ambiguous: ${ids.join(", ")} all match; a tie is an error, never first-wins`
+      );
+      this.name = "PresentationAmbiguityError";
+      this.ids = ids;
+    }
+  };
+  var PresentationRegistrationError = class extends Error {
+    constructor(message) {
+      super(message);
+      this.name = "PresentationRegistrationError";
+    }
+  };
+  function membershipProvenOrUnbound(result) {
+    return result.perRecordMembership.status === "pass" || result.perRecordMembership.status === "fail" && result.perRecordMembership.findings.length > 0 && result.perRecordMembership.findings.length === unboundRecordIds(result).length;
+  }
+  function bundleVerified(result) {
+    return result.graphClosure.status === "pass" && result.intervalCoverage.status === "pass" && membershipProvenOrUnbound(result) && Object.values(result.capsuleResults).every((capsule) => capsule.ok) && result.disclosures.every(
+      (disclosure) => disclosure.status === "disclosure_match" || disclosure.status === "withheld"
+    );
+  }
+  var isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  var EXTENSION_READERS = {
+    "outcome-report/v1": (bundle) => readOutcomeReportPresentation(bundle) !== void 0,
+    "eu-ai-act-compliance/v1": (bundle) => readCompliancePresentation(bundle) !== void 0
+  };
+  function describeContext(context) {
+    const bundle = isPlainObject(context.bundle) ? context.bundle : {};
+    const verified = bundleVerified(context.verification);
+    const bundleKind = typeof bundle.bundle_kind === "string" ? bundle.bundle_kind : void 0;
+    if (!verified)
+      return {
+        verified,
+        bundle_kind: bundleKind,
+        profiles: /* @__PURE__ */ new Set(),
+        extensions: /* @__PURE__ */ new Set()
+      };
+    const profiles = /* @__PURE__ */ new Set();
+    if (context.root !== void 0 && context.recordIndex.has(context.root)) {
+      const input = verifiedPayload(context, context.root, "agent_input");
+      if (isPlainObject(input) && typeof input.spec_version === "string")
+        profiles.add(`spec_version:${input.spec_version}`);
+    }
+    if (carriesResultDocument(context))
+      profiles.add(`result_version:${RESULT_VERSION}`);
+    const extensions2 = /* @__PURE__ */ new Set();
+    if (isPlainObject(bundle.extensions))
+      for (const kind of Object.keys(bundle.extensions)) {
+        const reader = EXTENSION_READERS[kind];
+        if (reader === void 0 || reader(context.bundle)) extensions2.add(kind);
+      }
+    return { verified, bundle_kind: bundleKind, profiles, extensions: extensions2 };
+  }
+  var requiredProfiles = (m) => m.requires.profiles ?? [];
+  var requiredExtensions = (m) => m.requires.extensions?.required ?? [];
+  var forbiddenProfiles = (m) => m.forbids?.profiles ?? [];
+  var forbiddenExtensions = (m) => m.forbids?.extensions ?? [];
+  var profileKey = (token) => token.split(":", 1)[0];
+  function onePerKey(tokens) {
+    const keys = /* @__PURE__ */ new Set();
+    for (const token of tokens) {
+      const key = profileKey(token);
+      if (keys.has(key)) return false;
+      keys.add(key);
+    }
+    return true;
+  }
+  function manifestMatches(manifest, descriptor, audience, format) {
+    return manifest.requires.bundle_kind === descriptor.bundle_kind && requiredProfiles(manifest).every((t) => descriptor.profiles.has(t)) && requiredExtensions(manifest).every((k) => descriptor.extensions.has(k)) && !forbiddenProfiles(manifest).some((t) => descriptor.profiles.has(t)) && !forbiddenExtensions(manifest).some((k) => descriptor.extensions.has(k)) && (manifest.audiences.includes("*") || manifest.audiences.includes(audience)) && manifest.formats.includes(format);
+  }
+  function manifestsCoMatchable(a, b) {
+    if (a.requires.bundle_kind !== b.requires.bundle_kind) return false;
+    if (!a.audiences.includes("*") && !b.audiences.includes("*") && !a.audiences.some((x) => b.audiences.includes(x)))
+      return false;
+    if (!a.formats.some((f) => b.formats.includes(f))) return false;
+    const reqP = /* @__PURE__ */ new Set([...requiredProfiles(a), ...requiredProfiles(b)]);
+    const reqE = /* @__PURE__ */ new Set([...requiredExtensions(a), ...requiredExtensions(b)]);
+    const forbP = [...forbiddenProfiles(a), ...forbiddenProfiles(b)];
+    const forbE = [...forbiddenExtensions(a), ...forbiddenExtensions(b)];
+    if (forbP.some((t) => reqP.has(t))) return false;
+    if (forbE.some((k) => reqE.has(k))) return false;
+    return onePerKey(reqP);
+  }
+  var MANIFEST_MEMBERS = /* @__PURE__ */ new Set([
+    "spec_version",
+    "id",
+    "presentation_api",
+    "runtime_min",
+    "trust_class",
+    "requires",
+    "forbids",
+    "audiences",
+    "formats",
+    "fallback",
+    "priority",
+    "executable",
+    "declarative"
+  ]);
+  var MANIFEST_ID = /^[a-z0-9]+(\.[a-z0-9_-]+)+\/v[0-9]+$/u;
+  var PROFILE_TOKEN = /^(spec_version|result_version):[A-Za-z0-9][A-Za-z0-9._/@+-]*$/u;
+  var AUDIENCE = /^(\*|[a-z][a-z0-9_-]*)$/u;
+  function manifestProblems(manifest) {
+    const problems = [];
+    const raw = manifest;
+    if (!isPlainObject(raw)) return ["manifest is not an object"];
+    for (const member of Object.keys(raw))
+      if (!MANIFEST_MEMBERS.has(member))
+        problems.push(`unknown member ${JSON.stringify(member)}`);
+    if (manifest.spec_version !== PRESENTATION_MANIFEST_VERSION)
+      problems.push(`spec_version is not ${PRESENTATION_MANIFEST_VERSION}`);
+    if (typeof manifest.id !== "string" || !MANIFEST_ID.test(manifest.id))
+      problems.push("id is not <dotted name>/v<major>");
+    if (typeof manifest.presentation_api !== "string" || !PRESENTATION_API.test(manifest.presentation_api))
+      problems.push("presentation_api is not aac.presentation-api/v<major>");
+    if (typeof manifest.runtime_min !== "string" || !RUNTIME_VERSION.test(manifest.runtime_min))
+      problems.push("runtime_min is not MAJOR.MINOR.PATCH");
+    if (manifest.trust_class !== "trusted-executable" && manifest.trust_class !== "declarative")
+      problems.push("trust_class is neither trusted-executable nor declarative");
+    if (!isPlainObject(manifest.requires) || typeof manifest.requires.bundle_kind !== "string")
+      problems.push("requires.bundle_kind is missing");
+    for (const token of [
+      ...requiredProfiles(manifest),
+      ...forbiddenProfiles(manifest)
+    ])
+      if (!PROFILE_TOKEN.test(token))
+        problems.push(`profile token ${JSON.stringify(token)} is malformed`);
+    if (!Array.isArray(manifest.audiences) || manifest.audiences.length === 0 || manifest.audiences.some((a) => typeof a !== "string" || !AUDIENCE.test(a)))
+      problems.push("audiences is not a non-empty list of audience tokens");
+    if (!Array.isArray(manifest.formats) || manifest.formats.length === 0 || manifest.formats.some((f) => !PRESENTATION_FORMATS.includes(f)))
+      problems.push("formats is not a non-empty list of html/fragment/embedded");
+    if (typeof manifest.fallback !== "boolean")
+      problems.push("fallback is not a boolean");
+    else if (manifest.fallback && manifest.priority !== void 0)
+      problems.push("a fallback carries no priority");
+    else if (!manifest.fallback && !(Number.isInteger(manifest.priority) && manifest.priority >= 1))
+      problems.push("a specific module needs an integer priority >= 1");
+    if (manifest.trust_class === "trusted-executable" !== (manifest.executable !== void 0 && manifest.declarative === void 0))
+      problems.push(
+        "trusted-executable carries executable, declarative carries declarative"
+      );
+    if (forbiddenProfiles(manifest).some(
+      (t) => requiredProfiles(manifest).includes(t)
+    ))
+      problems.push("requires and forbids share a profile");
+    if (forbiddenExtensions(manifest).some(
+      (k) => requiredExtensions(manifest).includes(k)
+    ))
+      problems.push("requires and forbids share an extension");
+    if (!onePerKey(requiredProfiles(manifest)))
+      problems.push("requires two tokens of one profile key");
+    return problems;
+  }
+  async function resolveModules(modules, descriptor, audience, format, canRender, refuse = () => void 0) {
+    if (!descriptor.verified) return { kind: "refusal" };
+    const matched = modules.filter(
+      (m) => manifestMatches(m.manifest, descriptor, audience, format)
+    );
+    const refused = [];
+    for (const fallback of [false, true]) {
+      const tier = matched.filter((m) => m.manifest.fallback === fallback);
+      if (tier.length > 1)
+        throw new PresentationAmbiguityError(
+          tier.map((m) => m.manifest.id).sort()
+        );
+      const only = tier[0];
+      if (only === void 0) continue;
+      const refusal = refuse(only);
+      if (refusal !== void 0) {
+        refused.push(refusal);
+        continue;
+      }
+      if (await canRender(only))
+        return { kind: "module", module: only, refused: Object.freeze(refused) };
+    }
+    return { kind: "no-presentation", refused: Object.freeze(refused) };
+  }
+  var PresentationRegistry = class {
+    /** Every module, refused ones included: all of them count for ambiguity. */
+    #modules = [];
+    #refused = /* @__PURE__ */ new Map();
+    #runtime;
+    /** `runtime` is what this registry's runtime implements (section 3.2). */
+    constructor(runtime = REFERENCE_PRESENTATION_RUNTIME) {
+      this.#runtime = runtime;
+    }
+    /** The runtime declaration this registry applies. */
+    get runtime() {
+      return this.#runtime;
+    }
+    /**
+     * Register a module. Throws on a malformed or dead manifest (a missing
+     * `presentation_api` included), a duplicate id, and any module whose
+     * manifest some descriptor could match together with an already
+     * registered module of the same tier (section 4.5), refused or not.
+     *
+     * A well-formed manifest whose `presentation_api` this runtime does not
+     * implement, or whose `runtime_min` it does not meet, is registered as
+     * refused (section 3.2): never selected, reported by every resolution it
+     * matches, and listed by {@link refused}.
+     */
+    register(module) {
+      const manifest = module.manifest;
+      const problems = manifestProblems(manifest);
+      if (problems.length > 0)
+        throw new PresentationRegistrationError(
+          `manifest ${JSON.stringify(manifest?.id)} refused: ${problems.join("; ")}`
+        );
+      for (const other of this.#modules) {
+        if (other.manifest.id === manifest.id)
+          throw new PresentationRegistrationError(
+            `manifest ${manifest.id} is already registered`
+          );
+        if (other.manifest.fallback === manifest.fallback && manifestsCoMatchable(other.manifest, manifest))
+          throw new PresentationAmbiguityError(
+            [other.manifest.id, manifest.id].sort(),
+            `manifests ${other.manifest.id} and ${manifest.id} are both ${manifest.fallback ? "fallbacks" : "specific"} and one descriptor can match both; state precedence with forbids`
+          );
+      }
+      this.#modules.push(module);
+      const reason = presentationRefusalReason(manifest, this.#runtime);
+      if (reason === void 0) return { status: "registered" };
+      const refusal = refusalOf(manifest, reason, this.#runtime);
+      this.#refused.set(module, refusal);
+      return { status: "refused", refusal };
+    }
+    /**
+     * Every module this registry can select, in registration order (which
+     * decides nothing). Refused modules are not here; see {@link refused}.
+     */
+    list() {
+      return this.#modules.filter((module) => !this.#refused.has(module));
+    }
+    /** Every module this runtime refused, with the reason. */
+    refused() {
+      return [...this.#refused.values()];
+    }
+    /** Section 4.3: the one module for this context, audience and format. */
+    resolve(context, audience, format) {
+      return resolveModules(
+        this.#modules,
+        describeContext(context),
+        audience,
+        format,
+        (module) => module.canRender(context),
+        (module) => this.#refused.get(module)
+      );
+    }
+  };
+
+  // src/builtin-manifests.ts
+  var BUILTIN_MANIFEST_REPORT_ROWS = Object.freeze(
+    {
+      spec_version: "aac.presentation-manifest/v0",
+      id: "aac.builtin.report-rows/v0",
+      presentation_api: "aac.presentation-api/v0",
+      runtime_min: "0.1.0",
+      trust_class: "trusted-executable",
+      requires: {
+        bundle_kind: "evidence-bundle/v2",
+        profiles: ["spec_version:report/v1"]
+      },
+      audiences: ["*"],
+      formats: ["html", "fragment", "embedded"],
+      fallback: false,
+      priority: 1,
+      executable: { carrier: "core-runtime" }
+    }
+  );
+  var BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.result-outcome-report/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      profiles: ["result_version:evidence-result-v0"],
+      extensions: { required: ["outcome-report/v1"] }
+    },
+    forbids: { profiles: ["spec_version:report/v1"] },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFEST_RESULT_COMPLIANCE = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.result-compliance/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      profiles: ["result_version:evidence-result-v0"],
+      extensions: { required: ["eu-ai-act-compliance/v1"] }
+    },
+    forbids: {
+      profiles: ["spec_version:report/v1"],
+      extensions: ["outcome-report/v1"]
+    },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFEST_RESULT = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.result/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      profiles: ["result_version:evidence-result-v0"]
+    },
+    forbids: {
+      profiles: ["spec_version:report/v1"],
+      extensions: ["outcome-report/v1", "eu-ai-act-compliance/v1"]
+    },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.evaluation-summary-graph/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      profiles: ["spec_version:evaluation-summary/v1"]
+    },
+    forbids: { profiles: ["result_version:evidence-result-v0"] },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFEST_NO_AGGREGATE = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.no-aggregate/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: { bundle_kind: "evidence-bundle/v2" },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: true,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_MANIFESTS = Object.freeze(
+    [
+      BUILTIN_MANIFEST_REPORT_ROWS,
+      BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT,
+      BUILTIN_MANIFEST_RESULT_COMPLIANCE,
+      BUILTIN_MANIFEST_RESULT,
+      BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH,
+      BUILTIN_MANIFEST_NO_AGGREGATE
+    ]
+  );
+  var BUILTIN_MANIFEST_COMPOSED = Object.freeze({
+    spec_version: "aac.presentation-manifest/v0",
+    id: "aac.builtin.composed/v0",
+    presentation_api: "aac.presentation-api/v0",
+    runtime_min: "0.1.0",
+    trust_class: "trusted-executable",
+    requires: {
+      bundle_kind: "evidence-bundle/v2",
+      extensions: { required: ["composed/v1"] }
+    },
+    audiences: ["*"],
+    formats: ["html", "fragment", "embedded"],
+    fallback: false,
+    priority: 1,
+    executable: { carrier: "core-runtime" }
+  });
+  var BUILTIN_SECTION_MANIFESTS = Object.freeze([BUILTIN_MANIFEST_COMPOSED]);
 
   // src/outcome-report.ts
   var NOT_STATED = "not stated";
@@ -7019,8 +8277,8 @@ var EvidenceGraph = (() => {
         `Judged under ${[...contractRefs].join(", ") || "no stated contract"}. ${wordingNote(model)} P is the probability the judge gave the verdict it returned.`
       )
     );
-    const table = el("table", "crit");
-    table.dataset.criteriaTable = conversation.conversationId;
+    const table2 = el("table", "crit");
+    table2.dataset.criteriaTable = conversation.conversationId;
     const head2 = element("thead");
     const headRow = element("tr");
     headRow.append(
@@ -7030,7 +8288,7 @@ var EvidenceGraph = (() => {
       element("th", "Rationale, as sealed")
     );
     head2.append(headRow);
-    table.append(head2);
+    table2.append(head2);
     const tbody = element("tbody");
     for (const criterion of conversation.criteria) {
       const tr = element("tr");
@@ -7084,9 +8342,9 @@ var EvidenceGraph = (() => {
       tr.append(rationaleCell);
       tbody.append(tr);
     }
-    table.append(tbody);
+    table2.append(tbody);
     const scroll = el("div", "tscroll");
-    scroll.append(table);
+    scroll.append(table2);
     body.append(scroll);
     const honest = el(
       "p",
@@ -7133,36 +8391,36 @@ var EvidenceGraph = (() => {
     body.append(el("h4", "", "Check it"));
     const check = el("dl", "chk");
     check.dataset.checkIt = conversation.conversationId;
-    const row = (label, value) => {
+    const row2 = (label, value) => {
       check.append(element("dt", label), element("dd", value));
     };
-    row("Case", conversation.conversationId);
-    row(
+    row2("Case", conversation.conversationId);
+    row2(
       "Case record",
       conversation.sourceCapsuleId ?? "not stated by the reports"
     );
     const dated = conversation.dated;
     if (dated.basis !== "judged") {
-      row(
+      row2(
         "Dated by",
         `${dated.stated ?? dated.date}${dated.zone === "not-stated" ? " (timezone not stated)" : ""}: ${BASIS_TEXT[dated.basis]}`
       );
       check.lastElementChild.setAttribute("data-dated", dated.basis);
-      if (dated.importedAt !== void 0) row("Imported", dated.importedAt);
-      row("Judged and sealed", conversation.judgedDay);
+      if (dated.importedAt !== void 0) row2("Imported", dated.importedAt);
+      row2("Judged and sealed", conversation.judgedDay);
     }
-    row("Result capsule", model.capsuleId);
+    row2("Result capsule", model.capsuleId);
     if (conversation.transcript.state === "verified") {
-      row("Transcript record", conversation.transcript.transcriptRecordId);
-      row("Case input digest", conversation.transcript.inputDigest);
+      row2("Transcript record", conversation.transcript.transcriptRecordId);
+      row2("Case input digest", conversation.transcript.inputDigest);
     }
-    row(
+    row2(
       "Judge pin",
       runInfo.judgePinDigest === void 0 ? "not stated" : `${runInfo.judgePinDigest}${runInfo.judgePinRecomputes === true && runInfo.judgePin !== void 0 ? ` = ${runInfo.judgePin.modelId}, prompt ${runInfo.judgePin.promptDigest}, axes ${runInfo.judgePin.axesDigest} (recomputed on this page)` : ""}`
     );
     for (const criterion of conversation.criteria) {
       if (criterion.claim === void 0) continue;
-      row(
+      row2(
         `Report: ${criterionLabel(model, criterion.checkId, criterion.criterionId).label}`,
         `${criterion.reportCapsuleId ?? "not cited"}${criterion.reportRecordId === void 0 ? "" : ` (book record ${criterion.reportRecordId})`}`
       );
@@ -7295,14 +8553,14 @@ var EvidenceGraph = (() => {
   function renderLines(host, model, runInfo) {
     const section = el("section", "");
     section.dataset.section = "lines";
-    const table = document.createElement("table");
-    table.className = "lines";
-    table.dataset.rows = "report-lines";
+    const table2 = document.createElement("table");
+    table2.className = "lines";
+    table2.dataset.rows = "report-lines";
     const thead = document.createElement("thead");
     const headRow = document.createElement("tr");
     headRow.append(element("th", "Description"), element("th", "Count"));
     thead.append(headRow);
-    table.append(thead);
+    table2.append(thead);
     const tbody = document.createElement("tbody");
     const lines = [
       [
@@ -7362,8 +8620,8 @@ var EvidenceGraph = (() => {
       tr.append(desc, el("td", "n", shown));
       tbody.append(tr);
     }
-    table.append(tbody);
-    section.append(table);
+    table2.append(tbody);
+    section.append(table2);
     host.append(section);
     const stamps = el("div", "stamps inl");
     const stamp = el(
@@ -7479,9 +8737,9 @@ var EvidenceGraph = (() => {
       host.append(section);
       return;
     }
-    const table = document.createElement("table");
-    table.className = "hct";
-    table.dataset.weeks = String(calibration.length);
+    const table2 = document.createElement("table");
+    table2.className = "hct";
+    table2.dataset.weeks = String(calibration.length);
     const thead = document.createElement("thead");
     const headRow = document.createElement("tr");
     headRow.append(
@@ -7491,7 +8749,7 @@ var EvidenceGraph = (() => {
       el("th", "n", "Added")
     );
     thead.append(headRow);
-    table.append(thead);
+    table2.append(thead);
     const tbody = document.createElement("tbody");
     for (const week of calibration) {
       const tr = document.createElement("tr");
@@ -7513,8 +8771,8 @@ var EvidenceGraph = (() => {
       tr.append(heldCell, addedCell);
       tbody.append(tr);
     }
-    table.append(tbody);
-    section.append(table);
+    table2.append(tbody);
+    section.append(table2);
     host.append(section);
   }
   function renderWhyMissed(host, model, runInfo) {
@@ -7550,12 +8808,12 @@ var EvidenceGraph = (() => {
       item.dataset.reasonKey = group.key;
       item.dataset.reasonStructured = String(group.structured);
       item.dataset.count = String(group.conversations.length);
-      const row = el("summary", "rsn");
-      row.append(
+      const row2 = el("summary", "rsn");
+      row2.append(
         element("span", group.label),
         el("span", "c", `${fmtCount(group.conversations.length)} \xB7 see them \u203A`)
       );
-      item.append(row);
+      item.append(row2);
       item.append(
         renderConversationList(
           group.conversations,
@@ -7763,57 +9021,6 @@ var EvidenceGraph = (() => {
     renderWhatRan(wrapper, runInfo);
     renderVerificationDetails(wrapper, bundle, verified);
     root.append(wrapper);
-  }
-
-  // src/outcome-report-presentation.ts
-  function object6(value) {
-    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-  }
-  var CRITERION_REF = /^[a-z0-9_]+\.[a-z0-9_]+$/u;
-  var MAX_NOTE_LINES = 12;
-  var MAX_NOTE_LINE = 600;
-  var MAX_NOTE_TITLE = 120;
-  var MAX_BADGE = 40;
-  function text2(value, max) {
-    return typeof value === "string" && value.trim().length > 0 && value.length <= max ? value : void 0;
-  }
-  function readProducerNote(value) {
-    const note = object6(value);
-    if (note === void 0 || !Array.isArray(note.lines)) return void 0;
-    const raw = note.lines;
-    if (raw.length === 0 || raw.length > MAX_NOTE_LINES) return void 0;
-    const lines = raw.map((line) => text2(line, MAX_NOTE_LINE));
-    if (lines.some((line) => line === void 0)) return void 0;
-    return {
-      title: text2(note.title, MAX_NOTE_TITLE) ?? "Producer's note",
-      lines
-    };
-  }
-  function readEditedCriteria(value) {
-    if (!Array.isArray(value)) return void 0;
-    const entries = value;
-    const edited = entries.flatMap((entry) => {
-      const item = object6(entry);
-      const criterion = typeof item?.criterion === "string" && CRITERION_REF.test(item.criterion) ? item.criterion : void 0;
-      const badge = text2(item?.badge, MAX_BADGE);
-      return criterion === void 0 || badge === void 0 ? [] : [{ criterion, badge }];
-    });
-    return edited.length === 0 ? void 0 : edited;
-  }
-  function readOutcomeReportPresentation(bundle) {
-    const top = object6(bundle);
-    const extensions2 = object6(top?.extensions);
-    const block = object6(extensions2?.["outcome-report/v1"]);
-    if (block === void 0 || block.enabled !== true) return void 0;
-    const percentages = block.percentages === true;
-    const producerNote = readProducerNote(block.producer_note);
-    const editedCriteria = readEditedCriteria(block.edited_criteria);
-    return {
-      enabled: true,
-      percentages,
-      ...producerNote === void 0 ? {} : { producerNote },
-      ...editedCriteria === void 0 ? {} : { editedCriteria }
-    };
   }
 
   // src/compliance.ts
@@ -8029,18 +9236,18 @@ var EvidenceGraph = (() => {
   function buildFindings(obligations) {
     const findings = [];
     for (const obligation of obligations)
-      for (const row of obligation.rows) {
-        if (row.finding === void 0 || row.notMetCount === 0) continue;
+      for (const row2 of obligation.rows) {
+        if (row2.finding === void 0 || row2.notMetCount === 0) continue;
         findings.push({
-          id: row.finding.id,
-          criterionId: row.criterionId,
+          id: row2.finding.id,
+          criterionId: row2.criterionId,
           obligationKey: obligation.key,
           article: obligation.article,
-          testName: row.name,
-          severity: row.finding.severity,
-          recommendation: row.finding.recommendation,
-          ownerDue: row.finding.ownerDue,
-          sessionIds: row.sessionsByVerdict.get("not_met") ?? []
+          testName: row2.name,
+          severity: row2.finding.severity,
+          recommendation: row2.finding.recommendation,
+          ownerDue: row2.finding.ownerDue,
+          sessionIds: row2.sessionsByVerdict.get("not_met") ?? []
         });
       }
     return findings;
@@ -8225,9 +9432,9 @@ var EvidenceGraph = (() => {
         "Results are stated as counts of sessions; no overall compliance percentage is given."
       )
     );
-    const table = document.createElement("table");
-    table.className = "grid";
-    table.dataset.rows = "summary";
+    const table2 = document.createElement("table");
+    table2.className = "grid";
+    table2.dataset.rows = "summary";
     const thead = document.createElement("thead");
     const headRow = document.createElement("tr");
     headRow.append(
@@ -8237,24 +9444,24 @@ var EvidenceGraph = (() => {
       element2("th", "Status")
     );
     thead.append(headRow);
-    table.append(thead);
+    table2.append(thead);
     const tbody = document.createElement("tbody");
     for (const obligation of model.obligations) {
-      const row = document.createElement("tr");
-      row.dataset.obligation = obligation.key;
+      const row2 = document.createElement("tr");
+      row2.dataset.obligation = obligation.key;
       const status2 = obligationStatus(obligation);
-      row.append(
+      row2.append(
         el2("td", "b", obligation.article),
         element2("td", obligation.title),
         element2("td", obligation.applicability.note)
       );
       const statusCell = document.createElement("td");
       statusCell.append(statusPill(status2.cls, status2.text));
-      row.append(statusCell);
-      tbody.append(row);
+      row2.append(statusCell);
+      tbody.append(row2);
     }
-    table.append(tbody);
-    section.append(table);
+    table2.append(tbody);
+    section.append(table2);
     host.append(section);
   }
   function checkItBlock(test) {
@@ -8345,9 +9552,9 @@ var EvidenceGraph = (() => {
         "Population is the sessions a test has a sealed result for; a session with none for a test is not applicable to it and is not counted. Recomputed tests are deterministic checks anyone can repeat from the records. Judged tests apply a frozen rubric with a pinned model."
       )
     );
-    const table = document.createElement("table");
-    table.className = "grid";
-    table.dataset.rows = "tests";
+    const table2 = document.createElement("table");
+    table2.className = "grid";
+    table2.dataset.rows = "tests";
     const thead = document.createElement("thead");
     const headRow = document.createElement("tr");
     headRow.append(
@@ -8360,35 +9567,35 @@ var EvidenceGraph = (() => {
       element2("th", "Result")
     );
     thead.append(headRow);
-    table.append(thead);
+    table2.append(thead);
     const tbody = document.createElement("tbody");
     for (const obligation of model.obligations)
-      for (const row of obligation.rows) {
+      for (const row2 of obligation.rows) {
         const tr = document.createElement("tr");
-        tr.dataset.criterion = row.criterionId;
+        tr.dataset.criterion = row2.criterionId;
         const typeCell = document.createElement("td");
-        typeCell.append(tierBadge(row.tier));
+        typeCell.append(tierBadge(row2.tier));
         const resultCell = document.createElement("td");
-        const population = model.totalSessions - row.notApplicableCount;
-        if (population > 0 && row.notEvaluableCount === population && row.notMetCount === 0 && row.metCount === 0) {
+        const population = model.totalSessions - row2.notApplicableCount;
+        if (population > 0 && row2.notEvaluableCount === population && row2.notMetCount === 0 && row2.metCount === 0) {
           resultCell.append(statusPill("ne", "Not evaluable"));
-          if (row.notEvaluableNote !== void 0)
-            resultCell.append(el2("div", "applic", row.notEvaluableNote));
+          if (row2.notEvaluableNote !== void 0)
+            resultCell.append(el2("div", "applic", row2.notEvaluableNote));
         } else {
           resultCell.append(
             statusPill(
-              row.notMetCount > 0 ? "exc" : "ok",
-              row.notMetCount > 0 ? "Exceptions" : "No exceptions"
+              row2.notMetCount > 0 ? "exc" : "ok",
+              row2.notMetCount > 0 ? "Exceptions" : "No exceptions"
             )
           );
         }
         tr.append(
           el2("td", "b", `${obligation.article}`),
-          element2("td", row.name),
+          element2("td", row2.name),
           typeCell,
           el2("td", "n", fmt(population)),
-          el2("td", "n", fmt(row.notMetCount)),
-          el2("td", "n", fmt(row.notEvaluableCount)),
+          el2("td", "n", fmt(row2.notMetCount)),
+          el2("td", "n", fmt(row2.notEvaluableCount)),
           resultCell
         );
         tbody.append(tr);
@@ -8396,16 +9603,16 @@ var EvidenceGraph = (() => {
         const drillCell = document.createElement("td");
         drillCell.colSpan = 7;
         const sessionIds = [
-          ...row.sessionsByVerdict.get("not_met") ?? [],
-          ...row.sessionsByVerdict.get("not_evaluable") ?? []
+          ...row2.sessionsByVerdict.get("not_met") ?? [],
+          ...row2.sessionsByVerdict.get("not_evaluable") ?? []
         ];
         if (sessionIds.length > 0)
           renderSessionList(drillCell, sessionIds, model.sessions);
         drill2.append(drillCell);
         tbody.append(drill2);
       }
-    table.append(tbody);
-    section.append(table);
+    table2.append(tbody);
+    section.append(table2);
     host.append(section);
   }
   function renderFindings(host, model) {
@@ -8434,8 +9641,8 @@ var EvidenceGraph = (() => {
         el2("span", "", finding.testName)
       );
       box.append(fh);
-      const table = document.createElement("table");
-      table.className = "fk";
+      const table2 = document.createElement("table");
+      table2.className = "fk";
       const evRow = document.createElement("tr");
       evRow.append(
         element2("th", "Evidence"),
@@ -8451,8 +9658,8 @@ var EvidenceGraph = (() => {
         element2("th", "Owner \xB7 due"),
         element2("td", finding.ownerDue)
       );
-      table.append(evRow, recRow, ownerRow);
-      box.append(table);
+      table2.append(evRow, recRow, ownerRow);
+      box.append(table2);
       renderSessionList(box, finding.sessionIds, model.sessions);
       section.append(box);
     }
@@ -8522,21 +9729,21 @@ var EvidenceGraph = (() => {
         el2("p", "applic", `Judged terms: ${obligation.judgedTerms.join(", ")}`)
       );
     details.append(el2("p", "", obligation.method));
-    for (const row of obligation.rows) {
+    for (const row2 of obligation.rows) {
       const rowBox = el2("div", "ck");
-      rowBox.dataset.wording = row.wording.source;
+      rowBox.dataset.wording = row2.wording.source;
       const h = el2("div", "h");
-      h.append(element2("span", row.name), tierBadge(row.tier));
+      h.append(element2("span", row2.name), tierBadge(row2.tier));
       rowBox.append(h);
       rowBox.append(
         el2(
           "div",
           "why",
-          row.wording.source === "sealed" ? `Wording run (sealed): ${row.wording.text}` : row.wording.source === "mixed" ? `Wording ${NOT_STATED}: the cited reports state different wordings.` : `Wording ${NOT_STATED}: no cited report states it.`
+          row2.wording.source === "sealed" ? `Wording run (sealed): ${row2.wording.text}` : row2.wording.source === "mixed" ? `Wording ${NOT_STATED}: the cited reports state different wordings.` : `Wording ${NOT_STATED}: no cited report states it.`
         )
       );
-      if (row.notEvaluableNote !== void 0)
-        rowBox.append(el2("div", "ev", row.notEvaluableNote));
+      if (row2.notEvaluableNote !== void 0)
+        rowBox.append(el2("div", "ev", row2.notEvaluableNote));
       details.append(rowBox);
     }
     host.append(details);
@@ -8566,108 +9773,219 @@ var EvidenceGraph = (() => {
     root.append(wrapper);
   }
 
-  // src/compliance-presentation.ts
-  function object7(value) {
-    return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  // src/composed-view.ts
+  function composedResult(context) {
+    const entry = context.verification.extensions.find(
+      (extension) => extension.kind === COMPOSED_KIND
+    );
+    const composed = entry?.composed;
+    return composed !== void 0 && !composed.malformed ? composed : void 0;
   }
-  function str(value) {
-    return typeof value === "string" ? value : void 0;
+  function element3(tag, text3) {
+    const node = document.createElement(tag);
+    if (text3 !== void 0) node.textContent = text3;
+    return node;
   }
-  function strArray(value) {
-    return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
+  function row(cells, header = false) {
+    const tr = element3("tr");
+    for (const cell of cells) tr.append(element3(header ? "th" : "td", cell));
+    return tr;
   }
-  function readFinding(value) {
-    const obj = object7(value);
-    const id = str(obj?.id);
-    const severity = str(obj?.severity);
-    const recommendation = str(obj?.recommendation);
-    const ownerDue = str(obj?.owner_due);
-    if (id === void 0 || severity === void 0 || recommendation === void 0 || ownerDue === void 0)
-      return void 0;
-    return { id, severity, recommendation, ownerDue };
+  function table(name, columns, rows) {
+    const node = element3("table");
+    node.setAttribute(`data-${name}`, "");
+    const head2 = element3("thead");
+    head2.append(row(columns, true));
+    const body = element3("tbody");
+    body.append(...rows);
+    node.append(head2, body);
+    return node;
   }
-  function readRow(value) {
-    const obj = object7(value);
-    const criterionId = str(obj?.criterion_id);
-    const name = str(obj?.name);
-    if (criterionId === void 0 || name === void 0) return void 0;
-    const notEvaluableNote = str(obj?.not_evaluable_note);
-    const finding = obj?.finding === void 0 ? void 0 : readFinding(obj.finding);
-    return {
-      criterionId,
-      name,
-      ...notEvaluableNote === void 0 ? {} : { notEvaluableNote },
-      ...finding === void 0 ? {} : { finding }
-    };
+  var NOT_APPLICABLE = "\u2014";
+  var findingsText = (findings) => findings.length === 0 ? "none" : findings.join(", ");
+  var claimText = (claim) => claim === void 0 ? NOT_APPLICABLE : claim.findings.length === 0 ? claim.status : `${claim.status} (${claim.findings.join(", ")})`;
+  var pairText = (members) => `${members[0]} \u2013 ${members[1]}`;
+  function renderDifference(difference, host) {
+    const list = element3("dl");
+    list.dataset.pointer = difference.pointer;
+    list.append(element3("dt", difference.pointer));
+    for (const value of difference.values)
+      list.append(
+        element3(
+          "dd",
+          value.resolved ? `${value.member}: ${JSON.stringify(value.value)}` : `${value.member}: does not resolve`
+        )
+      );
+    host.append(list);
   }
-  function readApplicability(value) {
-    const obj = object7(value);
-    const status2 = obj?.status === "in_force" || obj?.status === "future" ? obj.status : void 0;
-    const note = str(obj?.note);
-    if (status2 === void 0 || note === void 0) return void 0;
-    return { status: status2, note };
+  function corroborationText(c) {
+    switch (c.result) {
+      case "redundant":
+        return `${c.report} (${c.reasons.join(", ")})`;
+      case "corroborating":
+        return "corroborating, on declared custody";
+      case "not_applicable":
+        return "not applicable: the join did not derive agree";
+    }
   }
-  function readObligation(value) {
-    const obj = object7(value);
-    const key = str(obj?.key);
-    const article = str(obj?.article);
-    const title = str(obj?.title);
-    const plain2 = str(obj?.plain);
-    const method = str(obj?.method);
-    const applicability = readApplicability(obj?.applicability);
-    if (key === void 0 || article === void 0 || title === void 0 || plain2 === void 0 || method === void 0 || applicability === void 0)
-      return void 0;
-    const rows = Array.isArray(obj?.rows) ? obj.rows.flatMap((r) => {
-      const row = readRow(r);
-      return row === void 0 ? [] : [row];
-    }) : [];
-    return {
-      key,
-      article,
-      title,
-      plain: plain2,
-      judgedTerms: strArray(obj?.judged_terms),
-      applicability,
-      method,
-      rows
-    };
+  function renderComposed(model, host, services) {
+    const result = model.result;
+    const section = element3("section");
+    section.dataset.section = "composition";
+    section.dataset.module = BUILTIN_MANIFEST_COMPOSED.id;
+    section.append(element3("h2", "Composition"));
+    const status2 = element3("p", `composed/v1 check: ${result.status}`);
+    status2.dataset.compositionStatus = result.status;
+    section.append(status2);
+    if (result.findings.length > 0)
+      section.append(element3("p", `findings: ${result.findings.join(", ")}`));
+    section.append(
+      element3(
+        "p",
+        "Composition closure covers the declared members only; it is not completeness of participation."
+      )
+    );
+    section.append(element3("h3", "Composed digest"));
+    const digest = element3("dl");
+    digest.dataset.composedDigest = result.composedDigest.declared;
+    digest.dataset.matches = String(result.composedDigest.matches);
+    digest.append(
+      element3("dt", "declared"),
+      element3("dd", result.composedDigest.declared),
+      element3("dt", "recomputed"),
+      element3("dd", result.composedDigest.recomputed || "uncomputable"),
+      element3("dt", "matches"),
+      element3("dd", result.composedDigest.matches ? "yes" : "no")
+    );
+    section.append(digest);
+    section.append(element3("h3", "Members"));
+    section.append(
+      table(
+        "composition-members",
+        [
+          "member",
+          "observer",
+          "outcome",
+          "body",
+          "digest",
+          "graph closure",
+          "interval coverage",
+          "per-record membership",
+          "refusal signature",
+          "findings"
+        ],
+        result.members.map((m) => {
+          const tr = row([
+            m.id,
+            m.observer,
+            m.outcome,
+            m.body,
+            m.digest,
+            claimText(m.bundle?.graphClosure),
+            claimText(m.bundle?.intervalCoverage),
+            claimText(m.bundle?.perRecordMembership),
+            m.refusalSignature ?? NOT_APPLICABLE,
+            findingsText(m.findings)
+          ]);
+          tr.dataset.memberId = m.id;
+          tr.dataset.body = m.body;
+          tr.dataset.digest = m.digest;
+          return tr;
+        })
+      )
+    );
+    section.append(element3("h3", "Observers"));
+    section.append(
+      table(
+        "composition-observers",
+        ["observer", "role", "custody domain"],
+        result.observers.map((o) => {
+          const tr = row([o.id, o.role, o.custodyDomain]);
+          tr.dataset.observerId = o.id;
+          return tr;
+        })
+      )
+    );
+    section.append(
+      element3(
+        "p",
+        "Custody domains are labels declared by whoever composed this block. Identical labels make an agreeing pair redundant; distinct labels do not establish that two observers are independent."
+      )
+    );
+    section.append(element3("h3", "Composition closure"));
+    const closure = element3(
+      "p",
+      `${result.compositionClosure.status}; missing: ${result.compositionClosure.missing.length === 0 ? "none" : result.compositionClosure.missing.join(", ")}; findings: ${findingsText(result.compositionClosure.findings)}`
+    );
+    closure.dataset.closureStatus = result.compositionClosure.status;
+    section.append(closure);
+    section.append(element3("h3", "Joins"));
+    if (result.joins.length === 0) section.append(element3("p", "No joins."));
+    else {
+      section.append(
+        table(
+          "composition-joins",
+          ["members", "basis", "declared", "derived", "result"],
+          result.joins.map((j) => {
+            const tr = row([
+              pairText(j.members),
+              j.basis,
+              j.declared,
+              j.derived ?? "not derivable",
+              j.result
+            ]);
+            tr.dataset.joinMembers = j.members.join(",");
+            tr.dataset.joinDeclared = j.declared;
+            tr.dataset.joinDerived = j.derived ?? "not_derivable";
+            tr.dataset.joinResult = j.result;
+            return tr;
+          })
+        )
+      );
+      for (const j of result.joins) {
+        if (j.differences.length === 0) continue;
+        const details = services.details(
+          `Differing values: ${pairText(j.members)}`
+        );
+        details.dataset.joinDifferences = j.members.join(",");
+        for (const difference of j.differences)
+          renderDifference(difference, details);
+        section.append(details);
+      }
+      section.append(element3("h3", "Agreement"));
+      section.append(
+        table(
+          "composition-agreement",
+          ["members", "result"],
+          result.corroboration.map((c) => {
+            const tr = row([pairText(c.members), corroborationText(c)]);
+            tr.dataset.agreementMembers = c.members.join(",");
+            tr.dataset.corroboration = c.result;
+            if (c.result === "redundant")
+              tr.dataset.reasons = c.reasons.join(",");
+            return tr;
+          })
+        )
+      );
+    }
+    host.L1.append(section);
   }
-  function readQualityProtocol(value) {
-    const obj = object7(value);
-    if (obj === void 0) return void 0;
-    const protocol = str(obj.protocol);
-    const cadence = str(obj.cadence);
-    const note = str(obj.note);
-    if (protocol === void 0 && cadence === void 0 && note === void 0)
-      return void 0;
-    return {
-      ...protocol === void 0 ? {} : { protocol },
-      ...cadence === void 0 ? {} : { cadence },
-      ...note === void 0 ? {} : { note }
-    };
-  }
-  function readCompliancePresentation(bundle) {
-    const top = object7(bundle);
-    const extensions2 = object7(top?.extensions);
-    const block = object7(extensions2?.["eu-ai-act-compliance/v1"]);
-    if (block === void 0 || block.enabled !== true) return void 0;
-    const regulation = str(block.regulation) ?? "Regulation (EU) 2024/1689";
-    const obligations = Array.isArray(block.obligations) ? block.obligations.flatMap((o) => {
-      const obligation = readObligation(o);
-      return obligation === void 0 ? [] : [obligation];
-    }) : [];
-    if (obligations.length === 0) return void 0;
-    const qualityProtocol = readQualityProtocol(block.quality_protocol);
-    return {
-      enabled: true,
-      regulation,
-      obligations,
-      ...qualityProtocol === void 0 ? {} : { qualityProtocol }
-    };
-  }
+  var composedSectionModule = {
+    manifest: BUILTIN_MANIFEST_COMPOSED,
+    canRender: (context) => composedResult(context) !== void 0,
+    buildModel: (context) => {
+      const result = composedResult(context);
+      if (result === void 0)
+        throw new Error(
+          `${BUILTIN_MANIFEST_COMPOSED.id}: buildModel called although canRender was false`
+        );
+      return { result };
+    },
+    render: renderComposed
+  };
 
   // src/report-rows.ts
-  var rowCitationDigests = (row) => Array.isArray(row.references) ? row.references.flatMap(
+  var rowCitationDigests = (row2) => Array.isArray(row2.references) ? row2.references.flatMap(
     (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" ? asString(reference.digest) === void 0 ? [] : [asString(reference.digest)] : []
   ) : [];
   async function buildReportRows(input) {
@@ -8676,11 +9994,11 @@ var EvidenceGraph = (() => {
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures)) {
       return void 0;
     }
-    const rootRecord = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
-    if (rootRecord === void 0) return void 0;
+    const rootRecord2 = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
+    if (rootRecord2 === void 0) return void 0;
     const rootPayload = verifiedPayload(
       context,
-      rootRecord.capsule_id,
+      rootRecord2.capsule_id,
       "agent_input"
     );
     if (!isObject(rootPayload) || rootPayload.spec_version !== "report/v1")
@@ -8721,19 +10039,19 @@ var EvidenceGraph = (() => {
     const title = asString(rootPayload.title);
     const rootResolvedLogCoordinates = logCoordinates(
       memberships2,
-      rootRecord.capsule_id
+      rootRecord2.capsule_id
     );
     return {
-      capsuleId: rootRecord.capsule_id,
+      capsuleId: rootRecord2.capsule_id,
       ...title === void 0 ? {} : { title },
       rows,
       ...rootResolvedLogCoordinates === void 0 ? {} : { logCoordinates: rootResolvedLogCoordinates },
-      ...recordTimes(rootRecord)
+      ...recordTimes(rootRecord2)
     };
   }
 
   // src/evidence-graph-view.ts
-  function element3(tag, text3) {
+  function element4(tag, text3) {
     const value = document.createElement(tag);
     if (text3 !== void 0) value.textContent = text3;
     return value;
@@ -8746,23 +10064,23 @@ var EvidenceGraph = (() => {
     }
   }
   function appendValue(parent2, label, value) {
-    parent2.append(element3("dt", label));
-    parent2.append(element3("dd", display(value)));
+    parent2.append(element4("dt", label));
+    parent2.append(element4("dd", display(value)));
   }
   function renderTime(value) {
     const zone = zoneStatement(value);
-    const time = element3("span", value);
+    const time = element4("span", value);
     time.dataset.tz = zone;
     if (zone === "not-stated") {
-      const marker = element3("span", " (timezone not stated)");
+      const marker = element4("span", " (timezone not stated)");
       marker.dataset.tzMarker = "not-stated";
       time.append(marker);
     }
     return time;
   }
   function appendTime(parent2, label, value, absent) {
-    parent2.append(element3("dt", label));
-    const cell = element3("dd");
+    parent2.append(element4("dt", label));
+    const cell = element4("dd");
     if (value === void 0) {
       cell.textContent = absent;
       cell.dataset.time = "not-stated";
@@ -8771,37 +10089,31 @@ var EvidenceGraph = (() => {
     }
     parent2.append(cell);
   }
-  function membershipProvenOrUnbound(result) {
-    return result.perRecordMembership.status === "pass" || result.perRecordMembership.status === "fail" && result.perRecordMembership.findings.length > 0 && result.perRecordMembership.findings.length === unboundRecordIds(result).length;
-  }
-  function bundleVerified(result) {
-    return result.graphClosure.status === "pass" && result.intervalCoverage.status === "pass" && membershipProvenOrUnbound(result) && Object.values(result.capsuleResults).every((capsule) => capsule.ok) && result.disclosures.every(
-      (disclosure) => disclosure.status === "disclosure_match" || disclosure.status === "withheld"
-    );
-  }
   var recordsWord = (count) => `${count} ${count === 1 ? "record" : "records"}`;
-  function renderVerificationBanner(root, verified, coverage, styled = false) {
-    const banner = element3(
+  function renderVerificationBanner(root, verified, coverage) {
+    const banner = element4(
       "p",
       verified ? coverage.uncheckpointed === 0 ? "Bundle verification passed" : `Bundle verification passed; ${coverage.uncheckpointed} of ${recordsWord(coverage.total)} uncheckpointed` : "Bundle verification failed"
     );
     banner.dataset.verify = verified ? "verified" : "failed";
     banner.dataset.uncheckpointed = String(coverage.uncheckpointed);
-    if (styled)
-      banner.className = `oi oi-banner ${verified ? "oi-banner-ok" : "oi-banner-failed"}`;
     root.append(banner);
-    if (verified) return;
-    const refusal = element3(
+    if (verified) return banner;
+    const refusal = element4(
       "p",
       "This bundle did not verify. Its records, rows and payloads are not shown; the verification page below lists which checks failed."
     );
     refusal.dataset.refusal = "unverified-bundle";
     root.append(refusal);
+    return banner;
+  }
+  function styleBanner(banner, verified) {
+    banner.className = `oi oi-banner ${verified ? "oi-banner-ok" : "oi-banner-failed"}`;
   }
   function renderPresentationHeader(root, bundle) {
     const presentation = readPresentationBlock(bundle);
     if (presentation === void 0) return;
-    const header = element3("header");
+    const header = element4("header");
     header.dataset.presentation = "header";
     if (presentation.logoDataUrl !== void 0) {
       const logo = document.createElement("img");
@@ -8810,12 +10122,12 @@ var EvidenceGraph = (() => {
       header.append(logo);
     }
     if (presentation.producerDisplayName !== void 0) {
-      const name = element3("span", presentation.producerDisplayName);
+      const name = element4("span", presentation.producerDisplayName);
       name.dataset.presentationField = "producer-display-name";
       header.append(name);
     }
     if (presentation.title !== void 0) {
-      const title = element3("strong", presentation.title);
+      const title = element4("strong", presentation.title);
       title.dataset.presentationField = "title";
       header.append(title);
     }
@@ -8838,18 +10150,18 @@ var EvidenceGraph = (() => {
     }
   }
   function renderSignerStatement(item, signer, statement) {
-    const label = element3("p", `${signer}'s statement of what it recomputed:`);
+    const label = element4("p", `${signer}'s statement of what it recomputed:`);
     item.append(label);
-    const checks = element3("ul");
+    const checks = element4("ul");
     checks.dataset.countersignStatement = "checks";
     statement.checks.forEach((check) => {
-      const row = element3("li", `${check.name}: ${check.result}`);
-      row.dataset.checkResult = check.result;
-      checks.append(row);
+      const row2 = element4("li", `${check.name}: ${check.result}`);
+      row2.dataset.checkResult = check.result;
+      checks.append(row2);
     });
     item.append(checks);
     if (statement.receipt === "unverified") {
-      const receipt = element3(
+      const receipt = element4(
         "p",
         "receipt present, not verified by this viewer"
       );
@@ -8858,12 +10170,12 @@ var EvidenceGraph = (() => {
     }
   }
   function renderStamps(host, stamps) {
-    host.append(element3("h4", "Countersignatures"));
-    const list = element3("ul");
+    host.append(element4("h4", "Countersignatures"));
+    const list = element4("ul");
     stamps.forEach((stamp) => {
-      const item = element3("li");
+      const item = element4("li");
       item.dataset.stampKind = stamp.kind;
-      item.append(element3("span", stampText(stamp)));
+      item.append(element4("span", stampText(stamp)));
       if (stamp.kind === "resolved") {
         renderSignerStatement(item, stamp.name, stamp.statement);
       } else if (stamp.kind === "not-independent") {
@@ -8876,14 +10188,14 @@ var EvidenceGraph = (() => {
     host.append(list);
   }
   function renderReceipts(host, receipts2) {
-    host.append(element3("h4", "Receipts"));
+    host.append(element4("h4", "Receipts"));
     if (receipts2.length === 0) {
-      host.append(element3("p", "no receipts disclosed"));
+      host.append(element4("p", "no receipts disclosed"));
       return;
     }
-    const list = element3("ul");
+    const list = element4("ul");
     receipts2.forEach((receipt) => {
-      const item = element3("li", `${receipt.witness} \xB7 ${receipt.grade} \xB7 `);
+      const item = element4("li", `${receipt.witness} \xB7 ${receipt.grade} \xB7 `);
       item.append(renderTime(receipt.time));
       list.append(item);
     });
@@ -8896,9 +10208,9 @@ var EvidenceGraph = (() => {
     unverified: "membership unverified"
   });
   function renderCheckpointCoverage(host, records, uncheckpointed, coverage) {
-    host.append(element3("h4", "Checkpoint coverage"));
+    host.append(element4("h4", "Checkpoint coverage"));
     if (coverage.status === "established") {
-      const count = element3(
+      const count = element4(
         "p",
         `${recordsWord(uncheckpointed)} uncheckpointed of ${recordsWord(records.length)} supplied`
       );
@@ -8906,25 +10218,25 @@ var EvidenceGraph = (() => {
       count.dataset.count = String(uncheckpointed);
       host.append(count);
     } else {
-      const line = element3("p", `coverage not established: ${coverage.reason}`);
+      const line = element4("p", `coverage not established: ${coverage.reason}`);
       line.dataset.coverage = "not-established";
       line.dataset.claim = coverage.status;
       host.append(line);
       if (coverage.status === "withheld") return;
     }
     host.append(renderCoverageStatusCounts(records));
-    const details = element3("details");
+    const details = element4("details");
     details.dataset.records = "coverage-detail";
-    const summary = element3(
+    const summary = element4(
       "summary",
       `${recordsWord(records.length)}, by capsule id`
     );
     details.append(summary);
-    const list = element3("ul");
+    const list = element4("ul");
     list.dataset.records = "coverage";
     for (const record of records) {
-      const item = element3("li", `${record.capsuleId} \xB7 `);
-      const status2 = element3("span", COVERAGE_LABEL[record.status]);
+      const item = element4("li", `${record.capsuleId} \xB7 `);
+      const status2 = element4("span", COVERAGE_LABEL[record.status]);
       status2.dataset.recordStatus = record.status;
       status2.className = `seal-${record.status}`;
       item.dataset.capsuleId = record.capsuleId;
@@ -8939,12 +10251,12 @@ var EvidenceGraph = (() => {
     for (const record of records) {
       counts.set(record.status, (counts.get(record.status) ?? 0) + 1);
     }
-    const list = element3("ul");
+    const list = element4("ul");
     list.dataset.records = "coverage-summary";
     for (const status2 of Object.keys(COVERAGE_LABEL)) {
       const count = counts.get(status2) ?? 0;
       if (count === 0) continue;
-      const item = element3(
+      const item = element4(
         "li",
         `${recordsWord(count)} ${COVERAGE_LABEL[status2]}`
       );
@@ -8955,8 +10267,8 @@ var EvidenceGraph = (() => {
     return list;
   }
   function renderCompletenessStatement(host, completeness2) {
-    host.append(element3("h4", "Completeness statement"));
-    const details = element3("dl");
+    host.append(element4("h4", "Completeness statement"));
+    const details = element4("dl");
     appendValue(
       details,
       "closure depth",
@@ -8976,38 +10288,77 @@ var EvidenceGraph = (() => {
     host.append(details);
   }
   function renderChecks(host, checks) {
-    host.append(element3("h4", "The ten checks"));
-    const list = element3("ol");
+    host.append(element4("h4", "The ten checks"));
+    const list = element4("ol");
     checks.forEach((check) => {
-      const item = element3("li");
+      const item = element4("li");
       item.dataset.checkStatus = check.status;
-      item.append(element3("strong", check.name));
-      item.append(element3("span", `: ${check.result}`));
+      item.append(element4("strong", check.name));
+      item.append(element4("span", `: ${check.result}`));
       list.append(item);
     });
     host.append(list);
   }
-  async function renderVerificationPage(root, context, styled = false) {
+  function renderExtensions(host, rows, refusals) {
+    renderExtensionTable(host, rows);
+    for (const notice of refusals) {
+      const line = element4("p", notice.line);
+      line.dataset.presentationRefused = notice.id;
+      line.dataset.refusal = notice.reason;
+      host.append(line);
+    }
+  }
+  function renderExtensionTable(host, rows) {
+    if (rows.length === 0) return;
+    host.append(element4("h4", "Extensions"));
+    const table2 = element4("table");
+    table2.dataset.extensions = "";
+    const head2 = element4("tr");
+    for (const label of ["extension", "integrity", "semantics"])
+      head2.append(element4("th", label));
+    const thead = element4("thead");
+    thead.append(head2);
+    const body = element4("tbody");
+    for (const row2 of rows) {
+      const tr = element4("tr");
+      tr.dataset.extensionId = row2.id;
+      tr.dataset.integrity = row2.integrity;
+      tr.dataset.semantics = row2.refusal !== void 0 ? "refused" : row2.interpreter === void 0 ? "uninterpreted" : "interpreted";
+      if (row2.refusal !== void 0) {
+        tr.dataset.refusedModule = row2.refusal.id;
+        tr.dataset.refusal = row2.refusal.reason;
+      }
+      tr.append(
+        element4("td", row2.id),
+        element4("td", row2.integrity),
+        element4("td", row2.semantics)
+      );
+      body.append(tr);
+    }
+    table2.append(thead, body);
+    host.append(table2);
+  }
+  async function renderVerificationPage(root, context, styled, applied, refused) {
     const { bundle, verification: verified, countersigners } = context;
-    const section = element3("section");
+    const section = element4("section");
     section.dataset.page = "verification";
     let page = section;
     if (styled) {
       section.className = "oi oi-vp";
-      page = element3("div");
+      page = element4("div");
       page.className = "sec";
       section.append(page);
     }
-    page.append(element3("h2", "Verification"));
-    const model = buildVerificationPageModel(bundle, verified);
-    const summary = element3("dl");
+    page.append(element4("h2", "Verification"));
+    const model = buildVerificationPageModel(bundle, verified, applied, refused);
+    const summary = element4("dl");
     appendValue(summary, "bundle digest", model.bundleDigest ?? "uncomputable");
     appendValue(summary, "checkpoint root", model.checkpointRoot ?? "absent");
     appendValue(summary, "checkpoint size", model.checkpointSize ?? "absent");
     page.append(summary);
     renderReceipts(page, model.receipts);
     if (model.selfWitnessed) {
-      const witness = element3(
+      const witness = element4(
         "p",
         "self-witnessed: no transparency-service receipt"
       );
@@ -9029,7 +10380,8 @@ var EvidenceGraph = (() => {
     renderStamps(page, stamps);
     renderCompletenessStatement(page, model.completeness);
     renderChecks(page, model.checks);
-    page.append(element3("p", model.verifyIndependentlyLine));
+    renderExtensions(page, model.extensions, model.presentationRefusals);
+    page.append(element4("p", model.verifyIndependentlyLine));
     root.append(section);
   }
   function metRate(report) {
@@ -9043,13 +10395,13 @@ var EvidenceGraph = (() => {
     return `met rate ${passed}/${required.length}`;
   }
   function renderCalibration(calibration) {
-    const section = element3("section");
-    section.append(element3("h2", "Human check"));
+    const section = element4("section");
+    section.append(element4("h2", "Human check"));
     if (calibration === void 0) {
-      section.append(element3("p", "no human-check data"));
+      section.append(element4("p", "no human-check data"));
       return section;
     }
-    const details = element3("dl");
+    const details = element4("dl");
     appendValue(details, "confusion matrix", calibration.confusion);
     appendCount(details, "agreement", calibration.agreement);
     appendCount(details, "corrected rate", calibration.correctedRate);
@@ -9058,8 +10410,8 @@ var EvidenceGraph = (() => {
     return section;
   }
   function appendCount(parent2, label, count) {
-    parent2.append(element3("dt", label));
-    const cell = element3("dd");
+    parent2.append(element4("dt", label));
+    const cell = element4("dd");
     if (count === void 0) {
       cell.textContent = "not stated";
       cell.dataset.count = "not-stated";
@@ -9074,9 +10426,9 @@ var EvidenceGraph = (() => {
     parent2.append(cell);
   }
   function renderProvenance(capsuleId, coordinates, times) {
-    const panel = element3("section");
-    panel.append(element3("h4", "Provenance"));
-    const details = element3("dl");
+    const panel = element4("section");
+    panel.append(element4("h4", "Provenance"));
+    const details = element4("dl");
     appendValue(details, "capsule ID", capsuleId);
     if (times.provenanceMode !== void 0)
       appendValue(details, "provenance", times.provenanceMode);
@@ -9087,8 +10439,8 @@ var EvidenceGraph = (() => {
       "action time not stated"
     );
     appendTime(details, "seal time", times.sealTime, "seal time not stated");
-    details.append(element3("dt", "seal status"));
-    const seal = element3(
+    details.append(element4("dt", "seal status"));
+    const seal = element4(
       "dd",
       coordinates === void 0 ? "uncheckpointed" : "checkpointed"
     );
@@ -9104,35 +10456,35 @@ var EvidenceGraph = (() => {
     return panel;
   }
   function renderJudgment(judgment) {
-    const item = element3("li");
-    item.append(element3("strong", `${judgment.axisId}: ${judgment.status}`));
-    item.append(element3("p", judgment.rationale));
-    item.append(element3("p", `evidence: ${judgment.evidenceIds.join(", ")}`));
+    const item = element4("li");
+    item.append(element4("strong", `${judgment.axisId}: ${judgment.status}`));
+    item.append(element4("p", judgment.rationale));
+    item.append(element4("p", `evidence: ${judgment.evidenceIds.join(", ")}`));
     return item;
   }
   function renderAct(act) {
-    const section = element3("section");
-    section.append(element3("h4", `Turn ${act.turnIdx}`));
+    const section = element4("section");
+    section.append(element4("h4", `Turn ${act.turnIdx}`));
     if (act.agentInput !== void 0)
-      section.append(element3("pre", display(act.agentInput)));
+      section.append(element4("pre", display(act.agentInput)));
     if (act.agentOutput !== void 0)
-      section.append(element3("pre", display(act.agentOutput)));
+      section.append(element4("pre", display(act.agentOutput)));
     section.append(renderProvenance(act.capsuleId, act.logCoordinates, act));
     return section;
   }
-  function object8(value) {
+  function object10(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
   }
   function renderWithheldActs(acts, host) {
     for (const act of acts) {
       if (act.agentInput !== void 0 && act.agentOutput !== void 0) continue;
-      const committed = object8({
+      const committed = object10({
         agent_input_digest: act.agentInputDigest,
         agent_output_digest: act.agentOutputDigest
       });
-      const evidence = element3("section");
-      evidence.append(element3("h4", "Undisclosed payload evidence"));
-      const details = element3("dl");
+      const evidence = element4("section");
+      evidence.append(element4("h4", "Undisclosed payload evidence"));
+      const details = element4("dl");
       appendValue(details, "capsule ID", act.capsuleId);
       for (const field of ["agent_input_digest", "agent_output_digest"]) {
         if (typeof committed[field] === "string")
@@ -9144,7 +10496,7 @@ var EvidenceGraph = (() => {
         ["agent_output", act.agentOutputDisclosure]
       ]) {
         if (state !== "disclosure_mismatch") continue;
-        const note = element3(
+        const note = element4(
           "p",
           `${field}: the disclosed value does not match the committed digest and is withheld`
         );
@@ -9156,36 +10508,36 @@ var EvidenceGraph = (() => {
   }
   function renderCase(caseNode, host) {
     host.replaceChildren();
-    host.append(element3("h3", `Case ${caseNode.caseId}`));
-    const judgments = element3("ul");
+    host.append(element4("h3", `Case ${caseNode.caseId}`));
+    const judgments = element4("ul");
     caseNode.judgments.forEach(
       (judgment) => judgments.append(renderJudgment(judgment))
     );
-    host.append(element3("h4", "Axis judgments"), judgments);
-    host.append(element3("h4", "Disclosed transcript"));
+    host.append(element4("h4", "Axis judgments"), judgments);
+    host.append(element4("h4", "Disclosed transcript"));
     caseNode.acts.forEach((act) => host.append(renderAct(act)));
     renderWithheldActs(caseNode.acts, host);
   }
   function renderReport(report, host, _records) {
     host.replaceChildren();
-    const heading = element3("h2", "Cases for ");
+    const heading = element4("h2", "Cases for ");
     heading.append(renderTime(report.date));
     host.append(heading);
-    const outcomes = element3("ul");
+    const outcomes = element4("ul");
     report.outcomes.forEach((outcome) => {
       outcomes.append(
-        element3(
+        element4(
           "li",
           `${outcome.outcomeId} (${outcome.role}): ${outcome.aggregate ?? "unrated"}`
         )
       );
     });
-    host.append(element3("h3", "Outcome rollup"), outcomes);
+    host.append(element4("h3", "Outcome rollup"), outcomes);
     renderWithheldActs(report.withheldActs, host);
-    const cases = element3("section");
-    const detail = element3("section");
+    const cases = element4("section");
+    const detail = element4("section");
     report.cases.forEach((caseNode) => {
-      const item = element3(
+      const item = element4(
         "button",
         `${caseNode.taskId}, trial ${caseNode.trial}: ${caseNode.aggregate ?? "unrated"}`
       );
@@ -9201,14 +10553,14 @@ var EvidenceGraph = (() => {
     );
   }
   function renderCitation(citation) {
-    const section = element3("section");
+    const section = element4("section");
     section.append(
       renderProvenance(citation.capsuleId, citation.logCoordinates, citation)
     );
     if (citation.disclosure === "disclosed") {
-      section.append(element3("pre", display(citation.disclosedPayload)));
+      section.append(element4("pre", display(citation.disclosedPayload)));
     } else {
-      const note = element3(
+      const note = element4(
         "p",
         citation.disclosure === "disclosure_mismatch" ? "withheld: the disclosed value does not match the committed digest" : "withheld"
       );
@@ -9217,41 +10569,41 @@ var EvidenceGraph = (() => {
     }
     return section;
   }
-  function renderReportRow(row, host) {
+  function renderReportRow(row2, host) {
     host.replaceChildren();
-    host.append(element3("h3", row.label));
-    const status2 = element3("p", row.status.replaceAll("_", " "));
-    status2.dataset.rowStatus = row.status;
+    host.append(element4("h3", row2.label));
+    const status2 = element4("p", row2.status.replaceAll("_", " "));
+    status2.dataset.rowStatus = row2.status;
     host.append(status2);
-    if (row.reason !== void 0) host.append(element3("p", row.reason));
-    host.append(element3("h4", "Evidence"));
-    if (row.citations.length === 0) {
-      host.append(element3("p", "no citation"));
+    if (row2.reason !== void 0) host.append(element4("p", row2.reason));
+    host.append(element4("h4", "Evidence"));
+    if (row2.citations.length === 0) {
+      host.append(element4("p", "no citation"));
     } else {
-      row.citations.forEach((citation) => host.append(renderCitation(citation)));
+      row2.citations.forEach((citation) => host.append(renderCitation(citation)));
     }
   }
   function renderReportRowsTable(reportRows, root) {
-    const section = element3("section");
+    const section = element4("section");
     section.dataset.page = "report-rows";
-    section.append(element3("h1", reportRows.title ?? "Report"));
-    const table = document.createElement("table");
-    const detail = element3("section");
-    reportRows.rows.forEach((row) => {
+    section.append(element4("h1", reportRows.title ?? "Report"));
+    const table2 = document.createElement("table");
+    const detail = element4("section");
+    reportRows.rows.forEach((row2) => {
       const tr = document.createElement("tr");
       const labelCell = document.createElement("td");
-      const button = element3("button", row.label);
+      const button = element4("button", row2.label);
       button.setAttribute("type", "button");
-      button.dataset.rowId = row.rowId;
-      button.addEventListener("click", () => renderReportRow(row, detail));
+      button.dataset.rowId = row2.rowId;
+      button.addEventListener("click", () => renderReportRow(row2, detail));
       labelCell.append(button);
-      const statusCell = element3("td", row.status.replaceAll("_", " "));
-      statusCell.dataset.rowStatus = row.status;
+      const statusCell = element4("td", row2.status.replaceAll("_", " "));
+      statusCell.dataset.rowStatus = row2.status;
       tr.append(labelCell, statusCell);
-      table.append(tr);
+      table2.append(tr);
     });
     section.append(
-      table,
+      table2,
       detail,
       renderProvenance(
         reportRows.capsuleId,
@@ -9263,12 +10615,12 @@ var EvidenceGraph = (() => {
   }
   function renderCitedMember(host, field, resolution, committed) {
     if (resolution.state !== "disclosed" && committed === void 0) return;
-    host.append(element3("h5", field));
+    host.append(element4("h5", field));
     if (resolution.state === "disclosed") {
-      host.append(element3("pre", display(resolution.payload)));
+      host.append(element4("pre", display(resolution.payload)));
       return;
     }
-    const note = element3(
+    const note = element4(
       "p",
       resolution.state === "disclosure_mismatch" ? `withheld \xB7 ${committed}: the disclosed value does not match the committed digest` : `withheld \xB7 ${committed}`
     );
@@ -9276,7 +10628,7 @@ var EvidenceGraph = (() => {
     host.append(note);
   }
   function renderCitedRecord(record, records, host) {
-    const section = element3("section");
+    const section = element4("section");
     section.dataset.citedRecord = record.capsuleId;
     section.append(
       renderProvenance(record.capsuleId, record.logCoordinates, record)
@@ -9294,22 +10646,22 @@ var EvidenceGraph = (() => {
       record.agentOutputDigest
     );
     if (record.cites.length > 0) {
-      section.append(element3("h5", "Cites"));
+      section.append(element4("h5", "Cites"));
       renderCitationList(record.cites, records, section);
     }
     host.append(section);
   }
   function renderCitationList(ids, records, host) {
-    const list = element3("ul");
-    const detail = element3("section");
+    const list = element4("ul");
+    const detail = element4("section");
     for (const id of ids) {
-      const item = element3("li");
+      const item = element4("li");
       const target = records.get(id);
       if (target === void 0) {
         item.textContent = `${id} \xB7 not in this bundle`;
         item.dataset.citation = "missing";
       } else {
-        const button = element3("button", id);
+        const button = element4("button", id);
         button.setAttribute("type", "button");
         button.dataset.citedId = id;
         button.addEventListener("click", () => {
@@ -9329,30 +10681,30 @@ var EvidenceGraph = (() => {
       (entry) => entry.field === field
     );
     if (mismatch === void 0) return void 0;
-    const marker = element3("span", "count mismatch");
+    const marker = element4("span", "count mismatch");
     marker.dataset.countMismatch = field;
     marker.dataset.stated = String(mismatch.stated);
     marker.dataset.recomputed = String(mismatch.recomputed);
     return marker;
   }
   function appendCloseState(parent2, close, tag) {
-    const cell = element3(tag, close.state);
+    const cell = element4(tag, close.state);
     cell.dataset.closeState = close.state;
     cell.dataset.closeDerivation = close.derivation;
     cell.dataset.assertedState = close.asserted;
     if (close.stateMismatch) {
-      const marker = element3("span", "state mismatch");
+      const marker = element4("span", "state mismatch");
       marker.dataset.stateMismatch = "close_state";
       marker.dataset.asserted = close.asserted;
       marker.dataset.recomputed = close.state;
       cell.append(" ", marker);
     } else if (close.derivation === "producer-asserted") {
-      const marker = element3("span", "producer-asserted");
+      const marker = element4("span", "producer-asserted");
       marker.dataset.producerAsserted = "close_state";
       cell.append(" ", marker);
     }
     if (close.peerRefMismatch) {
-      const marker = element3("span", "peer_close_ref carries no such link");
+      const marker = element4("span", "peer_close_ref carries no such link");
       marker.dataset.peerRefMismatch = "peer_close_ref";
       cell.append(" ", marker);
     }
@@ -9360,18 +10712,18 @@ var EvidenceGraph = (() => {
     return cell;
   }
   function renderClose(close, result, host) {
-    host.append(element3("h4", "Close"));
-    const details = element3("dl");
+    host.append(element4("h4", "Close"));
+    const details = element4("dl");
     if (close.period !== void 0)
       appendValue(
         details,
         "period",
         `${close.period.start} \u2192 ${close.period.end}`
       );
-    details.append(element3("dt", "state"));
+    details.append(element4("dt", "state"));
     appendCloseState(details, close, "dd");
-    details.append(element3("dt", "derivation"));
-    const derivation = element3(
+    details.append(element4("dt", "derivation"));
+    const derivation = element4(
       "dd",
       close.derivation === "recomputed" ? `recomputed from ${close.links.length} counterparty ${close.links.length === 1 ? "link" : "links"} to the cited Close in this bundle${close.ignored.length === 0 ? "" : ` (${close.ignored.length} other ${close.ignored.length === 1 ? "link" : "links"} ignored)`}` : "producer-asserted: the cited Close is not a record in this bundle, so its links could not be read"
     );
@@ -9380,8 +10732,8 @@ var EvidenceGraph = (() => {
     if (close.peer !== void 0) appendValue(details, "peer", close.peer);
     if (close.bookId !== void 0) appendValue(details, "book", close.bookId);
     if (close.keyId !== void 0) {
-      details.append(element3("dt", "signer"));
-      const signer = element3(
+      details.append(element4("dt", "signer"));
+      const signer = element4(
         "dd",
         close.keyVerified === true ? `${close.keyId} (verified)` : `${close.keyId} \xB7 ${UNVERIFIED_KEY_LABEL}`
       );
@@ -9389,17 +10741,17 @@ var EvidenceGraph = (() => {
       details.append(signer);
     }
     host.append(details);
-    host.append(element3("h5", "Cited Close"));
+    host.append(element4("h5", "Cited Close"));
     renderCitationList([close.closeRef], result.records, host);
     if (close.peerCloseRef !== void 0) {
-      host.append(element3("h5", "Peer record"));
+      host.append(element4("h5", "Peer record"));
       renderCitationList([close.peerCloseRef], result.records, host);
     }
     if (close.links.length > 0) {
-      host.append(element3("h5", "Links to the cited Close"));
-      const list = element3("ul");
+      host.append(element4("h5", "Links to the cited Close"));
+      const list = element4("ul");
       for (const link of close.links) {
-        const item = element3(
+        const item = element4(
           "li",
           `${link.type} \xB7 ${link.recordId} \xB7 signer ${link.keyId} (verified)`
         );
@@ -9410,10 +10762,10 @@ var EvidenceGraph = (() => {
       host.append(list);
     }
     if (close.ignored.length > 0) {
-      host.append(element3("h5", "Links ignored (not from the counterparty)"));
-      const list = element3("ul");
+      host.append(element4("h5", "Links ignored (not from the counterparty)"));
+      const list = element4("ul");
       for (const link of close.ignored) {
-        const item = element3(
+        const item = element4(
           "li",
           `${link.type} \xB7 ${link.recordId} \xB7 ${link.reason}`
         );
@@ -9426,7 +10778,7 @@ var EvidenceGraph = (() => {
   }
   function appendVerdict(parent2, claim) {
     const shown = claim.failed ? "failed" : claim.support === "supported" ? claim.verdict : "unsupported";
-    const cell = element3(parent2.tagName === "TR" ? "td" : "dd", shown);
+    const cell = element4(parent2.tagName === "TR" ? "td" : "dd", shown);
     cell.dataset.verdict = shown;
     cell.dataset.support = claim.support;
     if (claim.failed) {
@@ -9439,7 +10791,7 @@ var EvidenceGraph = (() => {
   }
   function appendSufficiency(parent2, claim) {
     const shown = claim.failed ? "failed" : claim.sufficiency;
-    const cell = element3(parent2.tagName === "TR" ? "td" : "dd", shown);
+    const cell = element4(parent2.tagName === "TR" ? "td" : "dd", shown);
     cell.dataset.sufficiency = shown;
     if (claim.failed) {
       cell.dataset.statedSufficiency = claim.sufficiency;
@@ -9450,24 +10802,24 @@ var EvidenceGraph = (() => {
   }
   function renderClaim(claim, result, host) {
     host.replaceChildren();
-    host.append(element3("h3", `Claim ${claim.id}`));
-    const details = element3("dl");
+    host.append(element4("h3", `Claim ${claim.id}`));
+    const details = element4("dl");
     appendValue(details, "contract", claim.contractRef);
     appendValue(details, "requirement", claim.requirementRef);
-    details.append(element3("dt", "type"));
-    const type = element3("dd", CLAIM_TYPE_LABEL(claim));
+    details.append(element4("dt", "type"));
+    const type = element4("dd", CLAIM_TYPE_LABEL(claim));
     type.dataset.claimType = claim.recognized ? claim.type : "unrecognized";
     if (!claim.recognized) type.className = "claim-unrecognized";
     details.append(type);
     appendValue(details, "tier", claim.tier);
     appendValue(details, "grade", claim.grade);
-    details.append(element3("dt", "sufficiency"));
+    details.append(element4("dt", "sufficiency"));
     appendSufficiency(details, claim);
-    details.append(element3("dt", "verdict"));
+    details.append(element4("dt", "verdict"));
     appendVerdict(details, claim);
     host.append(details);
     if (claim.failed) {
-      const note = element3(
+      const note = element4(
         "p",
         `failed: ${claim.failure ?? "verification failed"}; sufficiency and verdict withheld`
       );
@@ -9476,15 +10828,15 @@ var EvidenceGraph = (() => {
     }
     if (claim.close !== void 0) renderClose(claim.close, result, host);
     if (claim.support === "unsupported") {
-      const note = element3(
+      const note = element4(
         "p",
         claim.missing.length === 0 ? "unsupported: this claim cites no evidence" : `unsupported: cited evidence not in this bundle: ${claim.missing.join(", ")}`
       );
       note.dataset.claimMissing = String(claim.missing.length);
       host.append(note);
     }
-    host.append(element3("h4", "Presentation"));
-    const carrier = element3("dl");
+    host.append(element4("h4", "Presentation"));
+    const carrier = element4("dl");
     appendValue(carrier, "carrier", claim.presentation.kind);
     appendValue(carrier, "status", claim.presentation.status);
     if (claim.presentation.summary !== void 0)
@@ -9493,7 +10845,7 @@ var EvidenceGraph = (() => {
       appendValue(carrier, "narrative", claim.presentation.narrative);
     host.append(carrier);
     if (claim.presentation.evidence !== void 0) {
-      host.append(element3("h5", "Carrier evidence"));
+      host.append(element4("h5", "Carrier evidence"));
       const list = renderCitationList(
         claim.presentation.evidence,
         result.records,
@@ -9501,22 +10853,22 @@ var EvidenceGraph = (() => {
       );
       list.dataset.carrierEvidence = String(claim.presentation.evidence.length);
     }
-    host.append(element3("h4", "Proofs"));
+    host.append(element4("h4", "Proofs"));
     if (claim.proofs.length === 0) {
-      host.append(element3("p", "no proof cited"));
+      host.append(element4("p", "no proof cited"));
     } else {
-      const proofs = element3("ul");
+      const proofs = element4("ul");
       for (const proof of claim.proofs)
         proofs.append(
-          element3("li", `${proof.kind} \xB7 ${proof.digest} \xB7 not resolved here`)
+          element4("li", `${proof.kind} \xB7 ${proof.digest} \xB7 not resolved here`)
         );
       host.append(proofs);
     }
-    host.append(element3("h4", "Evidence"));
+    host.append(element4("h4", "Evidence"));
     for (const ref of claim.evidence) {
       const record = result.records.get(ref.digest);
       if (record === void 0) {
-        const missing = element3("p", `${ref.digest} \xB7 not in this bundle`);
+        const missing = element4("p", `${ref.digest} \xB7 not in this bundle`);
         missing.dataset.evidence = "missing";
         host.append(missing);
       } else {
@@ -9530,10 +10882,10 @@ var EvidenceGraph = (() => {
     ["notEvaluable", "not evaluable"]
   ];
   function renderResultPage(result, root) {
-    const section = element3("section");
+    const section = element4("section");
     section.dataset.page = "result";
-    section.append(element3("h1", "Evidence result"));
-    const coverage = element3("p");
+    section.append(element4("h1", "Evidence result"));
+    const coverage = element4("p");
     coverage.append(
       `coverage: ${result.coverage.evaluatedPopulation} requirements evaluated`
     );
@@ -9551,12 +10903,12 @@ var EvidenceGraph = (() => {
     coverage.dataset.unknown = String(result.coverage.unknownCount);
     section.append(coverage);
     const byId = new Map(result.claims.map((claim) => [claim.id, claim]));
-    const buckets = element3("section");
+    const buckets = element4("section");
     buckets.dataset.buckets = "verdict";
-    buckets.append(element3("h2", "Claims by verdict"));
+    buckets.append(element4("h2", "Claims by verdict"));
     for (const [key, label] of BUCKETS) {
       const count = result.bucketCounts[key];
-      const heading = element3("h3", `${label}: ${count === 0 ? "none" : count}`);
+      const heading = element4("h3", `${label}: ${count === 0 ? "none" : count}`);
       heading.dataset.bucketCount = String(count);
       heading.dataset.bucketOf = key;
       const marker = countMismatchMarker(
@@ -9567,14 +10919,14 @@ var EvidenceGraph = (() => {
       buckets.append(heading);
       const ids = result.buckets[key];
       if (ids.length === 0) {
-        buckets.append(element3("p", "none"));
+        buckets.append(element4("p", "none"));
         continue;
       }
-      const list = element3("ul");
+      const list = element4("ul");
       list.dataset.bucket = key;
       for (const id of ids) {
         const claim = byId.get(id);
-        const item = element3(
+        const item = element4(
           "li",
           claim?.failed ? `${id} \xB7 failed` : claim?.support === "unsupported" ? `${id} \xB7 unsupported` : id
         );
@@ -9586,7 +10938,7 @@ var EvidenceGraph = (() => {
       }
       buckets.append(list);
     }
-    const failedHeading = element3(
+    const failedHeading = element4(
       "h3",
       `failed: ${result.bucketCounts.failed === 0 ? "none" : result.bucketCounts.failed}`
     );
@@ -9594,12 +10946,12 @@ var EvidenceGraph = (() => {
     failedHeading.dataset.bucketOf = "failed";
     buckets.append(failedHeading);
     const failedIds = result.claims.filter((claim) => claim.failed).map((claim) => claim.id);
-    if (failedIds.length === 0) buckets.append(element3("p", "none"));
+    if (failedIds.length === 0) buckets.append(element4("p", "none"));
     else {
-      const list = element3("ul");
+      const list = element4("ul");
       list.dataset.bucket = "failed";
       for (const id of failedIds) {
-        const item = element3("li", id);
+        const item = element4("li", id);
         item.dataset.claimRef = id;
         item.className = "claim-failed";
         list.append(item);
@@ -9607,9 +10959,9 @@ var EvidenceGraph = (() => {
       buckets.append(list);
     }
     section.append(buckets);
-    const table = document.createElement("table");
-    table.dataset.claims = "rows";
-    const detail = element3("section");
+    const table2 = document.createElement("table");
+    table2.dataset.claims = "rows";
+    const detail = element4("section");
     for (const claim of result.claims) {
       const tr = document.createElement("tr");
       tr.dataset.claimRow = claim.id;
@@ -9620,19 +10972,19 @@ var EvidenceGraph = (() => {
         tr.dataset.failed = claim.failedOn ?? "close_state";
       }
       const idCell = document.createElement("td");
-      const button = element3("button", claim.id);
+      const button = element4("button", claim.id);
       button.setAttribute("type", "button");
       button.dataset.claimId = claim.id;
       button.addEventListener("click", () => renderClaim(claim, result, detail));
       idCell.append(button);
-      tr.append(idCell, element3("td", claim.requirementRef));
+      tr.append(idCell, element4("td", claim.requirementRef));
       appendSufficiency(tr, claim);
       appendVerdict(tr, claim);
-      const tier = element3("td", claim.tier);
+      const tier = element4("td", claim.tier);
       tier.dataset.tier = claim.tier;
-      const grade = element3("td", claim.grade);
+      const grade = element4("td", claim.grade);
       grade.dataset.grade = claim.grade;
-      const type = element3("td", CLAIM_TYPE_LABEL(claim));
+      const type = element4("td", CLAIM_TYPE_LABEL(claim));
       type.dataset.claimType = claim.recognized ? claim.type : "unrecognized";
       if (!claim.recognized) type.className = "claim-unrecognized";
       if (claim.close !== void 0) {
@@ -9640,28 +10992,28 @@ var EvidenceGraph = (() => {
         appendCloseState(type, claim.close, "span");
       }
       tr.append(tier, grade, type);
-      table.append(tr);
+      table2.append(tr);
     }
     section.append(
-      table,
+      table2,
       detail,
       renderProvenance(result.capsuleId, result.logCoordinates, result)
     );
     root.append(section);
   }
   function renderGraph(graph2, root, records) {
-    const aggregate = element3("section");
-    aggregate.append(element3("h1", "Evidence graph"));
-    const metrics = element3("dl");
+    const aggregate = element4("section");
+    aggregate.append(element4("h1", "Evidence graph"));
+    const metrics = element4("dl");
     appendValue(metrics, "per-axis", graph2.aggregate.perAxis);
     appendValue(metrics, "counts", graph2.aggregate.counts);
     aggregate.append(metrics);
     root.append(aggregate, renderCalibration(graph2.calibration));
-    const calendar = element3("section");
-    calendar.append(element3("h2", "Daily reports"));
-    const detail = element3("section");
+    const calendar = element4("section");
+    calendar.append(element4("h2", "Daily reports"));
+    const detail = element4("section");
     [...graph2.reports].sort((left, right) => left.date.localeCompare(right.date)).forEach((report) => {
-      const tile = element3("button");
+      const tile = element4("button");
       tile.append(renderTime(report.date), `: ${metRate(report)}`);
       tile.setAttribute("type", "button");
       tile.dataset.reportDate = report.date;
@@ -9673,62 +11025,494 @@ var EvidenceGraph = (() => {
     });
     root.append(calendar, detail);
   }
-  async function renderEvidenceGraph(input, root, countersigners) {
+  function memo(build) {
+    const cache = /* @__PURE__ */ new WeakMap();
+    return (context) => {
+      let value = cache.get(context);
+      if (value === void 0) {
+        value = build(context);
+        cache.set(context, value);
+      }
+      return value;
+    };
+  }
+  var reportRowsOf = memo(buildReportRows);
+  var resultRootOf = memo(
+    async (context) => await isResultRoot(context) ? buildResultRoot(context) : void 0
+  );
+  var evidenceGraphOf = memo(async (context) => {
+    try {
+      return await buildEvidenceGraph(context);
+    } catch (err) {
+      if (!(err instanceof EvidenceGraphError)) throw err;
+      return void 0;
+    }
+  });
+  function defined(value, id) {
+    if (value === void 0)
+      throw new Error(`${id}: buildModel called although canRender was false`);
+    return value;
+  }
+  var reportRowsModule = {
+    manifest: BUILTIN_MANIFEST_REPORT_ROWS,
+    canRender: async (context) => await reportRowsOf(context) !== void 0,
+    buildModel: async (context) => defined(await reportRowsOf(context), BUILTIN_MANIFEST_REPORT_ROWS.id),
+    render: (model, host) => renderReportRowsTable(model, host.L1)
+  };
+  var resultOutcomeReportModule = {
+    manifest: BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT,
+    canRender: async (context) => readOutcomeReportPresentation(context.bundle) !== void 0 && await isResultRoot(context),
+    buildModel: async (context) => ({
+      result: defined(
+        await resultRootOf(context),
+        BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT.id
+      ),
+      card: defined(
+        readOutcomeReportPresentation(context.bundle),
+        BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT.id
+      ),
+      bundle: context.bundle,
+      verification: context.verification
+    }),
+    render: async (model, host) => {
+      host.setChromeClass("oi");
+      await renderOutcomeReportPage(
+        model.result,
+        model.card,
+        model.bundle,
+        model.verification,
+        host.L1
+      );
+    }
+  };
+  var resultComplianceModule = {
+    manifest: BUILTIN_MANIFEST_RESULT_COMPLIANCE,
+    canRender: async (context) => readCompliancePresentation(context.bundle) !== void 0 && await isResultRoot(context),
+    buildModel: async (context) => ({
+      result: defined(
+        await resultRootOf(context),
+        BUILTIN_MANIFEST_RESULT_COMPLIANCE.id
+      ),
+      card: defined(
+        readCompliancePresentation(context.bundle),
+        BUILTIN_MANIFEST_RESULT_COMPLIANCE.id
+      ),
+      bundle: context.bundle,
+      verification: context.verification
+    }),
+    render: (model, host) => renderCompliancePage(
+      model.result,
+      model.card,
+      model.bundle,
+      model.verification,
+      host.L1
+    )
+  };
+  var resultModule = {
+    manifest: BUILTIN_MANIFEST_RESULT,
+    canRender: (context) => isResultRoot(context),
+    buildModel: async (context) => defined(await resultRootOf(context), BUILTIN_MANIFEST_RESULT.id),
+    render: (model, host) => renderResultPage(model, host.L1)
+  };
+  var evaluationSummaryGraphModule = {
+    manifest: BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH,
+    canRender: async (context) => await evidenceGraphOf(context) !== void 0,
+    buildModel: async (context) => {
+      const records = object10(context.bundle).records;
+      return {
+        graph: defined(
+          await evidenceGraphOf(context),
+          BUILTIN_MANIFEST_EVALUATION_SUMMARY_GRAPH.id
+        ),
+        records: Array.isArray(records) ? records : []
+      };
+    },
+    render: (model, host) => renderGraph(model.graph, host.L1, model.records)
+  };
+  var noAggregateModule = {
+    manifest: BUILTIN_MANIFEST_NO_AGGREGATE,
+    canRender: () => true,
+    buildModel: () => null,
+    render: (_model, host) => {
+      const note = document.createElement("p");
+      note.setAttribute("data-notice", "no-aggregate");
+      note.textContent = "This bundle carries no evaluation summary, so there is no aggregate view. The records and their verification are below.";
+      host.L1.append(note);
+    }
+  };
+  var BUILTIN_MODULE_INTERPRETERS = Object.freeze({
+    [BUILTIN_MANIFEST_RESULT_OUTCOME_REPORT.id]: [
+      "result-root",
+      "outcome-report-card"
+    ],
+    [BUILTIN_MANIFEST_RESULT_COMPLIANCE.id]: ["result-root", "compliance-card"],
+    [BUILTIN_MANIFEST_RESULT.id]: ["result-root"],
+    [BUILTIN_MANIFEST_COMPOSED.id]: ["aac.builtin.composed/v0"]
+  });
+  var BUILTIN_PRESENTATIONS = Object.freeze([
+    reportRowsModule,
+    resultOutcomeReportModule,
+    resultComplianceModule,
+    resultModule,
+    evaluationSummaryGraphModule,
+    noAggregateModule
+  ]);
+  function createPresentationRegistry() {
+    const registry = new PresentationRegistry();
+    for (const module of BUILTIN_PRESENTATIONS) registry.register(module);
+    return registry;
+  }
+  var defaultRegistry = createPresentationRegistry();
+  var BUILTIN_SECTIONS = Object.freeze([
+    composedSectionModule
+  ]);
+  function createSectionRegistry(runtime) {
+    const registry = new PresentationRegistry(runtime);
+    for (const module of BUILTIN_SECTIONS) registry.register(module);
+    return registry;
+  }
+  var defaultSections = createSectionRegistry();
+  function registerPresentation(module) {
+    return defaultRegistry.register(module);
+  }
+  function resolvePresentation(context, audience = DEFAULT_AUDIENCE, format = DEFAULT_FORMAT) {
+    return defaultRegistry.resolve(context, audience, format);
+  }
+  var DEFAULT_AUDIENCE = "*";
+  var DEFAULT_FORMAT = "html";
+  var OUTCOME_CHROME = "oi";
+  function presentationServices(context) {
+    return Object.freeze({
+      details(summary, open = false) {
+        const details = document.createElement("details");
+        if (open) details.open = true;
+        details.append(element4("summary", summary));
+        return details;
+      },
+      badge(state) {
+        const badge = element4("span", state);
+        badge.dataset.badge = state;
+        return badge;
+      },
+      disclosure(capsuleId, member) {
+        return disclosureOf(context, capsuleId, member).state;
+      }
+    });
+  }
+  var PRESENTATION_REFUSALS = {
+    "presentation-unresolved": "The presentation for this bundle could not be resolved. No presentation content is shown; the verification page below lists the checks.",
+    "presentation-failed": "The presentation for this bundle failed. No presentation content is shown; the verification page below lists the checks."
+  };
+  async function renderEvidenceGraph(input, root, countersigners, options = {}) {
     const context = isVerifiedBundleContext(input) ? countersigners === void 0 ? input : withCountersigners(input, countersigners) : await buildVerifiedBundleContext(input, {
       ...countersigners === void 0 ? {} : { countersigners }
     });
     const { bundle, verification } = context;
     const verified = bundleVerified(verification);
-    const reportRows = verified ? await buildReportRows(context) : void 0;
-    const result = verified && reportRows === void 0 && await isResultRoot(context) ? await buildResultRoot(context) : void 0;
-    let graph2;
-    let noAggregate = false;
-    if (verified && reportRows === void 0 && result === void 0) {
+    const registry = options.registry ?? defaultRegistry;
+    let refusal;
+    let selected;
+    let resolution;
+    try {
+      resolution = await registry.resolve(
+        context,
+        options.audience ?? DEFAULT_AUDIENCE,
+        options.format ?? DEFAULT_FORMAT
+      );
+    } catch (err) {
+      if (!(err instanceof PresentationAmbiguityError)) throw err;
+      resolution = { kind: "no-presentation", refused: [] };
+      refusal = "presentation-unresolved";
+    }
+    const refused = resolution.kind === "refusal" ? [] : [...resolution.refused];
+    if (resolution.kind === "refusal" && verified)
+      throw new Error("resolver refused a bundle that verified");
+    if (resolution.kind === "module" && !verified)
+      throw new Error("resolver selected a module for an unverified bundle");
+    if (resolution.kind === "module")
+      selected = {
+        module: resolution.module,
+        model: await resolution.module.buildModel(context)
+      };
+    let section;
+    if (verified && refusal === void 0) {
+      let sectionResolution;
       try {
-        graph2 = await buildEvidenceGraph(context);
+        sectionResolution = await (options.sections ?? defaultSections).resolve(
+          context,
+          options.audience ?? DEFAULT_AUDIENCE,
+          options.format ?? DEFAULT_FORMAT
+        );
       } catch (err) {
-        if (!(err instanceof EvidenceGraphError)) throw err;
-        noAggregate = true;
+        if (!(err instanceof PresentationAmbiguityError)) throw err;
+        sectionResolution = { kind: "no-presentation", refused: [] };
+        selected = void 0;
+        refusal = "presentation-unresolved";
+      }
+      if (sectionResolution.kind !== "refusal")
+        refused.push(...sectionResolution.refused);
+      if (sectionResolution.kind === "module")
+        section = {
+          module: sectionResolution.module,
+          model: await sectionResolution.module.buildModel(context)
+        };
+    }
+    const records = object10(bundle).records;
+    const coverage = {
+      uncheckpointed: unboundRecordIds(verification).length,
+      total: Array.isArray(records) ? records.length : 0
+    };
+    const drawFrame = () => {
+      root.replaceChildren();
+      renderPresentationHeader(root, bundle);
+      return renderVerificationBanner(root, verified, coverage);
+    };
+    let banner = drawFrame();
+    if (refused.length > 0)
+      root.dataset.presentationRefused = refused.map((r) => r.id).join(" ");
+    else delete root.dataset.presentationRefused;
+    let chrome;
+    if (selected !== void 0) {
+      const host = {
+        L0: root,
+        L1: root,
+        L2: root,
+        depth: options.depth ?? "L2",
+        setChromeClass(name) {
+          if (name !== OUTCOME_CHROME)
+            throw new Error(`unknown chrome class ${JSON.stringify(name)}`);
+          chrome = name;
+          styleBanner(banner, verified);
+        }
+      };
+      try {
+        await selected.module.render(
+          selected.model,
+          host,
+          presentationServices(context)
+        );
+      } catch {
+        chrome = void 0;
+        banner = drawFrame();
+        refusal = "presentation-failed";
       }
     }
-    const records = object8(bundle).records;
-    const outcomeReport = result !== void 0 ? readOutcomeReportPresentation(bundle) : void 0;
-    const styled = result !== void 0 && outcomeReport !== void 0;
-    root.replaceChildren();
-    renderPresentationHeader(root, bundle);
-    renderVerificationBanner(
-      root,
-      verified,
-      {
-        uncheckpointed: unboundRecordIds(verification).length,
-        total: Array.isArray(records) ? records.length : 0
-      },
-      styled
-    );
-    const compliance = result !== void 0 && outcomeReport === void 0 ? readCompliancePresentation(bundle) : void 0;
-    if (reportRows !== void 0) {
-      renderReportRowsTable(reportRows, root);
-    } else if (result !== void 0 && outcomeReport !== void 0) {
-      await renderOutcomeReportPage(
-        result,
-        outcomeReport,
-        bundle,
-        verification,
-        root
+    if (refusal === void 0 && resolution.kind === "no-presentation") {
+      const note = element4(
+        "p",
+        "No presentation is available for this bundle, audience and format. The records and their verification are below."
       );
-    } else if (result !== void 0 && compliance !== void 0) {
-      renderCompliancePage(result, compliance, bundle, verification, root);
-    } else if (result !== void 0) {
-      renderResultPage(result, root);
-    } else if (graph2 !== void 0) {
-      renderGraph(graph2, root, Array.isArray(records) ? records : []);
-    } else if (noAggregate) {
-      const note = document.createElement("p");
-      note.setAttribute("data-notice", "no-aggregate");
-      note.textContent = "This bundle carries no evaluation summary, so there is no aggregate view. The records and their verification are below.";
+      note.dataset.notice = "no-presentation";
       root.append(note);
     }
-    await renderVerificationPage(root, context, styled);
+    if (section !== void 0 && refusal === void 0) {
+      try {
+        await section.module.render(
+          section.model,
+          {
+            L0: root,
+            L1: root,
+            L2: root,
+            depth: "L2",
+            setChromeClass() {
+              throw new Error("a section has no chrome");
+            }
+          },
+          presentationServices(context)
+        );
+      } catch {
+        chrome = void 0;
+        banner = drawFrame();
+        refusal = "presentation-failed";
+      }
+    }
+    if (refusal !== void 0) {
+      const note = element4("p", PRESENTATION_REFUSALS[refusal]);
+      note.dataset.refusal = refusal;
+      root.append(note);
+    }
+    const applied = /* @__PURE__ */ new Set([
+      "presentation-header",
+      "countersignature-stamp"
+    ]);
+    if (refusal === void 0) {
+      for (const ran of [selected, section])
+        if (ran !== void 0)
+          for (const id of BUILTIN_MODULE_INTERPRETERS[ran.module.manifest.id] ?? [])
+            applied.add(id);
+    }
+    await renderVerificationPage(
+      root,
+      context,
+      chrome === OUTCOME_CHROME,
+      applied,
+      refused
+    );
+  }
+
+  // src/presentation-fragment.ts
+  var PRESENTATION_FRAGMENT_VERSION = "aac.presentation-fragment/v0";
+  var FRAGMENT_URL_MAX_LENGTH = 1048576;
+  var FRAGMENT_ADDRESS_ALLOWANCE = 2048;
+  var FRAGMENT_TOKEN_MAX_LENGTH = FRAGMENT_URL_MAX_LENGTH - FRAGMENT_ADDRESS_ALLOWANCE;
+  var FRAGMENT_TOKEN_DEFAULT_BUDGET = 65536;
+  var FragmentTooLargeError = class extends Error {
+    length;
+    maxLength;
+    /** What was too long: `"fragment token"` or `"permalink URL"`. */
+    subject;
+    constructor(length, maxLength, what = "fragment token") {
+      super(
+        `${what} is ${length} characters, over the ${maxLength}-character maximum; it is refused, never truncated. Share the offline .html instead.`
+      );
+      this.name = "FragmentTooLargeError";
+      this.length = length;
+      this.maxLength = maxLength;
+      this.subject = what;
+    }
+  };
+  var FragmentDecodeError = class extends Error {
+    constructor(message) {
+      super(message);
+      this.name = "FragmentDecodeError";
+    }
+  };
+  function encodeFragmentToken(value) {
+    return encodeFragment(value);
+  }
+  function decodeFragmentToken(token, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
+    const body = token.replace(/^#+/u, "");
+    if (body.length > maxLength)
+      throw new FragmentTooLargeError(body.length, maxLength);
+    try {
+      return decodeFragment(body);
+    } catch (err) {
+      throw new FragmentDecodeError(
+        err instanceof Error && err.message === "fragment base64url" ? "fragment token has a character outside the base64url alphabet" : "fragment token is not UTF-8 JSON"
+      );
+    }
+  }
+  var PRESENTATION_DEPTHS = [
+    "L0",
+    "L1",
+    "L2"
+  ];
+  var FRAGMENT_MEMBERS = /* @__PURE__ */ new Set([
+    "fragment_version",
+    "audience",
+    "presentation",
+    "depth",
+    "title",
+    "theme_css",
+    "wording",
+    "core_runtime_sha256",
+    "module_sha256",
+    "bundle"
+  ]);
+  var isObject2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  function checkPresentationFragment(value) {
+    const fail2 = (why) => {
+      throw new FragmentDecodeError(`presentation fragment: ${why}`);
+    };
+    if (!isObject2(value)) fail2("not a JSON object");
+    const v = value;
+    for (const key of Object.keys(v))
+      if (!FRAGMENT_MEMBERS.has(key))
+        fail2(`unknown member ${JSON.stringify(key)}`);
+    if (v.fragment_version !== PRESENTATION_FRAGMENT_VERSION)
+      fail2(`fragment_version is not ${PRESENTATION_FRAGMENT_VERSION}`);
+    if (typeof v.audience !== "string" || v.audience === "")
+      fail2("audience is not a non-empty string");
+    if (typeof v.presentation !== "string" || v.presentation === "")
+      fail2("presentation is not a non-empty string");
+    if (v.depth !== void 0 && !PRESENTATION_DEPTHS.includes(v.depth))
+      fail2("depth is not L0, L1 or L2");
+    if (v.title !== void 0 && typeof v.title !== "string")
+      fail2("title is not a string");
+    if (v.theme_css !== void 0 && typeof v.theme_css !== "string")
+      fail2("theme_css is not a string");
+    if (v.wording !== void 0) {
+      const w = v.wording;
+      if (!isObject2(w) || Object.keys(w).some((k) => k !== "pack" && k !== "sha256") || typeof w.pack !== "string" || !isHex64(w.sha256))
+        fail2("wording is not {pack, sha256}");
+    }
+    if (!isHex64(v.core_runtime_sha256))
+      fail2("core_runtime_sha256 is not a lowercase hex SHA-256");
+    if (!Array.isArray(v.module_sha256) || !v.module_sha256.every((pin) => isHex64(pin)))
+      fail2("module_sha256 is not a list of lowercase hex SHA-256 pins");
+    if (!("bundle" in v)) fail2("bundle is missing");
+  }
+  function encodePresentationFragment(payload, options = {}) {
+    checkPresentationFragment(payload);
+    const maxLength = options.maxLength ?? FRAGMENT_TOKEN_MAX_LENGTH;
+    if (!Number.isInteger(maxLength) || maxLength < 1 || maxLength > FRAGMENT_TOKEN_MAX_LENGTH)
+      throw new RangeError(
+        `maxLength must be an integer from 1 to ${FRAGMENT_TOKEN_MAX_LENGTH}`
+      );
+    const fragment = encodeFragmentToken(payload);
+    if (fragment.length > maxLength)
+      throw new FragmentTooLargeError(fragment.length, maxLength);
+    if (options.viewerUrl === void 0) return { fragment };
+    if (options.viewerUrl.includes("#"))
+      throw new Error("viewerUrl must not already carry a fragment");
+    const url = `${options.viewerUrl}#${fragment}`;
+    if (url.length > FRAGMENT_URL_MAX_LENGTH)
+      throw new FragmentTooLargeError(
+        url.length,
+        FRAGMENT_URL_MAX_LENGTH,
+        "permalink URL"
+      );
+    return { fragment, url };
+  }
+  function decodePresentationFragment(token, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
+    const value = decodeFragmentToken(token, maxLength);
+    checkPresentationFragment(value);
+    return value;
+  }
+  function scopeDisclosures(bundle, scope) {
+    if (!isObject2(bundle)) return bundle;
+    const supplied = bundle.disclosures;
+    if (!isObject2(supplied)) return { ...bundle };
+    const kept = {};
+    for (const [id, members] of Object.entries(supplied)) {
+      const allowed = Object.hasOwn(scope, id) ? scope[id] : [];
+      if (!isObject2(members) || allowed.length === 0) continue;
+      const entry = {};
+      for (const [member, value] of Object.entries(members))
+        if (allowed.includes(member)) entry[member] = value;
+      if (Object.keys(entry).length > 0) kept[id] = entry;
+    }
+    return { ...bundle, disclosures: kept };
+  }
+
+  // src/presentation-mount.ts
+  function mountPresentation(element5, input) {
+    return renderEvidenceGraph(input.bundle, element5, void 0, {
+      audience: input.audience,
+      format: input.format,
+      ...input.depth === void 0 ? {} : { depth: input.depth },
+      ...input.wording === void 0 ? {} : { wording: input.wording },
+      ...input.registry === void 0 ? {} : { registry: input.registry }
+    });
+  }
+  async function mountPresentationFragment(hash2, element5, maxLength = FRAGMENT_TOKEN_MAX_LENGTH) {
+    let payload;
+    try {
+      payload = decodePresentationFragment(hash2, maxLength);
+    } catch (err) {
+      const note = document.createElement("p");
+      note.dataset.refusal = "fragment-unreadable";
+      note.textContent = `This link's fragment could not be read, so nothing is shown. ${err instanceof Error ? err.message : ""}`.trim();
+      element5.replaceChildren(note);
+      return;
+    }
+    await mountPresentation(element5, {
+      bundle: payload.bundle,
+      audience: payload.audience,
+      format: "fragment",
+      ...payload.depth === void 0 ? {} : { depth: payload.depth },
+      ...payload.wording === void 0 ? {} : { wording: payload.wording }
+    });
   }
   return __toCommonJS(browser_exports2);
 })();
