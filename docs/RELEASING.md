@@ -61,18 +61,38 @@ C. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tag
 
 **Steps marked "maintainer decision" are taken only on the maintainer's go.** Every release is.
 
-1. **Tag** (maintainer decision). Tag the merge commit on a fresh `main`: fetch first, then
-   fast-forward. Make an annotated tag, and echo the commit you tag in the same shell:
+1. **Tag** (maintainer decision). From `v0.1.0-rc15` on, every tag is **signed** with the
+   maintainer's SSH signing key. Its public key is in the release monitor's allowed-signers file
+   (RELEASE-TRANSPARENCY.md, section 5). That key never touches CI.
+   - **Prepare** (whoever cuts the release): on a fresh `main`, fetch, fast-forward, and record the
+     merge commit to tag. Hand the maintainer that commit and the tag name.
 
-   ```sh
-   git fetch origin && git checkout main && git pull --ff-only
-   git rev-parse HEAD      # the commit being tagged: record it
-   git tag -a v0.1.0-rcNN -m "capsulectl v0.1.0-rcNN"
-   git push origin v0.1.0-rcNN
-   ```
+     ```sh
+     git fetch origin && git checkout main && git pull --ff-only
+     git rev-parse HEAD      # the merge commit to tag: record it
+     ```
+   - **Sign and push** (the maintainer, one line, with the recorded commit). The `-c` settings make
+     the signature SSH, whatever the machine signs commits with; the monitor accepts only an SSH
+     signature by an allowed key.
 
-   Once tag signing has started, sign it (`git tag -s`). Until then, add the tag to the release
-   monitor's list of tags made before signing (RELEASE-TRANSPARENCY.md, section 5).
+     ```sh
+     git -c gpg.format=ssh -c user.signingkey="$HOME/.ssh/RELEASE_KEY.pub" tag -s v0.1.0-rcNN <merge-commit> -m "capsulectl v0.1.0-rcNN" && git push origin v0.1.0-rcNN
+     ```
+   - **Check** that the tag verifies before release CI's result is relied on:
+
+     ```sh
+     git -c gpg.ssh.allowedSignersFile="$HOME/release-monitor/allowed_signers" tag -v v0.1.0-rcNN
+     ```
+
+   **An unsigned tag is never added to the monitor's list of tags made before signing.** That list
+   is frozen at `v0.1.0-rc14` (`release/known-unsigned.txt` is its reference copy; see
+   RELEASE-TRANSPARENCY.md, section 5). A tag pushed unsigned by mistake raises the monitor's
+   alarm, as it should. Do not move or delete it; cut the next rc, signed.
+
+   The monitor's operator copies `release/known-unsigned.txt` **once**, from the signed
+   `v0.1.0-rc15` tag, into the monitor's own directory, and checks its SHA-256 against the value
+   in RELEASE-TRANSPARENCY.md, section 5. They never point the monitor at the repository's file
+   and never re-sync it. A later edit of the repository's file is itself a red flag.
 2. **Release CI is green.** It builds, checks the version each binary reports, attests the
    binaries, registers the release statement in the transparency log, and publishes the
    pre-release.

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Release tags are signed from v0.1.0-rc15
+
+- **Changed (release procedure).** From `v0.1.0-rc15` on, every release tag is SSH-signed by the
+  maintainer's key, whose public key is in the release monitor's allowed-signers file. The tag
+  step in `docs/RELEASING.md` is now two parts: prepare (record the merge commit) and one line
+  for the maintainer that signs and pushes the tag, with SSH pinned for the signature.
+- **Added: `release/known-unsigned.txt`**, a reference copy of the tags made before signing
+  began, exactly `v0.1.0-rc1` to `v0.1.0-rc14`, frozen. The monitor's operator copies it once
+  from the signed `v0.1.0-rc15` tag and checks its SHA-256 against the value in
+  `docs/RELEASE-TRANSPARENCY.md`, section 5. The monitor never reads the repository's file, and
+  a later edit of it is itself a red flag. An unsigned tag made after signing began is an
+  alarm, whatever its name.
+
 ### New deal records seal action taxonomy version 6
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
