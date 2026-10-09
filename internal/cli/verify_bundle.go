@@ -235,6 +235,10 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	// withheld; any other result (a mismatch, a member that cannot be
 	// disclosed, one with no sealed digest, or an unknown status) means the
 	// bundle carries content its records do not vouch for.
+	//
+	// They are listed by capsule id, then member, then status. The
+	// verifier lists a record's withheld members in map order, so without
+	// this the same bundle could print differently on each run.
 	disclosures := make([]map[string]string, 0, len(result.Disclosures))
 	disclosuresOK := true
 	for _, d := range result.Disclosures {
@@ -243,6 +247,16 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 			disclosuresOK = false
 		}
 	}
+	sort.SliceStable(disclosures, func(i, j int) bool {
+		a, b := disclosures[i], disclosures[j]
+		if a["capsule_id"] != b["capsule_id"] {
+			return a["capsule_id"] < b["capsule_id"]
+		}
+		if a["member"] != b["member"] {
+			return a["member"] < b["member"]
+		}
+		return a["status"] < b["status"]
+	})
 	countersignatures := make([]string, 0, len(result.Countersignatures))
 	for _, s := range result.Countersignatures {
 		countersignatures = append(countersignatures, s.Status)
