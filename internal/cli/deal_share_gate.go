@@ -373,6 +373,7 @@ func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 		}
 		if e.Evidence != nil {
 			whoValues(e.Evidence.Who)
+			ids = append(ids, e.Evidence.SettlementAccounts...)
 			texts = append(texts, e.Evidence.About, e.Evidence.Detail)
 			if m := e.Evidence.Email; m != nil {
 				// The merchant's email: its order id, the addresses in its

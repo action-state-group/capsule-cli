@@ -46,3 +46,5 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.58.0 // indirect
 )
+
+replace github.com/action-state-group/capsule-emit-go => github.com/action-state-group/capsule-emit/go v0.0.0-20261009182422-f183b1557ab0
