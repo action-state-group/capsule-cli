@@ -1,0 +1,251 @@
+{
+  "draft": "draft-mih-agent-settlement-records-00",
+  "provenance": "spec-derived",
+  "settlement_version": "0",
+  "legs": [
+    "terms",
+    "payer_observed",
+    "payee_observed",
+    "delivered"
+  ],
+  "sealer_roles": [
+    "payer",
+    "payee"
+  ],
+  "statuses": [
+    "pending",
+    "settled",
+    "failed",
+    "reversed"
+  ],
+  "delivery_directions": {
+    "sent": "payee",
+    "received": "payer"
+  },
+  "payment_states": [
+    "terms_only",
+    "payer_stated",
+    "payee_stated",
+    "agreed",
+    "mismatch",
+    "unjoined"
+  ],
+  "delivery_states": [
+    "none",
+    "stated",
+    "matched",
+    "mismatch"
+  ],
+  "failure_codes": [
+    "settlement_malformed",
+    "amount_not_exact",
+    "terms_ref_unresolved",
+    "leg_role_mismatch",
+    "sealer_not_authorized_for_role",
+    "sealer_conflation",
+    "wrapped_digest_mismatch",
+    "wrapped_resigned"
+  ],
+  "informational_codes": [
+    "payment_ref_type_unknown",
+    "fee_unstated",
+    "fee_asset_differs"
+  ],
+  "base_profile_codes": [
+    "capsule_invalid",
+    "envelope_invalid"
+  ],
+  "payment_ref_types": {
+    "x402.transaction": {
+      "qualifiers": [
+        "network"
+      ],
+      "receive_fee": "not_applicable",
+      "receive_fee_scope": "not_applicable for the x402 'exact' scheme only, established from a wrapped x402.offer or x402.payment-payload whose octets the verifier holds; may_apply for any other scheme or when the scheme cannot be established"
+    },
+    "ln.payment_hash": {
+      "qualifiers": [],
+      "receive_fee": "may_apply"
+    },
+    "bolt12.invoice_payment_hash": {
+      "qualifiers": [],
+      "receive_fee": "may_apply"
+    },
+    "ap2.transaction_id": {
+      "qualifiers": [],
+      "receive_fee": "may_apply"
+    },
+    "ap2.payment_id": {
+      "qualifiers": [],
+      "receive_fee": "may_apply"
+    },
+    "ap2.network_confirmation_id": {
+      "qualifiers": [],
+      "receive_fee": "may_apply"
+    },
+    "acp.order_id": {
+      "qualifiers": [],
+      "receive_fee": "may_apply"
+    },
+    "ucp.order_id": {
+      "qualifiers": [],
+      "receive_fee": "may_apply"
+    },
+    "mpp.reference": {
+      "qualifiers": [
+        "method"
+      ],
+      "receive_fee": "may_apply"
+    },
+    "iso20022.uetr": {
+      "qualifiers": [],
+      "receive_fee": "may_apply"
+    },
+    "iso20022.end_to_end_id": {
+      "qualifiers": [
+        "debtor_agent"
+      ],
+      "receive_fee": "may_apply"
+    },
+    "open_payments.incoming_payment": {
+      "qualifiers": [],
+      "receive_fee": "may_apply"
+    }
+  },
+  "wrapped_types": {
+    "x402.offer": "payee",
+    "x402.receipt": "payee",
+    "x402.payment-payload": "payer",
+    "x402.settle-response": "other",
+    "ap2.checkout-mandate": "payer",
+    "ap2.payment-mandate": "payer",
+    "ap2.checkout-receipt": "other",
+    "ap2.payment-receipt": "other",
+    "bolt12.invoice": "payee",
+    "bolt12.payer-proof": "payer",
+    "mpp.payment-receipt": "payee",
+    "iso20022.message": "other",
+    "delivery.proof": "other"
+  },
+  "settlement_members": {
+    "terms": {
+      "required": [
+        "version",
+        "leg",
+        "sealer_role",
+        "amount"
+      ],
+      "optional": [
+        "payment_ref",
+        "deliverable",
+        "valid_until",
+        "wrapped"
+      ]
+    },
+    "payer_observed": {
+      "required": [
+        "version",
+        "leg",
+        "sealer_role",
+        "terms_ref",
+        "amount",
+        "payment_ref",
+        "status",
+        "observed_at"
+      ],
+      "optional": [
+        "routing_fee",
+        "wrapped"
+      ]
+    },
+    "payee_observed": {
+      "required": [
+        "version",
+        "leg",
+        "sealer_role",
+        "terms_ref",
+        "received",
+        "payment_ref",
+        "status",
+        "observed_at"
+      ],
+      "optional": [
+        "receive_fee",
+        "wrapped"
+      ]
+    },
+    "delivered": {
+      "required": [
+        "version",
+        "leg",
+        "sealer_role",
+        "terms_ref",
+        "observed_at",
+        "delivery"
+      ],
+      "optional": [
+        "wrapped"
+      ]
+    }
+  },
+  "iso20022_status_map": {
+    "pending": {
+      "payer_pacs002": [
+        "ACTC",
+        "ACCP",
+        "ACSP",
+        "PDNG"
+      ],
+      "payee_pacs002": [
+        "ACSP",
+        "PDNG"
+      ],
+      "payee_camt054": [
+        "PDNG"
+      ]
+    },
+    "settled": {
+      "payer_pacs002": [
+        "ACSC"
+      ],
+      "payee_pacs002": [
+        "ACCC"
+      ],
+      "payee_camt054": [
+        "BOOK"
+      ]
+    },
+    "failed": {
+      "payer_pacs002": [
+        "RJCT"
+      ],
+      "payee_pacs002": [
+        "RJCT"
+      ],
+      "payee_camt054": []
+    },
+    "reversed": {
+      "payer_pacs002": [],
+      "payee_pacs002": [],
+      "payee_camt054": [
+        "BOOK+reversal"
+      ]
+    }
+  },
+  "section": [
+    "§3 Two Independent Sealers",
+    "§4.2 The settlement Member",
+    "§4.3 Citations Between Legs",
+    "§5.1 Terms",
+    "§5.4 Delivered",
+    "§6 Amounts",
+    "§6.1 Fees",
+    "§7.1 Shape and Join Rule",
+    "§7.2 Initial Types",
+    "§8 Wrapping Existing Signed Objects",
+    "§9.1 Inputs",
+    "§9.2 Payment State",
+    "§9.3 Delivery State",
+    "§9.4 Failures"
+  ]
+}
