@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-rAQiobQN/EK9f6XYPhN4EYmArqWVvq10Tvrr9E59kr8=' 'sha256-baySdVyvWqoWIs1DaUPJPtZT4L6N12ZSEbS6nqwcR+0=' 'sha256-lV9ImV44oLMn2KFNWeoPHRf6Q7FglvI585fikp6ch78=' 'sha256-qb3uFKNUqyZ7NLuvkLLvBXxbjp1xHGrGxRRbXN7jxu4='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-ne0hHJOVwqIx5zloT48DqIXvD3slCiFPV0OewNmiQSs=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-rAQiobQN/EK9f6XYPhN4EYmArqWVvq10Tvrr9E59kr8=' 'sha256-baySdVyvWqoWIs1DaUPJPtZT4L6N12ZSEbS6nqwcR+0=' 'sha256-XxLnYRiXxgs9F/HNaYE1aJO82a8/zhGif6XFr8YsYGQ=' 'sha256-qb3uFKNUqyZ7NLuvkLLvBXxbjp1xHGrGxRRbXN7jxu4='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-ne0hHJOVwqIx5zloT48DqIXvD3slCiFPV0OewNmiQSs=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report</title>
     <style>
@@ -10122,7 +10122,13 @@ globalThis.capsulectlDealView = async (context, page) => {
   // words do not match, is never shown as said.
   const said = report.representations || [];
   if (said.length > 0) {
-    const labels = { condition: "Condition", warranty: "Warranty", refund_terms: "Refund terms", delivery_promise: "Delivery promise", other: "Other" };
+    const labels = {
+      price: "Price", condition: "Condition", features: "Features", authenticity: "Authenticity",
+      availability: "Availability", delivery_date: "Delivery date", service_scope: "Service scope",
+      warranty: "Warranty", refund_terms: "Refund terms", payment_methods: "Payment methods",
+      pickup: "Pickup", deadline: "Deadline", address: "Address", other: "Other",
+      delivery_promise: "Delivery promise", // a claim sealed before delivery_date
+    };
     const heading = !shared ? "What your agent told the buyer" : report.audience === "counterparty" ? "What the seller's agent told you" : "What the seller's agent told the buyer";
     host.append(el("h2", heading));
     const checked = (page && page.openings && page.openings.representations) || [];

@@ -355,7 +355,13 @@ globalThis.capsulectlDealView = async (context, page) => {
   // words do not match, is never shown as said.
   const said = report.representations || [];
   if (said.length > 0) {
-    const labels = { condition: "Condition", warranty: "Warranty", refund_terms: "Refund terms", delivery_promise: "Delivery promise", other: "Other" };
+    const labels = {
+      price: "Price", condition: "Condition", features: "Features", authenticity: "Authenticity",
+      availability: "Availability", delivery_date: "Delivery date", service_scope: "Service scope",
+      warranty: "Warranty", refund_terms: "Refund terms", payment_methods: "Payment methods",
+      pickup: "Pickup", deadline: "Deadline", address: "Address", other: "Other",
+      delivery_promise: "Delivery promise", // a claim sealed before delivery_date
+    };
     const heading = !shared ? "What your agent told the buyer" : report.audience === "counterparty" ? "What the seller's agent told you" : "What the seller's agent told the buyer";
     host.append(el("h2", heading));
     const checked = (page && page.openings && page.openings.representations) || [];
