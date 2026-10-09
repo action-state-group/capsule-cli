@@ -2,17 +2,27 @@
 
 ## Unreleased
 
-### A seller's commit tells the rules checker when the accepted offer was made
+### A history act on a sale's thread carries the sale's item reference
 
-- **Added (checker input only; nothing sealed changes).** The check of a seller's `commit` that rests
-  on an accepted offer now carries `record.proposal_at`. That is the offer's proposed-action record's
-  sealed `at`, so a rule on an offer's expiry can be evaluated: before, it could not be checked on
-  any commit.
-- It is the latest offer, with a recorded acceptance and no change of details since: the same
-  acceptance the commit gate requires. It is absent on a buyer's deal, on any other action, with no
-  acceptance in force, and on history entries.
-- `record` is open in `external-check-input-v0.schema.json`, so a checker that predates the member
-  ignores it.
+- **Added (checker input, additive).** In `external-check-input/v0`, each `history` entry whose
+  act was on a sale's thread carries `item_ref`: the sale's item reference, the same plain value
+  the top-level `item_ref` carries on a check of that sale's threads. A rule on a second buyer's
+  thread can see the first thread's acceptance of the same item. An act of any other deal carries
+  none. It is beside the record, as `counterparty_profile` is, never in it: no record changes.
+  History entries are open objects, so a checker that does not read it is unaffected.
+
+### A claim's class is one of a seller's fourteen representation classes
+
+- **Changed (schema, additive; records sealed before re-derive unchanged).** A claim's optional
+  `class` is one of `price`, `condition`, `features`, `authenticity`, `availability`,
+  `delivery_date`, `service_scope`, `warranty`, `refund_terms`, `payment_methods`, `pickup`,
+  `deadline`, `address` or `other`: the representation classes of capsule-engine's
+  `capsule_engine/guards/wickets/catalog_defs/required_disclosure.yaml` at `21975ce45837`, in
+  the same order. Any other class is refused.
+- **`delivery_promise` becomes `delivery_date`.** An input that says `delivery_promise` is sealed
+  as `delivery_date`; capsulectl never seals `delivery_promise` again. A claim sealed with it
+  stays valid in the profile schema, re-derives, and is labelled as before on the page.
+- The page labels every class; the deal skill and the profile list them.
 
 ## v0.1.0-rc14
 
