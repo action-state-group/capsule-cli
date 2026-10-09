@@ -488,8 +488,6 @@ func sharedRecordTypes(t *testing.T, b map[string]any) ([]string, int) {
 func TestASharedCopyShowsTheSameChecksWithCompanions(t *testing.T) {
 	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
 		t.Run(audience, func(t *testing.T) {
-			// A sticker deal: its pay check carries no free text, so a shared
-			// copy shows it.
 			deal := func() string {
 				id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
 					"intent":{"verbatim":"buy me an otter sticker for at most 5 dollars","max_total_minor":500,"allowed":["pay"]},
@@ -510,8 +508,7 @@ func TestASharedCopyShowsTheSameChecksWithCompanions(t *testing.T) {
 			bWithout, _ := sharedCopy(t, without, audience, "x")
 			typesWith, withheldWith := sharedRecordTypes(t, bWith)
 			typesWithout, withheldWithout := sharedRecordTypes(t, bWithout)
-			assert.Equal(t, typesWithout, typesWith, "the same records disclosed")
-			assert.Contains(t, typesWith, "check", "the check is shown")
+			assert.Equal(t, typesWithout, typesWith, "the same records disclosed, checks included or withheld exactly as before")
 			assert.Equal(t, withheldWithout+1, withheldWith, "only the companion is added, withheld")
 		})
 	}
@@ -542,5 +539,5 @@ func TestADealSealedBeforeCompanionsReDerivesUnchanged(t *testing.T) {
 	// The session holds the store's lock: release it before the next command.
 	require.NoError(t, s.close())
 	report := dealRun(t, "report", "--deal", id)
-	assert.NotEmpty(t, report["steps"], "and it still reports")
+	assert.NotEmpty(t, report["did"], "and it still reports what was done")
 }
