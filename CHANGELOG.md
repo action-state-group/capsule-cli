@@ -2,18 +2,27 @@
 
 ## Unreleased
 
-### Release tags are signed from v0.1.0-rc15
+### A history act on a sale's thread carries the sale's item reference
 
-- **Changed (release procedure).** From `v0.1.0-rc15` on, every release tag is SSH-signed by the
-  maintainer's key, whose public key is in the release monitor's allowed-signers file. The tag
-  step in `docs/RELEASING.md` is now two parts: prepare (record the merge commit) and one line
-  for the maintainer that signs and pushes the tag, with SSH pinned for the signature.
-- **Added: `release/known-unsigned.txt`**, a reference copy of the tags made before signing
-  began, exactly `v0.1.0-rc1` to `v0.1.0-rc14`, frozen. The monitor's operator copies it once
-  from the signed `v0.1.0-rc15` tag and checks its SHA-256 against the value in
-  `docs/RELEASE-TRANSPARENCY.md`, section 5. The monitor never reads the repository's file, and
-  a later edit of it is itself a red flag. An unsigned tag made after signing began is an
-  alarm, whatever its name.
+- **Added (checker input, additive).** In `external-check-input/v0`, each `history` entry whose
+  act was on a sale's thread carries `item_ref`: the sale's item reference, the same plain value
+  the top-level `item_ref` carries on a check of that sale's threads. A rule on a second buyer's
+  thread can see the first thread's acceptance of the same item. An act of any other deal carries
+  none. It is beside the record, as `counterparty_profile` is, never in it: no record changes.
+  History entries are open objects, so a checker that does not read it is unaffected.
+
+### A claim's class is one of a seller's fourteen representation classes
+
+- **Changed (schema, additive; records sealed before re-derive unchanged).** A claim's optional
+  `class` is one of `price`, `condition`, `features`, `authenticity`, `availability`,
+  `delivery_date`, `service_scope`, `warranty`, `refund_terms`, `payment_methods`, `pickup`,
+  `deadline`, `address` or `other`: the representation classes of capsule-engine's
+  `capsule_engine/guards/wickets/catalog_defs/required_disclosure.yaml` at `21975ce45837`, in
+  the same order. Any other class is refused.
+- **`delivery_promise` becomes `delivery_date`.** An input that says `delivery_promise` is sealed
+  as `delivery_date`; capsulectl never seals `delivery_promise` again. A claim sealed with it
+  stays valid in the profile schema, re-derives, and is labelled as before on the page.
+- The page labels every class; the deal skill and the profile list them.
 
 ## v0.1.0-rc14
 
