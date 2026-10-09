@@ -1,0 +1,7 @@
+{
+  "emitted_by": "capsulectl deal report --deal ID --html page.html --bundle bundle.json (share keep), with a pinned stub rules checker",
+  "kind": "receipt-declared-rules",
+  "page": "written",
+  "rerender": "deal-report",
+  "verify": "VALID"
+}

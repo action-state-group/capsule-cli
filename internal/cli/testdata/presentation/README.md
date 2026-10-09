@@ -1,6 +1,6 @@
 # Presentation goldens
 
-Six synthetic bundles and what capsulectl's pages show a reader for them, taken with
+Seven synthetic bundles and what capsulectl's pages show a reader for them, taken with
 the viewer vendored at agent-action-capsule `5d80d40` (`evidence-graph.iife.js`
 sha256 `008d4c2c…090cdd`). `TestPresentationGoldens`
 (`internal/cli/presentation_golden_test.go`) holds every later viewer to them:
@@ -36,6 +36,7 @@ through the real CLI. Run it only to change a fixture on purpose.
 | `5-monthly-compliance` | a month of judged sessions against an example obligations pack, opted into the EU AI Act obligations card | `report build --card obligation` | written |
 | `6-generic-fallback` | a plain record with no report and no aggregate: the viewer's fallback | `disclose --root … --html` | written |
 | `6-generic-fallback-unknown-extension` | fixture 6's bundle with an extension no reader knows (`x-example-unknown/v1`) | the same gate and viewer, in the test | written |
+| `7-receipt-declared-rules` | fixture 2's deal receipt with a pinned stub rules checker that allows the purchase and reports three rules its ruleset declares but does not measure (`declared, not measured`); the check line says them quietly beside "no differences" | `deal report --html` | written |
 
 ## What these fixtures found
 
