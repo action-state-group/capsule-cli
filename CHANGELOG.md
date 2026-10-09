@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### A shared copy lists the counterparty_profile step under a neutral kind
+
+- **Changed:** a shared copy (counterparty or adjudicator) lists every step of the log, withheld
+  ones included, so a verifier can tell withheld from missing. The check's `counterparty_profile`
+  companion was listed by that kind, which tells the reader the user keeps a fingerprint of
+  merchants across deals. It is now listed as kind `private`, still withheld, with the line "A
+  record kept for the user only (withheld)".
+- **Unchanged:** the record itself, and the user's own copy, which names it as it is.
+
 ### A floor in force goes to the rules checker opened, or the check is refused
 
 - **Fixed (fail closed).** A rules checker reads a floor only from its verified
