@@ -20,9 +20,24 @@ const dealClaimCommitVersion = "1"
 var dealSourceKinds = map[string]bool{"merchant": true, "agent": true, "platform": true, "user": true, "external": true}
 
 // dealClaimClasses are the kinds of representation a claim may be labelled
-// as: what the agent said of the item's condition, a warranty, the refund
-// terms, a delivery promise, or another.
-var dealClaimClasses = map[string]bool{"condition": true, "warranty": true, "refund_terms": true, "delivery_promise": true, "other": true}
+// as: a seller's representation classes, the same closed set, in the same
+// order, as the seller rules' required disclosures. delivery_promise is the
+// word a claim sealed before this set took for a delivery date: it stays
+// valid on those records, but an input that says it is sealed as
+// delivery_date.
+var dealClaimClassList = []string{
+	"price", "condition", "features", "authenticity", "availability", "delivery_date",
+	"service_scope", "warranty", "refund_terms", "payment_methods", "pickup", "deadline",
+	"address", "other",
+}
+
+var dealClaimClasses = func() map[string]bool {
+	m := map[string]bool{"delivery_promise": true}
+	for _, c := range dealClaimClassList {
+		m[c] = true
+	}
+	return m
+}()
 
 // merchantSources are the source notes that can only mean the counterparty
 // said it. Any other note (a page, a photo, a snapshot: the merchant's own
@@ -55,8 +70,11 @@ func normalizeClaim(c *dealClaim) error {
 		return inputError(fmt.Sprintf("state the claim's source_kind (merchant, agent, platform, user or external): its source %q does not say whose it is", c.Source))
 	}
 	c.Class = strings.ToLower(strings.TrimSpace(c.Class))
+	if c.Class == "delivery_promise" {
+		c.Class = "delivery_date"
+	}
 	if c.Class != "" && !dealClaimClasses[c.Class] {
-		return inputError("a claim's class must be one of condition, warranty, refund_terms, delivery_promise or other")
+		return inputError("a claim's class must be one of " + strings.Join(dealClaimClassList[:len(dealClaimClassList)-1], ", ") + " or other")
 	}
 	return c.validate()
 }
