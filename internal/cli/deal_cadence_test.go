@@ -340,6 +340,10 @@ func TestWitnessPendingReasons(t *testing.T) {
 	assert.Equal(t, "witness_error", reason, "a witness that answered is not a consent problem")
 	reason, _ = witnessPendingReason(cll.WitnessState{}, dealDefaultWitness)
 	assert.Equal(t, "not_attempted", reason)
+	// What the witness answered is kept (its status, never its body) and said.
+	reason, text = witnessPendingReason(cll.WitnessState{Attempts: 1, LastError: "witness returned HTTP 400: " + witnessFailureBody(409)}, dealDefaultWitness)
+	assert.Equal(t, "witness_error", reason)
+	assert.Equal(t, "pending: the witness answered with an error (HTTP 409); it is retried at every tick.", text)
 }
 
 func TestDoctorExplainsWitnessConsent(t *testing.T) {
