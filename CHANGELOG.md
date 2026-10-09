@@ -48,7 +48,32 @@
 - **Fixed:** opening a log that does not exist could panic while cleaning up the failed open. It
   now returns the log's error.
 
-## v0.1.0-rc12
+### Where the user sells: a seller profile, an exact acceptance, and one item for several buyers
+
+- **Added (wire, additive; every deal sealed before re-derives unchanged).** `party_role`
+  (`buyer` | `seller`) on the intent, set when a deal opens and fixed; absent means buyer.
+  `deliver_by` and `perform_by` obligations with a `due_by` date. A `not_selected` close.
+- **A seller's floor stays private.** `min_total_minor` is never sealed. Records that state it
+  seal `bounds_commitment`, a salted commitment (`sha256-jcs-nonce256`) to a
+  `commercial-bounds/v0` document. Only the user's own copy carries its openings, and only the
+  user's own rules checker is given the opening in force (`commercial_bounds_opening`). No
+  shared copy, for any audience, carries the floor. A check below the floor asks (`under_floor`).
+- **An exact acceptance.** `offer` is a check, allowed only where the user sells; a later offer
+  supersedes the earlier one (`supersedes`). `deal note --kind acceptance` seals the buyer's
+  acceptance of the exact offer by its digest. A seller's `commit` needs an acceptance of the
+  latest offer with no change since, must equal that offer's amount, currency, terms and
+  recourse, and cites the acceptance. A deal where the user sells must use typed records.
+- **A sale is money in.** A seller's commit and offer count 0 toward any spend total.
+- **What the buyer's copy shows (seller deals only).** The offer, the task authority in full,
+  the acceptance, and the seller's agent's own representations to the buyer (claims, with an
+  optional `class`: `condition`, `warranty`, `refund_terms`, `delivery_promise`, `other`) whose
+  words hold none of the user's private details. A buyer's deal is shared exactly as before.
+- **One item, several buyers.** `deal sale new` seals a sale's own log; `deal open --sale ID`
+  opens a buyer's thread under it. Each thread seals the item reference and the sale's task
+  authority only as per-thread salted commitments, so no value links two buyers' copies. The
+  user's own rules checker is given the plain `item_ref`.
+- **Not yet:** the check that keeps the floor out of written text misses some formats
+  ("$1,700.00", bare amounts); a fix follows.
 
 ### A refund's check names the payment it returns
 
