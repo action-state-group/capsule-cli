@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### A floor in force goes to the rules checker opened, or the check is refused
+
+- **Fixed (fail closed).** A rules checker reads a floor only from its verified
+  `commercial_bounds_opening`, and given none it finds the floor rule not applicable. When a floor
+  was in force but its opening could not be built, the checker was run without it. Now:
+  - `deal check` refuses before sealing anything, naming the cause and never the floor. The causes
+    are: the deal's limits cannot be read, no opening on this device recomputes to the commitment,
+    or the opening is not a commercial-bounds document.
+  - A floor is in force when the limits in force set one, whatever can be recomputed from its
+    opening.
+  - With no floor in force, nothing changes.
+- **Fixed: typed deals sent the wrong opening.** In a typed deal, the opening sent was the open
+  step's, but a checker verifies it against the task authority it is given, which seals the floor
+  under its own nonce. The two never matched, so a checker verifying the opening failed every such
+  check. The task authority's own opening is now sent.
+
 ## v0.1.0-rc13
 
 ### The payee keyed per profile, for the user's own history
