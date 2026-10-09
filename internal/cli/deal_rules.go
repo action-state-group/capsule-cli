@@ -55,9 +55,12 @@ type dealTerms struct {
 }
 
 type dealClaim struct {
-	Text     string `json:"text"`
-	Source   string `json:"source"`
-	Verified bool   `json:"verified,omitempty"`
+	Text string `json:"text"`
+	// Source is where the claim was read, in the caller's words (a token);
+	// SourceKind is whose it is, from a closed set (dealSourceKinds).
+	Source     string `json:"source,omitempty"`
+	SourceKind string `json:"source_kind,omitempty"`
+	Verified   bool   `json:"verified,omitempty"`
 }
 
 type dealRecourse struct {
@@ -519,6 +522,11 @@ type dealEvent struct {
 	// step like Producer: a step sealed before has none and re-derives
 	// without them.
 	RuleInputs string `json:"rule_inputs,omitempty"`
+	// ClaimCommit (dealClaimCommitVersion) marks a step whose claims are
+	// sealed as commitments with a visible source_kind (deal_claims.go),
+	// kept with the step like Producer: a step sealed before has none and
+	// re-derives its claims in clear, unchanged.
+	ClaimCommit string `json:"claim_commit,omitempty"`
 }
 
 // dealPlatformApproval is an observation of another platform's own approval
@@ -612,8 +620,8 @@ func (o dealOpen) validate() error {
 }
 
 func (c dealClaim) validate() error {
-	if strings.TrimSpace(c.Text) == "" || strings.TrimSpace(c.Source) == "" {
-		return inputError("every claim needs its text and its source")
+	if strings.TrimSpace(c.Text) == "" || (strings.TrimSpace(c.Source) == "" && c.SourceKind == "") {
+		return inputError("every claim needs its text, and its source_kind or source")
 	}
 	return nil
 }

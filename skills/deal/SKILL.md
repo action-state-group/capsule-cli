@@ -435,13 +435,22 @@ make exact), `intent.max_total_minor`, `intent.allowed` (the actions the user
 asked for: see below); `who` (every identifier you can see: `name`, `domain`, `phone`,
 `email`, `payee`, `relay_address`, `profile_id`); `terms` (`item`,
 `quantity`, `price_minor`, `deposit_minor`, `currency`, `when`, `place`,
-`conditions`); `claims` (each with `text` and its `source`); `recourse`
+`conditions`); `claims` (each with `text`, its `source_kind` and its `source`); `recourse`
 (`rail` and `refundable`); `channel` (where you are talking: `marketplace`,
 `app_chat`, `sms`, `email`, `web`, ...). Money is always an integer in minor
 units (cents), and `currency` is a 3-letter code. A `source` is a short word
-(`seller_message`, `listing_photo`). Keep claim text free of names, phone
-numbers and emails: a step that would carry one is refused. Keep the
-returned `deal_id`.
+(`seller_message`, `listing_photo`).
+
+A claim's `source_kind` says whose it is: `merchant` (the other party: their
+message, their own site or page), `platform` (a marketplace or booking site
+in between), `user`, `agent`, or `external` (anyone else, such as a public
+lookup). State it whenever the `source` alone does not say: a page, a photo
+or a snapshot can be the merchant's own or a marketplace's, and a claim that
+leaves it open is refused. Only a source that can only be the other party
+(`counterparty`, `seller_message`, `merchant_email`) is taken as `merchant`.
+The claim's words and its source are sealed as commitments; only its
+`source_kind` shows. Keep claim text free of names, phone numbers and emails:
+a step that would carry one is refused. Keep the returned `deal_id`.
 
 `intent.allowed` decides what the user has already said yes to:
 
@@ -458,7 +467,7 @@ returned `deal_id`.
 
 ```sh
 capsulectl --profile deal deal note --deal ID --kind message  --input m.json   # {"from":"counterparty","channel":"...","text":"..."}
-capsulectl --profile deal deal note --deal ID --kind claim    --input c.json   # {"text":"...","source":"..."}
+capsulectl --profile deal deal note --deal ID --kind claim    --input c.json   # {"text":"...","source_kind":"merchant","source":"..."}
 capsulectl --profile deal deal note --deal ID --kind evidence --input e.json   # {"about":"...","source":"...","verified":true}
 capsulectl --profile deal deal note --deal ID --kind change   --input d.json   # {"source":"...","who":{...},"terms":{...},"recourse":{...}}
 capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   # {"verbatim":"the user's new words","allowed":["pay","share_contact"]}: a new action is only proposed

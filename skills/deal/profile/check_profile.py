@@ -7,6 +7,10 @@
   python3 check_profile.py --regen    rewrite fixtures/ deterministically (maintainers only)
   python3 check_profile.py FILE...    check deal records (one JSON record per file, or a
                                       JSON array = one deal in seq order)
+  python3 check_profile.py --openings=OPENINGS.json FILE
+                                      also check a copy's claim openings (its claim_openings:
+                                      record digest, index, nonce and words) against the
+                                      commitments FILE's records carry
 
 Stdlib only. Uses `jsonschema` for the schema stage when it is installed; without it a
 reduced structural check runs and the output says so.
@@ -1020,7 +1024,30 @@ def run_fixtures() -> int:
     return bad
 
 
-def check_files(paths) -> int:
+def check_openings(recs, openings) -> None:
+    """Each claim opening (a copy's claim_openings: the record digest, the
+    baseline claim's index if any, and the nonce and words of the claim and
+    of its source note) must recompute to the commitment the sealed record
+    carries. Raises StageError('openings')."""
+    by_digest = {record_digest(r): r for r in recs}
+    for o in openings:
+        rec = by_digest.get(o["record_digest"])
+        if rec is None:
+            raise StageError("openings", f"no record has digest {o['record_digest']}")
+        claim = rec["body"]["claims"][o["index"]] if "index" in o else rec["body"]
+        pairs = [("text", "text_commitment"), ("source", "source_ref_commitment")]
+        for member, field in pairs:
+            if member not in o:
+                if field in claim:
+                    raise StageError("openings", f"{field} of {o['record_digest']} has no opening")
+                continue
+            if field not in claim:
+                raise StageError("openings", f"an opening for {field}, which {o['record_digest']} does not carry")
+            if commitment(o[member]["nonce"], o[member]["text"]) != claim[field]:
+                raise StageError("openings", f"the opening does not match {field} of {o['record_digest']}")
+
+
+def check_files(paths, openings=None) -> int:
     bad = 0
     for p in paths:
         data = load(p)
@@ -1031,6 +1058,9 @@ def check_files(paths) -> int:
                 check_record(r)
             if isinstance(data, list):
                 check_chain(recs)
+            if openings is not None:
+                check_openings(recs, openings)
+                print(f"ok   {p}: {len(openings)} claim opening(s) match")
             print(f"ok   {p}: " + ", ".join(record_digest(r) for r in recs))
         except StageError as e:
             bad += 1
@@ -1329,6 +1359,11 @@ def regen():
         + "".join(f"{d}  {n if '/' in n else 'positive/' + n}\n" for n, d in digests), encoding="utf-8")
     texts.update(texts1)
     com.update(com1)
+    # A claim's words and its source note, committed as a claim record from
+    # claim_commit on seals them (text_commitment, source_ref_commitment).
+    for k, v in {"claim-text-1": "they have 2 jet skis for Saturday", "claim-source-1": "seller_message"}.items():
+        texts[k] = v
+        com[k] = commitment(nonce(k), v)
 
     vec = {"note": "TEST-ONLY. Simulates a device's local store: the secret and raw values below never appear in a record. "
                    "All names, numbers and domains are fictional (555-01xx, .example).",
@@ -1616,7 +1651,11 @@ def main(argv):
     _validator()
     print(f"schema stage: {SCHEMA_MODE}")
     files = [a for a in argv if not a.startswith("--")]
-    bad = len(fails) + (check_files(files) if files else run_fixtures())
+    openings = None
+    for a in argv:
+        if a.startswith("--openings="):
+            openings = load(a.split("=", 1)[1])
+    bad = len(fails) + (check_files(files, openings) if files else run_fixtures())
     print("ALL OK" if not bad else f"{bad} FAILURE(S)")
     return 1 if bad else 0
 

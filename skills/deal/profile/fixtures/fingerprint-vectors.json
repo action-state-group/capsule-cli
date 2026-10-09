@@ -191,6 +191,18 @@
       "nonce": "bb889b00a3c303181ebaa49a2bb74456623240e18ac97b9d40a11e75c5f0efa8",
       "text": "yes, the new site is fine",
       "commitment": "60b5b2b1237a12666ec051e57927dd948948e6c6bca112b8a28df78f0c224224"
+    },
+    {
+      "label": "claim-text-1",
+      "nonce": "10f2b096d788f690b4999f91e3100c604a199e5027a65c61368f556e2b45d415",
+      "text": "they have 2 jet skis for Saturday",
+      "commitment": "192ed01bb0d9937fb1a395a8e7ca1a8532fca0e74de094c8dae12cd190d9c9cb"
+    },
+    {
+      "label": "claim-source-1",
+      "nonce": "c7bdc201cbc5e44b8523a4ee2384a079d2b3c73bed9cd1b255fd572188db14c7",
+      "text": "seller_message",
+      "commitment": "4a6942d0a71c2869165ef69ad2927e937dc11458c6606a905cb9da9692e0d1df"
     }
   ]
 }

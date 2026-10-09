@@ -63,6 +63,17 @@ func dealTexts(ev dealEvent) map[string]string {
 	switch {
 	case ev.Open != nil:
 		t["verbatim"] = ev.Open.Intent.Verbatim
+		// A step sealed before claims were committed carries them in the
+		// clear, so they are no committed text of it.
+		if ev.ClaimCommit != "" {
+			for i, c := range ev.Open.Claims {
+				claimTexts(t, c, fmt.Sprintf("claim_text_%d", i), fmt.Sprintf("claim_source_%d", i))
+			}
+		}
+	case ev.Claim != nil:
+		if ev.ClaimCommit != "" {
+			claimTexts(t, *ev.Claim, "claim_text", "claim_source")
+		}
 	case ev.Intent != nil:
 		t["verbatim"] = ev.Intent.Verbatim
 	case ev.Message != nil:
@@ -579,7 +590,13 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if len(o.Claims) > 0 {
 			claims := make([]interface{}, len(o.Claims))
 			for i, c := range o.Claims {
-				claims[i] = map[string]interface{}{"text": c.Text, "source": c.Source}
+				if ev.ClaimCommit == "" {
+					claims[i] = map[string]interface{}{"text": c.Text, "source": c.Source}
+					continue
+				}
+				if claims[i], err = claimBody(c, fmt.Sprintf("claim_text_%d", i), fmt.Sprintf("claim_source_%d", i), commit); err != nil {
+					return nil, err
+				}
 			}
 			body["claims"] = claims
 		}
@@ -606,7 +623,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 	case "claim":
 		rtype = "claim"
-		body = map[string]interface{}{"text": ev.Claim.Text, "source": ev.Claim.Source}
+		if ev.ClaimCommit == "" {
+			body = map[string]interface{}{"text": ev.Claim.Text, "source": ev.Claim.Source}
+		} else if body, err = claimBody(*ev.Claim, "claim_text", "claim_source", commit); err != nil {
+			return nil, err
+		}
 	case "evidence":
 		rtype = "evidence"
 		about := events[0].Digest
@@ -798,7 +819,13 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 		body["options"] = options
 		if len(ck.Unverified) > 0 {
-			body["unverified"] = ck.Unverified
+			if ev.ClaimCommit == "" {
+				body["unverified"] = ck.Unverified
+			} else if refs := unverifiedClaimRefs(events, ck.Unverified); len(refs) > 0 {
+				// The unverified claims by reference: their words are
+				// commitments in their own records.
+				body["unverified_claims"] = refs
+			}
 		}
 		var notes []interface{}
 		for _, n := range ck.Notes {
@@ -1084,11 +1111,9 @@ func normalizeOpen(o *dealOpen) error {
 		o.Channel = "other"
 	}
 	for i := range o.Claims {
-		t, err := sourceToken(o.Claims[i].Source)
-		if err != nil {
+		if err := normalizeClaim(&o.Claims[i]); err != nil {
 			return err
 		}
-		o.Claims[i].Source = t
 	}
 	o.Recourse.Rail = normRail(o.Recourse.Rail)
 	if err := normalizeTerms(&o.Terms); err != nil {
@@ -1113,7 +1138,7 @@ func normalizeNote(ev *dealEvent) error {
 	case ev.Message != nil:
 		ev.Message.Channel = channelToken(ev.Message.Channel)
 	case ev.Claim != nil:
-		ev.Claim.Source, err = sourceToken(ev.Claim.Source)
+		err = normalizeClaim(ev.Claim)
 	case ev.Evidence != nil:
 		if ev.Evidence.Obligation != nil {
 			if err = ev.Evidence.Obligation.normalize(); err != nil {

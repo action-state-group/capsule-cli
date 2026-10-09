@@ -62,6 +62,9 @@ var dealShareKeys = map[string]bool{
 	"deal_type": true, "action": true, "currency": true, "rail": true, "result": true, "pack_id": true,
 	"question": true, "rule": true, "field": true, "options": true, "notes": true, "changed": true,
 	"choice": true, "approver": true, "status": true, "outcome": true, "from": true, "kind": true,
+	// Whose a claim is, from a closed set: its words and source note are
+	// commitments.
+	"source_kind":     true,
 	"response_digest": true,
 	// The action's taxonomy class and the taxonomy's version: vocabulary
 	// tokens, never the user's data.
@@ -1144,13 +1147,20 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 	for _, f := range dealWithheldFields[audience] {
 		withheld = append(withheld, f)
 	}
-	return map[string]interface{}{
+	ext := map[string]interface{}{
 		"deal_id": events[0].Event.DealID, "scope": dealScopeLine, "audience": audience, "withheld": withheld, "steps": steps,
 		"asked_step": report.AskedStep, "did": items(report.Did, false), "anomalies": items(report.Anomalies, true),
 		"merchant": merchant, "email_scope": emailScopeLine,
 		"told":      scrubTold(toldItems(report.Told, false), p),
 		"lifecycle": shareLifecycle(buildDealLifecycle(events, dealClock())),
 	}
+	// An adjudicator's copy opens the claims whose words and source note
+	// carry none of the user's private details (an opening cannot be
+	// scrubbed and still check); a counterparty's opens none.
+	if audience == dealAudienceAdjudicator {
+		ext["claim_openings"] = claimOpenings(events, func(c dealClaim) bool { return p.clean(c.Text) && p.clean(c.Source) })
+	}
+	return ext
 }
 
 // shareLifecycle is where the deal stands, for a shared copy: the state,
