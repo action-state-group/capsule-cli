@@ -2,30 +2,27 @@
 
 ## Unreleased
 
-### A plugin may offer presentations
+### A history act on a sale's thread carries the sale's item reference
 
-- **Added:** the cli-plugin/v1 handshake may carry `presentations`.
-  - **What each entry holds:** an `aac.presentation-manifest/v0` manifest (agent-action-capsule's
-    presentation contract) and the files it names by role (`script`, `style`, `wording`) with their
-    SHA-256.
-  - **Compatibility:** an older capsulectl ignores the member. A module's compatibility is its
-    manifest's `presentation_api` and `runtime_min`, not cli-plugin/v1.
-- **How each file is checked:** capsulectl reads it itself, from the launcher's own directory,
-  under the launcher's trust rules, at most 1 MiB. It must hash to both its entry's digest and the
-  digest the manifest pins.
-  - The manifest and any wording pack are checked against the contract's schema.
-  - A plugin's code module is carried in the module slot.
-  - Any failure refuses that plugin's presentations; its subcommands still run. `plugin ls` reports
-    the refusal as `presentations_refused: {reason, file, detail}`, with a machine-readable
-    reason: `digest_mismatch`, `path_escape`, `not_regular_file`, `writable`, `oversize`,
-    `invalid_manifest`,
-    `invalid_files`, `invalid_wording`, `unsupported_carrier`, `duplicate_id`, `missing_file`,
-    `untrusted_root` or `unreadable`.
-- **Layout:** a plugin keeps its files under `<launcher>.d/presentations/<module>/`, user-owned
-  `0644` files in `0755` directories.
-- **Presentations load only from the two built-in plugin roots.** `CAPSULECTL_PLUGIN_ROOTS` never
-  makes a directory a source of them.
-- **Not in this change:** putting presentations into a page.
+- **Added (checker input, additive).** In `external-check-input/v0`, each `history` entry whose
+  act was on a sale's thread carries `item_ref`: the sale's item reference, the same plain value
+  the top-level `item_ref` carries on a check of that sale's threads. A rule on a second buyer's
+  thread can see the first thread's acceptance of the same item. An act of any other deal carries
+  none. It is beside the record, as `counterparty_profile` is, never in it: no record changes.
+  History entries are open objects, so a checker that does not read it is unaffected.
+
+### A claim's class is one of a seller's fourteen representation classes
+
+- **Changed (schema, additive; records sealed before re-derive unchanged).** A claim's optional
+  `class` is one of `price`, `condition`, `features`, `authenticity`, `availability`,
+  `delivery_date`, `service_scope`, `warranty`, `refund_terms`, `payment_methods`, `pickup`,
+  `deadline`, `address` or `other`: the representation classes of capsule-engine's
+  `capsule_engine/guards/wickets/catalog_defs/required_disclosure.yaml` at `21975ce45837`, in
+  the same order. Any other class is refused.
+- **`delivery_promise` becomes `delivery_date`.** An input that says `delivery_promise` is sealed
+  as `delivery_date`; capsulectl never seals `delivery_promise` again. A claim sealed with it
+  stays valid in the profile schema, re-derives, and is labelled as before on the page.
+- The page labels every class; the deal skill and the profile list them.
 
 ## v0.1.0-rc14
 
