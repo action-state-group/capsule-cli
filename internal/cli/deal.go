@@ -1160,6 +1160,22 @@ func dealNoteCommand() *cobra.Command {
 				if ev.Message.Channel == "" {
 					ev.Message.Channel = open.Channel
 				}
+				// What the agent writes to the other party never states the
+				// user's floor or limit, in any form; the user's own words
+				// are recorded as they were said.
+				if ev.Message.From == "agent" {
+					if field := statesBound(ev.Message.Text, events, true); field != "" {
+						return inputError("refusing to seal: the agent's message would tell the other party " + field + "; leave the user's bounds out of what the agent writes")
+					}
+				}
+			case "claim":
+				// Where the user sells, the agent's own claims are opened to the
+				// buyer: they never state the floor or a limit.
+				if ev.Claim.SourceKind == "agent" && dealRole(events) == dealRoleSeller {
+					if field := statesBound(ev.Claim.Text, events, true); field != "" {
+						return inputError("refusing to seal: the agent's claim, shown to the buyer, would state " + field + "; leave the user's bounds out of what the agent writes")
+					}
+				}
 			case "intent":
 				if open.Sale != "" {
 					return inputError("a sale's thread is under the sale's one task authority: its request and limits do not change per buyer")
