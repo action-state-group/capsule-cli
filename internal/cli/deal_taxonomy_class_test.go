@@ -12,8 +12,12 @@ import (
 )
 
 // taxonomyV4 is every action name in version 4 of capsule-engine's
-// capsule_engine/guards/action_taxonomy.json, copied here so a class this
-// CLI seals is checked against the table, not against itself. Version 2 (at
+// capsule_engine/guards/action_taxonomy.json
+// (github.com/action-state-group/capsule-engine at
+// 5300e0be262fa2d878b18eca630cbf539f785752, file sha256
+// 9e10156647792a0e3fe6cf24e5211ebb8757cb8362c1e868dcfe6db6e8d891a7), copied
+// here so a class this CLI seals is checked against the table, not against
+// itself. Version 2 (at
 // 2521ee6) and version 3 (at a5e9e30) name the same 19.
 var taxonomyV4 = []string{
 	"money.purchase", "money.transfer", "money.subscription", "money.refund",

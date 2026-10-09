@@ -5,7 +5,8 @@
 ### New deal records seal action taxonomy version 4
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
-  `taxonomy_version` is now `"4"`: capsule-engine's `capsule_engine/guards/action_taxonomy.json`.
+  `taxonomy_version` is now `"4"`: capsule-engine's `capsule_engine/guards/action_taxonomy.json`
+  at `5300e0b`.
   A reader that holds a later version found no class-keyed result for a record that named `"2"`.
 - **Every `action_class` is unchanged.** Versions 2, 3 and 4 name the same classes. Versions 3
   and 4 add `approver_role` `account_holder`:

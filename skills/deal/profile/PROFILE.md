@@ -134,7 +134,7 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 A `check`, an `action` and a `disclosure` sealed by this release carry `action_class`: the
 action's class in version `taxonomy_version` (`"4"`) of the action taxonomy published in
 capsule-engine, `capsule_engine/guards/action_taxonomy.json`
-(github.com/action-state-group/capsule-engine). The two members come together or not at all.
+(github.com/action-state-group/capsule-engine at `5300e0b`). The two members come together or not at all.
 Steps sealed before carry neither, and re-derive without them. Steps sealed by an earlier
 release under version `"2"` (at `2521ee6`) or `"3"` (at `a5e9e30`) keep their own version.
 All three name the same classes:

@@ -4,11 +4,15 @@ import "fmt"
 
 // dealTaxonomyVersion is the action-class taxonomy a new deal record's
 // action_class is drawn from: version 4 of capsule-engine's
-// capsule_engine/guards/action_taxonomy.json. A record sealed with an
-// action_class also seals this version, so a reader resolves the class
-// against the table that was live when it was sealed. Each step keeps the
-// version it was sealed with: a step sealed under version 2 (at 2521ee6) or
-// version 3 (at a5e9e30) re-derives with its own.
+// capsule_engine/guards/action_taxonomy.json
+// (github.com/action-state-group/capsule-engine at
+// 5300e0be262fa2d878b18eca630cbf539f785752, file sha256
+// 9e10156647792a0e3fe6cf24e5211ebb8757cb8362c1e868dcfe6db6e8d891a7, JCS sha256
+// 1ddce1235c3445b4ec92890d903934b08831c993f1b562e7f00082f87ca4c859). A
+// record sealed with an action_class also seals this version, so a reader
+// resolves the class against the table that was live when it was sealed.
+// Each step keeps the version it was sealed with: a step sealed under
+// version 2 (at 2521ee6) or version 3 (at a5e9e30) re-derives with its own.
 //
 // Versions 2, 3 and 4 name the same classes, each with the same trigger
 // class. Version 3 adds approver_role account_holder to money.purchase,
@@ -18,7 +22,7 @@ import "fmt"
 const dealTaxonomyVersion = "4"
 
 // The taxonomy-v4 classes a deal record can carry. Each is a row of
-// action_taxonomy.json; none is invented here.
+// action_taxonomy.json at 5300e0b; none is invented here.
 const (
 	classMoneyPurchase       = "money.purchase"
 	classMoneyRefund         = "money.refund"
