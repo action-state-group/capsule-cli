@@ -79,7 +79,7 @@ func recordsOf(t *testing.T, dealID string) ([]sealedEvent, []map[string]any) {
 }
 
 // The acceptance case: a $558.80 card purchase seals action_class
-// money.purchase on its check and on its act, under taxonomy version 4, and
+// money.purchase on its check and on its act, under taxonomy version 5, and
 // is over caps/3.0.0's per-action limit. The cancel that returns it is a
 // refund, which no cap covers, so a spend cap can never deny it.
 func TestDealPurchaseAndItsCancelCarryTheirTaxonomyClass(t *testing.T) {
