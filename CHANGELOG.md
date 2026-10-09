@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### A claim's class is one of a seller's fourteen representation classes
+
+- **Changed (schema, additive; records sealed before re-derive unchanged).** A claim's optional
+  `class` is one of `price`, `condition`, `features`, `authenticity`, `availability`,
+  `delivery_date`, `service_scope`, `warranty`, `refund_terms`, `payment_methods`, `pickup`,
+  `deadline`, `address` or `other`: the representation classes of capsule-engine's
+  `capsule_engine/guards/wickets/catalog_defs/required_disclosure.yaml` at `21975ce45837`, in
+  the same order. Any other class is refused.
+- **`delivery_promise` becomes `delivery_date`.** An input that says `delivery_promise` is sealed
+  as `delivery_date`; capsulectl never seals `delivery_promise` again. A claim sealed with it
+  stays valid in the profile schema, re-derives, and is labelled as before on the page.
+- The page labels every class; the deal skill and the profile list them.
+
 ### New deal records seal action taxonomy version 6
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
