@@ -12,15 +12,34 @@
 - **Every `action_class` is unchanged.** Against version 5 (`e5ec2c1`), version 6 changes only
   `approver_role` (to `account_holder`) on `agreement.accept`, `marketplace.offer` and
   `marketplace.sale`. No class is renamed, removed or added, and none changes trigger class.
-  - Deal records carry `agreement.accept` (a seller's commit, and a rental's or service's commit
-    or sign), and its meaning is unchanged.
-  - They never carry `marketplace.offer` or `marketplace.sale`: a seller's offer is
-    `external_commitment.other`.
+  - A seller's steps carry: an offer `external_commitment.other`, a commit (accepting a buyer)
+    `agreement.accept`, and telling the buyer where the item is `disclosure.personal`. A rental's
+    or service's commit or sign is also `agreement.accept`, whose meaning is unchanged.
+  - Deal records never carry `marketplace.offer` or `marketplace.sale`.
 - **Each step keeps its own version.** A record sealed under `"2"`, `"3"`, `"4"` or `"5"` re-derives
   with it.
 - **Release pairing.** A rules checker compares `taxonomy_version` exactly, so a record sealing
   `"6"` needs a checker that holds version 6. The next release from `main` ships with such a
   checker; none is cut from `main` before one is available.
+
+### The user's floor and limit are recognised in any written form
+
+- **Fixed:** the check that keeps a seller's floor (`min_total_minor`) and a spending limit
+  (`max_total_minor`) out of a shared copy only matched the form capsulectl writes ("$1700.00").
+  It now reads money as prose writes it, and compares by value:
+  - currency symbols before or after the amount (`$`, `€`, `£`, `¥` and others), ISO codes
+    (`USD 1,700`, `1700 usd`, also written against the number: `USD1,700`, `1700usd`) and
+    currency words (`dollars`, `euros`);
+  - thousands separators as locales use them (comma, dot, space, apostrophe, no-break or thin
+    space), with or without cents (`1.700,00 €`, `1'700.00 CHF`), and `k` (`$1.7k`);
+  - a bare number a few words after a money word ("the lowest I'll take is 1700").
+
+  Dates, times, ids and digests are not read as money. An amount the other party is shown anyway
+  (the asked price, an offer, a payment) is still not protected.
+- **Added:** a message the agent writes (`from: agent`), and, where the user sells, an agent's
+  claim (which the buyer's copy opens), is refused before it is sealed when it states the floor or
+  the limit in any of these forms. The refusal names the field, never the value. The user's own
+  words are recorded as said.
 
 ## v0.1.0-rc13
 
