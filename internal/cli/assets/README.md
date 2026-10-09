@@ -11,9 +11,9 @@ to render a report.
 
 | | |
 |---|---|
-| source | agent-action-capsule main @ `5d80d40097f603c8ab5014a5b6e95ea43f3ae2a1`, the merged commit `go.mod` pins; registry `@action-state-group/cll` `0.2.0` |
+| source | agent-action-capsule main @ `fa49b4d0649303a54a5f1e765dd7253f7f64767a`, the merged commit `go.mod` pins; registry `@action-state-group/cll` `0.2.0` |
 | build | `cd ts && npm ci && npm run emitter:iife`, esbuild 0.28.2 |
-| sha256 | `008d4c2c68f09bf9264f71964e6ae8722593c54b9568bdf711f667f496090cdd` |
+| sha256 | `6dac92755caf5aaa1622cd436943c93ed653e0be8dd7665211b4ba9eac1c47ed` |
 
 The digest is pinned again in `report.go` (`evidenceGraphIIFEDigest`) and
 checked by `TestIIFEIsPinned`; `deal report` embeds the same file, with its digest in `evidence-graph.iife.js.sha256`. `scripts/build-evidence-graph-iife.sh [--write]` rebuilds it from the aac commit `go.mod` pins; `scripts/iife-sync.sh <aac checkout>` rebuilds
