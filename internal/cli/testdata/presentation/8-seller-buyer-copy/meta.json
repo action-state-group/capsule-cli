@@ -1,0 +1,7 @@
+{
+  "emitted_by": "capsulectl deal report --deal ID --share counterparty --to \"the buyer\" --html page.html (bundle.json is the bundle the page carries)",
+  "kind": "seller-buyer-copy",
+  "page": "written",
+  "rerender": "deal-report",
+  "verify": "VALID"
+}

@@ -354,6 +354,35 @@ function versionBefore(a, b) {
   });
   host.append(el("p", "Only what the agent sealed as shared is listed here; something it told without sealing it is not.", "deal-note"));
 
+  // Where the user sells: what their agent told the buyer, each claim's words
+  // checked here against the commitment its sealed step carries, labelled by
+  // the class sealed with it. A claim that is not the agent's own, or whose
+  // words do not match, is never shown as said.
+  const said = report.representations || [];
+  if (said.length > 0) {
+    const labels = { condition: "Condition", warranty: "Warranty", refund_terms: "Refund terms", delivery_promise: "Delivery promise", other: "Other" };
+    const heading = !shared ? "What your agent told the buyer" : report.audience === "counterparty" ? "What the seller's agent told you" : "What the seller's agent told the buyer";
+    host.append(el("h2", heading));
+    for (const r of said) {
+      const rec = matched.has(r.step) ? ((bundle.disclosures || {})[r.step] || {}).agent_input : undefined;
+      const body = rec && rec.body;
+      const claim = body && (Number.isInteger(r.index) ? (body.claims || [])[r.index] : body);
+      let ok = false;
+      if (claim && claim.source_kind === "agent" && typeof r.nonce === "string" && typeof r.text === "string") {
+        const jcs = `{"nonce":${JSON.stringify(r.nonce)},"text":${JSON.stringify(r.text)}}`;
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(jcs));
+        ok = Array.from(new Uint8Array(digest), (x) => x.toString(16).padStart(2, "0")).join("") === claim.text_commitment;
+      }
+      if (ok) {
+        const label = labels[claim.class];
+        host.append(item(`${label ? `${label}: ` : ""}“${r.text}” ✓`, [r.step]));
+      } else {
+        host.append(item("⚠️ A statement here could not be checked against its sealed step.", [r.step], "deal-flag"));
+      }
+    }
+    host.append(el("p", "✓ These are the exact words sealed when the agent said them; this page does not check that they are true.", "deal-note"));
+  }
+
   // Cancel-by dates (the point of no return is a date passing) and due
   // dates (what the user owes by a date). Recorded, never enforced.
   const deadlines = report.deadlines || [];

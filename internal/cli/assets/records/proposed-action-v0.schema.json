@@ -220,6 +220,10 @@
         },
         "counterparty": {
           "$ref": "record-common-v0.schema.json#/$defs/counterparty"
+        },
+        "item_ref_commitment": {
+          "description": "On a check of a sale's thread: the sale's item reference, committed under this check's own nonce, so it is equal across the sale's threads only to a holder of the openings.",
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
         }
       }
     }

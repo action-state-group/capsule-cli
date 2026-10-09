@@ -26,7 +26,7 @@ func dealOwnBundle(t *testing.T, dealID string) string {
 
 func TestASellerDealSealsItsRole(t *testing.T) {
 	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, sellerOpen))["deal_id"].(string)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerOpen))["deal_id"].(string)
 	assert.Contains(t, dealOwnBundle(t, id), `"party_role":"seller"`)
 
 	// A later intent note keeps the deal's role, with or without naming it.

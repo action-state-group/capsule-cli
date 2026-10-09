@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentactioncapsule.org/records/action-approval-v0.schema.json",
   "title": "action-approval/v0",
-  "description": "One approval artifact of a stated authority. user_approval: the user's own answer to an ASK, with their words (said_commitment) and what they were shown (rendering_commitment, equal to the evaluation's). card_answer: a card was answered with no words of the user's; it satisfies no ask. platform_approval: a platform approval observation (kind platform-approval-observation): that another platform's approval interaction for the proposed action (proposed_action_ref) happened with these bytes, when it was observed (observed_at): the text the platform displayed (displayed_text_digest, a rendering commitment, the same primitive as rendering_commitment) and the user's text it returned (returned_user_text_digest); platform and mechanism are names the caller gives. It claims nothing about whether the platform authorized anything or any rule is satisfied, and never answers a check. policy_change: the user's confirmation of a policy change, binding what they were shown (rendering_commitment), the effective policy (effective_policy_digest) and the semantic diff (semantic_diff_digest). one_shot_override: reserved.",
+  "description": "One approval artifact of a stated authority. user_approval: the user's own answer to an ASK, with their words (said_commitment) and what they were shown (rendering_commitment, equal to the evaluation's). card_answer: a card was answered with no words of the user's; it satisfies no ask. platform_approval: a platform approval observation (kind platform-approval-observation): that another platform's approval interaction for the proposed action (proposed_action_ref) happened with these bytes, when it was observed (observed_at): the text the platform displayed (displayed_text_digest, a rendering commitment, the same primitive as rendering_commitment) and the user's text it returned (returned_user_text_digest); platform and mechanism are names the caller gives. It claims nothing about whether the platform authorized anything or any rule is satisfied, and never answers a check. policy_change: the user's confirmation of a policy change, binding what they were shown (rendering_commitment), the effective policy (effective_policy_digest) and the semantic diff (semantic_diff_digest). counterparty_acceptance: a counterparty acceptance observation (kind counterparty-acceptance-observation): that the counterparty accepted the exact proposed action proposed_action_ref names (an offer), when it was observed (observed_at), on which channel kind (channel), with their words by commitment (content_commitment). It authorizes nothing by itself and never answers a check. one_shot_override: reserved.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -66,6 +66,7 @@
             "card_answer",
             "platform_approval",
             "policy_change",
+            "counterparty_acceptance",
             "one_shot_override"
           ]
         },
@@ -86,7 +87,10 @@
           "$ref": "record-common-v0.schema.json#/$defs/hex64"
         },
         "kind": {
-          "const": "platform-approval-observation"
+          "enum": [
+            "platform-approval-observation",
+            "counterparty-acceptance-observation"
+          ]
         },
         "platform": {
           "$ref": "record-common-v0.schema.json#/$defs/caller_name"
@@ -117,6 +121,33 @@
         },
         "semantic_diff_digest": {
           "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "content_commitment": {
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "channel": {
+          "description": "counterparty_acceptance: the channel kind the counterparty accepted on (x-deal-v0's channel set). A kind, never an address.",
+          "anyOf": [
+            {
+              "enum": [
+                "marketplace",
+                "web",
+                "sms",
+                "phone_call",
+                "email",
+                "app_chat",
+                "whatsapp",
+                "telegram",
+                "signal",
+                "in_person",
+                "other"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+\\.[a-z][a-z0-9_]{0,63}$"
+            }
+          ]
         }
       },
       "allOf": [
@@ -180,6 +211,16 @@
                 {
                   "required": [
                     "semantic_diff_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "content_commitment"
+                  ]
+                },
+                {
+                  "required": [
+                    "channel"
                   ]
                 }
               ]
@@ -250,6 +291,16 @@
                   "required": [
                     "semantic_diff_digest"
                   ]
+                },
+                {
+                  "required": [
+                    "content_commitment"
+                  ]
+                },
+                {
+                  "required": [
+                    "channel"
+                  ]
                 }
               ]
             }
@@ -303,6 +354,16 @@
                   "required": [
                     "semantic_diff_digest"
                   ]
+                },
+                {
+                  "required": [
+                    "content_commitment"
+                  ]
+                },
+                {
+                  "required": [
+                    "channel"
+                  ]
                 }
               ]
             },
@@ -310,6 +371,11 @@
               "amount_minor": [
                 "currency"
               ]
+            },
+            "properties": {
+              "kind": {
+                "const": "platform-approval-observation"
+              }
             }
           }
         },
@@ -378,6 +444,102 @@
                 {
                   "required": [
                     "amount_minor"
+                  ]
+                },
+                {
+                  "required": [
+                    "content_commitment"
+                  ]
+                },
+                {
+                  "required": [
+                    "channel"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "authority": {
+                "const": "counterparty_acceptance"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "kind",
+              "proposed_action_ref",
+              "observed_at",
+              "content_commitment"
+            ],
+            "properties": {
+              "kind": {
+                "const": "counterparty-acceptance-observation"
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "choice"
+                  ]
+                },
+                {
+                  "required": [
+                    "proceed"
+                  ]
+                },
+                {
+                  "required": [
+                    "said_commitment"
+                  ]
+                },
+                {
+                  "required": [
+                    "rendering_commitment"
+                  ]
+                },
+                {
+                  "required": [
+                    "platform"
+                  ]
+                },
+                {
+                  "required": [
+                    "mechanism"
+                  ]
+                },
+                {
+                  "required": [
+                    "displayed_text_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "returned_user_text_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "amount_minor"
+                  ]
+                },
+                {
+                  "required": [
+                    "currency"
+                  ]
+                },
+                {
+                  "required": [
+                    "effective_policy_digest"
+                  ]
+                },
+                {
+                  "required": [
+                    "semantic_diff_digest"
                   ]
                 }
               ]

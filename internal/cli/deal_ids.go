@@ -207,7 +207,7 @@ func commitText(nonceHex, text string) (string, error) {
 // Pre-seal scans, the same as the profile checker's personal_data and
 // wording stages. A hit is a bug in the producer, so the step is not sealed.
 var (
-	scanExempt = regexp.MustCompile(`^([0-9a-f]{16,}|deal-[0-9a-f]+|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?|[a-z0-9-]+/[a-z0-9-]+/\d+\.\d+\.\d+)$`)
+	scanExempt = regexp.MustCompile(`^([0-9a-f]{16,}|(deal|sale)-[0-9a-f]+|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?|[a-z0-9-]+/[a-z0-9-]+/\d+\.\d+\.\d+)$`)
 	scanPhone  = regexp.MustCompile(`\+?\(?\d[\d\s().-]{6,}\d`)
 	scanEmail  = regexp.MustCompile(`[^\s@]+@[^\s@]+\.[^\s@]+`)
 	scanWords  = regexp.MustCompile(`[^a-z]+`)

@@ -87,15 +87,38 @@ func dealActionClass(dealType, action, direction string) string {
 	return classExternalCommitOther
 }
 
+// dealRoleActionClass is dealActionClass for the side of the deal the user is
+// on. A seller's commit accepts an agreement to be paid: money comes in, so
+// it is agreement.accept in every deal type, never a purchase or booking a
+// cap would count.
+func dealRoleActionClass(role, dealType, action, direction string) string {
+	if role == dealRoleSeller && action == "commit" {
+		return classAgreementAccept
+	}
+	return dealActionClass(dealType, action, direction)
+}
+
+// dealRoleSpendMinor is dealSpendMinor for the side of the deal the user is
+// on: a seller's commit is money in, so its spend is 0, and a weekly total
+// never counts a sale.
+func dealRoleSpendMinor(role, action, direction string, amount *int64) (int64, bool) {
+	if role == dealRoleSeller && action == "commit" {
+		return 0, true
+	}
+	return dealSpendMinor(action, direction, amount)
+}
+
 // dealSpendMinor is the amount of an action a spend cap evaluates, sealed as
 // spend_minor beside its class: what the action pays out. Stopping a
 // commitment is never spend, so every cancel is 0, whether it returns a
 // payment, returns part of one, or costs a fee (a fee is recorded as its own
 // fee_minor, and no cap evaluates it). Any other action spends its amount,
-// unless it moved money in. With no amount and no cancel, there is none.
+// unless it moved money in. An offer is a seller's proposal: its amount is
+// what the buyer would pay, never the user's spend. With no amount and no
+// cancel, there is none.
 func dealSpendMinor(action, direction string, amount *int64) (int64, bool) {
 	switch {
-	case action == "cancel":
+	case action == "cancel", action == offerAction:
 		return 0, true
 	case amount == nil || direction == "in":
 		return 0, false

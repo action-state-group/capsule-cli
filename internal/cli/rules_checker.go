@@ -610,6 +610,12 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 	if opening := boundsOpeningInForce(events); opening != nil {
 		input["commercial_bounds_opening"] = opening
 	}
+	// On a sale's thread, the sale's item reference, in the clear for this
+	// device's own checker only: equal across the sale's threads, so a rule
+	// can hold the sale to one accepted commitment. No record carries it.
+	if item := events[0].Event.Open.ItemRef; item != "" {
+		input["item_ref"] = item
+	}
 	raw, err := json.Marshal(input)
 	return raw, scope, err
 }

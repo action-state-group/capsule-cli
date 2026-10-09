@@ -1,0 +1,40 @@
+{
+  "fixture": "01-sale.json",
+  "expect": "valid",
+  "story": "Where the user sells one item to one of several buyers: the sale's own log opens with what is for sale and the seller's request, before any buyer, the item reference only as a commitment.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "sale-3c9e1a7b5d2f8064",
+      "record_type": "sale",
+      "seq": 1,
+      "at": "2026-10-06T08:00:00Z"
+    },
+    "body": {
+      "deal_type": "purchase",
+      "demo": true,
+      "intent": {
+        "verbatim_commitment": "d3fac6cc87ae05ca64c403cf54e951802794208efc2d566acef5ffe7c3f7b7aa",
+        "party_role": "seller",
+        "allowed": [
+          "offer",
+          "commit"
+        ],
+        "bounds_commitment": "1fa905fd9fdac587a2a833c571c2598dede7e529526f4da8097686391ca9c32c"
+      },
+      "terms": {
+        "item": "example bicycle",
+        "quantity": 1,
+        "price_minor": 190000,
+        "currency": "USD"
+      },
+      "recourse": {
+        "rail": "card",
+        "refundable": false
+      },
+      "item_ref_commitment": "f6bd9aacf91735e696de0cab23142dfd5a1db5086deede44baaec14f83996df9"
+    }
+  },
+  "expected_digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+}
