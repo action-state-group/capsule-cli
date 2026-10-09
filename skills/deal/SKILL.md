@@ -429,6 +429,14 @@ folder) is visible, and it may be the one being followed. The record shows
 which instructions were present when the deal opened, as you reported them;
 it is not proof that they were followed. Never say it is.
 
+When the other party also keeps a capsulectl record of this deal and has
+opened it already, open your side under **their** deal id (`deal-` and 16
+hex, as their `deal open` printed it, and as their shared copies show it):
+`deal open --deal-id deal-… --input open.json`. Both copies then carry one
+deal id and can be put side by side and checked as one deal. The id names the
+deal and nothing else: never put a description or a link in its place. Open
+under a given id only once.
+
 `open.json` carries: `type`; `intent.verbatim` (**the user's exact words**,
 copied, never paraphrased); `intent.asked` (the parts of the request you can
 make exact), `intent.max_total_minor`, `intent.allowed` (the actions the user
