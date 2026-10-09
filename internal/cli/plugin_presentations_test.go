@@ -229,3 +229,9 @@ func TestAnOlderHostIgnoresPresentations(t *testing.T) {
 	require.NoError(t, json.Unmarshal(meta, &older))
 	assert.Equal(t, olderInfo{Name: "view", PluginAPI: pluginAPI, Subcommands: []string{"decide"}}, older)
 }
+
+// The vendored manifest schema is agent-action-capsule's, unmodified, at the
+// commit go.mod pins (assets/presentation/README.md).
+func TestThePresentationSchemaIsPinned(t *testing.T) {
+	assert.Equal(t, "077a69fd0dc670bdff6f9fe9793540ffb241873fb5687000cc519241e69ef5a1", hexSHA256(presentationManifestSchema), "refresh from agent-action-capsule at the pinned commit; never hand-edit")
+}

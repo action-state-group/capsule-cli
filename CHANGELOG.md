@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### A plugin may offer presentations
+
+- **Added:** the cli-plugin/v1 handshake may carry `presentations`.
+  - **What each entry holds:** an `aac.presentation-manifest/v0` manifest (agent-action-capsule's
+    presentation contract) and the files it names by role (`script`, `style`, `wording`) with their
+    SHA-256.
+  - **Compatibility:** an older capsulectl ignores the member. A module's compatibility is its
+    manifest's `presentation_api` and `runtime_min`, not cli-plugin/v1.
+- **How each file is checked:** capsulectl reads it itself, from the launcher's own directory,
+  under the launcher's trust rules, at most 1 MiB. It must hash to both its entry's digest and the
+  digest the manifest pins.
+  - The manifest and any wording pack are checked against the contract's schema.
+  - A plugin's code module is carried in the module slot.
+  - Any failure refuses that plugin's presentations, with the reason in `plugin ls`; its
+    subcommands still run.
+- **Presentations load only from the two built-in plugin roots.** `CAPSULECTL_PLUGIN_ROOTS` never
+  makes a directory a source of them.
+- **Not in this change:** putting presentations into a page.
+
 ### New deal records seal action taxonomy version 6
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
