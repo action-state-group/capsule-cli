@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### A rules checker is told which side of the deal the user is on
+
+- **Changed (checker input).** Every deal check now sends `party_role` (`buyer` or `seller`) at the
+  top level of `external-check-input/v0`. It is the side the deal's opening intent sealed, or
+  `buyer` when it names none, and it is always explicit, so a checker selects its rules without
+  inferring the side.
+- **Release pairing.** The input's top level refuses members it does not list, so a checker built
+  before this change refuses every check that carries `party_role`. A release that sends it ships
+  with a checker that accepts it.
+- **The deal id has one source per record:** an x-deal-v0 record's `deal_id`, or a typed record's
+  `chain_id`, which is exactly that value. No record carries both, and a test now holds it.
+
 ### A shared copy lists the counterparty_profile step under a neutral kind
 
 - **Changed:** a shared copy (counterparty or adjudicator) lists every step of the log, withheld
