@@ -51,13 +51,19 @@ func startHeadlessChrome(t *testing.T, binary string) *headlessChrome {
 	require.NoError(t, err)
 	replies, fromChrome, err := os.Pipe()
 	require.NoError(t, err)
+	// Chrome's helper processes can still be writing its profile when the
+	// browser itself has exited, so the profile is not a t.TempDir (whose
+	// cleanup fails on a directory that is not yet empty): it is removed
+	// after the browser is killed, retrying briefly, and never fails a test.
+	profile, err := os.MkdirTemp("", "capsulectl-chrome-")
+	require.NoError(t, err)
 	// No page may reach the network: every host name resolves to nothing,
 	// and each page's requests are checked as well (see open).
 	cmd := exec.Command(binary, "--headless=new", "--remote-debugging-pipe", "--no-sandbox",
 		"--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
 		"--host-resolver-rules=MAP * ~NOTFOUND", "--disable-background-networking",
 		"--disable-component-update", "--disable-sync",
-		"--user-data-dir="+t.TempDir(), "about:blank")
+		"--user-data-dir="+profile, "about:blank")
 	cmd.ExtraFiles = []*os.File{toChrome, fromChrome}
 	require.NoError(t, cmd.Start())
 	require.NoError(t, toChrome.Close())
@@ -69,6 +75,9 @@ func startHeadlessChrome(t *testing.T, binary string) *headlessChrome {
 		_ = commands.Close()
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
+		for i := 0; i < 20 && os.RemoveAll(profile) != nil; i++ {
+			time.Sleep(100 * time.Millisecond)
+		}
 	})
 	return c
 }
