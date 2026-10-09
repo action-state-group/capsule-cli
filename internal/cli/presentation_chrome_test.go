@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,6 +28,8 @@ type headlessChrome struct {
 	reply  map[int]chan cdpMessage
 	events chan cdpMessage
 	done   chan struct{}
+	// requests holds, per page session, every URL the page asked for.
+	requests map[string][]string
 }
 
 type cdpMessage struct {
@@ -46,15 +49,19 @@ func startHeadlessChrome(t *testing.T, binary string) *headlessChrome {
 	require.NoError(t, err)
 	replies, fromChrome, err := os.Pipe()
 	require.NoError(t, err)
+	// No page may reach the network: every host name resolves to nothing,
+	// and each page's requests are checked as well (see open).
 	cmd := exec.Command(binary, "--headless=new", "--remote-debugging-pipe", "--no-sandbox",
 		"--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
+		"--host-resolver-rules=MAP * ~NOTFOUND", "--disable-background-networking",
+		"--disable-component-update", "--disable-sync",
 		"--user-data-dir="+t.TempDir(), "about:blank")
 	cmd.ExtraFiles = []*os.File{toChrome, fromChrome}
 	require.NoError(t, cmd.Start())
 	require.NoError(t, toChrome.Close())
 	require.NoError(t, fromChrome.Close())
 	c := &headlessChrome{cmd: cmd, in: commands, reply: map[int]chan cdpMessage{},
-		events: make(chan cdpMessage, 1024), done: make(chan struct{})}
+		events: make(chan cdpMessage, 1024), done: make(chan struct{}), requests: map[string][]string{}}
 	go c.read(replies)
 	t.Cleanup(func() {
 		_ = commands.Close()
@@ -77,6 +84,18 @@ func (c *headlessChrome) read(replies *os.File) {
 			continue
 		}
 		if m.ID == 0 {
+			if m.Method == "Network.requestWillBeSent" {
+				var sent struct {
+					Request struct {
+						URL string `json:"url"`
+					} `json:"request"`
+				}
+				if json.Unmarshal(m.Params, &sent) == nil {
+					c.mu.Lock()
+					c.requests[m.SessionID] = append(c.requests[m.SessionID], sent.Request.URL)
+					c.mu.Unlock()
+				}
+			}
 			select {
 			case c.events <- m:
 			default:
@@ -179,6 +198,7 @@ func (c *headlessChrome) open(t *testing.T, url string, view pageView) openedPag
 	p := openedPage{c: c, session: s, target: target.TargetID}
 	t.Cleanup(func() { _ = c.call("", "Target.closeTarget", map[string]any{"targetId": target.TargetID}, nil) })
 	require.NoError(t, c.call(s, "Page.enable", map[string]any{}, nil))
+	require.NoError(t, c.call(s, "Network.enable", map[string]any{}, nil))
 	require.NoError(t, c.call(s, "Page.addScriptToEvaluateOnNewDocument", map[string]any{"source": errorHook}, nil))
 	require.NoError(t, c.call(s, "Emulation.setDeviceMetricsOverride", map[string]any{
 		"width": view.width, "height": view.height, "deviceScaleFactor": 1, "mobile": view.mobile}, nil))
@@ -191,7 +211,33 @@ func (c *headlessChrome) open(t *testing.T, url string, view pageView) openedPag
 	var errs []string
 	p.eval(t, `window.__renderErrors || ["the error hook did not run"]`, &errs)
 	require.Empty(t, errs, "console errors, uncaught errors or unhandled rejections (%s)", view.name)
+	require.Empty(t, c.externalRequests(s), "the page asked for something outside itself (%s)", view.name)
 	return p
+}
+
+// externalRequests is every URL a page session asked for that is not the
+// page itself or data it carries.
+func (c *headlessChrome) externalRequests(session string) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []string
+	for _, u := range c.requests[session] {
+		if !strings.HasPrefix(u, "file:") && !strings.HasPrefix(u, "data:") &&
+			!strings.HasPrefix(u, "blob:") && !strings.HasPrefix(u, "about:") {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+// version is the browser's product string, e.g. "HeadlessChrome/155.0.8059.39".
+func (c *headlessChrome) version(t *testing.T) string {
+	t.Helper()
+	var v struct {
+		Product string `json:"product"`
+	}
+	require.NoError(t, c.call("", "Browser.getVersion", map[string]any{}, &v))
+	return v.Product
 }
 
 func (c *headlessChrome) waitFor(t *testing.T, session, method string) {
