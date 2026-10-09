@@ -1730,6 +1730,11 @@ func buildDealReport(events []sealedEvent) dealReport {
 			checkItem[se.CapsuleID] = len(r.Did)
 			text := fmt.Sprintf("Checked before %s: %s", actionNames[e.Check.Action], verdict)
 			shared := text
+			// The rules the ruleset declares and the checker does not measure,
+			// quietly, in the user's own copy only (they are the user's policy).
+			if declared := declaredRules(e.Check.Rules); len(declared) > 0 {
+				text += "; " + strings.TrimSuffix(declaredRulesLine(declared), ".")
+			}
 			// What the user chose and what the agent chose for them, told
 			// apart as the approval text tells them, so a choice the agent
 			// made never reads as the user's.
