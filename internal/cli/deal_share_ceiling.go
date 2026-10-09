@@ -124,6 +124,15 @@ func dealCeilingGate(data []byte, events []sealedEvent, audience string) error {
 	if counterparty && strings.Contains(text, "max_total_minor") {
 		return refuseLimit
 	}
+	// The bound as money in any of the ways prose writes it ("$1,700.00",
+	// "1.700,00 €", "USD 1 700", "lowest I'll take is 1700"), compared by
+	// value.
+	switch statesBound(string(data), events, counterparty) {
+	case "intent.min_total_minor":
+		return refuseFloor
+	case "intent.max_total_minor":
+		return refuseLimit
+	}
 	shown := dealShownAmounts(events)
 	for _, c := range dealCeilings(events) {
 		if shown[c.minor] || (!c.floor && !counterparty) {
