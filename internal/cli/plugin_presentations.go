@@ -60,6 +60,33 @@ func builtinPluginRoots() []string {
 	return roots
 }
 
+// presentationRefusal is why a plugin's presentations were refused: a
+// machine-readable reason, the file it concerns (when one), and the detail.
+// The reasons: untrusted_root, invalid_manifest, invalid_files,
+// unsupported_carrier, duplicate_id, path_escape, writable, missing_file,
+// oversize, digest_mismatch, invalid_wording, unreadable.
+type presentationRefusal struct {
+	Reason string `json:"reason"`
+	File   string `json:"file,omitempty"`
+	Detail string `json:"detail"`
+}
+
+func (r *presentationRefusal) Error() string { return r.Detail }
+
+func refuse(reason, file, format string, args ...interface{}) error {
+	return &presentationRefusal{Reason: reason, File: file, Detail: fmt.Sprintf(format, args...)}
+}
+
+// asRefusal is err as a refusal; an error loadPresentations did not classify
+// (the launcher could not be resolved, the schema could not be read) is
+// "unreadable".
+func asRefusal(err error) *presentationRefusal {
+	if r, ok := err.(*presentationRefusal); ok {
+		return r
+	}
+	return &presentationRefusal{Reason: "unreadable", Detail: err.Error()}
+}
+
 type pluginPresentation struct {
 	Manifest json.RawMessage          `json:"manifest"`
 	Files    []pluginPresentationFile `json:"files"`
@@ -131,7 +158,7 @@ func loadPresentations(info pluginInfo) ([]presentationModule, error) {
 		return nil, err
 	}
 	if root := rootOf(launcher, presentationRoots()); root == "" {
-		return nil, fmt.Errorf("presentations load only from the built-in plugin roots (%s), and %s is not under one", strings.Join(presentationRoots(), ", "), launcher)
+		return nil, refuse("untrusted_root", "", "presentations load only from the built-in plugin roots (%s), and %s is not under one", strings.Join(presentationRoots(), ", "), launcher)
 	}
 	dir := filepath.Dir(launcher)
 	seen := map[string]bool{}
@@ -139,10 +166,13 @@ func loadPresentations(info pluginInfo) ([]presentationModule, error) {
 	for i, p := range info.Presentations {
 		m, err := loadPresentation(dir, p)
 		if err != nil {
-			return nil, fmt.Errorf("presentation %d: %w", i, err)
+			if r, ok := err.(*presentationRefusal); ok {
+				r.Detail = fmt.Sprintf("presentation %d: %s", i, r.Detail)
+			}
+			return nil, err
 		}
 		if seen[m.ID] {
-			return nil, fmt.Errorf("presentation %d: the module id %s is given twice", i, m.ID)
+			return nil, refuse("duplicate_id", "", "presentation %d: the module id %s is given twice", i, m.ID)
 		}
 		seen[m.ID] = true
 		m.plugin = info.Name
@@ -172,10 +202,10 @@ func loadPresentation(dir string, p pluginPresentation) (presentationModule, err
 	}
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(p.Manifest))
 	if err != nil {
-		return m, fmt.Errorf("the manifest is not JSON")
+		return m, refuse("invalid_manifest", "", "the manifest is not JSON")
 	}
 	if err = schema.Validate(doc); err != nil {
-		return m, fmt.Errorf("the manifest is not an aac.presentation-manifest/v0: %s", firstSchemaError(err))
+		return m, refuse("invalid_manifest", "", "the manifest is not an aac.presentation-manifest/v0: %s", firstSchemaError(err))
 	}
 	if err = json.Unmarshal(p.Manifest, &m.Manifest); err != nil {
 		return m, err
@@ -189,7 +219,7 @@ func loadPresentation(dir string, p pluginPresentation) (presentationModule, err
 	case "trusted-executable":
 		exec, _ := m.Manifest["executable"].(map[string]interface{})
 		if exec["carrier"] != "module-slot" {
-			return m, fmt.Errorf("%s: a plugin's module is carried in the module slot; core-runtime modules ship inside the runtime", m.ID)
+			return m, refuse("unsupported_carrier", "", "%s: a plugin's module is carried in the module slot; core-runtime modules ship inside the runtime", m.ID)
 		}
 		script, _ = exec["script_sha256"].(string)
 		for _, s := range asList(exec["style_sha256"]) {
@@ -206,20 +236,23 @@ func loadPresentation(dir string, p pluginPresentation) (presentationModule, err
 	}
 	for role := range byRole {
 		if role != "script" && role != "style" && role != "wording" {
-			return m, fmt.Errorf("%s: unknown file role %q", m.ID, role)
+			return m, refuse("invalid_files", "", "%s: unknown file role %q", m.ID, role)
 		}
 	}
 	read := func(f pluginPresentationFile) (presentationFile, error) {
 		if !lowerHexDigest.MatchString(f.SHA256) {
-			return presentationFile{}, fmt.Errorf("%s: %s's sha256 is not 64 lowercase hex", m.ID, f.Path)
+			return presentationFile{}, refuse("invalid_files", f.Path, "%s: %s's sha256 is not 64 lowercase hex", m.ID, f.Path)
 		}
 		bytes, err := readPresentationFile(dir, f.Path)
 		if err != nil {
-			return presentationFile{}, fmt.Errorf("%s: %w", m.ID, err)
+			if r, ok := err.(*presentationRefusal); ok {
+				r.Detail = m.ID + ": " + r.Detail
+			}
+			return presentationFile{}, err
 		}
 		sum := sha256.Sum256(bytes)
 		if got := hex.EncodeToString(sum[:]); got != f.SHA256 {
-			return presentationFile{}, fmt.Errorf("%s: %s hashes to %s, not the %s it states", m.ID, f.Path, got, f.SHA256)
+			return presentationFile{}, refuse("digest_mismatch", f.Path, "%s: %s hashes to %s, not the %s it states", m.ID, f.Path, got, f.SHA256)
 		}
 		return presentationFile{SHA256: f.SHA256, Bytes: bytes}, nil
 	}
@@ -227,16 +260,16 @@ func loadPresentation(dir string, p pluginPresentation) (presentationModule, err
 	// The script: exactly one for a module-slot module, none otherwise.
 	switch scripts := byRole["script"]; {
 	case script == "" && len(scripts) > 0:
-		return m, fmt.Errorf("%s: a %s module carries no script", m.ID, m.TrustClass)
+		return m, refuse("invalid_files", "", "%s: a %s module carries no script", m.ID, m.TrustClass)
 	case script != "" && len(scripts) != 1:
-		return m, fmt.Errorf("%s: the manifest pins one script; the plugin lists %d", m.ID, len(scripts))
+		return m, refuse("invalid_files", "", "%s: the manifest pins one script; the plugin lists %d", m.ID, len(scripts))
 	case script != "":
 		f, err := read(scripts[0])
 		if err != nil {
 			return m, err
 		}
 		if f.SHA256 != script {
-			return m, fmt.Errorf("%s: the script is %s, not the script_sha256 the manifest pins", m.ID, f.SHA256)
+			return m, refuse("digest_mismatch", scripts[0].Path, "%s: the script is %s, not the script_sha256 the manifest pins", m.ID, f.SHA256)
 		}
 		m.Script = &f
 	}
@@ -253,32 +286,32 @@ func loadPresentation(dir string, p pluginPresentation) (presentationModule, err
 	sort.Strings(gotStyles)
 	sort.Strings(styles)
 	if !slices.Equal(gotStyles, styles) {
-		return m, fmt.Errorf("%s: the stylesheets listed are not the style_sha256 the manifest pins", m.ID)
+		return m, refuse("digest_mismatch", "", "%s: the stylesheets listed are not the style_sha256 the manifest pins", m.ID)
 	}
 	// The wording pack: the one the manifest pins, a valid wording pack.
 	switch words := byRole["wording"]; {
 	case wording == "" && len(words) > 0:
-		return m, fmt.Errorf("%s: the manifest pins no wording pack", m.ID)
+		return m, refuse("invalid_files", "", "%s: the manifest pins no wording pack", m.ID)
 	case wording != "" && len(words) != 1:
-		return m, fmt.Errorf("%s: the manifest pins one wording pack; the plugin lists %d", m.ID, len(words))
+		return m, refuse("invalid_files", "", "%s: the manifest pins one wording pack; the plugin lists %d", m.ID, len(words))
 	case wording != "":
 		f, err := read(words[0])
 		if err != nil {
 			return m, err
 		}
 		if f.SHA256 != wording {
-			return m, fmt.Errorf("%s: the wording pack is %s, not the wording_sha256 the manifest pins", m.ID, f.SHA256)
+			return m, refuse("digest_mismatch", words[0].Path, "%s: the wording pack is %s, not the wording_sha256 the manifest pins", m.ID, f.SHA256)
 		}
 		pack, err := jsonschema.UnmarshalJSON(bytes.NewReader(f.Bytes))
 		if err != nil {
-			return m, fmt.Errorf("%s: the wording pack is not JSON", m.ID)
+			return m, refuse("invalid_wording", words[0].Path, "%s: the wording pack is not JSON", m.ID)
 		}
 		schema, err := presentationSchema("wording")
 		if err != nil {
 			return m, err
 		}
 		if err = schema.Validate(pack); err != nil {
-			return m, fmt.Errorf("%s: the wording pack is not valid: %s", m.ID, firstSchemaError(err))
+			return m, refuse("invalid_wording", words[0].Path, "%s: the wording pack is not valid: %s", m.ID, firstSchemaError(err))
 		}
 		m.Wording = &f
 	}
@@ -296,17 +329,21 @@ func asList(v interface{}) []interface{} {
 // most presentationFileLimit bytes.
 func readPresentationFile(dir, rel string) ([]byte, error) {
 	if rel == "" || filepath.IsAbs(rel) || rel != filepath.Clean(rel) || strings.HasPrefix(rel, "..") {
-		return nil, fmt.Errorf("%q is not a plain path relative to the plugin's directory", rel)
+		return nil, refuse("path_escape", rel, "%q is not a plain path relative to the plugin's directory", rel)
 	}
 	resolved, err := filepath.EvalSymlinks(filepath.Join(dir, rel))
 	if err != nil {
-		return nil, fmt.Errorf("cannot resolve %s: %w", rel, err)
+		return nil, refuse("missing_file", rel, "cannot resolve %s: %v", rel, err)
 	}
 	if !strings.HasPrefix(resolved, dir+string(os.PathSeparator)) {
-		return nil, fmt.Errorf("%s resolves to %s, outside the plugin's directory", rel, resolved)
+		return nil, refuse("path_escape", rel, "%s resolves to %s, outside the plugin's directory", rel, resolved)
 	}
 	if err = verifyTrustedPath(resolved); err != nil {
-		return nil, err
+		reason := "path_escape" // outside the roots, or not a regular file
+		if msg := err.Error(); strings.Contains(msg, "writable") || strings.Contains(msg, "owned by") {
+			reason = "writable"
+		}
+		return nil, refuse(reason, rel, "%v", err)
 	}
 	f, err := os.Open(resolved)
 	if err != nil {
@@ -318,7 +355,7 @@ func readPresentationFile(dir, rel string) ([]byte, error) {
 		return nil, err
 	}
 	if len(data) > presentationFileLimit {
-		return nil, fmt.Errorf("%s is larger than %d bytes", rel, presentationFileLimit)
+		return nil, refuse("oversize", rel, "%s is larger than %d bytes", rel, presentationFileLimit)
 	}
 	return data, nil
 }

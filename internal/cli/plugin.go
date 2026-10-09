@@ -114,7 +114,7 @@ type pluginInfo struct {
 	path          string
 	// presentations are the checked modules, or refusal why there are none.
 	presentations []presentationModule
-	refusal       string
+	refusal       *presentationRefusal
 }
 
 // pluginMetadata runs the launcher's cli-plugin-metadata handshake. A launcher
@@ -198,7 +198,7 @@ func discoverPluginsAndRefusals() ([]pluginInfo, []refusedPlugin) {
 			}
 			// A plugin whose presentations are refused still dispatches.
 			if info.presentations, err = loadPresentations(info); err != nil {
-				info.presentations, info.refusal = nil, err.Error()
+				info.presentations, info.refusal = nil, asRefusal(err)
 			}
 			seen[name] = true
 			plugins = append(plugins, info)
@@ -281,7 +281,7 @@ func pluginGroup() *cobra.Command {
 							"presentation_api": m.Manifest["presentation_api"], "runtime_min": m.Manifest["runtime_min"]})
 					}
 					row["presentations"] = modules
-					if p.refusal != "" {
+					if p.refusal != nil {
 						row["presentations_refused"] = p.refusal
 					}
 				}

@@ -15,8 +15,13 @@
   digest the manifest pins.
   - The manifest and any wording pack are checked against the contract's schema.
   - A plugin's code module is carried in the module slot.
-  - Any failure refuses that plugin's presentations, with the reason in `plugin ls`; its
-    subcommands still run.
+  - Any failure refuses that plugin's presentations; its subcommands still run. `plugin ls` reports
+    the refusal as `presentations_refused: {reason, file, detail}`, with a machine-readable
+    reason: `digest_mismatch`, `path_escape`, `writable`, `oversize`, `invalid_manifest`,
+    `invalid_files`, `invalid_wording`, `unsupported_carrier`, `duplicate_id`, `missing_file`,
+    `untrusted_root` or `unreadable`.
+- **Layout:** a plugin keeps its files under `<launcher>.d/presentations/<module>/`, user-owned
+  `0644` files in `0755` directories.
 - **Presentations load only from the two built-in plugin roots.** `CAPSULECTL_PLUGIN_ROOTS` never
   makes a directory a source of them.
 - **Not in this change:** putting presentations into a page.

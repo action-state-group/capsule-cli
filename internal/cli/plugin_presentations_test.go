@@ -59,7 +59,13 @@ func moduleSlotFixture() presentationFixture {
 func presentationPlugin(t *testing.T, root, name string, p presentationFixture) {
 	t.Helper()
 	for file, body := range p.files {
-		require.NoError(t, os.WriteFile(filepath.Join(root, file), body, 0o644))
+		path := filepath.Join(root, file)
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		for dir := filepath.Dir(path); dir != root; dir = filepath.Dir(dir) {
+			require.NoError(t, os.Chmod(dir, 0o755)) // MkdirAll takes the umask
+		}
+		require.NoError(t, os.WriteFile(path, body, 0o644))
+		require.NoError(t, os.Chmod(path, 0o644))
 	}
 	meta, err := json.Marshal(map[string]any{
 		"name": name, "vendor": "Example", "version": "1.0.0", "plugin_api": pluginAPI, "subcommands": []any{"decide"},
@@ -97,7 +103,7 @@ func TestAPluginsPresentationLoads(t *testing.T) {
 	trustPresentationsIn(t, root)
 	presentationPlugin(t, root, "view", moduleSlotFixture())
 	p := discovered(t, "view")
-	require.Empty(t, p.refusal)
+	require.Nil(t, p.refusal)
 	require.Len(t, p.presentations, 1)
 	m := p.presentations[0]
 	assert.Equal(t, "org.example.view/v0", m.ID)
@@ -132,7 +138,7 @@ func TestADeclarativePresentationLoads(t *testing.T) {
 	p.entries = p.entries[2:]
 	presentationPlugin(t, root, "rules", p)
 	got := discovered(t, "rules")
-	require.Empty(t, got.refusal)
+	require.Nil(t, got.refusal)
 	require.Len(t, got.presentations, 1)
 	assert.Nil(t, got.presentations[0].Script)
 }
@@ -144,42 +150,43 @@ func TestAPluginsPresentationIsRefused(t *testing.T) {
 	cases := map[string]struct {
 		change func(t *testing.T, root string, p *presentationFixture)
 		reason string
+		code   string
 	}{
 		"a file that does not hash to its entry": {func(_ *testing.T, _ string, p *presentationFixture) {
 			p.files["view.js"] = []byte("globalThis.other = 1;")
-		}, "not the"},
+		}, "not the", "digest_mismatch"},
 		"an entry the manifest does not pin": {func(_ *testing.T, _ string, p *presentationFixture) {
 			other := []byte("globalThis.other = 1;")
 			p.files["view.js"] = other
 			p.entries[0]["sha256"] = hexSHA256(other)
-		}, "not the script_sha256 the manifest pins"},
+		}, "not the script_sha256 the manifest pins", "digest_mismatch"},
 		"a path out of the plugin's directory": {func(_ *testing.T, _ string, p *presentationFixture) {
 			p.entries[0]["path"] = "../view.js"
-		}, "not a plain path"},
+		}, "not a plain path", "path_escape"},
 		"an absolute path": {func(_ *testing.T, root string, p *presentationFixture) {
 			p.entries[0]["path"] = filepath.Join(root, "view.js")
-		}, "not a plain path"},
+		}, "not a plain path", "path_escape"},
 		"a symlink out of the plugin's directory": {func(t *testing.T, root string, p *presentationFixture) {
 			outside := filepath.Join(t.TempDir(), "elsewhere.js")
 			require.NoError(t, os.WriteFile(outside, fixtureScript, 0o644))
 			require.NoError(t, os.Symlink(outside, filepath.Join(root, "link.js")))
 			p.entries[0]["path"] = "link.js"
-		}, "outside the plugin's directory"},
+		}, "outside the plugin's directory", "path_escape"},
 		"a group-writable file": {func(t *testing.T, root string, p *presentationFixture) {
 			// made group-writable once written, below
-		}, "group-writable"},
+		}, "group-writable", "writable"},
 		"a file over the size limit": {func(_ *testing.T, _ string, p *presentationFixture) {
 			p.files["view.js"] = big
 			p.entries[0]["sha256"] = hexSHA256(big)
 			p.manifest["executable"].(map[string]any)["script_sha256"] = hexSHA256(big)
-		}, "larger than"},
+		}, "larger than", "oversize"},
 		"an invalid manifest": {func(_ *testing.T, _ string, p *presentationFixture) {
 			p.manifest["title"] = "words in a manifest"
-		}, "not an aac.presentation-manifest/v0"},
+		}, "not an aac.presentation-manifest/v0", "invalid_manifest"},
 		"a core-runtime module": {func(_ *testing.T, _ string, p *presentationFixture) {
 			p.manifest["executable"] = map[string]any{"carrier": "core-runtime"}
 			p.entries = nil
-		}, "carried in the module slot"},
+		}, "carried in the module slot", "unsupported_carrier"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -193,7 +200,9 @@ func TestAPluginsPresentationIsRefused(t *testing.T) {
 			}
 			got := discovered(t, "view")
 			assert.Empty(t, got.presentations)
-			assert.Contains(t, got.refusal, c.reason)
+			require.NotNil(t, got.refusal)
+			assert.Equal(t, c.code, got.refusal.Reason, got.refusal.Detail)
+			assert.Contains(t, got.refusal.Detail, c.reason)
 			assert.Equal(t, []string{"decide"}, got.Subcommands, "the plugin itself is still discovered")
 		})
 	}
@@ -207,7 +216,9 @@ func TestTheRootsOverrideDoesNotTrustPresentations(t *testing.T) {
 	got := discovered(t, "view")
 	assert.Equal(t, []string{"decide"}, got.Subcommands, "the override still finds the plugin")
 	assert.Empty(t, got.presentations)
-	assert.Contains(t, got.refusal, "presentations load only from the built-in plugin roots")
+	require.NotNil(t, got.refusal)
+	assert.Equal(t, "untrusted_root", got.refusal.Reason)
+	assert.Contains(t, got.refusal.Detail, "presentations load only from the built-in plugin roots")
 	for _, r := range builtinPluginRoots() {
 		assert.False(t, strings.HasPrefix(root, r))
 	}
@@ -234,4 +245,80 @@ func TestAnOlderHostIgnoresPresentations(t *testing.T) {
 // commit go.mod pins (assets/presentation/README.md).
 func TestThePresentationSchemaIsPinned(t *testing.T) {
 	assert.Equal(t, "077a69fd0dc670bdff6f9fe9793540ffb241873fb5687000cc519241e69ef5a1", hexSHA256(presentationManifestSchema), "refresh from agent-action-capsule at the pinned commit; never hand-edit")
+}
+
+// inDotD moves a fixture's files under <launcher>.d/presentations/<module>/,
+// the layout a plugin installs them in.
+func inDotD(p presentationFixture, launcher string) presentationFixture {
+	dir := launcher + ".d/presentations/org.example.view/"
+	files := map[string][]byte{}
+	for name, body := range p.files {
+		files[dir+name] = body
+	}
+	p.files = files
+	for _, e := range p.entries {
+		e["path"] = dir + e["path"].(string)
+	}
+	return p
+}
+
+// A plugin keeps its presentation files in <launcher>.d/presentations/<module>/:
+// user-owned 0644 files in 0755 directories load; a group-writable directory
+// on the way, or a symlink out of the plugin's directory, is refused.
+func TestPresentationsLoadFromTheLaunchersDotDDirectory(t *testing.T) {
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	presentationPlugin(t, root, "view", inDotD(moduleSlotFixture(), "capsulectl-view"))
+	got := discovered(t, "view")
+	require.Nil(t, got.refusal)
+	require.Len(t, got.presentations, 1)
+	assert.Equal(t, fixtureScript, got.presentations[0].Script.Bytes)
+
+	t.Run("a group-writable directory", func(t *testing.T) {
+		root := pluginRoot(t)
+		trustPresentationsIn(t, root)
+		presentationPlugin(t, root, "view", inDotD(moduleSlotFixture(), "capsulectl-view"))
+		require.NoError(t, os.Chmod(filepath.Join(root, "capsulectl-view.d", "presentations"), 0o775))
+		got := discovered(t, "view")
+		require.NotNil(t, got.refusal)
+		assert.Equal(t, "writable", got.refusal.Reason)
+		assert.Contains(t, got.refusal.File, "capsulectl-view.d/presentations/")
+	})
+	t.Run("a symlink out of the plugin's directory", func(t *testing.T) {
+		root := pluginRoot(t)
+		trustPresentationsIn(t, root)
+		p := inDotD(moduleSlotFixture(), "capsulectl-view")
+		presentationPlugin(t, root, "view", p)
+		outside := filepath.Join(t.TempDir(), "view.js")
+		require.NoError(t, os.WriteFile(outside, fixtureScript, 0o644))
+		link := filepath.Join(root, "capsulectl-view.d/presentations/org.example.view/view.js")
+		require.NoError(t, os.Remove(link))
+		require.NoError(t, os.Symlink(outside, link))
+		got := discovered(t, "view")
+		require.NotNil(t, got.refusal)
+		assert.Equal(t, "path_escape", got.refusal.Reason)
+	})
+}
+
+// plugin ls (JSON) reports a refusal as {reason, file, detail}; the plugin's
+// subcommands are still listed.
+func TestPluginLsReportsARefusalByReason(t *testing.T) {
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	p := moduleSlotFixture()
+	p.files["view.js"] = []byte("globalThis.other = 1;")
+	presentationPlugin(t, root, "view", p)
+	out, err := invoke(t, "", "plugin", "ls") // JSON by default
+	require.NoError(t, err)
+	var ls struct {
+		Plugins []map[string]any `json:"plugins"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &ls))
+	require.Len(t, ls.Plugins, 1)
+	refused := ls.Plugins[0]["presentations_refused"].(map[string]any)
+	assert.Equal(t, "digest_mismatch", refused["reason"])
+	assert.Equal(t, "view.js", refused["file"])
+	assert.NotEmpty(t, refused["detail"])
+	assert.Equal(t, []any{"decide"}, ls.Plugins[0]["subcommands"])
+	assert.Equal(t, []any{}, ls.Plugins[0]["presentations"])
 }
