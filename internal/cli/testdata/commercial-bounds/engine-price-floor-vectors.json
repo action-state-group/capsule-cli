@@ -1,0 +1,816 @@
+{
+  "description": "price_floor/2.0.1 (capsule-engine 97a2aff) reference outcomes for the Go mirror: check_price_floor(action, task_authority_record, commercial_bounds_opening). bounds_commitment = SHA-256 over JCS({nonce, text}), text = JCS(commercial-bounds/v0 document). Golden vectors from capsule-cli 553e5414e480a55ddb3f39eedd2b2af85bfb6e32. item_ref: top-level checker-input item_ref -> Action.item_ref when 64 lowercase hex, else ignored and named in ignored_inputs.",
+  "item_ref": [
+    {
+      "expect": {
+        "action_item_ref": "3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+        "ignored_inputs": []
+      },
+      "item_ref": "3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+      "name": "valid"
+    },
+    {
+      "expect": {
+        "action_item_ref": null,
+        "ignored_inputs": [
+          "item_ref"
+        ]
+      },
+      "item_ref": "3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F3F",
+      "name": "upper-case"
+    },
+    {
+      "expect": {
+        "action_item_ref": null,
+        "ignored_inputs": [
+          "item_ref"
+        ]
+      },
+      "item_ref": "3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+      "name": "short"
+    },
+    {
+      "expect": {
+        "action_item_ref": null,
+        "ignored_inputs": [
+          "item_ref"
+        ]
+      },
+      "item_ref": "3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f\n",
+      "name": "trailing-newline"
+    },
+    {
+      "expect": {
+        "action_item_ref": null,
+        "ignored_inputs": [
+          "item_ref"
+        ]
+      },
+      "item_ref": "item/ref-1",
+      "name": "not-hex"
+    },
+    {
+      "expect": {
+        "action_item_ref": null,
+        "ignored_inputs": []
+      },
+      "item_ref": null,
+      "name": "absent"
+    }
+  ],
+  "price_floor": [
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 170000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "amount_minor": 170000,
+          "below_floor": false,
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the amount is at or above the committed floor",
+        "result": "pass"
+      },
+      "name": "golden-170000-at-floor",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 169999,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "amount_minor": 169999,
+          "below_floor": true,
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the amount is below the committed floor",
+        "result": "fail"
+      },
+      "name": "golden-170000-below",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 0,
+        "task_authority_ref": "6a8b1493ff4528253f8a279d0c38b11cd959b0f376c914fff2c8462755e04b5a"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "e02e4e9ef4ccc2e5159571d49fb316276310faf47c55b38de8497fec3c682889",
+        "document": {
+          "min_total_minor": 0,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "37c6372baa51d290d62b83349d1c4db9711b656f662a28d08c5b5ace32fc0a5f"
+      },
+      "expect": {
+        "evidence": {
+          "amount_minor": 0,
+          "below_floor": false,
+          "bounds_commitment": "e02e4e9ef4ccc2e5159571d49fb316276310faf47c55b38de8497fec3c682889",
+          "task_authority_ref": "6a8b1493ff4528253f8a279d0c38b11cd959b0f376c914fff2c8462755e04b5a"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the amount is at or above the committed floor",
+        "result": "pass"
+      },
+      "name": "golden-0-at-floor",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "e02e4e9ef4ccc2e5159571d49fb316276310faf47c55b38de8497fec3c682889",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 9007199254740991,
+        "task_authority_ref": "6de9acb18e689a0b5167f28aa4a1a94bec379022488021b4ce844f10b4bcf7b8"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "c366ae5c6e9932458b3cc34e2e9786317f319de5a05e158b7eb0876d776aebf8",
+        "document": {
+          "min_total_minor": 9007199254740991,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "15aca378373bdf75f4a89eb6e13335c47d45b85d9a284012268b20785426094a"
+      },
+      "expect": {
+        "evidence": {
+          "amount_minor": 9007199254740991,
+          "below_floor": false,
+          "bounds_commitment": "c366ae5c6e9932458b3cc34e2e9786317f319de5a05e158b7eb0876d776aebf8",
+          "task_authority_ref": "6de9acb18e689a0b5167f28aa4a1a94bec379022488021b4ce844f10b4bcf7b8"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the amount is at or above the committed floor",
+        "result": "pass"
+      },
+      "name": "golden-9007199254740991-at-floor",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "c366ae5c6e9932458b3cc34e2e9786317f319de5a05e158b7eb0876d776aebf8",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 9007199254740990,
+        "task_authority_ref": "6de9acb18e689a0b5167f28aa4a1a94bec379022488021b4ce844f10b4bcf7b8"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "c366ae5c6e9932458b3cc34e2e9786317f319de5a05e158b7eb0876d776aebf8",
+        "document": {
+          "min_total_minor": 9007199254740991,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "15aca378373bdf75f4a89eb6e13335c47d45b85d9a284012268b20785426094a"
+      },
+      "expect": {
+        "evidence": {
+          "amount_minor": 9007199254740990,
+          "below_floor": true,
+          "bounds_commitment": "c366ae5c6e9932458b3cc34e2e9786317f319de5a05e158b7eb0876d776aebf8",
+          "task_authority_ref": "6de9acb18e689a0b5167f28aa4a1a94bec379022488021b4ce844f10b4bcf7b8"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the amount is below the committed floor",
+        "result": "fail"
+      },
+      "name": "golden-9007199254740991-below",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "c366ae5c6e9932458b3cc34e2e9786317f319de5a05e158b7eb0876d776aebf8",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 175000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "amount_minor": 175000,
+          "below_floor": false,
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the amount is at or above the committed floor",
+        "result": "pass"
+      },
+      "name": "above",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 168000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "amount_minor": 168000,
+          "below_floor": true,
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the amount is below the committed floor",
+        "result": "fail"
+      },
+      "name": "below",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 175000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 100000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "opens_commitment": false,
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the commercial-bounds opening does not open the bounds_commitment the task authority seals",
+        "result": "fail"
+      },
+      "name": "mismatch-floor-lowered",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 175000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expect": {
+        "evidence": {
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "opens_commitment": false,
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the commercial-bounds opening does not open the bounds_commitment the task authority seals",
+        "result": "fail"
+      },
+      "name": "mismatch-nonce-replaced",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 175000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "e02e4e9ef4ccc2e5159571d49fb316276310faf47c55b38de8497fec3c682889",
+        "document": {
+          "min_total_minor": 0,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "37c6372baa51d290d62b83349d1c4db9711b656f662a28d08c5b5ace32fc0a5f"
+      },
+      "expect": {
+        "evidence": {
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "opens_commitment": false,
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the commercial-bounds opening does not open the bounds_commitment the task authority seals",
+        "result": "fail"
+      },
+      "name": "mismatch-another-floors-opening",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 175000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "1111111111111111111111111111111111111111111111111111111111111111",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "opens_commitment": false,
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the commercial-bounds opening does not open the bounds_commitment the task authority seals",
+        "result": "fail"
+      },
+      "name": "mismatch-stated-commitment-differs",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 175000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        }
+      },
+      "expect": {
+        "evidence": {
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "opens_commitment": false,
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the commercial-bounds opening does not open the bounds_commitment the task authority seals",
+        "result": "fail"
+      },
+      "name": "mismatch-nonce-missing",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 175000,
+        "task_authority_ref": "2fa26caa93f7452e40f0b7dd271c3e1f4bf52d09dab4a39fda75d6d0925d3ca4"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "12381bd584878db768381d762174b8b2b1ffb7ff0929cfb08c3755bb00b4dcc9",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v1"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "bounds_commitment": "12381bd584878db768381d762174b8b2b1ffb7ff0929cfb08c3755bb00b4dcc9",
+          "opens_commitment": false,
+          "task_authority_ref": "2fa26caa93f7452e40f0b7dd271c3e1f4bf52d09dab4a39fda75d6d0925d3ca4"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the commercial-bounds opening does not open the bounds_commitment the task authority seals",
+        "result": "fail"
+      },
+      "name": "mismatch-document-type",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "12381bd584878db768381d762174b8b2b1ffb7ff0929cfb08c3755bb00b4dcc9",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 168000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": null,
+      "expect": {
+        "evidence": {
+          "constraint_id": "price_floor",
+          "in_scope": true,
+          "missing_field": "commercial_bounds_opening"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "no commercial-bounds opening was supplied; the committed floor could not be read",
+        "result": "n/a"
+      },
+      "name": "absent-opening",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 168000,
+        "task_authority_ref": "dd3472a644170af786a0265d7eccdcf8e147edc9cd51da5fc985f95412943ebc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "constraint_id": "price_floor",
+          "in_scope": false,
+          "missing_field": null
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the task-authority record commits to no floor at body.bounds_commitment",
+        "result": "n/a"
+      },
+      "name": "authority-commits-to-no-floor",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 180000,
+        "task_authority_ref": "670afc5ec118b16f870647a7f12601e4f32001085ef4b7064551ead881f12d25"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "amount_minor": 180000,
+          "below_floor": false,
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "task_authority_ref": "670afc5ec118b16f870647a7f12601e4f32001085ef4b7064551ead881f12d25"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the amount is at or above the committed floor",
+        "result": "pass"
+      },
+      "name": "clear-floor-beside-commitment-never-read",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "min_total_minor": 220000,
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 180000,
+        "task_authority_ref": "670afc5ec118b16f870647a7f12601e4f32001085ef4b7064551ead881f12d25"
+      },
+      "commercial_bounds_opening": null,
+      "expect": {
+        "evidence": {
+          "constraint_id": "price_floor",
+          "in_scope": true,
+          "missing_field": "commercial_bounds_opening"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "no commercial-bounds opening was supplied; the committed floor could not be read",
+        "result": "n/a"
+      },
+      "name": "clear-floor-beside-commitment-no-opening",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "min_total_minor": 220000,
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 175000,
+        "task_authority_ref": "aa58ce3ba88730f57666bd5cd93c5b07cfca29c3d72636152224520e21b9329e"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "malformed_field": "bounds_commitment",
+          "task_authority_ref": "aa58ce3ba88730f57666bd5cd93c5b07cfca29c3d72636152224520e21b9329e"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the bounds_commitment the task authority seals is not a SHA-256 hex digest",
+        "result": "fail"
+      },
+      "name": "malformed-sealed-commitment",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "marketplace.offer",
+        "amount_minor": 175000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 9007199254740992,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "opens_commitment": false,
+          "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the commercial-bounds opening does not open the bounds_commitment the task authority seals",
+        "result": "fail"
+      },
+      "name": "mismatch-unsafe-integer-floor",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    },
+    {
+      "action": {
+        "action_class": "money.purchase",
+        "amount_minor": 168000,
+        "task_authority_ref": "97e7e75da19bf70863b695c1549ce063afd10c07087564dde922a25a7a67a4bc"
+      },
+      "commercial_bounds_opening": {
+        "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+        "document": {
+          "min_total_minor": 170000,
+          "type": "commercial-bounds/v0"
+        },
+        "nonce": "43a3c8a2914ecd228f722ed9f47dc4b4005cc1e257bc64777c0635a41ba7ea67"
+      },
+      "expect": {
+        "evidence": {
+          "constraint_id": "price_floor",
+          "in_scope": false,
+          "missing_field": null
+        },
+        "method": "committed_floor_threshold_v1",
+        "reason": "the rule is not configured for this action class",
+        "result": "n/a"
+      },
+      "name": "out-of-scope-class",
+      "task_authority_record": {
+        "body": {
+          "allowed_actions": [
+            "offer",
+            "sell"
+          ],
+          "bounds_commitment": "13563d6685d99e1bd4b5508a85a6ca679331cb3ff60e8516177ccafcfd5b4998",
+          "outcome_id": "household.sell_the_bicycle/1.0.0",
+          "preconditions": []
+        },
+        "type": "task-authority/v0"
+      }
+    }
+  ]
+}
