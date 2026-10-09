@@ -17,7 +17,9 @@ import (
 
 // The browser verifier is agent-action-capsule's own evidence-graph runtime,
 // vendored unmodified and rebuilt reproducibly by
-// scripts/build-evidence-graph-iife.sh. deal-view.js adds the deal section.
+// scripts/build-evidence-graph-iife.sh. deal-view.js adds the deal section: a
+// module the page builder inlines in the emitter's module slot, pinned by its
+// digest like the runtime.
 var (
 	//go:embed assets/evidence-graph.iife.js
 	evidenceGraphIIFE []byte
@@ -25,6 +27,8 @@ var (
 	evidenceGraphIIFESHA256 string
 	//go:embed assets/deal-view.js
 	dealViewJS string
+	//go:embed assets/deal-view.js.sha256
+	dealViewJSSHA256 string
 )
 
 // dealReportBundle builds the deal's Evidence Bundle: every step of the deal's
@@ -303,42 +307,55 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // vendored verifier and the deal view. It needs no network to open or verify,
 // and nothing is hosted: the agent attaches or hands over the file.
 //
-// The countersign rung was checked by capsulectl when the page was written
-// (the page cannot check a signature against a directory); it rides as JSON
-// beside the bundle, never inside it, so the bundle's digest is unchanged.
+// The page is built through the emitter's slots: the title, the deal view's
+// stylesheet in the theme slot (interim: the theme slot is for theme tokens;
+// the stylesheet moves to the deal view module, pinned by its own digest, once
+// the emitter can pin a module's stylesheet, agent-action-capsule #214), the
+// deal view as a digest-pinned module, and
+// a bootstrap that builds the verified context once and hands it to both the
+// evidence graph and the deal view. The emitter writes a Content-Security-
+// Policy that lists the digest of every inline script and style it emitted
+// and allows no network.
+//
+// What capsulectl checked when it wrote the page rides in the bootstrap,
+// beside the bundle and never inside it, so the bundle's digest is
+// unchanged: the countersign rung (the page cannot check a signature against
+// a directory), and the words it recomputed against their sealed commitments
+// (dealPageOpenings): a page whose words do not match is never written.
 func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (string, error) {
 	if err := pageGate(b); err != nil {
 		return "", err
 	}
+	openings, err := dealPageOpenings(b)
+	if err != nil {
+		return "", err
+	}
 	countersign = dealCountersignForPage(b, countersign)
-	page, err := emitter.EmitEvidenceGraphHTML(b, evidenceGraphIIFE)
+	// json.Marshal escapes <, > and &, so the data cannot close its element.
+	data, err := json.Marshal(map[string]interface{}{"countersign": countersign, "openings": openings})
 	if err != nil {
 		return "", err
 	}
-	replaceOnce := func(page, old, replacement string) (string, error) {
-		if strings.Count(page, old) != 1 {
-			return "", errors.New("report page shell changed; cannot place the deal section")
-		}
-		return strings.Replace(page, old, replacement, 1), nil
-	}
-	if page, err = replaceOnce(page, "<title>Evidence Graph</title>", "<title>Deal report</title>\n    <style>"+dealViewCSS+"</style>"); err != nil {
-		return "", err
-	}
-	if page, err = replaceOnce(page, `<div id="app"></div>`, `<div id="deal"></div>`+"\n    "+`<div id="app"></div>`); err != nil {
-		return "", err
-	}
-	end := strings.LastIndex(page, "</body>")
-	if end < 0 || strings.Contains(dealViewJS, "</script") {
-		return "", errors.New("report page shell changed; cannot place the deal section")
-	}
-	// json.Marshal escapes <, > and &, so the blob cannot close its element.
-	cs, err := json.Marshal(countersign)
-	if err != nil {
-		return "", err
-	}
-	return page[:end] + `<script type="application/json" id="deal-countersign">` + string(cs) + "</script>\n  <script>" + dealViewJS + "</script>\n  " + page[end:], nil
+	bootstrap := `(async () => {
+  const context = await EvidenceGraph.buildVerifiedBundleContext(window.__BUNDLE__);
+  await renderEvidenceGraph(context, document.getElementById("app"));
+  await capsulectlDealView(context, ` + string(data) + `);
+})();`
+	return emitter.EmitEvidenceGraphHTMLWithOptions(b, evidenceGraphIIFE, emitter.Options{
+		Title: "Deal report",
+		// Interim, until the emitter pins module stylesheets
+		// (agent-action-capsule #214): then the deal view carries it.
+		ThemeCSS:          dealViewCSS,
+		CoreRuntimeSHA256: strings.TrimSpace(evidenceGraphIIFESHA256),
+		Modules:           []emitter.Module{{Code: []byte(dealViewJS), SHA256: strings.TrimSpace(dealViewJSSHA256)}},
+		Bootstrap:         bootstrap,
+	})
 }
 
+// dealViewCSS is the deal view's stylesheet. It rides in the emitter's theme
+// slot for now (interim): it moves to the deal view module, pinned by its own
+// digest, once the emitter can pin a module's stylesheet (agent-action-capsule
+// #214).
 const dealViewCSS = `
 :root { --fg: #1b1b1f; --muted: #5d5d66; --bg: #ffffff; --line: #d9d9e0; --warn: #9a3b00; --ok: #1d6b35; }
 @media (prefers-color-scheme: dark) { :root { --fg: #ececf1; --muted: #a3a3ad; --bg: #16161a; --line: #34343c; --warn: #ffb07a; --ok: #7fd49a; } }

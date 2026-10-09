@@ -156,12 +156,30 @@ check "legacy-jsonl-profile: no page is written" refused legacy-jsonl-profile "a
 variant zero-rows -e 's#references: \[cite\(\$permissions\)\]#references: [cite("0000000000000000000000000000000000000000000000000000000000000000")]#'
 check "zero-rows: no page is written for a report that would show 1 of 2 rows" refused zero-rows "would show 1 of 2 rows"
 
+# rehash_bundle_csp ORIGINAL EDITED: the page's CSP pins the SHA-256 of every
+# inline script, the bundle's included, so a page whose bundle text was edited
+# does not run it at all. Whoever edits the file can edit the policy too: this
+# puts the edited bundle script's hash where the original's was, so the checks
+# below test what the page itself says about an edited bundle.
+rehash_bundle_csp() {
+  perl -MDigest::SHA=sha256_base64 -e '
+    sub h { my $b = sha256_base64($_[0]); $b .= "=" while length($b) % 4; return "sha256-$b" }
+    local $/; open my $o, "<", $ARGV[0] or die; my $orig = <$o>; close $o;
+    open my $e, "<", $ARGV[1] or die; my $page = <$e>; close $e;
+    my ($old) = $orig =~ /<script>(window\.__BUNDLE__ = .*?;)<\/script>/s or die "no bundle script";
+    my ($new) = $page =~ /<script>(window\.__BUNDLE__ = .*?;)<\/script>/s or die "no bundle script";
+    my ($ho, $hn) = (h($old), h($new));
+    $page =~ s/\Q$ho\E/$hn/ or die "the bundle script is not pinned in the CSP";
+    open my $w, ">", $ARGV[1] or die; print $w $page; close $w;' "$1" "$2"
+}
+
 # incomplete-bundle: the README page with its records' producer signatures
 # removed is INCOMPLETE by `verify --bundle`; its page must never say the
 # bundle passed. capsulectl writes no such page; this checks the vendored
 # viewer itself, once it states a verdict (data-verdict).
 jq -c '.records |= map(del(.signature, .key_id))' bundle.json >incomplete.json
 perl -0pe 'BEGIN{open my $f,"<","incomplete.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' report.html >incomplete.html
+rehash_bundle_csp report.html incomplete.html
 check "incomplete-bundle: the page carries the changed bundle" differs report.html incomplete.html
 capsulectl verify --bundle incomplete.html >incomplete-verify.json 2>/dev/null && verdict=0 || verdict=$?
 check "incomplete-bundle: verify --bundle calls it INCOMPLETE, exit 3" test "$verdict" -eq 3
@@ -201,7 +219,15 @@ did_line=$(jq -r '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$
 check "deal-receipt: the page renders its sealed summary line" contains receipt.html.dom "<p class=\"deal-note\">$did_line</p>"
 jq -c '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report.did_line = "A line nobody sealed."' receipt.json >receipt-edited.json
 perl -0pe 'BEGIN{open my $f,"<","receipt-edited.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-edited.html
+rehash_bundle_csp receipt.html receipt-edited.html
 check "deal-receipt-edited: the page carries the edited line" contains receipt-edited.html 'A line nobody sealed.'
+# The same edit without touching the policy: the edited bundle script is not
+# the one the CSP pins, so the browser does not run it and the page shows no
+# deal text at all.
+perl -0pe 'BEGIN{open my $f,"<","receipt-edited.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-unpinned.html
+render receipt-unpinned.html
+check "deal-receipt-unpinned: an edited bundle the CSP does not pin shows no deal text" lacks receipt-unpinned.html.dom '<p class="deal-note">A line nobody sealed.</p>'
+check "deal-receipt-unpinned: and no deal section" lacks receipt-unpinned.html.dom '<h1>Deal report</h1>'
 render receipt-edited.html
 # The rendered warning (the page's own script also carries the words).
 check "deal-receipt-edited: the page says the report did not verify" contains receipt-edited.html.dom '<p class="deal-bad">⚠️ This report did not verify'
@@ -216,6 +242,7 @@ check "deal-receipt-edited: verify --bundle: INVALID, exit 1" test "$verdict" -e
 jq -c '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report as $text
   | .extensions["x-deal-v0"] = ($text | .did_line = "A line nobody sealed.") | del(.disclosures[$id])' receipt.json >receipt-downgraded.json
 perl -0pe 'BEGIN{open my $f,"<","receipt-downgraded.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-downgraded.html
+rehash_bundle_csp receipt.html receipt-downgraded.html
 check "deal-receipt-downgraded: the page carries the inline line" contains receipt-downgraded.html 'A line nobody sealed.'
 render receipt-downgraded.html
 check "deal-receipt-downgraded: the page says the text could not be checked" contains receipt-downgraded.html.dom "<p class=\"deal-bad\">⚠️ The deal's text could not be checked against its sealed record"

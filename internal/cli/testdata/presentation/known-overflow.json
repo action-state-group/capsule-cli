@@ -7,20 +7,8 @@
   },
   "tolerance_px": 4,
   "views": {
-    "1-rules-comparison": {
-      "390": 682
-    },
     "4-monthly-outcome": {
       "390": 421
-    },
-    "5-monthly-compliance": {
-      "390": 793
-    },
-    "6-generic-fallback": {
-      "390": 686
-    },
-    "6-generic-fallback-unknown-extension": {
-      "390": 686
     }
   }
 }

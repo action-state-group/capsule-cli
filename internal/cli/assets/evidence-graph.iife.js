@@ -2627,6 +2627,7 @@ var EvidenceGraph = (() => {
     buildDisclosureEnvelope: () => buildDisclosureEnvelope,
     buildResultRoot: () => buildResultRoot,
     buildVerificationPageModel: () => buildVerificationPageModel,
+    buildVerifiedBundleContext: () => buildVerifiedBundleContext,
     bundleDigest: () => bundleDigest,
     carriedCapsuleCommitment: () => carriedCapsuleCommitment,
     classifyCountersignatures: () => classifyCountersignatures,
@@ -2640,11 +2641,14 @@ var EvidenceGraph = (() => {
     decodeStrictJson: () => decodeStrictJson,
     deriveCloseState: () => deriveCloseState,
     disclosureEligibleFields: () => disclosureEligibleFields,
+    disclosureOf: () => disclosureOf,
+    disclosurePayload: () => disclosurePayload,
     encodeFragment: () => encodeFragment,
     indexCountersigners: () => indexCountersigners,
     isHex64: () => isHex64,
     isResultRoot: () => isResultRoot,
     isV4IrreversibilityClass: () => isV4IrreversibilityClass,
+    isVerifiedBundleContext: () => isVerifiedBundleContext,
     jcs: () => jcs,
     jsonDigest: () => jsonDigest,
     parseCapsule: () => parseCapsule,
@@ -2656,16 +2660,20 @@ var EvidenceGraph = (() => {
     renderEvidenceGraph: () => renderEvidenceGraph,
     renderOutcomeReportPage: () => renderOutcomeReportPage,
     resolveCarriedInput: () => resolveCarriedInput,
+    resolveDisclosure: () => resolveDisclosure,
     sealCapsule: () => sealCapsule,
     sha256Hex: () => sha256Hex,
     unboundRecordIds: () => unboundRecordIds,
     validateEvidenceResult: () => validateEvidenceResult,
+    verifiedBundleContext: () => verifiedBundleContext,
+    verifiedPayload: () => verifiedPayload,
     verifyBundle: () => verifyBundle,
     verifyClass1: () => verifyClass1,
     verifyCountersignV1Signature: () => verifyCountersignV1Signature,
     verifyDisclosureEnvelope: () => verifyDisclosureEnvelope,
     verifyProducerEnvelope: () => verifyProducerEnvelope,
-    verifyStore: () => verifyStore
+    verifyStore: () => verifyStore,
+    withCountersigners: () => withCountersigners
   });
 
   // src/json.ts
@@ -4282,6 +4290,204 @@ var EvidenceGraph = (() => {
       integrityCovered: true
     })) : [];
   }
+  var contexts = /* @__PURE__ */ new WeakSet();
+  var ReadonlyMapView = class {
+    #map;
+    constructor(map) {
+      this.#map = map;
+      Object.freeze(this);
+    }
+    get size() {
+      return this.#map.size;
+    }
+    get(key) {
+      return this.#map.get(key);
+    }
+    has(key) {
+      return this.#map.has(key);
+    }
+    forEach(callback, thisArg) {
+      this.#map.forEach((value, key) => callback.call(thisArg, value, key, this));
+    }
+    entries() {
+      return this.#map.entries();
+    }
+    keys() {
+      return this.#map.keys();
+    }
+    values() {
+      return this.#map.values();
+    }
+    [Symbol.iterator]() {
+      return this.#map.entries();
+    }
+  };
+  Object.freeze(ReadonlyMapView.prototype);
+  var plain = (value) => {
+    const prototype = Object.getPrototypeOf(value);
+    return Array.isArray(value) || prototype === Object.prototype || prototype === null;
+  };
+  function ownedCopy(value, seen = /* @__PURE__ */ new Map()) {
+    if (value === null || typeof value !== "object" || !plain(value))
+      return value;
+    const done = seen.get(value);
+    if (done !== void 0) return done;
+    if (Array.isArray(value)) {
+      const out2 = [];
+      seen.set(value, out2);
+      for (const item of value) out2.push(ownedCopy(item, seen));
+      return out2;
+    }
+    const out = {};
+    seen.set(value, out);
+    for (const key of Object.keys(value))
+      Object.defineProperty(out, key, {
+        value: ownedCopy(value[key], seen),
+        enumerable: true,
+        writable: true,
+        configurable: true
+      });
+    return out;
+  }
+  function deepFreeze(value, seen = /* @__PURE__ */ new WeakSet()) {
+    if (value === null || typeof value !== "object" || seen.has(value))
+      return value;
+    seen.add(value);
+    if (value instanceof ReadonlyMapView) {
+      for (const [key, entry] of value) {
+        deepFreeze(key, seen);
+        deepFreeze(entry, seen);
+      }
+      return value;
+    }
+    if (!plain(value)) return value;
+    Object.freeze(value);
+    for (const descriptor of Object.values(
+      Object.getOwnPropertyDescriptors(value)
+    ))
+      if ("value" in descriptor) deepFreeze(descriptor.value, seen);
+    return value;
+  }
+  function isVerifiedBundleContext(value) {
+    return object3(value) && contexts.has(value);
+  }
+  var WITHHELD = Object.freeze({ state: "withheld" });
+  var MISMATCHED = Object.freeze({
+    state: "disclosure_mismatch"
+  });
+  async function buildVerifiedBundleContext(bundle, options = {}) {
+    const owned = deepFreeze(ownedCopy(bundle));
+    return contextFrom(
+      owned,
+      await verifyBundle(owned),
+      options.countersigners === void 0 ? void 0 : deepFreeze(ownedCopy(options.countersigners))
+    );
+  }
+  async function verifiedBundleContext(input) {
+    return isVerifiedBundleContext(input) ? input : buildVerifiedBundleContext(input);
+  }
+  function withCountersigners(context, countersigners) {
+    return contextFrom(
+      context.bundle,
+      context.verification,
+      countersigners === void 0 ? void 0 : deepFreeze(ownedCopy(countersigners)),
+      context
+    );
+  }
+  function contextFrom(bundle, verification, countersigners, reuse) {
+    let records, recordIndex, resolvedDisclosures;
+    if (reuse !== void 0) {
+      ({ records, recordIndex, resolvedDisclosures } = reuse);
+    } else {
+      const index = /* @__PURE__ */ new Map();
+      if (object3(bundle) && Array.isArray(bundle.records)) {
+        for (const record of bundle.records)
+          if (object3(record) && typeof record.capsule_id === "string" && !index.has(record.capsule_id) && verification.capsuleResults[record.capsule_id]?.ok === true && verification.capsuleResults[record.capsule_id]?.capsuleId === record.capsule_id)
+            index.set(record.capsule_id, record);
+      }
+      records = Object.freeze([...index.values()]);
+      recordIndex = new ReadonlyMapView(index);
+      resolvedDisclosures = resolveFromVerification(
+        bundle,
+        verification.disclosures,
+        index
+      );
+    }
+    const certificate = object3(bundle) ? bundle.completeness_certificate : void 0;
+    deepFreeze(verification);
+    const context = deepFreeze({
+      bundle,
+      root: object3(bundle) && typeof bundle.root === "string" ? bundle.root : void 0,
+      verification,
+      resolvedDisclosures,
+      records,
+      recordIndex,
+      countersignatures: verification.countersignatures,
+      countersigners,
+      extensions: verification.extensions,
+      completeness: {
+        graphClosure: verification.graphClosure,
+        intervalCoverage: verification.intervalCoverage,
+        perRecordMembership: verification.perRecordMembership,
+        memberships: object3(certificate) && object3(certificate.memberships) ? certificate.memberships : {}
+      }
+    });
+    contexts.add(context);
+    return context;
+  }
+  function resolveFromVerification(bundle, results, index) {
+    const status2 = /* @__PURE__ */ new Map();
+    for (const result of results)
+      status2.set(`${result.capsuleId}\0${result.member}`, result.status);
+    const overlay = object3(bundle) && object3(bundle.disclosures) ? bundle.disclosures : {};
+    const resolved = /* @__PURE__ */ new Map();
+    const one = (id, field) => {
+      switch (status2.get(`${id}\0${field}`)) {
+        case DISCLOSURE_MATCH: {
+          const entry = overlay[id];
+          return object3(entry) && Object.hasOwn(entry, field) ? Object.freeze({ state: "disclosed", payload: entry[field] }) : MISMATCHED;
+        }
+        case DISCLOSURE_MISMATCH:
+        case DISCLOSURE_NO_COMMITTED_DIGEST:
+          return MISMATCHED;
+        default:
+          return WITHHELD;
+      }
+    };
+    for (const id of index.keys())
+      resolved.set(
+        id,
+        Object.freeze({
+          agent_input: one(id, "agent_input"),
+          agent_output: one(id, "agent_output")
+        })
+      );
+    return new ReadonlyMapView(resolved);
+  }
+  function disclosureOf(context, capsuleId, field) {
+    return context.resolvedDisclosures.get(capsuleId)?.[field] ?? WITHHELD;
+  }
+  function verifiedPayload(context, capsuleId, field) {
+    return disclosureOf(context, capsuleId, field).payload;
+  }
+  var resolveDisclosure = async (record, disclosures2, field) => {
+    const entry = disclosures2[record.capsule_id];
+    if (!object3(entry) || !Object.hasOwn(entry, field))
+      return { state: "withheld" };
+    const committed = resolveDisclosurePath(
+      record,
+      disclosureEligibleFields[field]
+    );
+    if (isHex64(committed)) {
+      try {
+        if (await jsonDigest(entry[field]) === committed)
+          return { state: "disclosed", payload: entry[field] };
+      } catch {
+      }
+    }
+    return { state: "disclosure_mismatch" };
+  };
+  var disclosurePayload = async (record, disclosures2, field) => (await resolveDisclosure(record, disclosures2, field)).payload;
 
   // src/model.ts
   var CURRENT_SPEC_VERSION = "draft-mih-scitt-agent-action-capsule-05";
@@ -4514,21 +4720,6 @@ var EvidenceGraph = (() => {
   var committedDigest = (record, field) => asString(
     objectOrEmpty(objectOrEmpty(record.model_attestation).compute_attestation)[`${field}_digest`]
   );
-  var resolveDisclosure = async (record, disclosures2, field) => {
-    const entry = disclosures2[record.capsule_id];
-    if (!isObject(entry) || !Object.hasOwn(entry, field))
-      return { state: "withheld" };
-    const committed = committedDigest(record, field);
-    if (isHex64(committed)) {
-      try {
-        if (await jsonDigest(entry[field]) === committed)
-          return { state: "disclosed", payload: entry[field] };
-      } catch {
-      }
-    }
-    return { state: "disclosure_mismatch" };
-  };
-  var disclosurePayload = async (record, disclosures2, field) => (await resolveDisclosure(record, disclosures2, field)).payload;
   var logCoordinates = (memberships2, capsuleId) => {
     const membership = memberships2[capsuleId];
     if (!isObject(membership) || !isObject(membership.log_coordinates))
@@ -4552,28 +4743,27 @@ var EvidenceGraph = (() => {
       ...agentOutputDigest === void 0 ? {} : { agentOutputDigest }
     };
   };
-  async function buildEvidenceGraph(bundle) {
+  async function buildEvidenceGraph(input) {
+    const context = await verifiedBundleContext(input);
+    const bundle = context.bundle;
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures)) {
       throw new EvidenceGraphError("bundle must contain records and disclosures");
     }
-    const disclosures2 = bundle.disclosures;
-    const records = bundle.records.filter(
-      (record) => isObject(record) && asString(record.capsule_id) !== void 0
-    );
-    const root = asString(bundle.root);
-    const rootRecord = records.find((record) => record.capsule_id === root);
+    const records = context.records;
+    const rootRecord = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
     if (rootRecord === void 0) {
-      throw new EvidenceGraphError("root aggregate payload not disclosed");
+      throw new EvidenceGraphError(
+        bundle.records.some(
+          (record) => isObject(record) && record.capsule_id === context.root
+        ) ? "root aggregate payload is not disclosed" : "root aggregate payload not disclosed"
+      );
     }
-    const rootPayload = await disclosurePayload(
-      rootRecord,
-      disclosures2,
-      "agent_input"
-    );
+    const payloadOf = (record) => verifiedPayload(context, record.capsule_id, "agent_input");
+    const rootPayload = payloadOf(rootRecord);
     if (!isObject(rootPayload) || rootPayload.spec_version !== "evaluation-summary/v1") {
       throw new EvidenceGraphError("root aggregate payload is not disclosed");
     }
-    const memberships2 = isObject(bundle.completeness_certificate) ? isObject(bundle.completeness_certificate.memberships) ? bundle.completeness_certificate.memberships : {} : {};
+    const memberships2 = context.completeness.memberships;
     const aggregate = {
       capsuleId: rootRecord.capsule_id,
       ...asString(rootPayload.cross_case_aggregation) === void 0 ? {} : {
@@ -4588,9 +4778,7 @@ var EvidenceGraph = (() => {
       } : {},
       ...Object.hasOwn(rootPayload, "cohort") ? { cohort: rootPayload.cohort } : {}
     };
-    const recordsById = new Map(
-      records.map((record) => [record.capsule_id, record])
-    );
+    const recordsById = context.recordIndex;
     const reportIds = /* @__PURE__ */ new Set();
     const visitedSummaries = /* @__PURE__ */ new Set();
     const collectReports = async (record) => {
@@ -4599,11 +4787,7 @@ var EvidenceGraph = (() => {
       for (const id of actedOnReferences(record)) {
         const referenced = recordsById.get(id);
         if (referenced === void 0) continue;
-        const payload = await disclosurePayload(
-          referenced,
-          disclosures2,
-          "agent_input"
-        );
+        const payload = payloadOf(referenced);
         if (!isObject(payload)) continue;
         if (payload.spec_version === "evaluation-report/v1") reportIds.add(id);
         else if (payload.spec_version === "evaluation-summary/v1")
@@ -4614,7 +4798,7 @@ var EvidenceGraph = (() => {
     const reports = [];
     for (const reportId of reportIds) {
       const record = recordsById.get(reportId);
-      const payload = await disclosurePayload(record, disclosures2, "agent_input");
+      const payload = payloadOf(record);
       if (!isObject(payload) || payload.spec_version !== "evaluation-report/v1")
         continue;
       const date = asString(payload.date);
@@ -4625,17 +4809,13 @@ var EvidenceGraph = (() => {
       for (const actId of actedOnReferences(record)) {
         const actRecord = recordsById.get(actId);
         if (actRecord === void 0) continue;
-        const input = await resolveDisclosure(
-          actRecord,
-          disclosures2,
-          "agent_input"
-        );
-        const output = await resolveDisclosure(
-          actRecord,
-          disclosures2,
+        const input2 = disclosureOf(context, actRecord.capsule_id, "agent_input");
+        const output = disclosureOf(
+          context,
+          actRecord.capsule_id,
           "agent_output"
         );
-        const inputCase = isObject(input.payload) && isObject(input.payload.case) ? input.payload.case : {};
+        const inputCase = isObject(input2.payload) && isObject(input2.payload.case) ? input2.payload.case : {};
         const caseId = asString(inputCase.conversation_id);
         const turnIdx = asNumber(inputCase.turn_idx);
         const actResolvedLogCoordinates = logCoordinates(
@@ -4646,9 +4826,9 @@ var EvidenceGraph = (() => {
           capsuleId: actRecord.capsule_id,
           caseId: caseId ?? actRecord.capsule_id,
           turnIdx: turnIdx ?? Number.MAX_SAFE_INTEGER,
-          ...isObject(input.payload) ? { agentInput: input.payload } : {},
+          ...isObject(input2.payload) ? { agentInput: input2.payload } : {},
           ...output.state === "disclosed" ? { agentOutput: output.payload } : {},
-          agentInputDisclosure: input.state,
+          agentInputDisclosure: input2.state,
           agentOutputDisclosure: output.state,
           ...committedDigests(actRecord),
           ...recordTimes(actRecord),
@@ -4739,7 +4919,7 @@ var EvidenceGraph = (() => {
         continue;
       const reportId = asString(record.chain.parent_capsule_id);
       if (reportId === void 0) continue;
-      const payload = await disclosurePayload(record, disclosures2, "agent_input");
+      const payload = payloadOf(record);
       const ratingVerdict = isObject(payload) ? verdict(payload.verdict) : void 0;
       const report = reports.find(
         (candidate) => candidate.capsuleId === reportId
@@ -4753,7 +4933,7 @@ var EvidenceGraph = (() => {
     }
     let calibration;
     for (const record of records) {
-      const payload = await disclosurePayload(record, disclosures2, "agent_input");
+      const payload = payloadOf(record);
       if (!isObject(payload) || payload.spec_version !== "calibration-summary/v1")
         continue;
       calibration = {
@@ -5064,10 +5244,10 @@ var EvidenceGraph = (() => {
       return void 0;
     return body;
   }
-  async function inboundCloseLinks(records, disclosures2) {
+  async function inboundCloseLinks(context) {
     const inbound = /* @__PURE__ */ new Map();
-    for (const record of records) {
-      const header = await disclosurePayload(record, disclosures2, "agent_input");
+    for (const record of context.records) {
+      const header = verifiedPayload(context, record.capsule_id, "agent_input");
       if (!isObject(header) || !Array.isArray(header.links)) continue;
       const bookId = asString(header.book_id);
       const signer = await signerOf(record);
@@ -5127,13 +5307,13 @@ var EvidenceGraph = (() => {
   var actedOnReferences2 = (record) => Array.isArray(record.references) ? record.references.flatMap(
     (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" && typeof reference.digest === "string" ? [reference.digest] : []
   ) : [];
-  async function resultDocument(root, disclosures2) {
-    return (await resultCarriers(root, disclosures2))[0];
+  function resultDocument(context, root) {
+    return resultCarriers(context, root)[0];
   }
-  async function resultCarriers(record, disclosures2) {
+  function resultCarriers(context, record) {
     const carriers = [];
     for (const member of ["agent_output", "agent_input"]) {
-      const payload = await disclosurePayload(record, disclosures2, member);
+      const payload = verifiedPayload(context, record.capsule_id, member);
       if (!isObject(payload)) continue;
       if (payload.result_version === RESULT_VERSION)
         carriers.push({ member, form: "payload", document: payload });
@@ -5142,19 +5322,18 @@ var EvidenceGraph = (() => {
     }
     return carriers;
   }
-  async function nonResultDescription(root, disclosures2) {
-    const header = await disclosurePayload(root, disclosures2, "agent_input");
+  function nonResultDescription(context, root) {
+    const header = verifiedPayload(context, root.capsule_id, "agent_input");
     const recordType = isObject(header) ? header.record_type : void 0;
     return typeof recordType === "string" ? `agent_input is a book record header of record_type ${JSON.stringify(recordType)}, not ${JSON.stringify(RESULT_RECORD_TYPE)}` : `no disclosed member carries an ${RESULT_VERSION} document or an ${RESULT_RECORD_TYPE} record header`;
   }
-  async function isResultRoot(bundle) {
+  async function isResultRoot(input) {
+    const context = await verifiedBundleContext(input);
+    const bundle = context.bundle;
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures))
       return false;
-    const root = asString(bundle.root);
-    const record = bundle.records.find(
-      (candidate) => isObject(candidate) && candidate.capsule_id === root
-    );
-    return record !== void 0 && await resultDocument(record, bundle.disclosures) !== void 0;
+    const record = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
+    return record !== void 0 && resultDocument(context, record) !== void 0;
   }
   var BOOK_PAYLOADS_EXTENSION = "evidencebook/payloads";
   var AGENT_INPUT_ORIGINALS_EXTENSION = "capsulectl/agent-input-originals/v1";
@@ -5251,22 +5430,24 @@ var EvidenceGraph = (() => {
     }
     return { state: "withheld" };
   }
-  async function buildResultRoot(bundle) {
+  async function buildResultRoot(input) {
+    const context = await verifiedBundleContext(input);
+    const bundle = context.bundle;
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures))
       throw new EvidenceGraphError("bundle must contain records and disclosures");
-    const disclosures2 = bundle.disclosures;
-    const records = bundle.records.filter(
-      (record) => isObject(record) && asString(record.capsule_id) !== void 0
-    );
-    const root = asString(bundle.root);
-    const rootRecord = records.find((record) => record.capsule_id === root);
+    const records = context.records;
+    const rootRecord = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
     if (rootRecord === void 0)
-      throw new EvidenceGraphError("root record not supplied");
-    const rootCarriers = await resultCarriers(rootRecord, disclosures2);
+      throw new EvidenceGraphError(
+        bundle.records.some(
+          (record) => isObject(record) && record.capsule_id === context.root
+        ) ? "root record failed verification" : "root record not supplied"
+      );
+    const rootCarriers = resultCarriers(context, rootRecord);
     const carried = rootCarriers[0];
     if (carried === void 0)
       throw new EvidenceGraphError(
-        `root is not a Result v0: ${await nonResultDescription(rootRecord, disclosures2)}`
+        `root is not a Result v0: ${nonResultDescription(context, rootRecord)}`
       );
     if (rootCarriers.length > 1)
       throw new EvidenceGraphError(
@@ -5274,7 +5455,7 @@ var EvidenceGraph = (() => {
       );
     const otherCarriers = [];
     for (const record of records)
-      if (record !== rootRecord && (await resultCarriers(record, disclosures2)).length > 0)
+      if (record !== rootRecord && resultCarriers(context, record).length > 0)
         otherCarriers.push(record.capsule_id);
     if (otherCarriers.length > 0)
       throw new EvidenceGraphError(
@@ -5290,10 +5471,8 @@ var EvidenceGraph = (() => {
         `root is not a Result v0: ${findings.join("; ")}`
       );
     const document2 = carried.document;
-    const memberships2 = isObject(bundle.completeness_certificate) ? isObject(bundle.completeness_certificate.memberships) ? bundle.completeness_certificate.memberships : {} : {};
-    const recordsById = new Map(
-      records.map((record) => [record.capsule_id, record])
-    );
+    const memberships2 = context.completeness.memberships;
+    const recordsById = context.recordIndex;
     const bookPayloads = isObject(bundle.extensions) && isObject(bundle.extensions[BOOK_PAYLOADS_EXTENSION]) ? bundle.extensions[BOOK_PAYLOADS_EXTENSION] : {};
     const inputOriginals = isObject(bundle.extensions) && isObject(bundle.extensions[AGENT_INPUT_ORIGINALS_EXTENSION]) ? bundle.extensions[AGENT_INPUT_ORIGINALS_EXTENSION] : {};
     let carriersById;
@@ -5301,15 +5480,9 @@ var EvidenceGraph = (() => {
       if (carriersById === void 0) {
         carriersById = /* @__PURE__ */ new Map();
         for (const record of records) {
-          const entry = disclosures2[record.capsule_id];
-          if (!isObject(entry) || !isObject(entry.agent_input) || entry.agent_input.record_type !== PUBLISHED_CAPSULE_RECORD_TYPE)
+          const header = disclosureOf(context, record.capsule_id, "agent_input");
+          if (header.state !== "disclosed" || !isObject(header.payload) || header.payload.record_type !== PUBLISHED_CAPSULE_RECORD_TYPE)
             continue;
-          const header = await resolveDisclosure(
-            record,
-            disclosures2,
-            "agent_input"
-          );
-          if (header.state !== "disclosed" || !isObject(header.payload)) continue;
           const subject = header.payload.subject_ref;
           if (isHex64(subject) && !recordsById.has(subject))
             carriersById.set(subject, record);
@@ -5326,11 +5499,7 @@ var EvidenceGraph = (() => {
       const coordinates = logCoordinates(memberships2, record.capsule_id);
       const agentInputDigest = committedDigest(record, "agent_input");
       const agentOutputDigest = committedDigest(record, "agent_output");
-      const agentInput = await resolveDisclosure(
-        record,
-        disclosures2,
-        "agent_input"
-      );
+      const agentInput = disclosureOf(context, record.capsule_id, "agent_input");
       const carriedInput = agentInput.state === "disclosed" ? await resolveCarriedInput(
         agentInput.payload,
         bookPayloads,
@@ -5347,7 +5516,7 @@ var EvidenceGraph = (() => {
           carriedInputDigest: carriedCapsule.inputDigest
         },
         ...carriedCapsule !== void 0 ? { stated: carriedCapsule.stated } : agentInput.state === "disclosed" && isObject(agentInput.payload) && agentInput.payload.record_type === PUBLISHED_CAPSULE_RECORD_TYPE ? {} : { stated: statedTimes(record) },
-        agentOutput: await resolveDisclosure(record, disclosures2, "agent_output"),
+        agentOutput: disclosureOf(context, record.capsule_id, "agent_output"),
         ...agentInputDigest === void 0 ? {} : { agentInputDigest },
         ...agentOutputDigest === void 0 ? {} : { agentOutputDigest },
         ...coordinates === void 0 ? {} : { logCoordinates: coordinates },
@@ -5359,7 +5528,7 @@ var EvidenceGraph = (() => {
     const hasCloseClaim = document2.claims.some(
       (raw) => raw.type === CLOSE_CLAIM
     );
-    const inbound = hasCloseClaim ? await inboundCloseLinks(records, disclosures2) : /* @__PURE__ */ new Map();
+    const inbound = hasCloseClaim ? await inboundCloseLinks(context) : /* @__PURE__ */ new Map();
     const claims = [];
     for (const raw of document2.claims) {
       const evidence = [];
@@ -5381,7 +5550,7 @@ var EvidenceGraph = (() => {
         const closeRecord = recordsById.get(closeRef);
         const supplied = closeRecord !== void 0;
         const peer = asString(body.peer);
-        const closeHeader = closeRecord === void 0 ? void 0 : await disclosurePayload(closeRecord, disclosures2, "agent_input");
+        const closeHeader = closeRecord === void 0 ? void 0 : verifiedPayload(context, closeRecord.capsule_id, "agent_input");
         const closeBookId = isObject(closeHeader) ? asString(closeHeader.book_id) : void 0;
         const closeSigner = closeRecord === void 0 ? {} : await signerOf(closeRecord);
         const { links, ignored } = counterpartyLinks(
@@ -8314,10 +8483,10 @@ var EvidenceGraph = (() => {
     const key = str(obj?.key);
     const article = str(obj?.article);
     const title = str(obj?.title);
-    const plain = str(obj?.plain);
+    const plain2 = str(obj?.plain);
     const method = str(obj?.method);
     const applicability = readApplicability(obj?.applicability);
-    if (key === void 0 || article === void 0 || title === void 0 || plain === void 0 || method === void 0 || applicability === void 0)
+    if (key === void 0 || article === void 0 || title === void 0 || plain2 === void 0 || method === void 0 || applicability === void 0)
       return void 0;
     const rows = Array.isArray(obj?.rows) ? obj.rows.flatMap((r) => {
       const row = readRow(r);
@@ -8327,7 +8496,7 @@ var EvidenceGraph = (() => {
       key,
       article,
       title,
-      plain,
+      plain: plain2,
       judgedTerms: strArray(obj?.judged_terms),
       applicability,
       method,
@@ -8372,28 +8541,23 @@ var EvidenceGraph = (() => {
   var rowCitationDigests = (row) => Array.isArray(row.references) ? row.references.flatMap(
     (reference) => isObject(reference) && reference.type === "agent-action-capsule" && reference.citation_purpose === "acted_on" ? asString(reference.digest) === void 0 ? [] : [asString(reference.digest)] : []
   ) : [];
-  async function buildReportRows(bundle) {
+  async function buildReportRows(input) {
+    const context = await verifiedBundleContext(input);
+    const bundle = context.bundle;
     if (!isObject(bundle) || !Array.isArray(bundle.records) || !isObject(bundle.disclosures)) {
       return void 0;
     }
-    const disclosures2 = bundle.disclosures;
-    const records = bundle.records.filter(
-      (record) => isObject(record) && asString(record.capsule_id) !== void 0
-    );
-    const root = asString(bundle.root);
-    const rootRecord = records.find((record) => record.capsule_id === root);
+    const rootRecord = context.root === void 0 ? void 0 : context.recordIndex.get(context.root);
     if (rootRecord === void 0) return void 0;
-    const rootPayload = await disclosurePayload(
-      rootRecord,
-      disclosures2,
+    const rootPayload = verifiedPayload(
+      context,
+      rootRecord.capsule_id,
       "agent_input"
     );
     if (!isObject(rootPayload) || rootPayload.spec_version !== "report/v1")
       return void 0;
-    const memberships2 = isObject(bundle.completeness_certificate) ? isObject(bundle.completeness_certificate.memberships) ? bundle.completeness_certificate.memberships : {} : {};
-    const recordsById = new Map(
-      records.map((record) => [record.capsule_id, record])
-    );
+    const memberships2 = context.completeness.memberships;
+    const recordsById = context.recordIndex;
     const rows = [];
     for (const raw of Array.isArray(rootPayload.rows) ? rootPayload.rows : []) {
       if (!isObject(raw)) continue;
@@ -8407,11 +8571,7 @@ var EvidenceGraph = (() => {
       for (const digest of rowCitationDigests(raw)) {
         const record = recordsById.get(digest);
         if (record === void 0) continue;
-        const resolved = await resolveDisclosure(
-          record,
-          disclosures2,
-          "agent_input"
-        );
+        const resolved = disclosureOf(context, record.capsule_id, "agent_input");
         const coordinates = logCoordinates(memberships2, record.capsule_id);
         citations2.push({
           capsuleId: record.capsule_id,
@@ -8698,7 +8858,8 @@ var EvidenceGraph = (() => {
     });
     host.append(list);
   }
-  async function renderVerificationPage(root, bundle, verified, countersigners, styled = false) {
+  async function renderVerificationPage(root, context, styled = false) {
+    const { bundle, verification: verified, countersigners } = context;
     const section = element3("section");
     section.dataset.page = "verification";
     let page = section;
@@ -8730,9 +8891,8 @@ var EvidenceGraph = (() => {
       model.uncheckpointedCount,
       model.coverage
     );
-    const countersignatures = object8(bundle).countersignatures;
     const stamps = await classifyCountersignatures(
-      Array.isArray(countersignatures) ? countersignatures : [],
+      context.countersignatures.map((entry) => entry.value),
       verified.bundleDigest,
       declaredProducerKeys(bundle),
       countersigners
@@ -9384,16 +9544,19 @@ var EvidenceGraph = (() => {
     });
     root.append(calendar, detail);
   }
-  async function renderEvidenceGraph(bundle, root, countersigners) {
-    const verification = await verifyBundle(bundle);
+  async function renderEvidenceGraph(input, root, countersigners) {
+    const context = isVerifiedBundleContext(input) ? countersigners === void 0 ? input : withCountersigners(input, countersigners) : await buildVerifiedBundleContext(input, {
+      ...countersigners === void 0 ? {} : { countersigners }
+    });
+    const { bundle, verification } = context;
     const verified = bundleVerified(verification);
-    const reportRows = verified ? await buildReportRows(bundle) : void 0;
-    const result = verified && reportRows === void 0 && await isResultRoot(bundle) ? await buildResultRoot(bundle) : void 0;
+    const reportRows = verified ? await buildReportRows(context) : void 0;
+    const result = verified && reportRows === void 0 && await isResultRoot(context) ? await buildResultRoot(context) : void 0;
     let graph2;
     let noAggregate = false;
     if (verified && reportRows === void 0 && result === void 0) {
       try {
-        graph2 = await buildEvidenceGraph(bundle);
+        graph2 = await buildEvidenceGraph(context);
       } catch (err) {
         if (!(err instanceof EvidenceGraphError)) throw err;
         noAggregate = true;
@@ -9436,13 +9599,7 @@ var EvidenceGraph = (() => {
       note.textContent = "This bundle carries no evaluation summary, so there is no aggregate view. The records and their verification are below.";
       root.append(note);
     }
-    await renderVerificationPage(
-      root,
-      bundle,
-      verification,
-      countersigners,
-      styled
-    );
+    await renderVerificationPage(root, context, styled);
   }
   return __toCommonJS(browser_exports2);
 })();
