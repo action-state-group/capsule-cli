@@ -220,7 +220,7 @@ func TestTheShareGateKeepsASellersFloor(t *testing.T) {
 	err := dealCeilingGate([]byte("we will take $1700.00"), events, dealAudienceCounterparty)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "the lowest price you will take")
-	assert.NoError(t, dealCeilingGate([]byte("we will take $1700.00"), events, dealAudienceAdjudicator))
+	assert.Error(t, dealCeilingGate([]byte("we will take $1700.00"), events, dealAudienceAdjudicator), "no shared copy carries the floor")
 	assert.NoError(t, dealCeilingGate([]byte("asking $1900.00"), events, dealAudienceCounterparty), "the asked price is shown anyway")
 	for _, key := range []string{"min_total_minor", "max_total_minor"} {
 		assert.Error(t, dealCeilingGate([]byte(`{"`+key+`":1}`), events, dealAudienceCounterparty), key)
@@ -254,4 +254,26 @@ func TestASellersCounterpartyIsTheBuyer(t *testing.T) {
 	other := stickerDeal(t, "card", false)
 	sealed, _, _ = ruleInputs(t, other, share)
 	assert.Equal(t, "fulfilling_merchant", sealed["recipient_role"])
+}
+
+// No shared copy, for any audience, carries the floor: not its field, not
+// its openings, not its amount. The buyer's limit is kept from the
+// counterparty only (the adjudicator judges "over your limit" with it).
+func TestNoSharedCopyCarriesTheFloor(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
+		_, shared := sharedCopy(t, id, audience, "a recipient")
+		for _, hidden := range []string{"170000", "1700.00", "bounds_openings", "commercial_bounds_opening", "min_total_minor"} {
+			assert.NotContains(t, shared, hidden, audience)
+		}
+	}
+	floor := int64(170000)
+	events := []sealedEvent{{Event: dealEvent{Kind: "open", Open: &dealOpen{
+		Intent: dealIntent{PartyRole: dealRoleSeller, MinTotalMinor: &floor}, Terms: dealTerms{Currency: "USD"}}}}}
+	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
+		for _, page := range []string{"$1700.00", "1700.00", `"bounds_openings":[]`, `"min_total_minor":1`, `"commercial_bounds_opening":{}`} {
+			assert.Error(t, dealCeilingGate([]byte(page), events, audience), audience+": "+page)
+		}
+	}
 }

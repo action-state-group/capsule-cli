@@ -24,12 +24,19 @@ var dealPrivateBoundKeys = map[string]bool{"max_total_minor": true, "min_total_m
 // is only the user's spending limit.
 const dealBasisYourLimit = "your limit"
 
-// dealCeiling is the ceiling as the copy could write it: as money with
-// its currency, and as a bare decimal amount.
+// dealCeiling is a bound as the copy could write it: as money with its
+// currency, and as a bare decimal amount. floor marks the user's floor
+// (min_total_minor), which no shared copy may carry; the limit
+// (max_total_minor) is kept from the counterparty only.
 type dealCeiling struct {
 	minor    int64
 	currency string
+	floor    bool
 }
+
+// dealFloorKeys name the floor and its openings: no shared copy, for any
+// audience, carries them.
+var dealFloorKeys = []string{"min_total_minor", "bounds_openings", "commercial_bounds_opening"}
 
 func dealCeilings(events []sealedEvent) []dealCeiling {
 	var out []dealCeiling
@@ -47,10 +54,11 @@ func dealCeilings(events []sealedEvent) []dealCeiling {
 			intents = append(intents, *e.Intent)
 		}
 		for _, i := range intents {
-			for _, v := range []*int64{i.MaxTotalMinor, i.MinTotalMinor} {
-				if v != nil {
-					out = append(out, dealCeiling{*v, currency})
-				}
+			if i.MaxTotalMinor != nil {
+				out = append(out, dealCeiling{*i.MaxTotalMinor, currency, false})
+			}
+			if i.MinTotalMinor != nil {
+				out = append(out, dealCeiling{*i.MinTotalMinor, currency, true})
 			}
 		}
 	}
@@ -92,30 +100,41 @@ func dealShownAmounts(events []sealedEvent) map[int64]bool {
 	return shown
 }
 
-// dealCeilingGate refuses a counterparty copy that carries the spending
-// limit. It reads the same plain form as the share gate (foldText).
+// dealCeilingGate refuses a shared copy that carries a bound it may not: the
+// floor (by name, by its openings, or as money) in any shared copy, and the
+// spending limit in the counterparty's. It reads the same plain form as the
+// share gate (foldText). An amount the copy shows anyway (the price asked, an
+// amount paid) is not a leak.
 func dealCeilingGate(data []byte, events []sealedEvent, audience string) error {
-	if audience != dealAudienceCounterparty {
+	if audience == dealAudienceKeep {
 		return nil
 	}
+	counterparty := audience == dealAudienceCounterparty
 	text := strings.ToLower(foldText(string(data)))
-	refuse := inputError("refusing to write the shared copy: the counterparty's copy would carry your spending limit")
+	refuseLimit := inputError("refusing to write the shared copy: the counterparty's copy would carry your spending limit")
 	if dealRole(events) == dealRoleSeller {
-		refuse = inputError("refusing to write the shared copy: the counterparty's copy would carry the lowest price you will take, or a limit you set")
+		refuseLimit = inputError("refusing to write the shared copy: the counterparty's copy would carry the lowest price you will take, or a limit you set")
 	}
-	for k := range dealPrivateBoundKeys {
+	refuseFloor := inputError("refusing to write the shared copy: it would carry the lowest price you will take")
+	for _, k := range dealFloorKeys {
 		if strings.Contains(text, k) {
-			return refuse
+			return refuseFloor
 		}
+	}
+	if counterparty && strings.Contains(text, "max_total_minor") {
+		return refuseLimit
 	}
 	shown := dealShownAmounts(events)
 	for _, c := range dealCeilings(events) {
-		if shown[c.minor] {
+		if shown[c.minor] || (!c.floor && !counterparty) {
 			continue
 		}
 		for _, form := range []string{formatMoney(c.minor, c.currency), fmt.Sprintf("%d.%02d", c.minor/100, c.minor%100)} {
 			if regexp.MustCompile(`(^|[^0-9.])` + regexp.QuoteMeta(strings.ToLower(form)) + `([^0-9]|$)`).MatchString(text) {
-				return refuse
+				if c.floor {
+					return refuseFloor
+				}
+				return refuseLimit
 			}
 		}
 	}

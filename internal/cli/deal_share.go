@@ -771,9 +771,10 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 				}
 				continue
 			}
-			if dealPrivateBoundKeys[k] && audience == dealAudienceCounterparty {
+			if (dealPrivateBoundKeys[k] && audience == dealAudienceCounterparty) || k == "min_total_minor" {
 				// The user's bounds (a buyer's limit, a seller's floor):
-				// never the counterparty's to see, whatever the role.
+				// never the counterparty's to see, whatever the role; and
+				// the floor is in no shared copy at all.
 				return false
 			}
 			if k == "materiality" {
