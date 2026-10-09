@@ -21,7 +21,8 @@
     },
     "record": {
       "$ref": "#/$defs/record",
-      "description": "The step being checked."
+      "description": "The step being checked. Its item_ref, on a sale's thread, is the top-level item_ref; the record itself never carries one.",
+      "not": { "required": ["item_ref"] }
     },
     "task_authority_record": {
       "type": "object",

@@ -72,6 +72,12 @@ func TestAHistoryActOnASaleThreadCarriesTheSalesItemRef(t *testing.T) {
 	given, err := jsonschema.UnmarshalJSON(strings.NewReader(mustJSONString(t, input)))
 	require.NoError(t, err)
 	assert.NoError(t, compiled.Validate(given))
+	// item_ref is a history entry's only: on the checked record it is refused.
+	input["record"].(map[string]any)["item_ref"] = item
+	misplaced, err := jsonschema.UnmarshalJSON(strings.NewReader(mustJSONString(t, input)))
+	require.NoError(t, err)
+	assert.Error(t, compiled.Validate(misplaced), "the checked record carries no item_ref")
+	delete(input["record"].(map[string]any), "item_ref")
 
 	// No record, in the sale's log or any deal's, carries the reference or
 	// an item_ref member: only the salted item_ref_commitment it always had.
