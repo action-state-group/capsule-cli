@@ -123,27 +123,58 @@ capsulectl release watch --allowed-signers ~/release-monitor/allowed_signers \
   --known-unsigned-file ~/release-monitor/known-unsigned
 ```
 
-where `~/release-monitor/known-unsigned` lists every tag made before tag
-signing starts, one per line. Until the first signed tag, add each new tag
-as it is made; once signing starts, the file stops growing:
+where `~/release-monitor/allowed_signers` holds the maintainer keys and
+`~/release-monitor/known-unsigned` lists the tags made before tag signing
+began. Both live in the monitor's own directory.
+
+**The allowed signers.** Use one line per maintainer key, in ssh
+`allowed_signers` format, limited to the `git` namespace. The principal is
+only a label. This example has a placeholder where the key goes; the real
+key is the maintainer's public key, given to whoever runs the monitor:
 
 ```text
-# Tags made before tag signing began. Never add a tag made after it.
-v0.1.0-rc1
-v0.1.0-rc2
-v0.1.0-rc3
-v0.1.0-rc4
-v0.1.0-rc5
-v0.1.0-rc6
+maintainer@example.org namespaces="git" ssh-ed25519 <the maintainer's public key, base64>
 ```
+
+**The tags made before signing.** Tag signing begins at `v0.1.0-rc15`. Every
+earlier tag, `v0.1.0-rc1` through `v0.1.0-rc14`, is unsigned. This repository
+keeps a reference copy of that list at
+[`release/known-unsigned.txt`](../release/known-unsigned.txt), with SHA-256:
+
+```text
+fa53f40efe7243a45fb47863b3cd2a5a5b31868a58dbf193a04abc4e54d48aa4
+```
+
+Copy it **once** into the monitor's own directory, from the first signed
+tag (whose signature covers it) rather than from `main`. Then check the
+copy's SHA-256 against the value above before you use it:
+
+```sh
+git -C ~/src/capsule-cli fetch --tags origin
+git -C ~/src/capsule-cli -c gpg.ssh.allowedSignersFile="$HOME/release-monitor/allowed_signers" \
+  tag -v v0.1.0-rc15                                # the tag verifies under an allowed signer
+git -C ~/src/capsule-cli show v0.1.0-rc15:release/known-unsigned.txt > ~/release-monitor/known-unsigned
+shasum -a 256 ~/release-monitor/known-unsigned   # must equal the value above
+```
+
+- **Never point the monitor at the repository's file, and never re-sync
+  from it.** The list is frozen at `v0.1.0-rc14`. From `v0.1.0-rc15` on,
+  every tag is signed, so the list never grows. A tag made after signing
+  began is never added to it. An unsigned tag is an alarm, whatever its
+  name.
+- **A later edit of the repository's file is itself a red flag.** Whoever
+  can change the repository must not be able to change what counts as
+  intended. The monitor's copy is what it trusts, and the repository's copy
+  is only where it came from.
 
 - `--allowed-signers` (ssh `allowed_signers` format) belongs to whoever
   runs the monitor, never to this repository. An attacker who can change
   the repository must not be able to change what counts as intended.
 - `--known-unsigned-file` (or `--known-unsigned`, comma-separated) names the
   tags made before tag signing began, which are accepted as known
-  exceptions. Like the allowed signers, the file belongs to the monitor,
-  never to this repository.
+  exceptions. Like the allowed signers, the file the monitor reads belongs
+  to the monitor, never to this repository: the repository's
+  `release/known-unsigned.txt` is a reference copy, taken once.
 - `--trusted-root` passes a Sigstore trusted root to gh, for a fully
   offline check.
 
