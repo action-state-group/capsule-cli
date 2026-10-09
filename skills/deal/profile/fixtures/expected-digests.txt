@@ -27,3 +27,5 @@ b529a92142bb0dfd6719797b3baeeabc49f3fc0fa2eab78d4338add734f5cacf  positive-typed
 1c08f1004b280f2ab7c32f43b61dd46ea5f806b13ec5f9c48721d786da999926  positive-typed/08-outcome-platform-only.json
 f8ca671c9d559715149b4c95a54225538a32f6ef6c81bbed331e4982d1c9c94b  positive-typed/09-approval-on-the-card.json
 acf99d1a0c84447f64e5f8b8bb40ad6bd6f599185e88b6538c1f13f98cdc49a6  positive-typed/10-action-record-pay.json
+d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e  positive-sale/01-sale.json
+a3384a8bb82f07c5a3e80eb91dd8e9ce61bd5a460c9ca4bb5f032c25e396e0fb  positive-sale/02-task-authority.json

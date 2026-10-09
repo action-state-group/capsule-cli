@@ -13,7 +13,9 @@
   "allOf": [
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "baseline" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_baseline" }, "x-deal-v0": { "required": ["channel", "counterparty"], "not": { "anyOf": [ { "required": ["baseline_ref"] }, { "required": ["prev"] } ] } } } },
-      "else": { "properties": { "x-deal-v0": { "required": ["baseline_ref", "prev"] } } } },
+      "else": { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "sale" } } } } },
+                "then": { "properties": { "body": { "$ref": "#/$defs/body_sale" }, "x-deal-v0": { "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" } }, "not": { "anyOf": [ { "required": ["baseline_ref"] }, { "required": ["prev"] }, { "required": ["counterparty"] }, { "required": ["refs"] } ] } } } },
+                "else": { "properties": { "x-deal-v0": { "required": ["baseline_ref", "prev"] } } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "intent" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_intent" } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "message" } } } } },
@@ -51,7 +53,7 @@
     },
     "short_text": { "type": "string", "minLength": 1, "maxLength": 200 },
     "record_type": {
-      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure"]
+      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale"]
     },
     "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer"] },
     "outcome_value": { "description": "completed, mismatch or open; or not_selected: the other side was not chosen, and nothing was done on the deal (no action is on record). Every value but open is final at a close.", "enum": ["completed", "mismatch", "open", "not_selected"] },
@@ -100,7 +102,7 @@
       "properties": {
         "profile": { "const": "x-deal-v0" },
         "canonicalization": { "const": "jcs" },
-        "deal_id": { "type": "string", "pattern": "^deal-[0-9a-f]{16,64}$" },
+        "deal_id": { "type": "string", "pattern": "^(deal|sale)-[0-9a-f]{16,64}$" },
         "record_type": { "$ref": "#/$defs/record_type" },
         "seq": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
         "at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
@@ -172,6 +174,19 @@
       "not": { "required": ["label_commitment", "name"] }
     },
 
+    "body_sale": {
+      "description": "A sale's root, the first record of a sale's own log: what is for sale and the seller's request, before any buyer, and the item reference as a commitment. The sale's one task authority (a typed task-authority/v0) follows it; each buyer's deal is a thread whose task authority names that one by digest (sale_authority_ref).",
+      "type": "object", "additionalProperties": false,
+      "required": ["deal_type", "intent", "terms", "recourse", "item_ref_commitment"],
+      "properties": {
+        "deal_type": { "enum": ["purchase", "rental", "booking", "service"] },
+        "demo": { "type": "boolean" },
+        "intent": { "$ref": "#/$defs/body_intent" },
+        "terms": { "$ref": "#/$defs/terms" },
+        "recourse": { "type": "object", "allOf": [ { "$ref": "#/$defs/recourse" } ], "required": ["rail", "refundable"] },
+        "item_ref_commitment": { "$ref": "#/$defs/hex64" }
+      }
+    },
     "body_baseline": {
       "type": "object", "additionalProperties": false,
       "required": ["deal_type", "intent", "terms", "recourse"],
@@ -293,6 +308,7 @@
       "dependentRequired": { "action_class": ["taxonomy_version"], "taxonomy_version": ["action_class"], "spend_authorized_minor": ["authorized_max_minor", "spend_minor"] },
       "properties": {
         "action": { "$ref": "#/$defs/point_of_no_return" },
+        "item_ref_commitment": { "description": "On a check of a sale's thread: the sale's item reference, committed under this check's own nonce, so it is equal across the sale's threads only to a holder of the openings.", "$ref": "#/$defs/hex64" },
         "action_class": { "$ref": "#/$defs/action_class" },
         "taxonomy_version": { "$ref": "#/$defs/taxonomy_version" },
         "spend_minor": { "description": "The amount a spend cap evaluates: what the action pays out. 0 on every cancel. Sealed with action_class.", "$ref": "#/$defs/safe_uint" },

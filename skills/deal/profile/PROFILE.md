@@ -116,6 +116,7 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | record_type | What it records | Required body fields | Required refs / block fields |
 |---|---|---|---|
 | `baseline` | First contact: what the user asked, who the counterparty is, the terms and the way back. The deal's contract. | `deal_type` (`purchase`\|`rental`\|`booking`\|`service`), `intent` (as the intent body; its optional `party_role`, `buyer`\|`seller`, is which side of the deal the user is on, absent meaning `buyer`, as on every deal sealed before it was recorded), `terms`, `recourse.rail` + `recourse.refundable`; `materiality` (the materiality predicate pinned when the deal opened, as on a verdict; a verdict under another one carries a `materiality_changed` difference) | `seq` = 1; `channel`; `counterparty` (≥ 1 id). No `prev`, no `baseline_ref`. Optional `claims[]`, `counterparty_facts`, `demo`, `skill` (`{"skill_md_digest": <64 hex>, "other_copies": <int ≥ 0>}`: the SHA-256 of the SKILL.md the agent reported following, and how many other copies of that skill sat beside it; a boundary marker for accidents, not proof the instructions were followed). |
+| `sale` | Where the user sells one item to one of several buyers: the first record of the sale's own log (deal_id `sale-…`), before any buyer. Followed by the sale's one `task-authority/v0` and nothing else. | `deal_type`, `intent` (the seller's request and limits, `party_role: seller`), `terms`, `recourse.rail` + `recourse.refundable`, `item_ref_commitment` (the sale's opaque item reference, committed) | `seq` = 1. No `prev`, no `baseline_ref`, no `counterparty`, no `refs`. Optional `demo`. |
 | `intent` | The user restates or picks within the ask. Replaces `verbatim` / `asked` from here on. `allowed` and `max_total_minor` carry forward unchanged: an intent may lower the limit or drop actions, and a higher limit or a new action is only a proposal (section 6, rule 6). | `verbatim_commitment` | `baseline_ref`, `prev`. Optional `party_role`, equal to the baseline's (a deal's role is fixed when it opens). |
 | `message` | One message in the thread. The text stays local. | `from` (`counterparty`\|`user`\|`agent`), `content_commitment` | `channel`. `counterparty` when the message shows identifiers (for example, a new phone number). |
 | `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text_commitment` (the claim's words, ≤ 200 chars, committed), `source_kind` (whose it is: `merchant`\|`agent`\|`platform`\|`user`\|`external`), optional `source_ref_commitment` (the caller's note of where it was read, committed). A claim sealed before claims were committed carries `text` and `source` in the clear instead, and re-derives unchanged (see "Claims"). | none beyond the chain. |
@@ -468,6 +469,19 @@ A verifier holding one deal's records in `seq` order checks:
    offer is made and accepted again. Such a commit or share action cites the acceptance it rests
    on with exactly one `source` ref; no other action carries one. The acceptance is not
    authority: `authority_basis` is unchanged.
+10. **A sale to one of several buyers.** A sale's own log is a `sale` record and then its one
+    `task-authority/v0` (`source` → the sale record, the floor's `bounds_commitment` when the
+    sale states one, no `sale_authority_ref`), and nothing else. Each buyer's negotiation is a
+    deal of its own, a thread, whose task authority carries `sale_authority_ref`: the digest of
+    the sale's task authority, the same on every thread of the sale. A thread's request and
+    limits are the sale's and do not change per buyer (no `intent` steps). Each `check` of a
+    thread carries `item_ref_commitment`: the sale's item reference committed under that check's
+    own nonce, so no value in a thread's records but `sale_authority_ref` is equal across threads,
+    and a buyer's copy withholds the record that carries it. A thread verifies alone: the
+    referenced task authority is in the sale's log, and the producer checks, before each check,
+    that the sale's task authority is still the one the thread opened under. The profile's own
+    rules checker is given the plain reference (`item_ref`), the same on every thread, which is
+    how it holds a sale to one accepted commitment; no record carries it.
 
 ## 7. Outcome conventions: `completed | mismatch | open`
 
@@ -551,6 +565,9 @@ At every check, after the `check` record is sealed:
     `task_authority_ref` names, exactly as sealed: SHA-256 over its JCS bytes is the ref's digest,
     and its plan (`outcome_id`, `allowed_actions`, `preconditions`) is at `body`. Absent when the limits in force were confirmed
     later in an approval, and in a deal with no task-authority record.
+  - `item_ref` (a sale's thread): the sale's item reference, 64 lowercase hex, the same on every
+    thread of the sale (section 6, rule 10). Only this device's checker is given it; no record
+    carries it. A rule that needs it and is given none reports `not_evaluable`, never a pass.
 
   A rolling window is evaluated over the history the deal check supplies. A checker given no
   history, or too little (`complete` false, or a window longer than `days`), reports that rule

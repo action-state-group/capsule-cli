@@ -106,7 +106,7 @@ func (s *dealSession) previousSkill(ctx context.Context, dealID, openedAt string
 			return nil, errors.Join(err, rows.Close())
 		}
 		var ev dealEvent
-		if json.Unmarshal([]byte(local), &ev) != nil || ev.Open == nil || ev.At > openedAt {
+		if json.Unmarshal([]byte(local), &ev) != nil || ev.Kind != "open" || ev.Open == nil || ev.At > openedAt {
 			continue
 		}
 		if best == nil || ev.At > best.At || (ev.At == best.At && ev.DealID > best.DealID) {

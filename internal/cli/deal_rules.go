@@ -126,6 +126,17 @@ type dealOpen struct {
 	// profile, never from the input file. A later check under another one
 	// is flagged. Absent on deals opened before it was recorded.
 	Materiality dealMateriality `json:"materiality,omitzero"`
+	// ItemRef is the sale's opaque item reference (256 random bits, hex),
+	// minted by `deal sale new` and kept only locally: a sale's root
+	// carries it, and so does each buyer thread opened under that sale
+	// (`deal open --sale`). Records carry it only as a salted commitment.
+	ItemRef string `json:"item_ref,omitempty"`
+	// Sale is, on a buyer thread, the id of the sale it was opened under,
+	// and SaleAuthority the digest of that sale's one task authority, which
+	// the thread's task authority records (sale_authority_ref). Set by
+	// `deal open --sale`, never from the input file.
+	Sale          string `json:"sale,omitempty"`
+	SaleAuthority string `json:"sale_authority,omitempty"`
 }
 
 type dealMessage struct {
@@ -164,6 +175,10 @@ type dealChange struct {
 
 // dealSnapshot is exactly what is about to happen at a point of no return.
 type dealSnapshot struct {
+	// ItemRef is the sale's item reference, on a check of a sale's thread:
+	// set by `deal check` from the thread, never from the input file, and
+	// sealed only as item_ref_commitment.
+	ItemRef     string        `json:"item_ref,omitempty"`
 	Action      string        `json:"action"`
 	Description string        `json:"description,omitempty"`
 	AmountMinor *int64        `json:"amount_minor,omitempty"`

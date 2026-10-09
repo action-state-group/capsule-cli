@@ -448,6 +448,9 @@ func dealDeadlinesCommand() *cobra.Command {
 		list := []dealDeadline{}
 		deals := []dealOpenListing{}
 		for _, id := range ids {
+			if saleIDPattern.MatchString(id) {
+				continue // a sale's log is not a deal: its threads are
+			}
 			events, err := s.loadOther(ctx, id)
 			if err != nil {
 				return err

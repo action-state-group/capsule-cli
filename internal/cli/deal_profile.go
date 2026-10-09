@@ -72,6 +72,9 @@ func dealTexts(ev dealEvent) map[string]string {
 	case ev.Open != nil:
 		t["verbatim"] = ev.Open.Intent.Verbatim
 		boundsText(t, ev.Open.Intent)
+		if ev.Kind == "sale" {
+			t["item_ref"] = ev.Open.ItemRef
+		}
 		// A step sealed before claims were committed carries them in the
 		// clear, so they are no committed text of it.
 		if ev.ClaimCommit != "" {
@@ -98,8 +101,13 @@ func dealTexts(ev dealEvent) map[string]string {
 		if ev.Evidence.Obligation != nil && ev.Evidence.Obligation.Terms != "" {
 			t["terms"] = ev.Evidence.Obligation.Terms
 		}
-	case ev.Snapshot != nil && ev.Snapshot.Description != "":
-		t["description"] = ev.Snapshot.Description
+	case ev.Snapshot != nil && (ev.Snapshot.Description != "" || ev.Snapshot.ItemRef != ""):
+		if ev.Snapshot.Description != "" {
+			t["description"] = ev.Snapshot.Description
+		}
+		if ev.Snapshot.ItemRef != "" {
+			t["item_ref"] = ev.Snapshot.ItemRef
+		}
 	case ev.Check != nil && ev.Check.Card != "":
 		t["card"] = ev.Check.Card
 	case ev.Approval != nil && ev.Approval.Approver == "user":
@@ -586,6 +594,24 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 	var rtype string
 	var err error
 	switch ev.Kind {
+	case "sale":
+		// A sale's root: what is for sale and the seller's request, before
+		// any buyer. No counterparty and no channel yet; the item reference
+		// only as a commitment. The sale's one task authority follows it.
+		o := ev.Open
+		rtype = "sale"
+		body["deal_type"] = o.Type
+		if o.Demo {
+			body["demo"] = true
+		}
+		if body["intent"], err = intentBody(o.Intent, commit); err != nil {
+			return nil, err
+		}
+		body["terms"] = termsBody(o.Terms)
+		body["recourse"] = recourseBody(o.Recourse)
+		if body["item_ref_commitment"], err = commit("item_ref"); err != nil {
+			return nil, err
+		}
 	case "open":
 		o := ev.Open
 		rtype = "baseline"
@@ -777,6 +803,13 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			setIDs(counterpartyIDs(key, *sn.Who))
 		}
 		body["action"] = sn.Action
+		// On a sale's thread, the item it is about, salted per check: equal
+		// across a sale's threads only to whoever holds the openings.
+		if sn.ItemRef != "" {
+			if body["item_ref_commitment"], err = commit("item_ref"); err != nil {
+				return nil, err
+			}
+		}
 		var snapCurrency string
 		if sn.AmountMinor != nil {
 			body["amount_minor"] = *sn.AmountMinor

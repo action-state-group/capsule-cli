@@ -163,7 +163,7 @@ func openDealSession(ctx context.Context, p Profile) (_ *dealSession, err error)
 // useDeal opens the store with the deal's own log, creating the log for a new
 // deal. An existing deal must already have indexed steps.
 func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) error {
-	if !dealIDPattern.MatchString(dealID) {
+	if !dealIDPattern.MatchString(dealID) && !saleIDPattern.MatchString(dealID) {
 		return inputError("--deal must be a deal id as printed by `deal open`: deal- followed by 16 hex characters")
 	}
 	if create {
@@ -696,7 +696,7 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealCountersignCommand(), dealExportCommand(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand(), dealDeadlinesCommand())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealCountersignCommand(), dealExportCommand(), dealSaleCommands(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand(), dealDeadlinesCommand())
 	return deal
 }
 
@@ -712,6 +712,10 @@ func runDeal(c *cobra.Command, needDeal bool, fn func(ctx context.Context, s *de
 		dealID, _ = c.Flags().GetString("deal")
 		if dealID == "" {
 			return inputError("--deal is required: a deal id as printed by `deal open`")
+		}
+		// A sale's log is not a deal: only `deal sale` commands read it.
+		if !dealIDPattern.MatchString(dealID) {
+			return inputError("--deal must be a deal id as printed by `deal open`: deal- followed by 16 hex characters")
 		}
 	}
 	ctx := c.Context()
@@ -852,6 +856,19 @@ func dealOpenCommand() *cobra.Command {
 		if err = decodeJSONAs("--input", raw, &o); err != nil {
 			return err
 		}
+		// Set from the sale (deal open --sale), never from the input file.
+		o.ItemRef, o.Sale, o.SaleAuthority = "", "", ""
+		if saleID, _ := c.Flags().GetString("sale"); saleID != "" {
+			if err = runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
+				sale, authority, err := s.saleOf(ctx, saleID)
+				if err != nil {
+					return err
+				}
+				return underSale(&o, sale, saleID, authority)
+			}); err != nil {
+				return err
+			}
+		}
 		if err = o.validate(); err != nil {
 			return err
 		}
@@ -864,6 +881,9 @@ func dealOpenCommand() *cobra.Command {
 		o.Records = ""
 		switch v, _ := c.Flags().GetString("records"); v {
 		case "", "x-deal-v0":
+			if o.Sale != "" {
+				o.Records = recordsTyped // a sale's thread is typed
+			}
 		case "typed":
 			o.Records = recordsTyped
 		default:
@@ -936,6 +956,7 @@ func dealOpenCommand() *cobra.Command {
 	cmd.Flags().String("input", "", "Baseline JSON: type, intent, who, terms, claims, recourse")
 	cmd.Flags().String("skill", "", "The SKILL.md the agent is following (or $"+dealSkillEnv+"): its digest is sealed in the baseline")
 	cmd.Flags().String("records", "", "The record set: x-deal-v0 (the default) or typed (the typed action records, which carry the check contract)")
+	cmd.Flags().String("sale", "", "A sale id from `deal sale new`: open this buyer's thread under the sale's request and task authority (typed records)")
 	return cmd
 }
 
@@ -1139,6 +1160,9 @@ func dealNoteCommand() *cobra.Command {
 					ev.Message.Channel = open.Channel
 				}
 			case "intent":
+				if open.Sale != "" {
+					return inputError("a sale's thread is under the sale's one task authority: its request and limits do not change per buyer")
+				}
 				for _, a := range ev.Intent.Allowed {
 					if !slices.Contains(dealPointsOfNoReturn[open.Type], a) {
 						return inputError("intent.allowed names an action that is not a point of no return for this deal type: " + a)
@@ -1473,6 +1497,12 @@ func dealCheckCommand() *cobra.Command {
 			}
 			if snap.Action == offerAction && dealRole(events) != dealRoleSeller {
 				return inputError("an offer is made on a deal where the user sells (intent.party_role seller)")
+			}
+			// On a sale's thread, the check is about the sale's item, under
+			// the sale's task authority as it was when the thread opened.
+			snap.ItemRef = open.ItemRef
+			if err := s.saleUnchanged(ctx, events); err != nil {
+				return err
 			}
 			if err := checkFee(snap.Action, snap.FeeMinor); err != nil {
 				return err

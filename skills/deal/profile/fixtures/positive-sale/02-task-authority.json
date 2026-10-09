@@ -1,0 +1,39 @@
+{
+  "fixture": "02-task-authority.json",
+  "expect": "valid",
+  "story": "The sale's one task authority: every buyer's thread names it by digest.",
+  "record": {
+    "type": "task-authority/v0",
+    "canonicalization": "jcs",
+    "chain_id": "sale-3c9e1a7b5d2f8064",
+    "seq": 2,
+    "at": "2026-10-06T08:00:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+    },
+    "refs": [
+      {
+        "rel": "source",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+      }
+    ],
+    "body": {
+      "verbatim_commitment": "1f7b62ba5ad3972c1a03b97ac5c2643b0faccf44527ca5dfe96812ea3a180078",
+      "bounds_commitment": "19f36162d01f974179026258d7f435c189712bc6274b5119c1163fd9321b78c3",
+      "allowed": [
+        "offer",
+        "commit"
+      ]
+    }
+  },
+  "expected_digest": "a3384a8bb82f07c5a3e80eb91dd8e9ce61bd5a460c9ca4bb5f032c25e396e0fb"
+}

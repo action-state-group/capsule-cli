@@ -777,6 +777,11 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 				// the floor is in no shared copy at all.
 				return false
 			}
+			if k == "sale_authority_ref" && audience == dealAudienceCounterparty {
+				// The same digest on every thread of a sale: two buyers
+				// comparing their copies would learn they bid for one item.
+				return false
+			}
 			if k == "materiality" {
 				// Which materiality predicate applied: shareable as its
 				// digest and the commitment to its name and version only.

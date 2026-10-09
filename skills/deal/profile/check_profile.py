@@ -47,7 +47,7 @@ TYPED_TYPES = {"task-authority/v0": "task_authority", "proposed-action/v0": "che
 FIX = HERE / "fixtures"
 
 RECORD_TYPES = ["intent", "baseline", "message", "claim", "evidence", "detail_change",
-                "check", "verdict", "approval", "action", "outcome", "close", "disclosure"]
+                "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale"]
 # The point of no return whose check covers a disclosed field of each class.
 DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "home_address", "address",
                                                   "pickup_location", "other_contact")}
@@ -464,7 +464,7 @@ def stage_schema(rec):
         raise StageError("schema", f"x-deal-v0/record_type: {blk['record_type']!r} is not one of {RECORD_TYPES}")
     if not isinstance(blk["seq"], int) or blk["seq"] < 1:
         raise StageError("schema", "seq must be an integer >= 1")
-    if not re.fullmatch(r"deal-[0-9a-f]{16,64}", str(blk["deal_id"])):
+    if not re.fullmatch(r"(deal|sale)-[0-9a-f]{16,64}", str(blk["deal_id"])):
         raise StageError("schema", "deal_id pattern")
     body = rec.get("body")
     if blk["record_type"] == "baseline" and isinstance(body, dict) and "skill" in body:
@@ -481,7 +481,7 @@ def stage_schema(rec):
             raise StageError("schema", "x-deal-v0/producer must be {name, version, commit}: non-empty strings")
 
 
-_EXEMPT = re.compile(r"^([0-9a-f]{16,}|deal-[0-9a-f]+|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?|"
+_EXEMPT = re.compile(r"^([0-9a-f]{16,}|(deal|sale)-[0-9a-f]+|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?|"
                      r"[a-z0-9-]+/[a-z0-9-]+/\d+\.\d+\.\d+)$")
 _PHONE = re.compile(r"\+?\(?\d[\d\s().-]{6,}\d")
 _EMAIL = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
@@ -531,10 +531,41 @@ def _ref(d):
     return {"type": "deal-record", "digest_alg": "SHA-256", "digest": d}
 
 
+def check_sale_chain(records):
+    """A sale's own log (section 6, rule 10): its root and its one task authority,
+    nothing else. Raises StageError('chain')."""
+    def fail(i, msg):
+        raise StageError("chain", f"seq position {i + 1}: {msg}")
+
+    if len(records) != 2:
+        fail(min(len(records), 2) - 1 if records else 0, "a sale's log holds its root and its one task authority, nothing else")
+    root, ta = records
+    blk = root["x-deal-v0"]
+    if blk["seq"] != 1:
+        fail(0, "a sale's root is the first record of its log")
+    if root["body"]["intent"].get("party_role") != "seller":
+        fail(0, "a sale is made by the seller (party_role seller)")
+    if not is_typed(ta) or ta["type"] != "task-authority/v0":
+        fail(1, "a sale's root is followed by its task authority (task-authority/v0)")
+    d0 = record_digest(root)
+    if ta["seq"] != 2 or ta.get("prev", {}).get("digest") != d0 or ta.get("chain_root", {}).get("digest") != d0 \
+            or ta["chain_id"] != blk["deal_id"]:
+        fail(1, "the sale's task authority follows its root in the same log")
+    if [(r["rel"], r["digest"]) for r in ta.get("refs", [])] != [("source", d0)]:
+        fail(1, "the sale's task authority names the sale's root as its source, and nothing else")
+    if "sale_authority_ref" in ta["body"]:
+        fail(1, "a sale's own task authority names no other sale")
+    if root["body"]["intent"].get("bounds_commitment") is not None and "bounds_commitment" not in ta["body"]:
+        fail(1, "the sale's task authority carries the floor its root states")
+
+
 def check_chain(records):
     """Profile section 6 rules over one deal, in seq order. Raises StageError('chain')."""
     def fail(i, msg):
         raise StageError("chain", f"seq position {i + 1}: {msg}")
+
+    if records and not is_typed(records[0]) and records[0]["x-deal-v0"]["record_type"] == "sale":
+        return check_sale_chain(records)
 
     digests = [record_digest(r) for r in records]
     by_digest = {d: i for i, d in enumerate(digests)}
@@ -1082,10 +1113,11 @@ def run_fixtures() -> int:
         print(f"{'ok  ' if ok else 'FAIL'} commercial-bounds/v0 {x['document']['min_total_minor']:<16} {x['bounds_commitment'][:16]}…")
     store = local_store_values()
 
-    # Two positive chains: x-deal-v0 throughout, and one sealed in the typed action
-    # records beside x-deal-v0 evidence records. Each is checked as its own chain.
+    # Three positive chains: x-deal-v0 throughout, one sealed in the typed action
+    # records beside x-deal-v0 evidence records, and a sale's own log. Each is
+    # checked as its own chain.
     positives = []
-    for chain_dir in ("positive", "positive-typed"):
+    for chain_dir in ("positive", "positive-typed", "positive-sale"):
         chain = []
         for p in sorted((FIX / chain_dir).glob("*.json")):
             positives.append(p)
@@ -1097,7 +1129,9 @@ def run_fixtures() -> int:
                 if d != f["expected_digest"]:
                     raise StageError("digest", f"recomputed {d} != expected {f['expected_digest']}")
                 chain.append(rec)
-                check_chain(chain)
+                # A sale's log is checked whole: its root alone is not yet one.
+                if chain_dir != "positive-sale" or len(chain) == 2:
+                    check_chain(chain)
                 print(f"ok   {chain_dir}/{p.name:<34} {record_type_of(rec):<20} jcs-sha256 {d}")
             except StageError as e:
                 bad += 1
@@ -1460,6 +1494,39 @@ def regen():
         digests.append((f"positive-typed/{n}", d))
         dump(FIX / "positive-typed" / n, {"fixture": n, "expect": "valid", "story": stories1[record_type_of(r)],
                                           "record": r, "expected_digest": d})
+    # A sale's own log (section 6, rule 10): what is for sale and the seller's
+    # request, before any buyer, with the item reference as a commitment; then
+    # the sale's one task authority. Synthetic: an example bicycle.
+    sale_id = "sale-3c9e1a7b5d2f8064"
+    sale_verbatim = "Sell my example bicycle; ask 1900, not under 1700"
+    sale_bounds = jcs({"type": "commercial-bounds/v0", "min_total_minor": 170000}).decode("utf-8")
+    sale_root = {"x-deal-v0": {"profile": "x-deal-v0", "canonicalization": "jcs", "deal_id": sale_id,
+                               "record_type": "sale", "seq": 1, "at": "2026-10-06T08:00:00Z"},
+                 "body": {"deal_type": "purchase", "demo": True,
+                          "intent": {"verbatim_commitment": commitment(nonce("sale-verbatim"), sale_verbatim),
+                                     "party_role": "seller", "allowed": ["offer", "commit"],
+                                     "bounds_commitment": commitment(nonce("sale-bounds"), sale_bounds)},
+                          "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000, "currency": "USD"},
+                          "recourse": {"rail": "card", "refundable": False},
+                          "item_ref_commitment": commitment(nonce("sale-item-ref"), nonce("sale-item"))}}
+    root_ref = {"type": "record", "digest_alg": "SHA-256", "digest": record_digest(sale_root)}
+    sale_authority = {"type": "task-authority/v0", "canonicalization": "jcs", "chain_id": sale_id, "seq": 2,
+                      "at": "2026-10-06T08:00:00Z", "prev": root_ref, "chain_root": root_ref,
+                      "refs": [{"rel": "source", **root_ref}],
+                      "body": {"verbatim_commitment": commitment(nonce("sale-ta-verbatim"), sale_verbatim),
+                               "bounds_commitment": commitment(nonce("sale-ta-bounds"), sale_bounds),
+                               "allowed": ["offer", "commit"]}}
+    sale_stories = {"sale": "Where the user sells one item to one of several buyers: the sale's own log opens with what is "
+                            "for sale and the seller's request, before any buyer, the item reference only as a commitment.",
+                    "task-authority/v0": "The sale's one task authority: every buyer's thread names it by digest."}
+    (FIX / "positive-sale").mkdir(parents=True, exist_ok=True)
+    for old in (FIX / "positive-sale").glob("*.json"):
+        old.unlink()
+    for n, r in (("01-sale.json", sale_root), ("02-task-authority.json", sale_authority)):
+        d = record_digest(r)
+        digests.append((f"positive-sale/{n}", d))
+        dump(FIX / "positive-sale" / n, {"fixture": n, "expect": "valid", "story": sale_stories[record_type_of(r)],
+                                         "record": r, "expected_digest": d})
     (FIX / "expected-digests.txt").write_text(
         "# SHA-256 over the RFC 8785 (JCS) bytes of each positive record (the `record` member only)\n"
         + "".join(f"{d}  {n if '/' in n else 'positive/' + n}\n" for n, d in digests), encoding="utf-8")
