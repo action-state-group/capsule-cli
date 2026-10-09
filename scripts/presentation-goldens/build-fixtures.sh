@@ -131,6 +131,45 @@ cp bundle.json page.html "$out/7-receipt-declared-rules/"
 meta 7-receipt-declared-rules "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "receipt-declared-rules", emitted_by: "capsulectl deal report --deal ID --html page.html --bundle bundle.json (share keep), with a pinned stub rules checker", rerender: "deal-report", page: "written", verify: $v}')"
 unset CAPSULECTL_PLUGIN_ROOTS
 
+# --- 8. a seller's deal, the buyer's copy: what the seller's agent said ----
+# The user sells an example bicycle. Their agent states the item's condition
+# and the refund terms (its own claims, each with a class), offers, records
+# the buyer's acceptance of that exact offer, and commits. The buyer's copy
+# opens those statements, labelled, and none of the user's own. Synthetic.
+fixture 8-seller-buyer-copy
+export CAPSULE_DEAL_CHECK_URL=
+capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
+cat >open.json <<'JSON'
+{"type": "purchase", "demo": true, "channel": "marketplace",
+ "intent": {"verbatim": "Sell my example bicycle; ask 1900", "party_role": "seller",
+            "asked": {"item": "example bicycle", "quantity": 1}, "allowed": ["offer", "commit"]},
+ "who": {"name": "Example Buyer", "domain": "buyer.example"},
+ "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000, "currency": "USD"},
+ "recourse": {"rail": "card", "refundable": false}}
+JSON
+id=$(capsulectl --profile deal deal open --records typed --input open.json | jq -r .deal_id)
+note() { capsulectl --profile deal deal note --deal "$id" "$@" >/dev/null; }
+echo '{"text": "The frame has one small scratch by the seat", "source_kind": "agent", "class": "condition"}' >claim-1.json
+echo '{"text": "Returns accepted within 7 days if unridden", "source_kind": "agent", "class": "refund_terms"}' >claim-2.json
+echo '{"text": "I bought it new two years ago", "source_kind": "user"}' >claim-3.json
+note --kind claim --input claim-1.json
+note --kind claim --input claim-2.json
+note --kind claim --input claim-3.json
+echo '{"action": "offer", "amount_minor": 190000, "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000}}' >offer.json
+offer=$(capsulectl --profile deal deal check --deal "$id" --input offer.json | jq -r .check_id)
+echo '{"action": "offer", "amount_minor": 190000}' >act-offer.json
+note --kind act --input act-offer.json
+note --kind acceptance --check "$offer" --words "Deal, 1900 works for me" --channel marketplace
+echo '{"action": "commit", "amount_minor": 190000, "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000}}' >commit.json
+capsulectl --profile deal deal check --deal "$id" --input commit.json >/dev/null
+echo '{"action": "commit", "amount_minor": 190000}' >act-commit.json
+note --kind act --input act-commit.json
+capsulectl --profile deal deal report --deal "$id" --share counterparty --to "the buyer" --html page.html >/dev/null
+# A shared copy writes only its page; the bundle is the one the page carries.
+perl -ne 'print "$1\n" if /^\s*<script>window\.__BUNDLE__ = (.*);<\/script>$/' page.html | jq . >bundle.json
+cp bundle.json page.html "$out/8-seller-buyer-copy/"
+meta 8-seller-buyer-copy "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "seller-buyer-copy", emitted_by: "capsulectl deal report --deal ID --share counterparty --to \"the buyer\" --html page.html (bundle.json is the bundle the page carries)", rerender: "deal-report", page: "written", verify: $v}')"
+
 # --- 3. bilateral receipt: composed/v1 joined, two members, one mismatch ---
 fixture 3-bilateral-composed
 git -C "$aac" show "${aac_commit}:python/scripts/generate_bundle_composed_vectors.py" >generator.py

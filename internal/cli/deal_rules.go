@@ -22,11 +22,16 @@ import (
 // undone. `deal check` refuses any other action, so an agent cannot reach an
 // irreversible step through a name the rules do not cover.
 var dealPointsOfNoReturn = map[string][]string{
-	"purchase": {"pay", "commit", "cancel", "share_contact", "share_credentials"},
-	"rental":   {"pay", "commit", "sign", "cancel", "share_contact", "share_credentials"},
-	"booking":  {"pay", "commit", "cancel", "share_contact", "share_credentials"},
-	"service":  {"pay", "commit", "sign", "cancel", "share_contact", "share_credentials"},
+	"purchase": {"pay", "commit", "cancel", "share_contact", "share_credentials", "offer"},
+	"rental":   {"pay", "commit", "sign", "cancel", "share_contact", "share_credentials", "offer"},
+	"booking":  {"pay", "commit", "cancel", "share_contact", "share_credentials", "offer"},
+	"service":  {"pay", "commit", "sign", "cancel", "share_contact", "share_credentials", "offer"},
 }
+
+// offerAction is a seller's offer or counteroffer: its checked snapshot is the
+// exact proposal (every material term, under this deal's id), and a later
+// offer supersedes it. Only a deal whose party_role is seller makes one.
+const offerAction = "offer"
 
 // dealWho identifies the counterparty. Every field is optional; each one that
 // was sealed at first contact is compared on every check.
@@ -61,6 +66,9 @@ type dealClaim struct {
 	Source     string `json:"source,omitempty"`
 	SourceKind string `json:"source_kind,omitempty"`
 	Verified   bool   `json:"verified,omitempty"`
+	// Class is what kind of representation an agent's claim is (dealClaimClasses),
+	// so a page can label it; optional, and sealed in the clear.
+	Class string `json:"class,omitempty"`
 }
 
 type dealRecourse struct {
@@ -118,6 +126,18 @@ type dealOpen struct {
 	// profile, never from the input file. A later check under another one
 	// is flagged. Absent on deals opened before it was recorded.
 	Materiality dealMateriality `json:"materiality,omitzero"`
+	// ItemRef is the sale's opaque item reference (256 random bits, hex),
+	// minted by `deal sale new` and kept only locally: a sale's root
+	// carries it, and so does each buyer thread opened under that sale
+	// (`deal open --sale`). Records carry it only as a salted commitment.
+	ItemRef string `json:"item_ref,omitempty"`
+	// Sale is, on a buyer thread, the id of the sale it was opened under,
+	// and SaleAuthority the digest of that sale's one task authority, which
+	// the thread's task authority commits to under its own nonce
+	// (sale_authority_commitment). Set by
+	// `deal open --sale`, never from the input file.
+	Sale          string `json:"sale,omitempty"`
+	SaleAuthority string `json:"sale_authority,omitempty"`
 }
 
 type dealMessage struct {
@@ -156,6 +176,10 @@ type dealChange struct {
 
 // dealSnapshot is exactly what is about to happen at a point of no return.
 type dealSnapshot struct {
+	// ItemRef is the sale's item reference, on a check of a sale's thread:
+	// set by `deal check` from the thread, never from the input file, and
+	// sealed only as item_ref_commitment.
+	ItemRef     string        `json:"item_ref,omitempty"`
 	Action      string        `json:"action"`
 	Description string        `json:"description,omitempty"`
 	AmountMinor *int64        `json:"amount_minor,omitempty"`
@@ -428,6 +452,9 @@ type dealAct struct {
 	// neither; a pay among them moved money out.
 	Direction string `json:"direction,omitempty"`
 	Reverses  string `json:"reverses,omitempty"`
+	// Accepted is, on a seller's commit, the sealed acceptance of the offer
+	// it rests on; the record cites it (rel source).
+	Accepted string `json:"accepted,omitempty"`
 	// FeeMinor is, on a cancel only, a fee the cancellation costs, recorded
 	// as its own amount: never the amount a spend cap evaluates (spend_minor
 	// is 0 on every cancel).
@@ -525,6 +552,14 @@ type dealEvent struct {
 	// Platform is an observation of another platform's own approval interaction,
 	// as observed (typed records). It never answers a check.
 	Platform *dealPlatformApproval `json:"platform,omitempty"`
+	// Acceptance is an observation of the counterparty accepting one exact
+	// offer (typed records). It authorizes nothing by itself.
+	Acceptance *dealAcceptance `json:"acceptance,omitempty"`
+	// SaleAuthority is, on the task authority of a sale's thread, the digest
+	// of the sale's one task authority: sealed only as a commitment under
+	// this step's own nonce (sale_authority_commitment), so no two threads
+	// carry an equal value.
+	SaleAuthority string `json:"sale_authority,omitempty"`
 	// Confirms is set on a record sealed after the deal was closed: the
 	// capsule id of that close. Its Capsule chains to the close with the
 	// registered relation `confirms`, never `follows`, and its record
@@ -586,6 +621,19 @@ type dealPlatformApproval struct {
 	ObservedAt    string `json:"observed_at"`
 	AmountMinor   *int64 `json:"amount_minor,omitempty"`
 	Currency      string `json:"currency,omitempty"`
+}
+
+// dealAcceptance is the counterparty accepting an offer, as the agent
+// observed it: which exact offer (the capsule id of its checked snapshot, the
+// proposed action), on which channel, when, and the counterparty's words
+// (committed, never stored in the record). It binds the acceptance to that
+// offer's digest; an offer made after it, or a change of details, leaves
+// that acceptance behind.
+type dealAcceptance struct {
+	Offer      string `json:"offer"`
+	Channel    string `json:"channel,omitempty"`
+	ObservedAt string `json:"observed_at"`
+	Words      string `json:"words"`
 }
 
 // dealProducer names the build that sealed a step. A development build says
@@ -1084,6 +1132,7 @@ var proceedLabels = map[string]string{
 var actionNames = map[string]string{
 	"pay": "paying", "commit": "confirming a commitment", "sign": "signing", "cancel": "cancelling",
 	"share_contact": "sharing your contact details", "share_credentials": "sharing a login or code",
+	"offer": "making an offer",
 }
 
 // evaluateDeal answers the four questions for snap against the sealed state:
@@ -1393,6 +1442,21 @@ func renderCard(r dealCheckResult, demo bool) string {
 // sealed) and only under the terms and refund terms it was made under.
 func authorizeAct(events []sealedEvent, act dealAct, now time.Time) (approval, reason, rule string) {
 	typed := dealRecordSet(dealEvent{}, events) == recordsTyped
+	// A seller commits to the offer the other party accepted, on exactly its
+	// terms: acceptedOffer is that offer's checked snapshot.
+	sellerCommit := typed && act.Action == "commit" && dealRole(events) == dealRoleSeller
+	acceptedOffer := ""
+	if sellerCommit {
+		acceptance, reason, rule := offerAccepted(events)
+		if rule != "" {
+			return "", reason, rule
+		}
+		for _, se := range events {
+			if se.CapsuleID == acceptance {
+				acceptedOffer = se.Event.Acceptance.Offer
+			}
+		}
+	}
 	// One approval (or, typed, one DO evaluation) covers at most one step:
 	// an action or a disclosure.
 	used := map[string]bool{}
@@ -1413,6 +1477,9 @@ func authorizeAct(events []sealedEvent, act dealAct, now time.Time) (approval, r
 			continue
 		}
 		verdict := events[i]
+		if sellerCommit && !sameMaterialTerms(events, acceptedOffer, verdict.Event.Check.Snapshot) {
+			return "", "the commit's terms differ from the offer the other party accepted: make that offer, and record its acceptance, before committing to it", "changed_after_acceptance"
+		}
 		if typed && verdict.Event.Check.ValidUntil != "" {
 			if until, err := time.Parse(time.RFC3339, verdict.Event.Check.ValidUntil); err == nil && now.After(until) {
 				return "", "the check went stale at " + verdict.Event.Check.ValidUntil + ": check again before acting", "stale_check"
@@ -1462,6 +1529,82 @@ func authorizeAct(events []sealedEvent, act dealAct, now time.Time) (approval, r
 		return "", reason, "no_sealed_approval"
 	}
 	return "", "no check before this action", "no_check"
+}
+
+// offerAccepted is the sealed acceptance a seller's commit rests on, or why
+// there is none:
+// the latest offer (only it is live; each later one supersedes the one
+// before) has a recorded acceptance, and no change of details came after
+// that acceptance. A change leaves the acceptance behind: the offer is made
+// again and accepted again.
+func offerAccepted(events []sealedEvent) (acceptance, reason, rule string) {
+	latest := ""
+	for _, se := range events {
+		if p := se.Event.Snapshot; se.Event.Kind == "snapshot" && p != nil && p.Action == offerAction {
+			latest = se.CapsuleID
+		}
+	}
+	if latest == "" {
+		return "", "no offer is on record: a seller commits to an offer the other party accepted", "no_accepted_offer"
+	}
+	accepted := -1
+	for i, se := range events {
+		if a := se.Event.Acceptance; se.Event.Kind == "acceptance" && a != nil && a.Offer == latest {
+			accepted = i
+		}
+	}
+	if accepted < 0 {
+		return "", "the latest offer has no recorded acceptance: an earlier offer's acceptance does not carry over", "offer_not_accepted"
+	}
+	for _, se := range events[accepted+1:] {
+		if changesDetails(se.Event) {
+			return "", "details changed after the other party accepted: make the offer again and record its acceptance", "changed_after_acceptance"
+		}
+	}
+	return events[accepted].CapsuleID, "", ""
+}
+
+// materialTerms is what an offer covers, as its check seals it: the amount
+// and its currency, the terms and the recourse.
+func materialTerms(sn *dealSnapshot, currency string) map[string]interface{} {
+	m := map[string]interface{}{}
+	if sn.AmountMinor != nil {
+		m["amount_minor"] = *sn.AmountMinor
+		if sn.Terms != nil && sn.Terms.Currency != "" {
+			currency = sn.Terms.Currency
+		}
+		m["currency"] = currency
+	}
+	if sn.Terms != nil {
+		if t := termsBody(*sn.Terms); len(t) > 0 {
+			m["terms"] = t
+		}
+	}
+	if sn.Recourse != nil {
+		if r := recourseBody(*sn.Recourse); len(r) > 0 {
+			m["recourse"] = r
+		}
+	}
+	return m
+}
+
+// sameMaterialTerms is whether two checked snapshots seal the same material
+// terms: a commit's, and the offer it rests on.
+func sameMaterialTerms(events []sealedEvent, a, b string) bool {
+	var sa, sb *dealSnapshot
+	for _, se := range events {
+		switch se.CapsuleID {
+		case a:
+			sa = se.Event.Snapshot
+		case b:
+			sb = se.Event.Snapshot
+		}
+	}
+	if sa == nil || sb == nil {
+		return false
+	}
+	currency := events[0].Event.Open.Terms.Currency
+	return reflect.DeepEqual(materialTerms(sa, currency), materialTerms(sb, currency))
 }
 
 // actMismatch compares what was done with the snapshot that was checked.
@@ -1627,6 +1770,8 @@ func trailLine(e dealEvent) string {
 		return "your request recorded as what the agent may do for you"
 	case "platform_approval":
 		return e.Platform.Platform + " separately asked you for approval (recorded as observed; it does not answer your rules)"
+	case "acceptance":
+		return "the other party accepted the offer (recorded as observed)"
 	case "check":
 		if e.Check.Verdict == "pass" {
 			return "checked " + e.Check.Action + ": no differences"
@@ -1946,6 +2091,10 @@ func buildDealReport(events []sealedEvent) dealReport {
 					r.Did[i].Text += "; you chose " + optionLabel(events, e.Approval.Check, e.Approval.Choice)
 				}
 			}
+		case "acceptance":
+			r.Did = append(r.Did, dealReportItem{Kind: "acceptance", At: e.Acceptance.ObservedAt, Steps: []string{e.Acceptance.Offer, se.CapsuleID},
+				Text:   fmt.Sprintf("The other party accepted the offer: %q (recorded as observed)", e.Acceptance.Words),
+				Shared: "The other party accepted the offer (recorded as observed)"})
 		case "platform_approval":
 			p := e.Platform
 			line := p.Platform + " separately asked you for approval"
@@ -2110,8 +2259,11 @@ type dealDisclosure struct {
 	// AuthorizedBy is the sealed approval that covered it; empty when none
 	// did, with Reason and Rule saying why.
 	AuthorizedBy string `json:"authorized_by,omitempty"`
-	Reason       string `json:"reason,omitempty"`
-	Rule         string `json:"rule,omitempty"`
+	// Accepted is, on a seller's address, the sealed acceptance of the offer
+	// it rests on; the record cites it (rel source).
+	Accepted string `json:"accepted,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+	Rule     string `json:"rule,omitempty"`
 }
 
 type dealDisclosureField struct {
@@ -2156,6 +2308,18 @@ func classWord(c string) string {
 // action is the point of no return that covers the disclosure.
 func (d dealDisclosure) action() string {
 	return disclosureClasses[d.Fields[0].Class]
+}
+
+// addressed is whether the disclosure gives a place: a street or home
+// address, or a pickup location.
+func (d dealDisclosure) addressed() bool {
+	for _, f := range d.Fields {
+		switch f.Class {
+		case "home_address", "address", "pickup_location":
+			return true
+		}
+	}
+	return false
 }
 
 func (d dealDisclosure) classList() string {

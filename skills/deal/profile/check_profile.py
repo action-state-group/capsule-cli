@@ -47,12 +47,16 @@ TYPED_TYPES = {"task-authority/v0": "task_authority", "proposed-action/v0": "che
 FIX = HERE / "fixtures"
 
 RECORD_TYPES = ["intent", "baseline", "message", "claim", "evidence", "detail_change",
-                "check", "verdict", "approval", "action", "outcome", "close", "disclosure"]
+                "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale"]
 # The point of no return whose check covers a disclosed field of each class.
 DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "home_address", "address",
                                                   "pickup_location", "other_contact")}
 DISCLOSURE_ACTION.update({c: "share_credentials" for c in ("credential", "verification_code",
                                                            "payment_card", "id_document")})
+# What an offer covers, and a seller's commit must equal: the material terms.
+OFFER_TERMS = ("amount_minor", "currency", "terms", "recourse")
+# The classes that give a place: a seller gives one out only for an accepted offer.
+ADDRESS_CLASSES = {"home_address", "address", "pickup_location"}
 IDENTIFIER_KINDS = ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id"]
 SAFE_INT = 2**53 - 1
 
@@ -462,7 +466,7 @@ def stage_schema(rec):
         raise StageError("schema", f"x-deal-v0/record_type: {blk['record_type']!r} is not one of {RECORD_TYPES}")
     if not isinstance(blk["seq"], int) or blk["seq"] < 1:
         raise StageError("schema", "seq must be an integer >= 1")
-    if not re.fullmatch(r"deal-[0-9a-f]{16,64}", str(blk["deal_id"])):
+    if not re.fullmatch(r"(deal|sale)-[0-9a-f]{16,64}", str(blk["deal_id"])):
         raise StageError("schema", "deal_id pattern")
     body = rec.get("body")
     if blk["record_type"] == "baseline" and isinstance(body, dict) and "skill" in body:
@@ -479,7 +483,7 @@ def stage_schema(rec):
             raise StageError("schema", "x-deal-v0/producer must be {name, version, commit}: non-empty strings")
 
 
-_EXEMPT = re.compile(r"^([0-9a-f]{16,}|deal-[0-9a-f]+|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?|"
+_EXEMPT = re.compile(r"^([0-9a-f]{16,}|(deal|sale)-[0-9a-f]+|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?|"
                      r"[a-z0-9-]+/[a-z0-9-]+/\d+\.\d+\.\d+)$")
 _PHONE = re.compile(r"\+?\(?\d[\d\s().-]{6,}\d")
 _EMAIL = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
@@ -529,10 +533,41 @@ def _ref(d):
     return {"type": "deal-record", "digest_alg": "SHA-256", "digest": d}
 
 
+def check_sale_chain(records):
+    """A sale's own log (section 6, rule 10): its root and its one task authority,
+    nothing else. Raises StageError('chain')."""
+    def fail(i, msg):
+        raise StageError("chain", f"seq position {i + 1}: {msg}")
+
+    if len(records) != 2:
+        fail(min(len(records), 2) - 1 if records else 0, "a sale's log holds its root and its one task authority, nothing else")
+    root, ta = records
+    blk = root["x-deal-v0"]
+    if blk["seq"] != 1:
+        fail(0, "a sale's root is the first record of its log")
+    if root["body"]["intent"].get("party_role") != "seller":
+        fail(0, "a sale is made by the seller (party_role seller)")
+    if not is_typed(ta) or ta["type"] != "task-authority/v0":
+        fail(1, "a sale's root is followed by its task authority (task-authority/v0)")
+    d0 = record_digest(root)
+    if ta["seq"] != 2 or ta.get("prev", {}).get("digest") != d0 or ta.get("chain_root", {}).get("digest") != d0 \
+            or ta["chain_id"] != blk["deal_id"]:
+        fail(1, "the sale's task authority follows its root in the same log")
+    if [(r["rel"], r["digest"]) for r in ta.get("refs", [])] != [("source", d0)]:
+        fail(1, "the sale's task authority names the sale's root as its source, and nothing else")
+    if "sale_authority_commitment" in ta["body"]:
+        fail(1, "a sale's own task authority names no other sale")
+    if root["body"]["intent"].get("bounds_commitment") is not None and "bounds_commitment" not in ta["body"]:
+        fail(1, "the sale's task authority carries the floor its root states")
+
+
 def check_chain(records):
     """Profile section 6 rules over one deal, in seq order. Raises StageError('chain')."""
     def fail(i, msg):
         raise StageError("chain", f"seq position {i + 1}: {msg}")
+
+    if records and not is_typed(records[0]) and records[0]["x-deal-v0"]["record_type"] == "sale":
+        return check_sale_chain(records)
 
     digests = [record_digest(r) for r in records]
     by_digest = {d: i for i, d in enumerate(digests)}
@@ -546,9 +581,10 @@ def check_chain(records):
     if blk0["record_type"] != "baseline":
         fail(0, "the first record of a deal must be the baseline")
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
-                    "approval": {"approves"}, "action": {"authorized_by", "reverses"}, "outcome": {"observes"},
+                    "approval": {"approves"}, "action": {"authorized_by", "reverses", "source"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"},
                     "task_authority": {"source", "approves"}, "platform_approval": set(), "policy_change": set(),
+                    "check": {"supersedes"}, "counterparty_acceptance": set(),
                     "counterparty_profile": {"about"}}
     # The user's limits in force. Absent allowed = no restriction; present and
     # empty = nothing allowed. An intent may narrow them; only the user's
@@ -558,6 +594,8 @@ def check_chain(records):
     max_total = records[0]["body"]["intent"].get("max_total_minor")
     # The side of the deal the user is on: set when it opens (absent = buyer), never changed.
     party_role = records[0]["body"]["intent"].get("party_role", "buyer")
+    if party_role == "seller" and not typed_chain:
+        fail(0, "a deal where the user sells is sealed in the typed action records")
     # The floor in force, as the bounds_commitment that stated it: the floor itself is never in a
     # record, so it cannot be compared. After an intent states a new floor the producer applies it
     # only if it is higher, which this checker cannot see: the floor in force is then unknown
@@ -578,6 +616,10 @@ def check_chain(records):
     first_answer = {}  # verdict index -> index of its first approval
     last_outcome = None
     unchecked = 0
+    # A seller's offers: each later offer supersedes the one before, and only the
+    # latest can be accepted. accepted is the index of the acceptance of the latest
+    # offer, None until there is one.
+    latest_offer, accepted = None, None
     closed_final = None  # index of the final close, once there is one
     for i, rec in enumerate(records):
         b, body = rec["x-deal-v0"], rec["body"]
@@ -632,6 +674,29 @@ def check_chain(records):
             if js and records[js[0]]["x-deal-v0"]["record_type"] not in types:
                 fail(i, f"{rel!r} must point at a {' or '.join(types)} record")
             return js[0] if js else None
+
+        def offer_check_of(k):
+            """The check an authorizing record (a DO evaluation, or an approval of
+            one) rests on."""
+            if records[k]["x-deal-v0"]["record_type"] == "approval":
+                k = by_digest[records[k]["x-deal-v0"]["refs"][0]["digest"]]
+            return by_digest[records[k]["x-deal-v0"]["refs"][0]["digest"]]
+
+        def seller_needs_acceptance(what):
+            """A seller commits, or gives out a place, only for the latest offer the
+            counterparty accepted, with no change of details since."""
+            if latest_offer is None:
+                fail(i, f"no offer is on record: a seller's {what} rests on an offer the other party accepted")
+            if accepted is None:
+                fail(i, f"the latest offer has no recorded acceptance: the {what} needs one")
+            for k in range(accepted + 1, i):
+                kb = records[k]["x-deal-v0"]
+                identity = kb["record_type"] in ("message", "evidence") and (
+                    "counterparty" in kb or "counterparty_facts" in records[k]["body"])
+                if kb["record_type"] == "detail_change" or identity:
+                    fail(i, f"details changed after the other party accepted; the {what} needs the offer made and accepted again")
+            if by_rel.get("source") != [accepted]:
+                fail(i, f"a seller's {what} cites the acceptance it rests on (source)")
 
         def authorized_check(ja, action, what):
             """Section 6, rule 5: the approval proceeds, is unused, is the
@@ -783,6 +848,33 @@ def check_chain(records):
             if body["observed_at"] > b["at"]:
                 fail(i, "observed_at is later than the record")
             platform_for_verdict.setdefault(jv, []).append(i)
+        elif t == "check" and body.get("action") == "offer":
+            if party_role != "seller":
+                fail(i, "an offer is made on a deal where the user sells (party_role seller)")
+            j = one("supersedes", ("check",), required=latest_offer is not None)
+            if j != latest_offer:
+                fail(i, "an offer supersedes exactly the latest earlier offer")
+            latest_offer, accepted = i, None
+        elif t == "check":
+            if "supersedes" in by_rel:
+                fail(i, "only an offer supersedes an earlier offer")
+        elif t == "counterparty_acceptance":
+            # An observation that the counterparty accepted one exact offer. It
+            # authorizes nothing by itself; a seller's commit rests on it.
+            j = by_digest.get(body["proposed_action_ref"]["digest"])
+            if j is None or j >= i or records[j]["x-deal-v0"]["record_type"] != "check" \
+                    or records[j]["body"]["action"] != "offer":
+                fail(i, "proposed_action_ref names no earlier offer of this chain")
+            if j != latest_offer:
+                fail(i, "a later offer superseded that one: only the latest offer can be accepted")
+            if not any(records[k]["x-deal-v0"]["record_type"] == "action" and records[k]["body"]["action"] == "offer"
+                       and any(r["rel"] == "authorized_by" and offer_check_of(by_digest[r["digest"]]) == j
+                               for r in records[k]["x-deal-v0"].get("refs", []))
+                       for k in range(j + 1, i)):
+                fail(i, "that offer was checked but never made: the offer action comes before its acceptance")
+            if body["observed_at"] > b["at"]:
+                fail(i, "observed_at is later than the record")
+            accepted = i
         elif t == "policy_change":
             pass  # its bindings are structural (the schema); no chain step depends on it yet
         elif t == "intent":
@@ -906,6 +998,8 @@ def check_chain(records):
         elif t == "action":
             if "authorized_by" not in by_rel:
                 fail(i, "an action must reference the sealed approval that authorized it (authorized_by)")
+            if not b.get("typed") and "source" in by_rel:
+                fail(i, "only a seller's commit or address cites an acceptance (source)")
             if b.get("typed"):
                 jv, ja, chk = authorize_typed(one("authorized_by", ("approval", "verdict")), body["action"], "action")
                 verify_basis(jv, ja, body.get("amount_minor"))
@@ -913,6 +1007,17 @@ def check_chain(records):
                     actions = {DISCLOSURE_ACTION[f["class"]] for f in body["disclosed"]["fields"]}
                     if actions != {body["action"]}:
                         fail(i, "the disclosed classes are not the ones this action covers")
+                if party_role == "seller" and body["action"] == "commit":
+                    seller_needs_acceptance("commit")
+                    # On exactly the accepted offer's terms: its amount and currency,
+                    # terms and recourse, as the two checks seal them.
+                    offered, committed = records[latest_offer]["body"], chk["body"]
+                    if any(offered.get(k) != committed.get(k) for k in OFFER_TERMS):
+                        fail(i, "the commit's terms differ from the offer the other party accepted (changed_after_acceptance)")
+                elif party_role == "seller" and any(f["class"] in ADDRESS_CLASSES for f in body.get("disclosed", {}).get("fields", [])):
+                    seller_needs_acceptance("address")
+                elif "source" in by_rel:
+                    fail(i, "only a seller's commit or address cites an acceptance (source)")
             else:
                 chk = authorized_check(one("authorized_by", ("approval",)), body["action"], "action")
             cb = chk["body"]
@@ -1025,10 +1130,11 @@ def run_fixtures() -> int:
         print(f"{'ok  ' if ok else 'FAIL'} commercial-bounds/v0 {x['document']['min_total_minor']:<16} {x['bounds_commitment'][:16]}…")
     store = local_store_values()
 
-    # Two positive chains: x-deal-v0 throughout, and one sealed in the typed action
-    # records beside x-deal-v0 evidence records. Each is checked as its own chain.
+    # Three positive chains: x-deal-v0 throughout, one sealed in the typed action
+    # records beside x-deal-v0 evidence records, and a sale's own log. Each is
+    # checked as its own chain.
     positives = []
-    for chain_dir in ("positive", "positive-typed"):
+    for chain_dir in ("positive", "positive-typed", "positive-sale"):
         chain = []
         for p in sorted((FIX / chain_dir).glob("*.json")):
             positives.append(p)
@@ -1040,7 +1146,9 @@ def run_fixtures() -> int:
                 if d != f["expected_digest"]:
                     raise StageError("digest", f"recomputed {d} != expected {f['expected_digest']}")
                 chain.append(rec)
-                check_chain(chain)
+                # A sale's log is checked whole: its root alone is not yet one.
+                if chain_dir != "positive-sale" or len(chain) == 2:
+                    check_chain(chain)
                 print(f"ok   {chain_dir}/{p.name:<34} {record_type_of(rec):<20} jcs-sha256 {d}")
             except StageError as e:
                 bad += 1
@@ -1403,6 +1511,39 @@ def regen():
         digests.append((f"positive-typed/{n}", d))
         dump(FIX / "positive-typed" / n, {"fixture": n, "expect": "valid", "story": stories1[record_type_of(r)],
                                           "record": r, "expected_digest": d})
+    # A sale's own log (section 6, rule 10): what is for sale and the seller's
+    # request, before any buyer, with the item reference as a commitment; then
+    # the sale's one task authority. Synthetic: an example bicycle.
+    sale_id = "sale-3c9e1a7b5d2f8064"
+    sale_verbatim = "Sell my example bicycle; ask 1900, not under 1700"
+    sale_bounds = jcs({"type": "commercial-bounds/v0", "min_total_minor": 170000}).decode("utf-8")
+    sale_root = {"x-deal-v0": {"profile": "x-deal-v0", "canonicalization": "jcs", "deal_id": sale_id,
+                               "record_type": "sale", "seq": 1, "at": "2026-10-06T08:00:00Z"},
+                 "body": {"deal_type": "purchase", "demo": True,
+                          "intent": {"verbatim_commitment": commitment(nonce("sale-verbatim"), sale_verbatim),
+                                     "party_role": "seller", "allowed": ["offer", "commit"],
+                                     "bounds_commitment": commitment(nonce("sale-bounds"), sale_bounds)},
+                          "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000, "currency": "USD"},
+                          "recourse": {"rail": "card", "refundable": False},
+                          "item_ref_commitment": commitment(nonce("sale-item-ref"), nonce("sale-item"))}}
+    root_ref = {"type": "record", "digest_alg": "SHA-256", "digest": record_digest(sale_root)}
+    sale_authority = {"type": "task-authority/v0", "canonicalization": "jcs", "chain_id": sale_id, "seq": 2,
+                      "at": "2026-10-06T08:00:00Z", "prev": root_ref, "chain_root": root_ref,
+                      "refs": [{"rel": "source", **root_ref}],
+                      "body": {"verbatim_commitment": commitment(nonce("sale-ta-verbatim"), sale_verbatim),
+                               "bounds_commitment": commitment(nonce("sale-ta-bounds"), sale_bounds),
+                               "allowed": ["offer", "commit"]}}
+    sale_stories = {"sale": "Where the user sells one item to one of several buyers: the sale's own log opens with what is "
+                            "for sale and the seller's request, before any buyer, the item reference only as a commitment.",
+                    "task-authority/v0": "The sale's one task authority: every buyer's thread names it by digest."}
+    (FIX / "positive-sale").mkdir(parents=True, exist_ok=True)
+    for old in (FIX / "positive-sale").glob("*.json"):
+        old.unlink()
+    for n, r in (("01-sale.json", sale_root), ("02-task-authority.json", sale_authority)):
+        d = record_digest(r)
+        digests.append((f"positive-sale/{n}", d))
+        dump(FIX / "positive-sale" / n, {"fixture": n, "expect": "valid", "story": sale_stories[record_type_of(r)],
+                                         "record": r, "expected_digest": d})
     (FIX / "expected-digests.txt").write_text(
         "# SHA-256 over the RFC 8785 (JCS) bytes of each positive record (the `record` member only)\n"
         + "".join(f"{d}  {n if '/' in n else 'positive/' + n}\n" for n, d in digests), encoding="utf-8")

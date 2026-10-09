@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentactioncapsule.org/records/action-outcome-v0.schema.json",
   "title": "action-outcome/v0",
-  "description": "What was observed about an action, or an action attempted without authority (status unchecked_action: attempted is what was done, findings say why it was not covered).",
+  "description": "What was observed about an action, or an action attempted without authority (status unchecked_action: attempted is what was done, findings say why it was not covered). not_selected (status and outcome alike, with no findings): the other side was not chosen, and nothing was done on the deal.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -68,14 +68,16 @@
             "not_received",
             "pending",
             "unchecked_action",
-            "reverted"
+            "reverted",
+            "not_selected"
           ]
         },
         "outcome": {
           "enum": [
             "completed",
             "mismatch",
-            "open"
+            "open",
+            "not_selected"
           ]
         },
         "findings": {
@@ -156,6 +158,47 @@
             "properties": {
               "outcome": {
                 "const": "open"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "not_selected"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "const": "not_selected"
+              },
+              "findings": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "not_selected"
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "not_selected"
               }
             }
           }

@@ -103,7 +103,7 @@ deal's log:
 A **digest ref** is `{"type": "deal-record", "digest_alg": "SHA-256", "digest": <64 lowercase
 hex>}`: the typed digest reference shape AAC `references[]` uses. The digest alone is the
 identity. A **rel ref** is a digest ref plus `rel` (one of `about`, `source`, `checks`,
-`approves`, `authorized_by`, `observes`, `outcome`, `confirms`).
+`approves`, `authorized_by`, `observes`, `outcome`, `confirms`, `supersedes`).
 
 `counterparty.ids` on a record states the identifiers observed or asserted *at that record*.
 On the baseline they are first contact. Every later check compares against first contact,
@@ -116,12 +116,13 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | record_type | What it records | Required body fields | Required refs / block fields |
 |---|---|---|---|
 | `baseline` | First contact: what the user asked, who the counterparty is, the terms and the way back. The deal's contract. | `deal_type` (`purchase`\|`rental`\|`booking`\|`service`), `intent` (as the intent body; its optional `party_role`, `buyer`\|`seller`, is which side of the deal the user is on, absent meaning `buyer`, as on every deal sealed before it was recorded), `terms`, `recourse.rail` + `recourse.refundable`; `materiality` (the materiality predicate pinned when the deal opened, as on a verdict; a verdict under another one carries a `materiality_changed` difference) | `seq` = 1; `channel`; `counterparty` (≥ 1 id). No `prev`, no `baseline_ref`. Optional `claims[]`, `counterparty_facts`, `demo`, `skill` (`{"skill_md_digest": <64 hex>, "other_copies": <int ≥ 0>}`: the SHA-256 of the SKILL.md the agent reported following, and how many other copies of that skill sat beside it; a boundary marker for accidents, not proof the instructions were followed). |
+| `sale` | Where the user sells one item to one of several buyers: the first record of the sale's own log (deal_id `sale-…`), before any buyer. Followed by the sale's one `task-authority/v0` and nothing else. | `deal_type`, `intent` (the seller's request and limits, `party_role: seller`), `terms`, `recourse.rail` + `recourse.refundable`, `item_ref_commitment` (the sale's opaque item reference, committed) | `seq` = 1. No `prev`, no `baseline_ref`, no `counterparty`, no `refs`. Optional `demo`. |
 | `intent` | The user restates or picks within the ask. Replaces `verbatim` / `asked` from here on. `allowed` and `max_total_minor` carry forward unchanged: an intent may lower the limit or drop actions, and a higher limit or a new action is only a proposal (section 6, rule 6). | `verbatim_commitment` | `baseline_ref`, `prev`. Optional `party_role`, equal to the baseline's (a deal's role is fixed when it opens). |
 | `message` | One message in the thread. The text stays local. | `from` (`counterparty`\|`user`\|`agent`), `content_commitment` | `channel`. `counterparty` when the message shows identifiers (for example, a new phone number). |
 | `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text_commitment` (the claim's words, ≤ 200 chars, committed), `source_kind` (whose it is: `merchant`\|`agent`\|`platform`\|`user`\|`external`), optional `source_ref_commitment` (the caller's note of where it was read, committed). A claim sealed before claims were committed carries `text` and `source` in the clear instead, and re-derives unchanged (see "Claims"). | none beyond the chain. |
 | `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). After the deal's final close, the only record type allowed: later evidence linked to that close. | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. At most one `confirms` → the deal's final `close` (required after it, not allowed before it). Optional `resolves_obligation` (a digest ref) → an earlier record holding a cancel-by date. |
 | `detail_change` | The counterparty changed an identifier, a term or the rail after first contact. Recording it never accepts it. | `source`, `changed[]` (field names) | `counterparty.ids` kinds MUST equal the identifier kinds listed in `changed`. At most one `source` → a `message` or `evidence`. |
-| `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor` (the expected charge), on a `pay` `authorized_max_minor` (the most it may take: what a limit binds, at least `amount_minor`), `currency`, `seen_item`, `terms`, `recourse`, the rule inputs (below), `pack_id`, `pack_digest`, `action_class` + `taxonomy_version` and `spend_minor` (see Action classes, below), with `spend_authorized_minor` beside them when `authorized_max_minor` is sealed, on a `cancel` `fee_minor`, `cancelled_amount_minor` and `direction` (`in`), on a refund's `cancel` `reverses_ref` (the payment it returns, see Action classes, below), and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
+| `check` | The agent asks, before a point of no return, exactly what is about to happen (the snapshot). | `action` (`pay`\|`sign`\|`commit`\|`cancel`\|`share_contact`\|`share_credentials`\|`offer`; `offer` only where the user sells) | `baseline_ref` (always). `counterparty.ids.payee` when a payee is involved. Optional `amount_minor` (the expected charge), on a `pay` `authorized_max_minor` (the most it may take: what a limit binds, at least `amount_minor`), `currency`, `seen_item`, `terms`, `recourse`, the rule inputs (below), `pack_id`, `pack_digest`, `action_class` + `taxonomy_version` and `spend_minor` (see Action classes, below), with `spend_authorized_minor` beside them when `authorized_max_minor` is sealed, on a `cancel` `fee_minor`, `cancelled_amount_minor` and `direction` (`in`), on a refund's `cancel` `reverses_ref` (the payment it returns, see Action classes, below), on a check of a sale's thread `item_ref_commitment` (section 6, rule 10), and for a share `disclosing` (the classes about to be given, as for a `disclosure`) and `disclosing_to` (`counterparty`\|`other`), which every share check carries. |
 | `verdict` | The answer to one check: pass, pause with the differences, or deny. | `result` (`pass`\|`pause`\|`deny`), `differences[]`, `options[]`; `rules` (what the profile's external rules checker said, §8 "The external rules checker"; absent on verdicts sealed before it was recorded); `materiality` (the predicate that decided which of the agent's own picks pause: its `digest`, and `label_commitment`, a commitment to its name and version, opened only in the user's own copy (`materiality_openings`); `digest: "none"` when none was configured and every pick paused; verdicts sealed by v0.1.0-rc8 carry `name` and `version` in the clear instead, and shared copies withhold them) | exactly one `checks` → a `check`; one verdict per check; optional `pack_id`, equal to the check's when either names one. `pause` ⇒ ≥ 1 difference and ≥ 1 option. `pass` ⇒ no options. `deny` ⇒ ≥ 1 difference, `rules`, and no option but `hold`. |
 | `approval` | What authorizes, or declines, the next step; or the user's confirmation of the limits an intent proposed. | `choice` (`hold`\|`verify_contact`\|`proceed`\|`confirm_limits`), `proceed` (`true` on `proceed`, `false` on `hold` and `verify_contact`), `approver` (`user`\|`standing_intent`\|`agent_card`); on `confirm_limits` only, `limits` (`previous` and `new`, each `max_total_minor` and `allowed`) | `confirm_limits`: exactly one `approves` → the proposing `intent`, `approver: user`, and section 6, rule 6. Otherwise exactly one `approves` → a `verdict`. `user` ⇒ `said_commitment` (the user's own words), and on a pause the choice is one of the verdict's options. `agent_card` ⇒ no `said_commitment`: a card the agent composed was answered, and no words of the user's are on record; never on `confirm_limits`. Optional `card_commitment` (on an answer to a verdict, never on `confirm_limits` or `standing_intent`): the card text the answer was given on, committed under the verdict's own card nonce, so it MUST equal the verdict's `card_commitment`: equal means the card shown is the card checked, recomputable without the text. `standing_intent` ⇒ the verdict passed, the choice is `proceed`, and the checked action is in the current `allowed` (`allowed` absent = no restriction; `allowed` present and empty = nothing is allowed yet, as in "show me options, don't book"). |
 | `action` | A point-of-no-return step actually taken. | `action`; optional `direction` (`out`: paid by the user; `in`: back to the user); optional `action_class` + `taxonomy_version` and `spend_minor` (see Action classes, below); on a `cancel`, optional `fee_minor` and `cancelled_amount_minor` (see Action classes, below) | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). An action that returns money (`direction: in`) carries exactly one `reverses` → the `pay` action it undoes (section 6, rule 8). |
@@ -158,9 +159,13 @@ limit on an action's class (a per-action or rolling spend cap, for example) sele
 | any other `cancel` | `external_commitment.other` | `external_commitment.other` | `booking.cancel` | `external_commitment.other` |
 | `share_contact` | `disclosure.personal` | `disclosure.personal` | `disclosure.personal` | `disclosure.personal` |
 | `share_credentials` | `disclosure.secret` | `disclosure.secret` | `disclosure.secret` | `disclosure.secret` |
+| `offer` | `external_commitment.other` | `external_commitment.other` | `external_commitment.other` | `external_commitment.other` |
 
 - Committing to a purchase is the same class as paying for it, so a limit keyed on the class
   cannot be stepped around by committing first.
+- An `offer` is a seller's proposal: its amount is what the buyer would pay, so its
+  `spend_minor` is 0. A seller's `commit` is money coming in: `agreement.accept` in every deal
+  type, with `spend_minor` 0, so a cap's rolling total never counts a sale.
 - A cancel that returns a payment is money arriving, not leaving: `money.refund`. A `check`
   states no `direction`; its class is the one its `action` would carry, from the same sealed
   payments.
@@ -330,12 +335,16 @@ typed record, in its header), next to the fingerprints' `fp_alg`. What it states
   - `claim_openings` (each claim's `text_commitment` and `source_ref_commitment`).
 
   An adjudicator's copy carries the `claim_openings` of claims whose words and source note hold
-  none of the user's private details. A counterparty's copy carries none.
+  none of the user's private details. A counterparty's copy carries none, except where the user
+  sells: there it opens the agent's own claims (its representations to the buyer) whose words
+  and source note hold none of the user's private details, and no other claim.
 
 **Claims.** A claim's words and its source note are sealed as commitments; only whose it is,
 `source_kind`, is in the clear.
 - **On a claim step and on each of the baseline's `claims[]`:** `{text_commitment, source_kind,
-  source_ref_commitment?}`.
+  source_ref_commitment?, class?}`. `class` says what kind of representation the claim is, so a
+  page can label it: `condition`, `warranty`, `refund_terms`, `delivery_promise` or `other`. It
+  is optional and in the clear; a claim without one re-derives unchanged.
 - **`source_kind`** is stated by the caller. A source that can only mean the counterparty
   (`counterparty`, `seller_message`, `merchant_email` and the like) is taken as `merchant`. Any
   other source (a page, a photo, a snapshot: the merchant's own or a marketplace's) must state it,
@@ -343,6 +352,11 @@ typed record, in its header), next to the fingerprints' `fp_alg`. What it states
 - **`claim_openings`** in a copy are `{record_digest, index (a baseline claim), text: {nonce,
   text}, source: {nonce, text}}`. `check_profile.py --openings=FILE` recomputes each against the
   sealed record.
+- **`representations`**, where the user sells: the agent's own claims (`source_kind: agent`), as
+  `{step, index (a baseline claim), class?, nonce, text}`, in the user's copy and, for those whose
+  words hold none of the user's private details, in both shared copies. The page checks each
+  against its sealed `text_commitment` and labels it by the sealed `class`. A buyer's deal has
+  none: there, the agent's claims are its own notes.
 - **A verdict** names the claims it found unverified by reference, as `unverified_claims`
   (`{claim: <digest ref>, index?}`), not by their words.
 - **Older records:** a step sealed before this carries `text` and `source` (and a verdict
@@ -454,6 +468,39 @@ A verifier holding one deal's records in `seq` order checks:
    and `currency`. A payment is reversed at most once. Summing amounts by direction gives what a
    deal moved: a pay and its reversal net to zero. Records sealed before this rule carry no
    `direction`; a `pay` among them moved money out, and no other action states a direction.
+9. **Offers and acceptance (where the user sells).** A deal whose `party_role` is `seller` is
+   sealed in the typed action records (section 9). An `offer` is a `check` (typed: a
+   `proposed-action/v0`) with `action: "offer"`, on such a deal; its
+   record is the exact proposal, every material term under this deal's id. Each later offer
+   carries exactly one `supersedes` ref, to the latest earlier offer, and the first carries
+   none; no other `check` carries one. Only the latest offer can be accepted. A counterparty
+   acceptance observation (section 9) names, by `proposed_action_ref`, the latest offer, after
+   an `offer` action that rests on it (the offer was made). On a typed seller deal, a `commit`
+   action, and a share action that discloses an address class (`home_address`, `address`,
+   `pickup_location`), each need: an offer on record, an acceptance of the latest one, and no
+   `detail_change`, and no `message` or `evidence` carrying `counterparty` identifiers or
+   `counterparty_facts`, after that acceptance. A change leaves the acceptance behind: the
+   offer is made and accepted again. Such a commit or share action cites the acceptance it rests
+   on with exactly one `source` ref; no other action carries one. The acceptance is not
+   authority: `authority_basis` is unchanged.
+10. **A sale to one of several buyers.** A sale's own log is a `sale` record and then its one
+    `task-authority/v0` (`source` → the sale record, the floor's `bounds_commitment` when the
+    sale states one, no `sale_authority_commitment`), and nothing else. Each buyer's negotiation
+    is a deal of its own, a thread, whose task authority carries `sale_authority_commitment`: the
+    digest of the sale's task authority, committed under that step's own nonce. A thread's
+    request and limits are the sale's and do not change per buyer (no `intent` steps). Each
+    `check` of a thread carries `item_ref_commitment`: the sale's item reference committed under
+    that check's own nonce. So no value in a thread's records is equal across the sale's threads,
+    and a buyer's copy carries the thread's task authority and its offers in full. The user's own
+    copy and an adjudicator's carry `sale_authority_opening` (`{record_digest, nonce, text}`, the
+    text being the sale's task-authority digest), which ties the thread to the sale; a buyer's
+    copy does not. A thread verifies alone, and the producer checks, before each check, that the
+    sale's task authority is still the one the thread opened under. The profile's own rules
+    checker is given the plain reference (`item_ref`), the same on every thread, which is how it
+    holds a sale to one accepted commitment; no record carries it.
+11. **A seller commits on the accepted terms.** A seller's `commit` rests on its check, which
+    seals exactly the `amount_minor`, `currency`, `terms` and `recourse` of the offer the other
+    party accepted; a commit on other terms is refused (`changed_after_acceptance`).
 
 ## 7. Outcome conventions: `completed | mismatch | open`
 
@@ -543,6 +590,9 @@ At every check, after the `check` record is sealed:
     `task_authority_ref` names, exactly as sealed: SHA-256 over its JCS bytes is the ref's digest,
     and its plan (`outcome_id`, `allowed_actions`, `preconditions`) is at `body`. Absent when the limits in force were confirmed
     later in an approval, and in a deal with no task-authority record.
+  - `item_ref` (a sale's thread): the sale's item reference, 64 lowercase hex, the same on every
+    thread of the sale (section 6, rule 10). Only this device's checker is given it; no record
+    carries it. A rule that needs it and is given none reports `not_evaluable`, never a pass.
 
   A rolling window is evaluated over the history the deal check supplies. A checker given no
   history, or too little (`complete` false, or a window longer than `days`), reports that rule
@@ -660,6 +710,14 @@ the caller gives), `displayed_text_digest` (what the platform displayed),
 `proposed_action_ref` and `observed_at`, and the amount the displayed text stated. It proves
 only that this interaction was recorded with these bytes. It does not say that the platform
 authorized anything or that any rule is satisfied, carries no choice, and never answers a check.
+
+**Counterparty acceptance observation.** An `action-approval/v0` with
+`authority: "counterparty_acceptance"` and `kind: "counterparty-acceptance-observation"` records
+that the counterparty accepted one exact offer: `proposed_action_ref` (the offer's proposed
+action), `observed_at`, the channel kind they accepted on (`channel`, from x-deal-v0's channel
+set; optional), and their words by `content_commitment` (the same `{nonce, text}` commitment).
+It is recorded as observed, authorizes nothing by itself and never answers a check; a seller's
+`commit` rests on it (section 6, rule 9).
 
 **One rendering commitment.** What a person was shown is committed one way: the text under the
 nonce of its rendering (`{nonce, text}`, JCS, SHA-256). An evaluation's `rendering_commitment`

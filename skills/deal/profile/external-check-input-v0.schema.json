@@ -102,6 +102,11 @@
           "pattern": "^[0-9a-f]{64}$"
         }
       }
+    },
+    "item_ref": {
+      "description": "Optional: on a check of a sale's thread, the sale's opaque item reference (256 random bits, lowercase hex), sent only to the profile's own rules checker on the user's device. It is equal across the sale's threads, so a rule can hold the sale to one accepted commitment; no record carries it, only a salted commitment per check (item_ref_commitment).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
     }
   },
   "$defs": {
