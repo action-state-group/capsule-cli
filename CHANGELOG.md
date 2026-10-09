@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### `doctor --check-witness` is ok only when the witness answers with success
+
+- **Fixed:** the witness probe sent a HEAD to the endpoint and called any answer ok. A witness that
+  serves no HEAD routes answered 405 and was reported `reachable: true, status_code: 405, ok: true`,
+  while the first delivery could still fail.
+- **Now:** the probe is a read-only GET of `<endpoint>/health`, the witness's health endpoint. It is
+  ok only on a 2xx answer. Any 4xx or 5xx is `ok: false`, with an issue naming the status, the
+  method and the URL.
+- **Changed:** a delivery the witness answered with an error keeps the witness's HTTP status (never
+  its response body), and its pending text says it: "pending: the witness answered with an error
+  (HTTP 409); it is retried at every tick."
+
 ### A deal claim's words are sealed as a commitment; only whose it is shows
 
 - **Changed (wire, additive; records sealed before re-derive unchanged).** A claim, on a `claim`
