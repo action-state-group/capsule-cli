@@ -561,7 +561,10 @@ At every check, after the `check` record is sealed:
 - **What the check does with it.** It folds the answer into its one verdict:
   - `allow` adds nothing;
   - `escalate` and `not_evaluable` add a `rules_escalate` or `rules_not_evaluable` difference
-    per failing finding (with its limit and value), and the check pauses;
+    per failing finding (with its limit and value), and the check pauses. A finding the
+    checker reports as `not_evaluable` with the reason `declared, not measured` (a rule its
+    ruleset declares and it does not measure) is never a difference: it never moves the verdict,
+    and the approval text and the user's own receipt name it quietly beside it;
   - `deny` adds `rules_deny` differences, and the verdict is `deny` with no way to proceed.
   - A checker that is configured but changed since it was pinned, refused the input, timed
     out, printed anything else, or reported another `definition_digest` than the pinned one
