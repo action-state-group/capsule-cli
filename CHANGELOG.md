@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### `deal checkpoint status`: a deal log's latest checkpoint, read-only
+
+- **Added:** `capsulectl deal checkpoint status --deal ID` returns, as JSON:
+  - the deal log's latest checkpoint: its `id` (the SHA-256 of the signed statement), `at`, and
+    the log head it covers (`mmr_size`, `entries`, `root`);
+  - the log's `log_entries`;
+  - the checkpoint's witness state as stored.
+
+  A deal with no checkpoint yet has `checkpoint` and `witness` `null`, and exits 0.
+- **Read-only:** it never seals, never cuts a checkpoint and never contacts the witness, and every
+  file under the store is byte-for-byte the same after it. It works on a `read_only` profile.
+- **Fixed:** opening a log that does not exist could panic while cleaning up the failed open. It
+  now returns the log's error.
+
 ### New deal records seal action taxonomy version 4
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's

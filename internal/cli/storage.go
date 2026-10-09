@@ -301,9 +301,13 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 				return nil, err
 			}
 		}
-		if t.log, err = openLog(ctx, p, dsn, p.LogID); err != nil {
+		// Assigned only on success: a failed open returns a typed nil, which
+		// close would call.
+		log, err := openLog(ctx, p, dsn, p.LogID)
+		if err != nil {
 			return nil, err
 		}
+		t.log = log
 	}
 	return t, nil
 }
