@@ -66,6 +66,10 @@
         "max_total_minor": {
           "$ref": "record-common-v0.schema.json#/$defs/uint"
         },
+        "bounds_commitment": {
+          "description": "The salted commitment to the commercial-bounds/v0 document holding the lowest total the user will take. The floor itself is never in this record, so the task authority can be shared whole.",
+          "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
         "allowed": {
           "type": "array",
           "items": {

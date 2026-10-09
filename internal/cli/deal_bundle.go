@@ -83,7 +83,7 @@ func dealBundleRun(c *cobra.Command, use string) error {
 		if err = dealShareGate(encoded, events, audience); err != nil {
 			return err
 		}
-		share, err := s.recordShare(ctx, dealID, b, audience, recipient, encoded)
+		share, err := s.recordShare(ctx, dealID, b, audience, recipient, dealRole(events), encoded)
 		if err != nil {
 			return err
 		}

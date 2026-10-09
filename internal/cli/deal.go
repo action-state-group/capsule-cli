@@ -1031,6 +1031,9 @@ func dealNoteCommand() *cobra.Command {
 			return inputError("change needs its source and at least one of who, terms or recourse")
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
+			if ev.Intent != nil && ev.Intent.PartyRole != "" && ev.Intent.PartyRole != dealRole(events) {
+				return inputError("this deal's party_role is " + dealRole(events) + ", set when it opened; a note cannot change it")
+			}
 			if i := finalClose(events); i >= 0 {
 				// A closed deal takes later evidence only, linked to the close
 				// (it confirms the close); every other step needs a new deal.
@@ -1048,7 +1051,7 @@ func dealNoteCommand() *cobra.Command {
 					if se.Event.N == ev.Evidence.ResolvesStep || (target != "" && se.CapsuleID == target) {
 						target = se.CapsuleID
 						if se.Event.Evidence == nil || se.Event.Evidence.Obligation == nil {
-							return inputError("resolves names a step that holds no cancel-by date")
+							return inputError("resolves names a step that holds no obligation")
 						}
 					}
 				}
@@ -1160,7 +1163,7 @@ func dealNoteCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if proposed, more := proposedLimits(state.intent.limits(), *ev.Intent); more {
+				if proposed, more := proposedLimits(state.intent.limits(), withBoundsCommit(*ev.Intent, se.Event.Nonces)); more {
 					out["proposed"] = proposed
 					out["in_force"] = state.intent.limits()
 					out["next"] = "this note asks for a higher limit or a new action: it is recorded as a proposal and not applied. " +
@@ -1227,7 +1230,13 @@ func dealNoteCommand() *cobra.Command {
 						}
 						out["checkpoint"] = cp
 					}
-					out["deadline"] = map[string]any{"cancel_by": o.CancelBy, "text": o.sentence(events[0].Event.Open.Terms.Currency), "note": deadlineNotEnforced}
+					deadline := map[string]any{"text": o.sentence(events[0].Event.Open.Terms.Currency), "note": deadlineNotEnforced}
+					if o.due() {
+						deadline["due_by"] = o.DueBy
+					} else {
+						deadline["cancel_by"] = o.CancelBy
+					}
+					out["deadline"] = deadline
 				}
 			}
 			return output(c, out)
@@ -1315,7 +1324,7 @@ func judgeLimitsConfirmation(events []sealedEvent, i int, a *dealApproval) error
 		return err
 	}
 	cur := state.intent.limits()
-	proposed, more := proposedLimits(cur, *events[i].Event.Intent)
+	proposed, more := proposedLimits(cur, withBoundsCommit(*events[i].Event.Intent, events[i].Event.Nonces))
 	for _, later := range events[i+1:] {
 		switch {
 		case later.Event.Kind == "intent":
@@ -1550,8 +1559,8 @@ func dealCloseCommand() *cobra.Command {
 		if err = decodeJSONAs("--input", raw, &in); err != nil {
 			return err
 		}
-		if !slices.Contains([]string{"received", "pending", "not_received"}, in.Status) {
-			return inputError("status must be received, pending or not_received")
+		if !slices.Contains([]string{"received", "pending", "not_received", "not_selected"}, in.Status) {
+			return inputError("status must be received, pending, not_received or not_selected")
 		}
 		if err = normalizeTerms(in.Delivered); err != nil {
 			return err
@@ -1564,15 +1573,22 @@ func dealCloseCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if in.Status == "not_selected" {
+				for _, se := range events {
+					if se.Event.Kind == "act" {
+						return inputError("not_selected closes a deal where nothing was done, and this deal has an action on record: close it received or not_received")
+					}
+				}
+			}
 			carry, _ := c.Flags().GetBool("carry-open-obligations")
 			open := openDeadlines(events, dealClock())
 			if len(open) > 0 && in.Status != "pending" && !carry {
-				return inputError("this deal has an open cancel-by date (" + open[0].CancelBy + ": " + open[0].Text + "); closing would end its record. Close with status pending, close after the cancel is sealed or the date has passed, or close with --carry-open-obligations to keep the date open after the close")
+				return inputError("this deal has an open date (" + open[0].date() + ": " + open[0].Text + "); closing would end its record. Close with status pending, close after the cancel is sealed or the date has passed, or close with --carry-open-obligations to keep the date open after the close")
 			}
 			result := closeDeal(state, in)
 			if in.Status != "pending" {
 				for _, d := range open {
-					result.Carried = append(result.Carried, dealCarried{Step: d.Step, CapsuleID: d.CapsuleID, CancelBy: d.CancelBy})
+					result.Carried = append(result.Carried, dealCarried{Step: d.Step, CapsuleID: d.CapsuleID, CancelBy: d.CancelBy, DueBy: d.DueBy})
 				}
 			}
 			for _, se := range events {
@@ -1720,7 +1736,7 @@ func dealReportCommand() *cobra.Command {
 				// Sharing is a disclose act: it is on record before the file
 				// exists, and the output carries none of the local report's
 				// raw text.
-				share, err := s.recordShare(ctx, dealID, b, audience, recipient, []byte(page))
+				share, err := s.recordShare(ctx, dealID, b, audience, recipient, dealRole(events), []byte(page))
 				if err != nil {
 					return err
 				}

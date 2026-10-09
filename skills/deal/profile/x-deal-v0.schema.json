@@ -54,7 +54,7 @@
       "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure"]
     },
     "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials"] },
-    "outcome_value": { "enum": ["completed", "mismatch", "open"] },
+    "outcome_value": { "description": "completed, mismatch or open; or not_selected: the other side was not chosen, and nothing was done on the deal (no action is on record). Every value but open is final at a close.", "enum": ["completed", "mismatch", "open", "not_selected"] },
     "identifier_kind": { "enum": ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id"] },
     "channel": {
       "description": "Seeded: marketplace, web, sms, phone_call, email, app_chat, whatsapp, telegram, signal, in_person, other. Anything else MUST be namespaced.",
@@ -200,8 +200,10 @@
       "required": ["verbatim_commitment"],
       "properties": {
         "verbatim_commitment": { "$ref": "#/$defs/hex64" },
+        "party_role": { "description": "Which side of the deal the user is on. Absent means buyer (every deal sealed before it was recorded); set when the deal opens and the same on every later intent.", "enum": ["buyer", "seller"] },
         "asked": { "$ref": "#/$defs/terms" },
         "max_total_minor": { "$ref": "#/$defs/safe_uint" },
+        "bounds_commitment": { "description": "The salted commitment (commit_alg) to the commercial-bounds/v0 document holding the lowest total the user will take (min_total_minor). The floor itself is never in a record; the user's own copy carries its opening.", "$ref": "#/$defs/hex64" },
         "allowed": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/point_of_no_return" } }
       }
     },
@@ -228,11 +230,16 @@
       }
     },
     "obligation": {
-      "description": "A commitment that takes effect when a date passes: the last day to cancel, what happens then, and the price. Recorded, never enforced.",
-      "type": "object", "additionalProperties": false, "required": ["kind", "cancel_by"],
+      "description": "A commitment tied to a date. A cancel-by kind (trial_conversion, renewal, cancel_window, payment_due) takes effect when its last day to cancel passes: cancel_by. A due kind (deliver_by, perform_by) is something the user owes by a date: due_by. Recorded, never enforced.",
+      "type": "object", "additionalProperties": false, "required": ["kind"],
+      "oneOf": [
+        { "required": ["cancel_by"], "not": { "required": ["due_by"] }, "properties": { "kind": { "enum": ["trial_conversion", "renewal", "cancel_window", "payment_due"] } } },
+        { "required": ["due_by"], "not": { "required": ["cancel_by"] }, "properties": { "kind": { "enum": ["deliver_by", "perform_by"] } } }
+      ],
       "properties": {
-        "kind": { "enum": ["trial_conversion", "renewal", "cancel_window", "payment_due"] },
+        "kind": { "enum": ["trial_conversion", "renewal", "cancel_window", "payment_due", "deliver_by", "perform_by"] },
         "cancel_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "due_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
         "takes_effect": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
         "amount_minor": { "$ref": "#/$defs/safe_uint" },
         "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
@@ -300,7 +307,7 @@
         "disclosing": { "description": "For a share: the classes of the user's data about to be given.", "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/disclosure_class" } },
         "disclosing_to": { "description": "For a share: who receives it, the counterparty or someone else. An approval covers a telling only to that party.", "enum": ["counterparty", "other"] },
         "terms": { "$ref": "#/$defs/terms" },
-        "recipient_role": {"enum": ["fulfilling_merchant", "third_party", "self"], "description": "Who receives a share, by role: fulfilling_merchant (the deal's counterparty), third_party (anyone else) or self. A role, never a name. Absent when not a share or not known."},
+        "recipient_role": {"enum": ["fulfilling_merchant", "buyer", "third_party", "self"], "description": "Who receives a share, by role: the deal's counterparty, which is fulfilling_merchant when the user buys (or the deal states no party_role) and buyer when the user sells; third_party (anyone else); or self. A role, never a name. Absent when not a share or not known."},
         "channel": {"$ref": "#/$defs/channel", "description": "The channel kind in use at this check (x-deal-v0's channel set): the latest sealed message's, else first contact's. A kind, never an address."},
         "first_contact_channel": {"$ref": "#/$defs/channel", "description": "The channel kind the relationship started on (the baseline's channel). A kind, never an address."},
         "material_fields_changed": {"type": "integer", "minimum": 0, "maximum": 11, "description": "How many of the material fields (the list material_fields_basis names: terms.item, terms.quantity, terms.price_minor, terms.deposit_minor, terms.currency, terms.when, terms.place, terms.conditions, recourse.rail, recourse.refundable, who.payee) the proposal changes from what was agreed. A key counts when present on one side and absent on the other, or present on both with unequal JCS values; terms.conditions counts as one key."},
@@ -397,6 +404,7 @@
       "type": "object", "additionalProperties": false,
       "properties": {
         "max_total_minor": { "type": "integer", "minimum": 0 },
+        "bounds_commitment": { "description": "The floor in this version, as the bounds_commitment the intent that stated it sealed.", "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "allowed": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
       }
     },
@@ -457,7 +465,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["status", "outcome", "differences"],
       "properties": {
-        "status": { "enum": ["received", "not_received", "pending", "unchecked_action", "reverted"] },
+        "status": { "enum": ["received", "not_received", "pending", "unchecked_action", "reverted", "not_selected"] },
         "outcome": { "$ref": "#/$defs/outcome_value" },
         "delivered": { "$ref": "#/$defs/terms" },
         "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
@@ -466,6 +474,8 @@
       },
       "allOf": [
         { "if": { "properties": { "status": { "const": "pending" } } }, "then": { "properties": { "outcome": { "const": "open" } } } },
+        { "if": { "properties": { "status": { "const": "not_selected" } }, "required": ["status"] }, "then": { "properties": { "outcome": { "const": "not_selected" }, "differences": { "maxItems": 0 } } } },
+        { "if": { "properties": { "outcome": { "const": "not_selected" } }, "required": ["outcome"] }, "then": { "properties": { "status": { "const": "not_selected" } } } },
         { "if": { "properties": { "status": { "enum": ["not_received", "unchecked_action"] } } }, "then": { "properties": { "outcome": { "const": "mismatch" }, "differences": { "minItems": 1 } } } },
         { "if": { "properties": { "status": { "const": "unchecked_action" } } }, "then": { "required": ["unchecked"] }, "else": { "not": { "required": ["unchecked"] } } },
         { "if": { "properties": { "outcome": { "const": "completed" } } }, "then": { "properties": { "differences": { "maxItems": 0 }, "status": { "const": "received" } } } },
@@ -515,13 +525,18 @@
         "unchecked_actions": { "$ref": "#/$defs/safe_uint" },
         "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
         "carried_obligations": {
-          "description": "Cancel-by obligations still open at the close, carried by it: they stay open after the close until a later record that confirms the close resolves them, or the date passes.",
+          "description": "Obligations still open at the close, carried by it, each with its cancel-by date or its due date: they stay open after the close until a later record that confirms the close resolves them, or the date passes.",
           "type": "array", "minItems": 1,
           "items": {
-            "type": "object", "additionalProperties": false, "required": ["obligation", "cancel_by"],
+            "type": "object", "additionalProperties": false, "required": ["obligation"],
+            "oneOf": [
+              { "required": ["cancel_by"], "not": { "required": ["due_by"] } },
+              { "required": ["due_by"], "not": { "required": ["cancel_by"] } }
+            ],
             "properties": {
               "obligation": { "$ref": "#/$defs/digest_ref" },
-              "cancel_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+              "cancel_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+              "due_by": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
             }
           }
         }

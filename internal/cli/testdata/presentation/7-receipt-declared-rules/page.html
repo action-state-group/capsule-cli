@@ -9857,16 +9857,16 @@ function versionBefore(a, b) {
   });
   host.append(el("p", "Only what the agent sealed as shared is listed here; something it told without sealing it is not.", "deal-note"));
 
-  // Cancel-by dates: the point of no return is a date passing. Recorded,
-  // never enforced.
+  // Cancel-by dates (the point of no return is a date passing) and due
+  // dates (what the user owes by a date). Recorded, never enforced.
   const deadlines = report.deadlines || [];
   if (deadlines.length > 0) {
-    host.append(el("h2", "Cancel-by dates"));
+    host.append(el("h2", deadlines.some((d) => d.due_by) ? "Cancel-by and due dates" : "Cancel-by dates"));
     const list = el("ul", undefined, "deal-steps");
     deadlines.forEach((d) => {
       const live = d.status === "open" || d.status === "carried_at_close";
       const li = el("li", undefined, live ? "deal-bad" : undefined);
-      li.append(el("span", `${d.cancel_by} · ${d.marking || d.status}: `), el("span", `${d.text}. ${d.holds || ""}`));
+      li.append(el("span", `${d.cancel_by || d.due_by} · ${d.marking || d.status}: `), el("span", `${d.text}. ${d.holds || ""}`));
       list.append(li);
     });
     host.append(list, el("p", deadlines[0].note, "deal-note"));

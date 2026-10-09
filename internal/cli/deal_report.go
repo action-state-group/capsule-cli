@@ -207,7 +207,10 @@ func (s *dealSession) dealReportExtension(events []sealedEvent, report dealRepor
 		// The openings of the claims' words and source notes, committed in
 		// the records (text_commitment, source_ref_commitment).
 		"claim_openings": claimOpenings(events, func(dealClaim) bool { return true }),
-		"did":            items(report.Did), "anomalies": items(report.Anomalies),
+		// The openings of the user's floor (bounds_commitment): the
+		// commercial-bounds/v0 document and its nonce, in this copy only.
+		"bounds_openings": boundsOpenings(events),
+		"did":             items(report.Did), "anomalies": items(report.Anomalies),
 		"told":     toldItems(report.Told, true),
 		"did_line": dealDidLine(dealDidSources(events)),
 		// Which builds sealed the steps, and which one made this page:
@@ -491,6 +494,25 @@ func toldItems(told []dealToldItem, withValues bool) []interface{} {
 		out[i] = map[string]interface{}{
 			"at": t.At, "text": text, "fields": fields, "authority": t.Authority, "authority_text": authority, "steps": steps,
 		}
+	}
+	return out
+}
+
+// boundsOpenings are the openings of every bounds_commitment the deal sealed:
+// per step, the commercial-bounds/v0 document holding the floor and the nonce
+// it was committed under. Only the user's own copy carries them.
+func boundsOpenings(events []sealedEvent) []interface{} {
+	out := []interface{}{}
+	for _, se := range events {
+		text, ok := dealTexts(se.Event)["bounds"]
+		if !ok || se.Event.Nonces["bounds"] == "" {
+			continue
+		}
+		var doc map[string]interface{}
+		if err := json.Unmarshal([]byte(text), &doc); err != nil {
+			continue
+		}
+		out = append(out, map[string]interface{}{"step": se.CapsuleID, "nonce": se.Event.Nonces["bounds"], "document": doc})
 	}
 	return out
 }

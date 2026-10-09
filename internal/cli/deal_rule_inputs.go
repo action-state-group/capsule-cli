@@ -12,8 +12,9 @@ import (
 // reference, never a name, a contact detail, a diff or free text. Each is
 // absent when it is not known, never a fabricated zero or empty string.
 //
-//   - recipient_role: who receives a share, by role (fulfilling_merchant or
-//     third_party; self is in the set and never derived here).
+//   - recipient_role: who receives a share, by role (the counterparty:
+//     fulfilling_merchant for a buyer, buyer for a seller; or third_party;
+//     self is in the set and never derived here).
 //   - channel, first_contact_channel: the channel kind in use at this check
 //     and the one the relationship started on (x-deal-v0's channel set).
 //   - upfront_amount_minor: the deposit the check's own terms state.
@@ -155,7 +156,13 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 	if strings.HasPrefix(sn.Action, "share_") {
 		switch sn.DisclosingTo {
 		case "counterparty":
+			// The deal's counterparty, by the user's side of it: the merchant
+			// for a buyer (and every deal that states no role), the buyer for
+			// a seller.
 			body["recipient_role"] = "fulfilling_merchant"
+			if dealRole(events) == dealRoleSeller {
+				body["recipient_role"] = "buyer"
+			}
 		case "other":
 			body["recipient_role"] = "third_party"
 		}

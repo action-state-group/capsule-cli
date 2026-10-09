@@ -115,8 +115,8 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 
 | record_type | What it records | Required body fields | Required refs / block fields |
 |---|---|---|---|
-| `baseline` | First contact: what the user asked, who the counterparty is, the terms and the way back. The deal's contract. | `deal_type` (`purchase`\|`rental`\|`booking`\|`service`), `intent` (as the intent body), `terms`, `recourse.rail` + `recourse.refundable`; `materiality` (the materiality predicate pinned when the deal opened, as on a verdict; a verdict under another one carries a `materiality_changed` difference) | `seq` = 1; `channel`; `counterparty` (≥ 1 id). No `prev`, no `baseline_ref`. Optional `claims[]`, `counterparty_facts`, `demo`, `skill` (`{"skill_md_digest": <64 hex>, "other_copies": <int ≥ 0>}`: the SHA-256 of the SKILL.md the agent reported following, and how many other copies of that skill sat beside it; a boundary marker for accidents, not proof the instructions were followed). |
-| `intent` | The user restates or picks within the ask. Replaces `verbatim` / `asked` from here on. `allowed` and `max_total_minor` carry forward unchanged: an intent may lower the limit or drop actions, and a higher limit or a new action is only a proposal (section 6, rule 6). | `verbatim_commitment` | `baseline_ref`, `prev`. |
+| `baseline` | First contact: what the user asked, who the counterparty is, the terms and the way back. The deal's contract. | `deal_type` (`purchase`\|`rental`\|`booking`\|`service`), `intent` (as the intent body; its optional `party_role`, `buyer`\|`seller`, is which side of the deal the user is on, absent meaning `buyer`, as on every deal sealed before it was recorded), `terms`, `recourse.rail` + `recourse.refundable`; `materiality` (the materiality predicate pinned when the deal opened, as on a verdict; a verdict under another one carries a `materiality_changed` difference) | `seq` = 1; `channel`; `counterparty` (≥ 1 id). No `prev`, no `baseline_ref`. Optional `claims[]`, `counterparty_facts`, `demo`, `skill` (`{"skill_md_digest": <64 hex>, "other_copies": <int ≥ 0>}`: the SHA-256 of the SKILL.md the agent reported following, and how many other copies of that skill sat beside it; a boundary marker for accidents, not proof the instructions were followed). |
+| `intent` | The user restates or picks within the ask. Replaces `verbatim` / `asked` from here on. `allowed` and `max_total_minor` carry forward unchanged: an intent may lower the limit or drop actions, and a higher limit or a new action is only a proposal (section 6, rule 6). | `verbatim_commitment` | `baseline_ref`, `prev`. Optional `party_role`, equal to the baseline's (a deal's role is fixed when it opens). |
 | `message` | One message in the thread. The text stays local. | `from` (`counterparty`\|`user`\|`agent`), `content_commitment` | `channel`. `counterparty` when the message shows identifiers (for example, a new phone number). |
 | `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text_commitment` (the claim's words, ≤ 200 chars, committed), `source_kind` (whose it is: `merchant`\|`agent`\|`platform`\|`user`\|`external`), optional `source_ref_commitment` (the caller's note of where it was read, committed). A claim sealed before claims were committed carries `text` and `source` in the clear instead, and re-derives unchanged (see "Claims"). | none beyond the chain. |
 | `evidence` | What was done to establish a claim, and whether it did. Optionally a merchant's own email (`merchant_email`, below). After the deal's final close, the only record type allowed: later evidence linked to that close. | `source`, `verified` | exactly one `about` → a `claim` or the `baseline`. At most one `confirms` → the deal's final `close` (required after it, not allowed before it). Optional `resolves_obligation` (a digest ref) → an earlier record holding a cancel-by date. |
@@ -197,12 +197,17 @@ Field details:
   `confirms` ref commits to the close record's digest, so it cannot be reattached to another
   deal. It shows that whoever sealed it held that deal; it does not show the deal expected it.
   `supersedes` (terminal) is not emitted: an expiry is computed when a receipt is made.
-- **obligation** (on `evidence`, optional): a commitment that takes effect when a date passes.
-  `kind` (`trial_conversion` | `renewal` | `cancel_window` | `payment_due`), `cancel_by` (the
-  last day to cancel), optional `takes_effect`, `amount_minor` + `currency`, `period` (`week` |
-  `month` | `year` | `once`) and `terms_commitment` (to the merchant's own wording, kept on the
-  device). The evidence record's `source` says where it came from (`merchant_email`,
-  `page_snapshot`). Recorded, never enforced. Each obligation records one cancel-by date. A recurring renewal after that date is not tracked; seal a new obligation for each later date.
+- **obligation** (on `evidence`, optional): a commitment tied to a date. Either a cancel-by
+  kind, which takes effect when a date passes: `kind` (`trial_conversion` | `renewal` |
+  `cancel_window` | `payment_due`) and `cancel_by` (the last day to cancel); or a due kind,
+  something the user owes the other side by a date: `kind` (`deliver_by` | `perform_by`) and
+  `due_by`. Never both dates. Optional `takes_effect`, `amount_minor` + `currency`, `period`
+  (`week` | `month` | `year` | `once`) and `terms_commitment` (to the merchant's own wording, kept
+  on the device). The evidence record's `source` says where it came from (`merchant_email`,
+  `page_snapshot`). Recorded, never enforced. Each obligation records one date. A recurring
+  renewal after that date is not tracked; seal a new obligation for each later date. A later
+  `evidence` record resolves either kind (`resolves_obligation`); a sealed `cancel` ends a
+  cancel-by obligation, never a due one.
 - **merchant_email** (on `evidence`, optional): a merchant's DKIM-signed email, kept raw on the
   device. `message_digest` (SHA-256 of the exact RFC 822 bytes), `key_records_digest` (SHA-256
   of the JCS array of `{"name","txt"}` key records captured when the email was sealed),
@@ -221,7 +226,7 @@ Field details:
 - **differences[]**: `{question, rule, field?}`. `question` is one of `asked`, `who`, `terms`,
   `recourse`, `safety`, `delivered`. `rule` is the id of the rule that found the difference.
   `capsulectl`'s deal check writes its own built-in rules, among them `not_asked`, `over_limit`,
-  `agent_picked`, `terms_changed`, `recourse_changed`, `credentials_requested`, `not_delivered`
+  `under_floor` (a price below the user's floor, rule 6), `agent_picked`, `terms_changed`, `recourse_changed`, `credentials_requested`, `not_delivered`
   and `delivered_differs`. Any change of
   `recourse.rail` or `recourse.refundable` from what was agreed is a
   `recourse_changed` difference, for every action. The human card text contains raw values, so it is
@@ -404,6 +409,17 @@ A verifier holding one deal's records in `seq` order checks:
 6. **The user's limits, and standing intent.** The limits in force start as the baseline
    intent's `max_total_minor` and `allowed`. An `intent` record may lower the limit or drop
    actions; a higher limit or an action not in force is a proposal, recorded and not applied.
+   A floor (the lowest total the user will take, a seller's `min_total_minor`) runs the other
+   way: an `intent` may raise it, and a lower floor is a proposal. The floor is never sealed: a
+   record carries `bounds_commitment`, the salted commitment (`commit_alg`) to the
+   `commercial-bounds/v0` document holding it (`records/commercial-bounds-v0.schema.json`; the
+   checker's vector, `fixtures/commercial-bounds-vectors.json`), on the baseline or intent that
+   states it, on a typed `task-authority/v0`, and in a `confirm_limits` approval's `limits`
+   (the commitment of the intent that stated that floor). Only the user's own copy carries its
+   opening (`bounds_openings` in its sealed report), and the profile's own rules checker is
+   given the opening in force (`commercial_bounds_opening`). A floor cannot be compared from its
+   commitment, so a checker treats an intent that states another floor as possibly asking for
+   more.
    Only the user's `approval` with `choice: "confirm_limits"` that `approves` the proposing
    `intent` puts it in force, as a new version: its `limits.previous` equals the limits in force,
    its `limits.new` is what the intent proposed (a field the intent leaves out keeps its value),
@@ -417,10 +433,13 @@ A verifier holding one deal's records in `seq` order checks:
    consented to the action.
 7. **Close.** `close` references the latest `outcome` (if any), and its `outcome` equals that
    outcome's. Without an outcome record, the close is `open`. `unchecked_actions` equals the
-   number of `unchecked_action` outcomes. A close with `completed` or `mismatch` is terminal:
+   number of `unchecked_action` outcomes. A close with `completed`, `mismatch` or `not_selected`
+   is terminal. `not_selected` (status and outcome alike, with no differences) says the other side
+   was not chosen, one buyer of several for example, and nothing was done: no `action` precedes
+   it. A terminal close:
    after it, only `evidence` records that `confirms` that close may follow. A close with `open`
    MAY be followed by later `outcome` and `close` records. Each `carried_obligations` entry names
-   an earlier record holding that `cancel_by`.
+   an earlier record holding that `cancel_by`, or that `due_by`.
 8. **Reversals.** An `action` with `direction: "in"` and an `amount_minor` returns money the user paid: it carries
    exactly one `reverses` ref to an earlier `action` with `action: "pay"` (direction `out`, or
    none, as records sealed before `direction` was recorded carry), with the same `amount_minor`
@@ -474,7 +493,7 @@ sealed before carries none and re-derives unchanged.
 
 | Field | Value |
 | --- | --- |
-| `recipient_role` | A share's recipient, by role: `fulfilling_merchant` (`disclosing_to: counterparty`) or `third_party` (`disclosing_to: other`). `self` is in the set and never derived. Absent on other actions. |
+| `recipient_role` | A share's recipient, by role: `fulfilling_merchant` (`disclosing_to: counterparty`, on a deal where the user buys or states no `party_role`), `buyer` (`disclosing_to: counterparty`, where the user sells) or `third_party` (`disclosing_to: other`). `self` is in the set and never derived. Absent on other actions. |
 | `channel`, `first_contact_channel` | Channel kinds (the `channel` set above): the one in use at this check (the latest sealed message's, else first contact's) and the baseline's. |
 | `upfront_amount_minor` | The deposit the check's own terms state (`terms.deposit_minor`), in minor units. Never inferred. |
 | `material_fields_changed`, `material_fields_basis` | How many of `terms.item`, `terms.quantity`, `terms.price_minor`, `terms.deposit_minor`, `terms.currency`, `terms.when`, `terms.place`, `terms.conditions`, `recourse.rail`, `recourse.refundable`, `who.payee` the proposal (the deal as it stands with the check on top) changes from what was agreed (payee: the first contact's payee, else its name), and the hex SHA-256 of that list's JCS bytes. |

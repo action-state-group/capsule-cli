@@ -555,6 +555,22 @@ def check_chain(records):
     # in force (section 6).
     allowed = records[0]["body"]["intent"].get("allowed")
     max_total = records[0]["body"]["intent"].get("max_total_minor")
+    # The side of the deal the user is on: set when it opens (absent = buyer), never changed.
+    party_role = records[0]["body"]["intent"].get("party_role", "buyer")
+    # The floor in force, as the bounds_commitment that stated it: the floor itself is never in a
+    # record, so it cannot be compared. After an intent states a new floor the producer applies it
+    # only if it is higher, which this checker cannot see: the floor in force is then unknown
+    # (bounds_known False) until a confirmation states it again.
+    bounds, bounds_known = records[0]["body"]["intent"].get("bounds_commitment"), True
+
+    def limits_in_force():
+        out = {k: v for k, v in (("max_total_minor", max_total), ("allowed", allowed)) if v is not None}
+        if bounds_known and bounds is not None:
+            out["bounds_commitment"] = bounds
+        return out
+
+    def without_unknown_bounds(d):
+        return d if bounds_known else {k: v for k, v in d.items() if k != "bounds_commitment"}
     confirmed_intents = set()
     used_approvals, verdict_for_check = set(), set()
     reversed_actions = set()
@@ -579,7 +595,7 @@ def check_chain(records):
             # Close is terminal: after it, only later evidence that confirms
             # that close (and commits to its digest) may follow.
             if t != "evidence" or len(confirms) != 1 or confirms[0]["digest"] != digests[closed_final]:
-                fail(i, "record after a close whose outcome is completed or mismatch (close is terminal): "
+                fail(i, "record after a close whose outcome is final (completed, mismatch or not_selected; close is terminal): "
                         "only an evidence record that confirms that close may follow")
         elif confirms:
             fail(i, "a confirms ref names the deal's final close; this deal is not closed")
@@ -726,6 +742,8 @@ def check_chain(records):
                 for k in ("max_total_minor", "allowed"):
                     if body.get(k) != intent0.get(k):
                         fail(i, f"the task authority's {k} is not the one asked at the baseline")
+                if ("bounds_commitment" in body) != ("bounds_commitment" in intent0):
+                    fail(i, "the task authority states a floor exactly when the baseline does")
             else:
                 j = one("approves", ("intent",))
                 prop = records[j]["body"]
@@ -740,6 +758,8 @@ def check_chain(records):
                         new[k] = prop[k]
                 if {k: body[k] for k in ("max_total_minor", "allowed") if k in body} != new:
                     fail(i, "the new task authority is not what the proposal asked for")
+                if "bounds_commitment" in prop and body.get("bounds_commitment") != prop["bounds_commitment"]:
+                    fail(i, "the new task authority's floor is not the one the proposal stated")
                 more = (prop.get("max_total_minor") is not None and max_total is not None
                         and prop["max_total_minor"] > max_total) or \
                        (prop.get("allowed") is not None and allowed is not None
@@ -765,10 +785,14 @@ def check_chain(records):
         elif t == "policy_change":
             pass  # its bindings are structural (the schema); no chain step depends on it yet
         elif t == "intent":
+            if body.get("party_role", party_role) != party_role:
+                fail(i, f"an intent cannot change the deal's party_role ({party_role}, set when it opened)")
             # An intent narrows the limits in force; asking for more is a
             # proposal that applies only once the user confirms it.
             if body.get("max_total_minor") is not None and (max_total is None or body["max_total_minor"] < max_total):
                 max_total = body["max_total_minor"]
+            if body.get("bounds_commitment") is not None and body["bounds_commitment"] != bounds:
+                bounds_known = False
             if body.get("allowed") is not None:
                 allowed = [a for a in body["allowed"] if allowed is None or a in allowed]
         elif t == "evidence":
@@ -777,7 +801,7 @@ def check_chain(records):
             if "resolves_obligation" in body:
                 j = by_digest.get(body["resolves_obligation"]["digest"])
                 if j is None or j >= i or "obligation" not in records[j]["body"]:
-                    fail(i, "resolves_obligation must name an earlier record holding a cancel-by date")
+                    fail(i, "resolves_obligation must name an earlier record holding an obligation")
         elif t == "detail_change":
             one("source", ("message", "evidence"), required=False)
             kinds = set(b.get("counterparty", {}).get("ids", {}))
@@ -815,23 +839,28 @@ def check_chain(records):
                 continue
             if not body["proceed"]:
                 fail(i, "a confirmation of a standing proposal proceeds")
-            in_force = {k: v for k, v in (("max_total_minor", max_total), ("allowed", allowed)) if v is not None}
-            if body["limits"]["previous"] != in_force:
+            in_force = limits_in_force()
+            if without_unknown_bounds(body["limits"]["previous"]) != in_force:
                 fail(i, "limits.previous is not the limits in force")
             new = dict(in_force)
-            for k in ("max_total_minor", "allowed"):
+            for k in ("max_total_minor", "allowed", "bounds_commitment"):
                 if prop.get(k) is not None:
                     new[k] = prop[k]
-            if body["limits"]["new"] != new:
+            got = body["limits"]["new"] if "bounds_commitment" in prop else without_unknown_bounds(body["limits"]["new"])
+            if got != new:
                 fail(i, "limits.new is not what the intent proposed")
+            # A floor cannot be compared (only its commitment is sealed): a proposal that states a
+            # floor other than the one in force may be asking for a lower one, so it needs confirming.
             more = (prop.get("max_total_minor") is not None and max_total is not None
                     and prop["max_total_minor"] > max_total) or \
                    (prop.get("allowed") is not None and allowed is not None
-                    and any(a not in allowed for a in prop["allowed"]))
+                    and any(a not in allowed for a in prop["allowed"])) or \
+                   (prop.get("bounds_commitment") is not None and prop["bounds_commitment"] != bounds)
             if not more:
                 fail(i, "the intent asks for no higher limit and no new action: nothing to confirm")
             confirmed_intents.add(j)
             max_total, allowed = new.get("max_total_minor"), new.get("allowed")
+            bounds, bounds_known = body["limits"]["new"].get("bounds_commitment"), True
         elif t == "approval":
             j = one("approves", ("verdict",))
             first_answer.setdefault(j, i)
@@ -913,6 +942,10 @@ def check_chain(records):
             one("observes", ("action",), required=False)
             if body["status"] == "unchecked_action":
                 unchecked += 1
+            if body["outcome"] == "not_selected" and any(
+                    records[k]["type"] == "action-record/v0" if is_typed(records[k])
+                    else records[k]["x-deal-v0"]["record_type"] == "action" for k in range(i)):
+                fail(i, "not_selected means nothing was done on the deal, and an action is on record")
             last_outcome = i
         elif t == "close":
             if last_outcome is None:
@@ -932,8 +965,10 @@ def check_chain(records):
                 closed_final = i
             for c in body.get("carried_obligations", []):
                 j = by_digest.get(c["obligation"]["digest"])
-                if j is None or j >= i or records[j]["body"].get("obligation", {}).get("cancel_by") != c["cancel_by"]:
-                    fail(i, "carried_obligations must name earlier records holding that cancel-by date")
+                held = records[j]["body"].get("obligation", {}) if j is not None else {}
+                date = "due_by" if "due_by" in c else "cancel_by"
+                if j is None or j >= i or held.get(date) != c[date]:
+                    fail(i, "carried_obligations must name earlier records holding that date")
 
 
 def check_record(rec, local_store_values=()):
@@ -974,6 +1009,10 @@ def run_fixtures() -> int:
         ok = commitment(x["nonce"], x["text"]) == x["commitment"]
         bad += not ok
         print(f"{'ok  ' if ok else 'FAIL'} commitment {x['label']:<18} {x['commitment'][:16]}…")
+    for x in load(FIX / "commercial-bounds-vectors.json")["vectors"]:
+        ok = jcs(x["document"]).decode("utf-8") == x["text"] and commitment(x["nonce"], x["text"]) == x["bounds_commitment"]
+        bad += not ok
+        print(f"{'ok  ' if ok else 'FAIL'} commercial-bounds/v0 {x['document']['min_total_minor']:<16} {x['bounds_commitment'][:16]}…")
     store = local_store_values()
 
     # Two positive chains: x-deal-v0 throughout, and one sealed in the typed action
@@ -1250,7 +1289,7 @@ def regen():
     # regenerate these fixtures when it or the rule table changes (a Go test keeps them equal).
     materiality = record_digest(load(EXAMPLE_PREDICATE))
     rules = {"evaluator": "capsulectl deal check", "materiality_digest": materiality, "rules": [
-        {"question": "asked", "rules": ["agent_picked", "not_asked", "over_limit"]},
+        {"question": "asked", "rules": ["agent_picked", "not_asked", "over_limit", "under_floor"]},
         {"question": "who", "rules": ["payee_or_contact_changed", "first_disclosure"]},
         {"question": "terms", "rules": ["terms_changed"]},
         {"question": "recourse", "rules": ["recourse_changed", "irreversible_rail"]},
@@ -1377,6 +1416,18 @@ def regen():
         vec["vectors"].append({"kind": k, "raw": v, "normalized": normalize(k, v), "fp": fingerprint(dk, k, v)})
     dump(FIX / "fingerprint-vectors.json", vec)
 
+    # commercial-bounds/v0: the private document holding a floor, and the bounds_commitment a
+    # record seals to it. Go recomputes the same values (internal/cli/deal_bounds_test.go).
+    bounds = {"description": "bounds_commitment = SHA-256 over the RFC 8785 (JCS) bytes of {\"nonce\", \"text\"}, "
+                             "with text the JCS bytes of the commercial-bounds/v0 document (commit_alg sha256-jcs-nonce256).",
+              "vectors": []}
+    for label, floor in (("bounds-1", 170000), ("bounds-2", 0), ("bounds-3", 9007199254740991)):
+        doc = {"type": "commercial-bounds/v0", "min_total_minor": floor}
+        text = jcs(doc).decode("utf-8")
+        bounds["vectors"].append({"document": doc, "nonce": nonce(label), "text": text,
+                                  "bounds_commitment": commitment(nonce(label), text)})
+    dump(FIX / "commercial-bounds-vectors.json", bounds)
+
     # --- negatives -------------------------------------------------------------------------
     import copy
 
@@ -1391,6 +1442,14 @@ def regen():
 
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["seq"] = 5
     neg("neg-seq-gap", "chain", "seq gap", r, 2, "seq jumps from 2 to 5.")
+
+    r = copy.deepcopy(records[16]); r["body"] = {"status": "not_selected", "outcome": "not_selected", "differences": []}
+    neg("neg-not-selected-after-an-action", "chain", "nothing was done on the deal", r, 16,
+        "An outcome that says the other side was not chosen, on a deal where an action was taken.")
+
+    r = copy.deepcopy(records[4]); r["body"]["party_role"] = "seller"
+    neg("neg-intent-changes-party-role", "chain", "cannot change the deal's party_role", r, 4,
+        "An intent note on a deal that opened with no party_role (a buyer's) names seller.")
 
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["seq"] = 2
     neg("neg-seq-regression", "chain", "seq regression", r, 2, "seq repeats 2 after 2.")

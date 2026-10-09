@@ -11,7 +11,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "d53355e0b9e0655649a2a7c15cdee1464b543f02787c8f2abbdcd295838c3607"
+      "digest": "5d40bb76d51d369c69180df649c7897915b7c8c37041e92faac8ee261bce595d"
     },
     "chain_root": {
       "type": "record",
@@ -35,5 +35,5 @@
       }
     }
   },
-  "expected_digest": "62af4c6d0522b09755238f10267ae5bffe688cdbb2cff86cd3204238d6210e05"
+  "expected_digest": "1c08f1004b280f2ab7c32f43b61dd46ea5f806b13ec5f9c48721d786da999926"
 }

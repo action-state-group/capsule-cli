@@ -51,6 +51,24 @@ var dealWithheldFields = map[string][]string{
 	},
 }
 
+// dealWithheldFieldsFor is dealWithheldFields for one deal: a seller's copy
+// names what it leaves out as the user's bounds (both of them are withheld
+// whatever the role; the role changes only the words).
+func dealWithheldFieldsFor(audience, role string) []string {
+	fields := dealWithheldFields[audience]
+	if role != dealRoleSeller {
+		return fields
+	}
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if f == "your spending limit" {
+			f = "the lowest price you will take, and any limit you set"
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
 // dealShareKeys are the record keys whose string values a shared copy may
 // disclose: tokens, timestamps, rails, currencies, digests and commitments.
 // A sealed record is disclosed whole or not at all (its digest binds every
@@ -74,7 +92,7 @@ var dealShareKeys = map[string]bool{
 	// A sealed merchant email's record: digests, the DKIM and DMARC verdicts,
 	// where the keys came from, and dates.
 	"key_source": true, "dkim": true, "dmarc_policy": true, "dmarc_source": true, "method": true,
-	"cancel_by": true, "sent_at": true,
+	"cancel_by": true, "due_by": true, "sent_at": true,
 	// When the deal is expected to close: a date.
 	"expect_close_by": true,
 }
@@ -753,8 +771,10 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 				}
 				continue
 			}
-			if k == "max_total_minor" && audience == dealAudienceCounterparty {
-				// The user's spending limit: never the counterparty's to see.
+			if (dealPrivateBoundKeys[k] && audience == dealAudienceCounterparty) || k == "min_total_minor" {
+				// The user's bounds (a buyer's limit, a seller's floor):
+				// never the counterparty's to see, whatever the role; and
+				// the floor is in no shared copy at all.
 				return false
 			}
 			if k == "materiality" {
@@ -1144,7 +1164,7 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 		merchant = append(merchant, m)
 	}
 	withheld := make([]interface{}, 0, len(dealWithheldFields[audience]))
-	for _, f := range dealWithheldFields[audience] {
+	for _, f := range dealWithheldFieldsFor(audience, dealRole(events)) {
 		withheld = append(withheld, f)
 	}
 	ext := map[string]interface{}{
@@ -1193,7 +1213,7 @@ func dealVerifyCommand(htmlPath string) string {
 // and the digest of the exact page. It is kept in the local store and its
 // digest is appended to the deal's own disclosure log (beside the deal's
 // log, which holds only steps) under a fresh signed checkpoint.
-func (s *dealSession) recordShare(ctx context.Context, dealID string, b map[string]interface{}, audience, recipient string, page []byte) (map[string]any, error) {
+func (s *dealSession) recordShare(ctx context.Context, dealID string, b map[string]interface{}, audience, recipient, role string, page []byte) (map[string]any, error) {
 	record, err := disclosureRecord(b)
 	if err != nil {
 		return nil, err
@@ -1211,7 +1231,7 @@ func (s *dealSession) recordShare(ctx context.Context, dealID string, b map[stri
 	}
 	sort.Slice(withheld, func(i, j int) bool { return withheld[i].(string) < withheld[j].(string) })
 	fields := make([]interface{}, 0, len(dealWithheldFields[audience]))
-	for _, f := range dealWithheldFields[audience] {
+	for _, f := range dealWithheldFieldsFor(audience, role) {
 		fields = append(fields, f)
 	}
 	nonce := make([]byte, 32)
