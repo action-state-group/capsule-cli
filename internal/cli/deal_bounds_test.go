@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -89,8 +90,28 @@ func TestASellersFloorStaysPrivate(t *testing.T) {
 	// The buyer's copy carries neither the floor nor its amount.
 	_, shared := sharedCopy(t, id, dealAudienceCounterparty, "the buyer")
 	assert.NotContains(t, shared, "min_total_minor")
-	assert.NotContains(t, shared, "1700.00")
+	for _, form := range writtenAmounts(1700) {
+		assert.NotContains(t, shared, form)
+	}
 	assert.NotContains(t, shared, "bounds_openings")
+}
+
+// writtenAmounts are the ways a copy could write a whole amount as text: as
+// capsulectl does, with thousands separators as locales use them, with a
+// symbol and with a code. A leak grep looks for each.
+func writtenAmounts(units int64) []string {
+	plain := fmt.Sprintf("%d", units)
+	grouped := func(sep string) string {
+		s := plain
+		for i := len(s) - 3; i > 0; i -= 3 {
+			s = s[:i] + sep + s[i:]
+		}
+		return s
+	}
+	return []string{
+		plain + ".00", "$" + plain, grouped(",") + ".00", "$" + grouped(","), grouped(","),
+		grouped(".") + ",00", grouped(" "), grouped("'"), "USD " + grouped(","), plain + " usd", plain + "usd",
+	}
 }
 
 func mustJSONString(t *testing.T, v any) string {
@@ -236,8 +257,9 @@ func TestASellersShareWithholdsBothBounds(t *testing.T) {
 	both := strings.Replace(sellerWithFloor, `"min_total_minor": 170000`, `"min_total_minor": 170000, "max_total_minor": 250000`, 1)
 	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, both))["deal_id"].(string)
 	_, shared := sharedCopy(t, id, dealAudienceCounterparty, "the buyer")
-	for _, hidden := range []string{"min_total_minor", "max_total_minor", "250000", "2500.00", "1700.00"} {
-		assert.NotContains(t, shared, hidden)
+	hidden := append([]string{"min_total_minor", "max_total_minor", "250000"}, append(writtenAmounts(2500), writtenAmounts(1700)...)...)
+	for _, h := range hidden {
+		assert.NotContains(t, shared, h)
 	}
 	assert.Contains(t, shared, "the lowest price you will take, and any limit you set")
 	assert.NotContains(t, shared, "your spending limit")
@@ -266,7 +288,7 @@ func TestNoSharedCopyCarriesTheFloor(t *testing.T) {
 	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
 	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
 		_, shared := sharedCopy(t, id, audience, "a recipient")
-		for _, hidden := range []string{"170000", "1700.00", "bounds_openings", "commercial_bounds_opening", "min_total_minor"} {
+		for _, hidden := range append([]string{"170000", "bounds_openings", "commercial_bounds_opening", "min_total_minor"}, writtenAmounts(1700)...) {
 			assert.NotContains(t, shared, hidden, audience)
 		}
 	}
@@ -274,7 +296,9 @@ func TestNoSharedCopyCarriesTheFloor(t *testing.T) {
 	events := []sealedEvent{{Event: dealEvent{Kind: "open", Open: &dealOpen{
 		Intent: dealIntent{PartyRole: dealRoleSeller, MinTotalMinor: &floor}, Terms: dealTerms{Currency: "USD"}}}}}
 	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
-		for _, page := range []string{"$1700.00", "1700.00", `"bounds_openings":[]`, `"min_total_minor":1`, `"commercial_bounds_opening":{}`} {
+		pages := []string{"$1700.00", "1700.00", `"bounds_openings":[]`, `"min_total_minor":1`, `"commercial_bounds_opening":{}`,
+			"$1,700", "$1,700.00", "1.700,00 €", "USD 1,700", "1700 usd", "1700usd", "USD1,700", "1'700.00 CHF", "lowest is 1,700"}
+		for _, page := range pages {
 			assert.Error(t, dealCeilingGate([]byte(page), events, audience), audience+": "+page)
 		}
 	}

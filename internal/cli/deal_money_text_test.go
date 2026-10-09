@@ -16,6 +16,8 @@ var floorForms = []string{
 	"1'700.00 CHF", "1’700 chf", "USD 1,700", "usd 1700.00", "1700 usd", "1,700 USD", "1700,00 EUR",
 	"1,700 dollars", "1700 bucks", "£1,700", "1.7k dollars", "$1.7k",
 	"the lowest I'll take is 1700", "asking 1,700 for it", "I could go down to 1700.00", "won't sell under 1700",
+	// A code or a currency word written against the number.
+	"USD1,700", "EUR1700", "1700usd", "$1700USD", "1,700.00EUR", "GBP1.700,00", "1700dollars",
 }
 
 func TestMoneyAmountsReadsEveryForm(t *testing.T) {
@@ -30,6 +32,8 @@ func TestMoneyAmountsLeavesOtherNumbersAlone(t *testing.T) {
 	for _, text := range []string{
 		"on 2026-10-09 at 17:00", "2026-10-09T17:00:00Z", "deal-ab1700cd00112233", "ab1700cd",
 		"order 1700-22", "1700 Main Street", "I took 1700 photos", "call 555-1700",
+		// Letters against the number that are not a whole currency code.
+		"xusd1700", "1700usdx", "abc1700", "1700abc",
 	} {
 		assert.NotContains(t, moneyAmounts(text), int64(170000), text)
 	}

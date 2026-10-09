@@ -25,7 +25,8 @@
   (`max_total_minor`) out of a shared copy only matched the form capsulectl writes ("$1700.00").
   It now reads money as prose writes it, and compares by value:
   - currency symbols before or after the amount (`$`, `€`, `£`, `¥` and others), ISO codes
-    (`USD 1,700`, `1700 usd`) and currency words (`dollars`, `euros`);
+    (`USD 1,700`, `1700 usd`, also written against the number: `USD1,700`, `1700usd`) and
+    currency words (`dollars`, `euros`);
   - thousands separators as locales use them (comma, dot, space, apostrophe, no-break or thin
     space), with or without cents (`1.700,00 €`, `1'700.00 CHF`), and `k` (`$1.7k`);
   - a bare number a few words after a money word ("the lowest I'll take is 1700").

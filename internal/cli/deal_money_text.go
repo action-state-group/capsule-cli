@@ -52,8 +52,11 @@ func moneyAmounts(text string) []int64 {
 	for _, loc := range moneyNumber.FindAllStringIndex(low, -1) {
 		start, end := loc[0], loc[1]
 		// Part of a longer run of letters or digits (an id, a digest, a
-		// date or a time) is not an amount.
-		if start > 0 && isMoneyGlue(low[start-1]) || end < len(low) && isMoneyGlue(low[end]) && !strings.HasPrefix(low[end:], "k") {
+		// date or a time) is not an amount; a currency code or word written
+		// against it ("usd1,700", "1700usd"), or a k, is.
+		gluedBefore := start > 0 && isMoneyGlue(low[start-1]) && !moneyCodes[lettersBefore(low, start)]
+		gluedAfter := end < len(low) && isMoneyGlue(low[end]) && !strings.HasPrefix(low[end:], "k") && !moneyCodes[lettersAfter(low, end)]
+		if gluedBefore || gluedAfter {
 			continue
 		}
 		num := low[start:end]
@@ -76,6 +79,25 @@ func moneyAmounts(text string) []int64 {
 }
 
 func isLetterByte(b byte) bool { return b >= 'a' && b <= 'z' }
+
+// lettersBefore is the run of letters that ends at text[i], and
+// lettersAfter the run that starts there: the whole word, so "xusd" is not
+// "usd".
+func lettersBefore(text string, i int) string {
+	j := i
+	for j > 0 && isLetterByte(text[j-1]) {
+		j--
+	}
+	return text[j:i]
+}
+
+func lettersAfter(text string, i int) string {
+	j := i
+	for j < len(text) && isLetterByte(text[j]) {
+		j++
+	}
+	return text[i:j]
+}
 
 // isMoneyGlue is a byte that joins a number into something else: a letter,
 // a digit, or the dash, colon or slash of a date or a time.
