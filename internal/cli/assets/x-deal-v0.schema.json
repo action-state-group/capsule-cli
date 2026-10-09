@@ -43,7 +43,7 @@
     "hex64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "safe_uint": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
     "token": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
-    "action_class": { "description": "The action's class in the action taxonomy taxonomy_version names (version 3: capsule-engine's capsule_engine/guards/action_taxonomy.json, github.com/action-state-group/capsule-engine at a5e9e30; records sealed earlier name version 2, at 2521ee6, with the same classes). Absent on records sealed before it was recorded.", "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}\\.[a-z][a-z0-9_]{0,63}$" },
+    "action_class": { "description": "The action's class in the action taxonomy taxonomy_version names (version 4: capsule-engine's capsule_engine/guards/action_taxonomy.json, at github.com/action-state-group/capsule-engine; records sealed earlier name version 2, at 2521ee6, or version 3, at a5e9e30, with the same classes). Absent on records sealed before it was recorded.", "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}\\.[a-z][a-z0-9_]{0,63}$" },
     "taxonomy_version": { "description": "The version of the action taxonomy action_class is drawn from.", "type": "string", "pattern": "^[1-9][0-9]{0,3}$" },
     "ns_token": {
       "description": "A seeded bare token, or a namespaced one (reverse-DNS prefix, e.g. org.example.foo).",

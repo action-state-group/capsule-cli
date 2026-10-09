@@ -2,15 +2,17 @@
 
 ## Unreleased
 
-### New deal records seal action taxonomy version 3
+### New deal records seal action taxonomy version 4
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
-  `taxonomy_version` is now `"3"`: capsule-engine's `capsule_engine/guards/action_taxonomy.json`
-  at `a5e9e30`. A reader holding version 3 found no class-keyed result for a record that named
-  `"2"`. Version 3 names the same classes as version 2, so every `action_class` is unchanged.
-  It adds `approver_role` `account_holder` to `money.purchase`, `money.subscription`,
-  `booking.create` and `booking.modify`.
-- **Each step keeps its own version.** A record sealed under `"2"` re-derives with `"2"`.
+  `taxonomy_version` is now `"4"`: capsule-engine's `capsule_engine/guards/action_taxonomy.json`.
+  A reader that holds a later version found no class-keyed result for a record that named `"2"`.
+- **Every `action_class` is unchanged.** Versions 2, 3 and 4 name the same classes. Versions 3
+  and 4 add `approver_role` `account_holder`:
+  - version 3 to `money.purchase`, `money.subscription`, `booking.create` and `booking.modify`;
+  - version 4 to `booking.cancel`, `data.delete`, `communication.publish` and
+    `disclosure.personal`.
+- **Each step keeps its own version.** A record sealed under `"2"` or `"3"` re-derives with it.
 
 ### `doctor --check-witness` is ok only when the witness answers with success
 
