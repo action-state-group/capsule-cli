@@ -16,6 +16,8 @@
 - **Fixed:** opening a log that does not exist could panic while cleaning up the failed open. It
   now returns the log's error.
 
+## v0.1.0-rc12
+
 ### New deal records seal action taxonomy version 4
 
 - **Changed (wire; records sealed before re-derive unchanged).** A deal record's
