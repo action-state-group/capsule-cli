@@ -825,21 +825,27 @@ func (s *dealSession) localStep(ctx context.Context, capsuleID string) (string, 
 }
 
 // actCounterpartyProfile is the payee keyed per profile for an earlier act:
-// the act's approval, the verdict it answers, the check that verdict is of,
-// and that check's companion. Nil when any link is missing: an act without
-// approval, or one checked before checks had a companion.
+// the verdict the act rests on, the check that verdict is of, and that
+// check's companion. The act rests on its approval's verdict, or, in typed
+// records, on a verdict that needed no approval, which authorizes the act
+// itself. Nil when any link is missing: an act without authorization, or one
+// checked before checks had a companion.
 func (s *dealSession) actCounterpartyProfile(ctx context.Context, actID string) (map[string]interface{}, error) {
 	dealID, act, err := s.localStep(ctx, actID)
 	if err != nil || act == nil || act.Act == nil || act.Act.AuthorizedBy == "" {
 		return nil, err
 	}
-	_, approval, err := s.localStep(ctx, act.Act.AuthorizedBy)
-	if err != nil || approval == nil || approval.Approval == nil {
+	_, verdict, err := s.localStep(ctx, act.Act.AuthorizedBy)
+	if err != nil || verdict == nil {
 		return nil, err
 	}
-	_, verdict, err := s.localStep(ctx, approval.Approval.Check)
-	if err != nil || verdict == nil || verdict.Check == nil || verdict.Check.Snapshot == "" {
-		return nil, err
+	if verdict.Approval != nil {
+		if _, verdict, err = s.localStep(ctx, verdict.Approval.Check); err != nil || verdict == nil {
+			return nil, err
+		}
+	}
+	if verdict.Check == nil || verdict.Check.Snapshot == "" {
+		return nil, nil
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT local FROM deal_steps WHERE deal_id=? AND kind='counterparty_profile'`, dealID)
 	if err != nil {
