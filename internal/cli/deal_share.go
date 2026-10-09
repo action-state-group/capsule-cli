@@ -1029,7 +1029,6 @@ var dealShareAnomaly = map[string]string{
 	"rules_not_checked":        "Your own rules were not checked",
 }
 
-// dealShareStepLine is one step in plain words for a shared copy.
 // dealSharePrivateKind is the kind a shared copy gives a step that only the
 // user's own copy may describe: it is listed, withheld, so the copy accounts
 // for every record of the log, but it does not say what it is.
@@ -1045,6 +1044,7 @@ func dealShareKind(kind string) string {
 	return kind
 }
 
+// dealShareStepLine is one step in plain words for a shared copy.
 func dealShareStepLine(e dealEvent, audience string, p dealPrivate, currency string) string {
 	adjudicator := audience == dealAudienceAdjudicator
 	switch e.Kind {
