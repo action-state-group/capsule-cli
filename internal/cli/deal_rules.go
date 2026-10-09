@@ -1402,6 +1402,11 @@ func closeDeal(s dealState, in dealCloseInput) dealCloseResult {
 		r.Outcome = "mismatch"
 		r.Differences = append(r.Differences, dealDifference{Question: "delivered", Rule: "not_delivered", Text: "Nothing was delivered"})
 		return r
+	case "not_selected":
+		// The other side was not chosen (one buyer of several, say): the
+		// deal ends with nothing taken or delivered. Final, like completed.
+		r.Outcome = "not_selected"
+		return r
 	}
 	if in.Delivered != nil {
 		for _, d := range termFieldDiffs(s.agreed, *in.Delivered) {

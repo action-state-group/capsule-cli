@@ -1559,8 +1559,8 @@ func dealCloseCommand() *cobra.Command {
 		if err = decodeJSONAs("--input", raw, &in); err != nil {
 			return err
 		}
-		if !slices.Contains([]string{"received", "pending", "not_received"}, in.Status) {
-			return inputError("status must be received, pending or not_received")
+		if !slices.Contains([]string{"received", "pending", "not_received", "not_selected"}, in.Status) {
+			return inputError("status must be received, pending, not_received or not_selected")
 		}
 		if err = normalizeTerms(in.Delivered); err != nil {
 			return err
@@ -1572,6 +1572,13 @@ func dealCloseCommand() *cobra.Command {
 			state, err := foldDeal(events)
 			if err != nil {
 				return err
+			}
+			if in.Status == "not_selected" {
+				for _, se := range events {
+					if se.Event.Kind == "act" {
+						return inputError("not_selected closes a deal where nothing was done, and this deal has an action on record: close it received or not_received")
+					}
+				}
 			}
 			carry, _ := c.Flags().GetBool("carry-open-obligations")
 			open := openDeadlines(events, dealClock())

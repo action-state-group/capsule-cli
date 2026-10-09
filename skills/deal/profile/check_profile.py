@@ -581,7 +581,7 @@ def check_chain(records):
             # Close is terminal: after it, only later evidence that confirms
             # that close (and commits to its digest) may follow.
             if t != "evidence" or len(confirms) != 1 or confirms[0]["digest"] != digests[closed_final]:
-                fail(i, "record after a close whose outcome is completed or mismatch (close is terminal): "
+                fail(i, "record after a close whose outcome is final (completed, mismatch or not_selected; close is terminal): "
                         "only an evidence record that confirms that close may follow")
         elif confirms:
             fail(i, "a confirms ref names the deal's final close; this deal is not closed")
@@ -917,6 +917,10 @@ def check_chain(records):
             one("observes", ("action",), required=False)
             if body["status"] == "unchecked_action":
                 unchecked += 1
+            if body["outcome"] == "not_selected" and any(
+                    records[k]["type"] == "action-record/v0" if is_typed(records[k])
+                    else records[k]["x-deal-v0"]["record_type"] == "action" for k in range(i)):
+                fail(i, "not_selected means nothing was done on the deal, and an action is on record")
             last_outcome = i
         elif t == "close":
             if last_outcome is None:
@@ -1397,6 +1401,10 @@ def regen():
 
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["seq"] = 5
     neg("neg-seq-gap", "chain", "seq gap", r, 2, "seq jumps from 2 to 5.")
+
+    r = copy.deepcopy(records[16]); r["body"] = {"status": "not_selected", "outcome": "not_selected", "differences": []}
+    neg("neg-not-selected-after-an-action", "chain", "nothing was done on the deal", r, 16,
+        "An outcome that says the other side was not chosen, on a deal where an action was taken.")
 
     r = copy.deepcopy(records[4]); r["body"]["party_role"] = "seller"
     neg("neg-intent-changes-party-role", "chain", "cannot change the deal's party_role", r, 4,

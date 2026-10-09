@@ -416,7 +416,10 @@ A verifier holding one deal's records in `seq` order checks:
    consented to the action.
 7. **Close.** `close` references the latest `outcome` (if any), and its `outcome` equals that
    outcome's. Without an outcome record, the close is `open`. `unchecked_actions` equals the
-   number of `unchecked_action` outcomes. A close with `completed` or `mismatch` is terminal:
+   number of `unchecked_action` outcomes. A close with `completed`, `mismatch` or `not_selected`
+   is terminal. `not_selected` (status and outcome alike, with no differences) says the other side
+   was not chosen, one buyer of several for example, and nothing was done: no `action` precedes
+   it. A terminal close:
    after it, only `evidence` records that `confirms` that close may follow. A close with `open`
    MAY be followed by later `outcome` and `close` records. Each `carried_obligations` entry names
    an earlier record holding that `cancel_by`, or that `due_by`.

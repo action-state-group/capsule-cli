@@ -54,7 +54,7 @@
       "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure"]
     },
     "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials"] },
-    "outcome_value": { "enum": ["completed", "mismatch", "open"] },
+    "outcome_value": { "description": "completed, mismatch or open; or not_selected: the other side was not chosen, and nothing was done on the deal (no action is on record). Every value but open is final at a close.", "enum": ["completed", "mismatch", "open", "not_selected"] },
     "identifier_kind": { "enum": ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id"] },
     "channel": {
       "description": "Seeded: marketplace, web, sms, phone_call, email, app_chat, whatsapp, telegram, signal, in_person, other. Anything else MUST be namespaced.",
@@ -463,7 +463,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["status", "outcome", "differences"],
       "properties": {
-        "status": { "enum": ["received", "not_received", "pending", "unchecked_action", "reverted"] },
+        "status": { "enum": ["received", "not_received", "pending", "unchecked_action", "reverted", "not_selected"] },
         "outcome": { "$ref": "#/$defs/outcome_value" },
         "delivered": { "$ref": "#/$defs/terms" },
         "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
@@ -472,6 +472,8 @@
       },
       "allOf": [
         { "if": { "properties": { "status": { "const": "pending" } } }, "then": { "properties": { "outcome": { "const": "open" } } } },
+        { "if": { "properties": { "status": { "const": "not_selected" } }, "required": ["status"] }, "then": { "properties": { "outcome": { "const": "not_selected" }, "differences": { "maxItems": 0 } } } },
+        { "if": { "properties": { "outcome": { "const": "not_selected" } }, "required": ["outcome"] }, "then": { "properties": { "status": { "const": "not_selected" } } } },
         { "if": { "properties": { "status": { "enum": ["not_received", "unchecked_action"] } } }, "then": { "properties": { "outcome": { "const": "mismatch" }, "differences": { "minItems": 1 } } } },
         { "if": { "properties": { "status": { "const": "unchecked_action" } } }, "then": { "required": ["unchecked"] }, "else": { "not": { "required": ["unchecked"] } } },
         { "if": { "properties": { "outcome": { "const": "completed" } } }, "then": { "properties": { "differences": { "maxItems": 0 }, "status": { "const": "received" } } } },
