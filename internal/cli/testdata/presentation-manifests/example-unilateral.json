@@ -1,0 +1,32 @@
+{
+  "spec_version": "aac.presentation-manifest/v0",
+  "id": "org.example.unilateral/v0",
+  "presentation_api": "aac.presentation-api/v0",
+  "runtime_min": "0.1.0",
+  "trust_class": "trusted-executable",
+  "requires": {
+    "bundle_kind": "evidence-bundle/v2",
+    "profiles": [
+      "spec_version:org.example.exchange/v0"
+    ]
+  },
+  "forbids": {
+    "extensions": [
+      "composed/v1"
+    ]
+  },
+  "audiences": [
+    "*"
+  ],
+  "formats": [
+    "html",
+    "fragment",
+    "embedded"
+  ],
+  "fallback": false,
+  "priority": 1,
+  "executable": {
+    "carrier": "module-slot",
+    "script_sha256": "1f0e3dad99908345f7439f8ffabdffc41f0e3dad99908345f7439f8ffabdffc4"
+  }
+}

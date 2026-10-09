@@ -1,0 +1,22 @@
+{
+  "spec_version": "aac.presentation-manifest/v0",
+  "id": "aac.builtin.no-aggregate/v0",
+  "presentation_api": "aac.presentation-api/v0",
+  "runtime_min": "0.1.0",
+  "trust_class": "trusted-executable",
+  "requires": {
+    "bundle_kind": "evidence-bundle/v2"
+  },
+  "audiences": [
+    "*"
+  ],
+  "formats": [
+    "html",
+    "fragment",
+    "embedded"
+  ],
+  "fallback": true,
+  "executable": {
+    "carrier": "core-runtime"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "wording_pack_version": "aac.wording-pack/v0",
+  "id": "org.example.rules-table.wording/v0",
+  "locale": "en",
+  "entries": {
+    "heading.l0": "What the comparison found",
+    "heading.l1": "Each rule, and why",
+    "column.rule": "Rule",
+    "column.state": "State",
+    "column.cites": "Cited record",
+    "state.controlled": "Controlled by a mechanism the record names",
+    "state.not_controlled": "No control found",
+    "state.unknown": "Not established: no finding either way",
+    "count.rules": "Rules compared"
+  }
+}

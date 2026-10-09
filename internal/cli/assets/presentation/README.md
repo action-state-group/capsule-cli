@@ -15,3 +15,19 @@ aac Go module does not carry the repository's `schemas/` directory.
 The digest is pinned again in `plugin_presentations_test.go`
 (`TestThePresentationSchemaIsPinned`). Refresh the file and both digests
 together, from the commit `go.mod` pins.
+
+## Built-in page manifests
+
+`builtin/builtin-*.json` are agent-action-capsule's
+`schemas/examples/presentation-manifest-v0/builtin-*.json` at the same commit,
+copied unmodified: the six page modules the vendored browser runtime
+registers by default. `capsulectl presentation build` checks the plugin
+modules it puts in a page against them (presentation contract section 4.5).
+Their digests are pinned in `presentation_build_test.go`
+(`TestThePresentationRuntimeDeclarationIsTheVendoredOne`), which also checks
+that the vendored runtime carries each id and declares the runtime
+(`aac.presentation-api/v0`, version `0.1.0`) capsulectl checks modules
+against. Refresh them with the runtime, from the commit `go.mod` pins.
+
+`internal/cli/testdata/presentation-manifests/` holds the same directory's
+example and negative manifests, as test vectors only.
