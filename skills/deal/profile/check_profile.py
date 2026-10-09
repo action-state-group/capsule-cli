@@ -53,6 +53,8 @@ DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "hom
                                                   "pickup_location", "other_contact")}
 DISCLOSURE_ACTION.update({c: "share_credentials" for c in ("credential", "verification_code",
                                                            "payment_card", "id_document")})
+# What an offer covers, and a seller's commit must equal: the material terms.
+OFFER_TERMS = ("amount_minor", "currency", "terms", "recourse")
 # The classes that give a place: a seller gives one out only for an accepted offer.
 ADDRESS_CLASSES = {"home_address", "address", "pickup_location"}
 IDENTIFIER_KINDS = ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id"]
@@ -997,6 +999,11 @@ def check_chain(records):
                         fail(i, "the disclosed classes are not the ones this action covers")
                 if party_role == "seller" and body["action"] == "commit":
                     seller_needs_acceptance("commit")
+                    # On exactly the accepted offer's terms: its amount and currency,
+                    # terms and recourse, as the two checks seal them.
+                    offered, committed = records[latest_offer]["body"], chk["body"]
+                    if any(offered.get(k) != committed.get(k) for k in OFFER_TERMS):
+                        fail(i, "the commit's terms differ from the offer the other party accepted (changed_after_acceptance)")
                 elif party_role == "seller" and any(f["class"] in ADDRESS_CLASSES for f in body.get("disclosed", {}).get("fields", [])):
                     seller_needs_acceptance("address")
                 elif "source" in by_rel:

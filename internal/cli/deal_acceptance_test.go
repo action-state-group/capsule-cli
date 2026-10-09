@@ -154,6 +154,29 @@ func TestACounterofferSupersedesTheOfferBeforeIt(t *testing.T) {
 	checkerPasses(t, id)
 }
 
+// A seller commits on exactly the terms of the offer the other party
+// accepted: its amount and currency, terms and recourse. A commit on any
+// other terms is not covered by that acceptance.
+func TestASellerCommitsOnTheAcceptedOffersTerms(t *testing.T) {
+	dealFixture(t)
+	id := openTyped(t, sellerTyped)
+	_, err := acceptOffer(t, id, makeOffer(t, id, "190000"))
+	require.NoError(t, err)
+	for name, check := range map[string]string{
+		"a lower amount":               `{"action":"commit","amount_minor":120000,"terms":{"item":"example bicycle","quantity":1,"price_minor":120000}}`,
+		"the same amount, other terms": `{"action":"commit","amount_minor":190000,"terms":{"item":"example bicycle","quantity":2,"price_minor":190000}}`,
+		"other recourse":               `{"action":"commit","amount_minor":190000,"terms":{"item":"example bicycle","quantity":1,"price_minor":190000},"recourse":{"rail":"card","refundable":true}}`,
+		"no terms at all":              `{"action":"commit","amount_minor":190000}`,
+	} {
+		approved(t, id, dealRun(t, "check", "--deal", id, "--input", writeJSON(t, check)))
+		act := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"commit"}`))
+		assert.Equal(t, true, act["unchecked"], name)
+		assert.Equal(t, "changed_after_acceptance", act["rule"], name)
+	}
+	assert.Equal(t, false, commitNow(t, id, "190000")["unchecked"], "the accepted terms")
+	checkerPasses(t, id)
+}
+
 func TestAnOfferIsAcceptedOnlyOnceItWasMade(t *testing.T) {
 	dealFixture(t)
 	id := openTyped(t, sellerTyped)
@@ -257,7 +280,12 @@ func TestTheProfileCheckerHoldsTheAcceptanceRules(t *testing.T) {
 	// An offer is its proposed action, evaluation (and answer, if it paused)
 	// and action; then its acceptance.
 	o2, a2 := at["offer1"], at["accept1"]
-	commit := len(recs) - 1
+	commit, commitCheck := len(recs)-1, 0
+	for i, r := range recs {
+		if b, ok := r["body"].(map[string]any); ok && r["type"] == "proposed-action/v0" && b["action"] == "commit" {
+			commitCheck = i
+		}
+	}
 	// citing points the commit's source ref at the record at j.
 	citing := func(j int) func(map[string]any) {
 		return func(r map[string]any) {
@@ -295,6 +323,11 @@ func TestTheProfileCheckerHoldsTheAcceptanceRules(t *testing.T) {
 			relinked(t, recs, nil, map[int]func(map[string]any){a2: func(r map[string]any) {
 				r["body"].(map[string]any)["proposed_action_ref"].(map[string]any)["digest"] = recordDigest(t, recs[at["offer0"]])
 			}})},
+		{"the commit's check is at another amount than the accepted offer", "terms differ from the offer the other party accepted",
+			relinked(t, recs, nil, map[int]func(map[string]any){commitCheck: func(r map[string]any) {
+				b := r["body"].(map[string]any)
+				b["amount_minor"], b["terms"].(map[string]any)["price_minor"] = 120000.0, 120000.0
+			}, commit: func(r map[string]any) { r["body"].(map[string]any)["amount_minor"] = 120000.0 }})},
 		{"the counteroffer names no superseded offer", "carries exactly one 'supersedes'",
 			relinked(t, recs, nil, map[int]func(map[string]any){o2: func(r map[string]any) { delete(r, "refs") }})},
 	}

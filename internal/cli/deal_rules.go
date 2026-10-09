@@ -1421,9 +1421,19 @@ func renderCard(r dealCheckResult, demo bool) string {
 // sealed) and only under the terms and refund terms it was made under.
 func authorizeAct(events []sealedEvent, act dealAct, now time.Time) (approval, reason, rule string) {
 	typed := dealRecordSet(dealEvent{}, events) == recordsTyped
-	if typed && act.Action == "commit" && dealRole(events) == dealRoleSeller {
-		if _, reason, rule := offerAccepted(events); rule != "" {
+	// A seller commits to the offer the other party accepted, on exactly its
+	// terms: acceptedOffer is that offer's checked snapshot.
+	sellerCommit := typed && act.Action == "commit" && dealRole(events) == dealRoleSeller
+	acceptedOffer := ""
+	if sellerCommit {
+		acceptance, reason, rule := offerAccepted(events)
+		if rule != "" {
 			return "", reason, rule
+		}
+		for _, se := range events {
+			if se.CapsuleID == acceptance {
+				acceptedOffer = se.Event.Acceptance.Offer
+			}
 		}
 	}
 	// One approval (or, typed, one DO evaluation) covers at most one step:
@@ -1446,6 +1456,9 @@ func authorizeAct(events []sealedEvent, act dealAct, now time.Time) (approval, r
 			continue
 		}
 		verdict := events[i]
+		if sellerCommit && !sameMaterialTerms(events, acceptedOffer, verdict.Event.Check.Snapshot) {
+			return "", "the commit's terms differ from the offer the other party accepted: make that offer, and record its acceptance, before committing to it", "changed_after_acceptance"
+		}
 		if typed && verdict.Event.Check.ValidUntil != "" {
 			if until, err := time.Parse(time.RFC3339, verdict.Event.Check.ValidUntil); err == nil && now.After(until) {
 				return "", "the check went stale at " + verdict.Event.Check.ValidUntil + ": check again before acting", "stale_check"
@@ -1528,6 +1541,49 @@ func offerAccepted(events []sealedEvent) (acceptance, reason, rule string) {
 		}
 	}
 	return events[accepted].CapsuleID, "", ""
+}
+
+// materialTerms is what an offer covers, as its check seals it: the amount
+// and its currency, the terms and the recourse.
+func materialTerms(sn *dealSnapshot, currency string) map[string]interface{} {
+	m := map[string]interface{}{}
+	if sn.AmountMinor != nil {
+		m["amount_minor"] = *sn.AmountMinor
+		if sn.Terms != nil && sn.Terms.Currency != "" {
+			currency = sn.Terms.Currency
+		}
+		m["currency"] = currency
+	}
+	if sn.Terms != nil {
+		if t := termsBody(*sn.Terms); len(t) > 0 {
+			m["terms"] = t
+		}
+	}
+	if sn.Recourse != nil {
+		if r := recourseBody(*sn.Recourse); len(r) > 0 {
+			m["recourse"] = r
+		}
+	}
+	return m
+}
+
+// sameMaterialTerms is whether two checked snapshots seal the same material
+// terms: a commit's, and the offer it rests on.
+func sameMaterialTerms(events []sealedEvent, a, b string) bool {
+	var sa, sb *dealSnapshot
+	for _, se := range events {
+		switch se.CapsuleID {
+		case a:
+			sa = se.Event.Snapshot
+		case b:
+			sb = se.Event.Snapshot
+		}
+	}
+	if sa == nil || sb == nil {
+		return false
+	}
+	currency := events[0].Event.Open.Terms.Currency
+	return reflect.DeepEqual(materialTerms(sa, currency), materialTerms(sb, currency))
 }
 
 // actMismatch compares what was done with the snapshot that was checked.
