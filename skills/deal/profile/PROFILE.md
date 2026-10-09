@@ -148,8 +148,9 @@ sealed by an earlier release under version `"2"` (at `2521ee6`), `"3"` (at `a5e9
   `disclosure.personal`;
 - version 5 adds it to `communication.send`, a class no deal record carries;
 - version 6 adds it to `agreement.accept` (a seller's commit, and a rental's or service's commit
-  or sign), `marketplace.offer` and `marketplace.sale` (no deal record carries either: an offer
-  is `external_commitment.other`). A reader that keys a
+  or sign), `marketplace.offer` (a seller's offer, from the step that marks it; an offer sealed
+  before carries `external_commitment.other`) and `marketplace.sale` (no deal record carries it).
+  A reader that keys a
 limit on an action's class (a per-action or rolling spend cap, for example) selects on
 `action_class`, and resolves it against the taxonomy version it names.
 
@@ -162,7 +163,7 @@ limit on an action's class (a per-action or rolling spend cap, for example) sele
 | any other `cancel` | `external_commitment.other` | `external_commitment.other` | `booking.cancel` | `external_commitment.other` |
 | `share_contact` | `disclosure.personal` | `disclosure.personal` | `disclosure.personal` | `disclosure.personal` |
 | `share_credentials` | `disclosure.secret` | `disclosure.secret` | `disclosure.secret` | `disclosure.secret` |
-| `offer` | `external_commitment.other` | `external_commitment.other` | `external_commitment.other` | `external_commitment.other` |
+| `offer` | `marketplace.offer` | `marketplace.offer` | `marketplace.offer` | `marketplace.offer` |
 
 - Committing to a purchase is the same class as paying for it, so a limit keyed on the class
   cannot be stepped around by committing first.
