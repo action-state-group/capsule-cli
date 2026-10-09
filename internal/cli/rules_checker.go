@@ -753,20 +753,26 @@ func (s *dealSession) capsuleWithInput(ctx context.Context, capsuleID string) (m
 // rulesHistory is the profile's sealed acts with an amount, from every deal
 // on this profile's own store, sealed in the last rulesHistoryDays days,
 // newest first and at most rulesHistoryMax of them, with what it covers.
+//
+// An act on a sale's thread carries the sale's item reference beside it
+// (item_ref), the same plain reference a check of that sale's threads is
+// given at the top level, so a rule can see an earlier thread's acceptance of
+// the same item. Like that one, it is for this device's own checker only: no
+// record carries it.
 func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRulesHistory, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT capsule_id, local FROM deal_steps WHERE kind='act'`)
+	rows, err := s.db.QueryContext(ctx, `SELECT deal_id, capsule_id, local FROM deal_steps WHERE kind='act'`)
 	if err != nil {
 		return nil, nil, err
 	}
 	type act struct {
-		id string
-		at time.Time
+		deal, id string
+		at       time.Time
 	}
 	var acts []act
 	since := dealClock().Add(-rulesHistoryDays * 24 * time.Hour)
 	for rows.Next() {
-		var id, local string
-		if err = rows.Scan(&id, &local); err != nil {
+		var deal, id, local string
+		if err = rows.Scan(&deal, &id, &local); err != nil {
 			return nil, nil, errors.Join(err, rows.Close())
 		}
 		var ev dealEvent
@@ -777,7 +783,7 @@ func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRul
 		if e != nil || at.Before(since) {
 			continue
 		}
-		acts = append(acts, act{id, at})
+		acts = append(acts, act{deal, id, at})
 	}
 	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
 		return nil, nil, err
@@ -788,6 +794,7 @@ func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRul
 		acts, scope.Complete = acts[:rulesHistoryMax], false
 	}
 	history := []interface{}{}
+	items := map[string]string{}
 	for _, a := range acts {
 		record, err := s.capsuleWithInput(ctx, a.id)
 		if err != nil || record == nil {
@@ -801,10 +808,41 @@ func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRul
 		if cp != nil {
 			record["counterparty_profile"] = cp
 		}
+		item, ok := items[a.deal]
+		if !ok {
+			if item, err = s.dealItemRef(ctx, a.deal); err != nil {
+				return nil, nil, err
+			}
+			items[a.deal] = item
+		}
+		if item != "" {
+			record["item_ref"] = item
+		}
 		history = append(history, record)
 	}
 	scope.Acts = len(history)
 	return history, scope, nil
+}
+
+// dealItemRef is the item reference a deal opened with: its sale's, on a
+// sale's thread; empty on any other deal.
+func (s *dealSession) dealItemRef(ctx context.Context, dealID string) (string, error) {
+	var local string
+	err := s.db.QueryRowContext(ctx, `SELECT local FROM deal_steps WHERE deal_id=? AND n=1`, dealID).Scan(&local)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	var ev dealEvent
+	if err = json.Unmarshal([]byte(local), &ev); err != nil {
+		return "", err
+	}
+	if ev.Open == nil {
+		return "", nil
+	}
+	return ev.Open.ItemRef, nil
 }
 
 // localStep is a sealed step's local event and its deal, by capsule id.
