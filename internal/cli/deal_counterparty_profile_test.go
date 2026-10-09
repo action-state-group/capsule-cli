@@ -576,3 +576,72 @@ func TestASaleThreadCheckNamingAPayeeSealsAWithheldCompanion(t *testing.T) {
 	dealRun(t, "check", "--deal", none, "--input", writeJSON(t, offerInput))
 	assert.Empty(t, profileSteps(t, none), "a check naming no payee seals no companion")
 }
+
+// sharedSteps is the steps a shared copy's sealed report lists.
+func sharedSteps(t *testing.T, b map[string]any) []map[string]any {
+	t.Helper()
+	disclosures, _ := b["disclosures"].(map[string]any)
+	for _, d := range disclosures {
+		input, _ := d.(map[string]any)["agent_input"].(map[string]any)
+		report, _ := input["report"].(map[string]any)
+		if steps, ok := report["steps"].([]any); ok {
+			out := make([]map[string]any, len(steps))
+			for i, s := range steps {
+				out[i] = s.(map[string]any)
+			}
+			return out
+		}
+	}
+	t.Fatal("no sealed report in the shared copy")
+	return nil
+}
+
+// A shared copy accounts for the counterparty_profile step, withheld, under
+// a neutral kind: nothing in it, bundle or page, says the user keeps a
+// fingerprint of merchants across deals, and it still verifies. The user's
+// own copy names the step as it is.
+func TestASharedCopyGivesTheCompanionANeutralKind(t *testing.T) {
+	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
+		t.Run(audience, func(t *testing.T) {
+			dealFixture(t)
+			id := retailDeal(t)
+			require.Len(t, profileSteps(t, id), 1)
+			dir := t.TempDir()
+			shared := filepath.Join(dir, "shared.json")
+			out, err := invoke(t, "", "--profile", "deal", "disclose", "--deal", id, "--share", audience, "--to", "x", "--out", shared)
+			require.NoError(t, err, out)
+			raw := string(mustRead(t, shared))
+			var b map[string]any
+			require.NoError(t, json.Unmarshal([]byte(raw), &b))
+			dealRun(t, "report", "--deal", id, "--share", audience, "--to", "x", "--html", filepath.Join(dir, "page.html"))
+			for name, text := range map[string]string{"bundle": raw, "page": string(mustRead(t, filepath.Join(dir, "page.html")))} {
+				for _, word := range []string{"counterparty_profile", dealProfileFPAlg, "own history"} {
+					assert.NotContains(t, text, word, "%s %s", audience, name)
+				}
+			}
+			steps := sharedSteps(t, b)
+			private := 0
+			for _, s := range steps {
+				if s["kind"] == dealSharePrivateKind {
+					private++
+					assert.Equal(t, true, s["withheld"], "listed, and withheld")
+				}
+			}
+			assert.Equal(t, 1, private, "the companion is still accounted for")
+			assert.Len(t, b["records"], len(steps)+1, "every step of the log, and the sealed report")
+			out, err = invoke(t, "", "verify", "--bundle", shared)
+			require.NoError(t, err, "the shared copy verifies: %s", out)
+		})
+	}
+	// The user's own copy, in a fixture of its own.
+	dealFixture(t)
+	ownPath := filepath.Join(t.TempDir(), "own.json")
+	dealRun(t, "report", "--deal", retailDeal(t), "--bundle", ownPath)
+	var own map[string]any
+	require.NoError(t, json.Unmarshal(mustRead(t, ownPath), &own))
+	kinds := []string{}
+	for _, s := range sharedSteps(t, own) {
+		kinds = append(kinds, s["kind"].(string))
+	}
+	assert.Contains(t, kinds, "counterparty_profile", "the user's own copy names it")
+}
