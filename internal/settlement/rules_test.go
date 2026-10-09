@@ -392,3 +392,16 @@ func TestTheX402SchemeIsReadFromHeldOctetsOnly(t *testing.T) {
 }
 
 func base64URL(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
+
+// Both sides can agree with each other on what moved while both differ from
+// the terms: the state is agreed (§9.2), and terms_amount says differs.
+func TestAgreedPaymentThatDiffersFromTheTerms(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.edit("x402-payer-observed", func(s map[string]any) { s["amount"].(map[string]any)["value"] = "1400000" })
+	result := f.edit("x402-payee-observed", func(s map[string]any) { s["received"].(map[string]any)["value"] = "1400000" })
+	require.True(t, result.Conforming, result.Failures)
+	s := result.Settlements[0]
+	assert.Equal(t, PaymentAgreed, s.PaymentState)
+	assert.Equal(t, "differs", s.TermsAmount)
+	assert.Equal(t, "equal", Verify(newFixture(t, "pos-x402-two-sided-agreed").in).Settlements[0].TermsAmount)
+}

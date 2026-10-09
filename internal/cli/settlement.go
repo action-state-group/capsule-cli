@@ -97,7 +97,14 @@ func paymentReading(s settlement.Settlement) string {
 	case settlement.PaymentPayeeStated:
 		return "a stated claim by the payee alone, not an agreement; the absence of the payer's leg is not evidence the payer disagrees"
 	case settlement.PaymentAgreed:
-		return "both sides, under distinct keys, report the same payment reference, amount and status (" + s.AgreedStatus + ")"
+		agreed := "both sides, under distinct keys, report the same payment reference, amount and status (" + s.AgreedStatus + ")"
+		if s.TermsAmount != "equal" {
+			// §9.2: agreed is about the payment only. Two sides can agree on
+			// what moved and both differ from the terms; that is never a
+			// clean agreement and is said first.
+			return "the amount paid DIFFERS FROM THE TERMS: " + agreed + ", but that amount is not the amount the terms state"
+		}
+		return agreed + ", and the amount equals the terms"
 	case settlement.PaymentMismatch:
 		return "both sides report this payment and differ"
 	}

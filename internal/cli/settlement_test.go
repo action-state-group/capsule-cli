@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/action-state-group/capsule-cli/internal/settlement"
 	"github.com/action-state-group/capsule-emit-go/artifact"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -123,6 +124,7 @@ func TestSettlementStatusDerivesAgreedAndMatchedFromBothShapes(t *testing.T) {
 	assert.Equal(t, "settled", s.AgreedStatus)
 	assert.Equal(t, "matched", s.DeliveryState)
 	assert.Equal(t, []string{"seller_handoff", "buyer_receipt"}, s.DeliveryEvidence)
+	assert.Contains(t, result.Readings[0].Payment, "and the amount equals the terms")
 	for _, l := range result.Settlement.Legs {
 		assert.Len(t, l.AuthenticatedKey, 64)
 	}
@@ -157,4 +159,15 @@ func TestSettlementStatusInputErrors(t *testing.T) {
 	require.NoError(t, os.WriteFile(bad, []byte(`{"capsule_id":"x","spec_version":"x","format_version":"4","signature":"zz","key_id":"x"}`), 0o600))
 	_, err = invoke(t, "", "settlement", "status", "--leg", bad)
 	assert.ErrorContains(t, err, "signature must be the hex Producer Envelope")
+}
+
+func TestAnAgreedPaymentThatDiffersFromTheTermsIsNeverReadAsClean(t *testing.T) {
+	differs := paymentReading(settlement.Settlement{PaymentState: settlement.PaymentAgreed, AgreedStatus: "settled", TermsAmount: "differs"})
+	assert.True(t, strings.HasPrefix(differs, "the amount paid DIFFERS FROM THE TERMS"), differs)
+	assert.Contains(t, differs, "not the amount the terms state")
+	assert.NotContains(t, differs, "equals the terms")
+
+	equal := paymentReading(settlement.Settlement{PaymentState: settlement.PaymentAgreed, AgreedStatus: "settled", TermsAmount: "equal"})
+	assert.Contains(t, equal, "and the amount equals the terms")
+	assert.NotContains(t, equal, "DIFFERS")
 }

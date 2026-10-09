@@ -58,9 +58,14 @@ type Report struct {
 
 // Settlement is the derived state of the legs that answer one terms leg.
 type Settlement struct {
-	Terms         string   `json:"terms"`
-	PaymentState  string   `json:"payment_state"`
-	AgreedStatus  string   `json:"agreed_status,omitempty"`
+	Terms        string `json:"terms"`
+	PaymentState string `json:"payment_state"`
+	AgreedStatus string `json:"agreed_status,omitempty"`
+	// TermsAmount is set with agreed only: "equal" or "differs", whether the
+	// payer's amount equals the terms leg's (§9.2). Agreed is about the
+	// payment between the sides; an agreed payment whose amount differs from
+	// the terms is not an agreement on the terms, and a caller must not
+	// present it as one.
 	TermsAmount   string   `json:"terms_amount,omitempty"`
 	Differs       []string `json:"differs,omitempty"`
 	DeliveryState string   `json:"delivery_state"`
