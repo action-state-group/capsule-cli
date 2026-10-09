@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### A refund's check names the payment it returns
+
+- **Added (wire, additive; records sealed before re-derive unchanged).** A deal `check` of a
+  `cancel` that returns a sealed payment (a refund) now carries `reverses_ref`: that payment's
+  `action`, by its record digest, as a typed reference (`{"type": "record", "digest_alg":
+  "SHA-256", "digest": …}`). It names the same payment, by the same digest, as the refund
+  `action`'s `reverses` ref. A typed deal's `proposed-action/v0` carries it too.
+- **Amounts unchanged:** a refund's `check` and `action` both keep `amount_minor`. A partial
+  cancel's keep `cancelled_amount_minor` and name no payment. No `returned_minor` is sealed.
+
 ## v0.1.0-rc12
 
 ### New deal records seal action taxonomy version 4

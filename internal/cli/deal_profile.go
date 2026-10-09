@@ -775,11 +775,16 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 		// The checked action's direction, as its act would be sealed with: a
 		// cancel that returns a sealed payment is a refund.
-		direction, _ := actDirection(events, dealAct{Action: sn.Action, AmountMinor: sn.AmountMinor, Currency: snapCurrency}, currency)
+		direction, reversed := actDirection(events, dealAct{Action: sn.Action, AmountMinor: sn.AmountMinor, Currency: snapCurrency}, currency)
 		if sn.FeeMinor != nil {
 			body["fee_minor"] = *sn.FeeMinor
 		}
 		classify(body, sn.Action, direction, sn.AmountMinor)
+		// A refund's check names the pay it reverses, as its act will: on a
+		// step that seals the refund's direction (classify).
+		if ev.ReversesRef != "" && ev.TaxonomyVersion != "" && reversed != "" {
+			body["reverses_ref"] = typedRef(digestOf(reversed))
+		}
 		// The most the payment may take, beside the expected charge: what a
 		// limit binds, and (beside spend_minor) what a per-action cap reads.
 		if sn.AuthorizedMaxMinor != nil {
