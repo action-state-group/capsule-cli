@@ -81,6 +81,7 @@
             "approves",
             "authorized_by",
             "observes",
+            "registration",
             "reverses",
             "source",
             "supersedes"

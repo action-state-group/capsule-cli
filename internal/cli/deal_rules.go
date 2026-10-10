@@ -564,6 +564,15 @@ type dealEvent struct {
 	// this step's own nonce (sale_authority_commitment), so no two threads
 	// carry an equal value.
 	SaleAuthority string `json:"sale_authority,omitempty"`
+	// SaleRegistration is, on the task authority of a sale's thread, the
+	// record digest of the thread's registration on the sale's log (a
+	// `thread` record), sealed as its `registration` ref. A thread opened
+	// before threads were registered has none.
+	SaleRegistration string `json:"sale_registration,omitempty"`
+	// Thread is a sale's registration of one thread, on the sale's own log:
+	// the thread's deal id, sealed only as a commitment under this step's
+	// own nonce (thread_ref_commitment).
+	Thread *dealThread `json:"thread,omitempty"`
 	// Confirms is set on a record sealed after the deal was closed: the
 	// capsule id of that close. Its Capsule chains to the close with the
 	// registered relation `confirms`, never `follows`, and its record
@@ -601,6 +610,10 @@ type dealEvent struct {
 	// counterparty when it names no one, kept with the step like Producer:
 	// a step sealed before has none and re-derives with no counterparty.
 	ThreadCounterparty string `json:"thread_counterparty,omitempty"`
+	// ThreadRegistration (dealThreadRegistrationVersion) marks a step sealed
+	// after a sale's threads were registered: a thread's task authority
+	// sealed then must name its registration. A step sealed before has none.
+	ThreadRegistration string `json:"thread_registration,omitempty"`
 	// OfferClass (dealOfferClassVersion) marks a step whose offer is classed
 	// marketplace.offer, kept with the step like Producer: a step sealed
 	// before has none and re-derives its offer as external_commitment.other.

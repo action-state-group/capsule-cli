@@ -116,7 +116,7 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | record_type | What it records | Required body fields | Required refs / block fields |
 |---|---|---|---|
 | `baseline` | First contact: what the user asked, who the counterparty is, the terms and the way back. The deal's contract. | `deal_type` (`purchase`\|`rental`\|`booking`\|`service`), `intent` (as the intent body; its optional `party_role`, `buyer`\|`seller`, is which side of the deal the user is on, absent meaning `buyer`, as on every deal sealed before it was recorded), `terms`, `recourse.rail` + `recourse.refundable`; `materiality` (the materiality predicate pinned when the deal opened, as on a verdict; a verdict under another one carries a `materiality_changed` difference) | `seq` = 1; `channel`; `counterparty` (≥ 1 id). No `prev`, no `baseline_ref`. Optional `claims[]`, `counterparty_facts`, `demo`, `skill` (`{"skill_md_digest": <64 hex>, "other_copies": <int ≥ 0>}`: the SHA-256 of the SKILL.md the agent reported following, and how many other copies of that skill sat beside it; a boundary marker for accidents, not proof the instructions were followed). |
-| `sale` | Where the user sells one item to one of several buyers: the first record of the sale's own log (deal_id `sale-…`), before any buyer. Followed by the sale's one `task-authority/v0` and nothing else. | `deal_type`, `intent` (the seller's request and limits, `party_role: seller`), `terms`, `recourse.rail` + `recourse.refundable`, `item_ref_commitment` (the sale's opaque item reference, committed) | `seq` = 1. No `prev`, no `baseline_ref`, no `counterparty`, no `refs`. Optional `demo`. |
+| `sale` | Where the user sells one item to one of several buyers: the first record of the sale's own log (deal_id `sale-…`), before any buyer. Followed by the sale's one `task-authority/v0`, then one `thread` record per registered thread, and nothing else. | `deal_type`, `intent` (the seller's request and limits, `party_role: seller`), `terms`, `recourse.rail` + `recourse.refundable`, `item_ref_commitment` (the sale's opaque item reference, committed) | `seq` = 1. No `prev`, no `baseline_ref`, no `counterparty`, no `refs`. Optional `demo`. |
 | `intent` | The user restates or picks within the ask. Replaces `verbatim` / `asked` from here on. `allowed` and `max_total_minor` carry forward unchanged: an intent may lower the limit or drop actions, and a higher limit or a new action is only a proposal (section 6, rule 6). | `verbatim_commitment` | `baseline_ref`, `prev`. Optional `party_role`, equal to the baseline's (a deal's role is fixed when it opens). |
 | `message` | One message in the thread. The text stays local. | `from` (`counterparty`\|`user`\|`agent`), `content_commitment` | `channel`. `counterparty` when the message shows identifiers (for example, a new phone number). |
 | `claim` | Something the counterparty (or listing) asserts, recorded as a claim, not a fact. | `text_commitment` (the claim's words, ≤ 200 chars, committed), `source_kind` (whose it is: `merchant`\|`agent`\|`platform`\|`user`\|`external`), optional `source_ref_commitment` (the caller's note of where it was read, committed). A claim sealed before claims were committed carries `text` and `source` in the clear instead, and re-derives unchanged (see "Claims"). | none beyond the chain. |
@@ -129,6 +129,7 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. On the outcome a close seals: `actor` and `reason` (see the close). |
 | `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. Optional `carried_obligations`: the cancel-by dates still open at the close, each `{obligation: digest ref, cancel_by}`. `actor` (`user`\|`agent`\|`platform`: whose decision ended the deal) and `reason` (why, from a closed set), together, equal to its outcome's. The reason follows from the status where it can: `completed` or `delivered_mismatch` (`received`), `awaiting_delivery` (`pending`), `not_selected`. With `not_received` it is one of `user_closed` (actor `user`), `agent_could_not_complete` (actor `agent`), `merchant_rejected`, `payment_failed`, `cancelled_in_window`, `not_delivered`, `other`. Absent on closes sealed before. |
 | `disclosure` | Something the agent told someone about the user: what kind of thing, to whom, when, under what authority. | `to` (`counterparty`\|`other`), `fields[]` (each `class` + `value_commitment`), `authority` (`approval`\|`none`) | `authority: approval` ⇒ exactly one `authorized_by` → an `approval`, under the same rules as an `action` (section 6); `none` ⇒ no `authorized_by`, and `rule` says why. All `fields` share one covering action: contact classes `share_contact`, credential classes `share_credentials`. Optional `action_class` + `taxonomy_version` (see Action classes, below); optional `channel`; `counterparty` when the recipient is someone new. |
+| `thread` | On a sale's own log: the registration of one buyer's thread, sealed by `deal open --sale` before the thread opens (section 6, rule 10). | `thread_ref_commitment`: the thread's deal id, committed under this step's own nonce | `deal_id` `sale-…`; follows the sale's previous record (`prev`, `baseline_ref` → the `sale` root). No `counterparty`, no `refs`. |
 | `counterparty_profile` | The payee of the `check` just before it, fingerprinted under this profile's own key, for the user's own history: one merchant has one value across the profile's deals. Sealed right after its check, before any rules checker runs; never in a shared copy. | `counterparty_profile` in the header: `{fp_alg: "hmac-sha256-profile-key", ids: {payee}}`; an empty body | exactly one `about` → the `check` it follows. No `counterparty` block. |
 
 ### Action classes
@@ -491,11 +492,27 @@ A verifier holding one deal's records in `seq` order checks:
    offer is made and accepted again. Such a commit or share action cites the acceptance it rests
    on with exactly one `source` ref; no other action carries one. The acceptance is not
    authority: `authority_basis` is unchanged.
-10. **A sale to one of several buyers.** A sale's own log is a `sale` record and then its one
+10. **A sale to one of several buyers.** A sale's own log is a `sale` record, then its one
     `task-authority/v0` (`source` → the sale record, the floor's `bounds_commitment` when the
-    sale states one, no `sale_authority_commitment`), and nothing else. Each buyer's negotiation
-    is a deal of its own, a thread, whose task authority carries `sale_authority_commitment`: the
-    digest of the sale's task authority, committed under that step's own nonce. A thread's
+    sale states one, no `sale_authority_commitment`), then one `thread` record per registered
+    thread, and nothing else. Each buyer's negotiation is a deal of its own, a thread, whose task
+    authority carries `sale_authority_commitment`: the digest of the sale's task authority,
+    committed under that step's own nonce. A thread is registered on the sale's log before it
+    opens (a `thread` record committing to its deal id), and its task authority names that
+    registration with exactly one `registration` ref, a record on the sale's log, not the
+    thread's; a thread opened before threads were registered has none. The user's own sale
+    bundle (`deal sale bundle`) is the sale log's Evidence Bundle, whose completeness
+    certificate covers every registration through its checkpoint. It carries each registered
+    thread's own copy in the `x-deal-sale/v0` extension (`{"threads": {"<deal id>": <bundle>}}`),
+    and its x-deal-v0 section lists `sale_threads`, one entry per registration in seal order:
+    `{registration, nonce, thread_id, member}`, with `member` `present` (carried), `missing`
+    (withheld; no `nonce` or `thread_id`) or `never_opened`. `capsulectl verify` opens each
+    registration, holds the carried threads to exactly the `present` ones, verifies each as its
+    own Evidence Bundle, and checks it names its registration and opens its
+    `sale_authority_commitment` to this sale's task authority. A `missing` thread, or a sale
+    whose threads predate registration (`threads_predate_registration`), is INCOMPLETE; any
+    mismatch is INVALID. No buyer's copy carries the sale bundle, a `thread` record or an
+    opening. A thread's
     request and limits are the sale's and do not change per buyer (no `intent` steps). Each
     `check` of a thread carries `item_ref_commitment`: the sale's item reference committed under
     that check's own nonce. A thread's `check` that names no one carries the thread's buyer as its
@@ -691,7 +708,7 @@ fingerprint as section 4). Digests are over the record's JCS bytes, as for x-dea
 
 | Type | Sealed for | Replaces (x-deal-v0) |
 |---|---|---|
-| `task-authority/v0` | The user's task authority: their words by commitment, `max_total_minor`, `allowed` (and, from this version, the plan shape a rules checker reads: `outcome_id`, a fixed id per deal type such as `capsulectl.deal.purchase/1.0.0`, the same actions as `allowed_actions`, and `preconditions: []`). Sealed after the baseline (`source` ref), and again when the user confirms new limits (`approves` the intent, `previous_ref`, `said_commitment`). | the baseline intent; `approval` with `confirm_limits` |
+| `task-authority/v0` | The user's task authority (on a sale's thread, also its `sale_authority_commitment` and its `registration` ref, section 6 rule 10): their words by commitment, `max_total_minor`, `allowed` (and, from this version, the plan shape a rules checker reads: `outcome_id`, a fixed id per deal type such as `capsulectl.deal.purchase/1.0.0`, the same actions as `allowed_actions`, and `preconditions: []`). Sealed after the baseline (`source` ref), and again when the user confirms new limits (`approves` the intent, `previous_ref`, `said_commitment`). | the baseline intent; `approval` with `confirm_limits` |
 | `proposed-action/v0` | The action about to be taken, exactly as checked. | `check` |
 | `action-evaluation/v0` | The deal check's disposition (`DO`, `ASK` or `DENY`) and findings, with the contract fields below. | `verdict` |
 | `action-approval/v0` | An approval artifact of one stated `authority`: `user_approval` (the user's own answer, with their words and the `rendering_commitment` of what they were shown), `card_answer` (a card answered with no words), `platform_approval` (a platform approval observation, below), `policy_change` (the user confirming a policy change: `rendering_commitment`, `effective_policy_digest`, `semantic_diff_digest`), `one_shot_override` (reserved). | `approval` |

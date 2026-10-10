@@ -30,7 +30,7 @@ var saleIDPattern = regexp.MustCompile(`^sale-[0-9a-f]{16}$`)
 
 func dealSaleCommands() *cobra.Command {
 	sale := &cobra.Command{Use: "sale", Short: "A sale to one of several buyers: one item, one task authority, a thread per buyer"}
-	sale.AddCommand(dealSaleNewCommand(), dealSaleExportCommand())
+	sale.AddCommand(dealSaleNewCommand(), dealSaleExportCommand(), dealSaleBundleCommand())
 	return sale
 }
 
@@ -236,3 +236,83 @@ func (s *dealSession) saleUnchanged(ctx context.Context, events []sealedEvent) e
 	}
 	return nil
 }
+
+// dealThreadRegistrationVersion marks a step sealed after a sale's threads
+// were registered (dealEvent.ThreadRegistration).
+const dealThreadRegistrationVersion = "1"
+
+// dealRegistersThreads is whether `deal open --sale` registers the thread
+// on the sale's log; tests turn it off to seal a thread as an earlier
+// release did.
+var dealRegistersThreads = true
+
+// dealThread is a sale's registration of one thread: the thread's deal id,
+// sealed as a commitment on the sale's own log.
+type dealThread struct {
+	ThreadID string `json:"thread_id"`
+}
+
+// registerThread registers a thread on the sale's log before the thread
+// opens, so no thread of a sale exists unregistered, and cuts the sale's
+// checkpoint. It returns the thread's id and the registration's record
+// digest. With no id given, a registration whose thread never opened (an
+// open that failed after registering) is reused, not sealed again. It
+// leaves the session on the sale's log.
+func (s *dealSession) registerThread(ctx context.Context, saleID, threadID string) (string, string, error) {
+	if err := s.useDeal(ctx, saleID, false); err != nil {
+		return "", "", err
+	}
+	events, err := s.load(ctx, saleID)
+	if err != nil {
+		return "", "", err
+	}
+	for _, se := range events {
+		th := se.Event.Thread
+		if th == nil || (threadID != "" && th.ThreadID != threadID) {
+			continue
+		}
+		// Reused only when nothing of its thread was sealed: an open that
+		// stopped before its baseline (its key row may already be written).
+		// A thread with a baseline and no task authority is not reused; its
+		// registration stays never opened.
+		steps, _, err := s.threadSteps(ctx, th.ThreadID)
+		if err != nil {
+			return "", "", err
+		}
+		if steps == 0 {
+			return th.ThreadID, se.Digest, nil
+		}
+		if threadID != "" {
+			return "", "", inputError("this sale already registered deal " + threadID)
+		}
+	}
+	if threadID == "" {
+		id := make([]byte, 8)
+		if _, err := rand.Read(id); err != nil {
+			return "", "", err
+		}
+		threadID = "deal-" + hex.EncodeToString(id)
+	}
+	se, err := s.seal(ctx, saleID, events, dealEvent{Kind: "thread", Thread: &dealThread{ThreadID: threadID}})
+	if err != nil {
+		return "", "", err
+	}
+	if _, err := s.milestone(ctx); err != nil {
+		return "", "", err
+	}
+	return threadID, se.Digest, nil
+}
+
+// threadSteps is how many steps of a thread this device sealed, and whether
+// one is its task authority: a thread is opened once its task authority is
+// sealed, never by its key row alone (written before anything is sealed).
+func (s *dealSession) threadSteps(ctx context.Context, threadID string) (int, bool, error) {
+	var steps, authority int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(kind='task_authority'), 0) FROM deal_steps WHERE deal_id=?`, threadID).Scan(&steps, &authority)
+	return steps, authority > 0, err
+}
+
+// dealOpenStopsAt is a test hook: the open stops with its error at a stage
+// ("keyed": the deal's key row is written; "baseline": the baseline is
+// sealed), standing in for a crash there.
+var dealOpenStopsAt = func(stage string) error { return nil }

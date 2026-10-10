@@ -170,8 +170,25 @@ func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) e
 		// The deal key is stored at open, so rotating the store secret later
 		// cannot break a deal in progress.
 		s.dkey = dealKeyFor(s.secret, dealID)
-		if _, err := s.db.ExecContext(ctx, `INSERT INTO deal_keys (deal_id, deal_key) VALUES (?, ?)`, dealID, s.dkey); err != nil {
+		res, err := s.db.ExecContext(ctx, `INSERT INTO deal_keys (deal_id, deal_key) VALUES (?, ?) ON CONFLICT(deal_id) DO NOTHING`, dealID, s.dkey)
+		if err != nil {
 			return err
+		}
+		// A key row with nothing sealed under it is an open that stopped
+		// before its baseline: it is taken up again, with the key it holds.
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n == 0 {
+			var steps int
+			if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_steps WHERE deal_id=?`, dealID).Scan(&steps); err != nil {
+				return err
+			}
+			if steps > 0 {
+				return inputError("this profile already holds deal " + dealID)
+			}
+			if err := s.db.QueryRowContext(ctx, `SELECT deal_key FROM deal_keys WHERE deal_id=?`, dealID).Scan(&s.dkey); err != nil {
+				return err
+			}
 		}
 	} else {
 		err := s.db.QueryRowContext(ctx, `SELECT deal_key FROM deal_keys WHERE deal_id=?`, dealID).Scan(&s.dkey)
@@ -616,6 +633,9 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	ev.RuleInputs = dealRuleInputsVersion
 	ev.ClaimCommit = dealClaimCommitVersion
 	ev.ReversesRef = dealReversesRefVersion
+	if dealRegistersThreads {
+		ev.ThreadRegistration = dealThreadRegistrationVersion
+	}
 	ev.ThreadCounterparty = dealThreadCounterpartyVersion
 	ev.OfferClass = dealOfferClassVersion
 	ev.Nonces = map[string]string{}
@@ -952,13 +972,26 @@ func dealOpenCommand() *cobra.Command {
 			}
 			o.Materiality = predicate.ref()
 			dealID := carried
+			// A sale's thread is registered on the sale's log first: the
+			// registration names the thread's id, and the thread's task
+			// authority names the registration.
+			registration := ""
+			if o.Sale != "" && dealRegistersThreads {
+				if dealID, registration, err = s.registerThread(ctx, o.Sale, carried); err != nil {
+					return err
+				}
+				if err = s.t.close(); err != nil {
+					return err
+				}
+				s.t = nil
+			}
 			if dealID == "" {
 				id := make([]byte, 8)
 				if _, err := rand.Read(id); err != nil {
 					return err
 				}
 				dealID = "deal-" + hex.EncodeToString(id)
-			} else {
+			} else if carried != "" {
 				var held int
 				if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_keys WHERE deal_id=?`, dealID).Scan(&held); err != nil {
 					return err
@@ -970,15 +1003,21 @@ func dealOpenCommand() *cobra.Command {
 			if err := s.useDeal(ctx, dealID, true); err != nil {
 				return err
 			}
+			if err := dealOpenStopsAt("keyed"); err != nil {
+				return err
+			}
 			se, err := s.seal(ctx, dealID, nil, dealEvent{Kind: "open", Open: &o})
 			if err != nil {
+				return err
+			}
+			if err := dealOpenStopsAt("baseline"); err != nil {
 				return err
 			}
 			// Typed records: the user's task authority is its own step,
 			// right after the baseline it was asked in.
 			if o.Records == recordsTyped {
 				intent := o.Intent
-				if _, err = s.seal(ctx, dealID, []sealedEvent{se}, dealEvent{Kind: "task_authority", TaskAuthority: &intent, SaleAuthority: o.SaleAuthority}); err != nil {
+				if _, err = s.seal(ctx, dealID, []sealedEvent{se}, dealEvent{Kind: "task_authority", TaskAuthority: &intent, SaleAuthority: o.SaleAuthority, SaleRegistration: registration}); err != nil {
 					return err
 				}
 			}
