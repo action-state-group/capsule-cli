@@ -596,6 +596,11 @@ type dealEvent struct {
 	// names the pay it reverses (reverses_ref), kept with the step like
 	// Producer: a step sealed before has none and re-derives without it.
 	ReversesRef string `json:"reverses_ref,omitempty"`
+	// ActEffects (dealActEffectsVersion) marks a step whose approved offer,
+	// commit, sign or cancel act is sealed as a decide Capsule with its
+	// effect type and disposition, kept with the step like Producer: a step
+	// sealed before has none and re-derives fyi.
+	ActEffects string `json:"act_effects,omitempty"`
 	// ThreadCounterparty (dealThreadCounterpartyVersion) marks a step whose
 	// check, on a sale's thread, seals the thread's buyer as its
 	// counterparty when it names no one, kept with the step like Producer:

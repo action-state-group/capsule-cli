@@ -96,11 +96,11 @@ func TestDealPayApprovedByStandingIntentIsPolicyDisposed(t *testing.T) {
 	assert.Equal(t, "one_way_consequential", capsule["effect"].(map[string]any)["irreversibility_class"])
 }
 
-// What the record does not show as an approved action with a registered
-// effect type stays fyi: an unchecked pay (the deal record seals it as an
-// outcome, never as an action), and authorized acts with no registered AAC
-// effect.type (commit, cancel).
-func TestDealRecordsWithoutARegisteredActionStayFYI(t *testing.T) {
+// An approved commit or cancel is sealed as a decide Capsule with its
+// effect type and disposition, as a pay is; an unchecked act (the deal record
+// seals it as an outcome, never as an action) stays fyi, and so does an act
+// sealed before acts other than a pay carried an effect type.
+func TestDealApprovedActsAreDecideAndOthersStayFYI(t *testing.T) {
 	dealFixture(t)
 	id := openSticker(t, true)
 	unchecked := act(t, id, "pay", 600)
@@ -113,15 +113,42 @@ func TestDealRecordsWithoutARegisteredActionStayFYI(t *testing.T) {
 	require.NotEmpty(t, cancelled["authorized_by"])
 
 	capsules := dealCapsules(t, id)
-	for name, step := range map[string]map[string]any{"unchecked pay": unchecked, "commit": committed, "cancel": cancelled} {
+	capsule := capsules[unchecked["capsule_id"].(string)]
+	assert.Equal(t, "fyi", capsule["action_type"], "unchecked pay")
+	assert.Nil(t, capsule["disposition"])
+	assert.Nil(t, capsule["effect"])
+	for name, step := range map[string]map[string]any{"accept_agreement": committed, "cancel_commitment": cancelled} {
 		capsule := capsules[step["capsule_id"].(string)]
-		assert.Equal(t, "fyi", capsule["action_type"], name)
-		assert.Nil(t, capsule["disposition"], name)
-		assert.Nil(t, capsule["effect"], name)
-		assert.Equal(t, "not_applicable", capsule["assurance"].(map[string]any)["effect_mode"], name)
+		assert.Equal(t, "decide", capsule["action_type"], name)
+		assert.Equal(t, "accept", capsule["disposition"].(map[string]any)["decision"], name)
+		assert.Equal(t, "executed", capsule["disposition"].(map[string]any)["verdict_class"], name)
+		effect := capsule["effect"].(map[string]any)
+		assert.Equal(t, name, effect["type"])
+		assert.Equal(t, "one_way_recoverable", effect["irreversibility_class"], "%s: the deal is refundable", name)
+		assert.Equal(t, "dispatched_unconfirmed", capsule["assurance"].(map[string]any)["effect_mode"], name)
 	}
-	assert.Equal(t, map[string]string{"pay": "send_payment"}, dealEffectTypes,
-		"only pay has a registered AAC effect.type; the rest await registration")
+
+	// The same commit as a step sealed before the change stays fyi.
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.close() })
+	require.NoError(t, s.useDeal(t.Context(), id, false))
+	events, err := s.load(t.Context(), id)
+	require.NoError(t, err)
+	for i, se := range events {
+		if se.CapsuleID != committed["capsule_id"] {
+			continue
+		}
+		require.Equal(t, dealActEffectsVersion, se.Event.ActEffects)
+		before := se.Event
+		before.ActEffects = ""
+		in := dealCapsuleInput(events[:i], before, nil, p.Name, time.Now(), false)
+		assert.Equal(t, "fyi", string(in.ActionType))
+		assert.Nil(t, in.Effect)
+	}
+	assert.Equal(t, map[string]string{"pay": "send_payment"}, dealEffectTypes, "pay's effect type is unchanged")
 }
 
 // The acceptance case: a caps check keyed on the payment's class (the
@@ -338,4 +365,34 @@ func TestDealUserApprovalsCarrySaidCommitment(t *testing.T) {
 	k := records[card["capsule_id"].(string)]
 	assert.Equal(t, "agent_card", k["body"].(map[string]any)["approver"])
 	assert.NotContains(t, k["body"], "said_commitment", "a card click commits no words")
+}
+
+// Where the user sells, the offer made and the commit to the accepted offer
+// are decide Capsules with their dispositions: a reader tells an accepted
+// commit from a repeat by them.
+func TestASellersOfferAndCommitActsAreDecide(t *testing.T) {
+	dealFixture(t)
+	id := openTyped(t, sellerTyped)
+	check := offerAt(t, id, "190000")
+	offer := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"offer","amount_minor":190000}`))
+	_, err := acceptOffer(t, id, check)
+	require.NoError(t, err)
+	commit := commitNow(t, id, "190000")
+	require.Equal(t, false, commit["unchecked"])
+
+	capsules := dealCapsules(t, id)
+	for name, want := range map[string]struct {
+		step            map[string]any
+		irreversibility string
+	}{
+		"make_offer":       {offer, "two_way"},
+		"accept_agreement": {commit, "one_way_consequential"},
+	} {
+		capsule := capsules[want.step["capsule_id"].(string)]
+		assert.Equal(t, "decide", capsule["action_type"], name)
+		assert.Equal(t, "accept", capsule["disposition"].(map[string]any)["decision"], name)
+		effect := capsule["effect"].(map[string]any)
+		assert.Equal(t, name, effect["type"])
+		assert.Equal(t, want.irreversibility, effect["irreversibility_class"], name)
+	}
 }
