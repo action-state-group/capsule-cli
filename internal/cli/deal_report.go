@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/action-state-group/agent-action-capsule/go/emitter"
 )
@@ -388,6 +389,14 @@ func dealPageTitle(b map[string]interface{}, openings map[string]interface{}) st
 	}
 	opening, _ := report["asked_opening"].(map[string]interface{})
 	text, _ := opening["text"].(string)
+	// Control and format characters (NUL, terminal escapes, bidi overrides)
+	// never reach a title; whitespace controls are folded with the rest.
+	text = strings.Map(func(r rune) rune {
+		if (unicode.IsControl(r) && !unicode.IsSpace(r)) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, text)
 	if openings["asked"] != true || strings.TrimSpace(text) == "" {
 		return "Deal report"
 	}

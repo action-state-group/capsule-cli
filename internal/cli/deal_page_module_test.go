@@ -289,6 +289,9 @@ func TestTheDealPageTitleSaysOnlyWhatTheCopyShows(t *testing.T) {
 	}
 	assert.Equal(t, "Deal report", dealPageTitle(report("keep", asked), map[string]interface{}{"asked": false}), "words not checked when the page was built are not quoted")
 	assert.Equal(t, "Deal report: “a b”", dealPageTitle(report("keep", " a\n\tb "), map[string]interface{}{"asked": true}))
+	assert.Equal(t, "Deal report: “Order the [31msticker”", dealPageTitle(report("keep", "Order\x00 the \x1b[31msticker\u202e"), map[string]interface{}{"asked": true}),
+		"NUL, the escape character and a bidi override are dropped (what is left of the escape sequence is plain text)")
+	assert.Equal(t, "Deal report", dealPageTitle(report("keep", "\x00\u202e\u200b"), map[string]interface{}{"asked": true}), "nothing left to quote")
 	long := dealPageTitle(report("keep", strings.Repeat("x", 500)), map[string]interface{}{"asked": true})
 	assert.Equal(t, "Deal report: “"+strings.Repeat("x", dealPageTitleWords-1)+"…”", long)
 	assert.Equal(t, "Deal report: a shared copy for the other party", dealPageTitle(report(dealAudienceCounterparty, asked), map[string]interface{}{"asked": true}), "a shared copy never quotes them")
