@@ -77,7 +77,7 @@ func TestAnOpenDealIsWaitingForTheMerchantsReceipt(t *testing.T) {
 	life := dealRun(t, "report", "--deal", dealID)["lifecycle"].(map[string]any)
 	assert.True(t, strings.HasPrefix(life["text"].(string), "Open: waiting for the merchant's receipt."), life["text"])
 
-	dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"not_received"}`))
+	dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"not_received","reason":"not_delivered"}`))
 	life = dealRun(t, "report", "--deal", dealID)["lifecycle"].(map[string]any)
 	assert.NotContains(t, life["text"], "matched", "only a completed close reads matched")
 }

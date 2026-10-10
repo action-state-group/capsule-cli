@@ -505,6 +505,22 @@
         "description_commitment": { "$ref": "#/$defs/hex64" }
       }
     },
+    "close_actor": {
+      "description": "Whose decision ended the deal: the user's (they ended it, or told the agent to), the agent's (it could not go on), or another platform's. Sealed with reason on the outcome and close records a close seals; absent on records sealed before.",
+      "enum": ["user", "agent", "platform"]
+    },
+    "close_reason": {
+      "description": "Why the deal ended, from a closed set, never free text. completed and delivered_mismatch (status received), awaiting_delivery (pending) and not_selected follow from the status; a close with nothing received (not_received) gives one of the others. user_closed is the user's (actor user), agent_could_not_complete the agent's (actor agent).",
+      "enum": ["completed", "delivered_mismatch", "awaiting_delivery", "not_selected", "user_closed", "agent_could_not_complete", "merchant_rejected", "payment_failed", "cancelled_in_window", "not_delivered", "other"]
+    },
+    "close_actor_reason_rules": {
+      "description": "A close's actor and reason come together, and user_closed and agent_could_not_complete name their actor.",
+      "dependentRequired": { "actor": ["reason"], "reason": ["actor"] },
+      "allOf": [
+        { "if": { "properties": { "reason": { "const": "user_closed" } }, "required": ["reason"] }, "then": { "properties": { "actor": { "const": "user" } } } },
+        { "if": { "properties": { "reason": { "const": "agent_could_not_complete" } }, "required": ["reason"] }, "then": { "properties": { "actor": { "const": "agent" } } } }
+      ]
+    },
     "body_outcome": {
       "type": "object", "additionalProperties": false,
       "required": ["status", "outcome", "differences"],
@@ -514,9 +530,18 @@
         "delivered": { "$ref": "#/$defs/terms" },
         "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
         "unchecked": { "$ref": "#/$defs/body_action" },
-        "note_commitment": { "$ref": "#/$defs/hex64" }
+        "note_commitment": { "$ref": "#/$defs/hex64" },
+        "actor": { "$ref": "#/$defs/close_actor" },
+        "reason": { "$ref": "#/$defs/close_reason" }
       },
       "allOf": [
+        { "$ref": "#/$defs/close_actor_reason_rules" },
+        { "if": { "properties": { "status": { "const": "received" } }, "required": ["status", "reason"] }, "then": { "properties": { "reason": { "enum": ["completed", "delivered_mismatch"] } } } },
+        { "if": { "properties": { "outcome": { "const": "completed" } }, "required": ["outcome", "reason"] }, "then": { "properties": { "reason": { "const": "completed" } } } },
+        { "if": { "properties": { "status": { "const": "pending" } }, "required": ["status", "reason"] }, "then": { "properties": { "reason": { "const": "awaiting_delivery" } } } },
+        { "if": { "properties": { "status": { "const": "not_selected" } }, "required": ["status", "reason"] }, "then": { "properties": { "reason": { "const": "not_selected" } } } },
+        { "if": { "properties": { "status": { "const": "not_received" } }, "required": ["status", "reason"] }, "then": { "properties": { "reason": { "enum": ["user_closed", "agent_could_not_complete", "merchant_rejected", "payment_failed", "cancelled_in_window", "not_delivered", "other"] } } } },
+        { "if": { "properties": { "status": { "enum": ["unchecked_action", "reverted"] } }, "required": ["status"] }, "then": { "not": { "anyOf": [{ "required": ["actor"] }, { "required": ["reason"] }] } } },
         { "if": { "properties": { "status": { "const": "pending" } } }, "then": { "properties": { "outcome": { "const": "open" } } } },
         { "if": { "properties": { "status": { "const": "not_selected" } }, "required": ["status"] }, "then": { "properties": { "outcome": { "const": "not_selected" }, "differences": { "maxItems": 0 } } } },
         { "if": { "properties": { "outcome": { "const": "not_selected" } }, "required": ["outcome"] }, "then": { "properties": { "status": { "const": "not_selected" } } } },
@@ -564,9 +589,12 @@
     "body_close": {
       "type": "object", "additionalProperties": false,
       "required": ["outcome", "unchecked_actions"],
+      "allOf": [{ "$ref": "#/$defs/close_actor_reason_rules" }],
       "properties": {
         "outcome": { "$ref": "#/$defs/outcome_value" },
         "unchecked_actions": { "$ref": "#/$defs/safe_uint" },
+        "actor": { "$ref": "#/$defs/close_actor" },
+        "reason": { "$ref": "#/$defs/close_reason" },
         "differences": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
         "carried_obligations": {
           "description": "Obligations still open at the close, carried by it, each with its cancel-by date or its due date: they stay open after the close until a later record that confirms the close resolves them, or the date passes.",

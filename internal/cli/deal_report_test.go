@@ -181,7 +181,7 @@ func TestDealRecordsFollowTheProfile(t *testing.T) {
 	require.Equal(t, false, late["proceed"])
 	paid := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":38000,"payee":"M. Torres","rail":"zelle","reference":"zelle ref 7781"}`))
 	require.Equal(t, true, paid["unchecked"])
-	dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"not_received","note":"nobody at the front desk"}`))
+	dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"not_received","reason":"not_delivered","note":"nobody at the front desk"}`))
 
 	export := filepath.Join(t.TempDir(), "deal.json")
 	out := dealRun(t, "export", "--deal", dealID, "--output", export)

@@ -685,6 +685,18 @@ capsulectl --profile deal deal close --deal ID --input close.json   # {"status":
 `status` is `received`, `pending` (outcome stays `open`) or `not_received`.
 The outcome is `completed`, `mismatch` or `open`.
 
+The close also seals who ended the deal (`actor`) and why (`reason`), from
+fixed lists, never your own words:
+- `actor` is `user` when the user ended the deal or told you to, `agent`
+  when you stop on your own, or `platform` when another platform ended it.
+  Leave it out and it is `agent`, unless the reason is `user_closed`.
+- With `received`, `pending` or `not_selected`, the reason follows from the
+  status: leave it out.
+- With `not_received`, say why: `user_closed` (the user ended it),
+  `agent_could_not_complete` (you could not finish it), `merchant_rejected`,
+  `payment_failed`, `cancelled_in_window`, `not_delivered` or `other`.
+  For example: `{"status":"not_received","reason":"user_closed"}`.
+
 **6. Report**, when the user asks for one:
 
 ```sh

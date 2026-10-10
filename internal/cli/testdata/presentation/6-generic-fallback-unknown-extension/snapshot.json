@@ -72,6 +72,16 @@
     ": passed with no errors found",
     "Per-record membership",
     ": passed with no errors found",
+    "Extensions",
+    "extension",
+    "integrity",
+    "semantics",
+    "producer-key/v1",
+    "covered",
+    "interpreted by countersignature-stamp",
+    "x-example-unknown/v1",
+    "covered",
+    "Integrity verified; meaning not interpreted by this viewer",
     "verify independently at verify.agentactioncapsule.org or with the CLI"
   ]
 }

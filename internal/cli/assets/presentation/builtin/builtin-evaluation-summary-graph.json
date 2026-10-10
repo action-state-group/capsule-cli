@@ -1,0 +1,31 @@
+{
+  "spec_version": "aac.presentation-manifest/v0",
+  "id": "aac.builtin.evaluation-summary-graph/v0",
+  "presentation_api": "aac.presentation-api/v0",
+  "runtime_min": "0.1.0",
+  "trust_class": "trusted-executable",
+  "requires": {
+    "bundle_kind": "evidence-bundle/v2",
+    "profiles": [
+      "spec_version:evaluation-summary/v1"
+    ]
+  },
+  "forbids": {
+    "profiles": [
+      "result_version:evidence-result-v0"
+    ]
+  },
+  "audiences": [
+    "*"
+  ],
+  "formats": [
+    "html",
+    "fragment",
+    "embedded"
+  ],
+  "fallback": false,
+  "priority": 1,
+  "executable": {
+    "carrier": "core-runtime"
+  }
+}
