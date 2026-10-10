@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-2TQVzs+0jXYZVLBoXJCyHYKst0weVqpt28tmhK7M4Ss=' 'sha256-WK/gJhju8NR5iaiTNcXu9SLSATO0FXW92AsFs4sWiw0=' 'sha256-Sz2WAnoC9pNxut7bQCHJIKgqCctERuRiGhf8g413IYw='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-2TQVzs+0jXYZVLBoXJCyHYKst0weVqpt28tmhK7M4Ss=' 'sha256-W6yn27UtFzlVs0pBcY43HqTY4fdhFymONlw83JwgP0M=' 'sha256-Sz2WAnoC9pNxut7bQCHJIKgqCctERuRiGhf8g413IYw='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report</title>
     <style>
@@ -11648,6 +11648,7 @@ const dealViewModel = (context) => {
     const wc = report.witness_coverage || {};
     witness = {
       kind: "witnessed",
+      at: typeof cadence.checkpoint_at === "string" ? cadence.checkpoint_at : "",
       witness: host,
       cut: typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : "",
       part: cadence.state === "witnessed" && cadence.extent === "part" && k < n,
@@ -11871,6 +11872,22 @@ const dealViewRender = (model, regions) => {
 
   if (model.demo) host.append(el("span", "DEMO", "deal-demo"));
   host.append(el("h1", "Deal report"));
+  // What the witness covers, first, in one line: from the witness block
+  // only, never more than it covers. The receipt and what it does not prove
+  // are in the header below.
+  const w0 = model.witness;
+  const at = w0.at ? ` at ${w0.at}` : "";
+  const witnessed =
+    w0.kind !== "witnessed"
+      ? w0.kind === "scheduled" || w0.kind === "pending"
+        ? "Not witnessed yet: witness receipt pending the next tick."
+        : "Not witnessed."
+      : w0.part
+        ? `Witnessed through step ${w0.k} of ${w0.n}${at} (receipt attached); later steps: witness receipt pending the next tick.`
+        : `Witnessed through the last step this copy holds${at} (receipt attached).`;
+  const line = el("p", witnessed, "deal-rung");
+  line.dataset.witness = w0.kind === "witnessed" ? (w0.part ? "part" : "all") : w0.kind;
+  host.append(line);
 
   // Which build sealed the steps, read from the records this page verified
   // (not from the summary), compared with the build that made this page.
