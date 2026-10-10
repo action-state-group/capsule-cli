@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -68,6 +70,26 @@ func exampleDealFixture(t *testing.T) presentationFixture {
 func sha256CSPSource(b []byte) string {
 	sum := sha256.Sum256(b)
 	return "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+}
+
+// cspSources is one directive's source list in a page's CSP, sorted.
+func cspSources(t *testing.T, page, directive string) []string {
+	t.Helper()
+	m := regexp.MustCompile(`http-equiv="Content-Security-Policy" content="([^"]*)"`).FindStringSubmatch(page)
+	require.NotNil(t, m, "the page has a CSP")
+	for _, d := range strings.Split(m[1], ";") {
+		fields := strings.Fields(d)
+		if len(fields) > 0 && fields[0] == directive {
+			return sortedSources(append([]string{}, fields[1:]...))
+		}
+	}
+	t.Fatalf("no %s in the CSP", directive)
+	return nil
+}
+
+func sortedSources(sources []string) []string {
+	sort.Strings(sources)
+	return sources
 }
 
 func presentationOut(t *testing.T) string {
@@ -134,8 +156,17 @@ func TestPresentationBuildCarriesAPluginsModule(t *testing.T) {
 	page, err := os.ReadFile(out)
 	require.NoError(t, err)
 	assert.Contains(t, string(page), string(script))
-	assert.Contains(t, string(page), sha256CSPSource(script))
-	assert.Contains(t, string(page), sha256CSPSource(fixtureStyle))
+	// The CSP lists exactly the page's own sources plus the module's script
+	// and stylesheet: the same build with no module, plus those two.
+	raw, err := os.ReadFile(presentationBuildBundle)
+	require.NoError(t, err)
+	value, err := decodeBundleJSON(raw)
+	require.NoError(t, err)
+	base, err := emitter.BuildOfflineHTML(value, evidenceGraphIIFE, emitter.OfflineOptions{Audience: "*",
+		Wording: &emitter.Wording{Pack: string(fixtureWording), SHA256: hexSHA256(fixtureWording)}})
+	require.NoError(t, err)
+	assert.Equal(t, sortedSources(append(cspSources(t, base, "script-src"), sha256CSPSource(script))), cspSources(t, string(page), "script-src"))
+	assert.Equal(t, sortedSources(append(cspSources(t, base, "style-src"), sha256CSPSource(fixtureStyle))), cspSources(t, string(page), "style-src"))
 	assert.Contains(t, string(page), `"sha256":"`+hexSHA256(fixtureWording)+`"`, "the module's wording pack is the page's")
 
 	binary := os.Getenv("CAPSULECTL_CHROME")

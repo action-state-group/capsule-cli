@@ -21,10 +21,11 @@ import "fmt"
 // booking.cancel, data.delete, communication.publish and disclosure.personal;
 // version 5 adds it to communication.send, a class no deal record carries;
 // version 6 adds it to agreement.accept (which a seller's commit, and a
-// rental's or service's commit or sign, carries), marketplace.offer and
-// marketplace.sale (which no deal record carries: an offer is
-// external_commitment.other). approver_role says who approves, not what a
-// class covers, so the mapping below is the same under all five.
+// rental's or service's commit or sign, carries), marketplace.offer (which a
+// seller's offer carries, from dealOfferClassVersion; an offer sealed before
+// is external_commitment.other) and marketplace.sale (which no deal record
+// carries). approver_role says who approves, not what a class covers, so the
+// mapping below is the same under all five.
 const dealTaxonomyVersion = "6"
 
 // The taxonomy-v6 classes a deal record can carry. Each is a row of
@@ -38,7 +39,14 @@ const (
 	classDisclosurePersonal  = "disclosure.personal"
 	classDisclosureSecret    = "disclosure.secret"
 	classExternalCommitOther = "external_commitment.other"
+	classMarketplaceOffer    = "marketplace.offer"
 )
+
+// dealOfferClassVersion marks a step whose seller's offer is classed
+// marketplace.offer, the class a seller's rules key on (taxonomy version 6
+// already has it; no taxonomy change). A step sealed before has none and
+// re-derives its offer as external_commitment.other, unchanged.
+const dealOfferClassVersion = "1"
 
 // dealActionClasses maps a deal action, per deal type, to its taxonomy-v6
 // class. A cancel is mapped here only for a cancel that returns no money; one
