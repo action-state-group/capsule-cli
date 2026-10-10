@@ -608,6 +608,17 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 	} else if at != "" {
 		record["proposal_at"] = at
 	}
+	// deal_claims: where the user sells, what the agent stated to the buyer
+	// earlier in this deal (a condition, a warranty), so a rule on a required
+	// disclosure finds a statement made before the offer. The words stay a
+	// commitment: the claim record's own values, never its text.
+	claims, err := s.dealClaimsInput(ctx, capsuleID, events)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(claims) > 0 {
+		record["deal_claims"] = claims
+	}
 	// party_role: the side of the deal the user is on, as its opening intent
 	// sealed it (buyer when it names none), sent on every check, always
 	// explicit, so a checker selects its rules without inferring the side.
@@ -683,6 +694,46 @@ func (s *dealSession) acceptedProposalAt(ctx context.Context, checked string, ev
 		return "", errors.New("refusing to check: the accepted offer's sealed record is not on this device, so the rules checker cannot be told when it was made")
 	}
 	return at, nil
+}
+
+// dealClaimsInput are, where the user sells, the deal's agent claims sealed
+// before the checked step, in seal order: each as its sealed claim record
+// states it (capsule id, record digest, class, source_kind, at,
+// text_commitment). A claim with no class, or sealed with its text in the
+// clear (before claims were committed), is left out. None on a buyer's deal.
+func (s *dealSession) dealClaimsInput(ctx context.Context, checked string, events []sealedEvent) ([]interface{}, error) {
+	if dealRole(events) != dealRoleSeller {
+		return nil, nil
+	}
+	var before int64
+	for _, se := range events {
+		if se.CapsuleID == checked {
+			before = se.Event.N
+		}
+	}
+	var out []interface{}
+	for _, se := range events {
+		c := se.Event.Claim
+		if se.Event.Kind != "claim" || c == nil || c.SourceKind != "agent" || c.Class == "" || (before > 0 && se.Event.N >= before) {
+			continue
+		}
+		sealed, err := s.capsuleWithInput(ctx, se.CapsuleID)
+		if err != nil || sealed == nil {
+			return nil, err
+		}
+		record, _ := sealed["agent_input"].(map[string]interface{})
+		block, _ := record["x-deal-v0"].(map[string]interface{})
+		body, _ := record["body"].(map[string]interface{})
+		commitment, _ := body["text_commitment"].(string)
+		if block == nil || commitment == "" {
+			continue
+		}
+		out = append(out, map[string]interface{}{
+			"capsule_id": se.CapsuleID, "record_digest": se.Digest, "class": body["class"],
+			"source_kind": body["source_kind"], "at": block["at"], "text_commitment": commitment,
+		})
+	}
+	return out, nil
 }
 
 // boundsOpeningInForce is the opening of the floor in force: its
