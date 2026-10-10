@@ -139,6 +139,16 @@
     ": passed with no errors found",
     "Per-record membership",
     ": passed with no errors found",
+    "Extensions",
+    "extension",
+    "integrity",
+    "semantics",
+    "x-cadence-witness/v0",
+    "covered",
+    "Integrity verified; meaning not interpreted by this viewer",
+    "x-deal-v0",
+    "covered",
+    "Integrity verified; meaning not interpreted by this viewer",
     "verify independently at verify.agentactioncapsule.org or with the CLI"
   ]
 }

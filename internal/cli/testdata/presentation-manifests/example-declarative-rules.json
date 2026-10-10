@@ -1,0 +1,59 @@
+{
+  "spec_version": "aac.presentation-manifest/v0",
+  "id": "org.example.rules-table/v0",
+  "presentation_api": "aac.presentation-api/v0",
+  "runtime_min": "0.1.0",
+  "trust_class": "declarative",
+  "requires": {
+    "bundle_kind": "evidence-bundle/v2",
+    "profiles": [
+      "spec_version:org.example.rules-comparison/v0"
+    ]
+  },
+  "audiences": [
+    "*"
+  ],
+  "formats": [
+    "html",
+    "fragment",
+    "embedded"
+  ],
+  "fallback": false,
+  "priority": 1,
+  "declarative": {
+    "renderer": "aac.declarative-renderer/v0",
+    "wording_sha256": "50ac069ce2d1783ef021462816e39860ab608ff7b1699d5c47fee74b1df0cc95",
+    "fields": [
+      {
+        "level": "L0",
+        "source": "/rule_count",
+        "kind": "count",
+        "label_key": "count.rules"
+      },
+      {
+        "level": "L1",
+        "source": "/rules",
+        "kind": "rows",
+        "label_key": "heading.l1",
+        "columns": [
+          {
+            "source": "/rule_id",
+            "kind": "identifier",
+            "label_key": "column.rule"
+          },
+          {
+            "source": "/state",
+            "kind": "enum",
+            "label_key": "column.state",
+            "value_key_prefix": "state."
+          },
+          {
+            "source": "/cites",
+            "kind": "digest",
+            "label_key": "column.cites"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -87,12 +87,13 @@ func trustPresentationsIn(t *testing.T, root string) {
 
 func discovered(t *testing.T, name string) pluginInfo {
 	t.Helper()
-	for _, p := range discoverPlugins() {
+	plugins, refused := discoverPluginsAndRefusals()
+	for _, p := range plugins {
 		if p.Name == name {
 			return p
 		}
 	}
-	t.Fatalf("plugin %s not discovered", name)
+	t.Fatalf("plugin %s not discovered (refused: %+v)", name, refused)
 	return pluginInfo{}
 }
 
