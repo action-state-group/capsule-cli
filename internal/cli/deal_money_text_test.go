@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -34,9 +35,27 @@ func TestMoneyAmountsLeavesOtherNumbersAlone(t *testing.T) {
 		"order 1700-22", "1700 Main Street", "I took 1700 photos", "call 555-1700",
 		// Letters against the number that are not a whole currency code.
 		"xusd1700", "1700usdx", "abc1700", "1700abc",
+		// A currency code inside a run of hex is part of a digest, not money.
+		"1700aed04c2", "\"1700cad9f\"", "f01700bbd2", "4cad1700",
 	} {
 		assert.NotContains(t, moneyAmounts(text), int64(170000), text)
 	}
+}
+
+// A digest that happens to hold a digit and then a currency code spelled in hex
+// letters ("8aed", "4cad") is never an amount: this witness hash once read as
+// 8 AED, a deal's 8.00 limit, and refused the deal's share.
+func TestADigestIsNeverMoney(t *testing.T) {
+	for _, text := range []string{
+		`"witness":["8aed04c28dc0b81b61966fc58565d2bbad26412fc9294e6f9d5ef4cb26f12885"]`,
+		"e3d8aed0", "0x8cad00", "8aed1", "1aed8", "7a3cad8e1f", "e1cad800f", "0b3cad8000", "deal-3cad800000000000",
+	} {
+		assert.Empty(t, moneyAmounts(text), text)
+	}
+	// A whole word still reads as money, glued or spaced.
+	assert.Contains(t, moneyAmounts("8aed"), int64(800))
+	assert.Contains(t, moneyAmounts("aed8"), int64(800))
+	assert.Contains(t, moneyAmounts("pay 8 aed"), int64(800))
 }
 
 func agentSays(t *testing.T, dealID, text string) error {
@@ -99,4 +118,26 @@ func TestTheShareGateReadsEveryFormOfTheFloor(t *testing.T) {
 		assert.NoError(t, dealCeilingGate([]byte(`<p>About to offer $1,900.00 on 2026-10-09T17:00:00Z</p>`), events, audience), audience)
 	}
 	assert.False(t, strings.Contains(strings.Join(floorForms, " "), "170000"), "the controls are written forms, not minor units")
+}
+
+// The spending-limit gate reads past the deal's own ids and every digest: a
+// deal whose id holds "3cad8", or a copy whose digests hold "cad800", shares
+// normally, and the prose forms still trip it.
+func TestTheCeilingGateReadsPastIDsAndDigests(t *testing.T) {
+	for _, limit := range []int64{800, 80000} {
+		events := []sealedEvent{{Event: dealEvent{Kind: "open", DealID: "deal-3cad800000000000", Open: &dealOpen{
+			Intent: dealIntent{MaxTotalMinor: &limit}, Terms: dealTerms{Currency: "USD"}}}}}
+		copyText := `{"deal_id":"deal-3cad800000000000","log":"deal/deal-3cad800000000000:1:0",` +
+			`"capsule_id":"7a3cad8e1f00c0ffee000000000000000000000000000000000000000000cad800",` +
+			`"witness":["8aed04c28dc0b81b61966fc58565d2bbad26412fc9294e6f9d5ef4cb26f12885"],` +
+			`"key":"0b3cad8000aed8004cad8001234567890abcdef0123456789abcdef01234567"}`
+		assert.NoError(t, dealCeilingGate([]byte(copyText), events, dealAudienceCounterparty), "limit %d", limit)
+
+		// The planted controls: the limit as prose still trips the gate.
+		major := limit / 100
+		for _, prose := range []string{fmt.Sprintf("my limit is CAD %d", major), fmt.Sprintf("up to %d cad", major), fmt.Sprintf("$%d.00 at most", major)} {
+			err := dealCeilingGate([]byte(copyText+" "+prose), events, dealAudienceCounterparty)
+			assert.ErrorContains(t, err, "your spending limit", prose)
+		}
+	}
 }
