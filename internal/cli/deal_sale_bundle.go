@@ -2,10 +2,10 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"sort"
 
 	"github.com/spf13/cobra"
