@@ -457,6 +457,30 @@ func authorizesCheck(events []sealedEvent, authorizedBy, check string) bool {
 	return false
 }
 
+// dealNamesPayeeOnAmountChecks is whether a check other than a pay names the
+// payee when it states an amount; a test turns it off to stand in for a
+// release from before, when only a pay did.
+var dealNamesPayeeOnAmountChecks = true
+
+// checkNamesPayee is whether a check names the deal's payee: every pay, and,
+// where the user buys, every other action that states an amount (a commit, a
+// sign, a cancel with an amount), since each is money to or from that
+// merchant. A seller's commit or offer is money from the buyer, never to a
+// payee, and a share moves none.
+func checkNamesPayee(snap dealSnapshot, role string) bool {
+	switch {
+	case snap.Action == "pay":
+		return true
+	case !dealNamesPayeeOnAmountChecks || role == dealRoleSeller || snap.AmountMinor == nil:
+		return false
+	}
+	switch snap.Action {
+	case "commit", "sign", "cancel":
+		return true
+	}
+	return false
+}
+
 // shownCardMatches refuses an answer given on a card other than the one the
 // check rendered: a card_commitment must equal the check's, never differ.
 func shownCardMatches(events []sealedEvent, a dealApproval) error {
@@ -1571,9 +1595,11 @@ func dealCheckCommand() *cobra.Command {
 			} else if snap.DisclosingTo != "" || snap.Recipient != nil {
 				return inputError(`disclosing_to and recipient go with a share check`)
 			}
-			if snap.Action == "pay" {
+			if checkNamesPayee(snap, dealRole(events)) {
 				// The check names the payee it is about, so an action can be
-				// held to the same payee.
+				// held to the same payee, and a rule keyed on who was paid
+				// (the profile companion below) sees the merchant on every
+				// check that moves money to it, not only on a pay.
 				state, err := foldDeal(events)
 				if err != nil {
 					return err
