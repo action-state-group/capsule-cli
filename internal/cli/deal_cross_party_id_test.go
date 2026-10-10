@@ -1,9 +1,16 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
+	"regexp"
+	"strings"
 	"testing"
 
+	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -101,4 +108,99 @@ func TestACarriedDealIDIsRefusedWhenMalformedOrHeld(t *testing.T) {
 	}
 	_, err := invoke(t, "", "--profile", "deal", "deal", "open", "--deal-id", held, "--input", writeJSON(t, crossPartyBuyerOpen))
 	assert.ErrorContains(t, err, "already holds deal "+held)
+}
+
+// composeCopies puts two parties' copies of a deal, byte for byte, into a
+// composed/v1 block on the composer's own container, as capsule-viewer's
+// bilateral fixtures do: one agreeing join over the parts' root records.
+func composeCopies(t *testing.T, container, a, b map[string]any) map[string]any {
+	t.Helper()
+	member := func(id, observer string, part map[string]any) map[string]any {
+		request, err := canonical.JCS(map[string]any{"subject": map[string]any{"correlation": "deal-copies"}, "nonce": "n-" + id})
+		require.NoError(t, err)
+		sum := sha256.Sum256(request)
+		digest, err := aacbundle.BundleDigest(part)
+		require.NoError(t, err)
+		return map[string]any{"id": id, "observer": observer, "request_digest": hex.EncodeToString(sum[:]), "outcome": "artifact", "digest": digest, "bundle": part}
+	}
+	agreed := sha256.Sum256([]byte("deal"))
+	block := map[string]any{
+		"members": []any{member("party-a", "obs-a", a), member("party-b", "obs-b", b)},
+		"observers": []any{
+			map[string]any{"id": "obs-a", "role": "buyer", "custody_domain": "buyer.example"},
+			map[string]any{"id": "obs-b", "role": "seller", "custody_domain": "seller.example"},
+		},
+		"joins": []any{map[string]any{"members": []any{"party-a", "party-b"}, "basis": "pre_agreed_identifier", "pointer": "/operator",
+			"identifier_digest": hex.EncodeToString(agreed[:]), "compare": []any{"/developer", "/spec_version"}, "state": "agree"}},
+	}
+	// The digest covers the declarations, not composed_digest itself; the
+	// block is parsed whole, so it holds a placeholder until it is computed.
+	block["composed_digest"] = strings.Repeat("0", 64)
+	digest, err := aacbundle.ComposedDigest(block)
+	require.NoError(t, err)
+	block["composed_digest"] = digest
+	extensions, _ := container["extensions"].(map[string]any)
+	if extensions == nil {
+		extensions = map[string]any{}
+	}
+	extensions["composed/v1"] = block
+	container["extensions"] = extensions
+	return container
+}
+
+// copyDealIDs are the deal ids a shared copy names anywhere (its records,
+// its log coordinates).
+func copyDealIDs(raw string) map[string]bool {
+	ids := map[string]bool{}
+	for _, id := range regexp.MustCompile(`deal-[0-9a-f]{16}`).FindAllString(raw, -1) {
+		ids[id] = true
+	}
+	return ids
+}
+
+// exactBundle decodes a bundle with its numbers exact, as digests need them.
+func exactBundle(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	b, err := decodeBundleJSON([]byte(raw))
+	require.NoError(t, err)
+	return b
+}
+
+// Two real copies of one deal, the buyer's and the seller's opened under the
+// buyer's deal id, compose into one composed/v1 bundle that verifies VALID,
+// and both parts name the one deal.
+func TestTwoRealCopiesOfOneDealComposeAndVerify(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	_, buyerCopy := sharedCopy(t, id, dealAudienceCounterparty, "the seller")
+
+	dealFixture(t)
+	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
+	dealRun(t, "check", "--deal", id, "--input", writeJSON(t,
+		`{"action":"offer","amount_minor":190000,"terms":{"item":"example bicycle","quantity":1,"price_minor":190000}}`))
+	_, sellerCopy := sharedCopy(t, id, dealAudienceCounterparty, "the buyer")
+
+	// The composer's own container: an ordinary evidence bundle it sealed.
+	dealFixture(t)
+	other := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	container := exactBundle(t, dealOwnBundle(t, other))
+
+	assert.Equal(t, map[string]bool{id: true}, copyDealIDs(buyerCopy))
+	assert.Equal(t, map[string]bool{id: true}, copyDealIDs(sellerCopy), "both parts name the one deal")
+
+	whole := composeCopies(t, container, exactBundle(t, buyerCopy), exactBundle(t, sellerCopy))
+	out, err := invoke(t, "", "verify", "--bundle", writeBundle(t, whole))
+	require.NoError(t, err, out)
+	var result map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &result), out)
+	assert.Equal(t, "VALID", result["verdict"], out)
+
+	// The verdict is earned: a member whose declared digest is not its
+	// copy's does not verify.
+	block := whole["extensions"].(map[string]any)["composed/v1"].(map[string]any)
+	block["members"].([]any)[1].(map[string]any)["digest"] = strings.Repeat("e", 64)
+	out, _ = invoke(t, "", "verify", "--bundle", writeBundle(t, whole))
+	var tampered map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &tampered), out)
+	assert.Equal(t, "INVALID", tampered["verdict"], out)
 }
