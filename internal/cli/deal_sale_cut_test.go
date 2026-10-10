@@ -1,0 +1,209 @@
+package cli
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// A sale bundle is cut fresh: it seals each thread's report, then a cut on
+// the sale's log naming every thread's last record, then the checkpoint,
+// so the certified interval covers every thread's acts up to the bundle.
+// And the sale's log says which threads opened, so never_opened is
+// checkable.
+
+// twoThreadSale is a sale with two buyers' threads, each an offer the buyer
+// accepted and the commit to it, B's after A's: every act sealed after both
+// registrations.
+func twoThreadSale(t *testing.T) (saleID, a, b string) {
+	t.Helper()
+	dealFixture(t)
+	saleID, _ = newSale(t)
+	a = buyerThread(t, saleID, "buyer-a.example")
+	b = buyerThread(t, saleID, "buyer-b.example")
+	for id, price := range map[string]string{a: "190000", b: "185000"} {
+		_, err := acceptOffer(t, id, makeOffer(t, id, price))
+		require.NoError(t, err)
+		require.Equal(t, false, commitNow(t, id, price)["unchecked"])
+	}
+	return saleID, a, b
+}
+
+// saleBodies are the bodies of a sale bundle's records of one type, in order.
+func saleBodies(t *testing.T, bundle map[string]any, recordType string) []map[string]any {
+	t.Helper()
+	disclosures := bundle["disclosures"].(map[string]any)
+	var out []map[string]any
+	for _, raw := range bundle["records"].([]any) {
+		in, _ := disclosures[raw.(map[string]any)["capsule_id"].(string)].(map[string]any)["agent_input"].(map[string]any)
+		if blk, ok := in[dealProfile].(map[string]any); ok && blk["record_type"] == recordType {
+			out = append(out, in["body"].(map[string]any))
+		}
+	}
+	return out
+}
+
+// The order is the threads' reports, the cut, the checkpoint: the cut is
+// the sale log's last record and the certified checkpoint covers it, and
+// each thread's head is its last record, which is the report the bundle
+// step sealed in it. A cut before the reports would name an earlier
+// record, and this test fails.
+func TestASaleBundleSealsTheReportsThenTheCutThenTheCheckpoint(t *testing.T) {
+	saleID, a, b := twoThreadSale(t)
+	bundle, res := saleBundle(t, saleID)
+	require.Equal(t, "VALID", res["verdict"])
+
+	recs := bundle["records"].([]any)
+	assert.Equal(t, []string{"sale", typeTaskAuthority, "thread", "thread_opened", "thread", "thread_opened", "sale_cut"},
+		saleRecordTypes(exportedSale(t, saleID)), "the cut is the sale log's last record")
+	cert := bundle["completeness_certificate"].(map[string]any)
+	assert.Equal(t, dealLogID(saleID), cert["log_id"])
+	lastID := recs[len(recs)-1].(map[string]any)["capsule_id"].(string)
+	lastIn := bundle["disclosures"].(map[string]any)[lastID].(map[string]any)["agent_input"].(map[string]any)
+	assert.Equal(t, "sale_cut", lastIn[dealProfile].(map[string]any)["record_type"], "the bundle's last certified record is the cut")
+	result, _ := verifyBundleOutput(t, writeBundle(t, bundle))
+	assert.Equal(t, "pass", status(result, "per_record_membership"), "under the checkpoint cut after it")
+
+	entries, threads := saleSection(bundle)
+	cut := saleBodies(t, bundle, "sale_cut")
+	require.Len(t, cut, 1)
+	heads := cut[0]["thread_heads"].([]any)
+	require.Len(t, heads, 2)
+	for i, id := range []string{a, b} {
+		tb := threads[id].(map[string]any)
+		last := lastRecordDigest(tb)
+		assert.Equal(t, dealReportActionID, actionIDOf(t, tb, last), "%s: the head is the report the bundle step sealed", id)
+		e := entries[i].(map[string]any)
+		head := e["head"].(map[string]any)
+		assert.Equal(t, last, head["record_digest"], id)
+		assert.True(t, saleOpensTo(head, last, heads[i].(map[string]any)["head_commitment"].(string)), id)
+	}
+	verdict, findings := verifySale(t, bundle)
+	assert.Equal(t, "VALID", verdict)
+	assert.Empty(t, findings)
+}
+
+// exportedSale is the sale's log as `deal sale export` writes it.
+func exportedSale(t *testing.T, saleID string) []map[string]any {
+	t.Helper()
+	recs, _ := exportSale(t, saleID)
+	return recs
+}
+
+// actionIDOf is the action_id of the capsule in a bundle that commits to
+// the record digest.
+func actionIDOf(t *testing.T, tb map[string]any, digest string) any {
+	t.Helper()
+	for _, raw := range tb["records"].([]any) {
+		r := raw.(map[string]any)
+		ca := r["model_attestation"].(map[string]any)["compute_attestation"].(map[string]any)
+		if ca["agent_input_digest"] == digest {
+			return r["action_id"]
+		}
+	}
+	return nil
+}
+
+// Each bundle cuts again: a later bundle's checkpoint covers acts sealed
+// after the first, its cut names the threads' new last records, and a
+// thread carried from the earlier bundle (a copy cut short) is refused.
+func TestEachSaleBundleCutsAgainAndRefusesAThreadCutShort(t *testing.T) {
+	saleID, a, _ := twoThreadSale(t)
+	first, _ := saleBundle(t, saleID)
+	dealRun(t, "note", "--deal", a, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","channel":"app_chat","text":"Picking it up Saturday"}`))
+	second, res := saleBundle(t, saleID)
+	require.Equal(t, "VALID", res["verdict"])
+
+	sizeOf := func(b map[string]any) int64 {
+		n, err := b["checkpoint"].(map[string]any)["mmr_size"].(json.Number).Int64()
+		require.NoError(t, err)
+		return n
+	}
+	assert.Greater(t, sizeOf(second), sizeOf(first), "a fresh checkpoint, past the first cut")
+	assert.Len(t, saleBodies(t, second, "sale_cut"), 2)
+	_, firstThreads := saleSection(first)
+	_, secondThreads := saleSection(second)
+	assert.NotEqual(t, lastRecordDigest(firstThreads[a].(map[string]any)), lastRecordDigest(secondThreads[a].(map[string]any)))
+
+	secondThreads[a] = firstThreads[a]
+	verdict, findings := verifySale(t, second)
+	assert.Equal(t, "INVALID", verdict)
+	assert.Contains(t, strings.Join(findings, " "), "thread_not_whole_at_the_cut:"+a)
+}
+
+// never_opened is checkable: an entry listed never_opened whose thread the
+// sale's log says opened is refused; an opening that does not match the
+// carried thread is refused; a present thread the latest cut does not name
+// is not shown.
+func TestTheSalesLogMakesOpenedCheckable(t *testing.T) {
+	saleID, a, b := twoThreadSale(t)
+	pristine, _ := saleBundle(t, saleID)
+	raw, err := json.Marshal(pristine)
+	require.NoError(t, err)
+	for name, c := range map[string]struct {
+		edit    func(map[string]any)
+		verdict string
+		finding string
+	}{
+		"B listed never_opened, though its opening is sealed": {func(x map[string]any) {
+			entries, threads := saleSection(x)
+			e := entries[1].(map[string]any)
+			e["member"] = saleThreadNeverOpened
+			delete(e, "opened")
+			delete(e, "head")
+			delete(threads, b)
+		}, "INVALID", "never_opened_but_opened:"},
+		"an opening that is not A's task authority": {func(x map[string]any) {
+			entries, _ := saleSection(x)
+			entries[0].(map[string]any)["opened"] = entries[1].(map[string]any)["opened"]
+		}, "INVALID", "opening_does_not_match_the_thread:" + a},
+		"a head that is not A's last record": {func(x map[string]any) {
+			entries, _ := saleSection(x)
+			entries[0].(map[string]any)["head"] = entries[1].(map[string]any)["head"]
+		}, "INVALID", "thread_not_whole_at_the_cut:" + a},
+	} {
+		t.Run(name, func(t *testing.T) {
+			x := decodeExact(t, raw)
+			c.edit(x)
+			verdict, findings := verifySale(t, x)
+			assert.Equal(t, c.verdict, verdict)
+			assert.Contains(t, strings.Join(findings, " "), c.finding)
+		})
+	}
+}
+
+// A crash between a thread's task authority and its opening on the sale's
+// log: the thread opened, and the next sale bundle seals its opening before
+// the cut, and verifies.
+func TestASaleBundleSealsAnOpeningACrashLeftOut(t *testing.T) {
+	dealFixture(t)
+	saleID, _ := newSale(t)
+	openThreadStoppingAt(t, saleID, "authority")
+	assert.Equal(t, []string{"sale", typeTaskAuthority, "thread"}, saleRecordTypes(exportedSale(t, saleID)), "the thread opened; its opening is not sealed yet")
+
+	bundle, res := saleBundle(t, saleID)
+	assert.Equal(t, "VALID", res["verdict"])
+	assert.Equal(t, []string{"sale", typeTaskAuthority, "thread", "thread_opened", "sale_cut"}, saleRecordTypes(exportedSale(t, saleID)))
+	entries, _ := saleSection(bundle)
+	require.Len(t, entries, 1)
+	assert.Equal(t, saleThreadPresent, entries[0].(map[string]any)["member"])
+}
+
+// A copy made before sales recorded openings and cuts reads INCOMPLETE,
+// never INVALID: nothing in it is wrong, it just cannot show the threads
+// opened or the cut.
+func TestASaleCopyWithoutOpeningsOrACutIsIncomplete(t *testing.T) {
+	dealSealsSaleEvidence = false
+	defer func() { dealSealsSaleEvidence = true }()
+	saleID, _, _ := twoThreadSale(t)
+	bundle, res := saleBundle(t, saleID)
+	assert.Equal(t, "INCOMPLETE", res["verdict"])
+	verdict, findings := verifySale(t, bundle)
+	assert.Equal(t, "INCOMPLETE", verdict)
+	joined := strings.Join(findings, " ")
+	assert.Contains(t, joined, "opened_not_evidenced:")
+	assert.Contains(t, joined, "no_sale_cut")
+}

@@ -246,6 +246,11 @@ const dealThreadRegistrationVersion = "1"
 // release did.
 var dealRegistersThreads = true
 
+// dealSealsSaleEvidence is whether a sale's log records each thread's
+// opening and a sale bundle's cut; tests turn it off to stand in for a copy
+// made before they were.
+var dealSealsSaleEvidence = true
+
 // dealThread is a sale's registration of one thread: the thread's deal id,
 // sealed as a commitment on the sale's own log.
 type dealThread struct {
@@ -316,3 +321,53 @@ func (s *dealSession) threadSteps(ctx context.Context, threadID string) (int, bo
 // ("keyed": the deal's key row is written; "baseline": the baseline is
 // sealed), standing in for a crash there.
 var dealOpenStopsAt = func(stage string) error { return nil }
+
+// dealThreadOpened is a sale's evidence that a registered thread opened.
+type dealThreadOpened struct {
+	// Registration is the record digest of the thread's registration.
+	Registration string `json:"registration"`
+	// TaskAuthority is the thread's task-authority record digest.
+	TaskAuthority string `json:"task_authority"`
+}
+
+// dealSaleCut is the cut a sale bundle is made at.
+type dealSaleCut struct {
+	Heads []dealThreadHead `json:"heads"`
+}
+
+// dealThreadHead is one opened thread at a cut: its registration's record
+// digest, and its last record's digest then.
+type dealThreadHead struct {
+	Registration string `json:"registration"`
+	Head         string `json:"head"`
+}
+
+// sealThreadOpened seals, on the sale's log, the evidence that the thread
+// registered as registration opened with the task authority whose record
+// digest is authority, unless the log already holds it, and cuts the sale's
+// checkpoint. It leaves the session on the sale's log.
+func (s *dealSession) sealThreadOpened(ctx context.Context, saleID, registration, authority string) error {
+	if s.t != nil {
+		if err := s.t.close(); err != nil {
+			return err
+		}
+		s.t = nil
+	}
+	if err := s.useDeal(ctx, saleID, false); err != nil {
+		return err
+	}
+	events, err := s.load(ctx, saleID)
+	if err != nil {
+		return err
+	}
+	for _, se := range events {
+		if o := se.Event.ThreadOpened; o != nil && o.Registration == registration {
+			return nil
+		}
+	}
+	if _, err = s.seal(ctx, saleID, events, dealEvent{Kind: "thread_opened", ThreadOpened: &dealThreadOpened{Registration: registration, TaskAuthority: authority}}); err != nil {
+		return err
+	}
+	_, err = s.milestone(ctx)
+	return err
+}

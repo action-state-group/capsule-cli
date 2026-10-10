@@ -68,7 +68,7 @@ func TestAThreadIsRegisteredOnTheSalesLogBeforeItOpens(t *testing.T) {
 
 	recs, path := exportSale(t, saleID)
 	checkProfile(t, path)
-	require.Len(t, recs, 3, "root, task authority, one registration")
+	require.Equal(t, []string{"sale", typeTaskAuthority, "thread", "thread_opened"}, saleRecordTypes(recs), "root, task authority, the registration, its opening")
 	reg := recs[2]
 	assert.Equal(t, "thread", reg["x-deal-v0"].(map[string]any)["record_type"])
 	assert.Equal(t, []string{"thread_ref_commitment"}, keysOf(reg["body"].(map[string]any)))
@@ -137,7 +137,7 @@ func TestARetriedOpenReusesAnUnopenedRegistration(t *testing.T) {
 	a := buyerThread(t, saleID, "buyer-a.example")
 	assert.Equal(t, orphan, a, "the unopened registration is the thread's")
 	recs, _ := exportSale(t, saleID)
-	assert.Len(t, recs, 3, "one registration, not two")
+	assert.Equal(t, []string{"sale", typeTaskAuthority, "thread", "thread_opened"}, saleRecordTypes(recs), "one registration, not two")
 }
 
 // Two threads: the sale bundle certifies the sale's whole log, carries both
@@ -176,7 +176,7 @@ func TestATwoThreadSaleBundleVerifiesWithThreadCompleteness(t *testing.T) {
 	// both registrations.
 	cert := bundle["completeness_certificate"].(map[string]any)
 	assert.Equal(t, dealLogID(saleID), cert["log_id"])
-	assert.Len(t, bundle["records"], 4)
+	assert.Len(t, bundle["records"], 7, "root, task authority, two registrations, their openings, the cut")
 }
 
 // Every way the binding can break: a thread not shown is INCOMPLETE; a
@@ -370,7 +370,7 @@ func TestAnOpenStoppedAfterItsKeyRowIsTakenUpAgain(t *testing.T) {
 	assert.Equal(t, registered, a, "the retry opens the registered thread")
 	recs, path := exportSale(t, saleID)
 	checkProfile(t, path)
-	assert.Len(t, recs, 3, "one registration, not two")
+	assert.Equal(t, []string{"sale", typeTaskAuthority, "thread", "thread_opened"}, saleRecordTypes(recs), "one registration, not two")
 
 	bundle, res := saleBundle(t, saleID)
 	assert.Equal(t, "VALID", res["verdict"])
@@ -396,7 +396,7 @@ func TestAnOpenStoppedAfterItsBaselineLeavesTheRegistrationNeverOpened(t *testin
 	a := buyerThread(t, saleID, "buyer-a.example")
 	assert.NotEqual(t, first, a)
 	recs, _ := exportSale(t, saleID)
-	assert.Len(t, recs, 4, "a second registration")
+	assert.Equal(t, []string{"sale", typeTaskAuthority, "thread", "thread", "thread_opened"}, saleRecordTypes(recs), "a second registration; only the second opened")
 
 	bundle, res := saleBundle(t, saleID)
 	assert.Equal(t, "VALID", res["verdict"])
@@ -408,4 +408,17 @@ func TestAnOpenStoppedAfterItsBaselineLeavesTheRegistrationNeverOpened(t *testin
 	assert.Equal(t, []string{a}, keysOf(threads))
 	verdict, _ := verifySale(t, bundle)
 	assert.Equal(t, "VALID", verdict)
+}
+
+// saleRecordTypes is each record's type on a sale's log, in order.
+func saleRecordTypes(recs []map[string]any) []string {
+	out := make([]string, len(recs))
+	for i, r := range recs {
+		if blk, ok := r["x-deal-v0"].(map[string]any); ok {
+			out[i] = blk["record_type"].(string)
+		} else {
+			out[i] = r["type"].(string)
+		}
+	}
+	return out
 }

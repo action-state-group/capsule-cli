@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -80,17 +81,18 @@ func (s *dealSession) dealSaleBundle(ctx context.Context, saleID, verify string)
 	var entries []interface{}
 	threads := map[string]interface{}{}
 	counts := map[string]int{}
+	var opened []openedThread
 	for _, se := range events {
 		th := se.Event.Thread
 		if th == nil {
 			continue
 		}
 		entry := map[string]interface{}{"registration": digestRef(se.Digest), "nonce": se.Event.Nonces["thread_ref"], "thread_id": th.ThreadID, "member": saleThreadNeverOpened}
-		_, opened, err := s.threadSteps(ctx, th.ThreadID)
+		_, isOpen, err := s.threadSteps(ctx, th.ThreadID)
 		if err != nil {
 			return nil, nil, err
 		}
-		if opened {
+		if isOpen {
 			if err := s.t.close(); err != nil {
 				return nil, nil, err
 			}
@@ -112,17 +114,42 @@ func (s *dealSession) dealSaleBundle(ctx context.Context, saleID, verify string)
 			}
 			threads[th.ThreadID] = tb
 			entry["member"] = saleThreadPresent
+			authority, err := s.threadAuthority(ctx, th.ThreadID)
+			if err != nil {
+				return nil, nil, err
+			}
+			// The head is this copy's last record on the thread's log: the
+			// report just sealed in it, read from the bundle as a verifier
+			// reads it.
+			raw, err := json.Marshal(tb)
+			if err != nil {
+				return nil, nil, err
+			}
+			decoded, err := decodeBundleJSON(raw)
+			if err != nil {
+				return nil, nil, err
+			}
+			head := lastRecordDigest(decoded)
+			opened = append(opened, openedThread{entry: entry, registration: se.Digest, authority: authority, head: head})
 		}
 		counts[entry["member"].(string)]++
 		entries = append(entries, entry)
 	}
+	// Every opened thread's opening is on the sale's log (a crash may have
+	// come between a thread's task authority and it); then the cut, which
+	// grows the sale's log, so the checkpoint below is cut now and its
+	// interval covers every thread's acts up to this bundle.
 	if s.t != nil {
 		if err := s.t.close(); err != nil {
 			return nil, nil, err
 		}
 		s.t = nil
 	}
-	if err := s.useDeal(ctx, saleID, false); err != nil {
+	if dealSealsSaleEvidence {
+		if events, err = s.sealSaleEvidence(ctx, saleID, opened); err != nil {
+			return nil, nil, err
+		}
+	} else if err := s.useDeal(ctx, saleID, false); err != nil {
 		return nil, nil, err
 	}
 	b, cadence, err := s.dealAssemble(ctx, events, nil)
@@ -220,6 +247,9 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 	}
 	var registrations []held
 	saleKey, isSale := "", false
+	openedBy := map[string]string{} // registration -> task_authority_commitment
+	var cutHeads map[string]string  // registration -> head_commitment, from the latest sale_cut
+	cutSeq := 0.0
 	records, _ := value["records"].([]interface{})
 	for _, raw := range records {
 		r, _ := raw.(map[string]interface{})
@@ -240,6 +270,27 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 		switch blk["record_type"] {
 		case "sale":
 			isSale = true
+		case "thread_opened":
+			refs, _ := blk["refs"].([]interface{})
+			if len(refs) == 1 {
+				ref, _ := refs[0].(map[string]interface{})
+				reg, _ := ref["digest"].(string)
+				body, _ := in["body"].(map[string]interface{})
+				openedBy[reg], _ = body["task_authority_commitment"].(string)
+			}
+		case "sale_cut":
+			seq := recordSeq(blk)
+			if seq > cutSeq {
+				cutSeq, cutHeads = seq, map[string]string{}
+				body, _ := in["body"].(map[string]interface{})
+				heads, _ := body["thread_heads"].([]interface{})
+				for _, h := range heads {
+					head, _ := h.(map[string]interface{})
+					ref, _ := head["registration"].(map[string]interface{})
+					reg, _ := ref["digest"].(string)
+					cutHeads[reg], _ = head["head_commitment"].(string)
+				}
+			}
 		case "thread":
 			var seq float64
 			switch n := blk["seq"].(type) {
@@ -272,6 +323,7 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 		fail("sale_threads_do_not_match_the_registrations")
 	}
 	present := map[string]string{} // thread id -> registration digest
+	openings := map[string]map[string]interface{}{}
 	var shown []any
 	for i, raw := range listed {
 		e, _ := raw.(map[string]interface{})
@@ -296,6 +348,9 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 			}
 			if member == saleThreadPresent {
 				present[threadID] = regDigest
+				openings[threadID] = e
+			} else if _, ok := openedBy[regDigest]; ok {
+				fail("never_opened_but_opened:" + regDigest)
 			}
 		default:
 			fail("unknown_thread_state:" + regDigest)
@@ -326,8 +381,31 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 			fail("thread_invalid:" + id)
 			continue
 		}
-		if why := threadBinding(tb, id, regDigest, saleKey); why != "" {
+		why, authority, last := threadBinding(tb, id, regDigest, saleKey)
+		if why != "" {
 			fail(why + ":" + id)
+			continue
+		}
+		// The sale's log says the thread opened, with this task authority,
+		// and the latest cut names this thread's last record.
+		e := openings[id]
+		if commitment, ok := openedBy[regDigest]; !ok {
+			notShown = append(notShown, "opened_not_evidenced:"+id)
+		} else if o, _ := e["opened"].(map[string]interface{}); !saleOpensTo(o, authority, commitment) {
+			fail("opening_does_not_match_the_thread:" + id)
+		}
+		switch commitment, ok := cutHeads[regDigest]; {
+		case cutHeads == nil:
+			notShown = append(notShown, "no_sale_cut")
+		case !ok:
+			// Present, but the latest cut has no head for it: not shown.
+			notShown = append(notShown, "thread_not_in_the_cut:"+id)
+		default:
+			h, _ := e["head"].(map[string]interface{})
+			digest, _ := h["record_digest"].(string)
+			if !saleOpensTo(h, digest, commitment) || digest != last {
+				fail("thread_not_whole_at_the_cut:" + id)
+			}
 		}
 	}
 	entry["threads"] = shown
@@ -352,7 +430,7 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 // authority opening (the user's own copy carries it) recomputes to its
 // sale_authority_commitment and names this sale's task authority. "" when
 // it holds.
-func threadBinding(tb map[string]interface{}, threadID, regDigest, saleKey string) string {
+func threadBinding(tb map[string]interface{}, threadID, regDigest, saleKey string) (string, string, string) {
 	disclosures, _ := tb["disclosures"].(map[string]interface{})
 	var ta map[string]interface{}
 	taDigest := ""
@@ -365,7 +443,7 @@ func threadBinding(tb map[string]interface{}, threadID, regDigest, saleKey strin
 		}
 	}
 	if ta == nil {
-		return "thread_has_no_task_authority_of_this_thread"
+		return "thread_has_no_task_authority_of_this_thread", "", ""
 	}
 	names := false
 	refs, _ := ta["refs"].([]interface{})
@@ -376,7 +454,7 @@ func threadBinding(tb map[string]interface{}, threadID, regDigest, saleKey strin
 		}
 	}
 	if !names {
-		return "thread_does_not_name_its_registration"
+		return "thread_does_not_name_its_registration", "", ""
 	}
 	report := sealedOrInlineReport(tb)
 	opening, _ := report["sale_authority_opening"].(map[string]interface{})
@@ -385,9 +463,58 @@ func threadBinding(tb map[string]interface{}, threadID, regDigest, saleKey strin
 	body, _ := ta["body"].(map[string]interface{})
 	got, err := commitText(nonce, text)
 	if err != nil || got != body["sale_authority_commitment"] || text != saleKey || opening["record_digest"] != taDigest {
-		return "thread_is_not_under_this_sale"
+		return "thread_is_not_under_this_sale", "", ""
+	}
+	return "", taDigest, lastRecordDigest(tb)
+}
+
+// lastRecordDigest is the record digest of a deal bundle's last record on
+// its log: the capsule its completeness certificate places at the highest
+// log seq (the copy's own sealed report, when the bundle step sealed one),
+// as its capsule commits to it (agent_input_digest), disclosed or not.
+func lastRecordDigest(tb map[string]interface{}) string {
+	cert, _ := tb["completeness_certificate"].(map[string]interface{})
+	memberships, _ := cert["memberships"].(map[string]interface{})
+	best, last := -1.0, ""
+	for id, raw := range memberships {
+		m, _ := raw.(map[string]interface{})
+		coords, _ := m["log_coordinates"].(map[string]interface{})
+		if seq := recordSeq(coords); seq > best {
+			best, last = seq, id
+		}
+	}
+	records, _ := tb["records"].([]interface{})
+	for _, raw := range records {
+		r, _ := raw.(map[string]interface{})
+		if r["capsule_id"] != last {
+			continue
+		}
+		ma, _ := r["model_attestation"].(map[string]interface{})
+		ca, _ := ma["compute_attestation"].(map[string]interface{})
+		digest, _ := ca["agent_input_digest"].(string)
+		return digest
 	}
 	return ""
+}
+
+// recordSeq is a record header's seq.
+func recordSeq(blk map[string]interface{}) float64 {
+	switch n := blk["seq"].(type) {
+	case json.Number:
+		f, _ := n.Float64()
+		return f
+	case float64:
+		return n
+	}
+	return 0
+}
+
+// saleOpensTo reports whether an opening's nonce, with text, recomputes to a
+// commitment.
+func saleOpensTo(opening map[string]interface{}, text, commitment string) bool {
+	nonce, _ := opening["nonce"].(string)
+	got, err := commitText(nonce, text)
+	return err == nil && text != "" && got == commitment
 }
 
 // sealedOrInlineReport is a deal bundle's report: the sealed report its
@@ -415,4 +542,60 @@ func jcsDigest(v any) string {
 	}
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
+}
+
+// threadAuthority is a thread's opening task-authority record digest, from
+// this device's store.
+func (s *dealSession) threadAuthority(ctx context.Context, threadID string) (string, error) {
+	var authority string
+	err := s.db.QueryRowContext(ctx, `SELECT record_digest FROM deal_steps WHERE deal_id=? AND kind='task_authority' ORDER BY n LIMIT 1`, threadID).Scan(&authority)
+	return authority, err
+}
+
+// openedThread is an opened thread a sale bundle carries: its sale_threads
+// entry, its registration's record digest, its task-authority record digest
+// and its last record's digest, read after the bundle step sealed its report.
+type openedThread struct {
+	entry                         map[string]interface{}
+	registration, authority, head string
+}
+
+// sealSaleEvidence seals, on the sale's log, each opened thread's opening
+// (if a crash came between its task authority and it) and then the cut,
+// naming each thread's last record, which already includes the report the
+// bundle step sealed in it. The cut grows the sale's log, so the checkpoint
+// cut after it is new: the order is the threads' reports, the cut, the
+// checkpoint. It adds each entry's openings and returns the sale's events,
+// leaving the session on the sale's log.
+func (s *dealSession) sealSaleEvidence(ctx context.Context, saleID string, opened []openedThread) ([]sealedEvent, error) {
+	cut := &dealSaleCut{Heads: []dealThreadHead{}}
+	for _, o := range opened {
+		if err := s.sealThreadOpened(ctx, saleID, o.registration, o.authority); err != nil {
+			return nil, err
+		}
+		cut.Heads = append(cut.Heads, dealThreadHead{Registration: o.registration, Head: o.head})
+	}
+	if s.t == nil {
+		if err := s.useDeal(ctx, saleID, false); err != nil {
+			return nil, err
+		}
+	}
+	events, err := s.load(ctx, saleID)
+	if err != nil {
+		return nil, err
+	}
+	cutEvent, err := s.seal(ctx, saleID, events, dealEvent{Kind: "sale_cut", SaleCut: cut})
+	if err != nil {
+		return nil, err
+	}
+	events = append(events, cutEvent)
+	for i, o := range opened {
+		for _, se := range events {
+			if t := se.Event.ThreadOpened; t != nil && t.Registration == o.registration {
+				o.entry["opened"] = map[string]interface{}{"nonce": se.Event.Nonces["task_authority"]}
+			}
+		}
+		o.entry["head"] = map[string]interface{}{"nonce": cutEvent.Event.Nonces[fmt.Sprintf("head_%d", i)], "record_digest": o.head}
+	}
+	return events, nil
 }

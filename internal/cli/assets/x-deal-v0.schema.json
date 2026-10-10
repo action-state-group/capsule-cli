@@ -18,6 +18,10 @@
                 "else": { "properties": { "x-deal-v0": { "required": ["baseline_ref", "prev"] } } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "thread" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_thread" }, "x-deal-v0": { "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" } }, "not": { "anyOf": [ { "required": ["counterparty"] }, { "required": ["refs"] } ] } } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "thread_opened" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_thread_opened" }, "x-deal-v0": { "required": ["refs"], "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" }, "refs": { "minItems": 1, "maxItems": 1, "items": { "properties": { "rel": { "const": "registration" } } } } }, "not": { "required": ["counterparty"] } } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "sale_cut" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_sale_cut" }, "x-deal-v0": { "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" } }, "not": { "anyOf": [ { "required": ["counterparty"] }, { "required": ["refs"] } ] } } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "intent" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_intent" } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "message" } } } } },
@@ -58,7 +62,7 @@
     },
     "short_text": { "type": "string", "minLength": 1, "maxLength": 200 },
     "record_type": {
-      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread"]
+      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread", "thread_opened", "sale_cut"]
     },
     "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer"] },
     "outcome_value": { "description": "completed, mismatch or open; or not_selected: the other side was not chosen, and nothing was done on the deal (no action is on record). Every value but open is final at a close.", "enum": ["completed", "mismatch", "open", "not_selected"] },
@@ -93,7 +97,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["rel", "type", "digest_alg", "digest"],
       "properties": {
-        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome", "confirms", "reverses", "supersedes"] },
+        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome", "confirms", "reverses", "supersedes", "registration"] },
         "type": { "const": "deal-record" },
         "digest_alg": { "const": "SHA-256" },
         "digest": { "$ref": "#/$defs/hex64" }
@@ -528,6 +532,22 @@
       "type": "object", "additionalProperties": false,
       "required": ["thread_ref_commitment"],
       "properties": { "thread_ref_commitment": { "$ref": "#/$defs/hex64" } }
+    },
+    "body_thread_opened": {
+      "description": "On a sale's own log: the evidence that the registered thread its registration ref names opened, sealed right after that thread's task authority: its task-authority record digest as a commitment under this step's own nonce.",
+      "type": "object", "additionalProperties": false,
+      "required": ["task_authority_commitment"],
+      "properties": { "task_authority_commitment": { "$ref": "#/$defs/hex64" } }
+    },
+    "body_sale_cut": {
+      "description": "On a sale's own log: the cut a sale bundle is made at, sealed before its checkpoint so the checkpoint is cut then. One head per opened thread: its registration, and its last record's digest at the cut as a commitment under this step's own nonce.",
+      "type": "object", "additionalProperties": false,
+      "required": ["thread_heads"],
+      "properties": {
+        "thread_heads": { "type": "array", "items": {
+          "type": "object", "additionalProperties": false, "required": ["registration", "head_commitment"],
+          "properties": { "registration": { "$ref": "#/$defs/digest_ref" }, "head_commitment": { "$ref": "#/$defs/hex64" } } } }
+      }
     },
     "body_outcome": {
       "type": "object", "additionalProperties": false,
