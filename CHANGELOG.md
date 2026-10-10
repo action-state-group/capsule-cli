@@ -2,6 +2,144 @@
 
 ## Unreleased
 
+## v0.1.0-rc15
+
+### Release tags are signed from v0.1.0-rc15
+
+- **Changed (release procedure).** From `v0.1.0-rc15` on, every release tag is SSH-signed by the
+  maintainer's key, whose public key is in the release monitor's allowed-signers file. The tag
+  step in `docs/RELEASING.md` is now two parts: prepare (record the merge commit) and one line
+  for the maintainer that signs and pushes the tag, with SSH pinned for the signature.
+- **Added: `release/known-unsigned.txt`**, a reference copy of the tags made before signing
+  began, exactly `v0.1.0-rc1` to `v0.1.0-rc14`, frozen. The monitor's operator copies it once
+  from the signed `v0.1.0-rc15` tag and checks its SHA-256 against the value in
+  `docs/RELEASE-TRANSPARENCY.md`, section 5. The monitor never reads the repository's file, and
+  a later edit of it is itself a red flag. An unsigned tag made after signing began is an
+  alarm, whatever its name.
+
+### The deal page is built through the emitter's slots, under a per-page CSP
+
+- **Changed:** `deal report --html` builds its page through agent-action-capsule's emitter
+  options (agent-action-capsule `fa49b4d`, with the browser runtime rebuilt from it):
+  - the title;
+  - the deal view's stylesheet (in the theme slot, until module stylesheets can be pinned);
+  - the deal view as a digest-pinned module;
+  - a bootstrap that builds the verified context once.
+
+  The page's Content-Security-Policy lists the digest of every inline script and style and allows
+  no network. Nothing is spliced into the page any more.
+- **Changed: the deal view reads only the verified context.** It no longer verifies the bundle,
+  reads `window.__BUNDLE__` or the bundle's disclosures or records, or recomputes a commitment.
+- **The words a page shows are checked when it is built.** These are the user's words and each
+  statement the agent made. capsulectl recomputes each against its sealed commitment and writes no
+  page whose words do not match. The page now says they were "checked when this page was built".
+- **The sealed-report refusal** stays in the build-time page gate.
+- **Interim:** the deal view's stylesheet rides in the theme slot until the emitter can pin a
+  module's own stylesheet (agent-action-capsule #214).
+- **Not in this change:**
+  - the static, no-script page: capsulectl does not produce it, and will report it as unavailable
+    (`no-document`) for now;
+  - the share gate's removal of the two vendored scripts before it scans a shared page is retired in
+    a later change.
+
+### A hex id or digest is never read as money
+
+- **Fixed.** The share gate no longer reads a currency code inside a run of hex as money ("…3cad8…"
+  as 8 Canadian dollars, a digest's "8aed…" as 8 dirham), and the spending-limit and floor check
+  takes out the deal's own ids and every digest, key and signature before it reads a copy. A deal's
+  share could be refused at random when such a run matched the user's limit; a code written against
+  an amount as a word of its own ("1700usd", "USD1,700") still counts.
+
+### The deal page's view is a registered presentation module
+
+- **Changed:** `deal report --html` puts the deal view in the page as the presentation module `capsulectl.deal-view/v0`, with its own manifest. The page's runtime selects it for a verified deal bundle. It reads only the verified context and what capsulectl checked when it built the page.
+- **Changed:** the deal view's stylesheet is its own, pinned in the page's Content-Security-Policy by its manifest. The theme slot holds theme tokens only.
+- **Checked when the page is built:** capsulectl writes no deal page whose view the page's runtime would refuse, or that could be ambiguous with a built-in view.
+- **Changed:** a deal page whose bundle does not verify shows the runtime's refusal and no deal section.
+- **Not in this change:** the deal view's words in a wording pack; the share gate on the page builder's inputs; the static, no-script page, which stays unavailable (`no-document`).
+
+### The deal page says first what the witness covers
+
+- **Changed:** the deal page opens with one line saying what its witness receipt covers, read from the bundle's witness block only:
+  - "Witnessed through step K of N at `<time>` (receipt attached); later steps: witness receipt pending the next tick", when the receipt covers part of the deal;
+  - "Witnessed through the last step this copy holds at `<time>` (receipt attached)", when it covers every step;
+  - "Not witnessed yet: witness receipt pending the next tick", before the first tick;
+  - "Not witnessed.", when there is no receipt.
+
+  The line never says the whole deal is witnessed. It is on every copy, shared ones included.
+
+### A plugin may offer presentations
+
+- **Added:** the cli-plugin/v1 handshake may carry `presentations`.
+  - **What each entry holds:** an `aac.presentation-manifest/v0` manifest (agent-action-capsule's
+    presentation contract) and the files it names by role (`script`, `style`, `wording`) with their
+    SHA-256.
+  - **Compatibility:** an older capsulectl ignores the member. A module's compatibility is its
+    manifest's `presentation_api` and `runtime_min`, not cli-plugin/v1.
+- **How each file is checked:** capsulectl reads it itself, from the launcher's own directory,
+  under the launcher's trust rules, at most 1 MiB. It must hash to both its entry's digest and the
+  digest the manifest pins.
+  - The manifest and any wording pack are checked against the contract's schema.
+  - A plugin's code module is carried in the module slot.
+  - Any failure refuses that plugin's presentations; its subcommands still run. `plugin ls` reports
+    the refusal as `presentations_refused: {reason, file, detail}`, with a machine-readable
+    reason: `digest_mismatch`, `path_escape`, `not_regular_file`, `writable`, `oversize`,
+    `invalid_manifest`,
+    `invalid_files`, `invalid_wording`, `unsupported_carrier`, `duplicate_id`, `missing_file`,
+    `untrusted_root` or `unreadable`.
+- **Layout:** a plugin keeps its files under `<launcher>.d/presentations/<module>/`, user-owned
+  `0644` files in `0755` directories.
+- **Presentations load only from the two built-in plugin roots.** `CAPSULECTL_PLUGIN_ROOTS` never
+  makes a directory a source of them.
+- **Not in this change:** putting presentations into a page.
+
+### `presentation build`: the offline page with the installed plugins' presentation modules
+
+- **Added:** `capsulectl presentation build --bundle FILE --out FILE [--audience A] [--depth L] [--module ID]` writes the offline evidence page with the installed plugins' trusted-executable presentation modules in its module slots. The page's own runtime decides which module renders.
+- **Checked before anything is written:**
+  - the page's runtime (`aac.presentation-api/v0`, version `0.1.0`) would refuse no module given to it (`presentation_api_unsupported`, `runtime_too_old`);
+  - no two manifests the page would hold, the built-ins included, are of one tier and can match the same bundle (`ambiguous`);
+  - no id is given twice (`duplicate_id`), and no manifest can never match (`dead_manifest`).
+
+  A refusal writes no page, and the result names the module and the reason.
+- **The page is written only when `verify --bundle` calls the bundle VALID.**
+- **What the result reports:** each module carried, and what was left out (`not_included` for a declarative module; `plugins_refused` for a plugin whose presentations were refused).
+- **Not in this change:**
+  - `presentation list`;
+  - the fragment and embedded packagings;
+  - the static page, which is reported as unavailable (`no-document`).
+
+### A seller's offer is classed `marketplace.offer`
+
+- **Changed (wire; records sealed before re-derive unchanged).** An offer is now classed
+  `marketplace.offer`; before this, `external_commitment.other`. It is the taxonomy-version-6 class a
+  seller's rules select on: under the old class no seller rule reached an offer, so an offer below the
+  floor was not held to it.
+- **No taxonomy change.** Version 6 already has `marketplace.offer`. Each step keeps its own class:
+  an offer sealed before this change re-derives as `external_commitment.other`.
+
+### A sale thread's check names the thread's buyer
+
+- **Changed (wire; records sealed before re-derive unchanged).** A check on a sale's thread that
+  names no one now seals the thread's buyer as its `counterparty`: the keyed fingerprints the
+  thread's opening sealed, per deal, as a purchase's check carries them (typed records:
+  `body.counterparty`, `hmac-sha256-chain-key`). Rules keyed on the counterparty, such as one
+  commitment per sale, now have a target on a seller's deal.
+- Shared copies carry the fingerprints, never the buyer's identifiers. No profile-keyed companion is
+  sealed for such a check.
+
+### A seller's commit tells the rules checker when the accepted offer was made
+
+- **Added (checker input only; nothing sealed changes).** The check of a seller's `commit` that rests
+  on an accepted offer now carries `record.proposal_at`. That is the offer's proposed-action record's
+  sealed `at`, so a rule on an offer's expiry can be evaluated: before, it could not be checked on
+  any commit.
+- It is the latest offer, with a recorded acceptance and no change of details since: the same
+  acceptance the commit gate requires. It is absent on a buyer's deal, on any other action, with no
+  acceptance in force, and on history entries.
+- `record` is open in `external-check-input-v0.schema.json`, so a checker that predates the member
+  ignores it.
+
 ### A history act on a sale's thread carries the sale's item reference
 
 - **Added (checker input, additive).** In `external-check-input/v0`, each `history` entry whose
@@ -23,6 +161,58 @@
   as `delivery_date`; capsulectl never seals `delivery_promise` again. A claim sealed with it
   stays valid in the profile schema, re-derives, and is labelled as before on the page.
 - The page labels every class; the deal skill and the profile list them.
+
+### Every copy of a seller's deal engages `x-deal-seller/v0`
+
+- **Added (bundle packaging; no record changes).** Every copy of a deal the user sells (the
+  user's own, the counterparty's and an adjudicator's, a sale's threads included) engages the
+  bundle extension kind `x-deal-seller/v0`, with an empty block, so a viewer can choose a
+  seller's presentation from the engaged kinds. It carries no value and is never authority:
+  which side the user is on stays the opening intent's sealed `party_role`. A buyer's deal
+  engages nothing new.
+
+### Every amount-bearing check names the payee, not only a pay
+
+- **Changed (wire, additive; records sealed before re-derive unchanged).** Where the user buys, a
+  `commit`, `sign` or `cancel` check that states an `amount_minor` now names the deal's payee as a
+  `pay` check does (`counterparty.ids.payee`, the per-deal fingerprint), and is followed by its
+  `counterparty_profile` companion (the payee keyed per profile, withheld from every shared copy).
+  A check without an amount, a share, and a seller's `commit` or `offer` name none. In x-deal-v0
+  and typed records alike.
+- **The rules checker sees one merchant as one payee on these checks too:** the checked record and
+  each earlier act in its history carry the `counterparty_profile` of the check they rest on, so a
+  repeated booking in one deal reads as a repeat, and a merchant booked before is not new in a
+  later deal.
+
+### A close seals who ended the deal and why
+
+- **Added (wire, additive; records sealed before re-derive unchanged).** A close's outcome and
+  close records (and, in typed records, its `action-outcome/v0`) carry `actor` (`user`, `agent`
+  or `platform`) and `reason` from a closed set: `completed`, `delivered_mismatch`,
+  `awaiting_delivery`, `not_selected`, `user_closed`, `agent_could_not_complete`,
+  `merchant_rejected`, `payment_failed`, `cancelled_in_window`, `not_delivered`, `other`. The
+  reason follows from the status where it can; a close with `not_received` must state it.
+- **Changed (CLI).** `deal close` with `status: not_received` and no `reason` is refused. `actor`
+  defaults to `agent` (`user` for `user_closed`); a reason or actor the close contradicts is
+  refused.
+- The report and page read a close as an actor-marked line ("You closed this deal", "The agent
+  could not complete this deal").
+
+### Both parties' copies of a deal can carry one deal id
+
+- **Added.** `deal open --deal-id deal-…` opens your side of a deal the other party opened, under the
+  deal id their `deal open` minted. Both copies then seal one `deal_id`, so a `composed/v1` bundle
+  joins them as one deal. The id is opaque (`deal-` and 16 hex), each party keeps its own per-deal
+  key, and an id the profile already holds is refused. Without the flag a deal gets a new random id,
+  as before.
+
+### `verify --bundle` prints the same bytes on every run
+
+- **Fixed.** Each `disclosures` array in `verify --bundle`'s result is now ordered by capsule id,
+  then member, then status. That covers the containing bundle's array and each composed member
+  bundle's. Before, a record that withheld both `agent_input` and `agent_output` listed them in
+  either order, so the same bundle could print differently from run to run. The verdict was
+  never affected.
 
 ## v0.1.0-rc14
 
