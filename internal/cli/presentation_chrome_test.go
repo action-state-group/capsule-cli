@@ -188,6 +188,9 @@ type pageView struct {
 	width, height int
 	mobile        bool
 	media         string // "" (screen) or "print"
+	// scriptsOff loads the page with JavaScript off, as a script-blocking
+	// viewer or a host's inline preview shows it.
+	scriptsOff bool
 }
 
 var presentationViews = []pageView{
@@ -251,6 +254,9 @@ func (c *headlessChrome) load(t *testing.T, url string, view pageView) openedPag
 	require.NoError(t, c.call(s, "Emulation.setDeviceMetricsOverride", map[string]any{
 		"width": view.width, "height": view.height, "deviceScaleFactor": 1, "mobile": view.mobile}, nil))
 	require.NoError(t, c.call(s, "Emulation.setEmulatedMedia", map[string]any{"media": view.media}, nil))
+	if view.scriptsOff {
+		require.NoError(t, c.call(s, "Emulation.setScriptExecutionDisabled", map[string]any{"value": true}, nil))
+	}
 	require.NoError(t, c.call(s, "Page.navigate", map[string]any{"url": url}, nil))
 	c.waitFor(t, s, "Page.loadEventFired")
 	return p

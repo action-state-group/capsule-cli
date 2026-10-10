@@ -359,12 +359,58 @@ func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (
   await renderEvidenceGraph(context, document.getElementById("app"));
 })();`
 	return emitter.EmitEvidenceGraphHTMLWithOptions(b, evidenceGraphIIFE, emitter.Options{
-		Title:             "Deal report",
+		Title:             dealPageTitle(b, openings),
 		ThemeCSS:          dealThemeCSS,
 		CoreRuntimeSHA256: strings.TrimSpace(evidenceGraphIIFESHA256),
 		Modules:           []emitter.Module{module},
 		Bootstrap:         bootstrap,
 	})
+}
+
+// dealPageTitleWords caps the words a page title quotes.
+const dealPageTitleWords = 120
+
+// dealPageTitle is the page's title: what a tab, or a host's preview of the
+// file, shows before (or without) any script. It says only what this copy
+// already shows in the clear: on the user's own copy, the words they asked,
+// and only when they were checked against their sealed commitment when the
+// page was built (dealPageOpenings); on a shared copy, from which those
+// words are withheld, only whom the copy is for. Never a structured field:
+// no floor, limit or withheld value. The share gate scans the title with
+// the rest of a shared page.
+func dealPageTitle(b map[string]interface{}, openings map[string]interface{}) string {
+	report := dealPageReport(b)
+	switch audience, _ := report["audience"].(string); audience {
+	case dealAudienceCounterparty:
+		return "Deal report: a shared copy for the other party"
+	case dealAudienceAdjudicator:
+		return "Deal report: a shared copy for an adjudicator"
+	}
+	opening, _ := report["asked_opening"].(map[string]interface{})
+	text, _ := opening["text"].(string)
+	if openings["asked"] != true || strings.TrimSpace(text) == "" {
+		return "Deal report"
+	}
+	words := []rune(strings.Join(strings.Fields(text), " "))
+	if len(words) > dealPageTitleWords {
+		words = append(words[:dealPageTitleWords-1], '…')
+	}
+	return "Deal report: “" + string(words) + "”"
+}
+
+// dealPageReport is the report text the page shows: the sealed report's
+// input, or (a bundle written before reports were sealed) the extension.
+func dealPageReport(b map[string]interface{}) map[string]interface{} {
+	exts, _ := b["extensions"].(map[string]interface{})
+	report, _ := exts[dealProfile].(map[string]interface{})
+	if id, ok := report["sealed_report"].(string); ok {
+		disclosures, _ := b["disclosures"].(map[string]interface{})
+		d, _ := disclosures[id].(map[string]interface{})
+		in, _ := d["agent_input"].(map[string]interface{})
+		sealed, _ := in["report"].(map[string]interface{})
+		return sealed
+	}
+	return report
 }
 
 // dealViewModule is the deal view as the emitter's module, after the two
