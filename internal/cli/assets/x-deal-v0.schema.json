@@ -16,6 +16,8 @@
       "else": { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "sale" } } } } },
                 "then": { "properties": { "body": { "$ref": "#/$defs/body_sale" }, "x-deal-v0": { "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" } }, "not": { "anyOf": [ { "required": ["baseline_ref"] }, { "required": ["prev"] }, { "required": ["counterparty"] }, { "required": ["refs"] } ] } } } },
                 "else": { "properties": { "x-deal-v0": { "required": ["baseline_ref", "prev"] } } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "thread" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_thread" }, "x-deal-v0": { "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" } }, "not": { "anyOf": [ { "required": ["counterparty"] }, { "required": ["refs"] } ] } } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "intent" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_intent" } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "message" } } } } },
@@ -56,7 +58,7 @@
     },
     "short_text": { "type": "string", "minLength": 1, "maxLength": 200 },
     "record_type": {
-      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile"]
+      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread"]
     },
     "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer"] },
     "outcome_value": { "description": "completed, mismatch or open; or not_selected: the other side was not chosen, and nothing was done on the deal (no action is on record). Every value but open is final at a close.", "enum": ["completed", "mismatch", "open", "not_selected"] },
@@ -520,6 +522,12 @@
         { "if": { "properties": { "reason": { "const": "user_closed" } }, "required": ["reason"] }, "then": { "properties": { "actor": { "const": "user" } } } },
         { "if": { "properties": { "reason": { "const": "agent_could_not_complete" } }, "required": ["reason"] }, "then": { "properties": { "actor": { "const": "agent" } } } }
       ]
+    },
+    "body_thread": {
+      "description": "A sale's registration of one thread, on the sale's own log, sealed before the thread opens: the thread's deal id as a commitment under this step's own nonce, nothing else. The thread's task-authority/v0 names this record with its registration ref.",
+      "type": "object", "additionalProperties": false,
+      "required": ["thread_ref_commitment"],
+      "properties": { "thread_ref_commitment": { "$ref": "#/$defs/hex64" } }
     },
     "body_outcome": {
       "type": "object", "additionalProperties": false,

@@ -112,6 +112,8 @@ func dealTexts(ev dealEvent) map[string]string {
 		t["card"] = ev.Check.Card
 	case ev.Approval != nil && ev.Approval.Approver == "user":
 		t["said"] = ev.Approval.Said
+	case ev.Thread != nil:
+		t["thread_ref"] = ev.Thread.ThreadID
 	case ev.TaskAuthority != nil:
 		t["verbatim"] = ev.TaskAuthority.Verbatim
 		boundsText(t, *ev.TaskAuthority)
@@ -623,6 +625,13 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		body["terms"] = termsBody(o.Terms)
 		body["recourse"] = recourseBody(o.Recourse)
 		if body["item_ref_commitment"], err = commit("item_ref"); err != nil {
+			return nil, err
+		}
+	case "thread":
+		// A sale's registration of one thread, on the sale's own log: the
+		// thread's deal id as a commitment, nothing else.
+		rtype = "thread"
+		if body["thread_ref_commitment"], err = commit("thread_ref"); err != nil {
 			return nil, err
 		}
 	case "open":

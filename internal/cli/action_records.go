@@ -297,6 +297,14 @@ func taskAuthorityRecord(ev dealEvent, events []sealedEvent, commit func(string)
 		}
 	}
 	block["refs"] = []interface{}{relRef("source", events[0].Digest)}
+	// A thread opened after threads were registered names its registration
+	// on the sale's log; one with none is refused, never sealed.
+	if ev.SaleAuthority != "" && ev.ThreadRegistration != "" && ev.SaleRegistration == "" {
+		return nil, inputError("a sale's thread is registered on the sale's log before it opens: its task authority names that registration")
+	}
+	if ev.SaleRegistration != "" {
+		block["refs"] = append(block["refs"].([]interface{}), relRef("registration", ev.SaleRegistration))
+	}
 	return typedHeader(typeTaskAuthority, block, body), nil
 }
 

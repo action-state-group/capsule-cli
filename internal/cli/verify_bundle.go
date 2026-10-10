@@ -289,6 +289,11 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 				claims = append(claims, aacbundle.ClaimResult{Status: "fail", Findings: entry["findings"].([]string)})
 			}
 		}
+		if x.Kind == dealSaleExtension {
+			sale, claim := saleBundleEntry(value, result, directory)
+			entry = sale
+			claims = append(claims, claim)
+		}
 		if x.Composed != nil {
 			composed, memberVerdicts := composedOutput(value, x.Composed, directory)
 			entry["composed"] = composed
@@ -454,6 +459,12 @@ func dealReportEntry(value map[string]interface{}, result aacbundle.Verification
 		// sealed: text in the extension instead of a pointer is a downgrade
 		// (the record kept, its disclosure dropped, edited text inline).
 		return fail("sealed_report_not_named")
+	}
+	if _, sale := ext[dealSaleExtension]; sale {
+		return map[string]any{
+			"kind": dealProfile, "status": "uninterpreted", "findings": []string{"extension_unbound"},
+			"note": "a sale's section: its sale_threads openings are checked against the sealed registrations under " + dealSaleExtension,
+		}
 	}
 	return map[string]any{
 		"kind": dealProfile, "status": "uninterpreted", "findings": []string{"extension_unbound"},

@@ -534,14 +534,14 @@ def _ref(d):
 
 
 def check_sale_chain(records):
-    """A sale's own log (section 6, rule 10): its root and its one task authority,
-    nothing else. Raises StageError('chain')."""
+    """A sale's own log (section 6, rule 10): its root, its one task authority, then
+    one thread record per registered thread, nothing else. Raises StageError('chain')."""
     def fail(i, msg):
         raise StageError("chain", f"seq position {i + 1}: {msg}")
 
-    if len(records) != 2:
-        fail(min(len(records), 2) - 1 if records else 0, "a sale's log holds its root and its one task authority, nothing else")
-    root, ta = records
+    if len(records) < 2:
+        fail(min(len(records), 2) - 1 if records else 0, "a sale's log holds its root and its one task authority, then its thread registrations")
+    root, ta = records[0], records[1]
     blk = root["x-deal-v0"]
     if blk["seq"] != 1:
         fail(0, "a sale's root is the first record of its log")
@@ -559,6 +559,16 @@ def check_sale_chain(records):
         fail(1, "a sale's own task authority names no other sale")
     if root["body"]["intent"].get("bounds_commitment") is not None and "bounds_commitment" not in ta["body"]:
         fail(1, "the sale's task authority carries the floor its root states")
+    prev, at = record_digest(ta), ta["at"]
+    for i in range(2, len(records)):
+        r = records[i]
+        if is_typed(r) or r["x-deal-v0"]["record_type"] != "thread":
+            fail(i, "after its task authority, a sale's log holds only thread registrations")
+        b = r["x-deal-v0"]
+        if b["seq"] != i + 1 or b["deal_id"] != blk["deal_id"] or b.get("prev") != _ref(prev) \
+                or b.get("baseline_ref") != _ref(d0) or b["at"] < at:
+            fail(i, "a thread registration follows the sale's previous record in the same log")
+        prev, at = record_digest(r), b["at"]
 
 
 def check_chain(records):
@@ -583,7 +593,7 @@ def check_chain(records):
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by", "reverses", "source"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"},
-                    "task_authority": {"source", "approves"}, "platform_approval": set(), "policy_change": set(),
+                    "task_authority": {"source", "approves", "registration"}, "platform_approval": set(), "policy_change": set(),
                     "check": {"supersedes"}, "counterparty_acceptance": set(),
                     "counterparty_profile": {"about"}}
     # The user's limits in force. Absent allowed = no restriction; present and
@@ -658,9 +668,17 @@ def check_chain(records):
                 fail(i, "at is earlier than the previous record's")
         refs = b.get("refs", [])
         by_rel = {}
+        registrations = 0
         for r in refs:
             if r["rel"] not in allowed_rels.get(t, set()):
                 fail(i, f"rel {r['rel']!r} is not allowed on a {t} record")
+            if r["rel"] == "registration":
+                # A sale's thread names its registration, a record on the sale's
+                # own log: checked with the sale's bundle, never in this chain.
+                registrations += 1
+                if registrations > 1 or "sale_authority_commitment" not in body:
+                    fail(i, "only a sale's thread names a registration, and exactly one")
+                continue
             j = by_digest.get(r["digest"])
             if j is None or j >= i:
                 fail(i, f"ref {r['rel']} does not name an earlier record of this deal")

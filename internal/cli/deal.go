@@ -616,6 +616,9 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	ev.RuleInputs = dealRuleInputsVersion
 	ev.ClaimCommit = dealClaimCommitVersion
 	ev.ReversesRef = dealReversesRefVersion
+	if dealRegistersThreads {
+		ev.ThreadRegistration = dealThreadRegistrationVersion
+	}
 	ev.ThreadCounterparty = dealThreadCounterpartyVersion
 	ev.OfferClass = dealOfferClassVersion
 	ev.Nonces = map[string]string{}
@@ -952,13 +955,26 @@ func dealOpenCommand() *cobra.Command {
 			}
 			o.Materiality = predicate.ref()
 			dealID := carried
+			// A sale's thread is registered on the sale's log first: the
+			// registration names the thread's id, and the thread's task
+			// authority names the registration.
+			registration := ""
+			if o.Sale != "" && dealRegistersThreads {
+				if dealID, registration, err = s.registerThread(ctx, o.Sale, carried); err != nil {
+					return err
+				}
+				if err = s.t.close(); err != nil {
+					return err
+				}
+				s.t = nil
+			}
 			if dealID == "" {
 				id := make([]byte, 8)
 				if _, err := rand.Read(id); err != nil {
 					return err
 				}
 				dealID = "deal-" + hex.EncodeToString(id)
-			} else {
+			} else if carried != "" {
 				var held int
 				if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_keys WHERE deal_id=?`, dealID).Scan(&held); err != nil {
 					return err
@@ -978,7 +994,7 @@ func dealOpenCommand() *cobra.Command {
 			// right after the baseline it was asked in.
 			if o.Records == recordsTyped {
 				intent := o.Intent
-				if _, err = s.seal(ctx, dealID, []sealedEvent{se}, dealEvent{Kind: "task_authority", TaskAuthority: &intent, SaleAuthority: o.SaleAuthority}); err != nil {
+				if _, err = s.seal(ctx, dealID, []sealedEvent{se}, dealEvent{Kind: "task_authority", TaskAuthority: &intent, SaleAuthority: o.SaleAuthority, SaleRegistration: registration}); err != nil {
 					return err
 				}
 			}

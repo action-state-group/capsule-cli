@@ -267,7 +267,7 @@ func TestTheProfileCheckerHoldsASalesLog(t *testing.T) {
 		want  string
 	}{
 		"the task authority dropped": {recs[:1], "its root and its one task authority"},
-		"a second task authority":    {append(append([]map[string]any{}, recs...), recs[1]), "its root and its one task authority"},
+		"a second task authority":    {append(append([]map[string]any{}, recs...), recs[1]), "holds only thread registrations"},
 		"the authority names a sale": {relinked(t, recs, nil, map[int]func(map[string]any){1: func(r map[string]any) {
 			r["body"].(map[string]any)["sale_authority_commitment"] = recordDigest(t, recs[0])
 		}}), "names no other sale"},
