@@ -58,6 +58,16 @@
 - **Changed:** a deal page whose bundle does not verify shows the runtime's refusal and no deal section.
 - **Not in this change:** the deal view's words in a wording pack; the share gate on the page builder's inputs; the static, no-script page, which stays unavailable (`no-document`).
 
+### The deal page says first what the witness covers
+
+- **Changed:** the deal page opens with one line saying what its witness receipt covers, read from the bundle's witness block only:
+  - "Witnessed through step K of N at `<time>` (receipt attached); later steps: witness receipt pending the next tick", when the receipt covers part of the deal;
+  - "Witnessed through the last step this copy holds at `<time>` (receipt attached)", when it covers every step;
+  - "Not witnessed yet: witness receipt pending the next tick", before the first tick;
+  - "Not witnessed.", when there is no receipt.
+
+  The line never says the whole deal is witnessed. It is on every copy, shared ones included.
+
 ### A plugin may offer presentations
 
 - **Added:** the cli-plugin/v1 handshake may carry `presentations`.
@@ -187,6 +197,14 @@
   refused.
 - The report and page read a close as an actor-marked line ("You closed this deal", "The agent
   could not complete this deal").
+
+### Both parties' copies of a deal can carry one deal id
+
+- **Added.** `deal open --deal-id deal-…` opens your side of a deal the other party opened, under the
+  deal id their `deal open` minted. Both copies then seal one `deal_id`, so a `composed/v1` bundle
+  joins them as one deal. The id is opaque (`deal-` and 16 hex), each party keeps its own per-deal
+  key, and an id the profile already holds is refused. Without the flag a deal gets a new random id,
+  as before.
 
 ### `verify --bundle` prints the same bytes on every run
 
