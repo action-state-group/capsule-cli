@@ -78,7 +78,7 @@ func TestTheDealPageIsBuiltThroughTheEmittersSlots(t *testing.T) {
 	assert.Equal(t, 2, readers, "the bundle slot sets it, the bootstrap reads it")
 	assert.Contains(t, directives["script-src"], cspSource(dealViewJS))
 	assert.NotContains(t, page, `id="deal-countersign"`, "nothing beside the emitter's slots")
-	assert.Contains(t, page, "<title>Deal report</title>")
+	assert.Regexp(t, `<title>Deal report: “[^<]+”</title>`, page, "the user's own copy is titled with the words they asked")
 }
 
 // The deal view never verifies, never reads the bundle itself and never
@@ -254,4 +254,45 @@ func TestADealViewThePageWouldRefuseWritesNoPage(t *testing.T) {
 			assert.NoFileExists(t, path)
 		})
 	}
+}
+
+// The page's title, what a tab or a host's preview shows before any script
+// runs, says only what that copy already shows in the clear: the user's own
+// copy quotes the words they asked (checked when the page was built); a
+// shared copy, from which those words are withheld, says only whom it is
+// for.
+func TestTheDealPageTitleSaysOnlyWhatTheCopyShows(t *testing.T) {
+	dealFixture(t)
+	id := retailDeal(t)
+	asked := "Order the cat sticker in my cart at Example Stickers"
+	title := func(page string) string {
+		m := regexp.MustCompile(`<title>([^<]*)</title>`).FindStringSubmatch(page)
+		require.NotNil(t, m)
+		return m[1]
+	}
+	dir := t.TempDir()
+	own := filepath.Join(dir, "own.html")
+	dealRun(t, "report", "--deal", id, "--html", own)
+	assert.Equal(t, "Deal report: “"+asked+"”", title(string(mustRead(t, own))))
+	for audience, want := range map[string]string{
+		"counterparty": "Deal report: a shared copy for the other party",
+		"adjudicator":  "Deal report: a shared copy for an adjudicator",
+	} {
+		path := filepath.Join(dir, audience+".html")
+		dealRun(t, "report", "--deal", id, "--html", path, "--share", audience, "--to", "the shop's support desk")
+		assert.Equal(t, want, title(string(mustRead(t, path))), audience)
+	}
+
+	report := func(audience string, text string) map[string]interface{} {
+		return map[string]interface{}{"extensions": map[string]interface{}{dealProfile: map[string]interface{}{
+			"audience": audience, "asked_opening": map[string]interface{}{"nonce": "n", "text": text}}}}
+	}
+	assert.Equal(t, "Deal report", dealPageTitle(report("keep", asked), map[string]interface{}{"asked": false}), "words not checked when the page was built are not quoted")
+	assert.Equal(t, "Deal report: “a b”", dealPageTitle(report("keep", " a\n\tb "), map[string]interface{}{"asked": true}))
+	assert.Equal(t, "Deal report: “Order the [31msticker”", dealPageTitle(report("keep", "Order\x00 the \x1b[31msticker\u202e"), map[string]interface{}{"asked": true}),
+		"NUL, the escape character and a bidi override are dropped (what is left of the escape sequence is plain text)")
+	assert.Equal(t, "Deal report", dealPageTitle(report("keep", "\x00\u202e\u200b"), map[string]interface{}{"asked": true}), "nothing left to quote")
+	long := dealPageTitle(report("keep", strings.Repeat("x", 500)), map[string]interface{}{"asked": true})
+	assert.Equal(t, "Deal report: “"+strings.Repeat("x", dealPageTitleWords-1)+"…”", long)
+	assert.Equal(t, "Deal report: a shared copy for the other party", dealPageTitle(report(dealAudienceCounterparty, asked), map[string]interface{}{"asked": true}), "a shared copy never quotes them")
 }

@@ -104,7 +104,7 @@ func TestDealReportIsOneLocalVerifyingPage(t *testing.T) {
 	require.NoError(t, err)
 	html := string(raw)
 	assert.NotRegexp(t, regexp.MustCompile(`(?i)<(script|link|img|iframe)[^>]+(src|href)=`), html)
-	assert.Contains(t, html, "<title>Deal report</title>")
+	assert.Regexp(t, `<title>Deal report: “[^<]+”</title>`, html, "the user's own copy is titled with the words they asked")
 	assert.Contains(t, html, string(evidenceGraphIIFE))
 	assert.Contains(t, html, "If you would rather not take this page's word for the first list, open verify.agentactioncapsule.org and drop this file in.")
 

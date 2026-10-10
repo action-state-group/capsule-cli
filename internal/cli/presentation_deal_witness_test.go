@@ -142,3 +142,41 @@ func TestPresentationDealSaysWhichChecksRan(t *testing.T) {
 		assert.NotContains(t, got.Text, "all records", name)
 	}
 }
+
+// With JavaScript off, as a script-blocking viewer or a host's inline
+// preview shows it, the deal page runs nothing and its title still says
+// what that copy shows in the clear: the words asked on the user's own
+// copy, whom it is for on a shared copy.
+func TestPresentationDealPageWithoutJavaScript(t *testing.T) {
+	binary := os.Getenv("CAPSULECTL_CHROME")
+	if binary == "" {
+		t.Skip("CAPSULECTL_CHROME is not set")
+	}
+	chrome := startHeadlessChrome(t, binary)
+	dealFixture(t)
+	id := retailDeal(t)
+	dir := t.TempDir()
+	off := presentationViews[1]
+	off.name, off.scriptsOff = "scripts off", true
+	for name, c := range map[string]struct {
+		extra []string
+		title string
+	}{
+		"own":          {nil, "Deal report: “Order the cat sticker in my cart at Example Stickers”"},
+		"counterparty": {[]string{"--share", "counterparty", "--to", "the shop's support desk"}, "Deal report: a shared copy for the other party"},
+		"adjudicator":  {[]string{"--share", "adjudicator", "--to", "the shop's support desk"}, "Deal report: a shared copy for an adjudicator"},
+	} {
+		path := filepath.Join(dir, name+".html")
+		dealRun(t, append([]string{"report", "--deal", id, "--html", path}, c.extra...)...)
+		page := chrome.load(t, "file://"+path, off)
+		var got struct {
+			Title  string `json:"title"`
+			Ran    bool   `json:"ran"`
+			Bundle bool   `json:"bundle"`
+		}
+		page.eval(t, `({ title: document.title, ran: document.getElementById("deal") !== null || document.getElementById("app").childElementCount > 0, bundle: typeof window.__BUNDLE__ !== "undefined" })`, &got)
+		assert.False(t, got.Ran, "%s: no script ran", name)
+		assert.False(t, got.Bundle, "%s: not even the bundle slot", name)
+		assert.Equal(t, c.title, got.Title, name)
+	}
+}

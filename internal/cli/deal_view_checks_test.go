@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -81,7 +83,9 @@ func TestTheDealViewSaysWhichChecksRan(t *testing.T) {
 	contexts["cites a signer"] = cites
 
 	producerKey := base()
-	producerKey["bundle"].(map[string]any)["extensions"].(map[string]any)["producer-key/v1"] = map[string]any{"public_key": "ab"}
+	// A real key, so the case is the one a bundle would carry.
+	producerPublic := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)).Public().(ed25519.PublicKey)
+	producerKey["bundle"].(map[string]any)["extensions"].(map[string]any)["producer-key/v1"] = map[string]any{"public_key": hex.EncodeToString(producerPublic)}
 	contexts["producer-key block"] = producerKey
 
 	countersigned := base()
