@@ -602,6 +602,12 @@ At every check, after the `check` record is sealed:
     and none when it has none (an act done without a check, or one checked before checks had a
     companion). A rule keyed on who was paid before reads one merchant as one payee across the
     profile's deals from there on; acts checked before keep only their per-deal fingerprints.
+    Each act also carries `counterparty`, the counterparty that check sealed, exactly as sealed (an
+    x-deal-v0 check's header `counterparty`, `hmac-sha256-deal-key`; a typed check's
+    `body.counterparty`, `hmac-sha256-chain-key`), beside the record and never in it: an act record
+    names no counterparty itself. It is keyed per deal, so it matches the deal's own checks (a
+    repeated booking in one deal) and never another deal's; none when the act rests on no check or
+    the check names none.
     An act on a sale's thread also carries `item_ref`, the sale's item reference (the same plain
     value as the top-level `item_ref` below, beside the record and never in it), so a rule sees an
     earlier thread's acceptance of the same item; an act of any other deal carries none;

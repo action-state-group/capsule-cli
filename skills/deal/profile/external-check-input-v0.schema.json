@@ -148,6 +148,18 @@
             }
           }
         },
+        "counterparty": {
+          "description": "Optional, supplied by capsulectl beside the sealed capsule (never part of it), on history entries: the counterparty the act's check sealed, exactly as sealed (an x-deal-v0 check's header counterparty, fp_alg hmac-sha256-deal-key; a typed check's body.counterparty, fp_alg hmac-sha256-chain-key). The ids are keyed per deal: equal across one deal's acts and checks, never across deals (counterparty_profile is the cross-deal key). An act record names no counterparty itself; this is who the act was with. Resolved act -> the verdict it rests on -> the check. Absent when that check names none.",
+          "type": "object",
+          "required": ["fp_alg", "ids"],
+          "properties": {
+            "fp_alg": { "enum": ["hmac-sha256-deal-key", "hmac-sha256-chain-key"] },
+            "ids": {
+              "type": "object",
+              "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          }
+        },
         "proposal_at": {
           "description": "Optional, supplied by capsulectl beside the sealed capsule (never part of it), on the checked record only: on the check of a seller's commit that rests on an accepted offer (the latest offer, with a recorded acceptance and no change of details since), the offer's proposed-action record's sealed `at`, byte for byte. Absent on a buyer's deal, on any other action, with no acceptance in force, and on history entries. Never null.",
           "type": "string",
