@@ -252,3 +252,92 @@ func TestASaleCopyWithoutOpeningsOrACutIsIncomplete(t *testing.T) {
 	assert.Contains(t, joined, "opened_not_evidenced:")
 	assert.Contains(t, joined, "no_sale_cut")
 }
+
+// sealCutWith makes the sale bundle with a cut sealing only the heads keep
+// returns: a readable, sealed cut that names fewer threads.
+func sealCutWith(t *testing.T, saleID string, keep func([]dealThreadHead) []dealThreadHead) map[string]any {
+	t.Helper()
+	saved := dealSaleCutHeads
+	dealSaleCutHeads = keep
+	defer func() { dealSaleCutHeads = saved }()
+	bundle, _ := saleBundle(t, saleID)
+	return bundle
+}
+
+func findingsWith(findings []string, prefix string) []string {
+	var out []string
+	for _, f := range findings {
+		if strings.HasPrefix(f, prefix) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// One name per cut finding. A readable cut without a present thread's head
+// says thread_not_in_the_cut for that thread; a cut with no heads says it
+// for each; no readable cut (withheld, or one whose disclosure does not
+// match what its record sealed, which is never read) says no_sale_cut,
+// once.
+func TestEachCutFindingHasOneName(t *testing.T) {
+	saleID, a, b := twoThreadSale(t)
+
+	one := sealCutWith(t, saleID, func(h []dealThreadHead) []dealThreadHead { return h[:1] })
+	verdict, findings := verifySale(t, one)
+	assert.Equal(t, "INCOMPLETE", verdict, "a sealed cut that names A only")
+	assert.Equal(t, []string{"thread_not_in_the_cut:" + b}, findingsWith(findings, "thread_not_in_the_cut"))
+	assert.Empty(t, findingsWith(findings, "no_sale_cut"))
+
+	empty := sealCutWith(t, saleID, func([]dealThreadHead) []dealThreadHead { return []dealThreadHead{} })
+	verdict, findings = verifySale(t, empty)
+	assert.Equal(t, "INCOMPLETE", verdict, "a sealed cut with no heads")
+	assert.ElementsMatch(t, []string{"thread_not_in_the_cut:" + a, "thread_not_in_the_cut:" + b}, findingsWith(findings, "thread_not_in_the_cut"))
+	assert.Empty(t, findingsWith(findings, "no_sale_cut"))
+
+	whole, _ := saleBundle(t, saleID)
+	raw, err := json.Marshal(whole)
+	require.NoError(t, err)
+
+	withheld := decodeExact(t, raw)
+	withholdLatestCut(t, withheld)
+	verdict, findings = verifySale(t, withheld)
+	assert.Equal(t, "INCOMPLETE", verdict, "the cut withheld")
+	assert.Equal(t, []string{"no_sale_cut"}, findingsWith(findings, "no_sale_cut"), "once, not per thread")
+	assert.Empty(t, findingsWith(findings, "thread_not_in_the_cut"))
+
+	// Each latest cut's disclosed body edited: a head dropped, or a head
+	// added. Neither matches what the cut's record sealed, so the bundle is
+	// INVALID and the cut is never read.
+	for name, edit := range map[string]func([]any) []any{
+		"a head dropped": func(h []any) []any { return h[:1] },
+		"a head added":   func(h []any) []any { return append(h, h[0]) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			x := decodeExact(t, raw)
+			cuts := saleBodies(t, x, "sale_cut")
+			latest := cuts[len(cuts)-1]
+			latest["thread_heads"] = edit(latest["thread_heads"].([]any))
+			verdict, findings := verifySale(t, x)
+			assert.Equal(t, "INVALID", verdict)
+			assert.Equal(t, []string{"no_sale_cut"}, findingsWith(findings, "no_sale_cut"))
+			assert.Empty(t, findingsWith(findings, "thread_not_in_the_cut"), "an unread cut has no threads to be absent from")
+		})
+	}
+}
+
+// withholdLatestCut drops the disclosure of the sale log's latest cut.
+func withholdLatestCut(t *testing.T, x map[string]any) {
+	t.Helper()
+	disclosures := x["disclosures"].(map[string]any)
+	best, id := -1.0, ""
+	for cid, d := range disclosures {
+		in, _ := d.(map[string]any)["agent_input"].(map[string]any)
+		if blk, _ := in[dealProfile].(map[string]any); blk["record_type"] == "sale_cut" {
+			if seq := recordSeq(blk); seq > best {
+				best, id = seq, cid
+			}
+		}
+	}
+	require.NotEmpty(t, id)
+	delete(disclosures, id)
+}
