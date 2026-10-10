@@ -1015,15 +1015,27 @@ func dealOpenCommand() *cobra.Command {
 			}
 			// Typed records: the user's task authority is its own step,
 			// right after the baseline it was asked in.
+			var authority sealedEvent
 			if o.Records == recordsTyped {
 				intent := o.Intent
-				if _, err = s.seal(ctx, dealID, []sealedEvent{se}, dealEvent{Kind: "task_authority", TaskAuthority: &intent, SaleAuthority: o.SaleAuthority, SaleRegistration: registration}); err != nil {
+				if authority, err = s.seal(ctx, dealID, []sealedEvent{se}, dealEvent{Kind: "task_authority", TaskAuthority: &intent, SaleAuthority: o.SaleAuthority, SaleRegistration: registration}); err != nil {
 					return err
 				}
 			}
 			cp, err := s.milestone(ctx)
 			if err != nil {
 				return err
+			}
+			// The sale's log records that the thread opened, by its task
+			// authority (as a commitment); a sale bundle seals it if a crash
+			// came first.
+			if registration != "" && dealSealsSaleEvidence {
+				if err := dealOpenStopsAt("authority"); err != nil {
+					return err
+				}
+				if err := s.sealThreadOpened(ctx, o.Sale, registration, authority.Digest); err != nil {
+					return err
+				}
 			}
 			out := stepOutput(dealID, se)
 			out["demo"] = o.Demo

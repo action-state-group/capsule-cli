@@ -114,6 +114,12 @@ func dealTexts(ev dealEvent) map[string]string {
 		t["said"] = ev.Approval.Said
 	case ev.Thread != nil:
 		t["thread_ref"] = ev.Thread.ThreadID
+	case ev.ThreadOpened != nil:
+		t["task_authority"] = ev.ThreadOpened.TaskAuthority
+	case ev.SaleCut != nil:
+		for i, h := range ev.SaleCut.Heads {
+			t[fmt.Sprintf("head_%d", i)] = h.Head
+		}
 	case ev.TaskAuthority != nil:
 		t["verbatim"] = ev.TaskAuthority.Verbatim
 		boundsText(t, *ev.TaskAuthority)
@@ -634,6 +640,27 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		if body["thread_ref_commitment"], err = commit("thread_ref"); err != nil {
 			return nil, err
 		}
+	case "thread_opened":
+		// The evidence a registered thread opened: its registration (a
+		// record of this log) and its task-authority digest as a commitment.
+		rtype = "thread_opened"
+		block["refs"] = []interface{}{relRef("registration", ev.ThreadOpened.Registration)}
+		if body["task_authority_commitment"], err = commit("task_authority"); err != nil {
+			return nil, err
+		}
+	case "sale_cut":
+		// The cut a sale bundle is made at: each opened thread's last record
+		// then, as a commitment, by its registration.
+		rtype = "sale_cut"
+		heads := make([]interface{}, len(ev.SaleCut.Heads))
+		for i, h := range ev.SaleCut.Heads {
+			c, err := commit(fmt.Sprintf("head_%d", i))
+			if err != nil {
+				return nil, err
+			}
+			heads[i] = map[string]interface{}{"registration": digestRef(h.Registration), "head_commitment": c}
+		}
+		body["thread_heads"] = heads
 	case "open":
 		o := ev.Open
 		rtype = "baseline"

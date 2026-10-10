@@ -573,6 +573,13 @@ type dealEvent struct {
 	// the thread's deal id, sealed only as a commitment under this step's
 	// own nonce (thread_ref_commitment).
 	Thread *dealThread `json:"thread,omitempty"`
+	// ThreadOpened is, on a sale's own log, the evidence that a registered
+	// thread opened: its registration, and its task-authority record
+	// digest, sealed only as a commitment.
+	ThreadOpened *dealThreadOpened `json:"thread_opened,omitempty"`
+	// SaleCut is, on a sale's own log, the cut a sale bundle is made at: the
+	// last record of each opened thread then, each as a commitment.
+	SaleCut *dealSaleCut `json:"sale_cut,omitempty"`
 	// Confirms is set on a record sealed after the deal was closed: the
 	// capsule id of that close. Its Capsule chains to the close with the
 	// registered relation `confirms`, never `follows`, and its record

@@ -560,15 +560,28 @@ def check_sale_chain(records):
     if root["body"]["intent"].get("bounds_commitment") is not None and "bounds_commitment" not in ta["body"]:
         fail(1, "the sale's task authority carries the floor its root states")
     prev, at = record_digest(ta), ta["at"]
+    registrations, opened = set(), set()
     for i in range(2, len(records)):
         r = records[i]
-        if is_typed(r) or r["x-deal-v0"]["record_type"] != "thread":
-            fail(i, "after its task authority, a sale's log holds only thread registrations")
+        t = None if is_typed(r) else r["x-deal-v0"]["record_type"]
+        if t not in ("thread", "thread_opened", "sale_cut"):
+            fail(i, "after its task authority, a sale's log holds only thread registrations, their openings and cuts")
         b = r["x-deal-v0"]
         if b["seq"] != i + 1 or b["deal_id"] != blk["deal_id"] or b.get("prev") != _ref(prev) \
                 or b.get("baseline_ref") != _ref(d0) or b["at"] < at:
-            fail(i, "a thread registration follows the sale's previous record in the same log")
+            fail(i, "a sale's record follows its previous record in the same log")
+        if t == "thread_opened":
+            reg = b["refs"][0]["digest"]
+            if reg not in registrations or reg in opened:
+                fail(i, "a thread's opening names an earlier registration of this sale, once")
+            opened.add(reg)
+        elif t == "sale_cut":
+            heads = [h["registration"]["digest"] for h in r["body"]["thread_heads"]]
+            if len(set(heads)) != len(heads) or not set(heads) <= opened:
+                fail(i, "a sale cut names each opened thread at most once, and only opened threads")
         prev, at = record_digest(r), b["at"]
+        if t == "thread":
+            registrations.add(prev)
 
 
 def check_chain(records):
