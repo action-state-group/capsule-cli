@@ -166,6 +166,12 @@ func (s *dealSession) saleOf(ctx context.Context, saleID string) (dealOpen, stri
 	return *ev.Open, digest, nil
 }
 
+// dealThreadCounterpartyVersion marks a step whose check on a sale's thread
+// seals the thread's buyer as its counterparty when the check names no one
+// (rules keyed on the counterparty, such as one commitment per sale, need a
+// target). A step sealed before has none and re-derives unchanged.
+const dealThreadCounterpartyVersion = "1"
+
 // underSale puts a buyer's thread under its sale: the sale's request and
 // task authority, its deal type, item and currency, and the typed records a
 // seller's deal is sealed in. An input that states another request, type,

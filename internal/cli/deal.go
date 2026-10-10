@@ -592,6 +592,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	ev.RuleInputs = dealRuleInputsVersion
 	ev.ClaimCommit = dealClaimCommitVersion
 	ev.ReversesRef = dealReversesRefVersion
+	ev.ThreadCounterparty = dealThreadCounterpartyVersion
 	ev.OfferClass = dealOfferClassVersion
 	ev.Nonces = map[string]string{}
 	for name := range dealTexts(ev) {
