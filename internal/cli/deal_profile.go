@@ -1030,6 +1030,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		rtype = "outcome"
 		oc := ev.Outcome
 		body = map[string]interface{}{"status": oc.Status, "outcome": oc.Outcome, "differences": differencesBody(oc.Differences)}
+		closeActorReasonBody(body, oc.dealCloseInput)
 		if oc.Delivered != nil {
 			if t := termsBody(*oc.Delivered); len(t) > 0 {
 				body["delivered"] = t
@@ -1079,6 +1080,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			}
 		}
 		body = map[string]interface{}{"outcome": cl.Outcome, "unchecked_actions": cl.UncheckedActions}
+		closeActorReasonBody(body, cl.dealCloseInput)
 		if len(cl.Differences) > 0 {
 			body["differences"] = differencesBody(cl.Differences)
 		}

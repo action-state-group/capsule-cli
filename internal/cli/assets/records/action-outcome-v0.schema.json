@@ -114,6 +114,30 @@
         },
         "note_commitment": {
           "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "actor": {
+          "description": "Whose decision ended the deal (user, agent or platform), as the x-deal-v0 outcome records it; with reason, on an outcome a close seals. Absent on records sealed before.",
+          "enum": [
+            "user",
+            "agent",
+            "platform"
+          ]
+        },
+        "reason": {
+          "description": "Why the deal ended, from the x-deal-v0 close_reason set; never free text.",
+          "enum": [
+            "completed",
+            "delivered_mismatch",
+            "awaiting_delivery",
+            "not_selected",
+            "user_closed",
+            "agent_could_not_complete",
+            "merchant_rejected",
+            "payment_failed",
+            "cancelled_in_window",
+            "not_delivered",
+            "other"
+          ]
         }
       },
       "allOf": [
@@ -222,7 +246,15 @@
             }
           }
         }
-      ]
+      ],
+      "dependentRequired": {
+        "actor": [
+          "reason"
+        ],
+        "reason": [
+          "actor"
+        ]
+      }
     }
   }
 }

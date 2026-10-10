@@ -1758,6 +1758,9 @@ func dealCloseCommand() *cobra.Command {
 				return inputError("this deal has an open date (" + open[0].date() + ": " + open[0].Text + "); closing would end its record. Close with status pending, close after the cancel is sealed or the date has passed, or close with --carry-open-obligations to keep the date open after the close")
 			}
 			result := closeDeal(state, in)
+			if err = settleCloseActorReason(&result.dealCloseInput, result.Outcome); err != nil {
+				return err
+			}
 			if in.Status != "pending" {
 				for _, d := range open {
 					result.Carried = append(result.Carried, dealCarried{Step: d.Step, CapsuleID: d.CapsuleID, CancelBy: d.CancelBy, DueBy: d.DueBy})
@@ -1785,6 +1788,7 @@ func dealCloseCommand() *cobra.Command {
 			}
 			out := stepOutput(dealID, se)
 			out["outcome"] = result.Outcome
+			out["actor"], out["reason"] = result.Actor, result.Reason
 			out["differences"] = result.Differences
 			out["unchecked_actions"] = result.UncheckedActions
 			out["checkpoint"] = cp

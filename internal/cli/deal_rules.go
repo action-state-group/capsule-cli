@@ -509,6 +509,10 @@ type dealCloseInput struct {
 	Status    string     `json:"status"`
 	Delivered *dealTerms `json:"delivered,omitempty"`
 	Note      string     `json:"note,omitempty"`
+	// Actor and Reason are who ended the deal and why, from closed sets
+	// (deal_close_reason.go); empty on closes sealed before they were.
+	Actor  string `json:"actor,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type dealCloseResult struct {
@@ -1805,6 +1809,9 @@ func trailLine(e dealEvent) string {
 	case "outcome":
 		return "observed: " + e.Outcome.Status + " (" + e.Outcome.Outcome + ")"
 	case "close":
+		if e.Close.Actor != "" {
+			return strings.ToLower(closeLine(*e.Close)[:1]) + closeLine(*e.Close)[1:]
+		}
 		return "closed: " + e.Close.Outcome
 	case "disclosure":
 		line := "told " + e.Disclosure.recipientWord() + ": " + e.Disclosure.classList()
@@ -2140,7 +2147,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 				counterparty("delivered_differs", d.Text, openID, se.CapsuleID)
 			}
 		case "close":
-			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: "Closed: " + e.Close.Outcome, Steps: []string{se.CapsuleID}, At: e.At})
+			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: closeLine(*e.Close), Steps: []string{se.CapsuleID}, At: e.At})
 		case "disclosure":
 			d := e.Disclosure
 			item := dealToldItem{At: e.At, To: d.recipient(open.Who), ToKind: d.To, Fields: d.Fields, Authority: "approval", Steps: []string{se.CapsuleID}}
