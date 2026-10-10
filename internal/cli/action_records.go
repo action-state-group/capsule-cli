@@ -174,7 +174,7 @@ func typedRecord(ev dealEvent, events []sealedEvent, v0 map[string]interface{}) 
 	case "outcome":
 		typeName = typeActionOutcome
 		out = map[string]interface{}{"status": body["status"], "outcome": body["outcome"], "findings": body["differences"]}
-		for _, k := range []string{"delivered", "note_commitment"} {
+		for _, k := range []string{"delivered", "note_commitment", "actor", "reason"} {
 			if v, ok := body[k]; ok {
 				out[k] = v
 			}

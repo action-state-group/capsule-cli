@@ -1074,6 +1074,9 @@ def check_chain(records):
                     fail(i, "close must reference the latest outcome record")
                 if body["outcome"] != records[j]["body"]["outcome"]:
                     fail(i, "close outcome differs from the referenced outcome")
+                for k in ("actor", "reason"):
+                    if body.get(k) != records[j]["body"].get(k):
+                        fail(i, f"close {k} differs from the referenced outcome's")
             if body["unchecked_actions"] != unchecked:
                 fail(i, f"unchecked_actions must count unchecked_action outcomes ({unchecked})")
             if body["outcome"] != "open":
