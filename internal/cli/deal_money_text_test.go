@@ -141,3 +141,17 @@ func TestTheCeilingGateReadsPastIDsAndDigests(t *testing.T) {
 		}
 	}
 }
+
+// The ceiling gate blanks every whole hex token before it reads a copy: a
+// digest or key that happens to be all digits ("0000000000000800") after a
+// money word reads to the money matcher as 800.00, and only the strip keeps
+// it from refusing the share. The limit written as prose still trips it.
+func TestTheCeilingGateBlanksHexTokens(t *testing.T) {
+	limit := int64(80000)
+	events := []sealedEvent{{Event: dealEvent{Kind: "open", DealID: "deal-0123456789abcdef", Open: &dealOpen{
+		Intent: dealIntent{MaxTotalMinor: &limit}, Terms: dealTerms{Currency: "USD"}}}}}
+	copyText := `{"pay":"0000000000000800","for":"0000000000000800"}`
+	require.Contains(t, moneyAmounts(copyText), limit, "the matcher alone reads the digest as the limit")
+	assert.NoError(t, dealCeilingGate([]byte(copyText), events, dealAudienceCounterparty))
+	assert.ErrorContains(t, dealCeilingGate([]byte(copyText+" I will pay 800 for it"), events, dealAudienceCounterparty), "your spending limit")
+}
