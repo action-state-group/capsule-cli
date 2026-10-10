@@ -1,14 +1,25 @@
-// deal-view.js: the page `capsulectl deal report --html` writes. Three parts:
-// what you asked, what the agent did, anomalies on either side. Each item
-// expands to its sealed steps. It is a digest-pinned module the page builder
-// inlines: it never verifies and never reads the bundle itself. The page's
-// bootstrap builds the verified context once (the vendored evidence-graph
-// runtime's buildVerifiedBundleContext) and hands it here, with what
-// capsulectl checked when it built the page (the countersign line, and the
-// words it recomputed against their sealed commitments). A step's line is
-// shown only when its sealed record's disclosure verified, otherwise the step
-// shows its capsule_id only. All text is set with textContent; nothing from
-// the bundle is parsed as HTML.
+// deal-view.js: the deal page's presentation module, capsulectl.deal-view/v0,
+// for the page `capsulectl deal report --html` writes. Three parts: what you
+// asked, what the agent did, anomalies on either side. Each item expands to its
+// sealed steps.
+//
+// It is a module-slot script (agent-action-capsule's presentation contract):
+// it registers its module with the page's runtime at load, and the runtime's
+// resolver selects it for a verified deal bundle. It never verifies and never
+// reads the bundle's records or disclosures itself: buildModel reads the
+// verified context the runtime built, and what capsulectl checked when it
+// built the page (the countersign line, and the words it recomputed against
+// their sealed commitments), which the page's bootstrap sets as
+// capsulectlDealPage before the page renders. render writes the model into the
+// host. A step's line is shown only when its sealed record's disclosure
+// verified, otherwise the step shows its capsule_id only. All text is set with
+// textContent; nothing from the bundle is parsed as HTML.
+//
+// Its manifest is assets/deal-view.manifest.json; the copy below is the same
+// manifest except executable.script_sha256, which a script cannot carry for
+// itself (it is all zeros here). Its stylesheet is DEAL_VIEW_CSS, inserted
+// once at render and pinned by the manifest's style_sha256 (assets/deal-view.css
+// holds the same bytes).
 // versionBefore reports whether version a is older than b: "v0.1.0-rc3" style,
 // numbers compared as numbers, a pre-release before its release. An
 // unparsable version, or a development build, is never called older.
@@ -31,49 +42,42 @@ function versionBefore(a, b) {
   return x.pre < y.pre;
 }
 
-globalThis.capsulectlDealView = async (context, page) => {
-  const app = document.getElementById("app");
-  const host = document.createElement("div");
-  host.id = "deal";
-  app.before(host);
-  // The context's own frozen copy of the bundle, read only for what no
-  // record seals: the extension blocks and the checkpoint's witnesses.
-  const bundle = context.bundle;
-  const payload = (id) => EvidenceGraph.verifiedPayload(context, id, "agent_input");
-  const el = (tag, text, cls) => {
-    const node = document.createElement(tag);
-    if (text !== undefined) node.textContent = text;
-    if (cls) node.className = cls;
-    return node;
-  };
-  // The one verification the page ran, read from the context. Stricter than
-  // the core's gate in one place: membership must be proven, not unbound.
+// The model: everything render shows, read from the verified context and the
+// page's build-time checks. Stricter than the core's gate in one place:
+// membership must be proven, not unbound (canRender).
+const dealViewVerified = (context) => {
   const verification = context.verification;
-  const ok =
+  return (
     verification !== undefined &&
     verification.graphClosure.status === "pass" &&
     verification.intervalCoverage.status === "pass" &&
     verification.perRecordMembership.status === "pass" &&
     Object.values(verification.capsuleResults).every((r) => r.ok) &&
-    verification.disclosures.every((d) => d.status === "disclosure_match" || d.status === "withheld");
-  if (!ok) {
-    host.append(el("p", "⚠️ This report did not verify. Do not rely on it.", "deal-bad"));
-    return;
-  }
-
-  // In the verifier's disclosure order, as the context resolved each one.
-  const matched = new Set(
-    verification.disclosures
-      .filter((d) => d.member === "agent_input" && EvidenceGraph.disclosureOf(context, d.capsuleId, "agent_input").state === "disclosed")
-      .map((d) => d.capsuleId),
+    verification.disclosures.every((d) => d.status === "disclosure_match" || d.status === "withheld")
   );
+};
+
+const dealViewModel = (context) => {
+  const page = globalThis.capsulectlDealPage || {};
+  // The context's own frozen copy of the bundle, read only for what no
+  // record seals: the extension blocks and the checkpoint's witnesses.
+  const bundle = context.bundle;
+  const payload = (id) => EvidenceGraph.verifiedPayload(context, id, "agent_input");
+  // In the verifier's disclosure order, as the context resolved each one.
+  const matched = [
+    ...new Set(
+      context.verification.disclosures
+        .filter((d) => d.member === "agent_input" && EvidenceGraph.disclosureOf(context, d.capsuleId, "agent_input").state === "disclosed")
+        .map((d) => d.capsuleId),
+    ),
+  ];
   // The deal's text: the input of the sealed report the x-deal-v0 extension
   // points at, checked like every record (its disclosure matched). A bundle
   // written before reports were sealed carries the text in the extension
   // itself, which no record seals, and the page says so.
   const dealExt = (bundle.extensions || {})["x-deal-v0"] || {};
   const sealedId = typeof dealExt.sealed_report === "string" ? dealExt.sealed_report : undefined;
-  const otherReports = [...matched].filter((id) => {
+  const otherReports = matched.filter((id) => {
     const input = payload(id);
     return id !== sealedId && input && input.type === "deal_report";
   });
@@ -86,19 +90,142 @@ globalThis.capsulectlDealView = async (context, page) => {
   if (sealedId !== undefined || otherReports.length > 0 || reportRecords.length > 0) {
     const input = sealedId !== undefined ? payload(sealedId) : undefined;
     if (otherReports.length > 0 || !input || input.type !== "deal_report" || typeof input.report !== "object" || input.report === null) {
-      host.append(el("p", "⚠️ The deal's text could not be checked against its sealed record. Do not rely on it.", "deal-bad"));
-      return;
+      return { refusal: "⚠️ The deal's text could not be checked against its sealed record. Do not rely on it." };
     }
     report = input.report;
   }
-  const sealed = sealedId !== undefined;
   const shared = report.audience === "counterparty" || report.audience === "adjudicator";
-  const byId = new Map((report.steps || []).map((s) => [s.capsule_id, s]));
   const base = payload(report.asked_step);
   if (!shared && (!base || !base["x-deal-v0"] || base["x-deal-v0"].record_type !== "baseline")) {
-    host.append(el("p", "⚠️ The deal's opening step is not in this report.", "deal-bad"));
+    return { refusal: "⚠️ The deal's opening step is not in this report." };
+  }
+
+  // A witness receipt rides in checkpoint.witnesses, or (the default) in the
+  // cadence chain, x-cadence-witness/v0 (earlier bundles: cadence-witness/v0
+  // or x-deal-cadence-v0), that anchors this deal's checkpoint in the
+  // profile's cadence log. Any other witness state is shown as it is.
+  const exts = bundle.extensions || {};
+  const cadence = exts["x-cadence-witness/v0"] || exts["cadence-witness/v0"] || exts["x-deal-cadence-v0"] || {};
+  const anchored = cadence.state === "witnessed" ? (cadence.cadence || {}).witnesses || [] : [];
+  const witnesses = ((bundle.checkpoint || {}).witnesses || []).concat(anchored).filter((w) => w && typeof w.ts_url === "string");
+  let witness = { kind: "none" };
+  if (witnesses.length > 0) {
+    let host = witnesses[0].ts_url;
+    try {
+      host = new URL(host).host || host;
+    } catch (e) {
+      // not a URL: show it as written
+    }
+    // An earlier checkpoint that already held every step (only sealed
+    // reports after it) witnesses them all.
+    const k = Number(cadence.steps_witnessed);
+    const n = Number(cadence.steps);
+    // What those steps hold, in the user's terms, as capsulectl named them.
+    const wc = report.witness_coverage || {};
+    witness = {
+      kind: "witnessed",
+      witness: host,
+      cut: typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : "",
+      part: cadence.state === "witnessed" && cadence.extent === "part" && k < n,
+      k,
+      n,
+      coverage:
+        (typeof wc.witnessed_acts === "string" && wc.witnessed_acts ? `Witnessed, steps 1 to ${k}: ${wc.witnessed_acts}. ` : "") +
+        (typeof wc.pending_acts === "string" && wc.pending_acts ? `Witness pending, steps ${k + 1} to ${n}: ${wc.pending_acts}. ` : ""),
+    };
+  } else if (cadence.state === "scheduled") {
+    witness = { kind: "scheduled", every: typeof cadence.cadence === "string" && cadence.cadence ? ` (${cadence.cadence})` : "" };
+  } else if (cadence.state === "pending") {
+    witness = { kind: "pending", consent: cadence.reason === "network_consent_needed" && typeof cadence.text === "string" ? cadence.text : undefined };
+  }
+
+  // Which build sealed the steps, read from the records this page verified
+  // (not from the summary), compared with the build that made this page.
+  // Both are already in this file: nothing is fetched to do it.
+  const builds = [];
+  matched.forEach((id) => {
+    const rec = payload(id) || {};
+    // An x-deal-v0 record names its producer in its block; a typed record, in its header.
+    const p = (rec["x-deal-v0"] || rec).producer;
+    const name = p && typeof p.version === "string" ? `${p.name || "capsulectl"} ${p.version} (${p.commit || "unknown"})` : "an earlier capsulectl that did not record its version";
+    if (!builds.some((b) => b.name === name)) builds.push({ name, version: p && p.version });
+  });
+
+  // Each statement's class, as sealed with it (undefined when its sealed step
+  // holds no such claim).
+  const claimClasses = (report.representations || []).map((r) => {
+    const rec = payload(r.step);
+    const body = rec && rec.body;
+    const claim = body && (Number.isInteger(r.index) ? (body.claims || [])[r.index] : body);
+    return claim ? claim.class : undefined;
+  });
+
+  return {
+    page,
+    report,
+    sealed: sealedId !== undefined,
+    shared,
+    demo: !!(base && base.body && base.body.demo),
+    matched,
+    recorded: [...context.recordIndex.keys()],
+    witness,
+    builds,
+    claimClasses,
+  };
+};
+
+// Inserted once, at the head: its bytes hash to the manifest's style_sha256,
+// which the page's Content-Security-Policy lists.
+const DEAL_VIEW_CSS = `#deal { --deal-warn: #9a3b00; --deal-ok: #1d6b35; line-height: 1.45; overflow-wrap: anywhere; }
+@media (prefers-color-scheme: dark) { #deal { --deal-warn: #ffb07a; --deal-ok: #7fd49a; } }
+#deal h1 { font-size: 1.5rem; margin: 0.2rem 0; }
+#deal h2 { font-size: 1.15rem; margin-top: 1.6rem; }
+#deal h3 { font-size: 0.95rem; color: var(--aac-muted); margin: 1rem 0 0.3rem; }
+#deal .deal-flag summary { color: var(--deal-warn); }
+#deal .deal-steps { margin: 8px 0 0; padding-left: 1.4rem; }
+#deal .deal-steps li { margin: 4px 0; overflow-wrap: anywhere; }
+#deal .deal-at { color: var(--aac-muted); font-size: 0.85rem; }
+#deal .deal-note { color: var(--aac-muted); font-size: 0.9rem; }
+#deal .deal-demo { display: inline-block; border: 1px solid var(--deal-warn); color: var(--deal-warn); padding: 0 6px; border-radius: 4px; font-size: 0.8rem; }
+#deal .deal-bad { color: var(--deal-warn); font-weight: 600; }
+#deal details { border: 1px solid var(--aac-line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+#deal summary { cursor: pointer; font-weight: 600; }
+#deal table.deal-merchant { border-collapse: collapse; width: 100%; margin: 6px 0; }
+#deal table.deal-merchant th, #deal table.deal-merchant td { border: 1px solid var(--aac-line); padding: 4px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+#deal table.deal-merchant th { color: var(--aac-muted); font-weight: 600; width: 40%; }
+#deal .deal-ok { color: var(--deal-ok); font-weight: 600; }
+#deal code { color: var(--aac-muted); font-size: 0.8rem; overflow-wrap: anywhere; }
+#deal .deal-assurance { border: 1px solid var(--aac-line); border-radius: 6px; padding: 8px 12px; margin: 8px 0 16px; }
+#deal .deal-rung { font-weight: 600; margin: 0.2rem 0; }
+#deal .deal-scope { font-weight: 600; margin: 0.2rem 0 0.6rem; }
+#deal .deal-claims { border: none; padding: 0; }
+#deal .deal-verify { background: transparent; border: 1px solid var(--aac-line); border-radius: 4px; padding: 6px 8px; overflow-x: auto; font-size: 0.85rem; user-select: all; }
+`;
+
+const dealViewRender = (model, regions) => {
+  if (!document.getElementById("capsulectl-deal-view-style")) {
+    const style = document.createElement("style");
+    style.id = "capsulectl-deal-view-style";
+    style.textContent = DEAL_VIEW_CSS;
+    document.head.append(style);
+  }
+  const host = document.createElement("div");
+  host.id = "deal";
+  regions.L0.append(host);
+  const el = (tag, text, cls) => {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    if (cls) node.className = cls;
+    return node;
+  };
+  if (model.refusal !== undefined) {
+    host.append(el("p", model.refusal, "deal-bad"));
     return;
   }
+  const { page, report, sealed, shared } = model;
+  const matched = new Set(model.matched);
+  const recorded = new Set(model.recorded);
+  const byId = new Map((report.steps || []).map((s) => [s.capsule_id, s]));
 
   // The header, on the face of every copy: the scope, the assurance rung read
   // from what the file itself carries, what the "did" part rests on, what
@@ -130,40 +257,17 @@ globalThis.capsulectlDealView = async (context, page) => {
     header.append(unchecked);
   }
   header.append(el("p", report.scope || "This receipt covers this one deal. It is not a record of everything the agent did.", "deal-scope"));
-  // A witness receipt rides in checkpoint.witnesses, or (the default) in the
-  // cadence chain, x-cadence-witness/v0 (earlier bundles: cadence-witness/v0
-  // or x-deal-cadence-v0), that anchors this deal's checkpoint in
-  // the profile's cadence log. This page does not check either (capsulectl
-  // verify does, against a witness directory the reader chooses), and says
-  // so. Any other witness state is shown as it is.
-  const exts = bundle.extensions || {};
-  const cadence = exts["x-cadence-witness/v0"] || exts["cadence-witness/v0"] || exts["x-deal-cadence-v0"] || {};
-  const anchored = cadence.state === "witnessed" ? (cadence.cadence || {}).witnesses || [] : [];
-  const witnesses = ((bundle.checkpoint || {}).witnesses || []).concat(anchored).filter((w) => w && typeof w.ts_url === "string");
-  if (witnesses.length > 0) {
-    let witness = witnesses[0].ts_url;
-    try {
-      witness = new URL(witness).host || witness;
-    } catch (e) {
-      // not a URL: show it as written
-    }
-    const cut = typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : "";
-    // An earlier checkpoint that already held every step (only sealed
-    // reports after it) witnesses them all.
-    const part = cadence.state === "witnessed" && cadence.extent === "part" && Number(cadence.steps_witnessed) < Number(cadence.steps);
-    // What those steps hold, in the user's terms, as capsulectl named them.
-    const wc = report.witness_coverage || {};
-    const coverage =
-      (typeof wc.witnessed_acts === "string" && wc.witnessed_acts ? `Witnessed, steps 1 to ${Number(cadence.steps_witnessed)}: ${wc.witnessed_acts}. ` : "") +
-      (typeof wc.pending_acts === "string" && wc.pending_acts ? `Witness pending, steps ${Number(cadence.steps_witnessed) + 1} to ${Number(cadence.steps)}: ${wc.pending_acts}. ` : "");
-    const k = Number(cadence.steps_witnessed);
-    const n = Number(cadence.steps);
+  // The witness state, as buildModel read it: this page does not check a
+  // receipt (capsulectl verify does, against a witness directory the reader
+  // chooses), and says so.
+  const w = model.witness;
+  if (w.kind === "witnessed") {
     header.append(
       el(
         "p",
-        part
-          ? `Witnessed in part: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${cut}at a cadence tick, covering steps 1 to ${k} of ${n}: those existed, unchanged, by then. Steps ${k + 1} to ${n} are sealed by my agent on this device only, witness pending. ${coverage}It does not confirm what the agent did.`
-          : `Witnessed: ${witness}, an independent log, signed a receipt for this deal's checkpoint, ${cut}at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`,
+        w.part
+          ? `Witnessed in part: ${w.witness}, an independent log, signed a receipt for this deal's checkpoint, ${w.cut}at a cadence tick, covering steps 1 to ${w.k} of ${w.n}: those existed, unchanged, by then. Steps ${w.k + 1} to ${w.n} are sealed by my agent on this device only, witness pending. ${w.coverage}It does not confirm what the agent did.`
+          : `Witnessed: ${w.witness}, an independent log, signed a receipt for this deal's checkpoint, ${w.cut}at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`,
         "deal-rung",
       ),
       el(
@@ -173,12 +277,11 @@ globalThis.capsulectlDealView = async (context, page) => {
         "deal-note",
       ),
     );
-  } else if (cadence.state === "scheduled") {
-    const every = typeof cadence.cadence === "string" && cadence.cadence ? ` (${cadence.cadence})` : "";
-    header.append(el("p", `Sealed by my agent, witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence${every}, and only then can it be witnessed. Until then it is sealed on this device only.`, "deal-rung"));
-  } else if (cadence.state === "pending") {
+  } else if (w.kind === "scheduled") {
+    header.append(el("p", `Sealed by my agent, witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence${w.every}, and only then can it be witnessed. Until then it is sealed on this device only.`, "deal-rung"));
+  } else if (w.kind === "pending") {
     header.append(el("p", "Sealed by my agent, witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet; it is retried at every tick.", "deal-rung"));
-    if (cadence.reason === "network_consent_needed" && typeof cadence.text === "string") header.append(el("p", `Witness ${cadence.text}`, "deal-note"));
+    if (typeof w.consent === "string") header.append(el("p", `Witness ${w.consent}`, "deal-note"));
   } else {
     header.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
   }
@@ -217,7 +320,7 @@ globalThis.capsulectlDealView = async (context, page) => {
     header.append(el("p", `A shared copy for ${who}. Left out of this copy: ${(report.withheld || []).join(", ")}.`, "deal-note"));
   }
 
-  const recordOk = (id) => context.recordIndex.has(id);
+  const recordOk = (id) => recorded.has(id);
   const steps = (ids) => {
     const list = el("ol", undefined, "deal-steps");
     ids.forEach((id) => {
@@ -242,21 +345,14 @@ globalThis.capsulectlDealView = async (context, page) => {
     return d;
   };
 
-  if (base && base.body.demo) host.append(el("span", "DEMO", "deal-demo"));
+  if (model.demo) host.append(el("span", "DEMO", "deal-demo"));
   host.append(el("h1", "Deal report"));
 
   // Which build sealed the steps, read from the records this page verified
   // (not from the summary), compared with the build that made this page.
   // Both are already in this file: nothing is fetched to do it.
   const provenance = el("section", undefined, "deal-provenance");
-  const builds = [];
-  matched.forEach((id) => {
-    const rec = payload(id) || {};
-    // An x-deal-v0 record names its producer in its block; a typed record, in its header.
-    const p = (rec["x-deal-v0"] || rec).producer;
-    const name = p && typeof p.version === "string" ? `${p.name || "capsulectl"} ${p.version} (${p.commit || "unknown"})` : "an earlier capsulectl that did not record its version";
-    if (!builds.some((b) => b.name === name)) builds.push({ name, version: p && p.version });
-  });
+  const builds = model.builds;
   if (builds.length > 0) provenance.append(el("p", `Produced by ${builds.map((b) => b.name).join(", then ")}.`, "deal-note"));
   if (typeof report.instructions === "string" && report.instructions) provenance.append(el("p", report.instructions, "deal-note"));
   const pageVersion = typeof report.page_version === "string" ? report.page_version : "";
@@ -366,13 +462,11 @@ globalThis.capsulectlDealView = async (context, page) => {
     host.append(el("h2", heading));
     const checked = (page && page.openings && page.openings.representations) || [];
     for (const [i, r] of said.entries()) {
-      const rec = payload(r.step);
-      const body = rec && rec.body;
-      const claim = body && (Number.isInteger(r.index) ? (body.claims || [])[r.index] : body);
       // Checked against its sealed commitment when this page was built.
-      const ok = checked[i] === true && !!claim && typeof r.text === "string";
+      const claimClass = model.claimClasses[i];
+      const ok = checked[i] === true && claimClass !== undefined && typeof r.text === "string";
       if (ok) {
-        const label = labels[claim.class];
+        const label = labels[claimClass];
         host.append(item(`${label ? `${label}: ` : ""}“${r.text}” ✓`, [r.step]));
       } else {
         host.append(item("⚠️ A statement here could not be checked against its sealed step.", [r.step], "deal-flag"));
@@ -478,3 +572,10 @@ globalThis.capsulectlDealView = async (context, page) => {
     ),
   );
 };
+
+EvidenceGraph.registerPresentation({
+  manifest: {"spec_version": "aac.presentation-manifest/v0", "id": "capsulectl.deal-view/v0", "presentation_api": "aac.presentation-api/v0", "runtime_min": "0.1.0", "trust_class": "trusted-executable", "requires": {"bundle_kind": "evidence-bundle/v2", "extensions": {"required": ["x-deal-v0"]}}, "forbids": {"profiles": ["spec_version:report/v1", "result_version:evidence-result-v0", "spec_version:evaluation-summary/v1"]}, "audiences": ["*"], "formats": ["html"], "fallback": false, "priority": 1, "executable": {"carrier": "module-slot", "script_sha256": "0000000000000000000000000000000000000000000000000000000000000000", "style_sha256": ["033433c0f3b97d682e7b81a8309dd868a96b0ea91f18997b33e097686e7e74da"]}},
+  canRender: dealViewVerified,
+  buildModel: dealViewModel,
+  render: dealViewRender,
+});

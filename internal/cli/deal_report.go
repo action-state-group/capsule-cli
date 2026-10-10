@@ -18,8 +18,9 @@ import (
 // The browser verifier is agent-action-capsule's own evidence-graph runtime,
 // vendored unmodified and rebuilt reproducibly by
 // scripts/build-evidence-graph-iife.sh. deal-view.js adds the deal section: a
-// module the page builder inlines in the emitter's module slot, pinned by its
-// digest like the runtime.
+// presentation module (capsulectl.deal-view/v0, deal-view.manifest.json) the
+// page builder inlines in the emitter's module slot, pinned by its digest like
+// the runtime, with its stylesheet pinned by the manifest's style_sha256.
 var (
 	//go:embed assets/evidence-graph.iife.js
 	evidenceGraphIIFE []byte
@@ -29,6 +30,8 @@ var (
 	dealViewJS string
 	//go:embed assets/deal-view.js.sha256
 	dealViewJSSHA256 string
+	//go:embed assets/deal-view.manifest.json
+	dealViewManifestJSON []byte
 )
 
 // dealSellerExtension is the bundle extension kind every copy of a deal the
@@ -319,15 +322,13 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // vendored verifier and the deal view. It needs no network to open or verify,
 // and nothing is hosted: the agent attaches or hands over the file.
 //
-// The page is built through the emitter's slots: the title, the deal view's
-// stylesheet in the theme slot (interim: the theme slot is for theme tokens;
-// the stylesheet moves to the deal view module, pinned by its own digest, once
-// the emitter can pin a module's stylesheet, agent-action-capsule #214), the
-// deal view as a digest-pinned module, and
-// a bootstrap that builds the verified context once and hands it to both the
-// evidence graph and the deal view. The emitter writes a Content-Security-
-// Policy that lists the digest of every inline script and style it emitted
-// and allows no network.
+// The page is built through the emitter's slots: the title, theme tokens
+// (dealThemeCSS), the deal view as a digest-pinned presentation module whose
+// stylesheet is pinned by its manifest, and a bootstrap that builds the
+// verified context once and renders it. The page's runtime resolves the deal
+// view for the bundle; the module registers itself when its script loads. The
+// emitter writes a Content-Security-Policy that lists the digest of every
+// inline script and stylesheet and allows no network.
 //
 // What capsulectl checked when it wrote the page rides in the bootstrap,
 // beside the bundle and never inside it, so the bundle's digest is
@@ -336,6 +337,10 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // (dealPageOpenings): a page whose words do not match is never written.
 func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (string, error) {
 	if err := pageGate(b); err != nil {
+		return "", err
+	}
+	module, err := dealViewModule()
+	if err != nil {
 		return "", err
 	}
 	openings, err := dealPageOpenings(b)
@@ -348,56 +353,59 @@ func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (
 	if err != nil {
 		return "", err
 	}
-	bootstrap := `(async () => {
+	bootstrap := `globalThis.capsulectlDealPage = Object.freeze(` + string(data) + `);
+(async () => {
   const context = await EvidenceGraph.buildVerifiedBundleContext(window.__BUNDLE__);
   await renderEvidenceGraph(context, document.getElementById("app"));
-  await capsulectlDealView(context, ` + string(data) + `);
 })();`
 	return emitter.EmitEvidenceGraphHTMLWithOptions(b, evidenceGraphIIFE, emitter.Options{
-		Title: "Deal report",
-		// Interim, until the emitter pins module stylesheets
-		// (agent-action-capsule #214): then the deal view carries it.
-		ThemeCSS:          dealViewCSS,
+		Title:             "Deal report",
+		ThemeCSS:          dealThemeCSS,
 		CoreRuntimeSHA256: strings.TrimSpace(evidenceGraphIIFESHA256),
-		Modules:           []emitter.Module{{Code: []byte(dealViewJS), SHA256: strings.TrimSpace(dealViewJSSHA256)}},
+		Modules:           []emitter.Module{module},
 		Bootstrap:         bootstrap,
 	})
 }
 
-// dealViewCSS is the deal view's stylesheet. It rides in the emitter's theme
-// slot for now (interim): it moves to the deal view module, pinned by its own
-// digest, once the emitter can pin a module's stylesheet (agent-action-capsule
-// #214).
-const dealViewCSS = `
-:root { --fg: #1b1b1f; --muted: #5d5d66; --bg: #ffffff; --line: #d9d9e0; --warn: #9a3b00; --ok: #1d6b35; }
-@media (prefers-color-scheme: dark) { :root { --fg: #ececf1; --muted: #a3a3ad; --bg: #16161a; --line: #34343c; --warn: #ffb07a; --ok: #7fd49a; } }
-body { background: var(--bg); color: var(--fg); }
-#deal { max-width: 760px; margin: 0 auto; padding: 16px; line-height: 1.45; }
-#deal h1 { font-size: 1.5rem; margin: 0.2rem 0; }
-#deal h2 { font-size: 1.15rem; margin-top: 1.6rem; }
-#deal h3 { font-size: 0.95rem; color: var(--muted); margin: 1rem 0 0.3rem; }
-#deal .deal-flag summary { color: var(--warn); }
-#deal .deal-steps { margin: 8px 0 0; padding-left: 1.4rem; }
-#deal .deal-steps li { margin: 4px 0; overflow-wrap: anywhere; }
-#deal .deal-at { color: var(--muted); font-size: 0.85rem; }
-#deal .deal-note { color: var(--muted); font-size: 0.9rem; }
-#deal .deal-rung { font-weight: 600; margin: 4px 0; }
-#deal .deal-demo { display: inline-block; border: 1px solid var(--warn); color: var(--warn); padding: 0 6px; border-radius: 4px; font-size: 0.8rem; }
-#deal .deal-bad { color: var(--warn); font-weight: 600; }
-#deal details { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
-#deal summary { cursor: pointer; font-weight: 600; }
-#deal table.deal-merchant { border-collapse: collapse; width: 100%; margin: 6px 0; }
-#deal table.deal-merchant th, #deal table.deal-merchant td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-#deal table.deal-merchant th { color: var(--muted); font-weight: 600; width: 40%; }
-#deal .deal-scope { font-weight: 600; }
-#deal .deal-ok { color: var(--ok); font-weight: 600; }
-#deal code { color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
-#deal .deal-assurance { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0 16px; }
-#deal .deal-rung { font-weight: 600; margin: 0.2rem 0; }
-#deal .deal-scope { font-weight: 600; margin: 0.2rem 0 0.6rem; }
-#deal .deal-claims { border: none; padding: 0; }
-#deal .deal-verify { background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; overflow-x: auto; font-size: 0.85rem; user-select: all; }
-#app { max-width: 760px; margin: 0 auto; padding: 0 16px 16px; overflow-wrap: anywhere; }
+// dealViewModule is the deal view as the emitter's module, after the two
+// checks a builder makes on a module it puts in a page: the page's runtime
+// would not refuse it, and it is ambiguous with none of the built-in page
+// modules (presentation_build.go). Its manifest pins the script's digest.
+func dealViewModule() (emitter.Module, error) {
+	var manifest map[string]interface{}
+	if err := json.Unmarshal(dealViewManifestJSON, &manifest); err != nil {
+		return emitter.Module{}, fmt.Errorf("the deal view's manifest: %w", err)
+	}
+	executable := manifestMap(manifest, "executable")
+	pin := strings.TrimSpace(dealViewJSSHA256)
+	if manifestString(executable, "script_sha256") != pin {
+		return emitter.Module{}, errors.New("the deal view's manifest does not pin its script")
+	}
+	if r := runtimeRefusal(manifest); r != nil {
+		return emitter.Module{}, r
+	}
+	builtins, err := builtinPresentationManifests()
+	if err != nil {
+		return emitter.Module{}, err
+	}
+	if err := staticPresentationCheck(append(builtins, manifest)); err != nil {
+		return emitter.Module{}, err
+	}
+	var styles []string
+	for _, s := range asList(executable["style_sha256"]) {
+		if digest, ok := s.(string); ok {
+			styles = append(styles, digest)
+		}
+	}
+	return emitter.Module{Code: []byte(dealViewJS), SHA256: pin, StyleSHA256: styles}, nil
+}
+
+// dealThemeCSS is the deal page's theme: tokens only (the shell's --aac-*
+// custom properties). The deal view's own layout is its module stylesheet,
+// assets/deal-view.css.
+const dealThemeCSS = `
+:root { --aac-page-width: 760px; --aac-gutter: 16px; --aac-fg: #1b1b1f; --aac-muted: #5d5d66; --aac-bg: #ffffff; --aac-line: #d9d9e0; }
+@media (prefers-color-scheme: dark) { :root { --aac-fg: #ececf1; --aac-muted: #a3a3ad; --aac-bg: #16161a; --aac-line: #34343c; } }
 `
 
 // dealStepLine is one step in plain words, from the local store.
