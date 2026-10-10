@@ -13,9 +13,7 @@
     "page": [
       "verification"
     ],
-    "notice": [
-      "no-aggregate"
-    ],
+    "notice": [],
     "section": []
   },
   "evidence_ids": [
@@ -29,6 +27,7 @@
     "e56b3602524f27a02c8fdf8b8d4429ae99bd037a622eb2588e4108bdcd9f6663"
   ],
   "text": [
+    "Bundle verification passed",
     "DEMO",
     "Deal report",
     "What you asked",
@@ -79,8 +78,6 @@
     "Counterparty side",
     "None found.",
     "This page checked itself: every step's sealed record and its place in this deal's log. The records carry fingerprints, not names or numbers; the words shown come from this device. The seal key is on the agent's machine, so this shows the record was not changed after it was made, not who made it. It covers this skill's own records only, never the agent host's own store.",
-    "Bundle verification passed",
-    "This bundle carries no evaluation summary, so there is no aggregate view. The records and their verification are below.",
     "Verification",
     "bundle digest",
     "\"84d30b7a315e93899d6e48a37a63a59113275b180e18faacebaa70136ff4f816\"",

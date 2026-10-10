@@ -13,9 +13,7 @@
     "page": [
       "verification"
     ],
-    "notice": [
-      "no-aggregate"
-    ],
+    "notice": [],
     "section": []
   },
   "evidence_ids": [
@@ -36,6 +34,7 @@
     "e61bf3b129dc015deebf1fbf13fb3b5834cbc0a0a7c14d21a8fd3a6504acca4e"
   ],
   "text": [
+    "Bundle verification passed",
     "DEMO",
     "Deal report",
     "What you asked",
@@ -109,8 +108,6 @@
     "2026-10-09T07:54:01Z ·",
     "Claim recorded (withheld)",
     "This page checked itself: every step's sealed record and its place in this deal's log. The records carry fingerprints, not names or numbers; the words shown come from this device. Steps marked contents withheld are proven present and unchanged; what they say is not in this copy. The seal key is on the agent's machine, so this shows the record was not changed after it was made, not who made it. It covers this skill's own records only, never the agent host's own store.",
-    "Bundle verification passed",
-    "This bundle carries no evaluation summary, so there is no aggregate view. The records and their verification are below.",
     "Verification",
     "bundle digest",
     "\"4c0419da71005e42515595a80f3da7854ab5cf6654e751b473193035bf068b43\"",

@@ -1,0 +1,24 @@
+#deal { --deal-warn: #9a3b00; --deal-ok: #1d6b35; line-height: 1.45; overflow-wrap: anywhere; }
+@media (prefers-color-scheme: dark) { #deal { --deal-warn: #ffb07a; --deal-ok: #7fd49a; } }
+#deal h1 { font-size: 1.5rem; margin: 0.2rem 0; }
+#deal h2 { font-size: 1.15rem; margin-top: 1.6rem; }
+#deal h3 { font-size: 0.95rem; color: var(--aac-muted); margin: 1rem 0 0.3rem; }
+#deal .deal-flag summary { color: var(--deal-warn); }
+#deal .deal-steps { margin: 8px 0 0; padding-left: 1.4rem; }
+#deal .deal-steps li { margin: 4px 0; overflow-wrap: anywhere; }
+#deal .deal-at { color: var(--aac-muted); font-size: 0.85rem; }
+#deal .deal-note { color: var(--aac-muted); font-size: 0.9rem; }
+#deal .deal-demo { display: inline-block; border: 1px solid var(--deal-warn); color: var(--deal-warn); padding: 0 6px; border-radius: 4px; font-size: 0.8rem; }
+#deal .deal-bad { color: var(--deal-warn); font-weight: 600; }
+#deal details { border: 1px solid var(--aac-line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+#deal summary { cursor: pointer; font-weight: 600; }
+#deal table.deal-merchant { border-collapse: collapse; width: 100%; margin: 6px 0; }
+#deal table.deal-merchant th, #deal table.deal-merchant td { border: 1px solid var(--aac-line); padding: 4px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+#deal table.deal-merchant th { color: var(--aac-muted); font-weight: 600; width: 40%; }
+#deal .deal-ok { color: var(--deal-ok); font-weight: 600; }
+#deal code { color: var(--aac-muted); font-size: 0.8rem; overflow-wrap: anywhere; }
+#deal .deal-assurance { border: 1px solid var(--aac-line); border-radius: 6px; padding: 8px 12px; margin: 8px 0 16px; }
+#deal .deal-rung { font-weight: 600; margin: 0.2rem 0; }
+#deal .deal-scope { font-weight: 600; margin: 0.2rem 0 0.6rem; }
+#deal .deal-claims { border: none; padding: 0; }
+#deal .deal-verify { background: transparent; border: 1px solid var(--aac-line); border-radius: 4px; padding: 6px 8px; overflow-x: auto; font-size: 0.85rem; user-select: all; }

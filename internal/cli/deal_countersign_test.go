@@ -73,7 +73,7 @@ func pageCountersign(t *testing.T, htmlPath string) dealCountersignView {
 // capsulectl checked when it wrote the page.
 func pageData(t *testing.T, page []byte) []byte {
 	t.Helper()
-	m := regexp.MustCompile(`await capsulectlDealView\(context, (.*)\);\n\}\)\(\);`).FindSubmatch(page)
+	m := regexp.MustCompile(`globalThis\.capsulectlDealPage = Object\.freeze\((.*)\);\n`).FindSubmatch(page)
 	require.NotNil(t, m, "the page's bootstrap carries the deal view's data")
 	return m[1]
 }

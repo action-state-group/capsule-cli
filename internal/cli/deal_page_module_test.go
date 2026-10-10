@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -166,4 +168,90 @@ func TestADealPageWhoseWordsDoNotMatchIsNotWritten(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "a statement the agent made does not match")
 	assert.NotContains(t, err.Error(), "No scratches at all")
+}
+
+// The deal view is a presentation module: a schema-valid manifest that pins
+// its script and its one stylesheet, registered by the script itself at
+// load with the same manifest (but for the script's own digest, which a
+// script cannot carry), and its stylesheet is the committed file's bytes.
+func TestTheDealViewIsAPresentationModule(t *testing.T) {
+	schema, err := presentationSchema("manifest")
+	require.NoError(t, err)
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(dealViewManifestJSON))
+	require.NoError(t, err)
+	require.NoError(t, schema.Validate(doc))
+
+	var manifest map[string]interface{}
+	require.NoError(t, json.Unmarshal(dealViewManifestJSON, &manifest))
+	assert.Equal(t, "capsulectl.deal-view/v0", manifest["id"])
+	css := mustRead(t, "assets/deal-view.css")
+	executable := manifest["executable"].(map[string]interface{})
+	assert.Equal(t, "module-slot", executable["carrier"])
+	assert.Equal(t, strings.TrimSpace(dealViewJSSHA256), executable["script_sha256"])
+	assert.Equal(t, []interface{}{hexSHA256(css)}, executable["style_sha256"])
+
+	m := regexp.MustCompile("(?s)const DEAL_VIEW_CSS = `(.*?)`;").FindStringSubmatch(dealViewJS)
+	require.NotNil(t, m, "the script carries its stylesheet")
+	assert.Equal(t, string(css), m[1], "assets/deal-view.css and the script's stylesheet are the same bytes")
+
+	code := regexp.MustCompile(`EvidenceGraph\.registerPresentation\(\{\n  manifest: (\{.*\}),\n`).FindStringSubmatch(dealViewJS)
+	require.NotNil(t, code, "the script registers its module at load")
+	assert.Equal(t, strings.Repeat("0", 64), regexp.MustCompile(`"script_sha256": "([0-9a-f]{64})"`).FindStringSubmatch(code[1])[1])
+	var inCode map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(code[1]), &inCode))
+	inCode["executable"].(map[string]interface{})["script_sha256"] = executable["script_sha256"]
+	assert.Equal(t, manifest, inCode)
+	assert.Equal(t, 1, strings.Count(dealViewJS, "registerPresentation("), "one module")
+	assert.NotContains(t, dealViewJS, "capsulectlDealView =", "no entry point beside the module")
+
+	module, err := dealViewModule()
+	require.NoError(t, err)
+	assert.Equal(t, []string{hexSHA256(css)}, module.StyleSHA256)
+}
+
+// The page's theme is tokens only; the deal view's layout is its own,
+// pinned, stylesheet, and the page's style-src lists it.
+func TestTheDealPageThemeIsTokensOnly(t *testing.T) {
+	for _, line := range strings.Split(strings.TrimSpace(dealThemeCSS), "\n") {
+		assert.Regexp(t, `^(@media \(prefers-color-scheme: dark\) \{ )?:root \{( --aac-[a-z-]+: [^;{}]+;)+ \}( \})?$`, line)
+	}
+	dealFixture(t)
+	id := retailDeal(t)
+	path := filepath.Join(t.TempDir(), "page.html")
+	dealRun(t, "report", "--deal", id, "--html", path)
+	page := string(mustRead(t, path))
+	for _, s := range pageStyles.FindAllStringSubmatch(page, -1) {
+		assert.NotContains(t, s[1], "#deal", "the deal view's rules are not in the page's own styles")
+	}
+	assert.Contains(t, pageCSP.FindStringSubmatch(page)[1], cspSource(string(mustRead(t, "assets/deal-view.css"))))
+}
+
+// A deal view the page's runtime would refuse, one ambiguous with a
+// built-in, or one whose manifest does not pin its script writes no page.
+func TestADealViewThePageWouldRefuseWritesNoPage(t *testing.T) {
+	for name, edit := range map[string]func(m map[string]interface{}){
+		"runtime":   func(m map[string]interface{}) { m["runtime_min"] = "0.2.0" },
+		"api":       func(m map[string]interface{}) { m["presentation_api"] = "aac.presentation-api/v1" },
+		"ambiguous": func(m map[string]interface{}) { delete(m, "forbids") },
+		"unpinned": func(m map[string]interface{}) {
+			m["executable"].(map[string]interface{})["script_sha256"] = strings.Repeat("0", 64)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var copied map[string]interface{}
+			require.NoError(t, json.Unmarshal(dealViewManifestJSON, &copied))
+			edit(copied)
+			raw, err := json.Marshal(copied)
+			require.NoError(t, err)
+			old := dealViewManifestJSON
+			dealViewManifestJSON = raw
+			t.Cleanup(func() { dealViewManifestJSON = old })
+			dealFixture(t)
+			id := retailDeal(t)
+			path := filepath.Join(t.TempDir(), "page.html")
+			_, err = invoke(t, "", "--profile", "deal", "deal", "report", "--deal", id, "--html", path)
+			require.Error(t, err)
+			assert.NoFileExists(t, path)
+		})
+	}
 }

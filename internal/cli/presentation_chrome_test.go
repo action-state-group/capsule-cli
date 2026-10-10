@@ -205,7 +205,7 @@ type openedPage struct {
 
 // errorHook records every console.error, uncaught error and unhandled
 // rejection before the page's own scripts run.
-const errorHook = `(function(){window.__renderErrors=[];var e=console.error;console.error=function(){window.__renderErrors.push("console.error: "+Array.prototype.join.call(arguments," "));return e.apply(console,arguments);};window.addEventListener("error",function(ev){window.__renderErrors.push("uncaught: "+ev.message);});window.addEventListener("unhandledrejection",function(ev){window.__renderErrors.push("unhandled rejection: "+(ev.reason&&ev.reason.message||ev.reason));});})();`
+const errorHook = `(function(){window.__renderErrors=[];var e=console.error;console.error=function(){window.__renderErrors.push("console.error: "+Array.prototype.join.call(arguments," "));return e.apply(console,arguments);};window.addEventListener("error",function(ev){window.__renderErrors.push("uncaught: "+ev.message);});document.addEventListener("securitypolicyviolation",function(ev){window.__renderErrors.push("CSP violation: "+ev.violatedDirective+" "+(ev.blockedURI||"inline"));});window.addEventListener("unhandledrejection",function(ev){window.__renderErrors.push("unhandled rejection: "+(ev.reason&&ev.reason.message||ev.reason));});})();`
 
 // rendered waits until the viewer has drawn its verification page (and a
 // deal page its deal section), then lets pending work settle.

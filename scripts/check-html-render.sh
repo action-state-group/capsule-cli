@@ -211,6 +211,7 @@ cp deal-receipt/receipt.html receipt.html
 render receipt.html
 check "deal-receipt: no console.error, uncaught error or unhandled rejection" no_render_errors receipt.html.dom
 check "deal-receipt: the page renders the deal" contains receipt.html.dom '<h1>Deal report</h1>'
+check "deal-receipt: the deal view inserted its own stylesheet" contains receipt.html.dom '<style id="capsulectl-deal-view-style">'
 check "deal-receipt: the page says its text is sealed and checked" contains receipt.html.dom 'data-sealed="x-deal-v0"'
 capsulectl verify --bundle receipt.html >receipt-verify.json && verdict=0 || verdict=$?
 check "deal-receipt: verify --bundle: VALID, exit 0" test "$verdict" -eq 0
@@ -229,8 +230,10 @@ render receipt-unpinned.html
 check "deal-receipt-unpinned: an edited bundle the CSP does not pin shows no deal text" lacks receipt-unpinned.html.dom '<p class="deal-note">A line nobody sealed.</p>'
 check "deal-receipt-unpinned: and no deal section" lacks receipt-unpinned.html.dom '<h1>Deal report</h1>'
 render receipt-edited.html
-# The rendered warning (the page's own script also carries the words).
-check "deal-receipt-edited: the page says the report did not verify" contains receipt-edited.html.dom '<p class="deal-bad">⚠️ This report did not verify'
+# The page's runtime says the bundle failed and selects no presentation: the
+# deal view never runs on a bundle that did not verify.
+check "deal-receipt-edited: the page says the bundle did not verify" contains receipt-edited.html.dom 'data-refusal="unverified-bundle"'
+check "deal-receipt-edited: and no deal section" lacks receipt-edited.html.dom '<h1>Deal report</h1>'
 check "deal-receipt-edited: the page shows no edited line" lacks receipt-edited.html.dom '<p class="deal-note">A line nobody sealed.</p>'
 capsulectl verify --bundle receipt-edited.html >/dev/null 2>&1 && verdict=0 || verdict=$?
 check "deal-receipt-edited: verify --bundle: INVALID, exit 1" test "$verdict" -eq 1
