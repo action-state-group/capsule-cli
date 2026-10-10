@@ -106,7 +106,7 @@ func TestDealReportIsOneLocalVerifyingPage(t *testing.T) {
 	assert.NotRegexp(t, regexp.MustCompile(`(?i)<(script|link|img|iframe)[^>]+(src|href)=`), html)
 	assert.Contains(t, html, "<title>Deal report</title>")
 	assert.Contains(t, html, string(evidenceGraphIIFE))
-	assert.Contains(t, html, "This page checked itself. If you would rather not take its word, open verify.agentactioncapsule.org and drop this file in.")
+	assert.Contains(t, html, "If you would rather not take this page's word for the first list, open verify.agentactioncapsule.org and drop this file in.")
 
 	// Pull the embedded bundle back out and run the authoritative verifier.
 	b := embeddedBundle(t, html)

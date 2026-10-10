@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,4 +87,58 @@ func TestPresentationDealWitnessLine(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("Witnessed through step %d of %d at 2026-10-04T09:00:00Z (receipt attached); later steps: witness receipt pending the next tick.", k, n), text, name)
 		}
 	})
+}
+
+// The deal view says which checks ran on the page and which only
+// `capsulectl verify` runs, rendered in Chrome on a deal shaped like a
+// shared receipt whose witness covers part of it (an earlier checkpoint, a
+// receipt, a consistency proof), on every copy. No "verified" appears in
+// the deal section except as "not verified" or "verified or not".
+func TestPresentationDealSaysWhichChecksRan(t *testing.T) {
+	binary := os.Getenv("CAPSULECTL_CHROME")
+	if binary == "" {
+		t.Skip("CAPSULECTL_CHROME is not set")
+	}
+	chrome := startHeadlessChrome(t, binary)
+	public, key, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	endpoint, _ := countingWitness(t)
+	p := cadenceFixture(t, endpoint, public, "1h", "0s", 0)
+	now := clockAt(t, time.Date(2026, 10, 4, 9, 0, 0, 0, time.UTC))
+	dealID := retailDeal(t)
+	require.Equal(t, "ticked", dealRun(t, "tick")["state"])
+	deliver(t, p, cadenceSize(t, p), key)
+	*now = now.Add(10 * time.Minute)
+	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","text":"Your order has shipped."}`))
+
+	dir := t.TempDir()
+	copies := map[string][]string{"own": nil, "counterparty": {"--share", "counterparty", "--to", "the shop's support desk"}, "adjudicator": {"--share", "adjudicator", "--to", "the shop's support desk"}}
+	for name, extra := range copies {
+		path := filepath.Join(dir, name+".html")
+		dealRun(t, append([]string{"report", "--deal", dealID, "--html", path}, extra...)...)
+		page := chrome.open(t, "file://"+path, presentationViews[1])
+		var got struct {
+			Page    []string `json:"page"`
+			CLI     []string `json:"cli"`
+			CLIText []string `json:"cliText"`
+			Command string   `json:"command"`
+			Text    string   `json:"text"`
+		}
+		page.eval(t, `(() => {
+  const ids = (w) => [...document.querySelectorAll('#deal [data-checks="' + w + '"] li')].map((li) => li.dataset.check);
+  return {
+    page: ids("page"), cli: ids("cli"),
+    cliText: [...document.querySelectorAll('#deal [data-checks="cli"] li')].map((li) => li.textContent),
+    command: (document.querySelector("#deal .deal-verify") || {}).textContent || "",
+    text: document.getElementById("deal").textContent,
+  };
+})()`, &got)
+		assert.Equal(t, []string{"digests", "membership", "range", "disclosures"}, got.Page, name)
+		assert.Equal(t, []string{"checkpoint-signature", "producer-signatures", "witness-receipt", "consistency"}, got.CLI, name)
+		assert.Contains(t, got.CLIText[0], "This page cannot check it, and it shows the bundle as passing without it.", name)
+		assert.Regexp(t, `^capsulectl verify --bundle \S+ --witness-directory DIRECTORY\.json$`, got.Command, name)
+		scan := strings.NewReplacer("not verified", "", "verified or not", "").Replace(got.Text)
+		assert.NotRegexp(t, `(?i)\bverified\b`, scan, "%s: \"verified\" only for a check the page ran", name)
+		assert.NotContains(t, got.Text, "all records", name)
+	}
 }

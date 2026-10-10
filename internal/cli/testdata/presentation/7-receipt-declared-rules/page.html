@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-2TQVzs+0jXYZVLBoXJCyHYKst0weVqpt28tmhK7M4Ss=' 'sha256-W6yn27UtFzlVs0pBcY43HqTY4fdhFymONlw83JwgP0M=' 'sha256-Sz2WAnoC9pNxut7bQCHJIKgqCctERuRiGhf8g413IYw='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-2TQVzs+0jXYZVLBoXJCyHYKst0weVqpt28tmhK7M4Ss=' 'sha256-3+5dK91wXpn89/tjtvoJfEje3CY/U5YlVkCOlJB/5Ko=' 'sha256-Sz2WAnoC9pNxut7bQCHJIKgqCctERuRiGhf8g413IYw='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report</title>
     <style>
@@ -11676,6 +11676,39 @@ const dealViewModel = (context) => {
     if (!builds.some((b) => b.name === name)) builds.push({ name, version: p && p.version });
   });
 
+  // Which checks this page ran and which it left to `capsulectl verify`,
+  // read from what the page's verification recorded and what the file
+  // carries; never assumed. The page recomputes each record's digest, its
+  // membership and the range proof, matches opened words against their
+  // sealed digests, checks a countersignature's signature under the key it
+  // names, and checks the agent's signature only on the records it cites as
+  // signers (a Close and the records that acknowledge or rebut it). It has no
+  // verifier for the records' own signatures in general, a witness receipt or
+  // a consistency proof, and it passes a bundle whose checkpoint signature it
+  // could not check, recording checkpoint_unverified.
+  const v = context.verification;
+  const checks = { page: [], cli: [] };
+  if (Object.keys(v.capsuleResults).length > 0) checks.page.push("digests");
+  if (v.perRecordMembership.status === "pass") checks.page.push("membership");
+  if (v.intervalCoverage.status === "pass") checks.page.push("range");
+  if (v.disclosures.some((d) => d.status === "disclosure_match")) checks.page.push("disclosures");
+  if (v.countersignatures.length > 0) checks.page.push("countersignatures");
+  const citesSigners = context.records.some((r) => {
+    const header = r && payload(r.capsule_id);
+    return (
+      header && Array.isArray(header.links) && header.links.some((l) => l && (l.type === "acknowledges" || l.type === "rebuts"))
+    );
+  });
+  if (citesSigners) checks.page.push("cited-signers");
+  const checkpoint = bundle.checkpoint || {};
+  if (typeof checkpoint.cose === "string" && checkpoint.cose) {
+    const unchecked = [v.perRecordMembership, v.intervalCoverage].some((c) => (c.findings || []).includes("checkpoint_unverified"));
+    (unchecked ? checks.cli : checks.page).push("checkpoint-signature");
+  }
+  if (context.records.some((r) => r && typeof r.signature === "string" && r.signature)) checks.cli.push("producer-signatures");
+  if (witnesses.length > 0) checks.cli.push("witness-receipt");
+  if (cadence.earlier && typeof cadence.earlier === "object") checks.cli.push("consistency");
+
   // Each statement's class, as sealed with it (undefined when its sealed step
   // holds no such claim).
   const claimClasses = (report.representations || []).map((r) => {
@@ -11694,6 +11727,7 @@ const dealViewModel = (context) => {
     matched,
     recorded: [...context.recordIndex.keys()],
     witness,
+    checks,
     builds,
     claimClasses,
   };
@@ -11837,9 +11871,53 @@ const dealViewRender = (model, regions) => {
   header.append(notClaimed);
   // A second opinion without trusting this page or installing anything: a
   // verifier that checks a dropped file in the reader's own browser.
-  header.append(el("p", "This page checked itself. If you would rather not take its word, open verify.agentactioncapsule.org and drop this file in.", "deal-note"));
-  header.append(el("p", "Anyone can check this file offline, with only the file and capsulectl:", "deal-note"));
-  header.append(el("pre", report.verify_command || "capsulectl verify --bundle receipt.html", "deal-verify"));
+  // Which checks ran here and which only `capsulectl verify` runs, as
+  // buildModel read them: a check this page did not run is never called
+  // checked here.
+  const words = {
+    digests: "Each record's contents match the fingerprint it was sealed with.",
+    membership: "Each record sits at its place in this deal's log.",
+    range: "The log's range proof holds: no record is missing from the stretch this file covers.",
+    disclosures: "Each opened step's words match what was sealed.",
+    countersignatures: "Each countersignature is a valid signature by the key it names (the details below show whose key, if known).",
+    "cited-signers":
+      "The agent's signature on the records the details below cite as signers, each marked there as verified or not. Not the signature on every record.",
+    "checkpoint-signature": {
+      page: "The signature on the log's checkpoint.",
+      cli: "The signature on the log's checkpoint. This page cannot check it, and it shows the bundle as passing without it.",
+    },
+    "producer-signatures": "The agent's signature on every record.",
+    "witness-receipt": "The witness's receipt.",
+    consistency: "That the log only grew, and nothing in it changed, since its earlier checkpoint.",
+  };
+  const checkList = (ids, which) => {
+    const list = el("ul", undefined, "deal-checks");
+    list.dataset.checks = which;
+    ids.forEach((id) => {
+      const li = el("li", typeof words[id] === "string" ? words[id] : words[id][which]);
+      li.dataset.check = id;
+      list.append(li);
+    });
+    return list;
+  };
+  header.append(el("h3", "Checked on this page"), checkList(model.checks.page, "page"));
+  if (model.checks.cli.length > 0) {
+    header.append(el("h3", "Checked only by capsulectl verify"), checkList(model.checks.cli, "cli"));
+  }
+  header.append(el("p", "Run, with only this file and capsulectl:", "deal-note"));
+  const command = (report.verify_command || "capsulectl verify --bundle receipt.html") + (model.checks.cli.includes("witness-receipt") ? " --witness-directory DIRECTORY.json" : "");
+  header.append(el("pre", command, "deal-verify"));
+  if (model.checks.cli.includes("witness-receipt")) {
+    header.append(el("p", "DIRECTORY.json is a witness directory you trust: the command checks the receipt against it.", "deal-note"));
+  }
+  header.append(
+    el(
+      "p",
+      "None of these checks says who the agent or its user is, or that this file is the latest copy of the deal. " +
+        "If you would rather not take this page's word for the first list, open verify.agentactioncapsule.org and drop this file in.",
+      "deal-note",
+    ),
+  );
   if (shared) {
     const who = report.audience === "counterparty" ? "the other party" : "an adjudicator";
     header.append(el("p", `A shared copy for ${who}. Left out of this copy: ${(report.withheld || []).join(", ")}.`, "deal-note"));
@@ -12104,7 +12182,7 @@ const dealViewRender = (model, regions) => {
   host.append(
     el(
       "p",
-      "This page checked itself: every step's sealed record and its place in this deal's log. " +
+      "This page checked each step's sealed record and its place in this deal's log; the lists above say what it did not check. " +
         "The records carry fingerprints, not names or numbers; the words shown come from this device. " +
         (shared ? "Steps marked contents withheld are proven present and unchanged; what they say is not in this copy. " : "") +
         "The seal key is on the agent's machine, so this shows the record was not changed after it was made, not who made it. " +
