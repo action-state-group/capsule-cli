@@ -857,6 +857,13 @@ func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRul
 		if cp != nil {
 			record["counterparty_profile"] = cp
 		}
+		party, err := s.actCounterparty(ctx, a.id)
+		if err != nil {
+			return nil, nil, err
+		}
+		if party != nil {
+			record["counterparty"] = party
+		}
 		item, ok := items[a.deal]
 		if !ok {
 			if item, err = s.dealItemRef(ctx, a.deal); err != nil {
@@ -911,6 +918,55 @@ func (s *dealSession) localStep(ctx context.Context, capsuleID string) (string, 
 	return dealID, &ev, nil
 }
 
+// actCheck is the check an earlier act rests on (the capsule id of its
+// checked snapshot), with the act's deal: the verdict the act rests on, then
+// the check that verdict is of. The act rests on its approval's verdict, or,
+// in typed records, on a verdict that needed no approval, which authorizes
+// the act itself. Empty when a link is missing (an act without authorization).
+func (s *dealSession) actCheck(ctx context.Context, actID string) (dealID, check string, err error) {
+	dealID, act, err := s.localStep(ctx, actID)
+	if err != nil || act == nil || act.Act == nil || act.Act.AuthorizedBy == "" {
+		return "", "", err
+	}
+	_, verdict, err := s.localStep(ctx, act.Act.AuthorizedBy)
+	if err != nil || verdict == nil {
+		return "", "", err
+	}
+	if verdict.Approval != nil {
+		if _, verdict, err = s.localStep(ctx, verdict.Approval.Check); err != nil || verdict == nil {
+			return "", "", err
+		}
+	}
+	if verdict.Check == nil || verdict.Check.Snapshot == "" {
+		return "", "", nil
+	}
+	return dealID, verdict.Check.Snapshot, nil
+}
+
+// actCounterparty is the counterparty an earlier act's check sealed, exactly
+// as sealed: an x-deal-v0 check's header counterparty (per-deal key), or a
+// typed check's body counterparty (the same fingerprints, named for the
+// chain). An act record names no counterparty itself, so a rule keying acts
+// on who they were with reads it here. Nil when the check names none.
+func (s *dealSession) actCounterparty(ctx context.Context, actID string) (map[string]interface{}, error) {
+	_, check, err := s.actCheck(ctx, actID)
+	if err != nil || check == "" {
+		return nil, err
+	}
+	sealed, err := s.capsuleWithInput(ctx, check)
+	if err != nil || sealed == nil {
+		return nil, err
+	}
+	record, _ := sealed["agent_input"].(map[string]interface{})
+	if block, ok := record["x-deal-v0"].(map[string]interface{}); ok {
+		cp, _ := block["counterparty"].(map[string]interface{})
+		return cp, nil
+	}
+	body, _ := record["body"].(map[string]interface{})
+	cp, _ := body["counterparty"].(map[string]interface{})
+	return cp, nil
+}
+
 // actCounterpartyProfile is the payee keyed per profile for an earlier act:
 // the verdict the act rests on, the check that verdict is of, and that
 // check's companion. The act rests on its approval's verdict, or, in typed
@@ -918,21 +974,9 @@ func (s *dealSession) localStep(ctx context.Context, capsuleID string) (string, 
 // itself. Nil when any link is missing: an act without authorization, or one
 // checked before checks had a companion.
 func (s *dealSession) actCounterpartyProfile(ctx context.Context, actID string) (map[string]interface{}, error) {
-	dealID, act, err := s.localStep(ctx, actID)
-	if err != nil || act == nil || act.Act == nil || act.Act.AuthorizedBy == "" {
+	dealID, check, err := s.actCheck(ctx, actID)
+	if err != nil || check == "" {
 		return nil, err
-	}
-	_, verdict, err := s.localStep(ctx, act.Act.AuthorizedBy)
-	if err != nil || verdict == nil {
-		return nil, err
-	}
-	if verdict.Approval != nil {
-		if _, verdict, err = s.localStep(ctx, verdict.Approval.Check); err != nil || verdict == nil {
-			return nil, err
-		}
-	}
-	if verdict.Check == nil || verdict.Check.Snapshot == "" {
-		return nil, nil
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT local FROM deal_steps WHERE deal_id=? AND kind='counterparty_profile'`, dealID)
 	if err != nil {
@@ -945,7 +989,7 @@ func (s *dealSession) actCounterpartyProfile(ctx context.Context, actID string) 
 			return nil, errors.Join(err, rows.Close())
 		}
 		var ev dealEvent
-		if json.Unmarshal([]byte(local), &ev) == nil && ev.CounterpartyProfile != nil && ev.CounterpartyProfile.Check == verdict.Check.Snapshot {
+		if json.Unmarshal([]byte(local), &ev) == nil && ev.CounterpartyProfile != nil && ev.CounterpartyProfile.Check == check {
 			out = counterpartyProfileBlock(ev.CounterpartyProfile.Payee)
 		}
 	}
