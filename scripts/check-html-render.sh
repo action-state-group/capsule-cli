@@ -211,6 +211,7 @@ cp deal-receipt/receipt.html receipt.html
 render receipt.html
 check "deal-receipt: no console.error, uncaught error or unhandled rejection" no_render_errors receipt.html.dom
 check "deal-receipt: the page renders the deal" contains receipt.html.dom '<h1>Deal report</h1>'
+check "deal-receipt: the deal view inserted its own stylesheet" contains receipt.html.dom '<style id="capsulectl-deal-view-style">'
 check "deal-receipt: the page says its text is sealed and checked" contains receipt.html.dom 'data-sealed="x-deal-v0"'
 capsulectl verify --bundle receipt.html >receipt-verify.json && verdict=0 || verdict=$?
 check "deal-receipt: verify --bundle: VALID, exit 0" test "$verdict" -eq 0
