@@ -518,7 +518,9 @@ A verifier holding one deal's records in `seq` order checks:
     own Evidence Bundle, and checks it names its registration and opens its
     `sale_authority_commitment` to this sale's task authority, that its `thread_opened` opens to
     its task authority, and that its last record on its log is its head in the latest
-    `sale_cut`; a `never_opened` registration has no `thread_opened`. A `missing` thread, a sale
+    `sale_cut`; a `never_opened` registration has no `thread_opened` and no head in the latest
+    cut, and is shown only when every certified record of the sale's log is disclosed (one
+    withheld could be its opening). A `missing` thread, a sale
     whose threads predate registration (`threads_predate_registration`), a copy without
     `thread_opened` or `sale_cut` (made before they were sealed), or a present thread the latest
     cut does not name, is INCOMPLETE; any mismatch is INVALID. No buyer's copy carries the sale bundle, a `thread` record or an

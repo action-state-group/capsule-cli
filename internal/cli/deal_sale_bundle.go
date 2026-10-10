@@ -250,6 +250,7 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 	openedBy := map[string]string{} // registration -> task_authority_commitment
 	var cutHeads map[string]string  // registration -> head_commitment, from the latest sale_cut
 	cutSeq := 0.0
+	undisclosed := false
 	records, _ := value["records"].([]interface{})
 	for _, raw := range records {
 		r, _ := raw.(map[string]interface{})
@@ -257,6 +258,9 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 		d, _ := disclosures[id].(map[string]interface{})
 		in, _ := d["agent_input"].(map[string]interface{})
 		if in == nil || !matched[id] {
+			// A certified record this copy does not show: it could be any
+			// thread's opening, so no never_opened can be shown.
+			undisclosed = true
 			continue
 		}
 		digest := jcsDigest(in)
@@ -349,8 +353,19 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 			if member == saleThreadPresent {
 				present[threadID] = regDigest
 				openings[threadID] = e
-			} else if _, ok := openedBy[regDigest]; ok {
+				break
+			}
+			// never_opened: no thread_opened for it anywhere in the
+			// certified log, so none withheld, and no head in the cut.
+			_, opened := openedBy[regDigest]
+			_, inCut := cutHeads[regDigest]
+			switch {
+			case opened:
 				fail("never_opened_but_opened:" + regDigest)
+			case inCut:
+				fail("never_opened_but_in_the_cut:" + regDigest)
+			case undisclosed:
+				notShown = append(notShown, "never_opened_unprovable:"+regDigest)
 			}
 		default:
 			fail("unknown_thread_state:" + regDigest)

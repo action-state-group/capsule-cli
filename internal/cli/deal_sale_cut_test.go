@@ -160,6 +160,15 @@ func TestTheSalesLogMakesOpenedCheckable(t *testing.T) {
 			entries, _ := saleSection(x)
 			entries[0].(map[string]any)["opened"] = entries[1].(map[string]any)["opened"]
 		}, "INVALID", "opening_does_not_match_the_thread:" + a},
+		"B's opening withheld, B listed never_opened and dropped": {func(x map[string]any) {
+			hideB(x)
+			withhold(t, x, "thread_opened", registrationOf(x, 1))
+		}, "INVALID", "never_opened_but_in_the_cut:"},
+		"B's opening and the cut withheld, B listed never_opened and dropped": {func(x map[string]any) {
+			hideB(x)
+			withhold(t, x, "thread_opened", registrationOf(x, 1))
+			withhold(t, x, "sale_cut", "")
+		}, "INCOMPLETE", "never_opened_unprovable:"},
 		"a head that is not A's last record": {func(x map[string]any) {
 			entries, _ := saleSection(x)
 			entries[0].(map[string]any)["head"] = entries[1].(map[string]any)["head"]
@@ -173,6 +182,42 @@ func TestTheSalesLogMakesOpenedCheckable(t *testing.T) {
 			assert.Contains(t, strings.Join(findings, " "), c.finding)
 		})
 	}
+}
+
+// hideB lists the second thread never_opened and drops it from the bundle.
+func hideB(x map[string]any) {
+	entries, threads := saleSection(x)
+	e := entries[1].(map[string]any)
+	delete(threads, e["thread_id"].(string))
+	e["member"] = saleThreadNeverOpened
+	delete(e, "opened")
+	delete(e, "head")
+}
+
+// registrationOf is the registration digest of a sale bundle's i-th entry.
+func registrationOf(x map[string]any, i int) string {
+	entries, _ := saleSection(x)
+	return entries[i].(map[string]any)["registration"].(map[string]any)["digest"].(string)
+}
+
+// withhold drops the disclosure of the sale-log record of recordType (one
+// naming registration, when given): the record stays certified, unread.
+func withhold(t *testing.T, x map[string]any, recordType, registration string) {
+	t.Helper()
+	disclosures := x["disclosures"].(map[string]any)
+	for id, d := range disclosures {
+		in, _ := d.(map[string]any)["agent_input"].(map[string]any)
+		blk, _ := in[dealProfile].(map[string]any)
+		if blk["record_type"] != recordType {
+			continue
+		}
+		if registration != "" && blk["refs"].([]any)[0].(map[string]any)["digest"] != registration {
+			continue
+		}
+		delete(disclosures, id)
+		return
+	}
+	t.Fatalf("no %s record to withhold", recordType)
 }
 
 // A crash between a thread's task authority and its opening on the sale's
