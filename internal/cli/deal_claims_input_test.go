@@ -54,7 +54,8 @@ func TestASellersEarlierAgentClaimReachesTheChecker(t *testing.T) {
 	checker := pinStubChecker(t)
 	id := openTyped(t, sellerTyped)
 	claim := noteClaim(t, id, `{"text":"`+conditionWords+`","source_kind":"agent","source":"listing_message","class":"condition"}`)
-	noteClaim(t, id, `{"text":"The buyer asked about the frame size","source_kind":"merchant","source":"buyer_message"}`)
+	// The buyer's own claim carries a class too: only the source keeps it out.
+	noteClaim(t, id, `{"text":"The buyer says the frame looks scratched","source_kind":"merchant","source":"buyer_message","class":"condition"}`)
 	noteClaim(t, id, `{"text":"The agent's own note with no class","source_kind":"agent","source":"listing_message"}`)
 	dealRun(t, "check", "--deal", id, "--input", writeJSON(t, sellerOffer))
 
@@ -106,4 +107,30 @@ func TestNoDealClaimsWithoutASellersClaim(t *testing.T) {
 	dealRun(t, "check", "--deal", buyer, "--input", writeJSON(t, hotelCommit))
 	require.NoError(t, json.Unmarshal([]byte(rawCheckerInput(t, checker)), &input))
 	assert.NotContains(t, input["record"], "deal_claims", "a buyer's deal is unchanged")
+}
+
+// Only claims sealed before the checked step count: given the whole deal, the
+// input for an earlier check holds the claim before it and not one sealed
+// after it.
+func TestOnlyClaimsBeforeTheCheckedStepCount(t *testing.T) {
+	dealFixture(t)
+	id := openTyped(t, sellerTyped)
+	earlier := noteClaim(t, id, `{"text":"`+conditionWords+`","source_kind":"agent","source":"listing_message","class":"condition"}`)
+	first := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, sellerOffer))
+	noteClaim(t, id, `{"text":"Comes with a one-month warranty on the gears","source_kind":"agent","source":"listing_message","class":"warranty"}`)
+
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, s.close()) }()
+	require.NoError(t, s.useDeal(t.Context(), id, false))
+	events, err := s.load(t.Context(), id)
+	require.NoError(t, err)
+
+	claims, err := s.dealClaimsInput(t.Context(), first["snapshot_id"].(string), events)
+	require.NoError(t, err)
+	require.Len(t, claims, 1, "the claim sealed after the check is not part of its input")
+	assert.Equal(t, earlier["capsule_id"], claims[0].(map[string]interface{})["capsule_id"])
+	assert.Equal(t, "condition", claims[0].(map[string]interface{})["class"])
 }
