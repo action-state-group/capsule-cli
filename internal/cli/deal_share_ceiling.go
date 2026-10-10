@@ -100,6 +100,32 @@ func dealShownAmounts(events []sealedEvent) map[int64]bool {
 	return shown
 }
 
+// hexRun is a run of 16 or more hex digits.
+var hexRun = regexp.MustCompile(`(?i)[0-9a-f]{16,}`)
+
+// removeHexTokens blanks every whole token that is a run of 16 or more hex
+// digits (a capsule id, a digest, a key, a signature): one with no letter or
+// digit right before or after it.
+func removeHexTokens(text []byte) []byte {
+	out := append([]byte(nil), text...)
+	alnum := func(i int) bool {
+		if i < 0 || i >= len(text) {
+			return false
+		}
+		b := text[i] | 0x20
+		return (b >= 'a' && b <= 'z') || (text[i] >= '0' && text[i] <= '9')
+	}
+	for _, loc := range hexRun.FindAllIndex(text, -1) {
+		if alnum(loc[0]-1) || alnum(loc[1]) {
+			continue
+		}
+		for i := loc[0]; i < loc[1]; i++ {
+			out[i] = ' '
+		}
+	}
+	return out
+}
+
 // dealCeilingGate refuses a shared copy that carries a bound it may not: the
 // floor (by name, by its openings, or as money) in any shared copy, and the
 // spending limit in the counterparty's. It reads the same plain form as the
@@ -110,7 +136,15 @@ func dealCeilingGate(data []byte, events []sealedEvent, audience string) error {
 		return nil
 	}
 	counterparty := audience == dealAudienceCounterparty
-	text := strings.ToLower(foldText(string(data)))
+	// The deal's own ids and every digest, key and signature are taken out
+	// first, as the page gate takes out the ids it allows: a run of hex is
+	// never prose, and one that holds "3cad8" is not 8 Canadian dollars.
+	folded := []byte(foldText(string(data)))
+	for _, id := range dealOwnIDs(events) {
+		folded = removeWholeToken(folded, []byte(foldText(id)))
+	}
+	data = removeHexTokens(folded)
+	text := strings.ToLower(string(data))
 	refuseLimit := inputError("refusing to write the shared copy: the counterparty's copy would carry your spending limit")
 	if dealRole(events) == dealRoleSeller {
 		refuseLimit = inputError("refusing to write the shared copy: the counterparty's copy would carry the lowest price you will take, or a limit you set")

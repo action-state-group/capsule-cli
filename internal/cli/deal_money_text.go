@@ -54,8 +54,8 @@ func moneyAmounts(text string) []int64 {
 		// Part of a longer run of letters or digits (an id, a digest, a
 		// date or a time) is not an amount; a currency code or word written
 		// against it ("usd1,700", "1700usd"), or a k, is.
-		gluedBefore := start > 0 && isMoneyGlue(low[start-1]) && !moneyCodes[lettersBefore(low, start)]
-		gluedAfter := end < len(low) && isMoneyGlue(low[end]) && !strings.HasPrefix(low[end:], "k") && !moneyCodes[lettersAfter(low, end)]
+		gluedBefore := start > 0 && isMoneyGlue(low[start-1]) && !codeBefore(low, start)
+		gluedAfter := end < len(low) && isMoneyGlue(low[end]) && !strings.HasPrefix(low[end:], "k") && !codeAfter(low, end)
 		if gluedBefore || gluedAfter {
 			continue
 		}
@@ -79,6 +79,24 @@ func moneyAmounts(text string) []int64 {
 }
 
 func isLetterByte(b byte) bool { return b >= 'a' && b <= 'z' }
+
+func isAlnumByte(b byte) bool { return isLetterByte(b) || (b >= '0' && b <= '9') }
+
+// codeBefore is whether the letters right before text[i] are a currency code
+// or word that starts a word of its own ("usd1,700", not "4cad1700"); codeAfter
+// whether those right after text[i] end one ("1700usd", not "8aed04c2", a hex
+// digest, which is not 8 AED).
+func codeBefore(text string, i int) bool {
+	code := lettersBefore(text, i)
+	k := i - len(code)
+	return moneyCodes[code] && (k == 0 || !isAlnumByte(text[k-1]))
+}
+
+func codeAfter(text string, i int) bool {
+	code := lettersAfter(text, i)
+	k := i + len(code)
+	return moneyCodes[code] && (k == len(text) || !isAlnumByte(text[k]))
+}
 
 // lettersBefore is the run of letters that ends at text[i], and
 // lettersAfter the run that starts there: the whole word, so "xusd" is not
