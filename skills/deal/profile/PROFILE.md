@@ -594,6 +594,11 @@ At every check, after the `check` record is sealed:
     offer's proposed-action record's sealed `at`, byte for byte, so a rule can hold the offer to its
     expiry. It is absent on a buyer's deal, on any other action, with no acceptance in force, and on
     history entries;
+    and, where the user sells, `deal_claims`: the deal's claims with `source_kind` `agent` and a
+    `class`, sealed before the checked step, in seal order, each as its sealed claim record states
+    it (`capsule_id`, `record_digest`, `class`, `source_kind`, `at`, `text_commitment`; never the
+    words), so a rule on a required disclosure finds a statement the agent made earlier in the deal.
+    It is absent on a buyer's deal, when there are none, and on history entries;
   - `history`: the profile's earlier sealed acts with an amount, from every deal on this
     profile's own store, sealed in the last 31 days, newest first, at most 1,000 of them, in the
     same shape. Each act carries the `counterparty_profile` of the check it rests on (act →
