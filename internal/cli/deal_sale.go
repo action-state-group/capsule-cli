@@ -271,11 +271,15 @@ func (s *dealSession) registerThread(ctx context.Context, saleID, threadID strin
 		if th == nil || (threadID != "" && th.ThreadID != threadID) {
 			continue
 		}
-		var held int
-		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_keys WHERE deal_id=?`, th.ThreadID).Scan(&held); err != nil {
+		// Reused only when nothing of its thread was sealed: an open that
+		// stopped before its baseline (its key row may already be written).
+		// A thread with a baseline and no task authority is not reused; its
+		// registration stays never opened.
+		steps, _, err := s.threadSteps(ctx, th.ThreadID)
+		if err != nil {
 			return "", "", err
 		}
-		if held == 0 {
+		if steps == 0 {
 			return th.ThreadID, se.Digest, nil
 		}
 		if threadID != "" {
@@ -298,3 +302,17 @@ func (s *dealSession) registerThread(ctx context.Context, saleID, threadID strin
 	}
 	return threadID, se.Digest, nil
 }
+
+// threadSteps is how many steps of a thread this device sealed, and whether
+// one is its task authority: a thread is opened once its task authority is
+// sealed, never by its key row alone (written before anything is sealed).
+func (s *dealSession) threadSteps(ctx context.Context, threadID string) (int, bool, error) {
+	var steps, authority int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(kind='task_authority'), 0) FROM deal_steps WHERE deal_id=?`, threadID).Scan(&steps, &authority)
+	return steps, authority > 0, err
+}
+
+// dealOpenStopsAt is a test hook: the open stops with its error at a stage
+// ("keyed": the deal's key row is written; "baseline": the baseline is
+// sealed), standing in for a crash there.
+var dealOpenStopsAt = func(stage string) error { return nil }

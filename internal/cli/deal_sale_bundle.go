@@ -86,11 +86,11 @@ func (s *dealSession) dealSaleBundle(ctx context.Context, saleID, verify string)
 			continue
 		}
 		entry := map[string]interface{}{"registration": digestRef(se.Digest), "nonce": se.Event.Nonces["thread_ref"], "thread_id": th.ThreadID, "member": saleThreadNeverOpened}
-		var held int
-		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_keys WHERE deal_id=?`, th.ThreadID).Scan(&held); err != nil {
+		_, opened, err := s.threadSteps(ctx, th.ThreadID)
+		if err != nil {
 			return nil, nil, err
 		}
-		if held > 0 {
+		if opened {
 			if err := s.t.close(); err != nil {
 				return nil, nil, err
 			}

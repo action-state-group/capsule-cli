@@ -170,8 +170,25 @@ func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) e
 		// The deal key is stored at open, so rotating the store secret later
 		// cannot break a deal in progress.
 		s.dkey = dealKeyFor(s.secret, dealID)
-		if _, err := s.db.ExecContext(ctx, `INSERT INTO deal_keys (deal_id, deal_key) VALUES (?, ?)`, dealID, s.dkey); err != nil {
+		res, err := s.db.ExecContext(ctx, `INSERT INTO deal_keys (deal_id, deal_key) VALUES (?, ?) ON CONFLICT(deal_id) DO NOTHING`, dealID, s.dkey)
+		if err != nil {
 			return err
+		}
+		// A key row with nothing sealed under it is an open that stopped
+		// before its baseline: it is taken up again, with the key it holds.
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n == 0 {
+			var steps int
+			if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_steps WHERE deal_id=?`, dealID).Scan(&steps); err != nil {
+				return err
+			}
+			if steps > 0 {
+				return inputError("this profile already holds deal " + dealID)
+			}
+			if err := s.db.QueryRowContext(ctx, `SELECT deal_key FROM deal_keys WHERE deal_id=?`, dealID).Scan(&s.dkey); err != nil {
+				return err
+			}
 		}
 	} else {
 		err := s.db.QueryRowContext(ctx, `SELECT deal_key FROM deal_keys WHERE deal_id=?`, dealID).Scan(&s.dkey)
@@ -986,8 +1003,14 @@ func dealOpenCommand() *cobra.Command {
 			if err := s.useDeal(ctx, dealID, true); err != nil {
 				return err
 			}
+			if err := dealOpenStopsAt("keyed"); err != nil {
+				return err
+			}
 			se, err := s.seal(ctx, dealID, nil, dealEvent{Kind: "open", Open: &o})
 			if err != nil {
+				return err
+			}
+			if err := dealOpenStopsAt("baseline"); err != nil {
 				return err
 			}
 			// Typed records: the user's task authority is its own step,

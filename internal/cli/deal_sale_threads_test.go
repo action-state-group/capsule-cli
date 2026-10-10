@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -337,4 +338,74 @@ func TestWriteTheSaleBundleFixture(t *testing.T) {
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	res := dealRun(t, "sale", "bundle", "--sale", saleID, "--out", out)
 	require.Equal(t, "VALID", res["verdict"])
+}
+
+// openThreadStoppingAt runs `deal open --sale` and stops it, as a crash
+// would, at stage; the open fails and the hook is restored.
+func openThreadStoppingAt(t *testing.T, saleID, stage string) {
+	t.Helper()
+	saved := dealOpenStopsAt
+	dealOpenStopsAt = func(s string) error {
+		if s == stage {
+			return errors.New("stopped at " + s)
+		}
+		return nil
+	}
+	defer func() { dealOpenStopsAt = saved }()
+	_, err := invoke(t, "", "--profile", "deal", "deal", "open", "--sale", saleID, "--input", writeJSON(t,
+		`{"channel": "marketplace", "who": {"name": "Example Buyer", "domain": "buyer-a.example"}, "terms": {"price_minor": 190000}}`))
+	require.Error(t, err)
+}
+
+// A crash right after the thread's key row is written, before anything of
+// the thread is sealed: the retry reuses the registration (no second one),
+// and the sale bundle lists the thread present and verifies.
+func TestAnOpenStoppedAfterItsKeyRowIsTakenUpAgain(t *testing.T) {
+	dealFixture(t)
+	saleID, _ := newSale(t)
+	openThreadStoppingAt(t, saleID, "keyed")
+	registered := chainSteps(t, saleID)[2].Event.Thread.ThreadID
+
+	a := buyerThread(t, saleID, "buyer-a.example")
+	assert.Equal(t, registered, a, "the retry opens the registered thread")
+	recs, path := exportSale(t, saleID)
+	checkProfile(t, path)
+	assert.Len(t, recs, 3, "one registration, not two")
+
+	bundle, res := saleBundle(t, saleID)
+	assert.Equal(t, "VALID", res["verdict"])
+	entries, threads := saleSection(bundle)
+	require.Len(t, entries, 1)
+	assert.Equal(t, saleThreadPresent, entries[0].(map[string]any)["member"])
+	assert.Contains(t, threads, a)
+	verdict, findings := verifySale(t, bundle)
+	assert.Equal(t, "VALID", verdict)
+	assert.Empty(t, findings)
+}
+
+// A crash after the thread's baseline, before its task authority: that
+// thread never opened (no task authority), so its registration is not
+// reused; the retry registers a new thread, and the bundle lists the first
+// never_opened and the second present, and verifies.
+func TestAnOpenStoppedAfterItsBaselineLeavesTheRegistrationNeverOpened(t *testing.T) {
+	dealFixture(t)
+	saleID, _ := newSale(t)
+	openThreadStoppingAt(t, saleID, "baseline")
+	first := chainSteps(t, saleID)[2].Event.Thread.ThreadID
+
+	a := buyerThread(t, saleID, "buyer-a.example")
+	assert.NotEqual(t, first, a)
+	recs, _ := exportSale(t, saleID)
+	assert.Len(t, recs, 4, "a second registration")
+
+	bundle, res := saleBundle(t, saleID)
+	assert.Equal(t, "VALID", res["verdict"])
+	assert.EqualValues(t, 1, res["never_opened"])
+	entries, threads := saleSection(bundle)
+	require.Len(t, entries, 2)
+	assert.Equal(t, saleThreadNeverOpened, entries[0].(map[string]any)["member"])
+	assert.Equal(t, saleThreadPresent, entries[1].(map[string]any)["member"])
+	assert.Equal(t, []string{a}, keysOf(threads))
+	verdict, _ := verifySale(t, bundle)
+	assert.Equal(t, "VALID", verdict)
 }
