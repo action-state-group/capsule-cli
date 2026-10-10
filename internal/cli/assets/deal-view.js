@@ -124,6 +124,7 @@ const dealViewModel = (context) => {
     const wc = report.witness_coverage || {};
     witness = {
       kind: "witnessed",
+      at: typeof cadence.checkpoint_at === "string" ? cadence.checkpoint_at : "",
       witness: host,
       cut: typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : "",
       part: cadence.state === "witnessed" && cadence.extent === "part" && k < n,
@@ -347,6 +348,22 @@ const dealViewRender = (model, regions) => {
 
   if (model.demo) host.append(el("span", "DEMO", "deal-demo"));
   host.append(el("h1", "Deal report"));
+  // What the witness covers, first, in one line: from the witness block
+  // only, never more than it covers. The receipt and what it does not prove
+  // are in the header below.
+  const w0 = model.witness;
+  const at = w0.at ? ` at ${w0.at}` : "";
+  const witnessed =
+    w0.kind !== "witnessed"
+      ? w0.kind === "scheduled" || w0.kind === "pending"
+        ? "Not witnessed yet: witness receipt pending the next tick."
+        : "Not witnessed."
+      : w0.part
+        ? `Witnessed through step ${w0.k} of ${w0.n}${at} (receipt attached); later steps: witness receipt pending the next tick.`
+        : `Witnessed through the last step this copy holds${at} (receipt attached).`;
+  const line = el("p", witnessed, "deal-rung");
+  line.dataset.witness = w0.kind === "witnessed" ? (w0.part ? "part" : "all") : w0.kind;
+  host.append(line);
 
   // Which build sealed the steps, read from the records this page verified
   // (not from the summary), compared with the build that made this page.

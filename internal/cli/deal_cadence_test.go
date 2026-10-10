@@ -444,8 +444,9 @@ func TestDealReportRungWitnessedInPart(t *testing.T) {
 	assert.Contains(t, part["text"], fmt.Sprintf("covering steps 1 to %d of %d", int(k), int(n)))
 	assert.Contains(t, part["text"], fmt.Sprintf("Steps %d to %d are sealed by my agent on this device only", int(k)+1, int(n)))
 	assert.Contains(t, part["text"], "Witness pending for the rest: the current checkpoint goes to the witness at the next tick")
-	page := string(mustRead(t, filepath.Join(dir, "part.html")))
-	assert.Contains(t, page, "Witnessed in part")
+	// What the page shows a reader is checked rendered, in Chrome
+	// (TestPresentationDealWitnessLine): the page's source always carries
+	// the deal view's words, so it proves nothing here.
 	result, err := verifyWithDirectory(t, partPath, directory)
 	require.NoError(t, err)
 	status, findings := bundleWitnesses(result)
