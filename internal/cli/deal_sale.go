@@ -251,6 +251,10 @@ var dealRegistersThreads = true
 // made before they were.
 var dealSealsSaleEvidence = true
 
+// dealSaleCutHeads is a test hook: the heads a sale bundle's cut seals,
+// from the ones it would.
+var dealSaleCutHeads = func(heads []dealThreadHead) []dealThreadHead { return heads }
+
 // dealThread is a sale's registration of one thread: the thread's deal id,
 // sealed as a commitment on the sale's own log.
 type dealThread struct {

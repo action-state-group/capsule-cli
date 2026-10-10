@@ -248,8 +248,23 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 	var registrations []held
 	saleKey, isSale := "", false
 	openedBy := map[string]string{} // registration -> task_authority_commitment
-	var cutHeads map[string]string  // registration -> head_commitment, from the latest sale_cut
+	// The latest sale_cut this copy can read (disclosed, and matching what
+	// its record sealed), and its heads. A cut whose disclosure does not
+	// match is never read: it is no readable cut.
+	cutRead := false
+	cutHeads := map[string]string{} // registration -> head_commitment
 	cutSeq := 0.0
+	// Where each record sits on the sale's log: a record this copy cannot
+	// read after the latest cut it can read may itself be a later cut, so
+	// then no cut is read.
+	cert, _ := value["completeness_certificate"].(map[string]interface{})
+	memberships, _ := cert["memberships"].(map[string]interface{})
+	logSeq := func(id string) float64 {
+		m, _ := memberships[id].(map[string]interface{})
+		coords, _ := m["log_coordinates"].(map[string]interface{})
+		return recordSeq(coords)
+	}
+	cutAt, lastUnread := 0.0, 0.0
 	undisclosed := false
 	records, _ := value["records"].([]interface{})
 	for _, raw := range records {
@@ -261,6 +276,9 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 			// A certified record this copy does not show: it could be any
 			// thread's opening, so no never_opened can be shown.
 			undisclosed = true
+			if at := logSeq(id); at > lastUnread {
+				lastUnread = at
+			}
 			continue
 		}
 		digest := jcsDigest(in)
@@ -285,7 +303,7 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 		case "sale_cut":
 			seq := recordSeq(blk)
 			if seq > cutSeq {
-				cutSeq, cutHeads = seq, map[string]string{}
+				cutRead, cutSeq, cutHeads, cutAt = true, seq, map[string]string{}, logSeq(id)
 				body, _ := in["body"].(map[string]interface{})
 				heads, _ := body["thread_heads"].([]interface{})
 				for _, h := range heads {
@@ -305,6 +323,9 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 			}
 			registrations = append(registrations, held{seq, digest, in})
 		}
+	}
+	if lastUnread > cutAt {
+		cutRead, cutHeads = false, map[string]string{}
 	}
 	entry := map[string]any{"kind": dealSaleExtension}
 	exts, _ := value["extensions"].(map[string]interface{})
@@ -410,8 +431,8 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 			fail("opening_does_not_match_the_thread:" + id)
 		}
 		switch commitment, ok := cutHeads[regDigest]; {
-		case cutHeads == nil:
-			notShown = append(notShown, "no_sale_cut")
+		case !cutRead:
+			// Said once, below: there is no cut for any thread to be in.
 		case !ok:
 			// Present, but the latest cut has no head for it: not shown.
 			notShown = append(notShown, "thread_not_in_the_cut:"+id)
@@ -422,6 +443,9 @@ func saleBundleEntry(value map[string]interface{}, result aacbundle.Verification
 				fail("thread_not_whole_at_the_cut:" + id)
 			}
 		}
+	}
+	if !cutRead && len(present) > 0 {
+		notShown = append(notShown, "no_sale_cut")
 	}
 	entry["threads"] = shown
 	status := "pass"
@@ -599,6 +623,7 @@ func (s *dealSession) sealSaleEvidence(ctx context.Context, saleID string, opene
 	if err != nil {
 		return nil, err
 	}
+	cut.Heads = dealSaleCutHeads(cut.Heads)
 	cutEvent, err := s.seal(ctx, saleID, events, dealEvent{Kind: "sale_cut", SaleCut: cut})
 	if err != nil {
 		return nil, err
