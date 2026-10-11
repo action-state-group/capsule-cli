@@ -29,6 +29,20 @@
   - On a store whose last writer closed cleanly, every file under the store is byte-for-byte the
     same after the list.
 
+### A report opened outside a secure context verifies
+
+- **Fixed:** a valid deal report opened where the browser gives no WebCrypto (a non-secure or
+  opaque origin, such as an app's attachment viewer on iPhone) said it did not verify: the page hashed only
+  through `crypto.subtle`, which exists only in a secure context, so every digest, membership
+  and range check failed. The vendored runtime is rebuilt from agent-action-capsule with a plain
+  SHA-256 fallback (and `@action-state-group/cll` 0.2.1 for the MMR proofs); the ten checks
+  now pass with no `crypto` at all. `scripts/check-viewer-without-webcrypto.mjs PAGE.html` runs a
+  page's own verifier that way and prints its checks.
+- **Changed:** without WebCrypto the deal page lists the countersignatures and the cited signers
+  under "Checked only by capsulectl verify": it cannot check an Ed25519 signature there.
+- **Added:** a viewer with no SHA-256 at all shows "Unable to verify in this viewer" and the
+  `capsulectl verify` command for the file, never the failure banner.
+
 ## v0.1.0-rc15
 
 ### Release tags are signed from v0.1.0-rc15
