@@ -15,8 +15,9 @@ import (
 )
 
 // dealViewChecksDriver loads the deal view under node with the runtime's
-// two context readers stubbed, and prints the checks buildModel derives for
-// each context it is given on stdin.
+// two context readers and its Ed25519 capability stubbed (a context with
+// noEd25519 stands for a viewer without WebCrypto), and prints the checks
+// buildModel derives for each context it is given on stdin.
 const dealViewChecksDriver = `
 const fs = require("fs");
 const [script] = process.argv.slice(2);
@@ -29,6 +30,7 @@ for (const [name, c] of Object.entries(contexts)) {
     registerPresentation: (m) => { registered = m; },
     verifiedPayload: (_ctx, id) => payloads.get(id),
     disclosureOf: (_ctx, id) => ({ state: payloads.has(id) ? "disclosed" : "withheld" }),
+    ed25519Available: () => !c.noEd25519,
   };
   globalThis.document = undefined;
   new Function(fs.readFileSync(script, "utf8"))();
@@ -92,6 +94,16 @@ func TestTheDealViewSaysWhichChecksRan(t *testing.T) {
 	countersigned["verification"].(map[string]any)["countersignatures"] = []any{map[string]any{"status": "unverified"}}
 	contexts["countersigned"] = countersigned
 
+	// A viewer without Ed25519 (no WebCrypto outside a secure context)
+	// checks neither the countersignature nor the cited signer: both are left
+	// to the command, never called checked here.
+	noEd25519 := base()
+	noEd25519["noEd25519"] = true
+	noEd25519["verification"].(map[string]any)["countersignatures"] = []any{map[string]any{"status": "unverified"}}
+	noEd25519["records"] = cites["records"]
+	noEd25519["payloads"] = cites["payloads"]
+	contexts["no Ed25519"] = noEd25519
+
 	witnessed := base()
 	witnessed["bundle"].(map[string]any)["extensions"].(map[string]any)["x-cadence-witness/v0"] = map[string]any{
 		"state": "witnessed", "extent": "part", "steps_witnessed": 2, "steps": 3, "checkpoint_at": "2026-10-04T09:00:00Z",
@@ -130,6 +142,31 @@ func TestTheDealViewSaysWhichChecksRan(t *testing.T) {
 
 	assert.Equal(t, append(append([]string{}, pageChecks...), "countersignatures"), got["countersigned"].Page)
 
+	assert.Equal(t, pageChecks, got["no Ed25519"].Page)
+	assert.Equal(t, []string{"countersignatures", "cited-signers", "checkpoint-signature", "producer-signatures"}, got["no Ed25519"].CLI)
+
 	assert.Equal(t, pageChecks, got["witnessed in part"].Page)
 	assert.Equal(t, []string{"checkpoint-signature", "producer-signatures", "witness-receipt", "consistency"}, got["witnessed in part"].CLI)
+}
+
+// A deal page in a viewer without WebCrypto (a non-secure or opaque origin):
+// scripts/check-viewer-without-webcrypto.mjs runs the page's own scripts with
+// no crypto global. With the runtime's plain SHA-256 all ten checks pass;
+// with it switched off, the page's own bootstrap draws "unable to verify in
+// this viewer" with the verify command, and never the failure banner.
+func TestADealPageWithoutWebCrypto(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	script, err := filepath.Abs("../../scripts/check-viewer-without-webcrypto.mjs")
+	require.NoError(t, err)
+	page := filepath.Join(presentationDir, "2-unilateral-receipt", "page.html")
+	for _, args := range [][]string{
+		{"--crypto=none", "--expect=verified"},
+		{"--crypto=none", "--fallback=off", "--expect=unable"},
+	} {
+		out, err := exec.Command(node, append([]string{script, page}, args...)...).CombinedOutput()
+		assert.NoError(t, err, "%v:\n%s", args, out)
+	}
 }

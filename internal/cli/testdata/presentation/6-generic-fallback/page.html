@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-VmDlotlXbuJYaEcgHPAxXmxkixOsHI0hzaixk1p86CE=' 'sha256-2TQVzs+0jXYZVLBoXJCyHYKst0weVqpt28tmhK7M4Ss=' 'sha256-AFG9jl8n4fyrxkOkQg8ZaLKsLTDLPtEL+voR1wspDE4='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-VmDlotlXbuJYaEcgHPAxXmxkixOsHI0hzaixk1p86CE=' 'sha256-dLFNlyjaB23yzMbOWNTHqmQhND0F/na/sqpbLAgN0+4=' 'sha256-AFG9jl8n4fyrxkOkQg8ZaLKsLTDLPtEL+voR1wspDE4='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Evidence Graph</title>
     <style>
@@ -2256,7 +2256,7 @@ var EvidenceGraph = (() => {
     }
   });
 
-  // node_modules/@action-state-group/cll/dist/chunk-JR35ZH2C.js
+  // node_modules/@action-state-group/cll/dist/chunk-WGX7R3GB.js
   function shape(leaves) {
     const meta = [], peaks = [], positions = [];
     for (let i = 0; i < leaves; i += 1) {
@@ -2529,8 +2529,8 @@ var EvidenceGraph = (() => {
     }
   }
   var ok, same, be64, parent, toHex, hex, MAX_MMR_SIZE, MmrTree;
-  var init_chunk_JR35ZH2C = __esm({
-    "node_modules/@action-state-group/cll/dist/chunk-JR35ZH2C.js"() {
+  var init_chunk_WGX7R3GB = __esm({
+    "node_modules/@action-state-group/cll/dist/chunk-WGX7R3GB.js"() {
       init_cborg();
       ok = (x) => x.length === 32;
       same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -2686,10 +2686,138 @@ var EvidenceGraph = (() => {
     verifyInclusionValue: () => verifyInclusionValue2,
     verifyRange: () => verifyRange2
   });
-  var join, hash, MmrTree2, rootFromPeaks2, verifyInclusionValue2, verifyHexInclusion2, verifyConsistency2, verifyRange2;
+  function sha2562(data) {
+    const length = data.length;
+    const blocks = Math.ceil((length + 9) / 64);
+    const message = new Uint8Array(blocks * 64);
+    message.set(data);
+    message[length] = 128;
+    const view = new DataView(message.buffer);
+    view.setUint32(message.length - 8, Math.floor(length / 536870912));
+    view.setUint32(message.length - 4, length << 3 >>> 0);
+    const h = H02.slice();
+    const w = new Uint32Array(64);
+    for (let block = 0; block < blocks; block += 1) {
+      for (let t = 0; t < 16; t += 1) w[t] = view.getUint32(block * 64 + t * 4);
+      for (let t = 16; t < 64; t += 1) {
+        const a2 = w[t - 15];
+        const b2 = w[t - 2];
+        const s0 = rotr2(a2, 7) ^ rotr2(a2, 18) ^ a2 >>> 3;
+        const s1 = rotr2(b2, 17) ^ rotr2(b2, 19) ^ b2 >>> 10;
+        w[t] = w[t - 16] + s0 + w[t - 7] + s1 >>> 0;
+      }
+      let [a, b, c, d, e, f, g, hh] = h;
+      for (let t = 0; t < 64; t += 1) {
+        const s1 = rotr2(e, 6) ^ rotr2(e, 11) ^ rotr2(e, 25);
+        const ch = e & f ^ ~e & g;
+        const t1 = hh + s1 + ch + K2[t] + w[t] >>> 0;
+        const s0 = rotr2(a, 2) ^ rotr2(a, 13) ^ rotr2(a, 22);
+        const maj = a & b ^ a & c ^ b & c;
+        const t2 = s0 + maj >>> 0;
+        hh = g;
+        g = f;
+        f = e;
+        e = d + t1 >>> 0;
+        d = c;
+        c = b;
+        b = a;
+        a = t1 + t2 >>> 0;
+      }
+      h[0] = h[0] + a >>> 0;
+      h[1] = h[1] + b >>> 0;
+      h[2] = h[2] + c >>> 0;
+      h[3] = h[3] + d >>> 0;
+      h[4] = h[4] + e >>> 0;
+      h[5] = h[5] + f >>> 0;
+      h[6] = h[6] + g >>> 0;
+      h[7] = h[7] + hh >>> 0;
+    }
+    const out = new Uint8Array(32);
+    const outView = new DataView(out.buffer);
+    h.forEach((word, i) => outView.setUint32(i * 4, word));
+    return out;
+  }
+  var K2, H02, rotr2, join, hash, MmrTree2, rootFromPeaks2, verifyInclusionValue2, verifyHexInclusion2, verifyConsistency2, verifyRange2;
   var init_browser = __esm({
     "node_modules/@action-state-group/cll/dist/browser.js"() {
-      init_chunk_JR35ZH2C();
+      init_chunk_WGX7R3GB();
+      K2 = new Uint32Array([
+        1116352408,
+        1899447441,
+        3049323471,
+        3921009573,
+        961987163,
+        1508970993,
+        2453635748,
+        2870763221,
+        3624381080,
+        310598401,
+        607225278,
+        1426881987,
+        1925078388,
+        2162078206,
+        2614888103,
+        3248222580,
+        3835390401,
+        4022224774,
+        264347078,
+        604807628,
+        770255983,
+        1249150122,
+        1555081692,
+        1996064986,
+        2554220882,
+        2821834349,
+        2952996808,
+        3210313671,
+        3336571891,
+        3584528711,
+        113926993,
+        338241895,
+        666307205,
+        773529912,
+        1294757372,
+        1396182291,
+        1695183700,
+        1986661051,
+        2177026350,
+        2456956037,
+        2730485921,
+        2820302411,
+        3259730800,
+        3345764771,
+        3516065817,
+        3600352804,
+        4094571909,
+        275423344,
+        430227734,
+        506948616,
+        659060556,
+        883997877,
+        958139571,
+        1322822218,
+        1537002063,
+        1747873779,
+        1955562222,
+        2024104815,
+        2227730452,
+        2361852424,
+        2428436474,
+        2756734187,
+        3204031479,
+        3329325298
+      ]);
+      H02 = [
+        1779033703,
+        3144134277,
+        1013904242,
+        2773480762,
+        1359893119,
+        2600822924,
+        528734635,
+        1541459225
+      ];
+      rotr2 = (x, n) => x >>> n | x << 32 - n;
       join = (...parts) => {
         const value = new Uint8Array(
           parts.reduce((length, part) => length + part.length, 0)
@@ -2701,9 +2829,10 @@ var EvidenceGraph = (() => {
         }
         return value;
       };
-      hash = async (...parts) => new Uint8Array(
-        await globalThis.crypto.subtle.digest("SHA-256", join(...parts))
-      );
+      hash = async (...parts) => {
+        const subtle = globalThis.crypto?.subtle;
+        return typeof subtle?.digest === "function" ? new Uint8Array(await subtle.digest("SHA-256", join(...parts))) : sha2562(join(...parts));
+      };
       MmrTree2 = class extends MmrTree {
         constructor(nodes = []) {
           super(hash, nodes);
@@ -2777,7 +2906,9 @@ var EvidenceGraph = (() => {
     RESULT_RECORD_TYPE: () => RESULT_RECORD_TYPE,
     RESULT_VERSION: () => RESULT_VERSION,
     SUFFICIENCIES: () => SUFFICIENCIES,
+    Sha256UnavailableError: () => Sha256UnavailableError,
     TIERS: () => TIERS,
+    UNABLE_TO_VERIFY_LINES: () => UNABLE_TO_VERIFY_LINES,
     UNVERIFIED_KEY_LABEL: () => UNVERIFIED_KEY_LABEL,
     VERDICTS: () => VERDICTS,
     VERIFY_INDEPENDENTLY_LINE: () => VERIFY_INDEPENDENTLY_LINE,
@@ -2809,9 +2940,11 @@ var EvidenceGraph = (() => {
     decodeStrictJson: () => decodeStrictJson,
     deriveCloseState: () => deriveCloseState,
     describeContext: () => describeContext,
+    digestCapability: () => digestCapability,
     disclosureEligibleFields: () => disclosureEligibleFields,
     disclosureOf: () => disclosureOf,
     disclosurePayload: () => disclosurePayload,
+    ed25519Available: () => ed25519Available,
     encodeFragment: () => encodeFragment,
     encodeFragmentToken: () => encodeFragmentToken,
     encodePresentationFragment: () => encodePresentationFragment,
@@ -2834,6 +2967,7 @@ var EvidenceGraph = (() => {
     presentationRefusalNotices: () => presentationRefusalNotices,
     presentationRefusalReason: () => presentationRefusalReason,
     presentationRefusalRow: () => presentationRefusalRow,
+    probeEd25519: () => probeEd25519,
     readPresentationBlock: () => readPresentationBlock,
     recomputeCounts: () => recomputeCounts,
     registerPresentation: () => registerPresentation,
@@ -2841,12 +2975,14 @@ var EvidenceGraph = (() => {
     renderCompliancePage: () => renderCompliancePage,
     renderEvidenceGraph: () => renderEvidenceGraph,
     renderOutcomeReportPage: () => renderOutcomeReportPage,
+    renderUnableToVerify: () => renderUnableToVerify,
     resolveCarriedInput: () => resolveCarriedInput,
     resolveDisclosure: () => resolveDisclosure,
     resolveModules: () => resolveModules,
     resolvePresentation: () => resolvePresentation,
     scopeDisclosures: () => scopeDisclosures,
     sealCapsule: () => sealCapsule,
+    setSha256FallbackForTesting: () => setSha256FallbackForTesting,
     sha256Hex: () => sha256Hex,
     unboundRecordIds: () => unboundRecordIds,
     validateEvidenceResult: () => validateEvidenceResult,
@@ -2862,9 +2998,193 @@ var EvidenceGraph = (() => {
     withCountersigners: () => withCountersigners
   });
 
+  // src/producer-envelope-wire.ts
+  var encoder = new TextEncoder();
+  var CONTENT_TYPE = "application/agent-action-capsule-id";
+  var hex64 = /^[0-9a-f]{64}$/u;
+  function concat(...parts) {
+    const result = new Uint8Array(
+      parts.reduce((length, part) => length + part.length, 0)
+    );
+    let offset = 0;
+    for (const part of parts) {
+      result.set(part, offset);
+      offset += part.length;
+    }
+    return result;
+  }
+  function hexToBytes(value) {
+    const result = new Uint8Array(value.length / 2);
+    for (let i = 0; i < result.length; i += 1)
+      result[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
+    return result;
+  }
+  function equalBytes(left, right) {
+    return left.length === right.length && left.every((byte, index) => byte === right[index]);
+  }
+  function head(major, length) {
+    if (length < 24) return Uint8Array.of(major << 5 | length);
+    if (length < 256) return Uint8Array.of(major << 5 | 24, length);
+    if (length < 65536)
+      return Uint8Array.of(major << 5 | 25, length >>> 8, length & 255);
+    throw new RangeError("CBOR value too large");
+  }
+  function bstr(value) {
+    return concat(head(2, value.length), value);
+  }
+  function tstr(value) {
+    const bytes = encoder.encode(value);
+    return concat(head(3, bytes.length), bytes);
+  }
+  function array(parts) {
+    return concat(head(4, parts.length), ...parts);
+  }
+  function producerEnvelopeSigningBytes(protectedBytes, payload) {
+    return array([
+      tstr("Signature1"),
+      bstr(protectedBytes),
+      bstr(new Uint8Array()),
+      bstr(payload)
+    ]);
+  }
+  var spkiPrefix = hexToBytes("302a300506032b6570032100");
+  function producerPublicKeySpki(publicKey) {
+    return concat(spkiPrefix, publicKey);
+  }
+
+  // src/sha256.ts
+  var K = new Uint32Array([
+    1116352408,
+    1899447441,
+    3049323471,
+    3921009573,
+    961987163,
+    1508970993,
+    2453635748,
+    2870763221,
+    3624381080,
+    310598401,
+    607225278,
+    1426881987,
+    1925078388,
+    2162078206,
+    2614888103,
+    3248222580,
+    3835390401,
+    4022224774,
+    264347078,
+    604807628,
+    770255983,
+    1249150122,
+    1555081692,
+    1996064986,
+    2554220882,
+    2821834349,
+    2952996808,
+    3210313671,
+    3336571891,
+    3584528711,
+    113926993,
+    338241895,
+    666307205,
+    773529912,
+    1294757372,
+    1396182291,
+    1695183700,
+    1986661051,
+    2177026350,
+    2456956037,
+    2730485921,
+    2820302411,
+    3259730800,
+    3345764771,
+    3516065817,
+    3600352804,
+    4094571909,
+    275423344,
+    430227734,
+    506948616,
+    659060556,
+    883997877,
+    958139571,
+    1322822218,
+    1537002063,
+    1747873779,
+    1955562222,
+    2024104815,
+    2227730452,
+    2361852424,
+    2428436474,
+    2756734187,
+    3204031479,
+    3329325298
+  ]);
+  var H0 = [
+    1779033703,
+    3144134277,
+    1013904242,
+    2773480762,
+    1359893119,
+    2600822924,
+    528734635,
+    1541459225
+  ];
+  var rotr = (x, n) => x >>> n | x << 32 - n;
+  function sha256(data) {
+    const length = data.length;
+    const blocks = Math.ceil((length + 9) / 64);
+    const message = new Uint8Array(blocks * 64);
+    message.set(data);
+    message[length] = 128;
+    const view = new DataView(message.buffer);
+    view.setUint32(message.length - 8, Math.floor(length / 536870912));
+    view.setUint32(message.length - 4, length << 3 >>> 0);
+    const h = H0.slice();
+    const w = new Uint32Array(64);
+    for (let block = 0; block < blocks; block += 1) {
+      for (let t = 0; t < 16; t += 1) w[t] = view.getUint32(block * 64 + t * 4);
+      for (let t = 16; t < 64; t += 1) {
+        const a2 = w[t - 15];
+        const b2 = w[t - 2];
+        const s0 = rotr(a2, 7) ^ rotr(a2, 18) ^ a2 >>> 3;
+        const s1 = rotr(b2, 17) ^ rotr(b2, 19) ^ b2 >>> 10;
+        w[t] = w[t - 16] + s0 + w[t - 7] + s1 >>> 0;
+      }
+      let [a, b, c, d, e, f, g, hh] = h;
+      for (let t = 0; t < 64; t += 1) {
+        const s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+        const ch = e & f ^ ~e & g;
+        const t1 = hh + s1 + ch + K[t] + w[t] >>> 0;
+        const s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+        const maj = a & b ^ a & c ^ b & c;
+        const t2 = s0 + maj >>> 0;
+        hh = g;
+        g = f;
+        f = e;
+        e = d + t1 >>> 0;
+        d = c;
+        c = b;
+        b = a;
+        a = t1 + t2 >>> 0;
+      }
+      h[0] = h[0] + a >>> 0;
+      h[1] = h[1] + b >>> 0;
+      h[2] = h[2] + c >>> 0;
+      h[3] = h[3] + d >>> 0;
+      h[4] = h[4] + e >>> 0;
+      h[5] = h[5] + f >>> 0;
+      h[6] = h[6] + g >>> 0;
+      h[7] = h[7] + hh >>> 0;
+    }
+    const out = new Uint8Array(32);
+    const outView = new DataView(out.buffer);
+    h.forEach((word, i) => outView.setUint32(i * 4, word));
+    return out;
+  }
+
   // src/json.ts
   var utf8 = new TextDecoder("utf-8", { fatal: true });
-  var encoder = new TextEncoder();
+  var encoder2 = new TextEncoder();
   var MAX_DEPTH = 1e3;
   var numberToken = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/;
   var JsonNumber = class {
@@ -3072,74 +3392,68 @@ var EvidenceGraph = (() => {
     }
   }
   function jcs(value) {
-    return encoder.encode(render(value, "$", /* @__PURE__ */ new Set(), 0));
+    return encoder2.encode(render(value, "$", /* @__PURE__ */ new Set(), 0));
+  }
+  var Sha256UnavailableError = class extends Error {
+    constructor() {
+      super("no SHA-256 implementation is available in this runtime");
+      this.name = "Sha256UnavailableError";
+    }
+  };
+  var sha256Fallback = true;
+  function setSha256FallbackForTesting(enabled) {
+    sha256Fallback = enabled;
+  }
+  function webCrypto() {
+    const subtle = globalThis.crypto?.subtle;
+    return typeof subtle?.digest === "function" ? subtle : void 0;
+  }
+  function digestCapability() {
+    if (webCrypto() !== void 0) return "webcrypto";
+    return sha256Fallback ? "fallback" : "none";
+  }
+  var PROBE_KEY = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+  var ed25519Probes = /* @__PURE__ */ new WeakMap();
+  async function probeEd25519() {
+    const subtle = webCrypto();
+    if (subtle === void 0) return false;
+    let supported = ed25519Probes.get(subtle);
+    if (supported === void 0) {
+      try {
+        await subtle.importKey(
+          "spki",
+          producerPublicKeySpki(hexToBytes(PROBE_KEY)),
+          { name: "Ed25519" },
+          false,
+          ["verify"]
+        );
+        supported = true;
+      } catch (error) {
+        supported = error?.name !== "NotSupportedError";
+      }
+      ed25519Probes.set(subtle, supported);
+    }
+    return supported;
+  }
+  function ed25519Available() {
+    const subtle = webCrypto();
+    return subtle !== void 0 && ed25519Probes.get(subtle) !== false;
   }
   async function sha256Hex(value) {
-    const digest = await globalThis.crypto.subtle.digest(
-      "SHA-256",
-      value
+    const subtle = webCrypto();
+    let digest;
+    if (subtle !== void 0)
+      digest = new Uint8Array(
+        await subtle.digest("SHA-256", value)
+      );
+    else if (sha256Fallback) digest = sha256(value);
+    else throw new Sha256UnavailableError();
+    return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(
+      ""
     );
-    return Array.from(
-      new Uint8Array(digest),
-      (byte) => byte.toString(16).padStart(2, "0")
-    ).join("");
   }
   async function jsonDigest(value) {
     return sha256Hex(jcs(value));
-  }
-
-  // src/producer-envelope-wire.ts
-  var encoder2 = new TextEncoder();
-  var CONTENT_TYPE = "application/agent-action-capsule-id";
-  var hex64 = /^[0-9a-f]{64}$/u;
-  function concat(...parts) {
-    const result = new Uint8Array(
-      parts.reduce((length, part) => length + part.length, 0)
-    );
-    let offset = 0;
-    for (const part of parts) {
-      result.set(part, offset);
-      offset += part.length;
-    }
-    return result;
-  }
-  function hexToBytes(value) {
-    const result = new Uint8Array(value.length / 2);
-    for (let i = 0; i < result.length; i += 1)
-      result[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
-    return result;
-  }
-  function equalBytes(left, right) {
-    return left.length === right.length && left.every((byte, index) => byte === right[index]);
-  }
-  function head(major, length) {
-    if (length < 24) return Uint8Array.of(major << 5 | length);
-    if (length < 256) return Uint8Array.of(major << 5 | 24, length);
-    if (length < 65536)
-      return Uint8Array.of(major << 5 | 25, length >>> 8, length & 255);
-    throw new RangeError("CBOR value too large");
-  }
-  function bstr(value) {
-    return concat(head(2, value.length), value);
-  }
-  function tstr(value) {
-    const bytes = encoder2.encode(value);
-    return concat(head(3, bytes.length), bytes);
-  }
-  function array(parts) {
-    return concat(head(4, parts.length), ...parts);
-  }
-  function producerEnvelopeSigningBytes(protectedBytes, payload) {
-    return array([
-      tstr("Signature1"),
-      bstr(protectedBytes),
-      bstr(new Uint8Array()),
-      bstr(payload)
-    ]);
-  }
-  var spkiPrefix = hexToBytes("302a300506032b6570032100");
-  function producerPublicKeySpki(publicKey) {
-    return concat(spkiPrefix, publicKey);
   }
 
   // src/countersignature-stamp.ts
@@ -3228,15 +3542,24 @@ var EvidenceGraph = (() => {
     });
   }
   async function verifyCountersignV1Signature(entry, keyId, signatureHex) {
+    return await checkCountersignV1Signature(entry, keyId, signatureHex) === true;
+  }
+  async function checkCountersignV1Signature(entry, keyId, signatureHex) {
     if (!KEY_ID.test(keyId) || !SIGNATURE.test(signatureHex)) return false;
+    if (!await probeEd25519()) return void 0;
+    let key;
     try {
-      const key = await globalThis.crypto.subtle.importKey(
+      key = await globalThis.crypto.subtle.importKey(
         "spki",
         producerPublicKeySpki(hexToBytes(keyId)),
         { name: "Ed25519" },
         false,
         ["verify"]
       );
+    } catch (error) {
+      return error?.name === "NotSupportedError" ? void 0 : false;
+    }
+    try {
       return await globalThis.crypto.subtle.verify(
         { name: "Ed25519" },
         key,
@@ -3256,7 +3579,7 @@ var EvidenceGraph = (() => {
     const checks = readChecks(statement.checks);
     if (checks === void 0) return { kind: "invalid" };
     if (entry.over !== bundleDigest2) return { kind: "invalid" };
-    const signed = await verifyCountersignV1Signature(
+    const signed = await checkCountersignV1Signature(
       {
         over: entry.over,
         signer: entry.signer,
@@ -3266,6 +3589,8 @@ var EvidenceGraph = (() => {
       keyId,
       entry.signature
     );
+    if (signed === void 0)
+      return { kind: "unverified", type: COUNTERSIGN_V1, reason: "no-ed25519" };
     if (!signed) return { kind: "invalid" };
     const view = {
       checks,
@@ -3296,7 +3621,7 @@ var EvidenceGraph = (() => {
       if (entry === void 0 || typeof type !== "string") {
         results.push({ kind: "invalid" });
       } else if (type !== "" && type !== COUNTERSIGN_V1) {
-        results.push({ kind: "unverified", type });
+        results.push({ kind: "unverified", type, reason: "type" });
       } else if (bundleDigest2 === void 0) {
         results.push({ kind: "invalid" });
       } else {
@@ -4854,6 +5179,7 @@ var EvidenceGraph = (() => {
     );
   }
   async function verifyBundle(bundle) {
+    if (digestCapability() === "none") throw new Sha256UnavailableError();
     const invalid = fail("bundle_malformed");
     if (!object8(bundle))
       return {
@@ -5309,6 +5635,7 @@ var EvidenceGraph = (() => {
   });
   async function buildVerifiedBundleContext(bundle, options = {}) {
     const owned = deepFreeze(ownedCopy(bundle));
+    await probeEd25519();
     return contextFrom(
       owned,
       await verifyBundle(owned),
@@ -6180,6 +6507,8 @@ var EvidenceGraph = (() => {
   async function signerOf(record) {
     const keyId = record.key_id;
     if (typeof keyId !== "string" || !isHex64(keyId)) return {};
+    if (!await probeEd25519())
+      return { keyId, keyVerified: false, keyNotChecked: true };
     return { keyId, keyVerified: await keyVerifies(record, keyId) };
   }
   var lowerHex = /^(?:[0-9a-f]{2})+$/u;
@@ -6208,7 +6537,7 @@ var EvidenceGraph = (() => {
     const links = [];
     const ignored = [];
     for (const link of inbound) {
-      const reason = close.bookId === void 0 ? "the cited Close names no book_id, so nothing can be its counterparty" : close.keyId === void 0 ? "the cited Close carries no key_id, so no signer can be shown to differ from its own" : close.keyVerified !== true ? `the cited Close's key_id is a ${UNVERIFIED_KEY_LABEL}: its Producer Envelope does not verify under it, so no signer can be shown to differ from its own` : link.bookId === void 0 ? "the linking record names no book_id" : link.bookId === close.bookId ? "the linking record is from the Close's own book" : link.bookId !== peer ? peer === void 0 ? "the claim names no peer, so no book can be the counterparty" : `the linking record's book_id ${link.bookId} is not the claim's named peer ${peer}` : link.keyId === void 0 ? "the linking record carries no key_id" : link.keyVerified !== true ? `${UNVERIFIED_KEY_LABEL}: the linking record's Producer Envelope does not verify under its key_id` : link.keyId === close.keyId ? "the linking record is signed under the Close's own key" : void 0;
+      const reason = close.bookId === void 0 ? "the cited Close names no book_id, so nothing can be its counterparty" : close.keyId === void 0 ? "the cited Close carries no key_id, so no signer can be shown to differ from its own" : close.keyVerified !== true ? close.keyNotChecked === true ? `the cited Close's key_id is a ${UNVERIFIED_KEY_LABEL}: this viewer cannot check its Producer Envelope, so no signer can be shown to differ from its own` : `the cited Close's key_id is a ${UNVERIFIED_KEY_LABEL}: its Producer Envelope does not verify under it, so no signer can be shown to differ from its own` : link.bookId === void 0 ? "the linking record names no book_id" : link.bookId === close.bookId ? "the linking record is from the Close's own book" : link.bookId !== peer ? peer === void 0 ? "the claim names no peer, so no book can be the counterparty" : `the linking record's book_id ${link.bookId} is not the claim's named peer ${peer}` : link.keyId === void 0 ? "the linking record carries no key_id" : link.keyVerified !== true ? link.keyNotChecked === true ? `${UNVERIFIED_KEY_LABEL}: this viewer cannot check the linking record's Producer Envelope` : `${UNVERIFIED_KEY_LABEL}: the linking record's Producer Envelope does not verify under its key_id` : link.keyId === close.keyId ? "the linking record is signed under the Close's own key" : void 0;
       if (reason === void 0) links.push(link);
       else ignored.push({ ...link, reason });
     }
@@ -6472,7 +6801,7 @@ var EvidenceGraph = (() => {
           peer,
           inbound.get(closeRef) ?? []
         );
-        const derived = supplied ? deriveCloseState(links) : void 0;
+        const derived = supplied && closeSigner.keyNotChecked !== true ? deriveCloseState(links) : void 0;
         const peerCloseRef = isObject(body.peer_close_ref) ? asString(body.peer_close_ref.digest) : void 0;
         const period = isObject(body.period) ? {
           start: asString(body.period.start) ?? "",
@@ -10107,6 +10436,29 @@ var EvidenceGraph = (() => {
     root.append(refusal);
     return banner;
   }
+  var UNABLE_TO_VERIFY_LINES = {
+    banner: "Unable to verify in this viewer",
+    reason: "This viewer cannot compute the SHA-256 digests the checks need, so nothing was checked and no records are shown. This is not a failed check: the file may well be valid.",
+    command: "To check this file, run:",
+    noCommand: "To check this file, open it from a secure (https) page, or check it with a verifier outside this viewer."
+  };
+  function renderUnableToVerify(root, options = {}) {
+    root.replaceChildren();
+    const banner = element4("p", UNABLE_TO_VERIFY_LINES.banner);
+    banner.dataset.verify = "unable";
+    const reason = element4("p", UNABLE_TO_VERIFY_LINES.reason);
+    reason.dataset.refusal = "unable-to-verify";
+    root.append(banner, reason);
+    if (options.verifyCommand === void 0) {
+      root.append(element4("p", UNABLE_TO_VERIFY_LINES.noCommand));
+      return;
+    }
+    const command = element4("code", options.verifyCommand);
+    command.dataset.verifyCommand = "";
+    const block = element4("pre");
+    block.append(command);
+    root.append(element4("p", UNABLE_TO_VERIFY_LINES.command), block);
+  }
   function styleBanner(banner, verified) {
     banner.className = `oi oi-banner ${verified ? "oi-banner-ok" : "oi-banner-failed"}`;
   }
@@ -10138,7 +10490,7 @@ var EvidenceGraph = (() => {
       case "hollow":
         return "Countersigned: none";
       case "unverified":
-        return `a ${stamp.type} countersignature is present; this viewer does not verify that type`;
+        return stamp.reason === "no-ed25519" ? `a ${stamp.type} countersignature is present; its signature is not checked in this viewer` : `a ${stamp.type} countersignature is present; this viewer does not verify that type`;
       case "invalid":
         return "a countersignature is present but failed to verify";
       case "not-independent":
@@ -11204,6 +11556,13 @@ var EvidenceGraph = (() => {
     "presentation-failed": "The presentation for this bundle failed. No presentation content is shown; the verification page below lists the checks."
   };
   async function renderEvidenceGraph(input, root, countersigners, options = {}) {
+    if (!isVerifiedBundleContext(input) && digestCapability() === "none") {
+      renderUnableToVerify(
+        root,
+        options.verifyCommand === void 0 ? {} : { verifyCommand: options.verifyCommand }
+      );
+      return;
+    }
     const context = isVerifiedBundleContext(input) ? countersigners === void 0 ? input : withCountersigners(input, countersigners) : await buildVerifiedBundleContext(input, {
       ...countersigners === void 0 ? {} : { countersigners }
     });

@@ -1994,7 +1994,7 @@ func dealReportCommand() *cobra.Command {
 				}
 			}
 			out["countersign"] = countersign
-			page, err := dealReportHTML(b, countersign)
+			page, err := dealReportHTML(b, countersign, dealVerifyCommand(htmlPath))
 			if err != nil {
 				return err
 			}

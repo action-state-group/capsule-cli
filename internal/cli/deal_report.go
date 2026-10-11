@@ -336,7 +336,12 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // unchanged: the countersign rung (the page cannot check a signature against
 // a directory), and the words it recomputed against their sealed commitments
 // (dealPageOpenings): a page whose words do not match is never written.
-func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (string, error) {
+//
+// A viewer with no SHA-256 (no WebCrypto outside a secure context, and the
+// runtime's plain SHA-256 switched off) cannot verify anything: the
+// bootstrap then shows the runtime's "unable to verify in this viewer"
+// state with verifyCommand, never a failed verification.
+func dealReportHTML(b map[string]interface{}, countersign dealCountersignView, verifyCommand string) (string, error) {
 	if err := pageGate(b); err != nil {
 		return "", err
 	}
@@ -350,14 +355,19 @@ func dealReportHTML(b map[string]interface{}, countersign dealCountersignView) (
 	}
 	countersign = dealCountersignForPage(b, countersign)
 	// json.Marshal escapes <, > and &, so the data cannot close its element.
-	data, err := json.Marshal(map[string]interface{}{"countersign": countersign, "openings": openings})
+	data, err := json.Marshal(map[string]interface{}{"countersign": countersign, "openings": openings, "verify_command": verifyCommand})
 	if err != nil {
 		return "", err
 	}
 	bootstrap := `globalThis.capsulectlDealPage = Object.freeze(` + string(data) + `);
 (async () => {
+  const app = document.getElementById("app");
+  if (EvidenceGraph.digestCapability() === "none") {
+    EvidenceGraph.renderUnableToVerify(app, { verifyCommand: capsulectlDealPage.verify_command });
+    return;
+  }
   const context = await EvidenceGraph.buildVerifiedBundleContext(window.__BUNDLE__);
-  await renderEvidenceGraph(context, document.getElementById("app"));
+  await renderEvidenceGraph(context, app);
 })();`
 	return emitter.EmitEvidenceGraphHTMLWithOptions(b, evidenceGraphIIFE, emitter.Options{
 		Title:             dealPageTitle(b, openings),

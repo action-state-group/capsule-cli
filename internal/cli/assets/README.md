@@ -11,9 +11,9 @@ to render a report.
 
 | | |
 |---|---|
-| source | agent-action-capsule main @ `ab4ee43b71d6e074c6a000b5b19a9caf9720235e`, the merged commit `go.mod` pins; registry `@action-state-group/cll` `0.2.0` |
+| source | PENDING RELEASE: agent-action-capsule branch `viewer-webcrypto-fallback` @ `38068f279a8e197a7d152af912d775cdcd947db1` with `@action-state-group/cll` `0.2.1` packed from cll-ts `viewer-webcrypto-fallback` @ `d0ce4461d08783816c42f404ca0a5872d203c086`; neither is merged or published, and `go.mod` still pins `ab4ee43b71d6e074c6a000b5b19a9caf9720235e`. Replace with the merged commit after the release (see `report.go`). |
 | build | `cd ts && npm ci && npm run emitter:iife`, esbuild 0.28.2 |
-| sha256 | `d93415cecfb48d761954b0685c90b21d82acb74c1e56aa6ddbcb6684aecce12b` |
+| sha256 | `74b14d9728da076df2ccc6ce58d4c7aa6421343d05fe76bfb2aa5b2c080dd3ee` |
 
 The digest is pinned again in `report.go` (`evidenceGraphIIFEDigest`) and
 checked by `TestIIFEIsPinned`; `deal report` embeds the same file, with its digest in `evidence-graph.iife.js.sha256`. `scripts/build-evidence-graph-iife.sh [--write]` rebuilds it from the aac commit `go.mod` pins; `scripts/iife-sync.sh <aac checkout>` rebuilds

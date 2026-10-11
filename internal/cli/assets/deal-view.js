@@ -161,21 +161,25 @@ const dealViewModel = (context) => {
   // signers (a Close and the records that acknowledge or rebut it). It has no
   // verifier for the records' own signatures in general, a witness receipt or
   // a consistency proof, and it passes a bundle whose checkpoint signature it
-  // could not check, recording checkpoint_unverified.
+  // could not check, recording checkpoint_unverified. A viewer with no
+  // Ed25519 (no WebCrypto outside a secure context) checks no signature, so
+  // the countersignatures and the cited signers are then left to
+  // `capsulectl verify` too.
   const v = context.verification;
   const checks = { page: [], cli: [] };
+  const signatures = EvidenceGraph.ed25519Available() ? checks.page : checks.cli;
   if (Object.keys(v.capsuleResults).length > 0) checks.page.push("digests");
   if (v.perRecordMembership.status === "pass") checks.page.push("membership");
   if (v.intervalCoverage.status === "pass") checks.page.push("range");
   if (v.disclosures.some((d) => d.status === "disclosure_match")) checks.page.push("disclosures");
-  if (v.countersignatures.length > 0) checks.page.push("countersignatures");
+  if (v.countersignatures.length > 0) signatures.push("countersignatures");
   const citesSigners = context.records.some((r) => {
     const header = r && payload(r.capsule_id);
     return (
       header && Array.isArray(header.links) && header.links.some((l) => l && (l.type === "acknowledges" || l.type === "rebuts"))
     );
   });
-  if (citesSigners) checks.page.push("cited-signers");
+  if (citesSigners) signatures.push("cited-signers");
   const checkpoint = bundle.checkpoint || {};
   if (typeof checkpoint.cose === "string" && checkpoint.cose) {
     const unchecked = [v.perRecordMembership, v.intervalCoverage].some((c) => (c.findings || []).includes("checkpoint_unverified"));
@@ -355,9 +359,14 @@ const dealViewRender = (model, regions) => {
     membership: "Each record sits at its place in this deal's log.",
     range: "The log's range proof holds: no record is missing from the stretch this file covers.",
     disclosures: "Each opened step's words match what was sealed.",
-    countersignatures: "Each countersignature is a valid signature by the key it names (the details below show whose key, if known).",
-    "cited-signers":
-      "The agent's signature on the records the details below cite as signers, each marked there as verified or not. Not the signature on every record.",
+    countersignatures: {
+      page: "Each countersignature is a valid signature by the key it names (the details below show whose key, if known).",
+      cli: "Each countersignature's signature. This viewer cannot check signatures, so it is not checked here.",
+    },
+    "cited-signers": {
+      page: "The agent's signature on the records the details below cite as signers, each marked there as verified or not. Not the signature on every record.",
+      cli: "The agent's signature on the records the details below cite as signers. This viewer cannot check signatures, so it is not checked here.",
+    },
     "checkpoint-signature": {
       page: "The signature on the log's checkpoint.",
       cli: "The signature on the log's checkpoint. This page cannot check it, and it shows the bundle as passing without it.",
