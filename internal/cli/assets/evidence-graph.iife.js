@@ -2127,7 +2127,7 @@ var EvidenceGraph = (() => {
     }
   });
 
-  // node_modules/@action-state-group/cll/dist/chunk-WGX7R3GB.js
+  // node_modules/@action-state-group/cll/dist/chunk-JR35ZH2C.js
   function shape(leaves) {
     const meta = [], peaks = [], positions = [];
     for (let i = 0; i < leaves; i += 1) {
@@ -2400,8 +2400,8 @@ var EvidenceGraph = (() => {
     }
   }
   var ok, same, be64, parent, toHex, hex, MAX_MMR_SIZE, MmrTree;
-  var init_chunk_WGX7R3GB = __esm({
-    "node_modules/@action-state-group/cll/dist/chunk-WGX7R3GB.js"() {
+  var init_chunk_JR35ZH2C = __esm({
+    "node_modules/@action-state-group/cll/dist/chunk-JR35ZH2C.js"() {
       init_cborg();
       ok = (x) => x.length === 32;
       same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -2611,7 +2611,7 @@ var EvidenceGraph = (() => {
   var K2, H02, rotr2, join, hash, MmrTree2, rootFromPeaks2, verifyInclusionValue2, verifyHexInclusion2, verifyConsistency2, verifyRange2;
   var init_browser = __esm({
     "node_modules/@action-state-group/cll/dist/browser.js"() {
-      init_chunk_WGX7R3GB();
+      init_chunk_JR35ZH2C();
       K2 = new Uint32Array([
         1116352408,
         1899447441,

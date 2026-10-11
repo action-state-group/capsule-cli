@@ -38,17 +38,11 @@ import (
 
 const (
 	// evidenceGraphIIFEDigest is the SHA-256 of assets/evidence-graph.iife.js.
-	evidenceGraphIIFEDigest = "74b14d9728da076df2ccc6ce58d4c7aa6421343d05fe76bfb2aa5b2c080dd3ee"
+	evidenceGraphIIFEDigest = "06a3a0513b9d8c882065899037a86854b8758eb0baf8faeea845ae0c13523d05"
 	// evidenceGraphIIFESource names the aac commit and build the vendored
-	// IIFE came from. PENDING RELEASE ("unmerged"): aac branch
-	// viewer-webcrypto-fallback with CLL 0.2.1 packed from cll-ts branch
-	// viewer-webcrypto-fallback; neither is merged or published yet, and
-	// go.mod still pins ab4ee43b71d6e074c6a000b5b19a9caf9720235e. Once CLL
-	// 0.2.1 is published and the aac branch merged, bump go.mod to that
-	// commit, rebuild with scripts/build-evidence-graph-iife.sh --write and
-	// replace this line with the merged commit (CI's iife job refuses an
-	// unmerged pin until then).
-	evidenceGraphIIFESource = "agent-action-capsule unmerged@38068f279a8e197a7d152af912d775cdcd947db1 ts: npm run emitter:iife (esbuild 0.28.2), @action-state-group/cll 0.2.1 from cll-ts viewer-webcrypto-fallback@d0ce4461d08783816c42f404ca0a5872d203c086"
+	// IIFE came from: the merged aac commit go.mod pins, using released
+	// CLL 0.2.1 from the registry lock.
+	evidenceGraphIIFESource = "agent-action-capsule main@6f5b48f3fe0eb7eefd2114344f2a5c03e1ce4436 ts: npm run emitter:iife (esbuild 0.28.2)"
 
 	// cardExtension records which card the report was built for. There is
 	// no card registry yet: every card renders the one Result page today,
