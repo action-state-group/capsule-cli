@@ -58,6 +58,33 @@ func dealCheckpointStatusCommand() *cobra.Command {
 // last would leave them behind). When the store's lock file exists it holds a
 // shared lock on it, so the read never sees a step half sealed.
 func openDealSessionRead(ctx context.Context, p Profile, dealID string) (_ *dealSession, err error) {
+	s, err := openDealStoreRead(p)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, s.close())
+		}
+	}()
+	var steps int64
+	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_steps WHERE deal_id=?`, dealID).Scan(&steps); err != nil && !strings.Contains(err.Error(), "no such table") {
+		return nil, err
+	}
+	if steps == 0 {
+		return nil, inputError("unknown deal: " + dealID)
+	}
+	s.dp = p
+	s.dp.LogID = dealLogID(dealID)
+	if s.t, err = openTarget(ctx, s.dp, useCLLRead); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// openDealStoreRead is openDealSessionRead without a deal: the store's
+// handle under the shared lock, and no log opened.
+func openDealStoreRead(p Profile) (_ *dealSession, err error) {
 	if p.Type != "sqlite" {
 		return nil, inputError("deal commands need a sqlite profile; create one with `deal init`")
 	}
@@ -79,18 +106,6 @@ func openDealSessionRead(ctx context.Context, p Profile, dealID string) (_ *deal
 		}
 	}()
 	if s.db, _, err = sqliteConnection(p); err != nil {
-		return nil, err
-	}
-	var steps int64
-	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_steps WHERE deal_id=?`, dealID).Scan(&steps); err != nil && !strings.Contains(err.Error(), "no such table") {
-		return nil, err
-	}
-	if steps == 0 {
-		return nil, inputError("unknown deal: " + dealID)
-	}
-	s.dp = p
-	s.dp.LogID = dealLogID(dealID)
-	if s.t, err = openTarget(ctx, s.dp, useCLLRead); err != nil {
 		return nil, err
 	}
 	return s, nil

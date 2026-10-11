@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### `deal list`: every deal in the profile's store, read-only
+
+- **Added:** `capsulectl deal list [--json]` prints one line per deal in the profile's store, in
+  deal id order, tab-separated:
+  - `deal_id`;
+  - `kind`: `deal`, or `sale` for a `deal sale new` log. A sale's buyer threads are deals and are
+    listed as `deal`. A sale never closes, so its `state` is always `open`;
+  - `state`: `open`, or `closed` once a final close is in the index (as `deal deadlines` decides);
+  - `opened_at` and `last_record_at`: the `at` of the deal's first and last step;
+  - `counterparty_fingerprint`: the payee fingerprint of the latest `counterparty_profile` step,
+    or `-` when there is none;
+  - `log_id`.
+
+  `--json` prints the same fields as one JSON array, in that key order, with `null` for no
+  fingerprint. A store with no deal yet prints `[]` with `--json` and nothing without, and exits 0.
+- **Reads the store's index, not the deal logs:**
+  - Every query is a SELECT, under the store's shared lock when its lock file exists, like
+    `deal checkpoint status`. It works on a `read_only` profile.
+  - Each row gets the index checks a deal command makes before it reads a deal: one strict record
+    whose deal, step number and kind are the row's, chained to the step before it by digest. A row
+    that fails them is refused as a conflict.
+  - The steps are not re-verified against the deal's log; `deal export` and `deal report` do that.
+    A last step that was indexed but never reached the log (a crash between the two writes) is
+    listed, and the deal's next write command recovers it.
+  - On a store whose last writer closed cleanly, every file under the store is byte-for-byte the
+    same after the list.
+
 ## v0.1.0-rc15
 
 ### Release tags are signed from v0.1.0-rc15
