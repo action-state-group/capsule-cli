@@ -64,6 +64,15 @@ const dealSellerExtension = "x-deal-seller/v0"
 // writes no file), nothing is put on the log and the section rides
 // unsealed.
 func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent, report dealReport, audience, verifyCommand string, sealReport bool) (map[string]interface{}, error) {
+	return s.dealReportBundleAt(ctx, events, report, audience, verifyCommand, sealReport, "")
+}
+
+// dealReportBundleAt is dealReportBundle, or, with heldReport naming a report
+// already sealed on the deal's log, the copy that report was sealed for: it
+// is disclosed and pointed at, every other report is withheld, and nothing
+// new goes on the log, so the copy stays at the checkpoint that report was
+// cut under (an expected_pin answer, deal_evidence.go).
+func (s *dealSession) dealReportBundleAt(ctx context.Context, events []sealedEvent, report dealReport, audience, verifyCommand string, sealReport bool, heldReport string) (map[string]interface{}, error) {
 	if s.dp.Checkpoint.Signing == (Secret{}) {
 		return nil, inputError("a deal report needs the profile's checkpoint key (see `deal init`)")
 	}
@@ -85,6 +94,12 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	for id := range reports {
 		withhold[id] = true
 	}
+	if heldReport != "" {
+		if !reports[heldReport] {
+			return nil, ErrConflict
+		}
+		delete(withhold, heldReport)
+	}
 	b, cadence, err := s.dealAssemble(ctx, events, withhold)
 	if err != nil {
 		return nil, err
@@ -94,7 +109,9 @@ func (s *dealSession) dealReportBundle(ctx context.Context, events []sealedEvent
 	if err != nil {
 		return nil, err
 	}
-	if sealReport {
+	if heldReport != "" {
+		ext = map[string]interface{}{dealReportPointer: heldReport}
+	} else if sealReport {
 		id, err := s.dealSealReport(ctx, dealID, audience, ext)
 		if err != nil {
 			return nil, err

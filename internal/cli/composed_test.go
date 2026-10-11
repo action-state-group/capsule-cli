@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
@@ -259,4 +261,28 @@ func TestPageGateAgreesWithVerifyOnComposedBundles(t *testing.T) {
 		})
 	}
 	assert.Len(t, cases, 4)
+}
+
+// A refusal in evidencebook's form (`sig` over request_digest, reason and
+// issued_at) verifies under EvidenceBookRefusalProfile; an edited member or
+// a signature without its key does not.
+func TestEvidenceBookRefusalSignature(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	refusal := map[string]interface{}{"request_digest": strings.Repeat("a", 64), "reason": "coverage_unsatisfiable", "issued_at": "2026-10-11T00:00:00Z", "key_id": hex.EncodeToString(public)}
+	message, err := canonical.JCS(map[string]interface{}{"request_digest": refusal["request_digest"], "reason": refusal["reason"], "issued_at": refusal["issued_at"]})
+	require.NoError(t, err)
+	refusal["sig"] = hex.EncodeToString(ed25519.Sign(private, message))
+	assert.Equal(t, aacbundle.RefusalSignatureVerified, verifyRefusalSignature(refusal))
+
+	edited := maps.Clone(refusal)
+	edited["reason"] = "not_authorized"
+	assert.Equal(t, aacbundle.RefusalSignatureInvalid, verifyRefusalSignature(edited))
+	keyless := maps.Clone(refusal)
+	delete(keyless, "key_id")
+	assert.Equal(t, aacbundle.RefusalSignatureInvalid, verifyRefusalSignature(keyless))
+	unsigned := maps.Clone(refusal)
+	delete(unsigned, "sig")
+	delete(unsigned, "key_id")
+	assert.Equal(t, aacbundle.RefusalSignatureUnverified, verifyRefusalSignature(unsigned))
 }

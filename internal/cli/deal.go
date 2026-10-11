@@ -77,6 +77,7 @@ var dealIndexSchema = []string{
 	`CREATE TABLE IF NOT EXISTS deal_store (id INTEGER PRIMARY KEY CHECK (id = 1), secret BLOB NOT NULL)`,
 	dealCadenceSchema,
 	dealDeferredEmailSchema,
+	dealRequestsSchema,
 }
 
 // dealSession holds the write lock, the index handle and the signing key for
@@ -2031,7 +2032,7 @@ func dealReportCommand() *cobra.Command {
 				// Sharing is a disclose act: it is on record before the file
 				// exists, and the output carries none of the local report's
 				// raw text.
-				share, err := s.recordShare(ctx, dealID, b, audience, recipient, dealRole(events), []byte(page))
+				share, err := s.recordShare(ctx, dealID, b, audience, recipient, dealRole(events), []byte(page), "")
 				if err != nil {
 					return err
 				}

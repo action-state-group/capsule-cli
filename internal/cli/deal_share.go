@@ -1322,8 +1322,10 @@ func dealVerifyCommand(htmlPath string) string {
 // records withheld, the audience, the recipient, what the copy leaves out
 // and the digest of the exact page. It is kept in the local store and its
 // digest is appended to the deal's own disclosure log (beside the deal's
-// log, which holds only steps) under a fresh signed checkpoint.
-func (s *dealSession) recordShare(ctx context.Context, dealID string, b map[string]interface{}, audience, recipient, role string, page []byte) (map[string]any, error) {
+// log, which holds only steps) under a fresh signed checkpoint. A copy
+// served as the answer to an evidence request (deal_evidence.go) also names
+// that request's digest, and page is then the served artifact's bytes.
+func (s *dealSession) recordShare(ctx context.Context, dealID string, b map[string]interface{}, audience, recipient, role string, page []byte, requestDigest string) (map[string]any, error) {
 	record, err := disclosureRecord(b)
 	if err != nil {
 		return nil, err
@@ -1359,6 +1361,9 @@ func (s *dealSession) recordShare(ctx context.Context, dealID string, b map[stri
 	// The nonce keeps two identical shares distinct and the recipient
 	// unguessable from the digest on the log.
 	record["nonce"] = hex.EncodeToString(nonce)
+	if requestDigest != "" {
+		record["request_digest"] = requestDigest
+	}
 	digest, err := canonical.JSONDigest(record)
 	if err != nil {
 		return nil, err

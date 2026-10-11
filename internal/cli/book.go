@@ -845,6 +845,7 @@ func requestCommand() *cobra.Command {
 		}
 		var req evidencebook.EvidenceRequest
 		var resp evidencebook.Response
+		var requestBytes, responseBytes []byte
 		if ask != "" {
 			raw, e := readInput(ask)
 			if e != nil {
@@ -853,6 +854,7 @@ func requestCommand() *cobra.Command {
 			if e = decodeJSONAs("--request "+ask, raw, &req); e != nil {
 				return e
 			}
+			requestBytes = raw
 		}
 		var responder evidencebook.ResponderKeys
 		if answer != "" {
@@ -874,6 +876,7 @@ func requestCommand() *cobra.Command {
 			if e = decodeJSONAs("--response "+answer, raw, &resp); e != nil {
 				return e
 			}
+			responseBytes = raw
 			// Witness receipts an answer carries are checked against its
 			// anchor under this directory, the requester's own; without
 			// one, an answer carrying any receipt is recorded as failed.
@@ -888,6 +891,11 @@ func requestCommand() *cobra.Command {
 			}
 		} else if path, _ := c.Flags().GetString("witness-directory"); path != "" {
 			return inputError("--witness-directory goes with --response: it checks the witness receipts an answer carries")
+		}
+		if p.Type == "sqlite" {
+			// A deal profile asks for, and records, a deal's copy
+			// (deal_evidence.go); it has no evidence book.
+			return dealRequest(c, p, requestBytes, responseBytes, forID, windowEnd, responder)
 		}
 		opened, e := openBook(c.Context(), p, false)
 		if e != nil {
@@ -988,6 +996,12 @@ func respondCommand() *cobra.Command {
 			}
 		}
 		requester, _ := c.Flags().GetString("requester")
+		if p.Type == "sqlite" {
+			if policyPath, _ := c.Flags().GetString("policy"); policyPath != "" {
+				return inputError("--policy is the evidence book's share policy; a deal profile serves the counterparty copy, so it does not apply")
+			}
+			return dealRespond(c, p, requestBytes, requester, path)
+		}
 		opened, e := openBook(c.Context(), p, false)
 		if e != nil {
 			return e
