@@ -2,6 +2,118 @@
 
 ## Unreleased
 
+## v0.1.0-rc15
+
+### Release tags are signed from v0.1.0-rc15
+
+- **Changed (release procedure).** From `v0.1.0-rc15` on, every release tag is SSH-signed by the
+  maintainer's key, whose public key is in the release monitor's allowed-signers file. The tag
+  step in `docs/RELEASING.md` is now two parts: prepare (record the merge commit) and one line
+  for the maintainer that signs and pushes the tag, with SSH pinned for the signature.
+- **Added: `release/known-unsigned.txt`**, a reference copy of the tags made before signing
+  began, exactly `v0.1.0-rc1` to `v0.1.0-rc14`, frozen. The monitor's operator copies it once
+  from the signed `v0.1.0-rc15` tag and checks its SHA-256 against the value in
+  `docs/RELEASE-TRANSPARENCY.md`, section 5. The monitor never reads the repository's file, and
+  a later edit of it is itself a red flag. An unsigned tag made after signing began is an
+  alarm, whatever its name.
+
+### A report opened outside a secure context verifies
+
+- **Fixed:** a valid deal report opened where the browser gives no WebCrypto (a non-secure or
+  opaque origin, such as an app's attachment viewer on iPhone) said it did not verify: the page hashed only
+  through `crypto.subtle`, which exists only in a secure context, so every digest, membership
+  and range check failed. The vendored runtime is rebuilt from agent-action-capsule with a plain
+  SHA-256 fallback (and `@action-state-group/cll` 0.2.1 for the MMR proofs); the ten checks
+  now pass with no `crypto` at all. `scripts/check-viewer-without-webcrypto.mjs PAGE.html` runs a
+  page's own verifier that way and prints its checks.
+- **Changed:** without WebCrypto the deal page lists the countersignatures and the cited signers
+  under "Checked only by capsulectl verify": it cannot check an Ed25519 signature there.
+- **Added:** a viewer with no SHA-256 at all shows "Unable to verify in this viewer" and the
+  `capsulectl verify` command for the file, never the failure banner.
+
+### A sale registers its threads, and the user's own sale bundle proves the list is whole
+
+- **Added (wire, additive; records sealed before re-derive unchanged).** `deal open --sale` seals a
+  `thread` record on the sale's own log before the thread opens. It holds the thread's deal id as
+  a commitment only. The thread's `task-authority/v0` names that record with a `registration`
+  ref. A thread's task authority that should name a registration and does not is refused, never
+  sealed. An open that failed after registering reuses its registration on the next try.
+- **Added: `deal sale bundle --sale ID --out FILE`,** the user's own copy of a sale:
+  - the sale log's Evidence Bundle, whose completeness certificate covers every registration;
+  - each thread's own copy, in the `x-deal-sale/v0` extension;
+  - `sale_threads`: for each registration, its opening and whether its thread is `present`,
+    `missing` or `never_opened`.
+- **Added (verify).** `verify --bundle` checks a sale bundle's binding. A missing thread, or a sale
+  with threads opened before registration, is INCOMPLETE. Any mismatch, or a carried thread that
+  fails, is INVALID. A bundle that is not a sale's is `not_a_sale_bundle`. No buyer's copy carries
+  any of it.
+
+### A sale bundle is cut fresh, and a sale's log says which threads opened
+
+- **Added (wire, additive; records sealed before re-derive unchanged).** When a sale's thread
+  opens, the sale's log seals a `thread_opened` record: its registration, and its task authority
+  by commitment. `deal sale bundle` seals each thread's report, then a `sale_cut` naming each
+  opened thread's last record by commitment, then the sale log's checkpoint. The bundle's
+  certified interval then covers every thread's acts up to the bundle. Present `sale_threads`
+  entries carry the openings (`opened`, `head`).
+- **Added (verify).** A present thread must open to its `thread_opened`, and its last record must
+  be its head in the latest cut, so a copy cut short is INVALID. A `never_opened` registration has
+  neither; when a withheld record could be its opening, it is INCOMPLETE. A sale copy without
+  these records reads INCOMPLETE; any opening or head that does not match is INVALID.
+
+### `verify --bundle`: one name per sale-cut finding, against the latest cut only
+
+- **Fixed.** In a sale bundle, `no_sale_cut` (no readable cut) is said once, not once per thread,
+  and a readable cut without a present thread's head says `thread_not_in_the_cut` for that thread.
+  Only the latest cut counts: a cut is read only when its disclosure matches what its record
+  sealed and no record this copy cannot read follows it on the sale's log. A withheld or edited
+  latest cut is `no_sale_cut`, never a silent fall-back to an older one.
+
+### A rules checker sees who an earlier act was with
+
+- **Added (checker input only; nothing sealed changes).** Each act in a check's `history` now
+  carries `counterparty`: the counterparty the act's check sealed, exactly as sealed and keyed per
+  deal, beside the act record (which names none). A rule keyed on the counterparty sees a repeated
+  booking in one deal as a repeat on acts, as on checks; `counterparty_profile` remains the key
+  across deals. Absent for an act with no check behind it, or a check that names no counterparty.
+
+### A seller's check tells the rules checker what the agent stated earlier
+
+- **Added (checker input only; nothing sealed changes).** Where the user sells, the checked record
+  given to the rules checker carries `deal_claims`: the deal's agent claims that state a class,
+  sealed before the checked step, in seal order. Each is its sealed claim record's own values, with
+  the words as a commitment only. A rule on a required disclosure can then find a statement the
+  agent made before the offer. Absent when there is none; a buyer's checker input is unchanged.
+
+### The deal page says which checks ran on it and which only `capsulectl verify` runs
+
+- **Changed:** the deal page lists, in plain words, what the page itself checked and what only
+  `capsulectl verify --bundle` checks, with the command to run.
+  - **On the page:** each record's digest, its place in the log, the range proof, opened words, a
+    countersignature's signature, and the agent's signature only on the records the page cites as
+    signers.
+  - **Only by `capsulectl verify`:** the checkpoint's signature when the page could not check it
+    (the page says it shows the bundle as passing without it), the agent's signature on every
+    record, the witness receipt, and that the log only grew since its earlier checkpoint.
+
+  The lists are read from what the page's verification recorded and what the file carries.
+- **Changed:** the command includes `--witness-directory` when the file carries a witness receipt.
+- **Changed:** the page says none of these checks says who the agent or its user is, or that the
+  file is the latest copy. "This page checked itself" is gone.
+
+### A deal page's title says what that copy shows, with or without JavaScript
+
+- **Changed:** a deal page's `<title>`, which a tab or a host's preview shows even with JavaScript
+  off, now says what that copy shows in the clear:
+  - on the user's own copy, the words they asked, only when checked against their sealed
+    commitment when the page was built (whitespace folded, at most 120 characters);
+  - on a shared copy, only whom it is for.
+
+  It never carries a structured field such as a floor or a limit. The share gate scans it with the
+  rest of a shared page.
+- **Not in this change:** a `<noscript>` line in the page body, which waits on a slot in
+  agent-action-capsule's page shell.
+
 ### `deal list`: every deal in the profile's store, read-only
 
 - **Added:** `capsulectl deal list [--json]` prints one line per deal in the profile's store, in
@@ -28,35 +140,6 @@
     listed, and the deal's next write command recovers it.
   - On a store whose last writer closed cleanly, every file under the store is byte-for-byte the
     same after the list.
-
-### A report opened outside a secure context verifies
-
-- **Fixed:** a valid deal report opened where the browser gives no WebCrypto (a non-secure or
-  opaque origin, such as an app's attachment viewer on iPhone) said it did not verify: the page hashed only
-  through `crypto.subtle`, which exists only in a secure context, so every digest, membership
-  and range check failed. The vendored runtime is rebuilt from agent-action-capsule with a plain
-  SHA-256 fallback (and `@action-state-group/cll` 0.2.1 for the MMR proofs); the ten checks
-  now pass with no `crypto` at all. `scripts/check-viewer-without-webcrypto.mjs PAGE.html` runs a
-  page's own verifier that way and prints its checks.
-- **Changed:** without WebCrypto the deal page lists the countersignatures and the cited signers
-  under "Checked only by capsulectl verify": it cannot check an Ed25519 signature there.
-- **Added:** a viewer with no SHA-256 at all shows "Unable to verify in this viewer" and the
-  `capsulectl verify` command for the file, never the failure banner.
-
-## v0.1.0-rc15
-
-### Release tags are signed from v0.1.0-rc15
-
-- **Changed (release procedure).** From `v0.1.0-rc15` on, every release tag is SSH-signed by the
-  maintainer's key, whose public key is in the release monitor's allowed-signers file. The tag
-  step in `docs/RELEASING.md` is now two parts: prepare (record the merge commit) and one line
-  for the maintainer that signs and pushes the tag, with SSH pinned for the signature.
-- **Added: `release/known-unsigned.txt`**, a reference copy of the tags made before signing
-  began, exactly `v0.1.0-rc1` to `v0.1.0-rc14`, frozen. The monitor's operator copies it once
-  from the signed `v0.1.0-rc15` tag and checks its SHA-256 against the value in
-  `docs/RELEASE-TRANSPARENCY.md`, section 5. The monitor never reads the repository's file, and
-  a later edit of it is itself a red flag. An unsigned tag made after signing began is an
-  alarm, whatever its name.
 
 ### The deal page is built through the emitter's slots, under a per-page CSP
 
