@@ -191,6 +191,13 @@ func listPresentations(value map[string]interface{}, audience string, format aac
 		return result, err
 	}
 	result.Descriptor, _ = aacpresentation.DescribeBundle(value)
+	// A History's deals are checked by capsule-cli's verifier, not by the
+	// bundle verifier the descriptor runs: it is verified only when
+	// `verify --bundle` calls it VALID, as the page gate requires.
+	if exts, _ := value["extensions"].(map[string]interface{}); exts[historySelectionExtension] != nil && result.Descriptor.Verified {
+		verdict, _ := bundleVerdict(value, nil)
+		result.Descriptor.Verified = verdict == "VALID"
+	}
 	candidates, pluginsRefused, err := presentationListCandidates()
 	result.PluginsRefused = pluginsRefused
 	var registration *presentationListRegistration

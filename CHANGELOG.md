@@ -39,6 +39,9 @@
   catches the edit. A nested deal taken out of a History is no stronger than an unsealed deal
   report.
 - The deal view's manifest forbids `x-history-selection/v0`, so it never presents a History.
+- `presentation list` says a History is verified only when `verify --bundle` calls it VALID. The
+  bundle verifier it runs does not check the nested deals. `presentation build` writes a History's
+  page under the same rule.
 
 ### A rules checker may be pinned to a set of rulesets
 

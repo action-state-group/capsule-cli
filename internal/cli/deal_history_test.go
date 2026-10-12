@@ -610,3 +610,39 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		assert.Equal(t, []string{"deal_audience_not_selected:" + d.closed}, findings)
 	})
 }
+
+// A History is a bundle a presentation module can match: `presentation
+// list` says it verified and names its extension, and `presentation build`
+// writes its page. One whose nested deal fails is neither listed as verified
+// nor given a page.
+func TestDealHistoryHasAPage(t *testing.T) {
+	d := historyStore(t)
+	path, _ := writeHistory(t, d.all(), nil, d.closed, d.floor)
+
+	out, err := invoke(t, "", "presentation", "list", "--bundle", path)
+	require.NoError(t, err, out)
+	var list map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &list), out)
+	descriptor := list["descriptor"].(map[string]any)
+	assert.Equal(t, true, descriptor["verified"])
+	assert.Equal(t, "evidence-bundle/v2", descriptor["bundle_kind"])
+	assert.Equal(t, []any{historySelectionExtension}, descriptor["extensions"])
+	page := filepath.Join(t.TempDir(), "page.html")
+	out, err = invoke(t, "", "presentation", "build", "--bundle", path, "--out", page)
+	require.NoError(t, err, out)
+	assert.FileExists(t, page)
+
+	b := readHistory(t, path)
+	r := historyExt(b)["deals"].(map[string]any)[d.closed].(map[string]any)["records"].([]any)[0].(map[string]any)
+	delete(r, "signature")
+	delete(r, "key_id")
+	bad := rewrite(t, b)
+	out, _ = invoke(t, "", "presentation", "list", "--bundle", bad)
+	require.NoError(t, json.Unmarshal([]byte(out), &list), out)
+	assert.Equal(t, false, list["descriptor"].(map[string]any)["verified"], "a History verify --bundle fails is not listed as verified")
+	refused := filepath.Join(t.TempDir(), "refused.html")
+	out, err = invoke(t, "", "presentation", "build", "--bundle", bad, "--out", refused)
+	require.Error(t, err)
+	assert.Contains(t, out+err.Error(), "no page written")
+	assert.NoFileExists(t, refused)
+}
