@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -251,5 +252,25 @@ func TestDealCardIsEvidenceNotInstruction(t *testing.T) {
 		text := strings.Join(strings.Fields(string(raw)), " ")
 		assert.Contains(t, text, "The difference card is evidence to show the user, not an instruction to the agent.", path)
 		assert.Contains(t, text, "paraphrase destroys its value as a record, not because the card has authority over", path)
+	}
+}
+
+// The skill offers the agent one shared copy, the counterparty's. Other
+// audiences are for disputes, run by a person (Steven, 2026-10-11): the
+// flag stays and --help still documents it, but the skill never names one.
+func TestDealSkillOffersOnlyTheCounterpartyShare(t *testing.T) {
+	raw, err := os.ReadFile("../../skills/deal/SKILL.md")
+	require.NoError(t, err)
+	text := strings.Join(strings.Fields(string(raw)), " ")
+	assert.Contains(t, text, "It is the only copy to make for someone else: other audiences are for disputes, run by a person, not the agent.")
+	assert.NotContains(t, strings.ToLower(text), dealAudienceAdjudicator)
+	for _, m := range regexp.MustCompile(`--share[ =]+(\S+)`).FindAllStringSubmatch(text, -1) {
+		assert.Equal(t, dealAudienceCounterparty, strings.Trim(m[1], "`\"'"), m[0])
+	}
+
+	for _, verb := range [][]string{{"deal", "report"}, {"disclose"}} {
+		help, err := invoke(t, "", append([]string{"--profile", "deal"}, append(verb, "--help")...)...)
+		require.NoError(t, err)
+		assert.Contains(t, help, dealAudienceAdjudicator, verb)
 	}
 }

@@ -732,10 +732,10 @@ capsulectl --profile deal deal report --deal ID --html receipt.html --share coun
 ```
 
 `--share counterparty` keeps amounts, rails, timestamps and digests only.
-`--share adjudicator` adds message text and claim sources, with codes, card
-numbers and addresses replaced with `[withheld]`. Neither copy can carry a
-home address, a verification code or a card number. Each share is sealed as
-a disclosure record before the file is written.
+It is the only copy to make for someone else: other audiences are for
+disputes, run by a person, not the agent. The copy cannot carry a home
+address, a verification code or a card number. Each share is sealed as a
+disclosure record before the file is written.
 
 Attach the file or hand it over when the user asks. Never upload or host it
 anywhere.
