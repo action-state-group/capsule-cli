@@ -182,13 +182,6 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if err != nil {
 		return err
 	}
-	if value["kind"] == dealHistoryKind {
-		verdict, report := verifyHistory(value, directory)
-		if err := output(c, report); err != nil {
-			return err
-		}
-		return verdictError(verdict)
-	}
 	if value["bundle_kind"] != "evidence-bundle/v2" || value["bundle_version"] != "2" {
 		return inputError("--bundle is not an evidence-bundle/v2 file (bundle_kind \"evidence-bundle/v2\", bundle_version \"2\")")
 	}
@@ -305,6 +298,11 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 		if x.Kind == dealSaleExtension {
 			sale, claim := saleBundleEntry(value, result, directory)
 			entry = sale
+			claims = append(claims, claim)
+		}
+		if x.Kind == historySelectionExtension {
+			history, claim := historyEntry(value, result, directory)
+			entry = history
 			claims = append(claims, claim)
 		}
 		if x.Composed != nil {

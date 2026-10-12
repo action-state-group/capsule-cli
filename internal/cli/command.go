@@ -448,7 +448,7 @@ func NewCommand() *cobra.Command {
 		return nil
 	}}
 	verify.Flags().String("capsule", "", "A capsule file: an artifact.Record (as `seal --output` and `get --raw` write) or a bare Agent Action Capsule with an inline signature and key_id (as capsule-emit seals); its shape is read from its members and named in the output")
-	verify.Flags().String("bundle", "", "Evidence Bundle (evidence-bundle/v2) JSON file, or a deal history file, verified offline from the file alone")
+	verify.Flags().String("bundle", "", "Evidence Bundle (evidence-bundle/v2) JSON file, verified offline from the file alone")
 	verify.Flags().String("witness-directory", "", "With --bundle: a witness directory (witnesses.json format) naming the witnesses and keys whose receipts to check; without it no receipt is checked")
 	verify.MarkFlagsMutuallyExclusive("capsule", "bundle")
 	root.AddCommand(verify)

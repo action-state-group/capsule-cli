@@ -1,258 +1,484 @@
 package cli
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// historyStore is five demo deals: two retail deals paid (one closed, one
-// with a copy already sealed by `bundle --deal`), one only opened, one
-// opened with a later note past its checkpoint, and one more retail deal.
-func historyStore(t *testing.T) []string {
+// historyDeals are the five deals historyStore makes:
+//   - closed: a retail deal paid and closed;
+//   - private: a deal whose baseline holds a home address, a card, a code and
+//     the shop's contact details, with a counterparty copy and then the
+//     user's own copy sealed (each seals its report and cuts a checkpoint);
+//   - floor: a seller's deal with a price floor;
+//   - opened: a deal only opened;
+//   - other: one more retail deal.
+type historyDeals struct{ closed, private, floor, opened, other string }
+
+func historyStore(t *testing.T) historyDeals {
 	t.Helper()
 	dealFixture(t)
-	closed := retailDeal(t)
-	dealRun(t, "close", "--deal", closed, "--input", writeJSON(t, `{"status":"received","delivered":{"item":"cat sticker"}}`))
-	reported := retailDeal(t)
-	out, err := invoke(t, "", "--profile", "deal", "bundle", "--deal", reported, "--out", filepath.Join(t.TempDir(), "own.json"))
+	var d historyDeals
+	d.closed = retailDeal(t)
+	dealRun(t, "close", "--deal", d.closed, "--input", writeJSON(t, `{"status":"received","delivered":{"item":"cat sticker"}}`))
+	d.private = openPrivateDeal(t)
+	sharedCopy(t, d.private, dealAudienceCounterparty, "the shop")
+	out, err := invoke(t, "", "--profile", "deal", "bundle", "--deal", d.private, "--out", filepath.Join(t.TempDir(), "own.json"))
 	require.NoError(t, err, out)
-	opened := dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))["deal_id"].(string)
-	noted := dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))["deal_id"].(string)
-	dealRun(t, "check", "--deal", noted, "--input", filepath.Join(retailDemo, "check-pay.json"))
-	other := retailDeal(t)
-	return []string{closed, reported, opened, noted, other}
+	d.floor = dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	d.opened = dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))["deal_id"].(string)
+	d.other = retailDeal(t)
+	return d
 }
 
-// writeHistory runs `deal history` over picked, checks it changed no byte
-// of the store, and returns the container's path and its summary.
-func writeHistory(t *testing.T, picked ...string) (string, map[string]any) {
+func (d historyDeals) all() []string {
+	return []string{d.closed, d.private, d.floor, d.opened, d.other}
+}
+
+// dealLogState is everything the store holds for a deal's own logs (its log
+// and its disclosures log): every row of every table with a log_id column
+// for those logs, and the deal's rows in every table with a deal_id column.
+func dealLogState(t *testing.T, dealID string) string {
 	t.Helper()
 	p, err := loadProfile("deal")
 	require.NoError(t, err)
-	before := storeFiles(t, p)
-	path := filepath.Join(t.TempDir(), "history.json")
-	args := []string{"--profile", "deal", "deal", "history", "--out", path}
-	for _, id := range picked {
-		args = append(args, "--deal", id)
+	db, err := sql.Open("sqlite", "file:"+p.Connection.Database+"?mode=ro")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, db.Close()) }()
+	tables, err := db.Query(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
+	require.NoError(t, err)
+	var names []string
+	for tables.Next() {
+		var n string
+		require.NoError(t, tables.Scan(&n))
+		names = append(names, n)
 	}
-	out, err := invoke(t, "", args...)
+	require.NoError(t, tables.Close())
+	h := sha256.New()
+	rows := 0
+	dump := func(table, column string, values ...any) {
+		marks := strings.TrimSuffix(strings.Repeat("?,", len(values)), ",")
+		r, err := db.Query(fmt.Sprintf(`SELECT * FROM %q WHERE %q IN (%s) ORDER BY rowid`, table, column, marks), values...)
+		require.NoError(t, err)
+		cols, err := r.Columns()
+		require.NoError(t, err)
+		for r.Next() {
+			vals := make([]any, len(cols))
+			ptrs := make([]any, len(cols))
+			for i := range vals {
+				ptrs[i] = &vals[i]
+			}
+			require.NoError(t, r.Scan(ptrs...))
+			_, _ = fmt.Fprintf(h, "%s%v\n", table, vals)
+			rows++
+		}
+		require.NoError(t, r.Close())
+	}
+	for _, table := range names {
+		info, err := db.Query(fmt.Sprintf(`PRAGMA table_info(%q)`, table))
+		require.NoError(t, err)
+		var hasLog, hasDeal bool
+		for info.Next() {
+			var cid, notnull, pk int
+			var name, typ string
+			var dflt any
+			require.NoError(t, info.Scan(&cid, &name, &typ, &notnull, &dflt, &pk))
+			hasLog = hasLog || name == "log_id"
+			hasDeal = hasDeal || name == "deal_id"
+		}
+		require.NoError(t, info.Close())
+		if hasLog {
+			dump(table, "log_id", dealLogID(dealID), dealDisclosureLogID(dealID))
+		}
+		if hasDeal {
+			dump(table, "deal_id", dealID)
+		}
+	}
+	require.NotZero(t, rows, "the deal's logs are in the store")
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func logStates(t *testing.T, ids ...string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for _, id := range ids {
+		out[id] = dealLogState(t, id)
+	}
+	return out
+}
+
+// writeHistory runs `deal history` over picked (with args, e.g. --audience),
+// checks it changed nothing of any of the deals in all, and returns the
+// file's path and the command's output.
+func writeHistory(t *testing.T, all []string, args []string, picked ...string) (string, map[string]any) {
+	t.Helper()
+	before := logStates(t, all...)
+	path := filepath.Join(t.TempDir(), "history.json")
+	cmd := append([]string{"--profile", "deal", "deal", "history", "--out", path}, args...)
+	for _, id := range picked {
+		cmd = append(cmd, "--deal", id)
+	}
+	out, err := invoke(t, "", cmd...)
 	require.NoError(t, err, out)
-	assert.Equal(t, before, storeFiles(t, p), "the history copy changes no file under the store: no record sealed, no checkpoint cut")
+	assert.Equal(t, before, logStates(t, all...), "a History writes no deal's log: no record sealed, no checkpoint cut, no share recorded")
 	var summary map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &summary), out)
 	return path, summary
 }
 
-func readContainer(t *testing.T, path string) map[string]any {
+func readHistory(t *testing.T, path string) map[string]any {
 	t.Helper()
-	var c map[string]any
-	require.NoError(t, json.Unmarshal(mustRead(t, path), &c))
-	return c
+	var b map[string]any
+	require.NoError(t, json.Unmarshal(mustRead(t, path), &b))
+	return b
 }
 
-// rewrite writes c back to a new file. With reselect, each selection digest
-// is made to name the carried bundle again, as someone editing the file
-// would, so only the nested bundles' own checks can catch the edit.
-func rewrite(t *testing.T, c map[string]any, reselect bool) string {
+func historyExt(b map[string]any) map[string]any {
+	return b["extensions"].(map[string]any)[historySelectionExtension].(map[string]any)
+}
+
+// rewrite writes b back to a new file.
+func rewrite(t *testing.T, b map[string]any) string {
 	t.Helper()
-	raw, err := json.Marshal(c)
+	raw, err := json.Marshal(b)
 	require.NoError(t, err)
-	if reselect {
-		value, err := decodeBundleJSON(raw)
-		require.NoError(t, err)
-		deals := value["deals"].(map[string]interface{})
-		for _, e := range value["selection"].([]interface{}) {
-			entry := e.(map[string]interface{})
-			if tb, ok := deals[entry["deal_id"].(string)]; ok {
-				entry["bundle_digest"] = jcsDigest(tb)
-			}
-		}
-		raw, err = json.Marshal(value)
-		require.NoError(t, err)
-	}
 	path := filepath.Join(t.TempDir(), "edited.json")
 	require.NoError(t, os.WriteFile(path, raw, 0o600))
 	return path
 }
 
-func findings(result map[string]any) []string {
-	var out []string
-	for _, f := range result["findings"].([]any) {
-		out = append(out, f.(string))
+// verifyHistory runs verify --bundle and returns the verdict, the History
+// extension's entry and its findings.
+func verifyHistory(t *testing.T, path string) (string, map[string]any, []string, error) {
+	t.Helper()
+	result, err := verifyBundleOutput(t, path)
+	for _, raw := range result["extensions"].([]any) {
+		e := raw.(map[string]any)
+		if e["kind"] == historySelectionExtension {
+			var findings []string
+			for _, f := range e["findings"].([]any) {
+				findings = append(findings, f.(string))
+			}
+			return result["verdict"].(string), e, findings, err
+		}
 	}
-	return out
+	t.Fatalf("no %s entry in %v", historySelectionExtension, result)
+	return "", nil, nil, err
 }
 
-// Five deals, three picked: one file whose every nested deal is checked as
-// its own bundle, VALID, and the store untouched (writeHistory).
+// Five deals, three picked: the History is the counterparty's copy of each,
+// every nested deal checked as its own bundle, one signer key, no deal's log
+// written; the pick is sealed on the history log.
 func TestDealHistoryVerifiesEachPickedDeal(t *testing.T) {
-	deals := historyStore(t)
-	picked := []string{deals[0], deals[1], deals[3]}
-	path, summary := writeHistory(t, picked...)
+	d := historyStore(t)
+	picked := []string{d.closed, d.private, d.floor}
+	path, summary := writeHistory(t, d.all(), nil, picked...)
+	assert.Equal(t, dealAudienceCounterparty, summary["audience"], "the other party's copy unless asked otherwise")
 
 	want := append([]string{}, picked...)
 	sort.Strings(want)
-	var got []string
-	for _, d := range summary["deals"].([]any) {
-		got = append(got, d.(map[string]any)["deal_id"].(string))
-	}
-	assert.Equal(t, want, got)
-
-	result, err := verifyBundleOutput(t, path)
-	require.NoError(t, err, "VALID exits 0")
-	assert.Equal(t, "VALID", result["verdict"])
-	assert.Empty(t, result["findings"])
-	checked := result["deals"].([]any)
+	verdict, entry, findings, err := verifyHistory(t, path)
+	require.NoError(t, err, "VALID exits 0: %v", findings)
+	assert.Equal(t, "VALID", verdict)
+	assert.Empty(t, findings)
+	assert.Equal(t, dealAudienceCounterparty, entry["audience"])
+	holder := entry["holder_key"].(string)
+	require.Len(t, holder, 64)
+	assert.Equal(t, map[string]any{holder: []any{want[0], want[1], want[2]}}, entry["signer_keys"], "every nested record is signed by the selection's key")
+	checked := entry["deals"].([]any)
 	require.Len(t, checked, 3)
 	for i, raw := range checked {
-		d := raw.(map[string]any)
-		assert.Equal(t, want[i], d["deal_id"])
-		assert.Equal(t, "VALID", d["verdict"], "each nested deal verified on its own")
-		assert.Equal(t, "VALID", d["report"].(map[string]any)["verdict"], "the nested bundle's own report is carried")
+		m := raw.(map[string]any)
+		assert.Equal(t, want[i], m["deal_id"])
+		assert.Equal(t, "VALID", m["verdict"], "a counterparty copy verifies VALID on its own")
+		assert.Equal(t, dealAudienceCounterparty, m["audience"])
 	}
 
-	c := readContainer(t, path)
-	assert.Equal(t, dealHistoryKind, c["kind"])
-	nested := c["deals"].(map[string]any)
+	b := readHistory(t, path)
+	assert.Equal(t, "evidence-bundle/v2", b["bundle_kind"])
+	assert.Equal(t, historyLogID, b["completeness_certificate"].(map[string]any)["log_id"])
+	ext := historyExt(b)
+	nested := ext["deals"].(map[string]any)
 	require.Len(t, nested, 3)
 	for _, id := range picked {
 		cert := nested[id].(map[string]any)["completeness_certificate"].(map[string]any)
 		assert.Equal(t, dealLogID(id), cert["log_id"], "each nested bundle is its own deal's log")
 	}
-	// The deal with a copy already sealed points at that sealed report; the
-	// others carry the section unsealed.
-	reported := nested[deals[1]].(map[string]any)["extensions"].(map[string]any)[dealProfile].(map[string]any)
-	assert.NotEmpty(t, reported[dealReportPointer])
-	assert.NotContains(t, nested[deals[0]].(map[string]any)["extensions"].(map[string]any)[dealProfile], dealReportPointer)
+	// The sealed selection record is disclosed and is what the file carries.
+	sealed := b["disclosures"].(map[string]any)[ext["selection_record"].(string)].(map[string]any)["agent_input"].(map[string]any)
+	assert.Equal(t, "history_selection", sealed["type"])
+	assert.Equal(t, dealAudienceCounterparty, sealed["audience"])
+	assert.Equal(t, ext["selection"], sealed["selection"])
+
+	// A second History withholds the first one's selection.
+	path2, _ := writeHistory(t, d.all(), nil, d.other)
+	b2 := readHistory(t, path2)
+	assert.Len(t, b2["records"], 2, "both selections are on the history log")
+	earlier, _ := b2["disclosures"].(map[string]any)[ext["selection_record"].(string)].(map[string]any)
+	assert.NotContains(t, earlier, "agent_input", "the earlier selection is withheld")
+	verdict, _, findings, err = verifyHistory(t, path2)
+	require.NoError(t, err, "%v", findings)
+	assert.Equal(t, "VALID", verdict)
+}
+
+// The private values in the picked deals: none is anywhere in the file a
+// person sends; all are in the user's own (keep) History.
+func TestDealHistoryCarriesNoPrivateValue(t *testing.T) {
+	d := historyStore(t)
+	picked := []string{d.private, d.floor, d.closed}
+	hidden := append([]string{homeAddress, "Larkspur", cardNumber, verifyCode, shopEmail, shopPhone,
+		"170000", "min_total_minor", "bounds_openings"}, writtenAmounts(1700)...)
+
+	for _, audience := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
+		var args []string
+		if audience != dealAudienceCounterparty {
+			args = []string{"--audience", audience}
+		}
+		if audience == dealAudienceAdjudicator {
+			// The private deal's sealed reports are for the counterparty and
+			// the user: an adjudicator's copy needs its own first.
+			sharedCopy(t, d.private, dealAudienceAdjudicator, "the card issuer")
+		}
+		path, _ := writeHistory(t, d.all(), args, picked...)
+		raw := string(mustRead(t, path))
+		for _, v := range hidden {
+			assert.NotContains(t, raw, v, audience+": the whole file")
+		}
+		verdict, _, findings, err := verifyHistory(t, path)
+		require.NoError(t, err, "%v", findings)
+		assert.Equal(t, "VALID", verdict, audience)
+	}
+
+	// A keep copy needs the user's own report to be the newest one.
+	out, err := invoke(t, "", "--profile", "deal", "bundle", "--deal", d.private, "--out", filepath.Join(t.TempDir(), "own.json"))
+	require.NoError(t, err, out)
+	path, summary := writeHistory(t, d.all(), []string{"--audience", "keep"}, picked...)
+	assert.Equal(t, dealAudienceKeep, summary["audience"])
+	raw := string(mustRead(t, path))
+	assert.Contains(t, raw, "Larkspur Lane", "your own copy carries the address")
+	assert.Contains(t, raw, "min_total_minor", "and the floor")
+	verdict, entry, findings, err := verifyHistory(t, path)
+	require.NoError(t, err, "%v", findings)
+	assert.Equal(t, "VALID", verdict)
+	assert.Equal(t, dealAudienceKeep, entry["audience"], "verify says the file is the keep copy")
+	for _, m := range entry["deals"].([]any) {
+		assert.Equal(t, dealAudienceKeep, m.(map[string]any)["audience"])
+	}
 }
 
 // A step sealed after the deal's latest checkpoint is not in the copy (no
-// checkpoint is cut for it) and the summary says how many were left out.
+// checkpoint is cut on the deal for it) and the output counts it.
 func TestDealHistoryStopsAtTheLatestCheckpoint(t *testing.T) {
-	deals := historyStore(t)
-	dealRun(t, "note", "--deal", deals[3], "--kind", "act", "--input", filepath.Join(retailDemo, "act-pay.json"))
-	state := dealRun(t, "checkpoint", "status", "--deal", deals[3])
-	path, summary := writeHistory(t, deals[3])
+	d := historyStore(t)
+	dealRun(t, "check", "--deal", d.opened, "--input", filepath.Join(retailDemo, "check-pay.json"))
+	state := dealRun(t, "checkpoint", "status", "--deal", d.opened)
+	path, summary := writeHistory(t, d.all(), nil, d.opened)
 	line := summary["deals"].([]any)[0].(map[string]any)
-	// The deal has no report sealed, so its log holds only its steps; its
-	// checkpoint is the one its opening cut.
 	assert.Equal(t, float64(1), state["checkpoint"].(map[string]any)["entries"])
 	assert.Equal(t, float64(1), line["steps_shown"], "the steps the checkpoint covers")
 	assert.Equal(t, state["log_entries"].(float64)-1, line["steps_after_checkpoint"], "every later step, not shown")
-	nested := readContainer(t, path)["deals"].(map[string]any)[deals[3]].(map[string]any)
-	assert.Len(t, nested["records"], 1)
-	result, err := verifyBundleOutput(t, path)
-	require.NoError(t, err)
-	assert.Equal(t, "VALID", result["verdict"])
+	verdict, _, findings, err := verifyHistory(t, path)
+	require.NoError(t, err, "%v", findings)
+	assert.Equal(t, "VALID", verdict)
 }
 
-// One record edited inside one nested deal, selection digest updated to
-// match: INVALID, naming that deal and no other.
+// One record edited inside one nested deal: INVALID, naming that deal and no
+// other.
 func TestDealHistoryTamperedRecordNamesItsDeal(t *testing.T) {
-	deals := historyStore(t)
-	path, _ := writeHistory(t, deals[0], deals[1], deals[3])
-	c := readContainer(t, path)
-	target := deals[1]
-	tb := c["deals"].(map[string]any)[target].(map[string]any)
+	d := historyStore(t)
+	path, _ := writeHistory(t, d.all(), nil, d.closed, d.private, d.floor)
+	b := readHistory(t, path)
+	tb := historyExt(b)["deals"].(map[string]any)[d.closed].(map[string]any)
 	disclosures := tb["disclosures"].(map[string]any)
 	ids := make([]string, 0, len(disclosures))
-	for id := range disclosures {
-		ids = append(ids, id)
+	for id, raw := range disclosures {
+		if _, ok := raw.(map[string]any)["agent_input"]; ok {
+			ids = append(ids, id)
+		}
 	}
 	sort.Strings(ids)
-	input := disclosures[ids[0]].(map[string]any)["agent_input"].(map[string]any)
-	input["deal_id"] = deals[2]
+	require.NotEmpty(t, ids)
+	disclosures[ids[0]].(map[string]any)["agent_input"].(map[string]any)["deal_id"] = d.other
 
-	result, err := verifyBundleOutput(t, rewrite(t, c, true))
+	verdict, entry, findings, err := verifyHistory(t, rewrite(t, b))
 	require.ErrorIs(t, err, ErrBundleInvalid)
-	assert.Equal(t, "INVALID", result["verdict"])
-	assert.Equal(t, []string{"deal_invalid:" + target}, findings(result))
-	for _, raw := range result["deals"].([]any) {
-		d := raw.(map[string]any)
-		if d["deal_id"] == target {
-			assert.Equal(t, "INVALID", d["verdict"])
+	assert.Equal(t, "INVALID", verdict)
+	assert.ElementsMatch(t, []string{"deal_bundle_not_the_selected_one:" + d.closed, "deal_invalid:" + d.closed}, findings)
+	for _, raw := range entry["deals"].([]any) {
+		m := raw.(map[string]any)
+		if m["deal_id"] == d.closed {
+			assert.Equal(t, "INVALID", m["verdict"])
 		} else {
-			assert.Equal(t, "VALID", d["verdict"])
+			assert.Equal(t, "VALID", m["verdict"])
 		}
 	}
 }
 
-// Without its selection digest updated, the same edit is also caught as a
-// bundle the selection did not name.
-func TestDealHistoryEditedBundleIsNotTheSelectedOne(t *testing.T) {
-	deals := historyStore(t)
-	path, _ := writeHistory(t, deals[0])
-	c := readContainer(t, path)
-	tb := c["deals"].(map[string]any)[deals[0]].(map[string]any)
-	tb["extensions"].(map[string]any)["x-extra"] = map[string]any{}
-	result, err := verifyBundleOutput(t, rewrite(t, c, false))
-	require.ErrorIs(t, err, ErrBundleInvalid)
-	assert.Contains(t, findings(result), "deal_bundle_not_the_selected_one:"+deals[0])
-}
-
-// A deal nobody picked cannot be added: not as a whole bundle beside the
-// picked ones, not as a record inside a picked deal's bundle, and not under
-// a picked deal's name.
+// A deal nobody picked cannot be added: not beside the picked ones, not as
+// a record inside a picked deal's bundle, not under a picked deal's name; a
+// picked deal cannot be dropped; and neither the carried nor the sealed
+// selection can be edited to take one in.
 func TestDealHistoryRefusesAnUnpickedDeal(t *testing.T) {
-	deals := historyStore(t)
-	path, _ := writeHistory(t, deals[0], deals[1], deals[3])
-	unpickedPath, _ := writeHistory(t, deals[4])
-	unpicked := readContainer(t, unpickedPath)["deals"].(map[string]any)[deals[4]].(map[string]any)
+	d := historyStore(t)
+	path, _ := writeHistory(t, d.all(), nil, d.closed, d.private, d.floor)
+	otherPath, _ := writeHistory(t, d.all(), nil, d.other)
+	unpicked := historyExt(readHistory(t, otherPath))["deals"].(map[string]any)[d.other].(map[string]any)
 
 	t.Run("beside the picked deals", func(t *testing.T) {
-		c := readContainer(t, path)
-		c["deals"].(map[string]any)[deals[4]] = unpicked
-		result, err := verifyBundleOutput(t, rewrite(t, c, true))
+		b := readHistory(t, path)
+		historyExt(b)["deals"].(map[string]any)[d.other] = unpicked
+		_, _, findings, err := verifyHistory(t, rewrite(t, b))
 		require.ErrorIs(t, err, ErrBundleInvalid)
-		assert.Equal(t, []string{"deal_not_in_selection:" + deals[4]}, findings(result))
+		assert.Equal(t, []string{"deal_not_in_selection:" + d.other}, findings)
 	})
 	t.Run("a record inside a picked deal", func(t *testing.T) {
-		c := readContainer(t, path)
-		tb := c["deals"].(map[string]any)[deals[0]].(map[string]any)
-		record := unpicked["records"].([]any)[0].(map[string]any)
-		tb["records"] = append(tb["records"].([]any), record)
-		id := record["capsule_id"].(string)
-		tb["disclosures"].(map[string]any)[id] = unpicked["disclosures"].(map[string]any)[id]
-		result, err := verifyBundleOutput(t, rewrite(t, c, true))
+		b := readHistory(t, path)
+		tb := historyExt(b)["deals"].(map[string]any)[d.closed].(map[string]any)
+		tb["records"] = append(tb["records"].([]any), unpicked["records"].([]any)[0])
+		_, _, findings, err := verifyHistory(t, rewrite(t, b))
 		require.ErrorIs(t, err, ErrBundleInvalid)
-		assert.Equal(t, []string{"deal_invalid:" + deals[0]}, findings(result))
+		assert.ElementsMatch(t, []string{"deal_bundle_not_the_selected_one:" + d.closed, "deal_invalid:" + d.closed}, findings)
 	})
 	t.Run("under a picked deal's name", func(t *testing.T) {
-		c := readContainer(t, path)
-		c["deals"].(map[string]any)[deals[0]] = unpicked
-		result, err := verifyBundleOutput(t, rewrite(t, c, true))
+		b := readHistory(t, path)
+		historyExt(b)["deals"].(map[string]any)[d.closed] = unpicked
+		_, _, findings, err := verifyHistory(t, rewrite(t, b))
 		require.ErrorIs(t, err, ErrBundleInvalid)
-		assert.Equal(t, []string{"deal_not_of_its_log:" + deals[0]}, findings(result))
+		assert.ElementsMatch(t, []string{"deal_bundle_not_the_selected_one:" + d.closed, "deal_not_of_its_log:" + d.closed}, findings)
 	})
 	t.Run("a picked deal dropped", func(t *testing.T) {
-		c := readContainer(t, path)
-		delete(c["deals"].(map[string]any), deals[3])
-		result, err := verifyBundleOutput(t, rewrite(t, c, true))
+		b := readHistory(t, path)
+		delete(historyExt(b)["deals"].(map[string]any), d.floor)
+		_, _, findings, err := verifyHistory(t, rewrite(t, b))
 		require.ErrorIs(t, err, ErrBundleInvalid)
-		assert.Equal(t, []string{"deal_missing:" + deals[3]}, findings(result))
+		assert.Equal(t, []string{"deal_missing:" + d.floor}, findings)
+	})
+	t.Run("the carried selection edited", func(t *testing.T) {
+		b := readHistory(t, path)
+		ext := historyExt(b)
+		ext["selection"] = append(ext["selection"].([]any), map[string]any{"deal_id": d.other, "bundle_digest": jcsDigest(unpicked)})
+		ext["deals"].(map[string]any)[d.other] = unpicked
+		_, _, findings, err := verifyHistory(t, rewrite(t, b))
+		require.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Equal(t, []string{"selection_not_sealed", "deal_not_in_selection:" + d.other}, findings)
+	})
+	t.Run("the sealed selection edited", func(t *testing.T) {
+		b := readHistory(t, path)
+		ext := historyExt(b)
+		sealed := b["disclosures"].(map[string]any)[ext["selection_record"].(string)].(map[string]any)["agent_input"].(map[string]any)
+		sealed["selection"] = append(sealed["selection"].([]any), map[string]any{"deal_id": d.other, "bundle_digest": jcsDigest(unpicked)})
+		ext["selection"] = sealed["selection"]
+		ext["deals"].(map[string]any)[d.other] = unpicked
+		verdict, _, findings, err := verifyHistory(t, rewrite(t, b))
+		require.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Equal(t, "INVALID", verdict)
+		assert.Equal(t, []string{"selection_record_unverified"}, findings)
 	})
 }
 
-// The builder takes only deals from `deal list`, each once; a sale has its
-// own copy.
+// The owner's copy of a deal swapped into a counterparty History is named.
+func TestDealHistoryNamesACopyForAnotherAudience(t *testing.T) {
+	d := historyStore(t)
+	path, _ := writeHistory(t, d.all(), nil, d.closed)
+	keepPath, _ := writeHistory(t, d.all(), []string{"--audience", "keep"}, d.closed)
+	keep := historyExt(readHistory(t, keepPath))["deals"].(map[string]any)[d.closed]
+	b := readHistory(t, path)
+	historyExt(b)["deals"].(map[string]any)[d.closed] = keep
+	_, entry, findings, err := verifyHistory(t, rewrite(t, b))
+	require.ErrorIs(t, err, ErrBundleInvalid)
+	assert.ElementsMatch(t, []string{"deal_bundle_not_the_selected_one:" + d.closed, "deal_audience_not_selected:" + d.closed}, findings)
+	assert.Equal(t, dealAudienceKeep, entry["deals"].([]any)[0].(map[string]any)["audience"])
+}
+
+// rotateSigningKey gives the deal profile a new producer key, trusting both.
+func rotateSigningKey(t *testing.T) string {
+	t.Helper()
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	seed := make([]byte, ed25519.SeedSize)
+	_, err = rand.Read(seed)
+	require.NoError(t, err)
+	public := hex.EncodeToString(ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey))
+	p.Signing = Secret{Value: hex.EncodeToString(seed)}
+	p.TrustedKeys = append(p.TrustedKeys, public)
+	require.NoError(t, saveProfile(p, true))
+	return public
+}
+
+// Deals signed by two keys in one History FAIL, naming each key's deals:
+// one person whose key changed between deals included (a known limit).
+func TestDealHistoryFailsDealsSignedByTwoKeys(t *testing.T) {
+	d := historyStore(t)
+	newKey := rotateSigningKey(t)
+	after := retailDeal(t)
+	path, _ := writeHistory(t, append(d.all(), after), nil, d.closed, after)
+	verdict, entry, findings, err := verifyHistory(t, path)
+	require.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, "INVALID", verdict)
+	assert.Equal(t, newKey, entry["holder_key"], "the selection is signed by the key in use now")
+	signers := entry["signer_keys"].(map[string]any)
+	require.Len(t, signers, 2, "both keys named")
+	assert.Equal(t, []any{after}, signers[newKey])
+	for key, ids := range signers {
+		if key != newKey {
+			assert.Equal(t, []any{d.closed}, ids)
+		}
+	}
+	assert.ElementsMatch(t, []string{"deal_signed_by_other_key:" + d.closed, "deal_signers_differ"}, findings)
+}
+
+// A deal whose sealed reports include no current one for the History's
+// audience is refused: its copy would have to name a report written for
+// another reader, or before its later steps.
+func TestDealHistoryRefusesAReportNotForThisCopy(t *testing.T) {
+	d := historyStore(t)
+	for name, args := range map[string][]string{
+		"another audience": {"--audience", "adjudicator"},
+		"keep, not newest": {"--audience", "keep"},
+	} {
+		if name == "keep, not newest" {
+			// A step after the user's own report: the newest keep report no
+			// longer covers every step (a counterparty one does).
+			sharedCopy(t, d.private, dealAudienceCounterparty, "the shop")
+			dealRun(t, "note", "--deal", d.private, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","channel":"web","text":"shipped"}`))
+			sharedCopy(t, d.private, dealAudienceCounterparty, "the shop")
+		}
+		before := logStates(t, d.all()...)
+		out, err := invoke(t, "", append([]string{"--profile", "deal", "deal", "history", "--out", filepath.Join(t.TempDir(), "h.json"), "--deal", d.private}, args...)...)
+		require.Error(t, err, name)
+		assert.Contains(t, out+err.Error(), "has a sealed report but none for", name)
+		assert.Equal(t, before, logStates(t, d.all()...), name)
+	}
+}
+
+// The builder takes only deals from `deal list`, each once, and an audience
+// `deal report --share` knows; a sale has its own copy.
 func TestDealHistoryRefusesWhatIsNotAPickedDeal(t *testing.T) {
-	deals := historyStore(t)
+	d := historyStore(t)
 	sale, _ := newSale(t)
 	for name, c := range map[string]struct {
 		args []string
 		want string
 	}{
 		"unknown":    {[]string{"--deal", "deal-0000000000000000"}, "unknown deal: deal-0000000000000000"},
-		"twice":      {[]string{"--deal", deals[0], "--deal", deals[0]}, "is picked twice"},
+		"twice":      {[]string{"--deal", d.closed, "--deal", d.closed}, "is picked twice"},
 		"a sale":     {[]string{"--deal", sale}, "a sale has its own copy"},
 		"none":       {nil, "--deal (one per picked deal"},
 		"not a deal": {[]string{"--deal", "not-a-deal"}, "must be a deal id"},
+		"audience":   {[]string{"--deal", d.closed, "--audience", "everyone"}, "--audience must be counterparty"},
 	} {
 		out, err := invoke(t, "", append([]string{"--profile", "deal", "deal", "history", "--out", filepath.Join(t.TempDir(), "h.json")}, c.args...)...)
 		require.Error(t, err, name)
@@ -260,48 +486,9 @@ func TestDealHistoryRefusesWhatIsNotAPickedDeal(t *testing.T) {
 	}
 }
 
-// A deal whose newest sealed report predates steps under its checkpoint
-// (copied, then closed) is refused: its copy would have to name that report,
-// whose text shows the deal before the close.
-func TestDealHistoryRefusesAStaleSealedReport(t *testing.T) {
-	deals := historyStore(t)
-	dealRun(t, "close", "--deal", deals[1], "--input", writeJSON(t, `{"status":"received","delivered":{"item":"cat sticker"}}`))
-	p, err := loadProfile("deal")
-	require.NoError(t, err)
-	before := storeFiles(t, p)
-	out, err := invoke(t, "", "--profile", "deal", "deal", "history", "--out", filepath.Join(t.TempDir(), "h.json"), "--deal", deals[1])
-	require.Error(t, err)
-	assert.Contains(t, out+err.Error(), "newest sealed report predates its later steps")
-	assert.Equal(t, before, storeFiles(t, p))
-}
-
-// A selection entry with no digest, or one that is not a sha256, is
-// malformed, and a carried bundle that cannot be put in canonical form (a
-// non-integer number) is never the selected one: neither is VALID.
-func TestDealHistorySelectionDigestIsRequired(t *testing.T) {
-	deals := historyStore(t)
-	path, _ := writeHistory(t, deals[0])
-	t.Run("missing", func(t *testing.T) {
-		c := readContainer(t, path)
-		delete(c["selection"].([]any)[0].(map[string]any), "bundle_digest")
-		result, err := verifyBundleOutput(t, rewrite(t, c, false))
-		require.ErrorIs(t, err, ErrBundleInvalid)
-		assert.Contains(t, findings(result), "selection_entry_malformed:"+deals[0])
-	})
-	t.Run("not canonical", func(t *testing.T) {
-		c := readContainer(t, path)
-		c["selection"].([]any)[0].(map[string]any)["bundle_digest"] = ""
-		c["deals"].(map[string]any)[deals[0]].(map[string]any)["extensions"].(map[string]any)["x-pad"] = 1.5
-		result, err := verifyBundleOutput(t, rewrite(t, c, false))
-		require.ErrorIs(t, err, ErrBundleInvalid)
-		assert.NotEqual(t, "VALID", result["verdict"])
-	})
-	t.Run("no selection", func(t *testing.T) {
-		c := readContainer(t, path)
-		c["selection"] = []any{}
-		c["deals"] = map[string]any{}
-		result, err := verifyBundleOutput(t, rewrite(t, c, false))
-		require.ErrorIs(t, err, ErrBundleInvalid)
-		assert.Equal(t, []string{"selection_missing"}, findings(result))
-	})
+// The deal view never presents a History: it forbids the extension.
+func TestDealViewForbidsAHistory(t *testing.T) {
+	var m map[string]interface{}
+	require.NoError(t, json.Unmarshal(dealViewManifestJSON, &m))
+	assert.True(t, manifestSet(manifestMap(m, "forbids")["extensions"])[historySelectionExtension])
 }

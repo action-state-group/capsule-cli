@@ -13,6 +13,9 @@
     }
   },
   "forbids": {
+    "extensions": [
+      "x-history-selection/v0"
+    ],
     "profiles": [
       "spec_version:report/v1",
       "result_version:evidence-result-v0",

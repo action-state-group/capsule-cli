@@ -4,22 +4,35 @@
 
 ### One file for the deals you pick, each checked on its own
 
-- **Added:** `deal history --deal ID [--deal ID ...] --out FILE` writes one file holding the deals
-  you pick from `deal list`, each as its own deal bundle, under a selection naming exactly those
-  deals (kind `x-deal-history/v0`). Each deal has its own log, so one bundle over several deals
-  could not prove its records against one checkpoint. `verify --bundle FILE` checks every nested
-  bundle on its own, and checks that each one is of its deal's log and is the bundle the selection
-  names. It is VALID only when all of them pass. A finding names its deal
-  (`deal_invalid:<id>`, `deal_not_in_selection:<id>`, `deal_not_of_its_log:<id>`,
-  `deal_missing:<id>`).
-- The command is read-only. Unlike `bundle --deal`, it seals no report and cuts no checkpoint on
-  any picked deal. Each deal is copied through its latest checkpoint as it stands. Steps after
-  that checkpoint are not in the copy, and the command's output counts them
-  (`steps_after_checkpoint`). A deal that already has a sealed report carries the newest one
-  covered by the checkpoint. If that report predates later steps, the deal is refused, because
-  its text would show the deal as it stood then (`deal report --deal ID --bundle FILE` seals a
-  current one). A step not yet on the deal's log is refused too, not recovered. The selection is not signed: it says which bundles the file carries,
-  not who picked them.
+- **Added:** `deal history --deal ID [--deal ID ...] --out FILE` writes a History: one file holding
+  the deals you pick from `deal list`. It is an Evidence Bundle of your own history log
+  (`deal-history`). Each deal has its own log, so one bundle over several deals could not prove its
+  records against one checkpoint. Instead, `deal history` seals one selection record on the history
+  log, signed by your key, naming the picked deals and each deal copy's digest. The bundle's
+  `x-history-selection/v0` extension carries each deal's own bundle.
+- Each deal is carried as the other party's copy by default, withheld exactly as
+  `deal report --share counterparty` withholds it and checked by the same share gate.
+  `--audience adjudicator` gives the adjudicator's copy. `--audience keep` gives your own copy,
+  with every private value in it, and is never one to send.
+- `verify --bundle FILE` checks that the selection record is disclosed, matches its seal and is
+  signed, and that the selection the file carries is the sealed one. For each picked deal it then
+  checks that the deal is carried, is the bundle its digest names, is of that deal's own log, is
+  the copy for the sealed audience, and verifies on its own. Nothing unpicked may be carried.
+- Verify reports the History's `holder_key` and `signer_keys` (each key with the deals it signed).
+  It fails a History whose deals are signed by more than one key, or by a key other than the one
+  that signed the selection. A finding names its deal.
+- `deal history` writes no deal's log. It seals no report and cuts no checkpoint on any picked
+  deal, and it does not put the share on a deal's disclosures log: the selection record on your
+  history log is the record of what was sent.
+  - Each deal is copied through its latest checkpoint as it stands. Steps after that checkpoint
+    are not in the copy, and the output counts them (`steps_after_checkpoint`).
+  - A deal with sealed reports is refused unless its newest report for that audience covers every
+    step shown (seal one with `deal report --share`, or `--bundle` for keep).
+  - A step not yet on the deal's log is refused too, not recovered.
+- **Known limit:** a History proves records signed by one key K, and that the holder of K picked
+  them. Your deals from before a signing-key change carry the old key, so a History mixing deals
+  from before and after the change fails (`deal_signers_differ`).
+- The deal view's manifest forbids `x-history-selection/v0`, so it never presents a History.
 
 ### A rules checker may be pinned to a set of rulesets
 
