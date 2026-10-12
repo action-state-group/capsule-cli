@@ -11,8 +11,9 @@ import (
 )
 
 // dealListing is one deal in the profile's store, as `deal list` prints it:
-// identifiers and timestamps only. A sale (`deal sale new`) is listed with
-// kind "sale": its log is in the same store, though it is not a deal.
+// identifiers, timestamps and, with --json, a plain summary. A sale (`deal
+// sale new`) is listed with kind "sale": its log is in the same store,
+// though it is not a deal.
 type dealListing struct {
 	DealID       string `json:"deal_id"`
 	Kind         string `json:"kind"`  // "deal" or "sale"
@@ -23,10 +24,44 @@ type dealListing struct {
 	// counterparty_profile step (profileKeyFor), or null when it has none.
 	CounterpartyFingerprint *string `json:"counterparty_fingerprint"`
 	LogID                   string  `json:"log_id"`
+	// Summary is the deal in plain words, read from the steps the list
+	// reads. It is the user's own view: what they asked, the counterparty's
+	// name and the amount are private, and no shared copy carries them.
+	Summary dealSummary `json:"summary"`
 }
 
+// dealSummary is a deal in plain words: what the user asked (the words
+// `deal report` gives as asked), with whom, the amount and the outcome, and
+// those four as one line. It is computed from the sealed steps alone: it
+// seals nothing and cuts no checkpoint, unlike `deal report`.
+type dealSummary struct {
+	What string `json:"what"`
+	// Counterparty is the name the opening step sealed as who.name, or
+	// dealNotRecorded: a name is never read out of free text.
+	Counterparty string `json:"counterparty"`
+	// Amount is nil when no step records one.
+	Amount  *dealSummaryAmount `json:"amount"`
+	Outcome string             `json:"outcome"`
+	Text    string             `json:"text"`
+}
+
+// dealSummaryAmount is an amount as recorded, in minor units. Basis says
+// which: "paid" is the net of the sealed acts in the first act's currency
+// (`deal report`'s money net_minor; acts in another currency are counted in
+// OtherCurrencyActs, as the report counts them, never summed), and
+// "opening_terms" the opening step's price when no act moved money (a later
+// change of terms is not read).
+type dealSummaryAmount struct {
+	AmountMinor       int64  `json:"amount_minor"`
+	Currency          string `json:"currency"`
+	Basis             string `json:"basis"`
+	OtherCurrencyActs int    `json:"other_currency_acts,omitempty"`
+}
+
+const dealNotRecorded = "not recorded"
+
 func dealListCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "list", Short: "One line per deal in the profile's store: deal id, kind, state, opened and last-record times, counterparty fingerprint, log id; read-only", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	cmd := &cobra.Command{Use: "list", Short: "One line per deal in the profile's store: deal id, kind, state, opened and last-record times, counterparty fingerprint, log id; --json adds a plain summary (what, with whom, amount, outcome); read-only", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, err := selected(c)
 		if err != nil {
 			return err
@@ -54,8 +89,51 @@ func dealListCommand() *cobra.Command {
 		}
 		return nil
 	}}
-	cmd.Flags().Bool("json", false, "Emit the deals as one JSON array instead of tab-separated lines")
+	cmd.Flags().Bool("json", false, "Emit the deals as one JSON array, each with a plain summary, instead of tab-separated lines")
 	return cmd
+}
+
+// dealSummaryOf reads the summary from a deal's steps. Its outcome is the
+// last close step's, as `deal report` reads it, or "open".
+func dealSummaryOf(events []sealedEvent) dealSummary {
+	sum := dealSummary{What: dealNotRecorded, Counterparty: dealNotRecorded, Outcome: "open"}
+	currency := ""
+	if open := events[0].Event.Open; open != nil {
+		if strings.TrimSpace(open.Intent.Verbatim) != "" {
+			sum.What = open.Intent.Verbatim
+		}
+		if strings.TrimSpace(open.Who.Name) != "" {
+			sum.Counterparty = open.Who.Name
+		}
+		currency = open.Terms.Currency
+		if open.Terms.PriceMinor != nil {
+			sum.Amount = &dealSummaryAmount{AmountMinor: *open.Terms.PriceMinor, Currency: strings.ToUpper(currency), Basis: "opening_terms"}
+		}
+	}
+	if m := buildDealMoney(events, currency); m != nil {
+		sum.Amount = &dealSummaryAmount{AmountMinor: m.NetMinor, Currency: m.Currency, Basis: "paid", OtherCurrencyActs: m.Other}
+	}
+	for _, se := range events {
+		if se.Event.Kind == "close" && se.Event.Close != nil {
+			sum.Outcome = se.Event.Close.Outcome
+		}
+	}
+	amount := "amount not recorded"
+	if a := sum.Amount; a != nil {
+		amount = formatMoney(a.AmountMinor, a.Currency) + " in the opening terms"
+		if a.Basis == "paid" {
+			amount = "net " + formatMoney(a.AmountMinor, a.Currency) + " paid"
+		}
+		if a.OtherCurrencyActs > 0 {
+			amount += fmt.Sprintf(", and %d act(s) in another currency", a.OtherCurrencyActs)
+		}
+	}
+	with := "with " + sum.Counterparty
+	if sum.Counterparty == dealNotRecorded {
+		with = "counterparty not recorded"
+	}
+	sum.Text = strings.Join([]string{sum.What, with, amount, sum.Outcome}, " · ")
+	return sum
 }
 
 // dealListings reads every deal's steps from the store's index, in deal id
@@ -113,7 +191,7 @@ func dealListingOf(dealID string, events []sealedEvent) dealListing {
 	l := dealListing{
 		DealID: dealID, Kind: "deal", State: "open",
 		OpenedAt: events[0].Event.At, LastRecordAt: events[len(events)-1].Event.At,
-		LogID: dealLogID(dealID),
+		LogID: dealLogID(dealID), Summary: dealSummaryOf(events),
 	}
 	if saleIDPattern.MatchString(dealID) {
 		l.Kind = "sale"

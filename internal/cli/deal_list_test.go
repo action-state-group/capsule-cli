@@ -91,7 +91,7 @@ func TestDealListMatchesTheStore(t *testing.T) {
 	require.Len(t, list, len(want), "one entry per deal id in the store")
 	for i, d := range want {
 		l := list[i]
-		assert.Equal(t, []string{"deal_id", "kind", "state", "opened_at", "last_record_at", "counterparty_fingerprint", "log_id"}, keys[i], "stable key order")
+		assert.Equal(t, []string{"deal_id", "kind", "state", "opened_at", "last_record_at", "counterparty_fingerprint", "log_id", "summary"}, keys[i], "stable key order")
 		assert.Equal(t, d.id, l["deal_id"])
 		assert.Equal(t, d.first, l["opened_at"])
 		assert.Equal(t, d.last, l["last_record_at"])

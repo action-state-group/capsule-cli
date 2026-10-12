@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### `deal list --json`: a plain summary per deal
+
+- **Added:** each row of `deal list --json` carries `summary`: `what` (the user's own asked
+  words, as `deal report` gives them), `counterparty` (the name the opening step sealed as
+  `who.name`, or `"not recorded"`: never read out of a message or other free text), `amount`
+  (`amount_minor` and `currency` as recorded, with `basis` `"paid"` for the net of the sealed acts
+  in the first act's currency, `deal report`'s `net_minor`, acts in another currency counted in
+  `other_currency_acts` and never summed; or `"opening_terms"` for the opening step's price when
+  no act moved money, a later change of terms not read; `null` when neither is recorded),
+  `outcome` (the close step's own outcome word, or `"open"`) and `text`, the four as one line.
+  It is read from the sealed steps the list already reads: the list still seals nothing and
+  cuts no checkpoint, which `deal report` does even without a file flag. The summary is the
+  user's own view and private; no shared copy (`deal report --share`) changes. The tab-separated
+  output is unchanged.
+
 ### A presentation page carries only the modules for its audience
 
 - **Fixed (privacy):** `presentation build` put every installed plugin's presentation module in
