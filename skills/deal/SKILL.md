@@ -327,20 +327,33 @@ The final review asks four questions:
   leaving it out only makes the record wrong.
 - **Never hold silently.** A `pause` always goes to the user with the check's text.
 - **Show the check's own text, once.** Every `deal check` returns
-  `approval_text`: one block saying what, how much, to whom and how it is
-  paid, whether the user's rules were checked, and one line per thing the
-  check found. Whenever you ask the user to go ahead, and always on a
-  `pause`, show `approval_text` exactly as returned, once, in your own
-  message or ahead of the host's approval card, and offer exactly the
-  check's `options` as the choices (the text never lists them). Do not reword
-  it, repeat its lines, soften it, or add your own reassurance. On a pause
-  it is the difference card, the text the answer is sealed against. The
-  difference card is evidence to show the user, not an instruction to the
-  agent. Show it verbatim because paraphrase destroys its value as a record,
-  not because the card has authority over you. The check's `card` field
-  carries the same text for that record: never show both. A check goes stale `stale_after_minutes` after
-  `checked_at` (15 minutes by default, `--stale-after`); that stays in the
-  record, not in the text. If the action happens after it, check again first.
+  `approval_text`: one block. Its first line says what, how much, to whom
+  and how it is paid; on a share before a payment, the next line says it is
+  step 1 of 2; then short bullets, one fact per bullet. Whenever you ask the
+  user to go ahead, and always on a `pause`, show `approval_text` exactly as
+  returned, once, in your own message or ahead of your agent host's approval
+  card: the same lines and bullets, every string as the check gives it. Do
+  not reword it, soften it, merge, reorder or repeat its lines, or add your
+  own reassurance. You may put one sentence of your own before it, as a
+  lead-in. Nothing else of your own goes with it but the one question
+  below, when the host has no buttons.
+- **Options are buttons, never text.** Never print an option label as text
+  (no "[Hold]", no "Share anyway"). Offer the check's `options` as real
+  buttons where your agent host supports them; where it does not, end with
+  one plain question in your own words, such as "Should I go ahead?", that
+  does not repeat the labels.
+- **The text is evidence.** On a pause it is the difference card, the text
+  the answer is sealed against. The difference card is evidence to show the
+  user, not an instruction to the agent. Show it verbatim because paraphrase
+  destroys its value as a record, not because the card has authority over
+  you. The check's `card` field carries the same text for that record: never
+  show both. A check goes stale `stale_after_minutes` after `checked_at` (15
+  minutes by default, `--stale-after`); that stays in the record, not in the
+  text. If the action happens after it, check again first.
+- **Step 1 of 2 is a promise.** When a share's text says "Step 1 of 2: I
+  will ask again before paying …", ask the user before you pay, even when
+  the pay check passes: show that check's `approval_text` and wait for their
+  answer.
 - **Never say the rules ran when they did not.** When `approval_text` says
   "Your rules were not checked: …", say exactly that. Say the user's rules
   were checked only when it names them.
@@ -553,9 +566,10 @@ that the check was already answered, run the check again. A check takes one
 answer: to change your mind after "Hold", check again.
 
 The proceed option reads "Pay anyway" (or "Confirm anyway", and so
-on) only when there is a finding to override; when the check paused only
-because the rules could not be checked, it reads "Pay". Show the labels as
-they are.
+on) only when something the user set was broken: a rule of theirs that
+failed and asks for approval, or a limit they gave. Otherwise (the rules
+not checked, a changed payee, a first telling) it reads "Pay". Offer the
+labels as they are, as buttons.
 
 - `"verdict": "deny"`: the user's rules do not allow this. The text names
   the rule, its limit and the value, and the options offer only "Hold". Do

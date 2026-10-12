@@ -16,6 +16,18 @@
   takes the `approval_text` shown. A pass still has no card. Records sealed before keep their
   card as it was. The deal skill now has one show-it-verbatim rule naming `approval_text`, which
   changes its SKILL.md digest.
+- **Changed:** the proceed option is an override ("Pay anyway", "Share anyway") only when something
+  the user set was broken: a rule of theirs that failed and asks for approval, or a limit they gave.
+  Rules not checked or not fully checked, and findings such as a changed payee or a first telling,
+  now offer "Pay" / "Share". A deny still offers only "Hold".
+- **Changed:** in the block, the rules line is a bullet like the findings, and what the user asked
+  for and what the agent picked are separate bullets. A paused share in a deal that may still pay,
+  with no pay sealed yet, says `Step 1 of 2: I will ask again before paying $X.` after the headline,
+  with the deal's total.
+- **Changed (deal skill):** the agent may put one sentence of its own before the block, and nothing
+  else but one plain question when the host has no buttons. It never prints an option label as
+  text, and offers `options` as buttons where the host supports them. After a share's "Step 1 of
+  2", it asks the user before paying, even when the pay check passes.
 
 ## v0.1.0-rc15
 

@@ -1,6 +1,9 @@
 package cli
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // approvalVerbs name an action at the start of the approval text.
 var approvalVerbs = map[string]string{
@@ -10,23 +13,53 @@ var approvalVerbs = map[string]string{
 
 // dealApprovalText is the one block an agent shows the user when it asks to
 // go ahead, and on a pause the card the user's answer is sealed against. It
-// says each fact once: what, how much, to whom and how it is paid; whether
-// the user's rules were checked; then one line per thing the check found.
+// says each fact once: what, how much, to whom and how it is paid; on a
+// share before a payment, that it is the first of two steps; then one
+// bullet for whether the user's rules were checked and one per thing the
+// check found.
 // It is built from the check's own fields (differences, picks, unverified
 // claims, rules, recipient), so the agent's request carries the check's
 // words. The one-tap options are the host's to render, never text here. When
 // the check goes stale stays in the sealed record and the check's output
 // (checked_at, stale_after_minutes), out of the prompt.
-func dealApprovalText(state dealState, snap dealSnapshot, result dealCheckResult) string {
+func dealApprovalText(state dealState, snap dealSnapshot, result dealCheckResult, events []sealedEvent) string {
 	headline := approvalHeadline(state, snap)
 	lines := []string{headline}
+	if result.Verdict != "pass" {
+		if step := shareBeforePay(state, snap, events); step != "" {
+			lines = append(lines, step)
+		}
+	}
 	if rules := rulesStatusLine(result.Rules); rules != "" {
-		lines = append(lines, rules)
+		lines = append(lines, "• "+rules)
 	}
 	for _, f := range approvalFindings(result, headline) {
 		lines = append(lines, "• "+f)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// shareBeforePay is, on a share in a deal that will still pay, the line
+// saying the share is the first of two steps: the deal allows a pay and no
+// pay is sealed yet. The amount is the deal's total as it stands, when it
+// has one.
+func shareBeforePay(state dealState, snap dealSnapshot, events []sealedEvent) string {
+	if snap.Action != "share_contact" && snap.Action != "share_credentials" || !slices.Contains(state.intent.Allowed, "pay") {
+		return ""
+	}
+	for _, se := range events {
+		if se.Event.Kind == "act" && se.Event.Act != nil && se.Event.Act.Action == "pay" {
+			return ""
+		}
+	}
+	terms := state.terms
+	if snap.Terms != nil {
+		terms = overlayTerms(terms, *snap.Terms)
+	}
+	if terms.PriceMinor == nil {
+		return "Step 1 of 2: I will ask again before paying."
+	}
+	return "Step 1 of 2: I will ask again before paying " + formatMoney(*terms.PriceMinor, terms.Currency) + "."
 }
 
 // approvalHeadline is the block's first line: what, how much, to whom, by
@@ -116,7 +149,9 @@ func approvalFindings(r dealCheckResult, headline string) []string {
 	if r.Verdict != "pass" {
 		add(recipientFinding(r.Recipient))
 	}
-	add(picksFinding(r))
+	for _, line := range picksFindings(r) {
+		add(line)
+	}
 	for _, d := range r.Differences {
 		switch d.Rule {
 		case "first_disclosure", "rules_not_checked":
@@ -135,12 +170,13 @@ func approvalFindings(r dealCheckResult, headline string) []string {
 	return out
 }
 
-// picksFinding tells what the user chose and what the agent chose for them
-// apart, so a choice the agent made is never presented as the user's. A pick
-// the check paused on is its own difference line, so it is not said here.
-func picksFinding(r dealCheckResult) string {
+// picksFindings tell what the user chose and what the agent chose for them
+// apart, one line each, so a choice the agent made is never presented as the
+// user's. A pick the check paused on is its own difference line, so it is
+// not said here.
+func picksFindings(r dealCheckResult) []string {
 	if len(r.Picked) == 0 {
-		return ""
+		return nil
 	}
 	paused := map[string]bool{}
 	for _, d := range r.Differences {
@@ -161,7 +197,7 @@ func picksFinding(r dealCheckResult) string {
 	if len(minor) > 0 {
 		said = append(said, "The agent picked, not you: "+attributeText(minor))
 	}
-	return strings.Join(said, ". ")
+	return said
 }
 
 // recipientFinding is the one line about who is being dealt with: a first

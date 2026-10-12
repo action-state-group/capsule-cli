@@ -116,7 +116,7 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 			assert.Equal(t, "pass", check["verdict"], "a known merchant at the agreed price passes quietly")
 			assert.Equal(t, "", check["card"])
 			assert.Equal(t, "DEMO · Pay: Place order: 1 cat sticker, $6.27 total, saved card · $6.27 · to Example Stickers (stickers.example) · by card · refundable\n"+
-				"Your rules were not checked: no rules checker configured.", check["approval_text"])
+				"• Your rules were not checked: no rules checker configured.", check["approval_text"])
 			assert.Equal(t, "2026-09-27T18:00:00Z", check["checked_at"])
 			proceed = check["proceed"] == true
 		case strings.Contains(step, "place the order"):
@@ -173,7 +173,7 @@ func TestDealCheckApprovalTextCarriesTheFindingAndWhenItGoesStale(t *testing.T) 
 	dealID := openJetSki(t)
 	check := dealRun(t, "check", "--deal", dealID, "--stale-after", "5m", "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
 	assert.Equal(t, "DEMO · Pay: $200 deposit to hold 2 jet skis on Saturday · $200.00 · to M. Torres (coastal-jet-rentals.example) · by Zelle · not refundable\n"+
-		"Your rules were not checked: no rules checker configured.\n"+
+		"• Your rules were not checked: no rules checker configured.\n"+
 		"• First time dealing with Coastal Jet Rentals LLC ("+newProfileNote+")\n"+
 		"• Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle)\n"+
 		"• Payment changed since it was agreed (card → Zelle, not refundable)\n"+

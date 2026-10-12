@@ -127,18 +127,20 @@ func TestDealAskedVsDidBooking(t *testing.T) {
 
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit.json"))
 	assert.Equal(t, "Confirm: confirm the booking · to Example Hotel Shinjuku (hotel.example) · by card · refundable\n"+
-		"Your rules were not checked: no rules checker configured.\n"+
+		"• Your rules were not checked: no rules checker configured.\n"+
 		"• First time dealing with Example Hotel Shinjuku ("+newProfileNote+")\n"+
-		"• You asked for: dates 2026-10-03 · place Tokyo. The agent picked, not you: item double room, 2 nights\n"+
+		"• You asked for: dates 2026-10-03 · place Tokyo\n"+
+		"• The agent picked, not you: item double room, 2 nights\n"+
 		"• Not what you asked: check_out 2026-10-05 → 2026-10-07\n"+
 		"• Over your limit of $400.00 ($760.00)\n"+
 		"• Unverified: free cancellation until October 1", check["card"])
 
 	cancel := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-cancel.json"))
 	assert.Equal(t, "Cancel: cancel the existing flight booking to free the dates · to Example Hotel Shinjuku (hotel.example) · by card · refundable\n"+
-		"Your rules were not checked: no rules checker configured.\n"+
+		"• Your rules were not checked: no rules checker configured.\n"+
 		"• First time dealing with Example Hotel Shinjuku\n"+
-		"• You asked for: dates 2026-10-03 · place Tokyo · check out 2026-10-05. The agent picked, not you: item double room, 2 nights\n"+
+		"• You asked for: dates 2026-10-03 · place Tokyo · check out 2026-10-05\n"+
+		"• The agent picked, not you: item double room, 2 nights\n"+
 		"• You didn't ask for this: cancelling\n"+
 		"• Unverified: free cancellation until October 1", cancel["card"])
 
@@ -323,9 +325,10 @@ func TestDealRefundabilityChangePauses(t *testing.T) {
 	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"commit","terms":{"when":"2026-10-03","conditions":{"check_out":"2026-10-05"},"price_minor":38000},"recourse":{"refundable":false}}`))
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Equal(t, "Confirm: double room, 2 nights · to Example Hotel Shinjuku (hotel.example) · by card · not refundable\n"+
-		"Your rules were not checked: no rules checker configured.\n"+
+		"• Your rules were not checked: no rules checker configured.\n"+
 		"• First time dealing with Example Hotel Shinjuku ("+newProfileNote+")\n"+
-		"• You asked for: dates 2026-10-03 · place Tokyo · check out 2026-10-05. The agent picked, not you: item double room, 2 nights\n"+
+		"• You asked for: dates 2026-10-03 · place Tokyo · check out 2026-10-05\n"+
+		"• The agent picked, not you: item double room, 2 nights\n"+
 		"• No longer refundable (agreed as refundable)\n"+
 		"• Unverified: free cancellation until October 1", check["card"])
 }
