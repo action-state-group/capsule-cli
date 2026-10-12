@@ -29,9 +29,15 @@
   - A deal with sealed reports is refused unless its newest report for that audience covers every
     step shown (seal one with `deal report --share`, or `--bundle` for keep).
   - A step not yet on the deal's log is refused too, not recovered.
-- **Known limit:** a History proves records signed by one key K, and that the holder of K picked
-  them. Your deals from before a signing-key change carry the old key, so a History mixing deals
-  from before and after the change fails (`deal_signers_differ`).
+- **Known limit:** a History shows that the holder of one key K picked these deal copies and
+  signed every record in them. It does not prove K's holder made the deals. A record's signature
+  is outside its Capsule ID, so whoever holds copies can sign them again under their own key.
+- **Known limit:** your deals from before a signing-key change carry the old key, so a History
+  mixing deals from before and after the change fails (`deal_signers_differ`).
+- **Known limit:** a nested deal's inline `x-deal-v0` report (one with no `sealed_report`) is not
+  sealed on its own. Editing it leaves that nested deal VALID; only the History's `bundle_digest`
+  catches the edit. A nested deal taken out of a History is no stronger than an unsealed deal
+  report.
 - The deal view's manifest forbids `x-history-selection/v0`, so it never presents a History.
 
 ### A rules checker may be pinned to a set of rulesets

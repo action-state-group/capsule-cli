@@ -32,8 +32,9 @@ import (
 //	 "deals": {"<deal id>": <the deal's copy for the selected audience, an evidence-bundle/v2>}}
 //
 // It is a private kind, like x-deal-sale/v0, read by this verifier only. A
-// History proves records signed by one key, and that the holder of that key
-// picked them; each nested bundle is that key's own evidence of its deal.
+// History shows that the holder of one key picked these copies and that
+// every record in them is signed by that key. A record's signature is
+// outside its Capsule ID, so that key is not bound to who sealed the deals.
 const historySelectionExtension = "x-history-selection/v0"
 
 // historyLogID is the user's own history log: one selection record per

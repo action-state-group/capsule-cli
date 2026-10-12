@@ -567,6 +567,19 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		require.ErrorIs(t, err, ErrBundleInvalid)
 		assert.Contains(t, findings, "not_a_history_log")
 	})
+	t.Run("a member's inline report edited", func(t *testing.T) {
+		// The CHANGELOG's known limit: the nested deal stays VALID, and only
+		// the History's bundle_digest catches the edit.
+		b := readHistory(t, path)
+		tb := historyExt(b)["deals"].(map[string]any)[d.closed].(map[string]any)
+		section := tb["extensions"].(map[string]any)[dealProfile].(map[string]any)
+		require.NotContains(t, section, dealReportPointer, "an inline report")
+		section["scope"] = "edited"
+		_, entry, findings, err := verifyHistory(t, rewrite(t, b))
+		require.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Equal(t, []string{"deal_bundle_not_the_selected_one:" + d.closed}, findings)
+		assert.Equal(t, "VALID", entry["deals"].([]any)[0].(map[string]any)["verdict"])
+	})
 	t.Run("a member record unsigned", func(t *testing.T) {
 		b := readHistory(t, path)
 		r := historyExt(b)["deals"].(map[string]any)[d.closed].(map[string]any)["records"].([]any)[0].(map[string]any)
