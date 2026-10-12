@@ -115,9 +115,8 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 			check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(retailDemo, "check-pay.json"))
 			assert.Equal(t, "pass", check["verdict"], "a known merchant at the agreed price passes quietly")
 			assert.Equal(t, "", check["card"])
-			assert.Equal(t, "Your rules were not checked: no rules checker configured.\n"+
-				"DEMO · Pay: Place order: 1 cat sticker, $6.27 total, saved card · $6.27 · to Example Stickers (stickers.example) · by card · refundable\n"+
-				"Before you go ahead: no differences.", check["approval_text"])
+			assert.Equal(t, "DEMO · Pay: Place order: 1 cat sticker, $6.27 total, saved card · $6.27 · to Example Stickers (stickers.example) · by card · refundable\n"+
+				"Your rules were not checked: no rules checker configured.", check["approval_text"])
 			assert.Equal(t, "2026-09-27T18:00:00Z", check["checked_at"])
 			proceed = check["proceed"] == true
 		case strings.Contains(step, "place the order"):
@@ -173,9 +172,15 @@ func TestDealCheckApprovalTextCarriesTheFindingAndWhenItGoesStale(t *testing.T) 
 	dealFixture(t)
 	dealID := openJetSki(t)
 	check := dealRun(t, "check", "--deal", dealID, "--stale-after", "5m", "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
-	assert.Equal(t, "Your rules were not checked: no rules checker configured.\n"+
-		"DEMO · Pay: $200 deposit to hold 2 jet skis on Saturday · $200.00 · to M. Torres (coastal-jet-rentals.example) · by Zelle · not refundable\n"+
-		"Before you go ahead: flagged: Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle) · Payment changed since it was agreed (card → Zelle, not refundable) · Zelle = no card protection · Site registered 3 weeks ago. Unverified: they have 2 jet skis for Saturday.", check["approval_text"])
+	assert.Equal(t, "DEMO · Pay: $200 deposit to hold 2 jet skis on Saturday · $200.00 · to M. Torres (coastal-jet-rentals.example) · by Zelle · not refundable\n"+
+		"Your rules were not checked: no rules checker configured.\n"+
+		"• First time dealing with Coastal Jet Rentals LLC ("+newProfileNote+")\n"+
+		"• Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle)\n"+
+		"• Payment changed since it was agreed (card → Zelle, not refundable)\n"+
+		"• Zelle = no card protection\n"+
+		"• Site registered 3 weeks ago\n"+
+		"• Unverified: they have 2 jet skis for Saturday", check["approval_text"])
+	assert.Equal(t, check["approval_text"], check["card"], "one block: the card sealed is the text shown")
 	assert.Equal(t, float64(5), check["stale_after_minutes"])
 	assert.Equal(t, "2026-09-27T18:00:00Z", check["checked_at"])
 	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--stale-after", "10s", "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))

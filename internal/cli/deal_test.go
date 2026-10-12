@@ -126,10 +126,21 @@ func TestDealAskedVsDidBooking(t *testing.T) {
 	dealID := opened["deal_id"].(string)
 
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit.json"))
-	assert.Equal(t, "⚠️ This profile has no record of earlier counterparties yet, so everyone is first-time; this settles after your first deals · First time dealing with Example Hotel Shinjuku · Not what you asked: check_out 2026-10-05 → 2026-10-07 · Over your limit of $400.00 ($760.00) · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
+	assert.Equal(t, "Confirm: confirm the booking · to Example Hotel Shinjuku (hotel.example) · by card · refundable\n"+
+		"Your rules were not checked: no rules checker configured.\n"+
+		"• First time dealing with Example Hotel Shinjuku ("+newProfileNote+")\n"+
+		"• You asked for: dates 2026-10-03 · place Tokyo. The agent picked, not you: item double room, 2 nights\n"+
+		"• Not what you asked: check_out 2026-10-05 → 2026-10-07\n"+
+		"• Over your limit of $400.00 ($760.00)\n"+
+		"• Unverified: free cancellation until October 1", check["card"])
 
 	cancel := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-cancel.json"))
-	assert.Equal(t, "⚠️ First time dealing with Example Hotel Shinjuku · You didn't ask for this: cancelling · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Cancel anyway]", cancel["card"])
+	assert.Equal(t, "Cancel: cancel the existing flight booking to free the dates · to Example Hotel Shinjuku (hotel.example) · by card · refundable\n"+
+		"Your rules were not checked: no rules checker configured.\n"+
+		"• First time dealing with Example Hotel Shinjuku\n"+
+		"• You asked for: dates 2026-10-03 · place Tokyo · check out 2026-10-05. The agent picked, not you: item double room, 2 nights\n"+
+		"• You didn't ask for this: cancelling\n"+
+		"• Unverified: free cancellation until October 1", cancel["card"])
 
 	// What was asked passes quietly and authorizes the act.
 	ok := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit-asked.json"))
@@ -311,7 +322,12 @@ func TestDealRefundabilityChangePauses(t *testing.T) {
 	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
 	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"commit","terms":{"when":"2026-10-03","conditions":{"check_out":"2026-10-05"},"price_minor":38000},"recourse":{"refundable":false}}`))
 	assert.Equal(t, "pause", check["verdict"])
-	assert.Equal(t, "⚠️ This profile has no record of earlier counterparties yet, so everyone is first-time; this settles after your first deals · First time dealing with Example Hotel Shinjuku · No longer refundable (agreed as refundable) · picked by the agent, not by you: item double room, 2 nights · unverified: free cancellation until October 1 · [Hold] [Confirm anyway]", check["card"])
+	assert.Equal(t, "Confirm: double room, 2 nights · to Example Hotel Shinjuku (hotel.example) · by card · not refundable\n"+
+		"Your rules were not checked: no rules checker configured.\n"+
+		"• First time dealing with Example Hotel Shinjuku ("+newProfileNote+")\n"+
+		"• You asked for: dates 2026-10-03 · place Tokyo · check out 2026-10-05. The agent picked, not you: item double room, 2 nights\n"+
+		"• No longer refundable (agreed as refundable)\n"+
+		"• Unverified: free cancellation until October 1", check["card"])
 }
 
 // B2: a payee change carried in a counterparty message, after the check,
@@ -569,7 +585,7 @@ func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 		assert.Contains(t, check["unverified"], "Sticker listed on sale at $3.00 (list $3.50)", "an unverifiable reference price stays a claim")
 		assert.Equal(t, []string{"item " + item}, attrs(check["asked_attributes"]))
 		assert.Equal(t, []string{"size small 3.8in x 2.4in"}, attrs(check["picked_by_agent"]))
-		assert.Contains(t, check["approval_text"], "You asked for: item "+item+". The agent picked, not you: size small 3.8in x 2.4in.")
+		assert.Contains(t, check["approval_text"], "• You asked for: item "+item+"\n• "+pickedSize, "the pick the check paused on is its own line, never the user's")
 		// The receipt keeps them apart too: the report's check item, and
 		// the page and email it renders.
 		dealID := check["deal_id"].(string)

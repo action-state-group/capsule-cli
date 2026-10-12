@@ -1743,7 +1743,12 @@ func dealCheckCommand() *cobra.Command {
 			result.Differences = append(result.Differences, rulesDifferences(&rules)...)
 			settleCheck(&result, state)
 			result.Snapshot = snapped.CapsuleID
-			result.Card = renderCard(result, open.Demo)
+			// One block: the approval text, and on a pause the card the
+			// answer is sealed against. A passing check has no card.
+			approvalText := dealApprovalText(state, snap, result)
+			if result.Verdict != "pass" {
+				result.Card = approvalText
+			}
 			// -> seal the result before it is shown
 			if dealRecordSet(dealEvent{}, events) == recordsTyped {
 				// The check contract's fields, fixed when the evaluation is sealed.
@@ -1805,7 +1810,7 @@ func dealCheckCommand() *cobra.Command {
 			out["open_deadlines"] = openDeadlines(events, dealClock())
 			out["checked_at"] = checked.Event.At
 			out["stale_after_minutes"] = int(staleAfter / time.Minute)
-			out["approval_text"] = dealApprovalText(state, snap, result, checked.Event.At, staleAfter)
+			out["approval_text"] = approvalText
 			return output(c, out)
 		})
 	}}

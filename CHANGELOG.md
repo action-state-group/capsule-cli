@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### The approval prompt is one block, each fact once
+
+- **Changed:** `deal check` returns one block to show the user, built from the check's own
+  fields: the headline (what, how much, to whom, by what rail, refundable or not), the rules line
+  once, then one line per distinct finding. A first dealing, the profile being new and every
+  detail told for the first time are one line. A pick the check paused on is its own line,
+  beside what the user asked for and the agent's other picks. Unverified claims are one line.
+  The block lists no options (`options` stay the host's to render), and the rules line names no
+  CLI syntax. Before, the agent was told to show both `approval_text` and `card`, so the rules
+  line printed three times, every finding twice, and the buttons appeared again as text.
+- On a pause, `card` (the text sealed as `shown_card`) is that same block, so `--shown-card`
+  takes the `approval_text` shown. A pass still has no card. Records sealed before keep their
+  card as it was. The deal skill now has one show-it-verbatim rule naming `approval_text`, which
+  changes its SKILL.md digest.
+
 ## v0.1.0-rc15
 
 ### Release tags are signed from v0.1.0-rc15

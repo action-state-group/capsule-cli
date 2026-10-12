@@ -71,7 +71,7 @@ func TestNoMaterialityPredicateFailsSafe(t *testing.T) {
 	assert.Equal(t, "pause", check["verdict"])
 	assert.ElementsMatch(t, []string{"item", "when", "place", "conditions.fare"}, pausedOn(check))
 	assert.Contains(t, check["card"], "I picked dates Oct 21 to Oct 24; you didn't choose it")
-	assert.NotContains(t, check["card"], "picked by the agent, not by you", "no pick is set aside as minor")
+	assert.NotContains(t, check["card"], "The agent picked, not you", "no pick is set aside as minor")
 
 	materialityFixture(t, "--materiality", neutralMateriality)
 	check = flightCheck(t)
@@ -101,7 +101,7 @@ func TestThePredicateDecidesWhichPicksPause(t *testing.T) {
 	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[{"field":"when"}]}`))
 	check := flightCheck(t)
 	assert.Equal(t, []string{"when"}, pausedOn(check))
-	assert.Contains(t, check["card"], "picked by the agent, not by you: item WN 1234")
+	assert.Contains(t, check["card"], "The agent picked, not you: item WN 1234")
 
 	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing","version":"1","material":[]}`))
 	check = flightCheck(t)

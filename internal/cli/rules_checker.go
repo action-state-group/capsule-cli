@@ -261,7 +261,7 @@ func runRulesChecker(ctx context.Context, p Profile, input []byte, history *deal
 	case err != nil:
 		return notEvaluated("checker_unavailable", "the pinned rules checker cannot be run: "+SafeError(err))
 	case sum != pin.SHA256:
-		return notEvaluated("checker_changed", "the rules checker changed since it was pinned; re-pin it with profile update --rules-checker FILE")
+		return notEvaluated("checker_changed", "the rules checker changed since it was pinned"+rePinHint)
 	}
 	rulesBeforeExec()
 	timeout, err := rulesTimeout(pin.Timeout)
@@ -293,7 +293,7 @@ func runRulesChecker(ctx context.Context, p Profile, input []byte, history *deal
 		return notEvaluated("unreadable", "the rules checker's answer could not be read: "+err.Error())
 	}
 	if pin.DefinitionDigest != "" && result.DefinitionDigest != pin.DefinitionDigest {
-		return notEvaluated("ruleset_changed", "the ruleset changed since it was pinned ("+result.RulesetID+" reports another definition digest); re-pin it with profile update --rules-checker FILE")
+		return notEvaluated("ruleset_changed", "the ruleset changed since it was pinned ("+result.RulesetID+" reports another definition digest)"+rePinHint)
 	}
 	return dealRules{Status: "evaluated", RulesetID: result.RulesetID, DefinitionDigest: result.DefinitionDigest, CheckerSHA256: pin.SHA256,
 		Verdict: result.Verdict, Tier: result.Tier, Grade: result.Grade, Findings: result.Findings, History: history}
@@ -449,7 +449,10 @@ func declaredRulesLine(ids []string) string {
 
 var numberedRule = regexp.MustCompile(`^[a-z]{0,3}[0-9]{1,4}$`)
 
-// rulesStatusLine is the rules line every check prompt leads with.
+// rePinHint ends a sealed not-checked reason that a re-pin fixes.
+const rePinHint = "; re-pin it with profile update --rules-checker FILE"
+
+// rulesStatusLine is the approval block's rules line, said once.
 func rulesStatusLine(r *dealRules) string {
 	if r == nil {
 		return ""
@@ -472,7 +475,13 @@ func rulesStatusLine(r *dealRules) string {
 	case "not_configured":
 		return "Your rules were not checked: no rules checker configured."
 	default:
-		return "Your rules were not checked: " + r.Reason + "."
+		// The sealed reason names the command that re-pins; the user is
+		// told what is needed, not the command.
+		reason := r.Reason
+		if cut, ok := strings.CutSuffix(reason, rePinHint); ok {
+			reason = cut + ", so it needs re-pinning"
+		}
+		return "Your rules were not checked: " + reason + "."
 	}
 }
 
