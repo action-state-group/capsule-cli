@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### One file for the deals you pick, each checked on its own
+
+- **Added:** `deal history --deal ID [--deal ID ...] --out FILE` writes one file holding the deals
+  you pick from `deal list`, each as its own deal bundle, under a selection naming exactly those
+  deals (kind `x-deal-history/v0`). Each deal has its own log, so one bundle over several deals
+  could not prove its records against one checkpoint. `verify --bundle FILE` checks every nested
+  bundle on its own, and checks that each one is of its deal's log and is the bundle the selection
+  names. It is VALID only when all of them pass. A finding names its deal
+  (`deal_invalid:<id>`, `deal_not_in_selection:<id>`, `deal_not_of_its_log:<id>`,
+  `deal_missing:<id>`).
+- The command is read-only. Unlike `bundle --deal`, it seals no report and cuts no checkpoint on
+  any picked deal. Each deal is copied through its latest checkpoint as it stands. Steps after
+  that checkpoint are not in the copy, and the command's output counts them
+  (`steps_after_checkpoint`). A deal that already has a sealed report carries the newest one
+  covered by the checkpoint. If that report predates later steps, the deal is refused, because
+  its text would show the deal as it stood then (`deal report --deal ID --bundle FILE` seals a
+  current one). A step not yet on the deal's log is refused too, not recovered. The selection is not signed: it says which bundles the file carries,
+  not who picked them.
+
 ### A rules checker may be pinned to a set of rulesets
 
 - **Added:** `profile update --rules-checker FILE` accepts `"definition_digests": ["<64 hex>", …]`

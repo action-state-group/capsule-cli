@@ -147,6 +147,13 @@ func (s *dealSession) dealAssemble(ctx context.Context, events []sealedEvent, wi
 	if _, err := cutCheckpoint(ctx, localOnly(s.dp), s.t.log); err != nil {
 		return nil, nil, err
 	}
+	return s.dealAssembleAtCheckpoint(ctx, events, withhold)
+}
+
+// dealAssembleAtCheckpoint is dealAssemble over the log's latest checkpoint
+// as it stands: it cuts nothing, so every event in events must be covered
+// by that checkpoint.
+func (s *dealSession) dealAssembleAtCheckpoint(ctx context.Context, events []sealedEvent, withhold map[string]bool) (map[string]interface{}, map[string]interface{}, error) {
 	b, err := AssembleBundle(ctx, s.t.artifacts, s.t.log, s.dp.LogID, BundleOptions{
 		Root: events[len(events)-1].CapsuleID, ClosureDepth: len(events) - 1, Payloads: "selected", WithDisclosure: true, Withhold: withhold,
 	})

@@ -182,6 +182,13 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if err != nil {
 		return err
 	}
+	if value["kind"] == dealHistoryKind {
+		verdict, report := verifyHistory(value, directory)
+		if err := output(c, report); err != nil {
+			return err
+		}
+		return verdictError(verdict)
+	}
 	if value["bundle_kind"] != "evidence-bundle/v2" || value["bundle_version"] != "2" {
 		return inputError("--bundle is not an evidence-bundle/v2 file (bundle_kind \"evidence-bundle/v2\", bundle_version \"2\")")
 	}
@@ -189,6 +196,12 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 	if err := output(c, report); err != nil {
 		return err
 	}
+	return verdictError(verdict)
+}
+
+// verdictError is the exit for a verdict: none for VALID, ErrPartial for
+// INCOMPLETE, ErrBundleInvalid otherwise.
+func verdictError(verdict string) error {
 	switch verdict {
 	case "VALID":
 		return nil
