@@ -399,6 +399,7 @@ const sellerToBuyerA = `{"type": "purchase", "channel": "web",
 // private value of the user's other picked deals; the user's own (keep)
 // History of the same deals does (the control).
 func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
+	raceSkip(t)
 	d := historyStore(t)
 	sale := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerToBuyerA))["deal_id"].(string)
 	dealRun(t, "note", "--deal", sale, "--kind", "message", "--input", writeJSON(t,
@@ -599,6 +600,7 @@ func TestDealHistoryFailsDealsSignedByTwoKeys(t *testing.T) {
 // cover every step is refused: its copy would have to name a report written
 // before its later steps. A history copy carries no report, so it is not.
 func TestDealHistoryRefusesAStaleOwnReport(t *testing.T) {
+	raceSkip(t)
 	d := historyStore(t)
 	dealRun(t, "note", "--deal", d.private, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","channel":"web","text":"shipped"}`))
 	sharedCopy(t, d.private, dealAudienceCounterparty, "the shop")

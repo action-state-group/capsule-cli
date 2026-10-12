@@ -44,3 +44,13 @@ func raceSampleKey(t *testing.T, key string) {
 	h.Write([]byte(key))
 	raceSample(t, int(h.Sum32()%raceStride))
 }
+
+// raceSkip skips a whole end-to-end test under the race detector, for one
+// that runs one command at a time and whose work no other test shares. It
+// runs in full without it.
+func raceSkip(t *testing.T) {
+	t.Helper()
+	if raceSampling() {
+		t.Skip("skipped under the race detector; it runs in full without it")
+	}
+}
