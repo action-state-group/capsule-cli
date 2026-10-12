@@ -49,7 +49,7 @@ func TestDealPausesOnTheRecipientNotTheField(t *testing.T) {
 	require.Equal(t, "pause", check["verdict"])
 	card := check["card"].(string)
 	assert.Contains(t, card, "First time dealing with Redbubble")
-	assert.Contains(t, card, "First time telling Redbubble your street address")
+	assert.Contains(t, card, "First time dealing with Redbubble, and they have never had your street address")
 	assert.NotContains(t, card, "You didn't ask for this", "a share that names what it gives is judged by its recipient")
 	dealRun(t, "note", "--deal", first, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "yes, ship it to me")
 	assert.Equal(t, true, noteDelivery(t, first)["approved"])
@@ -81,7 +81,7 @@ func TestDealPausesOnTheRecipientNotTheField(t *testing.T) {
 	require.Equal(t, "pause", check["verdict"], "allowed share_contact does not stand in for the first telling")
 	card = check["card"].(string)
 	assert.Contains(t, card, "First time dealing with Garage Sale Gary")
-	assert.Contains(t, card, "First time telling Garage Sale Gary your street address")
+	assert.Contains(t, card, "First time dealing with Garage Sale Gary, and they have never had your street address")
 	assert.Contains(t, check["differences"], map[string]any{"question": "who", "rule": "first_disclosure", "field": "address", "text": "First time telling Garage Sale Gary your street address"})
 	assert.NotContains(t, card, homeStreet, "the card names the class, never the value")
 
@@ -178,7 +178,7 @@ func TestDealSharedPlatformIsNotOneCounterparty(t *testing.T) {
 	} {
 		check := shareCheck(t, openSeller(t, who), `"address"`)
 		assert.Equal(t, "pause", check["verdict"], "%s is not seller A", who)
-		assert.Contains(t, check["card"], "First time telling", who)
+		assert.Contains(t, check["card"], "they have never had your street address", who)
 		assert.Contains(t, check["card"], "First time dealing with", who)
 	}
 
@@ -244,15 +244,15 @@ func TestDealNewProfileSaysSoOnItsFirstPause(t *testing.T) {
 	dealFixture(t)
 	first := shareCheck(t, openMerchant(t, "redbubble.com"), `"address"`)
 	require.Equal(t, "pause", first["verdict"])
-	assert.Contains(t, first["card"], newProfileLine)
+	assert.Contains(t, first["card"], newProfileNote)
 	second := shareCheck(t, openMerchant(t, "society6.com"), `"address"`)
 	require.Equal(t, "pause", second["verdict"])
-	assert.NotContains(t, second["card"], newProfileLine, "said once")
+	assert.NotContains(t, second["card"], newProfileNote, "said once")
 
 	// A reinstall: a fresh profile says it again.
 	dealFixture(t)
 	again := shareCheck(t, openMerchant(t, "redbubble.com"), `"address"`)
-	assert.Contains(t, again["card"], newProfileLine)
+	assert.Contains(t, again["card"], newProfileNote)
 }
 
 // An approval covers a telling only to the party its check was about.
@@ -270,7 +270,7 @@ func TestDealApprovalForOnePartyDoesNotCoverAnother(t *testing.T) {
 	courier := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t,
 		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"other","recipient":{"name":"Quick Couriers","phone":"+1 555 010 7777"}}`))
 	require.Equal(t, "pause", courier["verdict"])
-	assert.Contains(t, courier["card"], "First time telling Quick Couriers your street address")
+	assert.Contains(t, courier["card"], "First time dealing with Quick Couriers, and they have never had your street address")
 	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", courier["check_id"].(string), "--choice", "proceed", "--said", "ok, the courier")
 	held = heldNote(t, dealID, `{"to":"other","who":{"phone":"+1 555 010 8888"},"fields":[{"class":"address","value":"`+homeStreet+`"}]}`)
 	assert.Equal(t, []any{"address"}, held["held"], "another courier is another party")

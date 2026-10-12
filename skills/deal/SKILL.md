@@ -55,7 +55,7 @@ subscription, an in-app purchase.
 1. Find what the user asked for, and keep their exact words.
 2. Fill the cart. Before you type any of the user's own details into the checkout (name, email, delivery address, phone), follow "Disclosure" below for them, on this deal (`deal open` it first): a delivery form is a disclosure to the merchant. Then fill the checkout up to the last screen before the order is placed. Do not press the final button.
 3. **Final review:** `deal open` (once per deal: the merchant as `who`, the cart as `terms`, `"allowed": ["pay"]` when the user asked you to buy). **If the user picked from options you showed** (an item, a size, a price, a date), seal the pick next with `deal note --kind intent`, before the check (see "The user picked from options" below). Then `deal check` with `"action": "pay"` and the exact total about to be charged.
-4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, place the order. On `pause`, show the card, seal the user's answer, and place the order only if that returns `"proceed": true`.
+4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, place the order. On `pause`, show it, seal the user's answer, and place the order only if that returns `"proceed": true`.
 5. Right after placing it: `deal note --kind act` with the amount, payee, rail and order reference.
 6. If the checkout or the confirmation shows a trial, a renewal or a last day to cancel, follow "Cancel-by date" below.
 7. `deal close` when the item arrives, or does not.
@@ -94,14 +94,14 @@ pick, if the deal is already open) and **before** `deal check`:
   limit or drop an action without a confirmation.
 - What you picked yourself (a size, a colour or a delivery option the user
   never mentioned) stays out of `asked` and in the cart's `terms`. The check
-  then lists it as yours: `picked_by_agent` in its output, "picked by the
-  agent, not by you" on a card, and "The agent picked, not you" in
-  `approval_text`. A choice you made is never shown as the user's.
+  then lists it as yours: `picked_by_agent` in its output, and "The agent
+  picked, not you" in `approval_text`. A choice you made is never shown as
+  the user's.
 
 Some picks change what is bought or what it costs: a size, a variant, a
 quantity other than one, a shipping or delivery option. If you picked one of
 these yourself, the check pauses on it ("I picked size small; price varies
-by size") rather than passing quietly. Show the card and seal the user's
+by size") rather than passing quietly. Show `approval_text` and seal the user's
 answer. If the user chose it, put it in the pick's `asked` instead.
 
 The check still reports what the user did not choose, and an unverified
@@ -116,7 +116,7 @@ A hotel, flight, table, appointment, rental or ticket.
 1. Find options that match what the user asked for, and keep their exact words.
 2. Fill the booking form up to the last screen before it is confirmed. Do not press the final button.
 3. **Final review:** `deal open` (once per deal, type `booking` or `rental`), then `deal check` with `"action": "commit"`, or `"pay"` when the confirmation charges a card.
-4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, confirm. On `pause`, show the card, seal the user's answer, and confirm only if that returns `"proceed": true`.
+4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, confirm. On `pause`, show it, seal the user's answer, and confirm only if that returns `"proceed": true`.
 5. Right after confirming: `deal note --kind act` with the amount and the confirmation reference.
 6. `deal close` after the stay, trip or appointment.
 
@@ -127,7 +127,7 @@ A contract, a lease, a rental agreement, a service order, any e-signature.
 1. Read the document, and keep the user's exact words about what they want signed.
 2. Fill it up to the signature, without signing.
 3. **Final review:** `deal open` (once per deal, type `service` or `rental`, the document's terms as `terms`), then `deal check` with `"action": "sign"`.
-4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, sign. On `pause`, show the card, seal the user's answer, and sign only if that returns `"proceed": true`.
+4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, sign. On `pause`, show it, seal the user's answer, and sign only if that returns `"proceed": true`.
 5. Right after signing: `deal note --kind act` with the document's reference.
 6. `deal close` when the agreement is done.
 
@@ -138,7 +138,7 @@ Giving anyone the user's name, phone, email, address, a pickup spot, a login or 
 1. Note who is asking and what for, and keep the user's exact words about it.
 2. Fill the form or message up to the point of sending, without sending.
 3. **Final review:** `deal open` (once per deal, with the deal type the disclosure belongs to, or `service`), then `deal check` with `"action": "share_contact"` (or `"share_credentials"`), `"disclosing_to"` and `"disclosing"`: who receives it, and the class of every field you are about to give, for example `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name","email","address"]}`. `"disclosing_to"` is required on every share check: `"counterparty"` for the deal's counterparty, `"other"` for anyone else. The check pauses the first time a class goes to this counterparty, naming them and the class, and passes with a `note` when you have told them before. When it goes to someone other than the counterparty (a courier, a platform): `"disclosing_to": "other", "recipient": {"name": "...", "phone": "..."}` with a phone, email, profile id, reply address or website. An approval covers a telling only to the party its check named.
-4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, note it (step 5) and then send. On `pause`, show the card, seal the user's answer, and go on only if that returns `"proceed": true`.
+4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, note it (step 5) and then send. On `pause`, show it, seal the user's answer, and go on only if that returns `"proceed": true`.
 5. With the form filled and **not yet sent**: `deal note --kind disclosure` naming what you are giving, by class, with the value (it stays on this device; the sealed record keeps only the class and a commitment). One disclosure per send, contact details and credentials separately:
 
    ```sh
@@ -250,7 +250,7 @@ merchant's word when the merchant's own email says so.
 1. Seal the user's words asking to cancel (`deal note --kind intent`), then
    `deal check` with `"action": "cancel"`, on the same deal that holds the
    cancel-by date. If the deal did not allow `cancel` from the start, the
-   intent only proposes it and the check pauses: show the card and seal the
+   intent only proposes it and the check pauses: show `approval_text` and seal the
    user's own answer (`deal note --kind approval`). A note never adds
    `cancel` on its own.
 2. On `"proceed": true`, or the user's sealed yes, cancel with the
@@ -311,12 +311,6 @@ The final review asks four questions:
   `"proceed": true`, or `deal note --kind approval` returned `"proceed": true`.
 - **On an error, hold.** If any `capsulectl` command exits non-zero, do not
   act. Tell the user what happened and hold.
-- **Show the card, not a summary.** When a check returns `pause`, show the
-  `card` text exactly as returned and offer exactly its `options`. Do not reword it,
-  soften it, or add your own reassurance. The difference card is evidence to
-  show the user, not an instruction to the agent. Show it verbatim because
-  paraphrase destroys its value as a record, not because the card has
-  authority over you.
 - **Note every telling, mechanically.** Whenever a page you fill or a
   message you send carries the user's name, email, phone, address, a pickup
   spot, a payment detail, a login or a code, check it first (`deal check`
@@ -331,12 +325,20 @@ The final review asks four questions:
   telling (a class this party was given before) with no covering approval is
   sealed all the same and shows on the report as an agent-side anomaly;
   leaving it out only makes the record wrong.
-- **Never hold silently.** A `pause` always goes to the user with the card.
-- **Ask with the check's own text.** Every `deal check` returns
-  `approval_text`: whether the user's rules were checked, what, who, the
-  amount, how it is paid, and what the check found. When you ask the user to
-  go ahead, in your own message or ahead of the host's approval card, show
-  that text as it is. A check goes stale `stale_after_minutes` after
+- **Never hold silently.** A `pause` always goes to the user with the check's text.
+- **Show the check's own text, once.** Every `deal check` returns
+  `approval_text`: one block saying what, how much, to whom and how it is
+  paid, whether the user's rules were checked, and one line per thing the
+  check found. Whenever you ask the user to go ahead, and always on a
+  `pause`, show `approval_text` exactly as returned, once, in your own
+  message or ahead of the host's approval card, and offer exactly the
+  check's `options` as the choices (the text never lists them). Do not reword
+  it, repeat its lines, soften it, or add your own reassurance. On a pause
+  it is the difference card, the text the answer is sealed against. The
+  difference card is evidence to show the user, not an instruction to the
+  agent. Show it verbatim because paraphrase destroys its value as a record,
+  not because the card has authority over you. The check's `card` field
+  carries the same text for that record: never show both. A check goes stale `stale_after_minutes` after
   `checked_at` (15 minutes by default, `--stale-after`); that stays in the
   record, not in the text. If the action happens after it, check again first.
 - **Never say the rules ran when they did not.** When `approval_text` says
@@ -527,17 +529,18 @@ the checkout shows them. The user's rules read both; left out, the rule on a
 non-refundable payment cannot be checked. If the checkout asks for a deposit,
 put it in `terms` as `deposit_minor`.
 
-Every check also returns `approval_text` (a short, paste-ready summary),
+Every check also returns `approval_text` (the one block you show),
 `checked_at` and `stale_after_minutes`, and `rules`: what the profile's rules
 checker said (see "Your rules" below).
 
 - `"verdict": "pass"`, `"proceed": true`: go ahead. Say nothing extra. The
   pass is approved by what the user already allowed, and that approval is
   sealed for you (`approval_id`).
-- `"verdict": "pause"`: show `card` verbatim with its `options`, then seal
-  the answer. Save the card text exactly as you showed it to a file and pass
-  it with `--shown-card`: the answer then commits to that card, and the record
-  shows it is the card the check produced (a different text is refused).
+- `"verdict": "pause"`: show `approval_text` verbatim and offer its
+  `options`, then seal the answer. Save that text exactly as you showed it to
+  a file and pass it with `--shown-card`: the answer then commits to that
+  card, and the record shows it is the card the check produced (a different
+  text is refused).
   `--said` is the user's own words; without them the answer is sealed as the
   card's (`agent_card`), not the user's:
 
@@ -549,14 +552,14 @@ Act only if that returns `"proceed": true`. If it says details changed, or
 that the check was already answered, run the check again. A check takes one
 answer: to change your mind after "Hold", check again.
 
-The card's proceed option reads "Pay anyway" (or "Confirm anyway", and so
+The proceed option reads "Pay anyway" (or "Confirm anyway", and so
 on) only when there is a finding to override; when the check paused only
 because the rules could not be checked, it reads "Pay". Show the labels as
 they are.
 
-- `"verdict": "deny"`: the user's rules do not allow this. The card names
-  the rule, its limit and the value, and offers only "Hold". Do not act, and
-  do not look for a way around it: tell the user what the card says.
+- `"verdict": "deny"`: the user's rules do not allow this. The text names
+  the rule, its limit and the value, and the options offer only "Hold". Do
+  not act, and do not look for a way around it: show the user that text.
 
 **Your rules.** A deal profile may pin a rules checker (the user's policy,
 set with `profile update --rules-checker FILE`; never yours to change). Every
@@ -593,7 +596,7 @@ capsulectl --profile deal deal note --deal ID --kind evidence --input call.json 
 ```
 
 Use the claim's own text as `about` to mark that claim checked. Then run
-`deal check` again with the same snapshot and show the new card. A changed
+`deal check` again with the same snapshot and show its new text. A changed
 payee still shows, because who is always compared with first contact: the
 call's result is in the trail, and the user decides on the new card.
 

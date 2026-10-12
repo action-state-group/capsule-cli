@@ -1,9 +1,6 @@
 package cli
 
-import (
-	"strings"
-	"time"
-)
+import "strings"
 
 // approvalVerbs name an action at the start of the approval text.
 var approvalVerbs = map[string]string{
@@ -11,13 +8,30 @@ var approvalVerbs = map[string]string{
 	"share_contact": "Share your contact details", "share_credentials": "Share a login or code",
 }
 
-// dealApprovalText is the message an agent shows the user when it asks to go
-// ahead: whether the user's rules were checked (and by which ruleset), what,
-// who, how much, how it is paid, and what the check found. It is generated
-// from the sealed check so that the agent's request for approval carries the
-// check's own words. When the check goes stale stays in the sealed record and
-// the check's output (checked_at, stale_after_minutes), out of the prompt.
-func dealApprovalText(state dealState, snap dealSnapshot, result dealCheckResult, checkedAt string, staleAfter time.Duration) string {
+// dealApprovalText is the one block an agent shows the user when it asks to
+// go ahead, and on a pause the card the user's answer is sealed against. It
+// says each fact once: what, how much, to whom and how it is paid; whether
+// the user's rules were checked; then one line per thing the check found.
+// It is built from the check's own fields (differences, picks, unverified
+// claims, rules, recipient), so the agent's request carries the check's
+// words. The one-tap options are the host's to render, never text here. When
+// the check goes stale stays in the sealed record and the check's output
+// (checked_at, stale_after_minutes), out of the prompt.
+func dealApprovalText(state dealState, snap dealSnapshot, result dealCheckResult) string {
+	headline := approvalHeadline(state, snap)
+	lines := []string{headline}
+	if rules := rulesStatusLine(result.Rules); rules != "" {
+		lines = append(lines, rules)
+	}
+	for _, f := range approvalFindings(result, headline) {
+		lines = append(lines, "• "+f)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// approvalHeadline is the block's first line: what, how much, to whom, by
+// what rail, and whether it is refundable.
+func approvalHeadline(state dealState, snap dealSnapshot) string {
 	what := approvalVerbs[snap.Action]
 	if snap.Description != "" {
 		what += ": " + snap.Description
@@ -77,34 +91,109 @@ func dealApprovalText(state dealState, snap dealSnapshot, result dealCheckResult
 	if len(parts) > 0 {
 		line += " · " + strings.Join(parts, " · ")
 	}
-	// What the user chose and what the agent chose for them, told apart, so
-	// a choice the agent made is never presented as the user's.
-	if len(result.Picked) > 0 {
-		chosen := "The agent picked, not you: " + attributeText(result.Picked) + "."
-		if len(result.Asked) > 0 {
-			chosen = "You asked for: " + attributeText(result.Asked) + ". " + chosen
-		}
-		line += "\n" + chosen
-	}
-	finding := "Before you go ahead: no differences."
-	if result.Verdict != "pass" {
-		var texts []string
-		for _, d := range result.Differences {
-			if d.Text != "" {
-				texts = append(texts, d.Text)
-			}
-		}
-		finding = "Before you go ahead: flagged: " + strings.Join(texts, " · ") + "."
-	}
-	if len(result.Unverified) > 0 {
-		finding += " Unverified: " + strings.Join(result.Unverified, " · ") + "."
-	}
 	if state.open.Demo {
 		line = "DEMO · " + line
 	}
-	text := line + "\n" + finding
-	if rules := rulesStatusLine(result.Rules); rules != "" {
-		text = rules + "\n" + text
+	return line
+}
+
+// approvalFindings are the block's lines after the headline and the rules,
+// one per distinct finding. A pass leaves out the recipient line: a first
+// dealing that did not pause is not news. Findings the block already says
+// another way are folded: the first dealing with a recipient and every
+// detail told to them for the first time make one line; the rules' own
+// not-checked difference is the rules line; a note the headline already
+// carries is not repeated.
+func approvalFindings(r dealCheckResult, headline string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(text string) {
+		if text != "" && !seen[text] {
+			seen[text] = true
+			out = append(out, text)
+		}
 	}
-	return text
+	if r.Verdict != "pass" {
+		add(recipientFinding(r.Recipient))
+	}
+	add(picksFinding(r))
+	for _, d := range r.Differences {
+		switch d.Rule {
+		case "first_disclosure", "rules_not_checked":
+			continue
+		}
+		add(d.Text)
+	}
+	for _, n := range r.Notes {
+		if !strings.Contains(headline, n) {
+			add(n)
+		}
+	}
+	if len(r.Unverified) > 0 {
+		add("Unverified: " + strings.Join(r.Unverified, " · "))
+	}
+	return out
+}
+
+// picksFinding tells what the user chose and what the agent chose for them
+// apart, so a choice the agent made is never presented as the user's. A pick
+// the check paused on is its own difference line, so it is not said here.
+func picksFinding(r dealCheckResult) string {
+	if len(r.Picked) == 0 {
+		return ""
+	}
+	paused := map[string]bool{}
+	for _, d := range r.Differences {
+		if d.Rule == "agent_picked" {
+			paused[d.Field] = true
+		}
+	}
+	var minor []dealAttribute
+	for _, a := range r.Picked {
+		if !paused[a.Field] {
+			minor = append(minor, a)
+		}
+	}
+	var said []string
+	if len(r.Asked) > 0 {
+		said = append(said, "You asked for: "+attributeText(r.Asked))
+	}
+	if len(minor) > 0 {
+		said = append(said, "The agent picked, not you: "+attributeText(minor))
+	}
+	return strings.Join(said, ". ")
+}
+
+// recipientFinding is the one line about who is being dealt with: a first
+// dealing, the details they have never had, and, on a profile with no
+// counterparty history yet, why everyone reads as first-time.
+func recipientFinding(rc *dealRecipient) string {
+	if rc == nil || (!rc.FirstTime && len(rc.First) == 0) {
+		return ""
+	}
+	words := make([]string, len(rc.First))
+	for i, c := range rc.First {
+		words[i] = classWord(c)
+	}
+	var line string
+	switch {
+	case rc.FirstTime && len(words) > 0:
+		line = "First time dealing with " + rc.Name + ", and they have never had your " + listWords(words, "or")
+	case rc.FirstTime:
+		line = "First time dealing with " + rc.Name
+	default:
+		line = "First time giving " + rc.Name + " your " + listWords(words, "and")
+	}
+	if rc.NewProfile {
+		line += " (" + newProfileNote + ")"
+	}
+	return line
+}
+
+// listWords joins words as a sentence does: "a", "a and b", "a, b and c".
+func listWords(words []string, conj string) string {
+	if len(words) < 2 {
+		return strings.Join(words, "")
+	}
+	return strings.Join(words[:len(words)-1], ", ") + " " + conj + " " + words[len(words)-1]
 }

@@ -1411,55 +1411,6 @@ func settleCheck(r *dealCheckResult, s dealState) {
 	r.Options = append(r.Options, dealOption{ID: "proceed", Label: label})
 }
 
-// renderCard writes the difference card: the differences, not a summary, then
-// what is unverified, then the one-tap options. A passing check has no card.
-func renderCard(r dealCheckResult, demo bool) string {
-	if r.Verdict == "pass" {
-		return ""
-	}
-	parts := make([]string, 0, len(r.Differences)+len(r.Notes)+2)
-	if r.Recipient != nil && r.Recipient.NewProfile {
-		parts = append(parts, newProfileLine)
-	}
-	if r.Recipient != nil && r.Recipient.FirstTime {
-		parts = append(parts, "First time dealing with "+r.Recipient.Name)
-	}
-	for _, d := range r.Differences {
-		if d.Text != "" { // a difference folded into another line
-			parts = append(parts, d.Text)
-		}
-	}
-	parts = append(parts, r.Notes...)
-	// The agent's other picks: the ones the check did not pause on.
-	paused := map[string]bool{}
-	for _, d := range r.Differences {
-		if d.Rule == "agent_picked" {
-			paused[d.Field] = true
-		}
-	}
-	var minor []dealAttribute
-	for _, a := range r.Picked {
-		if !paused[a.Field] {
-			minor = append(minor, a)
-		}
-	}
-	if len(minor) > 0 {
-		parts = append(parts, "picked by the agent, not by you: "+attributeText(minor))
-	}
-	if len(r.Unverified) > 0 {
-		parts = append(parts, "unverified: "+strings.Join(r.Unverified, ", "))
-	}
-	opts := make([]string, len(r.Options))
-	for i, o := range r.Options {
-		opts[i] = "[" + o.Label + "]"
-	}
-	card := "⚠️ " + strings.Join(parts, " · ") + " · " + strings.Join(opts, " ")
-	if demo {
-		card = "DEMO · " + card
-	}
-	return card
-}
-
 // authorizeAct finds the sealed approval that authorizes an action: the
 // latest check (verdict) of the same action with no detail change sealed
 // after it, answered by a proceed approval (the user's, or standing intent on
@@ -1809,7 +1760,9 @@ func trailLine(e dealEvent) string {
 		if e.Check.Verdict == "pass" {
 			return "checked " + e.Check.Action + ": no differences"
 		}
-		return "checked " + e.Check.Action + ": flagged — " + e.Check.Card
+		// A card is one block of lines; the trail says it on one.
+		card := strings.ReplaceAll(strings.ReplaceAll(e.Check.Card, "\n• ", " · "), "\n", " · ")
+		return "checked " + e.Check.Action + ": flagged — " + card
 	case "approval":
 		if e.Approval.Approver == "standing_intent" {
 			return "went ahead on what you already allowed"

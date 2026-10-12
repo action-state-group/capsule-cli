@@ -89,7 +89,7 @@ func TestTheReceiptNamesTheChoiceAsShown(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 954)))
 	require.Equal(t, "pause", check["verdict"], check["card"])
-	require.Contains(t, check["card"], "[Pay anyway]")
+	require.Contains(t, optionLabels(check), "Pay anyway")
 	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "yes, pay it")
 	report := dealRun(t, "report", "--deal", id)
 	raw, err := json.Marshal(report["did"])
