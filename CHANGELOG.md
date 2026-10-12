@@ -10,14 +10,22 @@
   records against one checkpoint. Instead, `deal history` seals one selection record on the history
   log, signed by your key, naming the picked deals and each deal copy's digest. The bundle's
   `x-history-selection/v0` extension carries each deal's own bundle.
-- Each deal is carried as the other party's copy by default, withheld exactly as
-  `deal report --share counterparty` withholds it and checked by the same share gate.
-  `--audience adjudicator` gives the adjudicator's copy. `--audience keep` gives your own copy,
-  with every private value in it, and is never one to send.
+- A History may be sent to anyone, so each deal is carried as its **history** copy by default
+  (`--audience history`). Every record's payload is withheld, and each record shows only what its
+  capsule states: its time and, for an act, its effect's status. A deal's outcome and its acts'
+  action classes are in payloads next to the item, the amounts and the other party's details. A
+  payload is disclosed whole or not at all, so a History does not prove them: verify says
+  `"not_proven": ["outcome", "action_class"]`, and the History is still VALID.
+  - The copies `deal report --share` writes for someone in the deal (`counterparty`,
+    `adjudicator`) are refused for a History.
+  - `--audience keep` gives your own copy, with every private value in it, and is never one to
+    send.
 - `verify --bundle FILE` checks that the selection record is disclosed, matches its seal and is
   signed, and that the selection the file carries is the sealed one. For each picked deal it then
   checks that the deal is carried, is the bundle its digest names, is of that deal's own log, is
-  the copy for the sealed audience, and verifies on its own. Nothing unpicked may be carried.
+  the copy for the sealed audience, and verifies on its own. Nothing unpicked may be carried. A
+  History sealed for any audience but history or keep fails, and so does one carrying a history
+  copy with any payload disclosed.
 - Verify reports the History's `holder_key` and `signer_keys` (each key with the deals it signed).
   It fails a History whose deals are signed by more than one key, or by a key other than the one
   that signed the selection. A finding names its deal.
@@ -26,18 +34,19 @@
   history log is the record of what was sent.
   - Each deal is copied through its latest checkpoint as it stands. Steps after that checkpoint
     are not in the copy, and the output counts them (`steps_after_checkpoint`).
-  - A deal with sealed reports is refused unless its newest report for that audience covers every
-    step shown (seal one with `deal report --share`, or `--bundle` for keep).
+  - For keep, a deal with sealed reports is refused unless its newest report of your own covers
+    every step shown (seal one with `deal report --deal ID --bundle FILE`). A history copy carries
+    no report.
   - A step not yet on the deal's log is refused too, not recovered.
 - **Known limit:** a History shows that the holder of one key K picked these deal copies and
   signed every record in them. It does not prove K's holder made the deals. A record's signature
   is outside its Capsule ID, so whoever holds copies can sign them again under their own key.
 - **Known limit:** your deals from before a signing-key change carry the old key, so a History
   mixing deals from before and after the change fails (`deal_signers_differ`).
-- **Known limit:** a nested deal's inline `x-deal-v0` report (one with no `sealed_report`) is not
-  sealed on its own. Editing it leaves that nested deal VALID; only the History's `bundle_digest`
-  catches the edit. A nested deal taken out of a History is no stronger than an unsealed deal
-  report.
+- **Known limit:** a nested deal's `x-deal-v0` section (a history copy's, or a keep copy's inline
+  report with no `sealed_report`) is not sealed on its own. Editing it leaves that nested deal
+  VALID; only the History's `bundle_digest` catches the edit. A nested deal taken out of a History
+  is no stronger than an unsealed deal report.
 - The deal view's manifest forbids `x-history-selection/v0`, so it never presents a History.
 - `presentation list` says a History is verified only when `verify --bundle` calls it VALID. The
   bundle verifier it runs does not check the nested deals. `presentation build` writes a History's

@@ -465,6 +465,13 @@ func dealReportEntry(value map[string]interface{}, result aacbundle.Verification
 		return fail("sealed_report_unverified")
 	case sealed:
 		return map[string]any{"kind": dealProfile, "status": "pass", dealReportPointer: id}
+	case len(deal) == 2 && deal["audience"] == dealAudienceHistory && deal["deal_id"] != nil && len(disclosed) == 0:
+		// A history copy (deal history) withholds every payload and carries
+		// no report text, so naming no sealed report is not a downgrade.
+		return map[string]any{
+			"kind": dealProfile, "status": "uninterpreted", "findings": []string{"extension_unbound"},
+			"note": "a history copy: every record's payload is withheld and the section carries no report text",
+		}
 	case len(reports) > 0:
 		// A bundle that holds a sealed report was written after reports were
 		// sealed: text in the extension instead of a pointer is a downgrade

@@ -29,7 +29,7 @@ import (
 //
 //	{"selection_record": <the selection record's capsule id>,
 //	 "selection": [{"deal_id": ..., "bundle_digest": <sha256 of the bundle's JCS>}],
-//	 "deals": {"<deal id>": <the deal's copy for the selected audience, an evidence-bundle/v2>}}
+//	 "deals": {"<deal id>": <the deal's copy for the selected audience (history, or keep), an evidence-bundle/v2>}}
 //
 // It is a private kind, like x-deal-sale/v0, read by this verifier only. A
 // History shows that the holder of one key picked these copies and that
@@ -44,10 +44,23 @@ const historyLogID = "deal-history"
 // historyActionID is the action_id of a selection record's capsule.
 const historyActionID = "capsulectl-deal-history"
 
+// dealAudienceHistory is the copy of a deal for someone who was not in it,
+// the only copy a History is sent with: every record's payload is withheld,
+// so each record shows only what its capsule states (its time, and for an
+// act its effect's status). A deal's outcome and its acts' action classes
+// are in payloads, beside the item, amounts and the other party's details,
+// and a payload is disclosed whole or not at all: a History does not prove
+// them (historyNotProven).
+const dealAudienceHistory = "history"
+
+// historyNotProven are the reads a history copy does not prove, as verify
+// reports them on every History for the history audience.
+var historyNotProven = []string{"outcome", "action_class"}
+
 var hexDigestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 func dealHistoryCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "history", Short: "Write one file holding the deals you pick, each as the copy for --audience (the other party's by default), checked by `verify --bundle`; seals the pick on your history log and never writes to a deal", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	cmd := &cobra.Command{Use: "history", Short: "Write one file holding the deals you pick, each with every record's payload withheld (only its time and an act's effect status show), checked by `verify --bundle`; seals the pick on your history log and never writes to a deal", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		ids, _ := c.Flags().GetStringArray("deal")
 		out, _ := c.Flags().GetString("out")
 		audience, _ := c.Flags().GetString("audience")
@@ -55,9 +68,11 @@ func dealHistoryCommand() *cobra.Command {
 			return inputError("--deal (one per picked deal, ids as `deal list` prints them) and --out are required")
 		}
 		switch audience {
-		case dealAudienceCounterparty, dealAudienceAdjudicator, dealAudienceKeep:
+		case dealAudienceHistory, dealAudienceKeep:
+		case dealAudienceCounterparty, dealAudienceAdjudicator:
+			return inputError("--audience " + audience + " is a copy of one deal for someone in it (`deal report --share`); a History may be sent to anyone, so its copies are --audience history (the default), or keep for your own file")
 		default:
-			return inputError("--audience must be counterparty (the default: the copy the other party may see), adjudicator, or keep (your own copy, every private value in it: never one to send)")
+			return inputError("--audience must be history (the default: every record's payload withheld) or keep (your own copy, every private value in it: never one to send)")
 		}
 		seen := map[string]bool{}
 		for _, id := range ids {
@@ -93,7 +108,7 @@ func dealHistoryCommand() *cobra.Command {
 	}}
 	cmd.Flags().StringArray("deal", nil, "A picked deal id from `deal list` (repeat for each deal)")
 	cmd.Flags().String("out", "", "New file for the History")
-	cmd.Flags().String("audience", dealAudienceCounterparty, "Whose copy of each deal: counterparty (default) or adjudicator, as `deal report --share` writes it; keep is your own copy and is never one to send")
+	cmd.Flags().String("audience", dealAudienceHistory, "Which copy of each deal: history (default: every record's payload withheld, for anyone) or keep (your own copy, never one to send)")
 	return cmd
 }
 
@@ -231,16 +246,20 @@ func (s *dealSession) historyBundle(ctx context.Context, audience string, select
 
 // dealHistoryMember is one picked deal's copy for audience, read from its log
 // as it stands: through its latest checkpoint, with nothing sealed and no
-// checkpoint cut. A shared copy withholds the records `deal report --share`
-// withholds (dealWithholdRecords), carries the section rewritten for the
-// audience, or a report sealed earlier for that audience as it was sealed,
-// and passes the share gate on its bytes.
-// A deal step indexed but not yet on the log (an interrupted write) is
-// refused rather than recovered, since recovery writes. A deal with a report
-// sealed within the checkpoint must name one (a bundle holding a sealed
-// report must): its newest one for this audience, and only
-// when it covers every step shown, else the deal is refused, since its text
-// would describe the deal before those steps or for another reader.
+// checkpoint cut. A step indexed but not yet on the log (an interrupted
+// write) is refused rather than recovered, since recovery writes.
+//
+// A history copy withholds the payload of every record on the deal's log
+// through the checkpoint (each step and each sealed report) through the
+// bundle builder's withholding, the one shared copies use, carries a deal section with no report
+// text ({"audience": "history", "deal_id": ...}), and passes the share gate
+// for both shared audiences on its bytes.
+//
+// A keep copy is the user's own: it must name the deal's newest report
+// sealed for keep within the checkpoint when it has any (a bundle holding a
+// sealed report must), and only when that report covers every step shown,
+// else the deal is refused, since its text would describe the deal before
+// those steps.
 func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, verify string) (_ map[string]interface{}, shown, after int, err error) {
 	if err = s.db.QueryRowContext(ctx, `SELECT deal_key FROM deal_keys WHERE deal_id=?`, dealID).Scan(&s.dkey); err != nil {
 		return nil, 0, 0, err
@@ -283,21 +302,40 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 	if len(covered) == 0 {
 		return nil, 0, 0, inputError("deal " + dealID + " has no step under its latest checkpoint")
 	}
-	shared := audience != dealAudienceKeep
-	var private dealPrivate
-	withhold := map[string]bool{}
-	if shared {
-		private = dealPrivateValues(covered)
-		if withhold, err = s.dealWithholdRecords(covered, audience, private); err != nil {
+	if audience == dealAudienceHistory {
+		all, err := s.logEntries(ctx)
+		if err != nil {
 			return nil, 0, 0, err
 		}
+		withhold := map[string]bool{}
+		for _, e := range all {
+			if e.Seq <= state.Checkpoint.IndexedSeq {
+				withhold[hex.EncodeToString(e.Value)] = true
+			}
+		}
+		b, cadence, err := s.dealAssembleAtCheckpoint(ctx, covered, withhold)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		extensions := map[string]interface{}{dealCadenceExtension: cadence, dealProfile: map[string]interface{}{"audience": dealAudienceHistory, "deal_id": dealID}}
+		if dealRole(covered) == dealRoleSeller {
+			extensions[dealSellerExtension] = map[string]interface{}{}
+		}
+		b["extensions"] = extensions
+		encoded, err := json.Marshal(b)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		for _, gate := range []string{dealAudienceCounterparty, dealAudienceAdjudicator} {
+			if err = dealShareGate(encoded, covered, gate); err != nil {
+				return nil, 0, 0, err
+			}
+		}
+		return b, len(covered), len(events) - len(covered), nil
 	}
-	reports, err := s.reportIDs(ctx, dealID)
+	withhold, err := s.reportIDs(ctx, dealID)
 	if err != nil {
 		return nil, 0, 0, err
-	}
-	for id := range reports {
-		withhold[id] = true
 	}
 	var sealedReports int
 	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_reports WHERE deal_id=? AND cll_sequence>0 AND cll_sequence<=?`, dealID, state.Checkpoint.IndexedSeq).Scan(&sealedReports); err != nil {
@@ -307,16 +345,12 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 	if sealedReports > 0 {
 		var reportSeq uint64
 		err = s.db.QueryRowContext(ctx, `SELECT capsule_id, cll_sequence FROM deal_reports WHERE deal_id=? AND cll_sequence>0 AND cll_sequence<=? AND audience=? ORDER BY cll_sequence DESC LIMIT 1`,
-			dealID, state.Checkpoint.IndexedSeq, audience).Scan(&pointer, &reportSeq)
+			dealID, state.Checkpoint.IndexedSeq, dealAudienceKeep).Scan(&pointer, &reportSeq)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, 0, 0, err
 		}
 		if pointer == "" || reportSeq < covered[len(covered)-1].Sequence {
-			seal := "`deal report --deal " + dealID + " --bundle FILE`"
-			if shared {
-				seal = "`deal report --deal " + dealID + " --share " + audience + " --to WHO --bundle FILE`"
-			}
-			return nil, 0, 0, inputError("deal " + dealID + " has a sealed report but none for " + audience + " that covers its later steps, so a copy would show the deal as it stood then or as another reader sees it; seal a current one with " + seal + ", then pick it again")
+			return nil, 0, 0, inputError("deal " + dealID + " has a sealed report but none of your own that covers its later steps, so your copy would show the deal as it stood then or as another reader sees it; seal a current one with `deal report --deal " + dealID + " --bundle FILE`, then pick it again")
 		}
 		delete(withhold, pointer)
 	}
@@ -330,7 +364,7 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 		if err != nil {
 			return nil, 0, 0, err
 		}
-		if ext, err = s.dealReportExtension(covered, report, audience, verify, private, withhold, witnessCoverage(covered, cadence)); err != nil {
+		if ext, err = s.dealReportExtension(covered, report, dealAudienceKeep, verify, dealPrivate{}, withhold, witnessCoverage(covered, cadence)); err != nil {
 			return nil, 0, 0, err
 		}
 	}
@@ -339,15 +373,6 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 		extensions[dealSellerExtension] = map[string]interface{}{}
 	}
 	b["extensions"] = extensions
-	if shared {
-		encoded, err := json.Marshal(b)
-		if err != nil {
-			return nil, 0, 0, err
-		}
-		if err = dealShareGate(encoded, covered, audience); err != nil {
-			return nil, 0, 0, err
-		}
-	}
 	return b, len(covered), len(events) - len(covered), nil
 }
 
@@ -403,6 +428,13 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 		failed = append(failed, "selection_not_sealed")
 	}
 	entry["holder_key"], entry["audience"] = holder, audience
+	switch audience {
+	case dealAudienceHistory:
+		entry["not_proven"] = historyNotProven
+	case dealAudienceKeep:
+	default:
+		failed = append(failed, "selection_audience_not_history")
+	}
 
 	listed, _ := sealed["selection"].([]interface{})
 	if len(listed) == 0 {
@@ -467,6 +499,9 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 		if copyFor != audience {
 			failed = append(failed, "deal_audience_not_selected:"+id)
 		}
+		if audience == dealAudienceHistory && payloadDisclosed(tb) {
+			failed = append(failed, "deal_payload_disclosed:"+id)
+		}
 		keys, unsigned := recordKeys(tb)
 		if unsigned {
 			failed = append(failed, "deal_record_unsigned:"+id)
@@ -525,4 +560,16 @@ func recordKeys(b map[string]interface{}) ([]string, bool) {
 	}
 	sort.Strings(keys)
 	return keys, unsigned
+}
+
+// payloadDisclosed is whether a bundle discloses any record's payload.
+func payloadDisclosed(b map[string]interface{}) bool {
+	disclosures, _ := b["disclosures"].(map[string]interface{})
+	for _, raw := range disclosures {
+		d, _ := raw.(map[string]interface{})
+		if len(d) > 0 {
+			return true
+		}
+	}
+	return false
 }
