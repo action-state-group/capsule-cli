@@ -15,6 +15,19 @@
   so two modules that could match one bundle are refused only on a page that would carry both.
   When one module is left, its wording pack is the page's, as for any one-module page.
 
+### A built-in materiality predicate, pinned by name
+
+- **Added:** `deal init --materiality builtin:neutral` and `profile update --materiality builtin:neutral`
+  pin the materiality predicate built into capsulectl ("quantity, size, variant and delivery picks",
+  version 1.0.0, digest `05ec66b4a21025a66288cafc74e7fa1c540cc62695c5f536df84f4a7d7f66d4a`). With
+  it, a quantity of 1 the agent filled in does not pause a check; another quantity, or a size,
+  variant or delivery the agent picked, still does. The profile keeps the name `builtin:neutral`
+  and the digest, not a path, so the pin survives an upgrade or a move. A check still refuses when
+  the pinned digest is not the one this capsulectl ships. A predicate given as a FILE is pinned by
+  its absolute path, as before; with none, every pick still pauses. The example
+  `skills/deal/profile/materiality-predicate/neutral.json` is unchanged. The deal skill's SKILL.md
+  names the built-in, which changes its digest.
+
 ### The approval prompt is one block, each fact once
 
 - **Changed:** `deal check` returns one block to show the user, built from the check's own

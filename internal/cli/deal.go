@@ -888,7 +888,7 @@ func dealInitCommand() *cobra.Command {
 	}}
 	cmd.Flags().String("dir", "", "Directory for the store and seeds (created 0700)")
 	cmd.Flags().Bool("no-witness", false, "Do not configure the default public witness; deals are sealed on this device only")
-	cmd.Flags().String("materiality", "", "A materiality predicate (materiality-predicate/v0 JSON) for this profile's checks to evaluate; without one, every attribute the agent picks pauses the check")
+	cmd.Flags().String("materiality", "", "A materiality predicate (a materiality-predicate/v0 JSON file, or builtin:neutral) for this profile's checks to evaluate, pinned by its digest; without one, every attribute the agent picks pauses the check")
 	return cmd
 }
 

@@ -487,3 +487,79 @@ func stringValues(v any) []string {
 	}
 	return nil
 }
+
+// builtinNeutralDigest is the built-in neutral predicate's digest. A
+// built-in's bytes never change under its name (a profile pins it by name and
+// digest across upgrades); a new version ships under a new name.
+const builtinNeutralDigest = "05ec66b4a21025a66288cafc74e7fa1c540cc62695c5f536df84f4a7d7f66d4a"
+
+// shackleCheck opens a purchase whose intent names the item only, and checks
+// a payment for it with the quantity and conditions the agent picked.
+func shackleCheck(t *testing.T, quantity int, conditions string) map[string]any {
+	t.Helper()
+	id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+		"intent":{"verbatim":"buy the snap shackle","asked":{"item":"snap shackle"},"allowed":["pay"]},
+		"who":{"name":"Example Marine","domain":"marine.example"},
+		"terms":{"item":"snap shackle","price_minor":4437,"currency":"USD"},
+		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	return dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fmt.Sprintf(`{"action":"pay","amount_minor":4437,"authorized_max_minor":4437,"terms":{"item":"snap shackle","quantity":%d,"price_minor":4437,"conditions":%s},"recourse":{"rail":"card","refundable":true}}`, quantity, conditions)))
+}
+
+// The install pins the built-in neutral predicate by name: a quantity of 1
+// the agent filled in does not pause the check, while a quantity of 2 or a
+// size it picked still does. With no predicate every pick pauses.
+func TestTheBuiltinNeutralPredicateLetsADefaultPickThrough(t *testing.T) {
+	materialityFixture(t)
+	assert.Equal(t, []string{"quantity"}, pausedOn(shackleCheck(t, 1, `{}`)), "no predicate: every pick pauses")
+
+	materialityFixture(t, "--materiality", "builtin:neutral")
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	assert.Equal(t, "builtin:neutral", p.Materiality.Predicate, "pinned by name, not by a path into the install")
+	assert.Equal(t, builtinNeutralDigest, p.Materiality.Digest)
+
+	check := shackleCheck(t, 1, `{}`)
+	assert.Equal(t, "pass", check["verdict"], check["card"])
+	assert.Empty(t, pausedOn(check))
+	assert.Equal(t, map[string]any{"name": "quantity, size, variant and delivery picks", "version": "1.0.0", "digest": builtinNeutralDigest}, check["materiality"])
+
+	assert.Equal(t, []string{"quantity"}, pausedOn(shackleCheck(t, 2, `{}`)))
+	assert.Equal(t, []string{"conditions.size"}, pausedOn(shackleCheck(t, 1, `{"size":"5 mm"}`)), "a size the agent picked still pauses")
+
+	pin(t, "")
+	pin(t, "builtin:neutral")
+	assert.Equal(t, "pass", shackleCheck(t, 1, `{}`)["verdict"], "profile update pins it the same way")
+}
+
+// A built-in is checked against its pinned digest like a file: a profile
+// whose digest does not match what this capsulectl ships refuses the check.
+// A name capsulectl does not ship is refused when pinned.
+func TestABuiltinPredicateIsHeldToItsPinnedDigest(t *testing.T) {
+	materialityFixture(t, "--materiality", "builtin:neutral")
+	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	p.Materiality.Digest = strings.Repeat("0", len(builtinNeutralDigest))
+	require.NoError(t, saveProfile(p, true))
+	_, err = invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, err.Error(), "materiality predicate changed since it was pinned (builtin:neutral)")
+
+	for _, name := range []string{"builtin:other", "builtin:", "builtin:x/../neutral"} {
+		out, err := invoke(t, "", "--profile", "deal", "profile", "update", "--materiality", name)
+		require.ErrorIs(t, err, ErrInput, out)
+		assert.Contains(t, err.Error(), "no built-in materiality predicate", name)
+		assert.Contains(t, err.Error(), "builtin:neutral", "the refusal names what ships")
+	}
+}
+
+// The built-in's bytes are fixed under its name, and it says nothing of being
+// an example: it is what an install pins.
+func TestTheBuiltinNeutralPredicateIsFixed(t *testing.T) {
+	predicate, err := loadMaterialityPredicate("builtin:neutral")
+	require.NoError(t, err)
+	assert.Equal(t, builtinNeutralDigest, predicate.Digest)
+	assert.Equal(t, "1.0.0", predicate.Version)
+	assert.NotContains(t, predicate.Name, "example")
+	assert.Equal(t, []string{"neutral"}, builtinMaterialityNames())
+}

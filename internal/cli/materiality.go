@@ -2,11 +2,13 @@ package cli
 
 import (
 	"bytes"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -99,36 +101,72 @@ func parseMaterialityPredicate(where string, raw []byte) (*materialityPredicate,
 	return &p, nil
 }
 
-// loadMaterialityPredicate reads the predicate at path, or returns nil when
-// none is configured (path empty): the check then fails safe.
-func loadMaterialityPredicate(path string) (*materialityPredicate, error) {
-	if path == "" {
+// builtinMaterialityPrefix addresses a predicate shipped inside capsulectl
+// ("builtin:neutral") rather than a file. A profile pins it by that name, so
+// the pin holds when capsulectl is upgraded or moved; the digest is still
+// checked at every check. A built-in's bytes never change under its name: a
+// new version ships under a new name.
+const builtinMaterialityPrefix = "builtin:"
+
+//go:embed assets/materiality/*.json
+var builtinMaterialityFS embed.FS
+
+// builtinMaterialityNames are the built-in predicates' names, sorted.
+func builtinMaterialityNames() []string {
+	entries, _ := builtinMaterialityFS.ReadDir("assets/materiality")
+	names := []string{}
+	for _, e := range entries {
+		names = append(names, strings.TrimSuffix(e.Name(), ".json"))
+	}
+	return names
+}
+
+// loadMaterialityPredicate reads the predicate ref names: a built-in
+// ("builtin:NAME") or a file path. It returns nil when none is configured
+// (ref empty): the check then fails safe.
+func loadMaterialityPredicate(ref string) (*materialityPredicate, error) {
+	if ref == "" {
 		return nil, nil
 	}
-	raw, err := readInput(path)
+	if name, ok := strings.CutPrefix(ref, builtinMaterialityPrefix); ok {
+		// A name is one path element: "x/../neutral" names no built-in.
+		raw, err := []byte(nil), fs.ErrNotExist
+		if name != "" && !strings.ContainsAny(name, `/\`) {
+			raw, err = builtinMaterialityFS.ReadFile(path.Join("assets/materiality", name+".json"))
+		}
+		if err != nil {
+			return nil, inputError(fmt.Sprintf("no built-in materiality predicate %q; built-in: %s%s", name, builtinMaterialityPrefix, strings.Join(builtinMaterialityNames(), ", "+builtinMaterialityPrefix)))
+		}
+		return parseMaterialityPredicate(ref, raw)
+	}
+	raw, err := readInput(ref)
 	if err != nil {
 		return nil, err
 	}
-	return parseMaterialityPredicate(path, raw)
+	return parseMaterialityPredicate(ref, raw)
 }
 
-// pinMateriality sets p's materiality predicate to the one at path, pinned by
-// its digest, or removes it when path is empty. Only the user does this (deal
-// init, profile update): which picks pause is policy.
-func pinMateriality(p *Profile, path string) error {
-	if path == "" {
+// pinMateriality sets p's materiality predicate to the one ref names (a
+// built-in, kept by its name, or a file, kept by its absolute path), pinned
+// by its digest, or removes it when ref is empty. Only the user does this
+// (deal init, profile update): which picks pause is policy.
+func pinMateriality(p *Profile, ref string) error {
+	if ref == "" {
 		p.Materiality.Predicate, p.Materiality.Digest = "", ""
 		return nil
 	}
-	abs, err := filepath.Abs(path)
+	if !strings.HasPrefix(ref, builtinMaterialityPrefix) {
+		abs, err := filepath.Abs(ref)
+		if err != nil {
+			return err
+		}
+		ref = abs
+	}
+	predicate, err := loadMaterialityPredicate(ref)
 	if err != nil {
 		return err
 	}
-	predicate, err := loadMaterialityPredicate(abs)
-	if err != nil {
-		return err
-	}
-	p.Materiality.Predicate, p.Materiality.Digest = abs, predicate.Digest
+	p.Materiality.Predicate, p.Materiality.Digest = ref, predicate.Digest
 	return nil
 }
 
@@ -143,8 +181,12 @@ func pinnedMateriality(p Profile) (*materialityPredicate, error) {
 	case m.Predicate == "" || m.Digest == "":
 		return nil, inputError("the profile's materiality predicate is not pinned: set it with `capsulectl --profile " + p.Name + " profile update --materiality FILE` (the user's to run)")
 	}
-	if _, err := os.Stat(m.Predicate); errors.Is(err, fs.ErrNotExist) {
-		return nil, inputError("materiality predicate file missing (" + m.Predicate + "): re-pin it with `capsulectl --profile " + p.Name + " profile update --materiality FILE`, which is the user's to run")
+	// A built-in has no file to go missing: one this capsulectl does not
+	// ship, or ships with other bytes, refuses below.
+	if !strings.HasPrefix(m.Predicate, builtinMaterialityPrefix) {
+		if _, err := os.Stat(m.Predicate); errors.Is(err, fs.ErrNotExist) {
+			return nil, inputError("materiality predicate file missing (" + m.Predicate + "): re-pin it with `capsulectl --profile " + p.Name + " profile update --materiality FILE`, which is the user's to run")
+		}
 	}
 	predicate, err := loadMaterialityPredicate(m.Predicate)
 	if err != nil {
