@@ -390,8 +390,10 @@ only fingerprints of identifiers and commitments to text.
 
 Which of your own picks (a size, a delivery option the user never named)
 pause a check is set by a materiality predicate the profile pins:
-`deal init --materiality FILE` or `profile update --materiality FILE` (see
-`profile/materiality-predicate/`). With none configured, every attribute you
+`deal init --materiality builtin:neutral` (the predicate built into
+capsulectl: a quantity of 1 does not pause, a size, variant, delivery or other
+quantity does) or a FILE of the user's own, or later `profile update
+--materiality` (see `profile/materiality-predicate/`). With none configured, every attribute you
 picked pauses the check and the user is asked about it. **Setting or changing
 the predicate is the user's policy: never do it yourself.** If a check refuses
 because the predicate changed since it was pinned, tell the user; re-pinning is

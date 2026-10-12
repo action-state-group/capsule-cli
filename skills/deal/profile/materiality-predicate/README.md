@@ -22,6 +22,23 @@ version describe the user's own policy.
 **With no predicate configured, every attribute the agent picked pauses the check.**
 That is the safe default: nothing the agent chose alone goes through unasked.
 
+## The built-in predicate
+
+capsulectl ships one predicate, `builtin:neutral`: `deal init --materiality
+builtin:neutral` or `profile update --materiality builtin:neutral`. It is
+pinned by that name and its digest, not by a path, so the pin survives an
+upgrade or a move of capsulectl. Its name is "quantity, size, variant and
+delivery picks", version 1.0.0, and its matchers are those of `neutral.json`
+below: a quantity of 1 the agent filled in does not pause; any other quantity,
+or a condition whose name mentions size, variant, shipping, delivery or
+quantity, does. Its digest is
+`05ec66b4a21025a66288cafc74e7fa1c540cc62695c5f536df84f4a7d7f66d4a`. A built-in
+never changes under its name: a new version ships under a new name, and a
+profile pinning the old one keeps its pin until the user re-pins.
+
+A predicate sees the value the agent picked, not what else was offered: a size
+picked when the offer had only one size still pauses.
+
 `neutral.json` here is an **example, not policy**. It reproduces what capsulectl
 paused on before predicates existed (a quantity other than 1; a condition whose
 name mentions size, variant, shipping, delivery or quantity), so demos and tests

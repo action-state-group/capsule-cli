@@ -432,7 +432,7 @@ func profileCommands() *cobra.Command {
 		f.Bool("read-only", false, "Reject operations requiring writes")
 		f.StringSlice("trusted-key", nil, "Trusted producer public key hex (repeatable)")
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
-		f.String("materiality", "", "A deal profile's materiality predicate (materiality-predicate/v0 JSON), pinned by its digest; empty to remove it (every agent pick then pauses). Policy: the user's to set, never the agent's")
+		f.String("materiality", "", "A deal profile's materiality predicate (a materiality-predicate/v0 JSON file, or builtin:neutral), pinned by its digest; empty to remove it (every agent pick then pauses). Policy: the user's to set, never the agent's")
 		f.String("rules-checker", "", "A deal profile's external rules checker: a JSON file {\"command\": [\"/absolute/path\", \"arg\", ...], \"timeout\": \"10s\", \"definition_digest\": \"...\"}, its executable under a trusted plugin root and pinned by its SHA-256; empty to remove it. Policy: the user's to set, never the agent's")
 		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token", "token": "credentials.token"}
 		for flag := range secrets {

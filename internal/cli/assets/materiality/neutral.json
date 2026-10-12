@@ -1,0 +1,9 @@
+{
+  "type": "materiality-predicate/v0",
+  "name": "quantity, size, variant and delivery picks",
+  "version": "1.0.0",
+  "material": [
+    {"field": "quantity", "except_values": ["1"]},
+    {"field_prefix": "conditions.", "name_contains_any": ["size", "variant", "shipping", "delivery", "quantity", "qty"]}
+  ]
+}
