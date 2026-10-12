@@ -22,7 +22,8 @@ together, from the commit `go.mod` pins.
 `schemas/examples/presentation-manifest-v0/builtin-*.json` at the same commit,
 copied unmodified: the six page modules the vendored browser runtime
 registers by default. `capsulectl presentation build` checks the plugin
-modules it puts in a page against them (presentation contract section 4.5).
+modules it puts in a page against them (presentation contract section 4.5),
+after leaving out every module whose audiences exclude the page's.
 Their digests are pinned in `presentation_build_test.go`
 (`TestThePresentationRuntimeDeclarationIsTheVendoredOne`), which also checks
 that the vendored runtime carries each id and declares the runtime
