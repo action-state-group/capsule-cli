@@ -81,7 +81,7 @@ func TestADealCheckRunsThePinnedRulesChecker(t *testing.T) {
 	assert.Equal(t, "allow", rules["verdict"])
 	assert.Equal(t, map[string]any{"days": float64(31), "acts": float64(0), "complete": true}, rules["history"])
 	text := approvalText(check)
-	assert.Contains(t, text, "\nYour rules (example-rules/1.0.0, digest abababab): allowed, judged (not stated).", text)
+	assert.Contains(t, text, "\n• Your rules (example-rules/1.0.0, digest abababab): allowed, judged (not stated).", text)
 	assert.NotContains(t, text, "Before you go ahead", "a pass is the headline and the rules")
 	assert.NotContains(t, text, "Deal check")
 	assert.NotContains(t, text, "Stale after", "the stale line stays in the record, out of the prompt")
@@ -183,7 +183,7 @@ func TestAnEscalationPausesWithPayAnyway(t *testing.T) {
 }
 
 // The checker's own not_evaluable pauses, naming the rule it could not
-// evaluate; proceeding over it is an override.
+// evaluate; no rule failed, so proceeding is "Pay", not an override.
 func TestANotEvaluableFromTheRulesPauses(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	finding := `{"id":"weekly","check":"window","verdict":"not_evaluable","reason":"the record carries no week of history"}`
@@ -191,7 +191,7 @@ func TestANotEvaluableFromTheRulesPauses(t *testing.T) {
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Contains(t, check["card"], "Your rules were not fully checked: weekly: the record carries no week of history")
-	assert.Contains(t, optionLabels(check), "Pay anyway")
+	assert.Equal(t, []string{"Hold", "Pay"}, optionLabels(check))
 	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not fully checked, judged (not stated).")
 	var rules []string
 	for _, d := range check["differences"].([]any) {
@@ -286,7 +286,7 @@ func TestNoRulesCheckerIsSaidAndSealed(t *testing.T) {
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	assert.Equal(t, "pass", check["verdict"])
 	assert.Equal(t, map[string]any{"status": "not_configured"}, check["rules"])
-	assert.Contains(t, approvalText(check), "\nYour rules were not checked: no rules checker configured.", approvalText(check))
+	assert.Contains(t, approvalText(check), "\n• Your rules were not checked: no rules checker configured.", approvalText(check))
 	records, export := exportRecords(t, id)
 	for _, r := range records {
 		if r["x-deal-v0"].(map[string]any)["record_type"] == "verdict" {

@@ -1745,7 +1745,7 @@ func dealCheckCommand() *cobra.Command {
 			result.Snapshot = snapped.CapsuleID
 			// One block: the approval text, and on a pause the card the
 			// answer is sealed against. A passing check has no card.
-			approvalText := dealApprovalText(state, snap, result)
+			approvalText := dealApprovalText(state, snap, result, events)
 			if result.Verdict != "pass" {
 				result.Card = approvalText
 			}

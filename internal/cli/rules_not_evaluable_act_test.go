@@ -32,7 +32,7 @@ func pausedOnNotEvaluable(t *testing.T, findings string) (string, map[string]any
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	require.Equal(t, "pause", check["verdict"])
 	require.Contains(t, check["card"], "Your rules were not fully checked")
-	require.Contains(t, optionLabels(check), "Pay anyway")
+	require.Equal(t, []string{"Hold", "Pay"}, optionLabels(check), "no rule failed: not an override")
 	var rules []string
 	for _, d := range check["differences"].([]any) {
 		rules = append(rules, d.(map[string]any)["rule"].(string))
@@ -45,7 +45,7 @@ func pausedOnNotEvaluable(t *testing.T, findings string) (string, map[string]any
 // An act taken over the pause without the user's choice is recorded, never
 // authorized: sealed unchecked (no_sealed_approval), shown as an anomaly,
 // and counted in the profile's history as unchecked spending. With the
-// user's "Pay anyway", the act is authorized by their approval of the
+// user's "Pay", the act is authorized by their approval of the
 // check whose only difference is rules_not_evaluable.
 func TestANotEvaluableRulesVerdictNeverAuthorizesAnActOnItsOwn(t *testing.T) {
 	for name, findings := range notEvaluableCases {
@@ -75,7 +75,7 @@ func TestANotEvaluableRulesVerdictNeverAuthorizesAnActOnItsOwn(t *testing.T) {
 			}
 			assert.True(t, flagged, "the act is an anomaly in the report")
 
-			// With "Pay anyway": authorized over rules_not_evaluable.
+			// With "Pay": authorized over rules_not_evaluable.
 			other, check := pausedOnNotEvaluable(t, findings)
 			approval, err := answerCheck(t, other, check["check_id"].(string), "yes, pay anyway", check["card"].(string))
 			require.NoError(t, err)

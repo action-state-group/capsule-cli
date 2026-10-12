@@ -1157,6 +1157,12 @@ var proceedPlainLabels = map[string]string{
 	"share_contact": "Share", "share_credentials": "Share",
 }
 
+// violationRules are the difference rules that break something the user set:
+// a failing rule of theirs that asks for approval, or a limit they gave. Only
+// these make the proceed option an override ("Pay anyway"). A deny offers no
+// proceed at all.
+var violationRules = map[string]bool{"rules_escalate": true, "over_limit": true, "under_floor": true}
+
 var proceedLabels = map[string]string{
 	"pay": "Pay anyway", "commit": "Confirm anyway", "sign": "Sign anyway", "cancel": "Cancel anyway",
 	"share_contact": "Share anyway", "share_credentials": "Share anyway",
@@ -1402,11 +1408,13 @@ func settleCheck(r *dealCheckResult, s dealState) {
 	if s.open.Who.Phone != "" && slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Question == "who" }) {
 		r.Options = append(r.Options, dealOption{ID: "verify_contact", Label: "Call the number I found (" + s.open.Who.Phone + ")"})
 	}
-	// "Pay anyway" overrides a finding. A check paused only because the
-	// rules could not be checked has none to override: "Pay".
-	label := proceedLabels[r.Action]
-	if !slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule != "rules_not_checked" }) {
-		label = proceedPlainLabels[r.Action]
+	// "Pay anyway" overrides a violation: a rule of the user's that failed
+	// and asks for approval, or a limit the user set. Anything else the
+	// check flags (rules not checked, a changed payee, a first telling) is
+	// news to decide on, not a rule to override: "Pay".
+	label := proceedPlainLabels[r.Action]
+	if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return violationRules[d.Rule] }) {
+		label = proceedLabels[r.Action]
 	}
 	r.Options = append(r.Options, dealOption{ID: "proceed", Label: label})
 }
