@@ -230,8 +230,10 @@ func (s *dealSession) historyBundle(ctx context.Context, audience string, select
 
 // dealHistoryMember is one picked deal's copy for audience, read from its log
 // as it stands: through its latest checkpoint, with nothing sealed and no
-// checkpoint cut. A shared copy withholds what `deal report --share` withholds
-// (dealWithholdRecords, the rewritten section, the share gate on its bytes).
+// checkpoint cut. A shared copy withholds the records `deal report --share`
+// withholds (dealWithholdRecords), carries the section rewritten for the
+// audience, or a report sealed earlier for that audience as it was sealed,
+// and passes the share gate on its bytes.
 // A deal step indexed but not yet on the log (an interrupted write) is
 // refused rather than recovered, since recovery writes. A deal with a report
 // sealed within the checkpoint must name one (a bundle holding a sealed
@@ -389,6 +391,12 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 		failed = append(failed, "selection_record_unverified")
 	case holder == "" || signatureStates[recordID] != "authored":
 		failed = append(failed, "selection_record_unsigned")
+	}
+	if value["root"] != recordID {
+		failed = append(failed, "selection_record_not_root")
+	}
+	if cert, _ := value["completeness_certificate"].(map[string]interface{}); cert["log_id"] != historyLogID {
+		failed = append(failed, "not_a_history_log")
 	}
 	if !sameJSONValue(ext["selection"], sealed["selection"]) {
 		failed = append(failed, "selection_not_sealed")

@@ -492,3 +492,108 @@ func TestDealViewForbidsAHistory(t *testing.T) {
 	require.NoError(t, json.Unmarshal(dealViewManifestJSON, &m))
 	assert.True(t, manifestSet(manifestMap(m, "forbids")["extensions"])[historySelectionExtension])
 }
+
+// sealHistory writes a History the holder seals over any selection and deals
+// (as a holder misusing their own key could), through the builder's own
+// sealing.
+func sealHistory(t *testing.T, audience string, selection []any, deals map[string]any) string {
+	t.Helper()
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, s.close()) }()
+	sel := make([]interface{}, len(selection))
+	copy(sel, selection)
+	b, id, err := s.historyBundle(t.Context(), audience, sel)
+	require.NoError(t, err)
+	b["extensions"] = map[string]interface{}{historySelectionExtension: map[string]interface{}{"selection_record": id, "selection": sel, "deals": deals}}
+	return rewrite(t, b)
+}
+
+// A deal with no sealed report is carried with its section rewritten for the
+// audience, as `deal report --share` writes it: none of the private values
+// in its baseline, nor the user's own words, is in the file.
+func TestDealHistoryInlineSharedCopyCarriesNoPrivateValue(t *testing.T) {
+	d := historyStore(t)
+	fresh := openPrivateDeal(t)
+	path, _ := writeHistory(t, append(d.all(), fresh), nil, fresh)
+	b := readHistory(t, path)
+	section := historyExt(b)["deals"].(map[string]any)[fresh].(map[string]any)["extensions"].(map[string]any)[dealProfile].(map[string]any)
+	assert.NotContains(t, section, dealReportPointer, "no report sealed: the section rides rewritten")
+	assert.Equal(t, dealAudienceCounterparty, section["audience"])
+	raw := string(mustRead(t, path))
+	for _, v := range []string{homeAddress, "Larkspur", cardNumber, verifyCode, shopEmail, shopPhone, "Buy the sticker", "texted me"} {
+		assert.NotContains(t, raw, v)
+	}
+	verdict, _, findings, err := verifyHistory(t, path)
+	require.NoError(t, err, "%v", findings)
+	assert.Equal(t, "VALID", verdict)
+}
+
+// What the History's own records and members must be: the selection signed
+// and the bundle's root on the history log; each member a bundle whose
+// every record is signed; each selection entry well formed; each member the
+// copy for the sealed audience, even when the holder sealed its digest.
+func TestDealHistoryChecksItsOwnParts(t *testing.T) {
+	d := historyStore(t)
+	path, _ := writeHistory(t, d.all(), nil, d.closed)
+	keepPath, _ := writeHistory(t, d.all(), []string{"--audience", "keep"}, d.closed)
+	keep := historyExt(readHistory(t, keepPath))["deals"].(map[string]any)[d.closed].(map[string]any)
+
+	t.Run("selection unsigned", func(t *testing.T) {
+		b := readHistory(t, path)
+		id := historyExt(b)["selection_record"].(string)
+		for _, raw := range b["records"].([]any) {
+			if r := raw.(map[string]any); r["capsule_id"] == id {
+				delete(r, "signature")
+				delete(r, "key_id")
+			}
+		}
+		_, _, findings, _ := verifyHistory(t, rewrite(t, b))
+		assert.Contains(t, findings, "selection_record_unsigned")
+	})
+	t.Run("selection not the root", func(t *testing.T) {
+		b := readHistory(t, path)
+		b["root"] = strings.Repeat("0", 64)
+		_, _, findings, err := verifyHistory(t, rewrite(t, b))
+		require.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Contains(t, findings, "selection_record_not_root")
+	})
+	t.Run("not on the history log", func(t *testing.T) {
+		b := readHistory(t, path)
+		b["completeness_certificate"].(map[string]any)["log_id"] = dealLogID(d.closed)
+		_, _, findings, err := verifyHistory(t, rewrite(t, b))
+		require.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Contains(t, findings, "not_a_history_log")
+	})
+	t.Run("a member record unsigned", func(t *testing.T) {
+		b := readHistory(t, path)
+		r := historyExt(b)["deals"].(map[string]any)[d.closed].(map[string]any)["records"].([]any)[0].(map[string]any)
+		delete(r, "signature")
+		delete(r, "key_id")
+		_, _, findings, err := verifyHistory(t, rewrite(t, b))
+		require.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Contains(t, findings, "deal_record_unsigned:"+d.closed)
+	})
+	t.Run("a member not a bundle", func(t *testing.T) {
+		b := readHistory(t, path)
+		historyExt(b)["deals"].(map[string]any)[d.closed] = map[string]any{"bundle_kind": "something-else"}
+		_, _, findings, err := verifyHistory(t, rewrite(t, b))
+		require.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Equal(t, []string{"deal_not_a_bundle:" + d.closed}, findings)
+	})
+	t.Run("a selection entry malformed, sealed by the holder", func(t *testing.T) {
+		member := historyExt(readHistory(t, path))["deals"].(map[string]any)[d.closed]
+		edited := sealHistory(t, dealAudienceCounterparty, []any{map[string]any{"deal_id": d.closed, "bundle_digest": "not-a-digest"}}, map[string]any{d.closed: member})
+		_, _, findings, err := verifyHistory(t, edited)
+		require.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Equal(t, []string{"selection_entry_malformed:" + d.closed, "deal_not_in_selection:" + d.closed}, findings)
+	})
+	t.Run("the keep copy, its digest sealed under counterparty", func(t *testing.T) {
+		edited := sealHistory(t, dealAudienceCounterparty, []any{map[string]any{"deal_id": d.closed, "bundle_digest": jcsDigest(keep)}}, map[string]any{d.closed: keep})
+		_, _, findings, err := verifyHistory(t, edited)
+		require.ErrorIs(t, err, ErrBundleInvalid)
+		assert.Equal(t, []string{"deal_audience_not_selected:" + d.closed}, findings)
+	})
+}
