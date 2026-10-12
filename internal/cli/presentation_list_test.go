@@ -22,6 +22,7 @@ type listOutput struct {
 	Selected       map[string]any             `json:"selected"`
 	Refused        []map[string]any           `json:"refused"`
 	Ambiguity      map[string]any             `json:"ambiguity"`
+	Registration   map[string]any             `json:"registration_refused"`
 	Modules        []map[string]any           `json:"modules"`
 	PluginsRefused []map[string]any           `json:"plugins_refused"`
 	Detail         string                     `json:"detail"`
@@ -245,5 +246,45 @@ func TestPresentationListUsesThePagesRuntimeAndBuiltins(t *testing.T) {
 		resolverCopy, ok := aacpresentation.BuiltinManifestJSON(m.ID)
 		require.True(t, ok, m.ID)
 		assert.Equal(t, string(resolverCopy), string(vendored), m.ID)
+	}
+}
+
+// A plugin's manifest the registry refuses to hold is shown, with the
+// resolver's reason, and nothing is resolved: a duplicate id (refused by
+// Register) and a dead manifest (refused by ParseManifest, which the plugin
+// loader's schema check lets through).
+func TestPresentationListShowsARegistrationRefusal(t *testing.T) {
+	for name, tc := range map[string]struct {
+		edit   func(m map[string]any)
+		module string
+		detail string
+	}{
+		"duplicate id": {func(m map[string]any) { m["id"] = "capsulectl.deal-view/v0" },
+			"capsulectl.deal-view/v0", "manifest capsulectl.deal-view/v0 is already registered"},
+		"dead manifest": {func(m map[string]any) {
+			m["requires"] = map[string]any{"bundle_kind": "evidence-bundle/v2", "profiles": []any{"spec_version:org.example.rules/v1"}}
+			m["forbids"] = map[string]any{"profiles": []any{"spec_version:org.example.rules/v1"}}
+		}, "org.example.deal-view/v0", "manifest \"org.example.deal-view/v0\" refused: "},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := pluginRoot(t)
+			trustPresentationsIn(t, root)
+			p := genericPluginFixture(t)
+			tc.edit(p.manifest)
+			presentationPlugin(t, root, "dealview", p)
+			stdout, err := invoke(t, "", "presentation", "list", "--bundle", presentationListGenericBundle)
+			require.Error(t, err)
+			assert.Equal(t, 2, ExitCode(err))
+			assert.Contains(t, err.Error(), tc.detail)
+			l := decodeList(t, stdout)
+			assert.Equal(t, "registration_refused", l.Resolution)
+			assert.Nil(t, l.Selected)
+			assert.Equal(t, map[string]any{"module": tc.module, "plugin": "dealview"}, l.Registration)
+			assert.Contains(t, l.Detail, tc.detail)
+
+			text, err := invoke(t, "", "presentation", "list", "--bundle", presentationListGenericBundle, "--text")
+			require.Error(t, err)
+			assert.Contains(t, text, "registration_refused: "+tc.detail)
+		})
 	}
 }
