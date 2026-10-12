@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -8,10 +9,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,7 +32,137 @@ import (
 //   - other: one more retail deal.
 type historyDeals struct{ closed, private, floor, opened, other string }
 
+// storeTemplate is a store built once per package run and copied into
+// each test that uses it: under the race detector, making the deals and
+// writing Histories of them was most of each History test's time. Each test
+// gets its own copy, which it may write to or tamper with.
+type storeTemplate struct {
+	once  sync.Once
+	dir   string // config/ (the XDG config home), deal/ (the profile's store) and the build's own files
+	ready bool
+}
+
+// use builds the template on first use: build runs in the calling test's
+// environment and may keep files under the template's directory, then the
+// template keeps that environment's config home and deal store. It then
+// points the test at its own copy and returns the copy's directory.
+func (s *storeTemplate) use(t *testing.T, build func(t *testing.T, dir string)) string {
+	t.Helper()
+	s.once.Do(func() {
+		var err error
+		s.dir, err = os.MkdirTemp("", "capsule-history-store-")
+		require.NoError(t, err)
+		build(t, s.dir)
+		p, err := loadProfile("deal")
+		require.NoError(t, err)
+		store := filepath.Dir(p.Connection.Database)
+		copyTree(t, os.Getenv("XDG_CONFIG_HOME"), filepath.Join(s.dir, "config"))
+		copyTree(t, store, filepath.Join(s.dir, "deal"))
+		pointProfile(t, filepath.Join(s.dir, "config"), store, filepath.Join(s.dir, "deal"))
+		s.ready = true
+	})
+	require.True(t, s.ready, "the History store failed to build in an earlier test")
+	dir := t.TempDir()
+	copyTree(t, s.dir, dir)
+	pointProfile(t, filepath.Join(dir, "config"), filepath.Join(s.dir, "deal"), filepath.Join(dir, "deal"))
+	dealTestEnv(t, filepath.Join(dir, "config"))
+	return dir
+}
+
+var (
+	dealsTemplate, historiesTemplate storeTemplate
+	templateDeals                    historyDeals
+	templatePickedSummary            map[string]any
+)
+
 func historyStore(t *testing.T) historyDeals {
+	t.Helper()
+	dealsTemplate.use(t, func(t *testing.T, _ string) { templateDeals = makeHistoryDeals(t) })
+	return templateDeals
+}
+
+// historyFiles are Histories of historyStore's deals that tests read, edit
+// copies of and verify, written in this order on one store (so each later
+// one carries the earlier selections, withheld):
+//   - picked: closed, private and floor (pickedSummary is what the command
+//     printed);
+//   - other: other alone;
+//   - closed: closed alone, and closedKeep, the user's own (keep) copy of it.
+type historyFiles struct {
+	picked, other, closed, closedKeep string
+	pickedSummary                     map[string]any
+}
+
+// historyStoreWithFiles is historyStore after historyFiles were written to
+// it: writeHistory checked, once, that none of them wrote a deal's log.
+func historyStoreWithFiles(t *testing.T) (historyDeals, historyFiles) {
+	t.Helper()
+	dir := historiesTemplate.use(t, func(t *testing.T, dir string) {
+		d := historyStore(t)
+		for _, h := range []struct {
+			name   string
+			args   []string
+			picked []string
+		}{
+			{"picked", nil, []string{d.closed, d.private, d.floor}},
+			{"other", nil, []string{d.other}},
+			{"closed", nil, []string{d.closed}},
+			{"closed-keep", []string{"--audience", "keep"}, []string{d.closed}},
+		} {
+			path, summary := writeHistory(t, d.all(), h.args, h.picked...)
+			if h.name == "picked" {
+				templatePickedSummary = summary
+			}
+			copyTree(t, filepath.Dir(path), filepath.Join(dir, "histories", h.name))
+		}
+	})
+	file := func(name string) string { return filepath.Join(dir, "histories", name, "history.json") }
+	return templateDeals, historyFiles{
+		picked: file("picked"), other: file("other"), closed: file("closed"), closedKeep: file("closed-keep"),
+		pickedSummary: maps.Clone(templatePickedSummary),
+	}
+}
+
+// copyTree copies the directory src to dst, keeping each file's mode.
+func copyTree(t *testing.T, src, dst string) {
+	t.Helper()
+	require.NoError(t, filepath.WalkDir(src, func(path string, e fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		info, err := e.Info()
+		if err != nil {
+			return err
+		}
+		if e.IsDir() {
+			return os.MkdirAll(filepath.Join(dst, rel), info.Mode().Perm())
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dst, rel), raw, info.Mode().Perm())
+	}))
+}
+
+// pointProfile rewrites the deal profile under configHome to name store
+// paths under to instead of from, and checks none under from is left.
+func pointProfile(t *testing.T, configHome, from, to string) {
+	t.Helper()
+	profile := filepath.Join(configHome, "capsule", "profiles", "deal.yaml")
+	raw, err := os.ReadFile(profile)
+	require.NoError(t, err)
+	sep := string(filepath.Separator)
+	raw = bytes.ReplaceAll(raw, []byte(from+sep), []byte(to+sep))
+	require.NotContains(t, string(raw), from+sep, "the copy's profile names only its own store")
+	require.NoError(t, os.WriteFile(profile, raw, 0o600))
+}
+
+func makeHistoryDeals(t *testing.T) historyDeals {
 	t.Helper()
 	dealFixture(t)
 	var d historyDeals
@@ -181,13 +315,14 @@ func verifyHistory(t *testing.T, path string) (string, map[string]any, []string,
 
 // Five deals, three picked: the History is the history copy of each (every
 // record's payload withheld), every nested deal checked as its own bundle,
-// one signer key, no deal's log written; the pick is sealed on the history
-// log; outcome and action class are reported as not proven.
+// one signer key (that no deal's log was written is checked where the
+// History is written, in historyStoreWithFiles); the pick is sealed on the
+// history log; outcome and action class are reported as not proven.
 func TestDealHistoryVerifiesEachPickedDeal(t *testing.T) {
-	d := historyStore(t)
+	d, h := historyStoreWithFiles(t)
 	picked := []string{d.closed, d.private, d.floor}
-	path, summary := writeHistory(t, d.all(), nil, picked...)
-	assert.Equal(t, dealAudienceHistory, summary["audience"], "the history copy unless asked otherwise")
+	path := h.picked
+	assert.Equal(t, dealAudienceHistory, h.pickedSummary["audience"], "the history copy unless asked otherwise")
 
 	want := append([]string{}, picked...)
 	sort.Strings(want)
@@ -238,8 +373,9 @@ func TestDealHistoryVerifiesEachPickedDeal(t *testing.T) {
 	assert.Equal(t, dealAudienceHistory, sealed["audience"])
 	assert.Equal(t, ext["selection"], sealed["selection"])
 
-	// A second History withholds the first one's selection.
-	path2, _ := writeHistory(t, d.all(), nil, d.other)
+	// A second History (other, written next) withholds the first one's
+	// selection.
+	path2 := h.other
 	b2 := readHistory(t, path2)
 	assert.Len(t, b2["records"], 2, "both selections are on the history log")
 	earlier, _ := b2["disclosures"].(map[string]any)[ext["selection_record"].(string)].(map[string]any)
@@ -324,9 +460,8 @@ func TestDealHistoryStopsAtTheLatestCheckpoint(t *testing.T) {
 // One record edited inside one nested deal: INVALID, naming that deal and no
 // other.
 func TestDealHistoryTamperedRecordNamesItsDeal(t *testing.T) {
-	d := historyStore(t)
-	path, _ := writeHistory(t, d.all(), nil, d.closed, d.private, d.floor)
-	b := readHistory(t, path)
+	d, h := historyStoreWithFiles(t)
+	b := readHistory(t, h.picked)
 	tb := historyExt(b)["deals"].(map[string]any)[d.closed].(map[string]any)
 	tb["records"].([]any)[0].(map[string]any)["timestamp"] = "2020-01-01T00:00:00Z"
 
@@ -349,12 +484,12 @@ func TestDealHistoryTamperedRecordNamesItsDeal(t *testing.T) {
 // picked deal cannot be dropped; and neither the carried nor the sealed
 // selection can be edited to take one in.
 func TestDealHistoryRefusesAnUnpickedDeal(t *testing.T) {
-	d := historyStore(t)
-	path, _ := writeHistory(t, d.all(), nil, d.closed, d.private, d.floor)
-	otherPath, _ := writeHistory(t, d.all(), nil, d.other)
-	unpicked := historyExt(readHistory(t, otherPath))["deals"].(map[string]any)[d.other].(map[string]any)
+	d, h := historyStoreWithFiles(t)
+	path := h.picked
+	unpicked := historyExt(readHistory(t, h.other))["deals"].(map[string]any)[d.other].(map[string]any)
 
 	t.Run("beside the picked deals", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		historyExt(b)["deals"].(map[string]any)[d.other] = unpicked
 		_, _, findings, err := verifyHistory(t, rewrite(t, b))
@@ -362,6 +497,7 @@ func TestDealHistoryRefusesAnUnpickedDeal(t *testing.T) {
 		assert.Equal(t, []string{"deal_not_in_selection:" + d.other}, findings)
 	})
 	t.Run("a record inside a picked deal", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		tb := historyExt(b)["deals"].(map[string]any)[d.closed].(map[string]any)
 		tb["records"] = append(tb["records"].([]any), unpicked["records"].([]any)[0])
@@ -370,6 +506,7 @@ func TestDealHistoryRefusesAnUnpickedDeal(t *testing.T) {
 		assert.ElementsMatch(t, []string{"deal_bundle_not_the_selected_one:" + d.closed, "deal_invalid:" + d.closed}, findings)
 	})
 	t.Run("under a picked deal's name", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		historyExt(b)["deals"].(map[string]any)[d.closed] = unpicked
 		_, _, findings, err := verifyHistory(t, rewrite(t, b))
@@ -377,6 +514,7 @@ func TestDealHistoryRefusesAnUnpickedDeal(t *testing.T) {
 		assert.ElementsMatch(t, []string{"deal_bundle_not_the_selected_one:" + d.closed, "deal_not_of_its_log:" + d.closed}, findings)
 	})
 	t.Run("a picked deal dropped", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		delete(historyExt(b)["deals"].(map[string]any), d.floor)
 		_, _, findings, err := verifyHistory(t, rewrite(t, b))
@@ -384,6 +522,7 @@ func TestDealHistoryRefusesAnUnpickedDeal(t *testing.T) {
 		assert.Equal(t, []string{"deal_missing:" + d.floor}, findings)
 	})
 	t.Run("the carried selection edited", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		ext := historyExt(b)
 		ext["selection"] = append(ext["selection"].([]any), map[string]any{"deal_id": d.other, "bundle_digest": jcsDigest(unpicked)})
@@ -393,6 +532,7 @@ func TestDealHistoryRefusesAnUnpickedDeal(t *testing.T) {
 		assert.Equal(t, []string{"selection_not_sealed", "deal_not_in_selection:" + d.other}, findings)
 	})
 	t.Run("the sealed selection edited", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		ext := historyExt(b)
 		sealed := b["disclosures"].(map[string]any)[ext["selection_record"].(string)].(map[string]any)["agent_input"].(map[string]any)
@@ -408,11 +548,9 @@ func TestDealHistoryRefusesAnUnpickedDeal(t *testing.T) {
 
 // The owner's copy of a deal swapped into a History sent to someone is named.
 func TestDealHistoryNamesACopyForAnotherAudience(t *testing.T) {
-	d := historyStore(t)
-	path, _ := writeHistory(t, d.all(), nil, d.closed)
-	keepPath, _ := writeHistory(t, d.all(), []string{"--audience", "keep"}, d.closed)
-	keep := historyExt(readHistory(t, keepPath))["deals"].(map[string]any)[d.closed]
-	b := readHistory(t, path)
+	d, h := historyStoreWithFiles(t)
+	keep := historyExt(readHistory(t, h.closedKeep))["deals"].(map[string]any)[d.closed]
+	b := readHistory(t, h.closed)
 	historyExt(b)["deals"].(map[string]any)[d.closed] = keep
 	_, entry, findings, err := verifyHistory(t, rewrite(t, b))
 	require.ErrorIs(t, err, ErrBundleInvalid)
@@ -530,12 +668,12 @@ func sealHistory(t *testing.T, audience string, selection []any, deals map[strin
 // every record is signed; each selection entry well formed; each member the
 // copy for the sealed audience, even when the holder sealed its digest.
 func TestDealHistoryChecksItsOwnParts(t *testing.T) {
-	d := historyStore(t)
-	path, _ := writeHistory(t, d.all(), nil, d.closed)
-	keepPath, _ := writeHistory(t, d.all(), []string{"--audience", "keep"}, d.closed)
-	keep := historyExt(readHistory(t, keepPath))["deals"].(map[string]any)[d.closed].(map[string]any)
+	d, h := historyStoreWithFiles(t)
+	path := h.closed
+	keep := historyExt(readHistory(t, h.closedKeep))["deals"].(map[string]any)[d.closed].(map[string]any)
 
 	t.Run("selection unsigned", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		id := historyExt(b)["selection_record"].(string)
 		for _, raw := range b["records"].([]any) {
@@ -548,6 +686,7 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		assert.Contains(t, findings, "selection_record_unsigned")
 	})
 	t.Run("selection not the root", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		b["root"] = strings.Repeat("0", 64)
 		_, _, findings, err := verifyHistory(t, rewrite(t, b))
@@ -555,6 +694,7 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		assert.Contains(t, findings, "selection_record_not_root")
 	})
 	t.Run("not on the history log", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		b["completeness_certificate"].(map[string]any)["log_id"] = dealLogID(d.closed)
 		_, _, findings, err := verifyHistory(t, rewrite(t, b))
@@ -562,6 +702,7 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		assert.Contains(t, findings, "not_a_history_log")
 	})
 	t.Run("a member's deal section edited", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		// The CHANGELOG's known limit: a member's deal section is sealed by
 		// no record; the nested deal stays VALID, and only the History's
 		// bundle_digest catches the edit.
@@ -576,6 +717,7 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		assert.Equal(t, "VALID", entry["deals"].([]any)[0].(map[string]any)["verdict"])
 	})
 	t.Run("a member record unsigned", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		r := historyExt(b)["deals"].(map[string]any)[d.closed].(map[string]any)["records"].([]any)[0].(map[string]any)
 		delete(r, "signature")
@@ -585,6 +727,7 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		assert.Contains(t, findings, "deal_record_unsigned:"+d.closed)
 	})
 	t.Run("a member not a bundle", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		b := readHistory(t, path)
 		historyExt(b)["deals"].(map[string]any)[d.closed] = map[string]any{"bundle_kind": "something-else"}
 		_, _, findings, err := verifyHistory(t, rewrite(t, b))
@@ -592,6 +735,7 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		assert.Equal(t, []string{"deal_not_a_bundle:" + d.closed}, findings)
 	})
 	t.Run("a selection entry malformed, sealed by the holder", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		member := historyExt(readHistory(t, path))["deals"].(map[string]any)[d.closed]
 		edited := sealHistory(t, dealAudienceHistory, []any{map[string]any{"deal_id": d.closed, "bundle_digest": "not-a-digest"}}, map[string]any{d.closed: member})
 		_, _, findings, err := verifyHistory(t, edited)
@@ -599,12 +743,14 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		assert.Equal(t, []string{"selection_entry_malformed:" + d.closed, "deal_not_in_selection:" + d.closed}, findings)
 	})
 	t.Run("the keep copy, its digest sealed under history", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		edited := sealHistory(t, dealAudienceHistory, []any{map[string]any{"deal_id": d.closed, "bundle_digest": jcsDigest(keep)}}, map[string]any{d.closed: keep})
 		_, _, findings, err := verifyHistory(t, edited)
 		require.ErrorIs(t, err, ErrBundleInvalid)
 		assert.Equal(t, []string{"deal_audience_not_selected:" + d.closed, "deal_payload_disclosed:" + d.closed}, findings)
 	})
 	t.Run("one payload disclosed, sealed by the holder", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		// A history copy with one record's payload put back (from the keep
 		// copy, so it still matches its seal and the member verifies).
 		member := historyExt(readHistory(t, path))["deals"].(map[string]any)[d.closed].(map[string]any)
@@ -617,6 +763,7 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 		assert.Equal(t, "VALID", entry["deals"].([]any)[0].(map[string]any)["verdict"], "the member itself verifies: only the History's rule catches it")
 	})
 	t.Run("a selection sealed for the other party", func(t *testing.T) {
+		raceSampleKey(t, t.Name())
 		member := historyExt(readHistory(t, path))["deals"].(map[string]any)[d.closed].(map[string]any)
 		edited := sealHistory(t, dealAudienceCounterparty, []any{map[string]any{"deal_id": d.closed, "bundle_digest": jcsDigest(member)}}, map[string]any{d.closed: member})
 		_, entry, findings, err := verifyHistory(t, edited)
@@ -631,8 +778,8 @@ func TestDealHistoryChecksItsOwnParts(t *testing.T) {
 // writes its page. One whose nested deal fails is neither listed as verified
 // nor given a page.
 func TestDealHistoryHasAPage(t *testing.T) {
-	d := historyStore(t)
-	path, _ := writeHistory(t, d.all(), nil, d.closed, d.floor)
+	d, h := historyStoreWithFiles(t)
+	path := h.picked
 
 	out, err := invoke(t, "", "presentation", "list", "--bundle", path)
 	require.NoError(t, err, out)
@@ -667,17 +814,16 @@ func TestDealHistoryHasAPage(t *testing.T) {
 // record-level reads a viewer buckets (each record's time, each act's
 // effect status) are per record, in the nested bundles.
 func TestDealHistoryCountsDealsNotRecords(t *testing.T) {
-	d := historyStore(t)
-	path, _ := writeHistory(t, d.all(), nil, d.closed, d.floor)
-	b := readHistory(t, path)
+	_, h := historyStoreWithFiles(t)
+	b := readHistory(t, h.picked)
 	ext := historyExt(b)
 	selection := ext["selection"].([]any)
 	deals := map[string]bool{}
 	for _, e := range selection {
 		deals[e.(map[string]any)["deal_id"].(string)] = true
 	}
-	assert.Len(t, selection, 2)
-	assert.Len(t, deals, 2, "each deal once")
+	assert.Len(t, selection, 3)
+	assert.Len(t, deals, 3, "each deal once")
 	records, effects := 0, map[string]int{}
 	for _, tb := range ext["deals"].(map[string]any) {
 		for _, raw := range tb.(map[string]any)["records"].([]any) {
