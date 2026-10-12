@@ -30,8 +30,8 @@ import (
 //     modules, are of one tier and can match one descriptor (section 4.5),
 //     and no id is given twice.
 //
-// `presentation list` (which module a bundle resolves to) waits for a
-// resolver in agent-action-capsule's Go module.
+// `presentation list` (presentation_list.go) says which module a bundle
+// resolves to, with agent-action-capsule's Go resolver.
 
 // presentationRuntime is the vendored runtime's declaration
 // (REFERENCE_PRESENTATION_RUNTIME in assets/evidence-graph.iife.js; pinned
@@ -347,7 +347,7 @@ func presentationSelection(only []string) ([]presentationModule, presentationBui
 }
 
 func presentationCommands() *cobra.Command {
-	group := &cobra.Command{Use: "presentation", Short: "Build offline pages with the installed plugins' presentation modules"}
+	group := &cobra.Command{Use: "presentation", Short: "Build offline pages with the installed plugins' presentation modules, and say which module a bundle resolves to"}
 	build := &cobra.Command{Use: "build", Short: "Write the offline page for a bundle, with the plugins' presentation modules in its module slots", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
 		bundlePath, _ := c.Flags().GetString("bundle")
 		out, _ := c.Flags().GetString("out")
@@ -468,6 +468,6 @@ func presentationCommands() *cobra.Command {
 	build.Flags().String("depth", "", "Depth level: L0, L1 or L2 (default: the module's own)")
 	build.Flags().String("title", "", "Page title (wins over the wording pack's page.title)")
 	build.Flags().StringSlice("module", nil, "Carry only this presentation module id (repeatable; default: every trusted-executable module the installed plugins offer)")
-	group.AddCommand(build)
+	group.AddCommand(build, presentationListCommand())
 	return group
 }

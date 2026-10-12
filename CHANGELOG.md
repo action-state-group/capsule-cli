@@ -29,6 +29,20 @@
   text, and offers `options` as buttons where the host supports them. After a share's "Step 1 of
   2", it asks the user before paying, even when the pay check passes.
 
+### `presentation list`: which presentation module a bundle resolves to
+
+- **Added:** `capsulectl presentation list --bundle <file> [--audience <token>] [--format html|fragment|embedded] [--text]`
+  says which presentation module the bundle resolves to among every module this tool can put in a
+  page: the page's built-ins, its deal view (`capsulectl.deal-view/v0`) and the modules the
+  installed plugins offer through the `presentations[]` handshake, each listed with its source,
+  trust class, tier and whether it matches. agent-action-capsule's Go resolver (`go/presentation`)
+  makes every decision: the bundle's descriptor, the runtime's refusals (each refused module is
+  shown with its reason; one that matched, with the resolver's refusal line), the ambiguity test at registration and the
+  resolution. Exit 0 for a module or for no presentation; 1 when the bundle does not pass the
+  viewer's verification gate (nothing is matched); 2 when two modules of one tier can match one
+  bundle (the resolver's named ambiguity, never first-wins) or the registry refuses a manifest.
+  The JSON report is the default; `--text` prints a short summary.
+
 ## v0.1.0-rc15
 
 ### Release tags are signed from v0.1.0-rc15
