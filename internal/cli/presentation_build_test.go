@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/action-state-group/agent-action-capsule/go/emitter"
+	aacpresentation "github.com/action-state-group/agent-action-capsule/go/presentation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -395,6 +396,165 @@ func TestPresentationBuildSaysWhatItLeavesOut(t *testing.T) {
 	assert.ErrorContains(t, err, "unavailable (no-document)")
 	_, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", presentationOut(t), "--format", "fragment")
 	assert.ErrorContains(t, err, "not built by this tool yet")
+}
+
+// excludesAudience agrees with the resolver's own declarative match on
+// every audience case, over a descriptor that meets the manifest's other
+// conditions: the build leaves out exactly the modules the page could never
+// select.
+func TestExcludesAudienceIsTheResolversAudienceCondition(t *testing.T) {
+	kind := "evidence-bundle/v2"
+	descriptor := aacpresentation.Descriptor{Verified: true, BundleKind: &kind, Profiles: []string{}, Extensions: []string{}}
+	for _, audiences := range [][]any{{"*"}, {"keep"}, {"counterparty"}, {"keep", "counterparty"}, {"keep", "*"}} {
+		for _, audience := range []string{"*", "keep", "counterparty", "adjudicator"} {
+			manifest := exampleDealManifest(strings.Repeat("0", 64))
+			manifest["audiences"] = audiences
+			raw, err := json.Marshal(manifest)
+			require.NoError(t, err)
+			parsed, err := aacpresentation.ParseManifest(raw)
+			require.NoError(t, err)
+			assert.Equal(t, aacpresentation.Matches(parsed, descriptor, audience, aacpresentation.FormatHTML), !excludesAudience(manifest, audience),
+				"audiences %v, --audience %s", audiences, audience)
+		}
+	}
+}
+
+const keepOnlyMarker = "keep-only-module-marker-5d1c"
+
+// keepOnlyDealFixture is the example module for the keep audience only,
+// under id, its script marked with keepOnlyMarker and its files under
+// names of their own, so it can sit beside exampleDealFixture in one root.
+func keepOnlyDealFixture(t *testing.T, id string) presentationFixture {
+	base := exampleDealFixture(t)
+	script := append(append([]byte{}, base.files["view.js"]...), []byte("// "+keepOnlyMarker+"\n")...)
+	p := presentationFixture{manifest: base.manifest, files: map[string][]byte{}}
+	p.manifest["id"], p.manifest["audiences"] = id, []any{"keep"}
+	p.manifest["executable"].(map[string]any)["script_sha256"] = hexSHA256(script)
+	for _, e := range base.entries {
+		e["path"] = "keep-" + e["path"].(string)
+		p.entries = append(p.entries, e)
+	}
+	p.entries[0]["sha256"] = hexSHA256(script)
+	for file, body := range base.files {
+		p.files["keep-"+file] = body
+	}
+	p.files["keep-view.js"] = script
+	return p
+}
+
+// A module for the keep audience only never reaches a counterparty page:
+// the page carries neither its id nor its script, the result says it was
+// left out, and naming it with --module is refused. The keep build still
+// carries it.
+func TestPresentationBuildLeavesOutAModuleForAnotherAudience(t *testing.T) {
+	const id = "org.example.deal-view/v0"
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	fixture := keepOnlyDealFixture(t, id)
+	script := fixture.files["keep-view.js"]
+	presentationPlugin(t, root, "dealview", fixture)
+
+	out := presentationOut(t)
+	stdout, err := invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", out, "--audience", "counterparty")
+	require.NoError(t, err, stdout)
+	page, err := os.ReadFile(out)
+	require.NoError(t, err)
+	assert.Equal(t, 0, strings.Count(string(page), id), "the page carries the module's id")
+	assert.Equal(t, 0, strings.Count(string(page), keepOnlyMarker), "the page carries the module's script")
+	b := decodeBuild(t, stdout)
+	assert.Equal(t, "written", b.Page)
+	assert.Empty(t, b.Modules)
+	assert.Equal(t, []map[string]any{{"id": id, "plugin": "dealview",
+		"reason": "the module is for audiences keep, not counterparty, so the page leaves it out"}}, b.NotIncluded)
+	// Byte for byte the counterparty page with no plugin module at all.
+	raw, err := os.ReadFile(presentationBuildBundle)
+	require.NoError(t, err)
+	value, err := decodeBundleJSON(raw)
+	require.NoError(t, err)
+	bare, err := emitter.BuildOfflineHTML(value, evidenceGraphIIFE, emitter.OfflineOptions{Audience: "counterparty", CoreRuntimeSHA256: evidenceGraphIIFEDigest})
+	require.NoError(t, err)
+	assert.Equal(t, bare, string(page))
+
+	// "*" is no particular audience, which a keep-only manifest does not
+	// match either (the resolver's rule), so that page leaves it out too.
+	stdout, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", presentationOut(t))
+	require.NoError(t, err, stdout)
+	assert.Empty(t, decodeBuild(t, stdout).Modules)
+
+	refused := presentationOut(t)
+	_, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", refused, "--audience", "counterparty", "--module", id)
+	require.ErrorIs(t, err, ErrInput)
+	assert.ErrorContains(t, err, "--module "+id+": the module is for audiences keep, not --audience counterparty")
+	assert.NoFileExists(t, refused)
+
+	kept := presentationOut(t)
+	stdout, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", kept, "--audience", "keep", "--module", id)
+	require.NoError(t, err, stdout)
+	b = decodeBuild(t, stdout)
+	require.Len(t, b.Modules, 1)
+	assert.Equal(t, id, b.Modules[0]["id"])
+	assert.Empty(t, b.NotIncluded)
+	page, err = os.ReadFile(kept)
+	require.NoError(t, err)
+	assert.Contains(t, string(page), string(script))
+}
+
+// A module for every audience ("*"), or one that names the page's, stays
+// on a page built for one.
+func TestPresentationBuildCarriesAModuleForEveryAudienceOnACounterpartyPage(t *testing.T) {
+	for name, audiences := range map[string][]any{"every": {"*"}, "named": {"keep", "counterparty"}} {
+		t.Run(name, func(t *testing.T) {
+			root := pluginRoot(t)
+			trustPresentationsIn(t, root)
+			fixture := exampleDealFixture(t)
+			fixture.manifest["audiences"] = audiences
+			presentationPlugin(t, root, "dealview", fixture)
+			out := presentationOut(t)
+			stdout, err := invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", out, "--audience", "counterparty")
+			require.NoError(t, err, stdout)
+			b := decodeBuild(t, stdout)
+			require.Len(t, b.Modules, 1)
+			assert.Equal(t, "org.example.deal-view/v0", b.Modules[0]["id"])
+			assert.Empty(t, b.NotIncluded)
+			page, err := os.ReadFile(out)
+			require.NoError(t, err)
+			assert.Contains(t, string(page), string(fixture.files["view.js"]))
+		})
+	}
+}
+
+// The builder's checks are over the modules the page carries. A keep-only
+// module and one for every audience that could match one bundle are
+// ambiguous on a keep page, which carries both; a counterparty page carries
+// only the second, so it is written, with that module's wording pack.
+func TestPresentationBuildChecksOnlyTheModulesThePageCarries(t *testing.T) {
+	const keepID = "org.example.deal-view-keep/v0"
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	every := exampleDealFixture(t)
+	presentationPlugin(t, root, "dealview", every)
+	presentationPlugin(t, root, "dealkeep", keepOnlyDealFixture(t, keepID))
+
+	stdout, err := invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", presentationOut(t), "--audience", "keep")
+	require.ErrorIs(t, err, ErrInput)
+	b := decodeBuild(t, stdout)
+	assert.Equal(t, "ambiguous", b.Refusal["reason"])
+	assert.ElementsMatch(t, []any{"org.example.deal-view/v0", keepID}, b.Refusal["modules"])
+
+	out := presentationOut(t)
+	stdout, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", out, "--audience", "counterparty")
+	require.NoError(t, err, stdout)
+	b = decodeBuild(t, stdout)
+	require.Len(t, b.Modules, 1)
+	assert.Equal(t, "org.example.deal-view/v0", b.Modules[0]["id"])
+	assert.Equal(t, "passed", b.Modules[0]["wording"])
+	require.Len(t, b.NotIncluded, 1)
+	assert.Equal(t, keepID, b.NotIncluded[0]["id"])
+	page, err := os.ReadFile(out)
+	require.NoError(t, err)
+	assert.Contains(t, string(page), string(every.files["view.js"]))
+	assert.Equal(t, 0, strings.Count(string(page), keepID))
+	assert.Equal(t, 0, strings.Count(string(page), keepOnlyMarker))
 }
 
 // A bundle `verify --bundle` does not call VALID gets no page.

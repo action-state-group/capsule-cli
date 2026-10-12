@@ -20,9 +20,11 @@ import (
 // `presentation build` writes the offline page with the trusted-executable
 // presentation modules of the installed plugins in its module slots. Which
 // module renders is decided in the page, by the vendored runtime's resolver
-// (presentation contract section 4.3); capsulectl carries no copy of it. It
-// runs only the two checks the contract puts on a builder that need no
-// resolution, before anything is written:
+// (presentation contract section 4.3); capsulectl carries no copy of it. A
+// module whose manifest audiences exclude --audience can never render on the
+// page, so the page does not carry it (presentationSelection). It runs only
+// the two checks the contract puts on a builder that need no resolution,
+// before anything is written:
 //
 //   - the page's runtime would refuse no module it is given (section 3.2:
 //     presentation_api_unsupported, runtime_too_old), and
@@ -309,10 +311,32 @@ type presentationBuildResult struct {
 	Refusal        *presentationBuildRefusal   `json:"refusal,omitempty"`
 }
 
+// excludesAudience is the audience condition of the resolver's declarative
+// match (agent-action-capsule go/presentation Matches, section 4.3 step 2):
+// a manifest whose audiences hold neither "*" nor the page's audience never
+// renders on that page.
+func excludesAudience(m map[string]interface{}, audience string) bool {
+	audiences := manifestSet(m["audiences"])
+	return !audiences["*"] && !audiences[audience]
+}
+
+func audienceList(m map[string]interface{}) string {
+	var out []string
+	for _, a := range asList(m["audiences"]) {
+		if s, ok := a.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
 // presentationSelection is what the page will carry: the trusted-executable
-// modules of the installed plugins (or those --module names), in plugin
-// then manifest order, and what was left out and why.
-func presentationSelection(only []string) ([]presentationModule, presentationBuildResult, error) {
+// modules of the installed plugins (or those --module names) that can render
+// for the audience, in plugin then manifest order, and what was left out and
+// why. A module for other audiences is left out, so its script never reaches
+// a page built for someone it is not for; naming one with --module is
+// refused.
+func presentationSelection(only []string, audience string) ([]presentationModule, presentationBuildResult, error) {
 	var result presentationBuildResult
 	want := map[string]bool{}
 	for _, id := range only {
@@ -330,6 +354,14 @@ func presentationSelection(only []string) ([]presentationModule, presentationBui
 				continue
 			}
 			found[m.ID] = true
+			if excludesAudience(m.Manifest, audience) {
+				if want[m.ID] {
+					return nil, result, hint(ErrInput, fmt.Sprintf("--module %s: the module is for audiences %s, not --audience %s; no page written", m.ID, audienceList(m.Manifest), audience))
+				}
+				result.NotIncluded = append(result.NotIncluded, presentationNotIncluded{ID: m.ID, Plugin: p.Name,
+					Reason: fmt.Sprintf("the module is for audiences %s, not %s, so the page leaves it out", audienceList(m.Manifest), audience)})
+				continue
+			}
 			if m.Script == nil {
 				result.NotIncluded = append(result.NotIncluded, presentationNotIncluded{ID: m.ID, Plugin: p.Name,
 					Reason: "a declarative module has no script for the page's module slots, and this tool does not yet package one"})
@@ -376,7 +408,7 @@ func presentationCommands() *cobra.Command {
 		default:
 			return hint(ErrInput, "--depth must be L0, L1 or L2")
 		}
-		modules, result, err := presentationSelection(only)
+		modules, result, err := presentationSelection(only, audience)
 		if err != nil {
 			return err
 		}
@@ -467,7 +499,7 @@ func presentationCommands() *cobra.Command {
 	build.Flags().String("format", "html", "Packaging target: html (fragment and embedded are not built yet; static is unavailable)")
 	build.Flags().String("depth", "", "Depth level: L0, L1 or L2 (default: the module's own)")
 	build.Flags().String("title", "", "Page title (wins over the wording pack's page.title)")
-	build.Flags().StringSlice("module", nil, "Carry only this presentation module id (repeatable; default: every trusted-executable module the installed plugins offer)")
+	build.Flags().StringSlice("module", nil, "Carry only this presentation module id (repeatable; default: every trusted-executable module the installed plugins offer for --audience)")
 	group.AddCommand(build, presentationListCommand())
 	return group
 }

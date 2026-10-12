@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### A presentation page carries only the modules for its audience
+
+- **Fixed (privacy):** `presentation build` put every installed plugin's presentation module in
+  the page, whatever `--audience` said, so a page built for the other party carried the script of
+  a module meant only for the user's own copy. That module could never render there, but its code
+  travelled with the page. The page now carries only the modules whose manifest audiences include
+  `--audience` (or `"*"`), the same rule the page's resolver applies. Each module left out is
+  listed under `not_included`, its reason naming the module's audiences, and `--module` naming one
+  is refused, with no page written. A module for `"*"` is carried as before.
+- The builder's ambiguity and duplicate-id checks now look only at the modules the page carries,
+  so two modules that could match one bundle are refused only on a page that would carry both.
+  When one module is left, its wording pack is the page's, as for any one-module page.
+
 ### The approval prompt is one block, each fact once
 
 - **Changed:** `deal check` returns one block to show the user, built from the check's own
