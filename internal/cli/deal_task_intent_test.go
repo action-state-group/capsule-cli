@@ -370,7 +370,7 @@ func TestPresentationWhatYouAsked(t *testing.T) {
 		"What you asked",
 		"“" + taskAsked + "”",
 		"What: " + taskWhat, "For: " + taskUse, "Budget: at most $40.00",
-		"✓ These are your exact words, sealed when the task started, before any search; the deal cites that record. Checked when this page was built.",
+		"✓ These are your exact words, sealed when the task started, before any search; the deal cites that record. Checked by capsulectl when this page was built.",
 		"You picked",
 		"“" + taskPicked + "”",
 		"✓ These are the exact words sealed when the deal opened, checked when this page was built.",

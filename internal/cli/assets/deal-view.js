@@ -494,7 +494,7 @@ const dealViewRender = (model, regions) => {
       (task.fields || []).forEach((f) => {
         if (typeof f.line === "string" && f.line) host.append(el("p", f.line));
       });
-      host.append(el("p", "✓ These are your exact words, sealed when the task started, before any search; the deal cites that record. Checked when this page was built.", "deal-note"));
+      host.append(el("p", "✓ These are your exact words, sealed when the task started, before any search; the deal cites that record. Checked by capsulectl when this page was built.", "deal-note"));
       host.append(el("h3", "You picked"));
     } else if (taskState === "unresolved") {
       host.append(el("p", "⚠️ This deal cites a record of your original request that this copy does not hold, so it is not shown. Below are your words when the deal opened.", "deal-bad"));

@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-rAQiobQN/EK9f6XYPhN4EYmArqWVvq10Tvrr9E59kr8=' 'sha256-BqOgUTudjIggZYmQN6hoVLh1jrC6+PruqEWuDBNSPQU=' 'sha256-GUqITRz93P5Pi3tDPYmcQWUj9wTJU5uIBrJX6a7ZbRs=' 'sha256-UjhybHxzo7stQgLMrpIvv7LpwKXFg0kaoOwTeJ9E+t4='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-rAQiobQN/EK9f6XYPhN4EYmArqWVvq10Tvrr9E59kr8=' 'sha256-BqOgUTudjIggZYmQN6hoVLh1jrC6+PruqEWuDBNSPQU=' 'sha256-Qcg9bd1GUqZwb+4TK3hvSL4wuUQlgbzty3VVcUK4j84=' 'sha256-UjhybHxzo7stQgLMrpIvv7LpwKXFg0kaoOwTeJ9E+t4='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-8WyH+xhO/jeUhbdh1XnJU0cbNLFIE1Yiw8TLSocc1pw=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: “Order the cat sticker in my cart at Example Stickers”</title>
     <style>
@@ -12377,7 +12377,7 @@ const dealViewRender = (model, regions) => {
       (task.fields || []).forEach((f) => {
         if (typeof f.line === "string" && f.line) host.append(el("p", f.line));
       });
-      host.append(el("p", "✓ These are your exact words, sealed when the task started, before any search; the deal cites that record. Checked when this page was built.", "deal-note"));
+      host.append(el("p", "✓ These are your exact words, sealed when the task started, before any search; the deal cites that record. Checked by capsulectl when this page was built.", "deal-note"));
       host.append(el("h3", "You picked"));
     } else if (taskState === "unresolved") {
       host.append(el("p", "⚠️ This deal cites a record of your original request that this copy does not hold, so it is not shown. Below are your words when the deal opened.", "deal-bad"));
