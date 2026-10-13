@@ -7,6 +7,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
+	"github.com/action-state-group/evidencebook"
 )
 
 // RefusalSignatureProfile names the one refusal signature form this CLI
@@ -104,12 +105,62 @@ func verifyEvidenceBookRefusal(refusal map[string]interface{}, rawKey, rawSig in
 	return aacbundle.RefusalSignatureVerified
 }
 
+// ResponseSignatureProfile names the one form this CLI checks an artifact
+// member's carried response in: evidencebook's signed artifact response
+// without its artifact bytes. It carries `key_id` and `sig` (an Ed25519
+// signature, 128 lowercase hex) over the response's signing body, which
+// names the artifact by artifact_digest only, so it verifies without the
+// artifact.
+const ResponseSignatureProfile = "evidencebook-artifact-response"
+
+// verifyResponseSignature checks a carried response under
+// ResponseSignatureProfile. A response carrying neither `key_id` nor `sig`
+// is not in that form (unverified); any other that does not verify is
+// invalid.
+func verifyResponseSignature(response map[string]interface{}) string {
+	rawKey, hasKey := response["key_id"]
+	rawSig, hasSig := response["sig"]
+	if !hasKey && !hasSig {
+		return aacbundle.RefusalSignatureUnverified
+	}
+	key, keyOK := rawKey.(string)
+	sig, sigOK := rawSig.(string)
+	if !keyOK || !sigOK || !refusalKeyRE.MatchString(key) || !refusalSignatureRE.MatchString(sig) {
+		return aacbundle.RefusalSignatureInvalid
+	}
+	fields := map[string]string{}
+	for _, name := range []string{"request_digest", "anchor", "artifact_kind", "artifact_digest", "issued_at"} {
+		member, ok := response[name].(string)
+		if !ok {
+			return aacbundle.RefusalSignatureInvalid
+		}
+		fields[name] = member
+	}
+	body, err := evidencebook.ArtifactResponse{
+		RequestDigest: fields["request_digest"], Anchor: fields["anchor"], ArtifactKind: fields["artifact_kind"],
+		ArtifactDigest: fields["artifact_digest"], IssuedAt: fields["issued_at"],
+	}.SigningBody()
+	if err != nil {
+		return aacbundle.RefusalSignatureInvalid
+	}
+	keyBytes, _ := hex.DecodeString(key)
+	sigBytes, _ := hex.DecodeString(sig)
+	if !ed25519.Verify(ed25519.PublicKey(keyBytes), body, sigBytes) {
+		return aacbundle.RefusalSignatureInvalid
+	}
+	return aacbundle.RefusalSignatureVerified
+}
+
 // composedOutput renders a verified composed/v1 block for `verify --bundle`:
 // the recomputed composed digest, each member (with a carried member bundle
 // assessed as its own Evidence Bundle), composition closure, each join's
 // declared and derived state, and per join whether a derived agreement is
 // redundant or corroborating on declared custody. It also returns each
-// carried member bundle's verdict.
+// carried member bundle's verdict, and INCOMPLETE for each refusal member:
+// what was asked for was not served, so capsulectl reads the composition as
+// incomplete. A refusal is still no failed claim (Bundle -01), so it alone
+// never makes the verdict INVALID. A carried response signed by a key other
+// than its member's observer fails (INVALID).
 func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, directory []witnessRow) (map[string]any, []string) {
 	out := map[string]any{
 		"status":   result.Status,
@@ -141,6 +192,19 @@ func composedOutput(container map[string]interface{}, result *aacbundle.Composed
 			report, verdict := assessBundle(raw, *m.Bundle, directory)
 			member["bundle"] = report
 			verdicts = append(verdicts, verdict)
+		}
+		if m.ResponseSignature != "" {
+			member["response_signature"] = map[string]any{"status": m.ResponseSignature, "profile": ResponseSignatureProfile}
+			if response, ok := composedMemberBody(container, m.ID, "response"); ok {
+				if key, ok := response["key_id"].(string); ok && key != m.Observer {
+					member["findings"] = append(nonNilStrings(m.Findings), "response_key_not_observer")
+					verdicts = append(verdicts, "INVALID")
+				}
+			}
+		}
+		if m.Outcome == "refusal" {
+			member["reads_as"] = "INCOMPLETE"
+			verdicts = append(verdicts, "INCOMPLETE")
 		}
 		if m.RefusalSignature != "" {
 			profile := RefusalSignatureProfile

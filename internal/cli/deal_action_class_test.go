@@ -144,7 +144,7 @@ func TestDealApprovedActsAreDecideAndOthersStayFYI(t *testing.T) {
 		require.Equal(t, dealActEffectsVersion, se.Event.ActEffects)
 		before := se.Event
 		before.ActEffects = ""
-		in := dealCapsuleInput(events[:i], before, nil, p.Name, time.Now(), false)
+		in := dealCapsuleInput(events[:i], before, nil, p.Name, time.Now(), dealCapsuleCurrent)
 		assert.Equal(t, "fyi", string(in.ActionType))
 		assert.Nil(t, in.Effect)
 	}
@@ -191,7 +191,7 @@ func TestDealOverCapPaymentIsSelectedByItsClass(t *testing.T) {
 	events, err := s.load(t.Context(), id)
 	require.NoError(t, err)
 	last := events[len(events)-1]
-	legacy := dealCapsuleInput(events[:len(events)-1], last.Event, nil, p.Name, time.Now(), true)
+	legacy := dealCapsuleInput(events[:len(events)-1], last.Event, nil, p.Name, time.Now(), dealCapsuleAllFYI)
 	assert.Equal(t, "fyi", string(legacy.ActionType))
 	assert.Nil(t, legacy.Effect, "nothing for a check keyed on the class to select")
 }
@@ -217,7 +217,7 @@ func TestDealRecoversAStepAnEarlierReleasePrepared(t *testing.T) {
 	_, prepared, err := s.prepareStep(t.Context(), id, events, dealEvent{Kind: "act", Act: a})
 	require.NoError(t, err)
 	// Rewrite the index row as the earlier release would have written it.
-	request, _, err := s.stepRequest(events, prepared.Event, true)
+	request, _, err := s.stepRequest(events, prepared.Event, dealCapsuleAllFYI)
 	require.NoError(t, err)
 	record, err := seal(request, s.key)
 	require.NoError(t, err)
@@ -395,4 +395,45 @@ func TestASellersOfferAndCommitActsAreDecide(t *testing.T) {
 		assert.Equal(t, name, effect["type"])
 		assert.Equal(t, want.irreversibility, effect["irreversibility_class"], name)
 	}
+}
+
+// Every step's Capsule carries the deal id as its top-level deal_id member,
+// and a step prepared before it (classed, no deal_id) is still recovered as
+// it was prepared.
+func TestDealRecoversAStepPreparedBeforeDealID(t *testing.T) {
+	dealFixture(t)
+	id := openSticker(t, true)
+	c := checkAct(t, id, "pay", 600)
+	require.Equal(t, "pass", c["verdict"])
+	for _, capsule := range dealCapsules(t, id) {
+		if capsule["action_id"] != dealReportActionID {
+			assert.Equal(t, id, capsule["deal_id"], "every step carries its deal id")
+		}
+	}
+
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	require.NoError(t, s.useDeal(t.Context(), id, false))
+	events, err := s.load(t.Context(), id)
+	require.NoError(t, err)
+	a := &dealAct{Action: "pay", AmountMinor: ptr(int64(600))}
+	a.AuthorizedBy, a.Reason, a.Rule = authorizeAct(events, *a, dealClock().UTC())
+	require.NotEmpty(t, a.AuthorizedBy)
+	_, prepared, err := s.prepareStep(t.Context(), id, events, dealEvent{Kind: "act", Act: a})
+	require.NoError(t, err)
+	request, _, err := s.stepRequest(events, prepared.Event, dealCapsuleNoDealID)
+	require.NoError(t, err)
+	record, err := seal(request, s.key)
+	require.NoError(t, err)
+	require.NotEqual(t, prepared.CapsuleID, record.CapsuleID)
+	_, err = s.db.ExecContext(t.Context(), `UPDATE deal_steps SET capsule_id=? WHERE deal_id=? AND n=?`, record.CapsuleID, id, prepared.Event.N)
+	require.NoError(t, err)
+	require.NoError(t, s.close())
+
+	capsule, ok := dealCapsules(t, id)[record.CapsuleID]
+	require.True(t, ok, "the step was recovered as the Capsule it was prepared as")
+	assert.Equal(t, "decide", capsule["action_type"], "classed, as that release sealed it")
+	assert.NotContains(t, capsule, "deal_id")
 }

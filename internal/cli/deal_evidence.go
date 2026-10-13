@@ -745,7 +745,9 @@ func composeCommand() *cobra.Command {
 // is the responder key the response verified under (the composer's own key
 // for an absence, which only the composer observed). The containing bundle's
 // root is a composition record sealed on the composer's own log, naming the
-// set by its composed digest.
+// set by its composed digest. A copy's member carries its signed response
+// without the artifact bytes, and each pair of members is joined on the
+// deal id (dealJoins).
 func (s *dealSession) compose(c *cobra.Command, dealID string, members []composeMember, path string) error {
 	ctx := c.Context()
 	own := hex.EncodeToString(s.key.Public().(ed25519.PublicKey))
@@ -795,11 +797,7 @@ func (s *dealSession) compose(c *cobra.Command, dealID string, members []compose
 	sort.Slice(blockMembers, func(i, j int) bool {
 		return blockMembers[i].(map[string]interface{})["id"].(string) < blockMembers[j].(map[string]interface{})["id"].(string)
 	})
-	// No join is declared: a join is derived from the members' root records,
-	// and a copy's root (its newest step) carries the deal id only inside
-	// its action_id, "<deal id>/<step>", whose step differs between the
-	// parties. A pre_agreed_identifier on the deal id would derive unjoined.
-	block := map[string]interface{}{"members": blockMembers, "observers": observerList}
+	block := map[string]interface{}{"members": blockMembers, "observers": observerList, "joins": dealJoins(dealID, blockMembers)}
 	digest, err := composedDigest(block)
 	if err != nil {
 		return err
@@ -904,8 +902,65 @@ func (s *dealSession) composeMember(ctx context.Context, dealID string, m compos
 			return nil, err
 		}
 		member["outcome"], member["bundle"] = "artifact", bundle
+		// The signed envelope without its artifact bytes binds the bundle to
+		// the request it answered.
+		member["response"] = map[string]interface{}{
+			"request_digest": a.RequestDigest, "anchor": a.Anchor, "artifact_kind": a.ArtifactKind,
+			"artifact_digest": a.ArtifactDigest, "issued_at": a.IssuedAt, "key_id": a.KeyID, "sig": a.Sig,
+		}
 	}
 	return member, nil
+}
+
+// dealJoinPointer is where a copy's root record holds the deal id: the
+// top-level deal_id member a step's Capsule carries (dealIDMember).
+const dealJoinPointer = "/" + dealIDMember
+
+// dealJoins declares one pre_agreed_identifier join on the deal id per pair
+// of members, in the state the verifier derives: unjoined with no copy
+// served, one_sided with one, and with two, agree when both roots carry this
+// deal's id, otherwise unjoined (a copy whose steps predate the deal_id
+// member). members are sorted by id.
+func dealJoins(dealID string, members []interface{}) []interface{} {
+	identifier := bytesDigest([]byte(dealID))
+	joins := []interface{}{}
+	for i := range members {
+		for k := i + 1; k < len(members); k++ {
+			a, b := members[i].(map[string]interface{}), members[k].(map[string]interface{})
+			served := 0
+			for _, m := range []map[string]interface{}{a, b} {
+				if m["outcome"] == "artifact" {
+					served++
+				}
+			}
+			state := "unjoined"
+			switch {
+			case served == 1:
+				state = "one_sided"
+			case served == 2 && rootDealID(a) == dealID && rootDealID(b) == dealID:
+				state = "agree"
+			}
+			joins = append(joins, map[string]interface{}{
+				"members": []interface{}{a["id"], b["id"]}, "basis": "pre_agreed_identifier",
+				"pointer": dealJoinPointer, "identifier_digest": identifier, "state": state,
+			})
+		}
+	}
+	return joins
+}
+
+// rootDealID is the deal_id member of an artifact member's root record, or "".
+func rootDealID(member map[string]interface{}) string {
+	bundle, _ := member["bundle"].(map[string]interface{})
+	root, _ := bundle["root"].(string)
+	records, _ := bundle["records"].([]interface{})
+	for _, raw := range records {
+		if record, ok := raw.(map[string]interface{}); ok && record["capsule_id"] == root {
+			id, _ := record[dealIDMember].(string)
+			return id
+		}
+	}
+	return ""
 }
 
 // composedDigest is the block's composed digest. The block is parsed whole,

@@ -38,7 +38,12 @@ exactly two members.
   JSON-DIGEST of the payload, which is by construction the record digest. This profile changes nothing in the Capsule: `action_type`, `effect`,
   `disposition`, `chain` and `references` keep their AAC meaning. v0 seals each step with
   `action_id: "<deal_id>/<seq>"`, and chains each Capsule to the previous one with
-  `chain.relation: "follows"`. A `follows` link is ordering only. The Capsule claims only what
+  `chain.relation: "follows"`. Each step's Capsule also carries the deal id alone as its
+  top-level `deal_id` member (a string, the same `deal_id` the records carry). The two parties
+  to a deal (`deal open --deal-id`) seal different steps, but both seal this member, so a
+  composition of their copies joins on it: a composed/v1 `pre_agreed_identifier` join with
+  `pointer: "/deal_id"` over each copy's root step. Steps sealed by an earlier capsulectl
+  carry no `deal_id`, and a join over them derives `unjoined`. A `follows` link is ordering only. The Capsule claims only what
   the record shows:
   - An `action` record (an act a sealed approval authorized) whose action has an AAC
     `effect.type` is `action_type: "decide"`: `pay`, as `send_payment` (registered), and the

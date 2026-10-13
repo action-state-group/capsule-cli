@@ -385,6 +385,25 @@ const dealActEffectsVersion = "1"
 // target in the sealed record).
 const dealActCounterpartyVersion = "1"
 
+// dealIDMember is the top-level Capsule member holding the deal id on every
+// step's Capsule (x-deal-v0 section 1), so a deal's copies held by two
+// parties join on it.
+const dealIDMember = "deal_id"
+
+// dealCapsuleForm is which release's Capsule a step is sealed as. A step is
+// sealed in the current form; the earlier forms are tried only to recover a
+// step an earlier release prepared but never published.
+type dealCapsuleForm int
+
+const (
+	// dealCapsuleCurrent carries deal_id.
+	dealCapsuleCurrent dealCapsuleForm = iota
+	// dealCapsuleNoDealID is the form before deal_id: classed, no deal_id.
+	dealCapsuleNoDealID
+	// dealCapsuleAllFYI is the all-fyi form of the releases before classing.
+	dealCapsuleAllFYI
+)
+
 // dealCapsuleInput is a step's Capsule, claiming only what the deal record
 // shows. A record that says an action was taken under a sealed approval (an
 // authorized act whose action has an effect type: dealEffectTypes, or
@@ -406,15 +425,22 @@ const dealActCounterpartyVersion = "1"
 //     one_way_consequential.
 //
 // Every other record stays fyi, including an unchecked act, which the deal
-// record itself seals as an outcome and never as an action. legacy gives the
-// all-fyi Capsule earlier capsulectl releases sealed, for recovering a step
-// one of them prepared.
-func dealCapsuleInput(events []sealedEvent, ev dealEvent, record []byte, operator string, at time.Time, legacy bool) emit.Input {
+// record itself seals as an outcome and never as an action. Every step's
+// Capsule carries the deal id as its top-level deal_id member, which a
+// composition joins the parties' copies on. form gives instead a Capsule an
+// earlier capsulectl release sealed, for recovering a step one of them
+// prepared (see dealCapsuleForm).
+func dealCapsuleInput(events []sealedEvent, ev dealEvent, record []byte, operator string, at time.Time, form dealCapsuleForm) emit.Input {
+	legacy := form == dealCapsuleAllFYI
 	in := emit.Input{ActionID: fmt.Sprintf("%s/%d", ev.DealID, ev.N), ActionType: emit.ActionTypeFYI, Operator: operator, Developer: "capsulectl-deal", Timestamp: at}
 	if e := ev.Evidence; !legacy && e != nil && len(e.Settlement) > 0 {
 		// A settlement leg rides on its step's Capsule as the top-level
 		// settlement member, exactly as built and stored with the step.
 		in.Extensions = []emit.Extension{{Name: "settlement", Value: e.Settlement}}
+	}
+	if form == dealCapsuleCurrent {
+		id, _ := json.Marshal(ev.DealID) // a string always marshals
+		in.Extensions = append(in.Extensions, emit.Extension{Name: dealIDMember, Value: id})
 	}
 	if legacy || ev.Kind != "act" || ev.Act == nil || ev.Act.Unchecked {
 		return in
@@ -624,8 +650,8 @@ func dealDisposition(events []sealedEvent, id string) (emit.Disposition, bool) {
 
 // stepRequest is the frozen seal request for a step: rebuilt from the stored
 // step it gives the same Capsule, which is what makes recovery possible
-// (legacy: the Capsule an earlier release sealed; see dealCapsuleInput).
-func (s *dealSession) stepRequest(events []sealedEvent, ev dealEvent, legacy bool) (Request, string, error) {
+// (form: the Capsule a release sealed; see dealCapsuleForm).
+func (s *dealSession) stepRequest(events []sealedEvent, ev dealEvent, form dealCapsuleForm) (Request, string, error) {
 	payload, digest, err := encodeDealRecord(ev, events, s.dkey)
 	if err != nil {
 		return Request{}, "", err
@@ -636,7 +662,7 @@ func (s *dealSession) stepRequest(events []sealedEvent, ev dealEvent, legacy boo
 	}
 	request := Request{
 		Version: "capsule-seal-request/v1",
-		Capsule: dealCapsuleInput(events, ev, payload, s.p.Name, at.UTC(), legacy),
+		Capsule: dealCapsuleInput(events, ev, payload, s.p.Name, at.UTC(), form),
 		Payload: payload,
 	}
 	// Each step's Capsule follows the one before it (ordering only), so the
@@ -688,7 +714,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 		}
 		ev.Nonces[name] = hex.EncodeToString(nonce)
 	}
-	request, digest, err := s.stepRequest(events, ev, false)
+	request, digest, err := s.stepRequest(events, ev, dealCapsuleCurrent)
 	if err != nil {
 		return Request{}, sealedEvent{}, err
 	}
@@ -725,11 +751,12 @@ func (s *dealSession) publishStep(ctx context.Context, request Request, se seale
 }
 
 // recoverStep publishes a step that was prepared but never reached the log.
-// The step may have been prepared by an earlier capsulectl, which sealed every
-// step fyi, so the request whose Capsule is the one prepared is the one used.
+// The step may have been prepared by an earlier capsulectl, which sealed it
+// without deal_id, or every step fyi, so the request whose Capsule is the one
+// prepared is the one used.
 func (s *dealSession) recoverStep(ctx context.Context, events []sealedEvent, ev dealEvent, capsuleID string) (sealedEvent, error) {
-	for _, legacy := range []bool{false, true} {
-		request, digest, err := s.stepRequest(events, ev, legacy)
+	for _, form := range []dealCapsuleForm{dealCapsuleCurrent, dealCapsuleNoDealID, dealCapsuleAllFYI} {
+		request, digest, err := s.stepRequest(events, ev, form)
 		if err != nil {
 			return sealedEvent{}, ErrConflict
 		}

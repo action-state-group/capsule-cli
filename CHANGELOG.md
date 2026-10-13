@@ -31,9 +31,19 @@
   - response bytes other than the ones recorded.
 
   Each member's `request_digest` is the recorded request's digest, and its observer is the
-  responder key the answer verified under. The containing bundle's root is a composition record
-  sealed on `deal/<id>/compositions`. No join is declared: a copy's root record carries the deal
-  id only inside its `action_id`, so a join on it would derive `unjoined`.
+  responder key the answer verified under. A copy's member carries `response`: the responder's
+  signed response without its artifact bytes, which binds the copy to the request it answered.
+  Each pair of members is joined on the deal id (`pre_agreed_identifier`, `pointer: "/deal_id"`),
+  declared in the state the verifier derives. The containing bundle's root is a composition
+  record sealed on `deal/<id>/compositions`.
+- **Added (wire):** every deal step's Capsule carries the deal id as its top-level `deal_id`
+  member (x-deal-v0 section 1), so two parties' copies join on it. A step an earlier release
+  prepared, without it, is still recovered as that release prepared it.
+- **Changed:** `verify --bundle` reads a composed/v1 block holding a refusal member as
+  INCOMPLETE (the member reports `reads_as: "INCOMPLETE"`): what was asked for was not served.
+  A refusal is still no failed claim, so it never makes the verdict INVALID. A copy's carried
+  `response` is checked under profile `evidencebook-artifact-response`: an invalid signature, or
+  one under a key other than the member's observer, fails.
 - **Fixed:** `verify --bundle` checks a carried refusal in evidencebook's own form (`key_id`, and
   `sig` over `{request_digest, reason, issued_at}`), the form `respond` sends, and reports
   profile `evidencebook-refusal`. Before this fix, such a refusal read `invalid`.

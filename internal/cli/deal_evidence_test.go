@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
@@ -186,7 +187,32 @@ func TestDealCopiesTravelOverEvidenceRequestsAndCompose(t *testing.T) {
 			sellerMember := memberByID(t, block, set.seller.recordID)
 			extensions := sellerMember["bundle"].(map[string]any)["extensions"].(map[string]any)
 			assert.Contains(t, extensions, dealSellerExtension, "the seller's copy engages its kind as cut")
-			assert.NotContains(t, block, "joins", "no join is declared that the root records cannot ground")
+
+			// The two copies join on the deal id each root step's Capsule
+			// carries, and the verifier derives the declared agreement.
+			a, b := set.members[0].recordID, set.members[1].recordID
+			if b < a {
+				a, b = b, a
+			}
+			assert.Equal(t, []any{map[string]any{
+				"members": []any{a, b}, "basis": "pre_agreed_identifier", "pointer": "/deal_id",
+				"identifier_digest": bytesDigest([]byte(id)), "state": "agree",
+			}}, block["joins"])
+			composed := composedEntry(t, result)
+			join := composed["joins"].([]any)[0].(map[string]any)
+			assert.Equal(t, "agree", join["derived"])
+			assert.Equal(t, "derived_matches", join["result"])
+			for _, raw := range composed["members"].([]any) {
+				m := raw.(map[string]any)
+				assert.Equal(t, map[string]any{"status": "verified", "profile": ResponseSignatureProfile}, m["response_signature"],
+					"each copy carries its responder's signed response, and it verifies")
+				member := memberByID(t, block, m["id"].(string))
+				response := member["response"].(map[string]any)
+				assert.Equal(t, member["request_digest"], response["request_digest"])
+				assert.Equal(t, member["digest"], response["artifact_digest"])
+				assert.Equal(t, member["observer"], response["key_id"])
+				assert.NotContains(t, response, "artifact", "the envelope without its artifact bytes")
+			}
 		})
 	}
 
@@ -213,11 +239,10 @@ func TestDealCopiesTravelOverEvidenceRequestsAndCompose(t *testing.T) {
 	path, err := composeMembers(t, id, buyerOwn, stale)
 	require.NoError(t, err, path)
 	result, err := verifyWithDirectory(t, path, "")
-	require.NoError(t, err)
-	// Bundle -01: a verified refusal member is not a failed claim, so the
-	// composition verifies; the refusal is what it reports. (u817 DESIGN.md
-	// §4: the item's "not VALID" for this case is open with Steven.)
-	assert.Equal(t, "VALID", result["verdict"])
+	// A refusal member is no failed claim (Bundle -01), but what was asked
+	// for was not served: capsulectl reads the composition as INCOMPLETE.
+	require.Error(t, err, "INCOMPLETE exits nonzero")
+	assert.Equal(t, "INCOMPLETE", result["verdict"], "a stale pin is not VALID")
 	refusal := memberByID(t, composedBlock(t, path), stale.recordID)
 	assert.Equal(t, "refusal", refusal["outcome"])
 	assert.Equal(t, digestOfFile(t, stale.requestPath), refusal["request_digest"])
@@ -227,8 +252,10 @@ func TestDealCopiesTravelOverEvidenceRequestsAndCompose(t *testing.T) {
 			assert.Equal(t, map[string]any{"status": "verified", "profile": EvidenceBookRefusalProfile}, m["refusal_signature"],
 				"the refusal is signed by the seller and verifies")
 			assert.Equal(t, "refusal", m["outcome"])
+			assert.Equal(t, "INCOMPLETE", m["reads_as"])
 		}
 	}
+	assert.Equal(t, "one_sided", composed["joins"].([]any)[0].(map[string]any)["derived"])
 	assert.Equal(t, seller.signer, refusal["observer"], "observed by the responder whose key it verified under")
 }
 
@@ -512,4 +539,86 @@ func TestASignedAnswerThatDoesNotHoldUpIsRecordedFailed(t *testing.T) {
 	recordID, digest = ask()
 	elsewhere := resigned(t, otherCopy.response, func(a *evidencebook.ArtifactResponse, _ map[string]any) { a.RequestDigest = digest })
 	assert.Equal(t, "artifact_failed_verification", record(recordID, elsewhere)["outcome"], "a copy of another deal")
+}
+
+// A copy's carried response is checked: a signature that does not verify,
+// or one by a key other than the member's observer, fails the composition.
+func TestAComposedCopysResponseMustBeSignedByItsResponder(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	buyer := thisDealParty(t)
+	dealFixture(t)
+	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
+	seller := thisDealParty(t)
+	buyerOwn, _ := pinnedCopy(t, buyer, buyer, id)
+	sellerCopy, _ := pinnedCopy(t, buyer, seller, id)
+	party(t, buyer.config)
+	path, err := composeMembers(t, id, buyerOwn, sellerCopy)
+	require.NoError(t, err, path)
+
+	edited := func(t *testing.T, edit func(response map[string]any)) map[string]any {
+		t.Helper()
+		raw, err := os.ReadFile(path)
+		require.NoError(t, err)
+		container := exactBundle(t, string(raw))
+		block := container["extensions"].(map[string]any)["composed/v1"].(map[string]any)
+		edit(memberByID(t, block, sellerCopy.recordID)["response"].(map[string]any))
+		encoded, err := json.Marshal(container)
+		require.NoError(t, err)
+		out := filepath.Join(t.TempDir(), "edited.json")
+		require.NoError(t, os.WriteFile(out, encoded, 0o600))
+		result, err := verifyWithDirectory(t, out, "")
+		require.Error(t, err)
+		assert.Equal(t, "INVALID", result["verdict"])
+		for _, raw := range composedEntry(t, result)["members"].([]any) {
+			if m := raw.(map[string]any); m["id"] == sellerCopy.recordID {
+				return m
+			}
+		}
+		t.Fatal("no seller member")
+		return nil
+	}
+
+	forged := edited(t, func(r map[string]any) { r["issued_at"] = "2000-01-01T00:00:00Z" })
+	assert.Equal(t, map[string]any{"status": "invalid", "profile": ResponseSignatureProfile}, forged["response_signature"])
+
+	other := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	byAnother := edited(t, func(r map[string]any) {
+		a := evidencebook.ArtifactResponse{
+			RequestDigest: r["request_digest"].(string), Anchor: r["anchor"].(string), ArtifactKind: r["artifact_kind"].(string),
+			ArtifactDigest: r["artifact_digest"].(string), IssuedAt: r["issued_at"].(string),
+		}
+		body, err := a.SigningBody()
+		require.NoError(t, err)
+		r["key_id"] = hex.EncodeToString(other.Public().(ed25519.PublicKey))
+		r["sig"] = hex.EncodeToString(ed25519.Sign(other, body))
+	})
+	assert.Equal(t, map[string]any{"status": "verified", "profile": ResponseSignatureProfile}, byAnother["response_signature"],
+		"a good signature, by the wrong key")
+	assert.Contains(t, byAnother["findings"], "response_key_not_observer")
+}
+
+// A join is declared in the state the verifier will derive: two copies agree
+// only when both roots carry this deal's id; a copy whose steps predate the
+// deal_id member, or another deal's copy, is unjoined.
+func TestDealJoinsDeclareWhatTheRootsGround(t *testing.T) {
+	const id = "deal-0b11a7e2a1c0ffee"
+	copyOf := func(member, dealID string) map[string]interface{} {
+		root := map[string]interface{}{"capsule_id": "root-" + member}
+		if dealID != "" {
+			root["deal_id"] = dealID
+		}
+		return map[string]interface{}{"id": member, "outcome": "artifact",
+			"bundle": map[string]interface{}{"root": root["capsule_id"], "records": []interface{}{root}}}
+	}
+	refusal := map[string]interface{}{"id": "r", "outcome": "refusal"}
+	state := func(members ...interface{}) interface{} {
+		return dealJoins(id, members)[0].(map[string]interface{})["state"]
+	}
+	assert.Equal(t, "agree", state(copyOf("a", id), copyOf("b", id)))
+	assert.Equal(t, "unjoined", state(copyOf("a", id), copyOf("b", "")), "a copy sealed before deal_id")
+	assert.Equal(t, "unjoined", state(copyOf("a", id), copyOf("b", "deal-1111111111111111")))
+	assert.Equal(t, "one_sided", state(copyOf("a", id), refusal))
+	assert.Equal(t, "unjoined", state(refusal, map[string]interface{}{"id": "s", "outcome": "absence"}))
+	assert.Len(t, dealJoins(id, []interface{}{copyOf("a", id), copyOf("b", id), refusal}), 3, "one join per pair")
 }
