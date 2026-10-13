@@ -89,6 +89,12 @@ func dealTexts(ev dealEvent) map[string]string {
 	case ev.Intent != nil:
 		t["verbatim"] = ev.Intent.Verbatim
 		boundsText(t, *ev.Intent)
+		pickTexts(t, *ev.Intent)
+	case ev.TaskIntent != nil:
+		t["verbatim"] = ev.TaskIntent.Verbatim
+		for class, v := range ev.TaskIntent.values() {
+			t[taskFieldNonce(class)] = v
+		}
 	case ev.Message != nil:
 		t["content"] = ev.Message.Text
 	case ev.Evidence != nil:
@@ -491,6 +497,19 @@ func materialityLabelText(m dealMateriality) string {
 	return string(b)
 }
 
+// pickTexts adds a pick's committed texts: the options shown, as the JCS
+// bytes of their list, and the one the agent recommended.
+func pickTexts(t map[string]string, i dealIntent) {
+	if len(i.Shown) > 0 {
+		if text := jcsText(i.Shown); text != "" {
+			t["shown"] = text
+		}
+	}
+	if i.Recommended != "" {
+		t["recommended"] = i.Recommended
+	}
+}
+
 func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]interface{}, error) {
 	c, err := commit("verbatim")
 	if err != nil {
@@ -514,6 +533,16 @@ func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]i
 	}
 	if i.Allowed != nil { // present and empty: nothing is allowed yet
 		m["allowed"] = i.Allowed
+	}
+	if len(i.Shown) > 0 {
+		if m["shown_commitment"], err = commit("shown"); err != nil {
+			return nil, err
+		}
+	}
+	if i.Recommended != "" {
+		if m["recommended_commitment"], err = commit("recommended"); err != nil {
+			return nil, err
+		}
 	}
 	return m, nil
 }
@@ -710,10 +739,23 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			heads[i] = map[string]interface{}{"registration": digestRef(h.Registration), "head_commitment": c}
 		}
 		body["thread_heads"] = heads
+	case "task_intent":
+		// A task's root, the only record of its own log: what the user asked
+		// for when the task started, before any merchant. No counterparty,
+		// no channel, no refs; nothing in the clear.
+		rtype = "task_intent"
+		if body, err = taskIntentBody(*ev.TaskIntent, commit); err != nil {
+			return nil, err
+		}
 	case "open":
 		o := ev.Open
 		rtype = "baseline"
 		block["channel"] = o.Channel
+		// The task intent the deal was opened under, sealed on the task's
+		// own log before it: cited by its record digest.
+		if o.TaskIntent != "" {
+			block["refs"] = []interface{}{relRef("cites", o.TaskIntent)}
+		}
 		first := o.Who
 		if first.Payee == "" {
 			first.Payee = first.Name

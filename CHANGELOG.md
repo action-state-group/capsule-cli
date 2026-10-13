@@ -92,6 +92,38 @@
   (sha256 `b5d4d9aec20328a746684283ba3ec7a0237b7fd6a11b5ecef348c39ae8722fa3` to
   `643ac179237d9a5f30f9bbd373b93db84f4cff0428fa0edcfa66461bf042d29a`).
 
+### The user's original request, sealed when the task starts
+
+- **Added:** `deal task new --input task.json` seals what the user asked for when a buying or
+  booking task starts, before any search and before there is a merchant: `verbatim` (their
+  request exactly as given, never trimmed or normalized) and, when they stated them, `what`,
+  `use` and `budget_max` (`{amount_minor, currency}`). It is a new x-deal-v0 record type,
+  `task_intent`, the only record of a log of its own (`task-` and 16 hex). Nothing is in the
+  clear: the request is a salted commitment (`verbatim_commitment`, `sha256-jcs-nonce256`), and
+  each constraint is a `fields[]` entry whose `class` is in the clear and whose value is
+  committed under its own nonce, so a copy can open one without the others.
+- **Added:** `deal open --task <task_id>` cites it: the baseline carries one `cites` ref (a new
+  `rel`) to the task intent's record digest, which shows the request existed before the deal
+  opened. A deal opened without `--task` stays valid; its task bounds are then not available.
+- **Added:** a pick (`deal note --kind intent`) takes `shown` (the options the agent showed) and
+  `recommended` (the one it recommended), sealed as `shown_commitment` and
+  `recommended_commitment`; the pick's `verbatim` is the user's choice. `deal open` refuses them:
+  they go on the pick.
+- **Changed:** the user's own copy carries the cited record and its openings (`task_intent`) and
+  each pick's openings (`pick_openings`); `deal report --html` checks them before writing the
+  page and refuses a page whose openings do not recompute. The page's "What you asked" shows the
+  original request and the stated limits, then "You picked" with the words the deal opened on and
+  each pick (the options shown, the agent's recommendation, the user's choice); the page title
+  quotes the original request. A deal with no task intent says so: "No record of your original
+  request was sealed before this deal opened, so it is not shown." A cited record this device no
+  longer holds is reported, never shown. The email receipt does the same. A shared copy carries
+  none of it.
+- `deal list` lists a task with kind `task`. The x-deal-v0 schema (both copies), PROFILE.md
+  (section 3, section 6 rule 12) and `check_profile.py` know the new record type and ref. The deal
+  skill seals the request at the start of a purchase or booking and passes `--task` at the final
+  review, which changes its SKILL.md digest (sha256 `643ac179237d9a5f30f9bbd373b93db84f4cff0428fa0edcfa66461bf042d29a` to
+  `83d1a5e98e57a3d4ab23954f79b0a15a164b4d9e143933a02a0a322d71bafcf7`).
+
 ### `deal list --json`: a plain summary per deal
 
 - **Added:** each row of `deal list --json` carries `summary`: `what` (the user's own asked

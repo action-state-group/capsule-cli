@@ -101,15 +101,22 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 		fmt.Fprintf(&executions, `{"id":%q,"at":"2026-09-27T18:00:00Z","task":%q,"parent_task":"t-main","tool":%q,"action":%q,"status":"succeeded"%s}`+"\n", id, task, tool, action, extra)
 	}
 	host("c1", "t-main", "spawn_task", "other", "")
-	var dealID string
+	var dealID, taskID string
 	proceed := false
 	for _, step := range procedureSteps(t, "Purchase") {
 		switch {
+		case strings.HasPrefix(step, "**Before any search**"):
+			require.Contains(t, step, "`deal task new`")
+			task, err := json.Marshal(map[string]string{"verbatim": strings.TrimSuffix(string(request), "\n")})
+			require.NoError(t, err)
+			taskID = dealRun(t, "task", "new", "--input", writeJSON(t, string(task)))["task_id"].(string)
 		case strings.HasPrefix(step, "Fill"):
 			host("c2", "t-browser", "fill_form", "other", "")
 		case strings.HasPrefix(step, "**Final review:**"):
 			require.Contains(t, step, "`deal open`")
-			opened := dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))
+			require.Contains(t, step, "`--task <task_id>`")
+			require.NotEmpty(t, taskID, "the task was sealed before the final review")
+			opened := dealRun(t, "open", "--task", taskID, "--input", filepath.Join(retailDemo, "open.json"))
 			dealID = opened["deal_id"].(string)
 			require.Contains(t, step, "`deal check`")
 			check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(retailDemo, "check-pay.json"))

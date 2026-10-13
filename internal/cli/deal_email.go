@@ -229,6 +229,11 @@ type dealEmailView struct {
 	// MerchantNote says what stands behind the merchant section, once.
 	MerchantNote string
 	DeadlineNote string
+	// Picked is, when Asked is the original request a deal cites, the
+	// user's words when the deal opened; AskedNote says plainly when no
+	// original request is shown.
+	Picked    string
+	AskedNote string
 }
 
 // DeadlinesHeading names the dates section: cancel-by dates, as before, unless
@@ -261,6 +266,9 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <p style="margin:0 0 8px;font-weight:600;">{{.Scope}}</p>
 <h2 style="font-size:16px;margin:16px 0 4px;">What you asked</h2>
 <p style="margin:0;">&ldquo;{{.Asked}}&rdquo;</p>
+{{if .AskedNote}}<p style="margin:4px 0 0;color:#444;">{{.AskedNote}}</p>{{end}}
+{{if .Picked}}<h2 style="font-size:16px;margin:16px 0 4px;">You picked</h2>
+<p style="margin:0;">&ldquo;{{.Picked}}&rdquo;</p>{{end}}
 <h2 style="font-size:16px;margin:16px 0 4px;">What the agent did</h2>
 <ul style="margin:0;padding-left:20px;">{{range .Did}}<li>{{if .At}}{{.At}} &middot; {{end}}{{.Text}}</li>{{else}}<li>Nothing yet.</li>{{end}}</ul>
 {{if .Authority}}<h2 style="font-size:16px;margin:16px 0 4px;">Authority</h2>
@@ -334,7 +342,14 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 	if view.Demo {
 		tb.WriteString("DEMO\n\n")
 	}
-	fmt.Fprintf(&tb, "%s\n\nWhat you asked: \"%s\"\n\nWhat the agent did:\n", view.Scope, view.Asked)
+	fmt.Fprintf(&tb, "%s\n\nWhat you asked: \"%s\"\n", view.Scope, view.Asked)
+	if view.AskedNote != "" {
+		fmt.Fprintf(&tb, "%s\n", view.AskedNote)
+	}
+	if view.Picked != "" {
+		fmt.Fprintf(&tb, "\nYou picked: \"%s\"\n", view.Picked)
+	}
+	tb.WriteString("\nWhat the agent did:\n")
 	if len(view.Did) == 0 {
 		tb.WriteString("- Nothing yet.\n")
 	}

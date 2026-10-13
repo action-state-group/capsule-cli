@@ -12,11 +12,11 @@ import (
 
 // dealListing is one deal in the profile's store, as `deal list` prints it:
 // identifiers, timestamps and, with --json, a plain summary. A sale (`deal
-// sale new`) is listed with kind "sale": its log is in the same store,
-// though it is not a deal.
+// sale new`) is listed with kind "sale", and a task (`deal task new`) with
+// kind "task": each log is in the same store, though it is not a deal.
 type dealListing struct {
 	DealID       string `json:"deal_id"`
-	Kind         string `json:"kind"`  // "deal" or "sale"
+	Kind         string `json:"kind"`  // "deal", "sale" or "task"
 	State        string `json:"state"` // "open", or "closed" once a final close is indexed
 	OpenedAt     string `json:"opened_at"`
 	LastRecordAt string `json:"last_record_at"`
@@ -98,6 +98,9 @@ func dealListCommand() *cobra.Command {
 func dealSummaryOf(events []sealedEvent) dealSummary {
 	sum := dealSummary{What: dealNotRecorded, Counterparty: dealNotRecorded, Outcome: "open"}
 	currency := ""
+	if t := events[0].Event.TaskIntent; t != nil && strings.TrimSpace(t.Verbatim) != "" {
+		sum.What = t.Verbatim
+	}
 	if open := events[0].Event.Open; open != nil {
 		if strings.TrimSpace(open.Intent.Verbatim) != "" {
 			sum.What = open.Intent.Verbatim
@@ -193,8 +196,11 @@ func dealListingOf(dealID string, events []sealedEvent) dealListing {
 		OpenedAt: events[0].Event.At, LastRecordAt: events[len(events)-1].Event.At,
 		LogID: dealLogID(dealID), Summary: dealSummaryOf(events),
 	}
-	if saleIDPattern.MatchString(dealID) {
+	switch {
+	case saleIDPattern.MatchString(dealID):
 		l.Kind = "sale"
+	case taskIDPattern.MatchString(dealID):
+		l.Kind = "task"
 	}
 	if dealFinallyClosed(events) {
 		l.State = "closed"

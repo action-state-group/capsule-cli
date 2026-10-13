@@ -52,13 +52,41 @@ work once this skill is in use; they do not make the host invoke it (see
 Any checkout: a retail order from a known merchant, a marketplace buy, a
 subscription, an in-app purchase.
 
-1. Find what the user asked for, and keep their exact words.
+1. **Before any search**, seal what the user asked for: `deal task new` with their request exactly as they gave it, and the limits they stated (see "The user's original request" below). Keep the `task_id`. Then find what they asked for.
 2. Fill the cart. Before you type any of the user's own details into the checkout (name, email, delivery address, phone), follow "Disclosure" below for them, on this deal (`deal open` it first): a delivery form is a disclosure to the merchant. Then fill the checkout up to the last screen before the order is placed. Do not press the final button.
-3. **Final review:** `deal open` (once per deal: the merchant as `who`, the cart as `terms`, `"allowed": ["pay"]` when the user asked you to buy). **If the user picked from options you showed** (an item, a size, a price, a date), seal the pick next with `deal note --kind intent`, before the check (see "The user picked from options" below). Then `deal check` with `"action": "pay"` and the exact total about to be charged.
+3. **Final review:** `deal open` with `--task <task_id>` (once per deal: the merchant as `who`, the cart as `terms`, `"allowed": ["pay"]` when the user asked you to buy). **If the user picked from options you showed** (an item, a size, a price, a date), seal the pick next with `deal note --kind intent`, before the check (see "The user picked from options" below). Then `deal check` with `"action": "pay"` and the exact total about to be charged.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, place the order. On `pause`, show it, seal the user's answer, and place the order only if that returns `"proceed": true`.
 5. Right after placing it: `deal note --kind act` with the amount, payee, rail and order reference.
 6. If the checkout or the confirmation shows a trial, a renewal or a last day to cancel, follow "Cancel-by date" below.
 7. `deal close` when the item arrives, or does not.
+
+#### The user's original request
+
+The deal opens at the final review, so its opening words are usually the
+user's last instruction ("ok, buy that one"), not what they asked for. Seal
+the request when the task starts, before you search, before there is a
+merchant:
+
+```sh
+capsulectl --profile deal deal task new --input task.json
+```
+
+```json
+{"verbatim": "the user's request, exactly as they gave it",
+ "what": "the item or service, in their words",
+ "use": "what it is for, if they said",
+ "budget_max": {"amount_minor": 3000, "currency": "USD"}}
+```
+
+- `verbatim` is required: copy the user's words, never trimmed, corrected or
+  paraphrased.
+- `what`, `use` and `budget_max` are only what the user stated. Leave out
+  one they did not state; never fill one in yourself.
+- Keep the returned `task_id` and open the deal with `deal open --task
+  <task_id>`. The deal cites the request, and the receipt shows it first,
+  under "What you asked".
+- If the task did not start with this, say so; do not seal one later as if it
+  had. The receipt then says plainly that no original request was sealed.
 
 #### The user picked from options
 
@@ -75,10 +103,16 @@ pick, if the deal is already open) and **before** `deal check`:
 ```json
 {"verbatim": "the Otterly Chaos one",
  "asked": {"item": "Otterly Chaos - Unsupervised and Thriving Funny Otter Design Sticker"},
- "max_total_minor": 800, "allowed": ["pay"]}
+ "max_total_minor": 800, "allowed": ["pay"],
+ "shown": ["Otterly Chaos sticker, $6.27", "Sea Otter Hug sticker, $5.50", "Otter Pun sticker, $7.00"],
+ "recommended": "Sea Otter Hug sticker, $5.50"}
 ```
 
 - `verbatim` is the user's own words for the pick.
+- `shown` lists the options you showed, as you showed them; `recommended` is
+  the one you recommended, if you did. Both are sealed, so the receipt shows
+  the shortlist, your recommendation and the user's choice, even when the
+  user chose another.
 - `asked` holds only what the user chose, written exactly as the cart's
   `terms` write it.
 - `allowed` and `max_total_minor` carry forward UNCHANGED: copy the user's
@@ -113,9 +147,9 @@ after the pick is sealed.
 
 A hotel, flight, table, appointment, rental or ticket.
 
-1. Find options that match what the user asked for, and keep their exact words.
+1. **Before any search**, seal what the user asked for with `deal task new` (see "The user's original request"). Then find options that match it.
 2. Fill the booking form up to the last screen before it is confirmed. Do not press the final button.
-3. **Final review:** `deal open` (once per deal, type `booking` or `rental`), then `deal check` with `"action": "commit"`, or `"pay"` when the confirmation charges a card.
+3. **Final review:** `deal open` with `--task <task_id>` (once per deal, type `booking` or `rental`); if the user picked from options you showed, seal the pick with `deal note --kind intent` (see "The user picked from options"); then `deal check` with `"action": "commit"`, or `"pay"` when the confirmation charges a card.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, confirm. On `pause`, show it, seal the user's answer, and confirm only if that returns `"proceed": true`.
 5. Right after confirming: `deal note --kind act` with the amount and the confirmation reference.
 6. `deal close` after the stay, trip or appointment.
@@ -471,11 +505,23 @@ witness.
 
 All commands take `--profile deal` and print one JSON object.
 
+**0. Task** when a buying or booking task starts, before any search:
+
+```sh
+capsulectl --profile deal deal task new --input task.json   # {"verbatim":"...","what":"...","use":"...","budget_max":{"amount_minor":3000,"currency":"USD"}}
+```
+
+It prints `task_id`. The request and each limit are sealed only as
+commitments, on a log of their own: no merchant is named yet.
+
 **1. Open** at the final review, or earlier when you first contact a seller:
 
 ```sh
-capsulectl --profile deal deal open --skill <path of this SKILL.md> --input open.json
+capsulectl --profile deal deal open --skill <path of this SKILL.md> --task <task_id> --input open.json
 ```
+
+`--task` cites the request sealed when the task started. Leave it out only
+when no task was sealed: the receipt then says so.
 
 Always pass `--skill` with the full path of **this** file, the SKILL.md you
 are following now (or set `CAPSULE_DEAL_SKILL` to it). Its digest is sealed
@@ -535,7 +581,7 @@ capsulectl --profile deal deal note --deal ID --kind message  --input m.json   #
 capsulectl --profile deal deal note --deal ID --kind claim    --input c.json   # {"text":"...","source_kind":"merchant","source":"..."}; selling: {"text":"...","source_kind":"agent","class":"condition"}
 capsulectl --profile deal deal note --deal ID --kind evidence --input e.json   # {"about":"...","source":"...","verified":true}
 capsulectl --profile deal deal note --deal ID --kind change   --input d.json   # {"source":"...","who":{...},"terms":{...},"recourse":{...}}
-capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   # {"verbatim":"the user's new words","allowed":["pay","share_contact"]}: a new action is only proposed
+capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   # {"verbatim":"the user's new words","allowed":["pay","share_contact"]}: a new action is only proposed; a pick adds "shown":[...] and "recommended":"..."
 capsulectl --profile deal deal note --deal ID --kind disclosure --input d.json # {"fields":[{"class":"phone","value":"..."}]}
 ```
 

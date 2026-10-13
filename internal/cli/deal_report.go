@@ -109,6 +109,17 @@ func (s *dealSession) dealReportBundleAt(ctx context.Context, events []sealedEve
 	if err != nil {
 		return nil, err
 	}
+	// The user's own copy carries the task intent the deal cites, with its
+	// openings (deal_task_intent.go); a shared copy carries none.
+	if !shared {
+		section, err := s.taskIntentSection(ctx, events)
+		if err != nil {
+			return nil, err
+		}
+		if section != nil {
+			ext["task_intent"] = section
+		}
+	}
 	if heldReport != "" {
 		ext = map[string]interface{}{dealReportPointer: heldReport}
 	} else if sealReport {
@@ -249,7 +260,10 @@ func (s *dealSession) dealReportExtension(events []sealedEvent, report dealRepor
 		// The openings of the user's floor (bounds_commitment): the
 		// commercial-bounds/v0 document and its nonce, in this copy only.
 		"bounds_openings": boundsOpenings(events),
-		"did":             items(report.Did), "anomalies": items(report.Anomalies),
+		// The openings of each pick: the user's words for it, the options
+		// shown and the one the agent recommended.
+		"pick_openings": pickOpenings(events),
+		"did":           items(report.Did), "anomalies": items(report.Anomalies),
 		"told":     toldItems(report.Told, true),
 		"did_line": dealDidLine(dealDidSources(events)),
 		// Which builds sealed the steps, and which one made this page:
@@ -400,9 +414,10 @@ const dealPageTitleWords = 120
 
 // dealPageTitle is the page's title: what a tab, or a host's preview of the
 // file, shows before (or without) any script. It says only what this copy
-// already shows in the clear: on the user's own copy, the words they asked,
-// and only when they were checked against their sealed commitment when the
-// page was built (dealPageOpenings); on a shared copy, from which those
+// already shows in the clear: on the user's own copy, the words they asked
+// (their original request when the deal cites one, else their words when it
+// opened), and only when they were checked against their sealed commitment
+// when the page was built (dealPageOpenings); on a shared copy, from which those
 // words are withheld, only whom the copy is for. Never a structured field:
 // no floor, limit or withheld value. The share gate scans the title with
 // the rest of a shared page.
@@ -416,6 +431,15 @@ func dealPageTitle(b map[string]interface{}, openings map[string]interface{}) st
 	}
 	opening, _ := report["asked_opening"].(map[string]interface{})
 	text, _ := opening["text"].(string)
+	checked := openings["asked"] == true
+	// The user's original request, when the deal cites one and its words
+	// were checked: what they asked when the task started.
+	if openings["task_intent"] == "checked" {
+		section, _ := report["task_intent"].(map[string]interface{})
+		task, _ := section["verbatim_opening"].(map[string]interface{})
+		text, _ = task["text"].(string)
+		checked = true
+	}
 	// Control and format characters (NUL, terminal escapes, bidi overrides)
 	// never reach a title; whitespace controls are folded with the rest.
 	text = strings.Map(func(r rune) rune {
@@ -424,7 +448,7 @@ func dealPageTitle(b map[string]interface{}, openings map[string]interface{}) st
 		}
 		return r
 	}, text)
-	if openings["asked"] != true || strings.TrimSpace(text) == "" {
+	if !checked || strings.TrimSpace(text) == "" {
 		return "Deal report"
 	}
 	words := []rune(strings.Join(strings.Fields(text), " "))
