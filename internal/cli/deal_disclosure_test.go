@@ -274,3 +274,17 @@ func TestDealSkillOffersOnlyTheCounterpartyShare(t *testing.T) {
 		assert.Contains(t, help, dealAudienceAdjudicator, verb)
 	}
 }
+
+// The skill's README is public documentation of the same skill, so it names
+// only the counterparty share as well.
+func TestDealReadmeDocumentsOnlyTheCounterpartyShare(t *testing.T) {
+	raw, err := os.ReadFile("../../skills/deal/README.md")
+	require.NoError(t, err)
+	text := strings.Join(strings.Fields(string(raw)), " ")
+	assert.NotContains(t, strings.ToLower(text), dealAudienceAdjudicator)
+	shares := regexp.MustCompile(`--share[ =]+(\S+)`).FindAllStringSubmatch(text, -1)
+	require.NotEmpty(t, shares)
+	for _, m := range shares {
+		assert.Equal(t, dealAudienceCounterparty, strings.Trim(m[1], "`\"'"), m[0])
+	}
+}
