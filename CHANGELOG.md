@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Offer, commit, sign and cancel acts seal their disposition and counterparty
+
+- **Changed:** an approved `offer`, `commit`, `sign` or `cancel` act is sealed as a `decide`
+  Capsule, as a `pay` is, with the same disposition rule (the typed record's own
+  `authority_basis`; the approval in `x-deal-v0`) and its effect type: `make_offer`
+  (`two_way`), `accept_agreement`, `sign_document`, `cancel_commitment`. These four effect
+  types are **provisional**: proposed for agent-action-capsule's registry, held for
+  ratification and not yet registered, and provisional here until they are registered (the deal
+  profile's PROFILE.md marks each one). Before, only a `pay` had a disposition, so a reader could not tell an accepted
+  commit from a repeat, and after a sale's first commit every later commit check in it was
+  refused.
+- **Changed:** the same acts seal the counterparty of the check they rest on (an act names no
+  payee), exactly as that check sealed it, so a rule keying earlier acts on who they were with
+  (a repeated booking in one deal) finds it in the sealed record, not only beside it in the
+  checker's history.
+- Steps sealed before keep their bytes: each change is marked on the step (`act_effects`,
+  `act_counterparty`), and a step without the mark re-derives as it was sealed. An unchecked act
+  stays `fyi`. The deal skill's SKILL.md is unchanged, so its digest is too.
+
 ### A merchant email whose key cannot be read now is sealed at the next tick
 
 - **Changed:** when `deal note --kind evidence --email` cannot reach DNS for the merchant's DKIM
