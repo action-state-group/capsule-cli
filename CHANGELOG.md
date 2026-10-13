@@ -2,6 +2,52 @@
 
 ## Unreleased
 
+### A deal's copy over evidence requests, and `compose` from what was recorded
+
+- **Added:** on a deal profile, `request`, `respond` and `request --response` carry a deal's
+  shared copy. The subject is `{"kind":"correlation","value":"<deal id>"}`: the deal id both
+  parties hold (`deal open --deal-id`).
+  - `request --request` records the ask on the deal's requests log (`deal/<id>/requests`) and
+    writes the canonical request bytes. Their digest is the one evidencebook gives the same
+    request.
+  - `respond --requester WHO` answers with the copy `disclose --deal --share counterparty` makes,
+    in an evidencebook signed artifact response. The share is sealed on the disclosure log as
+    before, and its record names the request's digest. The artifact is the copy's JCS bytes, so
+    the signed `artifact_digest` is its bundle digest.
+  - Under `coverage.min_freshness` the copy is fresh: a report is sealed and a checkpoint cut.
+    Under `coverage.expected_pin` (`{root, mmr_size}`) the copy is re-served at exactly that
+    checkpoint, with nothing new sealed. That works only while the deal's log ends at the pin
+    with a copy's report as its newest record. Otherwise, for example once the deal has moved on,
+    the answer is a signed `coverage_unsatisfiable` refusal.
+  - `request --response` records the answer under the pinned responder keys. A signed copy that
+    does not verify VALID is recorded `artifact_failed_verification`, never as a grant; so is one
+    that is not anchored under the responder's checkpoint key, not on the requested deal's log,
+    or not at the pinned or fresh enough checkpoint. `--absent-until` records an absence.
+- **Added:** `capsulectl compose --deal ID --member REQUEST_RECORD_ID=RESPONSE_FILE ...` (two or
+  more members; `REQUEST_RECORD_ID` alone for a recorded absence) writes a composed/v1 bundle from
+  recorded answers only. It refuses:
+  - a member whose request this profile never recorded;
+  - a request still pending;
+  - response bytes other than the ones recorded.
+
+  Each member's `request_digest` is the recorded request's digest, and its observer is the
+  responder key the answer verified under. A copy's member carries `response`: the responder's
+  signed response without its artifact bytes, which binds the copy to the request it answered.
+  Each pair of members is joined on the deal id (`pre_agreed_identifier`, `pointer: "/deal_id"`),
+  declared in the state the verifier derives. The containing bundle's root is a composition
+  record sealed on `deal/<id>/compositions`.
+- **Added (wire):** every deal step's Capsule carries the deal id as its top-level `deal_id`
+  member (x-deal-v0 section 1), so two parties' copies join on it. A step an earlier release
+  prepared, without it, is still recovered as that release prepared it.
+- **Changed:** `verify --bundle` reads a composed/v1 block holding a refusal member as
+  INCOMPLETE (the member reports `reads_as: "INCOMPLETE"`): what was asked for was not served.
+  A refusal is still no failed claim, so it never makes the verdict INVALID. A copy's carried
+  `response` is checked under profile `evidencebook-artifact-response`: an invalid signature, or
+  one under a key other than the member's observer, fails.
+- **Fixed:** `verify --bundle` checks a carried refusal in evidencebook's own form (`key_id`, and
+  `sig` over `{request_digest, reason, issued_at}`), the form `respond` sends, and reports
+  profile `evidencebook-refusal`. Before this fix, such a refusal read `invalid`.
+
 ### Offer, commit, sign and cancel acts seal their disposition and counterparty
 
 - **Changed:** an approved `offer`, `commit`, `sign` or `cancel` act is sealed as a `decide`

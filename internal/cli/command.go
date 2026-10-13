@@ -308,7 +308,7 @@ func NewCommand() *cobra.Command {
 	root.AddCommand(releaseCommands())
 	root.AddCommand(backfillCommands())
 	root.AddCommand(canaryCommands())
-	root.AddCommand(closeCommand(), reconcileCommand(), requestCommand(), respondCommand())
+	root.AddCommand(closeCommand(), reconcileCommand(), requestCommand(), respondCommand(), composeCommand())
 	root.AddCommand(bookCommands())
 	root.AddCommand(settlementCommands())
 	root.AddCommand(presentationCommands())

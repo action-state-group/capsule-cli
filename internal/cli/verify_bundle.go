@@ -205,7 +205,7 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 // only after this same verdict is VALID (pageGate), so the page can never
 // claim more than verify --bundle does about the bundle it carries.
 func bundleVerdict(value map[string]interface{}, directory []witnessRow) (string, map[string]any) {
-	result := aacbundle.VerifyBundleWithOptions(value, aacbundle.Options{RefusalSignature: verifyRefusalSignature})
+	result := aacbundle.VerifyBundleWithOptions(value, aacbundle.Options{RefusalSignature: verifyRefusalSignature, ResponseSignature: verifyResponseSignature})
 	report, verdict := assessBundle(value, result, directory)
 	return verdict, report
 }
