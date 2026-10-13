@@ -772,6 +772,13 @@ func dealTickCommand() *cobra.Command {
 		}
 		until := dealClock().Add(wait)
 		published := 0
+		// Merchant emails deferred for want of DNS are sealed first, so
+		// their key records are in the checkpoint this tick publishes.
+		// A failure there is reported, and never stops the tick.
+		emails, err := sealDeferredEmails(c)
+		if err != nil {
+			emails = map[string]any{"error": err.Error()}
+		}
 		for {
 			var out map[string]any
 			err := runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
@@ -789,6 +796,9 @@ func dealTickCommand() *cobra.Command {
 			now := dealClock()
 			if wait == 0 || err != nil || due.After(until) {
 				out["published_this_run"] = published
+				if emails != nil {
+					out["merchant_emails"] = emails
+				}
 				return output(c, out)
 			}
 			if d := due.Sub(now); d > 0 {

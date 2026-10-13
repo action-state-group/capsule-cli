@@ -76,6 +76,7 @@ var dealIndexSchema = []string{
 	`CREATE TABLE IF NOT EXISTS deal_keys (deal_id TEXT PRIMARY KEY, deal_key BLOB NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS deal_store (id INTEGER PRIMARY KEY CHECK (id = 1), secret BLOB NOT NULL)`,
 	dealCadenceSchema,
+	dealDeferredEmailSchema,
 }
 
 // dealSession holds the write lock, the index handle and the signing key for
@@ -1212,10 +1213,12 @@ func dealNoteCommand() *cobra.Command {
 		default:
 			return inputError("--kind must be message, claim, evidence, change, intent, approval, act, disclosure, platform_approval, acceptance, payment_received or delivered")
 		}
+		var deferred *keysUnreachableError
 		if emailPath != "" {
 			// Captured before the deal is locked: the key records are read
 			// from DNS now, as close to receipt as the agent can make it.
-			if err := attachEmail(ev.Evidence, emailPath, keyPath, dmarcPath); err != nil {
+			// When DNS cannot be reached the capture is deferred, not refused.
+			if err := attachEmail(ev.Evidence, emailPath, keyPath, dmarcPath); err != nil && !errors.As(err, &deferred) {
 				return err
 			}
 		}
@@ -1238,31 +1241,15 @@ func dealNoteCommand() *cobra.Command {
 			if ev.Intent != nil && ev.Intent.PartyRole != "" && ev.Intent.PartyRole != dealRole(events) {
 				return inputError("this deal's party_role is " + dealRole(events) + ", set when it opened; a note cannot change it")
 			}
-			if i := finalClose(events); i >= 0 {
+			if finalClose(events) >= 0 && kind != "evidence" {
 				// A closed deal takes later evidence only, linked to the close
 				// (it confirms the close); every other step needs a new deal.
-				if kind != "evidence" {
-					return inputError("this deal is closed; it takes later evidence only (`deal note --kind evidence`, linked to the close), and any other step needs a new deal (`deal open`)")
-				}
-				if ev.Evidence.Obligation != nil {
-					return inputError("this deal is closed; a new cancel-by date belongs on a new deal (`deal open`)")
-				}
-				ev.Confirms = events[i].CapsuleID
+				return inputError("this deal is closed; it takes later evidence only (`deal note --kind evidence`, linked to the close), and any other step needs a new deal (`deal open`)")
 			}
-			if ev.Evidence != nil && (ev.Evidence.ResolvesStep != 0 || ev.Evidence.Resolves != "") {
-				target := ev.Evidence.Resolves
-				for _, se := range events {
-					if se.Event.N == ev.Evidence.ResolvesStep || (target != "" && se.CapsuleID == target) {
-						target = se.CapsuleID
-						if se.Event.Evidence == nil || se.Event.Evidence.Obligation == nil {
-							return inputError("resolves names a step that holds no obligation")
-						}
-					}
+			if ev.Evidence != nil {
+				if err := evidenceAgainst(events, &ev); err != nil {
+					return err
 				}
-				if target == "" {
-					return inputError("resolves names no step of this deal")
-				}
-				ev.Evidence.Resolves, ev.Evidence.ResolvesStep = target, 0
 			}
 			if settlementKind != "" {
 				if err := checkSettlementNote(events, &ev, settlementKind); err != nil {
@@ -1399,6 +1386,9 @@ func dealNoteCommand() *cobra.Command {
 					d.AuthorizedBy, d.Reason, d.Rule = "", "the check did not name your "+classWord(class), "class_not_checked"
 				}
 			}
+			if deferred != nil {
+				return s.deferEmail(ctx, c, dealID, *ev.Evidence, deferred.raw)
+			}
 			se, err := s.seal(ctx, dealID, events, ev)
 			if err != nil {
 				return err
@@ -1453,44 +1443,17 @@ func dealNoteCommand() *cobra.Command {
 				}
 				out["classes"] = classes
 			case "evidence":
-				if m := ev.Evidence.Email; m != nil {
-					// Keys rotate and are revoked: checkpoint the sealed key
-					// record at once (the next cadence tick witnesses it).
+				// Keys rotate and are revoked: a sealed key record, like an
+				// obligation, is checkpointed at once (the next cadence tick
+				// witnesses it).
+				if ev.Evidence.Email != nil || ev.Evidence.Obligation != nil {
 					cp, err := s.milestone(ctx)
 					if err != nil {
 						return err
 					}
 					out["checkpoint"] = cp
-					out["dkim"] = m.DKIM.Result
-					out["merchant_signed"] = m.DKIM.Merchant
-					out["key_source"] = m.KeySource
-					out["dmarc_policy"] = m.DKIM.Policy
-					out["scope"] = emailScopeLine
-					out["merchant_says"] = emailVerdictWords(m.DKIM)
-					out["we_say"] = ourSealWords
-					out["parsed"] = m.Parsed
-					if hint := obligationHint(m.Parsed); hint != nil && ev.Evidence.Obligation == nil {
-						// Proposed, never sealed by itself: the agent checks it
-						// against the email and seals it as evidence.
-						out["obligation_hint"] = hint
-					}
 				}
-				if o := ev.Evidence.Obligation; o != nil {
-					if ev.Evidence.Email == nil {
-						cp, err := s.milestone(ctx)
-						if err != nil {
-							return err
-						}
-						out["checkpoint"] = cp
-					}
-					deadline := map[string]any{"text": o.sentence(events[0].Event.Open.Terms.Currency), "note": deadlineNotEnforced}
-					if o.due() {
-						deadline["due_by"] = o.DueBy
-					} else {
-						deadline["cancel_by"] = o.CancelBy
-					}
-					out["deadline"] = deadline
-				}
+				evidenceOutput(out, *ev.Evidence, events)
 			}
 			return output(c, out)
 		})

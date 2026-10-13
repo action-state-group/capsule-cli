@@ -191,14 +191,9 @@ func captureEmail(raw []byte, supplied []dkimKeyRecord) (*merchantEmail, error) 
 		txt, err := dkimLookup(name)
 		var dnsErr *net.DNSError
 		if err != nil && !(errors.As(err, &dnsErr) && dnsErr.IsNotFound) {
-			// Not sealed: a record we could not read is not a record that is absent.
-			// The way on is named: the record, obtained some other way and
-			// supplied, is sealed as supplied, which is weaker evidence.
-			flag := "--key-record FILE"
-			if what == "DMARC record" {
-				flag = "--dmarc-record FILE beside --key-record FILE"
-			}
-			fetchErr = errors.Join(fetchErr, inputError("could not reach DNS for the "+what+" "+name+" ("+err.Error()+"): retry, or get that TXT record another way (another resolver, or a lookup the user runs) and pass it with "+flag+"; it is sealed as supplied, which is weaker evidence than a record read from DNS"))
+			// Not sealed: a record we could not read is not a record that is
+			// absent. The capture is deferred instead (keysUnreachableError).
+			fetchErr = errors.Join(fetchErr, errors.New("could not reach DNS for the "+what+" "+name+" ("+err.Error()+")"))
 			return nil, err
 		}
 		return txt, nil
@@ -233,13 +228,28 @@ func captureEmail(raw []byte, supplied []dkimKeyRecord) (*merchantEmail, error) 
 		}
 	}
 	verdict, err := verifyDKIM(raw, lookup, e.DMARC)
-	if err = errors.Join(fetchErr, err); err != nil {
+	if err != nil {
 		return nil, err
+	}
+	if fetchErr != nil {
+		return nil, &keysUnreachableError{raw: raw, err: fetchErr}
 	}
 	e.DKIM = verdict
 	e.Parsed = parseMerchantEmail(raw)
 	return e, nil
 }
+
+// keysUnreachableError is a capture that could not read a key or DMARC
+// record because DNS could not be reached (not because the record is absent).
+// Nothing is sealed from it: `deal note` defers the capture to the next
+// cadence tick (deferEmail), which reads the records again.
+type keysUnreachableError struct {
+	raw []byte
+	err error
+}
+
+func (e *keysUnreachableError) Error() string { return e.err.Error() }
+func (e *keysUnreachableError) Unwrap() error { return e.err }
 
 // sealedLookup answers key queries from sealed records only. A name that was
 // not sealed has no key: verification never falls back to the network.
