@@ -333,6 +333,28 @@
         }
       }
     },
+    "verifier_statement": {
+      "description": "Not a record: a verifier's signed statement that one sealed merchant email's DKIM signature checked out, issued only after a re-check of the full sealed raw message against the sealed key records passed, never from a header set and never over a supplied key. It carries no email bytes, header values, selector or signed-header list. email_digest is the merchant_email message_digest the deal record already seals; message_date is present only when the passing signature's h= covers Date; a covered Date that is repeated or unreadable gets no statement. signature is Ed25519, lowercase hex, over UTF8(\"x-deal-v0/verifier-statement/v1\") || 0x00 || JCS(the statement without signature), under verifier.public_key. In v0 the verifier is the holder's own signing key: the statement is the holder's tool's, not an independent one.",
+      "type": "object", "additionalProperties": false,
+      "required": ["statement_type", "dkim_domain", "email_digest", "key_records_digest", "key_source", "checked_at", "verifier", "signature"],
+      "properties": {
+        "statement_type": { "const": "dkim-verification" },
+        "dkim_domain": { "type": "string", "pattern": "^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$" },
+        "message_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+        "email_digest": {
+          "type": "object", "additionalProperties": false, "required": ["alg", "value"],
+          "properties": { "alg": { "const": "sha-256" }, "value": { "$ref": "#/$defs/hex64" } }
+        },
+        "key_records_digest": { "$ref": "#/$defs/hex64" },
+        "key_source": { "const": "dns" },
+        "checked_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+        "verifier": {
+          "type": "object", "additionalProperties": false, "required": ["key_id", "public_key"],
+          "properties": { "key_id": { "$ref": "#/$defs/hex64" }, "public_key": { "$ref": "#/$defs/hex64" } }
+        },
+        "signature": { "type": "string", "pattern": "^[0-9a-f]{128}$" }
+      }
+    },
     "body_detail_change": {
       "type": "object", "additionalProperties": false,
       "required": ["source", "changed"],

@@ -245,6 +245,8 @@ func SafeError(err error) string {
 		return ErrBundleInvalid.Error()
 	case errors.Is(err, ErrEmailUnverified):
 		return ErrEmailUnverified.Error()
+	case errors.Is(err, ErrStatementInvalid):
+		return ErrStatementInvalid.Error()
 	case errors.Is(err, ErrPaused):
 		return ErrPaused.Error()
 	case errors.Is(err, ErrBreaking):
