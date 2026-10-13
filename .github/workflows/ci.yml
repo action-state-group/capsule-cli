@@ -54,14 +54,20 @@ jobs:
         run: make build
 
   tests:
-    # The race detector (the slowest case loops sampled), then every case
-    # without it: see scripts/test.sh.
+    # The race detector (the slowest case loops sampled) split by test name
+    # across four jobs, and every case without it in a fifth: see
+    # scripts/test.sh. One job running both passes took 13-15 minutes and
+    # hit go test's 15-minute timeout on PR runs and on the nightly.
     strategy:
       fail-fast: false
       matrix:
-        build:
-          - { name: default, args: "" }
-    name: test (${{ matrix.build.name }})
+        part:
+          - { pass: race, shard: 1/4 }
+          - { pass: race, shard: 2/4 }
+          - { pass: race, shard: 3/4 }
+          - { pass: race, shard: 4/4 }
+          - { pass: plain, shard: 1/1 }
+    name: test (${{ matrix.part.pass }} ${{ matrix.part.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -82,6 +88,8 @@ jobs:
       CAPSULE_CLI_TEST_MYSQL_PORT: "3306"
       # The nightly run samples nothing: every case under the race detector.
       CAPSULE_TEST_RACE_FULL: ${{ github.event_name == 'schedule' && '1' || '' }}
+      CAPSULE_TEST_PASS: ${{ matrix.part.pass }}
+      CAPSULE_TEST_SHARD: ${{ matrix.part.shard }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,8 +98,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Unit and MySQL integration tests, with and without the race detector
-        run: bash scripts/test.sh ${{ matrix.build.args }}
+      - name: Unit and MySQL integration tests (${{ matrix.part.pass }}, shard ${{ matrix.part.shard }})
+        run: bash scripts/test.sh
 
   test:
     # One result under the job name checks and the PR capsule already use.
