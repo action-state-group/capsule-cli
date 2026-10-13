@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### A rules checker may be pinned to a set of rulesets
+
+- **Added:** `profile update --rules-checker FILE` accepts `"definition_digests": ["<64 hex>", …]`
+  in `FILE`: a set of rulesets, any of which the checker may report, for a checker whose ruleset
+  depends on the deal. A check compares the digest the checker reports against the set as it
+  compared it against the single digest; one outside the set is still not evaluated, cause
+  `ruleset_changed`. `profile show` (`RulesChecker.DefinitionDigests`) and `doctor`
+  (`profile.rules_checker.definition_digests`) print every pinned digest.
+- **Unchanged:** one digest, given as `definition_digest` or as a set of one, is stored as
+  `definition_digest` exactly as before, so a profile pinned to one ruleset reads, saves and shows
+  byte for byte as it did. An earlier capsulectl refuses to load a profile pinned to two or more
+  (it does not know `definition_digests`), rather than checking against only one of them.
+
 ### A deal's copy over evidence requests, and `compose` from what was recorded
 
 - **Added:** on a deal profile, `request`, `respond` and `request --response` carry a deal's

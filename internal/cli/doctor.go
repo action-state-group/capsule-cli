@@ -146,6 +146,17 @@ func doctorCommand() *cobra.Command {
 				}
 				profileReport["materiality"] = materiality
 			}
+			// A pinned rules checker: its executable's digest and every
+			// definition digest its ruleset may report.
+			if pin := p.RulesChecker; len(pin.Command) > 0 {
+				digests := pin.pinnedDigests()
+				checker := map[string]any{"sha256": pin.SHA256, "definition_digests": digests}
+				if len(digests) == 0 {
+					checker["definition_digests"] = []string{}
+					checker["notice"] = "no definition digest pinned: whatever ruleset the checker reports is evaluated"
+				}
+				profileReport["rules_checker"] = checker
+			}
 
 			switch {
 			case !checkWitness:
