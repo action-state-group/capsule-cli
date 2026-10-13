@@ -40,8 +40,18 @@ exactly two members.
   `action_id: "<deal_id>/<seq>"`, and chains each Capsule to the previous one with
   `chain.relation: "follows"`. A `follows` link is ordering only. The Capsule claims only what
   the record shows:
-  - An `action` record (an act a sealed approval authorized) whose action has a registered AAC
-    `effect.type` is `action_type: "decide"`. Today that is `pay`, as `send_payment`. Its
+  - An `action` record (an act a sealed approval authorized) whose action has an AAC
+    `effect.type` is `action_type: "decide"`: `pay`, as `send_payment` (registered), and the
+    other acts, with these **provisional** effect types (proposed for
+    agent-action-capsule's REGISTRY section 3, "Provisional: commitment effect types": held for
+    ratification and not yet registered; provisional here until they are registered):
+    - `offer` as `make_offer` (provisional)
+    - `commit` as `accept_agreement` (provisional)
+    - `sign` as `sign_document` (provisional)
+    - `cancel` as `cancel_commitment` (provisional)
+
+    Until then each is an unregistered value, which a verifier treats as informational under
+    the registry's never-reject invariant, never as a rejection. Its
     `disposition` is `accept` and `executed`, by `human` (with `human_disposed`) only when the
     user approved it in their own words (`approver: user`, with `said_commitment`), or by
     `policy` when a passing check approved it under their standing intent. An act approved by
@@ -53,10 +63,16 @@ exactly two members.
     neither; any other basis stays `fyi`. Its `effect` is `dispatched` and `runtime_claimed` (the agent's
     report, with no response in hand), so `effect_mode` is `dispatched_unconfirmed`;
     `one_way_recoverable` when the agreed recourse is refundable, else
-    `one_way_consequential`.
-  - Every other step is `action_type: "fyi"`: the other actions (`commit`, `cancel`, `sign`)
-    and disclosures have no registered `effect.type` yet, and an unchecked act is sealed as an
-    `outcome`, never as an action. Steps sealed by an earlier capsulectl are all `fyi`.
+    `one_way_consequential`; an `offer` is `two_way` (it binds nothing until accepted, and a
+    later offer supersedes it).
+  - An `offer`, `commit`, `sign` or `cancel` record, which names no payee, seals the
+    counterparty of the check it rests on, exactly as that check sealed it: the header `counterparty` in `x-deal-v0`, `body.counterparty` in a
+    typed `action-record/v0`. A rule keying earlier acts on who they were with reads it from
+    the sealed record. One sealed before this release names none, and re-derives unchanged.
+  - Every other step is `action_type: "fyi"`: disclosures have no registered `effect.type`
+    yet, and an unchecked act is sealed as an `outcome`, never as an action. Steps sealed by an
+    earlier capsulectl are all `fyi`, and an `offer`, `commit`, `sign` or `cancel` sealed before
+    this release stays `fyi`, and re-derives unchanged.
 - `record_type` is not AAC's `action_type`. AAC `action_type` stays `fyi` or `decide`.
   `record_type` is this profile's own closed vocabulary.
 - The record carries **no raw personal identifiers** (section 4). Raw values stay in the
