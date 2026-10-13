@@ -354,15 +354,40 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 
 // dealEffectTypes maps a deal action to its registered AAC effect.type
 // (agent-action-capsule spec/REGISTRY.md §3, "effect.type"). Only an action
-// listed here is sealed as a decide Capsule. Every other action (commit,
-// cancel, sign) and every disclosure (share_contact, share_credentials) has
-// no registered effect type yet, so its Capsule stays fyi rather than carry
-// an unregistered one.
+// listed here, or in dealActEffectTypes, is sealed as a decide Capsule. A
+// disclosure (share_contact, share_credentials) has no effect type yet, so
+// its Capsule stays fyi rather than carry one nobody proposed.
 var dealEffectTypes = map[string]string{"pay": "send_payment"}
+
+// dealActEffectTypes are the AAC effect.types of the other actions a deal
+// takes. They are PROVISIONAL: proposed for agent-action-capsule's registry,
+// held for ratification and not yet registered, so a verifier reads them as
+// unregistered values (informational, never a rejection); the deal profile's
+// PROFILE.md labels each one, and a test holds it to that. A step that
+// carries ActEffects seals an approved offer, commit, sign or cancel as a
+// decide Capsule with its disposition, as a pay is. A step sealed before has
+// none, and re-derives fyi as it was sealed.
+var dealActEffectTypes = map[string]string{
+	offerAction: "make_offer",
+	"commit":    "accept_agreement",
+	"sign":      "sign_document",
+	"cancel":    "cancel_commitment",
+}
+
+// dealActEffectsVersion marks a step whose act, other than a pay, carries
+// its effect type and disposition (dealActEffectTypes).
+const dealActEffectsVersion = "1"
+
+// dealActCounterpartyVersion marks a step whose offer, commit, sign or cancel
+// act seals the counterparty of the check it rests on (an act names no payee,
+// so without it a rule keying earlier acts on who they were with has no
+// target in the sealed record).
+const dealActCounterpartyVersion = "1"
 
 // dealCapsuleInput is a step's Capsule, claiming only what the deal record
 // shows. A record that says an action was taken under a sealed approval (an
-// authorized act whose action has a registered effect type) is a decide
+// authorized act whose action has an effect type: dealEffectTypes, or
+// dealActEffectTypes on a step that carries ActEffects) is a decide
 // Capsule:
 //   - disposition: accepted, and executed, as the act reports. In a typed
 //     action-record/v0 it is read from the record's own authority_basis, the
@@ -401,6 +426,9 @@ func dealCapsuleInput(events []sealedEvent, ev dealEvent, record []byte, operato
 		return in
 	}
 	effectType, ok := dealEffectTypes[ev.Act.Action]
+	if !ok && ev.ActEffects != "" {
+		effectType, ok = dealActEffectTypes[ev.Act.Action]
+	}
 	if !ok {
 		return in
 	}
@@ -409,7 +437,12 @@ func dealCapsuleInput(events []sealedEvent, ev dealEvent, record []byte, operato
 		return in
 	}
 	irreversibility := emit.IrreversibilityOneWayConsequential
-	if r := state.agreedRecourse.Refundable; r != nil && *r {
+	switch {
+	case ev.Act.Action == offerAction:
+		// An offer binds nothing until it is accepted, and a later offer
+		// supersedes it.
+		irreversibility = emit.IrreversibilityTwoWay
+	case state.agreedRecourse.Refundable != nil && *state.agreedRecourse.Refundable:
 		irreversibility = emit.IrreversibilityOneWayRecoverable
 	}
 	in.ActionType = emit.ActionTypeDecide
@@ -642,6 +675,8 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	if dealRegistersThreads {
 		ev.ThreadRegistration = dealThreadRegistrationVersion
 	}
+	ev.ActEffects = dealActEffectsVersion
+	ev.ActCounterparty = dealActCounterpartyVersion
 	ev.ThreadCounterparty = dealThreadCounterpartyVersion
 	ev.OfferClass = dealOfferClassVersion
 	ev.Nonces = map[string]string{}

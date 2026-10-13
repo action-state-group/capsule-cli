@@ -233,6 +233,52 @@ func relRef(rel, d string) map[string]interface{} {
 	return r
 }
 
+// snapshotCounterpartyIDs is the counterparty a check (snapshot) step seals:
+// the one it names, or, on a sale's thread opened for one buyer, that buyer,
+// with exactly the keyed fingerprints the thread's opening sealed (first
+// contact, its payee read as its name when it names none). Empty when it is
+// about no one.
+func snapshotCounterpartyIDs(key []byte, events []sealedEvent, ev dealEvent) map[string]interface{} {
+	if sn := ev.Snapshot; sn != nil && sn.Who != nil {
+		return counterpartyIDs(key, *sn.Who)
+	}
+	if len(events) == 0 {
+		return nil
+	}
+	if open := events[0].Event.Open; ev.ThreadCounterparty != "" && open != nil && open.Sale != "" {
+		first := open.Who
+		if first.Payee == "" {
+			first.Payee = first.Name
+		}
+		return counterpartyIDs(key, first)
+	}
+	return nil
+}
+
+// actSnapshot is the check (snapshot) step an act rests on: the verdict it
+// is authorized by, directly or through the approval of that verdict, and
+// the snapshot the verdict checks.
+func actSnapshot(events []sealedEvent, authorizedBy string) (sealedEvent, bool) {
+	verdict := authorizedBy
+	for _, se := range events {
+		if a := se.Event.Approval; se.CapsuleID == authorizedBy && a != nil {
+			verdict = a.Check
+		}
+	}
+	var snapshot string
+	for _, se := range events {
+		if c := se.Event.Check; se.CapsuleID == verdict && c != nil {
+			snapshot = c.Snapshot
+		}
+	}
+	for _, se := range events {
+		if se.CapsuleID == snapshot && se.Event.Kind == "snapshot" && se.Event.Snapshot != nil {
+			return se, true
+		}
+	}
+	return sealedEvent{}, false
+}
+
 // counterpartyIDs fingerprints every identifier that can be normalized. One
 // that cannot is not recorded; it stays local.
 func counterpartyIDs(key []byte, w dealWho) map[string]interface{} {
@@ -861,19 +907,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				}
 			}
 		}
-		if sn.Who != nil {
-			setIDs(counterpartyIDs(key, *sn.Who))
-		} else if open := events[0].Event.Open; ev.ThreadCounterparty != "" && open != nil && open.Sale != "" {
-			// A sale's thread is opened for one buyer: a check that names no
-			// one is about that buyer, with exactly the keyed fingerprints the
-			// thread's opening sealed (first contact, its payee read as its
-			// name when it names none).
-			first := open.Who
-			if first.Payee == "" {
-				first.Payee = first.Name
-			}
-			setIDs(counterpartyIDs(key, first))
-		}
+		setIDs(snapshotCounterpartyIDs(key, events, ev))
 		body["action"] = sn.Action
 		// On a sale's thread, the item it is about, salted per check: equal
 		// across a sale's threads only to whoever holds the openings.
@@ -1071,6 +1105,13 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			block["refs"] = refs
 			if ev.Act.Payee != "" {
 				setIDs(counterpartyIDs(key, dealWho{Payee: ev.Act.Payee}))
+			} else if _, acted := dealActEffectTypes[ev.Act.Action]; acted && ev.ActCounterparty != "" {
+				// An offer, commit, sign or cancel names no payee: it is with
+				// whoever the check it rests on is about, with exactly the
+				// keyed fingerprints that check sealed.
+				if snap, ok := actSnapshot(events, ev.Act.AuthorizedBy); ok {
+					setIDs(snapshotCounterpartyIDs(key, events, snap.Event))
+				}
 			}
 			classify(act, ev.Act.Action, ev.Act.Direction, ev.Act.AmountMinor)
 			body = act
