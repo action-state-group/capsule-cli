@@ -474,16 +474,57 @@ const dealViewRender = (model, regions) => {
   // The user's words were checked against the baseline's sealed commitment
   // when this page was built (capsulectl refuses to write a page whose words
   // do not match); this page does not recompute it.
+  // What the user asked when the task started (the task intent the deal's
+  // baseline cites), then what they picked: their words when the deal opened
+  // and each pick, with the options shown and the agent's recommendation.
+  // Each was checked against its sealed commitment when this page was built;
+  // a deal with no sealed original request says so, and shows none.
   const opening = report.asked_opening || {};
-  const askedChecked = !!(page && page.openings && page.openings.asked === true) && typeof opening.text === "string";
+  const openings = (page && page.openings) || {};
+  const askedChecked = openings.asked === true && typeof opening.text === "string";
+  const task = report.task_intent || {};
+  const taskState = typeof openings.task_intent === "string" ? openings.task_intent : "none";
   host.append(el("h2", "What you asked"));
   if (shared) {
     host.append(el("p", "Withheld from this copy.", "deal-note"));
-  } else if (askedChecked) {
-    host.append(item(`“${opening.text}”`, [report.asked_step]));
-    host.append(el("p", "✓ These are the exact words sealed when the deal opened, checked when this page was built.", "deal-note"));
   } else {
-    host.append(el("p", "⚠️ The words you asked could not be checked against the sealed record.", "deal-bad"));
+    const taskOpening = task.verbatim_opening || {};
+    if (taskState === "checked" && typeof taskOpening.text === "string") {
+      host.append(el("p", `“${taskOpening.text}”`));
+      (task.fields || []).forEach((f) => {
+        if (typeof f.line === "string" && f.line) host.append(el("p", f.line));
+      });
+      host.append(el("p", "✓ These are your exact words, sealed when the task started, before any search; the deal cites that record. Checked by capsulectl when this page was built.", "deal-note"));
+      host.append(el("h3", "You picked"));
+    } else if (taskState === "unresolved") {
+      host.append(el("p", "⚠️ This deal cites a record of your original request that this copy does not hold, so it is not shown. Below are your words when the deal opened.", "deal-bad"));
+    } else {
+      host.append(el("p", "No record of your original request was sealed before this deal opened, so it is not shown. Below are your words when the deal opened.", "deal-note"));
+    }
+    if (askedChecked) {
+      host.append(item(`“${opening.text}”`, [report.asked_step]));
+      host.append(el("p", "✓ These are the exact words sealed when the deal opened, checked when this page was built.", "deal-note"));
+    } else {
+      host.append(el("p", "⚠️ The words you asked could not be checked against the sealed record.", "deal-bad"));
+    }
+    const picks = report.pick_openings || [];
+    const picksChecked = openings.picks || [];
+    picks.forEach((p, i) => {
+      if (picksChecked[i] !== true || !p.verbatim || typeof p.verbatim.text !== "string") return;
+      const lines = [];
+      if (p.shown && typeof p.shown.text === "string") {
+        let shown = [];
+        try {
+          shown = JSON.parse(p.shown.text);
+        } catch (_) {
+          shown = [];
+        }
+        if (Array.isArray(shown) && shown.length > 0) lines.push(`Options shown: ${shown.join(" · ")}`);
+      }
+      if (p.recommended && typeof p.recommended.text === "string") lines.push(`The agent recommended: ${p.recommended.text}`);
+      lines.forEach((l) => host.append(el("p", l)));
+      host.append(item(`You chose: “${p.verbatim.text}”`, [p.step]));
+    });
   }
   host.append(
     el(

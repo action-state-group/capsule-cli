@@ -566,8 +566,8 @@ func (s *dealSession) allCoverSteps(ctx context.Context) (_ []*dealCoverStep, er
 	}
 	var steps []*dealCoverStep
 	for _, id := range ids {
-		if saleIDPattern.MatchString(id) {
-			continue // a sale's log holds no action
+		if saleIDPattern.MatchString(id) || taskIDPattern.MatchString(id) {
+			continue // a sale's or a task's log holds no action
 		}
 		if err = s.useDeal(ctx, id, false); err != nil {
 			return nil, err

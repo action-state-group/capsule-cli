@@ -98,6 +98,12 @@ type dealIntent struct {
 	// Allowed absent (nil) means no restriction; present and empty means
 	// nothing is allowed yet ("show me options, don't book").
 	Allowed []string `json:"allowed"`
+	// Shown and Recommended are, on a pick (an intent note), the options
+	// the agent showed the user and the one it recommended, each sealed only
+	// as a commitment (shown_commitment, recommended_commitment); the pick's
+	// verbatim is the user's choice. Never on a baseline or task authority.
+	Shown       []string `json:"shown,omitempty"`
+	Recommended string   `json:"recommended,omitempty"`
 }
 
 type dealOpen struct {
@@ -139,6 +145,11 @@ type dealOpen struct {
 	// `deal open --sale`, never from the input file.
 	Sale          string `json:"sale,omitempty"`
 	SaleAuthority string `json:"sale_authority,omitempty"`
+	// TaskIntent is the record digest of the task intent this deal cites
+	// (its baseline's `cites` ref): what the user asked for when the task
+	// started, sealed on the task's own log before the deal opened. Set by
+	// `deal open --task`, never from the input file.
+	TaskIntent string `json:"task_intent,omitempty"`
 }
 
 type dealMessage struct {
@@ -599,6 +610,10 @@ type dealEvent struct {
 	// SaleCut is, on a sale's own log, the cut a sale bundle is made at: the
 	// last record of each opened thread then, each as a commitment.
 	SaleCut *dealSaleCut `json:"sale_cut,omitempty"`
+	// TaskIntent is, on a task's own log, what the user asked for when the
+	// task started (deal_task_intent.go): their words and stated
+	// constraints, sealed only as commitments.
+	TaskIntent *dealTaskIntent `json:"task_intent,omitempty"`
 	// Confirms is set on a record sealed after the deal was closed: the
 	// capsule id of that close. Its Capsule chains to the close with the
 	// registered relation `confirms`, never `follows`, and its record
@@ -750,6 +765,9 @@ func (o dealOpen) validate() error {
 	}
 	if strings.TrimSpace(o.Intent.Verbatim) == "" {
 		return inputError("intent.verbatim (the user's own words) is required")
+	}
+	if len(o.Intent.Shown) > 0 || o.Intent.Recommended != "" {
+		return inputError("intent.shown and intent.recommended go on the user's pick (deal note --kind intent), not on the opening")
 	}
 	if err := validPartyRole(o.Intent.PartyRole); err != nil {
 		return err

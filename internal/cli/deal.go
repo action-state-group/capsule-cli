@@ -165,7 +165,7 @@ func openDealSession(ctx context.Context, p Profile) (_ *dealSession, err error)
 // useDeal opens the store with the deal's own log, creating the log for a new
 // deal. An existing deal must already have indexed steps.
 func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) error {
-	if !dealIDPattern.MatchString(dealID) && !saleIDPattern.MatchString(dealID) {
+	if !dealIDPattern.MatchString(dealID) && !saleIDPattern.MatchString(dealID) && !taskIDPattern.MatchString(dealID) {
 		return inputError("--deal must be a deal id as printed by `deal open`: deal- followed by 16 hex characters")
 	}
 	if create {
@@ -812,7 +812,7 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealCountersignCommand(), dealExportCommand(), dealSaleCommands(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand(), dealDeadlinesCommand(), dealCheckpointCommands(), dealListCommand(), dealSettlementCommand())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealCountersignCommand(), dealExportCommand(), dealSaleCommands(), dealReconcileCommand(), dealTickCommand(), dealVerifyEmailCommand(), dealDeadlinesCommand(), dealCheckpointCommands(), dealListCommand(), dealSettlementCommand(), dealTaskCommands())
 	return deal
 }
 
@@ -978,8 +978,24 @@ func dealOpenCommand() *cobra.Command {
 		if carried != "" && !dealIDPattern.MatchString(carried) {
 			return inputError("--deal-id must be a deal id as `deal open` prints it: deal- followed by 16 lowercase hex characters")
 		}
-		// Set from the sale (deal open --sale), never from the input file.
-		o.ItemRef, o.Sale, o.SaleAuthority = "", "", ""
+		// Set from the sale (deal open --sale) and the task (deal open
+		// --task), never from the input file.
+		o.ItemRef, o.Sale, o.SaleAuthority, o.TaskIntent = "", "", "", ""
+		if taskID, _ := c.Flags().GetString("task"); taskID != "" {
+			if c.Flags().Changed("sale") {
+				return inputError("--task goes with a buyer's own deal: a sale's thread is under the sale's request (--sale)")
+			}
+			if err = runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
+				task, err := s.taskIntentOf(ctx, taskID)
+				if err != nil {
+					return err
+				}
+				o.TaskIntent = task.Digest
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
 		if saleID, _ := c.Flags().GetString("sale"); saleID != "" {
 			if err = runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
 				sale, authority, err := s.saleOf(ctx, saleID)
@@ -1122,6 +1138,7 @@ func dealOpenCommand() *cobra.Command {
 	cmd.Flags().String("skill", "", "The SKILL.md the agent is following (or $"+dealSkillEnv+"): its digest is sealed in the baseline")
 	cmd.Flags().String("records", "", "The record set: x-deal-v0 (the default) or typed (the typed action records, which carry the check contract)")
 	cmd.Flags().String("sale", "", "A sale id from `deal sale new`: open this buyer's thread under the sale's request and task authority (typed records)")
+	cmd.Flags().String("task", "", "A task id from `deal task new`: the baseline cites what the user asked for when the task started")
 	return cmd
 }
 
@@ -1344,6 +1361,11 @@ func dealNoteCommand() *cobra.Command {
 			case "intent":
 				if open.Sale != "" {
 					return inputError("a sale's thread is under the sale's one task authority: its request and limits do not change per buyer")
+				}
+				for _, option := range ev.Intent.Shown {
+					if strings.TrimSpace(option) == "" {
+						return inputError("intent.shown lists the options shown to the user, each as words: an empty one is not an option")
+					}
 				}
 				for _, a := range ev.Intent.Allowed {
 					if !slices.Contains(dealPointsOfNoReturn[open.Type], a) {
@@ -2086,7 +2108,11 @@ func dealReportCommand() *cobra.Command {
 				out["bundle"] = bundlePath
 			}
 			if emailPath != "" {
-				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Authority: report.Authority, AuthorityOrder: dealAuthorityOrder, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, dealClock(), 2), Cancellations: dealCancellations(events), Lifecycle: buildDealLifecycle(events, dealClock()), Steps: len(events)}
+				asked, picked, note, err := s.emailAsked(ctx, events, report.Asked)
+				if err != nil {
+					return err
+				}
+				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: asked, Picked: picked, AskedNote: note, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Authority: report.Authority, AuthorityOrder: dealAuthorityOrder, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, dealClock(), 2), Cancellations: dealCancellations(events), Lifecycle: buildDealLifecycle(events, dealClock()), Steps: len(events)}
 				eml, subject, text, htmlBody, err := dealEmail(view, []byte(page), bundle, dealClock())
 				if err != nil {
 					return err

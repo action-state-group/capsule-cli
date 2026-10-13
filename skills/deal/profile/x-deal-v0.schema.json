@@ -12,10 +12,12 @@
   },
   "allOf": [
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "baseline" } } } } },
-      "then": { "properties": { "body": { "$ref": "#/$defs/body_baseline" }, "x-deal-v0": { "required": ["channel", "counterparty"], "not": { "anyOf": [ { "required": ["baseline_ref"] }, { "required": ["prev"] } ] } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_baseline" }, "x-deal-v0": { "required": ["channel", "counterparty"], "properties": { "refs": { "maxItems": 1, "items": { "properties": { "rel": { "const": "cites" } } } } }, "not": { "anyOf": [ { "required": ["baseline_ref"] }, { "required": ["prev"] } ] } } } },
       "else": { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "sale" } } } } },
                 "then": { "properties": { "body": { "$ref": "#/$defs/body_sale" }, "x-deal-v0": { "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" } }, "not": { "anyOf": [ { "required": ["baseline_ref"] }, { "required": ["prev"] }, { "required": ["counterparty"] }, { "required": ["refs"] } ] } } } },
-                "else": { "properties": { "x-deal-v0": { "required": ["baseline_ref", "prev"] } } } } },
+                "else": { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "task_intent" } } } } },
+                          "then": { "properties": { "body": { "$ref": "#/$defs/body_task_intent" }, "x-deal-v0": { "properties": { "deal_id": { "pattern": "^task-[0-9a-f]{16}$" }, "seq": { "const": 1 } }, "not": { "anyOf": [ { "required": ["baseline_ref"] }, { "required": ["prev"] }, { "required": ["counterparty"] }, { "required": ["channel"] }, { "required": ["refs"] } ] } } } },
+                          "else": { "properties": { "x-deal-v0": { "required": ["baseline_ref", "prev"] } } } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "thread" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_thread" }, "x-deal-v0": { "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" } }, "not": { "anyOf": [ { "required": ["counterparty"] }, { "required": ["refs"] } ] } } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "thread_opened" } } } } },
@@ -62,7 +64,7 @@
     },
     "short_text": { "type": "string", "minLength": 1, "maxLength": 200 },
     "record_type": {
-      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread", "thread_opened", "sale_cut"]
+      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread", "thread_opened", "sale_cut", "task_intent"]
     },
     "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer"] },
     "outcome_value": { "description": "completed, mismatch or open; or not_selected: the other side was not chosen, and nothing was done on the deal (no action is on record). Every value but open is final at a close.", "enum": ["completed", "mismatch", "open", "not_selected"] },
@@ -97,7 +99,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["rel", "type", "digest_alg", "digest"],
       "properties": {
-        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome", "confirms", "reverses", "supersedes", "registration"] },
+        "rel": { "enum": ["about", "source", "checks", "approves", "authorized_by", "observes", "outcome", "confirms", "reverses", "supersedes", "registration", "cites"] },
         "type": { "const": "deal-record" },
         "digest_alg": { "const": "SHA-256" },
         "digest": { "$ref": "#/$defs/hex64" }
@@ -134,7 +136,7 @@
       "properties": {
         "profile": { "const": "x-deal-v0" },
         "canonicalization": { "const": "jcs" },
-        "deal_id": { "type": "string", "pattern": "^(deal|sale)-[0-9a-f]{16,64}$" },
+        "deal_id": { "type": "string", "pattern": "^(deal|sale|task)-[0-9a-f]{16,64}$" },
         "record_type": { "$ref": "#/$defs/record_type" },
         "seq": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
         "at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
@@ -252,7 +254,20 @@
         "asked": { "$ref": "#/$defs/terms" },
         "max_total_minor": { "$ref": "#/$defs/safe_uint" },
         "bounds_commitment": { "description": "The salted commitment (commit_alg) to the commercial-bounds/v0 document holding the lowest total the user will take (min_total_minor). The floor itself is never in a record; the user's own copy carries its opening.", "$ref": "#/$defs/hex64" },
-        "allowed": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/point_of_no_return" } }
+        "allowed": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/point_of_no_return" } },
+        "shown_commitment": { "description": "On a pick (an intent record): the salted commitment (commit_alg) to the options the agent showed the user, the JCS bytes of their list. The user's own copy carries its opening.", "$ref": "#/$defs/hex64" },
+        "recommended_commitment": { "description": "On a pick (an intent record): the salted commitment (commit_alg) to the option the agent recommended. The pick's verbatim_commitment is the user's choice.", "$ref": "#/$defs/hex64" }
+      }
+    },
+    "body_task_intent": {
+      "description": "A task's root, the only record of its own log (deal_id task-…), sealed when a buying or booking task starts, before any search and before any merchant: what the user asked for. The request, exactly as given, as a salted commitment; each stated constraint as a field whose class is in the clear and whose value is committed under its own nonce (a budget as the JCS bytes of {amount_minor, currency}). A deal's baseline cites it by record digest (rel cites). Not an acceptance and not an acknowledgment.",
+      "type": "object", "additionalProperties": false,
+      "required": ["verbatim_commitment"],
+      "properties": {
+        "verbatim_commitment": { "$ref": "#/$defs/hex64" },
+        "fields": { "type": "array", "minItems": 1, "items": {
+          "type": "object", "additionalProperties": false, "required": ["class", "value_commitment"],
+          "properties": { "class": { "enum": ["what", "use", "budget_max"] }, "value_commitment": { "$ref": "#/$defs/hex64" } } } }
       }
     },
     "body_message": {

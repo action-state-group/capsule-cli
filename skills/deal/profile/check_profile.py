@@ -47,7 +47,7 @@ TYPED_TYPES = {"task-authority/v0": "task_authority", "proposed-action/v0": "che
 FIX = HERE / "fixtures"
 
 RECORD_TYPES = ["intent", "baseline", "message", "claim", "evidence", "detail_change",
-                "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale"]
+                "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "task_intent"]
 # The point of no return whose check covers a disclosed field of each class.
 DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "home_address", "address",
                                                   "pickup_location", "other_contact")}
@@ -466,7 +466,7 @@ def stage_schema(rec):
         raise StageError("schema", f"x-deal-v0/record_type: {blk['record_type']!r} is not one of {RECORD_TYPES}")
     if not isinstance(blk["seq"], int) or blk["seq"] < 1:
         raise StageError("schema", "seq must be an integer >= 1")
-    if not re.fullmatch(r"(deal|sale)-[0-9a-f]{16,64}", str(blk["deal_id"])):
+    if not re.fullmatch(r"(deal|sale|task)-[0-9a-f]{16,64}", str(blk["deal_id"])):
         raise StageError("schema", "deal_id pattern")
     body = rec.get("body")
     if blk["record_type"] == "baseline" and isinstance(body, dict) and "skill" in body:
@@ -483,7 +483,7 @@ def stage_schema(rec):
             raise StageError("schema", "x-deal-v0/producer must be {name, version, commit}: non-empty strings")
 
 
-_EXEMPT = re.compile(r"^([0-9a-f]{16,}|(deal|sale)-[0-9a-f]+|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?|"
+_EXEMPT = re.compile(r"^([0-9a-f]{16,}|(deal|sale|task)-[0-9a-f]+|\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}Z)?|"
                      r"[a-z0-9-]+/[a-z0-9-]+/\d+\.\d+\.\d+)$")
 _PHONE = re.compile(r"\+?\(?\d[\d\s().-]{6,}\d")
 _EMAIL = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
@@ -584,6 +584,14 @@ def check_sale_chain(records):
             registrations.add(prev)
 
 
+def check_task_chain(records):
+    """A task's own log (section 6, rule 12): its task intent, and nothing else."""
+    if len(records) != 1:
+        raise StageError("chain", f"seq position {min(len(records), 2)}: a task's log holds its task intent and nothing else")
+    if records[0]["x-deal-v0"]["seq"] != 1:
+        raise StageError("chain", "seq position 1: a task intent is the first record of its log")
+
+
 def check_chain(records):
     """Profile section 6 rules over one deal, in seq order. Raises StageError('chain')."""
     def fail(i, msg):
@@ -591,6 +599,8 @@ def check_chain(records):
 
     if records and not is_typed(records[0]) and records[0]["x-deal-v0"]["record_type"] == "sale":
         return check_sale_chain(records)
+    if records and not is_typed(records[0]) and records[0]["x-deal-v0"]["record_type"] == "task_intent":
+        return check_task_chain(records)
 
     digests = [record_digest(r) for r in records]
     by_digest = {d: i for i, d in enumerate(digests)}
@@ -608,7 +618,7 @@ def check_chain(records):
                     "close": {"outcome"}, "disclosure": {"authorized_by"},
                     "task_authority": {"source", "approves", "registration"}, "platform_approval": set(), "policy_change": set(),
                     "check": {"supersedes"}, "counterparty_acceptance": set(),
-                    "counterparty_profile": {"about"}}
+                    "counterparty_profile": {"about"}, "baseline": {"cites"}}
     # The user's limits in force. Absent allowed = no restriction; present and
     # empty = nothing allowed. An intent may narrow them; only the user's
     # confirm_limits answer to an intent that asks for more puts a new version
@@ -685,6 +695,11 @@ def check_chain(records):
         for r in refs:
             if r["rel"] not in allowed_rels.get(t, set()):
                 fail(i, f"rel {r['rel']!r} is not allowed on a {t} record")
+            if r["rel"] == "cites":
+                # A baseline cites the task intent it was opened under, a record
+                # on the task's own log: checked with the copy's task-intent
+                # opening, never in this chain.
+                continue
             if r["rel"] == "registration":
                 # A sale's thread names its registration, a record on the sale's
                 # own log: checked with the sale's bundle, never in this chain.

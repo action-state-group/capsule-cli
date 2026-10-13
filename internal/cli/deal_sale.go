@@ -55,7 +55,7 @@ func dealSaleNewCommand() *cobra.Command {
 			return inputError("a sale is made by the seller: intent.party_role is seller")
 		}
 		// Fixed by capsulectl, never taken from the input file.
-		o.Skill, o.Materiality, o.Sale, o.SaleAuthority = nil, dealMateriality{}, "", ""
+		o.Skill, o.Materiality, o.Sale, o.SaleAuthority, o.TaskIntent = nil, dealMateriality{}, "", "", ""
 		o.Records = recordsTyped
 		o.Who = dealWho{Name: "sale"} // validate wants a counterparty; the sale record carries none
 		if err = o.validate(); err != nil {

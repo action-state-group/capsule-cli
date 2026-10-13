@@ -44,7 +44,7 @@ func dealPageOpenings(b map[string]interface{}) (map[string]interface{}, error) 
 		sealed, _ := input(id)["report"].(map[string]interface{})
 		report = sealed
 	}
-	out := map[string]interface{}{"asked": false, "representations": []interface{}{}}
+	out := map[string]interface{}{"asked": false, "representations": []interface{}{}, "task_intent": "none", "picks": []interface{}{}}
 	if report == nil {
 		return out, nil
 	}
@@ -70,6 +70,16 @@ func dealPageOpenings(b map[string]interface{}) (map[string]interface{}, error) 
 			return nil, errors.New("refusing to write the page: the words you asked do not match the commitment sealed when the deal opened (step " + step + ")")
 		}
 		out["asked"] = ok
+		state, err := taskIntentOpenings(report, input(step))
+		if err != nil {
+			return nil, err
+		}
+		out["task_intent"] = state
+		picks, err := pickOpeningsChecked(report, input)
+		if err != nil {
+			return nil, err
+		}
+		out["picks"] = picks
 	}
 
 	said, _ := report["representations"].([]interface{})
@@ -98,5 +108,81 @@ func dealPageOpenings(b map[string]interface{}) (map[string]interface{}, error) 
 		checked[i] = ok
 	}
 	out["representations"] = checked
+	return out, nil
+}
+
+// taskIntentOpenings checks the user's own copy's task intent against the
+// baseline that cites it: the record the copy carries must be the one the
+// baseline's cites ref names (its JCS digest), and the request's and each
+// constraint's opening must recompute to the commitments in it. It returns
+// "none" when the baseline cites no task intent, "unresolved" when it cites
+// one the copy does not carry, and "checked" when every opening recomputes.
+// An opening that does not, or a record that is not the cited one, refuses
+// the page.
+func taskIntentOpenings(report, baseline map[string]interface{}) (string, error) {
+	cited := citedDigest(baseline)
+	section, _ := report["task_intent"].(map[string]interface{})
+	switch {
+	case cited == "" && section == nil:
+		return "none", nil
+	case cited == "":
+		return "", errors.New("refusing to write the page: the copy carries a task intent its deal does not cite")
+	case section == nil || section["resolved"] != true:
+		return "unresolved", nil
+	}
+	record, _ := section["record"].(map[string]interface{})
+	rb, _ := record["x-deal-v0"].(map[string]interface{})
+	if record == nil || rb["record_type"] != "task_intent" || jcsDigest(record) != cited {
+		return "", errors.New("refusing to write the page: the task intent the copy carries is not the one the deal cites")
+	}
+	body, _ := record["body"].(map[string]interface{})
+	opening, _ := section["verbatim_opening"].(map[string]interface{})
+	if !openingRecomputes(opening, body["verbatim_commitment"]) {
+		return "", errors.New("refusing to write the page: the words you asked when the task started do not match the commitment sealed then")
+	}
+	committed := map[string]interface{}{}
+	fields, _ := body["fields"].([]interface{})
+	for _, f := range fields {
+		field, _ := f.(map[string]interface{})
+		class, _ := field["class"].(string)
+		committed[class] = field["value_commitment"]
+	}
+	given, _ := section["fields"].([]interface{})
+	for _, f := range given {
+		field, _ := f.(map[string]interface{})
+		class, _ := field["class"].(string)
+		if !openingRecomputes(map[string]interface{}{"nonce": field["nonce"], "text": field["value"]}, committed[class]) {
+			return "", errors.New("refusing to write the page: a limit you stated when the task started does not match the commitment sealed then (" + class + ")")
+		}
+	}
+	return "checked", nil
+}
+
+// pickOpeningsChecked checks each pick's openings (the user's words, the
+// options shown, the agent's recommendation) against the commitments its
+// sealed intent record carries. A pick is checked when every opening it
+// carries recomputes; one that does not refuses the page.
+func pickOpeningsChecked(report map[string]interface{}, input func(string) map[string]interface{}) ([]interface{}, error) {
+	picks, _ := report["pick_openings"].([]interface{})
+	out := make([]interface{}, len(picks))
+	for i, p := range picks {
+		pick, _ := p.(map[string]interface{})
+		step, _ := pick["step"].(string)
+		body, _ := input(step)["body"].(map[string]interface{})
+		out[i] = false
+		if body == nil {
+			continue
+		}
+		for name, commitment := range map[string]string{"verbatim": "verbatim_commitment", "shown": "shown_commitment", "recommended": "recommended_commitment"} {
+			opening, present := pick[name].(map[string]interface{})
+			if !present {
+				continue
+			}
+			if !openingRecomputes(opening, body[commitment]) {
+				return nil, errors.New("refusing to write the page: a pick does not match the commitment sealed with it (step " + step + ")")
+			}
+		}
+		out[i] = true
+	}
 	return out, nil
 }
