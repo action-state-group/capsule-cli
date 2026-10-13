@@ -49,7 +49,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal verify-email [--step N] [--email FILE]` | Re-checks a sealed merchant email offline, against the key records sealed with it. `--email` checks another copy, which must match the sealed bytes. Exit 1 when it does not verify. |
 | `deal checkpoint status --deal ID` | Read-only: the deal log's latest checkpoint (`id`, the SHA-256 of its signed statement; `at`; the `mmr_size`, `entries` and `root` of the log head it covers), the log's `log_entries`, and the checkpoint's witness state as stored (`not_configured`, `scheduled`, `pending` or `witnessed`). It never seals, cuts a checkpoint or contacts the witness, and works on a `read_only` profile. A deal with no checkpoint yet has `checkpoint` and `witness` `null`. |
 | `bundle --deal ID [--out FILE]` | The deal's Evidence Bundle, your own copy: the same file as `deal report --bundle` (the whole deal from its own log, `deal/<deal_id>`, with its cadence chain and any witness receipt held). Nothing withheld, nothing on record. |
-| `disclose --deal ID --share counterparty\|adjudicator --to WHO --out FILE` | A bundle file for someone else: a share, exactly as `deal report --share` (see [Sharing a copy](#sharing-a-copy)). The copy withholds what that reader may not see, the final bytes pass the share gate, and the share is on record on `deal/<deal_id>/disclosures` before the file is written. A deal is not shared as a link: `permalink --deal` refuses and names the report file to hand over instead. |
+| `disclose --deal ID --share counterparty --to WHO --out FILE` | A bundle file for someone else: a share, exactly as `deal report --share` (see [Sharing a copy](#sharing-a-copy)). The copy withholds what that reader may not see, the final bytes pass the share gate, and the share is on record on `deal/<deal_id>/disclosures` before the file is written. A deal is not shared as a link: `permalink --deal` refuses and names the report file to hand over instead. |
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
 | `deal sale new --input FILE` | Where the user sells one item to one of several buyers: seals the sale's own log, what is for sale and the seller's request (`type`, `intent`, `terms`, `recourse`; no buyer), then its one task authority. Mints the sale's item reference, kept on this device and sealed only as a commitment. Prints the sale id. |
 | `deal open --sale ID --input FILE` | Opens one buyer's thread under the sale: the input names the buyer (`who`, `channel`) and the terms with them; the request, limits, item and currency are the sale's, and the thread is sealed in the typed records. Its task authority names the sale's by digest, salted per thread (`sale_authority_commitment`); each check seals the item reference salted per check, and the local rules checker is given it as `item_ref`. |
@@ -59,7 +59,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal countersign --bundle FILE --directory DIR [--entry FILE]` | Verifies (and with `--entry`, attaches) a countersignature you already hold over this deal's report bundle, and names its rung; a self-countersignature is shown as NOT INDEPENDENT. Sends nothing. See [COUNTERSIGN.md](COUNTERSIGN.md). |
 | `deal report --from-bundle FILE --directory DIR` | Renders the receipt from that same bundle file, so a countersignature covers what it shows. Every receipt names its countersign rung; without one it says "Not countersigned". |
 | `deal reconcile --executions FILE [--approvals FILE] [--from T] [--to T]` | Reads the agent host's execution records (tool calls of the agent and its sub-tasks, in the format in [RECONCILE.md](RECONCILE.md)) and lists each consequential action that has no deal record, with what the pass cannot see. Seals nothing; exits 3 when anything is unrecorded. |
-| `deal report --html FILE --share counterparty\|adjudicator --to WHO` | A copy for someone else. It leaves out what that reader must not get, and seals a disclosure record of the share before the file is written. |
+| `deal report --html FILE --share counterparty --to WHO` | A copy for someone else. It leaves out what that reader must not get, and seals a disclosure record of the share before the file is written. |
 
 Each step is a Capsule in the profile's store. Each deal has its own
 checkpointed log (`deal/<deal_id>`) in the same SQLite file, and each step
@@ -314,16 +314,11 @@ copy, with nothing withheld, so they cannot be combined with `--share`.
 |---|---|
 | `keep` (default) | Nothing withheld. No disclosure record: it is the user's own copy. |
 | `counterparty` | Amounts, rails, timestamps and digests only; where the user sells, also the typed records' vocabulary (a check's disposition, an approval's authority, the actions a task allows) and the item's name, so the buyer sees the offer they accepted. No home address, no names, payees or contact details, no card or payment identifiers, no verification codes, no message text, no claim text or sources (except, where the user sells, the agent's own statements to the buyer: its claims of condition, warranty, refund terms or delivery, opened when they hold none of the user's private details), none of the user's own words, and not the user's bounds, whichever side they are on: a buyer's spending limit or a seller's floor (a record that carries a bound is withheld; the floor is only ever sealed as a commitment; the merchant section leaves out an "approved" amount that is only that limit; the gate refuses either bound as the field or as money, in any written form (`$1,700.00`, `1.700,00 €`, `USD 1 700`, `1.7k dollars`, "lowest is 1700"), compared by value, unless it equals the asked price or an amount paid; a message the agent writes, or a seller's agent claim, that states either is refused before it is sealed). |
-| `adjudicator` | The counterparty copy plus message text and claim text with sources, and the spending limit. Codes, card numbers, phones, emails and street addresses are replaced with `[withheld]`. |
 
 A sealed record is disclosed whole or not at all, so a shared copy withholds
 every record holding a string it may not carry. That record still verifies:
 it shows as WITHHELD, and its place in the log is still proven. The deal
 section is rewritten for the reader from fixed words, amounts and rails.
-In the adjudicator copy, codes are withheld wherever they sit: inside a word
-(`G739142`, `code739142`) or split by a space or dash (`739 142`). Any piece
-of the sealed place or address (`Larkspur`, `Springfield`, `41`) is withheld
-wherever it appears in message text, in any order.
 
 Both the scrubber and the gate read text in the same plain form:
 
@@ -359,8 +354,7 @@ digits (`seven three nine one four two`). A base64 or hex run that decodes to
 text is read for what it holds. A number of six digits or more counts
 wherever it stands; a shorter one only where no digit adjoins it, so `1200`
 is not found in the amount `120000`. Dates, times and money amounts
-(`09/27/2026`, `October 3, 2026`, `18:00`, `$1,200.00`) are kept. In the
-adjudicator copy, message text appears in the plain form.
+(`09/27/2026`, `October 3, 2026`, `18:00`, `$1,200.00`) are kept.
 
 The tests:
 
@@ -396,8 +390,7 @@ carries the order number and the tracking number, but only where
 a booking, confirmation or reservation code) or a tracking number from an
 email whose signature checks out and was signed by the deal's own
 counterparty. The gate takes exactly those values out, as written, before it
-checks, so a long tracking number is not read as a card number. The
-adjudicator's copy carries neither, and also lists the items.
+checks, so a long tracking number is not read as a card number.
 
 **Sharing is on record.** Before the file exists, a disclosure record is
 sealed. It names the root, the payloads mode, the records withheld, the
