@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### A merchant email whose key cannot be read now is sealed at the next tick
+
+- **Changed:** when `deal note --kind evidence --email` cannot reach DNS for the merchant's DKIM
+  key or DMARC records (a timeout or unreachable resolver; an absent record is still sealed as
+  absent), it no longer refuses with a way on that asked for the record to be looked up some
+  other way. It answers `"state": "deferred"` with `"say": "the merchant's signature will be
+  checked later"`, seals nothing, and keeps the email and its note on this device
+  (`deal_deferred_emails`, local only). Each `deal tick` first reads the records again with the
+  store unlocked and, when it can, seals the email on its deal as the deal stands then, with
+  `key_source: dns` and a checkpoint at once. The step's time is when the key was read; after a
+  close, the email is later evidence linked to the close. The tick's result lists the queue under
+  `merchant_emails`: `sealed` (with the same fields `deal note` reports), `waiting` (each email's
+  deal and when it was queued; there is no retry limit) and `refused` (an email its deal no longer
+  takes, such as a cancel-by date on a deal closed meanwhile: kept on the device, never retried,
+  listed at every tick). A failure on one email is listed under `failed` and never stops the
+  tick. An email whose exact bytes its deal already holds is not sealed twice. No record shape
+  changes.
+- A capture that fails for any other reason (the email is not raw RFC 822 with its headers
+  intact, or its DKIM-Signature headers cannot be read at all) is still refused at once. A
+  signature that is merely malformed fails and is sealed as failing, as before. `--key-record` / `--dmarc-record` are unchanged.
+- The deal skill no longer tells the agent to have the user look up a key record: it says only
+  that the merchant's signature will be checked later. This changes the deal SKILL.md digest
+  (sha256 `b5d4d9aec20328a746684283ba3ec7a0237b7fd6a11b5ecef348c39ae8722fa3` to
+  `643ac179237d9a5f30f9bbd373b93db84f4cff0428fa0edcfa66461bf042d29a`).
+
 ### `deal list --json`: a plain summary per deal
 
 - **Added:** each row of `deal list --json` carries `summary`: `what` (the user's own asked

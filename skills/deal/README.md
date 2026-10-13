@@ -556,6 +556,10 @@ receipt reads pending.
 live DNS. **Sealing promptly is the whole protection**: an email sealed after
 its key was withdrawn cannot be verified. The key is read from ordinary DNS,
 which is not itself signed; the checkpoint fixes when it was read.
+When this device cannot reach DNS, nothing is sealed and the user is never
+asked to look anything up: `deal note` answers `"state": "deferred"`, keeps
+the email on the device, and the next `deal tick` reads the key records and
+seals the email then (listed under `merchant_emails` in its result).
 `--key-record` (and optionally `--dmarc-record`) supplies records by hand (for tests, or a machine with no
 resolver); the record says `key_source: supplied`, and the report says the key
 was not read from the merchant's DNS.
