@@ -156,9 +156,10 @@ type ProfileRulesChecker struct {
 	SHA256           string   `yaml:"sha256,omitempty" mapstructure:"sha256"`
 	Timeout          string   `yaml:"timeout,omitempty" mapstructure:"timeout"`
 	DefinitionDigest string   `yaml:"definition_digest,omitempty" mapstructure:"definition_digest"`
-	// DefinitionDigests holds the pinned definition digests when there are
-	// two or more, and DefinitionDigest is then empty: one digest is stored
-	// in DefinitionDigest alone, as before the set.
+	// DefinitionDigests holds a pinned set of definition digests, and
+	// DefinitionDigest is then empty. profile update --rules-checker stores
+	// a set of two or more here and one digest in DefinitionDigest alone, as
+	// before the set.
 	DefinitionDigests []string `yaml:"definition_digests,omitempty" mapstructure:"definition_digests" json:",omitempty"`
 }
 
@@ -250,11 +251,11 @@ func (p Profile) validate() error {
 		return e
 	}
 	if len(p.RulesChecker.DefinitionDigests) > 0 && p.RulesChecker.DefinitionDigest != "" {
-		return inputError("rules_checker holds definition_digest or definition_digests, not both: re-pin it with profile update --rules-checker FILE")
+		return inputError("rules_checker holds definition_digest or definition_digests, not both: edit the profile file to keep one (profile update reads the file first)")
 	}
 	for _, d := range p.RulesChecker.DefinitionDigests {
 		if !hex64.MatchString(d) {
-			return inputError("rules_checker definition_digests must each be 64 lowercase hex characters")
+			return inputError("rules_checker definition_digests must each be 64 lowercase hex characters: edit the profile file to correct them")
 		}
 	}
 	return nil

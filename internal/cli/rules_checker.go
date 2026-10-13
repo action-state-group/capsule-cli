@@ -95,9 +95,12 @@ func pinRulesChecker(p *Profile, path string) error {
 		return inputError("--rules-checker definition_digest must be 64 lowercase hex characters")
 	}
 	var digests []string
-	for _, d := range append([]string{pin.DefinitionDigest}, pin.DefinitionDigests...) {
+	if pin.DefinitionDigest != "" {
+		digests = append(digests, pin.DefinitionDigest)
+	}
+	for _, d := range pin.DefinitionDigests {
 		switch {
-		case d == "" || slices.Contains(digests, d):
+		case slices.Contains(digests, d):
 		case !hex64.MatchString(d):
 			return inputError("--rules-checker definition_digests must each be 64 lowercase hex characters")
 		default:

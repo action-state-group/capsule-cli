@@ -629,7 +629,8 @@ A deal profile may pin an external rules checker: the user's policy (`profile up
 "timeout": "10s", "definition_digest": "<64 hex>"}`. `timeout` (default 10s, at most 60s) and
 `definition_digest` (the ruleset the checker must report) are optional. To pin more than one
 ruleset, for a checker whose ruleset depends on the deal (on its `party_role`, say), give
-`"definition_digests": ["<64 hex>", …]` instead: the checker must report one of them. A profile
+`"definition_digests": ["<64 hex>", …]`, with or without `definition_digest`: the checker must
+report one of them all. A profile
 stores one digest as `definition_digest` and two or more as `definition_digests`; `profile show`
 and `doctor` print every one. The executable must sit under a trusted plugin root, and the
 profile pins its SHA-256.

@@ -177,6 +177,22 @@ func TestAMalformedPinnedSetIsRefused(t *testing.T) {
 func TestAMalformedDigestInThePinFileIsRefused(t *testing.T) {
 	stickerDeal(t, "card", false)
 	path := writePin(t, map[string]any{"command": []string{roleChecker(t)}, "definition_digests": []string{firstRulesDigest, "ABC"}})
-	_, err := invoke(t, "", "--profile", "deal", "profile", "update", "--rules-checker", path)
+	out, err := invoke(t, "", "--profile", "deal", "profile", "update", "--rules-checker", path)
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, out+SafeError(err), "--rules-checker definition_digests must each be 64 lowercase hex characters", "refused as the pin file is read")
+}
+
+// A pin file's set is the union of definition_digest and definition_digests;
+// an empty digest in the set is refused, never read as no pin.
+func TestAPinFilesSetIsBothKeysAndNeverEmpty(t *testing.T) {
+	stickerDeal(t, "card", false)
+	checker := roleChecker(t)
+	pinChecker(t, map[string]any{"command": []string{checker}, "definition_digest": firstRulesDigest, "definition_digests": []string{secondRulesDigest}})
+	p, err := loadProfile("deal")
+	require.NoError(t, err)
+	assert.Equal(t, []string{firstRulesDigest, secondRulesDigest}, p.RulesChecker.DefinitionDigests)
+
+	path := writePin(t, map[string]any{"command": []string{checker}, "definition_digests": []string{""}})
+	_, err = invoke(t, "", "--profile", "deal", "profile", "update", "--rules-checker", path)
 	assert.ErrorIs(t, err, ErrInput)
 }
