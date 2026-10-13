@@ -627,8 +627,13 @@ which a rules checker reads as the rail and refundability; a pay check always st
 A deal profile may pin an external rules checker: the user's policy (`profile update
 --rules-checker FILE`), never the agent's. `FILE` is `{"command": ["/absolute/path", "arg", …],
 "timeout": "10s", "definition_digest": "<64 hex>"}`. `timeout` (default 10s, at most 60s) and
-`definition_digest` (the ruleset the checker must report) are optional. The executable must sit
-under a trusted plugin root, and the profile pins its SHA-256.
+`definition_digest` (the ruleset the checker must report) are optional. To pin more than one
+ruleset, for a checker whose ruleset depends on the deal (on its `party_role`, say), give
+`"definition_digests": ["<64 hex>", …]`, with or without `definition_digest`: the checker must
+report one of them all. A profile
+stores one digest as `definition_digest` and two or more as `definition_digests`; `profile show`
+and `doctor` print every one. The executable must sit under a trusted plugin root, and the
+profile pins its SHA-256.
 
 At every check, after the `check` record is sealed:
 - **What the checker gets.** The command runs exactly as pinned, from a private copy of the
@@ -701,7 +706,7 @@ At every check, after the `check` record is sealed:
     and the approval text and the user's own receipt name it quietly beside it;
   - `deny` adds `rules_deny` differences, and the verdict is `deny` with no way to proceed.
   - A checker that is configured but changed since it was pinned, refused the input, timed
-    out, printed anything else, or reported another `definition_digest` than the pinned one
+    out, printed anything else, or reported a `definition_digest` that is not pinned
     adds a `rules_not_checked` difference naming why, and the check pauses.
 
 The verdict's `rules` seals the outcome as data:

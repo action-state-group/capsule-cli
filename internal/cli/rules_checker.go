@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -61,13 +62,16 @@ type rulesCheckerPin struct {
 	Command          []string `json:"command"`
 	Timeout          string   `json:"timeout,omitempty"`
 	DefinitionDigest string   `json:"definition_digest,omitempty"`
+	// DefinitionDigests pins a set of rulesets: the checker may report any
+	// of them. Together with DefinitionDigest, the set is both.
+	DefinitionDigests []string `json:"definition_digests,omitempty"`
 }
 
 var hex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // pinRulesChecker reads a pin file and pins its checker in p: the command,
-// the SHA-256 of its executable, the timeout and, when given, the ruleset's
-// definition digest. An empty path removes the checker.
+// the SHA-256 of its executable, the timeout and, when given, the rulesets'
+// definition digests. An empty path removes the checker.
 func pinRulesChecker(p *Profile, path string) error {
 	if path == "" {
 		p.RulesChecker = ProfileRulesChecker{}
@@ -90,11 +94,31 @@ func pinRulesChecker(p *Profile, path string) error {
 	if pin.DefinitionDigest != "" && !hex64.MatchString(pin.DefinitionDigest) {
 		return inputError("--rules-checker definition_digest must be 64 lowercase hex characters")
 	}
+	var digests []string
+	if pin.DefinitionDigest != "" {
+		digests = append(digests, pin.DefinitionDigest)
+	}
+	for _, d := range pin.DefinitionDigests {
+		switch {
+		case slices.Contains(digests, d):
+		case !hex64.MatchString(d):
+			return inputError("--rules-checker definition_digests must each be 64 lowercase hex characters")
+		default:
+			digests = append(digests, d)
+		}
+	}
 	sum, err := trustedExecutableDigest(pin.Command[0])
 	if err != nil {
 		return err
 	}
-	p.RulesChecker = ProfileRulesChecker{Command: pin.Command, SHA256: sum, Timeout: pin.Timeout, DefinitionDigest: pin.DefinitionDigest}
+	p.RulesChecker = ProfileRulesChecker{Command: pin.Command, SHA256: sum, Timeout: pin.Timeout}
+	// One digest is stored as it was before a set could be pinned, so the
+	// profile file reads the same.
+	if len(digests) == 1 {
+		p.RulesChecker.DefinitionDigest = digests[0]
+	} else {
+		p.RulesChecker.DefinitionDigests = digests
+	}
 	return nil
 }
 
@@ -292,7 +316,7 @@ func runRulesChecker(ctx context.Context, p Profile, input []byte, history *deal
 	if err != nil {
 		return notEvaluated("unreadable", "the rules checker's answer could not be read: "+err.Error())
 	}
-	if pin.DefinitionDigest != "" && result.DefinitionDigest != pin.DefinitionDigest {
+	if pinned := pin.pinnedDigests(); len(pinned) > 0 && !slices.Contains(pinned, result.DefinitionDigest) {
 		return notEvaluated("ruleset_changed", "the ruleset changed since it was pinned ("+result.RulesetID+" reports another definition digest)"+rePinHint)
 	}
 	return dealRules{Status: "evaluated", RulesetID: result.RulesetID, DefinitionDigest: result.DefinitionDigest, CheckerSHA256: pin.SHA256,

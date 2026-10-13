@@ -156,6 +156,23 @@ type ProfileRulesChecker struct {
 	SHA256           string   `yaml:"sha256,omitempty" mapstructure:"sha256"`
 	Timeout          string   `yaml:"timeout,omitempty" mapstructure:"timeout"`
 	DefinitionDigest string   `yaml:"definition_digest,omitempty" mapstructure:"definition_digest"`
+	// DefinitionDigests holds a pinned set of definition digests, and
+	// DefinitionDigest is then empty. profile update --rules-checker stores
+	// a set of two or more here and one digest in DefinitionDigest alone, as
+	// before the set.
+	DefinitionDigests []string `yaml:"definition_digests,omitempty" mapstructure:"definition_digests" json:",omitempty"`
+}
+
+// pinnedDigests is the set of definition digests a checker's ruleset must
+// report one of; none pins no ruleset.
+func (r ProfileRulesChecker) pinnedDigests() []string {
+	if len(r.DefinitionDigests) > 0 {
+		return r.DefinitionDigests
+	}
+	if r.DefinitionDigest != "" {
+		return []string{r.DefinitionDigest}
+	}
+	return nil
 }
 
 // isBook reports whether the profile is an evidence book: a jsonl profile with
@@ -232,6 +249,14 @@ func (p Profile) validate() error {
 	}
 	if _, e := parseKeys(p.Checkpoint.TrustedKeys); e != nil {
 		return e
+	}
+	if len(p.RulesChecker.DefinitionDigests) > 0 && p.RulesChecker.DefinitionDigest != "" {
+		return inputError("rules_checker holds definition_digest or definition_digests, not both: edit the profile file to keep one (profile update reads the file first)")
+	}
+	for _, d := range p.RulesChecker.DefinitionDigests {
+		if !hex64.MatchString(d) {
+			return inputError("rules_checker definition_digests must each be 64 lowercase hex characters: edit the profile file to correct them")
+		}
 	}
 	return nil
 }
@@ -433,7 +458,7 @@ func profileCommands() *cobra.Command {
 		f.StringSlice("trusted-key", nil, "Trusted producer public key hex (repeatable)")
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
 		f.String("materiality", "", "A deal profile's materiality predicate (a materiality-predicate/v0 JSON file, or builtin:neutral), pinned by its digest; empty to remove it (every agent pick then pauses). Policy: the user's to set, never the agent's")
-		f.String("rules-checker", "", "A deal profile's external rules checker: a JSON file {\"command\": [\"/absolute/path\", \"arg\", ...], \"timeout\": \"10s\", \"definition_digest\": \"...\"}, its executable under a trusted plugin root and pinned by its SHA-256; empty to remove it. Policy: the user's to set, never the agent's")
+		f.String("rules-checker", "", "A deal profile's external rules checker: a JSON file {\"command\": [\"/absolute/path\", \"arg\", ...], \"timeout\": \"10s\", \"definition_digest\": \"...\"} (or \"definition_digests\": [\"...\", ...], a set of rulesets any of which it may report), its executable under a trusted plugin root and pinned by its SHA-256; empty to remove it. Policy: the user's to set, never the agent's")
 		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token", "token": "credentials.token"}
 		for flag := range secrets {
 			f.String(flag, "", "Literal secret; prefer file/env reference")
