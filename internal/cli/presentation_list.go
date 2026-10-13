@@ -26,7 +26,7 @@ import (
 // not how they resolve: the deal view is a default that yields to an
 // installed module. When the resolver would refuse to hold a plugin's module
 // beside the deal view (same tier, and one descriptor can match both, as
-// capsule-viewer's unilateral and seller receipts and its history module do),
+// capsule-viewer's unilateral and seller receipts do),
 // the deal view is left out and the plugin's module is the candidate. With no such module installed, the deal
 // view is a candidate as before.
 

@@ -191,15 +191,16 @@ func TestPresentationListTheReceiptModulesDisplaceTheDealView(t *testing.T) {
 }
 
 // One installed module is enough to displace the deal view when the resolver
-// would not hold the two together. On a buyer copy the seller receipt and the
-// history do not match, so only the fallback is left; the bilateral receipt
-// forbids x-deal-v0, which the deal view requires, so it alone leaves the
-// deal view in place.
+// would not hold the two together. On a buyer copy the seller receipt does
+// not match, so only the fallback is left. The bilateral receipt forbids
+// x-deal-v0, which the deal view requires, and the deal view forbids
+// x-history-selection/v0, which the history module requires, so either alone
+// leaves the deal view in place.
 func TestPresentationListOneModuleDisplacesTheDealViewOnlyWhereTheyCollide(t *testing.T) {
 	for id, want := range map[string]string{
 		"capsuleviewer.receipt.unilateral/v0": "capsuleviewer.receipt.unilateral/v0",
 		"capsuleviewer.receipt.seller/v0":     "aac.builtin.no-aggregate/v0",
-		"capsuleviewer.history/v0":            "aac.builtin.no-aggregate/v0",
+		"capsuleviewer.history/v0":            "capsulectl.deal-view/v0",
 		"capsuleviewer.receipt.bilateral/v0":  "capsulectl.deal-view/v0",
 	} {
 		t.Run(id, func(t *testing.T) {
