@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -72,8 +73,8 @@ func declarativePluginFixture() presentationFixture {
 	return p
 }
 
-// The deal receipt resolves to this tool's deal view; the fallback also
-// matches and loses to it.
+// With no module installed that displaces it, the deal receipt resolves to
+// this tool's deal view; the fallback also matches and loses to it.
 func TestPresentationListResolvesTheDealViewForADeal(t *testing.T) {
 	pluginRoot(t)
 	stdout, err := invoke(t, "", "presentation", "list", "--bundle", presentationBuildBundle)
@@ -110,21 +111,122 @@ func TestPresentationListListsAPluginsModulesWithTheirTrustClass(t *testing.T) {
 	assert.Equal(t, false, rules["matches"])
 }
 
+// viewerModuleFixture is a plugin's module that declares what capsule-viewer's
+// manifest of that id declares (capsule-viewer db3db22e,
+// src/capsule_viewer/{receipt/module-slot,history}/manifest*.json): its id,
+// requires, forbids and audiences.
+func viewerModuleFixture(t *testing.T, id string) presentationFixture {
+	notReports := []any{"spec_version:report/v1", "spec_version:evaluation-summary/v1", "result_version:evidence-result-v0"}
+	extensions := func(kinds ...any) map[string]any { return map[string]any{"required": kinds} }
+	receipt := []any{"keep", "counterparty", "adjudicator"}
+	declared := map[string]struct {
+		requires  map[string]any
+		forbids   []any
+		audiences []any
+	}{
+		"capsuleviewer.receipt.unilateral/v0": {extensions("x-deal-v0"), []any{"composed/v1", "x-history-selection/v0", "x-deal-seller/v0"}, receipt},
+		"capsuleviewer.receipt.seller/v0":     {extensions("x-deal-v0", "x-deal-seller/v0"), []any{"composed/v1", "x-history-selection/v0"}, receipt},
+		"capsuleviewer.receipt.bilateral/v0":  {extensions("composed/v1"), []any{"x-deal-v0", "x-history-selection/v0"}, receipt},
+		"capsuleviewer.history/v0":            {extensions("x-history-selection/v0"), nil, append([]any{"history"}, receipt...)},
+	}[id]
+	require.NotNil(t, declared.requires, id)
+	p := exampleDealFixture(t)
+	p.manifest["id"] = id
+	p.manifest["requires"] = map[string]any{"bundle_kind": "evidence-bundle/v2", "extensions": declared.requires}
+	forbids := map[string]any{"profiles": notReports}
+	if declared.forbids != nil {
+		forbids["extensions"] = declared.forbids
+	}
+	p.manifest["forbids"] = forbids
+	p.manifest["audiences"] = declared.audiences
+	return p
+}
+
+var viewerModules = []string{"capsuleviewer.receipt.unilateral/v0", "capsuleviewer.receipt.seller/v0",
+	"capsuleviewer.receipt.bilateral/v0", "capsuleviewer.history/v0"}
+
+func installViewerModules(t *testing.T, ids ...string) {
+	t.Helper()
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	for i, id := range ids {
+		presentationPlugin(t, root, fmt.Sprintf("viewer%d", i), viewerModuleFixture(t, id))
+	}
+}
+
+func assertNotListed(t *testing.T, l listOutput, id string) {
+	t.Helper()
+	for _, m := range l.Modules {
+		assert.NotEqual(t, id, m["id"], "%s is listed", id)
+	}
+}
+
+// With capsule-viewer's three receipt modules and its history module
+// installed, a buyer's copy resolves to the unilateral receipt, whichever
+// side the user was on, and the deal view, which they displace, is not a
+// candidate: no ambiguity. (testdata has no VALID seller copy or composed
+// bundle, so the seller and bilateral receipts are shown registering, not
+// selected.)
+func TestPresentationListTheReceiptModulesDisplaceTheDealView(t *testing.T) {
+	for name, bundle := range map[string]string{
+		"user buys":  presentationBuildBundle,
+		"user sells": "testdata/presentation/8-seller-buyer-copy/bundle.json",
+	} {
+		t.Run(name, func(t *testing.T) {
+			installViewerModules(t, viewerModules...)
+			stdout, err := invoke(t, "", "presentation", "list", "--bundle", bundle, "--audience", "keep")
+			require.NoError(t, err, stdout)
+			l := decodeList(t, stdout)
+			assert.Equal(t, "module", l.Resolution)
+			assert.Nil(t, l.Ambiguity)
+			require.NotNil(t, l.Selected)
+			assert.Equal(t, "capsuleviewer.receipt.unilateral/v0", l.Selected["id"])
+			assert.Equal(t, "plugin", l.Selected["source"])
+			assertNotListed(t, l, "capsulectl.deal-view/v0")
+			for _, id := range viewerModules {
+				listedModule(t, l, id)
+			}
+		})
+	}
+}
+
+// One installed module is enough to displace the deal view when the resolver
+// would not hold the two together. On a buyer copy the seller receipt and the
+// history do not match, so only the fallback is left; the bilateral receipt
+// forbids x-deal-v0, which the deal view requires, so it alone leaves the
+// deal view in place.
+func TestPresentationListOneModuleDisplacesTheDealViewOnlyWhereTheyCollide(t *testing.T) {
+	for id, want := range map[string]string{
+		"capsuleviewer.receipt.unilateral/v0": "capsuleviewer.receipt.unilateral/v0",
+		"capsuleviewer.receipt.seller/v0":     "aac.builtin.no-aggregate/v0",
+		"capsuleviewer.history/v0":            "aac.builtin.no-aggregate/v0",
+		"capsuleviewer.receipt.bilateral/v0":  "capsulectl.deal-view/v0",
+	} {
+		t.Run(id, func(t *testing.T) {
+			installViewerModules(t, id)
+			stdout, err := invoke(t, "", "presentation", "list", "--bundle", presentationBuildBundle, "--audience", "keep")
+			require.NoError(t, err, stdout)
+			l := decodeList(t, stdout)
+			assert.Equal(t, "module", l.Resolution)
+			require.NotNil(t, l.Selected)
+			assert.Equal(t, want, l.Selected["id"])
+			if want != "capsulectl.deal-view/v0" {
+				assertNotListed(t, l, "capsulectl.deal-view/v0")
+			}
+		})
+	}
+}
+
 // Two specific modules one descriptor can match is the resolver's named
-// error, never first-wins: AAC #225's pair, the deal view and a unilateral
-// receipt view, here offered by a plugin.
+// error, never first-wins: two plugins that each offer a unilateral receipt
+// view. The deal view yields to them both, so the collision named is theirs.
 func TestPresentationListNamesAnAmbiguity(t *testing.T) {
 	root := pluginRoot(t)
 	trustPresentationsIn(t, root)
-	p := exampleDealFixture(t)
-	p.manifest["id"] = "capsuleviewer.receipt.unilateral/v0"
-	p.manifest["requires"] = map[string]any{"bundle_kind": "evidence-bundle/v2", "extensions": map[string]any{"required": []any{"x-deal-v0"}}}
-	p.manifest["forbids"] = map[string]any{
-		"profiles":   []any{"spec_version:report/v1", "spec_version:evaluation-summary/v1", "result_version:evidence-result-v0"},
-		"extensions": []any{"composed/v1"},
-	}
-	p.manifest["audiences"] = []any{"keep", "counterparty", "adjudicator"}
-	presentationPlugin(t, root, "receipt", p)
+	presentationPlugin(t, root, "receipt", viewerModuleFixture(t, "capsuleviewer.receipt.unilateral/v0"))
+	other := viewerModuleFixture(t, "capsuleviewer.receipt.unilateral/v0")
+	other.manifest["id"] = "org.example.receipt/v0"
+	presentationPlugin(t, root, "other", other)
 	stdout, err := invoke(t, "", "presentation", "list", "--bundle", presentationBuildBundle, "--audience", "keep")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrInput))
@@ -134,8 +236,8 @@ func TestPresentationListNamesAnAmbiguity(t *testing.T) {
 	assert.Nil(t, l.Selected)
 	assert.Equal(t, map[string]any{
 		"stage":   "registration",
-		"modules": []any{"capsulectl.deal-view/v0", "capsuleviewer.receipt.unilateral/v0"},
-		"detail":  "manifests capsulectl.deal-view/v0 and capsuleviewer.receipt.unilateral/v0 are both specific and one descriptor can match both; state precedence with forbids",
+		"modules": []any{"capsuleviewer.receipt.unilateral/v0", "org.example.receipt/v0"},
+		"detail":  "manifests org.example.receipt/v0 and capsuleviewer.receipt.unilateral/v0 are both specific and one descriptor can match both; state precedence with forbids",
 	}, l.Ambiguity)
 	assert.Contains(t, err.Error(), "state precedence with forbids")
 }
@@ -287,4 +389,66 @@ func TestPresentationListShowsARegistrationRefusal(t *testing.T) {
 			assert.Contains(t, text, "registration_refused: "+tc.detail)
 		})
 	}
+}
+
+// The test for displacing the deal view is the resolver's registration
+// test, tier included: a fallback that can match what the deal view matches
+// does not displace it, as the resolver holds the two together. (Through the
+// command no such fallback is reachable: the built-in fallback collides with
+// it first.)
+func TestPresentationListDisplacementIsTheResolversRegistrationTest(t *testing.T) {
+	dealView, err := aacpresentation.ParseManifest(dealViewManifestJSON)
+	require.NoError(t, err)
+	module := func(id string, fallback bool) presentationCandidate {
+		p := viewerModuleFixture(t, "capsuleviewer.receipt.unilateral/v0")
+		p.manifest["id"], p.manifest["fallback"] = id, fallback
+		if fallback {
+			delete(p.manifest, "priority") // a fallback carries none
+		}
+		raw, err := json.Marshal(p.manifest)
+		require.NoError(t, err)
+		m, err := aacpresentation.ParseManifest(raw)
+		require.NoError(t, err)
+		return presentationCandidate{manifest: m, source: "plugin"}
+	}
+	for name, tc := range map[string]struct {
+		plugins []presentationCandidate
+		want    bool
+	}{
+		"a specific module that co-matches": {[]presentationCandidate{module("org.example.specific/v0", false)}, true},
+		"a fallback that co-matches":        {[]presentationCandidate{module("org.example.fallback/v0", true)}, false},
+		"no module":                         {nil, false},
+	} {
+		got, err := displaced(dealView, tc.plugins)
+		require.NoError(t, err, name)
+		assert.Equal(t, tc.want, got, name)
+	}
+	// An error is the displaced manifest's own, never taken as an answer.
+	_, err = displaced(aacpresentation.Manifest{}, []presentationCandidate{module("org.example.specific/v0", false)})
+	assert.Error(t, err)
+}
+
+// A module the page's runtime refuses still counts for the resolver's
+// ambiguity test, so one that co-matches the deal view displaces it: the
+// module is held, refused and never selected, and the page falls back.
+func TestPresentationListARefusedModuleStillDisplacesTheDealView(t *testing.T) {
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	p := viewerModuleFixture(t, "capsuleviewer.receipt.unilateral/v0")
+	p.manifest["presentation_api"] = "aac.presentation-api/v1"
+	presentationPlugin(t, root, "receipt", p)
+	stdout, err := invoke(t, "", "presentation", "list", "--bundle", presentationBuildBundle, "--audience", "keep")
+	require.NoError(t, err, stdout)
+	l := decodeList(t, stdout)
+	assert.Equal(t, "module", l.Resolution)
+	assert.Nil(t, l.Ambiguity)
+	require.NotNil(t, l.Selected)
+	assert.Equal(t, "aac.builtin.no-aggregate/v0", l.Selected["id"])
+	assertNotListed(t, l, "capsulectl.deal-view/v0")
+	require.Len(t, l.Refused, 1)
+	assert.Equal(t, "capsuleviewer.receipt.unilateral/v0", l.Refused[0]["id"])
+	assert.Equal(t, "presentation_api_unsupported", l.Refused[0]["reason"])
+	row := listedModule(t, l, "capsuleviewer.receipt.unilateral/v0")
+	assert.Equal(t, true, row["matches"])
+	assert.Equal(t, "presentation_api_unsupported", row["refusal"].(map[string]any)["reason"])
 }

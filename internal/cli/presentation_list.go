@@ -17,10 +17,18 @@ import (
 // `presentation list` says which presentation module a bundle resolves to,
 // among every module this capsulectl can put in a page: the page's built-ins,
 // its own deal view (capsulectl.deal-view/v0) and the modules the installed
-// plugins offer. Every decision is agent-action-capsule's Go resolver's
-// (go/presentation): the descriptor (section 4.2), the runtime's refusals
-// (section 3.2), the ambiguity test at registration (section 4.5) and the
-// resolution (section 4.3). Nothing here re-decides them.
+// plugins offer. Every decision about those modules is agent-action-capsule's
+// Go resolver's (go/presentation): the descriptor (section 4.2), the
+// runtime's refusals (section 3.2), the ambiguity test at registration
+// (section 4.5) and the resolution (section 4.3).
+//
+// One choice is this file's, and it is about which modules are candidates,
+// not how they resolve: the deal view is a default that yields to an
+// installed module. When the resolver would refuse to hold a plugin's module
+// beside the deal view (same tier, and one descriptor can match both, as
+// capsule-viewer's unilateral and seller receipts and its history module do),
+// the deal view is left out and the plugin's module is the candidate. With no such module installed, the deal
+// view is a candidate as before.
 
 // presentationListRuntime is the page runtime's declaration
 // (presentationRuntime) as the resolver takes it.
@@ -44,9 +52,9 @@ type presentationCandidate struct {
 // nothing else does.
 var presentationListCandidates = presentationCandidates
 
-// presentationCandidates is the page's built-ins, the deal view and the
-// installed plugins' modules, in that order, and the plugins whose
-// presentations were refused.
+// presentationCandidates is the page's built-ins, the deal view unless an
+// installed module displaces it, and the installed plugins' modules, in that
+// order, and the plugins whose presentations were refused.
 func presentationCandidates() ([]presentationCandidate, []presentationRefusedPlugin, error) {
 	var out []presentationCandidate
 	entries, err := builtinPresentationFS.ReadDir("assets/presentation/builtin")
@@ -68,7 +76,7 @@ func presentationCandidates() ([]presentationCandidate, []presentationRefusedPlu
 	if err != nil {
 		return nil, nil, fmt.Errorf("deal view manifest: %w", err)
 	}
-	out = append(out, presentationCandidate{manifest: dealView, source: "capsulectl"})
+	var plugins []presentationCandidate
 	var refused []presentationRefusedPlugin
 	for _, p := range discoverPlugins() {
 		if p.refusal != nil {
@@ -86,10 +94,40 @@ func presentationCandidates() ([]presentationCandidate, []presentationRefusedPlu
 				// stricter than the schema the plugin loader checks.
 				return nil, refused, &presentationListRegistration{Module: module.ID, Plugin: p.Name, err: err}
 			}
-			out = append(out, presentationCandidate{manifest: m, source: "plugin", plugin: p.Name})
+			plugins = append(plugins, presentationCandidate{manifest: m, source: "plugin", plugin: p.Name})
 		}
 	}
-	return out, refused, nil
+	isDisplaced, err := displaced(dealView, plugins)
+	if err != nil {
+		return nil, nil, fmt.Errorf("deal view manifest: %w", err)
+	}
+	if !isDisplaced {
+		out = append(out, presentationCandidate{manifest: dealView, source: "capsulectl"})
+	}
+	return append(out, plugins...), refused, nil
+}
+
+// displaced is whether the resolver would refuse to hold m beside one of the
+// plugins' modules: registering both in one registry is the resolver's
+// ambiguity error (section 4.5). The test is the resolver's own Register, so
+// list cannot drift from it. A module the runtime refuses still displaces m:
+// Register applies the ambiguity test before the runtime's refusal, refused
+// or not. Any other error registering a plugin's module (a duplicate of m's
+// id) displaces nothing; the command's own registration reports it. The error
+// is m's own, as m is registered first.
+func displaced(m aacpresentation.Manifest, plugins []presentationCandidate) (bool, error) {
+	for _, c := range plugins {
+		registry := aacpresentation.NewRegistry(presentationListRuntime())
+		if _, err := registry.Register(m); err != nil {
+			return false, err
+		}
+		_, err := registry.Register(c.manifest)
+		var ambiguity *aacpresentation.AmbiguityError
+		if errors.As(err, &ambiguity) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // presentationListRegistration is a manifest the registry refused to hold:
