@@ -4,12 +4,15 @@
 
 ### One file for the deals you pick, each checked on its own
 
-- **Added:** `deal history --deal ID [--deal ID ...] --out FILE` writes a History: one file holding
-  the deals you pick from `deal list`. It is an Evidence Bundle of your own history log
-  (`deal-history`). Each deal has its own log, so one bundle over several deals could not prove its
-  records against one checkpoint. Instead, `deal history` seals one selection record on the history
-  log, signed by your key, naming the picked deals and each deal copy's digest. The bundle's
-  `x-history-selection/v0` extension carries each deal's own bundle.
+- **Added:** `deal history --deal ID [--deal ID ...] --out FILE --to WHO` writes a History: one
+  file holding the deals you pick from `deal list`. It is an Evidence Bundle of a log of its own,
+  `deal-history/<nonce>`, where the nonce is the selection record's. Each deal has its own log, so
+  one bundle over several deals could not prove its records against one checkpoint. Instead,
+  `deal history` seals one selection record as that log's only entry, signed by your key, naming
+  who it is for (`recipient`, from `--to`), the picked deals and each deal copy's digest. The
+  bundle's `x-history-selection/v0` extension carries each deal's own bundle.
+- One log per History: a History carries no other History's selection, not even withheld, so its
+  recipient learns nothing about earlier ones (how many, when, under which key).
 - A History may be sent to anyone, so each deal is carried as its **history** copy by default
   (`--audience history`). Every record's payload is withheld, and each record shows only what its
   capsule states: its time and, for an act, its effect's status. A deal's outcome and its acts'
@@ -19,21 +22,28 @@
   - The copies `deal report --share` writes for someone in the deal (`counterparty`,
     `adjudicator`) are refused for a History.
   - `--audience keep` gives your own copy, with every private value in it, and is never one to
-    send.
+    send. It takes no `--to`; every other History needs it.
 - `verify --bundle FILE` checks that the selection record is disclosed, matches its seal and is
   signed, and that the selection the file carries is the sealed one. For each picked deal it then
   checks that the deal is carried, is the bundle its digest names, is of that deal's own log, is
   the copy for the sealed audience, and verifies on its own. Nothing unpicked may be carried. A
   History sealed for any audience but history or keep fails, and so does one carrying a history
-  copy with any payload disclosed.
+  copy with any payload disclosed, one sealed for history with no `recipient`
+  (`selection_recipient_missing`), and one whose log is not `deal-history/` + its selection's nonce
+  (`not_a_history_log`).
 - Verify reports the History's `holder_key` and `signer_keys` (each key with the deals it signed).
   It fails a History whose deals are signed by more than one key, or by a key other than the one
   that signed the selection. A finding names its deal.
 - `deal history` writes no deal's log. It seals no report and cuts no checkpoint on any picked
-  deal, and it does not put the share on a deal's disclosures log: the selection record on your
-  history log is the record of what was sent.
+  deal, and it does not put the share on a deal's disclosures log: the selection record on the
+  History's own log is your record of what was sent and to whom.
   - Each deal is copied through its latest checkpoint as it stands. Steps after that checkpoint
-    are not in the copy, and the output counts them (`steps_after_checkpoint`).
+    (a refund, a dispute) are not in the copy. The output counts them, and so does the deal's
+    entry in the sealed selection (`{deal_id, bundle_digest, steps_after_checkpoint}`); verify
+    reports each deal's count.
+  - `recipient` and `steps_after_checkpoint` are your own statements, signed with the selection
+    and checked against no deal: verify lists them as `"holder_stated": ["recipient",
+    "steps_after_checkpoint"]`.
   - For keep, a deal with sealed reports is refused unless its newest report of your own covers
     every step shown (seal one with `deal report --deal ID --bundle FILE`). A history copy carries
     no report.

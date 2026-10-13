@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
@@ -21,14 +22,15 @@ import (
 )
 
 // historySelectionExtension carries a History: deals the user picked, each
-// as its own deal bundle, in the Evidence Bundle of the user's own history
-// log (historyLogID). Each deal has its own log, so the picked deals cannot
-// share one checkpoint; the history log instead seals one selection record
-// naming the picked deals and their bundles' digests, signed by the user's
-// key, and the extension carries the deals:
+// as its own deal bundle, in the Evidence Bundle of a history log of the
+// History's own (historyLogPrefix). Each deal has its own log, so the picked
+// deals cannot share one checkpoint; the History's log instead seals one
+// selection record naming who it is for, the picked deals and their bundles'
+// digests, signed by the user's key, and the extension carries the deals:
 //
 //	{"selection_record": <the selection record's capsule id>,
-//	 "selection": [{"deal_id": ..., "bundle_digest": <sha256 of the bundle's JCS>}],
+//	 "selection": [{"deal_id": ..., "bundle_digest": <sha256 of the bundle's JCS>,
+//	                "steps_after_checkpoint": <steps on the deal's log after the copy's checkpoint>}],
 //	 "deals": {"<deal id>": <the deal's copy for the selected audience (history, or keep), an evidence-bundle/v2>}}
 //
 // It is a private kind, like x-deal-sale/v0, read by this verifier only. A
@@ -37,9 +39,11 @@ import (
 // outside its Capsule ID, so that key is not bound to who sealed the deals.
 const historySelectionExtension = "x-history-selection/v0"
 
-// historyLogID is the user's own history log: one selection record per
-// History written. No deal's log is ever written by `deal history`.
-const historyLogID = "deal-history"
+// historyLogPrefix names a History's own log, historyLogPrefix + the
+// selection record's nonce: one log and one selection record per History,
+// so a History carries nothing of any other (how many came before, when,
+// under which key). No deal's log is ever written by `deal history`.
+const historyLogPrefix = "deal-history/"
 
 // historyActionID is the action_id of a selection record's capsule.
 const historyActionID = "capsulectl-deal-history"
@@ -53,6 +57,11 @@ const historyActionID = "capsulectl-deal-history"
 // them (historyNotProven).
 const dealAudienceHistory = "history"
 
+// historyHolderStated are the reads of a History that are the holder's own
+// word, signed with the selection and checked against no deal: who it is
+// for, and how many steps each deal has after its copy's checkpoint.
+var historyHolderStated = []string{"recipient", "steps_after_checkpoint"}
+
 // historyNotProven are the reads a history copy does not prove, as verify
 // reports them on every History for the history audience.
 var historyNotProven = []string{"outcome", "action_class"}
@@ -64,6 +73,8 @@ func dealHistoryCommand() *cobra.Command {
 		ids, _ := c.Flags().GetStringArray("deal")
 		out, _ := c.Flags().GetString("out")
 		audience, _ := c.Flags().GetString("audience")
+		recipient, _ := c.Flags().GetString("to")
+		recipient = strings.TrimSpace(recipient)
 		if len(ids) == 0 || out == "" {
 			return inputError("--deal (one per picked deal, ids as `deal list` prints them) and --out are required")
 		}
@@ -73,6 +84,12 @@ func dealHistoryCommand() *cobra.Command {
 			return inputError("--audience " + audience + " is a copy of one deal for someone in it (`deal report --share`); a History may be sent to anyone, so its copies are --audience history (the default), or keep for your own file")
 		default:
 			return inputError("--audience must be history (the default: every record's payload withheld) or keep (your own copy, every private value in it: never one to send)")
+		}
+		switch {
+		case audience == dealAudienceHistory && recipient == "":
+			return inputError("deal history needs --to: who the History is for, as sealed in its selection record")
+		case audience == dealAudienceKeep && recipient != "":
+			return inputError("--to names who a History is for; --audience keep is your own copy, never one to send")
 		}
 		seen := map[string]bool{}
 		for _, id := range ids {
@@ -93,7 +110,7 @@ func dealHistoryCommand() *cobra.Command {
 			return err
 		}
 		defer func() { err = errors.Join(err, s.close()) }()
-		b, summary, err := s.dealHistory(c.Context(), ids, audience, dealVerifyCommand(out))
+		b, summary, err := s.dealHistory(c.Context(), ids, audience, recipient, dealVerifyCommand(out))
 		if err != nil {
 			return err
 		}
@@ -104,21 +121,28 @@ func dealHistoryCommand() *cobra.Command {
 		if err = atomicFile(out, encoded, false); err != nil {
 			return err
 		}
-		return output(c, map[string]any{"out": out, "audience": audience, "deals": summary})
+		result := map[string]any{"out": out, "audience": audience, "deals": summary}
+		if recipient != "" {
+			result["recipient"] = recipient
+		}
+		return output(c, result)
 	}}
 	cmd.Flags().StringArray("deal", nil, "A picked deal id from `deal list` (repeat for each deal)")
 	cmd.Flags().String("out", "", "New file for the History")
 	cmd.Flags().String("audience", dealAudienceHistory, "Which copy of each deal: history (default: every record's payload withheld, for anyone) or keep (your own copy, never one to send)")
+	cmd.Flags().String("to", "", "Who the History is for, as sealed in its selection record (required, except with --audience keep)")
 	return cmd
 }
 
 // dealHistory builds the History over the picked deals, in deal id order,
 // and one summary line per deal: how many of its steps the copy shows and
 // how many came after its latest checkpoint (not shown: no deal's log is
-// written, so none is cut). Every deal copy is built and checked before the
+// written, so none is cut). That count is sealed in the deal's selection
+// entry too, so a step left out (a refund, a dispute) is stated in the file,
+// not only on the holder's screen. Every deal copy is built and checked before the
 // selection is sealed; the selection record and its checkpoint are the only
-// writes, and only to the history log.
-func (s *dealSession) dealHistory(ctx context.Context, ids []string, audience, verify string) (map[string]interface{}, []map[string]any, error) {
+// writes, and only to the History's own log.
+func (s *dealSession) dealHistory(ctx context.Context, ids []string, audience, recipient, verify string) (map[string]interface{}, []map[string]any, error) {
 	listed, err := s.dealListings(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -154,10 +178,10 @@ func (s *dealSession) dealHistory(ctx context.Context, ids []string, audience, v
 			return nil, nil, err
 		}
 		deals[id] = value
-		selection = append(selection, map[string]interface{}{"deal_id": id, "bundle_digest": jcsDigest(value)})
+		selection = append(selection, map[string]interface{}{"deal_id": id, "bundle_digest": jcsDigest(value), "steps_after_checkpoint": after})
 		summary = append(summary, map[string]any{"deal_id": id, "steps_shown": shown, "steps_after_checkpoint": after})
 	}
-	b, recordID, err := s.historyBundle(ctx, audience, selection)
+	b, recordID, err := s.historyBundle(ctx, audience, recipient, selection)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -167,12 +191,11 @@ func (s *dealSession) dealHistory(ctx context.Context, ids []string, audience, v
 	return b, summary, nil
 }
 
-// historyBundle seals the selection record on the history log, cuts that
-// log's checkpoint and assembles its Evidence Bundle around the record. The
-// record is disclosed; every earlier selection on the log is withheld (it
-// names other deals). The record holds a fresh 256-bit nonce, so a later
-// bundle that withholds it confirms no guess at what it names.
-func (s *dealSession) historyBundle(ctx context.Context, audience string, selection []interface{}) (_ map[string]interface{}, _ string, err error) {
+// historyBundle opens the History's own log, named by a fresh 256-bit nonce
+// the selection record also holds, seals the record (with recipient, when
+// given) as its only entry, cuts its checkpoint and assembles its Evidence
+// Bundle around the record, disclosed.
+func (s *dealSession) historyBundle(ctx context.Context, audience, recipient string, selection []interface{}) (_ map[string]interface{}, _ string, err error) {
 	if s.p.Checkpoint.Signing == (Secret{}) {
 		return nil, "", inputError("a History needs the profile's checkpoint key (see `deal init`)")
 	}
@@ -180,10 +203,14 @@ func (s *dealSession) historyBundle(ctx context.Context, audience string, select
 	if _, err = rand.Read(nonce); err != nil {
 		return nil, "", err
 	}
-	raw, err := json.Marshal(map[string]interface{}{
+	record := map[string]interface{}{
 		"type": "history_selection", "profile": historySelectionExtension, "audience": audience,
 		"nonce": hex.EncodeToString(nonce), "selection": selection,
-	})
+	}
+	if recipient != "" {
+		record["recipient"] = recipient
+	}
+	raw, err := json.Marshal(record)
 	if err != nil {
 		return nil, "", err
 	}
@@ -204,7 +231,7 @@ func (s *dealSession) historyBundle(ctx context.Context, audience string, select
 		Payload: payload,
 	}
 	s.dp = s.p
-	s.dp.LogID = historyLogID
+	s.dp.LogID = historyLogPrefix + hex.EncodeToString(nonce)
 	if s.t, err = openTarget(ctx, s.dp, useInitialization); err != nil {
 		return nil, "", err
 	}
@@ -219,18 +246,8 @@ func (s *dealSession) historyBundle(ctx context.Context, audience string, select
 	if _, err = cutCheckpoint(ctx, localOnly(s.dp), s.t.log); err != nil {
 		return nil, "", err
 	}
-	entries, err := s.logEntries(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-	withhold := map[string]bool{}
-	for _, e := range entries {
-		if id := hex.EncodeToString(e.Value); id != pub.CapsuleID {
-			withhold[id] = true
-		}
-	}
 	b, err := AssembleBundle(ctx, s.t.artifacts, s.t.log, s.dp.LogID, BundleOptions{
-		Root: pub.CapsuleID, Payloads: "selected", WithDisclosure: true, Withhold: withhold,
+		Root: pub.CapsuleID, Payloads: "selected", WithDisclosure: true,
 	})
 	if err != nil {
 		return nil, "", err
@@ -377,7 +394,8 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 }
 
 // historyEntry is `verify --bundle`'s reading of a History's extension. It
-// passes only when the selection record is disclosed and matches, signed;
+// passes only when the selection record is disclosed and matches, signed,
+// on the History's own log, and names a recipient when sent (history);
 // the carried selection is the sealed one; each selected deal is carried,
 // is the bundle its digest names, is of that deal's own log, is the copy
 // for the sealed audience and verifies VALID as its own Evidence Bundle;
@@ -421,16 +439,24 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 	if value["root"] != recordID {
 		failed = append(failed, "selection_record_not_root")
 	}
-	if cert, _ := value["completeness_certificate"].(map[string]interface{}); cert["log_id"] != historyLogID {
+	nonce, _ := sealed["nonce"].(string)
+	if cert, _ := value["completeness_certificate"].(map[string]interface{}); !hexDigestPattern.MatchString(nonce) || cert["log_id"] != historyLogPrefix+nonce {
 		failed = append(failed, "not_a_history_log")
 	}
 	if !sameJSONValue(ext["selection"], sealed["selection"]) {
 		failed = append(failed, "selection_not_sealed")
 	}
-	entry["holder_key"], entry["audience"] = holder, audience
+	recipient, _ := sealed["recipient"].(string)
+	entry["holder_key"], entry["audience"], entry["holder_stated"] = holder, audience, historyHolderStated
+	if recipient != "" {
+		entry["recipient"] = recipient
+	}
 	switch audience {
 	case dealAudienceHistory:
 		entry["not_proven"] = historyNotProven
+		if strings.TrimSpace(recipient) == "" {
+			failed = append(failed, "selection_recipient_missing")
+		}
 	case dealAudienceKeep:
 	default:
 		failed = append(failed, "selection_audience_not_history")
@@ -441,16 +467,19 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 		failed = append(failed, "selection_missing")
 	}
 	picked := map[string]string{} // deal id -> bundle digest
+	later := map[string]int64{}   // deal id -> steps after its checkpoint, as the holder sealed it
 	var order []string
 	for _, raw := range listed {
 		e, _ := raw.(map[string]interface{})
 		id, _ := e["deal_id"].(string)
 		digest, _ := e["bundle_digest"].(string)
-		if _, dup := picked[id]; dup || !dealIDPattern.MatchString(id) || !hexDigestPattern.MatchString(digest) {
+		steps, _ := e["steps_after_checkpoint"].(json.Number)
+		count, ok := stepCount(steps)
+		if _, dup := picked[id]; dup || !ok || !dealIDPattern.MatchString(id) || !hexDigestPattern.MatchString(digest) {
 			failed = append(failed, "selection_entry_malformed:"+id)
 			continue
 		}
-		picked[id] = digest
+		picked[id], later[id] = digest, count
 		order = append(order, id)
 	}
 	extra := make([]string, 0)
@@ -471,7 +500,7 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 	}
 	deals := make([]map[string]any, 0, len(order))
 	for _, id := range order {
-		member := map[string]any{"deal_id": id}
+		member := map[string]any{"deal_id": id, "steps_after_checkpoint": later[id]}
 		deals = append(deals, member)
 		tb, ok := carried[id].(map[string]interface{})
 		if !ok {
@@ -537,6 +566,13 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 	}
 	entry["status"], entry["findings"] = status, all
 	return entry, claim
+}
+
+// stepCount reads a sealed steps_after_checkpoint, and whether it is a
+// whole number of steps (not negative).
+func stepCount(n json.Number) (int64, bool) {
+	count, err := n.Int64()
+	return count, err == nil && count >= 0
 }
 
 // recordKeys are the keys a bundle's records name (key_id), sorted, and
