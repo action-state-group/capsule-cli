@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### The witness's grant text states, it does not instruct
+
+- **Changed:** the witness's network-grant text, in `doctor --check-witness`'s `witness.consent` and
+  in a tick's `network_consent_needed` pending text, now states what the grant is and why ("Ticks
+  run on a schedule, with nobody present to answer a network prompt, so they need a standing grant
+  ("Always allow this site") for agentactioncapsule.org, not a one-time one ("allow once")…")
+  instead of telling the reader what to choose. An agent reads this output, and an agent host may
+  treat instructions in tool output as prompt injection: Muse flagged an install whose output
+  carried them. The facts are unchanged; the agent's skill still tells the person what to choose.
+
 ### A merchant email whose key cannot be read now is sealed at the next tick
 
 - **Changed:** when `deal note --kind evidence --email` cannot reach DNS for the merchant's DKIM

@@ -173,23 +173,25 @@ func witnessSite(endpoint string) (host, site string) {
 	return host, site
 }
 
-// witnessAllowText is the plain instruction for an agent host that asks
-// before network access.
-func witnessAllowText(endpoint string) string {
+// witnessGrantText states the network grant a witness needs. It is a
+// statement, not an instruction: an agent reads this output, and an agent
+// host may treat instructions found in tool output as prompt injection and
+// refuse to go on. The agent's own skill tells the person what to choose.
+func witnessGrantText(endpoint string) string {
 	host, site := witnessSite(endpoint)
-	return fmt.Sprintf("If your agent host asks before network access, choose \"Always allow this site\" for %s (the witness is %s), not \"allow once\": ticks run on a schedule, when nobody is there to answer a prompt. That grant covers %s and all its subdomains.", site, host, site)
+	return fmt.Sprintf("Ticks run on a schedule, with nobody present to answer a network prompt, so they need a standing grant (\"Always allow this site\") for %s, not a one-time one (\"allow once\"). The witness is %s; a grant for %s covers it and all its subdomains.", site, host, site)
 }
 
 // witnessConsentText says what a delivery that did not reach the witness
 // most likely needs, without claiming to know: this program cannot see an
 // agent host's network-consent prompt.
 func witnessConsentText(endpoint string) string {
-	return "pending: network consent needed, or no network. The request did not reach the witness. " + witnessAllowText(endpoint)
+	return "pending: network consent needed, or no network. The request did not reach the witness. " + witnessGrantText(endpoint)
 }
 
 // witnessConsentReached is doctor's note when its own probe got through.
 func witnessConsentReached(endpoint string) string {
-	return "Reached from this command. A scheduled tick runs without anyone present. " + witnessAllowText(endpoint)
+	return "Reached from this command. " + witnessGrantText(endpoint)
 }
 
 // witnessPendingReason classifies a pending delivery from its stored error.

@@ -334,8 +334,8 @@ func TestDealBlockedDeliveryIsShownAsNetworkConsent(t *testing.T) {
 func TestWitnessPendingReasons(t *testing.T) {
 	reason, text := witnessPendingReason(cll.WitnessState{Attempts: 1, LastError: "witness returned HTTP 503: " + witnessNotReached}, dealDefaultWitness)
 	assert.Equal(t, "network_consent_needed", reason)
-	assert.Contains(t, text, `choose "Always allow this site" for agentactioncapsule.org (the witness is witness.agentactioncapsule.org)`)
-	assert.Contains(t, text, "That grant covers agentactioncapsule.org and all its subdomains.")
+	assert.Contains(t, text, `a standing grant ("Always allow this site") for agentactioncapsule.org`)
+	assert.Contains(t, text, "The witness is witness.agentactioncapsule.org; a grant for agentactioncapsule.org covers it and all its subdomains.")
 	reason, _ = witnessPendingReason(cll.WitnessState{Attempts: 1, LastError: "witness returned HTTP 503: checkpoint submission failed; response details suppressed"}, dealDefaultWitness)
 	assert.Equal(t, "witness_error", reason, "a witness that answered is not a consent problem")
 	reason, _ = witnessPendingReason(cll.WitnessState{}, dealDefaultWitness)
@@ -365,6 +365,20 @@ func TestDoctorExplainsWitnessConsent(t *testing.T) {
 	require.NoError(t, err, out)
 	require.NoError(t, json.Unmarshal([]byte(out), &report))
 	assert.Contains(t, report["witness"].(map[string]any)["consent"], `"Always allow this site"`)
+}
+
+// The witness's grant text is read by agents: it states what the grant is and
+// why, and never tells the reader what to do.
+func TestWitnessGrantTextIsAStatement(t *testing.T) {
+	for _, text := range []string{
+		witnessGrantText(dealDefaultWitness),
+		witnessConsentText(dealDefaultWitness),
+		witnessConsentReached(dealDefaultWitness),
+	} {
+		assert.NotContains(t, text, "If your agent")
+		assert.NotContains(t, text, "choose")
+		assert.Contains(t, text, "agentactioncapsule.org")
+	}
 }
 
 // A deal is never called witnessed at the moment it happens: until a tick has
