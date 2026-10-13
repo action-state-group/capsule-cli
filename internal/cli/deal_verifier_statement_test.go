@@ -384,6 +384,81 @@ func TestVerifierStatementRefusesAnAmbiguousSignedDate(t *testing.T) {
 	}
 }
 
+// The date follows the signature the statement rests on, the passing one
+// aligned with the sender, wherever it sits: another signature on the same
+// email that covers Date, one that fails or one from another domain that
+// passes, lends the statement no message_date, above or below the aligned one.
+func TestVerifierStatementTakesTheDateFromTheSignatureItRestsOn(t *testing.T) {
+	shopPub, shopKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	stalePub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	_, staleKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	relayPub, relayKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	txt := func(pub ed25519.PublicKey) string {
+		return "v=DKIM1; k=ed25519; p=" + base64.StdEncoding.EncodeToString(pub)
+	}
+	stubDNS(t, map[string]string{
+		"aligned._domainkey.shop.example": txt(shopPub),
+		// The stale selector publishes another key than the one that signs.
+		"stale._domainkey.shop.example":  txt(stalePub),
+		"relay._domainkey.relay.example": txt(relayPub),
+		dmarcName:                        merchantDMARC(t),
+	})
+	sign := func(msg []byte, domain, selector string, key ed25519.PrivateKey, headers ...string) []byte {
+		var signed bytes.Buffer
+		require.NoError(t, dkim.Sign(&signed, bytes.NewReader(msg), &dkim.SignOptions{
+			Domain: domain, Selector: selector, Signer: key, Hash: crypto.SHA256, HeaderKeys: headers,
+		}))
+		return signed.Bytes()
+	}
+	aligned := func(msg []byte) []byte {
+		return sign(msg, "shop.example", "aligned", shopKey, "From", "To", "Subject", "Message-ID")
+	}
+	others := map[string]struct {
+		result string
+		sign   func([]byte) []byte
+	}{
+		"a failing signature from the same domain": {"fail", func(msg []byte) []byte {
+			return sign(msg, "shop.example", "stale", staleKey, "From", "To", "Subject", "Date", "Message-ID")
+		}},
+		"a passing signature from another domain": {"pass", func(msg []byte) []byte {
+			return sign(msg, "relay.example", "relay", relayKey, "From", "To", "Subject", "Date", "Message-ID")
+		}},
+	}
+	_, holder, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	for name, other := range others {
+		msg := []byte(simpleMessage("orders@shop.example", "Sat, 03 Oct 2026 21:14:05 +0000", "<two@shop.example>", "Your order SE-1 is confirmed", "Thanks for your order!\r\n"))
+		// A signature is added above the headers it signs, so the one signed
+		// last is the first DKIM-Signature header.
+		for order, raw := range map[string][]byte{
+			"above the aligned one": other.sign(aligned(msg)),
+			"below the aligned one": aligned(other.sign(msg)),
+		} {
+			label := name + " " + order
+			e, err := captureEmail(raw, nil)
+			require.NoError(t, err, label)
+			require.Equal(t, "pass", e.DKIM.Result, label)
+			require.Len(t, e.DKIM.Signatures, 2, label)
+			first := 0
+			if order == "below the aligned one" {
+				first = 1
+			}
+			require.Equal(t, other.result, e.DKIM.Signatures[first].Result, label)
+			require.True(t, dateSigned(e.DKIM.Signatures[first].Signed), label)
+			require.False(t, dateSigned(e.DKIM.Signatures[1-first].Signed), label)
+
+			statement, err := issueVerifierStatement(e, holder, time.Now())
+			require.NoError(t, err, label)
+			assert.Equal(t, "shop.example", statement["dkim_domain"], label)
+			assert.NotContains(t, statement, "message_date", label)
+		}
+	}
+}
+
 // verify-statement --key matches the statement's key to the holder's; without
 // it the result says the key is not matched to any holder.
 func TestVerifyStatementKeyFlag(t *testing.T) {
