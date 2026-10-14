@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### A handle for each deal in a History, different in every History
+
+- **Added:** a History for someone (`--audience history`) gives each deal a handle, `dh-` and 32
+  hex, sealed in the deal's selection entry (`handle`) and printed in `deal history`'s output. A
+  recipient names a deal by it when asking a follow-up. The handle is an HMAC of the deal id under
+  a key of that History's own, which is derived from your store's secret and the selection's
+  nonce. Nothing new is stored, and two Histories of the same deal, even for the same person,
+  carry different handles. A handle grants nothing to whoever holds it.
+- **Added:** `deal history resolve --history FILE --handle H` maps a handle back to its deal, who
+  the History was for and the deal's counterparty.
+  - The file only locates the History (its log and its selection record). What resolve reports
+    comes from your store's own copy of that record, so an edited file changes none of it, and a
+    History your store did not write is refused.
+  - Only the store that wrote a History can derive its handles, so a handle quoted against
+    another History is refused, and so is a selection naming a deal under a handle your store did
+    not derive.
+  - It reads the store under its shared lock and changes no byte of it, on a `read_only` profile
+    too.
+- `verify --bundle` reports each deal's `handle` and lists `handle` under `holder_stated`: it has
+  no key to recompute one with. The handle is optional in `x-history-selection/v0`, so a History
+  with none (written before handles, or `--audience keep`) still verifies and says
+  `"handles": "none"`. Handles are all or none. Each of these fails as
+  `selection_entry_malformed:<deal id>`:
+  - a handle that is not `dh-` and 32 lowercase hex;
+  - a handle that appears twice in one file;
+  - a handle in a keep entry;
+  - an entry with no handle in a History whose other entries have one.
+- **Known limit, now stated by verify:** handles stop linkage through the handle only. Every deal
+  copy's signed checkpoint names its log, `deal/` + the deal id, and its records keep their
+  capsule ids, so two recipients who compare files can tell they saw the same deal. Every History
+  for someone says `"linkable_across_shares": ["deal_id", "capsule_ids"]`.
+- **Known limit:** a History's handle key is derived from the store secret and is not stored, so
+  a new store secret would leave every handle already sent unresolvable. No command makes a new
+  store secret today.
+
 ### Verification on agent-action-capsule's Go APIs
 
 - **Changed (build):** agent-action-capsule's Go module moves to v0.9.1, and capsulectl's own

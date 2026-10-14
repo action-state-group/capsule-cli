@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -31,7 +32,8 @@ import (
 //
 //	{"selection_record": <the selection record's capsule id>,
 //	 "selection": [{"deal_id": ..., "bundle_digest": <sha256 of the bundle's JCS>,
-//	                "steps_after_checkpoint": <steps on the deal's log after the copy's checkpoint>}],
+//	                "steps_after_checkpoint": <steps on the deal's log after the copy's checkpoint>,
+//	                "handle": <the deal's handle in this History (historyHandle); history audience only, optional>}],
 //	 "deals": {"<deal id>": <the deal's copy for the selected audience (history, or keep), an evidence-bundle/v2>}}
 //
 // It is a private kind, like x-deal-sale/v0, read by this verifier only. A
@@ -60,8 +62,38 @@ const dealAudienceHistory = "history"
 
 // historyHolderStated are the reads of a History that are the holder's own
 // word, signed with the selection and checked against no deal: who it is
-// for, and how many steps each deal has after its copy's checkpoint.
-var historyHolderStated = []string{"recipient", "steps_after_checkpoint"}
+// for, how many steps each deal has after its copy's checkpoint, and each
+// deal's handle (only the holder's store can recompute one).
+var historyHolderStated = []string{"recipient", "steps_after_checkpoint", "handle"}
+
+// historyLinkable are what tie a deal in one History to the same deal in
+// another, whatever the handles: each copy's signed checkpoint names its log,
+// "deal/" + deal id (dealLogID), and its records keep their capsule ids.
+// verify reports them on every History for the history audience. A handle
+// is a different string in each History, so no handle links them.
+var historyLinkable = []string{"deal_id", "capsule_ids"}
+
+// historyHandlePrefix starts a handle, so it is never read as a deal id.
+const historyHandlePrefix = "dh-"
+
+var historyHandlePattern = regexp.MustCompile(`^dh-[0-9a-f]{32}$`)
+
+// historyShareKey is one History's key for its handles, from the store
+// secret and the History's nonce (hex, as sealed): one key per History, and
+// nothing new stored. It never leaves the device, like the store secret.
+// Since it is not stored, a new store secret (no command makes one today)
+// would leave every handle already sent unresolvable.
+func historyShareKey(storeSecret []byte, nonce string) []byte {
+	return hmacSHA256(storeSecret, "x-deal-v0/history-share-key\x00", nonce)
+}
+
+// historyHandle is a deal's handle in the History whose share key is
+// shareKey: a recipient names a deal by it ("deal 3 in the History you
+// received"), and only the holder's store maps it back (`deal history
+// resolve`). It grants nothing to whoever holds it.
+func historyHandle(shareKey []byte, dealID string) string {
+	return historyHandlePrefix + hex.EncodeToString(hmacSHA256(shareKey, "x-deal-v0/history-handle\x00", dealID)[:16])
+}
 
 // historyNotProven are the reads a history copy does not prove, as verify
 // reports them on every History for the history audience.
@@ -132,7 +164,174 @@ func dealHistoryCommand() *cobra.Command {
 	cmd.Flags().String("out", "", "New file for the History")
 	cmd.Flags().String("audience", dealAudienceHistory, "Which copy of each deal: history (default: every record's payload withheld, for anyone) or keep (your own copy, never one to send)")
 	cmd.Flags().String("to", "", "Who the History is for, as sealed in its selection record (required, except with --audience keep)")
+	cmd.AddCommand(dealHistoryResolveCommand())
 	return cmd
+}
+
+func dealHistoryResolveCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "resolve", Short: "Map a handle from a History you sent back to its deal and counterparty (your store only)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+		path, _ := c.Flags().GetString("history")
+		handle, _ := c.Flags().GetString("handle")
+		handle = strings.TrimSpace(handle)
+		if path == "" || handle == "" {
+			return inputError("--history (the History file the handle came from) and --handle are required")
+		}
+		if !historyHandlePattern.MatchString(handle) {
+			return inputError("--handle must be a handle as a History names it: dh- followed by 32 lowercase hex characters")
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		value, err := decodeBundleJSON(raw)
+		if err != nil {
+			return err
+		}
+		p, err := selected(c)
+		if err != nil {
+			return err
+		}
+		s, err := openDealStoreRead(p)
+		if err != nil {
+			return err
+		}
+		defer func() { err = errors.Join(err, s.close()) }()
+		found, err := s.resolveHistoryHandle(c.Context(), value, handle)
+		if err != nil {
+			return err
+		}
+		return output(c, found)
+	}}
+	cmd.Flags().String("history", "", "The History file the handle came from")
+	cmd.Flags().String("handle", "", "A handle as the recipient quoted it (dh-…)")
+	return cmd
+}
+
+// resolveHistoryHandle maps a handle back to its deal, with who the History
+// was for and the deal's counterparty as this store knows them. The file
+// only locates the History: its log (deal-history/<nonce>) and its selection
+// record. Everything resolve reports comes from the store's own copy of that
+// record, so an edited file changes none of it, and a History this store did
+// not write is refused. Each selected deal's handle is recomputed under the
+// History's share key, which only this store can derive: a match is the
+// mapping, and a handle from another History (another nonce, another key)
+// matches none of this one's deals. The session is openDealStoreRead's, so
+// resolve writes nothing.
+func (s *dealSession) resolveHistoryHandle(ctx context.Context, value map[string]interface{}, handle string) (map[string]any, error) {
+	exts, _ := value["extensions"].(map[string]interface{})
+	ext, _ := exts[historySelectionExtension].(map[string]interface{})
+	recordID, _ := ext["selection_record"].(string)
+	cert, _ := value["completeness_certificate"].(map[string]interface{})
+	logID, _ := cert["log_id"].(string)
+	nonce := strings.TrimPrefix(logID, historyLogPrefix)
+	if !strings.HasPrefix(logID, historyLogPrefix) || !hexDigestPattern.MatchString(nonce) || !hexDigestPattern.MatchString(recordID) {
+		return nil, inputError("--history is not a History: it is not of a History's own log (see `deal history`)")
+	}
+	var secret []byte
+	err := s.db.QueryRowContext(ctx, `SELECT secret FROM deal_store WHERE id=1`).Scan(&secret)
+	if errors.Is(err, sql.ErrNoRows) || (err != nil && strings.Contains(err.Error(), "no such table")) {
+		return nil, inputError("this store has written no History, so it cannot map a handle")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(secret) != 32 {
+		return nil, ErrConflict
+	}
+	sealed, err := s.storedHistorySelection(ctx, logID, recordID)
+	if err != nil {
+		return nil, err
+	}
+	if sealed["nonce"] != nonce {
+		return nil, inputError("--history is not a History this store wrote: its selection record is not the one on its log here")
+	}
+	if sealed["audience"] != dealAudienceHistory {
+		return nil, inputError("this History has no handles (written before handles, or --audience keep)")
+	}
+	shareKey := historyShareKey(secret, nonce)
+	listed, _ := sealed["selection"].([]interface{})
+	anyHandle := false
+	for _, raw := range listed {
+		e, _ := raw.(map[string]interface{})
+		id, _ := e["deal_id"].(string)
+		sealedHandle, has := e["handle"].(string)
+		anyHandle = anyHandle || has
+		if historyHandle(shareKey, id) != handle {
+			continue
+		}
+		if sealedHandle != handle {
+			return nil, inputError("handle " + handle + " is this store's for deal " + id + ", but the History's sealed selection names that deal under another handle")
+		}
+		deals, err := s.dealListings(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, l := range deals {
+			if l.DealID == id {
+				found := map[string]any{"handle": handle, "deal_id": id, "counterparty": l.Summary.Counterparty, "counterparty_fingerprint": l.CounterpartyFingerprint}
+				if recipient, _ := sealed["recipient"].(string); recipient != "" {
+					found["recipient"] = recipient
+				}
+				return found, nil
+			}
+		}
+		return nil, inputError("handle " + handle + " names deal " + id + ", which is not in this store")
+	}
+	if !anyHandle {
+		return nil, inputError("this History has no handles (written before handles, or --audience keep)")
+	}
+	return nil, inputError("handle " + handle + " is not one of this History's deals")
+}
+
+// storedHistorySelection is the selection record recordID as this store
+// holds it on the History log logID: its sealed payload, read for reading
+// only. A History log the store does not hold is refused.
+func (s *dealSession) storedHistorySelection(ctx context.Context, logID, recordID string) (_ map[string]interface{}, err error) {
+	notHere := inputError("--history is not a History this store wrote: its log " + logID + " is not in this store")
+	var logs int
+	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM cll_meta WHERE log_id=?`, logID).Scan(&logs); err != nil {
+		if strings.Contains(err.Error(), "no such table") {
+			return nil, notHere
+		}
+		return nil, err
+	}
+	if logs == 0 {
+		return nil, notHere
+	}
+	s.dp = s.p
+	s.dp.LogID = logID
+	if s.t, err = openTarget(ctx, s.dp, useRead); err != nil {
+		return nil, err
+	}
+	defer func() {
+		err = errors.Join(err, s.t.close())
+		s.t = nil
+	}()
+	entries, err := s.logEntries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) == 0 {
+		return nil, notHere
+	}
+	onLog := false
+	for _, e := range entries {
+		onLog = onLog || hex.EncodeToString(e.Value) == recordID
+	}
+	if !onLog {
+		return nil, inputError("--history is not a History this store wrote: its selection record is not on its log here")
+	}
+	b, err := AssembleBundle(ctx, s.t.artifacts, s.t.log, logID, BundleOptions{Root: recordID, Payloads: "selected", WithDisclosure: true})
+	if err != nil {
+		return nil, err
+	}
+	disclosures, _ := b["disclosures"].(map[string]interface{})
+	d, _ := disclosures[recordID].(map[string]interface{})
+	sealed, _ := d["agent_input"].(map[string]interface{})
+	if sealed["type"] != "history_selection" {
+		return nil, inputError("--history is not a History this store wrote: its selection record is not the one on its log here")
+	}
+	return sealed, nil
 }
 
 // dealHistory builds the History over the picked deals, in deal id order,
@@ -140,14 +339,21 @@ func dealHistoryCommand() *cobra.Command {
 // how many came after its latest checkpoint (not shown: no deal's log is
 // written, so none is cut). That count is sealed in the deal's selection
 // entry too, so a step left out (a refund, a dispute) is stated in the file,
-// not only on the holder's screen. Every deal copy is built and checked before the
-// selection is sealed; the selection record and its checkpoint are the only
-// writes, and only to the History's own log.
+// not only on the holder's screen. A History for the history audience gives
+// each deal its handle under the History's own share key (historyShareKey),
+// in its selection entry and its summary line. Every deal copy is built and
+// checked before the selection is sealed; the selection record and its
+// checkpoint are the only writes, and only to the History's own log.
 func (s *dealSession) dealHistory(ctx context.Context, ids []string, audience, recipient, verify string) (map[string]interface{}, []map[string]any, error) {
 	listed, err := s.dealListings(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
+	nonce := make([]byte, 32)
+	if _, err = rand.Read(nonce); err != nil {
+		return nil, nil, err
+	}
+	shareKey := historyShareKey(s.secret, hex.EncodeToString(nonce))
 	known := map[string]bool{}
 	for _, l := range listed {
 		known[l.DealID] = true
@@ -179,10 +385,16 @@ func (s *dealSession) dealHistory(ctx context.Context, ids []string, audience, r
 			return nil, nil, err
 		}
 		deals[id] = value
-		selection = append(selection, map[string]interface{}{"deal_id": id, "bundle_digest": jcsDigest(value), "steps_after_checkpoint": after})
-		summary = append(summary, map[string]any{"deal_id": id, "steps_shown": shown, "steps_after_checkpoint": after})
+		entry := map[string]interface{}{"deal_id": id, "bundle_digest": jcsDigest(value), "steps_after_checkpoint": after}
+		line := map[string]any{"deal_id": id, "steps_shown": shown, "steps_after_checkpoint": after}
+		if audience == dealAudienceHistory {
+			entry["handle"] = historyHandle(shareKey, id)
+			line["handle"] = entry["handle"]
+		}
+		selection = append(selection, entry)
+		summary = append(summary, line)
 	}
-	b, recordID, err := s.historyBundle(ctx, audience, recipient, selection)
+	b, recordID, err := s.historyBundle(ctx, nonce, audience, recipient, selection)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -192,17 +404,13 @@ func (s *dealSession) dealHistory(ctx context.Context, ids []string, audience, r
 	return b, summary, nil
 }
 
-// historyBundle opens the History's own log, named by a fresh 256-bit nonce
-// the selection record also holds, seals the record (with recipient, when
-// given) as its only entry, cuts its checkpoint and assembles its Evidence
-// Bundle around the record, disclosed.
-func (s *dealSession) historyBundle(ctx context.Context, audience, recipient string, selection []interface{}) (_ map[string]interface{}, _ string, err error) {
+// historyBundle opens the History's own log, named by its fresh 256-bit
+// nonce, which the selection record also holds, seals the record (with
+// recipient, when given) as its only entry, cuts its checkpoint and
+// assembles its Evidence Bundle around the record, disclosed.
+func (s *dealSession) historyBundle(ctx context.Context, nonce []byte, audience, recipient string, selection []interface{}) (_ map[string]interface{}, _ string, err error) {
 	if s.p.Checkpoint.Signing == (Secret{}) {
 		return nil, "", inputError("a History needs the profile's checkpoint key (see `deal init`)")
-	}
-	nonce := make([]byte, 32)
-	if _, err = rand.Read(nonce); err != nil {
-		return nil, "", err
 	}
 	record := map[string]interface{}{
 		"type": "history_selection", "profile": historySelectionExtension, "audience": audience,
@@ -403,6 +611,14 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 // nothing unselected is carried; and every nested record is signed by the
 // selection record's key (holder_key), the one key the deals share. A
 // finding names the deal it is about.
+//
+// A handle is optional (a History written before handles has none, and
+// verify then reports "handles": "none"); one that is there is dh- and 32
+// lowercase hex, once in the file, and only in a history-audience entry, and
+// then every entry has one.
+// verify cannot recompute a handle, which needs the holder's store secret,
+// so it is holder_stated. A History for the history audience also reports
+// linkable_across_shares (historyLinkable).
 func historyEntry(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, aacbundle.ClaimResult) {
 	var failed, notShown []string
 	exts, _ := value["extensions"].(map[string]interface{})
@@ -454,7 +670,7 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 	}
 	switch audience {
 	case dealAudienceHistory:
-		entry["not_proven"] = historyNotProven
+		entry["not_proven"], entry["linkable_across_shares"] = historyNotProven, historyLinkable
 		if strings.TrimSpace(recipient) == "" {
 			failed = append(failed, "selection_recipient_missing")
 		}
@@ -467,8 +683,11 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 	if len(listed) == 0 {
 		failed = append(failed, "selection_missing")
 	}
-	picked := map[string]string{} // deal id -> bundle digest
-	later := map[string]int64{}   // deal id -> steps after its checkpoint, as the holder sealed it
+	picked := map[string]string{}  // deal id -> bundle digest
+	later := map[string]int64{}    // deal id -> steps after its checkpoint, as the holder sealed it
+	handles := map[string]string{} // deal id -> its handle, when the entry has one
+	handleSeen := map[string]bool{}
+	anyHandle := false
 	var order []string
 	for _, raw := range listed {
 		e, _ := raw.(map[string]interface{})
@@ -476,12 +695,29 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 		digest, _ := e["bundle_digest"].(string)
 		steps, _ := e["steps_after_checkpoint"].(json.Number)
 		count, ok := stepCount(steps)
-		if _, dup := picked[id]; dup || !ok || !dealIDPattern.MatchString(id) || !hexDigestPattern.MatchString(digest) {
+		rawHandle, hasHandle := e["handle"]
+		handle, _ := rawHandle.(string)
+		anyHandle = anyHandle || hasHandle
+		badHandle := hasHandle && (audience != dealAudienceHistory || !historyHandlePattern.MatchString(handle) || handleSeen[handle])
+		if _, dup := picked[id]; dup || !ok || badHandle || !dealIDPattern.MatchString(id) || !hexDigestPattern.MatchString(digest) {
 			failed = append(failed, "selection_entry_malformed:"+id)
 			continue
 		}
 		picked[id], later[id] = digest, count
+		if hasHandle {
+			handles[id], handleSeen[handle] = handle, true
+		}
 		order = append(order, id)
+	}
+	// Handles are all or none: a History written with handles that lacks
+	// one names that deal.
+	if !anyHandle {
+		entry["handles"] = "none"
+	}
+	for _, id := range order {
+		if _, ok := handles[id]; anyHandle && !ok {
+			failed = append(failed, "selection_entry_malformed:"+id)
+		}
 	}
 	extra := make([]string, 0)
 	for id := range carried {
@@ -502,6 +738,9 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 	deals := make([]map[string]any, 0, len(order))
 	for _, id := range order {
 		member := map[string]any{"deal_id": id, "steps_after_checkpoint": later[id]}
+		if handle, ok := handles[id]; ok {
+			member["handle"] = handle
+		}
 		deals = append(deals, member)
 		tb, ok := carried[id].(map[string]interface{})
 		if !ok {
