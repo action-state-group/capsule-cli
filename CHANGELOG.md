@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### `presentation build`: the fragment of the page, and the page's theme and wording
+
+- **Added:** `presentation build --format fragment` writes the page as an
+  `aac.presentation-fragment/v0` token (to `--out`): the bundle, the page's settings and the
+  module the resolver selects for a fragment (as `presentation list --format fragment` names it),
+  with the runtime's and modules' pins. The token must hand the html page back byte for byte, or nothing
+  is written. A token over `--max-fragment-length` (default 65,536, agent-action-capsule's
+  default link budget; at most 1,046,528) is refused (`refusal.reason: fragment_too_large`, with
+  its `length` and `limit`) and never written. `--format embedded` is still not built.
+- **Added:** `--theme-css FILE` puts a stylesheet in the page's theme slot. `--wording FILE`
+  gives the page its `aac.wording-pack/v0` wording pack, checked before anything is written.
+  The flag's pack wins over a module's own, and that module's row says so.
+
 ### One file for the deals you pick, each checked on its own
 
 - **Added:** `deal history --deal ID [--deal ID ...] --out FILE --to WHO` writes a History: one

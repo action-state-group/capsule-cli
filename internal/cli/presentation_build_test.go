@@ -394,7 +394,7 @@ func TestPresentationBuildSaysWhatItLeavesOut(t *testing.T) {
 	assert.ErrorContains(t, err, "org.example.absent/v0")
 	_, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", presentationOut(t), "--format", "static")
 	assert.ErrorContains(t, err, "unavailable (no-document)")
-	_, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", presentationOut(t), "--format", "fragment")
+	_, err = invoke(t, "", "presentation", "build", "--bundle", presentationBuildBundle, "--out", presentationOut(t), "--format", "embedded")
 	assert.ErrorContains(t, err, "not built by this tool yet")
 }
 

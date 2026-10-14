@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	aacpresentation "github.com/action-state-group/agent-action-capsule/go/presentation"
 )
 
 // `presentation build` writes the offline page with the trusted-executable
@@ -34,6 +37,23 @@ import (
 //
 // `presentation list` (presentation_list.go) says which module a bundle
 // resolves to, with agent-action-capsule's Go resolver.
+//
+// --format fragment packages the same page as a presentation fragment
+// (aac.presentation-fragment/v0): the bundle, the page's settings and the
+// module the resolver selects for a fragment, with the runtime's and modules'
+// pins, never their code. A token over the link budget
+// is refused, never written; one within it must hand the html page back byte
+// for byte (emitter.OfflineHTMLFromFragment), or nothing is written.
+
+// presentationFragmentBudget is the token budget a fragment gets unless
+// --max-fragment-length says otherwise: agent-action-capsule's
+// FRAGMENT_TOKEN_DEFAULT_BUDGET (ts/src/presentation-fragment.ts), the
+// longest link its builder offers without being asked for more.
+const presentationFragmentBudget = 65_536
+
+// presentationHandBack rebuilds the page a fragment was made from
+// (emitter.OfflineHTMLFromFragment). A test replaces it; nothing else does.
+var presentationHandBack = emitter.OfflineHTMLFromFragment
 
 // presentationRuntime is the vendored runtime's declaration
 // (REFERENCE_PRESENTATION_RUNTIME in assets/evidence-graph.iife.js; pinned
@@ -82,7 +102,10 @@ type presentationBuildRefusal struct {
 	// ambiguous (tier specific|fallback), duplicate_id, dead_manifest
 	Tier    string   `json:"tier,omitempty"`
 	Modules []string `json:"modules,omitempty"`
-	Detail  string   `json:"detail"`
+	// fragment_too_large: the token's length and the budget it is over
+	Length int    `json:"length,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
+	Detail string `json:"detail"`
 }
 
 func (r *presentationBuildRefusal) Error() string { return "no page written: " + r.Detail }
@@ -304,6 +327,7 @@ type presentationBuildResult struct {
 	Audience       string                      `json:"audience"`
 	Depth          string                      `json:"depth,omitempty"`
 	BundleDigest   string                      `json:"bundle_digest,omitempty"`
+	FragmentLength int                         `json:"fragment_length,omitempty"`
 	Runtime        interface{}                 `json:"runtime"`
 	Modules        []presentationBuildModule   `json:"modules"`
 	NotIncluded    []presentationNotIncluded   `json:"not_included,omitempty"`
@@ -388,6 +412,9 @@ func presentationCommands() *cobra.Command {
 		depth, _ := c.Flags().GetString("depth")
 		title, _ := c.Flags().GetString("title")
 		only, _ := c.Flags().GetStringSlice("module")
+		themePath, _ := c.Flags().GetString("theme-css")
+		wordingPath, _ := c.Flags().GetString("wording")
+		budget, _ := c.Flags().GetInt("max-fragment-length")
 		if bundlePath == "" || out == "" {
 			return hint(ErrInput, "--bundle and --out are required")
 		}
@@ -396,10 +423,14 @@ func presentationCommands() *cobra.Command {
 		}
 		switch format {
 		case "html":
+		case "fragment":
+			if budget < 1 || budget > emitter.FragmentTokenMaxLength {
+				return hint(ErrInput, fmt.Sprintf("--max-fragment-length must be from 1 to %d", emitter.FragmentTokenMaxLength))
+			}
 		case "static":
 			return hint(ErrInput, "--format static is unavailable (no-document): this tool has no document to render the page with at build time; build --format html")
-		case "fragment", "embedded":
-			return hint(ErrInput, fmt.Sprintf("--format %s is not built by this tool yet; build --format html", format))
+		case "embedded":
+			return hint(ErrInput, "--format embedded is not built by this tool yet; build --format html or fragment")
 		default:
 			return hint(ErrInput, fmt.Sprintf("--format %s is not a packaging target (html, fragment, embedded, static)", format))
 		}
@@ -407,6 +438,28 @@ func presentationCommands() *cobra.Command {
 		case "", "L0", "L1", "L2":
 		default:
 			return hint(ErrInput, "--depth must be L0, L1 or L2")
+		}
+		var theme string
+		if themePath != "" {
+			raw, err := readInput(themePath)
+			if err != nil {
+				return err
+			}
+			theme = string(raw)
+		}
+		// A wording pack given here is the page's; the emitter checks it
+		// again against its digest when it builds the page.
+		var pageWording *emitter.Wording
+		if wordingPath != "" {
+			raw, err := readInput(wordingPath)
+			if err != nil {
+				return err
+			}
+			sum := sha256.Sum256(raw)
+			pageWording = &emitter.Wording{Pack: string(raw), SHA256: hex.EncodeToString(sum[:])}
+			if _, err := emitter.CheckWordingPack(*pageWording); err != nil {
+				return hint(ErrInput, fmt.Sprintf("--wording %s: %v; no page written", wordingPath, err))
+			}
 		}
 		modules, result, err := presentationSelection(only, audience)
 		if err != nil {
@@ -459,16 +512,20 @@ func presentationCommands() *cobra.Command {
 			}
 			return err
 		}
-		// One wording pack per page: with one module, its own; with several
-		// none, as the page cannot know before resolving which one renders.
-		var wording *emitter.Wording
+		// One wording pack per page: --wording's; else, with one module, its
+		// own; with several none, as the page cannot know before resolving
+		// which one renders.
+		wording := pageWording
 		slots := make([]emitter.Module, 0, len(modules))
 		for _, m := range modules {
 			row := presentationBuildModule{ID: m.ID, Plugin: m.plugin, ScriptSHA256: m.Script.SHA256, StyleSHA256: []string{}, Wording: "none"}
 			for _, s := range m.Styles {
 				row.StyleSHA256 = append(row.StyleSHA256, s.SHA256)
 			}
-			if m.Wording != nil {
+			switch {
+			case m.Wording != nil && pageWording != nil:
+				row.Wording = "not passed: the page carries one wording pack, and --wording gives it"
+			case m.Wording != nil:
 				row.Wording = "not passed: the page carries one wording pack, and it holds more than one module"
 				if len(modules) == 1 {
 					wording = &emitter.Wording{Pack: string(m.Wording.Bytes), SHA256: m.Wording.SHA256}
@@ -479,13 +536,44 @@ func presentationCommands() *cobra.Command {
 			slots = append(slots, emitter.Module{Code: m.Script.Bytes, SHA256: m.Script.SHA256, StyleSHA256: row.StyleSHA256})
 		}
 		html, err := emitter.BuildOfflineHTML(value, evidenceGraphIIFE, emitter.OfflineOptions{
-			Audience: audience, Depth: depth, Title: title, Wording: wording,
+			Audience: audience, Depth: depth, Title: title, ThemeCSS: theme, Wording: wording,
 			CoreRuntimeSHA256: evidenceGraphIIFEDigest, Modules: slots,
 		})
 		if err != nil {
 			return hint(ErrInput, "no page written: "+err.Error())
 		}
-		if err = atomicFile(out, []byte(html), false); errors.Is(err, os.ErrExist) {
+		written := html
+		if format == "fragment" {
+			// The module the fragment names is the one the resolver selects
+			// for it (`presentation list --format fragment`), as the
+			// TypeScript builder names its resolved module; "auto" when none.
+			selected := "auto"
+			listed, err := listPresentations(value, audience, aacpresentation.FormatFragment)
+			if err != nil {
+				return hint(ErrInput, "no fragment written: "+err.Error())
+			}
+			if listed.Selected != nil {
+				selected = listed.Selected.ID
+			}
+			fields := map[string]bool{"title": c.Flags().Changed("title"), "theme_css": themePath != ""}
+			token, err := presentationFragment(value, audience, selected, depth, title, theme, fields, wording, slots)
+			if err != nil {
+				return err
+			}
+			if len(token) > budget {
+				return refuse(&presentationBuildRefusal{Reason: "fragment_too_large", Length: len(token), Limit: budget,
+					Detail: fmt.Sprintf("the fragment token is %d characters, over the %d-character link budget; no link is written (build --format html, or raise --max-fragment-length up to %d)", len(token), budget, emitter.FragmentTokenMaxLength)})
+			}
+			back, err := presentationHandBack(token, evidenceGraphIIFE, slots)
+			if err != nil {
+				return fmt.Errorf("no fragment written: the fragment does not hand back the html page: %w", err)
+			}
+			if back != html {
+				return errors.New("no fragment written: the fragment does not hand back the html page byte for byte")
+			}
+			written, result.FragmentLength = token, len(token)
+		}
+		if err = atomicFile(out, []byte(written), false); errors.Is(err, os.ErrExist) {
 			return hint(ErrInput, fmt.Sprintf("--out %s already exists (or was created by another process while this one ran); nothing was overwritten; pass another path", out))
 		} else if err != nil {
 			return err
@@ -496,10 +584,48 @@ func presentationCommands() *cobra.Command {
 	build.Flags().String("bundle", "", "A held, disclosed Evidence Bundle (the page is written only when `verify --bundle` calls it VALID)")
 	build.Flags().String("out", "", "Write the offline page here (new file)")
 	build.Flags().String("audience", "*", "Audience token the page resolves for; \"*\" is no particular audience")
-	build.Flags().String("format", "html", "Packaging target: html (fragment and embedded are not built yet; static is unavailable)")
+	build.Flags().String("format", "html", "Packaging target: html, or fragment (the same page as an aac.presentation-fragment/v0 token, written to --out); embedded is not built yet and static is unavailable")
+	build.Flags().Int("max-fragment-length", presentationFragmentBudget, "--format fragment: the token budget; a longer token is refused, never written")
+	build.Flags().String("theme-css", "", "Theme stylesheet for the page's theme slot (a file)")
+	build.Flags().String("wording", "", "The page's wording pack (an aac.wording-pack/v0 file); it wins over a module's own")
 	build.Flags().String("depth", "", "Depth level: L0, L1 or L2 (default: the module's own)")
 	build.Flags().String("title", "", "Page title (wins over the wording pack's page.title)")
 	build.Flags().StringSlice("module", nil, "Carry only this presentation module id (repeatable; default: every trusted-executable module the installed plugins offer for --audience)")
 	group.AddCommand(build, presentationListCommand())
 	return group
+}
+
+// presentationFragment is the fragment token of the page these settings
+// build: the payload of buildPresentation's "fragment" format in
+// agent-action-capsule's TypeScript builder, naming the module selected.
+// title and theme_css are members when given (fields), as the TypeScript
+// builder writes them when defined. wording is the page's pack: --wording's,
+// or a single module's own, which this tool puts in the page the way the
+// TypeScript builder puts its wording option; without it the fragment would
+// not hand that page back.
+func presentationFragment(value map[string]interface{}, audience, selected, depth, title, theme string, fields map[string]bool, wording *emitter.Wording, slots []emitter.Module) (string, error) {
+	pins := make([]interface{}, 0, len(slots))
+	for _, m := range slots {
+		pins = append(pins, m.SHA256)
+	}
+	payload := map[string]interface{}{
+		"fragment_version":    emitter.PresentationFragmentVersion,
+		"audience":            audience,
+		"presentation":        selected,
+		"core_runtime_sha256": evidenceGraphIIFEDigest,
+		"module_sha256":       pins,
+		"bundle":              value,
+	}
+	if depth != "" {
+		payload["depth"] = depth
+	}
+	for key, v := range map[string]string{"title": title, "theme_css": theme} {
+		if fields[key] {
+			payload[key] = v
+		}
+	}
+	if wording != nil {
+		payload["wording"] = map[string]interface{}{"pack": wording.Pack, "sha256": wording.SHA256}
+	}
+	return aacbundle.EncodeFragment(payload)
 }
