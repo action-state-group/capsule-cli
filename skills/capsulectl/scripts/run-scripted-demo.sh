@@ -116,7 +116,7 @@ ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 jq -n --arg op "$profile" --arg ts "$ts" --arg parent "$parent" '
   {spec_version:"capsule-seal-request/v1",
    capsule:({ActionID:"skill-demo/publish-1", ActionType:"fyi", Operator:$op, Developer:"capsulectl-skill/v0", Timestamp:$ts,
-             Chain:{ParentCapsuleID:$parent, Relation:"io.capsulectl.skill_step"}}),
+             Chain:{ParentCapsuleID:$parent, Relation:"follows"}}),
    payload:{note:"scripted demo publish"}}' >"$work/publish-request.json"
 "$bin" publish --profile "$profile" --request "$work/publish-request.json" >"$work/publish-result.json"
 published_id=$(jq -r .capsule_id "$work/publish-result.json")

@@ -154,14 +154,21 @@ if [[ -n "$merge_decision" ]]; then
   timestamp="$CAPSULE_PR_DECIDED_AT"
 fi
 
+# Every reference is cited as acted_on: the PR's action was performed against
+# that content. Which digest an entry is (diff, CI, reviews, prompt) is the
+# profile's own role, given by the entry's position and type, in this order
+# (docs/PR-CAPSULE-PROFILE.md); citation_purpose is the registered why.
+cite() {
+  jq -c --arg t "$1" --arg d "$2" '. + [{"Type":$t,"DigestAlg":"sha256","Digest":$d,"CitationPurpose":"acted_on"}]' <<<"$references"
+}
 references='[]'
-references=$(jq -c --arg d "$diff_digest" '. + [{"Type":"text/x-diff","DigestAlg":"sha256","Digest":$d,"CitationPurpose":"diff_digest"}]' <<<"$references")
-references=$(jq -c --arg d "$ci_result_digest" '. + [{"Type":"application/json","DigestAlg":"sha256","Digest":$d,"CitationPurpose":"ci_result_digest"}]' <<<"$references")
+references=$(cite text/x-diff "$diff_digest")
+references=$(cite application/json "$ci_result_digest")
 if [[ -n "$review_digest" ]]; then
-  references=$(jq -c --arg d "$review_digest" '. + [{"Type":"application/json","DigestAlg":"sha256","Digest":$d,"CitationPurpose":"review_digest"}]' <<<"$references")
+  references=$(cite application/json "$review_digest")
 fi
 if [[ -n "$prompt_digest" ]]; then
-  references=$(jq -c --arg d "$prompt_digest" '. + [{"Type":"text/plain","DigestAlg":"sha256","Digest":$d,"CitationPurpose":"prompt_digest"}]' <<<"$references")
+  references=$(cite text/plain "$prompt_digest")
 fi
 
 model='null'

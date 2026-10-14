@@ -306,6 +306,54 @@ jobs:
           node --version
           make iife-check AAC="$GITHUB_WORKSPACE/aac"
 
+  registry-conformance:
+    # Report-only. Seals every PR capsule the PR profile tests seal and checks
+    # each registry-governed value against agent-action-capsule's registry
+    # with its registry-conformance checker. continue-on-error on the checker
+    # step keeps a finding from failing the job; a test failure or an empty
+    # set of capsules still fails it. The pin is agent-action-capsule#241's head, which
+    # is not on main yet: move the pin to the merge commit when #241 merges.
+    # Nothing from that checkout ships; it only reads the capsules below.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AAC_CONFORMANCE_REV: 4c4cd202327d02fce9af08bf968477e6116b4202
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check out agent-action-capsule at the pinned commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: action-state-group/agent-action-capsule
+          ref: ${{ env.AAC_CONFORMANCE_REV }}
+          path: aac
+          persist-credentials: false
+      - name: Seal the PR profile's capsules
+        env:
+          CAPSULE_CONFORMANCE_OUT: ${{ runner.temp }}/capsules
+        run: |
+          mkdir -p "$CAPSULE_CONFORMANCE_OUT"
+          go test ./internal/cli -run '^TestPRCapsule' -count=1
+          if ! compgen -G "$CAPSULE_CONFORMANCE_OUT/*.json" >/dev/null; then
+            echo "::error::no capsules were sealed; the check would pass on nothing"
+            exit 1
+          fi
+      - name: Check every registry-governed value
+        continue-on-error: true
+        env:
+          CAPSULES: ${{ runner.temp }}/capsules
+          AAC_REGISTRY_PATH: ${{ github.workspace }}/aac/spec/REGISTRY.md
+          PYTHONPATH: ${{ github.workspace }}/aac/python
+        run: |
+          files=("$CAPSULES"/*.json)
+          echo "checking ${#files[@]} distinct capsules at agent-action-capsule@$AAC_CONFORMANCE_REV"
+          python3 -m agent_action_capsule.registry_conformance "${files[@]}"
+
   seal-pr-capsule:
     # Same-repo PRs only: a fork PR's pull_request event carries no repository
     # secrets, so sealing (which needs the producer/checkpoint signing keys)

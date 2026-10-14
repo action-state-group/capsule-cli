@@ -95,22 +95,13 @@ func TestPRCapsuleRequestShapeHuman(t *testing.T) {
 		"CAPSULE_PR_REPO_DIR":  dir,
 	})
 
-	r, e := parseRequest(raw)
-	require.NoError(t, e, "capsule-cli's own decoder rejected the script's request shape")
-
-	_, private, e := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, e)
-	record, e := seal(r, private)
-	require.NoError(t, e)
-	assert.NotEmpty(t, record.CapsuleID)
-
-	var payload map[string]any
-	require.NoError(t, json.Unmarshal(record.Capsule, &payload))
+	id, payload := sealPRCapsuleRequest(t, raw)
+	assert.NotEmpty(t, id)
 	assert.NotContains(t, payload, "model_attestation", "a PR with no capsule-declare block must not carry a model")
 	assurance, _ := payload["assurance"].(map[string]any)
 	assert.Equal(t, "self_attested", assurance["attestation_mode"])
 	refs, _ := payload["references"].([]any)
-	assert.Len(t, refs, 2, "diff_digest and ci_result_digest, no prompt_digest without a declared prompt")
+	assert.Len(t, refs, 2, "the diff and CI result, no prompt without a declared prompt")
 }
 
 func TestPRCapsuleRequestShapeAgentDeclared(t *testing.T) {
@@ -138,17 +129,8 @@ func TestPRCapsuleRequestShapeAgentDeclared(t *testing.T) {
 	capsuleField, _ := decoded["capsule"].(map[string]any)
 	assert.NotContains(t, capsuleField, "Model")
 
-	r, e := parseRequest(raw)
-	require.NoError(t, e)
-
-	_, private, e := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, e)
-	record, e := seal(r, private)
-	require.NoError(t, e)
-	assert.NotEmpty(t, record.CapsuleID)
-
-	var payload map[string]any
-	require.NoError(t, json.Unmarshal(record.Capsule, &payload))
+	id, payload := sealPRCapsuleRequest(t, raw)
+	assert.NotEmpty(t, id)
 	attestation, ok := payload["model_attestation"].(map[string]any)
 	require.True(t, ok, "declared agent_provider/agent_model must surface as model_attestation")
 	assert.Equal(t, "anthropic", attestation["provider"])
@@ -156,7 +138,7 @@ func TestPRCapsuleRequestShapeAgentDeclared(t *testing.T) {
 	assurance, _ := payload["assurance"].(map[string]any)
 	assert.Equal(t, "self_attested", assurance["attestation_mode"], "a declared model with no compute attestation is still self-attested, not a stronger grade")
 	refs, _ := payload["references"].([]any)
-	assert.Len(t, refs, 3, "diff_digest, ci_result_digest, and prompt_digest")
+	assert.Len(t, refs, 3, "the diff, CI result and declared prompt")
 }
 
 // TestPRCapsuleRequestRejectsMalformedPromptDigest locks the script's own
@@ -177,17 +159,9 @@ func TestPRCapsuleRequestRejectsMalformedPromptDigest(t *testing.T) {
 		"CAPSULE_PR_REPO_DIR":  dir,
 	})
 
-	r, e := parseRequest(raw)
-	require.NoError(t, e)
-	_, private, e := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, e)
-	record, e := seal(r, private)
-	require.NoError(t, e)
-
-	var payload map[string]any
-	require.NoError(t, json.Unmarshal(record.Capsule, &payload))
+	_, payload := sealPRCapsuleRequest(t, raw)
 	refs, _ := payload["references"].([]any)
-	assert.Len(t, refs, 2, "the malformed prompt digest must be dropped, leaving only diff_digest and ci_result_digest")
+	assert.Len(t, refs, 2, "the malformed prompt digest must be dropped, leaving only the diff and CI result")
 }
 
 // prCapsuleBaseEnv is the head-capsule environment every profile test starts
@@ -204,32 +178,103 @@ func prCapsuleBaseEnv(dir, base, head string) map[string]string {
 	}
 }
 
+// conformanceOutEnv names a directory that sealPRCapsuleRequest writes each
+// sealed payload into, as <capsule_id>.json, for the registry-conformance CI
+// job to check. Unset, nothing is written.
+const conformanceOutEnv = "CAPSULE_CONFORMANCE_OUT"
+
 // sealPRCapsuleRequest decodes and seals a request with capsule-cli's own
 // parseRequest/seal and returns the sealed payload.
 func sealPRCapsuleRequest(t *testing.T, raw []byte) (string, map[string]any) {
 	t.Helper()
 	r, e := parseRequest(raw)
-	require.NoError(t, e)
+	require.NoError(t, e, "capsule-cli's own decoder rejected the script's request shape")
 	_, private, e := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, e)
 	record, e := seal(r, private)
 	require.NoError(t, e)
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(record.Capsule, &payload))
+	refs, _ := payload["references"].([]any)
+	for i, ref := range refs {
+		m, _ := ref.(map[string]any)
+		assert.Equal(t, "acted_on", m["citation_purpose"], "references[%d]", i)
+	}
+	referenceRoles(t, payload)
+	if dir := os.Getenv(conformanceOutEnv); dir != "" {
+		require.NoError(t, os.MkdirAll(dir, 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, record.CapsuleID+".json"), record.Capsule, 0o600))
+	}
 	return record.CapsuleID, payload
 }
 
-func referenceDigest(t *testing.T, payload map[string]any, purpose string) string {
+// profileRoleOrder is the order docs/PR-CAPSULE-PROFILE.md fixes for the
+// references, absent entries left out.
+var profileRoleOrder = []string{"diff_digest", "ci_result_digest", "review_digest", "prompt_digest"}
+
+// referenceRoles reads each reference's role the way docs/PR-CAPSULE-PROFILE.md
+// defines it, by type and position: the first application/json entry is the
+// CI result and a second one is the review digest. It fails the test unless
+// the roles follow profileRoleOrder with no role twice, and returns them in
+// payload order with each role's digest.
+func referenceRoles(t *testing.T, payload map[string]any) ([]string, map[string]string) {
 	t.Helper()
 	refs, _ := payload["references"].([]any)
-	for _, ref := range refs {
+	var order []string
+	digests := map[string]string{}
+	next := 0
+	for i, ref := range refs {
 		m, _ := ref.(map[string]any)
-		if m["citation_purpose"] == purpose {
-			digest, _ := m["digest"].(string)
-			return digest
+		var role string
+		switch m["type"] {
+		case "text/x-diff":
+			role = "diff_digest"
+		case "text/plain":
+			role = "prompt_digest"
+		case "application/json":
+			role = "ci_result_digest"
+			if _, seen := digests[role]; seen {
+				role = "review_digest"
+			}
+		default:
+			t.Fatalf("reference type %v is not in the PR profile", m["type"])
 		}
+		for next < len(profileRoleOrder) && profileRoleOrder[next] != role {
+			next++
+		}
+		if next == len(profileRoleOrder) {
+			t.Fatalf("references[%d] is %s, out of the profile's order %v", i, role, profileRoleOrder)
+		}
+		next++
+		order = append(order, role)
+		digests[role], _ = m["digest"].(string)
 	}
-	return ""
+	return order, digests
+}
+
+func referenceDigest(t *testing.T, payload map[string]any, role string) string {
+	t.Helper()
+	_, digests := referenceRoles(t, payload)
+	return digests[role]
+}
+
+// TestPRCapsuleReferencesCiteActedOn seals the fullest capsule the profile
+// defines, a decision capsule with reviews and a declared prompt, and pins
+// all four roles in order. sealPRCapsuleRequest checks acted_on and the role
+// order on every capsule the PR tests seal.
+func TestPRCapsuleReferencesCiteActedOn(t *testing.T) {
+	dir, base, head := gitRepoWithTwoCommits(t)
+	promptDigest := hex.EncodeToString(make([]byte, 32))
+	env := prDecisionEnv(dir, base, head)
+	env["CAPSULE_PR_REVIEWS_JSON"] = `[{"reviewer":"reviewer-a","state":"APPROVED","commit_id":"` + head + `","submitted_at":"2026-10-02T10:00:00Z"}]`
+	env["CAPSULE_PR_BODY"] = "<!-- capsule-declare\nprompt_digest_sha256: " + promptDigest + "\n-->\n"
+	_, payload := sealPRCapsuleRequest(t, runPRCapsuleRequest(t, env))
+
+	order, digests := referenceRoles(t, payload)
+	assert.Equal(t, profileRoleOrder, order)
+	assert.Equal(t, promptDigest, digests["prompt_digest"])
+	ciSum := sha256.Sum256([]byte(`{"quality":"success","test":"success"}` + "\n"))
+	assert.Equal(t, hex.EncodeToString(ciSum[:]), digests["ci_result_digest"], "the second entry must be the CI result, not the reviews")
 }
 
 func runPRCapsuleRequestFails(t *testing.T, env map[string]string) string {

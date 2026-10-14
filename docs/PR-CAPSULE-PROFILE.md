@@ -39,14 +39,25 @@ PR comment.
 | `model_attestation` | only if the PR body declares one (self-attested) | absent |
 | `review_digest` reference | absent: a head capsule is sealed before most reviews exist | the reviews submitted at or before the decision, when recorded |
 
-References, each `{type, digest_alg: sha256, digest, citation_purpose}`:
+References, each `{type, digest_alg: sha256, digest, citation_purpose: acted_on}`. Every entry
+carries the registered purpose `acted_on`: the PR's action was performed against that content.
+Which digest an entry is, its **role**, is this profile's own field. It is not carried as a capsule
+member. It is fixed by the entry's position in `references`, which follows the order below with
+the absent entries left out, and by its `type`:
 
-| `citation_purpose` | Type | Digest of | Present |
+| Role | Type | Digest of | Present |
 |---|---|---|---|
-| `diff_digest` | `text/x-diff` | `git diff --no-color <base>...<head>` | always |
-| `ci_result_digest` | `application/json` | the CI job name → conclusion object | always |
+| `diff_digest` | `text/x-diff` | `git diff --no-color <base>...<head>` | always, first |
+| `ci_result_digest` | `application/json` | the CI job name → conclusion object | always, second |
 | `review_digest` | `application/json` | the PR's reviews submitted at or before the decision | decision capsule only, when reviews are recorded (`record-reviews: 'true'`) |
-| `prompt_digest` | `text/plain` | a prompt the PR author declared and digested themselves | only if declared |
+| `prompt_digest` | `text/plain` | a prompt the PR author declared and digested themselves | only if declared, last |
+
+The two `application/json` entries are told apart by position: the CI result is always the second
+entry, and a review digest, when present, is the third.
+
+Earlier PR capsules carry the role in `citation_purpose` itself (`diff_digest`,
+`ci_result_digest`, `review_digest`, `prompt_digest`), in the same order. Those values are not
+registered, and producers no longer write them. Position and type find the role in either form.
 
 Timestamps come from git and GitHub, never the wall clock. A re-run over the same head, CI outcome
 and reviews is the same request and the same `capsule_id`, so it is a retry, not a new capsule.
@@ -94,8 +105,9 @@ You need the capsule (`capsule.json`, or the artifact record) and read access to
          (.submitted_at | fromdateiso8601) <= ($decided | fromdateiso8601)))
          | sort_by(.submitted_at, .reviewer, .commit_id, .state)' | sha256sum
    ```
-   For the CI digest, take the conclusions from the head commit's check runs, under the job names
-   the producer recorded.
+   Compare each with the reference in that role (by position and type, as in
+   [What a PR capsule records](#what-a-pr-capsule-records)). For the CI digest, take the
+   conclusions from the head commit's check runs, under the job names the producer recorded.
 
    The time filter makes reviews left after the decision irrelevant. One change still breaks the
    recompute: **dismissing a review rewrites its `state` to `DISMISSED`**, after the fact and under
