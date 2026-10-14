@@ -39,14 +39,31 @@ PR comment.
 | `model_attestation` | only if the PR body declares one (self-attested) | absent |
 | `review_digest` reference | absent: a head capsule is sealed before most reviews exist | the reviews submitted at or before the decision, when recorded |
 
-References, each `{type, digest_alg: sha256, digest, citation_purpose}`:
+References, each `{type, digest_alg: sha256, digest, citation_purpose: acted_on}`. Every entry
+carries the registered purpose `acted_on`: the PR's action was performed against that content.
+Which digest an entry is, its **role**, is this profile's own field. It is not carried as a capsule
+member. It is fixed by the entry's position in `references`, which follows the order below with
+the absent entries left out, and by its `type`:
 
-| `citation_purpose` | Type | Digest of | Present |
+| Role | Type | Digest of | Present |
 |---|---|---|---|
-| `diff_digest` | `text/x-diff` | `git diff --no-color <base>...<head>` | always |
-| `ci_result_digest` | `application/json` | the CI job name → conclusion object | always |
+| `diff_digest` | `text/x-diff` | `git diff --no-color <base>...<head>` | always, first |
+| `ci_result_digest` | `application/json` | the CI job name → conclusion object | always, second |
 | `review_digest` | `application/json` | the PR's reviews submitted at or before the decision | decision capsule only, when reviews are recorded (`record-reviews: 'true'`) |
-| `prompt_digest` | `text/plain` | a prompt the PR author declared and digested themselves | only if declared |
+| `prompt_digest` | `text/plain` | a prompt the PR author declared and digested themselves | only if declared, last |
+
+The two `application/json` entries are told apart by position: the CI result is always the second
+entry, and a review digest, when present, is the third.
+
+A references list that does not decode this way has no defined roles, and the profile rejects it:
+the diff is not first, the CI result is not second, there are more than four entries, a review
+entry is on a head capsule, or anything else follows the CI result out of the order above.
+`scripts/pr-capsule-check.sh` is that check. It reads a sealed `capsule.json` or the request
+`pr-capsule-request.sh` writes, and the producer runs it on every request it writes.
+
+Earlier PR capsules carry the role in `citation_purpose` itself (`diff_digest`,
+`ci_result_digest`, `review_digest`, `prompt_digest`), in the same order. Those values are not
+registered, and producers no longer write them. Position and type find the role in either form.
 
 Timestamps come from git and GitHub, never the wall clock. A re-run over the same head, CI outcome
 and reviews is the same request and the same `capsule_id`, so it is a retry, not a new capsule.
@@ -78,6 +95,9 @@ and reviews is the same request and the same `capsule_id`, so it is a retry, not
 
 You need the capsule (`capsule.json`, or the artifact record) and read access to the repository.
 
+0. **Shape.** `scripts/pr-capsule-check.sh capsule.json` checks that the references decode into
+   roles ([What a PR capsule records](#what-a-pr-capsule-records)). If it exits non-zero, stop:
+   without roles there is nothing to recompute against.
 1. **Identity and signature.** `agent-action-capsule verify capsule.json` recomputes `capsule_id`
    from the payload. `capsulectl verify --profile <profile pinning the producer key> --capsule
    artifact.json` also checks the producer signature and trust.
@@ -94,8 +114,9 @@ You need the capsule (`capsule.json`, or the artifact record) and read access to
          (.submitted_at | fromdateiso8601) <= ($decided | fromdateiso8601)))
          | sort_by(.submitted_at, .reviewer, .commit_id, .state)' | sha256sum
    ```
-   For the CI digest, take the conclusions from the head commit's check runs, under the job names
-   the producer recorded.
+   Compare each with the reference in that role (by position and type, as in
+   [What a PR capsule records](#what-a-pr-capsule-records)). For the CI digest, take the
+   conclusions from the head commit's check runs, under the job names the producer recorded.
 
    The time filter makes reviews left after the decision irrelevant. One change still breaks the
    recompute: **dismissing a review rewrites its `state` to `DISMISSED`**, after the fact and under

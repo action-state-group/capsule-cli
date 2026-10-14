@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### PR capsules cite with a registered purpose
+
+- **Changed:** every PR capsule reference now carries `citation_purpose: acted_on`, a registered
+  purpose, instead of the unregistered `diff_digest`, `ci_result_digest`, `review_digest` and
+  `prompt_digest`. Those four names are now the PR profile's own roles, read from each entry's
+  position and type, in the same order as before (`docs/PR-CAPSULE-PROFILE.md`). The new
+  capsules get new `capsule_id`s.
+- **Added:** `scripts/pr-capsule-check.sh` rejects a PR capsule whose references do not decode
+  into roles: the diff not first, the CI result not second, more than four entries, a review on a
+  head capsule, or anything out of order after the CI result. `pr-capsule-request.sh` runs it on
+  every request it writes, and a verifier runs it on a sealed `capsule.json`.
+- **Changed:** the skill's scripted demo chains its publish step with the registered `follows`
+  rather than `io.capsulectl.skill_step`, and the skill reference lists the registered relations.
+- **Added (CI):** `registry-conformance`, report-only, checks every PR capsule the profile tests
+  seal against agent-action-capsule's registry-conformance checker at a pinned commit.
+
 ### The presentation pass, a CI job of its own
 
 - **Added (tests, CI):** `presentation-pass` drives the presentation goldens' bundles through

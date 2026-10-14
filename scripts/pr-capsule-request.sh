@@ -154,14 +154,21 @@ if [[ -n "$merge_decision" ]]; then
   timestamp="$CAPSULE_PR_DECIDED_AT"
 fi
 
+# Every reference is cited as acted_on: the PR's action was performed against
+# that content. Which digest an entry is (diff, CI, reviews, prompt) is the
+# profile's own role, given by the entry's position and type, in this order
+# (docs/PR-CAPSULE-PROFILE.md); citation_purpose is the registered why.
+cite() {
+  jq -c --arg t "$1" --arg d "$2" '. + [{"Type":$t,"DigestAlg":"sha256","Digest":$d,"CitationPurpose":"acted_on"}]' <<<"$references"
+}
 references='[]'
-references=$(jq -c --arg d "$diff_digest" '. + [{"Type":"text/x-diff","DigestAlg":"sha256","Digest":$d,"CitationPurpose":"diff_digest"}]' <<<"$references")
-references=$(jq -c --arg d "$ci_result_digest" '. + [{"Type":"application/json","DigestAlg":"sha256","Digest":$d,"CitationPurpose":"ci_result_digest"}]' <<<"$references")
+references=$(cite text/x-diff "$diff_digest")
+references=$(cite application/json "$ci_result_digest")
 if [[ -n "$review_digest" ]]; then
-  references=$(jq -c --arg d "$review_digest" '. + [{"Type":"application/json","DigestAlg":"sha256","Digest":$d,"CitationPurpose":"review_digest"}]' <<<"$references")
+  references=$(cite application/json "$review_digest")
 fi
 if [[ -n "$prompt_digest" ]]; then
-  references=$(jq -c --arg d "$prompt_digest" '. + [{"Type":"text/plain","DigestAlg":"sha256","Digest":$d,"CitationPurpose":"prompt_digest"}]' <<<"$references")
+  references=$(cite text/plain "$prompt_digest")
 fi
 
 model='null'
@@ -206,6 +213,9 @@ jq -n \
     } + (if $disposition == null then {} else {"Disposition": $disposition} end))
   } + (if $model == null then {} else {"model": $model} end)
     + (if $chain == null then {} else {"chain": $chain} end)' > "$CAPSULE_REQUEST_OUTPUT"
+
+# The request must decode under the profile before anything seals it.
+bash "$(dirname "${BASH_SOURCE[0]}")/pr-capsule-check.sh" "$CAPSULE_REQUEST_OUTPUT"
 
 printf 'pr-capsule-request: wrote %s (action_id=%s, diff_digest=%s, ci_result_digest=%s, review_digest=%s, decision=%s, agent_declared=%s)\n' \
   "$CAPSULE_REQUEST_OUTPUT" "$action_id" "$diff_digest" "$ci_result_digest" "${review_digest:-none}" "${decision:-none}" \

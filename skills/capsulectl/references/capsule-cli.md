@@ -98,9 +98,11 @@ rejects unknown fields, and supplying `Chain` derives `ledger_mode` to
 `assurance.ledger_mode: chained` and a `chain` block
 `{parent_capsule_id, relation}`, committed into `capsule_id` under format 4,
 so any later edit to the parent link fails verification. `Relation` states
-how this Capsule relates to its parent and comes from an extensible registry
-(seeded values `confirms`, `supersedes`, `epoch_opens`; namespaced extensions
-such as `io.capsulectl.skill_step` are permitted and verify). `publish` runs a
+how this Capsule relates to its parent and comes from the registry (registered
+values `follows`, `confirms`, `supersedes`, `epoch_opens`, `duplicates`). Use
+`follows` for a plain next step that claims nothing about its parent. A value
+outside that set still verifies, because a verifier never rejects a record for
+an unregistered value, but it is not conformant. `publish` runs a
 store-level check that the parent already exists in the target CLL, so append
 a Capsule only after its parent; a missing parent is a chain failure, not
 success. The bare `seal` command (below) builds and signs the record to a
