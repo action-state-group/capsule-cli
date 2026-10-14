@@ -1,0 +1,82 @@
+{
+  "verification": {
+    "verify": [
+      "failed"
+    ],
+    "verdict": [],
+    "sealed": [],
+    "unchecked": []
+  },
+  "views": {
+    "page": [
+      "verification"
+    ],
+    "notice": [],
+    "section": []
+  },
+  "evidence_ids": [
+    "0da963e89819051b3c04326b2e50109e4bb994f8456e0e7e684436f84abb9747",
+    "4d87439768bb3507835ca6f0ed0b728300549bd8109e0943b9e3b8db516a7047",
+    "767a4cc3ebac02f70d077578e94fc607170580beb7ad2930cd3b80ac83ca2c4b"
+  ],
+  "text": [
+    "Bundle verification failed",
+    "This bundle did not verify. Its records, rows and payloads are not shown; the verification page below lists which checks failed.",
+    "Verification",
+    "bundle digest",
+    "\"0da963e89819051b3c04326b2e50109e4bb994f8456e0e7e684436f84abb9747\"",
+    "checkpoint root",
+    "\"4d87439768bb3507835ca6f0ed0b728300549bd8109e0943b9e3b8db516a7047\"",
+    "checkpoint size",
+    "1",
+    "Receipts",
+    "no receipts disclosed",
+    "self-witnessed: no transparency-service receipt",
+    "Checkpoint coverage",
+    "coverage not established: membership_record_unknown, membership_record_missing",
+    "1 record membership invalid",
+    "1 record, by capsule id",
+    "767a4cc3ebac02f70d077578e94fc607170580beb7ad2930cd3b80ac83ca2c4b ·",
+    "membership invalid",
+    "Countersignatures",
+    "Countersigned: none",
+    "Completeness statement",
+    "closure depth",
+    "2",
+    "records mode",
+    "\"complete\"",
+    "payloads mode",
+    "\"all\"",
+    "suppressed fields",
+    "[]",
+    "The ten checks",
+    "Required fields",
+    ": passed with no errors found",
+    "Capsule identity",
+    ": failed at least one check",
+    "Effect consistency",
+    ": passed with no errors found",
+    "Verdict conflict",
+    ": passed with no errors found",
+    "Chain parent",
+    ": passed with no errors found",
+    "Assurance claims",
+    ": passed with no errors found",
+    "Bundle digest",
+    ": passed with no errors found",
+    "Graph closure",
+    ": failed at least one check",
+    "Interval coverage",
+    ": passed with no errors found",
+    "Per-record membership",
+    ": failed at least one check",
+    "Extensions",
+    "extension",
+    "integrity",
+    "semantics",
+    "producer-key/v1",
+    "covered",
+    "interpreted by countersignature-stamp",
+    "verify independently at verify.agentactioncapsule.org or with the CLI"
+  ]
+}

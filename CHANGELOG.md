@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### The presentation pass, a CI job of its own
+
+- **Added (tests, CI):** `presentation-pass` drives the presentation goldens' bundles through
+  `presentation list` and `presentation build` at 390px, 1280px and in print, with semantic
+  snapshots, in the pinned Chrome and fonts. See `internal/cli/testdata/presentation/README.md`
+  for what it holds, and for the two gaps it pins: build does not carry the deal view, and a
+  page's own gate does not check producer signatures.
+
 ### One file for the deals you pick, each checked on its own
 
 - **Added:** `deal history --deal ID [--deal ID ...] --out FILE --to WHO` writes a History: one
