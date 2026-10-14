@@ -410,6 +410,84 @@ const sellerToBuyerA = `{"type": "purchase", "channel": "web",
  "terms": {"item": "vintage road bike", "quantity": 1, "price_minor": 145000, "currency": "USD", "place": "12 Juniper Court, Lakeview"},
  "recourse": {"rail": "card", "refundable": false}}`
 
+// jsonLeaves decodes doc and returns every object key, string and number in
+// it, each number as written.
+func jsonLeaves(t *testing.T, doc []byte) []string {
+	t.Helper()
+	dec := json.NewDecoder(bytes.NewReader(doc))
+	dec.UseNumber()
+	var v any
+	require.NoError(t, dec.Decode(&v))
+	var leaves []string
+	var walk func(any)
+	walk = func(v any) {
+		switch v := v.(type) {
+		case map[string]any:
+			for k, child := range v {
+				leaves = append(leaves, k)
+				walk(child)
+			}
+		case []any:
+			for _, child := range v {
+				walk(child)
+			}
+		case string:
+			leaves = append(leaves, v)
+		case json.Number:
+			leaves = append(leaves, v.String())
+		}
+	}
+	walk(v)
+	return leaves
+}
+
+// leavesCarrying returns the leaves that carry v: equal to it, or holding it
+// with no letter or digit directly on either side. A digest or encoded blob
+// is all letters and digits, so a run of digits inside one never counts,
+// while a name or an amount inside a sentence does.
+func leavesCarrying(leaves []string, v string) []string {
+	isWord := func(s string, at int) bool {
+		if at < 0 || at >= len(s) {
+			return false
+		}
+		c := s[at]
+		return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+	}
+	var out []string
+	for _, leaf := range leaves {
+		for from := 0; ; {
+			i := strings.Index(leaf[from:], v)
+			if i < 0 {
+				break
+			}
+			i += from
+			if !isWord(leaf, i-1) && !isWord(leaf, i+len(v)) {
+				out = append(out, leaf)
+				break
+			}
+			from = i + 1
+		}
+	}
+	return out
+}
+
+// A value carried in a JSON leaf counts, alone or inside text; the same
+// digits inside a digest or an encoded blob do not (the flake this replaced:
+// "190000" inside a hex digest).
+func TestLeavesCarryingMatchesWholeValuesNotDigests(t *testing.T) {
+	for _, leaf := range []string{"190000", "sold for 190000.", "$190000", "price 190000 USD"} {
+		assert.Equal(t, []string{leaf}, leavesCarrying([]string{leaf}, "190000"), leaf)
+	}
+	for _, leaf := range []string{
+		"65db213ef58a8e8067dc190000d5476b5226dd156bf1e75d030e26ccd9",
+		"190000a876f1275de6e08c1e32921a7e89a51fcd3377b18d94bf71fb3f495f",
+		"0oRY7KQBJwN4H2Fw190000Y2F0aW9uL2NsbC1jaGVja3BvaW50K2Nib3IEWCCkkEYra96",
+		"1190000", "1900001",
+	} {
+		assert.Empty(t, leavesCarrying([]string{leaf}, "190000"), leaf)
+	}
+}
+
 // Two unrelated buyers: a History the seller sends to buyer B carries none
 // of buyer A's name, contact, address, item, price or message text, nor any
 // private value of the user's other picked deals; the user's own (keep)
@@ -434,9 +512,9 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 		"example bicycle", "190000", "170000", "min_total_minor", "bounds_openings", "cat sticker"}, writtenAmounts(1700)...)
 
 	path, _ := writeHistory(t, all, sentTo, picked...)
-	raw := string(mustRead(t, path))
+	leaves := jsonLeaves(t, mustRead(t, path))
 	for _, v := range append(buyerA, private...) {
-		assert.NotContains(t, raw, v, "the History sent to buyer B, whole file")
+		assert.Empty(t, leavesCarrying(leaves, v), "the History sent to buyer B carries %q", v)
 	}
 	verdict, _, findings, err := verifyHistory(t, path)
 	require.NoError(t, err, "%v", findings)
@@ -444,12 +522,12 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 
 	keepPath, summary := writeHistory(t, all, []string{"--audience", "keep"}, picked...)
 	assert.Equal(t, dealAudienceKeep, summary["audience"])
-	keep := string(mustRead(t, keepPath))
+	keep := jsonLeaves(t, mustRead(t, keepPath))
 	for _, v := range []string{"Avery", "vintage road bike", "145000", "Juniper", "Larkspur Lane", "min_total_minor"} {
-		assert.Contains(t, keep, v, "the keep control carries it")
+		assert.NotEmpty(t, leavesCarrying(keep, v), "the keep control carries %q", v)
 	}
 	for _, v := range buyerA {
-		t.Logf("keep control: %q x%d", v, strings.Count(keep, v))
+		t.Logf("keep control: %q in %d values", v, len(leavesCarrying(keep, v)))
 	}
 	verdict, entry, findings, err := verifyHistory(t, keepPath)
 	require.NoError(t, err, "%v", findings)
