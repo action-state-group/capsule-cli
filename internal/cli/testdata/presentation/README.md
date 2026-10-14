@@ -58,3 +58,56 @@ through the real CLI. Run it only to change a fixture on purpose.
   report 421px. Nothing overflows at 1280px or in print.
 - **The outcome card says "all nine criteria met"** for a pack with four criteria.
   The snapshot records the text as the viewer prints it today.
+
+## The presentation pass
+
+`TestPresentationPass` and its siblings (`internal/cli/presentation_pass_test.go`, CI job
+`presentation-pass`) drive the same bundles through `presentation list` and `presentation build`,
+the one registry, shell and builder capsulectl has, with no plugin installed:
+
+- **One page per (bundle, audience), for audiences `*` and `counterparty`.** The html page is
+  agent-action-capsule's offline packaging of the bundle as given (`emitter.BuildOfflineHTML`),
+  so no bundle kind has a renderer of its own.
+- **Refused packagings.** `presentation build` does not build fragment or embedded, and static is
+  unavailable: the test asserts each refusal for every bundle. Fixture 3 gets no page: its bundle
+  does not verify VALID.
+- **Views agree.** In Chrome, each page's semantic snapshot is the same at 390px, at 1280px, in
+  print and for both audiences. The snapshot reads the DOM, whatever CSS shows or hides. The
+  vendored runtime builds the same DOM at every width and medium, so this check catches only a
+  script that changes the content by viewport.
+- **Flips.** Wording (an installed module's wording pack, the one way a page gets one), the pack's
+  locale and depth (`--depth L0`/`L1`/`L2`) each change the page's bytes. None changes the bundle
+  bytes it carries, its evidence identifiers or its verification state. `presentation build` has
+  no theme input, so the theme is not flipped. Whether a flip changes what a reader sees is not
+  checked: the built-in modules do not read the wording pack, and the runtime does not read its
+  locale.
+- **Failing bundles.** A record edited after sealing gets no page, and `list`
+  resolves nothing. A page that carries the bundle anyway shows the refusal and nothing else
+  (`refusal-snapshot.json`).
+
+What `presentation build` shows, against these goldens (built through other commands):
+
+| Fixture | Golden reproduced? | Why not |
+| --- | --- | --- |
+| `1-rules-comparison` | yes | |
+| `2-unilateral-receipt` | no: `build-snapshot.json` | The golden is `deal report --html`, with the deal view (`capsulectl.deal-view/v0`). `presentation list` names the deal view, but `presentation build` does not carry it, so the page falls back to `aac.builtin.no-aggregate/v0`. The page has no `data-sealed="x-deal-v0"` and shows the no-aggregate notice, in about a fifth of the golden's words. The evidence identifiers and `data-verify` are the golden's. |
+| `3-bilateral-composed` | yes: refused | Both record the page as refused. |
+| `4-monthly-outcome` | yes, less the card | `report build` stamps `report-card/v1` into the bundle, and `presentation build` packages the bundle as given. Two things differ: the bundle digest, and the card's extension row (`report-card/v1 covered Integrity verified; meaning not interpreted by this viewer`). The test derives build's snapshot from the golden by exactly those two changes. |
+| `5-monthly-compliance` | yes, less the card | As fixture 4. |
+| `6-generic-fallback` | yes | |
+| `6-generic-fallback-unknown-extension` | yes | The extension row reads "Integrity verified; meaning not interpreted by this viewer", which the test asserts. |
+| `7-receipt-declared-rules` | no: `build-snapshot.json` | As fixture 2. |
+| `8-seller-buyer-copy` | no: `build-snapshot.json` | As fixture 2. |
+
+Two gaps are pinned so they fail once they close:
+
+- **The deal view.** `presentation list` offers it and `presentation build` does not carry it
+  (`TestPresentationPassDealViewNotCarried`).
+- **A record signed by another key than the one it names.** `verify --bundle` calls it INVALID
+  (`producer_signature_invalid`), so build writes no page. The page's own gate (the
+  vendored viewer, and agent-action-capsule's Go resolver that `list` uses) checks each record's
+  identity, not its producer signature. So `list` resolves the bundle, and a page carrying it
+  says it verified (`TestPresentationPassWrongSigner`).
+
+`CAPSULECTL_UPDATE_PRESENTATION_PASS=1` rewrites `build-snapshot.json` and
+`refusal-snapshot.json`.

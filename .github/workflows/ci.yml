@@ -155,7 +155,8 @@ jobs:
           CAPSULECTL_PRESENTATION_PINNED: "1"
           CAPSULECTL_PRESENTATION_RENDERS: ${{ runner.temp }}/presentation-renders
           FONTCONFIG_FILE: ${{ github.workspace }}/internal/cli/testdata/presentation/fonts.conf
-        run: go test -count=1 -v -run 'TestPresentation|TestOverflowBaselineCheck' ./internal/cli
+        # The presentation pass has a job of its own (presentation-pass).
+        run: go test -count=1 -v -run 'TestPresentation|TestOverflowBaselineCheck' -skip '^TestPresentationPass' ./internal/cli
       - name: Keep the presentation renders
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -163,6 +164,46 @@ jobs:
           name: presentation-renders
           path: ${{ runner.temp }}/presentation-renders
           if-no-files-found: ignore
+
+  presentation-pass:
+    # The presentation goldens' bundles through `presentation list` and
+    # `presentation build` (internal/cli/presentation_pass_test.go): each page
+    # is the one offline packaging per (bundle, audience), the packagings not
+    # built are refusals, wording, locale and depth flips leave every evidence
+    # identifier and verification state, and a failing bundle gets the
+    # refusal only. Each page is opened at
+    # 390px, 1280px and in print in the same pinned Chrome and fonts as the
+    # goldens, and compared semantically (the DOM's text, identifiers and
+    # verification state): never layout.
+    name: presentation pass (390px, 1280px, print)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Set up the pinned Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
+        with:
+          chrome-version: 155.0.8059.39
+          install-dependencies: true
+      - name: Install the pinned fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends fonts-dejavu-core fontconfig
+      - name: Presentation pass
+        env:
+          CAPSULECTL_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+          # The pass fails, rather than skips its browser checks, without this
+          # Chrome (presentation_pass_test.go passChrome).
+          CAPSULECTL_PRESENTATION_PINNED: "1"
+          FONTCONFIG_FILE: ${{ github.workspace }}/internal/cli/testdata/presentation/fonts.conf
+        run: go test -count=1 -p 1 -v -timeout 10m -run '^TestPresentationPass' ./internal/cli
 
   interop-at-resolved-versions:
     # evidencebook's own CI runs this Go <-> Python round trip against ITS pins;
