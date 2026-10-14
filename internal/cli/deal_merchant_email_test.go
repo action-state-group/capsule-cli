@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"crypto"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -16,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/emersion/go-msgauth/dkim"
 	"github.com/stretchr/testify/assert"
@@ -550,4 +552,61 @@ func TestMerchantDomainWords(t *testing.T) {
 	assert.Equal(t, "signed by mail.shop.example, the merchant's own domain (apex shop.example)", domainWords("mail.shop.example", "shop.example"))
 	assert.Equal(t, "signed by mailer.example; the merchant's domain (apex) is shop.example: not the same organization", domainWords("mailer.example", "shop.example"))
 	assert.Equal(t, "no signature passed; the merchant's domain (apex) is shop.example", domainWords("", "shop.example"))
+}
+
+// The DKIM library verifies an email's signatures in parallel, so a capture
+// looks its key records up from several goroutines at once (run under -race).
+// However those lookups interleave, the same email seals the same key records
+// in the same order, and so the same key_records_digest.
+func TestCaptureEmailSealsTheSameKeysFromParallelLookups(t *testing.T) {
+	alignedPub, alignedKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	relayPub, relayKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	records := map[string]string{
+		"a._domainkey.relay.example": "v=DKIM1; k=ed25519; p=" + base64.StdEncoding.EncodeToString(relayPub),
+		"z._domainkey.shop.example":  "v=DKIM1; k=ed25519; p=" + base64.StdEncoding.EncodeToString(alignedPub),
+		dmarcName:                    merchantDMARC(t),
+	}
+	old := dkimLookup
+	t.Cleanup(func() { dkimLookup = old })
+	dkimLookup = func(name string) ([]string, error) {
+		// The record that sorts first answers last.
+		if name == "a._domainkey.relay.example" {
+			time.Sleep(20 * time.Millisecond)
+		}
+		if txt, ok := records[name]; ok {
+			return []string{txt}, nil
+		}
+		return nil, &net.DNSError{Err: "no such host", Name: name, IsNotFound: true}
+	}
+	raw := []byte(simpleMessage("orders@shop.example", "Sat, 03 Oct 2026 21:14:05 +0000", "<keys@shop.example>", "Order", "Thanks\r\n"))
+	for _, s := range []struct {
+		domain, selector string
+		key              ed25519.PrivateKey
+	}{{"shop.example", "z", alignedKey}, {"relay.example", "a", relayKey}} {
+		var signed bytes.Buffer
+		require.NoError(t, dkim.Sign(&signed, bytes.NewReader(raw), &dkim.SignOptions{
+			Domain: s.domain, Selector: s.selector, Signer: s.key, Hash: crypto.SHA256,
+		}))
+		raw = signed.Bytes()
+	}
+
+	var first []dkimKeyRecord
+	var digest string
+	for i := 0; i < 5; i++ {
+		e, err := captureEmail(raw, nil)
+		require.NoError(t, err)
+		require.Equal(t, "pass", e.DKIM.Result)
+		require.Len(t, e.DKIM.Signatures, 2)
+		d, err := keyRecordsDigest(e.Keys)
+		require.NoError(t, err)
+		if i == 0 {
+			first, digest = e.Keys, d
+			assert.Equal(t, []string{"a._domainkey.relay.example", "z._domainkey.shop.example"}, []string{e.Keys[0].Name, e.Keys[1].Name})
+			continue
+		}
+		assert.Equal(t, first, e.Keys, "capture %d", i)
+		assert.Equal(t, digest, d, "capture %d", i)
+	}
 }

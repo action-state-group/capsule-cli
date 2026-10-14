@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -198,7 +199,13 @@ func captureEmail(raw []byte, supplied []dkimKeyRecord) (*merchantEmail, error) 
 		}
 		return txt, nil
 	}
+	// The DKIM library verifies the signatures in parallel, so lookup is
+	// called from several goroutines at once: mu guards e.Keys and, through
+	// fetch, fetchErr. The DMARC fetches below run before verification starts.
+	var mu sync.Mutex
 	lookup := func(name string) ([]string, error) {
+		mu.Lock()
+		defer mu.Unlock()
 		name = strings.ToLower(strings.TrimSuffix(name, "."))
 		for _, k := range e.Keys {
 			if k.Name == name {
@@ -230,6 +237,12 @@ func captureEmail(raw []byte, supplied []dkimKeyRecord) (*merchantEmail, error) 
 	verdict, err := verifyDKIM(raw, lookup, e.DMARC)
 	if err != nil {
 		return nil, err
+	}
+	if supplied == nil {
+		// The lookups finish in whatever order the parallel verification runs
+		// them: sorted, the same email seals the same key records, and the
+		// same key_records_digest, every time.
+		slices.SortFunc(e.Keys, func(a, b dkimKeyRecord) int { return strings.Compare(a.Name, b.Name) })
 	}
 	if fetchErr != nil {
 		return nil, &keysUnreachableError{raw: raw, err: fetchErr}

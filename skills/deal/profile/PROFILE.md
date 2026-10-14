@@ -262,6 +262,20 @@ Field details:
   `confirmation` | `cancellation`). `verified` is true
   only when `dkim` is `pass` and `merchant_signed` is true. The DKIM signature is the
   merchant's attestation; the record's own seal is the producer's. They are different claims.
+- **verifier_statement** (not a record; `$defs/verifier_statement`): a verifier's signed
+  statement that one sealed `merchant_email`'s DKIM signature checked out, which can travel
+  without the email. `statement_type` (`dkim-verification`), `dkim_domain` (the d= of the passing
+  signature), optional `message_date` (the Date header, UTC, present only when the passing
+  signature's h= covers Date; a covered Date that is repeated or unreadable gets no statement), `email_digest` (`{"alg": "sha-256", "value"}`: the record's own
+  `message_digest`, no new value), `key_records_digest` (the record's own), `key_source` (`dns`
+  only), `checked_at`, `verifier` (`{key_id, public_key}`, both the 64-hex Ed25519 public key)
+  and `signature` (Ed25519, 128 lowercase hex, over UTF8(`x-deal-v0/verifier-statement/v1`) ||
+  0x00 || JCS(the statement without `signature`)). It is issued only after a re-check of the full
+  sealed raw message against the sealed key records passes; never on `fail` or `none`, never from
+  a header set, and never over a `supplied` key. Selector, h= list and all header values are left
+  out. A statement is shown as V's statement and never as a verified receipt. `capsulectl` issues
+  it under the holder's own key, so it says "checked by the holder's own tool" and never
+  independent or third-party.
 - **recourse**: `rail` (a token: `card`, `zelle`, `wire`, …; normalized as in **Normalization**
   below) and `refundable`.
 - **differences[]**: `{question, rule, field?}`. `question` is one of `asked`, `who`, `terms`,

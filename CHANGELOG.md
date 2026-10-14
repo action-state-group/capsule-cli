@@ -61,6 +61,35 @@
   `sig` over `{request_digest, reason, issued_at}`), the form `respond` sends, and reports
   profile `evidencebook-refusal`. Before this fix, such a refusal read `invalid`.
 
+### A statement that a sealed merchant email's signature checked out, without the email
+
+- **Added:** `deal verifier-statement --deal ID [--step N] --out FILE` re-checks a sealed merchant
+  email's DKIM signature over the full sealed message, against the key records sealed with it,
+  and only when a signature passes writes a signed statement: `dkim_domain`, `message_date`
+  (only when the passing signature covers the Date header; otherwise left out and shown as "date
+  not covered by the signature". A covered Date that is repeated, where DKIM signs the bottom-most
+  and a reader takes the first, or unreadable gets no statement), `email_digest` (the `message_digest` the deal record already
+  seals, with its algorithm named), `key_records_digest`, `key_source` (`dns`), `checked_at`,
+  `verifier` and an Ed25519 `signature` over UTF8(`x-deal-v0/verifier-statement/v1`) || 0x00 ||
+  JCS(the rest). Those signed bytes begin with the tag, which a capsule's or a countersignature's
+  signed bytes never do, so neither verifies as the other under the same key. A test pins one
+  signing input and signature, cross-checked with a second Ed25519 implementation. No
+  email, header value, selector or signed-header list is in it. There is no statement when the
+  signature fails or is absent, and none over a key record supplied with `--key-record`.
+- **Added:** `deal verify-statement FILE [--key HEX]` checks the statement offline and prints "V's statement:
+  DKIM signature from D verified over a message dated T, checked by the holder's own tool (key
+  K) at T2". It does not re-check DKIM (there is no email) and says so. It exits 1 when the
+  statement does not verify. The statement names its own key: `--key` (the holder's public key)
+  checks that it is the holder's; without it the result says the key is not matched to any holder.
+- The verifier is the profile's own signing key. A statement is therefore no more independent
+  than the holder's own seal: it discloses less. It is never worded as independent, third-party
+  or a verified receipt.
+- **Schema:** `x-deal-v0.schema.json` gains `$defs/verifier_statement` (not a record type; no
+  record shape changes). A copy of the old schema does not know the definition, so the schema
+  ships with this release.
+- The deal SKILL.md is unchanged (digest still `643ac179237d9a5f30f9bbd373b93db84f4cff0428fa0edcfa66461bf042d29a`): the agent is not offered the
+  statement.
+
 ### Offer, commit, sign and cancel acts seal their disposition and counterparty
 
 - **Changed:** an approved `offer`, `commit`, `sign` or `cancel` act is sealed as a `decide`

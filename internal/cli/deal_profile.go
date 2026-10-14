@@ -40,21 +40,23 @@ var (
 )
 
 func compiledDealSchema() (*jsonschema.Schema, error) {
-	dealSchemaOnce.Do(func() {
-		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(dealProfileSchema))
-		if err != nil {
-			dealSchemaErr = err
-			return
-		}
-		c := jsonschema.NewCompiler()
-		const id = "x-deal-v0.schema.json"
-		if err = c.AddResource(id, doc); err != nil {
-			dealSchemaErr = err
-			return
-		}
-		dealSchema, dealSchemaErr = c.Compile(id)
-	})
+	dealSchemaOnce.Do(func() { dealSchema, dealSchemaErr = compileDealSchemaAt("") })
 	return dealSchema, dealSchemaErr
+}
+
+// compileDealSchemaAt compiles the x-deal-v0 schema at fragment ("" for the
+// record schema itself, "#/$defs/<name>" for one definition).
+func compileDealSchemaAt(fragment string) (*jsonschema.Schema, error) {
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(dealProfileSchema))
+	if err != nil {
+		return nil, err
+	}
+	c := jsonschema.NewCompiler()
+	const id = "x-deal-v0.schema.json"
+	if err = c.AddResource(id, doc); err != nil {
+		return nil, err
+	}
+	return c.Compile(id + fragment)
 }
 
 // boundsText adds an intent's commercial-bounds/v0 document to the texts its
