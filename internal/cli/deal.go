@@ -706,6 +706,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	ev.ActCounterparty = dealActCounterpartyVersion
 	ev.ThreadCounterparty = dealThreadCounterpartyVersion
 	ev.OfferClass = dealOfferClassVersion
+	ev.OutcomeSealing = dealOutcomeSealVersion
 	ev.Nonces = map[string]string{}
 	for name := range dealTexts(ev) {
 		nonce := make([]byte, 32)
@@ -1495,6 +1496,13 @@ func dealNoteCommand() *cobra.Command {
 				out["authorized_by"] = ev.Act.AuthorizedBy
 				out["reason"] = ev.Act.Reason
 				out["rule"] = ev.Act.Rule
+				// A cancel changes the deal's outcome: sealed at once.
+				if seal := outcomeSealFor(append(events, se), ""); seal != nil && ev.Act.Action == "cancel" && !ev.Act.Unchecked {
+					seal.Outcome = cancelOutcome(seal.ActionClass)
+					if _, out["outcome_seal"], err = s.sealOutcome(ctx, dealID, append(events, se), seal); err != nil {
+						return err
+					}
+				}
 			case "disclosure":
 				d := ev.Disclosure
 				out["approved"] = d.AuthorizedBy != ""
@@ -1923,6 +1931,10 @@ func dealCloseCommand() *cobra.Command {
 				return err
 			}
 			events = append(events, observed)
+			var sealedOutcome map[string]any
+			if events, sealedOutcome, err = s.sealOutcome(ctx, dealID, events, outcomeSealFor(events, closeOutcome(result))); err != nil {
+				return err
+			}
 			closing := result
 			closing.Note = ""
 			se, err := s.seal(ctx, dealID, events, dealEvent{Kind: "close", Close: &closing})
@@ -1939,6 +1951,9 @@ func dealCloseCommand() *cobra.Command {
 			out["differences"] = result.Differences
 			out["unchecked_actions"] = result.UncheckedActions
 			out["checkpoint"] = cp
+			if sealedOutcome != nil {
+				out["outcome_seal"] = sealedOutcome
+			}
 			if len(result.Carried) > 0 {
 				out["carried_open_obligations"] = result.Carried
 				out["note"] = "The deal is closed; the carried cancel-by dates stay open, and `deal deadlines` lists them as CARRIED AT CLOSE until a later record resolves them or the date passes."

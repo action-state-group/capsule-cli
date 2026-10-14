@@ -49,12 +49,14 @@ const historyLogPrefix = "deal-history/"
 const historyActionID = "capsulectl-deal-history"
 
 // dealAudienceHistory is the copy of a deal for someone who was not in it,
-// the only copy a History is sent with: every record's payload is withheld,
-// so each record shows only what its capsule states (its time, and for an
-// act its effect's status). A deal's outcome and its acts' action classes
-// are in payloads, beside the item, amounts and the other party's details,
-// and a payload is disclosed whole or not at all: a History does not prove
-// them (historyNotProven).
+// the only copy a History is sent with: every record's payload but an
+// outcome_seal's is withheld, so each record shows only what its capsule
+// states (its time, and for an act its effect's status). A deal's outcome and
+// its acts' action classes are in payloads, beside the item, amounts and the
+// other party's details, and a payload is disclosed whole or not at all: a
+// History does not prove them (historyNotProven). An outcome_seal holds only
+// the producer's statement of them, and is disclosed whole
+// (deal_outcome_seal.go).
 const dealAudienceHistory = "history"
 
 // historyHolderStated are the reads of a History that are the holder's own
@@ -69,7 +71,7 @@ var historyNotProven = []string{"outcome", "action_class"}
 var hexDigestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 func dealHistoryCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "history", Short: "Write one file holding the deals you pick, each with every record's payload withheld (only its time and an act's effect status show), checked by `verify --bundle`; seals the pick on your history log and never writes to a deal", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	cmd := &cobra.Command{Use: "history", Short: "Write one file holding the deals you pick, each with every record's payload withheld but an outcome seal's (otherwise only its time and an act's effect status show), checked by `verify --bundle`; seals the pick on your history log and never writes to a deal", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		ids, _ := c.Flags().GetStringArray("deal")
 		out, _ := c.Flags().GetString("out")
 		audience, _ := c.Flags().GetString("audience")
@@ -83,7 +85,7 @@ func dealHistoryCommand() *cobra.Command {
 		case dealAudienceCounterparty, dealAudienceAdjudicator:
 			return inputError("--audience " + audience + " is a copy of one deal for someone in it (`deal report --share`); a History may be sent to anyone, so its copies are --audience history (the default), or keep for your own file")
 		default:
-			return inputError("--audience must be history (the default: every record's payload withheld) or keep (your own copy, every private value in it: never one to send)")
+			return inputError("--audience must be history (the default: every record's payload withheld but an outcome seal's) or keep (your own copy, every private value in it: never one to send)")
 		}
 		switch {
 		case audience == dealAudienceHistory && recipient == "":
@@ -129,7 +131,7 @@ func dealHistoryCommand() *cobra.Command {
 	}}
 	cmd.Flags().StringArray("deal", nil, "A picked deal id from `deal list` (repeat for each deal)")
 	cmd.Flags().String("out", "", "New file for the History")
-	cmd.Flags().String("audience", dealAudienceHistory, "Which copy of each deal: history (default: every record's payload withheld, for anyone) or keep (your own copy, never one to send)")
+	cmd.Flags().String("audience", dealAudienceHistory, "Which copy of each deal: history (default: every record's payload withheld but an outcome seal's, for anyone) or keep (your own copy, never one to send)")
 	cmd.Flags().String("to", "", "Who the History is for, as sealed in its selection record (required, except with --audience keep)")
 	return cmd
 }
@@ -330,6 +332,7 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 				withhold[hex.EncodeToString(e.Value)] = true
 			}
 		}
+		historyDiscloseOutcomeSeals(covered, withhold)
 		b, cadence, err := s.dealAssembleAtCheckpoint(ctx, covered, withhold)
 		if err != nil {
 			return nil, 0, 0, err
@@ -528,8 +531,8 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 		if copyFor != audience {
 			failed = append(failed, "deal_audience_not_selected:"+id)
 		}
-		if audience == dealAudienceHistory && payloadDisclosed(tb) {
-			failed = append(failed, "deal_payload_disclosed:"+id)
+		if audience == dealAudienceHistory {
+			failed = append(failed, historyOutcomeSeals(id, tb, member)...)
 		}
 		keys, unsigned := recordKeys(tb)
 		if unsigned {
@@ -556,6 +559,9 @@ func historyEntry(value map[string]interface{}, result aacbundle.VerificationRes
 		sort.Strings(ids)
 	}
 	entry["signer_keys"], entry["deals"] = signers, deals
+	if audience == dealAudienceHistory {
+		entry["outcome_counts"] = historyOutcomeCounts(deals)
+	}
 	status, claim := "pass", aacbundle.ClaimResult{Status: "pass"}
 	all := nonNilStrings(append(failed, notShown...))
 	switch {
@@ -596,16 +602,4 @@ func recordKeys(b map[string]interface{}) ([]string, bool) {
 	}
 	sort.Strings(keys)
 	return keys, unsigned
-}
-
-// payloadDisclosed is whether a bundle discloses any record's payload.
-func payloadDisclosed(b map[string]interface{}) bool {
-	disclosures, _ := b["disclosures"].(map[string]interface{})
-	for _, raw := range disclosures {
-		d, _ := raw.(map[string]interface{})
-		if len(d) > 0 {
-			return true
-		}
-	}
-	return false
 }

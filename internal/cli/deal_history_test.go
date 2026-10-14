@@ -321,7 +321,8 @@ func verifyHistory(t *testing.T, path string) (string, map[string]any, []string,
 // one signer key (that no deal's log was written is checked where the
 // History is written, in historyStoreWithFiles); the pick and who it is for
 // are sealed on the History's own log; outcome and action class are
-// reported as not proven.
+// reported as not proven, beside the outcome_seal of a deal that has one
+// (the one payload a history copy discloses).
 func TestDealHistoryVerifiesEachPickedDeal(t *testing.T) {
 	d, h := historyStoreWithFiles(t)
 	picked := []string{d.closed, d.private, d.floor}
@@ -348,7 +349,17 @@ func TestDealHistoryVerifiesEachPickedDeal(t *testing.T) {
 		assert.Equal(t, want[i], m["deal_id"])
 		assert.Equal(t, "VALID", m["verdict"], "a history copy verifies VALID on its own")
 		assert.Equal(t, dealAudienceHistory, m["audience"])
+		if want[i] == d.closed {
+			assert.Equal(t, "delivered", m["outcome"], "the closed deal's seal: received as agreed")
+		} else {
+			assert.Equal(t, "not_proven", m["outcome"], "%s has no act sealed as an action and no close: no seal", want[i])
+		}
 	}
+	counts := map[string]any{"delivered": 1.0, "not_proven": 2.0}
+	for _, v := range outcomeSealValues[1:] {
+		counts[v] = 0.0
+	}
+	assert.Equal(t, counts, entry["outcome_counts"])
 
 	b := readHistory(t, path)
 	assert.Equal(t, "evidence-bundle/v2", b["bundle_kind"])
@@ -360,7 +371,16 @@ func TestDealHistoryVerifiesEachPickedDeal(t *testing.T) {
 		tb := nested[id].(map[string]any)
 		cert := tb["completeness_certificate"].(map[string]any)
 		assert.Equal(t, dealLogID(id), cert["log_id"], "each nested bundle is its own deal's log")
-		assert.False(t, payloadDisclosed(tb), "no payload of %s is disclosed", id)
+		for capsule, raw := range tb["disclosures"].(map[string]any) {
+			if dd := raw.(map[string]any); len(dd) > 0 {
+				record := dd["agent_input"].(map[string]any)
+				assert.Equal(t, "outcome_seal", record[dealProfile].(map[string]any)["record_type"], "only an outcome_seal of %s is disclosed: %s", id, capsule)
+				assert.Len(t, record["body"], 3, "whole, and nothing more")
+				for k := range record[dealProfile].(map[string]any) {
+					assert.Contains(t, outcomeSealBlockKeys, k, "only what every record's block carries")
+				}
+			}
+		}
 		assert.Equal(t, map[string]any{"audience": dealAudienceHistory, "deal_id": id}, tb["extensions"].(map[string]any)[dealProfile], "no report text")
 		for _, raw := range tb["records"].([]any) {
 			r := raw.(map[string]any)

@@ -47,7 +47,7 @@ TYPED_TYPES = {"task-authority/v0": "task_authority", "proposed-action/v0": "che
 FIX = HERE / "fixtures"
 
 RECORD_TYPES = ["intent", "baseline", "message", "claim", "evidence", "detail_change",
-                "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale"]
+                "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "outcome_seal"]
 # The point of no return whose check covers a disclosed field of each class.
 DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "home_address", "address",
                                                   "pickup_location", "other_contact")}
@@ -605,7 +605,7 @@ def check_chain(records):
         fail(0, "the first record of a deal must be the baseline")
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by", "reverses", "source"}, "outcome": {"observes"},
-                    "close": {"outcome"}, "disclosure": {"authorized_by"},
+                    "close": {"outcome"}, "disclosure": {"authorized_by"}, "outcome_seal": set(),
                     "task_authority": {"source", "approves", "registration"}, "platform_approval": set(), "policy_change": set(),
                     "check": {"supersedes"}, "counterparty_acceptance": set(),
                     "counterparty_profile": {"about"}}
@@ -1093,6 +1093,19 @@ def check_chain(records):
                     else records[k]["x-deal-v0"]["record_type"] == "action" for k in range(i)):
                 fail(i, "not_selected means nothing was done on the deal, and an action is on record")
             last_outcome = i
+        elif t == "outcome_seal":
+            # The producer's statement of how the deal's last act came out: it
+            # repeats that act's class. An approved disclosure is typed as an
+            # action-record/v0 too (its body holds `disclosed`), but it is not an
+            # act. The step names the act by capsule id, which records do not
+            # carry, so step is not checked here.
+            acts = [k for k in range(i) if "disclosed" not in records[k]["body"] and (
+                records[k]["type"] == "action-record/v0" if is_typed(records[k])
+                else records[k]["x-deal-v0"]["record_type"] == "action")]
+            if not acts:
+                fail(i, "an outcome_seal names the deal's last action, and no action is on record")
+            elif records[acts[-1]]["body"].get("action_class") != body["action_class"]:
+                fail(i, "an outcome_seal's action_class is not the last action's")
         elif t == "close":
             if last_outcome is None:
                 if by_rel.get("outcome"):
@@ -1448,7 +1461,7 @@ def regen():
         {"question": "safety", "rules": ["pay_before_seeing", "credentials_requested", "verification_code_request",
                                          "off_platform_early", "domain_recent", "materiality_changed"]}]}
     records1, names1 = [], []
-    clock1 = iter([f"2026-10-06T09:{m:02d}:00Z" for m in (2, 2, 10, 11, 13, 13, 14, 15, 16, 17)])
+    clock1 = iter([f"2026-10-06T09:{m:02d}:00Z" for m in (2, 2, 10, 11, 13, 13, 14, 15, 16, 17, 18)])
 
     def tref(j):
         return {"type": "record", "digest_alg": "SHA-256", "digest": record_digest(records1[j])}
@@ -1517,12 +1530,18 @@ def regen():
     fa = add_typed("approval-on-the-card", "action-approval/v0", {
         "authority": "user_approval", "choice": "proceed", "proceed": True,
         "said_commitment": com1["flight-said"], "rendering_commitment": com1["flight-card"]}, refs=[("approves", fv)])
-    add_typed("action-record-pay", "action-record/v0", {
+    fpay = add_typed("action-record-pay", "action-record/v0", {
         "action": "pay", "amount_minor": 55880, "currency": "USD", "rail": "card", "counterparty": cpt(("payee", "second")),
+        "action_class": "money.purchase", "taxonomy_version": "6",
         "evaluation_ref": tref(fv),
         "authority_basis": [{"type": "task_authority", "ref": tref(fta)},
                             {"type": "user_approval", "ref": tref(fa)},
                             {"type": "platform_approval", "ref": tref(fp)}]}, refs=[("authorized_by", fa)])
+    # The producer's statement of how the payment came out. step is the
+    # payment's capsule id, which no record carries: synthetic here.
+    add_v0("outcome-seal", "outcome_seal", {
+        "step": sha256_hex(b"x-deal-v0 fixture capsule id/action-record-pay"), "outcome": "delivered",
+        "action_class": "money.purchase"})
     stories1 = {
         "baseline": "First contact: the user asks for the SJC-HOU flight under $600 from Example Air.",
         "task-authority/v0": "The user's task authority as asked: their words by commitment, the limit and the allowed action.",
@@ -1536,6 +1555,9 @@ def regen():
                               "and never answers the check), or the user's own answer on the card the check rendered.",
         "action-outcome/v0": "Paying on the platform's approval alone is an unchecked action: it did not answer the ask.",
         "action-record/v0": "The payment, with the evaluation it relied on and every authority layer, in order.",
+        "outcome_seal": "The producer's own statement of how the payment came out: the payment's capsule id, the outcome "
+                        "and the payment's class, nothing else, so a history copy can disclose it whole. An assertion, "
+                        "not corroboration.",
     }
     (FIX / "positive-typed").mkdir(parents=True, exist_ok=True)
     for old in (FIX / "positive-typed").glob("*.json"):
@@ -1807,8 +1829,26 @@ def regen():
             "expected_error_contains": contains, "chain_dir": "positive-typed", "chain_prefix": names1[:prefix_upto],
             "record": record, **extra_fields})
 
-    pay = records1[-1]
-    last = len(records1) - 1
+    seal = records1[fpay + 1]
+    r = copy.deepcopy(seal)
+    r["body"]["item"] = "SJC-HOU flight"
+    negt("neg-outcome-seal-extra-field", "schema", "'item' was unexpected", r, fpay + 1,
+         "An outcome_seal carrying a fourth field: a history copy discloses it whole, so it holds exactly three.")
+    r = copy.deepcopy(seal)
+    r["body"]["outcome"] = "completed"
+    negt("neg-outcome-seal-outcome-not-in-the-set", "schema", "outcome", r, fpay + 1,
+         "An outcome_seal whose outcome is not one of the closed set.")
+    r = copy.deepcopy(seal)
+    r["body"]["action_class"] = "money.refund"
+    negt("neg-outcome-seal-not-the-last-action-class", "chain", "not the last action's", r, fpay + 1,
+         "An outcome_seal whose action_class is not the class of the deal's last action.")
+    r = copy.deepcopy(seal)
+    r["x-deal-v0"]["counterparty"] = {"fp_alg": "hmac-sha256-deal-key", "ids": {"payee": fps1[("payee", "second")]}}
+    negt("neg-outcome-seal-with-counterparty", "schema", "x-deal-v0", r, fpay + 1,
+         "An outcome_seal whose block names a counterparty: nothing beyond what every record carries.")
+
+    pay = records1[fpay]
+    last = fpay
     r = copy.deepcopy(pay)
     r["refs"] = [{"rel": "authorized_by", **tref(fp)}]
     r["body"]["authority_basis"] = [e for e in r["body"]["authority_basis"] if e["type"] != "user_approval"]

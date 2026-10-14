@@ -51,6 +51,8 @@
           "payee": "448ac256f669560a03396bf405bb19a5636b758a56f7034b2a87a0befb95ea14"
         }
       },
+      "action_class": "money.purchase",
+      "taxonomy_version": "6",
       "evaluation_ref": {
         "type": "record",
         "digest_alg": "SHA-256",
