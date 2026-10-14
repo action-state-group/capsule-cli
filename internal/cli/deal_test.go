@@ -25,12 +25,7 @@ const neutralMateriality = "../../skills/deal/profile/materiality-predicate/neut
 
 func dealFixture(t *testing.T) string {
 	t.Helper()
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv(dealCheckURLEnv, "")
-	fixed := time.Date(2026, 9, 27, 18, 0, 0, 0, time.UTC)
-	old := dealClock
-	dealClock = func() time.Time { return fixed }
-	t.Cleanup(func() { dealClock = old })
+	dealTestEnv(t, t.TempDir())
 	dir := filepath.Join(t.TempDir(), "deal")
 	// Most tests run without a witness; the witness tests configure one. They
 	// run under the neutral example predicate, which reproduces what the
@@ -38,6 +33,18 @@ func dealFixture(t *testing.T) string {
 	out, err := invoke(t, "", "deal", "init", "--profile", "deal", "--dir", dir, "--no-witness", "--materiality", neutralMateriality)
 	require.NoError(t, err, out)
 	return dir
+}
+
+// dealTestEnv points the profiles at configHome, with no check URL and the
+// deal clock fixed, for the rest of the test.
+func dealTestEnv(t *testing.T, configHome string) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv(dealCheckURLEnv, "")
+	fixed := time.Date(2026, 9, 27, 18, 0, 0, 0, time.UTC)
+	old := dealClock
+	dealClock = func() time.Time { return fixed }
+	t.Cleanup(func() { dealClock = old })
 }
 
 func dealRun(t *testing.T, args ...string) map[string]any {

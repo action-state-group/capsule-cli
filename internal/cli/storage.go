@@ -122,6 +122,9 @@ const (
 	usePublication
 	useCLLRead
 	useInitialization
+	// useRead is useCLLRead with the artifact store: a read of a log's
+	// records as well as its entries, writing nothing.
+	useRead
 )
 
 func (t *target) close() error {
@@ -226,15 +229,15 @@ func missingLogIDReason(p Profile) string {
 }
 
 func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err error) {
-	needsArtifacts := use == useArtifacts || use == usePublication || (use == useInitialization && p.Namespace != "")
-	needsCLL := use == useCLL || use == useCLLRead || use == usePublication || (use == useInitialization && p.LogID != "")
+	needsArtifacts := use == useArtifacts || use == usePublication || use == useRead || (use == useInitialization && p.Namespace != "")
+	needsCLL := use == useCLL || use == useCLLRead || use == useRead || use == usePublication || (use == useInitialization && p.LogID != "")
 	if needsArtifacts && p.Namespace == "" {
 		return nil, inputError("profile " + p.Name + " has no namespace, which this command needs: `capsulectl profile update --profile " + p.Name + " --namespace NAME`")
 	}
 	if needsCLL && p.LogID == "" {
 		return nil, inputError(missingLogIDReason(p))
 	}
-	if p.ReadOnly && use != useArtifacts && use != useCLLRead {
+	if p.ReadOnly && use != useArtifacts && use != useCLLRead && use != useRead {
 		return nil, ErrReadOnlyCLL
 	}
 	keys, err := parseKeys(p.TrustedKeys)
@@ -280,7 +283,7 @@ func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err e
 			return nil, err
 		}
 	}
-	if needsCLL && p.Type == "jsonl" && use == useCLLRead {
+	if needsCLL && p.Type == "jsonl" && (use == useCLLRead || use == useRead) {
 		// Reads (cll list, checkpoint status) never open the book: that
 		// needs its signing keys and takes its writer lock.
 	} else if needsCLL && p.Type == "jsonl" && use == useInitialization {

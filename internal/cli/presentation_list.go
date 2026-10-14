@@ -26,7 +26,7 @@ import (
 // not how they resolve: the deal view is a default that yields to an
 // installed module. When the resolver would refuse to hold a plugin's module
 // beside the deal view (same tier, and one descriptor can match both, as
-// capsule-viewer's unilateral and seller receipts and its history module do),
+// capsule-viewer's unilateral and seller receipts do),
 // the deal view is left out and the plugin's module is the candidate. With no such module installed, the deal
 // view is a candidate as before.
 
@@ -191,6 +191,13 @@ func listPresentations(value map[string]interface{}, audience string, format aac
 		return result, err
 	}
 	result.Descriptor, _ = aacpresentation.DescribeBundle(value)
+	// A History's deals are checked by capsule-cli's verifier, not by the
+	// bundle verifier the descriptor runs: it is verified only when
+	// `verify --bundle` calls it VALID, as the page gate requires.
+	if exts, _ := value["extensions"].(map[string]interface{}); exts[historySelectionExtension] != nil && result.Descriptor.Verified {
+		verdict, _ := bundleVerdict(value, nil)
+		result.Descriptor.Verified = verdict == "VALID"
+	}
 	candidates, pluginsRefused, err := presentationListCandidates()
 	result.PluginsRefused = pluginsRefused
 	var registration *presentationListRegistration
