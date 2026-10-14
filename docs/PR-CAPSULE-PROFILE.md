@@ -55,6 +55,12 @@ the absent entries left out, and by its `type`:
 The two `application/json` entries are told apart by position: the CI result is always the second
 entry, and a review digest, when present, is the third.
 
+A references list that does not decode this way has no defined roles, and the profile rejects it:
+the diff is not first, the CI result is not second, there are more than four entries, a review
+entry is on a head capsule, or anything else follows the CI result out of the order above.
+`scripts/pr-capsule-check.sh` is that check. It reads a sealed `capsule.json` or the request
+`pr-capsule-request.sh` writes, and the producer runs it on every request it writes.
+
 Earlier PR capsules carry the role in `citation_purpose` itself (`diff_digest`,
 `ci_result_digest`, `review_digest`, `prompt_digest`), in the same order. Those values are not
 registered, and producers no longer write them. Position and type find the role in either form.
@@ -89,6 +95,9 @@ and reviews is the same request and the same `capsule_id`, so it is a retry, not
 
 You need the capsule (`capsule.json`, or the artifact record) and read access to the repository.
 
+0. **Shape.** `scripts/pr-capsule-check.sh capsule.json` checks that the references decode into
+   roles ([What a PR capsule records](#what-a-pr-capsule-records)). If it exits non-zero, stop:
+   without roles there is nothing to recompute against.
 1. **Identity and signature.** `agent-action-capsule verify capsule.json` recomputes `capsule_id`
    from the payload. `capsulectl verify --profile <profile pinning the producer key> --capsule
    artifact.json` also checks the producer signature and trust.

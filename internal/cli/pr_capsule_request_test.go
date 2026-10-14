@@ -201,6 +201,8 @@ func sealPRCapsuleRequest(t *testing.T, raw []byte) (string, map[string]any) {
 		assert.Equal(t, "acted_on", m["citation_purpose"], "references[%d]", i)
 	}
 	referenceRoles(t, payload)
+	out, e := runPRCapsuleCheck(t, record.Capsule)
+	require.NoError(t, e, "the sealed capsule must decode under the profile: %s", out)
 	if dir := os.Getenv(conformanceOutEnv); dir != "" {
 		require.NoError(t, os.MkdirAll(dir, 0o700))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, record.CapsuleID+".json"), record.Capsule, 0o600))
@@ -414,4 +416,110 @@ func TestPRCapsuleIDIsSignerIndependent(t *testing.T) {
 	first, _ := sealPRCapsuleRequest(t, raw)
 	second, _ := sealPRCapsuleRequest(t, raw)
 	assert.Equal(t, first, second)
+}
+
+// runPRCapsuleCheck runs the real scripts/pr-capsule-check.sh on doc and
+// returns its output and exit error.
+func runPRCapsuleCheck(t *testing.T, doc []byte) (string, error) {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "capsule.json")
+	require.NoError(t, os.WriteFile(file, doc, 0o600))
+	out, e := exec.Command("bash", filepath.Join(repoRoot(t), "scripts", "pr-capsule-check.sh"), file).CombinedOutput()
+	return string(out), e
+}
+
+// prCapsuleShape is a sealed-capsule payload carrying only what the profile
+// check reads: the action_type and each reference's type.
+func prCapsuleShape(t *testing.T, actionType string, types ...string) []byte {
+	t.Helper()
+	refs := make([]map[string]string, 0, len(types))
+	for _, typ := range types {
+		refs = append(refs, map[string]string{"type": typ, "digest_alg": "sha256", "digest": hex.EncodeToString(make([]byte, 32)), "citation_purpose": "acted_on"})
+	}
+	b, e := json.Marshal(map[string]any{"action_type": actionType, "references": refs})
+	require.NoError(t, e)
+	return b
+}
+
+const (
+	diffType   = "text/x-diff"
+	jsonType   = "application/json"
+	promptType = "text/plain"
+)
+
+// TestPRCapsuleCheckAcceptsTheProfileShapes runs the profile check over every
+// references list the profile defines: diff and CI always, a review on a
+// decision capsule only, a declared prompt last.
+func TestPRCapsuleCheckAcceptsTheProfileShapes(t *testing.T) {
+	shapes := []struct {
+		name       string
+		actionType string
+		types      []string
+	}{
+		{"head", "fyi", []string{diffType, jsonType}},
+		{"head with prompt", "fyi", []string{diffType, jsonType, promptType}},
+		{"decision", "decide", []string{diffType, jsonType}},
+		{"decision with review", "decide", []string{diffType, jsonType, jsonType}},
+		{"decision with prompt", "decide", []string{diffType, jsonType, promptType}},
+		{"decision with review and prompt", "decide", []string{diffType, jsonType, jsonType, promptType}},
+	}
+	for _, c := range shapes {
+		t.Run(c.name, func(t *testing.T) {
+			out, e := runPRCapsuleCheck(t, prCapsuleShape(t, c.actionType, c.types...))
+			assert.NoError(t, e, out)
+		})
+	}
+}
+
+// TestPRCapsuleCheckRejectsWhatDoesNotDecode pins one rejection per way a
+// references list can fail to decode, each with the reason the check gives.
+func TestPRCapsuleCheckRejectsWhatDoesNotDecode(t *testing.T) {
+	cases := []struct {
+		name       string
+		actionType string
+		types      []string
+		reason     string
+	}{
+		{"more than four entries", "decide", []string{diffType, jsonType, jsonType, promptType, promptType}, "a PR capsule has at most 4"},
+		{"no references", "fyi", nil, "references[0] must be the diff"},
+		{"CI before the diff", "fyi", []string{jsonType, diffType}, "references[0] must be the diff"},
+		{"wrong first type", "fyi", []string{jsonType, jsonType}, "references[0] must be the diff"},
+		{"no CI result", "fyi", []string{diffType}, "references[1] must be the CI result"},
+		{"wrong second type", "fyi", []string{diffType, promptType}, "references[1] must be the CI result"},
+		{"review on a head capsule", "fyi", []string{diffType, jsonType, jsonType}, "on a head capsule"},
+		{"prompt before the review", "decide", []string{diffType, jsonType, promptType, jsonType}, "in that order"},
+		{"two prompts", "fyi", []string{diffType, jsonType, promptType, promptType}, "in that order"},
+		{"two reviews", "decide", []string{diffType, jsonType, jsonType, jsonType}, "in that order"},
+		{"a type outside the profile", "decide", []string{diffType, jsonType, "image/png"}, "in that order"},
+		{"not a PR action_type", "act", []string{diffType, jsonType}, "neither fyi"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out, e := runPRCapsuleCheck(t, prCapsuleShape(t, c.actionType, c.types...))
+			require.Error(t, e, "accepted a references list that does not decode")
+			assert.Contains(t, out, c.reason)
+		})
+	}
+}
+
+// TestPRCapsuleCheckReadsTheRequestForm pins the check on the request form
+// pr-capsule-request.sh writes, which spells the same fields ActionType and
+// References[].Type: a review on a head-capsule request is refused.
+func TestPRCapsuleCheckReadsTheRequestForm(t *testing.T) {
+	ref := func(typ string) map[string]string {
+		return map[string]string{"Type": typ, "DigestAlg": "sha256", "Digest": hex.EncodeToString(make([]byte, 32)), "CitationPurpose": "acted_on"}
+	}
+	request := func(refs ...map[string]string) []byte {
+		b, e := json.Marshal(map[string]any{
+			"spec_version": "capsule-seal-request/v1",
+			"capsule":      map[string]any{"ActionType": "fyi", "References": refs},
+		})
+		require.NoError(t, e)
+		return b
+	}
+	out, e := runPRCapsuleCheck(t, request(ref(diffType), ref(jsonType)))
+	assert.NoError(t, e, out)
+	out, e = runPRCapsuleCheck(t, request(ref(diffType), ref(jsonType), ref(jsonType)))
+	require.Error(t, e)
+	assert.Contains(t, out, "on a head capsule")
 }

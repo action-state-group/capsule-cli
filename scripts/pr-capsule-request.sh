@@ -214,6 +214,9 @@ jq -n \
   } + (if $model == null then {} else {"model": $model} end)
     + (if $chain == null then {} else {"chain": $chain} end)' > "$CAPSULE_REQUEST_OUTPUT"
 
+# The request must decode under the profile before anything seals it.
+bash "$(dirname "${BASH_SOURCE[0]}")/pr-capsule-check.sh" "$CAPSULE_REQUEST_OUTPUT"
+
 printf 'pr-capsule-request: wrote %s (action_id=%s, diff_digest=%s, ci_result_digest=%s, review_digest=%s, decision=%s, agent_declared=%s)\n' \
   "$CAPSULE_REQUEST_OUTPUT" "$action_id" "$diff_digest" "$ci_result_digest" "${review_digest:-none}" "${decision:-none}" \
   "$([[ "$model" == "null" ]] && echo false || echo true)" >&2
