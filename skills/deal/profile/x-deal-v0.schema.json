@@ -42,6 +42,8 @@
       "then": { "properties": { "body": { "$ref": "#/$defs/body_action" } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "outcome" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_outcome" } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "outcome_seal" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_outcome_seal" }, "x-deal-v0": { "not": { "anyOf": [ { "required": ["counterparty"] }, { "required": ["counterparty_profile"] }, { "required": ["channel"] }, { "required": ["refs"] } ] } } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "close" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_close" } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "disclosure" } } } } },
@@ -62,7 +64,7 @@
     },
     "short_text": { "type": "string", "minLength": 1, "maxLength": 200 },
     "record_type": {
-      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread", "thread_opened", "sale_cut"]
+      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread", "thread_opened", "sale_cut", "outcome_seal"]
     },
     "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer"] },
     "outcome_value": { "description": "completed, mismatch or open; or not_selected: the other side was not chosen, and nothing was done on the deal (no action is on record). Every value but open is final at a close.", "enum": ["completed", "mismatch", "open", "not_selected"] },
@@ -578,6 +580,16 @@
         "thread_heads": { "type": "array", "items": {
           "type": "object", "additionalProperties": false, "required": ["registration", "head_commitment"],
           "properties": { "registration": { "$ref": "#/$defs/digest_ref" }, "head_commitment": { "$ref": "#/$defs/hex64" } } } }
+      }
+    },
+    "body_outcome_seal": {
+      "description": "The producer's own statement of how one act came out, disclosed whole in a history copy: exactly these three fields. step is the capsule id of the deal's last act sealed as an action, and action_class is that act's sealed class (its taxonomy_version applies). partial and disputed are reserved: capsulectl seals neither yet. An assertion, not corroboration.",
+      "type": "object", "additionalProperties": false,
+      "required": ["step", "outcome", "action_class"],
+      "properties": {
+        "step": { "$ref": "#/$defs/hex64" },
+        "outcome": { "enum": ["delivered", "not_delivered", "partial", "cancelled", "refunded", "disputed", "unknown"] },
+        "action_class": { "$ref": "#/$defs/action_class" }
       }
     },
     "body_outcome": {

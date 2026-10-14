@@ -645,10 +645,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		// sealed by this build or later: no step sealed before keeps
 		// different bytes.
 		role := dealRole(events)
-		m["action_class"] = dealRoleActionClass(role, dealType, action, direction)
-		if action == offerAction && ev.OfferClass != "" {
-			m["action_class"] = classMarketplaceOffer
-		}
+		m["action_class"] = dealStepClass(role, dealType, ev, action, direction)
 		m["taxonomy_version"] = ev.TaxonomyVersion
 		if spend, ok := dealRoleSpendMinor(role, action, direction, amount); ok {
 			m["spend_minor"] = spend
@@ -1133,6 +1130,12 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				return nil, err
 			}
 		}
+	case "outcome_seal":
+		// Three fields, nothing else, and nothing on the block beyond what
+		// every record carries: a history copy discloses this payload whole.
+		rtype = "outcome_seal"
+		o := ev.OutcomeSeal
+		body = map[string]interface{}{"step": o.Step, "outcome": o.Outcome, "action_class": o.ActionClass}
 	case "disclosure":
 		rtype = "disclosure"
 		d := ev.Disclosure

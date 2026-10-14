@@ -1,0 +1,31 @@
+{
+  "fixture": "11-outcome-seal.json",
+  "expect": "valid",
+  "story": "The producer's own statement of how the payment came out: the payment's capsule id, the outcome and the payment's class, nothing else, so a history copy can disclose it whole. An assertion, not corroboration.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "outcome_seal",
+      "seq": 11,
+      "at": "2026-10-06T09:18:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "0569ea743dd0030bc9bcb074e6cf1c2169321724db75993833892653364d0dd3"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+      }
+    },
+    "body": {
+      "step": "8e153b457e6e539565261b71423dc2e102eeb59f2ac0c0ba5e6a083844b650b4",
+      "outcome": "delivered",
+      "action_class": "money.purchase"
+    }
+  },
+  "expected_digest": "e23ddd098a9690e52241175b2450727dad17bbec217bea0ad3b39c8d64546c2d"
+}

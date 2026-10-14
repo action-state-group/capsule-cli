@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### An outcome seal: the producer's word on how an action came out, disclosable whole
+
+- **Added (seal path, new deals only):** a new x-deal-v0 record, `outcome_seal`, holding exactly
+  three fields: `step` (the capsule id of the deal's last action), `outcome` and `action_class`
+  (that action's class). `outcome` is one of `delivered`, `not_delivered`, `partial`,
+  `cancelled`, `refunded`, `disputed` or `unknown`.
+- When it is sealed:
+  - `deal close` seals one just before the close: `delivered` when received as agreed,
+    `not_delivered` when not received, `unknown` when received with a difference or still pending.
+  - A cancel sealed as an action seals one right after it: `refunded` when it returns money,
+    else `cancelled`.
+  - `partial` and `disputed` are reserved; nothing seals them yet.
+  - A deal with no action, or opened before this build, gets none.
+- It is the producer's assertion, not corroboration. Rules in both schema copies and the profile
+  checker; see PROFILE.md section 7, "The outcome seal".
+- **Changed (`deal history`, verify):** a `history` copy now discloses each `outcome_seal` whole.
+  It is the one exception to "every payload withheld".
+- `verify --bundle` checks each disclosed seal:
+  - It fails a seal carrying anything beyond its three fields and the common block, an outcome
+    outside the set, or a `step` the copy does not carry (`outcome_seal_malformed:<deal>`).
+  - Any other disclosed payload still fails (`deal_payload_disclosed:<deal>`).
+- What verify reports:
+  - Per deal: `outcome`, the latest seal's value or `not_proven`, and `outcome_seals`, oldest
+    first, with `step_at` and `sealed_at` apart and `action_class_match: unchecked`. A witnessed
+    time is not shown: nothing in the copy carries one.
+  - Per History: `outcome_counts`, deals by latest seal, every value listed, and `not_proven`.
+  - `not_proven` still lists `outcome` and `action_class`: a seal is a statement, not proof.
+
 ### The presentation pass, a CI job of its own
 
 - **Added (tests, CI):** `presentation-pass` drives the presentation goldens' bundles through

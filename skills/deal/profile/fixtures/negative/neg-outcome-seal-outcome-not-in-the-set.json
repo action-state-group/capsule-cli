@@ -1,0 +1,45 @@
+{
+  "fixture": "neg-outcome-seal-outcome-not-in-the-set",
+  "expect": "invalid",
+  "description": "An outcome_seal whose outcome is not one of the closed set.",
+  "expected_stage": "schema",
+  "expected_error_contains": "outcome",
+  "chain_dir": "positive-typed",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json",
+    "03-message-site-switch.json",
+    "04-detail-change-merchant.json",
+    "05-proposed-action.json",
+    "06-action-evaluation.json",
+    "07-platform-approval-observation.json",
+    "08-outcome-platform-only.json",
+    "09-approval-on-the-card.json",
+    "10-action-record-pay.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-7a1e5c0d9b2f4e68",
+      "record_type": "outcome_seal",
+      "seq": 11,
+      "at": "2026-10-06T09:18:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "0569ea743dd0030bc9bcb074e6cf1c2169321724db75993833892653364d0dd3"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bece2799f6e08d30375ab87f8a8db27458e2a29995add32dc25561362d736246"
+      }
+    },
+    "body": {
+      "step": "8e153b457e6e539565261b71423dc2e102eeb59f2ac0c0ba5e6a083844b650b4",
+      "outcome": "completed",
+      "action_class": "money.purchase"
+    }
+  }
+}

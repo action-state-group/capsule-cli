@@ -160,6 +160,12 @@ func TestDealStepSealedBeforeTheClassReDerivesWithoutOne(t *testing.T) {
 	defer func() { require.NoError(t, s.close()) }()
 	require.NoError(t, s.useDeal(t.Context(), id, false))
 	for i, se := range events {
+		if se.Event.Kind == "outcome_seal" {
+			// A seal repeats its act's class under the act's version, and is
+			// sealed only on a deal opened after classes were: never on a
+			// step sealed before them.
+			continue
+		}
 		legacy := se.Event
 		legacy.TaxonomyVersion = ""
 		raw, _, err := encodeDealRecord(legacy, events[:i], s.dkey)
@@ -368,7 +374,7 @@ func TestDealActionClassIsInTheSealedDigest(t *testing.T) {
 		assert.NotEqual(t, se.Digest, other, "step %d: another class is another sealed record", se.Event.N)
 		checked++
 	}
-	assert.Equal(t, 4, checked, "both checks and both acts")
+	assert.Equal(t, 5, checked, "both checks, both acts and the cancel's outcome seal")
 }
 
 // numbered is v decoded again with its numbers kept as json.Number, the form

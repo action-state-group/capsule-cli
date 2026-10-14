@@ -149,6 +149,7 @@ Thirteen record types. The set is closed: an unknown `record_type` fails the sch
 | `action` | A point-of-no-return step actually taken. | `action`; optional `direction` (`out`: paid by the user; `in`: back to the user); optional `action_class` + `taxonomy_version` and `spend_minor` (see Action classes, below); on a `cancel`, optional `fee_minor` and `cancelled_amount_minor` (see Action classes, below) | exactly one `authorized_by` → an `approval` with `proceed: true` (section 6). An action that returns money (`direction: in`) carries exactly one `reverses` → the `pay` action it undoes (section 6, rule 8). |
 | `outcome` | What was observed afterwards: delivered or not, or an action taken without approval. | `status`, `outcome`, `differences[]` | At most one `observes` → an `action`. On the outcome a close seals: `actor` and `reason` (see the close). |
 | `close` | The deal ends (or pauses its record) with an outcome. | `outcome`, `unchecked_actions` | exactly one `outcome` → the latest `outcome` record, if any exists. Optional `carried_obligations`: the cancel-by dates still open at the close, each `{obligation: digest ref, cancel_by}`. `actor` (`user`\|`agent`\|`platform`: whose decision ended the deal) and `reason` (why, from a closed set), together, equal to its outcome's. The reason follows from the status where it can: `completed` or `delivered_mismatch` (`received`), `awaiting_delivery` (`pending`), `not_selected`. With `not_received` it is one of `user_closed` (actor `user`), `agent_could_not_complete` (actor `agent`), `merchant_rejected`, `payment_failed`, `cancelled_in_window`, `not_delivered`, `other`. Absent on closes sealed before. |
+| `outcome_seal` | The producer's own statement of how the deal's last action came out, small enough to disclose whole (section 7, "The outcome seal"). Sealed just before a close, and right after a cancel. | `step`, `outcome`, `action_class`: exactly these three | No `refs`, `counterparty`, `counterparty_profile` or `channel`. |
 | `disclosure` | Something the agent told someone about the user: what kind of thing, to whom, when, under what authority. | `to` (`counterparty`\|`other`), `fields[]` (each `class` + `value_commitment`), `authority` (`approval`\|`none`) | `authority: approval` ⇒ exactly one `authorized_by` → an `approval`, under the same rules as an `action` (section 6); `none` ⇒ no `authorized_by`, and `rule` says why. All `fields` share one covering action: contact classes `share_contact`, credential classes `share_credentials`. Optional `action_class` + `taxonomy_version` (see Action classes, below); optional `channel`; `counterparty` when the recipient is someone new. |
 | `thread` | On a sale's own log: the registration of one buyer's thread, sealed by `deal open --sale` before the thread opens (section 6, rule 10). | `thread_ref_commitment`: the thread's deal id, committed under this step's own nonce | `deal_id` `sale-…`; follows the sale's previous record (`prev`, `baseline_ref` → the `sale` root). No `counterparty`, no `refs`. |
 | `thread_opened` | On a sale's own log: a registered thread opened, sealed right after its task authority (or by the next sale bundle, if a crash came between) (section 6, rule 10). | `task_authority_commitment`: the thread's task-authority record digest, committed under this step's own nonce | `deal_id` `sale-…`; exactly one `registration` ref → an earlier `thread` record of this log, at most one `thread_opened` per registration. No `counterparty`. |
@@ -588,6 +589,64 @@ A verifier holding one deal's records in `seq` order checks:
 These are record facts about delivered-versus-agreed. They are not judgments of the
 counterparty. Records never label or grade a counterparty, a person or a business, and the
 checker rejects such vocabulary in any field.
+
+### The outcome seal
+
+An `outcome_seal` is the producer's own statement of how one action came out. Its body is exactly
+three fields:
+
+- `step` is the capsule id of the deal's last act sealed as an action. An unchecked act is sealed
+  as an `outcome`, never as an action, so a seal never names one. An approved disclosure is typed
+  as an `action-record/v0` in a typed deal, but it is not an act, so a seal never names one either.
+- `outcome` is one of `delivered`, `not_delivered`, `partial`, `cancelled`, `refunded`, `disputed`,
+  `unknown`.
+- `action_class` equals that action's sealed class, and that action's `taxonomy_version` applies.
+
+It is an assertion, not corroboration: nothing but the producer's key stands behind it.
+
+capsulectl seals one in two places.
+
+**Just before a close.**
+
+| Close | `outcome` |
+|---|---|
+| `received`, `completed` | `delivered` |
+| `received`, `mismatch` | `unknown` (a difference is not a measure of how much arrived) |
+| `not_received` | `not_delivered` |
+| `pending` | `unknown` |
+
+**Right after a cancel sealed as an action.**
+
+| Cancel | `outcome` |
+|---|---|
+| Returns money (`money.refund`) | `refunded` |
+| Returns none | `cancelled` |
+
+A deal with no action gets no seal. Neither does a deal opened by a build before seals: its outcome
+stays not proven. `partial` and `disputed` are reserved, and capsulectl seals neither yet.
+
+A close after a cancel seals again. Its seal names the cancel and maps from the close, so the
+cancel's `refunded` or `cancelled` becomes an earlier seal.
+
+Each seal is a step of its own, sealed after its act (or before its close). If capsulectl fails
+between the two, the act stays without a seal, and nothing re-seals it later.
+
+A History's `history` copy withholds every payload but a seal's. It discloses a seal whole, so the
+record carries nothing beyond the block every record carries and those three fields. `verify
+--bundle` fails a disclosed seal with anything more, less or else (`outcome_seal_malformed:<deal>`),
+and any other disclosed payload (`deal_payload_disclosed:<deal>`). Per deal, it reads:
+
+- the latest seal's `outcome` (`not_proven` without one);
+- every seal, oldest first, with the action's time (`step_at`) and the seal's own (`sealed_at`)
+  kept apart;
+- `action_class_match: unchecked`, because the action's payload is withheld.
+- No witnessed time: neither a checkpoint nor a witness receipt in the copy carries a time.
+
+Across the History it reads `outcome_counts`: deals by latest seal, every value listed, and
+`not_proven`.
+
+The profile checker cannot resolve `step`, since records do not carry capsule ids. It checks that
+`action_class` equals the class of the last act sealed as an action.
 
 ## 8. Checking
 

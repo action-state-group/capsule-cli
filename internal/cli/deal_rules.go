@@ -654,6 +654,15 @@ type dealEvent struct {
 	// marketplace.offer, kept with the step like Producer: a step sealed
 	// before has none and re-derives its offer as external_commitment.other.
 	OfferClass string `json:"offer_class,omitempty"`
+	// OutcomeSealing (dealOutcomeSealVersion) marks a step sealed by a build
+	// that seals outcome_seal records: a deal whose opening step carries it
+	// gets one at its close and after each cancel sealed as an action, when it
+	// has an act sealed as an action (deal_outcome_seal.go). A deal opened
+	// before has none and is never given one.
+	OutcomeSealing string `json:"outcome_sealing,omitempty"`
+	// OutcomeSeal is an outcome_seal step: the producer's own statement of
+	// one act's outcome, three fields, nothing else.
+	OutcomeSeal *dealOutcomeSeal `json:"outcome_seal,omitempty"`
 	// CounterpartyProfile is a counterparty_profile step: the check's payee
 	// fingerprinted under the profile's key (profileKeyFor), sealed right
 	// after the check, for this profile's own records only.
