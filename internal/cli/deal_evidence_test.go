@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	"github.com/action-state-group/evidencebook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -480,11 +479,11 @@ func TestADealRequestWithNoAnswerComposesAsAnAbsence(t *testing.T) {
 // resigned is a copy of an artifact response, edited by edit and signed
 // again under this profile's own signing key: a genuine signature over an
 // answer that does not hold up.
-func resigned(t *testing.T, response map[string]any, edit func(a *evidencebook.ArtifactResponse, bundle map[string]any)) string {
+func resigned(t *testing.T, response map[string]any, edit func(a *dealArtifactResponse, bundle map[string]any)) string {
 	t.Helper()
 	raw, err := json.Marshal(response["artifact"])
 	require.NoError(t, err)
-	var a evidencebook.ArtifactResponse
+	var a dealArtifactResponse
 	require.NoError(t, json.Unmarshal(raw, &a))
 	bundle := exactBundle(t, string(a.Artifact))
 	edit(&a, bundle)
@@ -500,7 +499,7 @@ func resigned(t *testing.T, response map[string]any, edit func(a *evidencebook.A
 	body, err := a.SigningBody()
 	require.NoError(t, err)
 	a.Sig = hex.EncodeToString(ed25519.Sign(key, body))
-	encoded, err := json.Marshal(evidencebook.Response{Artifact: &a})
+	encoded, err := json.Marshal(dealResponse{Artifact: &a})
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "resigned.json")
 	require.NoError(t, os.WriteFile(path, encoded, 0o600))
@@ -530,15 +529,50 @@ func TestASignedAnswerThatDoesNotHoldUpIsRecordedFailed(t *testing.T) {
 	}
 
 	recordID, digest := ask()
-	edited := resigned(t, served.response, func(a *evidencebook.ArtifactResponse, bundle map[string]any) {
+	edited := resigned(t, served.response, func(a *dealArtifactResponse, bundle map[string]any) {
 		a.RequestDigest = digest
 		bundle["root"] = strings.Repeat("0", 64)
 	})
 	assert.Equal(t, "artifact_failed_verification", record(recordID, edited)["outcome"], "a copy that does not verify VALID")
 
 	recordID, digest = ask()
-	elsewhere := resigned(t, otherCopy.response, func(a *evidencebook.ArtifactResponse, _ map[string]any) { a.RequestDigest = digest })
+	elsewhere := resigned(t, otherCopy.response, func(a *dealArtifactResponse, _ map[string]any) { a.RequestDigest = digest })
 	assert.Equal(t, "artifact_failed_verification", record(recordID, elsewhere)["outcome"], "a copy of another deal")
+}
+
+// A copy carrying a witness receipt (re-signed by the responder's own key,
+// so only the receipt can fail) is recorded as an artifact only when the
+// receipt verifies against its anchor under the requester's
+// --witness-directory.
+func TestADealCopysWitnessReceiptIsCheckedOnRecord(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	buyer := thisDealParty(t)
+	served := askFor(t, buyer, buyer, id, map[string]any{"min_freshness": map[string]any{"size": 1}})
+	witnessKey := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
+	_, otherKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	listed := writeDirectory(t, rawKeyRow(testWitness, witnessKey.Public().(ed25519.PublicKey)))
+	for name, tc := range map[string]struct {
+		directory []string
+		want      string
+	}{
+		"listed":    {[]string{"--witness-directory", listed}, "artifact"},
+		"other key": {[]string{"--witness-directory", writeDirectory(t, rawKeyRow(testWitness, otherKey.Public().(ed25519.PublicKey)))}, dealOutcomeArtifactFailed},
+	} {
+		party(t, buyer.config)
+		path := filepath.Join(t.TempDir(), "request.json")
+		sent := runJSON(t, "request", "--request", writeJSONFile(t, "ask.json", map[string]any{
+			"subject": map[string]any{"kind": "correlation", "value": id}, "coverage": map[string]any{"min_freshness": map[string]any{"size": 1}},
+		}), "--responder", "me", "--output", path)
+		edited := resigned(t, served.response, func(a *dealArtifactResponse, bundle map[string]any) {
+			a.RequestDigest = sent["request_digest"].(string)
+			witnessed(t, witnessKey)(bundle)
+		})
+		got := runJSON(t, append([]string{"request", "--response", edited, "--for", sent["record_id"].(string),
+			"--responder-key", buyer.signer, "--responder-checkpoint-key", buyer.checkpoint}, tc.directory...)...)
+		assert.Equal(t, tc.want, got["outcome"], name)
+	}
 }
 
 // A copy's carried response is checked: a signature that does not verify,
@@ -584,7 +618,7 @@ func TestAComposedCopysResponseMustBeSignedByItsResponder(t *testing.T) {
 
 	other := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
 	byAnother := edited(t, func(r map[string]any) {
-		a := evidencebook.ArtifactResponse{
+		a := dealArtifactResponse{
 			RequestDigest: r["request_digest"].(string), Anchor: r["anchor"].(string), ArtifactKind: r["artifact_kind"].(string),
 			ArtifactDigest: r["artifact_digest"].(string), IssuedAt: r["issued_at"].(string),
 		}

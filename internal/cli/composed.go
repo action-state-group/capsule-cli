@@ -7,7 +7,6 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	"github.com/action-state-group/evidencebook"
 )
 
 // RefusalSignatureProfile names the one refusal signature form this CLI
@@ -136,7 +135,7 @@ func verifyResponseSignature(response map[string]interface{}) string {
 		}
 		fields[name] = member
 	}
-	body, err := evidencebook.ArtifactResponse{
+	body, err := dealArtifactResponse{
 		RequestDigest: fields["request_digest"], Anchor: fields["anchor"], ArtifactKind: fields["artifact_kind"],
 		ArtifactDigest: fields["artifact_digest"], IssuedAt: fields["issued_at"],
 	}.SigningBody()

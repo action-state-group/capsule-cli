@@ -705,13 +705,13 @@ func TestRequestRespondRoundTrip(t *testing.T) {
 		return r
 	}
 
-	sent := ask("history", `{"subject":{"kind":"full_history"},"coverage":{"min_freshness":{"size":1}}}`)
+	sent := ask("history", `{"subject":{"full_history":null},"coverage":{"min_freshness":1}}`)
 	answered := respond("history")
 	assert.Equal(t, evidencebook.OutcomeArtifact, answered.Outcome)
 	assert.Equal(t, sent.RequestDigest, answered.RequestDigest)
 	assert.Equal(t, evidencebook.OutcomeArtifact, record(sent, "history").Outcome)
 
-	sent = ask("missing", `{"subject":{"kind":"record","digest":"`+hex.EncodeToString(make([]byte, 32))+`"},"coverage":{"min_freshness":{"size":1}}}`)
+	sent = ask("missing", `{"subject":{"record":"`+hex.EncodeToString(make([]byte, 32))+`"},"coverage":{"min_freshness":1}}`)
 	answered = respond("missing")
 	assert.Equal(t, evidencebook.OutcomeRefusal, answered.Outcome)
 	assert.Equal(t, evidencebook.ReasonNoSuchSubject, answered.Reason)
@@ -719,7 +719,7 @@ func TestRequestRespondRoundTrip(t *testing.T) {
 	assert.Equal(t, evidencebook.OutcomeRefusal, got.Outcome)
 	assert.Equal(t, evidencebook.ReasonNoSuchSubject, got.Reason)
 
-	sent = ask("unanswered", `{"subject":{"kind":"checkpoints"},"coverage":{"min_freshness":{"size":1}}}`)
+	sent = ask("unanswered", `{"subject":{"checkpoints":null},"coverage":{"min_freshness":1}}`)
 	set(day1.Add(time.Hour))
 	out, err := invoke(t, "", "request", "--profile", "a", "--for", sent.RecordID, "--absent-until", day1.Add(30*time.Minute).Format(time.RFC3339))
 	require.NoError(t, err)
@@ -732,7 +732,7 @@ func TestRequestRespondRoundTrip(t *testing.T) {
 	// them it is refused before the book is touched; under another signing
 	// key the book refuses it and records nothing, so the real response can
 	// still be recorded afterwards: a refused message never forecloses.
-	sent = ask("pinned", `{"subject":{"kind":"full_history"},"coverage":{"min_freshness":{"size":1}}}`)
+	sent = ask("pinned", `{"subject":{"full_history":null},"coverage":{"min_freshness":1}}`)
 	respond("pinned")
 	pinned := filepath.Join(dir, "pinned.response")
 	size := bookSize(t, a)
@@ -810,7 +810,7 @@ func TestUppercaseResponderKeysRecordTheArtifact(t *testing.T) {
 	set(day1)
 	dir := t.TempDir()
 	body := filepath.Join(dir, "ask.json")
-	require.NoError(t, os.WriteFile(body, []byte(`{"subject":{"kind":"full_history"},"coverage":{"min_freshness":{"size":1}}}`), 0o600))
+	require.NoError(t, os.WriteFile(body, []byte(`{"subject":{"full_history":null},"coverage":{"min_freshness":1}}`), 0o600))
 	out, err := invoke(t, "", "request", "--profile", "a", "--request", body, "--responder", "b", "--output", filepath.Join(dir, "ask.sent"))
 	require.NoError(t, err)
 	var sent requestResult
@@ -839,7 +839,7 @@ func TestRequestAndRespondReportTheirRecordWhenOutputFails(t *testing.T) {
 	taken := filepath.Join(dir, "taken")
 	require.NoError(t, os.WriteFile(taken, []byte("x"), 0o600))
 	body := filepath.Join(dir, "ask.json")
-	require.NoError(t, os.WriteFile(body, []byte(`{"subject":{"kind":"full_history"},"coverage":{"min_freshness":{"size":1}}}`), 0o600))
+	require.NoError(t, os.WriteFile(body, []byte(`{"subject":{"full_history":null},"coverage":{"min_freshness":1}}`), 0o600))
 
 	size := bookSize(t, a)
 	out, err := invoke(t, "", "request", "--profile", "a", "--request", body, "--responder", "b", "--output", taken)
@@ -857,10 +857,10 @@ func TestRequestAndRespondReportTheirRecordWhenOutputFails(t *testing.T) {
 	var answered respondResult
 	require.NoError(t, json.Unmarshal([]byte(out), &answered))
 	assert.Regexp(t, `^[0-9a-f]{64}$`, answered.RecordID)
-	var response evidencebook.Response
-	require.NoError(t, json.Unmarshal(answered.Response, &response))
-	require.NotNil(t, response.Artifact, "the signed response is not lost")
-	require.NoError(t, response.Artifact.Verify())
+	reply, err := evidencebook.ParseReply(evidencebook.Message{Octets: answered.Response, MediaType: evidencebook.MediaTypeJSON})
+	require.NoError(t, err)
+	require.NotNil(t, reply.Envelope, "the signed reply is not lost")
+	require.NoError(t, reply.Envelope.Verify())
 }
 
 func TestPeerCheckpointKeyWithoutPeerIsRefused(t *testing.T) {
