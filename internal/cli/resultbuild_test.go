@@ -778,6 +778,65 @@ func TestDiscloseRootsOnTheResult(t *testing.T) {
 	assert.Contains(t, SafeError(err), "evidence_result record, whose agent_input carries the Result itself")
 }
 
+// A book's bundle carries each record's producer signature as the book
+// stored it, so `bundle` and `disclose` on a jsonl profile verify VALID with
+// no hand-signing (#148): every record's signature is its stored envelope,
+// byte for byte, under the profile's signing key, and the disclosure record
+// the book commits names the digest of the bundle as written.
+func TestBookBundleCarriesStoredProducerSignatures(t *testing.T) {
+	b := newResultBook(t)
+	p := b.profile
+	result, _, err := runResultBuild(t, p, resultDoc(testClaim("claim-1", "met", b.capsules[0]), testClaim("claim-2", "not_met", b.capsules[1])))
+	require.NoError(t, err)
+	public := hex.EncodeToString(b.key.Public().(ed25519.PublicKey))
+	for _, args := range [][]string{
+		{"disclose", "--payloads", "selected"},
+		{"disclose", "--payloads", "selected", "--attach-input-originals"},
+		{"bundle"},
+	} {
+		path := filepath.Join(t.TempDir(), "bundle.json")
+		_, err = invoke(t, "", append(args, "--profile", p.Name, "--root", result.RecordID, "--out", path)...)
+		require.NoError(t, err, "%v", args)
+		verdict, err := verifyBundleOutput(t, path)
+		require.NoError(t, err, "%v", args)
+		assert.Equal(t, "VALID", verdict["verdict"], "%v", args)
+		raw, err := os.ReadFile(path)
+		require.NoError(t, err)
+		value, err := decodeBundleJSON(raw)
+		require.NoError(t, err)
+		digest, err := aacbundle.BundleDigest(value)
+		require.NoError(t, err)
+		func() {
+			opened, err := openBook(t.Context(), p, false)
+			require.NoError(t, err)
+			defer func() { require.NoError(t, opened.release()) }()
+			records := value["records"].([]interface{})
+			require.NotEmpty(t, records)
+			for _, r := range records {
+				record := r.(map[string]interface{})
+				id := record["capsule_id"].(string)
+				stored, err := opened.store.GetRecord(t.Context(), id)
+				require.NoError(t, err)
+				assert.Equal(t, hex.EncodeToString(stored.Envelope), record["signature"], "%v: record %s carries its stored envelope", args, id)
+				assert.Equal(t, public, record["key_id"], "%v: record %s", args, id)
+			}
+			disclosures, err := opened.book.Query(t.Context(), evidencebook.Filter{RecordType: evidencebook.RecordTypeDisclosure})
+			require.NoError(t, err)
+			require.NotEmpty(t, disclosures)
+			var statement evidencebook.DisclosureStatement
+			require.NoError(t, json.Unmarshal(disclosures[len(disclosures)-1].Header.Statement, &statement))
+			assert.Equal(t, digest, statement.BundleDigest, "%v: the disclosure record commits to the bundle as written", args)
+		}()
+		if args[0] == "disclose" {
+			report, out, err := runReportBuild(t, path, "--card", "outcome")
+			require.NoError(t, err, "%v", args)
+			assert.Equal(t, "VALID", report.Verdict)
+			assert.Equal(t, "written", report.Page)
+			assert.FileExists(t, out)
+		}
+	}
+}
+
 // A count the tool recomputes is compared only as an integer literal. The
 // schema accepts 2.0 and 2e0 as integers, so the cross-check records any
 // other spelling as a finding instead of skipping the comparison.

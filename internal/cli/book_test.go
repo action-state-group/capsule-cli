@@ -196,6 +196,8 @@ func TestCloseSigningPath(t *testing.T) {
 		closeVerified = closeVerified || (r.RecordID == result.RecordID && r.HeaderVerified && r.CapsuleOK && r.Header.RecordType == evidencebook.RecordTypeClose)
 	}
 	assert.True(t, closeVerified, "the bundle discloses the Close with a verified header")
+	signatures, _ := producerSignatureClaim(decoded["records"].([]interface{}))
+	assert.Equal(t, "pass", signatures.Status, "every record carries the producer signature the book stored: %v", signatures.Findings)
 	assert.True(t, verified.AnchorAuthenticated)
 	assert.Equal(t, hex.EncodeToString(keys.checkpoint), verified.AnchorKeyID)
 }

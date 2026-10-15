@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### A book's bundle carries its records' producer signatures (#148)
+
+- **Fixed:** `bundle`, `disclose`, `permalink` and `close --bundle-out` on a jsonl profile now put each record's
+  producer signature in the bundle (`signature`: the hex Producer Envelope the book stored when it
+  sealed the record; `key_id`: the key it verifies under), as a sqlite profile's bundle already
+  does. `verify --bundle` called every book bundle INCOMPLETE ("producer_signatures withheld"), so
+  `report build` refused the page for any `result build` Result. A book bundle now verifies VALID
+  as written. Nothing is re-signed: evidencebook verifies each stored envelope over its record id
+  and refuses the bundle if one is missing or does not verify. The signatures are inside the
+  bundle digest the book's disclosure record commits to.
+- **Changed (build):** the evidencebook pin moves from `717f21e` to the commit that adds
+  `BundleRequest.ProducerSignatures` (pending upstream).
+
 ### Verification on agent-action-capsule's Go APIs
 
 - **Changed (build):** agent-action-capsule's Go module moves to v0.9.1, and capsulectl's own
