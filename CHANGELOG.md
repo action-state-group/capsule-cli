@@ -43,6 +43,11 @@ the evidence interoperability profile `evidence-interop/0` over the request map 
   acknowledgement, rebuttal, disclosure, `evidence_result`, recorded response or absence) gets a
   capsule and record id that differ from what the previous build sealed for the same entry. Records already
   in a book keep verifying and keep their ids; the header still names every link's type.
+- **Breaking (pending requests):** a request a book recorded before this upgrade holds the old
+  request shape, which evidencebook no longer reads back: `request --response` and
+  `request --absent-until` for it fail with a corrupt-record error, and an upgraded responder
+  refuses its bytes as `request_malformed`. Record the outcome of every pending request before
+  upgrading, or ask again after it.
 - **Changed:** `request --witness-directory` applies to a deal copy only; on a book profile it is
   refused, since the profile reply carries no witness receipts.
 
