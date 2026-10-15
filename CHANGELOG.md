@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### evidencebook on agent-action-capsule's Evidence Request package
+
+- **Changed (build):** the evidencebook pin moves from `d3ae0fe` to `717f21e`
+  (action-state-group/evidencebook#20), which takes the Evidence Request protocol from
+  agent-action-capsule's `go/evidencerequest` instead of its own copy, and agent-action-capsule's Go
+  module moves to `v0.8.0` (from the `a726b9f` pseudo-version). No CLI code changes are needed:
+  evidencebook's request and reply types keep their fields, and its `ErrInvalid` (now the
+  package's sentinel, message `evidencerequest: invalid`) still matches every protocol error.
+- **Changed (validation):** v0.8.0 carries agent-action-capsule's stricter verifier checks, so
+  verification now rejects some inputs it accepted before: non-strict base64url or invalid UTF-8
+  in bundle fragments, non-string `domain`/`provenance`, and Producer Envelopes whose CBOR is not
+  strictly encoded.
+
 ### capsule-emit from its released module path
 
 - **Changed (build):** capsulectl imports `github.com/action-state-group/capsule-emit/go`
