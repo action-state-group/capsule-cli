@@ -244,7 +244,7 @@ record_of() { # FILE: log the record_id a consequential book verb returned, or f
 
 echo "== 12/17 request + respond (each a signed book record; consequential) ==" >&2
 cat >"$work/evidence-request.json" <<'EOF'
-{"subject":{"kind":"full_history"},"coverage":{"min_freshness":{"size":1}}}
+{"subject":{"full_history":null},"coverage":{"min_freshness":1}}
 EOF
 "$bin" request --profile "$profile" --request "$work/evidence-request.json" --responder "$peer" \
   --output "$work/request.sent" >"$work/request-result.json"

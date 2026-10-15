@@ -7,10 +7,53 @@
 - **Changed (build):** capsulectl imports `github.com/action-state-group/capsule-emit/go`
   v0.3.0, the first release of the module that replaces the archived
   `github.com/action-state-group/capsule-emit-go`. `go.mod` no longer replaces the old path with
-  an unreleased pseudo-version. The pinned evidencebook still imports the old path, so `go.mod`
-  keeps `capsule-emit-go v0.2.0` as an indirect requirement: without it, minimal version selection
-  would build evidencebook against v0.1.0, which stamps `spec_version` `-04`. No sealed bytes
-  change.
+  an unreleased pseudo-version, and no longer requires the old path at all: evidencebook is pinned
+  at `d3ae0fe`, which imports the new one (action-state-group/evidencebook#19). New capsules are
+  still sealed `-05`, as before.
+
+### Book evidence requests follow evidence-interop/0
+
+The evidencebook pin moves from `b970240` to `d3ae0fe`, whose `request` and `respond` implement
+the evidence interoperability profile `evidence-interop/0` over the request map of
+`draft-mih-agent-evidence-request-00`. On a book (jsonl) profile:
+
+- **Breaking (request input):** `request --request FILE` takes the draft's request map. The
+  subject is a map with one member naming its form (`{"full_history":null}`,
+  `{"record":"<digest>"}`, `{"range":[a,b]}` with zero-based log positions,
+  `{"correlation":"<id>"}`); `expected_pin` is the digest of an anchor the requester holds;
+  `min_freshness` is a log size or an RFC 3339 UTC time. The old shape (`subject.kind`,
+  `expected_pin` as `{root, mmr_size}`, `min_freshness` as `{size, time}`) is refused. Book
+  requests are still sent as JCS JSON.
+- **Breaking (reply):** `respond --output` writes the profile's signed reply, an envelope or a
+  refusal, not `{"artifact": ...}` or `{"refusal": ...}`. An answer is the canonical Artifact the
+  profile defines (a record's own octets with its CLL proofs, or a derivation), never an Evidence
+  Bundle. `request --response` reads that reply.
+- **Breaking (authorization):** `respond --requester ID` is the identity you authenticated the
+  request's sender as, and it is the only input to the book's relationship gate. Without it,
+  only public subjects (`checkpoints`, `history_card/1`) are answered; every other request gets a
+  signed `not_authorized` refusal. A malformed or unauthenticated request is answered without a
+  book record and never makes the book checkpoint, so `respond` may print no `record_id` or
+  `relationship`.
+- **Changed (records):** a recorded response's statement may carry `not_checked`, and an answer
+  that fails its checks is recorded as `artifact_verification_failed`; a signed refusal with an
+  unregistered reason as `refusal_nonconformant`. A recorded absence's statement is the profile's
+  absence record (`outcome`, `request_digest`, `route`, `window`, `recorded_at`).
+- **Changed (sealed bytes):** a new book record's links are no longer sealed as `references[]`
+  entries carrying `citation_purpose` (the link type). Every record with links (a close,
+  acknowledgement, rebuttal, disclosure, `evidence_result`, recorded response or absence) gets a
+  capsule and record id that differ from what the previous build sealed for the same entry. Records already
+  in a book keep verifying and keep their ids; the header still names every link's type.
+- **Breaking (pending requests):** a request a book recorded before this upgrade holds the old
+  request shape, which evidencebook no longer reads back: `request --response` and
+  `request --absent-until` for it fail with a corrupt-record error, and an upgraded responder
+  refuses its bytes as `request_malformed`. Record the outcome of every pending request before
+  upgrading, or ask again after it.
+- **Changed:** `request --witness-directory` applies to a deal copy only; on a book profile it is
+  refused, since the profile reply carries no witness receipts.
+
+Deal (sqlite) profiles are unchanged: a deal copy request, its answer, the records a deal keeps
+and a composed/v1 member's `response` keep their bytes. evidencebook no longer writes that
+pre-profile wire, so capsulectl holds its types itself (`internal/cli/deal_wire.go`).
 
 ## v0.1.0-rc16
 

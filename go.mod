@@ -6,7 +6,7 @@ require (
 	github.com/action-state-group/agent-action-capsule/go v0.7.1-0.20261013151350-a726b9f5442f
 	github.com/action-state-group/capsule-emit/go v0.3.0
 	github.com/action-state-group/checkpointed-local-log/go v0.1.0
-	github.com/action-state-group/evidencebook v0.1.2-0.20261008160739-b970240ce88a
+	github.com/action-state-group/evidencebook v0.1.2-0.20261015021641-d3ae0fe80bf0
 	github.com/emersion/go-msgauth v0.7.0
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1
@@ -22,7 +22,6 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
-	github.com/action-state-group/capsule-emit-go v0.2.0 // indirect
 	github.com/datatrails/go-datatrails-merklelog/mmr v0.4.2-0.20250428132117-275103a34a08 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect

@@ -40,14 +40,11 @@ import (
 // held in one place here:
 //   - dealSubjectKind: a deal is named by a correlation subject whose value
 //     is the deal id both parties hold (`deal open --deal-id`).
-//   - dealPin: coverage.expected_pin is {root, mmr_size}, evidencebook's Pin.
+//   - dealPin: coverage.expected_pin is {root, mmr_size}.
 
 // dealSubjectKind is the subject form that names a deal: its value is the
 // deal id.
 const dealSubjectKind = evidencebook.SubjectCorrelation
-
-// dealPin is the expected_pin shape a deal request carries.
-type dealPin = evidencebook.Pin
 
 // dealCopyAudience is the audience a served copy is cut for: the other party.
 const dealCopyAudience = dealAudienceCounterparty
@@ -86,14 +83,14 @@ const dealRequestsSchema = `CREATE TABLE IF NOT EXISTS deal_requests (
 
 // dealSubject reports whether a subject names a deal: dealSubjectKind with
 // a deal id as its value, and nothing else.
-func dealSubject(s evidencebook.Subject) bool {
+func dealSubject(s dealSubjectRef) bool {
 	return s.Kind == dealSubjectKind && dealIDPattern.MatchString(s.Value) && s.Digest == "" && s.First == 0 && s.Last == 0
 }
 
 // parseDealRequest reads request bytes as evidencebook does: unknown fields
 // refused, so a field this path would ignore cannot change what is served.
-func parseDealRequest(raw []byte) (evidencebook.EvidenceRequest, error) {
-	var req evidencebook.EvidenceRequest
+func parseDealRequest(raw []byte) (dealEvidenceRequest, error) {
+	var req dealEvidenceRequest
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
@@ -108,7 +105,7 @@ func parseDealRequest(raw []byte) (evidencebook.EvidenceRequest, error) {
 // dealCanonicalRequest is the request's transmitted bytes: the JCS form
 // evidencebook.Book.Request writes, so a deal request and a book request
 // with the same fields have the same digest.
-func dealCanonicalRequest(req evidencebook.EvidenceRequest) ([]byte, error) {
+func dealCanonicalRequest(req dealEvidenceRequest) ([]byte, error) {
 	encoded, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
@@ -212,7 +209,7 @@ type dealSentRequest struct {
 	row     dealExchangeRow
 	bytes   []byte
 	digest  string
-	request evidencebook.EvidenceRequest
+	request dealEvidenceRequest
 }
 
 func (s *dealSession) sentRequest(ctx context.Context, recordID string) (dealSentRequest, error) {
@@ -324,7 +321,7 @@ func dealAsk(c *cobra.Command, p Profile, raw []byte, responder, path string) (e
 // and never recorded; a genuinely signed artifact that does not hold up is
 // recorded as artifact_failed_verification, never as a grant.
 func dealRecordResponse(c *cobra.Command, p Profile, forID string, raw []byte, keys evidencebook.ResponderKeys, directory []witnessRow) (err error) {
-	var resp evidencebook.Response
+	var resp dealResponse
 	if e := decodeJSONAs("--response", raw, &resp); e != nil {
 		return e
 	}
@@ -365,7 +362,7 @@ func dealRecordResponse(c *cobra.Command, p Profile, forID string, raw []byte, k
 		}
 		record["outcome"], record["artifact_kind"], record["artifact_digest"], record["anchor"] = evidencebook.OutcomeArtifact, a.ArtifactKind, a.ArtifactDigest, a.Anchor
 		if failure := verifyDealCopy(sent.request, *a, keys.Checkpoint, directory); failure != "" {
-			record["outcome"], record["failure"] = evidencebook.OutcomeArtifactFailed, failure
+			record["outcome"], record["failure"] = dealOutcomeArtifactFailed, failure
 		}
 	default:
 		return inputError("a response carries exactly one of artifact or refusal")
@@ -383,9 +380,9 @@ func dealRecordResponse(c *cobra.Command, p Profile, forID string, raw []byte, k
 // checkpoint is signed by the pinned checkpoint key, is on the named deal's
 // own log, is the signed anchor, and meets the request's coverage. It
 // returns why it does not, or "".
-func verifyDealCopy(req evidencebook.EvidenceRequest, a evidencebook.ArtifactResponse, checkpointKey string, directory []witnessRow) string {
-	if a.ArtifactKind != evidencebook.ArtifactEvidenceBundle {
-		return fmt.Sprintf("artifact kind %q is not %s", a.ArtifactKind, evidencebook.ArtifactEvidenceBundle)
+func verifyDealCopy(req dealEvidenceRequest, a dealArtifactResponse, checkpointKey string, directory []witnessRow) string {
+	if a.ArtifactKind != dealArtifactBundle {
+		return fmt.Sprintf("artifact kind %q is not %s", a.ArtifactKind, dealArtifactBundle)
 	}
 	value, err := decodeBundleJSON(a.Artifact)
 	if err != nil {
@@ -527,7 +524,7 @@ func dealRespond(c *cobra.Command, p Profile, raw []byte, requester, path string
 		}
 		refusal.Sig = hex.EncodeToString(sig)
 		answered["outcome"], answered["reason"] = evidencebook.OutcomeRefusal, reason
-		return s.writeAnswer(c, dealID, answered, evidencebook.Response{Refusal: &refusal}, path)
+		return s.writeAnswer(c, dealID, answered, dealResponse{Refusal: &refusal}, path)
 	}
 	req, e := parseDealRequest(raw)
 	if e != nil || !dealSubject(req.Subject) {
@@ -629,8 +626,8 @@ func dealRespond(c *cobra.Command, p Profile, raw []byte, requester, path string
 		return e
 	}
 	anchor := fmt.Sprintf("%s:%d", root, size)
-	response := evidencebook.ArtifactResponse{
-		RequestDigest: digest, Anchor: anchor, ArtifactKind: evidencebook.ArtifactEvidenceBundle, Artifact: artifact,
+	response := dealArtifactResponse{
+		RequestDigest: digest, Anchor: anchor, ArtifactKind: dealArtifactBundle, Artifact: artifact,
 		ArtifactDigest: bytesDigest(artifact), IssuedAt: dealClock().UTC().Format(time.RFC3339Nano), KeyID: evidencebook.KeyID(signer),
 	}
 	body, e := response.SigningBody()
@@ -643,7 +640,7 @@ func dealRespond(c *cobra.Command, p Profile, raw []byte, requester, path string
 	}
 	response.Sig = hex.EncodeToString(sig)
 	answered["outcome"], answered["anchor"], answered["disclosure_record"] = evidencebook.OutcomeArtifact, anchor, share["disclosure_record"]
-	return s.writeAnswer(c, dealID, answered, evidencebook.Response{Artifact: &response}, path)
+	return s.writeAnswer(c, dealID, answered, dealResponse{Artifact: &response}, path)
 }
 
 // reportAtHead is the copy's report the deal's log ends with, when its
@@ -667,7 +664,7 @@ func (s *dealSession) reportAtHead(ctx context.Context, dealID string, entries [
 
 // writeAnswer records the answer and writes the signed response. The answer
 // is on record before the file: a failure writing it still reports both.
-func (s *dealSession) writeAnswer(c *cobra.Command, dealID string, answered map[string]interface{}, response evidencebook.Response, path string) error {
+func (s *dealSession) writeAnswer(c *cobra.Command, dealID string, answered map[string]interface{}, response dealResponse, path string) error {
 	id, err := s.recordExchange(c.Context(), dealID, dealExchangeAnswered, "", answered)
 	if err != nil {
 		return err
@@ -890,7 +887,7 @@ func (s *dealSession) composeMember(ctx context.Context, dealID string, m compos
 	default:
 		// A recorded artifact, or one recorded as failed: a failed artifact
 		// is still an artifact member, and the verifier reports its failure.
-		var a evidencebook.ArtifactResponse
+		var a dealArtifactResponse
 		if err = json.Unmarshal(*resp.Artifact, &a); err != nil {
 			return nil, err
 		}

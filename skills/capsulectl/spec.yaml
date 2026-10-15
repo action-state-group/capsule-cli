@@ -245,15 +245,18 @@ verbs:
   - name: request
     args:
       - "--profile NAME --request FILE --responder NAME --output FILE"
-      - "--profile NAME --for RECORD_ID --response FILE --responder-key HEX --responder-checkpoint-key HEX [--witness-directory FILE]"
+      - "--profile NAME --for RECORD_ID --response FILE --responder-key HEX --responder-checkpoint-key HEX"
+      - "--profile NAME --for RECORD_ID --response FILE --responder-key HEX --responder-checkpoint-key HEX --witness-directory FILE (deal profile)"
       - "--profile NAME --for RECORD_ID --absent-until TIME"
     when: >-
       Ask a party for evidence (the request is recorded before it is sent),
       then record exactly one outcome for it: the answer that came back, or
       that nothing came back in the window. The output file is what to
-      transmit; this verb transmits nothing itself. An answer carrying
-      witness receipts is recorded as granted only when every receipt
-      verifies under --witness-directory, your own witness directory.
+      transmit; this verb transmits nothing itself. On a book profile the
+      request is the evidence-interop/0 request map and the answer a signed
+      envelope or refusal. On a deal profile, a copy carrying witness
+      receipts is recorded as granted only when every receipt verifies under
+      --witness-directory, your own witness directory.
     emits: (each mode's own book record is the evidence; no wrapper capsule)
     emission_mode: primary-action
 
@@ -263,8 +266,12 @@ verbs:
       - "--profile NAME --request FILE --requester ID --policy FILE --output FILE"
     when: >-
       Answer a received evidence request with a signed artifact or a signed
-      refusal, under the share policy, and record that it was answered. The
-      output file is what to send back; this verb transmits nothing itself.
+      refusal, under the share policy, and record that it was answered. On a
+      book profile --requester is the identity you authenticated the sender
+      as; without it only public subjects are answered. A malformed request
+      is refused, and an unauthenticated one answered or refused, without a
+      book record. The output file is what to send back; this verb transmits
+      nothing itself.
     emits: (the book's record of the answered request is the evidence; no wrapper capsule)
     emission_mode: primary-action
 

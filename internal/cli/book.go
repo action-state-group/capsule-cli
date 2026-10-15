@@ -9,6 +9,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
@@ -843,18 +844,11 @@ func requestCommand() *cobra.Command {
 				return inputError("--absent-until must be an RFC 3339 time")
 			}
 		}
-		var req evidencebook.EvidenceRequest
-		var resp evidencebook.Response
 		var requestBytes, responseBytes []byte
 		if ask != "" {
-			raw, e := readInput(ask)
-			if e != nil {
+			if requestBytes, e = readInput(ask); e != nil {
 				return e
 			}
-			if e = decodeJSONAs("--request "+ask, raw, &req); e != nil {
-				return e
-			}
-			requestBytes = raw
 		}
 		var responder evidencebook.ResponderKeys
 		if answer != "" {
@@ -869,18 +863,18 @@ func requestCommand() *cobra.Command {
 			}
 			// The book compares key ids as lowercase hex strings.
 			responder.Signer, responder.Checkpoint = hex.EncodeToString(keys[0]), hex.EncodeToString(keys[1])
-			raw, e := readInput(answer)
-			if e != nil {
+			if responseBytes, e = readInput(answer); e != nil {
 				return e
 			}
-			if e = decodeJSONAs("--response "+answer, raw, &resp); e != nil {
-				return e
-			}
-			responseBytes = raw
-			// Witness receipts an answer carries are checked against its
+			// Witness receipts a deal copy carries are checked against its
 			// anchor under this directory, the requester's own; without
-			// one, an answer carrying any receipt is recorded as failed.
+			// one, a copy carrying any receipt is recorded as failed. A
+			// book's answer is a profile envelope, not an Evidence Bundle,
+			// and carries no receipts.
 			if path, _ := c.Flags().GetString("witness-directory"); path != "" {
+				if p.Type != "sqlite" {
+					return inputError("--witness-directory checks the witness receipts a deal copy carries; a book's answer is a profile envelope and carries none")
+				}
 				raw, e := readInput(path)
 				if e != nil {
 					return e
@@ -910,6 +904,10 @@ func requestCommand() *cobra.Command {
 			if responder == "" || path == "" {
 				return inputError("--request needs --responder and --output")
 			}
+			req, e := parseBookRequest("--request "+ask, requestBytes)
+			if e != nil {
+				return e
+			}
 			sent, e := book.Request(c.Context(), req, responder)
 			if e != nil {
 				return bookError(e)
@@ -923,7 +921,9 @@ func requestCommand() *cobra.Command {
 			}
 			return output(c, result)
 		case answer != "":
-			record, e := book.RecordResponse(c.Context(), forID, resp, responder)
+			// Book.Request sends JCS JSON, and a reply is in the request's
+			// own encoding.
+			record, e := book.RecordResponse(c.Context(), forID, evidencebook.Message{Octets: responseBytes, MediaType: evidencebook.MediaTypeJSON}, responder)
 			if e != nil {
 				return bookError(e)
 			}
@@ -938,21 +938,21 @@ func requestCommand() *cobra.Command {
 			if e != nil {
 				return bookError(e)
 			}
-			var st evidencebook.AbsenceStatement
+			var st evidencebook.AbsenceRecord
 			if e = json.Unmarshal(record.Header.Statement, &st); e != nil {
 				return e
 			}
 			return output(c, requestResult{RecordID: record.RecordID, RequestDigest: st.RequestDigest, Outcome: evidencebook.RecordTypeAbsence})
 		}
 	}}
-	cmd.Flags().String("request", "", "Evidence request JSON to ask with (subject + exactly one coverage member)")
+	cmd.Flags().String("request", "", "Evidence request JSON to ask with: the request map of draft-mih-agent-evidence-request-00 (a one-member subject such as {\"full_history\":null}, and coverage with exactly one of expected_pin or min_freshness); on a deal profile, the deal copy request")
 	cmd.Flags().String("responder", "", "Who is being asked (recorded in the request record)")
 	cmd.Flags().String("output", "", "Write the canonical request bytes to transmit")
 	cmd.Flags().String("for", "", "The request record id an answer or absence belongs to")
 	cmd.Flags().String("response", "", "The response JSON that came back")
 	cmd.Flags().String("responder-key", "", "Required with --response: the responder's signing public key in hex; a response under any other key is refused")
 	cmd.Flags().String("responder-checkpoint-key", "", "Required with --response: the responder's checkpoint public key in hex; an artifact anchored under any other key is refused")
-	cmd.Flags().String("witness-directory", "", "With --response: a witness directory (witnesses.json format) to verify the witness receipts an answer carries; any receipt that does not verify under it, or any receipt at all without it, records the answer as failed")
+	cmd.Flags().String("witness-directory", "", "With --response on a deal profile: a witness directory (witnesses.json format) to verify the witness receipts a deal copy carries; any receipt that does not verify under it, or any receipt at all without it, records the answer as failed")
 	cmd.Flags().String("absent-until", "", "RFC 3339 end of the window in which nothing arrived")
 	cmd.Flags().String("route", "", "Route the request was sent over (recorded with an absence)")
 	return cmd
@@ -961,13 +961,15 @@ func requestCommand() *cobra.Command {
 type respondResult struct {
 	// Response carries the signed response only when --output could not be
 	// written.
-	Response      json.RawMessage `json:"response,omitempty"`
-	RecordID      string          `json:"record_id"`
-	RequestDigest string          `json:"request_digest"`
-	Outcome       string          `json:"outcome"`
-	Reason        string          `json:"reason,omitempty"`
-	Relationship  string          `json:"relationship"`
-	Output        string          `json:"output"`
+	Response json.RawMessage `json:"response,omitempty"`
+	// RecordID and Relationship are empty when the book recorded nothing:
+	// a malformed or unauthenticated request is answered unrecorded.
+	RecordID      string `json:"record_id,omitempty"`
+	RequestDigest string `json:"request_digest"`
+	Outcome       string `json:"outcome"`
+	Reason        string `json:"reason,omitempty"`
+	Relationship  string `json:"relationship,omitempty"`
+	Output        string `json:"output"`
 }
 
 func respondCommand() *cobra.Command {
@@ -1007,30 +1009,117 @@ func respondCommand() *cobra.Command {
 			return e
 		}
 		defer func() { err = errors.Join(err, opened.release()) }()
-		response, record, e := opened.book.Respond(c.Context(), requestBytes, evidencebook.RespondOptions{RequesterID: requester, Policy: policy})
+		// The operator running respond is the transport: --requester is the
+		// identity they authenticated the request's sender as, and the only
+		// input to the book's relationship gate. Empty, only public
+		// subjects are answered.
+		reply, record, e := opened.book.Respond(c.Context(), evidencebook.Message{Octets: requestBytes, MediaType: evidencebook.MediaTypeJSON},
+			evidencebook.RespondOptions{AuthenticatedRequester: requester, Policy: policy})
 		if e != nil {
 			return bookError(e)
 		}
-		encoded, e := json.Marshal(response)
-		if e != nil {
-			return e
+		encoded := reply.Octets
+		result := respondResult{RecordID: record.RecordID, Output: path}
+		switch {
+		case record.RecordID != "":
+			var st evidencebook.AnsweredStatement
+			if e = json.Unmarshal(record.Header.Statement, &st); e != nil {
+				return e
+			}
+			result.RequestDigest, result.Outcome, result.Reason, result.Relationship = st.RequestDigest, st.Outcome, st.Reason, st.Relationship
+		case reply.Refusal != nil:
+			// A malformed or unauthenticated request is refused without a
+			// record: such traffic never grows the log.
+			result.RequestDigest, result.Outcome, result.Reason = reply.Refusal.RequestDigest, evidencebook.OutcomeRefusal, reply.Refusal.Reason
+		case reply.Envelope != nil:
+			result.RequestDigest, result.Outcome = reply.Envelope.RequestDigest, evidencebook.OutcomeArtifact
 		}
-		var st evidencebook.AnsweredStatement
-		if e = json.Unmarshal(record.Header.Statement, &st); e != nil {
-			return e
-		}
-		result := respondResult{RecordID: record.RecordID, RequestDigest: st.RequestDigest, Outcome: st.Outcome, Reason: st.Reason, Relationship: st.Relationship, Output: path}
 		if e = atomicFile(path, encoded, false); e != nil {
-			// The answer is on record and signed already: report both
-			// rather than lose the response with the file.
+			// The reply is signed (and, when record_id is set, on record)
+			// already: report it rather than lose it with the file.
 			result.Output, result.Response = "", encoded
 			return errors.Join(e, output(c, result))
 		}
 		return output(c, result)
 	}}
 	cmd.Flags().String("request", "", "The request bytes as received")
-	cmd.Flags().String("requester", "", "The requester's identity as the transport supplied it (not authenticated here)")
+	cmd.Flags().String("requester", "", "The requester's identity as you authenticated it on the channel the request came over; without it only public subjects (checkpoints, history_card/1) are answered. On a deal profile, who the copy is shared with")
 	cmd.Flags().String("policy", "", "Share policy JSON (record_at_completion, history_segments, adjudications, witness); default: the documented defaults")
-	cmd.Flags().String("output", "", "Write the signed response JSON to send back")
+	cmd.Flags().String("output", "", "Write the signed reply (envelope or refusal) to send back")
 	return cmd
+}
+
+// bookRequestInput is the request map of draft-mih-agent-evidence-request-00
+// in JSON, as `request --request` reads it. evidencebook exports the request
+// as a struct only, so this maps the wire members onto it; Book.Request
+// checks every value and encodes the map it sends.
+type bookRequestInput struct {
+	Subject  map[string]json.RawMessage `json:"subject"`
+	Coverage struct {
+		ExpectedPin  string          `json:"expected_pin,omitempty"`
+		MinFreshness json.RawMessage `json:"min_freshness,omitempty"`
+	} `json:"coverage"`
+	Derivation string `json:"derivation,omitempty"`
+	Deadline   string `json:"deadline,omitempty"`
+	Nonce      string `json:"nonce,omitempty"`
+	Route      string `json:"route,omitempty"`
+	Profile    string `json:"profile,omitempty"`
+}
+
+func parseBookRequest(label string, raw []byte) (evidencebook.EvidenceRequest, error) {
+	var in bookRequestInput
+	if err := decodeJSONAs(label, raw, &in); err != nil {
+		return evidencebook.EvidenceRequest{}, err
+	}
+	req := evidencebook.EvidenceRequest{
+		Coverage:   evidencebook.Coverage{ExpectedPin: in.Coverage.ExpectedPin},
+		Derivation: in.Derivation, Deadline: in.Deadline, Nonce: in.Nonce, Route: in.Route, Profile: in.Profile,
+	}
+	if len(in.Subject) != 1 {
+		return req, inputError(label + ": subject is a map with exactly one member, its form: full_history, checkpoints, record, exchange, range or correlation")
+	}
+	for form, content := range in.Subject {
+		req.Subject.Kind = evidencebook.SubjectKind(form)
+		var err error
+		switch req.Subject.Kind {
+		case evidencebook.SubjectFullHistory, evidencebook.SubjectCheckpoints:
+			if string(bytes.TrimSpace(content)) != "null" {
+				err = errors.New("its content is null")
+			}
+		case evidencebook.SubjectRecord, evidencebook.SubjectExchange:
+			err = json.Unmarshal(content, &req.Subject.Digest)
+		case evidencebook.SubjectRange:
+			var pair []uint64
+			if err = json.Unmarshal(content, &pair); err == nil && len(pair) != 2 {
+				err = errors.New("its content is two log positions")
+			} else if err == nil {
+				req.Subject.Range = [2]uint64{pair[0], pair[1]}
+			}
+		case evidencebook.SubjectCorrelation:
+			err = json.Unmarshal(content, &req.Subject.Correlation)
+		default:
+			err = errors.New("not one of the six forms")
+		}
+		if err != nil {
+			return req, inputError(fmt.Sprintf("%s: subject %q: %v", label, form, err))
+		}
+	}
+	if floor := bytes.TrimSpace(in.Coverage.MinFreshness); len(floor) > 0 {
+		req.Coverage.MinFreshness = &evidencebook.Freshness{}
+		var err error
+		switch {
+		case string(floor) == "null":
+			err = errors.New("null")
+		case floor[0] == '"':
+			err = json.Unmarshal(floor, &req.Coverage.MinFreshness.Time)
+		default:
+			var size uint64
+			err = json.Unmarshal(floor, &size)
+			req.Coverage.MinFreshness.Size = &size
+		}
+		if err != nil {
+			return req, inputError(label + ": min_freshness is a log size or an RFC 3339 UTC time")
+		}
+	}
+	return req, nil
 }
