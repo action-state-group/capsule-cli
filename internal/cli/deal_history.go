@@ -17,7 +17,7 @@ import (
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
-	emit "github.com/action-state-group/capsule-emit-go"
+	emit "github.com/action-state-group/capsule-emit/go"
 	"github.com/spf13/cobra"
 )
 

@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/action-state-group/capsule-emit-go/artifact"
+	"github.com/action-state-group/capsule-emit/go/artifact"
 	"github.com/action-state-group/evidencebook"
 	"github.com/spf13/cobra"
 )

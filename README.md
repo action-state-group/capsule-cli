@@ -1,6 +1,6 @@
 # capsule-cli
 
-Standalone Go executable `capsulectl`, wrapping `capsule-emit-go`, its optional
+Standalone Go executable `capsulectl`, wrapping `capsule-emit/go`, its optional
 artifact SDK, `cll-go` and the `evidencebook` Go library. Applications import
 those libraries, not this CLI: everything outside `cmd/` is under Go's
 `internal/` and cannot be imported. This repository is a command-line tool, not
@@ -1110,7 +1110,7 @@ verified, and a copy with one payload edited must say it failed. Tests run with 
 No production credentials or database tunnels are used.
 
 The artifact storage SDK is maintained and tested separately in
-[capsule-emit-go](https://github.com/action-state-group/capsule-emit-go), whose CI
+[capsule-emit/go](https://github.com/action-state-group/capsule-emit/tree/main/go), whose CI
 sets `CAPSULE_STORAGE_TEST_DSN` for its own isolated MySQL integration tests.
 CLI CI tests integration with the SDK version pinned in `go.mod`.
 

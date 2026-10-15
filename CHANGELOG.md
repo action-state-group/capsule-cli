@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### capsule-emit from its released module path
+
+- **Changed (build):** capsulectl imports `github.com/action-state-group/capsule-emit/go`
+  v0.3.0, the first release of the module that replaces the archived
+  `github.com/action-state-group/capsule-emit-go`. `go.mod` no longer replaces the old path with
+  an unreleased pseudo-version. The pinned evidencebook still imports the old path, so `go.mod`
+  keeps `capsule-emit-go v0.2.0` as an indirect requirement: without it, minimal version selection
+  would build evidencebook against v0.1.0, which stamps `spec_version` `-04`. No sealed bytes
+  change.
+
 ## v0.1.0-rc16
 
 ### The presentation pass, a CI job of its own

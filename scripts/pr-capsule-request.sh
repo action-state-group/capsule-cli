@@ -141,7 +141,7 @@ fi
 short_head="${CAPSULE_PR_HEAD_SHA:0:12}"
 action_id="pr-${CAPSULE_PR_REPO//\//-}-${CAPSULE_PR_NUMBER}-${short_head}${merge_decision:+-$merge_decision}"
 # The head commit's own timestamp, not wall-clock: capsule_id is a digest
-# over the whole payload including Timestamp (capsule-emit-go build.go),
+# over the whole payload including Timestamp (capsule-emit/go build.go),
 # so a wall-clock value would mint a distinct capsule on every re-run of the
 # same PR/head-sha even when nothing else changed. Using the commit's own
 # timestamp makes the request (and so capsule_id) deterministic given the
