@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	emit "github.com/action-state-group/capsule-emit-go"
-	"github.com/action-state-group/capsule-emit-go/artifact"
+	emit "github.com/action-state-group/capsule-emit/go"
+	"github.com/action-state-group/capsule-emit/go/artifact"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,14 +23,14 @@ const (
 	unrecognizedSpecVersion = "draft-mih-scitt-agent-action-capsule-99"
 )
 
-// emitModuleDir resolves the capsule-emit-go module pinned in go.mod, so tests
+// emitModuleDir resolves the capsule-emit/go module pinned in go.mod, so tests
 // replay its committed vectors instead of keeping copies in this repository.
 func emitModuleDir(t *testing.T) string {
 	t.Helper()
-	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/action-state-group/capsule-emit-go").Output()
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/action-state-group/capsule-emit/go").Output()
 	require.NoError(t, err)
 	dir := strings.TrimSpace(string(out))
-	require.NotEmpty(t, dir, "capsule-emit-go module is not downloaded")
+	require.NotEmpty(t, dir, "capsule-emit/go module is not downloaded")
 	return dir
 }
 
@@ -86,7 +86,7 @@ type interopExpected struct {
 }
 
 // TestV04RecordAndV05TwinLoadAndVerifyThroughArtifactStore replays
-// capsule-emit-go's committed format-4 interop packs: every released -04
+// capsule-emit/go's committed format-4 interop packs: every released -04
 // record and its -05 twin is stored, read back byte-for-byte, and verified
 // (identity, Producer Envelope, trusted signer) through capsule-cli's
 // artifact store. The twins differ only by the spec_version the ID commits to.

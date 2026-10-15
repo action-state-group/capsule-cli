@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	emit "github.com/action-state-group/capsule-emit-go"
+	emit "github.com/action-state-group/capsule-emit/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

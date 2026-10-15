@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"unicode/utf8"
 
-	"github.com/action-state-group/capsule-emit-go/artifact"
+	"github.com/action-state-group/capsule-emit/go/artifact"
 )
 
 // displayBytes is a presentation only: JSON reserialization must never be used

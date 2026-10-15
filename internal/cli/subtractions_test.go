@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/action-state-group/capsule-emit-go/artifact"
+	"github.com/action-state-group/capsule-emit/go/artifact"
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
 	"github.com/action-state-group/checkpointed-local-log/go/store/memory"

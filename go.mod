@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/action-state-group/agent-action-capsule/go v0.7.1-0.20261013151350-a726b9f5442f
-	github.com/action-state-group/capsule-emit-go v0.2.0
+	github.com/action-state-group/capsule-emit/go v0.3.0
 	github.com/action-state-group/checkpointed-local-log/go v0.1.0
 	github.com/action-state-group/evidencebook v0.1.2-0.20261008160739-b970240ce88a
 	github.com/emersion/go-msgauth v0.7.0
@@ -22,6 +22,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/action-state-group/capsule-emit-go v0.2.0 // indirect
 	github.com/datatrails/go-datatrails-merklelog/mmr v0.4.2-0.20250428132117-275103a34a08 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -46,5 +47,3 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.58.0 // indirect
 )
-
-replace github.com/action-state-group/capsule-emit-go => github.com/action-state-group/capsule-emit/go v0.0.0-20261009182422-f183b1557ab0

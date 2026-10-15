@@ -15,7 +15,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	emit "github.com/action-state-group/capsule-emit-go"
+	emit "github.com/action-state-group/capsule-emit/go"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 )

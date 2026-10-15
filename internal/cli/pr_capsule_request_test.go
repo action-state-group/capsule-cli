@@ -129,7 +129,7 @@ func TestPRCapsuleRequestShapeAgentDeclared(t *testing.T) {
 	})
 
 	// The request must place the declared model at the top-level "model" key,
-	// never nested under "capsule": capsule-emit-go's Seal() rejects a
+	// never nested under "capsule": capsule-emit/go's Seal() rejects a
 	// request whose capsule.Model is set directly (sign.go), so a script that
 	// nested it there would fail this line, not silently ship a wrong shape.
 	var decoded map[string]any

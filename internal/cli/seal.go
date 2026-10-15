@@ -13,8 +13,8 @@ import (
 	"regexp"
 	"strings"
 
-	emit "github.com/action-state-group/capsule-emit-go"
-	"github.com/action-state-group/capsule-emit-go/artifact"
+	emit "github.com/action-state-group/capsule-emit/go"
+	"github.com/action-state-group/capsule-emit/go/artifact"
 )
 
 // Request is an application-neutral v1 sealing request. Capsule metadata follows
@@ -285,7 +285,7 @@ func readRecord(path string) (artifact.Record, error) {
 // Missing originals are coverage gaps, not failed signatures. The SDK validates
 // supplied bindings; the CLI additionally reports committed fields for which
 // no retained preimage was supplied in an imported artifact file.
-// TODO: this coverage check belongs in capsule-emit-go; move it there once an
+// TODO: this coverage check belongs in capsule-emit/go; move it there once an
 // SDK release exposes it and bump the go.mod pin.
 func missingBindings(r artifact.Record) []string {
 	payload, err := emit.DecodePayload(r.Capsule)

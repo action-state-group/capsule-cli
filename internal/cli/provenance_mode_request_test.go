@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
-	emit "github.com/action-state-group/capsule-emit-go"
+	emit "github.com/action-state-group/capsule-emit/go"
 
 	"github.com/action-state-group/agent-action-capsule/go/verify"
 	"github.com/stretchr/testify/assert"
@@ -15,7 +15,7 @@ import (
 )
 
 // Vector capsule_ids and field values are copied by hand from
-// capsule-emit-go's testdata/provenance-mode-vectors/ (itself a byte-for-byte
+// capsule-emit/go's testdata/provenance-mode-vectors/ (itself a byte-for-byte
 // copy of the AAC provenance-mode-vectors corpus, agent-action-capsule,
 // branch aac-external-review-followups, commit 8def04c5). Those released
 // vectors carry spec_version -04 and are never rewritten. capsulectl now

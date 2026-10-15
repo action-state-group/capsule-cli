@@ -14,7 +14,7 @@ import (
 	"time"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
-	"github.com/action-state-group/capsule-emit-go/artifact"
+	"github.com/action-state-group/capsule-emit/go/artifact"
 	"github.com/action-state-group/evidencebook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

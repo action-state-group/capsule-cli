@@ -2,7 +2,7 @@
 
 This repository will contain a CLI wrapper over emit, artifact storage, and CLL.
 
-- Keep reusable storage in capsule-emit-go/artifact, not in this CLI repository.
+- Keep reusable storage in capsule-emit/go/artifact, not in this CLI repository.
 - Reuse emit and CLL libraries; do not reimplement AAC digest/signature rules.
 - Preserve exact bytes and explicit digest bindings; unbound attachments are not
   authenticated Capsule content. Trusted keys come from deployment policy.
