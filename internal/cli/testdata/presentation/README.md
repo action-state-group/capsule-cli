@@ -66,7 +66,7 @@ through the real CLI. Run it only to change a fixture on purpose.
 the one registry, shell and builder capsulectl has, with no plugin installed:
 
 - **One page per (bundle, audience), for audiences `*` and `counterparty`.** The html page is
-  agent-action-capsule's offline packaging of the bundle as given (`emitter.BuildOfflineHTML`),
+  capsule-viewer's offline packaging of the bundle as given (`emitter.BuildOfflineHTML`),
   so no bundle kind has a renderer of its own.
 - **Refused packagings.** `presentation build` does not build fragment or embedded, and static is
   unavailable: the test asserts each refusal for every bundle. Fixture 3 gets no page: its bundle
