@@ -10,6 +10,7 @@ package settlement
 
 import (
 	"encoding/hex"
+	"slices"
 
 	"github.com/action-state-group/agent-action-capsule/go/envelope"
 	aacsettlement "github.com/action-state-group/agent-action-capsule/go/settlement"
@@ -139,13 +140,16 @@ func Verify(in Input) Result {
 		capsules = append(capsules, wireCapsule(l, &keys[i]))
 	}
 	aac := aacsettlement.Verify(aacsettlement.Input{Capsules: capsules, WrappedObjects: in.Objects, KeyPolicy: in.Policy})
+	views := make([]legView, len(in.Legs))
+	for i, l := range in.Legs {
+		views[i] = newLegView(l, capsules[i], keys[i], in)
+	}
 
-	labels := newLabels(in.Legs)
 	result := Result{
 		Conforming:  aac.Conforming,
-		Failures:    labels.reports(aac.Failures),
-		Findings:    labels.reports(aac.Findings),
-		Settlements: make([]Settlement, 0, len(aac.Settlements)),
+		Failures:    reports(aac.Failures, views),
+		Findings:    reports(aac.Findings, views),
+		Settlements: []Settlement{},
 		Legs:        make([]LegKey, 0, len(in.Legs)),
 		KeyPolicy:   "not_applied",
 	}
@@ -162,26 +166,35 @@ func Verify(in Input) Result {
 		}
 		result.Legs = append(result.Legs, entry)
 	}
-	excluded := labels.excluded(aac.Failures)
-	for _, s := range aac.Settlements {
-		out := Settlement{
-			Terms:         labels.first(s.Terms),
-			PaymentState:  PaymentUnjoined,
-			AgreedStatus:  s.AgreedStatus,
-			TermsAmount:   s.TermsAmount,
-			Differs:       s.Differs,
-			DeliveryState: s.DeliveryState,
+	// The verifier derives one settlement per terms capsule_id; each terms
+	// leg that took part is reported, in input order, as the legs were before.
+	for i, v := range views {
+		if !v.live() || v.leg() != LegTerms {
+			continue
 		}
-		// No state of the draft applies to a conflated pair that otherwise
-		// matches (sealer_conflation is listed as a failure); capsule-cli
-		// reports it as legs that cannot be joined, never as agreed.
-		if s.PaymentState != nil {
-			out.PaymentState = *s.PaymentState
+		for _, s := range aac.Settlements {
+			if s.Terms != *v.id {
+				continue
+			}
+			out := Settlement{
+				Terms:         in.Legs[i].Label,
+				PaymentState:  PaymentUnjoined,
+				AgreedStatus:  s.AgreedStatus,
+				TermsAmount:   s.TermsAmount,
+				Differs:       s.Differs,
+				DeliveryState: s.DeliveryState,
+			}
+			// No state of the draft applies to a conflated pair that otherwise
+			// matches (sealer_conflation is listed as a failure); capsule-cli
+			// reports it as legs that cannot be joined, never as agreed.
+			if s.PaymentState != nil {
+				out.PaymentState = *s.PaymentState
+			}
+			if s.DeliveryState != DeliveryNone {
+				out.DeliveryEvidence = deliveryEvidence(s.Terms, views)
+			}
+			result.Settlements = append(result.Settlements, out)
 		}
-		if s.DeliveryState != DeliveryNone {
-			out.DeliveryEvidence = deliveryEvidence(s.Terms, in.Legs, excluded)
-		}
-		result.Settlements = append(result.Settlements, out)
 	}
 	return result
 }
@@ -212,84 +225,211 @@ func wireCapsule(l Leg, key *string) interface{} {
 	return out
 }
 
-// labels maps the verifier's record ids (capsule_id, or nil when a leg's
-// capsule_id is not a string) back to the caller's labels, in input order.
-type labels struct {
-	byID map[string][]string
-	noID []string
+// legView is one input leg as the mapping reads it: its label, its record id
+// as the verifier names it (nil when capsule_id is not a string), and the
+// codes the verifier reports for this leg on its own.
+type legView struct {
+	label string
+	id    *string
+	// key is the hex key its envelope authenticates, "" when none.
+	key string
+	s   map[string]any
+	// failures are its record-level failure codes and findings its
+	// record-level finding codes, from verifying the leg alone: everything
+	// that does not depend on another leg. terms_ref_unresolved, which a leg
+	// alone always reports, is left out.
+	failures, findings map[string]bool
 }
 
-func newLabels(legs []Leg) labels {
-	out := labels{byID: map[string][]string{}}
-	for _, l := range legs {
-		id, isString := l.Capsule["capsule_id"].(string)
-		if !isString {
-			out.noID = append(out.noID, l.Label)
-			continue
+// newLegView verifies the leg alone, with the same wrapped objects and key
+// policy, to learn which record-level codes are its own. The verifier names
+// a record by capsule_id only, so this is what tells apart two legs that
+// share one (a valid copy and a re-signed or broken copy).
+func newLegView(l Leg, wire interface{}, key string, in Input) legView {
+	v := legView{label: l.Label, key: key, failures: map[string]bool{}, findings: map[string]bool{}}
+	if id, isString := l.Capsule["capsule_id"].(string); isString {
+		v.id = &id
+	}
+	v.s, _ = l.Capsule["settlement"].(map[string]any)
+	alone := aacsettlement.Verify(aacsettlement.Input{Capsules: []interface{}{wire}, WrappedObjects: in.Objects, KeyPolicy: in.Policy})
+	for _, f := range alone.Failures {
+		if f.Code != "terms_ref_unresolved" {
+			v.failures[f.Code] = true
 		}
-		out.byID[id] = append(out.byID[id], l.Label)
 	}
-	return out
+	for _, f := range alone.Findings {
+		v.findings[f.Code] = true
+	}
+	return v
 }
 
-func (m labels) of(id *string) []string {
-	if id == nil {
-		return m.noID
-	}
-	return m.byID[*id]
+// live is whether the leg took part in the derived states: it has no failure
+// of its own.
+func (v legView) live() bool { return v.id != nil && len(v.failures) == 0 }
+
+func (v legView) leg() string { text, _ := v.s["leg"].(string); return text }
+
+func (v legView) names(id *string) bool {
+	return (id == nil && v.id == nil) || (id != nil && v.id != nil && *id == *v.id)
 }
 
-func (m labels) first(id string) string {
-	if names := m.byID[id]; len(names) > 0 {
-		return names[0]
+// reports maps the verifier's entries back to labels. A record-level code
+// names only the legs with that capsule_id whose own codes include it, one
+// leg per entry in input order (the verifier reports them in that order); a
+// leg passed twice under one key is reported once by the verifier and keeps
+// every label. Any other entry is about legs together: each record names its
+// live legs, or every leg with that capsule_id when none is live.
+func reports(entries []aacsettlement.Entry, views []legView) []Report {
+	remaining := map[string]int{}
+	for _, e := range entries {
+		if len(e.Records) == 1 {
+			remaining[entryKey(e)]++
+		}
 	}
-	return id
-}
-
-func (m labels) reports(entries []aacsettlement.Entry) []Report {
+	used := map[string]int{}
 	out := make([]Report, 0, len(entries))
 	for _, e := range entries {
 		records := []string{}
-		for _, id := range e.Records {
-			records = append(records, m.of(id)...)
+		var own []legView
+		if len(e.Records) == 1 {
+			for _, v := range views {
+				if v.names(e.Records[0]) && (v.failures[e.Code] || v.findings[e.Code]) {
+					own = append(own, v)
+				}
+			}
+		}
+		switch {
+		case len(own) > 0:
+			key := entryKey(e)
+			remaining[key]--
+			from := min(used[key], len(own)-1)
+			to := from + 1
+			if remaining[key] == 0 {
+				to = len(own)
+			}
+			used[key] = to
+			for _, v := range own[from:to] {
+				records = append(records, v.label)
+			}
+		case e.Code == "fee_asset_differs":
+			records = feeAssetDiffers(e.Records[0], views)
+		case e.Code == "sealer_conflation" && len(e.Records) == 2:
+			records = conflated(e.Records[0], e.Records[1], views)
+		default:
+			for _, id := range e.Records {
+				records = append(records, together(id, views)...)
+			}
 		}
 		out = append(out, Report{Records: records, Code: e.Code})
 	}
 	return out
 }
 
-// excluded is the capsule ids a failure of their own names: those legs take
-// no part in any state. sealer_conflation, a failure of a pair, excludes
-// neither leg.
-func (m labels) excluded(failures []aacsettlement.Entry) map[string]bool {
-	out := map[string]bool{}
-	for _, f := range failures {
-		if len(f.Records) == 1 && f.Records[0] != nil {
-			out[*f.Records[0]] = true
+func entryKey(e aacsettlement.Entry) string {
+	if e.Records[0] == nil {
+		return e.Code + "\x00"
+	}
+	return e.Code + "\x00:" + *e.Records[0]
+}
+
+// together is the labels a record of an entry about several legs names: its
+// live legs, or every leg with that capsule_id when none is live.
+func together(id *string, views []legView) []string {
+	var live, all []string
+	for _, v := range views {
+		if v.names(id) {
+			all = append(all, v.label)
+			if v.live() {
+				live = append(live, v.label)
+			}
 		}
 	}
-	return out
+	if len(live) > 0 {
+		return live
+	}
+	return all
+}
+
+// conflated is the labels of a sealer_conflation pair: the payer-observed
+// legs with capsule_id payer and the payee-observed legs with capsule_id
+// payee that share an authenticated key.
+func conflated(payer, payee *string, views []legView) []string {
+	var payers, payees []string
+	for _, p := range views {
+		if !p.names(payer) || p.key == "" || p.leg() != LegPayerObserved {
+			continue
+		}
+		for _, q := range views {
+			if q.names(payee) && q.key == p.key && q.leg() == LegPayeeObserved {
+				if !slices.Contains(payers, p.label) {
+					payers = append(payers, p.label)
+				}
+				if !slices.Contains(payees, q.label) {
+					payees = append(payees, q.label)
+				}
+			}
+		}
+	}
+	if len(payers) == 0 {
+		return append(together(payer, views), together(payee, views)...)
+	}
+	return append(payers, payees...)
+}
+
+// feeAssetDiffers names the leg whose fee is in another asset. The verifier
+// names the payee-observed leg for either fee; when the payee's receive fee
+// is in its received asset, it is the payer's routing_fee that differs from
+// the payer's amount, so the payer-observed leg is named.
+func feeAssetDiffers(payee *string, views []legView) []string {
+	named := together(payee, views)
+	for _, v := range views {
+		if !v.names(payee) || !v.live() || v.leg() != LegPayeeObserved {
+			continue
+		}
+		received := assetOf(v.s["received"])
+		fee := received
+		if _, stated := v.s["receive_fee"]; stated {
+			fee = assetOf(v.s["receive_fee"])
+		}
+		if fee != received {
+			return named
+		}
+		var payers []string
+		for _, p := range views {
+			_, routed := p.s["routing_fee"]
+			if p.live() && p.leg() == LegPayerObserved && p.s["terms_ref"] == v.s["terms_ref"] && routed && assetOf(p.s["routing_fee"]) != assetOf(p.s["amount"]) {
+				payers = append(payers, p.label)
+			}
+		}
+		if len(payers) > 0 {
+			return payers
+		}
+	}
+	return named
+}
+
+func assetOf(amount any) any {
+	object, _ := amount.(map[string]any)
+	return object["assetCode"]
 }
 
 // deliveryEvidence names the sources behind a delivery state from the
 // delivered legs that answer the terms leg termsID and took part in it. The
 // verifier derives the state; which sources back it is capsule-cli's reading.
-func deliveryEvidence(termsID string, legs []Leg, excluded map[string]bool) []string {
+func deliveryEvidence(termsID string, views []legView) []string {
 	sources := map[string]bool{}
-	for _, l := range legs {
-		id, _ := l.Capsule["capsule_id"].(string)
-		s, _ := l.Capsule["settlement"].(map[string]any)
-		if id == "" || excluded[id] || s["leg"] != LegDelivered || s["terms_ref"] != termsID {
+	for _, v := range views {
+		if !v.live() || v.leg() != LegDelivered || v.s["terms_ref"] != termsID {
 			continue
 		}
-		d, _ := s["delivery"].(map[string]any)
+		d, _ := v.s["delivery"].(map[string]any)
 		switch d["direction"] {
 		case "sent":
 			sources[EvidenceSellerHandoff] = true
 		case "received":
 			sources[EvidenceBuyerReceipt] = true
 		}
-		entries, _ := s["wrapped"].([]any)
+		entries, _ := v.s["wrapped"].([]any)
 		for _, item := range entries {
 			if w, _ := item.(map[string]any); w["type"] == "delivery.proof" {
 				sources[EvidenceCarrierConfirmation] = true

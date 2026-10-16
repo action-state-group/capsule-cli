@@ -366,3 +366,130 @@ func TestVerifyBundleRequiresButDoesNotReadTheReceiptPosition(t *testing.T) {
 	assert.Equal(t, "fail", state)
 	assert.Equal(t, []interface{}{"witness_receipt_malformed:0"}, findings)
 }
+
+// An entry that is not a receipt this CLI reads is malformed, and fails the
+// file, even where its witness has no directory row.
+func TestVerifyBundleFailsAMalformedReceiptWithoutARow(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	directory := writeDirectory(t, rawKeyRow("https://other.example", public))
+	for name, edit := range map[string]func(map[string]interface{}){
+		"receipt_b64 not base64":   func(r map[string]interface{}) { r["receipt_b64"] = "!" },
+		"receipt_b64 empty":        func(r map[string]interface{}) { r["receipt_b64"] = "" },
+		"receipt_b64 not a string": func(r map[string]interface{}) { r["receipt_b64"] = json.Number("42") },
+		"entry_hash missing":       func(r map[string]interface{}) { delete(r, "entry_hash") },
+		"entry_hash not a string":  func(r map[string]interface{}) { r["entry_hash"] = true },
+		"ts_url empty":             func(r map[string]interface{}) { r["ts_url"] = "" },
+		"leaf_index missing":       func(r map[string]interface{}) { delete(r, "leaf_index") },
+		"receipt is not an object": nil,
+	} {
+		path := producedBundle(t, func(b map[string]interface{}) {
+			witnessed(t, private)(b)
+			if edit == nil {
+				b["checkpoint"].(map[string]interface{})["witnesses"] = []interface{}{"not a receipt"}
+				return
+			}
+			edit(witnessEntry(b))
+		})
+		for _, dir := range []string{"", directory} {
+			result, err := verifyWithDirectory(t, path, dir)
+			assert.ErrorIs(t, err, ErrBundleInvalid, name)
+			assert.Equal(t, 1, ExitCode(err), name)
+			assert.Equal(t, "INVALID", result["verdict"], name)
+			state, findings := bundleWitnesses(result)
+			assert.Equal(t, "fail", state, name)
+			assert.Equal(t, []interface{}{"witness_receipt_malformed:0"}, findings, name)
+		}
+	}
+}
+
+// Findings are listed in entry order.
+func TestVerifyBundleListsWitnessFindingsInEntryOrder(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	path := producedBundle(t, func(b map[string]interface{}) {
+		witnessed(t, private)(b)
+		cp := b["checkpoint"].(map[string]interface{})
+		cp["witnesses"] = append(cp["witnesses"].([]interface{}), "not a receipt", witnessEntry(b), map[string]interface{}{"ts_url": testWitness})
+	})
+	result, err := verifyWithDirectory(t, path, "")
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	_, findings := bundleWitnesses(result)
+	assert.Equal(t, []interface{}{
+		"witness_unverified:" + testWitness,
+		"witness_receipt_malformed:1",
+		"witness_unverified:" + testWitness,
+		"witness_receipt_malformed:3",
+	}, findings)
+}
+
+// A directory row of another shape than witnesses.json's is an input error.
+func TestVerifyBundleRefusesAWitnessDirectoryRowOfAnotherShape(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bundle := producedBundle(t, nil)
+	for name, data := range map[string]string{
+		"a row that is not an object":   `{"witnesses": [42]}`,
+		"key_ids not a list":            `{"witnesses": [{"name": "w", "endpoint": "https://w.example", "key_ids": "abc"}]}`,
+		"a public key that is a number": `{"witnesses": [{"name": "w", "endpoint": "https://w.example", "key_ids": [], "public_keys": [1]}]}`,
+		"a bare list with a bad row":    `[{"endpoint": 7}]`,
+	} {
+		path := filepath.Join(t.TempDir(), "witnesses.json")
+		require.NoError(t, os.WriteFile(path, []byte(data), 0o600))
+		_, err := invoke(t, "", "verify", "--bundle", bundle, "--witness-directory", path)
+		assert.Equal(t, 2, ExitCode(err), name)
+		assert.Contains(t, SafeError(err), "not a witnesses.json file", name)
+	}
+}
+
+// aacStrictWitness is testdata/aac-strict-witness/vectors.json: agent-action-
+// capsule's strict Bundle vectors for the rekor and ES256 receipts.
+type aacStrictWitness struct {
+	WitnessDirectory json.RawMessage `json:"witness_directory"`
+	Cases            []struct {
+		ID     string          `json:"id"`
+		Bundle json.RawMessage `json:"bundle"`
+	} `json:"cases"`
+}
+
+// The rekor binding and a P-256 cll witness, at the CLI boundary, on
+// agent-action-capsule's own vectors.
+func TestVerifyBundleChecksRekorAndES256ReceiptsFromTheAACVectors(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	raw, err := os.ReadFile("testdata/aac-strict-witness/vectors.json")
+	require.NoError(t, err)
+	var vectors aacStrictWitness
+	require.NoError(t, json.Unmarshal(raw, &vectors))
+	dir := t.TempDir()
+	directory := filepath.Join(dir, "witnesses.json")
+	require.NoError(t, os.WriteFile(directory, vectors.WitnessDirectory, 0o600))
+	want := map[string]struct{ status, binding, finding string }{
+		"pos-witness-cll-es256":           {"pass", "cll", ""},
+		"pos-witness-rekor":               {"pass", "rekor", ""},
+		"neg-witness-rekor-other-payload": {"fail", "rekor", "witness_receipt_invalid:rekor+https://rekor.example"},
+	}
+	require.Len(t, vectors.Cases, len(want))
+	for _, c := range vectors.Cases {
+		expect, listed := want[c.ID]
+		require.True(t, listed, c.ID)
+		path := filepath.Join(dir, c.ID+".json")
+		require.NoError(t, os.WriteFile(path, c.Bundle, 0o600))
+		result, err := verifyWithDirectory(t, path, directory)
+		state, findings := bundleWitnesses(result)
+		assert.Equal(t, expect.status, state, c.ID)
+		receipts := result["witnesses"].(map[string]interface{})["receipts"].([]interface{})
+		require.Len(t, receipts, 1, c.ID)
+		assert.Equal(t, expect.binding, receipts[0].(map[string]interface{})["binding"], c.ID)
+		assert.Equal(t, expect.status, receipts[0].(map[string]interface{})["status"], c.ID)
+		if expect.status == "fail" {
+			assert.ErrorIs(t, err, ErrBundleInvalid, c.ID)
+			assert.Equal(t, "INVALID", result["verdict"], c.ID)
+			assert.Equal(t, []interface{}{expect.finding}, findings, c.ID)
+		} else {
+			require.NoError(t, err, c.ID)
+			assert.Equal(t, "VALID", result["verdict"], c.ID)
+			assert.Empty(t, findings, c.ID)
+		}
+	}
+}

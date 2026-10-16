@@ -957,8 +957,9 @@ row by agent-action-capsule's witness receipt check, and reported under
 - `withheld`: the file carries none, it is a stub, the directory has no row for
   its witness, the row has no key or a key id that is not 64 lowercase hex
   characters, or the checkpoint itself did not verify;
-- `fail`: it does not verify, or is malformed (each receipt needs `ts_url`,
-  `entry_hash`, `receipt_b64`, `leaf_index` and `tree_size`).
+- `fail`: it does not verify, or is malformed (each receipt needs non-empty
+  string `ts_url` and `entry_hash`, standard base64 `receipt_b64`, and
+  `leaf_index` and `tree_size`).
 
 The CLI privileges no witness. Without `--witness-directory` no receipt is
 checked, so receipts are `withheld`.

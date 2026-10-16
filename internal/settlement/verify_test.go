@@ -255,3 +255,105 @@ func TestAgreedPaymentThatDiffersFromTheTerms(t *testing.T) {
 	assert.Equal(t, "differs", s.TermsAmount)
 	assert.Equal(t, "equal", Verify(newFixture(t, "pos-x402-two-sided-agreed").in).Settlements[0].TermsAmount)
 }
+
+// duplicate appends a copy of a leg under a new label.
+func (f *fixture) duplicate(label, as string) *Leg {
+	original := f.leg(label)
+	f.in.Legs = append(f.in.Legs, Leg{Label: as, Capsule: deepCopy(f.t, original.Capsule), Envelope: append([]byte(nil), original.Envelope...)})
+	return f.leg(as)
+}
+
+// The verifier names a record by capsule_id. Two legs with one capsule_id,
+// one valid and one not, are told apart: the failure names only the broken
+// copy, and the valid copy still takes part, as each leg did on its own
+// before.
+func TestADuplicateCapsuleIDIsReportedPerLeg(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.duplicate("x402-payee-observed", "payee-copy").Envelope = nil
+	f.duplicate("x402-delivered-received", "received-copy").Envelope = nil
+	result := Verify(f.in)
+	assert.False(t, result.Conforming)
+	assert.Equal(t, []Report{
+		{Records: []string{"payee-copy"}, Code: "envelope_invalid"},
+		{Records: []string{"received-copy"}, Code: "envelope_invalid"},
+	}, result.Failures)
+	require.Len(t, result.Settlements, 1)
+	s := result.Settlements[0]
+	assert.Equal(t, PaymentAgreed, s.PaymentState)
+	assert.Equal(t, DeliveryMatched, s.DeliveryState)
+	assert.Equal(t, []string{EvidenceSellerHandoff, EvidenceBuyerReceipt}, s.DeliveryEvidence, "the valid copy still backs the delivery")
+	assert.Equal(t, LegKey{Record: "payee-copy"}, result.Legs[5])
+	assert.Len(t, result.Legs[2].AuthenticatedKey, 64)
+
+	// Re-signed under the payer's key: the copy is not authorized for the
+	// payee role and is conflated with the payer's leg; the original is not.
+	g := newFixture(t, "pos-x402-two-sided-agreed")
+	g.duplicate("x402-payee-observed", "payee-resigned")
+	g.reseal("payee-resigned", "payer")
+	result = Verify(g.in)
+	assert.Equal(t, []Report{
+		{Records: []string{"payee-resigned"}, Code: "sealer_not_authorized_for_role"},
+		{Records: []string{"x402-payer-observed", "payee-resigned"}, Code: "sealer_conflation"},
+	}, result.Failures)
+	assert.Equal(t, PaymentAgreed, result.Settlements[0].PaymentState)
+}
+
+// Two terms legs with one capsule_id answer the same legs: each is reported
+// with the same state, as each terms leg was before.
+func TestTwoTermsLegsWithOneCapsuleIDAreEachReported(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.duplicate("x402-terms", "terms-copy")
+	result := Verify(f.in)
+	require.True(t, result.Conforming, result.Failures)
+	require.Len(t, result.Settlements, 2)
+	assert.Equal(t, "x402-terms", result.Settlements[0].Terms)
+	assert.Equal(t, "terms-copy", result.Settlements[1].Terms)
+	second := result.Settlements[1]
+	second.Terms = "x402-terms"
+	assert.Equal(t, result.Settlements[0], second)
+	assert.Equal(t, PaymentAgreed, second.PaymentState)
+
+	// A broken copy of the terms leg is not reported as a settlement.
+	g := newFixture(t, "pos-x402-two-sided-agreed")
+	g.duplicate("x402-terms", "terms-copy").Envelope = nil
+	result = Verify(g.in)
+	require.Len(t, result.Settlements, 1)
+	assert.Equal(t, "x402-terms", result.Settlements[0].Terms)
+	assert.Equal(t, []Report{{Records: []string{"terms-copy"}, Code: "envelope_invalid"}}, result.Failures)
+}
+
+// fee_asset_differs names the leg whose fee is in another asset.
+func TestFeeAssetDiffersNamesTheLegWhoseFeeDiffers(t *testing.T) {
+	payer := newFixture(t, "pos-x402-two-sided-agreed").edit("x402-payer-observed", func(s map[string]any) {
+		s["routing_fee"] = map[string]any{"value": "1", "assetCode": "USD", "assetScale": json.Number("2")}
+	})
+	require.True(t, payer.Conforming, payer.Failures)
+	assert.Equal(t, PaymentUnjoined, payer.Settlements[0].PaymentState)
+	assert.Equal(t, []Report{{Records: []string{"x402-payer-observed"}, Code: "fee_asset_differs"}}, payer.Findings)
+
+	payee := newFixture(t, "pos-x402-two-sided-agreed").edit("x402-payee-observed", func(s map[string]any) {
+		s["receive_fee"].(map[string]any)["assetCode"] = "USD"
+	})
+	assert.Equal(t, []Report{{Records: []string{"x402-payee-observed"}, Code: "fee_asset_differs"}}, payee.Findings)
+}
+
+// A delivered leg naming a carrier with an empty name is accepted.
+// (capsule-cli once reported it settlement_malformed.)
+func TestAnEmptyCarrierNameIsAccepted(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	result := f.edit("x402-delivered-sent", func(s map[string]any) {
+		s["delivery"] = map[string]any{"direction": "sent", "carrier": ""}
+	})
+	assert.True(t, result.Conforming, result.Failures)
+}
+
+// A wrapped entry of an unregistered type is refused. (capsule-cli once
+// accepted it.)
+func TestAnUnregisteredWrappedTypeIsRefused(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	result := f.edit("x402-delivered-sent", func(s map[string]any) {
+		s["wrapped"] = []any{map[string]any{"type": "x-private.document", "digest_alg": "SHA-256", "digest": strings.Repeat("c", 64)}}
+	})
+	assert.False(t, result.Conforming)
+	assert.Equal(t, []Report{{Records: []string{"x402-delivered-sent"}, Code: "settlement_malformed"}}, result.Failures)
+}

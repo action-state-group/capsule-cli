@@ -20,7 +20,8 @@
   orders is compared leg by leg (mismatch or agreed) instead of `unjoined` with
   `observed_leg_not_unique`; a supersedes link counts only under the superseded leg's own key; the
   `in_progress` finding is no longer reported. A conflated pair that otherwise matches is still
-  reported `unjoined`.
+  reported `unjoined`. A delivered leg with an empty `delivery.carrier` is accepted, and a
+  wrapped entry of an unregistered type is `settlement_malformed`.
 
 ### The page emitter from capsule-viewer
 

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -114,4 +115,26 @@ func TestCountersignReceiptWithAnUnknownCriticalHeaderIsUnverified(t *testing.T)
 	state, err := verifyCountersignReceipt(public, testCountersignStatement, mintCountersignReceipt(t, entry, private, 0, true))
 	assert.Equal(t, receiptUnverified, state)
 	assert.ErrorContains(t, err, "crit")
+}
+
+// A receipt whose CBOR is not in its deterministic encoding is refused, even
+// where the bytes are not signed: here the unprotected vdp label 396 is
+// written with a 4-byte argument instead of 2.
+func TestCountersignReceiptNotStrictlyEncodedIsUnverified(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	entry := countersignEntry(t, testCountersignStatement)
+	var receipt map[string]any
+	require.NoError(t, json.Unmarshal(mintCountersignReceipt(t, entry, private, 0, false), &receipt))
+	blob, err := base64.StdEncoding.DecodeString(receipt["receipt_b64"].(string))
+	require.NoError(t, err)
+	minimal := []byte{0x19, 0x01, 0x8c}
+	require.Equal(t, 1, bytes.Count(blob, minimal))
+	blob = bytes.Replace(blob, minimal, []byte{0x1a, 0x00, 0x00, 0x01, 0x8c}, 1)
+	receipt["receipt_b64"] = base64.StdEncoding.EncodeToString(blob)
+	raw, err := json.Marshal(receipt)
+	require.NoError(t, err)
+	state, err := verifyCountersignReceipt(public, testCountersignStatement, raw)
+	assert.Equal(t, receiptUnverified, state)
+	assert.ErrorContains(t, err, "receipt rejected")
 }
