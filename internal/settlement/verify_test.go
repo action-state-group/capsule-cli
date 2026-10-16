@@ -335,6 +335,63 @@ func TestTermsRefUnresolvedNamesEachRecordOnce(t *testing.T) {
 	assert.Empty(t, result.Settlements)
 }
 
+// An altered copy that keeps a conflated leg's capsule_id and envelope fails
+// capsule_invalid and is not named in the conflation.
+func TestAnInvalidDuplicateIsNotNamedInAConflation(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.in.Policy = nil
+	f.reseal("x402-payee-observed", "payer")
+	f.duplicate("x402-payee-observed", "payee-altered").Capsule["settlement"].(map[string]any)["status"] = "failed"
+	result := Verify(f.in)
+	assert.Equal(t, []Report{
+		{Records: []string{"payee-altered"}, Code: "capsule_invalid"},
+		{Records: []string{"x402-payer-observed", "x402-payee-observed"}, Code: "sealer_conflation"},
+	}, result.Failures)
+}
+
+// When a payer observation is superseded under its own key, only the head is
+// compared, and only the head is named for its routing fee.
+func TestFeeAssetDiffersNamesOnlyThePayerHead(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.edit("x402-payer-observed", func(s map[string]any) {
+		s["routing_fee"] = map[string]any{"value": "1", "assetCode": "USD", "assetScale": json.Number("2")}
+	})
+	earlierID := f.leg("x402-payer-observed").Capsule["capsule_id"].(string)
+	final := f.duplicate("x402-payer-observed", "payer-final")
+	final.Capsule["chain"] = map[string]any{"parent_capsule_id": earlierID, "relation": "supersedes"}
+	final.Capsule["action_id"] = "settle-payer-final"
+	final.Capsule["settlement"].(map[string]any)["observed_at"] = "2026-10-01T12:05:00Z"
+	f.reseal("payer-final", "payer")
+	result := Verify(f.in)
+	require.True(t, result.Conforming, result.Failures)
+	assert.Equal(t, PaymentUnjoined, result.Settlements[0].PaymentState)
+	assert.Equal(t, []Report{{Records: []string{"payer-final"}, Code: "fee_asset_differs"}}, result.Findings)
+}
+
+// One capsule passed three times under two keys is two records: the third
+// copy, under the first key, is reported with the first.
+func TestACapsulePassedThreeTimesUnderTwoKeysIsTwoRecords(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.in.Policy = nil
+	f.edit("x402-payee-observed", func(s map[string]any) {
+		s["wrapped"] = []any{map[string]any{"type": "x402.receipt", "digest_alg": "SHA-256", "digest": strings.Repeat("c", 64), "content": "eA"}}
+	})
+	f.duplicate("x402-payee-observed", "payee-under-payer-key")
+	f.reseal("payee-under-payer-key", "payer")
+	f.duplicate("x402-payee-observed", "payee-again")
+	result := Verify(f.in)
+	var mismatches []Report
+	for _, r := range result.Failures {
+		if r.Code == "wrapped_digest_mismatch" {
+			mismatches = append(mismatches, r)
+		}
+	}
+	assert.Equal(t, []Report{
+		{Records: []string{"x402-payee-observed", "payee-again"}, Code: "wrapped_digest_mismatch"},
+		{Records: []string{"payee-under-payer-key"}, Code: "wrapped_digest_mismatch"},
+	}, mismatches)
+}
+
 // Two terms legs with one capsule_id answer the same legs: each is reported
 // with the same state, as each terms leg was before.
 func TestTwoTermsLegsWithOneCapsuleIDAreEachReported(t *testing.T) {
