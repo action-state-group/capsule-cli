@@ -74,6 +74,7 @@ func normalizeWitnessDirectory(raw []byte) ([]byte, error) {
 	}
 	rows, _ := doc.([]interface{})
 	if wrapped, ok := doc.(map[string]interface{}); ok {
+		canonicalFieldNames(wrapped, "witnesses")
 		rows, _ = wrapped["witnesses"].([]interface{})
 	}
 	for _, item := range rows {
@@ -81,6 +82,7 @@ func normalizeWitnessDirectory(raw []byte) ([]byte, error) {
 		if !ok {
 			continue
 		}
+		canonicalFieldNames(row, "name", "endpoint", "binding", "key_ids", "public_keys")
 		if binding, present := row["binding"]; present && (binding == nil || binding == "") {
 			delete(row, "binding")
 		}
@@ -100,6 +102,29 @@ func normalizeWitnessDirectory(raw []byte) ([]byte, error) {
 		}
 	}
 	return json.Marshal(doc)
+}
+
+// canonicalFieldNames renames each member of object whose name matches one
+// of names case-insensitively, as Go's struct decoder read it, to that name,
+// so agent-action-capsule's case-sensitive reader sees the field this CLI
+// has always honoured. An exact name always wins, as it does for the
+// decoder.
+func canonicalFieldNames(object map[string]interface{}, names ...string) {
+	for _, name := range names {
+		if _, exact := object[name]; exact {
+			continue
+		}
+		var match string
+		for key := range object {
+			if strings.EqualFold(key, name) && (match == "" || key > match) {
+				match = key
+			}
+		}
+		if match != "" {
+			object[name] = object[match]
+			delete(object, match)
+		}
+	}
 }
 
 // witnessClaim checks every receipt in checkpoint.witnesses against the

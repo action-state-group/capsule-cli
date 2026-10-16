@@ -14,8 +14,10 @@
   can pass or fail, where they were withheld. A directory row with a key id that is not 64
   lowercase hex characters is unusable as a whole (its receipts are withheld) where the bad id was
   skipped. A stub receipt (`is_stub`) is withheld. `leaf_index` and `tree_size` must be present but
-  are no longer read. COSE receipts must be strictly encoded and may not mark an unknown header
-  critical; a countersign or statement receipt may carry more than one inclusion proof.
+  are no longer read. COSE receipts must be strictly encoded, must carry their payload detached (a
+  receipt with its payload attached is refused, since its signature does not cover the rebuilt
+  root), and may not mark an unknown header critical; a countersign or statement receipt may carry
+  more than one inclusion proof.
 - **Changed (settlement):** a side with more than one observed leg that no supersedes chain
   orders is compared leg by leg (mismatch or agreed) instead of `unjoined` with
   `observed_leg_not_unique`; a supersedes link counts only under the superseded leg's own key; the

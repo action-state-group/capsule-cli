@@ -138,3 +138,31 @@ func TestCountersignReceiptNotStrictlyEncodedIsUnverified(t *testing.T) {
 	assert.Equal(t, receiptUnverified, state)
 	assert.ErrorContains(t, err, "receipt rejected")
 }
+
+// A receipt that carries its payload attached is refused, even when the
+// payload is the right root: a receipt's signature must cover the root
+// rebuilt from the leaf, and an attached payload binds nothing to it
+// (agent-action-capsule's receipt profile; capsule-cli once accepted it).
+func TestCountersignReceiptWithAnAttachedPayloadIsUnverified(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	entry := countersignEntry(t, testCountersignStatement)
+	proof, err := cbor.Marshal([]any{int64(1), int64(0), [][]byte{}})
+	require.NoError(t, err)
+	leaf := sha256.Sum256(append([]byte{0}, entry...))
+	message := cose.NewSign1Message()
+	message.Headers.Protected.SetAlgorithm(cose.AlgorithmEdDSA)
+	message.Headers.Protected[int64(395)] = int64(1)
+	message.Headers.Unprotected[int64(396)] = map[any]any{int64(-1): []any{proof}}
+	message.Payload = leaf[:]
+	signer, err := cose.NewSigner(cose.AlgorithmEdDSA, private)
+	require.NoError(t, err)
+	require.NoError(t, message.Sign(rand.Reader, nil, signer))
+	encoded, err := message.MarshalCBOR() // payload left attached
+	require.NoError(t, err)
+	raw, err := json.Marshal(map[string]any{"receipt_b64": base64.StdEncoding.EncodeToString(encoded), "leaf_index": 0, "tree_size": 1})
+	require.NoError(t, err)
+	state, err := verifyCountersignReceipt(public, testCountersignStatement, raw)
+	assert.Equal(t, receiptUnverified, state)
+	assert.ErrorContains(t, err, "attached")
+}

@@ -580,3 +580,30 @@ func TestVerifyBundleChecksAWrappedReceipt(t *testing.T) {
 	assert.Equal(t, "fail", state)
 	assert.Equal(t, []interface{}{"witness_receipt_invalid:" + testWitness}, findings)
 }
+
+// Directory field names are read as Go's decoder always read them, without
+// regard to case, so a row spelled with other casing still has its keys and
+// its receipts are still checked.
+func TestVerifyBundleReadsDirectoryFieldNamesWithoutCase(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	_, other, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "witnesses.json")
+	data, err := json.Marshal(map[string]interface{}{"directory_version": "1", "Witnesses": []interface{}{
+		map[string]interface{}{"Name": "test witness", "Endpoint": testWitness, "since": "2026-01-01", "Key_IDs": []string{hex.EncodeToString(public)}},
+	}})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, data, 0o600))
+
+	result, err := verifyWithDirectory(t, producedBundle(t, witnessed(t, private)), path)
+	require.NoError(t, err)
+	state, _ := bundleWitnesses(result)
+	assert.Equal(t, "pass", state)
+
+	result, _ = verifyWithDirectory(t, producedBundle(t, witnessed(t, other)), path)
+	state, _ = bundleWitnesses(result)
+	assert.Equal(t, "fail", state)
+	assert.Equal(t, "INVALID", result["verdict"])
+}
