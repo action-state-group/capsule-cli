@@ -357,3 +357,21 @@ func TestAnUnregisteredWrappedTypeIsRefused(t *testing.T) {
 	assert.False(t, result.Conforming)
 	assert.Equal(t, []Report{{Records: []string{"x402-delivered-sent"}, Code: "settlement_malformed"}}, result.Failures)
 }
+
+// A payment reference of an unregistered type, the empty string included,
+// is never rejected: the leg stays a valid record (the draft's never-reject
+// rule), the pair cannot join, and payment_ref_type_unknown says why.
+// (capsule-cli once reported an empty type settlement_malformed.)
+func TestAnUnregisteredPaymentReferenceTypeNeverJoins(t *testing.T) {
+	for _, ref := range []map[string]any{
+		{"type": "", "value": "x"},
+		{"type": "x-private.ref", "value": "x", "network": json.Number("5")},
+	} {
+		f := newFixture(t, "pos-x402-two-sided-agreed")
+		result := f.edit("x402-payee-observed", func(s map[string]any) { s["payment_ref"] = ref })
+		assert.True(t, result.Conforming, result.Failures)
+		assert.Contains(t, result.Findings, Report{Records: []string{"x402-payee-observed"}, Code: "payment_ref_type_unknown"})
+		require.Len(t, result.Settlements, 1)
+		assert.Equal(t, "unjoined", result.Settlements[0].PaymentState)
+	}
+}

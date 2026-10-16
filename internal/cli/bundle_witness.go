@@ -142,7 +142,7 @@ func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Direc
 	var wellFormed []interface{}
 	for _, entry := range list {
 		if wellFormedReceipt(entry) {
-			wellFormed = append(wellFormed, entry)
+			wellFormed = append(wellFormed, canonicalReceipt(entry.(map[string]interface{})))
 		}
 	}
 	var results []witness.ReceiptResult
@@ -188,6 +188,23 @@ func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Direc
 		return aacbundle.ClaimResult{Status: witness.StatusPass, Findings: findings}, receipts
 	}
 	return aacbundle.ClaimResult{Status: witness.StatusWithheld, Findings: findings}, receipts
+}
+
+// canonicalReceipt is a copy of a well-formed entry whose receipt_b64 is
+// re-spelled in canonical standard base64 from the bytes this CLI has always
+// read from it (Go's decoder ignores line breaks), so a receipt wrapped
+// across lines is still checked rather than refused by
+// agent-action-capsule's strict decoder. The receipt bytes are unchanged.
+func canonicalReceipt(fields map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(fields))
+	for k, v := range fields {
+		out[k] = v
+	}
+	encoded, _ := fields["receipt_b64"].(string)
+	if raw, err := base64.StdEncoding.DecodeString(encoded); err == nil {
+		out["receipt_b64"] = base64.StdEncoding.EncodeToString(raw)
+	}
+	return out
 }
 
 // wellFormedReceipt is a checkpoint.witnesses entry this CLI reads: an object

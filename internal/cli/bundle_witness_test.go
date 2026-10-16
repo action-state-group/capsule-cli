@@ -550,3 +550,33 @@ func TestVerifyBundleKeepsLegacyDirectoryRowReadings(t *testing.T) {
 		})
 	}
 }
+
+// A receipt_b64 wrapped across lines is the same receipt: this CLI has
+// always read it, so it is still checked, passing under the row's key and
+// failing under another.
+func TestVerifyBundleChecksAWrappedReceipt(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	_, other, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	directory := writeDirectory(t, rawKeyRow(testWitness, public))
+	wrap := func(key ed25519.PrivateKey) func(map[string]interface{}) {
+		return func(b map[string]interface{}) {
+			witnessed(t, key)(b)
+			entry := witnessEntry(b)
+			encoded := entry["receipt_b64"].(string)
+			entry["receipt_b64"] = encoded[:16] + "\r\n" + encoded[16:32] + "\n" + encoded[32:]
+		}
+	}
+	result, err := verifyWithDirectory(t, producedBundle(t, wrap(private)), directory)
+	require.NoError(t, err)
+	state, _ := bundleWitnesses(result)
+	assert.Equal(t, "pass", state)
+	assert.Equal(t, "VALID", result["verdict"])
+
+	result, _ = verifyWithDirectory(t, producedBundle(t, wrap(other)), directory)
+	state, findings := bundleWitnesses(result)
+	assert.Equal(t, "fail", state)
+	assert.Equal(t, []interface{}{"witness_receipt_invalid:" + testWitness}, findings)
+}
