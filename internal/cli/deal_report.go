@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/action-state-group/agent-action-capsule/go/emitter"
+	"github.com/action-state-group/capsule-viewer/go/emitter"
 )
 
 // The browser verifier is agent-action-capsule's own evidence-graph runtime,
