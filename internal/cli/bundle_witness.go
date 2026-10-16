@@ -48,83 +48,11 @@ func loadWitnessDirectory(path string) (witness.Directory, error) {
 	if err != nil {
 		return witness.Directory{}, hint(ErrInput, "the witness directory is not a witnesses.json file")
 	}
-	normalized, err := normalizeWitnessDirectory(raw)
-	if err != nil {
-		return witness.Directory{}, hint(ErrInput, "the witness directory is not a witnesses.json file")
-	}
-	directory, err := witness.ParseDirectory(normalized)
+	directory, err := witness.ParseDirectory(raw)
 	if err != nil {
 		return witness.Directory{}, hint(ErrInput, "the witness directory is not a witnesses.json file")
 	}
 	return directory, nil
-}
-
-// normalizeWitnessDirectory keeps the readings this CLI has always given a
-// row before agent-action-capsule reads it strictly: an empty or null
-// binding is the default (cll), a null public_keys is none, and a
-// public_keys entry may be wrapped across lines (PEM style), so its
-// whitespace is removed. Without this, such a row would match no receipt or
-// lose its keys, and a receipt it should check would go unchecked.
-func normalizeWitnessDirectory(raw []byte) ([]byte, error) {
-	var doc interface{}
-	decoder := json.NewDecoder(strings.NewReader(string(raw)))
-	decoder.UseNumber()
-	if err := decoder.Decode(&doc); err != nil {
-		return nil, err
-	}
-	rows, _ := doc.([]interface{})
-	if wrapped, ok := doc.(map[string]interface{}); ok {
-		canonicalFieldNames(wrapped, "witnesses")
-		rows, _ = wrapped["witnesses"].([]interface{})
-	}
-	for _, item := range rows {
-		row, ok := item.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		canonicalFieldNames(row, "name", "endpoint", "binding", "key_ids", "public_keys")
-		if binding, present := row["binding"]; present && (binding == nil || binding == "") {
-			delete(row, "binding")
-		}
-		if keys, present := row["public_keys"]; present {
-			list, ok := keys.([]interface{})
-			if keys == nil {
-				delete(row, "public_keys")
-				continue
-			}
-			if ok {
-				for i, entry := range list {
-					if text, isText := entry.(string); isText {
-						list[i] = strings.Join(strings.Fields(text), "")
-					}
-				}
-			}
-		}
-	}
-	return json.Marshal(doc)
-}
-
-// canonicalFieldNames renames each member of object whose name matches one
-// of names case-insensitively, as Go's struct decoder read it, to that name,
-// so agent-action-capsule's case-sensitive reader sees the field this CLI
-// has always honoured. An exact name always wins, as it does for the
-// decoder.
-func canonicalFieldNames(object map[string]interface{}, names ...string) {
-	for _, name := range names {
-		if _, exact := object[name]; exact {
-			continue
-		}
-		var match string
-		for key := range object {
-			if strings.EqualFold(key, name) && (match == "" || key > match) {
-				match = key
-			}
-		}
-		if match != "" {
-			object[name] = object[match]
-			delete(object, match)
-		}
-	}
 }
 
 // witnessClaim checks every receipt in checkpoint.witnesses against the
@@ -167,7 +95,7 @@ func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Direc
 	var wellFormed []interface{}
 	for _, entry := range list {
 		if wellFormedReceipt(entry) {
-			wellFormed = append(wellFormed, canonicalReceipt(entry.(map[string]interface{})))
+			wellFormed = append(wellFormed, entry)
 		}
 	}
 	var results []witness.ReceiptResult
@@ -213,23 +141,6 @@ func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Direc
 		return aacbundle.ClaimResult{Status: witness.StatusPass, Findings: findings}, receipts
 	}
 	return aacbundle.ClaimResult{Status: witness.StatusWithheld, Findings: findings}, receipts
-}
-
-// canonicalReceipt is a copy of a well-formed entry whose receipt_b64 is
-// re-spelled in canonical standard base64 from the bytes this CLI has always
-// read from it (Go's decoder ignores line breaks), so a receipt wrapped
-// across lines is still checked rather than refused by
-// agent-action-capsule's strict decoder. The receipt bytes are unchanged.
-func canonicalReceipt(fields map[string]interface{}) map[string]interface{} {
-	out := make(map[string]interface{}, len(fields))
-	for k, v := range fields {
-		out[k] = v
-	}
-	encoded, _ := fields["receipt_b64"].(string)
-	if raw, err := base64.StdEncoding.DecodeString(encoded); err == nil {
-		out["receipt_b64"] = base64.StdEncoding.EncodeToString(raw)
-	}
-	return out
 }
 
 // wellFormedReceipt is a checkpoint.witnesses entry this CLI reads: an object

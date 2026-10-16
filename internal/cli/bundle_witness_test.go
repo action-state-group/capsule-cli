@@ -494,116 +494,82 @@ func TestVerifyBundleChecksRekorAndES256ReceiptsFromTheAACVectors(t *testing.T) 
 	}
 }
 
-// Rows this CLI has always read keep their meaning when agent-action-capsule
-// reads the directory: an empty or null binding is cll, a null public_keys
-// is none, and a public_keys entry wrapped across lines is the same key. A
-// receipt under such a row is still checked: it passes under the row's key
-// and fails under another.
-func TestVerifyBundleKeepsLegacyDirectoryRowReadings(t *testing.T) {
+// agent-action-capsule reads a witness directory strictly, and capsule-cli
+// hands it the file as written (it writes no directories itself and ships
+// none in these lax forms). A row whose binding is empty or null, whose
+// public_keys is null, or whose field names are cased otherwise is no row
+// AAC can use, so the receipt it would have checked is withheld. A
+// public_keys entry wrapped across lines is skipped, so the row's key id is
+// read as a raw Ed25519 key and the receipt fails.
+func TestVerifyBundleReadsLaxDirectoryRowsAsAACDoes(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	public, private, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	_, other, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	der, err := x509.MarshalPKIXPublicKey(public)
 	require.NoError(t, err)
 	digest := sha256.Sum256(der)
 	encoded := base64.StdEncoding.EncodeToString(der)
-	wrapped := encoded[:20] + "\n" + encoded[20:40] + "\r\n" + encoded[40:]
 
-	rows := map[string]func() map[string]interface{}{
-		"empty binding": func() map[string]interface{} {
-			row := rawKeyRow(testWitness, public)
-			row["binding"] = ""
-			return row
-		},
-		"null binding": func() map[string]interface{} {
-			row := rawKeyRow(testWitness, public)
-			row["binding"] = nil
-			return row
-		},
-		"null public_keys": func() map[string]interface{} {
-			row := rawKeyRow(testWitness, public)
-			row["public_keys"] = nil
-			return row
-		},
-		"wrapped public_keys entry": func() map[string]interface{} {
-			row := rawKeyRow(testWitness, public)
-			row["key_ids"] = []string{hex.EncodeToString(digest[:])}
-			row["public_keys"] = []string{wrapped}
-			return row
-		},
+	withheld := map[string]map[string]interface{}{
+		"empty binding":    {"binding": ""},
+		"null binding":     {"binding": nil},
+		"null public_keys": {"public_keys": nil},
 	}
-	for name, row := range rows {
+	for name, extra := range withheld {
 		t.Run(name, func(t *testing.T) {
-			directory := writeDirectory(t, row())
-			result, err := verifyWithDirectory(t, producedBundle(t, witnessed(t, private)), directory)
+			row := rawKeyRow(testWitness, public)
+			for k, v := range extra {
+				row[k] = v
+			}
+			result, err := verifyWithDirectory(t, producedBundle(t, witnessed(t, private)), writeDirectory(t, row))
 			require.NoError(t, err)
-			state, _ := bundleWitnesses(result)
-			assert.Equal(t, "pass", state)
-
-			result, _ = verifyWithDirectory(t, producedBundle(t, witnessed(t, other)), directory)
 			state, findings := bundleWitnesses(result)
-			assert.Equal(t, "fail", state)
-			assert.Equal(t, []interface{}{"witness_receipt_invalid:" + testWitness}, findings)
-			assert.Equal(t, "INVALID", result["verdict"])
+			assert.Equal(t, "withheld", state)
+			assert.Equal(t, []interface{}{"witness_unverified:" + testWitness}, findings)
 		})
 	}
+
+	t.Run("field names cased otherwise", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "witnesses.json")
+		data, err := json.Marshal(map[string]interface{}{"directory_version": "1", "witnesses": []interface{}{
+			map[string]interface{}{"name": "test witness", "Endpoint": testWitness, "since": "2026-01-01", "key_ids": []string{hex.EncodeToString(public)}},
+		}})
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(path, data, 0o600))
+		result, err := verifyWithDirectory(t, producedBundle(t, witnessed(t, private)), path)
+		require.NoError(t, err)
+		state, _ := bundleWitnesses(result)
+		assert.Equal(t, "withheld", state)
+	})
+
+	t.Run("public_keys entry wrapped across lines", func(t *testing.T) {
+		row := rawKeyRow(testWitness, public)
+		row["key_ids"] = []string{hex.EncodeToString(digest[:])}
+		row["public_keys"] = []string{encoded[:20] + "\n" + encoded[20:]}
+		result, _ := verifyWithDirectory(t, producedBundle(t, witnessed(t, private)), writeDirectory(t, row))
+		state, findings := bundleWitnesses(result)
+		assert.Equal(t, "fail", state)
+		assert.Equal(t, []interface{}{"witness_receipt_invalid:" + testWitness}, findings)
+		assert.Equal(t, "INVALID", result["verdict"])
+	})
 }
 
-// A receipt_b64 wrapped across lines is the same receipt: this CLI has
-// always read it, so it is still checked, passing under the row's key and
-// failing under another.
-func TestVerifyBundleChecksAWrappedReceipt(t *testing.T) {
+// A receipt_b64 wrapped across lines is not canonical base64, which
+// agent-action-capsule requires, so the receipt fails. (capsule-cli writes
+// its receipts unwrapped.)
+func TestVerifyBundleFailsAWrappedReceipt(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	_, other, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	directory := writeDirectory(t, rawKeyRow(testWitness, public))
-	wrap := func(key ed25519.PrivateKey) func(map[string]interface{}) {
-		return func(b map[string]interface{}) {
-			witnessed(t, key)(b)
-			entry := witnessEntry(b)
-			encoded := entry["receipt_b64"].(string)
-			entry["receipt_b64"] = encoded[:16] + "\r\n" + encoded[16:32] + "\n" + encoded[32:]
-		}
-	}
-	result, err := verifyWithDirectory(t, producedBundle(t, wrap(private)), directory)
-	require.NoError(t, err)
-	state, _ := bundleWitnesses(result)
-	assert.Equal(t, "pass", state)
-	assert.Equal(t, "VALID", result["verdict"])
-
-	result, _ = verifyWithDirectory(t, producedBundle(t, wrap(other)), directory)
+	path := producedBundle(t, func(b map[string]interface{}) {
+		witnessed(t, private)(b)
+		entry := witnessEntry(b)
+		encoded := entry["receipt_b64"].(string)
+		entry["receipt_b64"] = encoded[:16] + "\n" + encoded[16:]
+	})
+	result, _ := verifyWithDirectory(t, path, writeDirectory(t, rawKeyRow(testWitness, public)))
 	state, findings := bundleWitnesses(result)
 	assert.Equal(t, "fail", state)
 	assert.Equal(t, []interface{}{"witness_receipt_invalid:" + testWitness}, findings)
-}
-
-// Directory field names are read as Go's decoder always read them, without
-// regard to case, so a row spelled with other casing still has its keys and
-// its receipts are still checked.
-func TestVerifyBundleReadsDirectoryFieldNamesWithoutCase(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	public, private, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	_, other, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-	path := filepath.Join(t.TempDir(), "witnesses.json")
-	data, err := json.Marshal(map[string]interface{}{"directory_version": "1", "Witnesses": []interface{}{
-		map[string]interface{}{"Name": "test witness", "Endpoint": testWitness, "since": "2026-01-01", "Key_IDs": []string{hex.EncodeToString(public)}},
-	}})
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(path, data, 0o600))
-
-	result, err := verifyWithDirectory(t, producedBundle(t, witnessed(t, private)), path)
-	require.NoError(t, err)
-	state, _ := bundleWitnesses(result)
-	assert.Equal(t, "pass", state)
-
-	result, _ = verifyWithDirectory(t, producedBundle(t, witnessed(t, other)), path)
-	state, _ = bundleWitnesses(result)
-	assert.Equal(t, "fail", state)
 	assert.Equal(t, "INVALID", result["verdict"])
 }

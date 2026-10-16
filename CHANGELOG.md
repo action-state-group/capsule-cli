@@ -18,6 +18,16 @@
   receipt with its payload attached is refused, since its signature does not cover the rebuilt
   root), and may not mark an unknown header critical; a countersign or statement receipt may carry
   more than one inclusion proof.
+- **Changed (witness directory and receipts):** agent-action-capsule reads a `witnesses.json` and
+  a `receipt_b64` strictly, and capsule-cli no longer softens them. Two kinds of change:
+  - Withheld where they used to be checked: a row whose `binding` is empty or null, whose
+    `public_keys` is null, or whose field names are cased otherwise (`Endpoint`) is no row AAC
+    uses, so its receipts are withheld.
+  - Fail where they used to pass: a `public_keys` entry wrapped across lines is skipped, so the
+    row's key id is read as a raw Ed25519 key and the receipt fails. A `receipt_b64` wrapped
+    across lines also fails.
+
+  capsule-cli writes no directories and writes its receipts unwrapped.
 - **Changed (settlement):** a side with more than one observed leg that no supersedes chain
   orders is compared leg by leg (mismatch or agreed) instead of `unjoined` with
   `observed_leg_not_unique`; a supersedes link counts only under the superseded leg's own key; the
