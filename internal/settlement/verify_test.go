@@ -469,3 +469,15 @@ func TestAnUnregisteredPaymentReferenceTypeNeverJoins(t *testing.T) {
 		assert.Equal(t, "unjoined", result.Settlements[0].PaymentState)
 	}
 }
+
+// A wrapped SD-JWT re-signed with the leg's own key is wrapped_resigned with
+// or without disclosures: the signature covers the issuer JWS before the
+// first "~". (capsule-cli's own verifier caught JWT~disclosure~; AAC go
+// v0.9.0 did not, and v0.9.1 does.)
+func TestAReSignedSDJWTIsWrappedResigned(t *testing.T) {
+	for _, id := range []string{"neg-wrapped-sd-jwt-resigned-with-disclosure", "neg-wrapped-sd-jwt-resigned-no-disclosure"} {
+		result := Verify(newFixture(t, id).in)
+		assert.False(t, result.Conforming, id)
+		assert.Equal(t, []Report{{Records: []string{"ap2-payee-observed"}, Code: "wrapped_resigned"}}, result.Failures, id)
+	}
+}

@@ -40,6 +40,8 @@ independent reading of the draft.
 | `pos-bolt12-two-sided-payer-proof` | Lightning, 21000000 msat (`assetScale` 11); payment hash fixed in the terms; the payer wraps its payer proof. | `agreed` |
 | `pos-ap2-receipt-wrapped-by-digest` | The payer seals AP2 terms (Payment Mandate by digest); the payee wraps the processor-signed Payment Receipt by digest only. | `payee_stated` |
 | `neg-wrapped-object-resigned` | The same receipt re-signed with the payee's own leg key. | failure `wrapped_resigned`; the leg is excluded: `terms_only` |
+| `neg-wrapped-sd-jwt-resigned-with-disclosure` | The payee's leg also wraps the Payment Mandate as an SD-JWT with one disclosure (`JWT~disclosure~`), re-signed with the payee's own leg key. Only the issuer JWS before the first `~` is signed. | failure `wrapped_resigned`: `terms_only` |
+| `neg-wrapped-sd-jwt-resigned-no-disclosure` | The same in the `JWT~` form, with no disclosures. | failure `wrapped_resigned`: `terms_only` |
 | `neg-wrapped-content-digest-mismatch` | Wrapped content does not hash to the stated digest. | failure `wrapped_digest_mismatch`: `payer_stated` |
 | `neg-amount-json-float` | `value` is the JSON number 1.5. The leg cannot be canonicalized, so it has no Capsule ID and no envelope. | failures `capsule_invalid`, `amount_not_exact`: `payee_stated` |
 | `neg-amount-decimal-fraction-string` | `value` is the string `"1.500000"`. | failure `amount_not_exact`: `payee_stated` |
@@ -58,6 +60,33 @@ Every observed leg in the other cases carries explicit fee members:
 `neg-payment-ref-type-unknown` is negative for the join, not for the records:
 the legs stay valid Capsules (the base profile's never-reject invariant) and a
 verifier reports `unjoined` instead of `agreed`.
+
+## Verifier details the cases do not reach
+
+The library verifiers (`agent_action_capsule.settlement.verify_settlements`
+and its Go, TypeScript and Rust ports) also agree on these readings of the
+draft, which no case above exercises:
+
+- Patterns match the whole string with ASCII digits only. An RFC 3339 UTC time
+  (`observed_at`, `valid_until`, `shipped_at`, `delivered_at`) must also name a
+  real instant: month 1-12, a day that exists in that month, hour 0-23, minute
+  0-59, second 0-59 (no leap second).
+- Amounts are compared as decimal digit strings at the largest scale, so any
+  length is exact. Two heads on one side compare by value, not by spelling.
+- `payment_ref: null`, a qualifier that is not a string, a non-string
+  `delivery.direction` or `wrapped[].type` or `wrapped[].content`, and an
+  optional delivery member of the wrong type (`carrier` a string,
+  `tracking_digest` and `address_digest` 64 lowercase hex, `status` one of
+  `pending`, `in_transit`, `delivered`, `failed`, `returned`) are
+  `settlement_malformed`.
+- `wrapped[].content` is canonical unpadded base64url; content that does not
+  decode is `wrapped_digest_mismatch`.
+- A leg's envelope `signature` must be hex digit pairs (no whitespace) or the
+  leg is `envelope_invalid`. A `capsule_id` that is not a string is reported
+  as `null`.
+- The state comes from the first payer head and payee head, in input order,
+  under distinct keys; `unjoined` takes precedence over a mismatch between two
+  heads of one side.
 
 ## How to consume them
 

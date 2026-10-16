@@ -4,7 +4,7 @@
 
 ### Verification on agent-action-capsule's Go APIs
 
-- **Changed (build):** agent-action-capsule's Go module moves to v0.9.0, and capsulectl's own
+- **Changed (build):** agent-action-capsule's Go module moves to v0.9.1, and capsulectl's own
   copies of its verifiers are removed (action-state-group/agent-action-capsule#280): witness
   receipt checks and witness directories (`verify --bundle --witness-directory`, deal copies,
   cadence receipts) use `go/witness`; countersign receipts and SCITT statement receipts use
@@ -34,6 +34,9 @@
   `in_progress` finding is no longer reported. A conflated pair that otherwise matches is still
   reported `unjoined`. A delivered leg with an empty `delivery.carrier` is accepted, and a
   wrapped entry of an unregistered type is `settlement_malformed`.
+  A wrapped SD-JWT re-signed with the leg's own key is still `wrapped_resigned` with or without
+  disclosures: v0.9.1 reads the issuer JWS before the first `~`, as capsule-cli did (v0.9.0 missed
+  `JWT~disclosure~`).
 
 ### The page emitter from capsule-viewer
 
