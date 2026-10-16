@@ -1,25 +1,22 @@
 package cli
 
 import (
-	"crypto/ed25519"
-	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
-	"github.com/action-state-group/checkpointed-local-log/go/witness"
+	"github.com/action-state-group/agent-action-capsule/go/witness"
 )
 
-// witnessRow is one row of a witness directory (capsule-emit's
-// witnesses.json format): the witness's endpoint, its binding (cll when
-// absent) and its keys. A key id is a raw Ed25519 key in hex, or the SHA-256
-// of a DER key listed in public_keys. Other row fields are read past.
-type witnessRow struct {
+// witnessRowShape is the shape every witness directory row must have
+// (capsule-emit's witnesses.json format): string name, endpoint and binding,
+// and lists of strings for key_ids and public_keys. Other row fields are read
+// past. A row of another shape refuses the whole directory as an input
+// error; the keys themselves are read by agent-action-capsule's witness
+// package.
+type witnessRowShape struct {
 	Name       string   `json:"name"`
 	Endpoint   string   `json:"endpoint"`
 	Binding    string   `json:"binding"`
@@ -28,209 +25,145 @@ type witnessRow struct {
 }
 
 // loadWitnessDirectory reads a witness directory file: {"witnesses": [rows]}
-// or a bare array of rows.
-func loadWitnessDirectory(path string) ([]witnessRow, error) {
+// or a bare array of rows. An object without a witnesses array is refused
+// rather than read as a directory that trusts no witness.
+func loadWitnessDirectory(path string) (witness.Directory, error) {
 	raw, err := readInput(path)
 	if err != nil {
-		return nil, err
+		return witness.Directory{}, err
 	}
 	trimmed := strings.TrimLeft(string(raw), " \t\r\n")
-	var rows []witnessRow
+	var rows []witnessRowShape
 	if strings.HasPrefix(trimmed, "[") {
 		err = json.Unmarshal(raw, &rows)
 	} else {
 		var wrapped struct {
-			Witnesses *[]witnessRow `json:"witnesses"`
+			Witnesses *[]witnessRowShape `json:"witnesses"`
 		}
 		err = json.Unmarshal(raw, &wrapped)
 		if err == nil && wrapped.Witnesses == nil {
-			return nil, hint(ErrInput, "the witness directory has no witnesses array")
-		}
-		if wrapped.Witnesses != nil {
-			rows = *wrapped.Witnesses
+			return witness.Directory{}, hint(ErrInput, "the witness directory has no witnesses array")
 		}
 	}
 	if err != nil {
-		return nil, hint(ErrInput, "the witness directory is not a witnesses.json file")
+		return witness.Directory{}, hint(ErrInput, "the witness directory is not a witnesses.json file")
 	}
-	return rows, nil
-}
-
-// witnessBinding and witnessEndpoint read a receipt's witness URL the way
-// the directory format names it: "rekor+https://..." and "scrapi+https://..."
-// name those bindings, anything else is cll; the endpoint drops the binding
-// prefix and any trailing slash.
-func witnessBinding(url string) string {
-	scheme, _, found := strings.Cut(url, "://")
-	if !found {
-		return "cll"
+	directory, err := witness.ParseDirectory(raw)
+	if err != nil {
+		return witness.Directory{}, hint(ErrInput, "the witness directory is not a witnesses.json file")
 	}
-	scheme = strings.ToLower(scheme)
-	for _, binding := range []string{"rekor", "scrapi"} {
-		if strings.HasPrefix(scheme, binding+"+") {
-			return binding
-		}
-	}
-	return "cll"
-}
-
-func witnessEndpoint(url string) string {
-	if witnessBinding(url) != "cll" {
-		_, url, _ = strings.Cut(url, "+")
-	}
-	return strings.TrimRight(url, "/")
-}
-
-func (r witnessRow) binding() string {
-	if r.Binding == "" {
-		return "cll"
-	}
-	return r.Binding
-}
-
-// keys returns the row's Ed25519 keys in key_ids order; a key id that names
-// no usable Ed25519 key is skipped.
-func (r witnessRow) keys() []ed25519.PublicKey {
-	byHash := map[string]ed25519.PublicKey{}
-	for _, b64 := range r.PublicKeys {
-		der, err := base64.StdEncoding.DecodeString(b64)
-		if err != nil {
-			continue
-		}
-		parsed, err := x509.ParsePKIXPublicKey(der)
-		if key, ok := parsed.(ed25519.PublicKey); ok && err == nil {
-			sum := sha256.Sum256(der)
-			byHash[hex.EncodeToString(sum[:])] = key
-		}
-	}
-	var keys []ed25519.PublicKey
-	for _, id := range r.KeyIDs {
-		if key, ok := byHash[id]; ok {
-			keys = append(keys, key)
-		} else if raw, err := hex.DecodeString(id); err == nil && len(raw) == ed25519.PublicKeySize {
-			keys = append(keys, ed25519.PublicKey(raw))
-		}
-	}
-	return keys
+	return directory, nil
 }
 
 // witnessClaim checks every receipt in checkpoint.witnesses against the
 // signed checkpoint statement (nil when it did not verify), under the keys
-// of directory's row for the receipt's witness. Per receipt: pass when it
-// verifies under one of the row's keys; withheld when there is no row, no
-// key, or a binding this CLI does not check; fail when it does not verify or
-// is malformed. Overall: fail if any fails, else pass if any passes, else
-// withheld. The file carrying none, or an unverified checkpoint, is withheld.
-func witnessClaim(value map[string]interface{}, statement []byte, directory []witnessRow) (aacbundle.ClaimResult, []map[string]string) {
+// of directory's row for the receipt's witness.
+func witnessClaim(value map[string]interface{}, statement []byte, directory *witness.Directory) (aacbundle.ClaimResult, []map[string]string) {
 	stated, _ := value["checkpoint"].(map[string]interface{})
-	entries, _ := stated["witnesses"].([]interface{})
-	if len(entries) == 0 {
-		return aacbundle.ClaimResult{Status: "withheld", Findings: []string{"witness_receipt_absent"}}, []map[string]string{}
+	return receiptsClaim(stated["witnesses"], statement, directory, "")
+}
+
+// receiptsClaim checks one checkpoint's receipts in this CLI's report shape.
+// statement is the checkpoint's COSE statement, nil when it did not verify;
+// trusted is the witness directory, nil when none was given; via, when set,
+// is added to each receipt.
+//
+// An entry that is not a receipt this CLI reads (wellFormedReceipt) is
+// malformed. Every other entry is checked by agent-action-capsule's
+// witness.VerifyReceipts: pass when it verifies under one of its row's keys;
+// withheld when it is a stub or there is no row or no usable key; fail when
+// it does not verify. Overall: fail if any entry is malformed or fails, else
+// pass if any passes, else withheld. Findings are in entry order.
+func receiptsClaim(entries interface{}, statement []byte, trusted *witness.Directory, via string) (aacbundle.ClaimResult, []map[string]string) {
+	list, _ := entries.([]interface{})
+	if len(list) == 0 {
+		return aacbundle.ClaimResult{Status: witness.StatusWithheld, Findings: []string{"witness_receipt_absent"}}, []map[string]string{}
 	}
-	if statement == nil {
-		return aacbundle.ClaimResult{Status: "withheld", Findings: []string{"checkpoint_unverified"}}, []map[string]string{}
+	var signed *witness.SignedCheckpoint
+	if statement != nil {
+		if parsed, err := witness.ParseSignedCheckpoint(statement); err == nil {
+			signed = &parsed
+		}
 	}
+	if signed == nil {
+		return aacbundle.ClaimResult{Status: witness.StatusWithheld, Findings: []string{"checkpoint_unverified"}}, []map[string]string{}
+	}
+	var directory witness.Directory // no directory trusts no witness
+	if trusted != nil {
+		directory = *trusted
+	}
+	var wellFormed []interface{}
+	for _, entry := range list {
+		if wellFormedReceipt(entry) {
+			wellFormed = append(wellFormed, entry)
+		}
+	}
+	var results []witness.ReceiptResult
+	if len(wellFormed) > 0 {
+		_, _, results = witness.VerifyReceipts(wellFormed, signed, statement, directory)
+	}
+
 	var findings []string
-	receipts := make([]map[string]string, 0, len(entries))
+	receipts := make([]map[string]string, 0, len(results))
 	sawPass, sawFail := false, false
-	for index, entry := range entries {
-		receipt, url, err := decodeWitnessReceipt(entry)
-		if err != nil {
+	next := 0
+	for index, entry := range list {
+		if !wellFormedReceipt(entry) {
 			sawFail = true
 			findings = append(findings, "witness_receipt_malformed:"+strconv.Itoa(index))
 			continue
 		}
-		status, reason := checkReceipt(statement, receipt, url, directory)
-		switch status {
-		case "pass":
+		r := results[next]
+		next++
+		reason := r.Reason
+		switch r.Status {
+		case witness.StatusPass:
 			sawPass = true
-		case "withheld":
-			findings = append(findings, "witness_unverified:"+url)
+			if row, found := directory.RowFor(r.TSURL); found {
+				reason = "verified under " + row.Name + "'s key"
+			}
+		case witness.StatusWithheld:
+			findings = append(findings, "witness_unverified:"+r.TSURL)
 		default:
 			sawFail = true
-			findings = append(findings, "witness_receipt_invalid:"+url)
+			findings = append(findings, "witness_receipt_invalid:"+r.TSURL)
 		}
-		receipts = append(receipts, map[string]string{"ts_url": url, "binding": witnessBinding(url), "status": status, "reason": reason})
+		receipt := map[string]string{"ts_url": r.TSURL, "binding": r.Binding, "status": r.Status, "reason": reason}
+		if via != "" {
+			receipt["via"] = via
+		}
+		receipts = append(receipts, receipt)
 	}
 	switch {
 	case sawFail:
-		return aacbundle.ClaimResult{Status: "fail", Findings: findings}, receipts
+		return aacbundle.ClaimResult{Status: witness.StatusFail, Findings: findings}, receipts
 	case sawPass:
-		return aacbundle.ClaimResult{Status: "pass", Findings: findings}, receipts
-	default:
-		return aacbundle.ClaimResult{Status: "withheld", Findings: findings}, receipts
+		return aacbundle.ClaimResult{Status: witness.StatusPass, Findings: findings}, receipts
 	}
+	return aacbundle.ClaimResult{Status: witness.StatusWithheld, Findings: findings}, receipts
 }
 
-func checkReceipt(statement []byte, receipt witness.Receipt, url string, directory []witnessRow) (string, string) {
-	binding, endpoint := witnessBinding(url), witnessEndpoint(url)
-	var row *witnessRow
-	for i := range directory {
-		if directory[i].binding() == binding && strings.TrimRight(directory[i].Endpoint, "/") == endpoint {
-			row = &directory[i]
-			break
-		}
-	}
-	switch {
-	case row == nil:
-		return "withheld", "not checked: no directory row for this witness"
-	case binding != "cll":
-		return "withheld", "not checked: capsulectl checks cll receipts only, not " + binding
-	}
-	keys := row.keys()
-	if len(keys) == 0 {
-		return "withheld", "not checked: no usable key in the directory row"
-	}
-	var last error
-	for _, key := range keys {
-		verifier, err := witness.NewReceiptVerifier(key)
-		if err != nil {
-			last = err
-			continue
-		}
-		if last = verifier.Verify(statement, receipt); last == nil {
-			return "pass", "verified under " + row.Name + "'s key"
-		}
-	}
-	return "fail", last.Error()
-}
-
-// decodeWitnessReceipt reads one checkpoint.witnesses entry: ts_url,
-// entry_hash, receipt_b64 (standard base64), and leaf_index and tree_size
-// (numbers, or numbers as strings, as producers write them).
-func decodeWitnessReceipt(entry interface{}) (witness.Receipt, string, error) {
-	fields, ok := entry.(map[string]interface{})
-	if !ok {
-		return witness.Receipt{}, "", fmt.Errorf("not a receipt")
+// wellFormedReceipt is a checkpoint.witnesses entry this CLI reads: an object
+// with non-empty string ts_url, entry_hash and receipt_b64 (standard base64),
+// and leaf_index and tree_size present. It is stricter than
+// witness.VerifyReceipts' own record check, which only requires the members
+// to be present: an entry that is not a receipt is malformed, never merely
+// not checked.
+func wellFormedReceipt(entry interface{}) bool {
+	fields, isObject := entry.(map[string]interface{})
+	if !isObject {
+		return false
 	}
 	url, _ := fields["ts_url"].(string)
 	entryHash, _ := fields["entry_hash"].(string)
 	encoded, _ := fields["receipt_b64"].(string)
 	if url == "" || entryHash == "" || encoded == "" {
-		return witness.Receipt{}, "", fmt.Errorf("receipt fields missing")
+		return false
 	}
-	bytes, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		return witness.Receipt{}, "", err
+	if _, err := base64.StdEncoding.DecodeString(encoded); err != nil {
+		return false
 	}
-	leaf, err := receiptInteger(fields["leaf_index"])
-	if err != nil {
-		return witness.Receipt{}, "", err
-	}
-	size, err := receiptInteger(fields["tree_size"])
-	if err != nil {
-		return witness.Receipt{}, "", err
-	}
-	return witness.Receipt{Bytes: bytes, EntryHash: entryHash, EntryHashScheme: witness.EntryHashSchemeCheckpointDigest, LeafIndex: leaf, TreeSize: size}, url, nil
-}
-
-func receiptInteger(value interface{}) (int64, error) {
-	switch v := value.(type) {
-	case json.Number:
-		return v.Int64()
-	case string:
-		return strconv.ParseInt(v, 10, 64)
-	default:
-		return 0, fmt.Errorf("receipt position is not an integer")
-	}
+	_, hasLeaf := fields["leaf_index"]
+	_, hasSize := fields["tree_size"]
+	return hasLeaf && hasSize
 }

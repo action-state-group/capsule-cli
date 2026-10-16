@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+### Verification on agent-action-capsule's Go APIs
+
+- **Changed (build):** agent-action-capsule's Go module moves to v0.9.1, and capsulectl's own
+  copies of its verifiers are removed (action-state-group/agent-action-capsule#280): witness
+  receipt checks and witness directories (`verify --bundle --witness-directory`, deal copies,
+  cadence receipts) use `go/witness`; countersign receipts and SCITT statement receipts use
+  `witness.VerifyCOSEReceipt`; `settlement status` and `deal settlement` derive states with
+  `go/settlement`. Output shapes, labels and exit codes are unchanged.
+- **Changed (validation):** witness receipts with a `rekor` or `scrapi` binding are checked, and
+  can pass or fail, where they were withheld. A directory row with a key id that is not 64
+  lowercase hex characters is unusable as a whole (its receipts are withheld) where the bad id was
+  skipped. A stub receipt (`is_stub`) is withheld. `leaf_index` and `tree_size` must be present but
+  are no longer read. COSE receipts must be strictly encoded, must carry their payload detached (a
+  receipt with its payload attached is refused, since its signature does not cover the rebuilt
+  root), and may not mark an unknown header critical; a countersign or statement receipt may carry
+  more than one inclusion proof.
+- **Changed (witness directory and receipts):** agent-action-capsule reads a `witnesses.json` and
+  a `receipt_b64` strictly, and capsule-cli no longer softens them. Two kinds of change:
+  - Withheld where they used to be checked: a row whose `binding` is empty or null, whose
+    `public_keys` is null, or whose field names are cased otherwise (`Endpoint`) is no row AAC
+    uses, so its receipts are withheld.
+  - Fail where they used to pass: a `public_keys` entry wrapped across lines is skipped, so the
+    row's key id is read as a raw Ed25519 key and the receipt fails. A `receipt_b64` wrapped
+    across lines also fails.
+
+  capsule-cli writes no directories and writes its receipts unwrapped.
+- **Changed (settlement):** a side with more than one observed leg that no supersedes chain
+  orders is compared leg by leg (mismatch or agreed) instead of `unjoined` with
+  `observed_leg_not_unique`; a supersedes link counts only under the superseded leg's own key; the
+  `in_progress` finding is no longer reported. A conflated pair that otherwise matches is still
+  reported `unjoined`. A delivered leg with an empty `delivery.carrier` is accepted, and a
+  wrapped entry of an unregistered type is `settlement_malformed`.
+  A wrapped SD-JWT re-signed with the leg's own key is still `wrapped_resigned` with or without
+  disclosures: v0.9.1 reads the issuer JWS before the first `~`, as capsule-cli did (v0.9.0 missed
+  `JWT~disclosure~`).
+
 ### The page emitter from capsule-viewer
 
 - **Changed (build):** the offline pages capsulectl writes (`report build`, `deal report --html`,

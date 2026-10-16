@@ -1,8 +1,8 @@
 package cli
 
 // Receipts for a SCITT Signed Statement registered at a witness's
-// /transparency/register-statement, verified with the RFC 9162 proof helpers
-// in countersign_receipt.go. For a COSE_Sign1 statement the witness's entry
+// /transparency/register-statement, verified with agent-action-capsule's
+// witness.VerifyCOSEReceipt. For a COSE_Sign1 statement the witness's entry
 // hash is SHA-256 over its Sig_structure (["Signature1", protected, h'',
 // payload]), and the receipt is a COSE_Sign1 by the witness's Ed25519
 // authority key over the detached root that the proof folds to.
@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/action-state-group/agent-action-capsule/go/witness"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/veraison/go-cose"
 )
@@ -69,51 +70,12 @@ func verifyStatementReceipt(statement, receipt []byte, reg statementRegistration
 	if hex.EncodeToString(entry) != reg.EntryHash {
 		return errors.New("the registration's entry hash does not match this statement")
 	}
-	var message cose.Sign1Message
-	if err := message.UnmarshalCBOR(receipt); err != nil {
-		return fmt.Errorf("decode COSE receipt: %w", err)
-	}
-	if vds, ok := receiptIntegerHeader(message.Headers.Protected, receiptHeaderVDS); !ok || vds != receiptVDSRFC9162 {
-		return errors.New("receipt protected header requires RFC 9162 VDS")
-	}
-	if alg, err := message.Headers.Protected.Algorithm(); err != nil || alg != cose.AlgorithmEdDSA {
-		return errors.New("receipt must use EdDSA")
-	}
-	vdpAny, ok := receiptLookup(message.Headers.Unprotected, receiptHeaderVDP)
-	if !ok {
-		return errors.New("receipt missing VDP")
-	}
-	vdp, ok := vdpAny.(map[any]any)
-	if !ok {
-		return errors.New("receipt VDP is not a map")
-	}
-	proofsAny, ok := receiptLookup(vdp, receiptVDPInclusion)
-	proofs, isList := proofsAny.([]any)
-	if !ok || !isList || len(proofs) != 1 {
-		return errors.New("receipt requires one inclusion proof")
-	}
-	blob, ok := proofs[0].([]byte)
-	if !ok {
-		return errors.New("receipt proof is not bytes")
-	}
-	size, index, path, err := decodeReceiptProof(blob)
+	checked, err := witness.VerifyCOSEReceipt(receipt, entry, authority)
 	if err != nil {
-		return err
-	}
-	if size != reg.TreeSize || index != reg.LeafIndex {
-		return errors.New("receipt position mismatch")
-	}
-	root, ok := receiptRootFromProof(entry, index, size, path)
-	if !ok {
-		return errors.New("receipt inclusion proof is invalid")
-	}
-	message.Payload = root
-	verifier, err := cose.NewVerifier(cose.AlgorithmEdDSA, authority)
-	if err != nil {
-		return err
-	}
-	if err := message.Verify(nil, verifier); err != nil {
 		return fmt.Errorf("verify receipt authority signature: %w", err)
+	}
+	if checked.TreeSize != reg.TreeSize || checked.LeafIndex != reg.LeafIndex {
+		return errors.New("receipt position mismatch")
 	}
 	return nil
 }

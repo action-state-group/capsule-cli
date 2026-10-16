@@ -25,7 +25,7 @@
       "public_key_hex": "3954c5684ec709945665c50fa166ee5940a66e3e24f6e9ab79938eab8c8e67f7"
     }
   },
-  "count": 19,
+  "count": 21,
   "cases": [
     {
       "id": "pos-x402-two-sided-agreed",
@@ -1483,6 +1483,304 @@
           "digest": "3d34e0c85a9d987e3c4161b47e72a238900de256d725b68468567cb02cfa5b2a",
           "octets_b64u": "ZXlKaGJHY2lPaUpGWkVSVFFTSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBZWFFpT2pFM09UQXdNREF4TURBc0ltbHpjeUk2SW1oMGRIQnpPaTh2Y0hKdlkyVnpjMjl5TG1WNFlXMXdiR1VpTENKdVpYUjNiM0pyWDJOdmJtWnBjbTFoZEdsdmJsOXBaQ0k2SW01bGRGODRNMlpqWVRCaE16VTFNbVZrWTJKbUlpd2ljR0Y1YldWdWRGOXBaQ0k2SW5CaGVWOWhNalE1T0dGak9ESmxaV1JqT1dZNElpd2ljSE53WDJOdmJtWnBjbTFoZEdsdmJsOXBaQ0k2SW5CemNGODRNMk5qTUdGbU56STJaR1JrTW1FeElpd2ljbVZtWlhKbGJtTmxJam9pTWpOaVlXUTNOalV5TVdFNE9URXdNbVEyWkRNMVltUmtaV1prTkRWaE0yWTBNMkpsTVRCaU16QmpOalUxTkRobE1Ua3pZbVkxWkdVMk5EWXlNbUl3WVNJc0luTjBZWFIxY3lJNklsTjFZMk5sYzNNaWZRLkxqajdhOERkMHBIZ3ZTYWJOR0NhYS13S0ZiYU56ZmFXelBYWXBWTnBUbjRTbGJXaTV1UFdIYmhDREZMNHZkX2V4X21fbko5UDJVc3hXY3V4TTFldkFR",
           "note": "the same receipt claims, signed by the payee leg key"
+        }
+      ],
+      "expect": {
+        "conforming": false,
+        "failures": [
+          {
+            "records": [
+              "ap2-payee-observed"
+            ],
+            "code": "wrapped_resigned"
+          }
+        ],
+        "findings": [],
+        "settlements": [
+          {
+            "terms": "ap2-terms",
+            "payment_state": "terms_only",
+            "delivery_state": "none"
+          }
+        ]
+      }
+    },
+    {
+      "id": "neg-wrapped-sd-jwt-resigned-with-disclosure",
+      "section": [
+        "§8 Wrapping Existing Signed Objects",
+        "§9.4 Failures"
+      ],
+      "description": "The payee's leg wraps the AP2 Payment Mandate as an SD-JWT in the JWT~disclosure~ form, re-signed with the payee's own leg key. The mandate's issuer is the payer, and the signature covers the issuer JWS before the first '~', so the leg fails and does not contribute.",
+      "key_policy": {
+        "payer": "2cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0",
+        "payee": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+      },
+      "records": [
+        {
+          "label": "ap2-terms",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ap2-terms",
+            "action_type": "fyi",
+            "operator": "payer.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:00:00Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "terms",
+              "sealer_role": "payer",
+              "amount": {
+                "value": "4200",
+                "assetCode": "USD",
+                "assetScale": 2
+              },
+              "wrapped": [
+                {
+                  "type": "ap2.payment-mandate",
+                  "digest_alg": "SHA-256",
+                  "digest": "23bad76521a89102d6d35bddefd45a3f43be10b30c65548e193bf5de64622b0a"
+                }
+              ]
+            },
+            "capsule_id": "2668f8adafd2cf2d5cdfb40e9c8367ca2eb02abc8509b28377cacdd26f53e008"
+          },
+          "capsule_id": "2668f8adafd2cf2d5cdfb40e9c8367ca2eb02abc8509b28377cacdd26f53e008",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458202cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0a058202668f8adafd2cf2d5cdfb40e9c8367ca2eb02abc8509b28377cacdd26f53e0085840e9613ff531a5e7a5f534f5493df618ad120750eecb7b5730f4ffd376226956538333cf8268fed71ebfbb13942127341a1b6bc9a3eb9660a102dd2e1c0501460f",
+          "envelope_kid": "2cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0"
+        },
+        {
+          "label": "ap2-payee-observed",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ap2-payee-observed",
+            "action_type": "fyi",
+            "operator": "payee.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:02:06Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "payee_observed",
+              "sealer_role": "payee",
+              "terms_ref": "2668f8adafd2cf2d5cdfb40e9c8367ca2eb02abc8509b28377cacdd26f53e008",
+              "payment_ref": {
+                "type": "ap2.payment_id",
+                "value": "pay_a2498ac82eedc9f8"
+              },
+              "received": {
+                "value": "4200",
+                "assetCode": "USD",
+                "assetScale": 2
+              },
+              "status": "settled",
+              "observed_at": "2026-10-01T12:02:05Z",
+              "receive_fee": {
+                "value": "0",
+                "assetCode": "USD",
+                "assetScale": 2
+              },
+              "wrapped": [
+                {
+                  "type": "ap2.payment-receipt",
+                  "digest_alg": "SHA-256",
+                  "digest": "008e6d8c65cfab54cc879517fd35c8d487f862287a36508b82b41eeb03ec8ea7"
+                },
+                {
+                  "type": "ap2.payment-mandate",
+                  "digest_alg": "SHA-256",
+                  "digest": "f0317e458a2e5ba0296b36ac6850a04ea9f9b381bd5dcacd2cd667b62db99b53",
+                  "content": "ZXlKaGJHY2lPaUpGWkVSVFFTSXNJblI1Y0NJNkltUmpLM05rTFdwM2RDSjkuZXlKZmMyUWlPbHNpWjFjelFqZERTRnA1ZWpGaE5XdGllVGhSTlVoVGQwOTJSbUpFWTA1UGR6Z3hVM1pIV1ZWWE9EaEVUU0pkTENKZmMyUmZZV3huSWpvaWMyaGhMVEkxTmlJc0ltRnRiM1Z1ZENJNmV5SmpkWEp5Wlc1amVTSTZJbFZUUkNJc0luWmhiSFZsSWpvaU5ESXdNQ0o5TENKMGNtRnVjMkZqZEdsdmJsOXBaQ0k2SW5SNGJsOWlPVFExTlRCaU5UWXpNREEzTXpaaUlpd2lkbU4wSWpvaWJXRnVaR0YwWlM1d1lYbHRaVzUwTGpFaWZRLlhjbE9weG9UM1BCbklpQ09WZTFFaG5VbWNDOHIzWXRMUTA0QzNUVnFlRUZJaGMza2tpemZHektKMzluZUpIZ1Z6S3FSUjIxSGRJT3pBVjlCTGFOWURRfld5STFOekZoWXpZd05HSmhaalJpWWpCaE0yTm1NVGMwT0dOaVpEUTNNR05rWWlJc0luQmhlV1ZsSWl3aWJXVnlZMmhoYm5RdVpYaGhiWEJzWlNKZH4"
+                }
+              ]
+            },
+            "capsule_id": "63f81843488acdfc9d951a3e648f1547d6db9dbe8f1c3a3c0fe5bc9f5727acac"
+          },
+          "capsule_id": "63f81843488acdfc9d951a3e648f1547d6db9dbe8f1c3a3c0fe5bc9f5727acac",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458207125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8a0582063f81843488acdfc9d951a3e648f1547d6db9dbe8f1c3a3c0fe5bc9f5727acac5840530feb342654e96929c9980a80f8ad07507b127ea769994244c67eaca0547e570b8d24072463abeaa2477bffce7fc3c85c44a19886220cb3a7550a389bcc3d0e",
+          "envelope_kid": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+        }
+      ],
+      "wrapped_objects": [
+        {
+          "type": "ap2.payment-mandate",
+          "digest": "23bad76521a89102d6d35bddefd45a3f43be10b30c65548e193bf5de64622b0a",
+          "octets_b64u": "ZXlKaGJHY2lPaUpGWkVSVFFTSXNJblI1Y0NJNkltUmpLM05rTFdwM2RDSjkuZXlKaGJXOTFiblFpT25zaVkzVnljbVZ1WTNraU9pSlZVMFFpTENKMllXeDFaU0k2SWpReU1EQWlmU3dpY0dGNVpXVWlPaUp0WlhKamFHRnVkQzVsZUdGdGNHeGxJaXdpZEhKaGJuTmhZM1JwYjI1ZmFXUWlPaUowZUc1ZllqazBOVFV3WWpVMk16QXdOek0yWWlJc0luWmpkQ0k2SW0xaGJtUmhkR1V1Y0dGNWJXVnVkQzR4SW4wLk5MMGpKZkFUb0hQenhOUDlKVElnZzFvdktaVHVHX1FNLTdyUHh0V200aWJjTGs0dXJyZDc3R3FkNHFYQ3ZWUHNhQnM1a3QwSWJ1Ml96OHZYdDJNeURBfg",
+          "note": "illustrative SD-JWT Payment Mandate (EdDSA, no disclosures)"
+        },
+        {
+          "type": "ap2.payment-receipt",
+          "digest": "008e6d8c65cfab54cc879517fd35c8d487f862287a36508b82b41eeb03ec8ea7",
+          "octets_b64u": "ZXlKaGJHY2lPaUpGWkVSVFFTSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBZWFFpT2pFM09UQXdNREF4TURBc0ltbHpjeUk2SW1oMGRIQnpPaTh2Y0hKdlkyVnpjMjl5TG1WNFlXMXdiR1VpTENKdVpYUjNiM0pyWDJOdmJtWnBjbTFoZEdsdmJsOXBaQ0k2SW01bGRGODRNMlpqWVRCaE16VTFNbVZrWTJKbUlpd2ljR0Y1YldWdWRGOXBaQ0k2SW5CaGVWOWhNalE1T0dGak9ESmxaV1JqT1dZNElpd2ljSE53WDJOdmJtWnBjbTFoZEdsdmJsOXBaQ0k2SW5CemNGODRNMk5qTUdGbU56STJaR1JrTW1FeElpd2ljbVZtWlhKbGJtTmxJam9pTWpOaVlXUTNOalV5TVdFNE9URXdNbVEyWkRNMVltUmtaV1prTkRWaE0yWTBNMkpsTVRCaU16QmpOalUxTkRobE1Ua3pZbVkxWkdVMk5EWXlNbUl3WVNJc0luTjBZWFIxY3lJNklsTjFZMk5sYzNNaWZRLnB4bDI1VVkzcGVmOWFxeS1wNkc0RDMwYjdOeFloSnREQWJpdXpmSlBsRzlUemNPU0loUzZIR25aQWdZcnluMkdvMWRUakNvVTkyTkRkOGJ2ZGYzbENB",
+          "note": "illustrative Payment Receipt JWT signed by the processor key"
+        },
+        {
+          "type": "ap2.payment-mandate",
+          "digest": "f0317e458a2e5ba0296b36ac6850a04ea9f9b381bd5dcacd2cd667b62db99b53",
+          "octets_b64u": "ZXlKaGJHY2lPaUpGWkVSVFFTSXNJblI1Y0NJNkltUmpLM05rTFdwM2RDSjkuZXlKZmMyUWlPbHNpWjFjelFqZERTRnA1ZWpGaE5XdGllVGhSTlVoVGQwOTJSbUpFWTA1UGR6Z3hVM1pIV1ZWWE9EaEVUU0pkTENKZmMyUmZZV3huSWpvaWMyaGhMVEkxTmlJc0ltRnRiM1Z1ZENJNmV5SmpkWEp5Wlc1amVTSTZJbFZUUkNJc0luWmhiSFZsSWpvaU5ESXdNQ0o5TENKMGNtRnVjMkZqZEdsdmJsOXBaQ0k2SW5SNGJsOWlPVFExTlRCaU5UWXpNREEzTXpaaUlpd2lkbU4wSWpvaWJXRnVaR0YwWlM1d1lYbHRaVzUwTGpFaWZRLlhjbE9weG9UM1BCbklpQ09WZTFFaG5VbWNDOHIzWXRMUTA0QzNUVnFlRUZJaGMza2tpemZHektKMzluZUpIZ1Z6S3FSUjIxSGRJT3pBVjlCTGFOWURRfld5STFOekZoWXpZd05HSmhaalJpWWpCaE0yTm1NVGMwT0dOaVpEUTNNR05rWWlJc0luQmhlV1ZsSWl3aWJXVnlZMmhoYm5RdVpYaGhiWEJzWlNKZH4",
+          "note": "the mandate claims as an SD-JWT (JWT~disclosure~), signed by the payee leg key"
+        }
+      ],
+      "expect": {
+        "conforming": false,
+        "failures": [
+          {
+            "records": [
+              "ap2-payee-observed"
+            ],
+            "code": "wrapped_resigned"
+          }
+        ],
+        "findings": [],
+        "settlements": [
+          {
+            "terms": "ap2-terms",
+            "payment_state": "terms_only",
+            "delivery_state": "none"
+          }
+        ]
+      }
+    },
+    {
+      "id": "neg-wrapped-sd-jwt-resigned-no-disclosure",
+      "section": [
+        "§8 Wrapping Existing Signed Objects",
+        "§9.4 Failures"
+      ],
+      "description": "The payee's leg wraps the AP2 Payment Mandate as an SD-JWT in the JWT~ form, re-signed with the payee's own leg key. The mandate's issuer is the payer, and the signature covers the issuer JWS before the first '~', so the leg fails and does not contribute.",
+      "key_policy": {
+        "payer": "2cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0",
+        "payee": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+      },
+      "records": [
+        {
+          "label": "ap2-terms",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ap2-terms",
+            "action_type": "fyi",
+            "operator": "payer.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:00:00Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "terms",
+              "sealer_role": "payer",
+              "amount": {
+                "value": "4200",
+                "assetCode": "USD",
+                "assetScale": 2
+              },
+              "wrapped": [
+                {
+                  "type": "ap2.payment-mandate",
+                  "digest_alg": "SHA-256",
+                  "digest": "23bad76521a89102d6d35bddefd45a3f43be10b30c65548e193bf5de64622b0a"
+                }
+              ]
+            },
+            "capsule_id": "2668f8adafd2cf2d5cdfb40e9c8367ca2eb02abc8509b28377cacdd26f53e008"
+          },
+          "capsule_id": "2668f8adafd2cf2d5cdfb40e9c8367ca2eb02abc8509b28377cacdd26f53e008",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458202cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0a058202668f8adafd2cf2d5cdfb40e9c8367ca2eb02abc8509b28377cacdd26f53e0085840e9613ff531a5e7a5f534f5493df618ad120750eecb7b5730f4ffd376226956538333cf8268fed71ebfbb13942127341a1b6bc9a3eb9660a102dd2e1c0501460f",
+          "envelope_kid": "2cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0"
+        },
+        {
+          "label": "ap2-payee-observed",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ap2-payee-observed",
+            "action_type": "fyi",
+            "operator": "payee.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:02:06Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "payee_observed",
+              "sealer_role": "payee",
+              "terms_ref": "2668f8adafd2cf2d5cdfb40e9c8367ca2eb02abc8509b28377cacdd26f53e008",
+              "payment_ref": {
+                "type": "ap2.payment_id",
+                "value": "pay_a2498ac82eedc9f8"
+              },
+              "received": {
+                "value": "4200",
+                "assetCode": "USD",
+                "assetScale": 2
+              },
+              "status": "settled",
+              "observed_at": "2026-10-01T12:02:05Z",
+              "receive_fee": {
+                "value": "0",
+                "assetCode": "USD",
+                "assetScale": 2
+              },
+              "wrapped": [
+                {
+                  "type": "ap2.payment-receipt",
+                  "digest_alg": "SHA-256",
+                  "digest": "008e6d8c65cfab54cc879517fd35c8d487f862287a36508b82b41eeb03ec8ea7"
+                },
+                {
+                  "type": "ap2.payment-mandate",
+                  "digest_alg": "SHA-256",
+                  "digest": "f812d95071db8721bc5e6b017db308b00ca6b58f6c9aa6577fbd687e9cdad7a5",
+                  "content": "ZXlKaGJHY2lPaUpGWkVSVFFTSXNJblI1Y0NJNkltUmpLM05rTFdwM2RDSjkuZXlKaGJXOTFiblFpT25zaVkzVnljbVZ1WTNraU9pSlZVMFFpTENKMllXeDFaU0k2SWpReU1EQWlmU3dpY0dGNVpXVWlPaUp0WlhKamFHRnVkQzVsZUdGdGNHeGxJaXdpZEhKaGJuTmhZM1JwYjI1ZmFXUWlPaUowZUc1ZllqazBOVFV3WWpVMk16QXdOek0yWWlJc0luWmpkQ0k2SW0xaGJtUmhkR1V1Y0dGNWJXVnVkQzR4SW4wLmdFeE9Uc3gxUS01bG5ZRi1HQ25jMEFmUnYwZlc0aEtUVzBRRE55UlVlZkhrSVhBSm05OFc5c3h0cWJISUQ4SEw2UU1tRXd6NjhlcU1pNDI5bnpjakNRfg"
+                }
+              ]
+            },
+            "capsule_id": "abb5485bb0cc1f7cd477b788a6e0a134098e06510ddda65c68d1effd0105086e"
+          },
+          "capsule_id": "abb5485bb0cc1f7cd477b788a6e0a134098e06510ddda65c68d1effd0105086e",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458207125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8a05820abb5485bb0cc1f7cd477b788a6e0a134098e06510ddda65c68d1effd0105086e5840051ebe29900fe6e4c35569687ebfaa3125bb14feba3a95e3782d628f6602986dda1a3556c0e7a4ea66b778e56df160f4bff64533b082be279c52bc27e8627d0d",
+          "envelope_kid": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+        }
+      ],
+      "wrapped_objects": [
+        {
+          "type": "ap2.payment-mandate",
+          "digest": "23bad76521a89102d6d35bddefd45a3f43be10b30c65548e193bf5de64622b0a",
+          "octets_b64u": "ZXlKaGJHY2lPaUpGWkVSVFFTSXNJblI1Y0NJNkltUmpLM05rTFdwM2RDSjkuZXlKaGJXOTFiblFpT25zaVkzVnljbVZ1WTNraU9pSlZVMFFpTENKMllXeDFaU0k2SWpReU1EQWlmU3dpY0dGNVpXVWlPaUp0WlhKamFHRnVkQzVsZUdGdGNHeGxJaXdpZEhKaGJuTmhZM1JwYjI1ZmFXUWlPaUowZUc1ZllqazBOVFV3WWpVMk16QXdOek0yWWlJc0luWmpkQ0k2SW0xaGJtUmhkR1V1Y0dGNWJXVnVkQzR4SW4wLk5MMGpKZkFUb0hQenhOUDlKVElnZzFvdktaVHVHX1FNLTdyUHh0V200aWJjTGs0dXJyZDc3R3FkNHFYQ3ZWUHNhQnM1a3QwSWJ1Ml96OHZYdDJNeURBfg",
+          "note": "illustrative SD-JWT Payment Mandate (EdDSA, no disclosures)"
+        },
+        {
+          "type": "ap2.payment-receipt",
+          "digest": "008e6d8c65cfab54cc879517fd35c8d487f862287a36508b82b41eeb03ec8ea7",
+          "octets_b64u": "ZXlKaGJHY2lPaUpGWkVSVFFTSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBZWFFpT2pFM09UQXdNREF4TURBc0ltbHpjeUk2SW1oMGRIQnpPaTh2Y0hKdlkyVnpjMjl5TG1WNFlXMXdiR1VpTENKdVpYUjNiM0pyWDJOdmJtWnBjbTFoZEdsdmJsOXBaQ0k2SW01bGRGODRNMlpqWVRCaE16VTFNbVZrWTJKbUlpd2ljR0Y1YldWdWRGOXBaQ0k2SW5CaGVWOWhNalE1T0dGak9ESmxaV1JqT1dZNElpd2ljSE53WDJOdmJtWnBjbTFoZEdsdmJsOXBaQ0k2SW5CemNGODRNMk5qTUdGbU56STJaR1JrTW1FeElpd2ljbVZtWlhKbGJtTmxJam9pTWpOaVlXUTNOalV5TVdFNE9URXdNbVEyWkRNMVltUmtaV1prTkRWaE0yWTBNMkpsTVRCaU16QmpOalUxTkRobE1Ua3pZbVkxWkdVMk5EWXlNbUl3WVNJc0luTjBZWFIxY3lJNklsTjFZMk5sYzNNaWZRLnB4bDI1VVkzcGVmOWFxeS1wNkc0RDMwYjdOeFloSnREQWJpdXpmSlBsRzlUemNPU0loUzZIR25aQWdZcnluMkdvMWRUakNvVTkyTkRkOGJ2ZGYzbENB",
+          "note": "illustrative Payment Receipt JWT signed by the processor key"
+        },
+        {
+          "type": "ap2.payment-mandate",
+          "digest": "f812d95071db8721bc5e6b017db308b00ca6b58f6c9aa6577fbd687e9cdad7a5",
+          "octets_b64u": "ZXlKaGJHY2lPaUpGWkVSVFFTSXNJblI1Y0NJNkltUmpLM05rTFdwM2RDSjkuZXlKaGJXOTFiblFpT25zaVkzVnljbVZ1WTNraU9pSlZVMFFpTENKMllXeDFaU0k2SWpReU1EQWlmU3dpY0dGNVpXVWlPaUp0WlhKamFHRnVkQzVsZUdGdGNHeGxJaXdpZEhKaGJuTmhZM1JwYjI1ZmFXUWlPaUowZUc1ZllqazBOVFV3WWpVMk16QXdOek0yWWlJc0luWmpkQ0k2SW0xaGJtUmhkR1V1Y0dGNWJXVnVkQzR4SW4wLmdFeE9Uc3gxUS01bG5ZRi1HQ25jMEFmUnYwZlc0aEtUVzBRRE55UlVlZkhrSVhBSm05OFc5c3h0cWJISUQ4SEw2UU1tRXd6NjhlcU1pNDI5bnpjakNRfg",
+          "note": "the mandate claims as an SD-JWT (JWT~), signed by the payee leg key"
         }
       ],
       "expect": {

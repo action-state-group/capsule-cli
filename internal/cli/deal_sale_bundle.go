@@ -13,6 +13,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
+	"github.com/action-state-group/agent-action-capsule/go/witness"
 )
 
 // dealSaleExtension carries a sale's threads in the user's own sale bundle:
@@ -229,7 +230,7 @@ func (s *dealSession) unregisteredThreads(ctx context.Context, saleID string) (b
 // sale whose threads predate registration, is not shown: INCOMPLETE. Any
 // mismatch, or a carried thread that fails, fails the bundle. The
 // extension on a bundle that is not a sale's is never read as completeness.
-func saleBundleEntry(value map[string]interface{}, result aacbundle.VerificationResult, directory []witnessRow) (map[string]any, aacbundle.ClaimResult) {
+func saleBundleEntry(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, aacbundle.ClaimResult) {
 	var findings, notShown []string
 	failed := false
 	fail := func(f string) { findings, failed = append(findings, f), true }

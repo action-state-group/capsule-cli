@@ -18,6 +18,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
+	"github.com/action-state-group/agent-action-capsule/go/witness"
 	emit "github.com/action-state-group/capsule-emit/go"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
 	"github.com/action-state-group/evidencebook"
@@ -320,7 +321,7 @@ func dealAsk(c *cobra.Command, p Profile, raw []byte, responder, path string) (e
 // that is not for this request under the pinned responder key is refused
 // and never recorded; a genuinely signed artifact that does not hold up is
 // recorded as artifact_failed_verification, never as a grant.
-func dealRecordResponse(c *cobra.Command, p Profile, forID string, raw []byte, keys evidencebook.ResponderKeys, directory []witnessRow) (err error) {
+func dealRecordResponse(c *cobra.Command, p Profile, forID string, raw []byte, keys evidencebook.ResponderKeys, directory *witness.Directory) (err error) {
 	var resp dealResponse
 	if e := decodeJSONAs("--response", raw, &resp); e != nil {
 		return e
@@ -380,7 +381,7 @@ func dealRecordResponse(c *cobra.Command, p Profile, forID string, raw []byte, k
 // checkpoint is signed by the pinned checkpoint key, is on the named deal's
 // own log, is the signed anchor, and meets the request's coverage. It
 // returns why it does not, or "".
-func verifyDealCopy(req dealEvidenceRequest, a dealArtifactResponse, checkpointKey string, directory []witnessRow) string {
+func verifyDealCopy(req dealEvidenceRequest, a dealArtifactResponse, checkpointKey string, directory *witness.Directory) string {
 	if a.ArtifactKind != dealArtifactBundle {
 		return fmt.Sprintf("artifact kind %q is not %s", a.ArtifactKind, dealArtifactBundle)
 	}
@@ -1054,13 +1055,13 @@ func dealRequest(c *cobra.Command, p Profile, requestBytes, responseBytes []byte
 		}
 		return dealAsk(c, p, requestBytes, responder, path)
 	case responseBytes != nil:
-		var directory []witnessRow
+		var directory *witness.Directory
 		if path, _ := c.Flags().GetString("witness-directory"); path != "" {
 			rows, err := loadWitnessDirectory(path)
 			if err != nil {
 				return err
 			}
-			directory = rows
+			directory = &rows
 		}
 		return dealRecordResponse(c, p, forID, responseBytes, keys, directory)
 	default:

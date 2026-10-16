@@ -9,12 +9,15 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	aacsettlement "github.com/action-state-group/agent-action-capsule/go/settlement"
 )
 
 // This file builds the two legs the payee seals: payee_observed, from the
 // rail's own objects, and delivered (sent). Every leg it returns passes the
-// same structure checks the verifier applies (structureFailures), so a leg
-// that a verifier would report settlement_malformed is never sealed.
+// structure checks the verifier applies (agent-action-capsule's
+// settlement.StructureFailures), so a leg that a verifier would report
+// settlement_malformed is never sealed.
 
 // Built is one leg's settlement member and the wrapped objects' octets it
 // binds by digest. Objects stay with the sealer: a leg never carries them
@@ -63,6 +66,10 @@ type X402Receipt struct {
 }
 
 var caip2Pattern = regexp.MustCompile(`^[-a-z0-9]{3,8}:[-_a-zA-Z0-9]{1,32}$`)
+
+// valuePattern is the amount value grammar (§6): 0, or a digit 1-9 followed by
+// digits. No sign, leading zero, decimal point, exponent or whitespace.
+var valuePattern = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)
 
 // PayeeObservedX402 builds the payee-observed leg for an x402 payment
 // (§5.3, §7.2). Every value is read from the rail's objects, never typed by
@@ -215,7 +222,7 @@ func (b Built) wrap(kind string, octets []byte) map[string]any {
 // carries an account identifier anywhere but in a CAIP-19 assetCode (which
 // names the token's contract, not an account).
 func (b Built) check() error {
-	if failures := structureFailures(b.Member); len(failures) > 0 {
+	if failures := aacsettlement.StructureFailures(b.Member); len(failures) > 0 {
 		return fmt.Errorf("the leg would not verify: %s", strings.Join(failures, ", "))
 	}
 	return NeverEnters(b.Member, b.AccountIDs)
