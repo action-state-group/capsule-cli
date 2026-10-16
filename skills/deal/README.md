@@ -268,9 +268,10 @@ Every item lists the steps it was read from. `--html FILE` writes the report
 as one local, self-contained page, built on this machine: nothing is hosted
 and no link is minted. The page embeds an AAC Evidence Bundle of the deal's
 own log (every step, its membership proof, the chain back to the opening
-step, the signed checkpoint) and agent-action-capsule's own emitter and
-browser verifier, vendored unmodified in `internal/cli/assets/` (rebuild and
-compare with `scripts/build-evidence-graph-iife.sh`). Each item expands to
+step, the signed checkpoint) in capsule-viewer's emitter shell, with
+agent-action-capsule's own browser verifier, vendored unmodified in
+`internal/cli/assets/` (rebuild and compare with
+`scripts/build-evidence-graph-iife.sh`). Each item expands to
 its steps, and a step's line is shown only if the verifier matched its record
 against the step's seal; the words shown come from this device's local
 store. If a byte was changed, the page says "This report did not verify"
