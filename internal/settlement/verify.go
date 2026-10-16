@@ -144,6 +144,7 @@ func Verify(in Input) Result {
 	for i, l := range in.Legs {
 		views[i] = newLegView(l, capsules[i], keys[i], in)
 	}
+	markUnresolved(views)
 
 	result := Result{
 		Conforming:  aac.Conforming,
@@ -158,11 +159,11 @@ func Verify(in Input) Result {
 	}
 	for i, l := range in.Legs {
 		entry := LegKey{Record: l.Label}
-		id, _ := l.Capsule["capsule_id"].(string)
-		// The verifier keys each authenticated record by "<capsule_id>:<key>";
-		// a leg without that entry failed the Capsule or envelope checks.
-		if keys[i] != "" && aac.Keys[id+":"+keys[i]] == keys[i] {
-			entry.CapsuleID, entry.AuthenticatedKey = id, keys[i]
+		// Only a leg that passes its own Capsule and envelope checks has an
+		// identity: another leg with the same capsule_id and key never lends
+		// it one.
+		if views[i].authenticated {
+			entry.CapsuleID, entry.AuthenticatedKey = *views[i].id, views[i].key
 		}
 		result.Legs = append(result.Legs, entry)
 	}
@@ -239,6 +240,13 @@ type legView struct {
 	// that does not depend on another leg. terms_ref_unresolved, which a leg
 	// alone always reports, is left out.
 	failures, findings map[string]bool
+	// authenticated is whether the leg alone passed the Capsule checks and
+	// its envelope authenticated key over its capsule_id.
+	authenticated bool
+	// unresolved is whether the leg is a live non-terms leg whose terms_ref
+	// names no live terms leg: terms_ref_unresolved is then its own code.
+	// It is kept apart from failures, which decide whether the leg is live.
+	unresolved bool
 }
 
 // newLegView verifies the leg alone, with the same wrapped objects and key
@@ -260,7 +268,23 @@ func newLegView(l Leg, wire interface{}, key string, in Input) legView {
 	for _, f := range alone.Findings {
 		v.findings[f.Code] = true
 	}
+	v.authenticated = v.id != nil && key != "" && alone.Keys[*v.id+":"+key] == key
 	return v
+}
+
+// markUnresolved sets unresolved on each live non-terms leg whose terms_ref
+// names no live terms leg, as the verifier decides terms_ref_unresolved.
+func markUnresolved(views []legView) {
+	terms := map[string]bool{}
+	for _, v := range views {
+		if v.live() && v.leg() == LegTerms {
+			terms[*v.id] = true
+		}
+	}
+	for i, v := range views {
+		ref, _ := v.s["terms_ref"].(string)
+		views[i].unresolved = v.live() && v.leg() != LegTerms && !terms[ref]
+	}
 }
 
 // live is whether the leg took part in the derived states: it has no failure
@@ -293,7 +317,7 @@ func reports(entries []aacsettlement.Entry, views []legView) []Report {
 		var own []legView
 		if len(e.Records) == 1 {
 			for _, v := range views {
-				if v.names(e.Records[0]) && (v.failures[e.Code] || v.findings[e.Code]) {
+				if v.names(e.Records[0]) && (v.failures[e.Code] || v.findings[e.Code] || (e.Code == "terms_ref_unresolved" && v.unresolved)) {
 					own = append(own, v)
 				}
 			}

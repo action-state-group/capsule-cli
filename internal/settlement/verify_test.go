@@ -298,6 +298,43 @@ func TestADuplicateCapsuleIDIsReportedPerLeg(t *testing.T) {
 	assert.Equal(t, PaymentAgreed, result.Settlements[0].PaymentState)
 }
 
+// A copy whose content no longer matches its capsule_id fails
+// capsule_invalid and has no identity of its own, even though its envelope
+// and capsule_id are those of the valid original.
+func TestAnInvalidDuplicateHasNoIdentity(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.duplicate("x402-payee-observed", "payee-altered").Capsule["settlement"].(map[string]any)["status"] = "failed"
+	result := Verify(f.in)
+	assert.Equal(t, []Report{{Records: []string{"payee-altered"}, Code: "capsule_invalid"}}, result.Failures)
+	assert.Equal(t, LegKey{Record: "payee-altered"}, result.Legs[5])
+	assert.Equal(t, f.leg("x402-payee-observed").Capsule["capsule_id"], result.Legs[2].CapsuleID)
+	assert.Len(t, result.Legs[2].AuthenticatedKey, 64)
+	assert.Equal(t, PaymentAgreed, result.Settlements[0].PaymentState)
+}
+
+// terms_ref_unresolved is one entry per record: a leg re-sealed under
+// another key is a second record, and each entry names one leg.
+func TestTermsRefUnresolvedNamesEachRecordOnce(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.in.Policy = nil
+	f.duplicate("x402-delivered-received", "received-resigned")
+	f.reseal("received-resigned", "payee")
+	f.in.Legs = without(f.in.Legs, "x402-terms")
+	result := Verify(f.in)
+	var unresolved []Report
+	for _, r := range result.Failures {
+		if r.Code == "terms_ref_unresolved" {
+			unresolved = append(unresolved, r)
+		}
+	}
+	var want []Report
+	for _, label := range []string{"x402-payer-observed", "x402-payee-observed", "x402-delivered-sent", "x402-delivered-received", "received-resigned"} {
+		want = append(want, Report{Records: []string{label}, Code: "terms_ref_unresolved"})
+	}
+	assert.Equal(t, want, unresolved)
+	assert.Empty(t, result.Settlements)
+}
+
 // Two terms legs with one capsule_id answer the same legs: each is reported
 // with the same state, as each terms leg was before.
 func TestTwoTermsLegsWithOneCapsuleIDAreEachReported(t *testing.T) {
