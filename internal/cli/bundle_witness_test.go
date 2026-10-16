@@ -264,3 +264,105 @@ print(c.verdict, c.witness.status)`
 		assert.Equal(t, goResult["verdict"].(string)+" "+goState, strings.TrimSpace(string(out)), name)
 	}
 }
+
+// The receipt checks are agent-action-capsule's (witness.VerifyReceipts).
+// These tests pin where they differ from the checks this CLI carried before.
+
+func witnessEntry(b map[string]interface{}) map[string]interface{} {
+	return b["checkpoint"].(map[string]interface{})["witnesses"].([]interface{})[0].(map[string]interface{})
+}
+
+// A scrapi receipt is checked, not withheld: a SCITT COSE Receipt whose leaf
+// is SHA-256 of the checkpoint's COSE statement.
+func TestVerifyBundleChecksAScrapiReceipt(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	_, otherKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	scrapi := func(key ed25519.PrivateKey) func(map[string]interface{}) {
+		return func(b map[string]interface{}) {
+			witnessed(t, private)(b)
+			statement, err := base64.RawURLEncoding.DecodeString(b["checkpoint"].(map[string]interface{})["cose"].(string))
+			require.NoError(t, err)
+			leaf := sha256.Sum256(statement)
+			witnessEntry(b)["ts_url"] = "scrapi+" + testWitness
+			witnessEntry(b)["receipt_b64"] = base64.StdEncoding.EncodeToString(mintReceipt(t, leaf[:], key))
+		}
+	}
+	row := rawKeyRow(testWitness, public)
+	row["binding"] = "scrapi"
+	directory := writeDirectory(t, row)
+
+	result, err := verifyWithDirectory(t, producedBundle(t, scrapi(private)), directory)
+	require.NoError(t, err)
+	state, findings := bundleWitnesses(result)
+	assert.Equal(t, "pass", state)
+	assert.Empty(t, findings)
+	receipt := result["witnesses"].(map[string]interface{})["receipts"].([]interface{})[0].(map[string]interface{})
+	assert.Equal(t, "scrapi", receipt["binding"])
+	assert.Equal(t, "verified under test witness's key", receipt["reason"])
+
+	result, err = verifyWithDirectory(t, producedBundle(t, scrapi(otherKey)), directory)
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	state, findings = bundleWitnesses(result)
+	assert.Equal(t, "fail", state)
+	assert.Equal(t, []interface{}{"witness_receipt_invalid:scrapi+" + testWitness}, findings)
+}
+
+// A row with a key id that is not 64 lowercase hex characters is unusable as
+// a whole: its receipts are withheld, not checked under its other keys.
+func TestVerifyBundleWithholdsAReceiptWhoseRowHasAnUnusableKeyID(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	row := rawKeyRow(testWitness, public)
+	row["key_ids"] = []string{hex.EncodeToString(public), "not-a-key"}
+	result, err := verifyWithDirectory(t, producedBundle(t, witnessed(t, private)), writeDirectory(t, row))
+	require.NoError(t, err)
+	assert.Equal(t, "VALID", result["verdict"])
+	state, findings := bundleWitnesses(result)
+	assert.Equal(t, "withheld", state)
+	assert.Equal(t, []interface{}{"witness_unverified:" + testWitness}, findings)
+}
+
+// A stub receipt never reached a witness: it is withheld, never checked.
+func TestVerifyBundleWithholdsAStubReceipt(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	path := producedBundle(t, func(b map[string]interface{}) {
+		witnessed(t, private)(b)
+		witnessEntry(b)["is_stub"] = true
+	})
+	result, err := verifyWithDirectory(t, path, writeDirectory(t, rawKeyRow(testWitness, public)))
+	require.NoError(t, err)
+	state, _ := bundleWitnesses(result)
+	assert.Equal(t, "withheld", state)
+}
+
+// leaf_index and tree_size must be present, and are not read: the receipt's
+// own inclusion proof states the position it verifies at.
+func TestVerifyBundleRequiresButDoesNotReadTheReceiptPosition(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	directory := writeDirectory(t, rawKeyRow(testWitness, public))
+
+	result, err := verifyWithDirectory(t, producedBundle(t, func(b map[string]interface{}) {
+		witnessed(t, private)(b)
+		witnessEntry(b)["leaf_index"] = "not a number"
+	}), directory)
+	require.NoError(t, err)
+	state, _ := bundleWitnesses(result)
+	assert.Equal(t, "pass", state)
+
+	result, err = verifyWithDirectory(t, producedBundle(t, func(b map[string]interface{}) {
+		witnessed(t, private)(b)
+		delete(witnessEntry(b), "tree_size")
+	}), directory)
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	state, findings := bundleWitnesses(result)
+	assert.Equal(t, "fail", state)
+	assert.Equal(t, []interface{}{"witness_receipt_malformed:0"}, findings)
+}

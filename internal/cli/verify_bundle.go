@@ -12,6 +12,7 @@ import (
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
 	"github.com/action-state-group/agent-action-capsule/go/envelope"
+	"github.com/action-state-group/agent-action-capsule/go/witness"
 	"github.com/spf13/cobra"
 )
 
@@ -163,13 +164,13 @@ func claim(result aacbundle.ClaimResult) claimOutput {
 // network. Exit 0 when every claim passes, 3 (ErrPartial) when nothing failed
 // but something is not shown, 1 (ErrBundleInvalid) when a claim failed.
 func verifyBundleFile(c *cobra.Command, path string) error {
-	var directory []witnessRow
+	var directory *witness.Directory
 	if directoryPath, _ := c.Flags().GetString("witness-directory"); directoryPath != "" {
 		rows, err := loadWitnessDirectory(directoryPath)
 		if err != nil {
 			return err
 		}
-		directory = rows
+		directory = &rows
 	}
 	raw, err := readInput(path)
 	if err != nil {
@@ -210,7 +211,7 @@ func verdictError(verdict string) error {
 // and an optional witness directory. A page that checks itself is written
 // only after this same verdict is VALID (pageGate), so the page can never
 // claim more than verify --bundle does about the bundle it carries.
-func bundleVerdict(value map[string]interface{}, directory []witnessRow) (string, map[string]any) {
+func bundleVerdict(value map[string]interface{}, directory *witness.Directory) (string, map[string]any) {
 	result := aacbundle.VerifyBundleWithOptions(value, aacbundle.Options{RefusalSignature: verifyRefusalSignature, ResponseSignature: verifyResponseSignature})
 	report, verdict := assessBundle(value, result, directory)
 	return verdict, report
@@ -221,7 +222,7 @@ func bundleVerdict(value map[string]interface{}, directory []witnessRow) (string
 // on their member; their claims are never merged into the containing
 // Bundle's, but a failed member or block fails the verdict, and one with
 // something not shown makes it INCOMPLETE.
-func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, directory []witnessRow) (map[string]any, string) {
+func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, string) {
 	records := map[string]string{}
 	ids := make([]string, 0, len(result.CapsuleResults))
 	for id := range result.CapsuleResults {

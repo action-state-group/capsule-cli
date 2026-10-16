@@ -17,6 +17,7 @@ import (
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
+	"github.com/action-state-group/agent-action-capsule/go/witness"
 	emit "github.com/action-state-group/capsule-emit/go"
 	"github.com/spf13/cobra"
 )
@@ -402,7 +403,7 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 // nothing unselected is carried; and every nested record is signed by the
 // selection record's key (holder_key), the one key the deals share. A
 // finding names the deal it is about.
-func historyEntry(value map[string]interface{}, result aacbundle.VerificationResult, directory []witnessRow) (map[string]any, aacbundle.ClaimResult) {
+func historyEntry(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, aacbundle.ClaimResult) {
 	var failed, notShown []string
 	exts, _ := value["extensions"].(map[string]interface{})
 	ext, _ := exts[historySelectionExtension].(map[string]interface{})

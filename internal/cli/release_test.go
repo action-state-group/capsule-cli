@@ -102,8 +102,8 @@ func relMintReceipt(t *testing.T, entry []byte, key ed25519.PrivateKey) []byte {
 	require.NoError(t, err)
 	msg := cose.NewSign1Message()
 	msg.Headers.Protected.SetAlgorithm(cose.AlgorithmEdDSA)
-	msg.Headers.Protected[receiptHeaderVDS] = receiptVDSRFC9162
-	msg.Headers.Unprotected[receiptHeaderVDP] = map[any]any{receiptVDPInclusion: []any{proof}}
+	msg.Headers.Protected[int64(395)] = int64(1)                               // vds: RFC9162_SHA256
+	msg.Headers.Unprotected[int64(396)] = map[any]any{int64(-1): []any{proof}} // vdp: inclusion proofs
 	msg.Payload = root[:]
 	signer, err := cose.NewSigner(cose.AlgorithmEdDSA, key)
 	require.NoError(t, err)

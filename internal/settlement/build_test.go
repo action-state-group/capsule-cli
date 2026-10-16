@@ -1,9 +1,11 @@
 package settlement
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
+	aacsettlement "github.com/action-state-group/agent-action-capsule/go/settlement"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,18 +29,14 @@ func x402Input(scheme string) X402Receipt {
 func TestPayeeObservedX402ReadsEveryValueFromTheRail(t *testing.T) {
 	b, err := PayeeObservedX402(x402Input("exact"))
 	require.NoError(t, err)
-	assert.Empty(t, structureFailures(b.Member))
+	assert.Empty(t, aacsettlement.StructureFailures(b.Member))
 	assert.Equal(t, LegPayeeObserved, b.Member["leg"])
 	assert.Equal(t, "settled", b.Member["status"])
 	ref := b.Member["payment_ref"].(map[string]any)
 	assert.Equal(t, strings.ToLower(testTx), ref["value"], "eip155 hashes in their lowercase normal form")
 	assert.Equal(t, "eip155:8453", ref["network"])
-	received, _ := parseAmount(b.Member["received"])
-	assert.Equal(t, "eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", received.Asset)
-	assert.Equal(t, 6, received.Scale)
-	assert.Equal(t, "1500000", received.Value.String())
-	fee, _ := parseAmount(b.Member["receive_fee"])
-	assert.Equal(t, "0", fee.Value.String(), "exact: recorded explicitly as zero")
+	assert.Equal(t, map[string]any{"value": "1500000", "assetCode": "eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", "assetScale": json.Number("6")}, b.Member["received"])
+	assert.Equal(t, "0", b.Member["receive_fee"].(map[string]any)["value"], "exact: recorded explicitly as zero")
 	assert.Equal(t, []string{testPayTo, testPayer}, b.AccountIDs)
 
 	wrapped := b.Member["wrapped"].([]any)
@@ -106,8 +104,7 @@ func TestPayeeObservedX402Refusals(t *testing.T) {
 	in.ReceiveFee = fee("5")
 	b, err := PayeeObservedX402(in)
 	require.NoError(t, err)
-	stated, _ := parseAmount(b.Member["receive_fee"])
-	assert.Equal(t, "5", stated.Value.String())
+	assert.Equal(t, "5", b.Member["receive_fee"].(map[string]any)["value"])
 
 	in = x402Input("exact")
 	in.Requirements = []byte(strings.Replace(string(in.Requirements), "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "0x9999999999999999999999999999999999999999", 1))

@@ -9,8 +9,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
-	"sort"
 	"strings"
 	"testing"
 
@@ -93,7 +91,7 @@ func (c vectorCase) input(t *testing.T) Input {
 }
 
 // comparable keeps what the vectors state: delivery_evidence, the legs' keys
-// and the key policy flag are this implementation's additions.
+// and the key policy flag are capsule-cli's additions.
 func comparable(t *testing.T, result Result) map[string]any {
 	t.Helper()
 	encoded, err := json.Marshal(result)
@@ -138,59 +136,16 @@ func TestPinnedVectorsMatchTheirChecksums(t *testing.T) {
 	assert.Equal(t, len(entries)-1, listed, "SHA256SUMS lists every pinned file but itself")
 }
 
-func keys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func TestRegistryMatchesTheVectors(t *testing.T) {
+// TestStateNamesMatchTheVectors holds the state names the readings switch on
+// to the registry the vectors pin.
+func TestStateNamesMatchTheVectors(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(vectorsDir, "registry.json"))
 	require.NoError(t, err)
 	var registry struct {
-		Legs               []string          `json:"legs"`
-		SealerRoles        []string          `json:"sealer_roles"`
-		Statuses           []string          `json:"statuses"`
-		DeliveryDirections map[string]string `json:"delivery_directions"`
-		PaymentStates      []string          `json:"payment_states"`
-		DeliveryStates     []string          `json:"delivery_states"`
-		FailureCodes       []string          `json:"failure_codes"`
-		InformationalCodes []string          `json:"informational_codes"`
-		BaseProfileCodes   []string          `json:"base_profile_codes"`
-		PaymentRefTypes    map[string]struct {
-			Qualifiers []string `json:"qualifiers"`
-			ReceiveFee string   `json:"receive_fee"`
-		} `json:"payment_ref_types"`
-		WrappedTypes     map[string]string `json:"wrapped_types"`
-		SettlementMember map[string]struct {
-			Required []string `json:"required"`
-			Optional []string `json:"optional"`
-		} `json:"settlement_members"`
+		PaymentStates  []string `json:"payment_states"`
+		DeliveryStates []string `json:"delivery_states"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &registry))
-
-	sorted := func(values []string) []string { out := slices.Clone(values); sort.Strings(out); return out }
-	assert.Equal(t, sorted(registry.Legs), keys(legs))
-	assert.Equal(t, sorted(registry.SealerRoles), keys(sealerRoles))
-	assert.Equal(t, sorted(registry.Statuses), keys(statuses))
-	assert.Equal(t, registry.DeliveryDirections, deliveryDirections)
 	assert.Equal(t, registry.PaymentStates, []string{PaymentTermsOnly, PaymentPayerStated, PaymentPayeeStated, PaymentAgreed, PaymentMismatch, PaymentUnjoined})
 	assert.Equal(t, registry.DeliveryStates, []string{DeliveryNone, DeliveryStated, DeliveryMatched, DeliveryMismatch})
-	assert.Equal(t, registry.FailureCodes, []string{CodeSettlementMalformed, CodeAmountNotExact, CodeTermsRefUnresolved, CodeLegRoleMismatch, CodeSealerNotAuthorizedForRole, CodeSealerConflation, CodeWrappedDigestMismatch, CodeWrappedResigned})
-	assert.Equal(t, registry.InformationalCodes, []string{CodePaymentRefTypeUnknown, CodeFeeUnstated, CodeFeeAssetDiffers})
-	assert.Equal(t, registry.BaseProfileCodes, []string{CodeCapsuleInvalid, CodeEnvelopeInvalid})
-	assert.Equal(t, keys(registry.PaymentRefTypes), keys(paymentRefTypes))
-	for name, entry := range registry.PaymentRefTypes {
-		assert.Equal(t, entry.Qualifiers, append([]string{}, paymentRefTypes[name].qualifiers...), name)
-		assert.Equal(t, entry.ReceiveFee == "not_applicable", paymentRefTypes[name].receiveFeeNotApplicable, name)
-	}
-	assert.Equal(t, registry.WrappedTypes, wrappedTypes)
-	assert.Equal(t, keys(registry.SettlementMember), keys(legMembers))
-	for name, entry := range registry.SettlementMember {
-		assert.Equal(t, entry.Required, legMembers[name].required, name)
-		assert.Equal(t, entry.Optional, legMembers[name].optional, name)
-	}
 }

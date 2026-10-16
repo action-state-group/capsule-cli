@@ -7,6 +7,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
+	"github.com/action-state-group/agent-action-capsule/go/witness"
 )
 
 // RefusalSignatureProfile names the one refusal signature form this CLI
@@ -160,7 +161,7 @@ func verifyResponseSignature(response map[string]interface{}) string {
 // incomplete. A refusal is still no failed claim (Bundle -01), so it alone
 // never makes the verdict INVALID. A carried response signed by a key other
 // than its member's observer fails (INVALID).
-func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, directory []witnessRow) (map[string]any, []string) {
+func composedOutput(container map[string]interface{}, result *aacbundle.ComposedResult, directory *witness.Directory) (map[string]any, []string) {
 	out := map[string]any{
 		"status":   result.Status,
 		"findings": nonNilStrings(result.Findings),

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	"github.com/action-state-group/agent-action-capsule/go/witness"
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/action-state-group/checkpointed-local-log/go/mmr"
 )
@@ -21,7 +22,7 @@ import (
 // verify under the directory's keys. present is false when the bundle claims
 // no witnessed chain. dealStatement is nil when the bundle's checkpoint did
 // not verify.
-func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory []witnessRow) (result aacbundle.ClaimResult, receipts []map[string]string, present bool) {
+func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory *witness.Directory) (result aacbundle.ClaimResult, receipts []map[string]string, present bool) {
 	chain := cadenceChainOf(value)
 	if chain["state"] != "witnessed" {
 		return aacbundle.ClaimResult{}, nil, false
@@ -123,40 +124,8 @@ func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory 
 		return fail("cadence_entry_not_included")
 	}
 
-	entries, _ := inner["witnesses"].([]interface{})
-	if len(entries) == 0 {
-		return aacbundle.ClaimResult{Status: "withheld", Findings: []string{"witness_receipt_absent"}}, []map[string]string{}, true
-	}
-	var findings []string
-	receipts = make([]map[string]string, 0, len(entries))
-	sawPass, sawFail := false, false
-	for i, e := range entries {
-		receipt, url, err := decodeWitnessReceipt(e)
-		if err != nil {
-			sawFail = true
-			findings = append(findings, "witness_receipt_malformed:"+strconv.Itoa(i))
-			continue
-		}
-		status, reason := checkReceipt(statement, receipt, url, directory)
-		switch status {
-		case "pass":
-			sawPass = true
-		case "withheld":
-			findings = append(findings, "witness_unverified:"+url)
-		default:
-			sawFail = true
-			findings = append(findings, "witness_receipt_invalid:"+url)
-		}
-		receipts = append(receipts, map[string]string{"ts_url": url, "binding": witnessBinding(url), "status": status, "reason": reason, "via": "cadence"})
-	}
-	switch {
-	case sawFail:
-		return aacbundle.ClaimResult{Status: "fail", Findings: findings}, receipts, true
-	case sawPass:
-		return aacbundle.ClaimResult{Status: "pass", Findings: findings}, receipts, true
-	default:
-		return aacbundle.ClaimResult{Status: "withheld", Findings: findings}, receipts, true
-	}
+	result, receipts = receiptsClaim(inner["witnesses"], statement, directory, "cadence")
+	return result, receipts, true
 }
 
 func jsonUint(v interface{}) (uint64, error) {

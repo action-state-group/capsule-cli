@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Verification on agent-action-capsule's Go APIs
+
+- **Changed (build):** agent-action-capsule's Go module moves to v0.9.0, and capsulectl's own
+  copies of its verifiers are removed (action-state-group/agent-action-capsule#280): witness
+  receipt checks and witness directories (`verify --bundle --witness-directory`, deal copies,
+  cadence receipts) use `go/witness`; countersign receipts and SCITT statement receipts use
+  `witness.VerifyCOSEReceipt`; `settlement status` and `deal settlement` derive states with
+  `go/settlement`. Output shapes, labels and exit codes are unchanged.
+- **Changed (validation):** witness receipts with a `rekor` or `scrapi` binding are checked, and
+  can pass or fail, where they were withheld. A directory row with a key id that is not 64
+  lowercase hex characters is unusable as a whole (its receipts are withheld) where the bad id was
+  skipped. A stub receipt (`is_stub`) is withheld. `leaf_index` and `tree_size` must be present but
+  are no longer read. COSE receipts must be strictly encoded and may not mark an unknown header
+  critical; a countersign or statement receipt may carry more than one inclusion proof.
+- **Changed (settlement):** a side with more than one observed leg that no supersedes chain
+  orders is compared leg by leg (mismatch or agreed) instead of `unjoined` with
+  `observed_leg_not_unique`; a supersedes link counts only under the superseded leg's own key; the
+  `in_progress` finding is no longer reported. A conflated pair that otherwise matches is still
+  reported `unjoined`.
+
 ### The page emitter from capsule-viewer
 
 - **Changed (build):** the offline pages capsulectl writes (`report build`, `deal report --html`,

@@ -277,13 +277,13 @@ func verifyReleaseStatementSignature(statement []byte, st releaseStatement, subj
 	if alg, err := msg.Headers.Protected.Algorithm(); err != nil || alg != cose.AlgorithmEdDSA {
 		return errors.New("not EdDSA")
 	}
-	claims, ok := receiptLookup(msg.Headers.Protected, 15)
+	claims, ok := cborLookup(msg.Headers.Protected, 15)
 	cwt, isMap := claims.(map[any]any)
 	if !ok || !isMap {
 		return errors.New("no CWT claims")
 	}
-	iss, _ := receiptLookup(cwt, 1)
-	sub, _ := receiptLookup(cwt, 2)
+	iss, _ := cborLookup(cwt, 1)
+	sub, _ := cborLookup(cwt, 2)
 	if iss != releaseIssuer || sub != subject {
 		return fmt.Errorf("issuer %v and subject %v are not the release workflow's", iss, sub)
 	}
@@ -299,6 +299,28 @@ func verifyReleaseStatementSignature(statement []byte, st releaseStatement, subj
 		return errors.New("the signature does not verify under its statement key")
 	}
 	return nil
+}
+
+// cborLookup reads an integer-labelled entry of a decoded CBOR map, whose
+// keys decode as int64 or uint64.
+func cborLookup(values map[any]any, key int64) (any, bool) {
+	for candidate, value := range values {
+		switch typed := candidate.(type) {
+		case int64:
+			if typed == key {
+				return value, true
+			}
+		case uint64:
+			if key >= 0 && typed == uint64(key) {
+				return value, true
+			}
+		case int:
+			if int64(typed) == key {
+				return value, true
+			}
+		}
+	}
+	return nil, false
 }
 
 type githubTag struct {
