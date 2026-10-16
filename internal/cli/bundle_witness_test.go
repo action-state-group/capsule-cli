@@ -493,3 +493,60 @@ func TestVerifyBundleChecksRekorAndES256ReceiptsFromTheAACVectors(t *testing.T) 
 		}
 	}
 }
+
+// Rows this CLI has always read keep their meaning when agent-action-capsule
+// reads the directory: an empty or null binding is cll, a null public_keys
+// is none, and a public_keys entry wrapped across lines is the same key. A
+// receipt under such a row is still checked: it passes under the row's key
+// and fails under another.
+func TestVerifyBundleKeepsLegacyDirectoryRowReadings(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	_, other, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKIXPublicKey(public)
+	require.NoError(t, err)
+	digest := sha256.Sum256(der)
+	encoded := base64.StdEncoding.EncodeToString(der)
+	wrapped := encoded[:20] + "\n" + encoded[20:40] + "\r\n" + encoded[40:]
+
+	rows := map[string]func() map[string]interface{}{
+		"empty binding": func() map[string]interface{} {
+			row := rawKeyRow(testWitness, public)
+			row["binding"] = ""
+			return row
+		},
+		"null binding": func() map[string]interface{} {
+			row := rawKeyRow(testWitness, public)
+			row["binding"] = nil
+			return row
+		},
+		"null public_keys": func() map[string]interface{} {
+			row := rawKeyRow(testWitness, public)
+			row["public_keys"] = nil
+			return row
+		},
+		"wrapped public_keys entry": func() map[string]interface{} {
+			row := rawKeyRow(testWitness, public)
+			row["key_ids"] = []string{hex.EncodeToString(digest[:])}
+			row["public_keys"] = []string{wrapped}
+			return row
+		},
+	}
+	for name, row := range rows {
+		t.Run(name, func(t *testing.T) {
+			directory := writeDirectory(t, row())
+			result, err := verifyWithDirectory(t, producedBundle(t, witnessed(t, private)), directory)
+			require.NoError(t, err)
+			state, _ := bundleWitnesses(result)
+			assert.Equal(t, "pass", state)
+
+			result, _ = verifyWithDirectory(t, producedBundle(t, witnessed(t, other)), directory)
+			state, findings := bundleWitnesses(result)
+			assert.Equal(t, "fail", state)
+			assert.Equal(t, []interface{}{"witness_receipt_invalid:" + testWitness}, findings)
+			assert.Equal(t, "INVALID", result["verdict"])
+		})
+	}
+}

@@ -48,11 +48,58 @@ func loadWitnessDirectory(path string) (witness.Directory, error) {
 	if err != nil {
 		return witness.Directory{}, hint(ErrInput, "the witness directory is not a witnesses.json file")
 	}
-	directory, err := witness.ParseDirectory(raw)
+	normalized, err := normalizeWitnessDirectory(raw)
+	if err != nil {
+		return witness.Directory{}, hint(ErrInput, "the witness directory is not a witnesses.json file")
+	}
+	directory, err := witness.ParseDirectory(normalized)
 	if err != nil {
 		return witness.Directory{}, hint(ErrInput, "the witness directory is not a witnesses.json file")
 	}
 	return directory, nil
+}
+
+// normalizeWitnessDirectory keeps the readings this CLI has always given a
+// row before agent-action-capsule reads it strictly: an empty or null
+// binding is the default (cll), a null public_keys is none, and a
+// public_keys entry may be wrapped across lines (PEM style), so its
+// whitespace is removed. Without this, such a row would match no receipt or
+// lose its keys, and a receipt it should check would go unchecked.
+func normalizeWitnessDirectory(raw []byte) ([]byte, error) {
+	var doc interface{}
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.UseNumber()
+	if err := decoder.Decode(&doc); err != nil {
+		return nil, err
+	}
+	rows, _ := doc.([]interface{})
+	if wrapped, ok := doc.(map[string]interface{}); ok {
+		rows, _ = wrapped["witnesses"].([]interface{})
+	}
+	for _, item := range rows {
+		row, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if binding, present := row["binding"]; present && (binding == nil || binding == "") {
+			delete(row, "binding")
+		}
+		if keys, present := row["public_keys"]; present {
+			list, ok := keys.([]interface{})
+			if keys == nil {
+				delete(row, "public_keys")
+				continue
+			}
+			if ok {
+				for i, entry := range list {
+					if text, isText := entry.(string); isText {
+						list[i] = strings.Join(strings.Fields(text), "")
+					}
+				}
+			}
+		}
+	}
+	return json.Marshal(doc)
 }
 
 // witnessClaim checks every receipt in checkpoint.witnesses against the
