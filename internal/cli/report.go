@@ -13,7 +13,7 @@ import (
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
-	"github.com/action-state-group/agent-action-capsule/go/emitter"
+	"github.com/action-state-group/capsule-viewer/go/emitter"
 	"github.com/action-state-group/evidencebook"
 	"github.com/spf13/cobra"
 )
@@ -26,8 +26,8 @@ import (
 // or whose root is not a Result; it touches no store and seals nothing --
 // the disclose act that produced the bundle is already on record.
 //
-// The page is aac's go/emitter shell around the bundle and the browser
-// runtime (the IIFE). The pinned aac Go module ships the shell but not the
+// The page is capsule-viewer's go/emitter shell around the bundle and the browser
+// runtime (the IIFE). The pinned capsule-viewer Go module ships the shell but not the
 // IIFE (dist/ is gitignored upstream and no release carries it), so the
 // built IIFE is vendored here with its digest pinned in code; TestIIFEIsPinned
 // keeps the two in step. The file and its digest are the same ones `deal

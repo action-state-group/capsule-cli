@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/action-state-group/agent-action-capsule/go/emitter"
+	"github.com/action-state-group/capsule-viewer/go/emitter"
 	"github.com/spf13/cobra"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"

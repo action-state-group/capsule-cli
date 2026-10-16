@@ -4,9 +4,9 @@
 runtime, built with `npm run emitter:iife` (esbuild) in that repository's
 `ts/` directory and embedded by `internal/cli/report.go` into every
 `report.html` that `capsulectl report build` writes. It is vendored because
-the pinned aac Go module ships the emitter shell (`go/emitter/shell.html`)
-but not this file: upstream `ts/dist/` is gitignored and no aac release
-carries a built IIFE. Node is therefore needed to *refresh* this file, never
+the pinned capsule-viewer Go module ships the emitter shell
+(`go/emitter/shell.html`) but not this file, which is built from aac's `ts/`:
+that repository's `ts/dist/` is gitignored and no aac release carries a built IIFE. Node is therefore needed to *refresh* this file, never
 to render a report.
 
 | | |

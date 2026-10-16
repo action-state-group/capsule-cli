@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/action-state-group/agent-action-capsule/go/emitter"
+	"github.com/action-state-group/capsule-viewer/go/emitter"
 	"sort"
 	"strings"
 	"time"

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### The page emitter from capsule-viewer
+
+- **Changed (build):** the offline pages capsulectl writes (`report build`, `deal report --html`,
+  `presentation build` and the bundle commands' HTML output) take the page emitter from `github.com/action-state-group/capsule-viewer/go/emitter` v0.1.0
+  instead of `github.com/action-state-group/agent-action-capsule/go/emitter`
+  (action-state-group/agent-action-capsule#281). The package is the same code with the same API,
+  held to the same golden pages, so pages are byte-identical. `go/presentation` and the rest of
+  agent-action-capsule's Go module stay at v0.8.0. The vendored browser IIFE is unchanged.
+
 ### evidencebook on agent-action-capsule's Evidence Request package
 
 - **Changed (build):** the evidencebook pin moves from `d3ae0fe` to `717f21e`

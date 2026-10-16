@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/action-state-group/agent-action-capsule/go/emitter"
 	aacpresentation "github.com/action-state-group/agent-action-capsule/go/presentation"
+	"github.com/action-state-group/capsule-viewer/go/emitter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -334,7 +334,7 @@ and CONTESTED wait on a way to bring the peer's record into the book.
 Result (either carrier: the document itself, or the book record header
 whose statement is the document), records `--card` and the optional
 `presentation/v1` header in the embedded copy, and renders an offline
-`report.html` through agent-action-capsule's Go emitter with the vendored
+`report.html` through capsule-viewer's Go emitter with the vendored
 browser runtime (`internal/cli/assets/`, digest pinned; refresh with
 `scripts/iife-sync.sh`); `--permalink` mints the viewer fragment over the
 same bytes and `--dry-run` writes the page marked draft.
