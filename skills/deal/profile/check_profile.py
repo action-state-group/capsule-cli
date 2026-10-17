@@ -46,8 +46,12 @@ TYPED_TYPES = {"task-authority/v0": "task_authority", "proposed-action/v0": "che
                "action-record/v0": "action", "action-outcome/v0": "outcome", "action-report/v0": "report"}
 FIX = HERE / "fixtures"
 
-RECORD_TYPES = ["intent", "baseline", "message", "claim", "evidence", "detail_change",
-                "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale"]
+# The schema's record_type enum: the fallback check and the fixture coverage check
+# read it here, so a type the schema adds needs no second list.
+RECORD_TYPES = json.loads(SCHEMA_PATH.read_text())["$defs"]["record_type"]["enum"]
+# Record types the positive fixtures do not carry yet; capsulectl's tests run this
+# checker on deals that do. Any other type the schema adds must get a fixture.
+UNFIXTURED_TYPES = {"counterparty_profile", "thread", "thread_opened", "sale_cut"}
 # The point of no return whose check covers a disclosed field of each class.
 DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "home_address", "address",
                                                   "pickup_location", "other_contact")}
@@ -1188,13 +1192,14 @@ def run_fixtures() -> int:
                 bad += 1
                 print(f"FAIL {chain_dir}/{p.name}: {e}")
     types = {record_type_of(load(p)["record"]) for p in positives}
-    missing = (set(RECORD_TYPES) | set(TYPED_TYPES) - {"action-report/v0"}) - types
+    missing = (set(RECORD_TYPES) - UNFIXTURED_TYPES | set(TYPED_TYPES) - {"action-report/v0"}) - types
     if missing:
         bad += 1
         print(f"FAIL positives do not cover record types: {sorted(missing)}")
     else:
-        print(f"ok   positives cover all {len(RECORD_TYPES)} x-deal-v0 record types and the sealed typed action "
-              f"records ({len(positives)} records)")
+        print(f"ok   positives cover {len(RECORD_TYPES) - len(UNFIXTURED_TYPES)} of the {len(RECORD_TYPES)} x-deal-v0 "
+              f"record types (not yet {sorted(UNFIXTURED_TYPES)}) and the sealed typed action records "
+              f"({len(positives)} records)")
 
     for p in sorted((FIX / "negative").glob("*.json")):
         f = load(p)
