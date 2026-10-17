@@ -830,7 +830,12 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, artifacts bundleAr
 		// closure, so a zero is refused rather than silently widened.
 		return evidencebook.Bundle{}, hint(ErrInput, "--closure-depth must be at least 1 on a jsonl profile")
 	}
-	request := evidencebook.BundleRequest{Root: root, ClosureDepth: depth}
+	// Every record carries the Producer Envelope the book stored when it
+	// sealed it (signature and key_id, the form `verify --bundle` checks), as
+	// a sqlite profile's records do. The book verifies each one and refuses
+	// the bundle if one does not; nothing is re-signed. They go in before
+	// the book digests the bundle into its disclosure record.
+	request := evidencebook.BundleRequest{Root: root, ClosureDepth: depth, ProducerSignatures: true}
 	if record, ok, err := publishedRecord(ctx, book, root); err != nil {
 		return evidencebook.Bundle{}, err
 	} else if ok {

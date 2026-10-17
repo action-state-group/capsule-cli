@@ -737,7 +737,9 @@ func closeOutputs(c *cobra.Command, opened openedBook, p Profile, result *closeR
 	if err != nil {
 		return err
 	}
-	bundle, err := opened.book.Bundle(c.Context(), evidencebook.BundleRequest{Root: sealed.RecordID, Include: include, WithholdPayloads: true})
+	// Each record carries the producer signature the book stored, as
+	// `disclose` does (see bookBundle).
+	bundle, err := opened.book.Bundle(c.Context(), evidencebook.BundleRequest{Root: sealed.RecordID, Include: include, WithholdPayloads: true, ProducerSignatures: true})
 	if err != nil {
 		return bookError(err)
 	}

@@ -72,8 +72,9 @@ func TestPageGateWritesTheReadmePage(t *testing.T) {
 
 // A jsonl profile writes no page: its bundle carries the evidence book's
 // records about what was sealed, not the sealed records, so no row can be
-// shown. Refused before anything is opened or put on record; and its bundle,
-// written without a page, is INCOMPLETE, which the gate refuses on its own.
+// shown. Refused before anything is opened or put on record. Its bundle,
+// written without a page, verifies VALID (each book record carries the
+// producer signature the book stored), so that refusal is what stops a page.
 func TestPageGateRefusesAJSONLProfilesPage(t *testing.T) {
 	dir, out, err := runReportVariant(t, func(s string) string {
 		return replaced(t, s, readmeSQLite, readmeJSONL)
@@ -95,11 +96,8 @@ func TestPageGateRefusesAJSONLProfilesPage(t *testing.T) {
 	dir, out, err = runReportVariant(t, func(s string) string {
 		return replaced(t, s, readmeSQLite, readmeJSONL, readmeDiscloseOK, readmeOutOnly)
 	})
-	require.Equal(t, 3, exitCode(err), "the jsonl bundle verifies INCOMPLETE:\n%s", out)
-	gate := pageGate(readBundle(t, filepath.Join(dir, "bundle.json")))
-	require.ErrorIs(t, gate, ErrPartial)
-	assert.Contains(t, gate.Error(), "calls this bundle INCOMPLETE")
-	assert.Contains(t, gate.Error(), "producer_signatures withheld")
+	require.NoError(t, err, "the jsonl bundle verifies VALID: its records carry the producer signatures the book stored:\n%s", out)
+	assert.NoError(t, pageGate(readBundle(t, filepath.Join(dir, "bundle.json"))), "the verdict no longer refuses it; the jsonl refusal above does")
 }
 
 // A report whose row cites a record the bundle does not carry (here a
