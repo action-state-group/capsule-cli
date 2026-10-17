@@ -212,3 +212,38 @@ func TestDiscoveryDedupesOnTheFilename(t *testing.T) {
 	require.Len(t, refused, 1)
 	assert.Equal(t, filepath.Join(first, "capsulectl-tool"), refused[0].Path)
 }
+
+// envPlugin prints the two variables core hands a launcher.
+const envPlugin = `#!/bin/sh
+if [ "$1" = "cli-plugin-metadata" ]; then
+  echo '{"name":"env","vendor":"ACME Compliance","version":"1.0.0","plugin_api":"cli-plugin/v1","subcommands":["show"]}'
+  exit 0
+fi
+echo "api=$CAPSULECTL_PLUGIN_API bin=$CAPSULECTL_BIN"
+`
+
+func TestPluginGetsCapsulectlBin(t *testing.T) {
+	root := pluginRoot(t)
+	writeLauncher(t, root, "capsulectl-env", envPlugin, 0o755)
+	self, err := selfExecutable()
+	require.NoError(t, err)
+
+	dispatch := func() string {
+		c := NewCommand()
+		var buf bytes.Buffer
+		c.SetOut(&buf)
+		c.SetErr(&buf)
+		c.SetArgs([]string{"env", "show"})
+		require.NoError(t, c.ExecuteContext(t.Context()))
+		return buf.String()
+	}
+
+	// Unset: core hands over its own path.
+	t.Setenv("CAPSULECTL_BIN", "")
+	require.NoError(t, os.Unsetenv("CAPSULECTL_BIN"))
+	assert.Contains(t, dispatch(), "api=cli-plugin/v1 bin="+self)
+
+	// Already set by the caller: kept as it is.
+	t.Setenv("CAPSULECTL_BIN", "/opt/elsewhere/capsulectl")
+	assert.Contains(t, dispatch(), "bin=/opt/elsewhere/capsulectl")
+}
