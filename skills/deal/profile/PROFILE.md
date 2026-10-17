@@ -110,7 +110,7 @@ deal's log:
 | `profile` | `"x-deal-v0"` | REQUIRED | Profile and version. |
 | `canonicalization` | `"jcs"` | REQUIRED | Pinned: RFC 8785. Any other value fails closed (section 5). |
 | `deal_id` | string `^deal-[0-9a-f]{16,64}$` | REQUIRED | Random, opaque, and the same on every record of the deal. Never derived from any identifier. |
-| `record_type` | enum (section 3) | REQUIRED | One of the 13 record types. |
+| `record_type` | enum (section 3) | REQUIRED | One of the 18 record types. |
 | `seq` | integer ≥ 1 | REQUIRED | Position in the deal: 1, 2, 3, … with no gaps (section 6). |
 | `at` | string `YYYY-MM-DDThh:mm:ssZ` | REQUIRED | The seal time in UTC, whole seconds. |
 | `prev` | digest ref | REQUIRED iff `seq` > 1 | The record digest of record `seq − 1`. |
@@ -132,7 +132,7 @@ never against a later change.
 
 ## 3. Record types (action-type conventions)
 
-Thirteen record types. The set is closed: an unknown `record_type` fails the schema.
+Eighteen record types. The set is closed: an unknown `record_type` fails the schema.
 
 | record_type | What it records | Required body fields | Required refs / block fields |
 |---|---|---|---|

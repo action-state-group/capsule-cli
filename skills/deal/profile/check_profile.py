@@ -1192,6 +1192,11 @@ def run_fixtures() -> int:
                 bad += 1
                 print(f"FAIL {chain_dir}/{p.name}: {e}")
     types = {record_type_of(load(p)["record"]) for p in positives}
+    # A type that leaves the schema, or that gains a fixture, leaves UNFIXTURED_TYPES too.
+    stale = (UNFIXTURED_TYPES - set(RECORD_TYPES)) | (UNFIXTURED_TYPES & types)
+    if stale:
+        bad += 1
+        print(f"FAIL UNFIXTURED_TYPES names types the schema lacks or a positive fixture carries: {sorted(stale)}")
     missing = (set(RECORD_TYPES) - UNFIXTURED_TYPES | set(TYPED_TYPES) - {"action-report/v0"}) - types
     if missing:
         bad += 1
