@@ -233,9 +233,8 @@ type legView struct {
 	label string
 	id    *string
 	// key is the hex key its envelope authenticates, "" when none.
-	key     string
-	s       map[string]any
-	capsule map[string]any
+	key string
+	s   map[string]any
 	// failures are its record-level failure codes and findings its
 	// record-level finding codes, from verifying the leg alone: everything
 	// that does not depend on another leg. terms_ref_unresolved, which a leg
@@ -260,7 +259,6 @@ func newLegView(l Leg, wire interface{}, key string, in Input) legView {
 		v.id = &id
 	}
 	v.s, _ = l.Capsule["settlement"].(map[string]any)
-	v.capsule = l.Capsule
 	alone := aacsettlement.Verify(aacsettlement.Input{Capsules: []interface{}{wire}, WrappedObjects: in.Objects, KeyPolicy: in.Policy})
 	for _, f := range alone.Failures {
 		if f.Code != "terms_ref_unresolved" {
@@ -344,8 +342,6 @@ func reports(entries []aacsettlement.Entry, views []legView) []Report {
 					records = append(records, v.label)
 				}
 			}
-		case e.Code == "fee_asset_differs":
-			records = feeAssetDiffers(e.Records[0], views)
 		case e.Code == "sealer_conflation" && len(e.Records) == 2:
 			records = conflated(e.Records[0], e.Records[1], views)
 		default:
@@ -430,89 +426,6 @@ func conflated(payer, payee *string, views []legView) []string {
 		return append(together(payer, views), together(payee, views)...)
 	}
 	return append(payers, payees...)
-}
-
-// feeAssetDiffers names the leg whose fee is in another asset. The verifier
-// names the payee-observed leg for either fee, from the pair it compared;
-// when that payee's receive fee is in its received asset, it is the payer's
-// routing_fee that differs from the payer's amount, so that payer-observed
-// leg is named.
-func feeAssetDiffers(payee *string, views []legView) []string {
-	named := together(payee, views)
-	for _, v := range views {
-		if !v.names(payee) || !v.live() || v.leg() != LegPayeeObserved {
-			continue
-		}
-		terms, _ := v.s["terms_ref"].(string)
-		a, b, found := comparedPair(terms, views)
-		if !found || !b.names(payee) {
-			continue
-		}
-		received := assetOf(b.s["received"])
-		fee := received
-		if _, stated := b.s["receive_fee"]; stated {
-			fee = assetOf(b.s["receive_fee"])
-		}
-		if _, routed := a.s["routing_fee"]; fee == received && routed && assetOf(a.s["routing_fee"]) != assetOf(a.s["amount"]) {
-			return []string{a.label}
-		}
-		return named
-	}
-	return named
-}
-
-// comparedPair is the payer-observed and payee-observed legs the verifier
-// compares for terms: on each side the live legs answering it, one per
-// record, less those a later leg under the same key supersedes; then the
-// first payer and payee heads, or the first combination under distinct keys.
-func comparedPair(terms string, views []legView) (legView, legView, bool) {
-	payer, payee := heads(terms, LegPayerObserved, views), heads(terms, LegPayeeObserved, views)
-	if len(payer) == 0 || len(payee) == 0 {
-		return legView{}, legView{}, false
-	}
-	for _, p := range payer {
-		for _, q := range payee {
-			if p.key != q.key {
-				return p, q, true
-			}
-		}
-	}
-	return payer[0], payee[0], true
-}
-
-func heads(terms, leg string, views []legView) []legView {
-	var side []legView
-	seen := map[string]bool{}
-	for _, v := range views {
-		if !v.live() || v.leg() != leg || v.s["terms_ref"] != terms {
-			continue
-		}
-		record := *v.id + ":" + v.key
-		if seen[record] {
-			continue
-		}
-		seen[record] = true
-		side = append(side, v)
-	}
-	var out []legView
-	for _, t := range side {
-		superseded := false
-		for _, l := range side {
-			chain, _ := l.capsule["chain"].(map[string]any)
-			if l.label != t.label && chain["relation"] == "supersedes" && chain["parent_capsule_id"] == *t.id && l.key == t.key {
-				superseded = true
-			}
-		}
-		if !superseded {
-			out = append(out, t)
-		}
-	}
-	return out
-}
-
-func assetOf(amount any) any {
-	object, _ := amount.(map[string]any)
-	return object["assetCode"]
 }
 
 // deliveryEvidence names the sources behind a delivery state from the

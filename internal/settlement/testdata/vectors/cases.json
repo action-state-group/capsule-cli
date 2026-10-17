@@ -25,7 +25,7 @@
       "public_key_hex": "3954c5684ec709945665c50fa166ee5940a66e3e24f6e9ab79938eab8c8e67f7"
     }
   },
-  "count": 21,
+  "count": 24,
   "cases": [
     {
       "id": "pos-x402-two-sided-agreed",
@@ -3765,6 +3765,508 @@
               "ln-payee-observed-1"
             ],
             "code": "fee_unstated"
+          }
+        ],
+        "settlements": [
+          {
+            "terms": "ln-terms-1",
+            "payment_state": "unjoined",
+            "delivery_state": "none"
+          }
+        ]
+      }
+    },
+    {
+      "id": "neg-ln-receive-fee-asset-differs",
+      "section": [
+        "§6.1 Fees",
+        "§9.2 Payment State",
+        "§9.4 Failures"
+      ],
+      "description": "The payee reports 995 msat received with a receive_fee of 0.05 USD. A fee in another asset cannot be combined with its amount: the pair is unjoined, and fee_asset_differs names the payee leg.",
+      "key_policy": {
+        "payer": "2cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0",
+        "payee": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+      },
+      "records": [
+        {
+          "label": "ln-terms-1",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ln-terms-1",
+            "action_type": "fyi",
+            "operator": "payee.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:00:00Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "terms",
+              "sealer_role": "payee",
+              "amount": {
+                "value": "1000",
+                "assetCode": "BTC",
+                "assetScale": 11
+              },
+              "payment_ref": {
+                "type": "ln.payment_hash",
+                "value": "6aaa35ab4414eae0f97b9e5c2674aea404c421f8106b476295145ad7e13c6097"
+              }
+            },
+            "capsule_id": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005"
+          },
+          "capsule_id": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458207125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8a058207fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005584034a2bf02e4325499740cf9f960d6dd364228423be178056cf5d3aef45be2d97c2fb438c965b4d9f4254e426c9d490522db879d9b9d907068ac7b8e4d247cad08",
+          "envelope_kid": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+        },
+        {
+          "label": "ln-payer-observed-1",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ln-payer-observed-1",
+            "action_type": "fyi",
+            "operator": "payer.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:01:06Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "payer_observed",
+              "sealer_role": "payer",
+              "terms_ref": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005",
+              "payment_ref": {
+                "type": "ln.payment_hash",
+                "value": "6aaa35ab4414eae0f97b9e5c2674aea404c421f8106b476295145ad7e13c6097"
+              },
+              "amount": {
+                "value": "1000",
+                "assetCode": "BTC",
+                "assetScale": 11
+              },
+              "status": "settled",
+              "observed_at": "2026-10-01T12:01:05Z",
+              "routing_fee": {
+                "value": "0",
+                "assetCode": "BTC",
+                "assetScale": 11
+              }
+            },
+            "capsule_id": "27c08813e6d7640f88d6b5ade05c4310312b47bcb3b47c89900ad411ef722173"
+          },
+          "capsule_id": "27c08813e6d7640f88d6b5ade05c4310312b47bcb3b47c89900ad411ef722173",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458202cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0a0582027c08813e6d7640f88d6b5ade05c4310312b47bcb3b47c89900ad411ef7221735840026ab9c783ff60d5ab7219cdc4e29df63649f12d5d595ec609f19ea7575cb5ef11fb8be40b4341b4bcbbf5536a34cfef9db895e47bcbe8d41f476d00c3720c00",
+          "envelope_kid": "2cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0"
+        },
+        {
+          "label": "ln-payee-observed-1",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ln-payee-observed-1",
+            "action_type": "fyi",
+            "operator": "payee.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:02:06Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "payee_observed",
+              "sealer_role": "payee",
+              "terms_ref": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005",
+              "payment_ref": {
+                "type": "ln.payment_hash",
+                "value": "6aaa35ab4414eae0f97b9e5c2674aea404c421f8106b476295145ad7e13c6097"
+              },
+              "received": {
+                "value": "995",
+                "assetCode": "BTC",
+                "assetScale": 11
+              },
+              "status": "settled",
+              "observed_at": "2026-10-01T12:02:05Z",
+              "receive_fee": {
+                "value": "5",
+                "assetCode": "USD",
+                "assetScale": 2
+              }
+            },
+            "references": [
+              {
+                "type": "agent-action-capsule",
+                "digest_alg": "SHA-256",
+                "digest": "27c08813e6d7640f88d6b5ade05c4310312b47bcb3b47c89900ad411ef722173",
+                "citation_purpose": "counterparty_half"
+              }
+            ],
+            "capsule_id": "4939edb7b7b1991de6ed9b3ea2172bad812a8b034985da5522e3537958ee5cc7"
+          },
+          "capsule_id": "4939edb7b7b1991de6ed9b3ea2172bad812a8b034985da5522e3537958ee5cc7",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458207125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8a058204939edb7b7b1991de6ed9b3ea2172bad812a8b034985da5522e3537958ee5cc75840bbbdfa0c7c8d2fd9ebffabb97fac5954914cdd8c4eea0b18ba96f3e26ab7dda8ae4dc1ef9528d28365b340be29b0360faf5e01574ab82694d44f07937f12650b",
+          "envelope_kid": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+        }
+      ],
+      "wrapped_objects": [],
+      "expect": {
+        "conforming": true,
+        "failures": [],
+        "findings": [
+          {
+            "records": [
+              "ln-payee-observed-1"
+            ],
+            "code": "fee_asset_differs"
+          }
+        ],
+        "settlements": [
+          {
+            "terms": "ln-terms-1",
+            "payment_state": "unjoined",
+            "delivery_state": "none"
+          }
+        ]
+      }
+    },
+    {
+      "id": "neg-ln-routing-fee-asset-differs",
+      "section": [
+        "§6.1 Fees",
+        "§9.2 Payment State",
+        "§9.4 Failures"
+      ],
+      "description": "The payer reports 1000 msat sent with a routing_fee of 0.05 USD; the payee's 995 msat plus 5 msat fee is in its amount's asset. The pair is unjoined, and fee_asset_differs names the payer leg only.",
+      "key_policy": {
+        "payer": "2cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0",
+        "payee": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+      },
+      "records": [
+        {
+          "label": "ln-terms-1",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ln-terms-1",
+            "action_type": "fyi",
+            "operator": "payee.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:00:00Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "terms",
+              "sealer_role": "payee",
+              "amount": {
+                "value": "1000",
+                "assetCode": "BTC",
+                "assetScale": 11
+              },
+              "payment_ref": {
+                "type": "ln.payment_hash",
+                "value": "6aaa35ab4414eae0f97b9e5c2674aea404c421f8106b476295145ad7e13c6097"
+              }
+            },
+            "capsule_id": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005"
+          },
+          "capsule_id": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458207125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8a058207fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005584034a2bf02e4325499740cf9f960d6dd364228423be178056cf5d3aef45be2d97c2fb438c965b4d9f4254e426c9d490522db879d9b9d907068ac7b8e4d247cad08",
+          "envelope_kid": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+        },
+        {
+          "label": "ln-payer-observed-1",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ln-payer-observed-1",
+            "action_type": "fyi",
+            "operator": "payer.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:01:06Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "payer_observed",
+              "sealer_role": "payer",
+              "terms_ref": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005",
+              "payment_ref": {
+                "type": "ln.payment_hash",
+                "value": "6aaa35ab4414eae0f97b9e5c2674aea404c421f8106b476295145ad7e13c6097"
+              },
+              "amount": {
+                "value": "1000",
+                "assetCode": "BTC",
+                "assetScale": 11
+              },
+              "status": "settled",
+              "observed_at": "2026-10-01T12:01:05Z",
+              "routing_fee": {
+                "value": "5",
+                "assetCode": "USD",
+                "assetScale": 2
+              }
+            },
+            "capsule_id": "34bb43ae20b0c5fc87bb310db5a5e0502f0f0b5cab5082baa540681da36dc0c0"
+          },
+          "capsule_id": "34bb43ae20b0c5fc87bb310db5a5e0502f0f0b5cab5082baa540681da36dc0c0",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458202cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0a0582034bb43ae20b0c5fc87bb310db5a5e0502f0f0b5cab5082baa540681da36dc0c058406dd88b29ce7dbc7ae3f25e15e3f5edb8096d9a5599812056aad4bd045eaf598e0e8968842d826e350f7f393024b43a4bf34eec6b4b29eb04f84fc6059818440a",
+          "envelope_kid": "2cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0"
+        },
+        {
+          "label": "ln-payee-observed-1",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ln-payee-observed-1",
+            "action_type": "fyi",
+            "operator": "payee.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:02:06Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "payee_observed",
+              "sealer_role": "payee",
+              "terms_ref": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005",
+              "payment_ref": {
+                "type": "ln.payment_hash",
+                "value": "6aaa35ab4414eae0f97b9e5c2674aea404c421f8106b476295145ad7e13c6097"
+              },
+              "received": {
+                "value": "995",
+                "assetCode": "BTC",
+                "assetScale": 11
+              },
+              "status": "settled",
+              "observed_at": "2026-10-01T12:02:05Z",
+              "receive_fee": {
+                "value": "5",
+                "assetCode": "BTC",
+                "assetScale": 11
+              }
+            },
+            "references": [
+              {
+                "type": "agent-action-capsule",
+                "digest_alg": "SHA-256",
+                "digest": "34bb43ae20b0c5fc87bb310db5a5e0502f0f0b5cab5082baa540681da36dc0c0",
+                "citation_purpose": "counterparty_half"
+              }
+            ],
+            "capsule_id": "65348ddf35695e1870e753ff85155cb084ac6ca0595a654695701c436fbd095e"
+          },
+          "capsule_id": "65348ddf35695e1870e753ff85155cb084ac6ca0595a654695701c436fbd095e",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458207125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8a0582065348ddf35695e1870e753ff85155cb084ac6ca0595a654695701c436fbd095e5840f4b56877eff2db5296a249a30f1983c5d0318f9923efeefd1b2961e3dbc36a0ac25cf7b801a396de16b12466613be2525ec932d5a6e4468b27dffdf13caa7a04",
+          "envelope_kid": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+        }
+      ],
+      "wrapped_objects": [],
+      "expect": {
+        "conforming": true,
+        "failures": [],
+        "findings": [
+          {
+            "records": [
+              "ln-payer-observed-1"
+            ],
+            "code": "fee_asset_differs"
+          }
+        ],
+        "settlements": [
+          {
+            "terms": "ln-terms-1",
+            "payment_state": "unjoined",
+            "delivery_state": "none"
+          }
+        ]
+      }
+    },
+    {
+      "id": "neg-ln-both-fee-assets-differ",
+      "section": [
+        "§6.1 Fees",
+        "§9.2 Payment State",
+        "§9.4 Failures"
+      ],
+      "description": "Both fees are in USD while both amounts are in BTC. The pair is unjoined, and one fee_asset_differs finding names both legs, the payer leg first.",
+      "key_policy": {
+        "payer": "2cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0",
+        "payee": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+      },
+      "records": [
+        {
+          "label": "ln-terms-1",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ln-terms-1",
+            "action_type": "fyi",
+            "operator": "payee.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:00:00Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "terms",
+              "sealer_role": "payee",
+              "amount": {
+                "value": "1000",
+                "assetCode": "BTC",
+                "assetScale": 11
+              },
+              "payment_ref": {
+                "type": "ln.payment_hash",
+                "value": "6aaa35ab4414eae0f97b9e5c2674aea404c421f8106b476295145ad7e13c6097"
+              }
+            },
+            "capsule_id": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005"
+          },
+          "capsule_id": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458207125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8a058207fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005584034a2bf02e4325499740cf9f960d6dd364228423be178056cf5d3aef45be2d97c2fb438c965b4d9f4254e426c9d490522db879d9b9d907068ac7b8e4d247cad08",
+          "envelope_kid": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+        },
+        {
+          "label": "ln-payer-observed-1",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ln-payer-observed-1",
+            "action_type": "fyi",
+            "operator": "payer.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:01:06Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "payer_observed",
+              "sealer_role": "payer",
+              "terms_ref": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005",
+              "payment_ref": {
+                "type": "ln.payment_hash",
+                "value": "6aaa35ab4414eae0f97b9e5c2674aea404c421f8106b476295145ad7e13c6097"
+              },
+              "amount": {
+                "value": "1000",
+                "assetCode": "BTC",
+                "assetScale": 11
+              },
+              "status": "settled",
+              "observed_at": "2026-10-01T12:01:05Z",
+              "routing_fee": {
+                "value": "5",
+                "assetCode": "USD",
+                "assetScale": 2
+              }
+            },
+            "capsule_id": "34bb43ae20b0c5fc87bb310db5a5e0502f0f0b5cab5082baa540681da36dc0c0"
+          },
+          "capsule_id": "34bb43ae20b0c5fc87bb310db5a5e0502f0f0b5cab5082baa540681da36dc0c0",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458202cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0a0582034bb43ae20b0c5fc87bb310db5a5e0502f0f0b5cab5082baa540681da36dc0c058406dd88b29ce7dbc7ae3f25e15e3f5edb8096d9a5599812056aad4bd045eaf598e0e8968842d826e350f7f393024b43a4bf34eec6b4b29eb04f84fc6059818440a",
+          "envelope_kid": "2cbfe3c87a19f0621a0b3231f64696ace6aa1a466495a947ced9ab21dfe5dcd0"
+        },
+        {
+          "label": "ln-payee-observed-1",
+          "capsule": {
+            "spec_version": "draft-mih-scitt-agent-action-capsule-05",
+            "format_version": "4",
+            "canonicalization_id": "jcs",
+            "action_id": "ln-payee-observed-1",
+            "action_type": "fyi",
+            "operator": "payee.example",
+            "developer": "settlement-example-agent@1",
+            "timestamp": "2026-10-01T12:02:06Z",
+            "assurance": {
+              "attestation_mode": "self_attested",
+              "effect_mode": "not_applicable",
+              "ledger_mode": "standalone"
+            },
+            "settlement": {
+              "version": "0",
+              "leg": "payee_observed",
+              "sealer_role": "payee",
+              "terms_ref": "7fcbce842a8ac9c67c18c004905d06743709de02ecedd83dc486f9e4ac419005",
+              "payment_ref": {
+                "type": "ln.payment_hash",
+                "value": "6aaa35ab4414eae0f97b9e5c2674aea404c421f8106b476295145ad7e13c6097"
+              },
+              "received": {
+                "value": "995",
+                "assetCode": "BTC",
+                "assetScale": 11
+              },
+              "status": "settled",
+              "observed_at": "2026-10-01T12:02:05Z",
+              "receive_fee": {
+                "value": "5",
+                "assetCode": "USD",
+                "assetScale": 2
+              }
+            },
+            "references": [
+              {
+                "type": "agent-action-capsule",
+                "digest_alg": "SHA-256",
+                "digest": "34bb43ae20b0c5fc87bb310db5a5e0502f0f0b5cab5082baa540681da36dc0c0",
+                "citation_purpose": "counterparty_half"
+              }
+            ],
+            "capsule_id": "91157826951fcbd337abd7c2482d430d94598e932ddc2d89a603e86ef3820fab"
+          },
+          "capsule_id": "91157826951fcbd337abd7c2482d430d94598e932ddc2d89a603e86ef3820fab",
+          "envelope_hex": "d284584ca301270378236170706c69636174696f6e2f6167656e742d616374696f6e2d63617073756c652d69640458207125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8a0582091157826951fcbd337abd7c2482d430d94598e932ddc2d89a603e86ef3820fab58408f4c9dbe32a4f0b0281b892c743277fbfa82365974f809f224090a063660478e29cb4f1d17db51e2549dd8537665761f715619114307ed7bb0c5267ed33a620b",
+          "envelope_kid": "7125e78196a360c3a278d00944a6133f53265c295fe8e1ed7f75a2a65d4681f8"
+        }
+      ],
+      "wrapped_objects": [],
+      "expect": {
+        "conforming": true,
+        "failures": [],
+        "findings": [
+          {
+            "records": [
+              "ln-payer-observed-1",
+              "ln-payee-observed-1"
+            ],
+            "code": "fee_asset_differs"
           }
         ],
         "settlements": [

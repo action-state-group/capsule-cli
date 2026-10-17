@@ -17,7 +17,7 @@ import (
 )
 
 // testdata/vectors is vectors/settlement/ of agent-action-capsule at
-// 565d1f0eaab1659b537426b434cc9374a39570f2 (draft-mih-agent-settlement-records-00),
+// 626074f631eb20454aef0b3a0f67320ddaf66119 (draft-mih-agent-settlement-records-00),
 // byte for byte. Every expectation in it is written from the draft text, not
 // from any implementation.
 const vectorsDir = "testdata/vectors"

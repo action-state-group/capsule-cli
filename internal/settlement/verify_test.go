@@ -429,6 +429,15 @@ func TestFeeAssetDiffersNamesTheLegWhoseFeeDiffers(t *testing.T) {
 		s["receive_fee"].(map[string]any)["assetCode"] = "USD"
 	})
 	assert.Equal(t, []Report{{Records: []string{"x402-payee-observed"}, Code: "fee_asset_differs"}}, payee.Findings)
+
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.edit("x402-payer-observed", func(s map[string]any) {
+		s["routing_fee"] = map[string]any{"value": "1", "assetCode": "USD", "assetScale": json.Number("2")}
+	})
+	both := f.edit("x402-payee-observed", func(s map[string]any) {
+		s["receive_fee"].(map[string]any)["assetCode"] = "USD"
+	})
+	assert.Equal(t, []Report{{Records: []string{"x402-payer-observed", "x402-payee-observed"}, Code: "fee_asset_differs"}}, both.Findings)
 }
 
 // A delivered leg naming a carrier with an empty name is accepted.

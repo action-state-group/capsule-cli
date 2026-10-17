@@ -51,6 +51,9 @@ independent reading of the draft.
 | `pos-ln-receive-fee-two-payments` | Two Lightning payments, from the numbers of a real run: the payer sent 1000 msat with `routing_fee` 0; the payee's wallet recorded `received` 995 with `receive_fee` 5. 1000 = 995 + 5. | both settlements `agreed` (naive equality would say `mismatch`) |
 | `state-ln-receive-fee-mismatch` | The payee reports `received` 995 with `receive_fee` 0. | `mismatch`, differs `amount` |
 | `neg-ln-receive-fee-absent` | The payee reports `received` 995 and no `receive_fee`. Lightning receive fees may apply, so absent is not zero. | finding `fee_unstated`, `unjoined` (never a false `agreed`) |
+| `neg-ln-receive-fee-asset-differs` | The payee reports `received` 995 msat with a `receive_fee` of 0.05 USD. | finding `fee_asset_differs` naming the payee leg, `unjoined` |
+| `neg-ln-routing-fee-asset-differs` | The payer reports a `routing_fee` of 0.05 USD on 1000 msat; the payee's fee is in BTC. | finding `fee_asset_differs` naming the payer leg only, `unjoined` |
+| `neg-ln-both-fee-assets-differ` | Both fees are in USD, both amounts in BTC. | one finding `fee_asset_differs` naming the payer leg, then the payee leg, `unjoined` |
 | `pos-amount-decimals-mixed-scales` | Non-trivial decimals at mixed scales: 0.000001 USDC as value 1 at scale 6, reported by the payee as 100 at scale 8; 1234.56 USD as value 123456 at scale 2, reported by the payee as 1234500 received plus 60 fee at scale 3. | both settlements `agreed`, compared exactly at the largest scale |
 | `state-amount-decimals-off-by-one-unit` | The same, but the payee reports 1234501 at scale 3 (1234.561 with the fee). | the USD settlement `mismatch`, differs `amount`; the USDC one `agreed` |
 
@@ -122,7 +125,9 @@ For each case, a verifier:
 
 `expect.settlements` has one entry per terms leg, in record order, each
 naming the terms leg's label. `expect.failures` and `expect.findings` list `{records, code}` in the order a
-verifier following the steps above, record by record, reports them.
+verifier following the steps above, record by record, reports them. A
+`fee_asset_differs` finding names the leg or legs whose fee is in another asset than its
+amount: the payer leg for `routing_fee`, the payee leg for `receive_fee`, payer first.
 `expect.conforming` is false when any failure is present.
 
 ## Conventions
