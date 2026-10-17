@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Settlement fee findings from agent-action-capsule
+
+- **Changed (build):** agent-action-capsule's Go module moves to v0.10.0. Its settlement verifier
+  now names the leg whose fee is in another asset in `fee_asset_differs`
+  (action-state-group/agent-action-capsule#303), so capsulectl's own mapping of that finding to a
+  leg is removed. The vendored settlement vectors come from agent-action-capsule 626074f.
+- **Changed (output):** `settlement status` and `deal settlement` name the legs of a
+  `fee_asset_differs` finding as before, except in two cases. When both fees differ, the finding
+  names the payer leg and then the payee leg, where it named only the payee leg. When only the
+  routing fee differs and the payer leg was passed more than once, every live copy of it is named,
+  as for the payee leg and every other finding, where only the compared copy was.
+
 ### `x-` members in an Evidence Result
 
 - **Changed (validation):** `result build` validates against Evidence Result v0 as of

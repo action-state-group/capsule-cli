@@ -429,6 +429,28 @@ func TestFeeAssetDiffersNamesTheLegWhoseFeeDiffers(t *testing.T) {
 		s["receive_fee"].(map[string]any)["assetCode"] = "USD"
 	})
 	assert.Equal(t, []Report{{Records: []string{"x402-payee-observed"}, Code: "fee_asset_differs"}}, payee.Findings)
+
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.edit("x402-payer-observed", func(s map[string]any) {
+		s["routing_fee"] = map[string]any{"value": "1", "assetCode": "USD", "assetScale": json.Number("2")}
+	})
+	both := f.edit("x402-payee-observed", func(s map[string]any) {
+		s["receive_fee"].(map[string]any)["assetCode"] = "USD"
+	})
+	assert.Equal(t, []Report{{Records: []string{"x402-payer-observed", "x402-payee-observed"}, Code: "fee_asset_differs"}}, both.Findings)
+}
+
+// fee_asset_differs names every live copy of the record whose fee differs, as
+// every other finding about a record does: a payer leg passed twice is named
+// twice.
+func TestFeeAssetDiffersNamesEveryLiveCopyOfTheRecord(t *testing.T) {
+	f := newFixture(t, "pos-x402-two-sided-agreed")
+	f.edit("x402-payer-observed", func(s map[string]any) {
+		s["routing_fee"] = map[string]any{"value": "1", "assetCode": "USD", "assetScale": json.Number("2")}
+	})
+	f.duplicate("x402-payer-observed", "payer-copy")
+	result := Verify(f.in)
+	assert.Equal(t, []Report{{Records: []string{"x402-payer-observed", "payer-copy"}, Code: "fee_asset_differs"}}, result.Findings)
 }
 
 // A delivered leg naming a carrier with an empty name is accepted.
