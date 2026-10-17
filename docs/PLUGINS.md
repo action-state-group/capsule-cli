@@ -100,7 +100,7 @@ launcher, along with the parent process's stdin/stdout/stderr and an
 additional environment variable, `CAPSULECTL_PLUGIN_API=cli-plugin/v1`, so a
 launcher can assert at runtime which contract version invoked it, and
 `CAPSULECTL_BIN`, the path of the `capsulectl` that invoked it (symlinks
-resolved), unless the caller's environment already sets it. A launcher that
+resolved), unless the caller's environment already sets it to a value. A launcher that
 calls core back uses that path rather than a bare `capsulectl`, which is not
 on PATH on every host (a Muse chat never has `~/.local/bin` on it).
 
