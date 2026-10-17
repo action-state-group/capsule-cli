@@ -98,7 +98,11 @@ A launcher that passes discovery and the handshake is added as a top-level
 every argument after `<name>` is passed straight through as `argv` to the
 launcher, along with the parent process's stdin/stdout/stderr and an
 additional environment variable, `CAPSULECTL_PLUGIN_API=cli-plugin/v1`, so a
-launcher can assert at runtime which contract version invoked it.
+launcher can assert at runtime which contract version invoked it, and
+`CAPSULECTL_BIN`, the path of the `capsulectl` that invoked it (symlinks
+resolved), unless the caller's environment already sets it to a value. A launcher that
+calls core back uses that path rather than a bare `capsulectl`, which is not
+on PATH on every host (a Muse chat never has `~/.local/bin` on it).
 
 The launcher's exit code is propagated as `capsulectl`'s own exit code.
 

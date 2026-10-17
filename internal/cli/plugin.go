@@ -234,6 +234,15 @@ func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
 	cmd := exec.CommandContext(c.Context(), info.path, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr()
 	cmd.Env = append(os.Environ(), "CAPSULECTL_PLUGIN_API="+pluginAPI)
+	// A plugin that calls core back (sealing, verify, profile show) needs to
+	// find this binary; on a host whose PATH lacks the install folder (a Muse
+	// chat never has ~/.local/bin on it) a bare "capsulectl" fails. Core knows
+	// its own path, so it is handed over, unless the caller already set it.
+	if os.Getenv("CAPSULECTL_BIN") == "" {
+		if self, err := selfExecutable(); err == nil {
+			cmd.Env = append(cmd.Env, "CAPSULECTL_BIN="+self)
+		}
+	}
 	if err := cmd.Run(); err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
@@ -242,6 +251,19 @@ func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
 		return fmt.Errorf("plugin %s failed: %w", info.Name, err)
 	}
 	return nil
+}
+
+// selfExecutable is the running capsulectl's path, symlinks resolved when
+// they can be, for CAPSULECTL_BIN.
+func selfExecutable() (string, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if resolved, err := filepath.EvalSymlinks(self); err == nil {
+		return resolved, nil
+	}
+	return self, nil
 }
 
 // pluginCommand wraps a discovered launcher as a cobra command that execs it,
