@@ -21,10 +21,14 @@ import (
 // whatever --schema the caller names. The copy is agent-action-capsule's
 // schemas/evidence-result-v0.json at the commit resultSchemaSource names --
 // the one carrying the optional claim `type` (requirement / reconcile /
-// close) of the 2026-09-25 ruling; the pinned aac Go module does not
-// ship the schema (it lives outside the module's go/ directory), which is
-// why a copy is here at all. Refresh it by replacing the file and the
-// digest together; TestResultSchemaIsPinned keeps them in step.
+// close) of the 2026-09-25 ruling, the `x-` extension members on the
+// document and on a claim (spec section 8a, aac #297) and the optional
+// document member coverage_report (aac #157); the pinned aac Go
+// module does not ship the schema (it lives outside the module's go/
+// directory), which is why a copy is here at all. Refresh it by replacing
+// the file, the digest and the source together, with the vectors in
+// testdata/result from the same commit (testdata/result/UPSTREAM);
+// TestResultSchemaIsPinned keeps them in step.
 //
 //go:embed schema/evidence-result-v0.json
 var resultSchemaBytes []byte
@@ -34,9 +38,9 @@ const (
 	resultRecordType = "evidence_result"
 	resultSchemaID   = "https://agentactioncapsule.org/schemas/evidence-result-v0.json"
 	// resultSchemaDigest is the SHA-256 of schema/evidence-result-v0.json.
-	resultSchemaDigest = "9c49bfbead577dc1fed5e3b626511253adc9a9c87b32d15d948997af42cbd033"
+	resultSchemaDigest = "cf46d273e0220a6a6e9cfa4e41b331b6a6a155d053ca81cc33f3c004dfa734a9"
 	// resultSchemaSource names where the vendored copy came from.
-	resultSchemaSource = "agent-action-capsule main@ee7888df15f1db7eecfe9da62626d290eeabcce6 schemas/evidence-result-v0.json"
+	resultSchemaSource = "agent-action-capsule main@627dd8c16f7eb0dd00169f199ba6b938fb179913 schemas/evidence-result-v0.json"
 
 	claimTypeRequirement = "requirement"
 	claimTypeReconcile   = "reconcile"

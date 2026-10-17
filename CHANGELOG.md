@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### `x-` members in an Evidence Result
+
+- **Changed (validation):** `result build` validates against Evidence Result v0 as of
+  agent-action-capsule 627dd8c. It admits members named `x-...` on the document and on a claim
+  (action-state-group/agent-action-capsule#297, spec section 8a). Every other member of every
+  level stays closed, including a capitalised `X-...`. It also admits an optional document member,
+  `coverage_report` (action-state-group/agent-action-capsule#157, PROPOSED), and a Result without
+  one validates as before. The vendored schema and its test vectors come from that commit. No
+  output of this CLI changes.
+
 ### Verification on agent-action-capsule's Go APIs
 
 - **Changed (build):** agent-action-capsule's Go module moves to v0.9.1, and capsulectl's own

@@ -157,7 +157,15 @@ func decodeJSONNumber(t *testing.T, raw []byte) map[string]interface{} {
 func TestResultSchemaIsPinned(t *testing.T) {
 	sum := sha256.Sum256(resultSchemaBytes)
 	assert.Equal(t, resultSchemaDigest, hex.EncodeToString(sum[:]), "schema/evidence-result-v0.json changed: update resultSchemaDigest and resultSchemaSource together")
-	_, _, err := resultSchema()
+	// The schema and the vectors in testdata/result come from one aac
+	// commit, which testdata/result/UPSTREAM names.
+	upstream, err := os.ReadFile(filepath.Join("testdata", "result", "UPSTREAM"))
+	require.NoError(t, err)
+	repo, vectors, ok := strings.Cut(strings.TrimSpace(string(upstream)), " ")
+	require.True(t, ok)
+	commit, _, _ := strings.Cut(vectors, " ")
+	assert.Equal(t, repo+" "+commit+" schemas/evidence-result-v0.json", resultSchemaSource, "resultSchemaSource must name the commit the vectors were vendored from")
+	_, _, err = resultSchema()
 	require.NoError(t, err)
 }
 
@@ -213,6 +221,64 @@ func TestResultVectors(t *testing.T) {
 		})
 	}
 	assert.Equal(t, len(walkNegatives), seenWalk, "every walk negative is vendored and run")
+}
+
+// An `x-` member is admitted on the document and on a claim (aac spec
+// section 8a) and nowhere else, and only with that exact prefix: every
+// other member of every level stays closed. The positive is aac's claims
+// positive with one `x-` member at each level.
+func TestResultSchemaAdmitsExtensionMembers(t *testing.T) {
+	read := func(name string) map[string]interface{} {
+		raw, err := os.ReadFile(filepath.Join("testdata", "result", name))
+		require.NoError(t, err)
+		return decodeJSONNumber(t, raw)
+	}
+	extended := read("pos-example-org-extended-result.json")
+	require.Contains(t, extended, "x-judged-selection")
+	claims, _ := extended["claims"].([]interface{})
+	require.Contains(t, claims[1], "x-judge-pin")
+	require.NoError(t, checkResultSchema(extended))
+	_, err := crossCheckResult(extended, "")
+	require.NoError(t, err)
+
+	// Without its x- members it is the claims positive: the slot is the only
+	// difference.
+	stripped := read("pos-example-org-extended-result.json")
+	delete(stripped, "x-judged-selection")
+	for _, c := range stripped["claims"].([]interface{}) {
+		delete(c.(map[string]interface{}), "x-judge-pin")
+	}
+	assert.Equal(t, read("pos-example-org-claims-result.json"), stripped)
+
+	for name, want := range map[string]string{
+		"neg-unprefixed-document-member.json": `at <root>: additional properties not allowed: "judged_selection"`,
+		"neg-unprefixed-claim-member.json":    `at claims/1: additional properties not allowed: "rule_id"`,
+	} {
+		err := checkResultSchema(read(name))
+		require.ErrorIs(t, err, ErrInput, name)
+		assert.Contains(t, SafeError(err), want, name)
+	}
+
+	for name, c := range map[string]struct {
+		mutate func(map[string]interface{})
+		want   string
+	}{
+		"on the aggregate": {func(d map[string]interface{}) { d["aggregate"].(map[string]interface{})["x-note"] = "n" }, `at aggregate: additional properties not allowed: "x-note"`},
+		"on a carrier": {func(d map[string]interface{}) {
+			d["claims"].([]interface{})[0].(map[string]interface{})["presentation"].(map[string]interface{})["x-note"] = "n"
+		}, `"x-note"`},
+		"on the view":                 {func(d map[string]interface{}) { d["view"].(map[string]interface{})["x-note"] = "n" }, `at view: additional properties not allowed: "x-note"`},
+		"capitalised on the document": {func(d map[string]interface{}) { d["X-note"] = "n" }, `at <root>: additional properties not allowed: "X-note"`},
+		"capitalised on a claim": {func(d map[string]interface{}) {
+			d["claims"].([]interface{})[0].(map[string]interface{})["X-note"] = "n"
+		}, `at claims/0: additional properties not allowed: "X-note"`},
+	} {
+		doc := read("pos-example-org-claims-result.json")
+		c.mutate(doc)
+		err := checkResultSchema(doc)
+		require.ErrorIs(t, err, ErrInput, name)
+		assert.Contains(t, SafeError(err), c.want, name)
+	}
 }
 
 // walkVector runs result build's close walk -- checkCloseRefs,
