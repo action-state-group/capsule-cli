@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### The deal profile checker's record types come from its schema
+
+- **Fixed:** without the Python `jsonschema` package, `skills/deal/profile/check_profile.py`
+  rejected `counterparty_profile`, `thread`, `thread_opened` and `sale_cut` records: its reduced
+  check kept its own list of record types, which lacked them. It now reads the `record_type` enum
+  from the schema it ships with. Its fixture run names the four types the positive fixtures do not
+  carry yet, where it counted against the old list.
+
 ### Settlement fee findings from agent-action-capsule
 
 - **Changed (build):** agent-action-capsule's Go module moves to v0.10.0. Its settlement verifier

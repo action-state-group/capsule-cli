@@ -13,7 +13,7 @@ Files in this directory:
 | `PROFILE.md` | This document. The normative text for the skill. |
 | `x-deal-v0.schema.json` | JSON Schema (Draft 2020-12) for one record: the block and each record type's body. |
 | `records/` | JSON Schemas (Draft 2020-12) for the typed action records and the check request and response (section 9). |
-| `fixtures/positive/` | One deal, 18 records, covering all 13 record types, with the expected JCS digest of each. |
+| `fixtures/positive/` | One deal, 18 records, covering 13 of the 18 record types (not `sale`, which `positive-sale/` carries, nor `counterparty_profile`, `thread`, `thread_opened` or `sale_cut`), with the expected JCS digest of each. |
 | `fixtures/positive-typed/` | One deal sealed in the typed action records beside x-deal-v0 evidence records (section 9). |
 | `fixtures/negative/` | Records that MUST be rejected, each at one named stage. |
 | `fixtures/fingerprint-vectors.json` | Test-only local store: a public test secret, the raw values, their normalized forms, fingerprints and commitments. |
@@ -110,7 +110,7 @@ deal's log:
 | `profile` | `"x-deal-v0"` | REQUIRED | Profile and version. |
 | `canonicalization` | `"jcs"` | REQUIRED | Pinned: RFC 8785. Any other value fails closed (section 5). |
 | `deal_id` | string `^deal-[0-9a-f]{16,64}$` | REQUIRED | Random, opaque, and the same on every record of the deal. Never derived from any identifier. |
-| `record_type` | enum (section 3) | REQUIRED | One of the 13 record types. |
+| `record_type` | enum (section 3) | REQUIRED | One of the 18 record types. |
 | `seq` | integer ≥ 1 | REQUIRED | Position in the deal: 1, 2, 3, … with no gaps (section 6). |
 | `at` | string `YYYY-MM-DDThh:mm:ssZ` | REQUIRED | The seal time in UTC, whole seconds. |
 | `prev` | digest ref | REQUIRED iff `seq` > 1 | The record digest of record `seq − 1`. |
@@ -132,7 +132,7 @@ never against a later change.
 
 ## 3. Record types (action-type conventions)
 
-Thirteen record types. The set is closed: an unknown `record_type` fails the schema.
+Eighteen record types. The set is closed: an unknown `record_type` fails the schema.
 
 | record_type | What it records | Required body fields | Required refs / block fields |
 |---|---|---|---|
