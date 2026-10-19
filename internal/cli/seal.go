@@ -246,6 +246,15 @@ func ParseRequest(raw []byte) (Request, error) {
 	return r, nil
 }
 func Seal(r Request, key ed25519.PrivateKey) (artifact.Record, error) {
+	// opening.* names an evidence book's field openings (salted
+	// commitments' nonce and text), which a book refuses as a caller's
+	// original and get never prints: reserved on every profile, so no
+	// request's artifact is refused on one profile and hidden on another.
+	for _, a := range r.Artifacts {
+		if isOpening(a) {
+			return artifact.Record{}, InputError("artifact name " + a.Name + " is reserved: " + openingOriginalPrefix + "* names an evidence book's field openings; rename the artifact in the capsule-seal-request/v1 request (--request)")
+		}
+	}
 	identity, e := emit.NewEd25519SigningIdentity(key)
 	if e != nil {
 		return artifact.Record{}, e

@@ -37,3 +37,26 @@ func TestCoreRefusesWritesOnADealProfile(t *testing.T) {
 
 	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"user","text":"still sealing"}`))
 }
+
+// The deal session is a writer while it holds the exclusive lock, and no
+// longer once closed; a read session under the shared lock never is.
+func TestDealSessionHoldsTheStoreWhileOpen(t *testing.T) {
+	dealFixture(t)
+	retailDeal(t)
+	p, err := cli.LoadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	assert.True(t, s.HoldsDealStore())
+	require.NoError(t, s.close())
+	assert.False(t, s.HoldsDealStore(), "a closed session")
+	_, err = cli.OpenDealTarget(t.Context(), p, cli.UseCLL, s)
+	assert.ErrorIs(t, err, cli.ErrDealProfileWrite)
+
+	r, err := openDealStoreRead(p)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, r.close()) }()
+	assert.False(t, r.HoldsDealStore(), "a read under the shared lock")
+	_, err = cli.OpenDealTarget(t.Context(), p, cli.UseCLL, r)
+	assert.ErrorIs(t, err, cli.ErrDealProfileWrite)
+}
