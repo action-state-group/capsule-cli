@@ -19,20 +19,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// safeTempDir is a t.TempDir whose path passes install's full-path check
+// under any umask: t.TempDir's directories take the umask, and under 002
+// they are group-writable, which install rightly refuses. os.TempDir itself
+// (/tmp on Linux: root's, sticky) is left alone; the check accepts it.
+func safeTempDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	tmp := filepath.Clean(os.TempDir())
+	for p := dir; p != tmp && strings.HasPrefix(p, tmp+string(os.PathSeparator)); p = filepath.Dir(p) {
+		if info, err := os.Stat(p); err == nil && info.Mode()&0o022 != 0 {
+			require.NoError(t, os.Chmod(p, info.Mode().Perm()&^0o022))
+		}
+	}
+	return dir
+}
+
 // installHome makes a private HOME whose path passes install's full-path
 // check under any umask, and points the plugin roots at its per-user root
 // (which does not exist yet). It returns HOME and that root.
 func installHome(t *testing.T) (string, string) {
 	t.Helper()
-	home := t.TempDir()
-	// t.TempDir's directories take the umask; under 002 they are
-	// group-writable, which install rightly refuses.
-	stop := filepath.Dir(os.TempDir())
-	for p := home; p != stop && strings.HasPrefix(p, os.TempDir()); p = filepath.Dir(p) {
-		if info, err := os.Stat(p); err == nil && info.Mode()&0o022 != 0 {
-			require.NoError(t, os.Chmod(p, info.Mode().Perm()&^0o022))
-		}
-	}
+	home := safeTempDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("SUDO_UID", "")
 	root := userPluginRoot(home)
@@ -234,7 +242,7 @@ func TestPluginInstallRefusesAnUnsafePath(t *testing.T) {
 
 func TestPluginInstallJudgesASymlinkedLocalByItsTarget(t *testing.T) {
 	home, _ := installHome(t)
-	safe := filepath.Join(t.TempDir(), "local")
+	safe := filepath.Join(safeTempDir(t), "local")
 	require.NoError(t, os.Mkdir(safe, 0o755))
 	require.NoError(t, os.Symlink(safe, filepath.Join(home, ".local")))
 	out, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
@@ -242,7 +250,7 @@ func TestPluginInstallJudgesASymlinkedLocalByItsTarget(t *testing.T) {
 	assert.True(t, strings.HasPrefix(installOut(t, out).Path, func() string { c, _ := filepath.EvalSymlinks(safe); return c }()), "the canonical path is reported")
 
 	home2, _ := installHome(t)
-	shared := filepath.Join(t.TempDir(), "shared")
+	shared := filepath.Join(safeTempDir(t), "shared")
 	require.NoError(t, os.Mkdir(shared, 0o755))
 	target := filepath.Join(shared, "local")
 	require.NoError(t, os.Mkdir(target, 0o755))
@@ -633,7 +641,7 @@ func TestPluginInstallReportsAnUnsyncedCommit(t *testing.T) {
 // ~/.local afterwards does not move where the launcher lands.
 func TestPluginInstallUsesTheCheckedCanonicalRoot(t *testing.T) {
 	home, _ := installHome(t)
-	first, second := filepath.Join(t.TempDir(), "a"), filepath.Join(t.TempDir(), "b")
+	first, second := filepath.Join(safeTempDir(t), "a"), filepath.Join(safeTempDir(t), "b")
 	require.NoError(t, os.Mkdir(first, 0o755))
 	require.NoError(t, os.Mkdir(second, 0o755))
 	link := filepath.Join(home, ".local")
