@@ -112,9 +112,10 @@ outputs:
   request-path:
     description: >-
       Path to the capsule-seal-request/v1 JSON the capsule was sealed from
-      (digests only). Publishing it into a durable evidence book with
-      `capsulectl publish --request` yields the same capsule_id; see
-      docs/PR-CAPSULE-PROFILE.md, "In a report".
+      (digests only). Publishing it with `capsulectl publish --request` on a
+      plain profile yields the same capsule_id; an evidence book records it
+      under that id as its subject_ref; see docs/PR-CAPSULE-PROFILE.md,
+      "In a report".
     value: ${{ steps.seal.outputs.request-path }}
 
 runs:

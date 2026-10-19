@@ -186,9 +186,9 @@ func canaryStep(ctx context.Context, profile string, args ...string) (map[string
 	if DealCommandGroup != nil {
 		root = NewCommandWith(DealCommandGroup())
 	}
-	var out bytes.Buffer
+	var out, stderr bytes.Buffer
 	root.SetOut(&out)
-	root.SetErr(io.Discard)
+	root.SetErr(&stderr)
 	root.SetIn(strings.NewReader(""))
 	root.SetArgs(append([]string{"--profile", profile, "deal"}, args...))
 	if err := root.ExecuteContext(ctx); err != nil {
@@ -199,7 +199,14 @@ func canaryStep(ctx context.Context, profile string, args ...string) (map[string
 				break
 			}
 		}
-		return nil, Hint(class, fmt.Sprintf("canary: `deal %s` failed: %s; stopped before the tick", args[0], SafeError(err)))
+		reason := SafeError(err)
+		if reason == "" {
+			// The deal verb ran in the capsulectl-deal plugin, which said
+			// why on its own stderr (its last line).
+			lines := strings.Split(strings.TrimSpace(stderr.String()), "\n")
+			reason = strings.TrimPrefix(lines[len(lines)-1], "capsulectl-deal: ")
+		}
+		return nil, Hint(class, fmt.Sprintf("canary: `deal %s` failed: %s; stopped before the tick", args[0], reason))
 	}
 	var result map[string]any
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {

@@ -117,8 +117,10 @@ You need the capsule (`capsule.json`, or the artifact record) and read access to
 ## In a report
 
 A PR capsule is ordinary evidence. `capsule_id` commits the payload, not the signing key, so
-publishing the request (the action's `request-path` output) into a durable evidence book gives the
-same id that the PR comment names:
+publishing the request (the action's `request-path` output) on a plain profile gives the same id
+that the PR comment names. An evidence book (a book profile, capsulectl-book) seals the request as
+its own capsule, which also carries its record header and so has an id of its own; the record's
+`subject_ref` is the id the PR comment names, and the book resolves that id to the record:
 
 ```bash
 capsulectl publish --profile <book> --request pr-capsule-request.json   # head capsule

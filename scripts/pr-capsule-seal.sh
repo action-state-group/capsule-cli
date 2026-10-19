@@ -42,11 +42,12 @@ mkdir -p "$CAPSULE_PROFILE_HOME" "$CAPSULE_OUTPUT_DIR"
 # capsulectl resolves these two by NAME via --*-key-env; the profile file on
 # disk records the name "CAPSULE_PRODUCER_SIGNING_KEY", never the value.
 profile=pr-capsule
-# A jsonl profile's log is its evidence book, whose records name an operator.
-# It is the operator the seal request already carries, never a new value.
+# The store is a plain jsonl log (--log cll): capsulectl keeps it itself, with
+# no plugin, and the capsule's id is the one the request seals to. The
+# operator is the one the seal request already carries, never a new value.
 operator=$(jq -er '.capsule.Operator' "$CAPSULE_REQUEST_FILE")
 "$CAPSULECTL" profile create --name "$profile" \
-  --type jsonl --jsonl-path "$CAPSULE_STORE_DIR" \
+  --type jsonl --log cll --jsonl-path "$CAPSULE_STORE_DIR" \
   --namespace pr-capsule \
   --log-id "$CAPSULE_LOG_ID" --operator "$operator" \
   --trusted-key "$CAPSULE_PRODUCER_TRUSTED_KEY" \

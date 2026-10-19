@@ -470,6 +470,7 @@ func profileCommands() *cobra.Command {
 		for flag := range fields {
 			f.String(flag, "", "Profile setting")
 		}
+		f.Lookup("log").Usage = "Who keeps the profile's log: cll (the core's own CLL) or book (an evidence book, kept by the capsulectl-book plugin; jsonl only). A jsonl profile with a log_id is a book unless it says cll. Fixed once set"
 		f.Int("mysql-port", 3306, "MySQL port")
 		f.String("sqlite-path", "", "SQLite database file path (sets connection.database for --type sqlite)")
 		f.String("jsonl-path", "", "JSONL storage directory (sets connection.database for --type jsonl)")

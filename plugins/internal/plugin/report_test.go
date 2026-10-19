@@ -14,6 +14,7 @@ import (
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/capsule-cli/internal/cli"
 	emit "github.com/action-state-group/capsule-emit/go"
+	"github.com/action-state-group/evidencebook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -467,4 +468,24 @@ func TestReportBuildRefusesAnExistingOut(t *testing.T) {
 	kept, err := os.ReadFile(out)
 	require.NoError(t, err)
 	assert.Equal(t, "keep", string(kept))
+}
+
+// A claim may cite the id a request seals to on a plain profile; on a book
+// profile the request's own capsule carries that id as its header's
+// subject_ref, so a bundle holding that capsule supports the claim.
+func TestUnsupportedClaimsReadsAnOwnCapsulesSubject(t *testing.T) {
+	plain, own := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	claims := resultDocument{claims: []resultClaim{{evidence: []string{plain}}}}
+	bare := map[string]interface{}{"records": []interface{}{map[string]interface{}{"capsule_id": own}}}
+	assert.Equal(t, 1, unsupportedClaims(bare, claims), "a capsule that names nothing does not hold another id")
+	headed := map[string]interface{}{"records": []interface{}{map[string]interface{}{
+		"capsule_id":                    own,
+		evidencebook.RecordHeaderMember: map[string]interface{}{"record_type": recordTypeOwn, "subject_ref": plain},
+	}}}
+	assert.Equal(t, 0, unsupportedClaims(headed, claims))
+	wrapper := map[string]interface{}{"records": []interface{}{map[string]interface{}{
+		"capsule_id":                    own,
+		evidencebook.RecordHeaderMember: map[string]interface{}{"record_type": "close", "subject_ref": plain},
+	}}}
+	assert.Equal(t, 1, unsupportedClaims(wrapper, claims), "only an own capsule stands for the id it names")
 }

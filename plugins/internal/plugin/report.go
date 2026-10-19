@@ -206,6 +206,14 @@ func unsupportedClaims(value map[string]interface{}, checked resultDocument) int
 			if id, ok := record["capsule_id"].(string); ok {
 				held[id] = true
 			}
+			// A book profile's own capsule is the publication of the request
+			// whose plain id its header names as subject_ref; a claim may
+			// cite that id (the one `seal` or a plain profile gives).
+			if header, ok := record[evidencebook.RecordHeaderMember].(map[string]interface{}); ok && header["record_type"] == recordTypeOwn {
+				if subject, ok := header["subject_ref"].(string); ok && subject != "" {
+					held[subject] = true
+				}
+			}
 		}
 	}
 	disclosures, _ := value["disclosures"].(map[string]interface{})
