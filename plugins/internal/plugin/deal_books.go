@@ -739,17 +739,30 @@ func (s *dealSession) books() shelfDealIndex {
 	return shelfDealIndex{legacy: sqliteDealIndex{s.db}, shelf: s.shelf, originals: s.originals, db: s.db}
 }
 
-// settleEnded reads which book deals have ended (a final close on their
+// settleEnded reads which live book deals have ended (a final close on their
 // book), for the cadence's Ended predicate, which runs under the shelf's lock
-// and so cannot read the shelf itself.
-func (s *dealSession) settleEnded(ctx context.Context) error {
+// and so cannot read the shelf itself. It runs before a receipt is reported.
+// Only the live set is read: a witnessed tick holds live logs only, and a log
+// outside the live set has nothing for Ended to take it out of, so the work
+// is per live deal, never per deal the profile ever kept (note §2.5).
+func (s *dealSession) settleEnded(ctx context.Context, c *evidencebook.Cadence) error {
 	x := s.books()
-	ids, err := x.bookDealIDs(ctx)
+	live, err := c.Live(ctx)
 	if err != nil {
 		return err
 	}
-	ended := make(map[string]bool, len(ids))
-	for _, id := range ids {
+	ended := map[string]bool{}
+	for _, logID := range live {
+		id, ok := dealOfBook(logID)
+		if !ok {
+			continue
+		}
+		if legacy, err := x.isLegacy(ctx, id); err != nil || legacy {
+			if err != nil {
+				return err
+			}
+			continue
+		}
 		steps, err := x.bookSteps(ctx, id)
 		if err != nil {
 			return err

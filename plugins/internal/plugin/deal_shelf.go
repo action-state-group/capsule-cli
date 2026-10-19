@@ -102,11 +102,6 @@ func (s *dealSession) cadenceOf(ctx context.Context) (*evidencebook.Cadence, cli
 	if err != nil {
 		return nil, cli.Profile{}, err
 	}
-	// The cadence calls Ended while it holds the shelf's lock, so which book
-	// deals have ended is read now, outside it (ended).
-	if err := s.settleEnded(ctx); err != nil {
-		return nil, cli.Profile{}, err
-	}
 	if s.cadence != nil {
 		return s.cadence, p, nil
 	}
@@ -133,7 +128,7 @@ func (s *dealSession) cadenceOf(ctx context.Context) (*evidencebook.Cadence, cli
 // is not open; a pending close leaves it open, note §2.4). A sale has no
 // close, so it never ends. The cadence calls it under the shelf's lock, so it
 // never reads the shelf: a legacy deal is answered from the SQLite index, a
-// book deal from bookEnded, read before the cadence was opened (settleEnded).
+// book deal from bookEnded, read before a receipt is reported (settleEnded).
 func (s *dealSession) ended(ctx context.Context, logID string) (bool, error) {
 	dealID, ok := strings.CutPrefix(logID, "deal/")
 	if !ok || !cli.DealIDPattern.MatchString(dealID) {
@@ -330,6 +325,9 @@ func (s *dealSession) legacyTicks(ctx context.Context, p cli.Profile) (_ []evide
 // back from the newest tick to the newest witnessed one: with a witness that
 // never answers, that is every tick, which the reconcile's rarity bounds.
 func (s *dealSession) witnessNativeTicks(ctx context.Context, c *evidencebook.Cadence, p cli.Profile) (err error) {
+	if err := s.settleEnded(ctx, c); err != nil {
+		return err
+	}
 	service, err := cli.ServiceID(p)
 	if err != nil || service == "" {
 		return err

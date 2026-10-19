@@ -555,3 +555,37 @@ func TestAStoredRecordTypeChangedIsAConflict(t *testing.T) {
 	_, err = s.index.steps(t.Context(), stepFilter{})
 	require.ErrorIs(t, err, cli.ErrConflict)
 }
+
+// Cadence work is per live deal, never per deal the profile ever kept: once
+// a closed book deal is witnessed and leaves the tick, a later tick and
+// another deal's checkpoint status never read it, so even its originals
+// gone from the store change nothing for them.
+func TestARetiredBookIsNotReadByCadenceWork(t *testing.T) {
+	p, _, witnessKey := rc16Store(t)
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 28, 0, 0, time.UTC) }
+	dealRun(t, "tick")
+	retired := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	dealRun(t, "close", "--deal", retired, "--input", writeJSON(t, `{"status":"received"}`))
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 30, 0, 0, time.UTC) }
+	tick := dealRun(t, "tick")
+	require.Equal(t, "ticked", tick["state"])
+	deliver(t, p, uint64(tick["checkpoint"].(float64)), witnessKey)
+	require.NotContains(t, liveLogs(t, p), cli.DealLogID(retired))
+	active := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+
+	// The retired book's originals are gone.
+	db, _, err := cli.SqliteConnection(p)
+	require.NoError(t, err)
+	for _, r := range bookRecords(t, retired) {
+		for _, table := range []string{"capsule_store_artifacts", "capsule_store_capsules"} {
+			_, err = db.Exec(`DELETE FROM `+table+` WHERE capsule_id = ?`, r.RecordID)
+			require.NoError(t, err)
+		}
+	}
+	require.NoError(t, db.Close())
+
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 30, 30, 0, time.UTC) }
+	assert.Equal(t, "not_due", dealRun(t, "tick")["state"])
+	out, err := invoke(t, "", "--profile", "deal", "deal", "checkpoint", "status", "--deal", active)
+	require.NoError(t, err, out)
+}

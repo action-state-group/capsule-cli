@@ -79,8 +79,8 @@ type dealSession struct {
 	book     *evidencebook.Book
 	inFlight time.Time
 	// originals is the store's artifact store, the shelf's; bookEnded is
-	// which book deals have ended, as of the last time the cadence was
-	// opened (settleEnded).
+	// which live book deals have ended, read before a receipt is reported
+	// (settleEnded).
 	originals cli.ArtifactStore
 	bookEnded map[string]bool
 	// migrated is set once migrate has completed this session: only then
