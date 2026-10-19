@@ -1,7 +1,11 @@
 package plugin
 
 import (
+	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -341,4 +345,47 @@ func TestTheCrossCheckSkipsHalvesThatAssertNothingAndActs(t *testing.T) {
 	act := map[string]interface{}{"x-deal-v0": map[string]interface{}{"record_type": "action"}, "body": map[string]interface{}{"action": "pay"}}
 	actBundle := map[string]interface{}{"disclosures": map[string]interface{}{"c": map[string]interface{}{"agent_input": closeOf(act)}, "a": map[string]interface{}{"agent_input": act}}}
 	assert.True(t, crossChecked(asserting, actBundle, "c"), "an unchecked act has no status to check")
+}
+
+// A verified copy whose selected close was signed under a key other than the
+// responder key pinned for the response (the seller rotated its key, keeping
+// the old one trusted, and answered under the new one) is untrusted: the
+// engine finds the pair unresolved.
+func TestACloseSignedUnderAnotherKeyIsUnresolved(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	buyer := thisDealParty(t)
+	dealFixture(t)
+	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	peer := dealPeerHalf{DealID: id, RecordID: finalCloseRecord(t, id), Openings: map[string]evidencebook.Opening{}}
+	r := shelfRecord(t, id, peer.RecordID)
+	withSession(t, func(s *dealSession) {
+		for _, f := range dealHalfFields {
+			o, err := s.index.(shelfDealIndex).openingOf(t.Context(), r, f)
+			require.NoError(t, err)
+			peer.Openings[f] = o
+		}
+	})
+	// The seller rotates its signing key, keeping the old one trusted.
+	p := dealProfile(t)
+	public, private, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	seed := filepath.Join(t.TempDir(), "rotated.seed")
+	require.NoError(t, os.WriteFile(seed, []byte(hex.EncodeToString(private.Seed())), 0o600))
+	p.Signing = cli.Secret{File: seed}
+	p.TrustedKeys = append(p.TrustedKeys, hex.EncodeToString(public))
+	require.NoError(t, cli.SaveProfile(p, true))
+	seller := thisDealParty(t)
+	ask := askFor(t, buyer, seller, id, map[string]any{"min_freshness": map[string]any{"size": 1}})
+	require.Equal(t, "artifact", ask.outcome, "a valid copy, answered under the new key")
+	withSession(t, func(s *dealSession) {
+		outcome, err := s.outcomeOf(t.Context(), ask.recordID)
+		require.NoError(t, err)
+		peer.ResponseRecord = outcome.digest
+	})
+	tallies, err := reconcileAs(t, buyer, id, peer)
+	require.NoError(t, err)
+	assert.Equal(t, evidencebook.Tallies{Unresolved: 1}, tallies)
 }

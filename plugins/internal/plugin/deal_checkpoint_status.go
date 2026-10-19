@@ -157,7 +157,8 @@ func openDealStoreRead(ctx context.Context, p cli.Profile) (_ *dealSession, err 
 	if err = s.openShelf(ctx, dbPath, originals); err != nil {
 		return nil, err
 	}
-	s.index = shelfDealIndex{legacy: sqliteDealIndex{s.db}, shelf: s.shelf, originals: originals, db: s.db}
+	s.originals = originals
+	s.index = s.books()
 	return s, nil
 }
 

@@ -468,3 +468,90 @@ func TestNoCommandReachesTheHalvesEngine(t *testing.T) {
 		walk(sub)
 	}
 }
+
+// A book deal's witness receipt is reported without re-entering the shelf:
+// the cadence calls Ended under the shelf's lock, so a closed book deal's
+// standing is read before (settleEnded). Its tick is witnessed and the
+// ended deal leaves the live set, with no deadlock.
+func TestABookDealsReceiptIsReportedAndItLeavesTheTick(t *testing.T) {
+	p, _, witnessKey := rc16Store(t)
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 28, 0, 0, time.UTC) }
+	dealRun(t, "tick")
+	bookID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	dealRun(t, "close", "--deal", bookID, "--input", writeJSON(t, `{"status":"received"}`))
+	require.Contains(t, liveLogs(t, p), cli.DealLogID(bookID))
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 30, 0, 0, time.UTC) }
+	tick := dealRun(t, "tick")
+	require.Equal(t, "ticked", tick["state"])
+	// The receipt is reported in a session past its migration, holding the
+	// step source over both kinds of deal, as deal tick's delivery reports
+	// one: the reconcile on open would report it with the SQLite index only.
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	c, cp, err := s.cadenceOf(t.Context())
+	require.NoError(t, err)
+	storeReceipt(t, p, uint64(tick["checkpoint"].(float64)), witnessKey)
+	done := make(chan error, 1)
+	go func() { done <- s.witnessNativeTicks(t.Context(), c, cp) }()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(30 * time.Second):
+		t.Fatal("reporting a receipt for a tick holding a book deal did not return")
+	}
+	require.NoError(t, s.close())
+	assert.NotContains(t, liveLogs(t, p), cli.DealLogID(bookID), "the ended, witnessed book deal leaves the tick")
+}
+
+// The cross-deal act history keeps the file's append order however the
+// acts of legacy and book deals interleave: each step is sorted with its
+// own key.
+func TestInterleavedActsKeepTheirAppendOrder(t *testing.T) {
+	dealFixture(t)
+	dealNewDealsOnBooks = false
+	t.Cleanup(func() { dealNewDealsOnBooks = true })
+	legacyID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	dealNewDealsOnBooks = true
+	bookID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	pay := writeJSON(t, `{"action":"pay","amount_minor":100}`)
+	var want []string
+	for _, id := range []string{legacyID, bookID, legacyID, bookID, legacyID} {
+		want = append(want, dealRun(t, "note", "--deal", id, "--kind", "act", "--input", pay)["capsule_id"].(string))
+	}
+	var got []string
+	withSession(t, func(s *dealSession) {
+		acts, err := s.index.steps(t.Context(), stepFilter{Kinds: []string{"act"}, Indexed: true})
+		require.NoError(t, err)
+		for _, st := range acts {
+			got = append(got, st.CapsuleID)
+		}
+	})
+	assert.Equal(t, want, got)
+}
+
+// A stored header whose record_type was changed is a conflict, never a step
+// silently left out: the binding runs before a reader filters by type.
+func TestAStoredRecordTypeChangedIsAConflict(t *testing.T) {
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received"}`))
+	p := dealProfile(t)
+	db, _, err := cli.SqliteConnection(p)
+	require.NoError(t, err)
+	var raw []byte
+	var seq int
+	require.NoError(t, db.QueryRow(`SELECT header, seq FROM book_records WHERE book_id = ? ORDER BY seq DESC LIMIT 1`, cli.DealLogID(dealID)).Scan(&raw, &seq))
+	var header map[string]any
+	require.NoError(t, json.Unmarshal(raw, &header))
+	header["record_type"] = "something_else"
+	changed, err := json.Marshal(header)
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE book_records SET header = ? WHERE book_id = ? AND seq = ?`, changed, cli.DealLogID(dealID), seq)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	s, err := openDealStoreRead(t.Context(), p)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, s.close()) }()
+	_, err = s.index.steps(t.Context(), stepFilter{})
+	require.ErrorIs(t, err, cli.ErrConflict)
+}

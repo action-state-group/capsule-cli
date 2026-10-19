@@ -58,8 +58,11 @@ func dealHalfCorrelation(dealID string) evidencebook.Correlation {
 // reconcileDealHalves reconciles this profile's half of a book deal with the
 // counterparty's: the session must have the deal in use (useDeal).
 func (s *dealSession) reconcileDealHalves(ctx context.Context, dealID string, peer dealPeerHalf) ([]evidencebook.PairResult, evidencebook.Tallies, error) {
-	if !s.onBook || s.book == nil {
+	if !s.onBook {
 		return nil, evidencebook.Tallies{}, cli.InputError("deal " + dealID + " is a legacy deal: it has no record header and no field commitments, so it has no halves")
+	}
+	if s.book == nil {
+		return nil, evidencebook.Tallies{}, cli.ErrReadOnlyCLL
 	}
 	own, err := s.ownHalf(ctx, dealID)
 	if err != nil {

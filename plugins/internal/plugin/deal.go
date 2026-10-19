@@ -78,6 +78,11 @@ type dealSession struct {
 	onBook   bool
 	book     *evidencebook.Book
 	inFlight time.Time
+	// originals is the store's artifact store, the shelf's; bookEnded is
+	// which book deals have ended, as of the last time the cadence was
+	// opened (settleEnded).
+	originals cli.ArtifactStore
+	bookEnded map[string]bool
 	// migrated is set once migrate has completed this session: only then
 	// does close record the mutation counter as seen, so a failed or
 	// interrupted reconcile is run again on the next open.
@@ -138,6 +143,7 @@ func openDealSession(ctx context.Context, p cli.Profile) (_ *dealSession, err er
 	if err = s.openShelf(ctx, dbPath, originals); err != nil {
 		return nil, err
 	}
+	s.originals = originals
 	s.index = sqliteDealIndex{s.db}
 	for _, stmt := range dealIndexSchema {
 		if _, err = s.db.ExecContext(ctx, stmt); err != nil {
@@ -164,7 +170,7 @@ func openDealSession(ctx context.Context, p cli.Profile) (_ *dealSession, err er
 	}
 	// The migration reads legacy deals only; from here on the step source
 	// holds book deals too (deal_books.go).
-	s.index = shelfDealIndex{legacy: sqliteDealIndex{s.db}, shelf: s.shelf, originals: originals, db: s.db}
+	s.index = s.books()
 	return s, nil
 }
 

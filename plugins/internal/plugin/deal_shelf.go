@@ -102,6 +102,11 @@ func (s *dealSession) cadenceOf(ctx context.Context) (*evidencebook.Cadence, cli
 	if err != nil {
 		return nil, cli.Profile{}, err
 	}
+	// The cadence calls Ended while it holds the shelf's lock, so which book
+	// deals have ended is read now, outside it (ended).
+	if err := s.settleEnded(ctx); err != nil {
+		return nil, cli.Profile{}, err
+	}
 	if s.cadence != nil {
 		return s.cadence, p, nil
 	}
@@ -126,13 +131,19 @@ func (s *dealSession) cadenceOf(ctx context.Context) (*evidencebook.Cadence, cli
 // ended is the cadence's Ended predicate for the profile's logs: a deal has
 // ended once its final close is indexed (finalClose: a close whose outcome
 // is not open; a pending close leaves it open, note §2.4). A sale has no
-// close, so it never ends. It reads the deal index only, never the shelf.
+// close, so it never ends. The cadence calls it under the shelf's lock, so it
+// never reads the shelf: a legacy deal is answered from the SQLite index, a
+// book deal from bookEnded, read before the cadence was opened (settleEnded).
 func (s *dealSession) ended(ctx context.Context, logID string) (bool, error) {
 	dealID, ok := strings.CutPrefix(logID, "deal/")
 	if !ok || !cli.DealIDPattern.MatchString(dealID) {
 		return false, nil
 	}
-	steps, err := s.index.steps(ctx, stepFilter{DealID: dealID})
+	legacy := sqliteDealIndex{s.db}
+	if n, err := legacy.stepCount(ctx, dealID); err != nil || n == 0 {
+		return s.bookEnded[dealID], err
+	}
+	steps, err := legacy.steps(ctx, stepFilter{DealID: dealID})
 	if err != nil {
 		return false, err
 	}

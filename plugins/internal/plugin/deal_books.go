@@ -110,7 +110,19 @@ func (x shelfDealIndex) steps(ctx context.Context, f stepFilter) ([]indexedStep,
 	if err != nil {
 		return nil, err
 	}
-	sort.SliceStable(out, func(i, j int) bool { return order[i] < order[j] })
+	// Each step is sorted with its own key: the keys never move apart from
+	// the steps they rank.
+	ranked := make([]struct {
+		key  int64
+		step indexedStep
+	}, len(out))
+	for i := range out {
+		ranked[i].key, ranked[i].step = order[i], out[i]
+	}
+	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].key < ranked[j].key })
+	for i := range ranked {
+		out[i] = ranked[i].step
+	}
 	return out, nil
 }
 
@@ -299,7 +311,12 @@ func dealOfBook(bookID string) (string, bool) {
 }
 
 // records are the committed records of one deal's book, or of every deal's
-// when dealID is empty, read from the shelf without opening a book.
+// when dealID is empty, read from the shelf without opening a book. Each is
+// bound to the header its Capsule carries inline (held) before any reader
+// uses its type or a commitment: a stored header changed outside capsulectl
+// is a conflict, never a record silently left out or read as another kind.
+// A pending tail, stored above its book's entry count, is not listed: the
+// book's next open commits it (note §2.8).
 func (x shelfDealIndex) records(ctx context.Context, dealID string) ([]evidencebook.ShelfRecord, error) {
 	var ids []string
 	if dealID != "" {
@@ -309,10 +326,16 @@ func (x shelfDealIndex) records(ctx context.Context, dealID string) ([]evidenceb
 	if err != nil {
 		return nil, err
 	}
-	return slices.DeleteFunc(read.Records, func(r evidencebook.ShelfRecord) bool {
+	records := slices.DeleteFunc(read.Records, func(r evidencebook.ShelfRecord) bool {
 		_, ok := dealOfBook(r.BookID)
 		return !ok
-	}), nil
+	})
+	for _, r := range records {
+		if _, err := x.held(ctx, r); err != nil {
+			return nil, err
+		}
+	}
+	return records, nil
 }
 
 // bookSteps are one deal's steps on its book, or every book deal's when
@@ -709,4 +732,38 @@ func (s *dealSession) cutMilestone(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 	return cp.Size, nil
+}
+
+// books is the session's step source over both kinds of deal.
+func (s *dealSession) books() shelfDealIndex {
+	return shelfDealIndex{legacy: sqliteDealIndex{s.db}, shelf: s.shelf, originals: s.originals, db: s.db}
+}
+
+// settleEnded reads which book deals have ended (a final close on their
+// book), for the cadence's Ended predicate, which runs under the shelf's lock
+// and so cannot read the shelf itself.
+func (s *dealSession) settleEnded(ctx context.Context) error {
+	x := s.books()
+	ids, err := x.bookDealIDs(ctx)
+	if err != nil {
+		return err
+	}
+	ended := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		steps, err := x.bookSteps(ctx, id)
+		if err != nil {
+			return err
+		}
+		events := make([]sealedEvent, 0, len(steps))
+		for _, st := range steps {
+			var ev dealEvent
+			if err := json.Unmarshal([]byte(st.Local), &ev); err != nil {
+				return cli.ErrConflict
+			}
+			events = append(events, sealedEvent{Event: ev})
+		}
+		ended[id] = dealFinallyClosed(events)
+	}
+	s.bookEnded = ended
+	return nil
 }
