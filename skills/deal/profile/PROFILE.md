@@ -43,8 +43,22 @@ exactly two members.
   to a deal (`deal open --deal-id`) seal different steps, but both seal this member, so a
   composition of their copies joins on it: a composed/v1 `pre_agreed_identifier` join with
   `pointer: "/deal_id"` over each copy's root step. Steps sealed by an earlier capsulectl
-  carry no `deal_id`, and a join over them derives `unjoined`. A `follows` link is ordering only. The Capsule claims only what
-  the record shows:
+  carry no `deal_id`, and a join over them derives `unjoined`. A `follows` link is ordering only.
+  A step of a deal opened since the deal store became an evidencebook shelf (capsule-cli#242)
+  is also a record of the deal's own evidence book, so its Capsule carries one more top-level
+  member, `evidence_record_header`: the record header the book assigned. It holds:
+  - `record_type` `deal_step` for every step, whatever its kind;
+  - `epistemic_type` `producer_claim`;
+  - `committed_at`, the record's own `at`;
+  - `subject_ref` `<deal_id>/<seq>`;
+  - one `cites` link to the step's chain parent, when it has one (none for the baseline);
+  - the record digest as its one payload commitment;
+  - three salted field commitments (`sha256-jcs-nonce256`). `deal_local` is the step's local
+    event, whose opening never leaves the device. `amount` and `currency` carry a received final
+    close's money terms, and the empty text on every other step.
+
+  The deal record itself is unchanged, so a verifier that ignores the member reads the deal as
+  before. The Capsule claims only what the record shows:
   - An `action` record (an act a sealed approval authorized) whose action has an AAC
     `effect.type` is `action_type: "decide"`: `pay`, as `send_payment` (registered), and the
     other acts, with these **provisional** effect types (proposed for
@@ -88,7 +102,9 @@ exactly two members.
 **Sealed reports are not steps.** Each copy of a deal report that is written to a file
 (the user's own receipt, or a shared copy) seals its readable text as one more Capsule on the
 deal's log:
-- **The Capsule:** `action_id: "capsulectl-deal-report"`, `action_type: "fyi"`, not chained.
+- **The Capsule:** `action_id: "capsulectl-deal-report"`, `action_type: "fyi"`, not chained. On a
+  deal opened since the evidencebook shelf, it also carries `evidence_record_header` with
+  `record_type` `deal_report`, and no `subject_ref`, link or field commitment.
 - **Its payload:** `{"type": "deal_report", "profile": "x-deal-v0", "deal_id", "audience",
   "nonce", "report"}`.
   - `report` is that copy's deal section: summary lines, step lines, amounts, what was told,

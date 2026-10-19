@@ -30,7 +30,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | Command | What it does |
 |---|---|
 | `deal init --dir DIR [--no-witness] [--materiality FILE\|builtin:neutral]` | Creates a SQLite deal profile: store plus signing and checkpoint seeds, each mode 0600, and the profile's cadence log. The public witness is configured by default. `--materiality` pins the materiality predicate its checks evaluate, by digest: a file, or `builtin:neutral`, the one capsulectl ships (see `profile/materiality-predicate/`; change it later with `profile update --materiality FILE`, the user's to run); without one, every attribute the agent picked pauses a check. |
-| `cll checkpoint cadence [--wait-up-to D]` | The checkpoint cadence's poll. Schedule it every 5 minutes with `--wait-up-to 5m` (or every D with `--wait-up-to D`); a run with no tick due publishes nothing new. When a tick is due (every 5m, give or take 1m, by default), cuts every deal's checkpoint locally, appends one entry to the cadence log and publishes its checkpoint to the witness; retries any delivery still pending once its backoff has passed. Deal steps never publish. |
+| `cll checkpoint cadence [--wait-up-to D]` | The checkpoint cadence's poll. Schedule it every 5 minutes with `--wait-up-to 5m` (or every D with `--wait-up-to D`); a run with no tick due publishes nothing new. When a tick is due (every 5m, give or take 1m, by default), cuts every live deal's checkpoint locally (see Witness cadence), appends one entry to the cadence log and publishes its checkpoint to the witness; retries any delivery still pending once its backoff has passed. Deal steps never publish. |
 | `deal open --input FILE` | Seals the baseline: the user's verbatim words, who, terms, claims (each with its source) and recourse. Cuts a checkpoint. |
 | `deal open --input FILE --records typed` | The same, sealing the deal's authority steps as typed action records (`task-authority/v0`, `proposed-action/v0`, `action-evaluation/v0`, `action-approval/v0`, `action-record/v0`, `action-outcome/v0`) beside its x-deal-v0 evidence records; the user's task authority is sealed right after the baseline, and the user's answer to a check that asked needs `--shown-card`. Without the flag a deal is x-deal-v0 throughout. See the profile, section 9. |
 | `deal note --kind message\|claim\|evidence\|change --input FILE` | Seals what happened. |
@@ -70,8 +70,33 @@ cites the one before it (`chain.parent_capsule_id`, relation `follows`). On
 every read, each step's signature, payload binding and chain link are
 verified again, so a dropped or edited step is reported as a conflict.
 
+The SQLite file is an evidencebook **shelf**: one evidence book per deal, each
+book its deal's own log.
+- A deal opened now is a book. Each step and sealed report is a record the
+  profile seals itself, and its Capsule carries the record header the book
+  assigned (`evidence_record_header`, see `profile/PROFILE.md`).
+- The step's local event (raw values and the nonces of its commitments) is a
+  salted field commitment, and its opening is kept in the profile's artifact
+  store.
+- A deal opened before keeps its own log, its index rows and its step path,
+  and reads as it always did. One store holds both kinds.
+
 Concurrent writers (sub-agents) are serialized by a lock file beside the
-store. `deal` commands run on Linux and macOS.
+store, which the shelf holds. `deal` commands run on Linux and macOS.
+
+**Upgrading a store a released build wrote.** The first deal command that
+writes, or that opens the store for writing, such as `deal tick`, `deal open` or
+`deal note`, moves it onto its shelf, once. A read-only command (`deal list`,
+`deal checkpoint status`) never moves a store: on one not yet moved it refuses
+and says to run a deal command on the writable profile first. The move:
+- Prepared steps are recovered, and the cadence continues from the released
+  build's ticks and due time.
+- Every existing deal stays as it is.
+- A released build can still run on the moved store. The next command finds
+  what it wrote and takes it in.
+- A deal profile needs its checkpoint key. Without one, every deal command
+  refuses and names `profile update --checkpoint-signing-key-file` and
+  `--checkpoint-trusted-key`.
 
 ## Local rules
 
@@ -174,11 +199,18 @@ cadence** (`cll checkpoint cadence`, scheduled) publishes on time alone:
   matching smaller value. Without `--wait-up-to`, a scheduled run publishes on
   the scheduler's grid, which hides the jitter and can push a tick to a later
   run.
-- At a tick, every deal's checkpoint is cut locally and becomes a leaf of a
-  fixed-depth (16) Merkle tree, with a fresh random salt at a fresh random
-  position, plus one random filler leaf. The tree's root is appended as
-  exactly one entry of the cadence log, and the cadence log's checkpoint is
-  published. Ticks happen whether or not anything happened.
+- At a tick, every **live** deal's checkpoint is cut locally and becomes a
+  leaf of a fixed-depth (16) Merkle tree, with a fresh random salt at a fresh
+  random position.
+  - A deal stays live until it has finally closed and a witnessed tick holds
+    its last checkpoint. A later write, such as evidence after the close,
+    makes it live again. A sale never ends.
+  - The tree always holds as many leaves as there are deals and sales the
+    profile ever had, plus one, made up with filler leaves. So the tree says
+    nothing about how many are live.
+  - The tree's root is appended as exactly one entry of the cadence log, and
+    the cadence log's checkpoint is published.
+  - Ticks happen whether or not anything happened.
 - So the witness sees one log that grows by one entry per tick. This reduces
   the volume signal to the tick count, and the timing signal to the
   cadence; it does not remove what the cadence itself shows (that the
@@ -498,8 +530,10 @@ is not registered anywhere.
 - Counterparty identifiers are sealed only as per-deal HMAC fingerprints of
   their normalized form; text (the user's words, messages, the card, notes)
   only as salted commitments. The raw values, the per-deal keys, the store
-  secret and the nonces stay in the local store (`deal_steps`, `deal_keys`,
-  `deal_store` in the profile's SQLite file).
+  secret and the nonces stay in the local store, in the profile's SQLite file:
+  - each step's `deal_local` opening, in the artifact store;
+  - for a deal opened before the shelf, `deal_steps`;
+  - `deal_keys` and `deal_store`.
 - Every action cites a sealed approval. A passing check is approved by the
   user's standing intent, sealed as its own step. An action without one is
   sealed as an `unchecked_action` outcome.
