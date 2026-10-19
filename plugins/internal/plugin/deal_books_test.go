@@ -11,6 +11,7 @@ import (
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
 	"github.com/action-state-group/evidencebook"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -415,4 +416,55 @@ func TestAStepStoredButNotLoggedIsCommittedOnTheNextOpen(t *testing.T) {
 	report := dealRun(t, "report", "--deal", dealID)
 	assert.Contains(t, reportTexts(t, report, "anomalies"), "agent/skipped_check: Skipped the check: pay $380.00 (no check before this action)")
 	assert.Len(t, bookRecords(t, dealID), len(before)+1, "the step is committed at its position")
+}
+
+// The milestone a book deal reports is the same MMR size a legacy deal's
+// reports for the same steps: the book's checkpoint TreeSize is the CLL
+// checkpoint's MMR size.
+func TestABookDealsMilestoneIsTheLegacyMMRSize(t *testing.T) {
+	dealFixture(t)
+	sizes := map[bool]any{}
+	for _, books := range []bool{false, true} {
+		dealNewDealsOnBooks = books
+		id := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+		dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":38000}`))
+		closed := dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received"}`))
+		sizes[books] = closed["checkpoint"].(map[string]any)["checkpoint"]
+	}
+	dealNewDealsOnBooks = true
+	assert.Equal(t, sizes[false], sizes[true])
+}
+
+// A book deal whose last committed record is gone from the store while its
+// log still names it is refused, as a legacy deal with a dropped step is.
+func TestABookDealMissingItsLastRecordIsRefused(t *testing.T) {
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
+	dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":38000}`))
+	p := dealProfile(t)
+	db, _, err := cli.SqliteConnection(p)
+	require.NoError(t, err)
+	_, err = db.Exec(`DELETE FROM book_records WHERE book_id = ? AND seq = 2`, cli.DealLogID(dealID))
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	_, err = invoke(t, "", "--profile", "deal", "deal", "report", "--deal", dealID)
+	require.Error(t, err)
+	_, err = invoke(t, "", "--profile", "deal", "deal", "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received"}`))
+	require.Error(t, err)
+}
+
+// No command reaches the reconcile engine in PR3: there is no halves verb.
+func TestNoCommandReachesTheHalvesEngine(t *testing.T) {
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		assert.NotEqual(t, "halves", c.Name())
+		assert.NotContains(t, c.Short+c.Long, "halves")
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+	walk(testCommand())
+	for _, sub := range DealCommands() {
+		walk(sub)
+	}
 }

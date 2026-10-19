@@ -239,3 +239,106 @@ func jsonDigest(t *testing.T, v any) string {
 	require.NoError(t, err)
 	return d
 }
+
+// A real copy's capsule is trusted only under the responder key the request
+// pinned: the seller's key verifies it, another key does not.
+func TestARealCopysCapsuleIsTrustedUnderThePinnedKeyOnly(t *testing.T) {
+	sc := closedHalves(t, received, received)
+	party(t, sc.buyer.config)
+	var capsule map[string]interface{}
+	withSession(t, func(s *dealSession) {
+		rows, err := s.exchangeRows(t.Context(), `kind=? AND record_digest=?`, dealExchangeResponse, sc.peer.ResponseRecord)
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		raw, held, err := s.keptReply(t.Context(), &rows[0])
+		require.NoError(t, err)
+		require.True(t, held)
+		var resp dealResponse
+		require.NoError(t, json.Unmarshal(raw, &resp))
+		bundle, err := cli.DecodeBundleJSON(resp.Artifact.Artifact)
+		require.NoError(t, err)
+		capsule = copyRecord(bundle, sc.peer.RecordID)
+	})
+	require.NotNil(t, capsule)
+	assert.True(t, signedBy(capsule, sc.peer.RecordID, sc.seller.signer))
+	assert.False(t, signedBy(capsule, sc.peer.RecordID, sc.buyer.signer), "another key: untrusted")
+}
+
+// Coverage is judged before trust: a tampered opening against an own close
+// no checkpoint covers yet (a crash between the seal and its milestone) is
+// insufficient, not unresolved.
+func TestATamperedOpeningOnAnUncoveredCloseIsInsufficient(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	old := dealMilestoneStops
+	t.Cleanup(func() { dealMilestoneStops = old })
+	dealMilestoneStops = func() error { return assert.AnError }
+	_, err := invoke(t, "", "--profile", "deal", "deal", "close", "--deal", id, "--input", writeJSON(t, received))
+	require.ErrorIs(t, err, assert.AnError, "sealed, not checkpointed")
+	dealMilestoneStops = old
+	buyer := thisDealParty(t)
+	dealFixture(t)
+	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	seller := thisDealParty(t)
+	peer := dealPeerHalf{DealID: id, RecordID: finalCloseRecord(t, id), Openings: map[string]evidencebook.Opening{}}
+	r := shelfRecord(t, id, peer.RecordID)
+	withSession(t, func(s *dealSession) {
+		for _, f := range dealHalfFields {
+			o, err := s.index.(shelfDealIndex).openingOf(t.Context(), r, f)
+			require.NoError(t, err)
+			peer.Openings[f] = o
+		}
+	})
+	o := peer.Openings[dealAmountField]
+	o.Text = "1"
+	peer.Openings[dealAmountField] = o
+	ask := askFor(t, buyer, seller, id, map[string]any{"min_freshness": map[string]any{"size": 1}})
+	require.Equal(t, "artifact", ask.outcome)
+	withSession(t, func(s *dealSession) {
+		outcome, err := s.outcomeOf(t.Context(), ask.recordID)
+		require.NoError(t, err)
+		peer.ResponseRecord = outcome.digest
+	})
+	tallies, err := reconcileAs(t, buyer, id, peer)
+	require.NoError(t, err)
+	assert.Equal(t, evidencebook.Tallies{Insufficient: 1}, tallies)
+}
+
+// A copy recorded as failing verification is never a half: the engine
+// refuses it.
+func TestACopyThatFailedVerificationIsRefused(t *testing.T) {
+	sc := closedHalves(t, received, received)
+	wrong := sc.seller
+	wrong.checkpoint = sc.buyer.checkpoint
+	ask := askFor(t, sc.buyer, wrong, sc.id, map[string]any{"min_freshness": map[string]any{"size": 1}})
+	require.Equal(t, dealOutcomeArtifactFailed, ask.outcome)
+	failed := sc.peer
+	withSession(t, func(s *dealSession) {
+		outcome, err := s.outcomeOf(t.Context(), ask.recordID)
+		require.NoError(t, err)
+		failed.ResponseRecord = outcome.digest
+	})
+	_, err := reconcileAs(t, sc.buyer, sc.id, failed)
+	require.ErrorIs(t, err, cli.ErrInput)
+}
+
+// The cross-check runs only for a half that asserts a value: a half with
+// empty openings stays trusted (and insufficient) even when its disclosed
+// outcome was not received. And a close whose outcome ref names an
+// unchecked act, not an outcome record, is checked on its outcome only.
+func TestTheCrossCheckSkipsHalvesThatAssertNothingAndActs(t *testing.T) {
+	notReceived := map[string]interface{}{"x-deal-v0": map[string]interface{}{"record_type": "outcome"}, "body": map[string]interface{}{"status": "not_received"}}
+	closeOf := func(ref map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"x-deal-v0": map[string]interface{}{"record_type": "close", "refs": []interface{}{map[string]interface{}{"rel": "outcome", "digest": jsonDigest(t, ref)}}}, "body": map[string]interface{}{"outcome": "mismatch"}}
+	}
+	bundle := map[string]interface{}{"disclosures": map[string]interface{}{"c": map[string]interface{}{"agent_input": closeOf(notReceived)}, "o": map[string]interface{}{"agent_input": notReceived}}}
+	empty := evidencebook.Half{Trusted: true, Opened: map[string]string{dealAmountField: "", dealCurrencyField: ""}}
+	assert.True(t, crossChecked(empty, bundle, "c"), "nothing asserted, nothing checked")
+	asserting := evidencebook.Half{Trusted: true, Opened: map[string]string{dealAmountField: "190000", dealCurrencyField: "USD"}}
+	assert.False(t, crossChecked(asserting, bundle, "c"), "an asserted value against a disclosed not-received outcome")
+
+	act := map[string]interface{}{"x-deal-v0": map[string]interface{}{"record_type": "action"}, "body": map[string]interface{}{"action": "pay"}}
+	actBundle := map[string]interface{}{"disclosures": map[string]interface{}{"c": map[string]interface{}{"agent_input": closeOf(act)}, "a": map[string]interface{}{"agent_input": act}}}
+	assert.True(t, crossChecked(asserting, actBundle, "c"), "an unchecked act has no status to check")
+}

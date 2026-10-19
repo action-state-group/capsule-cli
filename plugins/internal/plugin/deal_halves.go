@@ -194,10 +194,19 @@ func (s *dealSession) peerHalf(ctx context.Context, dealID string, peer dealPeer
 		Trusted: signedBy(capsule, peer.RecordID, fmtAny(row.record["key_id"])),
 	}
 	half = evidencebook.OpenHalf(half, peer.Openings)
-	if half.Trusted && asserts(half) && !disclosedCloseAgrees(bundle, peer.RecordID, half) {
-		half.Trusted = false
-	}
+	half.Trusted = crossChecked(half, bundle, peer.RecordID)
 	return half, nil
+}
+
+// crossChecked is whether a half stays trusted after the cross-check, which
+// runs, after the openings, only when the half asserts a value: a half whose
+// openings are all empty or omitted is insufficient whatever its disclosed
+// payload shows, so its payload is never checked (note §2.9).
+func crossChecked(half evidencebook.Half, bundle map[string]interface{}, id string) bool {
+	if !half.Trusted || !asserts(half) {
+		return half.Trusted
+	}
+	return disclosedCloseAgrees(bundle, id, half)
 }
 
 // copyRecord is the capsule a copy carries for id.
@@ -268,6 +277,12 @@ func disclosedCloseAgrees(bundle map[string]interface{}, id string, h evidencebo
 			if d, err := canonical.JSONDigest(record); err != nil || d != digest {
 				continue
 			}
+			// The ref can name an unchecked act instead (deal_profile.go:
+			// 1155-1158): only an outcome record, x-deal-v0 or typed, states
+			// a status and delivered terms to check.
+			if !isOutcomeRecord(record) {
+				continue
+			}
 			outcome, _ := record["body"].(map[string]interface{})
 			if outcome["status"] != "received" {
 				return false
@@ -286,6 +301,13 @@ func disclosedCloseAgrees(bundle map[string]interface{}, id string, h evidencebo
 		}
 	}
 	return true
+}
+
+// isOutcomeRecord is whether a deal record is an outcome: an x-deal-v0
+// record of type outcome, or the typed action-outcome record it maps to.
+func isOutcomeRecord(record map[string]interface{}) bool {
+	block, _ := record[cli.DealProfile].(map[string]interface{})
+	return block["record_type"] == "outcome" || record["type"] == cli.TypeActionOutcome
 }
 
 // disclosedPayloads are the payloads a copy discloses, by capsule id.

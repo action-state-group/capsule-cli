@@ -690,9 +690,16 @@ func (s *dealSession) bookIndex() (shelfDealIndex, bool) {
 	return x, ok && s.onBook
 }
 
+// dealMilestoneStops is a test hook: a milestone that fails after its step
+// is sealed (a crash between the two), leaving the step uncovered.
+var dealMilestoneStops = func() error { return nil }
+
 // cutMilestone cuts the deal's local checkpoint and returns its MMR size:
 // its book's checkpoint for a book deal, the log's own otherwise.
 func (s *dealSession) cutMilestone(ctx context.Context) (uint64, error) {
+	if err := dealMilestoneStops(); err != nil {
+		return 0, err
+	}
 	if s.book != nil {
 		cp, err := s.book.Checkpoint(ctx)
 		return cp.TreeSize, err
