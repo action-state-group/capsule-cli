@@ -401,6 +401,10 @@ func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 					texts = append(texts, it.Text)
 				}
 			}
+			if w := e.Evidence.Wrapped; w != nil {
+				// A held object: its text and its carrier headers' values.
+				texts = append(texts, wrappedTexts(w)...)
+			}
 		}
 		if e.Change != nil {
 			whoValues(e.Change.Who)

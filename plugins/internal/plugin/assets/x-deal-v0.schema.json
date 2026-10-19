@@ -267,6 +267,7 @@
     "body_evidence": {
       "type": "object", "additionalProperties": false,
       "required": ["source", "verified"],
+      "dependentRequired": { "wrapped": ["wrapped_octets", "wrapped_held"], "wrapped_octets": ["wrapped"], "wrapped_held": ["wrapped"], "carrier_headers_commitment": ["wrapped"] },
       "properties": {
         "source": { "$ref": "#/$defs/ns_token" },
         "verified": { "type": "boolean" },
@@ -275,6 +276,22 @@
         "merchant_email": { "$ref": "#/$defs/merchant_email" },
         "obligation": { "$ref": "#/$defs/obligation" },
         "resolves_obligation": { "$ref": "#/$defs/digest_ref" },
+        "wrapped": {
+          "description": "A held object (source wrapped_object): one entry in the shape of settlement-records-00 §8, never with content. type is a registered Settlement Wrapped Object Type or, for any other name, the sealer's label for an opaque digest. The octets and the carrier headers stay on the device.",
+          "type": "array", "minItems": 1, "maxItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["type", "digest_alg", "digest"],
+            "properties": {
+              "type": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" },
+              "digest_alg": { "const": "SHA-256" },
+              "digest": { "$ref": "#/$defs/hex64" }
+            }
+          }
+        },
+        "wrapped_octets": { "description": "What the wrapped digest is over: the octets as delivered, or their RFC 8785 form.", "enum": ["as-transmitted", "jcs"] },
+        "wrapped_held": { "description": "octets when the sealer held the object; digest when it was given only the digest, which claims no possession.", "enum": ["octets", "digest"] },
+        "carrier_headers_commitment": { "description": "A salted commitment to the header block the object arrived with, base64url-encoded.", "$ref": "#/$defs/hex64" },
         "received_to": {
           "description": "On evidence of a payment the user received (a settlement leg's step): the account it was received to, as its per-deal fingerprint. The user's own account, never a counterparty identifier.",
           "type": "object", "additionalProperties": false,

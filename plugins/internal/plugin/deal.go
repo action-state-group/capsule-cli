@@ -872,7 +872,7 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 
 func dealCommands() *cobra.Command {
 	deal := &cobra.Command{Use: "deal", Short: "Seal a deal's baseline and check every point of no return against it"}
-	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealCountersignCommand(), dealExportCommand(), dealSaleCommands(), dealAuditHostCommand(), dealReconcileAlias(), dealTickCommand(), dealVerifyEmailCommand(), dealVerifierStatementCommand(), dealVerifyStatementCommand(), dealDeadlinesCommand(), dealCheckpointCommands(), dealListCommand(), dealSettlementCommand(), dealHistoryCommand(), dealTermsResultCommand())
+	deal.AddCommand(dealInitCommand(), dealOpenCommand(), dealNoteCommand(), dealCheckCommand(), dealCloseCommand(), dealReportCommand(), dealCountersignCommand(), dealExportCommand(), dealSaleCommands(), dealAuditHostCommand(), dealReconcileAlias(), dealTickCommand(), dealVerifyEmailCommand(), dealVerifyObjectCommand(), dealVerifierStatementCommand(), dealVerifyStatementCommand(), dealDeadlinesCommand(), dealCheckpointCommands(), dealListCommand(), dealSettlementCommand(), dealHistoryCommand(), dealTermsResultCommand())
 	// A deal profile's copies: asked for, answered, composed.
 	deal.AddCommand(dealEvidenceCommands()...)
 	return deal
@@ -1248,6 +1248,13 @@ func dealNoteCommand() *cobra.Command {
 		if keyPath != "" && emailPath == "" {
 			return cli.InputError("--key-record goes with --email: the key record is read for that email's DKIM signature")
 		}
+		wrapped, err := wrappedNoteInput(c)
+		if err != nil {
+			return err
+		}
+		if wrapped != nil && kind != "evidence" {
+			return cli.InputError("--object and --object-digest go with --kind evidence")
+		}
 		path, _ := c.Flags().GetString("input")
 		settlementKind := ""
 		switch {
@@ -1259,6 +1266,11 @@ func dealNoteCommand() *cobra.Command {
 			ev, settlementKind, kind = built, kind, "evidence"
 		case kind == "evidence" && emailPath != "" && path == "":
 			ev.Evidence = &dealEvidence{About: "merchant confirmation email", Source: "merchant_email"}
+		case kind == "evidence" && wrapped != nil && path == "":
+			ev.Evidence = &dealEvidence{About: "held object", Source: wrappedSource}
+			if wrapped.Object == nil {
+				ev.Evidence.About = "held digest"
+			}
 		case slices.Contains([]string{"message", "claim", "evidence", "change", "intent", "act", "disclosure"}, kind):
 			raw, err := cli.ReadInput(path)
 			if err != nil {
@@ -1292,6 +1304,17 @@ func dealNoteCommand() *cobra.Command {
 			}
 			if err = refuseSettlementInput(ev.Evidence); err != nil {
 				return err
+			}
+			if ev.Evidence != nil && ev.Evidence.Wrapped != nil {
+				return cli.InputError("evidence --input cannot set a held object: use deal note --object or --object-digest")
+			}
+			if wrapped != nil {
+				// A held object's source is the fixed token, so its record
+				// shares as one (dealShareKeys).
+				if ev.Evidence.Source != "" && ev.Evidence.Source != wrappedSource {
+					return cli.InputError("a held object's source is " + wrappedSource + ": leave source out of --input")
+				}
+				ev.Evidence.Source = wrappedSource
 			}
 		case kind == "approval":
 			check, _ := c.Flags().GetString("check")
@@ -1369,6 +1392,9 @@ func dealNoteCommand() *cobra.Command {
 		default:
 			return cli.InputError("--kind must be message, claim, evidence, change, intent, approval, act, disclosure, platform_approval, acceptance, payment_received or delivered")
 		}
+		if wrapped != nil {
+			ev.Evidence.Wrapped = wrapped
+		}
 		var deferred *keysUnreachableError
 		if emailPath != "" {
 			// Captured before the deal is locked: the key records are read
@@ -1405,6 +1431,11 @@ func dealNoteCommand() *cobra.Command {
 			if ev.Evidence != nil {
 				if err := evidenceAgainst(events, &ev); err != nil {
 					return err
+				}
+				if ev.Evidence.Wrapped != nil {
+					if err := checkWrappedNote(s, events); err != nil {
+						return err
+					}
 				}
 			}
 			if settlementKind != "" {
@@ -1623,6 +1654,11 @@ func dealNoteCommand() *cobra.Command {
 	cmd.Flags().String("email", "", "evidence: a merchant's email as a raw RFC 822 file (.eml), headers intact; sealed with its DKIM key records")
 	cmd.Flags().String("key-record", "", "evidence: the DKIM key record to check --email against instead of DNS (marked supplied)")
 	cmd.Flags().String("dmarc-record", "", "evidence: the sender's DMARC record, with --key-record (marked supplied)")
+	cmd.Flags().String("object", "", "evidence: a held object, exactly as received (at most 4 MiB); its SHA-256 is sealed, the octets stay on this device")
+	cmd.Flags().String("object-digest", "", "evidence: only the SHA-256 of an object you do not hold (64 lowercase hex)")
+	cmd.Flags().String("object-type", "", "evidence, with --object or --object-digest: the wrapped type, e.g. delivery.proof (a settlement-records registered type) or your own label")
+	cmd.Flags().String("octets", wrappedAsTransmitted, "evidence, with --object or --object-digest: what the digest is over: as-transmitted (the octets as delivered) or jcs (their RFC 8785 form)")
+	cmd.Flags().String("headers", "", "evidence, with --object or --object-digest: the carrier headers it arrived with (start line and fields, as received); sealed as a salted commitment")
 	cmd.Flags().String("check", "", "approval: the check_id being answered, or the capsule_id of an intent note whose proposed limits the user confirms")
 	cmd.Flags().String("choice", "", "approval: the option id the user chose, or confirm_limits for an intent note")
 	cmd.Flags().String("said", "", "approval: the user's own words")

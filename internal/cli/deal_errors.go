@@ -14,6 +14,10 @@ var (
 	// verify against the sealed key record, or a copy that is not the sealed
 	// one. The result was printed.
 	ErrEmailUnverified = errors.New("merchant email did not verify against the sealed key record")
+	// ErrObjectUnverified is a held object, or a copy of it or of its
+	// carrier headers, that does not match what its deal step sealed. The
+	// result was printed.
+	ErrObjectUnverified = errors.New("held object did not match its sealed digest")
 	// ErrStatementInvalid is a verifier statement whose shape or signature
 	// does not check out. The result was printed.
 	ErrStatementInvalid = errors.New("verifier statement did not verify")

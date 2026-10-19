@@ -90,6 +90,9 @@ func dealTexts(ev dealEvent) map[string]string {
 		if ev.Evidence.Obligation != nil && ev.Evidence.Obligation.Terms != "" {
 			t["terms"] = ev.Evidence.Obligation.Terms
 		}
+		if w := ev.Evidence.Wrapped; w != nil && w.Headers != nil {
+			t["carrier_headers"] = headersText(w.Headers)
+		}
 	case ev.Snapshot != nil && (ev.Snapshot.Description != "" || ev.Snapshot.ItemRef != ""):
 		if ev.Snapshot.Description != "" {
 			t["description"] = ev.Snapshot.Description
@@ -797,6 +800,11 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 		if m := ev.Evidence.Email; m != nil {
 			if body["merchant_email"], err = merchantEmailBody(m, events[0].Event.Open.Who, commit); err != nil {
+				return nil, err
+			}
+		}
+		if w := ev.Evidence.Wrapped; w != nil {
+			if err = wrappedBody(body, w, commit); err != nil {
 				return nil, err
 			}
 		}

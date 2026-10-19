@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### A held object on a buyer's deal (capsule-cli#250)
+
+- **Added (deal):** `deal note --kind evidence --object FILE --object-type TYPE
+  [--octets as-transmitted|jcs] [--headers FILE]`, or `--object-digest HEX`,
+  seals an object the user holds on a buyer's deal kept on a book. The record
+  carries one entry in the settlement-records wrapped-object shape (`type`,
+  `SHA-256`, digest; never the content), `wrapped_octets`, `wrapped_held` and a
+  salted `carrier_headers_commitment`. The octets and headers stay in the
+  step's local record in the artifact store (at most 4 MiB). A type not in the
+  settlement-records registry is sealed as the sealer's label and reported
+  `type_registered: false`; a registered type is held to its octets rule.
+- **Added (deal):** `deal verify-object` checks a held object and its headers
+  against their step, or (without `--deal`) any object against a record's
+  digest; `--out` writes the held bytes back out. It exits 1 on a mismatch.
+- **Changed (profile):** x-deal-v0 `evidence` records gain the optional
+  `wrapped`, `wrapped_octets`, `wrapped_held` and `carrier_headers_commitment`
+  members, and the `wrapped_object` source.
+
 ### The core builds without evidencebook; the book and the deals are plugins (capsule-cli#236)
 
 - **Changed (build):** the repository is two Go modules. The root module is

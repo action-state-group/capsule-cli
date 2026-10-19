@@ -182,6 +182,10 @@ type dealEvidence struct {
 	// ReceivedTo is the account a payment was received to (the rail's
 	// pay-to), sealed only as its per-deal fingerprint (received_to).
 	ReceivedTo string `json:"received_to,omitempty"`
+	// Wrapped is a held object (deal_wrapped.go): its octets and carrier
+	// headers, kept on the device, and the digest its record seals. Only
+	// `deal note --object|--object-digest` sets it, never --input.
+	Wrapped *dealWrapped `json:"wrapped,omitempty"`
 }
 
 // dealChange is a detail the counterparty changed after first contact. It is

@@ -67,6 +67,9 @@ func evidenceAgainst(events []sealedEvent, ev *dealEvent) error {
 // evidenceOutput adds what a sealed evidence step reports about its
 // merchant email and its obligation, for `deal note` and for a tick alike.
 func evidenceOutput(out map[string]any, e dealEvidence, events []sealedEvent) {
+	if w := e.Wrapped; w != nil {
+		wrappedOutput(out, w)
+	}
 	if m := e.Email; m != nil {
 		out["dkim"] = m.DKIM.Result
 		out["merchant_signed"] = m.DKIM.Merchant
