@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -479,7 +480,7 @@ func TestPluginInstallByName(t *testing.T) {
 	require.NoError(t, err, out)
 	r := installOut(t, out)
 	assert.Equal(t, "deal", r.Name)
-	assert.Equal(t, []string{"sha256 (SHA256SUMS)", "provenance: not checked (gh not installed)"}, r.Checks)
+	assert.Equal(t, []string{"sha256 (SHA256SUMS)", "provenance: not checked (gh not installed)", "handshake (cli-plugin-metadata)"}, r.Checks)
 	assert.Equal(t, "matches capsulectl v0.2.0", r.VersionCheck)
 	noLeftovers(t, root)
 
@@ -550,4 +551,118 @@ func TestPluginInstallByNameRefusals(t *testing.T) {
 		_, err = downloadTo(t.Context(), "http://example.invalid/x", &sink, 100)
 		assert.ErrorContains(t, err, "downloads use HTTPS")
 	})
+}
+
+// Replacing a launcher others could have changed never runs it.
+func TestPluginInstallNeverRunsAnUnsafeOldLauncher(t *testing.T) {
+	_, root := installHome(t)
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+	require.NoError(t, err)
+	marker := filepath.Join(t.TempDir(), "ran")
+	old := filepath.Join(root, "capsulectl-acme")
+	require.NoError(t, os.WriteFile(old, []byte(launcherScript("acme", "0", marker)), 0o755))
+	require.NoError(t, os.Chmod(old, 0o757))
+	out, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "2", ""))
+	require.NoError(t, err, out)
+	assert.Contains(t, installOut(t, out).ReplacedVersion, "not inspected")
+	_, statErr := os.Stat(marker)
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "the old launcher never ran")
+}
+
+// Concurrent first installs both create, or accept, the same root.
+func TestInstallRootToleratesAConcurrentCreate(t *testing.T) {
+	home, root := installHome(t)
+	errs := make(chan error, 8)
+	for range 8 {
+		go func() { _, err := installRoot(home, true); errs <- err }()
+	}
+	for range 8 {
+		require.NoError(t, <-errs)
+	}
+	info, err := os.Stat(root)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
+// A refused install or remove runs no installed plugin: discovery is skipped
+// for them, even with a flag before the subcommand.
+func TestRefusedPluginManagementRunsNoInstalledPlugin(t *testing.T) {
+	_, root := installHome(t)
+	require.NoError(t, os.MkdirAll(root, 0o755))
+	marker := filepath.Join(t.TempDir(), "ran")
+	require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-acme"), []byte(launcherScript("acme", "1", marker)), 0o755))
+	t.Setenv("SUDO_UID", "501")
+	_, err := invoke(t, "", "--profile", "p", "plugin", "install", "./x")
+	require.ErrorIs(t, err, ErrInput)
+	_, err = invoke(t, "", "plugin", "remove", "acme")
+	require.ErrorIs(t, err, ErrInput)
+	_, statErr := os.Stat(marker)
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "no plugin handshake ran")
+
+	// The control: any other command discovers, and so runs, the launcher.
+	_, err = invoke(t, "", "plugin", "ls")
+	require.NoError(t, err)
+	_, statErr = os.Stat(marker)
+	assert.NoError(t, statErr, "the marker works")
+}
+
+func TestPluginInstallReportsAnUnsyncedCommit(t *testing.T) {
+	_, root := installHome(t)
+	old := syncPluginDir
+	syncPluginDir = func(*os.Root) error { return fmt.Errorf("sync failed") }
+	t.Cleanup(func() { syncPluginDir = old })
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+	require.ErrorIs(t, err, errPluginDurability)
+	assert.Contains(t, SafeError(err), "was installed at")
+	assert.Equal(t, 1, ExitCode(err))
+	_, statErr := os.Stat(filepath.Join(root, "capsulectl-acme"))
+	assert.NoError(t, statErr, "the rename committed")
+	noLeftovers(t, root)
+}
+
+// Install works on the canonical root it checked: repointing a symlinked
+// ~/.local afterwards does not move where the launcher lands.
+func TestPluginInstallUsesTheCheckedCanonicalRoot(t *testing.T) {
+	home, _ := installHome(t)
+	first, second := filepath.Join(t.TempDir(), "a"), filepath.Join(t.TempDir(), "b")
+	require.NoError(t, os.Mkdir(first, 0o755))
+	require.NoError(t, os.Mkdir(second, 0o755))
+	link := filepath.Join(home, ".local")
+	require.NoError(t, os.Symlink(first, link))
+	root, err := installRoot(home, true)
+	require.NoError(t, err)
+	r, err := os.OpenRoot(root)
+	require.NoError(t, err)
+	defer r.Close()
+	require.NoError(t, os.Remove(link))
+	require.NoError(t, os.Symlink(second, link))
+	src := launcherScript("acme", "1", "")
+	staged, err := stageInRoot(r, "", 0o755, func(w io.Writer) error { _, err := io.WriteString(w, src); return err })
+	require.NoError(t, err)
+	_, err = finishInstall(r, root, staged, "", false, nil)
+	require.NoError(t, err)
+	firstReal, _ := filepath.EvalSymlinks(first)
+	_, err = os.Stat(filepath.Join(firstReal, "lib", "capsulectl", "plugins", "capsulectl-acme"))
+	assert.NoError(t, err, "the launcher lands under the checked target")
+	_, err = os.Stat(filepath.Join(second, "lib"))
+	assert.ErrorIs(t, err, os.ErrNotExist, "nothing reaches the swapped-in target")
+}
+
+func TestPluginInstallByNameCapsTheAssetAndTheBundle(t *testing.T) {
+	_, root := installHome(t)
+	for name, cap := range map[string]*int64{"asset": &maxPluginAsset, "bundle": &maxPluginBundle} {
+		t.Run(name, func(t *testing.T) {
+			base := releaseServer(t, "v0.2.0", nil)
+			pathWithGh(t, "ok", 0)
+			old := *cap
+			*cap = 8
+			t.Cleanup(func() { *cap = old })
+			_, err := invoke(t, "", "plugin", "install", "--release-url", base, "deal")
+			require.ErrorIs(t, err, ErrPending)
+			assert.Contains(t, SafeError(err), "refusing to keep part of it")
+			noLeftovers(t, root)
+			_, statErr := os.Stat(filepath.Join(root, "capsulectl-deal"))
+			assert.ErrorIs(t, statErr, os.ErrNotExist)
+		})
+	}
 }

@@ -222,6 +222,13 @@ func installRoot(home string, create bool) (string, error) {
 			return "", err
 		}
 		err = r.Mkdir(name, 0o755)
+		if errors.Is(err, fs.ErrExist) {
+			// A concurrent install created it first: accept a directory (never
+			// a symlink); the full-path check below judges its trust.
+			if st, lerr := r.Lstat(name); lerr == nil && st.IsDir() {
+				err = nil
+			}
+		}
 		r.Close()
 		if err != nil {
 			return "", fmt.Errorf("create %s: %w", filepath.Join(parent, name), err)
@@ -345,6 +352,9 @@ func finishInstall(r *os.Root, root, staged, expected string, allowMismatch bool
 	case expected != "" && name != expected:
 		return pluginInstallResult{}, InputError(fmt.Sprintf("not installed: the downloaded launcher names itself %q, not %q", name, expected))
 	}
+	if !slices.Contains(checks, "handshake (cli-plugin-metadata)") {
+		checks = append(checks, "handshake (cli-plugin-metadata)")
+	}
 	result := pluginInstallResult{Name: name, Version: info.Version, Path: filepath.Join(root, pluginLauncherPrefix+name), Checks: checks, VersionCheck: "not applicable (not a first-party plugin)"}
 	if isFirstParty(name) {
 		switch {
@@ -372,7 +382,11 @@ func finishInstall(r *os.Root, root, staged, expected string, allowMismatch bool
 		if !st.Mode().IsRegular() {
 			return pluginInstallResult{}, InputError("not installed: " + result.Path + " exists and is not a regular file; move it away first")
 		}
-		if prev, err := readPluginMetadata(result.Path, name); err == nil {
+		// The old launcher runs only if the walk's rule still holds for it
+		// (the root has already passed the full-path check).
+		if checkTrustedComponent(result.Path, os.Getuid(), false) != nil {
+			result.ReplacedVersion = "not inspected (writable by others, or not yours)"
+		} else if prev, err := readPluginMetadata(result.Path, name); err == nil {
 			result.ReplacedVersion = FirstNonEmpty(prev.Version, "unversioned")
 		} else {
 			result.ReplacedVersion = "unreadable"
@@ -384,11 +398,14 @@ func finishInstall(r *os.Root, root, staged, expected string, allowMismatch bool
 		return pluginInstallResult{}, err
 	}
 	// The rename is the commit point: from here the destination has changed.
-	if err := syncRootDir(r); err != nil {
+	if err := syncPluginDir(r); err != nil {
 		return result, Hint(errPluginDurability, fmt.Sprintf("capsulectl-%s was installed at %s, but its directory could not be synced (%v)", name, result.Path, err))
 	}
 	return result, nil
 }
+
+// syncPluginDir is syncRootDir; a variable so a test can make it fail.
+var syncPluginDir = syncRootDir
 
 func syncRootDir(r *os.Root) error {
 	d, err := r.Open(".")
