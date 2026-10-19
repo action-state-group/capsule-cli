@@ -900,7 +900,7 @@ reconcile:
 - a verified checkpoint covers it: the book's own, or the copy's;
 - it is the final close. The own half is found by its steps. The counterparty's is the record its
   `field_openings` names, which must chain `follows`, with every later `deal_step` in the copy
-  chaining `confirms` to it (sealed reports are passed over), and no record missing between it and the copy's checkpoint. Where the copy discloses its payload,
+  chaining `confirms` to it (sealed reports are passed over), and no record missing between it and the copy's checkpoint. Each record's `seq` is read only where it equals the log position the copy's verified membership gives it (`completeness_certificate.memberships[*].log_coordinates.seq`), since a bundle verifier checks those coordinates and not the header's `seq`. Where the copy discloses its payload,
   it must be a close whose outcome is not `open`, and a verified opening must not contradict the
   outcome record it refs.
 

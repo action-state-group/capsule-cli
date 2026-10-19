@@ -881,3 +881,71 @@ func TestTheDiscloseRefusesWhenAnOpeningIsMissing(t *testing.T) {
 	_, statErr := os.Stat(path)
 	assert.True(t, os.IsNotExist(statErr), "nothing written")
 }
+
+// A received close whose delivered price is the buyer's own spending limit,
+// shown nowhere else in the deal, is kept back: the disclose carries no
+// openings and says why, so the counterparty's reconcile is not evaluable.
+func TestTheCeilingGateKeepsBackALimitAsTheAmount(t *testing.T) {
+	dealFixture(t)
+	open := strings.Replace(crossPartyBuyerOpen, `"max_total_minor":190000`, `"max_total_minor":200000`, 1)
+	id := dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received","delivered":{"price_minor":200000}}`))
+	path, note := discloseWithNote(t, id, "the seller")
+	assert.NotContains(t, string(mustRead(t, path)), "field_openings")
+	assert.Contains(t, note, "none: the amount, written as money, is one the counterparty share keeps from them")
+
+	// The same close at the agreed price, which the deal shows, is carried.
+	dealFixture(t)
+	id = dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	_, note = discloseWithNote(t, id, "the seller")
+	assert.True(t, strings.HasPrefix(note, "carried:"), note)
+}
+
+// Check 3: a candidate past the copy's checkpoint is not covered by it.
+func TestCheck3RefusesACloseOutsideTheCheckpoint(t *testing.T) {
+	pair := closedPair(t, received, received)
+	openings, err := dealOpeningsFile(mustRead(t, pair.sellerFile))
+	require.NoError(t, err)
+	digest, err := soleDigest(openings)
+	require.NoError(t, err)
+	withSession(t, func(s *dealSession) {
+		peer, err := s.peerCopy(t.Context(), pair.id, pair.response)
+		require.NoError(t, err)
+		half := copyHalves(peer.bundle)[digest]
+		// An MMR of seq-1 leaves: the checkpoint predates the close.
+		var size uint64
+		for size = 1; mmrLeafCount(size) < half.header.Seq-1 || mmrLeafCount(size) > half.header.Seq-1; size++ {
+		}
+		peer.bundle["checkpoint"].(map[string]interface{})["mmr_size"] = json.Number(fmt.Sprint(size))
+		_, err = admitPeerHalf(pair.id, peer, digest, openings[digest])
+		require.ErrorIs(t, err, cli.ErrInput)
+		assert.Contains(t, cli.SafeError(err), "not under the copy's checkpoint")
+	})
+}
+
+// The check takes its openings exactly as named. A Result made with a
+// tampered opening (amount UNRESOLVED) is equal under the same file, and a
+// producer check given no openings file reads one half where the Result
+// names two, so it differs on its evidence (DR §7.3).
+func TestTermsResultCheckTakesOpeningsAsNamed(t *testing.T) {
+	pair := closedPair(t, received, received)
+	tampered := editOpenings(t, pair.sellerFile, func(m map[string]map[string]evidencebook.Opening) {
+		for d, fields := range m {
+			o := fields[dealAmountField]
+			o.Text = "1"
+			m[d][dealAmountField] = o
+		}
+	})
+	_, result, resultPath, err := runTermsResult(t, pair.id, pair.response, "--openings", tampered)
+	require.NoError(t, err)
+	require.Equal(t, evidencebook.ResultTallies{Unresolved: 1}, claimsOf(result)[amountReq].Reconcile.Tallies)
+	out, err := runTermsCheck(t, pair.id, pair.response, resultPath, "--openings", tampered)
+	require.NoError(t, err, out)
+	assert.Equal(t, termsCheckEqual, out["check"])
+
+	out, err = runTermsCheck(t, pair.id, pair.response, resultPath)
+	require.ErrorIs(t, err, cli.ErrConflict)
+	assert.Equal(t, termsCheckDiffers, out["check"])
+	assert.Contains(t, out["detail"], "DR §7.3")
+}

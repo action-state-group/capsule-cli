@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -349,13 +350,12 @@ func (s *dealSession) checkTermsResult(c *cobra.Command, dealID, response string
 // recorded for the deal is of the file with this digest: a `disclose
 // --share counterparty` file, whose bytes are the ones recordShare hashed. A
 // respond copy names its request and is not one.
-func (s *dealSession) recordedCounterpartyShare(ctx context.Context, dealID, digest string) (bool, error) {
+func (s *dealSession) recordedCounterpartyShare(ctx context.Context, dealID, digest string) (found bool, err error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT record FROM deal_disclosures WHERE deal_id=?`, dealID)
 	if err != nil {
 		return false, err
 	}
-	defer func() { _ = rows.Close() }()
-	found := false
+	defer func() { err = errors.Join(err, rows.Close()) }()
 	for rows.Next() {
 		var raw string
 		if err := rows.Scan(&raw); err != nil {
