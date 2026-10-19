@@ -574,6 +574,14 @@ func resultBuildCommand() *cobra.Command {
 		if e != nil {
 			return e
 		}
+		// A deal reconcile's evidence is two halves from two books, which no
+		// book profile holds, and sealing it on the deal's own book would
+		// show it to anyone a copy goes to (note §2.10 Decision 5). It is
+		// refused here, before the book is opened or any citation resolved,
+		// so this is the message its builder sees.
+		if ids := dealReconcileClaimIDs(doc); len(ids) > 0 {
+			return cli.InputError("result build does not seal a claim under " + evidencebook.DealReconcileContractRef + " (" + strings.Join(ids, ", ") + "): its evidence is in a deal store and a recorded copy, not in a book; `deal terms-result` writes that Result, and `deal terms-result --check` checks it")
+		}
 		// Everything the document alone can be checked for (schema, headline
 		// cross-checks, --contract) is checked before the book is opened, so
 		// such a document never takes the lock; what needs the book --

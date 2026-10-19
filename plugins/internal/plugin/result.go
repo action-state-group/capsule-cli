@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/evidencebook"
 	"github.com/spf13/cobra"
 )
 
@@ -104,11 +105,21 @@ func resultCommands() *cobra.Command {
 			if e != nil {
 				return e
 			}
+			notRecomputed := dealReconcileClaimIDs(doc)
 			if format == "json" {
-				return cli.Output(c, map[string]any{"aggregate": aggregate, "note": resultShapeNote})
+				out := map[string]any{"aggregate": aggregate, "note": resultShapeNote}
+				if len(notRecomputed) > 0 {
+					out["not_recomputed"] = notRecomputed
+				}
+				return cli.Output(c, out)
 			}
 			if _, e := fmt.Fprint(c.OutOrStdout(), renderResultText(aggregate, coverage)); e != nil {
 				return e
+			}
+			for _, id := range notRecomputed {
+				if _, e := fmt.Fprintf(c.OutOrStdout(), "not recomputed: claim %s cites %s; `result open` recomputes nothing, `deal terms-result --check` checks it\n", id, evidencebook.DealReconcileContractRef); e != nil {
+					return e
+				}
 			}
 			_, e = fmt.Fprintln(c.OutOrStdout(), "note: "+resultShapeNote)
 			return e
@@ -117,4 +128,19 @@ func resultCommands() *cobra.Command {
 	open.Flags().String("format", "text", "Output format: text or json")
 	group.AddCommand(open, resultBuildCommand())
 	return group
+}
+
+// dealReconcileClaimIDs are the ids of a Result's claims whose contract_ref
+// is exactly ec:deal-reconcile@1.
+func dealReconcileClaimIDs(doc map[string]interface{}) []string {
+	claims, _ := doc["claims"].([]interface{})
+	var ids []string
+	for _, raw := range claims {
+		claim, _ := raw.(map[string]interface{})
+		if claim["contract_ref"] == evidencebook.DealReconcileContractRef {
+			id, _ := claim["id"].(string)
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }

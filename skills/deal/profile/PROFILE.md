@@ -55,7 +55,8 @@ exactly two members.
   - the record digest as its one payload commitment;
   - three salted field commitments (`sha256-jcs-nonce256`). `deal_local` is the step's local
     event, whose opening never leaves the device. `amount` and `currency` carry a received final
-    close's money terms, and the empty text on every other step.
+    close's money terms, and the empty text on every other step. Section 10 says where their
+    openings go.
 
   The deal record itself is unchanged, so a verifier that ignores the member reads the deal as
   before. The Capsule claims only what the record shows:
@@ -850,3 +851,83 @@ proposed action, history refs and any platform approvals; a response carries the
 `disposition`, `valid_until`, `proposed_action_digest`, findings, `authority_basis`,
 `evaluation_ref`, `ruleset_digest`, `task_authority_ref`, `materiality` and `materiality_digest`.
 `capsulectl deal check` returns the response for the evaluation it sealed (`check_response`).
+
+## 10. The two halves of a deal (`ec:deal-reconcile@1`)
+
+Each party to a deal (`deal open --deal-id`) seals its own close. `deal terms-result` reconciles
+the two closes under agent-action-capsule's Deal Reconcile Contract, `ec:deal-reconcile@1`
+(`spec/deal-reconcile-contract-v0.md`, cited here as DR), with evidencebook's recompute. This
+section is the profile's declaration that DR-4 asks for.
+
+**The half.** A party's half is its final close: the last `close` step whose outcome is not
+`open`. It is taken as its bundle record: the Capsule with its producer `signature` and `key_id`,
+the object every deal copy carries in `records`. The half's octets are the JCS of that object,
+and its digest is their SHA-256. That digest is not the `capsule_id`. Both parties compute the same
+digest from the same record. Only a deal whose steps are book records (since capsule-cli#242) has
+halves.
+
+**The half mapping (DR §4.2):**
+
+```json
+{"profile": "x-deal-v0",
+ "members": {"deal_id": "/deal_id", "book_id": "/key_id",
+             "recorded_at": "/evidence_record_header/committed_at",
+             "commit_alg": "/evidence_record_header/commit_alg",
+             "amount_commitment": "/evidence_record_header/field_commitments/amount",
+             "currency_commitment": "/evidence_record_header/field_commitments/currency"}}
+```
+
+`book_id` is the hex public key the record's producer signature verifies under. Both parties'
+evidence books are named `deal/<deal_id>`, so the signer is the one per-party identity a half
+carries, and this profile defines it as the book identity for this contract. `recorded_at` is the
+step's own time, to the second, with `Z`.
+
+**The commitments** are built as DR §4.1 requires: `sha256-jcs-nonce256`, with a fresh 32-byte
+nonce for each record and each field. `amount` is the price in minor units as a base-10 integer
+string, and `currency` is the code as the close states it. Both are written the same way by both
+parties' capsulectl (DR-1). Only a final close whose status is `received` commits non-empty terms:
+the delivered price and currency, or the agreed ones where the close names none. Every other step,
+and a received close with no known price or currency, commits the empty text. So the two halves
+match only where both parties closed as received, and every other pair is `INSUFFICIENT` (DR §6
+rule 5). A finally closed deal takes later evidence only, chained `confirms` to the close, so the
+final close is the deal's last step chained `follows`.
+
+**Admission (DR §4.1).** A half is admitted only after these checks; any failure refuses the
+reconcile:
+- its producer signature verifies, under this profile's key for the own half, and under the
+  responder key pinned for the recorded copy for the counterparty's;
+- its inline header is a `deal_step` of `deal/<deal_id>`;
+- a verified checkpoint covers it: the book's own, or the copy's;
+- it is the final close. The own half is found by its steps. The counterparty's is the record its
+  `field_openings` names, which must chain `follows`, with every later `deal_step` in the copy
+  chaining `confirms` to it (sealed reports are passed over), and no record missing between it and the copy's checkpoint. Each record's `seq` is read only where it equals the log position the copy's verified membership gives it (`completeness_certificate.memberships[*].log_coordinates.seq`), since a bundle verifier checks those coordinates and not the header's `seq`. Where the copy discloses its payload,
+  it must be a close whose outcome is not `open`, and a verified opening must not contradict the
+  outcome record it refs.
+
+**Openings (DR §5).** A `disclose --deal ID --share counterparty --to WHO` file carries
+`field_openings` for the final close only, keyed by its half digest, when the close commits
+non-empty terms and the amount written as money passes the counterparty share gate. No other copy
+carries openings: not a `deal respond` answer (its requester is not checked), an adjudicator's
+copy, a report page, or the user's own bundle. `deal_local` is never opened.
+
+**The claim (DR §7).** The Result has one claim per requirement, `tier` `recomputed`, citing no
+Close, with the counterparty's signing key as `peer`. That key is long-lived, so Results about
+different deals with one counterparty can be linked by anyone who holds them. DR §7.5's per-deal
+state is not shown. `result build` refuses a claim under exactly `ec:deal-reconcile@1`, because its
+evidence is not in any book.
+
+**Checking a Result.** `deal terms-result --check` recomputes a Result from the inputs given.
+The Result names its halves, since each claim's `evidence` is the sorted digests of every half in
+the reconcile (DR §7.3), so the check requires the halves it reads to be exactly those: the
+producer's halves are provable. Two inputs are not recorded in the Result:
+- which openings were carried, since it carries no opening (DR §7.3). A missing opening is
+  `INSUFFICIENT` where a carried one could match, so a check uses exactly the openings named: the
+  counterparty's own come only from the disclose file it sent (`--sent`), whose digest must be a
+  share it recorded;
+- the coverage declaration, which no claim cites (DR-3). A different coverage input can turn an
+  `A_ONLY` into `INSUFFICIENT`, and a check cannot tell which the producer used. The verb gives
+  none, so its own Results never hold `A_ONLY` or `B_ONLY`.
+
+An adjudicator receives no openings, so it cannot recompute a deal reconcile: its check is
+"cannot reproduce". A path that releases openings to a named adjudicator would be a later
+design.
