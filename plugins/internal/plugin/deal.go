@@ -72,6 +72,10 @@ type dealSession struct {
 	legacy  *evidencebook.LegacyLog
 	cadence *evidencebook.Cadence
 	clock   *dealShelfClock
+	// migrated is set once migrate has completed this session: only then
+	// does close record the mutation counter as seen, so a failed or
+	// interrupted reconcile is run again on the next open.
+	migrated bool
 }
 
 // HoldsDealStore is the session's proof, to cli.OpenDealTarget, that it
@@ -220,7 +224,7 @@ func (s *dealSession) close() error {
 		return nil
 	}
 	var e error
-	if s.shelf != nil && s.db != nil && !s.shared {
+	if s.migrated && s.db != nil && !s.shared {
 		e = s.markSeen(context.Background())
 	}
 	if s.t != nil {

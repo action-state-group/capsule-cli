@@ -170,8 +170,12 @@ func (s *dealSession) migrate(ctx context.Context) error {
 			return err
 		}
 		if mutations == seen {
+			s.migrated = true
 			return nil
 		}
+	}
+	if err := dealMigrateStopsAt("start"); err != nil {
+		return err
 	}
 	// Phase 1: recover every step a released build prepared but never
 	// logged, as load does, before anything is seeded.
@@ -225,6 +229,9 @@ func (s *dealSession) migrate(ctx context.Context) error {
 	if err := s.witnessNativeTicks(ctx, c, p); err != nil {
 		return err
 	}
+	if err := dealMigrateStopsAt("imported"); err != nil {
+		return err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -239,8 +246,16 @@ func (s *dealSession) migrate(ctx context.Context) error {
 ON CONFLICT(id) DO UPDATE SET seen = excluded.seen`, dealShelfVersion); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.migrated = true
+	return nil
 }
+
+// dealMigrateStopsAt is a test hook: the migration or reconcile stops with
+// its error at a stage, standing in for a crash or a cancellation there.
+var dealMigrateStopsAt = func(stage string) error { return nil }
 
 // legacyTicks reads the store's deal_cadence rows as cadence ticks, in
 // cadence-log order, each witnessed when the cadence log holds a verified

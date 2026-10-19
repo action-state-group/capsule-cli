@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -209,6 +210,14 @@ func (s *dealSession) dealWitnessState(ctx context.Context, dealID string, state
 	if err != nil {
 		return nil, err
 	}
+	// The cadence recorded the receipt when it verified; the chain counts
+	// only if it still verifies for the witness this profile names now (a
+	// changed endpoint or key leaves the deal unwitnessed, as before).
+	if ok, err := chainVerifiesNow(ctx, p, service, chain); err != nil {
+		return nil, err
+	} else if !ok {
+		return s.notYetWitnessed(ctx, c, p, service, dealID, current)
+	}
 	if chain["extent"] != "part" {
 		return chain, nil
 	}
@@ -230,6 +239,36 @@ func (s *dealSession) dealWitnessState(ctx context.Context, dealID string, state
 		return nil, err
 	}
 	return chain, nil
+}
+
+// chainVerifiesNow reports whether the cadence checkpoint a chain names has
+// a receipt, on the cadence log, that verifies for the profile's current
+// witness service and key.
+func chainVerifiesNow(ctx context.Context, p cli.Profile, service string, chain map[string]interface{}) (ok bool, err error) {
+	cadence, _ := chain["cadence"].(map[string]interface{})
+	cp, _ := cadence["checkpoint"].(map[string]interface{})
+	cose, _ := cp["cose"].(string)
+	statement, err := base64.RawURLEncoding.DecodeString(cose)
+	if err != nil {
+		return false, nil
+	}
+	record, err := checkpoint.ParseRecord(statement)
+	if err != nil {
+		return false, nil
+	}
+	t, err := cli.OpenTarget(ctx, p, cli.UseCLLRead)
+	if err != nil {
+		return false, err
+	}
+	defer func() { err = errors.Join(err, t.Close()) }()
+	state, err := t.Log.GetWitness(ctx, service, record.MMRSize)
+	if errors.Is(err, cll.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return state.Receipt != nil && cli.VerifyWitness(p, state) == nil, nil
 }
 
 // bundleValue is v as a bundle's members hold JSON: decoded objects, with
@@ -285,6 +324,11 @@ func (s *dealSession) notYetWitnessed(ctx context.Context, c *evidencebook.Caden
 	state, err := t.Log.GetWitness(ctx, service, last.CheckpointSize)
 	if err != nil && !errors.Is(err, cll.ErrNotFound) {
 		return nil, err
+	}
+	// A tick whose receipt verifies is not pending: what is not yet
+	// witnessed (only sealed reports since) waits for the next tick.
+	if err == nil && state.Receipt != nil && cli.VerifyWitness(p, state) == nil {
+		return rest, nil
 	}
 	reason, text := cli.WitnessPendingReason(state, p.Checkpoint.Endpoint)
 	return map[string]interface{}{"state": "pending", "tick": cli.Integer(last.N), "reason": reason, "text": text, "cadence": s.cadenceWords()}, nil

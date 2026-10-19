@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -51,7 +52,13 @@ func rc16Store(t *testing.T) (cli.Profile, rc16Deals, ed25519.PrivateKey) {
 	var ids map[string]string
 	require.NoError(t, json.Unmarshal(raw, &ids))
 	deals = rc16Deals{Closed: ids["closed"], Open: ids["open"], Later: ids["later"]}
-	key, err := cli.PrivateKey(cli.Secret{File: filepath.Join(src, "witness.seed")})
+	// A checkout keeps no file mode: the seed is copied owner-only, as a
+	// secret file must be.
+	seed, err := os.ReadFile(filepath.Join(src, "witness.seed"))
+	require.NoError(t, err)
+	seedPath := filepath.Join(t.TempDir(), "witness.seed")
+	require.NoError(t, os.WriteFile(seedPath, seed, 0o600))
+	key, err := cli.PrivateKey(cli.Secret{File: seedPath})
 	require.NoError(t, err)
 	return p, deals, key
 }
@@ -196,4 +203,60 @@ func tickLeaves(t *testing.T, p cli.Profile, n int) storedTickLeaves {
 	var out storedTickLeaves
 	require.NoError(t, json.Unmarshal([]byte(raw), &out))
 	return out
+}
+
+// A reconcile that fails part way (a crash, a cancellation) leaves the
+// released build's write unseen-as-handled: the next open runs it again.
+func TestAFailedReconcileRunsAgain(t *testing.T) {
+	p, deals, witnessKey := rc16Store(t)
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 28, 0, 0, time.UTC) }
+	third := dealRun(t, "tick")
+	deliver(t, p, uint64(third["checkpoint"].(float64)), witnessKey)
+	require.NotContains(t, liveLogs(t, p), cli.DealLogID(deals.Closed))
+	log, err := cllsqlite.Open(p.Connection.Database, cli.DealLogID(deals.Closed))
+	require.NoError(t, err)
+	_, err = log.Append(t.Context(), cll.AppendInput{Value: []byte(strings.Repeat("r", 32)), AppendedAt: time.Now().UTC()})
+	require.NoError(t, err)
+	require.NoError(t, log.Close())
+	old := dealMigrateStopsAt
+	dealMigrateStopsAt = func(stage string) error {
+		if stage == "imported" {
+			return assert.AnError
+		}
+		return nil
+	}
+	_, err = invoke(t, "", "--profile", "deal", "deal", "tick")
+	require.ErrorIs(t, err, assert.AnError)
+	dealMigrateStopsAt = old
+	assert.Contains(t, liveLogs(t, p), cli.DealLogID(deals.Closed), "the next open reconciled again")
+}
+
+// Witness standing is read for the witness the profile names now: a
+// changed witness key leaves a deal unwitnessed, as it always did, and a
+// report sealed after a witnessed tick waits for the next tick (scheduled),
+// never "pending" on a delivery that completed.
+func TestWitnessStandingFollowsTheProfilesWitness(t *testing.T) {
+	p, deals, witnessKey := rc16Store(t)
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 28, 0, 0, time.UTC) }
+	third := dealRun(t, "tick")
+	deliver(t, p, uint64(third["checkpoint"].(float64)), witnessKey)
+	witness := checkpointStatusOf(t, deals.Open)["witness"].(map[string]any)
+	require.Equal(t, "witnessed", witness["state"])
+	require.Equal(t, "all", witness["extent"])
+
+	// Only a report since the witnessed tick: witnessed in part, the rest
+	// scheduled.
+	dealRun(t, "report", "--deal", deals.Open, "--bundle", filepath.Join(t.TempDir(), "open.json"))
+	witness = checkpointStatusOf(t, deals.Open)["witness"].(map[string]any)
+	assert.Equal(t, "witnessed", witness["state"])
+	assert.Equal(t, "part", witness["extent"])
+	assert.Equal(t, "scheduled", witness["current"].(map[string]any)["state"], "the report waits for the next tick")
+
+	// Another witness key: the stored receipt no longer counts.
+	other, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	p.Checkpoint.PublicKey = hex.EncodeToString(other)
+	require.NoError(t, cli.SaveProfile(p, true))
+	witness = checkpointStatusOf(t, deals.Open)["witness"].(map[string]any)
+	assert.NotEqual(t, "witnessed", witness["state"])
 }
