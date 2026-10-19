@@ -36,6 +36,14 @@ else
   (cd "$root" && go build -o "$work/bin/capsulectl" ./cmd/capsulectl)
 fi
 export PATH="$work/bin:$PATH"
+# The deal and book commands are the first-party plugins (capsule-cli#236):
+# build both onto a plugin root of the run's own, unless one is given.
+if [[ -z "${CAPSULECTL_PLUGIN_ROOTS:-}" ]]; then
+  mkdir -m 0700 "$work/plugins"
+  (cd "$root/plugins" && go build -o "$work/plugins/capsulectl-book" ./cmd/capsulectl-book &&
+    go build -o "$work/plugins/capsulectl-deal" ./cmd/capsulectl-deal)
+  export CAPSULECTL_PLUGIN_ROOTS="$work/plugins"
+fi
 cd "$work"
 
 # The README's worked example: the first bash block under its heading, run as
@@ -150,7 +158,7 @@ refused() { # name, words the refusal must carry
 # evidence book's records, not the records sealed, so its page could show
 # none of the report's rows (it once said "verification passed" over 0 of 6).
 variant legacy-jsonl-profile -e 's#--type sqlite --sqlite-path \./store\.db#--type jsonl --jsonl-path ./store --namespace example#'
-check "legacy-jsonl-profile: no page is written" refused legacy-jsonl-profile "a jsonl profile's bundle carries its evidence book's records"
+check "legacy-jsonl-profile: no page is written" refused legacy-jsonl-profile "a book profile's bundle carries its evidence book's own records"
 
 # zero-rows: a VALID bundle whose report row cites a record it does not carry.
 variant zero-rows -e 's#references: \[cite\(\$permissions\)\]#references: [cite("0000000000000000000000000000000000000000000000000000000000000000")]#'
