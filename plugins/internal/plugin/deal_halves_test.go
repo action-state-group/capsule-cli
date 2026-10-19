@@ -949,3 +949,31 @@ func TestTermsResultCheckTakesOpeningsAsNamed(t *testing.T) {
 	assert.Equal(t, termsCheckDiffers, out["check"])
 	assert.Contains(t, out["detail"], "DR §7.3")
 }
+
+// The copy `deal respond` serves after the close ends in the sealed report
+// it cut for that answer, and the close before it is still the final close
+// as the copy shows it: admitted, with the report passed over.
+func TestARespondCopyEndingInAReportAdmitsTheClose(t *testing.T) {
+	pair := closedPair(t, received, received)
+	openings, err := dealOpeningsFile(mustRead(t, pair.sellerFile))
+	require.NoError(t, err)
+	digest, err := soleDigest(openings)
+	require.NoError(t, err)
+	withSession(t, func(s *dealSession) {
+		peer, err := s.peerCopy(t.Context(), pair.id, pair.response)
+		require.NoError(t, err)
+		var last evidencebook.Header
+		for _, r := range peer.bundle["records"].([]interface{}) {
+			h, err := inlineHeader(r.(map[string]interface{}))
+			require.NoError(t, err)
+			if h.Seq > last.Seq {
+				last = h
+			}
+		}
+		assert.Equal(t, dealReportRecordType, last.RecordType, "the respond copy ends in its sealed report")
+		half, err := admitPeerHalf(pair.id, peer, digest, openings[digest])
+		require.NoError(t, err)
+		assert.Less(t, half.header.Seq, last.Seq)
+		assert.Equal(t, dealStepRecordType, half.header.RecordType)
+	})
+}
