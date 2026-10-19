@@ -919,8 +919,12 @@ evidence is not in any book.
 **Sealing.** `deal terms-result` seals each Result it writes as an `evidence_result` record on the
 deal's results book, `deal/<deal_id>/results`: a book of the profile's shelf, never the deal's own,
 so no copy of the deal carries it. The record is the profile's own Capsule (action id
-`capsulectl-deal-terms-result`), whose payload is the Result's JCS, with the header's subject
-`ec:deal-reconcile@1`. It is sealed through the same path as `result build`, and its only resolver
+`capsulectl-deal-terms-result`), with the header's subject `ec:deal-reconcile@1`. Its payload is
+the JCS of `{"type": "deal_terms_result", "profile": "x-deal-v0", "deal_id", "nonce", "result"}`:
+the Result under a fresh 256-bit nonce, as a sealed report's text is. A share withholds the other
+Results' payloads, but keeps their Capsules, so the nonce stops anyone from confirming a guessed
+earlier Result against a payload digest. The Result is never in the record's header, which every
+bundle of the book carries. It is sealed through the same path as `result build`, and its only resolver
 is the run's own halves. A run equal to the newest sealed Result in every member but
 `generated_at` returns that record. Any other run seals a new one, and the book keeps every Result.
 A sealed Result proves what the producer reported, and when by its own clock; a witnessed tick

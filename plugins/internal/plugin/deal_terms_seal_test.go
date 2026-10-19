@@ -69,7 +69,14 @@ func TestTermsResultIsSealedOnTheResultsBook(t *testing.T) {
 		require.NoError(t, s.useDeal(t.Context(), pair.id, false))
 		payload, err := s.verifiedPayload(t.Context(), records[0].RecordID)
 		require.NoError(t, err)
-		assert.Equal(t, jcsOf(t, mustRead(t, out)), payload, "the record's payload is the file's document, in JCS")
+		inner, err := termsPayloadResult(payload)
+		require.NoError(t, err)
+		innerJCS, err := canonical.JCS(inner)
+		require.NoError(t, err)
+		assert.Equal(t, jcsOf(t, mustRead(t, out)), innerJCS, "the record's payload holds the file's document")
+		var wrapper map[string]any
+		require.NoError(t, json.Unmarshal(payload, &wrapper))
+		assert.Len(t, wrapper["nonce"], 64, "under a fresh nonce")
 		book, err := s.shelf.Open(t.Context(), dealResultsLogID(pair.id))
 		require.NoError(t, err)
 		covered, err := checkpointCovers(t.Context(), book, records[0].Seq)
@@ -218,8 +225,17 @@ func TestTermsResultShareDisclosesOneResult(t *testing.T) {
 		payload, err := s.verifiedPayload(t.Context(), other.RecordID)
 		require.NoError(t, err)
 		assert.NotContains(t, string(mustRead(t, path)), string(payload))
+		inner, err := termsPayloadResult(payload)
+		require.NoError(t, err)
+		innerJSON, err := json.Marshal(inner)
+		require.NoError(t, err)
 		var otherDoc evidencebook.DealReconcileResult
-		require.NoError(t, json.Unmarshal(payload, &otherDoc))
+		require.NoError(t, json.Unmarshal(innerJSON, &otherDoc))
+		// Nor can it be confirmed by a guess: the withheld record binds a
+		// nonce-salted payload, so hashing the bare Result matches nothing.
+		bare, err := canonical.JCS(inner)
+		require.NoError(t, err)
+		assert.NotContains(t, string(mustRead(t, path)), sha256Hex(bare), "a guessed earlier Result cannot be confirmed")
 		tallies, err := json.Marshal(otherDoc.Claims[0].Reconcile.Tallies)
 		require.NoError(t, err)
 		assert.NotContains(t, string(mustRead(t, path)), string(tallies), "the withheld Result's tallies are not readable")
@@ -408,4 +424,61 @@ func TestAResultsBookLeavesAndReturnsWithItsDeal(t *testing.T) {
 	assert.NotContains(t, live, cli.DealLogID(id), "the deal itself stays out")
 	witnessTick()
 	assert.NotContains(t, liveLogs(t, p), results, "settled through its deal, it leaves again")
+}
+
+// A second Result sealed after a witnessed tick is pending: the witnessed
+// tick holds the results book's earlier checkpoint (a "part" chain), and
+// what is not yet witnessed waits for the next tick (scheduled).
+func TestASecondResultIsPartlyWitnessed(t *testing.T) {
+	public, key, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	endpoint, _ := countingWitness(t)
+	p := cadenceFixture(t, endpoint, public, "1h", "0s", 0)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	buyer := thisDealParty(t)
+	dealFixture(t)
+	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	seller := thisDealParty(t)
+	response := recordedCopy(t, buyer, seller, id)
+	party(t, seller.config)
+	sellerFile := discloseTo(t, id, "the buyer")
+	party(t, buyer.config)
+
+	_, _, _, err = runTermsResult(t, id, response, "--openings", sellerFile)
+	require.NoError(t, err)
+	setDealClock(t, cli.DealClock().UTC().Add(time.Hour).Format("2006-01-02T15:04:05Z"))
+	require.Equal(t, "ticked", dealRun(t, "tick")["state"])
+	deliver(t, p, cadenceSize(t, p), key)
+
+	missing := editOpenings(t, sellerFile, func(m map[string]map[string]evidencebook.Opening) {
+		for d := range m {
+			delete(m[d], dealAmountField)
+		}
+	})
+	second, _, _, err := runTermsResult(t, id, response, "--openings", missing)
+	require.NoError(t, err)
+	assert.Equal(t, termsPendingWitness, sealedOf(t, second)["state"])
+
+	path := filepath.Join(t.TempDir(), "share.json")
+	out, err := invoke(t, "", "--profile", "deal", "deal", "terms-result", "--deal", id, "--share", "counterparty", "--recipient", "the seller", "--out", path)
+	require.NoError(t, err, out)
+	var b map[string]any
+	require.NoError(t, json.Unmarshal(mustRead(t, path), &b))
+	chain := b["extensions"].(map[string]any)[cli.DealCadenceExtension].(map[string]any)
+	assert.Equal(t, "part", chain["extent"], "the witnessed tick holds the results book's earlier checkpoint")
+	assert.Equal(t, "scheduled", chain["rest"].(map[string]any)["state"], "the rest waits for the next tick")
+}
+
+// A share never provisions a results book for a deal that has none.
+func TestAShareOfNoResultLeavesNoBook(t *testing.T) {
+	pair := closedPair(t, received, received)
+	_, err := invoke(t, "", "--profile", "deal", "deal", "terms-result", "--deal", pair.id, "--share", "counterparty", "--recipient", "x", "--out", filepath.Join(t.TempDir(), "x.json"))
+	require.ErrorIs(t, err, cli.ErrInput)
+	withSession(t, func(s *dealSession) {
+		books, err := s.shelf.Books(t.Context())
+		require.NoError(t, err)
+		assert.NotContains(t, books, dealResultsLogID(pair.id))
+	})
 }

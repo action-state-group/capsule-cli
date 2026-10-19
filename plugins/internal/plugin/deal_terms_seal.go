@@ -3,7 +3,9 @@ package plugin
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,7 +50,38 @@ type termsSeal struct {
 	// member but generated_at and returned its record.
 	Retry      bool   `json:"retry"`
 	Checkpoint uint64 `json:"checkpoint,omitempty"`
-	State      string `json:"state"`
+	// State is empty only when the record was sealed and a later step
+	// failed; the record id is still reported.
+	State string `json:"state,omitempty"`
+}
+
+// termsPayload is a sealed Result's payload: the Result under a fresh
+// 256-bit nonce, as a deal report's text is. A share withholds the other
+// Results' payloads but keeps their Capsules, whose payload digest would
+// otherwise let the counterparty, who holds nearly every input of a Result,
+// confirm a guessed earlier one.
+func termsPayload(dealID string, doc map[string]interface{}) ([]byte, error) {
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	return canonical.JCS(map[string]interface{}{
+		"type": "deal_terms_result", "profile": cli.DealProfile, "deal_id": dealID,
+		"nonce": hex.EncodeToString(nonce), "result": doc,
+	})
+}
+
+// termsPayloadResult is the Result a sealed payload holds.
+func termsPayloadResult(payload []byte) (map[string]interface{}, error) {
+	wrapper, err := cli.DecodeBundleJSON(payload)
+	if err != nil || wrapper["type"] != "deal_terms_result" {
+		return nil, cli.ErrConflict
+	}
+	doc, ok := wrapper["result"].(map[string]interface{})
+	if !ok {
+		return nil, cli.ErrConflict
+	}
+	return doc, nil
 }
 
 // resultDocumentOf is a Result as the decoded JSON value the result checks
@@ -90,9 +123,9 @@ func (s *dealSession) newestTermsResult(ctx context.Context, book *evidencebook.
 	if err != nil {
 		return evidencebook.Record{}, nil, false, err
 	}
-	doc, err := decodeResultDocument(payload)
+	doc, err := termsPayloadResult(payload)
 	if err != nil {
-		return evidencebook.Record{}, nil, false, cli.ErrConflict
+		return evidencebook.Record{}, nil, false, err
 	}
 	return newest, doc, true, nil
 }
@@ -108,7 +141,7 @@ func (s *dealSession) newestTermsResult(ctx context.Context, book *evidencebook.
 // returns it with the error.
 func (s *dealSession) sealTermsResult(ctx context.Context, dealID string, result *evidencebook.DealReconcileResult, halves map[string]bool) (termsSeal, error) {
 	for _, claim := range result.Claims {
-		for _, refs := range [][]evidencebook.EvidenceRef{claim.Evidence, claim.Presentation.Evidence} {
+		for _, refs := range [][]evidencebook.EvidenceRef{claim.Evidence, claim.Presentation.Evidence, claim.Proofs} {
 			for _, e := range refs {
 				if !halves[e.Digest] {
 					return termsSeal{}, fmt.Errorf("%w: claim %s cites %s, which is no half this run admitted", cli.ErrConflict, claim.ID, e.Digest)
@@ -167,11 +200,15 @@ func (s *dealSession) sealTermsResult(ctx context.Context, dealID string, result
 		// header's statement: a header travels in every bundle of the book,
 		// withheld or not, and a share must show one Result alone (7.4).
 		entry.Statement = nil
+		payload, err := termsPayload(dealID, doc)
+		if err != nil {
+			return evidencebook.Record{}, err
+		}
 		at := cli.DealClock().UTC().Truncate(time.Second)
 		return s.appendTo(ctx, book, at, cli.Request{
 			Version: "capsule-seal-request/v1",
 			Capsule: emit.Input{ActionID: dealTermsResultActionID, ActionType: emit.ActionTypeFYI, Operator: s.p.Name, Developer: "capsulectl-deal", Timestamp: at},
-			Payload: encoded,
+			Payload: payload,
 		}, entry)
 	})
 	seal := termsSeal{RecordID: sealed.RecordID, Seq: sealed.Seq, LogID: logID, Retry: already, Checkpoint: cut}
@@ -317,6 +354,18 @@ func (s *dealSession) shareTermsResult(c *cobra.Command, dealID string, events [
 	ctx := c.Context()
 	if !s.onBook {
 		return cli.InputError("deal " + dealID + " is a legacy deal: it has no terms Results to share")
+	}
+	// A share reads an existing results book only: it never provisions one.
+	books, err := s.shelf.Books(ctx)
+	if err != nil {
+		return err
+	}
+	held := false
+	for _, b := range books {
+		held = held || b == dealResultsLogID(dealID)
+	}
+	if !held {
+		return cli.InputError("deal " + dealID + " has no sealed terms Result to share: run `deal terms-result` first")
 	}
 	book, err := s.shelf.Open(ctx, dealResultsLogID(dealID))
 	if err != nil {
