@@ -34,6 +34,18 @@ be compared, and both claims are not evaluable.
 The period defaults to the two closes' recorded times. --from and --to set it
 instead, as [from, to) in RFC 3339 UTC seconds.
 
+Every Result is sealed, before its file is written, as a record of the deal's
+results book, deal/<deal_id>/results: a book of its own, never the deal's, so
+no copy of the deal carries it. The output names the record and its state:
+sealed (signed and checkpointed, its time this device's own clock), pending
+witness, or witnessed. A run equal to the newest sealed Result in all but its
+generated_at is a retry and seals nothing new; any other run seals a new
+record, and the book keeps both.
+
+--share counterparty --recipient WHO --out FILE writes the bundle of one
+sealed Result (--record, default the newest) for the counterparty, with every
+other Result's payload withheld, after the share gate, and on record as a share.
+
 --check FILE checks a Result under ec:deal-reconcile@1 against the inputs
 given, and writes nothing. The Result names its two closes by digest, and the
 closes read here must be exactly those. It does not record which openings were
@@ -54,6 +66,21 @@ func dealTermsResultCommand() *cobra.Command {
 		out, _ := c.Flags().GetString("out")
 		check, _ := c.Flags().GetString("check")
 		sent, _ := c.Flags().GetString("sent")
+		share, _ := c.Flags().GetString("share")
+		recipient, _ := c.Flags().GetString("recipient")
+		record, _ := c.Flags().GetString("record")
+		if share != "" || recipient != "" || record != "" {
+			// Sharing a sealed Result reads only the deal's results book.
+			if share != cli.DealAudienceCounterparty || recipient == "" || out == "" {
+				return cli.InputError("sharing a sealed terms Result needs --share counterparty, --recipient WHO and --out FILE")
+			}
+			if response != "" || openingsPath != "" || from != "" || to != "" || check != "" || sent != "" {
+				return cli.InputError("--share writes a sealed Result's bundle: drop --response, --openings, --from, --to, --check and --sent")
+			}
+			return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
+				return s.shareTermsResult(c, dealID, events, record, strings.TrimSpace(recipient), out)
+			})
+		}
 		if response == "" {
 			return cli.InputError("--response is required: the record `deal request --response` printed for the counterparty's copy")
 		}
@@ -87,6 +114,9 @@ func dealTermsResultCommand() *cobra.Command {
 	cmd.Flags().String("to", "", "The period's end, exclusive (default: one second after the later close's recorded time)")
 	cmd.Flags().String("out", "", "Where to write the Evidence Result")
 	cmd.Flags().String("check", "", "Check this Evidence Result against the inputs given instead of writing one")
+	cmd.Flags().String("share", "", "Write the bundle of a sealed terms Result for this audience (counterparty), to --out")
+	cmd.Flags().String("recipient", "", "With --share: who the Result's bundle is for, sealed in the disclosure record")
+	cmd.Flags().String("record", "", "With --share: the sealed Result's record id (default: the newest)")
 	cmd.Flags().String("sent", "", "With --check, when the counterparty made the Result: the `disclose --share counterparty` file you handed them")
 	return cmd
 }
@@ -210,19 +240,35 @@ func (s *dealSession) writeTermsResult(c *cobra.Command, dealID, response string
 	if err != nil {
 		return cli.Hint(cli.ErrConflict, "the reconcile could not be recomputed: "+err.Error())
 	}
+	// The Result is sealed on the deal's results book before its file is
+	// written (note §2.10 v7): a run that seals and then fails reports the
+	// record, and its retry seals nothing new.
+	halves := map[string]bool{}
+	for _, side := range []reconcileSide{a, peer} {
+		if side.half != nil {
+			halves[side.half.digest] = true
+		}
+	}
+	seal, err := s.sealTermsResult(ctx, dealID, &got.Result, halves)
+	if err != nil {
+		if seal.RecordID == "" {
+			return err
+		}
+		return errors.Join(err, cli.Output(c, termsSummary(dealID, "", got.Result, &seal)))
+	}
 	encoded, err := json.MarshalIndent(got.Result, "", "  ")
 	if err != nil {
 		return err
 	}
 	if err = cli.AtomicFile(out, append(encoded, '\n'), false); err != nil {
-		return err
+		return errors.Join(err, cli.Output(c, termsSummary(dealID, "", got.Result, &seal)))
 	}
-	return cli.Output(c, termsSummary(dealID, out, got.Result))
+	return cli.Output(c, termsSummary(dealID, out, got.Result, &seal))
 }
 
 // termsSummary is what the verb prints: the claims' verdicts and
 // tallies. The contract's optional per-deal state is never shown.
-func termsSummary(dealID, out string, result evidencebook.DealReconcileResult) map[string]any {
+func termsSummary(dealID, out string, result evidencebook.DealReconcileResult, seal *termsSeal) map[string]any {
 	claims := make([]map[string]any, 0, len(result.Claims))
 	for _, claim := range result.Claims {
 		claims = append(claims, map[string]any{
@@ -233,7 +279,11 @@ func termsSummary(dealID, out string, result evidencebook.DealReconcileResult) m
 	if len(result.Claims) > 0 {
 		period = result.Claims[0].Reconcile.Period
 	}
-	return map[string]any{"deal_id": dealID, "contract_ref": evidencebook.DealReconcileContractRef, "period": period, "claims": claims, "out": out}
+	summary := map[string]any{"deal_id": dealID, "contract_ref": evidencebook.DealReconcileContractRef, "period": period, "claims": claims, "out": out}
+	if seal != nil {
+		summary["sealed"] = seal
+	}
+	return summary
 }
 
 // Outcomes of --check.

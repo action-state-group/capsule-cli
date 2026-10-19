@@ -916,6 +916,18 @@ different deals with one counterparty can be linked by anyone who holds them. DR
 state is not shown. `result build` refuses a claim under exactly `ec:deal-reconcile@1`, because its
 evidence is not in any book.
 
+**Sealing.** `deal terms-result` seals each Result it writes as an `evidence_result` record on the
+deal's results book, `deal/<deal_id>/results`: a book of the profile's shelf, never the deal's own,
+so no copy of the deal carries it. The record is the profile's own Capsule (action id
+`capsulectl-deal-terms-result`), whose payload is the Result's JCS, with the header's subject
+`ec:deal-reconcile@1`. It is sealed through the same path as `result build`, and its only resolver
+is the run's own halves. A run equal to the newest sealed Result in every member but
+`generated_at` returns that record. Any other run seals a new one, and the book keeps every Result.
+A sealed Result proves what the producer reported, and when by its own clock; a witnessed tick
+then covers its book's checkpoint, as it covers a deal's. The results book ends with its deal. A
+sealed Result goes to the counterparty as a bundle of the results book that discloses that Result
+only (`deal terms-result --share counterparty`).
+
 **Checking a Result.** `deal terms-result --check` recomputes a Result from the inputs given.
 The Result names its halves, since each claim's `evidence` is the sorted digests of every half in
 the reconcile (DR §7.3), so the check requires the halves it reads to be exactly those: the
