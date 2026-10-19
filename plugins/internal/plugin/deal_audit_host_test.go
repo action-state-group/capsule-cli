@@ -287,10 +287,10 @@ func TestDealReconcileIsADeprecatedAliasOfAuditHost(t *testing.T) {
 	}
 	newOut, newErr, err := run("audit-host")
 	require.ErrorIs(t, err, cli.ErrPartial)
-	assert.NotContains(t, newErr, "deprecated")
+	assert.NotContains(t, newErr, dealReconcileDeprecation)
 	oldOut, oldErr, err := run("reconcile")
 	require.ErrorIs(t, err, cli.ErrPartial)
-	assert.JSONEq(t, newOut, oldOut, "the same result, and nothing else on stdout")
+	assert.Equal(t, newOut, oldOut, "the same stdout, byte for byte")
 	assert.Contains(t, oldErr, dealReconcileDeprecation)
 
 	help, err := invoke(t, "", "--profile", "deal", "deal", "--help")
@@ -298,4 +298,14 @@ func TestDealReconcileIsADeprecatedAliasOfAuditHost(t *testing.T) {
 	assert.Contains(t, help, "audit-host")
 	assert.Contains(t, help, "List host actions that have no deal record; seals nothing")
 	assert.NotRegexp(t, `(?m)^\s+reconcile\s`, help, "the alias is hidden")
+}
+
+// The plugin's subcommand list is the deal command tree's, hidden alias
+// included, so `capsulectl plugin ls` names every verb the plugin answers.
+func TestDealMetadataListsEveryDealSubcommand(t *testing.T) {
+	var names []string
+	for _, c := range dealCommands().Commands() {
+		names = append(names, c.Name())
+	}
+	assert.ElementsMatch(t, DealMetadata.Subcommands, names)
 }
