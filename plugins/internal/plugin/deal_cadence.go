@@ -127,20 +127,23 @@ func (s *dealSession) deliverCadence(ctx context.Context, c *evidencebook.Cadenc
 		if w.WitnessID != service {
 			continue
 		}
-		state, err := cli.DeliverWitness(ctx, p, t.Log, service, w.CheckpointSize)
-		if err != nil || state.Receipt == nil || cli.VerifyWitness(p, state) != nil {
-			reason, text := cli.WitnessPendingReason(state, p.Checkpoint.Endpoint)
-			pending = append(pending, map[string]any{"checkpoint": w.CheckpointSize, "reason": reason, "text": text})
-			continue
-		}
+		// A delivery can store a receipt and still fail (a cancelled read
+		// after the commit), so the session is unmigrated from before the
+		// attempt until the receipt, if one landed, is reported.
 		migrated := s.migrated
 		s.migrated = false
+		// A delivery error is pending, read from state as before; whether a
+		// receipt landed anyway is read back from the log below.
+		state, _ := dealDeliverWitness(ctx, p, t.Log, service, w.CheckpointSize)
 		receipt, ok, err := verifiedReceipt(ctx, p, t.Log, service, w.CheckpointSize)
 		if err != nil {
 			return nil, nil, err
 		}
 		if !ok {
-			return nil, nil, fmt.Errorf("%w: the witness receipt for cadence checkpoint %d does not verify once stored", cli.ErrConflict, w.CheckpointSize)
+			reason, text := cli.WitnessPendingReason(state, p.Checkpoint.Endpoint)
+			pending = append(pending, map[string]any{"checkpoint": w.CheckpointSize, "reason": reason, "text": text})
+			s.migrated = migrated
+			continue
 		}
 		n, found, err := tickAtSize(ctx, c, w.CheckpointSize)
 		if err != nil {
@@ -158,6 +161,10 @@ func (s *dealSession) deliverCadence(ctx context.Context, c *evidencebook.Cadenc
 	}
 	return delivered, pending, nil
 }
+
+// dealDeliverWitness is cli.DeliverWitness, a test hook for a delivery
+// that stores its receipt and then fails.
+var dealDeliverWitness = cli.DeliverWitness
 
 // tickAtSize is the cadence's tick whose checkpoint has size, walking back
 // from the newest: a pending delivery is for a recent tick.

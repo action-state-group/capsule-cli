@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
@@ -11,8 +12,10 @@ import (
 	"time"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
 	cllsqlite "github.com/action-state-group/checkpointed-local-log/go/store/sqlite"
+	"github.com/action-state-group/checkpointed-local-log/go/witness"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -192,6 +195,50 @@ func TestAReceiptStoredOutsideTheCadenceIsReportedOnTheNextOpen(t *testing.T) {
 	assert.Equal(t, 1, storeCount(t, p, `SELECT COUNT(*) FROM cadence_ticks WHERE tick = 3 AND witnessed = 1`))
 	seen, counter := shelfSeen(t, p)
 	assert.Equal(t, counter, seen)
+}
+
+// A delivery that stores its receipt and then fails (here the read after the
+// commit is cancelled) leaves the session unmigrated: close does not record
+// the store as seen, and the next open's reconcile reports the receipt.
+func TestADeliveryThatFailsAfterStoringItsReceiptIsReportedOnTheNextOpen(t *testing.T) {
+	p, _, witnessKey := rc16Store(t)
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 27, 0, 0, time.UTC) }
+	require.Equal(t, "not_due", dealRun(t, "tick")["state"], "migrated, no tick cut")
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 28, 0, 0, time.UTC) }
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var stored uint64
+	old := dealDeliverWitness
+	t.Cleanup(func() { dealDeliverWitness = old })
+	dealDeliverWitness = func(_ context.Context, p cli.Profile, store cll.WitnessStateStore, service string, size uint64) (cll.WitnessState, error) {
+		state, err := store.GetWitness(t.Context(), service, size)
+		require.NoError(t, err)
+		record, err := checkpoint.ParseRecord(state.Checkpoint)
+		require.NoError(t, err)
+		entry, err := record.EntryHash()
+		require.NoError(t, err)
+		next := state
+		next.Receipt = &cll.WitnessReceiptState{Bytes: mintReceipt(t, entry, witnessKey), EntryHash: hex.EncodeToString(entry), EntryHashScheme: witness.EntryHashSchemeCheckpointDigest, LeafIndex: ptr(int64(0)), TreeSize: ptr(int64(1))}
+		require.NoError(t, store.CommitWitness(t.Context(), state.Attempts, next))
+		stored = size
+		cancel()
+		return cll.WitnessState{}, ctx.Err()
+	}
+	s, err := openDealSession(ctx, p)
+	require.NoError(t, err)
+	_, err = s.tick(ctx)
+	require.ErrorIs(t, err, context.Canceled)
+	require.NoError(t, s.close())
+	seen, counter := shelfSeen(t, p)
+	require.Less(t, seen, counter, "the stored receipt is a write close did not mark seen")
+	require.NotZero(t, stored)
+	require.Equal(t, 1, storeCount(t, p, `SELECT COUNT(*) FROM cadence_ticks WHERE checkpoint_size = ?`, stored))
+	require.Equal(t, 0, storeCount(t, p, `SELECT COUNT(*) FROM cadence_ticks WHERE witnessed = 1`))
+
+	dealDeliverWitness = old
+	again := dealRun(t, "tick")
+	require.Equal(t, "not_due", again["state"])
+	assert.Equal(t, 1, storeCount(t, p, `SELECT COUNT(*) FROM cadence_ticks WHERE checkpoint_size = ? AND witnessed = 1`, stored), "the next open reported it")
 }
 
 // A read of a store no build with the shelf has opened is refused before
