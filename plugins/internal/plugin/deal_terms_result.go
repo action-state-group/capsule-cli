@@ -54,8 +54,18 @@ openings named: when the Result names your key as its peer (the counterparty
 made it), pass --sent with the disclose file you handed them, and your openings
 are read from that file only. "differs" means the Result is not the recompute
 of these inputs. It is not a finding that a claim is false. "cannot_reproduce"
-means the inputs needed are not held, and says nothing about the claims. An
-adjudicator's copy carries no openings, so an adjudicator cannot check one.`
+means the inputs needed are not held, and says nothing about the claims. Both
+exit nonzero; read the JSON "check" field to tell them from a flag error.
+
+An adjudicator, who has no deal store, checks with the files alone:
+--check RESULT --copy FILE --copy FILE --party-key SIGNER:CHECKPOINT
+--party-key SIGNER:CHECKPOINT. Each --copy is one party's own
+` + "`disclose --deal ID --share adjudicator`" + ` file, which carries that party's
+openings; each --party-key is the keys you hold for a party, never read from
+the files. A party that declines to disclose leaves one file, and the check is
+"cannot_reproduce": one side cannot be checked alone. A Result made without
+the other party's openings names one half where the files give two, and is
+"differs" on its evidence; that is not a finding that a claim is false.`
 
 func dealTermsResultCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "terms-result", Short: "Reconcile your final close of a deal with the counterparty's and write the Evidence Result (ec:deal-reconcile@1), or --check one", Long: dealTermsResultLong, Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
@@ -69,6 +79,19 @@ func dealTermsResultCommand() *cobra.Command {
 		share, _ := c.Flags().GetString("share")
 		recipient, _ := c.Flags().GetString("recipient")
 		record, _ := c.Flags().GetString("record")
+		copies, _ := c.Flags().GetStringArray("copy")
+		partyKeys, _ := c.Flags().GetStringArray("party-key")
+		if len(copies) > 0 || len(partyKeys) > 0 {
+			// The adjudicator's check reads only the files and keys given:
+			// no profile, no store (capsule-cli#278 Decision 2).
+			if check == "" {
+				return cli.InputError("--copy and --party-key go with --check: the adjudicator's check of a terms Result")
+			}
+			if c.Flags().Changed("deal") || response != "" || openingsPath != "" || sent != "" || out != "" || from != "" || to != "" || share != "" || recipient != "" || record != "" {
+				return cli.InputError("the adjudicator's check takes only --check, --copy and --party-key: drop --deal, --response, --openings, --sent, --out, --from, --to, --share, --recipient and --record")
+			}
+			return checkTermsFiles(c, check, copies, partyKeys)
+		}
 		if share != "" || recipient != "" || record != "" {
 			// Sharing a sealed Result reads only the deal's results book.
 			if share != cli.DealAudienceCounterparty || recipient == "" || out == "" {
@@ -114,6 +137,8 @@ func dealTermsResultCommand() *cobra.Command {
 	cmd.Flags().String("to", "", "The period's end, exclusive (default: one second after the later close's recorded time)")
 	cmd.Flags().String("out", "", "Where to write the Evidence Result")
 	cmd.Flags().String("check", "", "Check this Evidence Result against the inputs given instead of writing one")
+	cmd.Flags().StringArray("copy", nil, "With --check, for an adjudicator: one party's `disclose --share adjudicator` file (give one per party)")
+	cmd.Flags().StringArray("party-key", nil, "With --copy: a party's signing and checkpoint public keys, SIGNER:CHECKPOINT in hex, as you hold them (give one per party)")
 	cmd.Flags().String("share", "", "Write the bundle of a sealed terms Result for this audience (counterparty), to --out")
 	cmd.Flags().String("recipient", "", "With --share: who the Result's bundle is for, sealed in the disclosure record")
 	cmd.Flags().String("record", "", "With --share: the sealed Result's record id (default: the newest)")

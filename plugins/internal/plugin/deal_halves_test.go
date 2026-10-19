@@ -272,10 +272,11 @@ func TestBothPartiesComputeOneHalfDigest(t *testing.T) {
 	})
 }
 
-// Openings travel only in the user's own counterparty share, for the final
-// close only: never in a respond copy, an adjudicator's copy or the user's
-// own bundle. The share's recorded digest is the file's.
-func TestOpeningsTravelOnlyInACounterpartyDisclose(t *testing.T) {
+// Openings travel only in the user's own disclose shares, to the
+// counterparty or a named adjudicator (capsule-cli#278), for the final
+// close only: never in a respond copy or the user's own bundle. The share's
+// recorded digest is the file's.
+func TestOpeningsTravelOnlyInTheUsersOwnShares(t *testing.T) {
 	pair := closedPair(t, received, received)
 	party(t, pair.seller.config)
 	var b map[string]any
@@ -290,7 +291,7 @@ func TestOpeningsTravelOnlyInACounterpartyDisclose(t *testing.T) {
 		assert.True(t, recorded, "receipt_sha256 is the file's SHA-256")
 	})
 	adjudicator, _ := sharedCopy(t, pair.id, "adjudicator", "the platform")
-	assert.NotContains(t, adjudicator, "field_openings")
+	assert.Len(t, adjudicator["field_openings"], 1, "a named adjudicator gets the party's own openings")
 	own := filepath.Join(t.TempDir(), "own.json")
 	_, err := invoke(t, "", "--profile", "deal", "bundle", "--deal", pair.id, "--out", own)
 	require.NoError(t, err)
@@ -892,7 +893,7 @@ func TestTheCeilingGateKeepsBackALimitAsTheAmount(t *testing.T) {
 	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received","delivered":{"price_minor":200000}}`))
 	path, note := discloseWithNote(t, id, "the seller")
 	assert.NotContains(t, string(mustRead(t, path)), "field_openings")
-	assert.Contains(t, note, "none: the amount, written as money, is one the counterparty share keeps from them")
+	assert.Contains(t, note, "none: the amount, written as money, is one this share keeps from its reader")
 
 	// The same close at the agreed price, which the deal shows, is carried.
 	dealFixture(t)
