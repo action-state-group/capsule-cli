@@ -150,7 +150,7 @@ func (s *dealSession) recordExchange(ctx context.Context, dealID, kind, cites st
 		lp.LogID = dealRequestsLogID(dealID)
 	}
 	lp.Namespace = ""
-	t, err := cli.OpenTarget(ctx, lp, cli.UseInitialization)
+	t, err := cli.OpenDealTarget(ctx, lp, cli.UseInitialization, s)
 	if err != nil {
 		return "", err
 	}
@@ -1122,7 +1122,7 @@ func (s *dealSession) sealComposition(ctx context.Context, dealID, digest string
 	}
 	lp := s.p
 	lp.LogID = dealCompositionsLogID(dealID)
-	t, err := cli.OpenTarget(ctx, lp, cli.UseInitialization)
+	t, err := cli.OpenDealTarget(ctx, lp, cli.UseInitialization, s)
 	if err != nil {
 		return nil, err
 	}

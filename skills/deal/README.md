@@ -161,9 +161,9 @@ cadence** (`cll checkpoint cadence`, scheduled) publishes on time alone:
 
 - A tick is due at the previous tick plus `cadence.interval` (default `5m`)
   moved by a random amount within `cadence.jitter` (default `1m`). Deal
-  activity never brings a tick forward, and an explicit
-  `cll checkpoint publish` is the only other way anything reaches the
-  witness.
+  activity never brings a tick forward, and nothing else reaches the
+  witness: a core write on a deal profile (`publish`, `cll append`,
+  `cll checkpoint publish`) is refused.
 - A tick is published when the poll runs at or after its due time. Schedule
   `cll checkpoint cadence --wait-up-to 5m` every 5 minutes: each run waits,
   with the store unlocked, for every tick due inside its window and publishes
@@ -189,8 +189,8 @@ cadence** (`cll checkpoint cadence`, scheduled) publishes on time alone:
   deal reads it.
 - A witness that is slow or down never stops a deal. The delivery stays
   pending and is retried by a later poll once its backoff has passed,
-  or by hand with
-  `capsulectl --profile deal cll checkpoint publish --checkpoint SIZE`.
+  or by hand with `capsulectl --profile deal deal tick`, which retries
+  every pending delivery whether or not a tick is due.
 - A delivery whose request never reached the witness (refused, unresolved,
   timed out, or stopped by a proxy) is reported as "pending: network consent
   needed, or no network", in the poll's output and on the receipt: on an

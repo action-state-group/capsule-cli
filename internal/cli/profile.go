@@ -192,6 +192,11 @@ const (
 // carries the profile's operator.
 func (p Profile) IsBook() bool { return p.Type == "jsonl" && p.LogID != "" && p.Log != LogCLL }
 
+// IsShelf reports whether the profile is a deal profile (`deal init`): its
+// logs, each deal's and the cadence log, are written by capsulectl deal
+// alone, under the deal store's writer lock (capsule-cli#242).
+func (p Profile) IsShelf() bool { return p.Type == "sqlite" && p.Namespace == "deal" }
+
 // invisibleRune reports whitespace and format characters (Unicode category
 // Cf: U+200B, U+FEFF, U+200D and the like), which print as nothing.
 func invisibleRune(r rune) bool { return unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) }

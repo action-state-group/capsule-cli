@@ -100,7 +100,7 @@ func openDealStoreRead(p cli.Profile) (_ *dealSession, err error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &dealSession{p: p, unlock: unlock}
+	s := &dealSession{p: p, unlock: unlock, shared: true}
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, s.close())

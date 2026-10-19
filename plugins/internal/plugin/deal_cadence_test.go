@@ -79,7 +79,7 @@ func retailDeal(t *testing.T) string {
 // signer, as a witness delivery would.
 func deliver(t *testing.T, p cli.Profile, size uint64, signer ed25519.PrivateKey) {
 	t.Helper()
-	target, err := cli.OpenTarget(t.Context(), p, cli.UseCLL)
+	target, err := cli.OpenDealTarget(t.Context(), p, cli.UseCLL, &dealStoreLock{held: true})
 	require.NoError(t, err)
 	defer func() { require.NoError(t, target.Close()) }()
 	service, err := cli.ServiceID(p)

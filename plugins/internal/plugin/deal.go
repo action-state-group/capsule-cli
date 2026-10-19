@@ -62,7 +62,20 @@ type dealSession struct {
 	secret []byte // the store secret
 	dkey   []byte // the current deal's key
 	unlock func() error
+	shared bool // a read under the shared lock (openDealStoreRead)
+	closed bool
 }
+
+// HoldsDealStore is the session's proof, to cli.OpenDealTarget, that it
+// holds the deal store's writer lock: from openDealSession until close. A
+// read session holds only the shared lock, and is no writer.
+func (s *dealSession) HoldsDealStore() bool { return s.unlock != nil && !s.shared && !s.closed }
+
+// dealStoreLock is the writer lock held outside a session: deal init's,
+// while it creates the store.
+type dealStoreLock struct{ held bool }
+
+func (l *dealStoreLock) HoldsDealStore() bool { return l.held }
 
 func openDealSession(ctx context.Context, p cli.Profile) (_ *dealSession, err error) {
 	if p.Type != "sqlite" {
@@ -171,7 +184,7 @@ func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) e
 	if create {
 		use = cli.UseInitialization
 	}
-	t, err := cli.OpenTarget(ctx, s.dp, use)
+	t, err := cli.OpenDealTarget(ctx, s.dp, use, s)
 	if err != nil {
 		return err
 	}
@@ -187,6 +200,7 @@ func (s *dealSession) close() error {
 	if s.db != nil {
 		e = errors.Join(e, s.db.Close())
 	}
+	s.closed = true
 	return errors.Join(e, s.unlock())
 }
 
@@ -875,7 +889,20 @@ func dealInitCommand() *cobra.Command {
 		if err = cli.SaveProfile(p, false); err != nil {
 			return err
 		}
-		t, err := cli.OpenTarget(c.Context(), p, cli.UseInitialization)
+		dbPath, err := filepath.Abs(p.Connection.Database)
+		if err != nil {
+			return err
+		}
+		unlock, err := lockDealStore(dbPath)
+		if err != nil {
+			return err
+		}
+		lock := &dealStoreLock{held: true}
+		defer func() {
+			lock.held = false
+			err = errors.Join(err, unlock())
+		}()
+		t, err := cli.OpenDealTarget(c.Context(), p, cli.UseInitialization, lock)
 		if err != nil {
 			return err
 		}
