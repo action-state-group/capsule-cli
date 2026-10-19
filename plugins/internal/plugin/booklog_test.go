@@ -1396,4 +1396,11 @@ func TestAppendedCapsuleIsInTheBooksStore(t *testing.T) {
 	info, err := os.Stat(filepath.Join(p.Connection.Database, cli.JSONLArtifactFile))
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+
+	// Publishing the same request now finds the wrapper, which published it
+	// under the sealed id itself: capsule_id is that id, and no separate
+	// sealed_id is reported.
+	published := publishFile(t, "a", sealRequestFile(t, "sealed-elsewhere"))
+	assert.Equal(t, record.CapsuleID, published.CapsuleID)
+	assert.Empty(t, published.SealedID)
 }

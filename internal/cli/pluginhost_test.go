@@ -203,6 +203,14 @@ func TestAStrayProfileExportDoesNotReachThePlugin(t *testing.T) {
 	out, err = invoke(t, "", "deal", "list", "--profile", "b")
 	require.NoError(t, err, out)
 	assert.Contains(t, out, "| profile=b")
+
+	// Inside a plugin run (a core callback that hands on to a plugin again),
+	// the profile the run selected still travels.
+	t.Setenv("CAPSULECTL_PLUGIN_API", PluginAPI)
+	t.Setenv(ProfileEnv, "a")
+	out, err = invoke(t, "", "deal", "list")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "| profile=a\n")
 }
 
 // A command run back in the core from a plugin uses the profile the plugin
