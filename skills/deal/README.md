@@ -84,8 +84,11 @@ book its deal's own log.
 Concurrent writers (sub-agents) are serialized by a lock file beside the
 store, which the shelf holds. `deal` commands run on Linux and macOS.
 
-**Upgrading a store a released build wrote.** The first deal command moves it
-onto its shelf, once:
+**Upgrading a store a released build wrote.** The first deal command that
+writes, or that opens the store for writing, such as `deal tick`, `deal open` or
+`deal note`, moves it onto its shelf, once. A read-only command (`deal list`,
+`deal checkpoint status`) never moves a store: on one not yet moved it refuses
+and says to run a deal command on the writable profile first. The move:
 - Prepared steps are recovered, and the cadence continues from the released
   build's ticks and due time.
 - Every existing deal stays as it is.
