@@ -274,14 +274,23 @@ func TestAReleasedBuildsTickIsImportedOnTheNextOpen(t *testing.T) {
 	seen, counter := shelfSeen(t, p)
 	require.Less(t, seen, counter, "rc16's tick moved the counter")
 	require.Equal(t, 3, storeCount(t, p, `SELECT COUNT(*) FROM cadence_ticks`))
-	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 16, 25, 0, 0, time.UTC) }
+	// rc16 drew its due time from the wall clock when make-downgrade.sh ran:
+	// read it from the fixture rather than pin it.
+	db, _, err := cli.SqliteConnection(p)
+	require.NoError(t, err)
+	var rawDue string
+	require.NoError(t, db.QueryRow(`SELECT due_next FROM deal_cadence ORDER BY entry_seq DESC LIMIT 1`).Scan(&rawDue))
+	require.NoError(t, db.Close())
+	due, err := time.Parse(time.RFC3339, rawDue)
+	require.NoError(t, err)
+	cli.DealClock = func() time.Time { return due.Add(-time.Second) }
 	tick := dealRun(t, "tick")
 	assert.Equal(t, "not_due", tick["state"], "rc16's tick set the due time")
-	assert.Equal(t, "2026-10-19T16:25:16Z", tick["due"])
+	assert.Equal(t, rawDue, tick["due"])
 	assert.Equal(t, 1, storeCount(t, p, `SELECT COUNT(*) FROM cadence_ticks WHERE tick = 4 AND entry_seq = 4 AND checkpoint_size = 7`), "rc16's tick, numbered after the cadence's own")
 	seen, counter = shelfSeen(t, p)
 	assert.Equal(t, counter, seen)
-	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 16, 26, 0, 0, time.UTC) }
+	cli.DealClock = func() time.Time { return due.Add(time.Second) }
 	next := dealRun(t, "tick")
 	require.Equal(t, "ticked", next["state"])
 	assert.EqualValues(t, 5, next["tick"])
