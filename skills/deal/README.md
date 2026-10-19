@@ -202,9 +202,9 @@ cadence** (`cll checkpoint cadence`, scheduled) publishes on time alone:
   - A deal stays live until it has finally closed and a witnessed tick holds
     its last checkpoint. A later write, such as evidence after the close,
     makes it live again. A sale never ends.
-  - The tree always holds as many leaves as there are deals the profile ever
-    had, plus one, made up with filler leaves. So the tree says nothing about
-    how many deals are live.
+  - The tree always holds as many leaves as there are deals and sales the
+    profile ever had, plus one, made up with filler leaves. So the tree says
+    nothing about how many are live.
   - The tree's root is appended as exactly one entry of the cadence log, and
     the cadence log's checkpoint is published.
   - Ticks happen whether or not anything happened.
