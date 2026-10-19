@@ -130,7 +130,8 @@ capsulectl plugin remove NAME
 ```
 
 Both manage only the per-user root, `$HOME/.local/lib/capsulectl/plugins`. A
-system-wide plugin stays an operator step.
+system-wide plugin stays an operator step. Windows is out of scope: plugins,
+their trust checks and these commands are Unix-only.
 
 **Who may run them.** They refuse to run through `sudo` (`SUDO_UID` set) or
 as anyone other than the owner of `$HOME`. Root installing into its own home

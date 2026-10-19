@@ -399,7 +399,7 @@ func finishInstall(r *os.Root, root, staged, expected string, allowMismatch bool
 	}
 	// The rename is the commit point: from here the destination has changed.
 	if err := syncPluginDir(r); err != nil {
-		return result, Hint(errPluginDurability, fmt.Sprintf("capsulectl-%s was installed at %s, but its directory could not be synced (%v)", name, result.Path, err))
+		return result, Hint(errPluginDurability, fmt.Sprintf("capsulectl-%s %s was installed at %s (replacing %s; checks: %s; version: %s), but its directory could not be synced (%v)", name, FirstNonEmpty(result.Version, "unversioned"), result.Path, FirstNonEmpty(result.ReplacedVersion, "nothing"), strings.Join(result.Checks, ", "), result.VersionCheck, err))
 	}
 	return result, nil
 }

@@ -419,7 +419,8 @@ func TestSumFor(t *testing.T) {
 }
 
 // releaseServer serves a release of the deal plugin for version over TLS,
-// and points the download client at it. files may override any path.
+// and points the download client at it. files may override any path; a nil
+// value makes that path a 404.
 func releaseServer(t *testing.T, version string, files map[string][]byte) string {
 	t.Helper()
 	platform := runtime.GOOS + "/" + runtime.GOARCH
@@ -436,6 +437,10 @@ func releaseServer(t *testing.T, version string, files map[string][]byte) string
 		"/" + version + "/SHA256SUMS":                               []byte(sum(body) + "  " + asset + "\n" + sum(bundle) + "  capsulectl-" + version + ".sigstore.json\n"),
 	}
 	for k, v := range files {
+		if v == nil {
+			delete(served, k) // a 404
+			continue
+		}
 		served[k] = v
 	}
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -665,4 +670,82 @@ func TestPluginInstallByNameCapsTheAssetAndTheBundle(t *testing.T) {
 			assert.ErrorIs(t, statErr, os.ErrNotExist)
 		})
 	}
+}
+
+func TestPluginRemoveEdgeCases(t *testing.T) {
+	home, root := installHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "capsulectl-dir"), 0o755))
+	_, err := invoke(t, "", "plugin", "remove", "dir")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "not a regular file")
+
+	// A later root on an unsafe path is reported, never run.
+	_, err = invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+	require.NoError(t, err)
+	parent := filepath.Join(home, "unsafe")
+	later := filepath.Join(parent, "plugins")
+	require.NoError(t, os.MkdirAll(later, 0o755))
+	marker := filepath.Join(t.TempDir(), "ran")
+	require.NoError(t, os.WriteFile(filepath.Join(later, "capsulectl-acme"), []byte(launcherScript("acme", "9", marker)), 0o755))
+	require.NoError(t, os.Chmod(parent, 0o777))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root+string(os.PathListSeparator)+later)
+	out, err := invoke(t, "", "plugin", "remove", "acme")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "may be selected (not inspected")
+	_, statErr := os.Stat(marker)
+	assert.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+func TestPluginInstallListsEveryUnsafeComponent(t *testing.T) {
+	home, _ := installHome(t)
+	local := filepath.Join(home, ".local")
+	require.NoError(t, os.MkdirAll(filepath.Join(local, "lib"), 0o755))
+	require.NoError(t, os.Chmod(filepath.Join(local, "lib"), 0o757))
+	require.NoError(t, os.Chmod(local, 0o775))
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+	require.ErrorIs(t, err, ErrInput)
+	msg := SafeError(err)
+	assert.Contains(t, msg, "is group-writable")
+	assert.Contains(t, msg, "is other-writable")
+	assert.Regexp(t, `chmod go-w \S+\.local \S+\.local/lib`, msg, "one combined fix")
+}
+
+func TestPluginInstallByNameAssetMissingOrPlatform(t *testing.T) {
+	_, root := installHome(t)
+	pathWithGh(t, "", 0)
+	asset := fmt.Sprintf("capsulectl-v0.2.0-plugin-deal-%s-%s", runtime.GOOS, runtime.GOARCH)
+	base := releaseServer(t, "v0.2.0", map[string][]byte{"/v0.2.0/" + asset: nil})
+	_, err := invoke(t, "", "plugin", "install", "--release-url", base, "deal")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "has no asset "+asset)
+	noLeftovers(t, root)
+
+	old := releasePlatforms
+	releasePlatforms = []string{"plan9/none"}
+	t.Cleanup(func() { releasePlatforms = old })
+	_, err = invoke(t, "", "plugin", "install", "--release-url", base, "deal")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "no release build of the plugins for "+runtime.GOOS+"/"+runtime.GOARCH)
+}
+
+// A hand-over (here the transitional `compose` alias, through
+// ForwardToPlugin) warns on drift too.
+func TestHandOverWarnsOnAMismatchedFirstPartyPlugin(t *testing.T) {
+	_, root := installHome(t)
+	old := CLIVersion
+	t.Cleanup(func() { CLIVersion = old })
+	CLIVersion = "v0.2.0"
+	require.NoError(t, os.MkdirAll(root, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-deal"), []byte(launcherScript("deal", "v0.1.0", "")), 0o755))
+	out, err := invoke(t, "", "compose")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "warning:")
+	assert.Contains(t, out, "ran deal: compose")
+}
+
+func TestProfilePlugin(t *testing.T) {
+	assert.Equal(t, DealPluginName, profilePlugin(Profile{Type: "sqlite"}))
+	assert.Equal(t, BookPluginName, profilePlugin(Profile{Type: "jsonl", LogID: "l", Log: LogBook}))
+	assert.Equal(t, "", profilePlugin(Profile{Type: "jsonl", LogID: "l", Log: LogCLL}))
+	assert.Equal(t, "", profilePlugin(Profile{Type: "mysql"}))
 }
