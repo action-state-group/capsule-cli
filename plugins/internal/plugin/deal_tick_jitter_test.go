@@ -22,7 +22,7 @@ func publishedTicks(t *testing.T) []time.Time {
 	db, _, err := cli.SqliteConnection(p)
 	require.NoError(t, err)
 	defer db.Close()
-	rows, err := db.Query(`SELECT at FROM deal_cadence ORDER BY tick`)
+	rows, err := db.Query(`SELECT at FROM cadence_ticks ORDER BY tick`)
 	require.NoError(t, err)
 	defer rows.Close()
 	var out []time.Time

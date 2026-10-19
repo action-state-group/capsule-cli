@@ -67,7 +67,7 @@ func dealListCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		s, err := openDealStoreRead(p)
+		s, err := openDealStoreRead(c.Context(), p)
 		if err != nil {
 			return err
 		}

@@ -79,6 +79,22 @@ func retailDeal(t *testing.T) string {
 // signer, as a witness delivery would.
 func deliver(t *testing.T, p cli.Profile, size uint64, signer ed25519.PrivateKey) {
 	t.Helper()
+	storeReceipt(t, p, size, signer)
+	// The cadence records the receipt as the next deal command does
+	// (witnessNativeTicks): the tick's leaves become witnessed.
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, s.close()) }()
+	c, cp, err := s.cadenceOf(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, s.witnessNativeTicks(t.Context(), c, cp))
+}
+
+// storeReceipt stores, on the cadence log, a witness receipt signed by
+// signer for the cadence checkpoint at size, as a delivery would; nothing
+// tells the cadence.
+func storeReceipt(t *testing.T, p cli.Profile, size uint64, signer ed25519.PrivateKey) {
+	t.Helper()
 	target, err := cli.OpenDealTarget(t.Context(), p, cli.UseCLL, &dealStoreLock{held: true})
 	require.NoError(t, err)
 	defer func() { require.NoError(t, target.Close()) }()

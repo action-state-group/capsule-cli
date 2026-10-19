@@ -9,7 +9,3 @@ import "github.com/action-state-group/capsule-cli/internal/cli"
 func lockDealStore(string) (func() error, error) {
 	return nil, cli.InputError("deal commands are supported on Linux and macOS only")
 }
-
-func lockDealStoreShared(string) (func() error, error) {
-	return nil, cli.InputError("deal commands are supported on Linux and macOS only")
-}

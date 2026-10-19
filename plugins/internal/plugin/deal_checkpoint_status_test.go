@@ -122,18 +122,33 @@ func TestDealCheckpointStatusWithoutAWitness(t *testing.T) {
 	assert.Equal(t, map[string]any{"state": "not_configured"}, status["witness"])
 }
 
-// A deal whose log has no checkpoint yet: null fields, not an error.
-func TestDealCheckpointStatusWithNoCheckpoint(t *testing.T) {
+// A deal profile without a checkpoint key is refused by every deal
+// command, read-only ones included: its shelf signs each deal log's
+// checkpoints (capsule-cli#242 note §7.4). The message names the fix, and
+// the profile works again once the key is back.
+func TestADealProfileWithoutACheckpointKeyIsRefused(t *testing.T) {
 	dealFixture(t)
+	dealID := retailDeal(t)
 	p, err := cli.LoadProfile("deal")
 	require.NoError(t, err)
+	key := p.Checkpoint.Signing
 	p.Checkpoint.Signing = cli.Secret{}
 	require.NoError(t, cli.SaveProfile(p, true))
-	dealID := dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))["deal_id"].(string)
+	for _, args := range [][]string{
+		{"open", "--input", filepath.Join(retailDemo, "open.json")},
+		{"list", "--json"},
+		{"checkpoint", "status", "--deal", dealID},
+		{"tick"},
+	} {
+		_, err := invoke(t, "", append([]string{"--profile", "deal", "deal"}, args...)...)
+		require.Error(t, err, "%v", args)
+		assert.Contains(t, err.Error(), "--checkpoint-signing-key-file", "%v", args)
+		assert.Contains(t, err.Error(), "--checkpoint-trusted-key", "%v", args)
+	}
+	p.Checkpoint.Signing = key
+	require.NoError(t, cli.SaveProfile(p, true))
 	status := checkpointStatusOf(t, dealID)
-	assert.Nil(t, status["checkpoint"])
-	assert.Nil(t, status["witness"])
-	assert.EqualValues(t, 1, status["log_entries"], "the log holds the baseline")
+	assert.NotNil(t, status["checkpoint"])
 }
 
 // A read_only profile reads the status; the same profile cannot seal.
