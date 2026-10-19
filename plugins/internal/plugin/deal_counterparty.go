@@ -3,7 +3,6 @@ package plugin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"slices"
 	"sort"
 	"strings"
@@ -127,20 +126,16 @@ func counterpartyKeys(w dealWho, channel string) []string {
 // dealID is the deal being checked: its own opening is not an earlier
 // dealing, but its own earlier disclosures are earlier tellings.
 func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ *dealCounterpartyMemory, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT deal_id, kind, local FROM deal_steps WHERE kind IN ('open', 'disclosure', 'check') ORDER BY deal_id, n`)
+	steps, err := s.index.steps(ctx, stepFilter{Kinds: []string{"open", "disclosure", "check"}})
 	if err != nil {
 		return nil, err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
 	m := &dealCounterpartyMemory{}
 	opened := map[string]*dealOpen{}
-	for rows.Next() {
-		var id, kind, local string
-		if err = rows.Scan(&id, &kind, &local); err != nil {
-			return nil, err
-		}
+	for _, st := range steps {
+		id, kind := st.DealID, st.Kind
 		var ev dealEvent
-		if err = json.Unmarshal([]byte(local), &ev); err != nil {
+		if err = json.Unmarshal([]byte(st.Local), &ev); err != nil {
 			return nil, err
 		}
 		switch {
@@ -160,7 +155,7 @@ func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ 
 			}
 		}
 	}
-	return m, rows.Err()
+	return m, nil
 }
 
 // disclosureRecipientKeys are the identities of whoever a disclosure went

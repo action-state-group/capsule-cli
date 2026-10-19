@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -774,7 +773,9 @@ func (s *dealSession) capsuleWithInput(ctx context.Context, capsuleID string) (m
 // the same item. Like that one, it is for this device's own checker only: no
 // record carries it.
 func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRulesHistory, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT deal_id, capsule_id, local FROM deal_steps WHERE kind='act'`)
+	// In the order the acts were indexed: the sort below is stable, so it
+	// keeps that order among acts of the same second.
+	indexed, err := s.index.steps(ctx, stepFilter{Kinds: []string{"act"}, Indexed: true})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -784,13 +785,10 @@ func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRul
 	}
 	var acts []act
 	since := cli.DealClock().Add(-cli.RulesHistoryDays * 24 * time.Hour)
-	for rows.Next() {
-		var deal, id, local string
-		if err = rows.Scan(&deal, &id, &local); err != nil {
-			return nil, nil, errors.Join(err, rows.Close())
-		}
+	for _, st := range indexed {
+		deal, id := st.DealID, st.CapsuleID
 		var ev dealEvent
-		if json.Unmarshal([]byte(local), &ev) != nil || ev.Act == nil || ev.Act.AmountMinor == nil {
+		if json.Unmarshal([]byte(st.Local), &ev) != nil || ev.Act == nil || ev.Act.AmountMinor == nil {
 			continue
 		}
 		at, e := time.Parse(time.RFC3339, ev.At)
@@ -798,9 +796,6 @@ func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRul
 			continue
 		}
 		acts = append(acts, act{deal, id, at})
-	}
-	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
-		return nil, nil, err
 	}
 	sort.SliceStable(acts, func(i, j int) bool { return acts[i].at.After(acts[j].at) })
 	scope := &dealRulesHistory{Days: cli.RulesHistoryDays, Complete: true}
@@ -848,16 +843,12 @@ func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRul
 // dealItemRef is the item reference a deal opened with: its sale's, on a
 // sale's thread; empty on any other deal.
 func (s *dealSession) dealItemRef(ctx context.Context, dealID string) (string, error) {
-	var local string
-	err := s.db.QueryRowContext(ctx, `SELECT local FROM deal_steps WHERE deal_id=? AND n=1`, dealID).Scan(&local)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
+	open, err := s.index.steps(ctx, stepFilter{DealID: dealID, N: 1})
+	if err != nil || len(open) == 0 {
 		return "", err
 	}
 	var ev dealEvent
-	if err = json.Unmarshal([]byte(local), &ev); err != nil {
+	if err = json.Unmarshal([]byte(open[0].Local), &ev); err != nil {
 		return "", err
 	}
 	if ev.Open == nil {
@@ -868,19 +859,15 @@ func (s *dealSession) dealItemRef(ctx context.Context, dealID string) (string, e
 
 // localStep is a sealed step's local event and its deal, by capsule id.
 func (s *dealSession) localStep(ctx context.Context, capsuleID string) (string, *dealEvent, error) {
-	var dealID, local string
-	err := s.db.QueryRowContext(ctx, `SELECT deal_id, local FROM deal_steps WHERE capsule_id=?`, capsuleID).Scan(&dealID, &local)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil, nil
-	}
-	if err != nil {
+	steps, err := s.index.steps(ctx, stepFilter{CapsuleID: capsuleID})
+	if err != nil || len(steps) == 0 {
 		return "", nil, err
 	}
 	var ev dealEvent
-	if err = json.Unmarshal([]byte(local), &ev); err != nil {
+	if err = json.Unmarshal([]byte(steps[0].Local), &ev); err != nil {
 		return "", nil, err
 	}
-	return dealID, &ev, nil
+	return steps[0].DealID, &ev, nil
 }
 
 // actCheck is the check an earlier act rests on (the capsule id of its
@@ -943,20 +930,16 @@ func (s *dealSession) actCounterpartyProfile(ctx context.Context, actID string) 
 	if err != nil || check == "" {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT local FROM deal_steps WHERE deal_id=? AND kind='counterparty_profile'`, dealID)
+	steps, err := s.index.steps(ctx, stepFilter{DealID: dealID, Kinds: []string{"counterparty_profile"}})
 	if err != nil {
 		return nil, err
 	}
 	var out map[string]interface{}
-	for rows.Next() {
-		var local string
-		if err = rows.Scan(&local); err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
+	for _, st := range steps {
 		var ev dealEvent
-		if json.Unmarshal([]byte(local), &ev) == nil && ev.CounterpartyProfile != nil && ev.CounterpartyProfile.Check == check {
+		if json.Unmarshal([]byte(st.Local), &ev) == nil && ev.CounterpartyProfile != nil && ev.CounterpartyProfile.Check == check {
 			out = counterpartyProfileBlock(ev.CounterpartyProfile.Payee)
 		}
 	}
-	return out, errors.Join(rows.Err(), rows.Close())
+	return out, nil
 }

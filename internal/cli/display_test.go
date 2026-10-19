@@ -93,3 +93,30 @@ func TestGetRecordOutputEmptyInventory(t *testing.T) {
 		}
 	}
 }
+
+// A field opening (an evidence book's "opening.<field>" original: a salted
+// commitment's nonce and plain text) is never printed, in either view, and
+// the record itself is left as stored.
+func TestGetRecordOutputLeavesOutOpenings(t *testing.T) {
+	r := artifact.Record{
+		CapsuleID: "example",
+		Capsule:   []byte(`{}`),
+		Artifacts: []artifact.Artifact{
+			{Name: "payload", Binding: "effect.request_digest", Content: []byte(`{"ok":true}`), State: "present"},
+			{Name: "opening.deal_local", Content: []byte(`{"nonce":"00","text":"secret"}`), State: "present"},
+			{Name: "reply", Content: []byte(`{"x":1}`), State: "present"},
+		},
+	}
+	stored, err := json.Marshal(r)
+	require.NoError(t, err)
+	for _, raw := range []bool{false, true} {
+		b, err := json.Marshal(getRecordOutput(r, raw))
+		require.NoError(t, err)
+		assert.NotContains(t, string(b), "opening.deal_local")
+		assert.NotContains(t, string(b), "secret")
+		assert.Contains(t, string(b), `"reply"`, "an unbound original that is not an opening still prints")
+	}
+	after, err := json.Marshal(r)
+	require.NoError(t, err)
+	assert.Equal(t, stored, after, "display must not mutate the record")
+}

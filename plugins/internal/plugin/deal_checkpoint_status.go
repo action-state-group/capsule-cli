@@ -68,8 +68,8 @@ func openDealSessionRead(ctx context.Context, p cli.Profile, dealID string) (_ *
 			err = errors.Join(err, s.close())
 		}
 	}()
-	var steps int64
-	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_steps WHERE deal_id=?`, dealID).Scan(&steps); err != nil && !strings.Contains(err.Error(), "no such table") {
+	steps, err := s.index.stepCount(ctx, dealID)
+	if err != nil && !strings.Contains(err.Error(), "no such table") {
 		return nil, err
 	}
 	if steps == 0 {
@@ -109,6 +109,7 @@ func openDealStoreRead(p cli.Profile) (_ *dealSession, err error) {
 	if s.db, _, err = cli.SqliteConnection(p); err != nil {
 		return nil, err
 	}
+	s.index = sqliteDealIndex{s.db}
 	return s, nil
 }
 

@@ -56,7 +56,7 @@ func (s *dealSession) dealSealReport(ctx context.Context, dealID, audience strin
 	if err != nil {
 		return "", err
 	}
-	if _, err = s.db.ExecContext(ctx, `INSERT INTO deal_reports (deal_id, capsule_id, audience, cll_sequence) VALUES (?,?,?,0)`, dealID, record.CapsuleID, audience); err != nil {
+	if err = s.index.prepareReport(ctx, dealID, record.CapsuleID, audience); err != nil {
 		return "", err
 	}
 	pub, err := s.t.Publish(ctx, request, s.key)
@@ -67,40 +67,26 @@ func (s *dealSession) dealSealReport(ctx context.Context, dealID, audience strin
 		// Never appended: withdraw the row. Appended: keep it, so the next
 		// read sets the entry aside as a report.
 		if entries, scanErr := s.logEntries(ctx); scanErr == nil && !holdsEntry(entries, record.CapsuleID) {
-			_, delErr := s.db.ExecContext(ctx, `DELETE FROM deal_reports WHERE deal_id=? AND capsule_id=?`, dealID, record.CapsuleID)
-			err = errors.Join(err, delErr)
+			err = errors.Join(err, s.index.withdrawReport(ctx, dealID, record.CapsuleID))
 		}
 		return "", err
 	}
-	if _, err = s.db.ExecContext(ctx, `UPDATE deal_reports SET cll_sequence=? WHERE deal_id=? AND capsule_id=?`, pub.Sequence, dealID, record.CapsuleID); err != nil {
+	if err = s.index.publishedReport(ctx, dealID, record.CapsuleID, pub.Sequence); err != nil {
 		return "", err
 	}
 	return record.CapsuleID, nil
 }
 
 // reportIDs are the capsule ids of every report sealed for the deal.
-func (s *dealSession) reportIDs(ctx context.Context, dealID string) (_ map[string]bool, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT capsule_id FROM deal_reports WHERE deal_id=?`, dealID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
-	ids := map[string]bool{}
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids[id] = true
-	}
-	return ids, rows.Err()
+func (s *dealSession) reportIDs(ctx context.Context, dealID string) (map[string]bool, error) {
+	return s.index.reportIDs(ctx, dealID)
 }
 
 // stepsIn is how many of the deal's steps the first leaves entries of its
 // log hold: the entries less its sealed reports'.
 func (s *dealSession) stepsIn(ctx context.Context, dealID string, leaves uint64) (uint64, error) {
-	var reports uint64
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_reports WHERE deal_id=? AND cll_sequence>0 AND cll_sequence<=?`, dealID, leaves).Scan(&reports)
+	n, err := s.index.reportsThrough(ctx, dealID, leaves)
+	reports := uint64(n)
 	if err != nil || reports > leaves {
 		return 0, errors.Join(err, cli.ErrConflict)
 	}

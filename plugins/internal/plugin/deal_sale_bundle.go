@@ -2,8 +2,8 @@ package plugin
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -166,33 +166,27 @@ func (s *dealSession) dealSaleBundle(ctx context.Context, saleID, verify string)
 // sale opened before threads were registered (its task authority names no
 // registration).
 func (s *dealSession) unregisteredThreads(ctx context.Context, saleID string) (bool, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT local FROM deal_steps WHERE kind='task_authority'`)
+	authorities, err := s.index.steps(ctx, stepFilter{Kinds: []string{"task_authority"}})
 	if err != nil {
 		return false, err
 	}
 	var unregistered []string
-	for rows.Next() {
-		var local string
-		if err = rows.Scan(&local); err != nil {
-			return false, errors.Join(err, rows.Close())
-		}
+	for _, st := range authorities {
 		var ev dealEvent
-		if json.Unmarshal([]byte(local), &ev) == nil && ev.SaleAuthority != "" && ev.SaleRegistration == "" {
+		if json.Unmarshal([]byte(st.Local), &ev) == nil && ev.SaleAuthority != "" && ev.SaleRegistration == "" {
 			unregistered = append(unregistered, ev.DealID)
 		}
 	}
-	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
-		return false, err
-	}
-	// The store holds one connection: read each thread's opening only after
-	// the rows above are closed.
 	for _, dealID := range unregistered {
-		var open string
-		if err = s.db.QueryRowContext(ctx, `SELECT local FROM deal_steps WHERE deal_id=? AND n=1`, dealID).Scan(&open); err != nil {
+		open, err := s.index.steps(ctx, stepFilter{DealID: dealID, N: 1})
+		if err != nil {
 			return false, err
 		}
+		if len(open) == 0 {
+			return false, sql.ErrNoRows
+		}
 		var first dealEvent
-		if json.Unmarshal([]byte(open), &first) == nil && first.Open != nil && first.Open.Sale == saleID {
+		if json.Unmarshal([]byte(open[0].Local), &first) == nil && first.Open != nil && first.Open.Sale == saleID {
 			return true, nil
 		}
 	}
@@ -202,9 +196,14 @@ func (s *dealSession) unregisteredThreads(ctx context.Context, saleID string) (b
 // threadAuthority is a thread's opening task-authority record digest, from
 // this device's store.
 func (s *dealSession) threadAuthority(ctx context.Context, threadID string) (string, error) {
-	var authority string
-	err := s.db.QueryRowContext(ctx, `SELECT record_digest FROM deal_steps WHERE deal_id=? AND kind='task_authority' ORDER BY n LIMIT 1`, threadID).Scan(&authority)
-	return authority, err
+	steps, err := s.index.steps(ctx, stepFilter{DealID: threadID, Kinds: []string{"task_authority"}})
+	if err != nil {
+		return "", err
+	}
+	if len(steps) == 0 {
+		return "", sql.ErrNoRows
+	}
+	return steps[0].Digest, nil
 }
 
 // openedThread is an opened thread a sale bundle carries: its sale_threads

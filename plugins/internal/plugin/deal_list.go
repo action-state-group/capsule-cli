@@ -146,14 +146,13 @@ func dealSummaryOf(events []sealedEvent) dealSummary {
 // A store with no deal yet lists none.
 func (s *dealSession) dealListings(ctx context.Context) (_ []dealListing, err error) {
 	list := []dealListing{}
-	rows, err := s.db.QueryContext(ctx, `SELECT deal_id, n, kind, record_digest, local FROM deal_steps ORDER BY deal_id, n`)
+	steps, err := s.index.steps(ctx, stepFilter{})
 	if err != nil {
 		if strings.Contains(err.Error(), "no such table") {
 			return list, nil
 		}
 		return nil, err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
 	var id, prev string
 	var events []sealedEvent
 	flush := func() {
@@ -161,12 +160,8 @@ func (s *dealSession) dealListings(ctx context.Context) (_ []dealListing, err er
 			list = append(list, dealListingOf(id, events))
 		}
 	}
-	for rows.Next() {
-		var rowID, kind, digest, local string
-		var n int64
-		if err = rows.Scan(&rowID, &n, &kind, &digest, &local); err != nil {
-			return nil, err
-		}
+	for _, st := range steps {
+		rowID, n, kind, digest, local := st.DealID, st.N, st.Kind, st.Digest, st.Local
 		if rowID != id {
 			flush()
 			id, prev, events = rowID, "", nil
@@ -180,9 +175,6 @@ func (s *dealSession) dealListings(ctx context.Context) (_ []dealListing, err er
 		}
 		events = append(events, sealedEvent{Event: ev})
 		prev = digest
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
 	}
 	flush()
 	return list, nil
