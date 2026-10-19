@@ -128,9 +128,9 @@ func TestPresentationBuildWithoutModulesWritesTheDefaultPage(t *testing.T) {
 	assert.Empty(t, b.Modules)
 	raw, err := os.ReadFile(presentationBuildBundle)
 	require.NoError(t, err)
-	value, err := decodeBundleJSON(raw)
+	value, err := DecodeBundleJSON(raw)
 	require.NoError(t, err)
-	want, err := emitter.EmitEvidenceGraphHTML(value, evidenceGraphIIFE)
+	want, err := emitter.EmitEvidenceGraphHTML(value, EvidenceGraphIIFE)
 	require.NoError(t, err)
 	got, err := os.ReadFile(out)
 	require.NoError(t, err)
@@ -161,9 +161,9 @@ func TestPresentationBuildCarriesAPluginsModule(t *testing.T) {
 	// and stylesheet: the same build with no module, plus those two.
 	raw, err := os.ReadFile(presentationBuildBundle)
 	require.NoError(t, err)
-	value, err := decodeBundleJSON(raw)
+	value, err := DecodeBundleJSON(raw)
 	require.NoError(t, err)
-	base, err := emitter.BuildOfflineHTML(value, evidenceGraphIIFE, emitter.OfflineOptions{Audience: "*",
+	base, err := emitter.BuildOfflineHTML(value, EvidenceGraphIIFE, emitter.OfflineOptions{Audience: "*",
 		Wording: &emitter.Wording{Pack: string(fixtureWording), SHA256: hexSHA256(fixtureWording)}})
 	require.NoError(t, err)
 	assert.Equal(t, sortedSources(append(cspSources(t, base, "script-src"), sha256CSPSource(script))), cspSources(t, string(page), "script-src"))
@@ -245,7 +245,7 @@ func TestPresentationBuildRefusesADuplicateIdAndADeadManifest(t *testing.T) {
 
 	dead := exampleDealManifest(strings.Repeat("0", 64))
 	dead["requires"] = map[string]any{"bundle_kind": "evidence-bundle/v2", "profiles": []any{"spec_version:report/v1"}}
-	err = staticPresentationCheck([]map[string]interface{}{dead})
+	err = StaticPresentationCheck([]map[string]interface{}{dead})
 	var r *presentationBuildRefusal
 	require.ErrorAs(t, err, &r)
 	assert.Equal(t, "dead_manifest", r.Reason)
@@ -266,17 +266,17 @@ func TestPresentationChecksAgreeWithTheContractsVectors(t *testing.T) {
 		require.NoError(t, json.Unmarshal(raw, &m))
 		return m
 	}
-	builtins, err := builtinPresentationManifests()
+	builtins, err := BuiltinPresentationManifests()
 	require.NoError(t, err)
 	require.Len(t, builtins, 6)
-	assert.NoError(t, staticPresentationCheck(builtins))
+	assert.NoError(t, StaticPresentationCheck(builtins))
 	var examples []map[string]interface{}
 	for _, name := range []string{"example-composition-aware", "example-declarative-rules", "example-generic-fallback", "example-unilateral"} {
 		examples = append(examples, load(name))
 	}
-	assert.NoError(t, staticPresentationCheck(examples))
+	assert.NoError(t, StaticPresentationCheck(examples))
 
-	err = staticPresentationCheck([]map[string]interface{}{load("neg-ambiguous-pair/a"), load("neg-ambiguous-pair/b")})
+	err = StaticPresentationCheck([]map[string]interface{}{load("neg-ambiguous-pair/a"), load("neg-ambiguous-pair/b")})
 	var r *presentationBuildRefusal
 	require.ErrorAs(t, err, &r)
 	assert.Equal(t, "ambiguous", r.Reason)
@@ -288,7 +288,7 @@ func TestPresentationChecksAgreeWithTheContractsVectors(t *testing.T) {
 		{"aac.builtin.evaluation-summary-graph/v0", "profiles", "result_version:evidence-result-v0"},
 		{"aac.builtin.result-outcome-report/v0", "profiles", "spec_version:report/v1"},
 	} {
-		mutated, err := builtinPresentationManifests()
+		mutated, err := BuiltinPresentationManifests()
 		require.NoError(t, err)
 		removed := false
 		for _, m := range mutated {
@@ -297,7 +297,7 @@ func TestPresentationChecksAgreeWithTheContractsVectors(t *testing.T) {
 			}
 			forbids := m["forbids"].(map[string]interface{})
 			var kept []interface{}
-			for _, token := range asList(forbids[drop.field]) {
+			for _, token := range AsList(forbids[drop.field]) {
 				if token == drop.token {
 					removed = true
 					continue
@@ -308,31 +308,31 @@ func TestPresentationChecksAgreeWithTheContractsVectors(t *testing.T) {
 		}
 		require.True(t, removed, "%s forbids %s", drop.id, drop.token)
 		r = nil
-		require.ErrorAs(t, staticPresentationCheck(mutated), &r, "without %s's forbid of %s", drop.id, drop.token)
+		require.ErrorAs(t, StaticPresentationCheck(mutated), &r, "without %s's forbid of %s", drop.id, drop.token)
 		assert.Equal(t, "ambiguous", r.Reason)
 	}
 
 	unsupported := load("neg-unsupported-presentation-api")
-	assert.NoError(t, staticPresentationCheck(append(examples, unsupported)), "a refused module takes part in the test and is co-matchable with none of them")
-	require.NotNil(t, runtimeRefusal(unsupported))
-	assert.Equal(t, "presentation_api_unsupported", runtimeRefusal(unsupported).Reason)
+	assert.NoError(t, StaticPresentationCheck(append(examples, unsupported)), "a refused module takes part in the test and is co-matchable with none of them")
+	require.NotNil(t, RuntimeRefusal(unsupported))
+	assert.Equal(t, "presentation_api_unsupported", RuntimeRefusal(unsupported).Reason)
 	tooNew := load("example-unilateral")
 	tooNew["runtime_min"] = "0.1.1"
-	require.NotNil(t, runtimeRefusal(tooNew))
-	assert.Equal(t, "runtime_too_old", runtimeRefusal(tooNew).Reason)
+	require.NotNil(t, RuntimeRefusal(tooNew))
+	assert.Equal(t, "runtime_too_old", RuntimeRefusal(tooNew).Reason)
 	tooNew["runtime_min"] = "0.0.9"
-	assert.Nil(t, runtimeRefusal(tooNew))
+	assert.Nil(t, RuntimeRefusal(tooNew))
 	tooNew["runtime_min"] = "0.10.0"
-	assert.Equal(t, "runtime_too_old", runtimeRefusal(tooNew).Reason, "versions compare numerically")
+	assert.Equal(t, "runtime_too_old", RuntimeRefusal(tooNew).Reason, "versions compare numerically")
 	for _, m := range append(builtins, examples...) {
-		assert.Nil(t, runtimeRefusal(m), "%s", m["id"])
+		assert.Nil(t, RuntimeRefusal(m), "%s", m["id"])
 	}
 }
 
 // The declaration is the vendored runtime's own, and the built-ins are the
 // pinned commit's files.
 func TestThePresentationRuntimeDeclarationIsTheVendoredOne(t *testing.T) {
-	assert.Contains(t, string(evidenceGraphIIFE), `var PRESENTATION_API_V0 = "aac.presentation-api/v0";
+	assert.Contains(t, string(EvidenceGraphIIFE), `var PRESENTATION_API_V0 = "aac.presentation-api/v0";
   var REFERENCE_PRESENTATION_RUNTIME = Object.freeze({
     presentationApis: Object.freeze([PRESENTATION_API_V0]),
     runtimeVersion: "0.1.0"
@@ -356,10 +356,10 @@ func TestThePresentationRuntimeDeclarationIsTheVendoredOne(t *testing.T) {
 		got[e.Name()] = hexSHA256(raw)
 	}
 	assert.Equal(t, want, got)
-	builtins, err := builtinPresentationManifests()
+	builtins, err := BuiltinPresentationManifests()
 	require.NoError(t, err)
 	for _, m := range builtins {
-		assert.Contains(t, string(evidenceGraphIIFE), `"`+m["id"].(string)+`"`, "the runtime carries %s", m["id"])
+		assert.Contains(t, string(EvidenceGraphIIFE), `"`+m["id"].(string)+`"`, "the runtime carries %s", m["id"])
 	}
 }
 
@@ -469,9 +469,9 @@ func TestPresentationBuildLeavesOutAModuleForAnotherAudience(t *testing.T) {
 	// Byte for byte the counterparty page with no plugin module at all.
 	raw, err := os.ReadFile(presentationBuildBundle)
 	require.NoError(t, err)
-	value, err := decodeBundleJSON(raw)
+	value, err := DecodeBundleJSON(raw)
 	require.NoError(t, err)
-	bare, err := emitter.BuildOfflineHTML(value, evidenceGraphIIFE, emitter.OfflineOptions{Audience: "counterparty", CoreRuntimeSHA256: evidenceGraphIIFEDigest})
+	bare, err := emitter.BuildOfflineHTML(value, EvidenceGraphIIFE, emitter.OfflineOptions{Audience: "counterparty", CoreRuntimeSHA256: EvidenceGraphIIFEDigest})
 	require.NoError(t, err)
 	assert.Equal(t, bare, string(page))
 
@@ -562,7 +562,7 @@ func TestPresentationBuildWritesNoPageForABundleThatDoesNotVerify(t *testing.T) 
 	pluginRoot(t)
 	raw, err := os.ReadFile(presentationBuildBundle)
 	require.NoError(t, err)
-	value, err := decodeBundleJSON(raw)
+	value, err := DecodeBundleJSON(raw)
 	require.NoError(t, err)
 	value["root"] = strings.Repeat("0", 64)
 	bundle := writeBundle(t, value)

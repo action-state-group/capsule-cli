@@ -5,7 +5,7 @@
 #   scripts/iife-sync.sh <aac-checkout> [--check]
 #
 # Without --check the rebuilt file replaces internal/cli/assets/evidence-graph.iife.js
-# and its digest is printed, to be pinned in internal/cli/report.go
+# and its digest is printed, to be pinned in internal/cli/evidence_graph_assets.go
 # (evidenceGraphIIFEDigest / evidenceGraphIIFESource) and in assets/README.md
 # together. With --check the vendored copy must already equal the rebuild
 # (exit 1 otherwise) -- the drift guard for a vendored build artifact.
@@ -38,4 +38,4 @@ if [[ "$mode" == "--check" ]]; then
 fi
 cp "$built" "$vendored"
 echo "vendored $vendored from $commit"
-echo "sha256: $digest -- pin it in internal/cli/report.go and internal/cli/assets/README.md"
+echo "sha256: $digest -- pin it in internal/cli/evidence_graph_assets.go and internal/cli/assets/README.md"

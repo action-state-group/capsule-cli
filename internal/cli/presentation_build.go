@@ -50,7 +50,7 @@ var presentationRuntime = struct {
 //go:embed assets/presentation/builtin/*.json
 var builtinPresentationFS embed.FS
 
-func builtinPresentationManifests() ([]map[string]interface{}, error) {
+func BuiltinPresentationManifests() ([]map[string]interface{}, error) {
 	entries, err := builtinPresentationFS.ReadDir("assets/presentation/builtin")
 	if err != nil {
 		return nil, err
@@ -87,14 +87,14 @@ type presentationBuildRefusal struct {
 
 func (r *presentationBuildRefusal) Error() string { return "no page written: " + r.Detail }
 
-func manifestString(m map[string]interface{}, key string) string {
+func ManifestString(m map[string]interface{}, key string) string {
 	s, _ := m[key].(string)
 	return s
 }
 
-func manifestSet(v interface{}) map[string]bool {
+func ManifestSet(v interface{}) map[string]bool {
 	out := map[string]bool{}
-	for _, item := range asList(v) {
+	for _, item := range AsList(v) {
 		if s, ok := item.(string); ok {
 			out[s] = true
 		}
@@ -102,25 +102,25 @@ func manifestSet(v interface{}) map[string]bool {
 	return out
 }
 
-func manifestMap(m map[string]interface{}, key string) map[string]interface{} {
+func ManifestMap(m map[string]interface{}, key string) map[string]interface{} {
 	v, _ := m[key].(map[string]interface{})
 	return v
 }
 
 func requiredProfiles(m map[string]interface{}) map[string]bool {
-	return manifestSet(manifestMap(m, "requires")["profiles"])
+	return ManifestSet(ManifestMap(m, "requires")["profiles"])
 }
 
 func requiredExtensions(m map[string]interface{}) map[string]bool {
-	return manifestSet(manifestMap(manifestMap(m, "requires"), "extensions")["required"])
+	return ManifestSet(ManifestMap(ManifestMap(m, "requires"), "extensions")["required"])
 }
 
 func forbiddenProfiles(m map[string]interface{}) map[string]bool {
-	return manifestSet(manifestMap(m, "forbids")["profiles"])
+	return ManifestSet(ManifestMap(m, "forbids")["profiles"])
 }
 
 func forbiddenExtensions(m map[string]interface{}) map[string]bool {
-	return manifestSet(manifestMap(m, "forbids")["extensions"])
+	return ManifestSet(ManifestMap(m, "forbids")["extensions"])
 }
 
 func union(a, b map[string]bool) map[string]bool {
@@ -160,14 +160,14 @@ func onePerProfileKey(tokens map[string]bool) bool {
 // coMatchable is section 4.5's five conditions: true exactly when some
 // descriptor matches both manifests.
 func coMatchable(a, b map[string]interface{}) bool {
-	if manifestString(manifestMap(a, "requires"), "bundle_kind") != manifestString(manifestMap(b, "requires"), "bundle_kind") {
+	if ManifestString(ManifestMap(a, "requires"), "bundle_kind") != ManifestString(ManifestMap(b, "requires"), "bundle_kind") {
 		return false
 	}
-	audA, audB := manifestSet(a["audiences"]), manifestSet(b["audiences"])
+	audA, audB := ManifestSet(a["audiences"]), ManifestSet(b["audiences"])
 	if !audA["*"] && !audB["*"] && !meets(audA, audB) {
 		return false
 	}
-	if !meets(manifestSet(a["formats"]), manifestSet(b["formats"])) {
+	if !meets(ManifestSet(a["formats"]), ManifestSet(b["formats"])) {
 		return false
 	}
 	rp := union(requiredProfiles(a), requiredProfiles(b))
@@ -189,10 +189,10 @@ func manifestTier(m map[string]interface{}) string {
 // would hold when an id is given twice, a manifest can never match (section
 // 4.5, last paragraph) or two manifests of one tier can match one
 // descriptor.
-func staticPresentationCheck(manifests []map[string]interface{}) error {
+func StaticPresentationCheck(manifests []map[string]interface{}) error {
 	seen := map[string]bool{}
 	for _, m := range manifests {
-		id := manifestString(m, "id")
+		id := ManifestString(m, "id")
 		if seen[id] {
 			return &presentationBuildRefusal{Reason: "duplicate_id", Modules: []string{id},
 				Detail: fmt.Sprintf("the presentation module id %s is given twice (a built-in, or two plugins)", id)}
@@ -215,7 +215,7 @@ func staticPresentationCheck(manifests []map[string]interface{}) error {
 	for i, a := range manifests {
 		for _, b := range manifests[i+1:] {
 			if manifestTier(a) == manifestTier(b) && coMatchable(a, b) {
-				ids := []string{manifestString(a, "id"), manifestString(b, "id")}
+				ids := []string{ManifestString(a, "id"), ManifestString(b, "id")}
 				sort.Strings(ids)
 				return &presentationBuildRefusal{Reason: "ambiguous", Tier: manifestTier(a), Modules: ids,
 					Detail: fmt.Sprintf("presentation modules %s and %s are both %s and can match the same bundle, so the page could not choose between them (priority never breaks the tie)", ids[0], ids[1], manifestTier(a))}
@@ -243,8 +243,8 @@ func runtimeVersion(text string) ([3]int, bool) {
 
 // runtimeRefusal is section 3.2's refusal of one module by the page's
 // runtime, in its order of reasons, or nil.
-func runtimeRefusal(m map[string]interface{}) *presentationBuildRefusal {
-	id, api, min := manifestString(m, "id"), manifestString(m, "presentation_api"), manifestString(m, "runtime_min")
+func RuntimeRefusal(m map[string]interface{}) *presentationBuildRefusal {
+	id, api, min := ManifestString(m, "id"), ManifestString(m, "presentation_api"), ManifestString(m, "runtime_min")
 	declared := fmt.Sprintf("the page's runtime implements %s and is version %s", strings.Join(presentationRuntime.PresentationAPIs, ", "), presentationRuntime.Version)
 	refusal := &presentationBuildRefusal{Module: id, PresentationAPI: api, RuntimeMin: min, Runtime: presentationRuntime}
 	supported := false
@@ -316,13 +316,13 @@ type presentationBuildResult struct {
 // a manifest whose audiences hold neither "*" nor the page's audience never
 // renders on that page.
 func excludesAudience(m map[string]interface{}, audience string) bool {
-	audiences := manifestSet(m["audiences"])
+	audiences := ManifestSet(m["audiences"])
 	return !audiences["*"] && !audiences[audience]
 }
 
 func audienceList(m map[string]interface{}) string {
 	var out []string
-	for _, a := range asList(m["audiences"]) {
+	for _, a := range AsList(m["audiences"]) {
 		if s, ok := a.(string); ok {
 			out = append(out, s)
 		}
@@ -356,7 +356,7 @@ func presentationSelection(only []string, audience string) ([]presentationModule
 			found[m.ID] = true
 			if excludesAudience(m.Manifest, audience) {
 				if want[m.ID] {
-					return nil, result, hint(ErrInput, fmt.Sprintf("--module %s: the module is for audiences %s, not --audience %s; no page written", m.ID, audienceList(m.Manifest), audience))
+					return nil, result, Hint(ErrInput, fmt.Sprintf("--module %s: the module is for audiences %s, not --audience %s; no page written", m.ID, audienceList(m.Manifest), audience))
 				}
 				result.NotIncluded = append(result.NotIncluded, presentationNotIncluded{ID: m.ID, Plugin: p.Name,
 					Reason: fmt.Sprintf("the module is for audiences %s, not %s, so the page leaves it out", audienceList(m.Manifest), audience)})
@@ -372,7 +372,7 @@ func presentationSelection(only []string, audience string) ([]presentationModule
 	}
 	for _, id := range only {
 		if !found[id] {
-			return nil, result, hint(ErrInput, fmt.Sprintf("--module %s: no installed plugin offers a presentation module with that id that loaded (see `capsulectl plugin ls`)", id))
+			return nil, result, Hint(ErrInput, fmt.Sprintf("--module %s: no installed plugin offers a presentation module with that id that loaded (see `capsulectl plugin ls`)", id))
 		}
 	}
 	return modules, result, nil
@@ -380,7 +380,7 @@ func presentationSelection(only []string, audience string) ([]presentationModule
 
 func presentationCommands() *cobra.Command {
 	group := &cobra.Command{Use: "presentation", Short: "Build offline pages with the installed plugins' presentation modules, and say which module a bundle resolves to"}
-	build := &cobra.Command{Use: "build", Short: "Write the offline page for a bundle, with the plugins' presentation modules in its module slots", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	build := &cobra.Command{Use: "build", Short: "Write the offline page for a bundle, with the plugins' presentation modules in its module slots", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		bundlePath, _ := c.Flags().GetString("bundle")
 		out, _ := c.Flags().GetString("out")
 		audience, _ := c.Flags().GetString("audience")
@@ -389,24 +389,24 @@ func presentationCommands() *cobra.Command {
 		title, _ := c.Flags().GetString("title")
 		only, _ := c.Flags().GetStringSlice("module")
 		if bundlePath == "" || out == "" {
-			return hint(ErrInput, "--bundle and --out are required")
+			return Hint(ErrInput, "--bundle and --out are required")
 		}
 		if audience == "" {
-			return hint(ErrInput, "--audience must not be empty; \"*\" is no particular audience")
+			return Hint(ErrInput, "--audience must not be empty; \"*\" is no particular audience")
 		}
 		switch format {
 		case "html":
 		case "static":
-			return hint(ErrInput, "--format static is unavailable (no-document): this tool has no document to render the page with at build time; build --format html")
+			return Hint(ErrInput, "--format static is unavailable (no-document): this tool has no document to render the page with at build time; build --format html")
 		case "fragment", "embedded":
-			return hint(ErrInput, fmt.Sprintf("--format %s is not built by this tool yet; build --format html", format))
+			return Hint(ErrInput, fmt.Sprintf("--format %s is not built by this tool yet; build --format html", format))
 		default:
-			return hint(ErrInput, fmt.Sprintf("--format %s is not a packaging target (html, fragment, embedded, static)", format))
+			return Hint(ErrInput, fmt.Sprintf("--format %s is not a packaging target (html, fragment, embedded, static)", format))
 		}
 		switch depth {
 		case "", "L0", "L1", "L2":
 		default:
-			return hint(ErrInput, "--depth must be L0, L1 or L2")
+			return Hint(ErrInput, "--depth must be L0, L1 or L2")
 		}
 		modules, result, err := presentationSelection(only, audience)
 		if err != nil {
@@ -416,35 +416,35 @@ func presentationCommands() *cobra.Command {
 		result.Page, result.Modules = "not written", []presentationBuildModule{}
 		refuse := func(r *presentationBuildRefusal) error {
 			result.Refusal = r
-			if err := output(c, result); err != nil {
+			if err := Output(c, result); err != nil {
 				return err
 			}
-			return hint(ErrInput, r.Error())
+			return Hint(ErrInput, r.Error())
 		}
 		// The two checks need only the manifests, so they run before the
 		// bundle is read.
-		manifests, err := builtinPresentationManifests()
+		manifests, err := BuiltinPresentationManifests()
 		if err != nil {
 			return err
 		}
 		for _, m := range modules {
-			if r := runtimeRefusal(m.Manifest); r != nil {
+			if r := RuntimeRefusal(m.Manifest); r != nil {
 				return refuse(r)
 			}
 			manifests = append(manifests, m.Manifest)
 		}
-		if err := staticPresentationCheck(manifests); err != nil {
+		if err := StaticPresentationCheck(manifests); err != nil {
 			var r *presentationBuildRefusal
 			if errors.As(err, &r) {
 				return refuse(r)
 			}
 			return err
 		}
-		raw, err := readInput(bundlePath)
+		raw, err := ReadInput(bundlePath)
 		if err != nil {
 			return err
 		}
-		value, err := decodeBundleJSON(raw)
+		value, err := DecodeBundleJSON(raw)
 		if err != nil {
 			return err
 		}
@@ -453,8 +453,8 @@ func presentationCommands() *cobra.Command {
 		}
 		// The page checks itself; it is written only when `verify --bundle`
 		// calls the bundle VALID, as for every page this tool writes.
-		if err := pageGate(value); err != nil {
-			if outErr := output(c, result); outErr != nil {
+		if err := PageGate(value); err != nil {
+			if outErr := Output(c, result); outErr != nil {
 				return outErr
 			}
 			return err
@@ -478,20 +478,20 @@ func presentationCommands() *cobra.Command {
 			result.Modules = append(result.Modules, row)
 			slots = append(slots, emitter.Module{Code: m.Script.Bytes, SHA256: m.Script.SHA256, StyleSHA256: row.StyleSHA256})
 		}
-		html, err := emitter.BuildOfflineHTML(value, evidenceGraphIIFE, emitter.OfflineOptions{
+		html, err := emitter.BuildOfflineHTML(value, EvidenceGraphIIFE, emitter.OfflineOptions{
 			Audience: audience, Depth: depth, Title: title, Wording: wording,
-			CoreRuntimeSHA256: evidenceGraphIIFEDigest, Modules: slots,
+			CoreRuntimeSHA256: EvidenceGraphIIFEDigest, Modules: slots,
 		})
 		if err != nil {
-			return hint(ErrInput, "no page written: "+err.Error())
+			return Hint(ErrInput, "no page written: "+err.Error())
 		}
-		if err = atomicFile(out, []byte(html), false); errors.Is(err, os.ErrExist) {
-			return hint(ErrInput, fmt.Sprintf("--out %s already exists (or was created by another process while this one ran); nothing was overwritten; pass another path", out))
+		if err = AtomicFile(out, []byte(html), false); errors.Is(err, os.ErrExist) {
+			return Hint(ErrInput, fmt.Sprintf("--out %s already exists (or was created by another process while this one ran); nothing was overwritten; pass another path", out))
 		} else if err != nil {
 			return err
 		}
 		result.Page, result.Out = "written", out
-		return output(c, result)
+		return Output(c, result)
 	}}
 	build.Flags().String("bundle", "", "A held, disclosed Evidence Bundle (the page is written only when `verify --bundle` calls it VALID)")
 	build.Flags().String("out", "", "Write the offline page here (new file)")

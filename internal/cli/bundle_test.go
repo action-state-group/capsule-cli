@@ -163,7 +163,7 @@ func TestDisclosureRecordCommitsToExactlyWhatWasDisclosed(t *testing.T) {
 	}
 	expectedDigest, err := canonical.JSONDigest(expected)
 	require.NoError(t, err)
-	record, err := disclosureRecord(bundle)
+	record, err := DisclosureRecord(bundle)
 	require.NoError(t, err)
 	recordDigest, err := canonical.JSONDigest(record)
 	require.NoError(t, err)
@@ -196,7 +196,7 @@ func TestDisclosureRecordNamesEverySuppressedField(t *testing.T) {
 	bundle, err := AssembleBundle(t.Context(), store, log, profile.LogID, BundleOptions{Root: rec.CapsuleID, ClosureDepth: 2, Payloads: "selected", Suppress: map[string]bool{"agent_input": true}, WithDisclosure: true})
 	require.NoError(t, err)
 
-	record, err := disclosureRecord(bundle)
+	record, err := DisclosureRecord(bundle)
 	require.NoError(t, err)
 	assert.Equal(t, []interface{}{"agent_input"}, record["suppressed_fields"])
 	revealed := record["revealed"].(map[string]interface{})[rec.CapsuleID].(map[string]interface{})
@@ -206,11 +206,11 @@ func TestDisclosureRecordNamesEverySuppressedField(t *testing.T) {
 
 func bundleRecord(t *testing.T, key ed25519.PrivateKey, chain *emit.Chain, references []emit.Reference) artifact.Record {
 	t.Helper()
-	request, err := parseRequest(requestFixture(t))
+	request, err := ParseRequest(requestFixture(t))
 	require.NoError(t, err)
 	request.Capsule.Chain = chain
 	request.Capsule.References = references
-	record, err := seal(request, key)
+	record, err := Seal(request, key)
 	require.NoError(t, err)
 	return record
 }

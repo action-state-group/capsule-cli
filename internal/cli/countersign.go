@@ -28,12 +28,12 @@ import (
 // already use for map[string]interface{} targets: without it, encoding/json
 // decodes every JSON number as float64, which aacbundle's JCS canonicalizer
 // (and BundleDigest, which it backs) rejects outright.
-func decodeBundleJSON(raw []byte) (map[string]interface{}, error) {
+func DecodeBundleJSON(raw []byte) (map[string]interface{}, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	var bundle map[string]interface{}
 	if err := decoder.Decode(&bundle); err != nil {
-		return nil, inputError("the bundle file is not valid JSON")
+		return nil, InputError("the bundle file is not valid JSON")
 	}
 	return bundle, nil
 }
@@ -44,7 +44,7 @@ func decodeBundleJSON(raw []byte) (map[string]interface{}, error) {
 // different type (including "cose-sign1") is reported "unverified" here,
 // never rejected: this core never claims authority over a type it does not
 // define.
-const countersignAPI = "countersign/v1"
+const CountersignAPI = "countersign/v1"
 
 // There is no default countersigner directory: `countersign verify` takes
 // --directory (an HTTPS URL or a local file) naming the list a verifier
@@ -149,16 +149,16 @@ type countersignerDirectory struct {
 // do not declare, and dropping one would change the bytes. An entry with no type (tolerated, see
 // verifyCountersignatures) is verified as countersign/v1, the only type this
 // path handles.
-func countersignSigningInput(over string, signer, statement interface{}, entryType string) ([]byte, error) {
+func CountersignSigningInput(over string, signer, statement interface{}, entryType string) ([]byte, error) {
 	if entryType == "" {
-		entryType = countersignAPI
+		entryType = CountersignAPI
 	}
 	return canonical.JCS(map[string]interface{}{"over": over, "signer": signer, "statement": statement, "type": entryType})
 }
 
 // jsonValue re-decodes v as a generic JSON value with json.Number, the form
 // canonical.JCS accepts.
-func jsonValue(v any) (interface{}, error) {
+func JSONValue(v any) (interface{}, error) {
 	encoded, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
@@ -185,7 +185,7 @@ func signBundleDigest(key ed25519.PrivateKey, digestHex string) string {
 // isLowerHex reports whether s holds only lowercase hexadecimal digits: the
 // countersign/v1 wire spells signature and signer.key_id that way, and one
 // spelling per value keeps key comparisons exact.
-func isLowerHex(s string) bool {
+func IsLowerHex(s string) bool {
 	for _, r := range s {
 		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
 			return false
@@ -201,14 +201,14 @@ func isLowerHex(s string) bool {
 // signature from a genuine verification failure.
 func verifyCountersignSignature(signerKeyHex, over string, signer, statement interface{}, entryType, signatureHex string) (ed25519.PublicKey, error) {
 	key, err := hex.DecodeString(signerKeyHex)
-	if err != nil || len(key) != ed25519.PublicKeySize || !isLowerHex(signerKeyHex) {
+	if err != nil || len(key) != ed25519.PublicKeySize || !IsLowerHex(signerKeyHex) {
 		return nil, errors.New("signer key_id is not a 32-byte Ed25519 public key in lowercase hex")
 	}
 	signature, err := hex.DecodeString(signatureHex)
-	if err != nil || len(signature) != ed25519.SignatureSize || !isLowerHex(signatureHex) {
+	if err != nil || len(signature) != ed25519.SignatureSize || !IsLowerHex(signatureHex) {
 		return nil, errors.New("signature is not a 64-byte Ed25519 signature in lowercase hex")
 	}
-	message, err := countersignSigningInput(over, signer, statement, entryType)
+	message, err := CountersignSigningInput(over, signer, statement, entryType)
 	if err != nil {
 		return nil, fmt.Errorf("signing input cannot be canonicalized: %w", err)
 	}
@@ -225,11 +225,11 @@ func verifyCountersignSignature(signerKeyHex, over string, signer, statement int
 // caller could confuse with a fragment-carried bundle.
 func validateServiceURL(raw string) (string, error) {
 	if raw == "" {
-		return "", inputError("--service is required: the countersign service's HTTPS URL")
+		return "", InputError("--service is required: the countersign service's HTTPS URL")
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
-		return "", inputError("--service must be an absolute HTTPS URL without embedded credentials or a fragment")
+		return "", InputError("--service must be an absolute HTTPS URL without embedded credentials or a fragment")
 	}
 	return raw, nil
 }
@@ -239,14 +239,14 @@ func validateServiceURL(raw string) (string, error) {
 // a local file. It is required: no countersigner list is privileged.
 func validateDirectory(raw string) (string, error) {
 	if raw == "" {
-		return "", hint(ErrInput, "--directory is required: name the countersigner directory to resolve signers against, an HTTPS URL or a file ([{name, key_ids}] or {countersigners: [...]})")
+		return "", Hint(ErrInput, "--directory is required: name the countersigner directory to resolve signers against, an HTTPS URL or a file ([{name, key_ids}] or {countersigners: [...]})")
 	}
 	if !strings.Contains(raw, "://") {
 		return raw, nil
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
-		return "", hint(ErrInput, "--directory must be an absolute HTTPS URL without embedded credentials or a fragment, or a file path")
+		return "", Hint(ErrInput, "--directory must be an absolute HTTPS URL without embedded credentials or a fragment, or a file path")
 	}
 	return raw, nil
 }
@@ -281,7 +281,7 @@ func postJSON(ctx context.Context, client *http.Client, target string, body, out
 	if len(raw) > maxCountersignResponse {
 		return fmt.Errorf("%s response exceeds size limit", target)
 	}
-	return decodeJSONAs("the response from "+target, raw, out)
+	return DecodeJSONAs("the response from "+target, raw, out)
 }
 
 // getJSON is postJSON's read-only counterpart, used for the directory fetch.
@@ -305,7 +305,7 @@ func getJSON(ctx context.Context, client *http.Client, target string, out any) e
 	if len(raw) > maxCountersignResponse {
 		return fmt.Errorf("%s response exceeds size limit", target)
 	}
-	return decodeJSONAs("the response from "+target, raw, out)
+	return DecodeJSONAs("the response from "+target, raw, out)
 }
 
 // buildCountersignSubmission signs the bundle digest with the requester's own
@@ -317,7 +317,7 @@ func buildCountersignSubmission(bundle map[string]interface{}, window, requester
 	}
 	public, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
-		return countersignSubmission{}, "", inputError("the profile's signing key is not an Ed25519 key")
+		return countersignSubmission{}, "", InputError("the profile's signing key is not an Ed25519 key")
 	}
 	submission := countersignSubmission{
 		Bundle:             bundle,
@@ -347,11 +347,11 @@ func requestCountersignatures(ctx context.Context, client *http.Client, service 
 		if entry.Over != digest {
 			return nil, fmt.Errorf("countersignatures[%d] signs a different bundle digest", i)
 		}
-		statement, err := jsonValue(entry.Statement)
+		statement, err := JSONValue(entry.Statement)
 		if err != nil {
 			return nil, fmt.Errorf("countersignatures[%d] statement is malformed: %w", i, err)
 		}
-		signer, err := jsonValue(entry.Signer)
+		signer, err := JSONValue(entry.Signer)
 		if err != nil {
 			return nil, fmt.Errorf("countersignatures[%d] signer is malformed: %w", i, err)
 		}
@@ -364,10 +364,10 @@ func requestCountersignatures(ctx context.Context, client *http.Client, service 
 
 // attachCountersignatures appends entries to bundle["countersignatures"],
 // preserving whatever was already there.
-func attachCountersignatures(bundle map[string]interface{}, entries []CountersignatureEntry) error {
+func AttachCountersignatures(bundle map[string]interface{}, entries []CountersignatureEntry) error {
 	existing, _ := bundle["countersignatures"].([]interface{})
 	for _, entry := range entries {
-		value, err := jsonValue(entry)
+		value, err := JSONValue(entry)
 		if err != nil {
 			return err
 		}
@@ -386,7 +386,7 @@ func fetchCountersignerDirectory(ctx context.Context, client *http.Client, sourc
 			return countersignerDirectory{}, fmt.Errorf("fetching countersigner directory: %w", err)
 		}
 	} else {
-		file, err := readInput(source)
+		file, err := ReadInput(source)
 		if err != nil {
 			return countersignerDirectory{}, err
 		}
@@ -412,15 +412,15 @@ func decodeCountersignerDirectory(raw []byte) (countersignerDirectory, error) {
 	} else {
 		var object map[string]json.RawMessage
 		if err := json.Unmarshal(trimmed, &object); err != nil {
-			return countersignerDirectory{}, hint(ErrInput, "the countersigner directory is not a JSON array or object")
+			return countersignerDirectory{}, Hint(ErrInput, "the countersigner directory is not a JSON array or object")
 		}
 		var present bool
 		if rows, present = object["countersigners"]; !present {
-			return countersignerDirectory{}, hint(ErrInput, "the countersigner directory object has no countersigners array")
+			return countersignerDirectory{}, Hint(ErrInput, "the countersigner directory object has no countersigners array")
 		}
 	}
 	var dir countersignerDirectory
-	if err := decodeJSONAs("the countersigner directory", rows, &dir.Countersigners); err != nil {
+	if err := DecodeJSONAs("the countersigner directory", rows, &dir.Countersigners); err != nil {
 		return countersignerDirectory{}, err
 	}
 	return dir, nil
@@ -449,7 +449,7 @@ func resolveSigner(dir countersignerDirectory, keyHex string) (countersignerDire
 // spec's own reserved "cose-sign1"). Receipt is verified / unverified /
 // absent for a countersign/v1 entry (see verifyCountersignReceipt), with
 // ReceiptDetail naming why an unverified receipt did not verify.
-type countersignatureReport struct {
+type CountersignatureReport struct {
 	State         string             `json:"state"`
 	Detail        string             `json:"detail,omitempty"`
 	Receipt       string             `json:"receipt,omitempty"`
@@ -471,7 +471,7 @@ type countersignatureReport struct {
 // does not match the recomputed digest) is reported "invalid", with none of
 // its checks, and the remaining entries are still verified; the verify
 // command then exits non-zero (see hasInvalidCountersignature).
-func verifyCountersignatures(ctx context.Context, client *http.Client, directoryURL string, bundle map[string]interface{}, trustedProducerKeys []ed25519.PublicKey) (string, []countersignatureReport, string, error) {
+func VerifyCountersignatures(ctx context.Context, client *http.Client, directoryURL string, bundle map[string]interface{}, trustedProducerKeys []ed25519.PublicKey) (string, []CountersignatureReport, string, error) {
 	digest, err := aacbundle.BundleDigest(bundle)
 	if err != nil {
 		return "", nil, "", err
@@ -480,7 +480,7 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 	if member, present := bundle["countersignatures"]; present {
 		entries, ok := member.([]interface{})
 		if !ok {
-			return "", nil, "", inputError("bundle countersignatures member is not an array")
+			return "", nil, "", InputError("bundle countersignatures member is not an array")
 		}
 		rawEntries = entries
 	}
@@ -492,11 +492,11 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 	// producer keys: a countersignature by the declared key is never
 	// reported independent, whoever verifies it.
 	producerKeys := trustedProducerKeys
-	if declared, ok := declaredProducerKey(bundle); ok {
+	if declared, ok := DeclaredProducerKey(bundle); ok {
 		producerKeys = append(append([]ed25519.PublicKey(nil), trustedProducerKeys...), declared)
 	}
 	var directory *countersignerDirectory
-	var reports []countersignatureReport
+	var reports []CountersignatureReport
 	summary := "none"
 	rank := map[string]int{"none": 0, "invalid": 1, "unverified": 2, "unresolved_signer": 3, "not_independent": 4, "resolved": 5}
 	for i, raw := range rawEntries {
@@ -520,22 +520,22 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 		if err := decoder.Decode(&wire); err != nil {
 			return "", nil, "", fmt.Errorf("countersignatures[%d] is malformed: %w", i, err)
 		}
-		if entry.Type != "" && entry.Type != countersignAPI {
+		if entry.Type != "" && entry.Type != CountersignAPI {
 			// A reserved slot this core does not define: report it, verify
 			// nothing about it, never fail the bundle for it (the -00 spec's
 			// own rule for the "cose-sign1" type).
-			reports = append(reports, countersignatureReport{State: "unverified", Signer: entry.Signer})
+			reports = append(reports, CountersignatureReport{State: "unverified", Signer: entry.Signer})
 			continue
 		}
 		// An entry with no "type" is tolerated and verified as
 		// countersign/v1, with "countersign/v1" in its signing input.
 		if entry.Over != digest {
-			reports = append(reports, countersignatureReport{State: "invalid", Detail: "signs a different bundle digest", Signer: entry.Signer})
+			reports = append(reports, CountersignatureReport{State: "invalid", Detail: "signs a different bundle digest", Signer: entry.Signer})
 			continue
 		}
 		signerKey, err := verifyCountersignSignature(entry.Signer.KeyID, digest, wire.Signer, wire.Statement, entry.Type, entry.Signature)
 		if err != nil {
-			reports = append(reports, countersignatureReport{State: "invalid", Detail: err.Error(), Signer: entry.Signer})
+			reports = append(reports, CountersignatureReport{State: "invalid", Detail: err.Error(), Signer: entry.Signer})
 			continue
 		}
 		receiptState, receiptErr := verifyCountersignReceipt(signerKey, wire.Statement, entry.Receipt)
@@ -546,7 +546,7 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 				break
 			}
 		}
-		report := countersignatureReport{Signer: entry.Signer, Independent: &independent, Checks: entry.Statement.Checks, RecomputedAt: entry.Statement.RecomputedAt, Receipt: receiptState}
+		report := CountersignatureReport{Signer: entry.Signer, Independent: &independent, Checks: entry.Statement.Checks, RecomputedAt: entry.Statement.RecomputedAt, Receipt: receiptState}
 		if receiptErr != nil {
 			report.ReceiptDetail = receiptErr.Error()
 		}
@@ -582,7 +582,7 @@ func verifyCountersignatures(ctx context.Context, client *http.Client, directory
 
 // hasInvalidCountersignature returns an error naming the first invalid entry,
 // or nil when none is invalid.
-func hasInvalidCountersignature(reports []countersignatureReport) error {
+func HasInvalidCountersignature(reports []CountersignatureReport) error {
 	for i, report := range reports {
 		if report.State == "invalid" {
 			return fmt.Errorf("countersignatures[%d] is invalid: %s", i, report.Detail)
@@ -594,8 +594,8 @@ func hasInvalidCountersignature(reports []countersignatureReport) error {
 func countersignCommands() *cobra.Command {
 	group := &cobra.Command{Use: "countersign", Short: "Request and verify third-party countersignatures over an Evidence Bundle digest"}
 
-	request := &cobra.Command{Use: "request", Short: "Request a countersignature and attach the returned entry to the bundle file", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
-		profile, err := selected(c)
+	request := &cobra.Command{Use: "request", Short: "Request a countersignature and attach the returned entry to the bundle file", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+		profile, err := Selected(c)
 		if err != nil {
 			return err
 		}
@@ -606,7 +606,7 @@ func countersignCommands() *cobra.Command {
 		}
 		window, _ := c.Flags().GetString("window")
 		if window == "" {
-			return inputError("--window is required: the attestation window or period label to send")
+			return InputError("--window is required: the attestation window or period label to send")
 		}
 		bundlePath, _ := c.Flags().GetString("bundle")
 		outPath, _ := c.Flags().GetString("out")
@@ -615,11 +615,11 @@ func countersignCommands() *cobra.Command {
 		writePath := outPath
 		replace := false
 		if bundlePath != "" {
-			raw, err := readInput(bundlePath)
+			raw, err := ReadInput(bundlePath)
 			if err != nil {
 				return err
 			}
-			bundle, err = decodeBundleJSON(raw)
+			bundle, err = DecodeBundleJSON(raw)
 			if err != nil {
 				return err
 			}
@@ -629,38 +629,38 @@ func countersignCommands() *cobra.Command {
 		} else {
 			root, _ := c.Flags().GetString("root")
 			if root == "" {
-				return inputError("--root is required to build a bundle when --bundle is not given")
+				return InputError("--root is required to build a bundle when --bundle is not given")
 			}
 			closureDepth, _ := c.Flags().GetInt("closure-depth")
 			producerKey, err := bundleProducerKey(c, profile)
 			if err != nil {
 				return err
 			}
-			target, err := openTarget(c.Context(), profile, usePublication)
+			if profile.IsBook() {
+				// A book bundle always carries a disclosures member, which this
+				// request refuses; build it elsewhere and pass --bundle.
+				return ErrBookProfile
+			}
+			target, err := OpenTarget(c.Context(), profile, UsePublication)
 			if err != nil {
 				return err
 			}
-			if target.book != nil {
-				// A book bundle always carries a disclosures member, which this
-				// request refuses; build it elsewhere and pass --bundle.
-				return errors.Join(errBookProfile, target.close())
-			}
-			bundle, err = AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: "none", ProducerKey: producerKey})
-			if closeErr := target.close(); closeErr != nil {
+			bundle, err = AssembleBundle(c.Context(), target.Artifacts, target.Log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: "none", ProducerKey: producerKey})
+			if closeErr := target.Close(); closeErr != nil {
 				err = errors.Join(err, closeErr)
 			}
 			if err != nil {
 				return err
 			}
 			if writePath == "" {
-				return inputError("--out is required when building a fresh bundle (no existing --bundle file to update)")
+				return InputError("--out is required when building a fresh bundle (no existing --bundle file to update)")
 			}
 		}
 		if _, present := bundle["disclosures"]; present {
-			return inputError("countersign request refuses a bundle carrying disclosures; only a withheld (payloads none) bundle may be submitted")
+			return InputError("countersign request refuses a bundle carrying disclosures; only a withheld (payloads none) bundle may be submitted")
 		}
 
-		key, err := privateKey(profile.Signing)
+		key, err := PrivateKey(profile.Signing)
 		if err != nil {
 			return err
 		}
@@ -673,17 +673,17 @@ func countersignCommands() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if err := attachCountersignatures(bundle, entries); err != nil {
+		if err := AttachCountersignatures(bundle, entries); err != nil {
 			return err
 		}
 		encoded, err := json.Marshal(bundle)
 		if err != nil {
 			return err
 		}
-		if err := atomicFile(writePath, encoded, replace); err != nil {
+		if err := AtomicFile(writePath, encoded, replace); err != nil {
 			return err
 		}
-		return output(c, map[string]any{"bundle_digest": digest, "bundle": writePath, "countersignatures_added": len(entries)})
+		return Output(c, map[string]any{"bundle_digest": digest, "bundle": writePath, "countersignatures_added": len(entries)})
 	}}
 	request.Flags().String("service", "", "Countersign service URL (HTTPS; no default)")
 	request.Flags().String("window", "", "Attestation window/period label sent to the service")
@@ -694,16 +694,16 @@ func countersignCommands() *cobra.Command {
 	request.Flags().String("producer-key", "", producerKeyFlagUsage+" (when building a fresh bundle)")
 	group.AddCommand(request)
 
-	verify := &cobra.Command{Use: "verify BUNDLE", Short: "Verify every countersignatures[] entry's signature over the bundle digest and statement, check its receipt, and resolve its signer", Args: oneArg, RunE: func(c *cobra.Command, args []string) error {
-		profile, err := selected(c)
+	verify := &cobra.Command{Use: "verify BUNDLE", Short: "Verify every countersignatures[] entry's signature over the bundle digest and statement, check its receipt, and resolve its signer", Args: OneArg, RunE: func(c *cobra.Command, args []string) error {
+		profile, err := Selected(c)
 		if err != nil {
 			return err
 		}
-		raw, err := readInput(args[0])
+		raw, err := ReadInput(args[0])
 		if err != nil {
 			return err
 		}
-		bundle, err := decodeBundleJSON(raw)
+		bundle, err := DecodeBundleJSON(raw)
 		if err != nil {
 			return err
 		}
@@ -712,19 +712,19 @@ func countersignCommands() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		trusted, err := parseKeys(profile.TrustedKeys)
+		trusted, err := ParseKeys(profile.TrustedKeys)
 		if err != nil {
 			return err
 		}
 		client := &http.Client{Timeout: 30 * time.Second}
-		digest, reports, summary, err := verifyCountersignatures(c.Context(), client, directoryURL, bundle, trusted)
+		digest, reports, summary, err := VerifyCountersignatures(c.Context(), client, directoryURL, bundle, trusted)
 		if err != nil {
 			return err
 		}
-		if err := output(c, map[string]any{"bundle_digest": digest, "countersignatures": reports, "summary": summary}); err != nil {
+		if err := Output(c, map[string]any{"bundle_digest": digest, "countersignatures": reports, "summary": summary}); err != nil {
 			return err
 		}
-		if err := hasInvalidCountersignature(reports); err != nil {
+		if err := HasInvalidCountersignature(reports); err != nil {
 			return err
 		}
 		// Anything this CLI could not fully verify -- an entry of a type it

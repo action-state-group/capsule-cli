@@ -68,7 +68,7 @@ func presentationPlugin(t *testing.T, root, name string, p presentationFixture) 
 		require.NoError(t, os.Chmod(path, 0o644))
 	}
 	meta, err := json.Marshal(map[string]any{
-		"name": name, "vendor": "Example", "version": "1.0.0", "plugin_api": pluginAPI, "subcommands": []any{"decide"},
+		"name": name, "vendor": "Example", "version": "1.0.0", "plugin_api": PluginAPI, "subcommands": []any{"decide"},
 		"presentations": []any{map[string]any{"manifest": p.manifest, "files": p.entries}},
 	})
 	require.NoError(t, err)
@@ -80,9 +80,9 @@ func presentationPlugin(t *testing.T, root, name string, p presentationFixture) 
 // built-in roots are outside it.
 func trustPresentationsIn(t *testing.T, root string) {
 	t.Helper()
-	old := presentationRoots
-	presentationRoots = func() []string { return []string{root} }
-	t.Cleanup(func() { presentationRoots = old })
+	old := PresentationRoots
+	PresentationRoots = func() []string { return []string{root} }
+	t.Cleanup(func() { PresentationRoots = old })
 }
 
 func discovered(t *testing.T, name string) pluginInfo {
@@ -234,12 +234,12 @@ func TestAnOlderHostIgnoresPresentations(t *testing.T) {
 		Subcommands []string `json:"subcommands,omitempty"`
 	}
 	p := moduleSlotFixture()
-	meta, err := json.Marshal(map[string]any{"name": "view", "plugin_api": pluginAPI, "subcommands": []any{"decide"},
+	meta, err := json.Marshal(map[string]any{"name": "view", "plugin_api": PluginAPI, "subcommands": []any{"decide"},
 		"presentations": []any{map[string]any{"manifest": p.manifest, "files": p.entries}}})
 	require.NoError(t, err)
 	var older olderInfo
 	require.NoError(t, json.Unmarshal(meta, &older))
-	assert.Equal(t, olderInfo{Name: "view", PluginAPI: pluginAPI, Subcommands: []string{"decide"}}, older)
+	assert.Equal(t, olderInfo{Name: "view", PluginAPI: PluginAPI, Subcommands: []string{"decide"}}, older)
 }
 
 // The vendored manifest schema is agent-action-capsule's, unmodified, at the
@@ -348,7 +348,7 @@ func TestTheTrustWalkStopsAtTheRootsItIsGiven(t *testing.T) {
 	elsewhere := t.TempDir()
 	require.NoError(t, os.Chmod(elsewhere, 0o755))
 	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", elsewhere)
-	assert.ErrorIs(t, verifyTrustedPath(file), errOutsideRoots, "the override's roots do not hold it")
+	assert.ErrorIs(t, VerifyTrustedPath(file), errOutsideRoots, "the override's roots do not hold it")
 	assert.NoError(t, verifyTrustedPathUnder(file, []string{builtin}), "walked to the root it is under")
 	require.NoError(t, os.Chmod(file, 0o664))
 	assert.ErrorIs(t, verifyTrustedPathUnder(file, []string{builtin}), errWritable)

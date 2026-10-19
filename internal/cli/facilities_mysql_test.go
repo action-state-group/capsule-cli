@@ -24,29 +24,29 @@ func TestMySQLIndependentFacilitiesAndReadOnlyList(t *testing.T) {
 		t.Cleanup(func() { _, err := admin.Exec("DROP DATABASE " + name); require.NoError(t, err) })
 	}
 	p.Connection.Database, p.LogID = "capsule_cli_artifacts_only", ""
-	artifacts, err := openTarget(t.Context(), p, useInitialization)
+	artifacts, err := OpenTarget(t.Context(), p, UseInitialization)
 	require.NoError(t, err)
-	require.NotNil(t, artifacts.artifacts)
-	require.Nil(t, artifacts.log)
+	require.NotNil(t, artifacts.Artifacts)
+	require.Nil(t, artifacts.Log)
 	var count int
 	require.NoError(t, artifacts.db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name LIKE 'cll_%'").Scan(&count))
 	require.Zero(t, count)
-	require.NoError(t, artifacts.close())
+	require.NoError(t, artifacts.Close())
 
 	p.Connection.Database, p.Namespace, p.LogID, p.TrustedKeys = "capsule_cli_log_only", "", "test-log", nil
-	ledger, err := openTarget(t.Context(), p, useInitialization)
+	ledger, err := OpenTarget(t.Context(), p, UseInitialization)
 	require.NoError(t, err)
-	require.Nil(t, ledger.artifacts)
+	require.Nil(t, ledger.Artifacts)
 	require.NoError(t, ledger.db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name LIKE 'capsule_store_%'").Scan(&count))
 	require.Zero(t, count)
-	_, err = ledger.log.Append(t.Context(), cll.AppendInput{Value: make([]byte, 32), AppendedAt: time.Now().UTC()})
+	_, err = ledger.Log.Append(t.Context(), cll.AppendInput{Value: make([]byte, 32), AppendedAt: time.Now().UTC()})
 	require.NoError(t, err)
-	require.NoError(t, ledger.close())
+	require.NoError(t, ledger.Close())
 	p.Checkpoint.Endpoint = "https://127.0.0.1:1"
 	p.Checkpoint.PublicKey = p.Checkpoint.TrustedKeys[0]
 	writer := p
 	writer.TrustedKeys = producerTrust
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	_, err = invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
 	require.NoError(t, err)
 	_, err = admin.Exec("CREATE USER 'capsule_cli_reader'@'%' IDENTIFIED BY 'isolated-reader'")
@@ -56,27 +56,27 @@ func TestMySQLIndependentFacilitiesAndReadOnlyList(t *testing.T) {
 	require.NoError(t, err)
 	p.Credentials.Username, p.Credentials.Password = "capsule_cli_reader", Secret{Value: "isolated-reader"}
 	p.ReadOnly = true
-	require.NoError(t, saveProfile(p, true))
+	require.NoError(t, SaveProfile(p, true))
 	out, err := invoke(t, "", "cll", "list", "--profile", p.Name, "--after", "0", "--through", "1")
 	require.NoError(t, err)
 	require.Contains(t, out, `"sequence":1`)
 	_, err = invoke(t, "", "cll", "checkpoint", "status", "--profile", p.Name, "--checkpoint", "1")
 	require.NoError(t, err)
-	_, err = openTarget(t.Context(), p, useInitialization)
+	_, err = OpenTarget(t.Context(), p, UseInitialization)
 	require.ErrorIs(t, err, ErrReadOnlyCLL)
-	require.NoError(t, saveProfile(writer, true))
-	request, err := parseRequest(requestFixture(t))
+	require.NoError(t, SaveProfile(writer, true))
+	request, err := ParseRequest(requestFixture(t))
 	require.NoError(t, err)
-	record, err := seal(request, key)
+	record, err := Seal(request, key)
 	require.NoError(t, err)
 	raw, err := json.Marshal(record)
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "record.json")
-	require.NoError(t, atomicFile(path, raw, false))
+	require.NoError(t, AtomicFile(path, raw, false))
 	_, err = invoke(t, "", "cll", "append", "--profile", writer.Name, "--capsule", path)
 	require.NoError(t, err)
 	require.NoError(t, admin.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='capsule_cli_log_only' AND table_name LIKE 'capsule_store_%'").Scan(&count))
 	require.Zero(t, count)
-	_, err = openTarget(t.Context(), p, useCLL)
+	_, err = OpenTarget(t.Context(), p, UseCLL)
 	require.ErrorIs(t, err, ErrReadOnlyCLL)
 }

@@ -26,8 +26,8 @@ func doctorReport(t *testing.T, args ...string) map[string]any {
 func TestDoctorWithoutProfile(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	report := doctorReport(t)
-	assert.Equal(t, cliVersion, report["binary_version"])
-	assert.Equal(t, cliCommit, report["binary_commit"])
+	assert.Equal(t, CLIVersion, report["binary_version"])
+	assert.Equal(t, CLICommit, report["binary_commit"])
 	profile, _ := report["profile"].(map[string]any)
 	assert.Equal(t, "", profile["selected"])
 	assert.Equal(t, false, profile["present"])
@@ -53,7 +53,7 @@ func TestDoctorSigningKeyFilePermissions(t *testing.T) {
 	keyPath := filepath.Join(t.TempDir(), "signing.key")
 	require.NoError(t, os.WriteFile(keyPath, []byte(secretValue), 0o600))
 	p.Signing = Secret{File: keyPath}
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 
 	report := doctorReport(t, "--profile", p.Name)
 	profile, _ := report["profile"].(map[string]any)
@@ -82,7 +82,7 @@ func TestDoctorSigningKeyFromEnvNeverPrintsValue(t *testing.T) {
 	p, _ := profileFixture(t)
 	secretValue := p.Signing.Value
 	p.Signing = Secret{Env: "DOCTOR_TEST_SIGNING_KEY"}
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	t.Setenv("DOCTOR_TEST_SIGNING_KEY", secretValue)
 
 	report := doctorReport(t, "--profile", p.Name)
@@ -113,7 +113,7 @@ func TestDoctorWitnessReachabilityIsOptInAndNeverSendsAuth(t *testing.T) {
 	// serviceID (used elsewhere) requires HTTPS; doctor's own reachability
 	// probe intentionally does not call serviceID, so an http:// test server
 	// is fine here.
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 
 	// Without --check-witness: no request at all.
 	report := doctorReport(t, "--profile", p.Name)
@@ -153,7 +153,7 @@ func TestDoctorWitnessFailsWithoutPublicKey(t *testing.T) {
 			p, _ := profileFixture(t)
 			p.Checkpoint.Endpoint = server.URL
 			p.Checkpoint.PublicKey = key
-			require.NoError(t, saveProfile(p, false))
+			require.NoError(t, SaveProfile(p, false))
 			out, err := invoke(t, "", "doctor", "--profile", p.Name, "--check-witness")
 			require.ErrorIs(t, err, ErrPartial)
 			var report map[string]any
@@ -188,7 +188,7 @@ func TestDoctorNeverPrintsAPrivateKeySeed(t *testing.T) {
 	// sources -- doctor must not echo it.
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	report := doctorReport(t, "--profile", p.Name)
 	raw, e := json.Marshal(report)
 	require.NoError(t, e)
@@ -206,7 +206,7 @@ func TestDoctorWitnessErrorStatusIsNotOK(t *testing.T) {
 		p, _ := profileFixture(t)
 		p.Checkpoint.Endpoint = server.URL
 		p.Checkpoint.PublicKey = p.TrustedKeys[0]
-		require.NoError(t, saveProfile(p, false))
+		require.NoError(t, SaveProfile(p, false))
 		report := doctorReport(t, "--profile", p.Name, "--check-witness")
 		witness, _ := report["witness"].(map[string]any)
 		assert.Equal(t, true, witness["reachable"])

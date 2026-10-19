@@ -27,8 +27,8 @@ type witnessRowShape struct {
 // loadWitnessDirectory reads a witness directory file: {"witnesses": [rows]}
 // or a bare array of rows. An object without a witnesses array is refused
 // rather than read as a directory that trusts no witness.
-func loadWitnessDirectory(path string) (witness.Directory, error) {
-	raw, err := readInput(path)
+func LoadWitnessDirectory(path string) (witness.Directory, error) {
+	raw, err := ReadInput(path)
 	if err != nil {
 		return witness.Directory{}, err
 	}
@@ -42,15 +42,15 @@ func loadWitnessDirectory(path string) (witness.Directory, error) {
 		}
 		err = json.Unmarshal(raw, &wrapped)
 		if err == nil && wrapped.Witnesses == nil {
-			return witness.Directory{}, hint(ErrInput, "the witness directory has no witnesses array")
+			return witness.Directory{}, Hint(ErrInput, "the witness directory has no witnesses array")
 		}
 	}
 	if err != nil {
-		return witness.Directory{}, hint(ErrInput, "the witness directory is not a witnesses.json file")
+		return witness.Directory{}, Hint(ErrInput, "the witness directory is not a witnesses.json file")
 	}
 	directory, err := witness.ParseDirectory(raw)
 	if err != nil {
-		return witness.Directory{}, hint(ErrInput, "the witness directory is not a witnesses.json file")
+		return witness.Directory{}, Hint(ErrInput, "the witness directory is not a witnesses.json file")
 	}
 	return directory, nil
 }

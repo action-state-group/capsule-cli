@@ -36,19 +36,19 @@ func emitModuleDir(t *testing.T) string {
 
 // jsonlArtifactTarget initializes a jsonl profile trusting keys and opens its
 // artifact store the way every capsulectl artifact command does.
-func jsonlArtifactTarget(t *testing.T, keys ...string) *target {
+func jsonlArtifactTarget(t *testing.T, keys ...string) *Target {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	p.Type = "jsonl"
+	p.Type, p.Log = "jsonl", LogCLL // a plain jsonl profile: the core keeps its log
 	p.Connection.Database = filepath.Join(t.TempDir(), "store")
 	p.TrustedKeys = keys
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	_, err := invoke(t, "", "store", "init", "--profile", p.Name)
 	require.NoError(t, err)
-	tg, err := openTarget(t.Context(), p, useArtifacts)
+	tg, err := OpenTarget(t.Context(), p, UseArtifacts)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, tg.close()) })
+	t.Cleanup(func() { require.NoError(t, tg.Close()) })
 	return tg
 }
 
@@ -65,7 +65,7 @@ func sealedSpecVersion(t *testing.T, capsule []byte) any {
 func TestCapsulectlSealStampsSpecVersion05(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	dir := t.TempDir()
 	request := filepath.Join(dir, "request.json")
 	require.NoError(t, os.WriteFile(request, requestFixture(t), 0600))
@@ -116,13 +116,13 @@ func TestV04RecordAndV05TwinLoadAndVerifyThroughArtifactStore(t *testing.T) {
 
 				tg := jsonlArtifactTarget(t, expected.PublicKeyHex)
 				record := artifact.Record{CapsuleID: expected.CapsuleID, Capsule: capsule, ProducerEnvelope: envelope}
-				require.NoError(t, tg.artifacts.Put(t.Context(), record), pack.specVersion)
-				got, err := tg.artifacts.Get(t.Context(), expected.CapsuleID)
+				require.NoError(t, tg.Artifacts.Put(t.Context(), record), pack.specVersion)
+				got, err := tg.Artifacts.Get(t.Context(), expected.CapsuleID)
 				require.NoError(t, err, pack.specVersion)
 				assert.Equal(t, capsule, got.Capsule)
 				assert.Equal(t, envelope, got.ProducerEnvelope)
 
-				keys, err := parseKeys([]string{expected.PublicKeyHex})
+				keys, err := ParseKeys([]string{expected.PublicKeyHex})
 				require.NoError(t, err)
 				_, err = artifact.Verify(got, keys)
 				require.NoError(t, err, pack.specVersion)
@@ -142,9 +142,9 @@ func TestUnrecognizedSpecVersionIsNotRejected(t *testing.T) {
 	public, ok := key.Public().(ed25519.PublicKey)
 	require.True(t, ok)
 	request := `{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":"future-rev","ActionType":"fyi","Operator":"test-operator","Developer":"test-developer","Timestamp":"2026-09-08T00:00:00Z"}}`
-	r, err := parseRequest([]byte(request))
+	r, err := ParseRequest([]byte(request))
 	require.NoError(t, err)
-	sealed, err := seal(r, key)
+	sealed, err := Seal(r, key)
 	require.NoError(t, err)
 
 	value, err := emit.DecodePayload(sealed.Capsule)
@@ -162,8 +162,8 @@ func TestUnrecognizedSpecVersionIsNotRejected(t *testing.T) {
 	require.NoError(t, err)
 
 	tg := jsonlArtifactTarget(t, hex.EncodeToString(public))
-	require.NoError(t, tg.artifacts.Put(t.Context(), artifact.Record{CapsuleID: id, Capsule: capsule, ProducerEnvelope: envelope}))
-	got, err := tg.artifacts.Get(t.Context(), id)
+	require.NoError(t, tg.Artifacts.Put(t.Context(), artifact.Record{CapsuleID: id, Capsule: capsule, ProducerEnvelope: envelope}))
+	got, err := tg.Artifacts.Get(t.Context(), id)
 	require.NoError(t, err)
 	assert.Equal(t, unrecognizedSpecVersion, sealedSpecVersion(t, got.Capsule))
 

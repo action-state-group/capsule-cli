@@ -70,9 +70,13 @@ fi
 # shards together run every test; a name two packages share runs in each.
 # Each pass ends with its per-package times and slowest tests, and warns when
 # a package takes longer than CAPSULE_TEST_BUDGET seconds (default 420).
+# Both modules: the core (the repository root) and the first-party plugins
+# (plugins/, capsule-cli#236). go test ./... in a module does not reach into a
+# nested one, so every go command below runs once per module.
+modules=(. plugins)
 run=()
 if ((shard_count > 1)); then
-  listed=$(go test -list '.*' ./...)
+  listed=$(for m in "${modules[@]}"; do (cd "$m" && go test -list '.*' ./...); done)
   names=$(printf '%s\n' "$listed" | grep -E '^(Test|Example|Fuzz)' | sort -u |
     awk -v i="$shard_index" -v n="$shard_count" '(NR - 1) % n == i - 1')
   if [[ -z "$names" ]]; then
@@ -104,9 +108,13 @@ timed() {
 }
 
 printf 'Running all tests, including MySQL integration, on loopback port %s\n' "$CAPSULE_CLI_TEST_MYSQL_PORT"
-if [[ "$pass" != plain ]]; then
-  timed "race $shard" ${@+"$@"} "${run[@]}" -race -count=1 -timeout=15m ./...
-fi
-if [[ "$pass" != race ]]; then
-  timed "plain $shard" ${@+"$@"} "${run[@]}" -count=1 -timeout=10m ./...
-fi
+status=0
+for m in "${modules[@]}"; do
+  if [[ "$pass" != plain ]]; then
+    (cd "$m" && timed "race $shard ($m)" ${@+"$@"} "${run[@]}" -race -count=1 -timeout=15m ./...) || status=$?
+  fi
+  if [[ "$pass" != race ]]; then
+    (cd "$m" && timed "plain $shard ($m)" ${@+"$@"} "${run[@]}" -count=1 -timeout=10m ./...) || status=$?
+  fi
+done
+exit "$status"

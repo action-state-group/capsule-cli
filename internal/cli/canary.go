@@ -38,7 +38,7 @@ var ErrAlarm = errors.New("canary alarm")
 
 // errWitnessUnread is `canary watch` unable to read the witness at all: it
 // cannot tell whether the log advanced, so it says so instead of alarming.
-var errWitnessUnread = errors.New("witness not readable")
+var ErrWitnessUnread = errors.New("witness not readable")
 
 func canaryCommands() *cobra.Command {
 	canary := &cobra.Command{Use: "canary", Short: "A scheduled DEMO deal, and a watcher that alarms from the public witness when it stops"}
@@ -60,35 +60,35 @@ const (
 )
 
 func canaryRunCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "run", Short: "Run the scripted DEMO deal on this canary profile and tick its cadence log only if every step succeeded", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "run", Short: "Run the scripted DEMO deal on this canary profile and tick its cadence log only if every step succeeded", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		skill, _ := c.Flags().GetString("skill")
 		wantVersion, _ := c.Flags().GetString("expect-version")
 		wantSkill, _ := c.Flags().GetString("expect-skill-sha256")
-		p, err := selected(c)
+		p, err := Selected(c)
 		if err != nil {
 			return err
 		}
 		if p.Checkpoint.Endpoint == "" {
-			return hint(ErrInput, "canary: this profile has no witness, so nothing the canary does can be seen from outside; nothing was sealed")
+			return Hint(ErrInput, "canary: this profile has no witness, so nothing the canary does can be seen from outside; nothing was sealed")
 		}
-		if wantVersion != "" && wantVersion != cliVersion {
-			return hint(ErrConflict, fmt.Sprintf("canary: this binary is %s, expected %s; nothing was sealed", cliVersion, wantVersion))
+		if wantVersion != "" && wantVersion != CLIVersion {
+			return Hint(ErrConflict, fmt.Sprintf("canary: this binary is %s, expected %s; nothing was sealed", CLIVersion, wantVersion))
 		}
 		skillSum := ""
 		if skill != "" {
 			data, err := os.ReadFile(skill)
 			if err != nil {
-				return hint(ErrInput, fmt.Sprintf("canary: the skill file %s cannot be read (%s); nothing was sealed", skill, describeFileError(err)))
+				return Hint(ErrInput, fmt.Sprintf("canary: the skill file %s cannot be read (%s); nothing was sealed", skill, describeFileError(err)))
 			}
 			sum := sha256.Sum256(data)
 			skillSum = hex.EncodeToString(sum[:])
 		}
 		if wantSkill != "" {
 			if skill == "" {
-				return inputError("--expect-skill-sha256 needs --skill")
+				return InputError("--expect-skill-sha256 needs --skill")
 			}
 			if !strings.EqualFold(wantSkill, skillSum) {
-				return hint(ErrConflict, fmt.Sprintf("canary: %s has sha256 %s, expected %s; nothing was sealed", skill, skillSum, strings.ToLower(wantSkill)))
+				return Hint(ErrConflict, fmt.Sprintf("canary: %s has sha256 %s, expected %s; nothing was sealed", skill, skillSum, strings.ToLower(wantSkill)))
 			}
 		}
 
@@ -115,7 +115,7 @@ func canaryRunCommand() *cobra.Command {
 		}
 		dealID, _ := opened["deal_id"].(string)
 		if dealID == "" {
-			return hint(ErrPartial, "canary: `deal open` gave no deal_id; stopped before the tick")
+			return Hint(ErrPartial, "canary: `deal open` gave no deal_id; stopped before the tick")
 		}
 		skillDetail := "no skill file given"
 		if skillSum != "" {
@@ -124,7 +124,7 @@ func canaryRunCommand() *cobra.Command {
 		noteBody, _ := json.Marshal(map[string]string{
 			"about":  "canary self-check",
 			"source": "capsulectl canary run",
-			"detail": fmt.Sprintf("binary %s (commit %s); %s", cliVersion, cliCommit, skillDetail),
+			"detail": fmt.Sprintf("binary %s (commit %s); %s", CLIVersion, CLICommit, skillDetail),
 		})
 		notePath, err := file("note.json", string(noteBody))
 		if err != nil {
@@ -143,7 +143,7 @@ func canaryRunCommand() *cobra.Command {
 		}
 		approvalID, _ := checked["approval_id"].(string)
 		if checked["verdict"] != "pass" || approvalID == "" {
-			return hint(ErrPartial, fmt.Sprintf("canary: the demo check did not pass (verdict %v), so no approval was sealed; stopped before the tick", checked["verdict"]))
+			return Hint(ErrPartial, fmt.Sprintf("canary: the demo check did not pass (verdict %v), so no approval was sealed; stopped before the tick", checked["verdict"]))
 		}
 		if _, err = step("report", "--deal", dealID); err != nil {
 			return err
@@ -157,8 +157,8 @@ func canaryRunCommand() *cobra.Command {
 			"deal_id":        dealID,
 			"check_id":       checked["check_id"],
 			"approval_id":    approvalID,
-			"binary_version": cliVersion,
-			"binary_commit":  cliCommit,
+			"binary_version": CLIVersion,
+			"binary_commit":  CLICommit,
 			"cadence_log":    ticked["cadence_log"],
 			"tick":           ticked["state"],
 		}
@@ -170,7 +170,7 @@ func canaryRunCommand() *cobra.Command {
 				out[k] = v
 			}
 		}
-		return output(c, out)
+		return Output(c, out)
 	}}
 	cmd.Flags().String("skill", "", "The SKILL.md the agent loads; its sha256 is sealed in the run, and a missing file stops the run")
 	cmd.Flags().String("expect-version", "", "Stop before sealing unless this binary reports exactly this version")
@@ -183,6 +183,9 @@ func canaryRunCommand() *cobra.Command {
 // and names the verb, with the verb's own (already non-secret) message.
 func canaryStep(ctx context.Context, profile string, args ...string) (map[string]any, error) {
 	root := NewCommand()
+	if DealCommandGroup != nil {
+		root = NewCommandWith(DealCommandGroup())
+	}
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(io.Discard)
@@ -196,11 +199,11 @@ func canaryStep(ctx context.Context, profile string, args ...string) (map[string
 				break
 			}
 		}
-		return nil, hint(class, fmt.Sprintf("canary: `deal %s` failed: %s; stopped before the tick", args[0], SafeError(err)))
+		return nil, Hint(class, fmt.Sprintf("canary: `deal %s` failed: %s; stopped before the tick", args[0], SafeError(err)))
 	}
 	var result map[string]any
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
-		return nil, hint(ErrPartial, fmt.Sprintf("canary: `deal %s` printed no result object; stopped before the tick", args[0]))
+		return nil, Hint(ErrPartial, fmt.Sprintf("canary: `deal %s` printed no result object; stopped before the tick", args[0]))
 	}
 	return result, nil
 }
@@ -218,7 +221,7 @@ func describeFileError(err error) string {
 
 // witnessCheckpoint is the witness's read-only answer for one log:
 // GET {witness}/checkpoints/{log_id}, the last checkpoint it accepted.
-type witnessCheckpoint struct {
+type WitnessCheckpoint struct {
 	LogID           string            `json:"log_id"`
 	MMRSize         uint64            `json:"mmr_size"`
 	Root            string            `json:"root"`
@@ -241,12 +244,12 @@ type canaryObservation struct {
 	SizeSince string `json:"size_since"`
 }
 
-var canaryHTTP = canaryClient(nil)
+var CanaryHTTP = CanaryClient(nil)
 
 // canaryClient reads the witness with transport (nil: the default), and
 // never follows a redirect off HTTPS: an answer about a public log must come
 // over the same kind of channel it was asked on.
-func canaryClient(transport http.RoundTripper) *http.Client {
+func CanaryClient(transport http.RoundTripper) *http.Client {
 	return &http.Client{
 		Timeout:   20 * time.Second,
 		Transport: transport,
@@ -280,31 +283,31 @@ func witnessURLAllowed(u *url.URL) bool {
 }
 
 func canaryWatchCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "watch", Short: "Read a log's last checkpoint from the public witness and alarm when it is stale or its history was rewritten", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "watch", Short: "Read a log's last checkpoint from the public witness and alarm when it is stale or its history was rewritten", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		logID, _ := c.Flags().GetString("log-id")
 		witness, _ := c.Flags().GetString("witness")
 		every, _ := c.Flags().GetDuration("expect-every")
 		statePath, _ := c.Flags().GetString("state")
 		if logID == "" || every <= 0 {
-			return inputError("--log-id and a positive --expect-every are required")
+			return InputError("--log-id and a positive --expect-every are required")
 		}
 		if u, err := url.Parse(witness); err != nil || u.Host == "" || !witnessURLAllowed(u) {
-			return hint(ErrInput, "--witness must be an https URL (plain http only for a witness on this machine)")
+			return Hint(ErrInput, "--witness must be an https URL (plain http only for a witness on this machine)")
 		}
 		if statePath == "" {
-			dir, err := profilesDir()
+			dir, err := ProfilesDir()
 			if err != nil {
 				return err
 			}
 			statePath = filepath.Join(filepath.Dir(dir), "canary", canaryStateName(logID)+".json")
 		}
-		now := dealClock().UTC()
+		now := DealClock().UTC()
 		cp, found, err := readWitnessCheckpoint(c.Context(), witness, logID)
 		if err != nil {
-			return hint(errWitnessUnread, fmt.Sprintf("could not read %s for %s (%s); cannot tell whether it advanced", witness, logID, err))
+			return Hint(ErrWitnessUnread, fmt.Sprintf("could not read %s for %s (%s); cannot tell whether it advanced", witness, logID, err))
 		}
 		if !found {
-			return hint(ErrAlarm, fmt.Sprintf("%s has never been witnessed at %s", logID, witness))
+			return Hint(ErrAlarm, fmt.Sprintf("%s has never been witnessed at %s", logID, witness))
 		}
 		prev, hadPrev, err := readCanaryState(statePath)
 		if err != nil {
@@ -312,7 +315,7 @@ func canaryWatchCommand() *cobra.Command {
 		}
 		if why := canaryRewritten(cp, prev, hadPrev); why != "" {
 			// The last good observation is kept, so every later run alarms too.
-			return hint(ErrAlarm, fmt.Sprintf("%s history was rewritten: %s", logID, why))
+			return Hint(ErrAlarm, fmt.Sprintf("%s history was rewritten: %s", logID, why))
 		}
 		next := canaryObservation{LogID: logID, MMRSize: cp.MMRSize, Root: cp.Root, KeyID: cp.KeyID, Timestamp: cp.Timestamp, SizeSince: now.Format(time.RFC3339)}
 		if hadPrev && prev.MMRSize == cp.MMRSize && prev.SizeSince != "" {
@@ -323,16 +326,16 @@ func canaryWatchCommand() *cobra.Command {
 		}
 		stamped, err := time.Parse(time.RFC3339, cp.Timestamp)
 		if err != nil {
-			return hint(ErrAlarm, fmt.Sprintf("%s: the witness's last checkpoint has no readable time (%q)", logID, cp.Timestamp))
+			return Hint(ErrAlarm, fmt.Sprintf("%s: the witness's last checkpoint has no readable time (%q)", logID, cp.Timestamp))
 		}
 		since, _ := time.Parse(time.RFC3339, next.SizeSince)
 		if age := now.Sub(stamped); age > every {
-			return hint(ErrAlarm, fmt.Sprintf("%s has not advanced since %s (%s ago; expected every %s)", logID, cp.Timestamp, age.Truncate(time.Minute), every))
+			return Hint(ErrAlarm, fmt.Sprintf("%s has not advanced since %s (%s ago; expected every %s)", logID, cp.Timestamp, age.Truncate(time.Minute), every))
 		}
 		if held := now.Sub(since); held > every {
-			return hint(ErrAlarm, fmt.Sprintf("%s has stayed at size %d since %s (%s; expected every %s)", logID, cp.MMRSize, next.SizeSince, held.Truncate(time.Minute), every))
+			return Hint(ErrAlarm, fmt.Sprintf("%s has stayed at size %d since %s (%s; expected every %s)", logID, cp.MMRSize, next.SizeSince, held.Truncate(time.Minute), every))
 		}
-		return output(c, map[string]any{
+		return Output(c, map[string]any{
 			"state":            "advancing",
 			"log_id":           logID,
 			"mmr_size":         cp.MMRSize,
@@ -343,14 +346,14 @@ func canaryWatchCommand() *cobra.Command {
 		})
 	}}
 	cmd.Flags().String("log-id", "", "The canary profile's cadence log id (deal-cadence/...)")
-	cmd.Flags().String("witness", dealDefaultWitness, "The public witness to read")
+	cmd.Flags().String("witness", DealDefaultWitness, "The public witness to read")
 	cmd.Flags().Duration("expect-every", 0, "Alarm when the log has not advanced for longer than this: the canary's schedule plus the tick interval and jitter")
 	cmd.Flags().String("state", "", "Where this watcher keeps its last observation (default: under the config directory)")
 	return cmd
 }
 
 // canaryRewritten names how cp contradicts the last observation, or "".
-func canaryRewritten(cp witnessCheckpoint, prev canaryObservation, hadPrev bool) string {
+func canaryRewritten(cp WitnessCheckpoint, prev canaryObservation, hadPrev bool) string {
 	if n := len(cp.Equivocations); n > 0 {
 		return fmt.Sprintf("the witness has flagged %d conflicting checkpoint(s) for this log", n)
 	}
@@ -370,10 +373,10 @@ func canaryRewritten(cp witnessCheckpoint, prev canaryObservation, hadPrev bool)
 	return ""
 }
 
-func readWitnessCheckpoint(ctx context.Context, witness, logID string) (witnessCheckpoint, bool, error) {
+func readWitnessCheckpoint(ctx context.Context, witness, logID string) (WitnessCheckpoint, bool, error) {
 	base, err := url.Parse(witness)
 	if err != nil || base.Host == "" || !witnessURLAllowed(base) {
-		return witnessCheckpoint{}, false, errors.New("not an https URL")
+		return WitnessCheckpoint{}, false, errors.New("not an https URL")
 	}
 	segments := strings.Split(logID, "/")
 	for i, s := range segments {
@@ -382,29 +385,29 @@ func readWitnessCheckpoint(ctx context.Context, witness, logID string) (witnessC
 	target := strings.TrimRight(witness, "/") + "/checkpoints/" + strings.Join(segments, "/")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return witnessCheckpoint{}, false, err
+		return WitnessCheckpoint{}, false, err
 	}
-	resp, err := canaryHTTP.Do(req)
+	resp, err := CanaryHTTP.Do(req)
 	if err != nil {
 		var redirect *url.Error
 		if errors.As(err, &redirect) && strings.Contains(redirect.Err.Error(), "redirect") {
-			return witnessCheckpoint{}, false, redirect.Err
+			return WitnessCheckpoint{}, false, redirect.Err
 		}
-		return witnessCheckpoint{}, false, errors.New("no answer")
+		return WitnessCheckpoint{}, false, errors.New("no answer")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return witnessCheckpoint{}, false, nil
+		return WitnessCheckpoint{}, false, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return witnessCheckpoint{}, false, fmt.Errorf("status %d", resp.StatusCode)
+		return WitnessCheckpoint{}, false, fmt.Errorf("status %d", resp.StatusCode)
 	}
-	var cp witnessCheckpoint
+	var cp WitnessCheckpoint
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&cp); err != nil {
-		return witnessCheckpoint{}, false, errors.New("not a checkpoint")
+		return WitnessCheckpoint{}, false, errors.New("not a checkpoint")
 	}
 	if cp.LogID != logID {
-		return witnessCheckpoint{}, false, fmt.Errorf("answered for log %q", cp.LogID)
+		return WitnessCheckpoint{}, false, fmt.Errorf("answered for log %q", cp.LogID)
 	}
 	return cp, true, nil
 }
@@ -419,11 +422,11 @@ func readCanaryState(path string) (canaryObservation, bool, error) {
 		return canaryObservation{}, false, nil
 	}
 	if err != nil {
-		return canaryObservation{}, false, hint(ErrInput, fmt.Sprintf("canary state %s is unreadable", path))
+		return canaryObservation{}, false, Hint(ErrInput, fmt.Sprintf("canary state %s is unreadable", path))
 	}
 	var o canaryObservation
 	if err := json.Unmarshal(data, &o); err != nil {
-		return canaryObservation{}, false, hint(ErrInput, fmt.Sprintf("canary state %s is not a canary observation; move it aside to start over", path))
+		return canaryObservation{}, false, Hint(ErrInput, fmt.Sprintf("canary state %s is not a canary observation; move it aside to start over", path))
 	}
 	return o, true, nil
 }

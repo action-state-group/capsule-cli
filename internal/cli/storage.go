@@ -28,8 +28,8 @@ import (
 // jsonlFile names the fixed artifact and CLL files inside a jsonl profile's
 // connection.database directory.
 const (
-	jsonlArtifactFile = "artifacts.jsonl"
-	jsonlLogFile      = "cll.jsonl"
+	JSONLArtifactFile = "artifacts.jsonl"
+	JSONLLogFile      = "cll.jsonl"
 )
 
 // jsonlDir returns the absolute storage directory for a jsonl profile.
@@ -45,7 +45,7 @@ var ErrPartial = errors.New("verification incomplete or required originals unava
 // openLog and initLog dispatch CLL storage by profile type. MySQL and SQLite are
 // peer backends. For SQLite the coordinate is a file path (opened as its own
 // single-writer handle); for MySQL it is the shared DSN.
-func openLog(ctx context.Context, p Profile, coordinate, logID string) (cll.Backend, error) {
+func OpenLog(ctx context.Context, p Profile, coordinate, logID string) (cll.Backend, error) {
 	switch p.Type {
 	case "mysql":
 		return cllmysql.Open(ctx, coordinate, logID)
@@ -53,9 +53,9 @@ func openLog(ctx context.Context, p Profile, coordinate, logID string) (cll.Back
 		return cllsqlite.Open(coordinate, logID)
 	case "jsonl":
 		// The file is the log; coordinate is the profile's storage directory.
-		return clljsonl.Open(filepath.Join(coordinate, jsonlLogFile))
+		return clljsonl.Open(filepath.Join(coordinate, JSONLLogFile))
 	default:
-		return nil, inputError("profile type must be mysql, sqlite or jsonl")
+		return nil, InputError("profile type must be mysql, sqlite or jsonl")
 	}
 }
 
@@ -66,13 +66,13 @@ func initLog(ctx context.Context, p Profile, coordinate, logID string) error {
 	case "sqlite":
 		return cllsqlite.Init(coordinate, logID)
 	case "jsonl":
-		return clljsonl.Init(filepath.Join(coordinate, jsonlLogFile))
+		return clljsonl.Init(filepath.Join(coordinate, JSONLLogFile))
 	default:
-		return inputError("profile type must be mysql, sqlite or jsonl")
+		return InputError("profile type must be mysql, sqlite or jsonl")
 	}
 }
 
-func newArtifactStore(p Profile, db *sql.DB, keys []ed25519.PublicKey) (artifactStore, error) {
+func NewArtifactStore(p Profile, db *sql.DB, keys []ed25519.PublicKey) (ArtifactStore, error) {
 	switch p.Type {
 	case "mysql":
 		return artifactmysql.New(db, p.Namespace, keys)
@@ -83,57 +83,60 @@ func newArtifactStore(p Profile, db *sql.DB, keys []ed25519.PublicKey) (artifact
 		if e != nil {
 			return nil, e
 		}
-		return artifactjsonl.New(filepath.Join(dir, jsonlArtifactFile), p.Namespace, keys)
+		return artifactjsonl.New(filepath.Join(dir, JSONLArtifactFile), p.Namespace, keys)
 	default:
-		return nil, inputError("profile type must be mysql, sqlite or jsonl")
+		return nil, InputError("profile type must be mysql, sqlite or jsonl")
 	}
 }
 
-// artifactStore is the subset of the artifact SDK the CLI drives, satisfied by
-// both the MySQL and SQLite backends so openTarget can pick one by profile type.
-type artifactStore interface {
+// ArtifactStore is the subset of the artifact SDK the CLI drives, satisfied
+// by every backend (jsonl, mysql, sqlite) so OpenTarget can pick one by
+// profile type. Purge erases a record's originals; only a book's retention
+// calls it.
+type ArtifactStore interface {
 	Init(context.Context) error
 	Put(context.Context, artifact.Record) error
 	Get(context.Context, string) (artifact.Record, error)
+	Purge(context.Context, string) error
 }
 
-type target struct {
+type Target struct {
 	db        *sql.DB
-	artifacts artifactStore
-	// log is the CLL of a mysql or sqlite profile. A jsonl profile has no
-	// such log: its one log is the evidence book, and log stays nil.
-	log     cll.Backend
-	book    *openedBook
-	profile Profile
+	Artifacts ArtifactStore
+	// Log is the CLL of a plain profile. A book profile has no such log:
+	// its one log is the evidence book (Book), and Log stays nil.
+	Log     cll.Backend
+	Book    BookLog
+	Profile Profile
 }
 
-// errBookProfile refuses a CLL-only operation on a jsonl profile, whose one
+// errBookProfile refuses a CLL-only operation on a book profile, whose one
 // log is its evidence book, rather than reaching for a second log.
-var errBookProfile = inputError("not available on a jsonl profile: its log is the evidence book")
+var ErrBookProfile = InputError("not available on a book profile: its log is the evidence book")
 
 // targetUse names the actual dependencies instead of inferring artifact access
 // from whether a command also needs a log. CLL-only commands never build SDK
 // artifact handles; publication explicitly needs both.
-type targetUse uint8
+type TargetUse uint8
 
 const (
-	useArtifacts targetUse = iota
-	useCLL
-	usePublication
-	useCLLRead
-	useInitialization
+	UseArtifacts TargetUse = iota
+	UseCLL
+	UsePublication
+	UseCLLRead
+	UseInitialization
 	// useRead is useCLLRead with the artifact store: a read of a log's
 	// records as well as its entries, writing nothing.
-	useRead
+	UseRead
 )
 
-func (t *target) close() error {
+func (t *Target) Close() error {
 	var e error
-	if t.log != nil {
-		e = t.log.Close()
+	if t.Log != nil {
+		e = t.Log.Close()
 	}
-	if t.book != nil {
-		e = errors.Join(e, t.book.release())
+	if t.Book != nil {
+		e = errors.Join(e, t.Book.Release())
 	}
 	// The jsonl backend uses no *sql.DB, so t.db is nil for that profile type.
 	if t.db != nil {
@@ -149,11 +152,11 @@ func connection(p Profile) (*sql.DB, string, error) {
 	case "mysql":
 		return mysqlConnection(p)
 	case "sqlite":
-		return sqliteConnection(p)
+		return SqliteConnection(p)
 	case "jsonl":
 		return jsonlConnection(p)
 	default:
-		return nil, "", inputError("profile type must be mysql, sqlite or jsonl")
+		return nil, "", InputError("profile type must be mysql, sqlite or jsonl")
 	}
 }
 
@@ -200,7 +203,7 @@ func mysqlConnection(p Profile) (*sql.DB, string, error) {
 // absolute file path as the CLL coordinate. A single open connection serializes
 // writers; foreign_keys and WAL match the cll-go SQLite store so both sets of
 // tables share one file safely.
-func sqliteConnection(p Profile) (*sql.DB, string, error) {
+func SqliteConnection(p Profile) (*sql.DB, string, error) {
 	absolute, e := filepath.Abs(p.Connection.Database)
 	if e != nil {
 		return nil, "", e
@@ -228,89 +231,94 @@ func missingLogIDReason(p Profile) string {
 	return "profile " + p.Name + " has no log_id, which this command needs: `capsulectl profile update --profile " + p.Name + " --log-id NAME`"
 }
 
-func openTarget(ctx context.Context, p Profile, use targetUse) (_ *target, err error) {
-	needsArtifacts := use == useArtifacts || use == usePublication || use == useRead || (use == useInitialization && p.Namespace != "")
-	needsCLL := use == useCLL || use == useCLLRead || use == useRead || use == usePublication || (use == useInitialization && p.LogID != "")
+func OpenTarget(ctx context.Context, p Profile, use TargetUse) (_ *Target, err error) {
+	needsArtifacts := use == UseArtifacts || use == UsePublication || use == UseRead || (use == UseInitialization && p.Namespace != "") ||
+		// A book keeps its records' originals in the artifact store.
+		(use == UseCLL && p.IsBook() && p.Namespace != "")
+	needsCLL := use == UseCLL || use == UseCLLRead || use == UseRead || use == UsePublication || (use == UseInitialization && p.LogID != "")
 	if needsArtifacts && p.Namespace == "" {
-		return nil, inputError("profile " + p.Name + " has no namespace, which this command needs: `capsulectl profile update --profile " + p.Name + " --namespace NAME`")
+		return nil, InputError("profile " + p.Name + " has no namespace, which this command needs: `capsulectl profile update --profile " + p.Name + " --namespace NAME`")
 	}
 	if needsCLL && p.LogID == "" {
-		return nil, inputError(missingLogIDReason(p))
+		return nil, InputError(missingLogIDReason(p))
 	}
-	if p.ReadOnly && use != useArtifacts && use != useCLLRead && use != useRead {
+	if p.ReadOnly && use != UseArtifacts && use != UseCLLRead && use != UseRead {
 		return nil, ErrReadOnlyCLL
 	}
-	keys, err := parseKeys(p.TrustedKeys)
+	keys, err := ParseKeys(p.TrustedKeys)
 	if err != nil {
 		return nil, err
 	}
 	if len(keys) == 0 && needsArtifacts {
-		return nil, inputError("artifact operations require producer trusted_keys")
+		return nil, InputError("artifact operations require producer trusted_keys")
 	}
 	db, dsn, err := connection(p)
 	if err != nil {
 		return nil, err
 	}
-	t := &target{db: db, profile: p}
+	t := &Target{db: db, Profile: p}
 	defer func() {
 		if err != nil {
-			err = errors.Join(err, t.close())
+			err = errors.Join(err, t.Close())
 		}
 	}()
 	// The jsonl backend has no auto-creating handle: store init provisions the
 	// directory; any other use requires it to already exist so a mistyped path
 	// or an uninitialized store fails clearly rather than fabricating a tree.
 	if p.Type == "jsonl" {
-		if use == useInitialization {
+		if use == UseInitialization {
 			if err = os.MkdirAll(dsn, 0o755); err != nil {
 				return nil, err
 			}
 		} else if _, statErr := os.Stat(dsn); statErr != nil {
-			err = inputError("jsonl storage directory does not exist; run 'store init'")
+			err = InputError("jsonl storage directory does not exist; run 'store init'")
 			return nil, err
 		}
 	}
 	// CLL-only commands do not need producer policy or an artifact store. The
 	// SDK constructor rightly requires trust, but that is not a CLL requirement.
 	if needsArtifacts {
-		t.artifacts, err = newArtifactStore(p, db, keys)
+		t.Artifacts, err = NewArtifactStore(p, db, keys)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if use == useInitialization && needsArtifacts {
-		if err = t.artifacts.Init(ctx); err != nil {
+	if use == UseInitialization && needsArtifacts {
+		if err = t.Artifacts.Init(ctx); err != nil {
 			return nil, err
 		}
 	}
-	if needsCLL && p.Type == "jsonl" && (use == useCLLRead || use == useRead) {
+	if needsCLL && p.IsBook() && bookBackend == nil {
+		return nil, errBookNeedsPlugin(p)
+	}
+	if needsCLL && p.IsBook() && (use == UseCLLRead || use == UseRead) {
 		// Reads (cll list, checkpoint status) never open the book: that
 		// needs its signing keys and takes its writer lock.
-	} else if needsCLL && p.Type == "jsonl" && use == useInitialization {
+	} else if needsCLL && p.IsBook() && use == UseInitialization {
 		// store init signs nothing, so it creates the book's files without
 		// opening the book: no signing or checkpoint key, no trust check.
-		if err = initBookFiles(ctx, p); err != nil {
+		if err = bookBackend.Init(ctx, p); err != nil {
 			return nil, err
 		}
-	} else if needsCLL && p.Type == "jsonl" {
-		book, err := openBook(ctx, p, false)
+	} else if needsCLL && p.IsBook() {
+		book, err := bookBackend.Open(ctx, p, t.Artifacts)
 		if err != nil {
 			return nil, err
 		}
-		t.book = &book
+		t.Book = book
 	} else if needsCLL {
-		if use == useInitialization {
+		if use == UseInitialization {
 			if err = initLog(ctx, p, dsn, p.LogID); err != nil {
 				return nil, err
 			}
 		}
 		// Assigned only on success: a failed open returns a typed nil, which
 		// close would call.
-		log, err := openLog(ctx, p, dsn, p.LogID)
+		log, err := OpenLog(ctx, p, dsn, p.LogID)
 		if err != nil {
 			return nil, err
 		}
-		t.log = log
+		t.Log = log
 	}
 	return t, nil
 }
@@ -328,12 +336,12 @@ type Publication struct {
 	Warning string `json:"warning,omitempty"`
 }
 
-func requirePublisherKey(p Profile, private ed25519.PrivateKey) error {
+func RequirePublisherKey(p Profile, private ed25519.PrivateKey) error {
 	public, ok := private.Public().(ed25519.PublicKey)
 	if !ok {
-		return inputError("the profile's signing key is not an Ed25519 key")
+		return InputError("the profile's signing key is not an Ed25519 key")
 	}
-	trusted, err := parseKeys(p.TrustedKeys)
+	trusted, err := ParseKeys(p.TrustedKeys)
 	if err != nil {
 		return err
 	}
@@ -347,37 +355,32 @@ func requirePublisherKey(p Profile, private ed25519.PrivateKey) error {
 
 // preparePublication persists the deterministic record through the artifact SDK.
 // Retries reuse the frozen request and signer.
-func (t *target) preparePublication(ctx context.Context, r Request, private ed25519.PrivateKey) (Publication, error) {
-	record, err := seal(r, private)
+func (t *Target) preparePublication(ctx context.Context, r Request, private ed25519.PrivateKey) (Publication, error) {
+	record, err := Seal(r, private)
 	if err != nil {
 		return Publication{}, err
 	}
-	if len(missingBindings(record)) != 0 {
+	if len(MissingBindings(record)) != 0 {
 		return Publication{}, ErrPartial
 	}
-	if err = t.artifacts.Put(ctx, record); err != nil {
+	if err = t.Artifacts.Put(ctx, record); err != nil {
 		return Publication{}, err
 	}
-	return Publication{Namespace: t.profile.Namespace, LogID: t.profile.LogID, CapsuleID: record.CapsuleID, State: "pending"}, nil
+	return Publication{Namespace: t.Profile.Namespace, LogID: t.Profile.LogID, CapsuleID: record.CapsuleID, State: "pending"}, nil
 }
-func (t *target) publish(ctx context.Context, r Request, private ed25519.PrivateKey) (Publication, error) {
+
+// Publish seals r and appends it. On a plain profile the capsule is put in
+// the artifact store and its id appended to the CLL. On a book profile the
+// book seals it, carrying its record header, as the record itself.
+func (t *Target) Publish(ctx context.Context, r Request, private ed25519.PrivateKey) (Publication, error) {
+	if t.Book != nil {
+		return t.Book.Publish(ctx, r, private)
+	}
 	result, err := t.preparePublication(ctx, r, private)
 	if err != nil {
 		return result, err
 	}
-	if t.book != nil {
-		record, err := t.artifacts.Get(ctx, result.CapsuleID)
-		if err != nil {
-			return result, err
-		}
-		seq, warning, err := appendPublished(ctx, t.book.book, record)
-		if err != nil {
-			return result, err
-		}
-		result.Sequence, result.State, result.Warning = seq, "appended", warning
-		return result, nil
-	}
-	entry, err := appendRecord(ctx, t.log, result.CapsuleID)
+	entry, err := appendRecord(ctx, t.Log, result.CapsuleID)
 	if err != nil {
 		return result, err
 	}

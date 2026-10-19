@@ -53,23 +53,23 @@ func canonicalRequest(request []byte) ([]byte, string, error) {
 		} `json:"subject"`
 	}
 	if e := json.Unmarshal(request, &shape); e != nil || shape.Subject == nil || !evidenceSubjectKinds[shape.Subject.Kind] {
-		return nil, "", inputError("evidence request needs a JSON object with subject.kind record, range, chain_segment or correlation")
+		return nil, "", InputError("evidence request needs a JSON object with subject.kind record, range, chain_segment or correlation")
 	}
 	var value any
 	dec := json.NewDecoder(bytes.NewReader(request))
 	dec.UseNumber()
 	if e := dec.Decode(&value); e != nil {
-		return nil, "", inputError("evidence request is not valid JSON")
+		return nil, "", InputError("evidence request is not valid JSON")
 	}
 	var out bytes.Buffer
 	enc := json.NewEncoder(&out)
 	enc.SetEscapeHTML(false)
 	if e := enc.Encode(value); e != nil {
-		return nil, "", inputError("evidence request is not valid JSON")
+		return nil, "", InputError("evidence request is not valid JSON")
 	}
 	canonical := bytes.TrimSuffix(out.Bytes(), []byte("\n"))
 	if !portableJSON(canonical) {
-		return nil, "", inputError("evidence request must be printable ASCII with integer numbers and no escapes other than \\\" and \\\\")
+		return nil, "", InputError("evidence request must be printable ASCII with integer numbers and no escapes other than \\\" and \\\\")
 	}
 	return canonical, shape.Subject.Kind, nil
 }
@@ -300,17 +300,17 @@ func verifyChainHead(response []byte, pin string) (chainHead, error) {
 // askParty canonicalizes request, sends it to --party through the profile's
 // transport, and classifies the answer against it.
 func askParty(c *cobra.Command, request []byte) (evidenceAnswer, error) {
-	p, e := selected(c)
+	p, e := Selected(c)
 	if e != nil {
 		return evidenceAnswer{}, e
 	}
 	party, _ := c.Flags().GetString("party")
 	if party == "" || len(party) > 256 || strings.ContainsFunc(party, func(r rune) bool { return r <= ' ' || r > '~' }) {
-		return evidenceAnswer{}, inputError("--party is required: the party's id as the profile's transport addresses it")
+		return evidenceAnswer{}, InputError("--party is required: the party's id as the profile's transport addresses it")
 	}
 	responderKey, _ := c.Flags().GetString("responder-key")
 	if responderKey != "" {
-		if _, e = parseKeys([]string{responderKey}); e != nil {
+		if _, e = ParseKeys([]string{responderKey}); e != nil {
 			return evidenceAnswer{}, e
 		}
 	}
@@ -341,18 +341,18 @@ func askParty(c *cobra.Command, request []byte) (evidenceAnswer, error) {
 func withRequesterID(request []byte, p Profile) ([]byte, error) {
 	var fields map[string]json.RawMessage
 	if e := json.Unmarshal(request, &fields); e != nil {
-		return nil, inputError("evidence request is not a JSON object")
+		return nil, InputError("evidence request is not a JSON object")
 	}
 	if named, ok := fields["requester_id"]; ok {
 		// Held to the same form as the profile's: a node's full peer id.
 		var id string
-		if json.Unmarshal(named, &id) != nil || !hex64.MatchString(id) {
-			return nil, inputError("evidence request's requester_id must be a node's full peer id: 64 lowercase hex")
+		if json.Unmarshal(named, &id) != nil || !Hex64.MatchString(id) {
+			return nil, InputError("evidence request's requester_id must be a node's full peer id: 64 lowercase hex")
 		}
 		return request, nil
 	}
 	if p.Connection.RequesterID == "" {
-		return nil, inputError("profile " + p.Name + " names no requester id: set the node's own full peer id (64 hex, not the short id its status shows) with `capsulectl profile update --profile " + p.Name + " --requester-id <id>`, or name requester_id in the request")
+		return nil, InputError("profile " + p.Name + " names no requester id: set the node's own full peer id (64 hex, not the short id its status shows) with `capsulectl profile update --profile " + p.Name + " --requester-id <id>`, or name requester_id in the request")
 	}
 	id, e := json.Marshal(p.Connection.RequesterID)
 	if e != nil {
@@ -389,13 +389,16 @@ func askPartyFor(c *cobra.Command, request evidenceRequest) (evidenceAnswer, err
 	return askParty(c, body)
 }
 
-func bookCommands() *cobra.Command {
-	group := &cobra.Command{Use: "book", Short: "Read another party's evidence book through the profile's transport (read-only; answers are carried, not re-signed)"}
+// RemoteBookCommand is `capsulectl book remote ...`: reading another party's
+// evidence book through a remote profile's transport. It opens no book of
+// its own, and the capsulectl-book plugin mounts it.
+func RemoteBookCommand() *cobra.Command {
+	group := &cobra.Command{Use: "remote", Short: "Read another party's evidence book through the profile's transport (read-only; answers are carried, not re-signed)"}
 
-	list := &cobra.Command{Use: "list", Short: "List a range of the party's records (one page; follow next_page_token; bundles are carried, not verified)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	list := &cobra.Command{Use: "list", Short: "List a range of the party's records (one page; follow next_page_token; bundles are carried, not verified)", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		selector, _ := c.Flags().GetString("selector")
 		if selector == "" {
-			return inputError("--selector is required: id1..id2 or id1,id2,...")
+			return InputError("--selector is required: id1..id2 or id1,id2,...")
 		}
 		request := evidenceRequest{Subject: evidenceSubject{Kind: "range", Selector: selector}}
 		size, _ := c.Flags().GetInt("page-size")
@@ -407,16 +410,16 @@ func bookCommands() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		return output(c, answer)
+		return Output(c, answer)
 	}}
 	list.Flags().String("selector", "", "Record selector: id1..id2 or id1,id2,...")
 	list.Flags().Int("page-size", 0, "Records per page; the party caps it")
 	list.Flags().String("page-token", "", "next_page_token from the previous page")
 
-	get := &cobra.Command{Use: "get", Short: "Fetch one of the party's records as a bundle (carried, not verified; its capsule_id must match the one asked)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	get := &cobra.Command{Use: "get", Short: "Fetch one of the party's records as a bundle (carried, not verified; its capsule_id must match the one asked)", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		id, _ := c.Flags().GetString("capsule-id")
 		if id == "" {
-			return inputError("--capsule-id is required")
+			return InputError("--capsule-id is required")
 		}
 		answer, e := askPartyFor(c, evidenceRequest{Subject: evidenceSubject{Kind: "record", CapsuleID: id}})
 		if e != nil {
@@ -425,13 +428,13 @@ func bookCommands() *cobra.Command {
 		if answer.Answer == "artifact" && (len(answer.CapsuleIDs) != 1 || answer.CapsuleIDs[0] != id) {
 			return errors.Join(ErrConflict, errors.New("party answered with a record other than the one asked for"))
 		}
-		return output(c, answer)
+		return Output(c, answer)
 	}}
 	get.Flags().String("capsule-id", "", "The record's full capsule_id")
 
-	request := &cobra.Command{Use: "request", Short: "Send an evidence request (record, range, chain_segment or correlation) and return the classified answer", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	request := &cobra.Command{Use: "request", Short: "Send an evidence request (record, range, chain_segment or correlation) and return the classified answer", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		path, _ := c.Flags().GetString("request")
-		body, e := readInput(path)
+		body, e := ReadInput(path)
 		if e != nil {
 			return e
 		}
@@ -439,15 +442,15 @@ func bookCommands() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		return output(c, answer)
+		return Output(c, answer)
 	}}
 	request.Flags().String("request", "", "Evidence request JSON file; sent in canonical form (sorted keys, compact), which is what the party digests")
 
-	head := &cobra.Command{Use: "head", Short: "Read the newest checkpoint the party reports and verify its signature offline (a withheld newer checkpoint is not detected)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	head := &cobra.Command{Use: "head", Short: "Read the newest checkpoint the party reports and verify its signature offline (a withheld newer checkpoint is not detected)", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		pin, _ := c.Flags().GetString("responder-checkpoint-key")
 		// Checked like --responder-key, before anything is sent.
 		if pin != "" {
-			if _, e := parseKeys([]string{pin}); e != nil {
+			if _, e := ParseKeys([]string{pin}); e != nil {
 				return e
 			}
 		}
@@ -456,13 +459,13 @@ func bookCommands() *cobra.Command {
 			return e
 		}
 		if answer.Answer != "artifact" {
-			return output(c, answer)
+			return Output(c, answer)
 		}
 		h, e := verifyChainHead(answer.Response, pin)
 		if e != nil {
 			return e
 		}
-		return output(c, map[string]any{"request_digest": answer.RequestDigest, "answer": answer.Answer, "head": h, "response": answer.Response})
+		return Output(c, map[string]any{"request_digest": answer.RequestDigest, "answer": answer.Answer, "head": h, "response": answer.Response})
 	}}
 	head.Flags().String("responder-checkpoint-key", "", "The party's checkpoint public key in hex, obtained independently; a head signed by any other key is refused")
 

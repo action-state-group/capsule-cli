@@ -259,7 +259,7 @@ func TestDiscoverCommandSealsAScanCapsule(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
 	p.Name = "discover-test"
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 
 	root := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(root, "otel-collector.yaml"), []byte("receivers: {}\n"), 0o644))
@@ -308,7 +308,7 @@ func TestDiscoverCommandTableFormat(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
 	p.Name = "discover-table-test"
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 
 	root := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(root, "otel-collector.yaml"), []byte("receivers: {}\n"), 0o644))
@@ -332,7 +332,7 @@ func TestDiscoverCommandRequiresScope(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
 	p.Name = "discover-test2"
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 
 	_, err := invoke(t, "", "discover", "--profile", "discover-test2", "--seal-output", filepath.Join(t.TempDir(), "x.json"))
 	require.Error(t, err)
@@ -342,7 +342,7 @@ func TestDiscoverEffectsBuildsBoundaryMapFromMCPManifest(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
 	p.Name = "discover-effects-test"
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 
 	root := t.TempDir()
 	manifest := `{"tools":[

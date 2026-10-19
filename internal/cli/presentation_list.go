@@ -72,7 +72,7 @@ func presentationCandidates() ([]presentationCandidate, []presentationRefusedPlu
 		}
 		out = append(out, presentationCandidate{manifest: m, source: "builtin"})
 	}
-	dealView, err := aacpresentation.ParseManifest(dealViewManifestJSON)
+	dealView, err := aacpresentation.ParseManifest(DealViewManifestJSON)
 	if err != nil {
 		return nil, nil, fmt.Errorf("deal view manifest: %w", err)
 	}
@@ -194,8 +194,8 @@ func listPresentations(value map[string]interface{}, audience string, format aac
 	// A History's deals are checked by capsule-cli's verifier, not by the
 	// bundle verifier the descriptor runs: it is verified only when
 	// `verify --bundle` calls it VALID, as the page gate requires.
-	if exts, _ := value["extensions"].(map[string]interface{}); exts[historySelectionExtension] != nil && result.Descriptor.Verified {
-		verdict, _ := bundleVerdict(value, nil)
+	if exts, _ := value["extensions"].(map[string]interface{}); exts[HistorySelectionExtension] != nil && result.Descriptor.Verified {
+		verdict, _ := BundleVerdict(value, nil)
 		result.Descriptor.Verified = verdict == "VALID"
 	}
 	candidates, pluginsRefused, err := presentationListCandidates()
@@ -251,7 +251,7 @@ func listPresentations(value map[string]interface{}, audience string, format aac
 		result.Detail = fmt.Sprintf("no presentation module matches the bundle for audience %s, format %s; a page shows its \"no presentation\" notice", audience, format)
 	case aacpresentation.ResolutionRefusal:
 		result.Detail = "the bundle does not pass the viewer's verification gate, so no presentation module is matched; run `capsulectl verify --bundle` for why"
-		return result, hint(ErrBundleInvalid, "no presentation: "+result.Detail)
+		return result, Hint(ErrBundleInvalid, "no presentation: "+result.Detail)
 	}
 	return result, nil
 }
@@ -260,14 +260,14 @@ func ambiguous(result presentationListResult, stage string, err *aacpresentation
 	result.Resolution = "ambiguous"
 	result.Ambiguity = &presentationListAmbiguity{Stage: stage, Modules: err.IDs, Detail: err.Error()}
 	result.Detail = err.Error()
-	return result, hint(ErrInput, "no presentation resolved: "+err.Error())
+	return result, Hint(ErrInput, "no presentation resolved: "+err.Error())
 }
 
 func registrationRefused(result presentationListResult, r *presentationListRegistration) (presentationListResult, error) {
 	result.Resolution = "registration_refused"
 	result.Registration = r
 	result.Detail = r.Error()
-	return result, hint(ErrInput, "no presentation resolved: "+r.Error())
+	return result, Hint(ErrInput, "no presentation resolved: "+r.Error())
 }
 
 // printPresentationList is the short human form of a result.
@@ -308,29 +308,29 @@ func moduleLine(m presentationListModule) string {
 }
 
 func presentationListCommand() *cobra.Command {
-	list := &cobra.Command{Use: "list", Short: "Say which presentation module a bundle resolves to, among the built-ins, the deal view and the plugins' modules", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	list := &cobra.Command{Use: "list", Short: "Say which presentation module a bundle resolves to, among the built-ins, the deal view and the plugins' modules", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		bundlePath, _ := c.Flags().GetString("bundle")
 		audience, _ := c.Flags().GetString("audience")
 		format, _ := c.Flags().GetString("format")
 		text, _ := c.Flags().GetBool("text")
 		if bundlePath == "" {
-			return hint(ErrInput, "--bundle is required")
+			return Hint(ErrInput, "--bundle is required")
 		}
 		if audience == "" {
-			return hint(ErrInput, "--audience must not be empty; \"*\" is no particular audience")
+			return Hint(ErrInput, "--audience must not be empty; \"*\" is no particular audience")
 		}
 		known := false
 		for _, f := range aacpresentation.Formats {
 			known = known || string(f) == format
 		}
 		if !known {
-			return hint(ErrInput, fmt.Sprintf("--format %s is not a presentation format (html, fragment, embedded)", format))
+			return Hint(ErrInput, fmt.Sprintf("--format %s is not a presentation format (html, fragment, embedded)", format))
 		}
-		raw, err := readInput(bundlePath)
+		raw, err := ReadInput(bundlePath)
 		if err != nil {
 			return err
 		}
-		value, err := decodeBundleJSON(raw)
+		value, err := DecodeBundleJSON(raw)
 		if err != nil {
 			return err
 		}
@@ -340,7 +340,7 @@ func presentationListCommand() *cobra.Command {
 		}
 		if text {
 			printPresentationList(c.OutOrStdout(), result)
-		} else if err := output(c, result); err != nil {
+		} else if err := Output(c, result); err != nil {
 			return err
 		}
 		return listErr

@@ -6,12 +6,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"golang.org/x/net/publicsuffix"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/net/publicsuffix"
 
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
@@ -29,7 +30,7 @@ type Proof struct {
 	InclusionProof *mmr.InclusionProof `json:"inclusion_proof,omitempty"`
 }
 
-func verifyCheckpoint(p Profile, raw []byte) (checkpoint.Record, error) {
+func VerifyCheckpoint(p Profile, raw []byte) (checkpoint.Record, error) {
 	r, e := checkpoint.ParseRecord(raw)
 	if e != nil {
 		return r, e
@@ -40,12 +41,12 @@ func verifyCheckpoint(p Profile, raw []byte) (checkpoint.Record, error) {
 	if e = r.VerifySignature(); e != nil {
 		return r, e
 	}
-	if !checkpointSignerTrusted(p, r.KeyID) {
+	if !CheckpointSignerTrusted(p, r.KeyID) {
 		return r, errors.New("checkpoint signer not trusted")
 	}
 	return r, nil
 }
-func checkpointSignerTrusted(p Profile, keyID string) bool {
+func CheckpointSignerTrusted(p Profile, keyID string) bool {
 	for _, key := range p.Checkpoint.TrustedKeys {
 		if strings.EqualFold(key, keyID) {
 			return true
@@ -65,7 +66,7 @@ func witnessKeyIssue(p Profile) string {
 	if p.Checkpoint.PublicKey == "" {
 		return "checkpoint.public_key is required when checkpoint.endpoint is set: " + fix
 	}
-	if _, e := parseKeys([]string{p.Checkpoint.PublicKey}); e != nil {
+	if _, e := ParseKeys([]string{p.Checkpoint.PublicKey}); e != nil {
 		return "checkpoint.public_key must be the witness's Ed25519 public key as 64 hex characters: " + fix
 	}
 	return ""
@@ -81,15 +82,15 @@ func checkWitnessConfig(p Profile) error {
 	}
 	u, e := url.Parse(endpoint)
 	if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return hint(ErrInput, "checkpoint.endpoint must be an HTTPS URL without credentials, query or fragment")
+		return Hint(ErrInput, "checkpoint.endpoint must be an HTTPS URL without credentials, query or fragment")
 	}
 	if issue := witnessKeyIssue(p); issue != "" {
-		return hint(ErrInput, issue)
+		return Hint(ErrInput, issue)
 	}
 	return nil
 }
 
-func serviceID(p Profile) (string, error) {
+func ServiceID(p Profile) (string, error) {
 	endpoint := strings.TrimRight(p.Checkpoint.Endpoint, "/")
 	if endpoint == "" {
 		return "", nil
@@ -131,7 +132,7 @@ func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, e
 		// what a missing consent looks like from here.
 		var answered *witness.HTTPError
 		if !errors.As(e, &answered) || answered.StatusCode == http.StatusProxyAuthRequired {
-			return r, &witness.HTTPError{StatusCode: 503, Body: witnessNotReached}
+			return r, &witness.HTTPError{StatusCode: 503, Body: WitnessNotReached}
 		}
 		status := 400
 		if witness.IsRetryable(e) {
@@ -139,14 +140,14 @@ func (s safeSubmitter) Submit(ctx context.Context, b []byte) (witness.Receipt, e
 		}
 		// The witness's own status (never its body) is kept, so a pending
 		// delivery can say what the witness answered.
-		return r, &witness.HTTPError{StatusCode: status, Body: witnessFailureBody(answered.StatusCode)}
+		return r, &witness.HTTPError{StatusCode: status, Body: WitnessFailureBody(answered.StatusCode)}
 	}
 	return r, nil
 }
 
 // witnessFailureBody is what a delivery the witness answered with an error
 // records: its HTTP status, never its body.
-func witnessFailureBody(status int) string {
+func WitnessFailureBody(status int) string {
 	return fmt.Sprintf("checkpoint submission failed (the witness answered HTTP %d); response details suppressed", status)
 }
 
@@ -156,7 +157,7 @@ var witnessAnswered = regexp.MustCompile(`the witness answered HTTP (\d{3})`)
 
 // witnessNotReached marks a delivery whose request never got an answer from
 // the witness.
-const witnessNotReached = "witness not reached; response details suppressed"
+const WitnessNotReached = "witness not reached; response details suppressed"
 
 // witnessSite is the site an agent host's per-site network grant names for
 // a witness endpoint: its registrable domain (witness.example.org ->
@@ -177,7 +178,7 @@ func witnessSite(endpoint string) (host, site string) {
 // statement, not an instruction: an agent reads this output, and an agent
 // host may treat instructions found in tool output as prompt injection and
 // refuse to go on. The agent's own skill tells the person what to choose.
-func witnessGrantText(endpoint string) string {
+func WitnessGrantText(endpoint string) string {
 	host, site := witnessSite(endpoint)
 	return fmt.Sprintf("Ticks run on a schedule, with nobody present to answer a network prompt, so they need a standing grant (\"Always allow this site\") for %s, not a one-time one (\"allow once\"). The witness is %s; a grant for %s covers it and all its subdomains.", site, host, site)
 }
@@ -185,19 +186,19 @@ func witnessGrantText(endpoint string) string {
 // witnessConsentText says what a delivery that did not reach the witness
 // most likely needs, without claiming to know: this program cannot see an
 // agent host's network-consent prompt.
-func witnessConsentText(endpoint string) string {
-	return "pending: network consent needed, or no network. The request did not reach the witness. " + witnessGrantText(endpoint)
+func WitnessConsentText(endpoint string) string {
+	return "pending: network consent needed, or no network. The request did not reach the witness. " + WitnessGrantText(endpoint)
 }
 
 // witnessConsentReached is doctor's note when its own probe got through.
-func witnessConsentReached(endpoint string) string {
-	return "Reached from this command. " + witnessGrantText(endpoint)
+func WitnessConsentReached(endpoint string) string {
+	return "Reached from this command. " + WitnessGrantText(endpoint)
 }
 
 // witnessPendingReason classifies a pending delivery from its stored error.
-func witnessPendingReason(state cll.WitnessState, endpoint string) (string, string) {
-	if strings.Contains(state.LastError, witnessNotReached) {
-		return "network_consent_needed", witnessConsentText(endpoint)
+func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, string) {
+	if strings.Contains(state.LastError, WitnessNotReached) {
+		return "network_consent_needed", WitnessConsentText(endpoint)
 	}
 	if state.Attempts == 0 {
 		return "not_attempted", "pending: not sent yet; it goes at the next tick."
@@ -238,7 +239,7 @@ func witnessResult(state cll.WitnessState) map[string]any {
 
 // Status re-verifies persisted evidence rather than trusting a receipt-shaped
 // database row or an earlier successful network call.
-func verifyWitness(p Profile, state cll.WitnessState) error {
+func VerifyWitness(p Profile, state cll.WitnessState) error {
 	if state.Receipt == nil {
 		return nil
 	}
@@ -246,7 +247,7 @@ func verifyWitness(p Profile, state cll.WitnessState) error {
 	if r.LeafIndex == nil || r.TreeSize == nil {
 		return errors.New("incomplete stored receipt")
 	}
-	keys, err := parseKeys([]string{p.Checkpoint.PublicKey})
+	keys, err := ParseKeys([]string{p.Checkpoint.PublicKey})
 	if err != nil {
 		return err
 	}
@@ -258,28 +259,28 @@ func verifyWitness(p Profile, state cll.WitnessState) error {
 }
 
 func addCheckpointCommands(logs *cobra.Command) {
-	verify := &cobra.Command{Use: "verify", Short: "Verify a signed checkpoint and optional Capsule inclusion proof offline", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
-		p, e := selected(c)
+	verify := &cobra.Command{Use: "verify", Short: "Verify a signed checkpoint and optional Capsule inclusion proof offline", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+		p, e := Selected(c)
 		if e != nil {
 			return e
 		}
 		path, _ := c.Flags().GetString("proof")
-		raw, e := readInput(path)
+		raw, e := ReadInput(path)
 		if e != nil {
 			return e
 		}
 		var proof Proof
-		if e = decodeJSONAs("--proof "+path, raw, &proof); e != nil {
+		if e = DecodeJSONAs("--proof "+path, raw, &proof); e != nil {
 			return e
 		}
-		r, e := verifyCheckpoint(p, proof.Checkpoint)
+		r, e := VerifyCheckpoint(p, proof.Checkpoint)
 		if e != nil {
 			return e
 		}
 		checks := map[string]string{"checkpoint_signature_and_trust": "passed", "log_id": "passed", "embedded_consistency": "passed", "inclusion": "not_performed", "witness_receipt": "not_performed", "producer_signature": "not_performed"}
 		if proof.CapsuleID != "" {
 			if proof.InclusionProof == nil {
-				return inputError("proof is missing inclusion_proof; a proof minted before the structured-proof format (leaf_index + path) is no longer accepted — re-mint it")
+				return InputError("proof is missing inclusion_proof; a proof minted before the structured-proof format (leaf_index + path) is no longer accepted — re-mint it")
 			}
 			root, e := hex.DecodeString(r.Root)
 			if e != nil {
@@ -290,7 +291,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 			}
 			checks["inclusion"] = "passed"
 		}
-		if e = output(c, checks); e != nil {
+		if e = Output(c, checks); e != nil {
 			return e
 		}
 		if proof.CapsuleID == "" {
@@ -303,16 +304,27 @@ func addCheckpointCommands(logs *cobra.Command) {
 	group := &cobra.Command{Use: "checkpoint", Short: "Create signed checkpoints over the log"}
 	logs.AddCommand(group)
 	// A deal profile's checkpoint cadence, under the CLI's checkpoint verbs:
-	// the same command as `deal tick`, which stays callable.
-	cadence := dealTickCommand()
-	cadence.Use = "cadence"
+	// the same command as `deal tick`, which stays callable. Where the deal
+	// commands are not built in, it runs `tick` in the capsulectl-deal plugin.
+	var cadence *cobra.Command
+	if DealTickCommand != nil {
+		cadence = DealTickCommand()
+		cadence.Use = "cadence"
+	} else {
+		cadence = &cobra.Command{Use: "cadence", Short: "A deal profile's checkpoint cadence: `capsulectl deal tick` (plugin capsulectl-deal)", DisableFlagParsing: true, RunE: func(c *cobra.Command, args []string) error {
+			return ForwardToPlugin(c, DealPluginName, append([]string{"tick"}, args...))
+		}}
+	}
 	group.AddCommand(cadence)
-	create := &cobra.Command{Use: "create", Short: "Cut a signed checkpoint at the current log tip", Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
-		p, e := selected(c)
+	create := &cobra.Command{Use: "create", Short: "Cut a signed checkpoint at the current log tip", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+		p, e := Selected(c)
 		if e != nil {
 			return e
 		}
-		key, e := privateKey(p.Checkpoint.Signing)
+		if done, e := delegateBook(c, p, nil); done {
+			return e
+		}
+		key, e := PrivateKey(p.Checkpoint.Signing)
 		if e != nil {
 			return e
 		}
@@ -320,30 +332,30 @@ func addCheckpointCommands(logs *cobra.Command) {
 		if e != nil {
 			return e
 		}
-		if !checkpointSignerTrusted(p, signer.KeyID()) {
-			return inputError("the checkpoint signing key is not in checkpoint.trusted_keys: add its public key with `capsulectl profile update --profile " + p.Name + " --checkpoint-trusted-key <64-hex key>`")
+		if !CheckpointSignerTrusted(p, signer.KeyID()) {
+			return InputError("the checkpoint signing key is not in checkpoint.trusted_keys: add its public key with `capsulectl profile update --profile " + p.Name + " --checkpoint-trusted-key <64-hex key>`")
 		}
-		service, e := serviceID(p)
+		service, e := ServiceID(p)
 		if e != nil {
 			return e
 		}
-		t, e := openTarget(c.Context(), p, useCLL)
+		t, e := OpenTarget(c.Context(), p, UseCLL)
 		if e != nil {
 			return e
 		}
-		defer func() { err = errors.Join(err, t.close()) }()
-		if t.book != nil {
-			result, e := checkpointBook(c.Context(), p, t.book.book, service)
+		defer func() { err = errors.Join(err, t.Close()) }()
+		if t.Book != nil {
+			result, e := t.Book.Checkpoint(c.Context(), service)
 			if e != nil {
 				return e
 			}
-			return output(c, result)
+			return Output(c, result)
 		}
-		cp, e := cutCheckpoint(c.Context(), p, t.log)
+		cp, e := CutCheckpoint(c.Context(), p, t.Log)
 		if e != nil {
 			return e
 		}
-		return output(c, map[string]any{"checkpoint": cp.Size, "indexed_sequence": cp.IndexedSeq, "statement": cp.Bytes, "log_id": p.LogID})
+		return Output(c, map[string]any{"checkpoint": cp.Size, "indexed_sequence": cp.IndexedSeq, "statement": cp.Bytes, "log_id": p.LogID})
 	}}
 	group.AddCommand(create)
 	for _, publish := range []bool{false, true} {
@@ -351,40 +363,43 @@ func addCheckpointCommands(logs *cobra.Command) {
 		if publish {
 			verb = "publish"
 		}
-		cmd := &cobra.Command{Use: verb, Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
-			p, e := selected(c)
+		cmd := &cobra.Command{Use: verb, Args: NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+			p, e := Selected(c)
 			if e != nil {
+				return e
+			}
+			if done, e := delegateBook(c, p, nil); done {
 				return e
 			}
 			size, _ := c.Flags().GetUint64("checkpoint")
 			if size == 0 {
-				return inputError("--checkpoint MMR size is required")
+				return InputError("--checkpoint MMR size is required")
 			}
-			service, e := serviceID(p)
+			service, e := ServiceID(p)
 			if e != nil {
 				return e
 			}
 			if service == "" {
-				return inputError("checkpoint.endpoint is not set, so there is no witness to publish to: `capsulectl profile update --profile " + p.Name + " --checkpoint-endpoint URL --checkpoint-public-key <64-hex Ed25519 key>`")
+				return InputError("checkpoint.endpoint is not set, so there is no witness to publish to: `capsulectl profile update --profile " + p.Name + " --checkpoint-endpoint URL --checkpoint-public-key <64-hex Ed25519 key>`")
 			}
-			use := useCLLRead
+			use := UseCLLRead
 			if publish {
-				use = useCLL
+				use = UseCLL
 			}
-			t, e := openTarget(c.Context(), p, use)
+			t, e := OpenTarget(c.Context(), p, use)
 			if e != nil {
 				return e
 			}
-			defer func() { err = errors.Join(err, t.close()) }()
-			var store cll.WitnessStateStore = t.log
-			if p.Type == "jsonl" {
-				store = newBookWitnessStore(p)
+			defer func() { err = errors.Join(err, t.Close()) }()
+			var store cll.WitnessStateStore = t.Log
+			if p.IsBook() {
+				store = bookBackend.WitnessStore(p)
 			}
 			state, e := store.GetWitness(c.Context(), service, size)
 			if e != nil {
 				return e
 			}
-			record, e := verifyCheckpoint(p, state.Checkpoint)
+			record, e := VerifyCheckpoint(p, state.Checkpoint)
 			if e != nil {
 				return e
 			}
@@ -392,14 +407,14 @@ func addCheckpointCommands(logs *cobra.Command) {
 				return ErrConflict
 			}
 			if publish {
-				if state, e = deliverWitness(c.Context(), p, store, service, size); e != nil {
+				if state, e = DeliverWitness(c.Context(), p, store, service, size); e != nil {
 					return e
 				}
 			}
-			if e = verifyWitness(p, state); e != nil {
+			if e = VerifyWitness(p, state); e != nil {
 				return e
 			}
-			if e = output(c, witnessResult(state)); e != nil {
+			if e = Output(c, witnessResult(state)); e != nil {
 				return e
 			}
 			if publish && state.Permanent {
@@ -418,13 +433,13 @@ func addCheckpointCommands(logs *cobra.Command) {
 // cutCheckpoint signs a checkpoint at the current log tip and returns it after
 // re-verifying the stored statement. The checkpoint signer must be explicitly
 // trusted by the profile.
-func cutCheckpoint(ctx context.Context, p Profile, log cll.Backend) (*cll.CheckpointState, error) {
-	return cutCheckpointAt(ctx, p, log, time.Now().UTC())
+func CutCheckpoint(ctx context.Context, p Profile, log cll.Backend) (*cll.CheckpointState, error) {
+	return CutCheckpointAt(ctx, p, log, time.Now().UTC())
 }
 
 // cutCheckpointAt is cutCheckpoint with the time the checkpoint states.
-func cutCheckpointAt(ctx context.Context, p Profile, log cll.Backend, at time.Time) (*cll.CheckpointState, error) {
-	key, e := privateKey(p.Checkpoint.Signing)
+func CutCheckpointAt(ctx context.Context, p Profile, log cll.Backend, at time.Time) (*cll.CheckpointState, error) {
+	key, e := PrivateKey(p.Checkpoint.Signing)
 	if e != nil {
 		return nil, e
 	}
@@ -432,10 +447,10 @@ func cutCheckpointAt(ctx context.Context, p Profile, log cll.Backend, at time.Ti
 	if e != nil {
 		return nil, e
 	}
-	if !checkpointSignerTrusted(p, signer.KeyID()) {
-		return nil, inputError("the checkpoint signing key is not in checkpoint.trusted_keys: add its public key with `capsulectl profile update --profile " + p.Name + " --checkpoint-trusted-key <64-hex key>`")
+	if !CheckpointSignerTrusted(p, signer.KeyID()) {
+		return nil, InputError("the checkpoint signing key is not in checkpoint.trusted_keys: add its public key with `capsulectl profile update --profile " + p.Name + " --checkpoint-trusted-key <64-hex key>`")
 	}
-	service, e := serviceID(p)
+	service, e := ServiceID(p)
 	if e != nil {
 		return nil, e
 	}
@@ -470,9 +485,9 @@ func cutCheckpointAt(ctx context.Context, p Profile, log cll.Backend, at time.Ti
 			return nil, e
 		}
 		if state.Checkpoint == nil {
-			return nil, inputError("the log has no checkpoint yet, so there is nothing to publish: cut one with `capsulectl cll checkpoint create`")
+			return nil, InputError("the log has no checkpoint yet, so there is nothing to publish: cut one with `capsulectl cll checkpoint create`")
 		}
-		record, e := verifyCheckpoint(p, state.Checkpoint.Bytes)
+		record, e := VerifyCheckpoint(p, state.Checkpoint.Bytes)
 		if e != nil {
 			return nil, e
 		}
@@ -486,7 +501,7 @@ func cutCheckpointAt(ctx context.Context, p Profile, log cll.Backend, at time.Ti
 
 // deliverWitness makes one delivery attempt of the checkpoint at size to the
 // profile's witness service and returns the resulting persisted state.
-func deliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore, service string, size uint64) (cll.WitnessState, error) {
+func DeliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore, service string, size uint64) (cll.WitnessState, error) {
 	token, e := p.Checkpoint.Token.resolve()
 	if e != nil {
 		return cll.WitnessState{}, e
@@ -495,7 +510,7 @@ func deliverWitness(ctx context.Context, p Profile, store cll.WitnessStateStore,
 	if e != nil {
 		return cll.WitnessState{}, e
 	}
-	keys, e := parseKeys([]string{p.Checkpoint.PublicKey})
+	keys, e := ParseKeys([]string{p.Checkpoint.PublicKey})
 	if e != nil {
 		return cll.WitnessState{}, e
 	}

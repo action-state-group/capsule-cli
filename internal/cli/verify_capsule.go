@@ -32,7 +32,7 @@ const capsuleShapesAccepted = "an artifact.Record (capsule_id, capsule, producer
 func capsuleFileShape(path string, raw []byte) (string, error) {
 	var members map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &members); err != nil {
-		return "", inputError("--capsule " + path + " is not a JSON object; it must be " + capsuleShapesAccepted)
+		return "", InputError("--capsule " + path + " is not a JSON object; it must be " + capsuleShapesAccepted)
 	}
 	has := func(names ...string) bool {
 		for _, n := range names {
@@ -58,9 +58,9 @@ func capsuleFileShape(path string, raw []byte) (string, error) {
 	case bare && !hasAny("capsule", "producer_envelope", "artifacts"):
 		return capsuleShapeBare, nil
 	case record || bare:
-		return "", inputError("--capsule " + path + " has the members of both shapes; it must be exactly one: " + capsuleShapesAccepted)
+		return "", InputError("--capsule " + path + " has the members of both shapes; it must be exactly one: " + capsuleShapesAccepted)
 	}
-	return "", inputError("--capsule " + path + " is neither shape: it must be " + capsuleShapesAccepted)
+	return "", InputError("--capsule " + path + " is neither shape: it must be " + capsuleShapesAccepted)
 }
 
 // verifyBareCapsule checks a bare capsule as the wrapper is checked: its
@@ -69,9 +69,9 @@ func capsuleFileShape(path string, raw []byte) (string, error) {
 // trusted keys. A bare capsule carries no retained originals, so its
 // committed digests are not rehashed, and the output says so.
 func verifyBareCapsule(c *cobra.Command, p Profile, path string, raw []byte) error {
-	capsule, err := decodeBundleJSON(raw)
+	capsule, err := DecodeBundleJSON(raw)
 	if err != nil {
-		return inputError("--capsule " + path + ": " + err.Error())
+		return InputError("--capsule " + path + ": " + err.Error())
 	}
 	id, _ := capsule["capsule_id"].(string)
 	key, _ := capsule["key_id"].(string)
@@ -85,7 +85,7 @@ func verifyBareCapsule(c *cobra.Command, p Profile, path string, raw []byte) err
 	}
 	fail := func(field, why string) error {
 		out[field] = "failed: " + why
-		if outErr := output(c, out); outErr != nil {
+		if outErr := Output(c, out); outErr != nil {
 			return outErr
 		}
 		return errors.New("capsule verification failed: " + why)
@@ -108,7 +108,7 @@ func verifyBareCapsule(c *cobra.Command, p Profile, path string, raw []byte) err
 	switch {
 	case !hasSig && !hasKey:
 		out["producer_signature"] = "absent: the capsule carries no signature and key_id"
-		if outErr := output(c, out); outErr != nil {
+		if outErr := Output(c, out); outErr != nil {
 			return outErr
 		}
 		return ErrPartial
@@ -122,13 +122,13 @@ func verifyBareCapsule(c *cobra.Command, p Profile, path string, raw []byte) err
 		return fail("producer_signature", "the signature does not verify under the capsule's key_id")
 	}
 
-	keys, err := parseKeys(p.TrustedKeys)
+	keys, err := ParseKeys(p.TrustedKeys)
 	if err != nil {
 		return err
 	}
 	if len(keys) == 0 {
 		out["producer_signature"], out["producer_trust"] = "passed", "not_performed: no trusted key"
-		if outErr := output(c, out); outErr != nil {
+		if outErr := Output(c, out); outErr != nil {
 			return outErr
 		}
 		return ErrPartial
@@ -136,7 +136,7 @@ func verifyBareCapsule(c *cobra.Command, p Profile, path string, raw []byte) err
 	for _, trusted := range keys {
 		if bytes.Equal(trusted, keyBytes) {
 			out["producer_signature_and_trust"] = "passed"
-			return output(c, out)
+			return Output(c, out)
 		}
 	}
 	return fail("producer_signature_and_trust", "the signature verifies, but its key_id is not among the profile's trusted keys")

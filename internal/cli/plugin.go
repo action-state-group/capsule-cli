@@ -19,7 +19,7 @@ import (
 // pluginAPI is the handshake contract version. A plugin's cli-plugin-metadata
 // must advertise exactly this; any other value is a loud dispatch failure rather
 // than a silently-ignored plugin.
-const pluginAPI = "cli-plugin/v1"
+const PluginAPI = "cli-plugin/v1"
 
 // pluginLauncherPrefix names a plugin launcher on a trusted path: capsulectl-<name>.
 const pluginLauncherPrefix = "capsulectl-"
@@ -53,7 +53,7 @@ var (
 // resolved path escapes the trusted roots (so a symlink cannot redirect discovery
 // to an untrusted target) or is not a regular file. The root's own parents are
 // system directories, trusted by definition, so the walk stops at the root.
-func verifyTrustedPath(path string) error {
+func VerifyTrustedPath(path string) error {
 	return verifyTrustedPathUnder(path, trustedPluginRoots())
 }
 
@@ -154,8 +154,8 @@ func pluginMetadata(path, name string) (pluginInfo, error) {
 	if err := json.Unmarshal(out, &info); err != nil {
 		return pluginInfo{}, fmt.Errorf("%s: cli-plugin-metadata is not JSON: %w", name, err)
 	}
-	if info.PluginAPI != pluginAPI {
-		return pluginInfo{}, fmt.Errorf("%s: plugin_api %q does not match %q", name, info.PluginAPI, pluginAPI)
+	if info.PluginAPI != PluginAPI {
+		return pluginInfo{}, fmt.Errorf("%s: plugin_api %q does not match %q", name, info.PluginAPI, PluginAPI)
 	}
 	if info.Name != name {
 		return pluginInfo{}, fmt.Errorf("%s: metadata names the command %q, but the launcher's filename names %q; they must match", name, info.Name, name)
@@ -202,7 +202,7 @@ func discoverPluginsAndRefusals() ([]pluginInfo, []refusedPlugin) {
 				continue
 			}
 			path := filepath.Join(root, base)
-			if err := verifyTrustedPath(path); err != nil {
+			if err := VerifyTrustedPath(path); err != nil {
 				refused = append(refused, refusedPlugin{Path: path, Reason: err.Error()})
 				continue
 			}
@@ -228,12 +228,18 @@ func discoverPluginsAndRefusals() ([]pluginInfo, []refusedPlugin) {
 // model the residual verify->exec window would need an O_PATH fd to close),
 // then execs it with the given args passed straight through.
 func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
-	if err := verifyTrustedPath(info.path); err != nil {
-		return inputError("refusing to run plugin from an untrusted path")
+	if err := VerifyTrustedPath(info.path); err != nil {
+		return InputError("refusing to run plugin from an untrusted path")
 	}
 	cmd := exec.CommandContext(c.Context(), info.path, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr()
-	cmd.Env = append(os.Environ(), "CAPSULECTL_PLUGIN_API="+pluginAPI)
+	cmd.Env = append(os.Environ(), "CAPSULECTL_PLUGIN_API="+PluginAPI)
+	// The profile this command line selects goes with it, so a command the
+	// plugin runs back in the core uses the same one. --profile anywhere in
+	// args still wins inside the plugin.
+	if name := profileInArgs(args); name != "" {
+		cmd.Env = append(cmd.Env, ProfileEnv+"="+name)
+	}
 	// A plugin that calls core back (sealing, verify, profile show) needs to
 	// find this binary; on a host whose PATH lacks the install folder (a Muse
 	// chat never has ~/.local/bin on it) a bare "capsulectl" fails. Core knows
@@ -246,9 +252,35 @@ func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
 	if err := cmd.Run(); err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
-			return exit
+			return &PluginExit{Code: exit.ExitCode()}
 		}
 		return fmt.Errorf("plugin %s failed: %w", info.Name, err)
+	}
+	return nil
+}
+
+// PluginExit is a plugin's own non-zero exit. The plugin has already said
+// why on stderr, so capsulectl adds nothing to it (SafeError is empty) and
+// exits with the plugin's code (ExitCode). It is the error class of that
+// code, so a caller can still tell an input error from a pending one.
+type PluginExit struct{ Code int }
+
+func (e *PluginExit) Error() string { return fmt.Sprintf("the plugin exited with status %d", e.Code) }
+
+func (e *PluginExit) Unwrap() error {
+	switch e.Code {
+	case 2:
+		return ErrInput
+	case 3:
+		return ErrPartial
+	case 4:
+		return ErrPending
+	case 5:
+		return ErrConflict
+	case 6:
+		return ErrAlarm
+	case 7:
+		return ErrPaused
 	}
 	return nil
 }
@@ -274,7 +306,7 @@ func selfExecutable() (string, error) {
 func pluginCommand(info pluginInfo) *cobra.Command {
 	return &cobra.Command{
 		Use:                info.Name,
-		Short:              fmt.Sprintf("%s (plugin · %s)", firstNonEmpty(pluginShort(info), "external plugin"), firstNonEmpty(info.Vendor, "unknown vendor")),
+		Short:              fmt.Sprintf("%s (plugin · %s)", FirstNonEmpty(pluginShort(info), "external plugin"), FirstNonEmpty(info.Vendor, "unknown vendor")),
 		DisableFlagParsing: true,
 		RunE: func(c *cobra.Command, args []string) error {
 			return execPlugin(c, info, args)
@@ -289,7 +321,7 @@ func pluginShort(info pluginInfo) string {
 	return "subcommands: " + strings.Join(info.Subcommands, ", ")
 }
 
-func firstNonEmpty(values ...string) string {
+func FirstNonEmpty(values ...string) string {
 	for _, v := range values {
 		if v != "" {
 			return v
@@ -304,7 +336,7 @@ func firstNonEmpty(values ...string) string {
 // trusted root.
 func pluginGroup() *cobra.Command {
 	group := &cobra.Command{Use: "plugin", Short: "Inspect discovered capsulectl-* plugins (read-only)"}
-	ls := &cobra.Command{Use: "ls", Short: "List trusted, handshake-valid plugins discovered on the plugin roots", Args: noArgs,
+	ls := &cobra.Command{Use: "ls", Short: "List trusted, handshake-valid plugins discovered on the plugin roots", Args: NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			plugins, refused := discoverPluginsAndRefusals()
 			rows := make([]map[string]any, 0, len(plugins))
@@ -327,7 +359,7 @@ func pluginGroup() *cobra.Command {
 			if refused == nil {
 				refused = []refusedPlugin{}
 			}
-			return output(c, map[string]any{"roots": trustedPluginRoots(), "plugins": rows, "refused": refused})
+			return Output(c, map[string]any{"roots": trustedPluginRoots(), "plugins": rows, "refused": refused})
 		}}
 	group.AddCommand(ls)
 	return group
@@ -341,7 +373,6 @@ func pluginGroup() *cobra.Command {
 // its command name from the first whitespace-delimited token and could otherwise
 // alias a core command.
 func addPluginCommands(root *cobra.Command) {
-	root.AddCommand(pluginGroup())
 	reserved := map[string]bool{"help": true, "completion": true}
 	for _, c := range root.Commands() {
 		reserved[c.Name()] = true
@@ -356,5 +387,12 @@ func addPluginCommands(root *cobra.Command) {
 		}
 		root.AddCommand(cmd)
 		reserved[cmd.Name()] = true
+	}
+	// A first-party plugin that is not installed still answers its name, to
+	// say what to install.
+	for name, short := range map[string]string{BookPluginName: "Evidence books: close, reconcile, request, respond, remote, result, report, backfill, migrate", DealPluginName: "Deals: open, check, close, report, request, respond, compose, ..."} {
+		if !reserved[name] {
+			root.AddCommand(firstPartyPlaceholder(name, short))
+		}
 	}
 }

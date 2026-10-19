@@ -14,7 +14,7 @@ import (
 // value or in its own words, names one of these, an annotation, or no rung
 // (TestGradeStringsNameOnlyLadderRungs): when the ladder is renamed, this
 // list moves first and every string that no longer names a rung fails.
-var gradeLadder = []string{"self-attested", "witnessed", "countersigned"}
+var GradeLadder = []string{"self-attested", "witnessed", "countersigned"}
 
 // gradeAnnotations are the countersignature findings that are not rungs:
 // a self-countersignature (the producer's own key) or a countersignature
@@ -45,19 +45,19 @@ func rungName(value string) string {
 
 // isRungValue reports whether value, a rung field's value, is a rung of the
 // ladder, or a rung in part. Nothing else may sit in a rung field.
-func isRungValue(value string) bool {
-	return slices.Contains(gradeLadder, rungName(strings.TrimSuffix(value, gradeInPart)))
+func IsRungValue(value string) bool {
+	return slices.Contains(GradeLadder, rungName(strings.TrimSuffix(value, gradeInPart)))
 }
 
 // isFindingValue reports whether value, a finding field's value, is a
 // countersignature annotation or one of the values that name no rung.
-func isFindingValue(value string) bool {
+func IsFindingValue(value string) bool {
 	return slices.Contains(gradeNoRung, value) || slices.Contains(gradeAnnotations, rungName(value))
 }
 
 // isGradeValue reports whether a word the receipt shows names a rung, an
 // annotation, or no rung: anything else that looks like a grade is off the
 // ladder.
-func isGradeValue(value string) bool {
-	return isRungValue(value) || isFindingValue(value)
+func IsGradeValue(value string) bool {
+	return IsRungValue(value) || IsFindingValue(value)
 }

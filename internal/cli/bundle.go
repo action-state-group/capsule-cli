@@ -9,10 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/action-state-group/capsule-viewer/go/emitter"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/action-state-group/capsule-viewer/go/emitter"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -24,9 +25,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const defaultBundleURL = "https://verify.agentactioncapsule.org/bundle"
+const DefaultBundleURL = "https://verify.agentactioncapsule.org/bundle"
 
-type bundleArtifacts interface {
+type BundleArtifacts interface {
 	Get(context.Context, string) (artifact.Record, error)
 }
 
@@ -57,25 +58,25 @@ type BundleOptions struct {
 // made over that digest. It can only make a countersignature look less
 // independent, never more: a viewer treats the declared key as the
 // producer's own.
-const producerKeyExtensionKind = "producer-key/v1"
+const ProducerKeyExtensionKind = "producer-key/v1"
 
 // producerKeyExtension returns the extensions member declaring key as the
 // producer's: {"producer-key/v1": {"public_key": "<64 lowercase hex>"}}.
-func producerKeyExtension(key ed25519.PublicKey) (map[string]interface{}, error) {
+func ProducerKeyExtension(key ed25519.PublicKey) (map[string]interface{}, error) {
 	if len(key) != ed25519.PublicKeySize {
-		return nil, inputError("producer key must be a 32-byte Ed25519 public key")
+		return nil, InputError("producer key must be a 32-byte Ed25519 public key")
 	}
-	return map[string]interface{}{producerKeyExtensionKind: map[string]interface{}{"public_key": hex.EncodeToString(key)}}, nil
+	return map[string]interface{}{ProducerKeyExtensionKind: map[string]interface{}{"public_key": hex.EncodeToString(key)}}, nil
 }
 
 // declaredProducerKey reads a bundle's producer-key/v1 public_key, accepting
 // only the form the AAC viewer accepts (64 lowercase hex). Anything else is
 // treated as no declaration.
-func declaredProducerKey(bundle map[string]interface{}) (ed25519.PublicKey, bool) {
+func DeclaredProducerKey(bundle map[string]interface{}) (ed25519.PublicKey, bool) {
 	extensions, _ := bundle["extensions"].(map[string]interface{})
-	block, _ := extensions[producerKeyExtensionKind].(map[string]interface{})
+	block, _ := extensions[ProducerKeyExtensionKind].(map[string]interface{})
 	value, _ := block["public_key"].(string)
-	if len(value) != 2*ed25519.PublicKeySize || !isLowerHex(value) {
+	if len(value) != 2*ed25519.PublicKeySize || !IsLowerHex(value) {
 		return nil, false
 	}
 	key, err := hex.DecodeString(value)
@@ -93,9 +94,9 @@ func declaredProducerKey(bundle map[string]interface{}) (ed25519.PublicKey, bool
 func bundleProducerKey(c *cobra.Command, profile Profile) (ed25519.PublicKey, error) {
 	if c.Flags().Lookup("producer-key") != nil {
 		if value, _ := c.Flags().GetString("producer-key"); value != "" {
-			keys, err := parseKeys([]string{value})
+			keys, err := ParseKeys([]string{value})
 			if err != nil {
-				return nil, inputError("--producer-key must be a 32-byte Ed25519 public key in hex")
+				return nil, InputError("--producer-key must be a 32-byte Ed25519 public key in hex")
 			}
 			return keys[0], nil
 		}
@@ -103,26 +104,26 @@ func bundleProducerKey(c *cobra.Command, profile Profile) (ed25519.PublicKey, er
 	if profile.Signing == (Secret{}) {
 		return nil, nil
 	}
-	key, err := privateKey(profile.Signing)
+	key, err := PrivateKey(profile.Signing)
 	if err != nil {
 		return nil, err
 	}
 	public, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
-		return nil, inputError("the profile's signing key is not an Ed25519 key")
+		return nil, InputError("the profile's signing key is not an Ed25519 key")
 	}
 	return public, nil
 }
 
-func integer(value uint64) json.Number { return json.Number(fmt.Sprintf("%d", value)) }
+func Integer(value uint64) json.Number { return json.Number(fmt.Sprintf("%d", value)) }
 
 // AssembleBundle builds a self-verifying v2 Evidence Bundle. The proof range
 // deliberately spans the checkpointed log: the authoritative verifier requires
 // a membership entry for every sequence in a claimed interval, not merely the
 // graph-closure records.
-func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Backend, logID string, options BundleOptions) (map[string]interface{}, error) {
+func AssembleBundle(ctx context.Context, artifacts BundleArtifacts, log cll.Backend, logID string, options BundleOptions) (map[string]interface{}, error) {
 	if len(options.Root) != 64 {
-		return nil, inputError("--root is required: the Capsule ID (64 hex) the bundle is built around")
+		return nil, InputError("--root is required: the Capsule ID (64 hex) the bundle is built around")
 	}
 	// A negative depth means "unset" (the default); an explicit 0 is honored as a
 	// root-only bundle. The bundle command's flag default is 2.
@@ -133,18 +134,18 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		options.Payloads = "selected"
 	}
 	if options.Payloads != "all" && options.Payloads != "selected" && options.Payloads != "none" {
-		return nil, inputError("--payloads must be all, selected, or none")
+		return nil, InputError("--payloads must be all, selected, or none")
 	}
 	// "none" is a digests-only bundle (no disclosures overlay at all), the
 	// withheld form a countersign request submits; it is not a disclosure mode.
 	if options.Payloads == "none" && options.WithDisclosure {
-		return nil, inputError("--payloads none cannot be combined with disclosure")
+		return nil, InputError("--payloads none cannot be combined with disclosure")
 	}
 	if options.Payloads == "all" && len(options.Withhold) != 0 {
-		return nil, inputError("--payloads all discloses every record, so it cannot withhold any: a shared copy uses --payloads selected")
+		return nil, InputError("--payloads all discloses every record, so it cannot withhold any: a shared copy uses --payloads selected")
 	}
 
-	root, err := getCapsule(ctx, artifacts, options.Root)
+	root, err := GetCapsule(ctx, artifacts, options.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -157,18 +158,18 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		return nil, err
 	}
 	if state.Checkpoint == nil {
-		return nil, inputError("the log has no checkpoint yet, so no bundle can prove its records: cut one with `capsulectl cll checkpoint create`")
+		return nil, InputError("the log has no checkpoint yet, so no bundle can prove its records: cut one with `capsulectl cll checkpoint create`")
 	}
 	checkpointSize := state.Checkpoint.Size
 	checkpointSeq := state.Checkpoint.IndexedSeq
 	if checkpointSeq == 0 {
-		return nil, inputError("the log's checkpoint covers no entries: append a record and cut a new checkpoint with `capsulectl cll checkpoint create`")
+		return nil, InputError("the log's checkpoint covers no entries: append a record and cut a new checkpoint with `capsulectl cll checkpoint create`")
 	}
 	// The emitted range must end at the checkpoint tip (leaf_count(size) ==
 	// checkpointSeq); the verifier enforces this, so refuse to emit a cert that
 	// would fail rather than produce one that only some verifiers accept.
 	if leaves, ok := mmr.LeafCount(checkpointSize); !ok || leaves != checkpointSeq {
-		return nil, inputError("covering checkpoint is not tip-aligned (leaf_count(size) != indexed seq)")
+		return nil, InputError("covering checkpoint is not tip-aligned (leaf_count(size) != indexed seq)")
 	}
 	entries, err := allEntries(ctx, log, checkpointSeq)
 	if err != nil {
@@ -195,14 +196,14 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		sequenceByID[id] = entry.Seq
 		record, found := recordsByID[id]
 		if !found {
-			record, err = getCapsule(ctx, artifacts, id)
+			record, err = GetCapsule(ctx, artifacts, id)
 			if errors.Is(err, artifact.ErrNotFound) {
 				// A checkpointed entry the store does not hold: before
 				// disclosures were sealed as capsules, disclose appended a
 				// disclosure record's bare digest, kept nowhere else; or a record
 				// was lost. The two cannot be told apart here, and either way no
 				// bundle can supply it, since the verifier requires every entry.
-				return nil, inputError(fmt.Sprintf("log entry %d is checkpointed but not in this profile's store: either a disclosure an earlier release appended as a bare digest, or a lost record; no bundle over this log can include it; start a new profile (or log id) for new reports", entry.Seq))
+				return nil, InputError(fmt.Sprintf("log entry %d is checkpointed but not in this profile's store: either a disclosure an earlier release appended as a bare digest, or a lost record; no bundle over this log can include it; start a new profile (or log id) for new reports", entry.Seq))
 			}
 			if err != nil {
 				return nil, fmt.Errorf("checkpointed record %s is unavailable: %w", id, err)
@@ -231,8 +232,8 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		}
 		records = append(records, recordsByID[id])
 		memberships[id] = map[string]interface{}{
-			"log_coordinates": map[string]interface{}{"log_id": logID, "seq": integer(seq), "leaf_index": integer(seq - 1)},
-			"inclusion_proof": proofJSON(proof),
+			"log_coordinates": map[string]interface{}{"log_id": logID, "seq": Integer(seq), "leaf_index": Integer(seq - 1)},
+			"inclusion_proof": ProofJSON(proof),
 		}
 	}
 	// CLL #13 range proof over the whole checkpointed interval [1, checkpointSeq]
@@ -290,20 +291,20 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		"root":           options.Root,
 		"records":        records,
 		"completeness": map[string]interface{}{
-			"closure_depth": integer(uint64(options.ClosureDepth)), "records_mode": mode,
+			"closure_depth": Integer(uint64(options.ClosureDepth)), "records_mode": mode,
 			"payloads_mode": payloads, "suppressed_fields": suppressed(options.Suppress), "missing": missingIDs,
 		},
 		"completeness_certificate": map[string]interface{}{
-			"log_id": logID, "range_root": hex.EncodeToString(rangeRoot), "first_seq": integer(1), "last_seq": integer(checkpointSeq),
+			"log_id": logID, "range_root": hex.EncodeToString(rangeRoot), "first_seq": Integer(1), "last_seq": Integer(checkpointSeq),
 			"body_digests": bodyDigests,
-			"range_proof":  map[string]interface{}{"from_seq": integer(1), "to_seq": integer(checkpointSeq), "size": integer(checkpointSize), "from_index": integer(0), "to_index": integer(checkpointSeq - 1), "witness": witnessJSON},
+			"range_proof":  map[string]interface{}{"from_seq": Integer(1), "to_seq": Integer(checkpointSeq), "size": Integer(checkpointSize), "from_index": Integer(0), "to_index": Integer(checkpointSeq - 1), "witness": witnessJSON},
 			"memberships":  memberships,
 		},
 		"checkpoint":   checkpointObject,
 		"verification": map[string]interface{}{"producer": "capsulectl", "checks": []interface{}{"graph_closure", "interval_coverage", "per_record_membership"}},
 	}
 	if options.WithDisclosure {
-		overlay, disclosureErr := disclosureOverlay(ctx, artifacts, ids, options.Suppress, withhold)
+		overlay, disclosureErr := DisclosureOverlay(ctx, artifacts, ids, options.Suppress, withhold)
 		if disclosureErr != nil {
 			return nil, disclosureErr
 		}
@@ -321,7 +322,7 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 					// null is present (DE-3 validates the value), so `== nil` would
 					// wrongly reject it as not retained.
 					if _, ok := members[member]; members == nil || !ok {
-						return nil, inputError(fmt.Sprintf("payloads=all cannot be honored: the original for %s of %s is not retained", member, id))
+						return nil, InputError(fmt.Sprintf("payloads=all cannot be honored: the original for %s of %s is not retained", member, id))
 					}
 				}
 			}
@@ -329,13 +330,13 @@ func AssembleBundle(ctx context.Context, artifacts bundleArtifacts, log cll.Back
 		bundle["disclosures"] = overlay
 	}
 	if options.ProducerKey != nil {
-		extensions, err := producerKeyExtension(options.ProducerKey)
+		extensions, err := ProducerKeyExtension(options.ProducerKey)
 		if err != nil {
 			return nil, err
 		}
 		bundle["extensions"] = extensions
 	}
-	if err := verifyProducedBundle(bundle, options.WithDisclosure); err != nil {
+	if err := VerifyProducedBundle(bundle, options.WithDisclosure); err != nil {
 		return nil, err
 	}
 	return bundle, nil
@@ -357,7 +358,7 @@ func committedEligibleMembers(capsule map[string]interface{}) []string {
 	return members
 }
 
-func getCapsule(ctx context.Context, artifacts bundleArtifacts, id string) (map[string]interface{}, error) {
+func GetCapsule(ctx context.Context, artifacts BundleArtifacts, id string) (map[string]interface{}, error) {
 	record, err := artifacts.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -391,7 +392,7 @@ func getCapsule(ctx context.Context, artifacts bundleArtifacts, id string) (map[
 // cose (the draft's portable authenticator, unpadded base64url) and as
 // statement (the same bytes, for readers of the earlier shape).
 func bundleCheckpoint(statement, rangeRoot []byte, checkpointSize uint64) (map[string]interface{}, error) {
-	object, err := signedCheckpoint(statement)
+	object, err := SignedCheckpoint(statement)
 	if err != nil {
 		return nil, fmt.Errorf("parse checkpoint statement: %w", err)
 	}
@@ -403,7 +404,7 @@ func bundleCheckpoint(statement, rangeRoot []byte, checkpointSize uint64) (map[s
 	return object, nil
 }
 
-func citationClosure(ctx context.Context, artifacts bundleArtifacts, root map[string]interface{}, depth int) (map[string]map[string]interface{}, []string, error) {
+func citationClosure(ctx context.Context, artifacts BundleArtifacts, root map[string]interface{}, depth int) (map[string]map[string]interface{}, []string, error) {
 	rootID, _ := root["capsule_id"].(string)
 	records := map[string]map[string]interface{}{rootID: root}
 	missingSet := make(map[string]bool)
@@ -415,7 +416,7 @@ func citationClosure(ctx context.Context, artifacts bundleArtifacts, root map[st
 				if _, found := records[id]; found || missingSet[id] {
 					continue
 				}
-				cited, err := getCapsule(ctx, artifacts, id)
+				cited, err := GetCapsule(ctx, artifacts, id)
 				if err != nil {
 					// Only a genuinely absent original is a declared-missing citation.
 					// A decode/identity/authorization/backend error is an execution
@@ -497,7 +498,7 @@ func allEntries(ctx context.Context, log cll.EntrySource, size uint64) ([]cll.En
 	return entries, nil
 }
 
-func proofJSON(proof mmr.InclusionProof) map[string]interface{} {
+func ProofJSON(proof mmr.InclusionProof) map[string]interface{} {
 	hashes := func(values [][]byte) []interface{} {
 		result := make([]interface{}, len(values))
 		for i := range values {
@@ -505,7 +506,7 @@ func proofJSON(proof mmr.InclusionProof) map[string]interface{} {
 		}
 		return result
 	}
-	return map[string]interface{}{"v": integer(proof.V), "kind": proof.Kind, "size": integer(proof.Size), "leaf_index": integer(proof.LeafIndex), "witness": hashes(proof.Witness), "peaks_left": hashes(proof.PeaksLeft), "peaks_right": hashes(proof.PeaksRight)}
+	return map[string]interface{}{"v": Integer(proof.V), "kind": proof.Kind, "size": Integer(proof.Size), "leaf_index": Integer(proof.LeafIndex), "witness": hashes(proof.Witness), "peaks_left": hashes(proof.PeaksLeft), "peaks_right": hashes(proof.PeaksRight)}
 }
 
 func suppressed(values map[string]bool) []interface{} {
@@ -517,7 +518,7 @@ func suppressed(values map[string]bool) []interface{} {
 	return result
 }
 
-func disclosureOverlay(ctx context.Context, artifacts bundleArtifacts, ids []string, suppress, withhold map[string]bool) (map[string]interface{}, error) {
+func DisclosureOverlay(ctx context.Context, artifacts BundleArtifacts, ids []string, suppress, withhold map[string]bool) (map[string]interface{}, error) {
 	// Originals are looked up by the same names seal() persists. A missing or
 	// purged original is intentionally absent, which the verifier reports as WITHHELD.
 	result := make(map[string]interface{})
@@ -556,7 +557,7 @@ func disclosureOverlay(ctx context.Context, artifacts bundleArtifacts, ids []str
 	return result, nil
 }
 
-func verifyProducedBundle(value map[string]interface{}, disclosuresRequired bool) error {
+func VerifyProducedBundle(value map[string]interface{}, disclosuresRequired bool) error {
 	result := aacbundle.VerifyBundle(value)
 	if result.GraphClosure.Status == "fail" || result.IntervalCoverage.Status != "pass" || result.PerRecordMembership.Status != "pass" {
 		return fmt.Errorf("authoritative bundle verification rejected produced evidence: graph=%s interval=%s membership=%s", result.GraphClosure.Status, result.IntervalCoverage.Status, result.PerRecordMembership.Status)
@@ -576,7 +577,7 @@ func verifyProducedBundle(value map[string]interface{}, disclosuresRequired bool
 // for every member actually revealed — the digest DE-3 already binds it to,
 // not the content itself. AssembleBundle stays a pure builder; only this
 // command-layer helper (and sealDisclosure below) knows about the log.
-func disclosureRecord(bundle map[string]interface{}) (map[string]interface{}, error) {
+func DisclosureRecord(bundle map[string]interface{}) (map[string]interface{}, error) {
 	completeness, _ := bundle["completeness"].(map[string]interface{})
 	overlay, _ := bundle["disclosures"].(map[string]interface{})
 	ids := make([]string, 0, len(overlay))
@@ -615,8 +616,8 @@ func disclosureRecord(bundle map[string]interface{}) (map[string]interface{}, er
 // digests and labels only) sealed as an fyi capsule with the profile's
 // signing key, stored, and appended like any record. A later bundle supplies
 // it as a record, so a checkpoint over it never stops another report.
-func sealDisclosure(ctx context.Context, t *target, p Profile, bundle map[string]interface{}) (Publication, error) {
-	record, err := disclosureRecord(bundle)
+func sealDisclosure(ctx context.Context, t *Target, p Profile, bundle map[string]interface{}) (Publication, error) {
+	record, err := DisclosureRecord(bundle)
 	if err != nil {
 		return Publication{}, err
 	}
@@ -644,22 +645,22 @@ func sealDisclosure(ctx context.Context, t *target, p Profile, bundle map[string
 	if err != nil {
 		return Publication{}, err
 	}
-	request, err := parseRequest(raw)
+	request, err := ParseRequest(raw)
 	if err != nil {
 		return Publication{}, err
 	}
-	private, err := privateKey(p.Signing)
+	private, err := PrivateKey(p.Signing)
 	if err != nil {
 		return Publication{}, err
 	}
-	if err = requirePublisherKey(p, private); err != nil {
+	if err = RequirePublisherKey(p, private); err != nil {
 		return Publication{}, err
 	}
-	return t.publish(ctx, request, private)
+	return t.Publish(ctx, request, private)
 }
 
 // appendRecordDigest appends a disclosure record's own digest as a log entry.
-func appendRecordDigest(ctx context.Context, log cll.Backend, record map[string]interface{}) (cll.Entry, error) {
+func AppendRecordDigest(ctx context.Context, log cll.Backend, record map[string]interface{}) (cll.Entry, error) {
 	digest, err := canonical.JSONDigest(record)
 	if err != nil {
 		return cll.Entry{}, err
@@ -691,21 +692,21 @@ func bundleLog(c *cobra.Command, p Profile, use, root string) (Profile, error) {
 	logID, _ := c.Flags().GetString("log-id")
 	switch {
 	case logID != "":
-		if !logName.MatchString(logID) {
-			return p, inputError("--log-id must be lowercase letters, digits and ._:/-, such as a profile's log_id")
+		if !LogName.MatchString(logID) {
+			return p, InputError("--log-id must be lowercase letters, digits and ._:/-, such as a profile's log_id")
 		}
 	case p.LogID == "":
-		return p, inputError("the profile has no log_id: name the log with --log-id, or a deal with --deal")
+		return p, InputError("the profile has no log_id: name the log with --log-id, or a deal with --deal")
 	case p.Namespace == "deal" && strings.HasPrefix(p.LogID, "deal-cadence/"):
-		return p, inputError("this is a deal profile: each deal is its own log; name the deal with --deal DEAL_ID")
+		return p, InputError("this is a deal profile: each deal is its own log; name the deal with --deal DEAL_ID")
 	default:
 		return p, nil
 	}
 	if strings.HasPrefix(logID, "deal/") {
-		return p, inputError("a deal's logs are read with --deal DEAL_ID, which applies the deal's share rules; --log-id does not")
+		return p, InputError("a deal's logs are read with --deal DEAL_ID, which applies the deal's share rules; --log-id does not")
 	}
 	if root == "" {
-		return p, inputError("--root is required: the Capsule ID (64 hex) the bundle is built around")
+		return p, InputError("--root is required: the Capsule ID (64 hex) the bundle is built around")
 	}
 	p.LogID = logID
 	return p, nil
@@ -718,25 +719,31 @@ func bundleCommands() []*cobra.Command {
 		"permalink": "Mint a viewer permalink over a disclosed Evidence Bundle",
 	}
 	makeCommand := func(use string, disclosure bool, permalink bool) *cobra.Command {
-		command := &cobra.Command{Use: use, Short: shortFor[use], Args: noArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+		command := &cobra.Command{Use: use, Short: shortFor[use], Args: NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 			htmlPath, _ := c.Flags().GetString("html")
 			if htmlPath != "" && permalink {
-				return inputError("--html writes a page holding the bundle; a permalink carries the bundle in its link. Use `bundle --html FILE` or `disclose --html FILE` for a page")
+				return InputError("--html writes a page holding the bundle; a permalink carries the bundle in its link. Use `bundle --html FILE` or `disclose --html FILE` for a page")
 			}
 			if dealID, _ := c.Flags().GetString("deal"); dealID != "" {
 				if htmlPath != "" {
-					return inputError("a deal's page is its receipt: `deal report --deal ID --html FILE` (or `--share ... --html FILE` for someone else)")
+					return InputError("a deal's page is its receipt: `deal report --deal ID --html FILE` (or `--share ... --html FILE` for someone else)")
 				}
-				return dealBundleRun(c, use)
+				if DealBundleRun == nil {
+					return ForwardToPlugin(c, DealPluginName, CommandLine(c, nil))
+				}
+				return DealBundleRun(c, use)
 			}
 			if c.Flags().Changed("share") || c.Flags().Changed("to") {
-				return inputError("--share and --to go with --deal: they choose what a deal's shared copy withholds")
+				return InputError("--share and --to go with --deal: they choose what a deal's shared copy withholds")
 			}
-			profile, err := selected(c)
+			profile, err := Selected(c)
 			if err != nil {
 				return err
 			}
-			if htmlPath != "" && profile.Type == "jsonl" && use == "disclose" {
+			if done, err := delegateBook(c, profile, nil); done {
+				return err
+			}
+			if htmlPath != "" && profile.IsBook() && use == "disclose" {
 				return errJSONLPage // before anything is opened or put on record
 			}
 			root, _ := c.Flags().GetString("root")
@@ -749,7 +756,7 @@ func bundleCommands() []*cobra.Command {
 			suppressSet := make(map[string]bool, len(suppressNames))
 			for _, name := range suppressNames {
 				if name != "agent_input" && name != "agent_output" {
-					return inputError("--suppress must name agent_input or agent_output")
+					return InputError("--suppress must name agent_input or agent_output")
 				}
 				suppressSet[name] = true
 			}
@@ -757,29 +764,29 @@ func bundleCommands() []*cobra.Command {
 			if err != nil {
 				return err
 			}
-			target, err := openTarget(c.Context(), profile, usePublication)
+			target, err := OpenTarget(c.Context(), profile, UsePublication)
 			if err != nil {
 				return err
 			}
-			defer func() { err = errors.Join(err, target.close()) }()
+			defer func() { err = errors.Join(err, target.Close()) }()
 			var value map[string]interface{}
 			var encoded []byte
-			if target.book != nil {
+			if target.Book != nil {
 				// A jsonl profile's bundle comes from its book, which puts every
 				// bundle it builds on record as a disclosure record.
 				attach := false
 				if disclosure || permalink {
 					attach, _ = c.Flags().GetBool("attach-input-originals")
 				}
-				bundle, err := bookBundle(c.Context(), target.book.book, target.artifacts, root, closureDepth, payloads, suppressSet, disclosure || permalink, attach, producerKey)
+				bundle, err := target.Book.Bundle(c.Context(), BookBundleRequest{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, Disclose: disclosure || permalink, AttachOriginals: attach, ProducerKey: producerKey})
 				if err != nil {
 					return err
 				}
-				if value, err = decodeBundleJSON(bundle.JSON); err != nil {
+				if value, err = DecodeBundleJSON(bundle); err != nil {
 					return err
 				}
-				encoded = bundle.JSON
-			} else if value, err = AssembleBundle(c.Context(), target.artifacts, target.log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink, ProducerKey: producerKey}); err != nil {
+				encoded = bundle
+			} else if value, err = AssembleBundle(c.Context(), target.Artifacts, target.Log, profile.LogID, BundleOptions{Root: root, ClosureDepth: closureDepth, Payloads: payloads, Suppress: suppressSet, WithDisclosure: disclosure || permalink, ProducerKey: producerKey}); err != nil {
 				return err
 			}
 			// The page's verdict, before anything is put on record. A refused
@@ -788,16 +795,16 @@ func bundleCommands() []*cobra.Command {
 			// (verify --bundle states its verdict) and exits with the refusal.
 			var pageErr error
 			if htmlPath != "" {
-				if profile.Type == "jsonl" {
+				if profile.IsBook() {
 					pageErr = errJSONLPage
 				} else {
-					pageErr = pageGate(value)
+					pageErr = PageGate(value)
 				}
 				if pageErr != nil && use == "disclose" {
 					return pageErr
 				}
 			}
-			if use == "disclose" && target.book == nil {
+			if use == "disclose" && target.Book == nil {
 				// Every disclose act goes on record: sealed as a capsule and
 				// appended before the bundle is emitted, not merely alongside it.
 				if _, err := sealDisclosure(c.Context(), target, profile, value); err != nil {
@@ -818,7 +825,7 @@ func bundleCommands() []*cobra.Command {
 				}
 				base, _ := c.Flags().GetString("base-url")
 				if base == "" {
-					base = defaultBundleURL
+					base = DefaultBundleURL
 				}
 				_, err = fmt.Fprintln(c.OutOrStdout(), strings.TrimRight(base, "#")+"#"+fragment)
 				return err
@@ -828,11 +835,11 @@ func bundleCommands() []*cobra.Command {
 				// agent-action-capsule's own evidence-graph verifier, vendored
 				// (assets/evidence-graph.iife.js), which checks it with no
 				// network when the page is opened.
-				page, err := emitter.EmitEvidenceGraphHTML(value, evidenceGraphIIFE)
+				page, err := emitter.EmitEvidenceGraphHTML(value, EvidenceGraphIIFE)
 				if err != nil {
 					return err
 				}
-				if err = atomicFile(htmlPath, []byte(page), false); err != nil {
+				if err = AtomicFile(htmlPath, []byte(page), false); err != nil {
 					return err
 				}
 			}
@@ -843,14 +850,14 @@ func bundleCommands() []*cobra.Command {
 				}
 			}
 			if out != "" {
-				return errors.Join(atomicFile(out, encoded, false), pageErr)
+				return errors.Join(AtomicFile(out, encoded, false), pageErr)
 			}
 			_, err = c.OutOrStdout().Write(append(encoded, '\n'))
 			return errors.Join(err, pageErr)
 		}}
 		command.Flags().String("root", "", "Root Capsule ID")
 		command.Flags().String("deal", "", "A deal on a deal profile: the whole deal from its own log, built as `deal report` builds it (disclose also needs --share and --to; a deal is not shared as a link)")
-		command.Flags().String("share", dealAudienceKeep, "With --deal: who the copy is for: keep (bundle only: your own copy), counterparty or adjudicator (disclose only: a shared copy, put on record first)")
+		command.Flags().String("share", DealAudienceKeep, "With --deal: who the copy is for: keep (bundle only: your own copy), counterparty or adjudicator (disclose only: a shared copy, put on record first)")
 		command.Flags().String("to", "", "With --deal and --share: who the shared copy is for, as sealed in the disclosure record")
 		command.Flags().String("log-id", "", "Read this log instead of the profile's log_id")
 		command.Flags().Int("closure-depth", 2, "Citation closure traversal depth from the root")
@@ -863,14 +870,25 @@ func bundleCommands() []*cobra.Command {
 		if disclosure || permalink {
 			command.Flags().String("payloads", "all", "Disclosure mode: all or selected")
 			command.Flags().StringSlice("suppress", nil, "Disclosed member to withhold (agent_input or agent_output)")
-			command.Flags().Bool("attach-input-originals", false, "jsonl profiles: also carry each published capsule's retained agent_input original in the bundle (extension "+inputOriginalsExtension+"), checked against its agent_input_digest; the book itself never stores originals")
+			command.Flags().Bool("attach-input-originals", false, "Book profiles: also carry each published capsule's retained agent_input original in the bundle (extension "+InputOriginalsExtension+"), read from the artifact store and checked against its agent_input_digest")
 		}
 		if !permalink {
 			command.Flags().String("out", "", "Write the Evidence Bundle JSON to a new file")
 		} else {
-			command.Flags().String("base-url", defaultBundleURL, "Bundle viewer base URL")
+			command.Flags().String("base-url", DefaultBundleURL, "Bundle viewer base URL")
 		}
 		return command
 	}
 	return []*cobra.Command{makeCommand("bundle", false, false), makeCommand("disclose", true, false), makeCommand("permalink", true, true)}
 }
+
+// InputOriginalsExtension is the bundle extension that carries, on opt-in at
+// disclose time (--attach-input-originals), the agent_input original of each
+// published capsule in a book profile's bundle: a JSON object from
+// capsule_id to the original's exact bytes, base64url without padding, read
+// from the artifact store. It is part of the bundle the disclosure record
+// commits to. A reader checks each original's JSON-DIGEST against the
+// agent_input_digest of the capsule it names: the bundle record itself (a
+// book profile's own capsule is its record), or, for a capsule an older
+// capsulectl wrapped, the capsule the record's first payload carries.
+const InputOriginalsExtension = "capsulectl/agent-input-originals/v1"

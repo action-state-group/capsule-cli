@@ -104,7 +104,75 @@ resolved), unless the caller's environment already sets it to a value. A launche
 calls core back uses that path rather than a bare `capsulectl`, which is not
 on PATH on every host (a Muse chat never has `~/.local/bin` on it).
 
-The launcher's exit code is propagated as `capsulectl`'s own exit code.
+The launcher's exit code is propagated as `capsulectl`'s own exit code, and
+`capsulectl` prints nothing of its own after a launcher that failed: the
+launcher has said why on stderr.
+
+`--profile` reaches a launcher wherever it is written. Given after the
+plugin's name, it is one of the launcher's own arguments. Given before it
+(`capsulectl --profile a deal list`), it is passed through too, ahead of the
+remaining arguments, and the profile it names is also set as
+`CAPSULECTL_PROFILE` in the launcher's environment. A core command the
+launcher runs back without `--profile` uses `CAPSULECTL_PROFILE`, so it acts on
+the same profile; a `--profile` it does pass wins. When `--profile` is given
+both before and after the plugin's name, the later one wins, as it does for
+any repeated flag.
+
+## The first-party plugins: `capsulectl-book` and `capsulectl-deal`
+
+The core (capsule-cli#236) keeps no evidence book and no deal store, and
+does not depend on the evidencebook library: an implementer needs neither to
+conform. Two plugins from this repository's `plugins/` module carry them:
+
+| Launcher | `capsulectl ...` | What it holds |
+|---|---|---|
+| `capsulectl-book` | `book close`, `reconcile`, `request`, `respond`, `remote list\|get\|head\|request`, `result inspect\|build`, `report build`, `backfill run\|status`, `migrate` | the evidence book behind every book profile |
+| `capsulectl-deal` | `deal ...` (`init`, `open`, `check`, ..., `compose`, `request`, `respond`) | a deal profile's SQLite deal store |
+
+They ship as two binaries, one per launcher, each answering the handshake
+with the name its filename carries. A release names them
+`capsulectl-<version>-plugin-book-<os>-<arch>` and
+`capsulectl-<version>-plugin-deal-<os>-<arch>`, beside the core's own
+`capsulectl-<version>-<os>-<arch>`, under the same `SHA256SUMS`, attestation
+and release statement; install each as `capsulectl-book` or
+`capsulectl-deal` on a plugin root. `make build` builds all three.
+
+Each plugin is a whole `capsulectl` command tree with its own commands
+added, so the core can hand it a core command it cannot run itself:
+
+- **A profile's log has one owner**, declared in the profile as `log: cll`
+  or `log: book` (`profile create --log`), and never changed afterwards. A
+  plain profile (mysql, sqlite, or a jsonl profile with `log: cll`) keeps a
+  CLL the core writes, checkpoints and bundles with no plugin. A book profile
+  (a jsonl profile with `log: book`; a jsonl profile with a log_id saved
+  before the field reads as one) keeps an evidence book, and the core runs
+  `publish`, `cll list|append`, `cll checkpoint create|status|publish`,
+  `store init` and `bundle|disclose|permalink` on it in `capsulectl-book`,
+  with the same arguments. Without the plugin those commands refuse and say
+  which plugin to install.
+- `bundle --deal`, `disclose --deal` and `cll checkpoint cadence` run in
+  `capsulectl-deal` the same way.
+
+### Transitional aliases
+
+The commands that moved into the plugins keep their old names for one
+release window (capsule-cli#238). Each old name runs its replacement with
+the arguments unchanged, prints one line on stderr naming the replacement
+and the release that removes it, and keeps the replacement's stdout and exit
+code; its help says it is deprecated.
+
+| Old | Now |
+|---|---|
+| `capsulectl close`, `reconcile` | `capsulectl book close`, `reconcile` |
+| `capsulectl request`, `respond` | `capsulectl book request`, `respond`; on a deal (sqlite) profile `capsulectl deal request`, `respond` |
+| `capsulectl compose` | `capsulectl deal compose` |
+| `capsulectl book list`, `get`, `head`, `request` (another party's book, on a remote profile) | `capsulectl book remote list`, `get`, `head`, `request` |
+| `capsulectl result`, `report`, `backfill` | `capsulectl book result`, `report`, `backfill` |
+| `capsulectl store migrate` | `capsulectl book migrate` |
+
+The aliases arrive with the release after v0.1.0-rc16 and are removed in
+v0.2.0, once the skills, the Muse integration and the docs use only the new
+names.
 
 ## Reserved verbs
 

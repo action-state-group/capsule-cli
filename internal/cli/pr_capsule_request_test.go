@@ -95,12 +95,12 @@ func TestPRCapsuleRequestShapeHuman(t *testing.T) {
 		"CAPSULE_PR_REPO_DIR":  dir,
 	})
 
-	r, e := parseRequest(raw)
+	r, e := ParseRequest(raw)
 	require.NoError(t, e, "capsule-cli's own decoder rejected the script's request shape")
 
 	_, private, e := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, e)
-	record, e := seal(r, private)
+	record, e := Seal(r, private)
 	require.NoError(t, e)
 	assert.NotEmpty(t, record.CapsuleID)
 
@@ -138,12 +138,12 @@ func TestPRCapsuleRequestShapeAgentDeclared(t *testing.T) {
 	capsuleField, _ := decoded["capsule"].(map[string]any)
 	assert.NotContains(t, capsuleField, "Model")
 
-	r, e := parseRequest(raw)
+	r, e := ParseRequest(raw)
 	require.NoError(t, e)
 
 	_, private, e := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, e)
-	record, e := seal(r, private)
+	record, e := Seal(r, private)
 	require.NoError(t, e)
 	assert.NotEmpty(t, record.CapsuleID)
 
@@ -177,11 +177,11 @@ func TestPRCapsuleRequestRejectsMalformedPromptDigest(t *testing.T) {
 		"CAPSULE_PR_REPO_DIR":  dir,
 	})
 
-	r, e := parseRequest(raw)
+	r, e := ParseRequest(raw)
 	require.NoError(t, e)
 	_, private, e := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, e)
-	record, e := seal(r, private)
+	record, e := Seal(r, private)
 	require.NoError(t, e)
 
 	var payload map[string]any
@@ -208,11 +208,11 @@ func prCapsuleBaseEnv(dir, base, head string) map[string]string {
 // parseRequest/seal and returns the sealed payload.
 func sealPRCapsuleRequest(t *testing.T, raw []byte) (string, map[string]any) {
 	t.Helper()
-	r, e := parseRequest(raw)
+	r, e := ParseRequest(raw)
 	require.NoError(t, e)
 	_, private, e := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, e)
-	record, e := seal(r, private)
+	record, e := Seal(r, private)
 	require.NoError(t, e)
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(record.Capsule, &payload))

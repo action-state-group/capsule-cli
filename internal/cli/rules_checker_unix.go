@@ -10,7 +10,7 @@ import (
 // killGroupOnCancel runs the checker in its own process group and kills the
 // whole group when the check gives up on it, so a child it started cannot
 // keep it alive past its timeout.
-func killGroupOnCancel(cmd *exec.Cmd) {
+func KillGroupOnCancel(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {

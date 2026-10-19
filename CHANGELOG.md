@@ -2,6 +2,58 @@
 
 ## Unreleased
 
+### The core builds without evidencebook; the book and the deals are plugins (capsule-cli#236)
+
+- **Changed (build):** the repository is two Go modules. The root module is
+  the core, and no package of it imports evidencebook (`go list -deps ./...`
+  names none; CI checks it). The `plugins/` module builds two plugins,
+  `capsulectl-book` and `capsulectl-deal`, and pins evidencebook. Releases
+  ship them as `capsulectl-<version>-plugin-book-<os>-<arch>` and
+  `capsulectl-<version>-plugin-deal-<os>-<arch>`, under the same
+  `SHA256SUMS`, attestation and release statement; install each as
+  `capsulectl-<name>` on a plugin root (docs/PLUGINS.md).
+- **Changed (profiles):** a profile declares who keeps its log, `log: cll`
+  or `log: book` (`profile create --log`), once. A plain profile's CLL is the
+  core's, with no plugin. A book profile's log is its evidence book, and the
+  core runs `publish`, `cll`, `store init` and `bundle`/`disclose`/`permalink`
+  on it in `capsulectl-book`, or refuses, naming the plugin, when it is not
+  installed. A jsonl profile with a log_id saved earlier reads as a book.
+- **Changed (book records):** `publish` on a book profile seals the capsule
+  as the record itself: it carries its record header
+  (`evidence_record_header`), is signed by the profile's key, and its id is
+  the log entry, of record type `own_capsule`. The artifact store holds it
+  once, with its originals, which the record commits. The capsule's id
+  therefore differs from the one `seal` gives the same request; that id is
+  the record's subject_ref, so publishing the request again returns the same
+  record. `cll append` of a capsule sealed elsewhere wraps it in a
+  `published_capsule` record that names it and holds no copy, and `book
+  migrate` names each retired capsule the same way. On a book profile,
+  `disclose` carries an own capsule's originals as its record's payloads;
+  `--suppress agent_input` and `--suppress agent_output` withhold them (with
+  `--payloads selected`).
+- **Changed (storage):** a book profile keeps no `book/payloads/`. The first
+  time its book opens, the directory's bytes move into the profile's
+  artifact store, as each record's originals, and the directory is removed;
+  no leaf, record or checkpoint changes.
+- **Changed (replies):** a reply recorded with `request --response` is kept,
+  as received, in the profile's artifact store under the record that
+  observed it, on book and deal profiles. `deal compose --member` takes the
+  request record id alone and reads the reply from there; `ID=FILE` remains
+  for a reply recorded before.
+- **Changed (commands):** `close`, `reconcile`, `request`, `respond`,
+  `result`, `report`, `backfill` and `store migrate` are now `capsulectl book
+  ...` (`book migrate`); reading another party's book is `capsulectl book
+  remote list|get|head|request`; `compose` is `capsulectl deal compose`, and
+  a deal profile's `request` and `respond` are `capsulectl deal request` and
+  `respond`. The old names stay as aliases until v0.2.0 (capsule-cli#238):
+  each says on stderr what replaced it and runs it with the same arguments,
+  and its help is marked deprecated.
+- **Fixed:** a plugin's exit code is `capsulectl`'s, as docs/PLUGINS.md
+  says; it was 1. `capsulectl` adds nothing to a failed plugin's own message.
+- **Added:** `--profile` given before a plugin's name also reaches the
+  plugin as `CAPSULECTL_PROFILE`, which a core command the plugin runs back
+  uses when it names no `--profile` of its own.
+
 ### The deal profile checker's record types come from its schema
 
 - **Fixed:** without the Python `jsonschema` package, `skills/deal/profile/check_profile.py`

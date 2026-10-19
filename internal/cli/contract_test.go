@@ -163,8 +163,8 @@ func TestDiscriminatorValues(t *testing.T) {
 			"c": map[string]any{"properties": map[string]any{"other": map[string]any{"const": "ignored"}}},
 		},
 	}
-	assert.Equal(t, []string{"alpha", "beta"}, discriminatorValues(schemaRaw, "kind"))
-	assert.Empty(t, discriminatorValues(schemaRaw, "missing-key"))
+	assert.Equal(t, []string{"alpha", "beta"}, DiscriminatorValues(schemaRaw, "kind"))
+	assert.Empty(t, DiscriminatorValues(schemaRaw, "missing-key"))
 }
 
 func TestPathString(t *testing.T) {

@@ -97,10 +97,10 @@ func TestBackfilledSealIsCommittedVectorWithSpecVersion05(t *testing.T) {
 	committed := loadProvenanceVector(t, "pos-provenance-mode-backfilled")
 	requireCommittedCapsuleID(t, committed, posBackfilledCapsuleID)
 
-	r, err := parseRequest([]byte(posBackfilledRequest()))
+	r, err := ParseRequest([]byte(posBackfilledRequest()))
 	require.NoError(t, err)
 	_, key := profileFixture(t)
-	record, err := seal(r, key)
+	record, err := Seal(r, key)
 	require.NoError(t, err)
 	assert.Equal(t, posBackfilledCapsuleIDV05, record.CapsuleID)
 	requireV05TwinBytes(t, committed, nil, record.Capsule, record.CapsuleID)
@@ -135,10 +135,10 @@ func TestSealRefusesProvenanceModeTimingNegatives(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			requireCommittedCapsuleID(t, loadProvenanceVector(t, tc.name), tc.capsuleID)
 
-			r, err := parseRequest([]byte(tc.requestBody))
+			r, err := ParseRequest([]byte(tc.requestBody))
 			require.NoError(t, err)
 			_, key := profileFixture(t)
-			record, err := seal(r, key)
+			record, err := Seal(r, key)
 			require.ErrorIs(t, err, ErrInput)
 			assert.ErrorContains(t, err, "emit rejected sealing input")
 			assert.Empty(t, record.CapsuleID)
@@ -157,10 +157,10 @@ func TestSealRefusesProvenanceModeTimingNegatives(t *testing.T) {
 func TestProvenanceModeMissingFieldsRejectedProducerSide(t *testing.T) {
 	requestBody := `{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":"prov-missing-fields","ActionType":"decide","Operator":"ACME-CO","Developer":"agent@v1","Timestamp":"2026-08-24T00:00:00Z",` + provenanceVectorDisposition() + `},` +
 		`"provenance_mode":{"mode":"backfilled"}}`
-	r, err := parseRequest([]byte(requestBody))
+	r, err := ParseRequest([]byte(requestBody))
 	require.NoError(t, err)
 	_, key := profileFixture(t)
-	_, err = seal(r, key)
+	_, err = Seal(r, key)
 	require.Error(t, err)
 }
 
@@ -184,9 +184,9 @@ func TestChainDuplicatesSealIsCommittedVectorWithSpecVersion05(t *testing.T) {
 	_, key := profileFixture(t)
 
 	parentRequest := `{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":"prov-contemporaneous-parent","ActionType":"decide","Operator":"ACME-CO","Developer":"agent@v1","Timestamp":"2026-08-24T00:00:00Z",` + provenanceVectorDisposition() + `}}`
-	pr, err := parseRequest([]byte(parentRequest))
+	pr, err := ParseRequest([]byte(parentRequest))
 	require.NoError(t, err)
-	parent, err := seal(pr, key)
+	parent, err := Seal(pr, key)
 	require.NoError(t, err)
 	assert.Equal(t, posChainDuplicatesParentIDV05, parent.CapsuleID)
 	requireV05TwinBytes(t, committedParent, nil, parent.Capsule, parent.CapsuleID)
@@ -194,9 +194,9 @@ func TestChainDuplicatesSealIsCommittedVectorWithSpecVersion05(t *testing.T) {
 	childRequest := `{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":"prov-backfilled-duplicate","ActionType":"decide","Operator":"ACME-CO","Developer":"agent@v1","Timestamp":"2026-08-24T00:00:00Z",` + provenanceVectorDisposition() + `},` +
 		`"chain":{"parent_capsule_id":"` + parent.CapsuleID + `","relation":"duplicates"},` +
 		`"provenance_mode":{"mode":"backfilled","source_ref":{"type":"x-external-ledger-entry","digest_alg":"SHA-256","digest":"` + sourceRefDigestAllThrees + `"},"source_asserted_at":"2026-01-01T00:00:00Z","import_batch":"import-2026-09","imported_at":"2026-09-22T00:00:00Z"}}`
-	cr, err := parseRequest([]byte(childRequest))
+	cr, err := ParseRequest([]byte(childRequest))
 	require.NoError(t, err)
-	child, err := seal(cr, key)
+	child, err := Seal(cr, key)
 	require.NoError(t, err)
 	assert.Equal(t, posChainDuplicatesChildIDV05, child.CapsuleID)
 	committedChain, ok := committedChild["chain"].(map[string]any)
@@ -215,7 +215,7 @@ func TestChainDuplicatesSealIsCommittedVectorWithSpecVersion05(t *testing.T) {
 func TestProvenanceModeConflictBetweenRequestAndCapsuleRejected(t *testing.T) {
 	requestBody := `{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":"a","ActionType":"fyi","Operator":"o","Developer":"d","Timestamp":"2026-09-08T00:00:00Z","ProvenanceMode":{"Mode":"contemporaneous"}},` +
 		`"provenance_mode":{"mode":"contemporaneous"}}`
-	_, err := parseRequest([]byte(requestBody))
+	_, err := ParseRequest([]byte(requestBody))
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "provenance_mode must not be set on both")
 }
@@ -229,9 +229,9 @@ func TestProvenanceModeConflictBetweenRequestAndCapsuleRejected(t *testing.T) {
 func TestBackfilledSealRequestPublishesAgainstJSONLProfile(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	p.Type = "jsonl"
+	p.Type, p.Log = "jsonl", LogCLL // a plain jsonl profile: the core keeps its log
 	p.Connection.Database = filepath.Join(t.TempDir(), "store")
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 
 	_, err := invoke(t, "", "store", "init", "--profile", p.Name)
 	require.NoError(t, err)

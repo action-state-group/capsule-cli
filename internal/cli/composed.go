@@ -2,6 +2,7 @@ package cli
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
 	"regexp"
 
@@ -136,10 +137,7 @@ func verifyResponseSignature(response map[string]interface{}) string {
 		}
 		fields[name] = member
 	}
-	body, err := dealArtifactResponse{
-		RequestDigest: fields["request_digest"], Anchor: fields["anchor"], ArtifactKind: fields["artifact_kind"],
-		ArtifactDigest: fields["artifact_digest"], IssuedAt: fields["issued_at"],
-	}.SigningBody()
+	body, err := ArtifactResponseSigningBody(fields["request_digest"], fields["anchor"], fields["artifact_kind"], fields["artifact_digest"], fields["issued_at"])
 	if err != nil {
 		return aacbundle.RefusalSignatureInvalid
 	}
@@ -293,4 +291,26 @@ func composedMemberBody(container map[string]interface{}, id, key string) (map[s
 		}
 	}
 	return nil, false
+}
+
+// artifactResponseType is the context member of an artifact response's
+// signing body, so its signature cannot be read as any other statement.
+const artifactResponseType = "evidence-artifact-response/v1"
+
+// ArtifactResponseSigningBody is the exact bytes a signed artifact response
+// (ResponseSignatureProfile) covers: its context and the five members that
+// name the request, the anchor and the artifact by digest. The deal plugin
+// signs this body; verify --bundle checks a composed member's carried
+// response over it.
+func ArtifactResponseSigningBody(requestDigest, anchor, artifactKind, artifactDigest, issuedAt string) ([]byte, error) {
+	return canonical.JCS(map[string]interface{}{
+		"type": artifactResponseType, "request_digest": requestDigest, "anchor": anchor,
+		"artifact_kind": artifactKind, "artifact_digest": artifactDigest, "issued_at": issuedAt,
+	})
+}
+
+// BytesDigest is the lowercase hex SHA-256 of data.
+func BytesDigest(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }

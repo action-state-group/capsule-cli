@@ -24,7 +24,7 @@ func bareCapsuleProfile(t *testing.T, trusted ...string) string {
 	require.NoError(t, json.Unmarshal(raw, &capsule))
 	p, _ := profileFixture(t)
 	p.TrustedKeys = trusted
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	return capsule["key_id"].(string)
 }
 
@@ -44,10 +44,10 @@ func verifyCapsuleOutput(t *testing.T, path string) (map[string]any, error) {
 // trusted keys. The output says which shape it read.
 func TestVerifyCapsuleReadsABareCapsule(t *testing.T) {
 	key := bareCapsuleProfile(t)
-	p, err := loadProfile("test")
+	p, err := LoadProfile("test")
 	require.NoError(t, err)
 	p.TrustedKeys = []string{key}
-	require.NoError(t, saveProfile(p, true))
+	require.NoError(t, SaveProfile(p, true))
 
 	result, err := verifyCapsuleOutput(t, bareCapsuleFixture)
 	require.NoError(t, err, result)
@@ -63,10 +63,10 @@ func TestVerifyCapsuleReadsABareCapsule(t *testing.T) {
 // has its capsule_id, and an edited signature does not verify.
 func TestVerifyCapsuleFailsATamperedBareCapsule(t *testing.T) {
 	key := bareCapsuleProfile(t)
-	p, err := loadProfile("test")
+	p, err := LoadProfile("test")
 	require.NoError(t, err)
 	p.TrustedKeys = []string{key}
-	require.NoError(t, saveProfile(p, true))
+	require.NoError(t, SaveProfile(p, true))
 	raw, err := os.ReadFile(bareCapsuleFixture)
 	require.NoError(t, err)
 
@@ -145,7 +145,7 @@ func TestVerifyCapsuleNamesTheShapeItRead(t *testing.T) {
 func TestVerifyCapsuleNamesTheWrapperShape(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	dir := t.TempDir()
 	request := filepath.Join(dir, "request.json")
 	recordPath := filepath.Join(dir, "capsule.json")

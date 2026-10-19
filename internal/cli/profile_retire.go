@@ -35,14 +35,14 @@ func profileRetireCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "retire NAME",
 		Short: "Rename a profile to NAME-retired-YYYYMMDD, freeing its name; nothing it recorded is moved, changed or deleted",
-		Args:  oneArg,
+		Args:  OneArg,
 		RunE: func(c *cobra.Command, args []string) error {
 			moveTo, _ := c.Flags().GetString("move-data")
 			result, err := retireProfile(args[0], moveTo)
 			if err != nil {
 				return err
 			}
-			return output(c, result)
+			return Output(c, result)
 		},
 	}
 	cmd.Flags().String("move-data", "", "Also rename a jsonl profile's data directory to this new path (same filesystem), for a new profile to use the old one")
@@ -50,7 +50,7 @@ func profileRetireCommand() *cobra.Command {
 }
 
 func retireProfile(name, moveTo string) (_ map[string]any, err error) {
-	p, err := loadProfile(name) // its errors already say what is wrong
+	p, err := LoadProfile(name) // its errors already say what is wrong
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func retireProfile(name, moveTo string) (_ map[string]any, err error) {
 			return nil, err
 		}
 	}
-	oldPath, err := profilePath(name)
+	oldPath, err := ProfilePath(name)
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +83,11 @@ func retireProfile(name, moveTo string) (_ map[string]any, err error) {
 	// The retired profile is written first, create-only; the data moves next;
 	// the old file goes last. A failure before the last step leaves NAME as
 	// it was, and removes the retired file this run wrote.
-	if err = saveProfile(p, false); err != nil {
+	if err = SaveProfile(p, false); err != nil {
 		return nil, err
 	}
 	undo := func(cause error) (map[string]any, error) {
-		if path, e := profilePath(retired); e == nil {
+		if path, e := ProfilePath(retired); e == nil {
 			cause = errors.Join(cause, retireRemove(path))
 		}
 		return nil, cause
@@ -95,7 +95,7 @@ func retireProfile(name, moveTo string) (_ map[string]any, err error) {
 	if moveTo != "" {
 		if err = retireRename(data, moveTo); err != nil {
 			if errors.Is(err, syscall.EXDEV) {
-				err = inputError("--move-data must stay on the data directory's filesystem; nothing was changed")
+				err = InputError("--move-data must stay on the data directory's filesystem; nothing was changed")
 			}
 			return undo(err)
 		}
@@ -105,7 +105,7 @@ func retireProfile(name, moveTo string) (_ map[string]any, err error) {
 			if back := retireRename(moveTo, data); back != nil {
 				// The data stays moved, and the retired profile is the only
 				// file that points at it: keep it.
-				return nil, errors.Join(err, back, hint(ErrConflict, fmt.Sprintf(
+				return nil, errors.Join(err, back, Hint(ErrConflict, fmt.Sprintf(
 					"retire stopped half-way: the data is at %s and profile %s points at it; profile %s still exists and points at %s, which no longer holds it", moveTo, retired, name, data)))
 			}
 		}
@@ -128,9 +128,9 @@ func retiredName(name string) (string, error) {
 			candidate = fmt.Sprintf("%s-%d", base, n)
 		}
 		if !profileName.MatchString(candidate) {
-			return "", inputError("profile " + name + " is too long a name to retire as " + candidate + " (at most 64 characters)")
+			return "", InputError("profile " + name + " is too long a name to retire as " + candidate + " (at most 64 characters)")
 		}
-		path, err := profilePath(candidate)
+		path, err := ProfilePath(candidate)
 		if err != nil {
 			return "", err
 		}
@@ -140,7 +140,7 @@ func retiredName(name string) (string, error) {
 			return "", err
 		}
 	}
-	return "", inputError("profile " + name + " has been retired 99 times today")
+	return "", InputError("profile " + name + " has been retired 99 times today")
 }
 
 // checkDataMove refuses a --move-data the retire cannot do safely: only a
@@ -148,14 +148,14 @@ func retiredName(name string) (string, error) {
 // a new path, and never one holding a key file the profile names by path.
 func checkDataMove(p Profile, moveTo string) (string, error) {
 	if p.Type != "jsonl" {
-		return "", inputError("--move-data moves a jsonl profile's data directory; a " + p.Type + " profile keeps its store where it is")
+		return "", InputError("--move-data moves a jsonl profile's data directory; a " + p.Type + " profile keeps its store where it is")
 	}
 	target, err := filepath.Abs(moveTo)
 	if err != nil {
 		return "", err
 	}
 	if _, err = os.Lstat(target); err == nil {
-		return "", inputError("--move-data " + moveTo + " already exists: name a new path")
+		return "", InputError("--move-data " + moveTo + " already exists: name a new path")
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
@@ -172,7 +172,7 @@ func checkDataMove(p Profile, moveTo string) (string, error) {
 			return "", err
 		}
 		if rel, err := filepath.Rel(data, file); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return "", inputError("--move-data: the profile names a key file inside its data directory (" + s.File + "), which a move would break; retire without --move-data")
+			return "", InputError("--move-data: the profile names a key file inside its data directory (" + s.File + "), which a move would break; retire without --move-data")
 		}
 	}
 	return target, nil
@@ -195,7 +195,7 @@ func holdJSONLStore(p Profile) (func() error, error) {
 		}
 		return errors.Join(errs...)
 	}
-	for _, journal := range []string{filepath.Join(p.Connection.Database, "book", "log.jsonl"), filepath.Join(p.Connection.Database, jsonlLogFile)} {
+	for _, journal := range []string{filepath.Join(p.Connection.Database, "book", "log.jsonl"), filepath.Join(p.Connection.Database, JSONLLogFile)} {
 		f, err := os.Open(journal)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
@@ -205,7 +205,7 @@ func holdJSONLStore(p Profile) (func() error, error) {
 		}
 		if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 			err = errors.Join(f.Close(), release())
-			return nil, errors.Join(err, hint(ErrConflict, "profile "+p.Name+"'s store is in use by a running capsulectl command; retire it when that has finished"))
+			return nil, errors.Join(err, Hint(ErrConflict, "profile "+p.Name+"'s store is in use by a running capsulectl command; retire it when that has finished"))
 		}
 		held = append(held, f)
 	}

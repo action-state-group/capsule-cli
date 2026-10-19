@@ -23,7 +23,7 @@ func producedBundle(t *testing.T, edit func(map[string]interface{})) string {
 	require.NoError(t, err)
 	encoded, err := json.Marshal(bundle)
 	require.NoError(t, err)
-	value, err := decodeBundleJSON(encoded)
+	value, err := DecodeBundleJSON(encoded)
 	require.NoError(t, err)
 	if edit != nil {
 		edit(value)
@@ -109,7 +109,7 @@ func TestVerifyBundleRefusesAFileThatIsNotABundle(t *testing.T) {
 func TestProducedBundleCarriesTheSignedCheckpointFieldsAndRecordSignatures(t *testing.T) {
 	raw, err := os.ReadFile(producedBundle(t, nil))
 	require.NoError(t, err)
-	bundle, err := decodeBundleJSON(raw)
+	bundle, err := DecodeBundleJSON(raw)
 	require.NoError(t, err)
 	cp := bundle["checkpoint"].(map[string]interface{})
 	for _, field := range []string{"log_id", "key_id", "timestamp", "prev_size", "prev_root", "cose"} {
@@ -279,7 +279,7 @@ func TestVerifyBundleComparesTheTimestampAsSigned(t *testing.T) {
 	path := filepath.Join("testdata", "bundle-fractional-issued-at.json")
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
-	bundle, err := decodeBundleJSON(raw)
+	bundle, err := DecodeBundleJSON(raw)
 	require.NoError(t, err)
 	stated := bundle["checkpoint"].(map[string]interface{})["timestamp"].(string)
 	require.True(t, strings.HasSuffix(stated, ".000Z"), "the fixture is signed with a fractional issued_at")

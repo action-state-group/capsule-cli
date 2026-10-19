@@ -45,38 +45,38 @@ func TestVerifyTrustedPathRejections(t *testing.T) {
 	root := pluginRoot(t)
 
 	valid := writeLauncher(t, root, "capsulectl-guard", fakePlugin, 0o755)
-	require.NoError(t, verifyTrustedPath(valid), "a user-owned 0755 launcher on the trusted root is accepted")
+	require.NoError(t, VerifyTrustedPath(valid), "a user-owned 0755 launcher on the trusted root is accepted")
 
 	// group- and other-writable launchers
-	assert.ErrorContains(t, verifyTrustedPath(writeLauncher(t, root, "capsulectl-gw", fakePlugin, 0o775)), "group-writable")
-	assert.ErrorContains(t, verifyTrustedPath(writeLauncher(t, root, "capsulectl-ow", fakePlugin, 0o707)), "other-writable")
+	assert.ErrorContains(t, VerifyTrustedPath(writeLauncher(t, root, "capsulectl-gw", fakePlugin, 0o775)), "group-writable")
+	assert.ErrorContains(t, VerifyTrustedPath(writeLauncher(t, root, "capsulectl-ow", fakePlugin, 0o707)), "other-writable")
 
 	// group/other-writable INTERMEDIATE directory between the root and the launcher
 	gwDir := filepath.Join(root, "gwdir")
 	require.NoError(t, os.Mkdir(gwDir, 0o755))
 	launcherGW := writeLauncher(t, gwDir, "capsulectl-x", fakePlugin, 0o755)
 	require.NoError(t, os.Chmod(gwDir, 0o775)) // chmod after write: umask does not mask chmod
-	assert.ErrorContains(t, verifyTrustedPath(launcherGW), "group-writable")
+	assert.ErrorContains(t, VerifyTrustedPath(launcherGW), "group-writable")
 	owDir := filepath.Join(root, "owdir")
 	require.NoError(t, os.Mkdir(owDir, 0o755))
 	launcherOW := writeLauncher(t, owDir, "capsulectl-y", fakePlugin, 0o755)
 	require.NoError(t, os.Chmod(owDir, 0o707))
-	assert.ErrorContains(t, verifyTrustedPath(launcherOW), "other-writable")
+	assert.ErrorContains(t, VerifyTrustedPath(launcherOW), "other-writable")
 
 	// launcher outside every trusted root
 	outside := t.TempDir()
-	assert.ErrorContains(t, verifyTrustedPath(writeLauncher(t, outside, "capsulectl-z", fakePlugin, 0o755)), "outside the trusted plugin roots")
+	assert.ErrorContains(t, VerifyTrustedPath(writeLauncher(t, outside, "capsulectl-z", fakePlugin, 0o755)), "outside the trusted plugin roots")
 
 	// a symlink on the trusted root whose real target escapes the roots
 	target := writeLauncher(t, outside, "capsulectl-real", fakePlugin, 0o755)
 	link := filepath.Join(root, "capsulectl-link")
 	require.NoError(t, os.Symlink(target, link))
-	assert.ErrorContains(t, verifyTrustedPath(link), "outside the trusted plugin roots")
+	assert.ErrorContains(t, VerifyTrustedPath(link), "outside the trusted plugin roots")
 
 	// a non-regular file (e.g. a directory) on the trusted root is not a launcher
 	dir := filepath.Join(root, "capsulectl-dir")
 	require.NoError(t, os.Mkdir(dir, 0o755))
-	assert.ErrorContains(t, verifyTrustedPath(dir), "not a regular file")
+	assert.ErrorContains(t, VerifyTrustedPath(dir), "not a regular file")
 }
 
 func TestPluginCannotShadowCoreOrBuiltins(t *testing.T) {

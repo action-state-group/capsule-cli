@@ -26,24 +26,27 @@ func retireOn(t *testing.T, day string) {
 	t.Cleanup(func() { retireClock = previous })
 }
 
-// jsonlWithARecord is a jsonl profile (the fixture's name) holding one
-// published capsule, and that capsule's id.
+// jsonlWithARecord is a plain jsonl profile (the fixture's name) holding one
+// published, checkpointed capsule, and that capsule's id.
 func jsonlWithARecord(t *testing.T) (Profile, string) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, key := profileFixture(t)
-	p.Type = "jsonl"
+	p.Type, p.Log = "jsonl", LogCLL // a plain jsonl profile: the core keeps its log
 	p.Connection.Database = filepath.Join(t.TempDir(), "store")
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	_, err := invoke(t, "", "store", "init", "--profile", p.Name)
 	require.NoError(t, err)
-	request, err := parseRequest(requestFixture(t))
+	request, err := ParseRequest(requestFixture(t))
 	require.NoError(t, err)
-	target, err := openTarget(t.Context(), p, usePublication)
+	target, err := OpenTarget(t.Context(), p, UsePublication)
 	require.NoError(t, err)
-	published, err := target.publish(t.Context(), request, key)
+	published, err := target.Publish(t.Context(), request, key)
 	require.NoError(t, err)
-	require.NoError(t, target.close())
+	require.NoError(t, target.Close())
+	// A plain log proves its records from a checkpoint (a book cuts its own).
+	_, err = invoke(t, "", "cll", "checkpoint", "create", "--profile", p.Name)
+	require.NoError(t, err)
 	return p, published.CapsuleID
 }
 
@@ -112,7 +115,7 @@ func TestProfileRetireFreesTheNameAndKeepsEverything(t *testing.T) {
 	assert.Contains(t, result["note"], "refers to a free name")
 
 	assert.Equal(t, []string{retired}, profileNames(t), "the old name is free")
-	r, err := loadProfile(retired)
+	r, err := LoadProfile(retired)
 	require.NoError(t, err)
 	assert.Equal(t, p.LogID, r.LogID)
 	assert.Equal(t, p.Connection.Database, r.Connection.Database)
@@ -136,7 +139,7 @@ func TestProfileRetireRefusesWhatItCannotDo(t *testing.T) {
 
 	p, _ := profileFixture(t)
 	p.Name = strings.Repeat("a", 60)
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	_, err = invoke(t, "", "profile", "retire", p.Name)
 	require.ErrorIs(t, err, ErrInput, "too long a name to retire")
 	assert.Contains(t, profileNames(t), p.Name, "and it is left as it was")
@@ -160,7 +163,7 @@ func TestProfileRetireMoveData(t *testing.T) {
 	_, err = invoke(t, "", "profile", "retire", p.Name, "--move-data", moved)
 	require.NoError(t, err)
 	assert.NoDirExists(t, p.Connection.Database)
-	r, err := loadProfile(p.Name + "-retired-20261007")
+	r, err := LoadProfile(p.Name + "-retired-20261007")
 	require.NoError(t, err)
 	assert.Equal(t, moved, r.Connection.Database)
 	assert.Equal(t, files, treeDigests(t, moved), "moved byte for byte")
@@ -172,7 +175,7 @@ func TestProfileRetireMoveDataRefusals(t *testing.T) {
 	p, _ := profileFixture(t)
 	p.Type = "sqlite"
 	p.Connection.Database = filepath.Join(t.TempDir(), "store.db")
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	_, err := invoke(t, "", "profile", "retire", p.Name, "--move-data", filepath.Join(t.TempDir(), "x"))
 	require.ErrorIs(t, err, ErrInput, "a sqlite store is not moved")
 	assert.Contains(t, profileNames(t), p.Name)
@@ -181,7 +184,7 @@ func TestProfileRetireMoveDataRefusals(t *testing.T) {
 	key := filepath.Join(q.Connection.Database, "signing.key")
 	require.NoError(t, os.WriteFile(key, []byte("not read"), 0o600))
 	q.Signing = Secret{File: key}
-	require.NoError(t, saveProfile(q, true))
+	require.NoError(t, SaveProfile(q, true))
 	_, err = invoke(t, "", "profile", "retire", q.Name, "--move-data", filepath.Join(t.TempDir(), "y"))
 	require.ErrorIs(t, err, ErrInput, "a key file inside the data directory")
 	assert.Contains(t, profileNames(t), q.Name)
@@ -193,7 +196,7 @@ func TestProfileRetireMoveDataRefusals(t *testing.T) {
 func lockJournal(t *testing.T, dir string) func() {
 	t.Helper()
 	var path string
-	for _, candidate := range []string{filepath.Join(dir, "book", "log.jsonl"), filepath.Join(dir, jsonlLogFile)} {
+	for _, candidate := range []string{filepath.Join(dir, "book", "log.jsonl"), filepath.Join(dir, JSONLLogFile)} {
 		if _, err := os.Stat(candidate); err == nil {
 			path = candidate
 			break
@@ -276,7 +279,7 @@ func TestProfileRetireFailingHalfWay(t *testing.T) {
 			require.ErrorIs(t, err, ErrConflict)
 			assert.Contains(t, err.Error(), "retire stopped half-way")
 			assert.ElementsMatch(t, []string{p.Name, retired}, profileNames(t), "the retired profile is kept")
-			r, err := loadProfile(retired)
+			r, err := LoadProfile(retired)
 			require.NoError(t, err)
 			assert.Equal(t, moved, r.Connection.Database, "and points at the moved data")
 			assert.DirExists(t, moved)

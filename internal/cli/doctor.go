@@ -76,7 +76,7 @@ func doctorCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Environment sanity: binary version, plugin trust, profile presence, key permissions; never prints a token",
-		Args:  noArgs,
+		Args:  NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			if install, _ := c.Flags().GetBool("install-check"); install {
 				return installCheck(c)
@@ -87,8 +87,8 @@ func doctorCommand() *cobra.Command {
 				pluginRows = append(pluginRows, map[string]any{"name": p.Name, "vendor": p.Vendor, "version": p.Version, "plugin_api": p.PluginAPI})
 			}
 			report := map[string]any{
-				"binary_version": cliVersion,
-				"binary_commit":  cliCommit,
+				"binary_version": CLIVersion,
+				"binary_commit":  CLICommit,
 				"plugins": map[string]any{
 					"roots":      trustedPluginRoots(),
 					"discovered": pluginRows,
@@ -99,7 +99,7 @@ func doctorCommand() *cobra.Command {
 			checkWitness, _ := c.Flags().GetBool("check-witness")
 			profileReport := map[string]any{"selected": name}
 			if name == "" {
-				dir, e := profilesDir()
+				dir, e := ProfilesDir()
 				count := 0
 				if e == nil {
 					if entries, e := os.ReadDir(dir); e == nil {
@@ -114,16 +114,16 @@ func doctorCommand() *cobra.Command {
 				profileReport["configured_profiles"] = count
 				report["profile"] = profileReport
 				report["witness"] = map[string]any{"checked": false, "reason": "no --profile selected"}
-				return output(c, report)
+				return Output(c, report)
 			}
 
-			p, e := loadProfile(name)
+			p, e := LoadProfile(name)
 			if e != nil {
 				profileReport["present"] = false
 				profileReport["issue"] = SafeError(e)
 				report["profile"] = profileReport
 				report["witness"] = map[string]any{"checked": false, "reason": "profile did not load"}
-				return output(c, report)
+				return Output(c, report)
 			}
 			profileReport["present"] = true
 			profileReport["type"] = p.Type
@@ -135,7 +135,7 @@ func doctorCommand() *cobra.Command {
 			unreadablePredicate := false
 			if p.Namespace == "deal" {
 				materiality := map[string]any{"configured": p.Materiality.Predicate != ""}
-				switch predicate, err := pinnedMateriality(p); {
+				switch predicate, err := PinnedMateriality(p); {
 				case p.Materiality.Predicate == "" && p.Materiality.Digest == "":
 					materiality["notice"] = "no materiality predicate: every attribute the agent picks pauses the check (set one with deal init --materiality)"
 				case err != nil:
@@ -149,7 +149,7 @@ func doctorCommand() *cobra.Command {
 			// A pinned rules checker: its executable's digest and every
 			// definition digest its ruleset may report.
 			if pin := p.RulesChecker; len(pin.Command) > 0 {
-				digests := pin.pinnedDigests()
+				digests := pin.PinnedDigests()
 				checker := map[string]any{"sha256": pin.SHA256, "definition_digests": digests}
 				if len(digests) == 0 {
 					checker["definition_digests"] = []string{}
@@ -166,16 +166,16 @@ func doctorCommand() *cobra.Command {
 			default:
 				witness := checkpointReachability(c.Context(), p.Checkpoint.Endpoint)
 				if witness["reachable"] != true {
-					witness["consent"] = witnessConsentText(p.Checkpoint.Endpoint)
+					witness["consent"] = WitnessConsentText(p.Checkpoint.Endpoint)
 				} else {
-					witness["consent"] = witnessConsentReached(p.Checkpoint.Endpoint)
+					witness["consent"] = WitnessConsentReached(p.Checkpoint.Endpoint)
 				}
 				if issue := witnessKeyIssue(p); issue != "" {
 					// Reachable or not, no receipt from this endpoint can be
 					// verified: report it as a failure, with the fix.
 					witness["ok"], witness["public_key"] = false, map[string]any{"ok": false, "issue": issue}
 					report["witness"] = witness
-					if e := output(c, report); e != nil {
+					if e := Output(c, report); e != nil {
 						return e
 					}
 					return ErrPartial
@@ -194,7 +194,7 @@ func doctorCommand() *cobra.Command {
 				}
 				report["witness"] = witness
 			}
-			if e := output(c, report); e != nil || !unreadablePredicate {
+			if e := Output(c, report); e != nil || !unreadablePredicate {
 				return e
 			}
 			return ErrPartial
