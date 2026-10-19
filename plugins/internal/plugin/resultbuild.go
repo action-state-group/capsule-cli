@@ -663,6 +663,12 @@ func sealResultRecord(ctx context.Context, book *evidencebook.Book, statement []
 			RecordType: resultRecordType, EpistemicType: evidencebook.DerivedMetric,
 			SubjectRef: subject, Links: links, Statement: json.RawMessage(statement),
 		}); err != nil {
+			// A failure after the book committed the record (indexing, an
+			// automatic checkpoint) returns it with the error: keep it, so
+			// the caller still reports it.
+			if sealed.RecordID != "" {
+				return sealed, false, 0, bookError(err)
+			}
 			return evidencebook.Record{}, false, 0, bookError(err)
 		}
 	}

@@ -74,8 +74,8 @@ func withoutGeneratedAt(doc map[string]interface{}) ([]byte, error) {
 }
 
 // newestTermsResult is the results book's newest evidence_result record and
-// its statement, when it holds one.
-func newestTermsResult(ctx context.Context, book *evidencebook.Book) (evidencebook.Record, map[string]interface{}, bool, error) {
+// its Result, read from the record's verified payload, when it holds one.
+func (s *dealSession) newestTermsResult(ctx context.Context, book *evidencebook.Book) (evidencebook.Record, map[string]interface{}, bool, error) {
 	records, err := book.Query(ctx, evidencebook.Filter{RecordType: resultRecordType})
 	if err != nil || len(records) == 0 {
 		return evidencebook.Record{}, nil, false, err
@@ -86,7 +86,11 @@ func newestTermsResult(ctx context.Context, book *evidencebook.Book) (evidencebo
 			newest = r
 		}
 	}
-	doc, err := decodeResultDocument(newest.Header.Statement)
+	payload, err := s.verifiedPayload(ctx, newest.RecordID)
+	if err != nil {
+		return evidencebook.Record{}, nil, false, err
+	}
+	doc, err := decodeResultDocument(payload)
 	if err != nil {
 		return evidencebook.Record{}, nil, false, cli.ErrConflict
 	}
@@ -117,7 +121,7 @@ func (s *dealSession) sealTermsResult(ctx context.Context, dealID string, result
 	if err != nil {
 		return termsSeal{}, err
 	}
-	newest, newestDoc, have, err := newestTermsResult(ctx, book)
+	newest, newestDoc, have, err := s.newestTermsResult(ctx, book)
 	if err != nil {
 		return termsSeal{}, err
 	}
@@ -159,7 +163,10 @@ func (s *dealSession) sealTermsResult(ctx context.Context, dealID string, result
 	}, func(entry evidencebook.Entry) (evidencebook.Record, error) {
 		// The record is the profile's own Capsule, its payload the Result's
 		// JCS, so a copy of the results book is bundled and verified as a
-		// deal's is.
+		// deal's is. The Result is the bound payload only, never the
+		// header's statement: a header travels in every bundle of the book,
+		// withheld or not, and a share must show one Result alone (7.4).
+		entry.Statement = nil
 		at := cli.DealClock().UTC().Truncate(time.Second)
 		return s.appendTo(ctx, book, at, cli.Request{
 			Version: "capsule-seal-request/v1",

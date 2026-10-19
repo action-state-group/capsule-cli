@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -62,8 +64,12 @@ func TestTermsResultIsSealedOnTheResultsBook(t *testing.T) {
 	require.Len(t, records, 1)
 	assert.Equal(t, sealed["record_id"], records[0].RecordID)
 	assert.Equal(t, evidencebook.DealReconcileContractRef, records[0].Header.SubjectRef)
-	assert.Equal(t, jcsOf(t, mustRead(t, out)), jcsOf(t, records[0].Header.Statement), "the record commits to the file's document")
+	assert.Empty(t, records[0].Header.Statement, "the Result is never in the header, which every bundle carries")
 	withSession(t, func(s *dealSession) {
+		require.NoError(t, s.useDeal(t.Context(), pair.id, false))
+		payload, err := s.verifiedPayload(t.Context(), records[0].RecordID)
+		require.NoError(t, err)
+		assert.Equal(t, jcsOf(t, mustRead(t, out)), payload, "the record's payload is the file's document, in JCS")
 		book, err := s.shelf.Open(t.Context(), dealResultsLogID(pair.id))
 		require.NoError(t, err)
 		covered, err := checkpointCovers(t.Context(), book, records[0].Seq)
@@ -86,13 +92,10 @@ func TestTermsResultRetriesAndNewIssuances(t *testing.T) {
 			delete(m[d], dealAmountField)
 		}
 	})
-	at := func(clock string) {
-		setDealClock(t, clock)
-	}
-	at("2026-10-19T12:00:00Z")
+	setDealClock(t, "2026-10-19T12:00:00Z")
 	first, a1, _, err := runTermsResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
 	require.NoError(t, err)
-	at("2026-10-19T12:00:05Z")
+	setDealClock(t, "2026-10-19T12:00:05Z")
 	retry, a1again, _, err := runTermsResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
 	require.NoError(t, err)
 	assert.Equal(t, true, sealedOf(t, retry)["retry"])
@@ -100,11 +103,12 @@ func TestTermsResultRetriesAndNewIssuances(t *testing.T) {
 	assert.Equal(t, a1.GeneratedAt, a1again.GeneratedAt, "a retry keeps the sealed Result's generated_at")
 	require.Len(t, resultsRecords(t, pair.id), 1)
 
-	at("2026-10-19T12:00:10Z")
+	// With the clock held, A again is byte for byte the first A: only the
+	// newest Result is a retry's match, so it is a third record.
+	setDealClock(t, "2026-10-19T12:00:00Z")
 	b, _, _, err := runTermsResult(t, pair.id, pair.response, "--openings", missing)
 	require.NoError(t, err)
 	assert.Equal(t, false, sealedOf(t, b)["retry"])
-	at("2026-10-19T12:00:11Z")
 	again, _, _, err := runTermsResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
 	require.NoError(t, err)
 	assert.Equal(t, false, sealedOf(t, again)["retry"], "only the newest Result is a retry's match")
@@ -202,6 +206,24 @@ func TestTermsResultShareDisclosesOneResult(t *testing.T) {
 	require.Len(t, disclosures, 1, "exactly one Result's payload is disclosed")
 	assert.Contains(t, disclosures, firstID)
 	assert.Len(t, b["records"], 2, "both Results are present as positions")
+	// The other Result appears nowhere in the bundle: not as a disclosure,
+	// and not in its record's header.
+	for _, r := range b["records"].([]any) {
+		header := r.(map[string]any)[evidencebook.RecordHeaderMember].(map[string]any)
+		assert.NotContains(t, header, "statement")
+	}
+	other := resultsRecords(t, pair.id)[1]
+	withSession(t, func(s *dealSession) {
+		require.NoError(t, s.useDeal(t.Context(), pair.id, false))
+		payload, err := s.verifiedPayload(t.Context(), other.RecordID)
+		require.NoError(t, err)
+		assert.NotContains(t, string(mustRead(t, path)), string(payload))
+		var otherDoc evidencebook.DealReconcileResult
+		require.NoError(t, json.Unmarshal(payload, &otherDoc))
+		tallies, err := json.Marshal(otherDoc.Claims[0].Reconcile.Tallies)
+		require.NoError(t, err)
+		assert.NotContains(t, string(mustRead(t, path)), string(tallies), "the withheld Result's tallies are not readable")
+	})
 	result, err := verifyWithDirectory(t, path, "")
 	require.NoError(t, err)
 	assert.Equal(t, "VALID", result["verdict"])
@@ -319,4 +341,71 @@ func TestASealedResultSurvivesAFailedWrite(t *testing.T) {
 	assert.Equal(t, true, sealedOf(t, retry)["retry"])
 	assert.Equal(t, records[0].RecordID, sealedOf(t, retry)["record_id"])
 	assert.Len(t, resultsRecords(t, pair.id), 1)
+}
+
+// The shared sealing core keeps a record the book committed before an error
+// (an index or automatic-checkpoint failure), so the caller reports it.
+func TestSealResultRecordKeepsACommittedRecord(t *testing.T) {
+	committed := evidencebook.Record{RecordID: strings.Repeat("a", 64), Seq: 3}
+	sealed, already, _, err := sealResultRecord(t.Context(), nil, []byte("{}"), "x", nil,
+		func() (evidencebook.Record, bool, error) { return evidencebook.Record{}, false, nil },
+		func(evidencebook.Entry) (evidencebook.Record, error) { return committed, assert.AnError })
+	require.ErrorIs(t, err, assert.AnError)
+	assert.False(t, already)
+	assert.Equal(t, committed, sealed)
+	sealed, _, _, err = sealResultRecord(t.Context(), nil, []byte("{}"), "x", nil,
+		func() (evidencebook.Record, bool, error) { return evidencebook.Record{}, false, nil },
+		func(evidencebook.Entry) (evidencebook.Record, error) { return evidencebook.Record{}, assert.AnError })
+	require.ErrorIs(t, err, assert.AnError)
+	assert.Empty(t, sealed.RecordID, "nothing committed, nothing reported")
+}
+
+// The results book's whole lifecycle with a witness: it is live once a
+// Result is sealed, leaves the tick with its finally closed deal once a
+// witnessed tick holds its checkpoint, comes back live on a new issuance
+// after the deal itself has left, and leaves again once that is witnessed.
+func TestAResultsBookLeavesAndReturnsWithItsDeal(t *testing.T) {
+	public, key, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	endpoint, _ := countingWitness(t)
+	p := cadenceFixture(t, endpoint, public, "1h", "0s", 0)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	buyer := thisDealParty(t)
+	dealFixture(t)
+	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	seller := thisDealParty(t)
+	response := recordedCopy(t, buyer, seller, id)
+	party(t, seller.config)
+	sellerFile := discloseTo(t, id, "the buyer")
+	party(t, buyer.config)
+	results := dealResultsLogID(id)
+	witnessTick := func() {
+		t.Helper()
+		setDealClock(t, cli.DealClock().UTC().Add(time.Hour).Format("2006-01-02T15:04:05Z"))
+		require.Equal(t, "ticked", dealRun(t, "tick")["state"])
+		deliver(t, p, cadenceSize(t, p), key)
+	}
+
+	_, _, _, err = runTermsResult(t, id, response, "--openings", sellerFile)
+	require.NoError(t, err)
+	assert.Contains(t, liveLogs(t, p), results)
+	witnessTick()
+	live := liveLogs(t, p)
+	assert.NotContains(t, live, cli.DealLogID(id), "the closed deal has left")
+	assert.NotContains(t, live, results, "its results book left with it")
+
+	missing := editOpenings(t, sellerFile, func(m map[string]map[string]evidencebook.Opening) {
+		for d := range m {
+			delete(m[d], dealAmountField)
+		}
+	})
+	_, _, _, err = runTermsResult(t, id, response, "--openings", missing)
+	require.NoError(t, err)
+	live = liveLogs(t, p)
+	assert.Contains(t, live, results, "a new issuance makes the results book live again")
+	assert.NotContains(t, live, cli.DealLogID(id), "the deal itself stays out")
+	witnessTick()
+	assert.NotContains(t, liveLogs(t, p), results, "settled through its deal, it leaves again")
 }
