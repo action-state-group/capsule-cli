@@ -259,3 +259,19 @@ exit 2
 	assert.ErrorIs(t, err, ErrInput)
 	assert.Empty(t, SafeError(err), "the plugin already said why")
 }
+
+func TestAPluginKilledBySignalSaysSo(t *testing.T) {
+	root := pluginRoot(t)
+	writeLauncher(t, root, "capsulectl-"+DealPluginName, `#!/bin/sh
+if [ "$1" = "cli-plugin-metadata" ]; then
+  echo '{"name":"deal","vendor":"v","version":"1","plugin_api":"cli-plugin/v1"}'
+  exit 0
+fi
+kill -9 $$
+`, 0o755)
+	_, err := invoke(t, "", "deal", "list")
+	require.Error(t, err)
+	assert.Equal(t, 1, ExitCode(err))
+	assert.Contains(t, SafeError(err), "plugin stopped")
+	assert.Contains(t, SafeError(err), "signal: killed")
+}

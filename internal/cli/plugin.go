@@ -252,12 +252,20 @@ func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
 	if err := cmd.Run(); err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
+			if exit.ExitCode() < 0 {
+				// Killed by a signal: the plugin said nothing, and -1 would
+				// reach the shell as 255, a code the plugin could have chosen.
+				return Hint(errPluginStopped, fmt.Sprintf("%s stopped before it finished (%s); check the store before retrying", info.Name, exit.String()))
+			}
 			return &PluginExit{Code: exit.ExitCode()}
 		}
 		return fmt.Errorf("plugin %s failed: %w", info.Name, err)
 	}
 	return nil
 }
+
+// errPluginStopped is the class of a plugin killed by a signal.
+var errPluginStopped = errors.New("plugin stopped")
 
 // PluginExit is a plugin's own non-zero exit. The plugin has already said
 // why on stderr, so capsulectl adds nothing to it (SafeError is empty) and
