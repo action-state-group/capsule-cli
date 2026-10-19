@@ -121,6 +121,8 @@ func checkTermsFiles(c *cobra.Command, checkPath string, copies, partyKeyFlags [
 		return cli.InputError("the adjudicator's check takes two --copy files and two --party-key pairs, one of each per party")
 	case len(copies) == 2 && len(keys) != 2:
 		return cli.InputError("two --copy files need two --party-key pairs, one per party")
+	case len(copies) == 0:
+		return cli.InputError("--copy is required: each party's own adjudicator file")
 	case len(keys) == 0:
 		return cli.InputError("--party-key is required: the keys you hold for each party, SIGNER:CHECKPOINT")
 	}
@@ -179,12 +181,12 @@ func checkTermsFiles(c *cobra.Command, checkPath string, copies, partyKeyFlags [
 	default:
 		return report(termsCheckDiffers, "the Result's peer is neither party's signing key")
 	}
-	inputs := "the two parties' adjudicator files"
+	inputs := "the adjudicator files " + copies[0] + " and " + copies[1]
 	if !sameHalves(result, period, a, b) {
-		if fewerHalves(result) {
-			return report(termsCheckDiffers, "the Result's evidence omits the other party's half supplied here; missing openings at production time can cause this")
+		if onlyHalfOf(result, a) {
+			return report(termsCheckDiffers, "the Result's evidence omits the other party's half supplied here ("+inputs+"); missing openings at production time can cause this")
 		}
-		return report(termsCheckDiffers, "the Result's evidence (DR §7.3) names halves other than the closes read here")
+		return report(termsCheckDiffers, "the Result's evidence (DR §7.3) names halves other than the closes read here ("+inputs+")")
 	}
 	got, err := recompute(a, b, period, result.GeneratedAt)
 	if err != nil {
@@ -196,10 +198,16 @@ func checkTermsFiles(c *cobra.Command, checkPath string, copies, partyKeyFlags [
 	return report(termsCheckEqual, "the Result is the recompute of "+inputs)
 }
 
-// fewerHalves is whether a Result's claims name fewer than two halves.
-func fewerHalves(result evidencebook.DealReconcileResult) bool {
+// onlyHalfOf is whether every claim of a Result names exactly one half, the
+// producer's own: the case where the other party's half was left out. Any
+// other mismatch, such as a lone peer half or a digest of no copy, is not
+// that case.
+func onlyHalfOf(result evidencebook.DealReconcileResult, producer reconcileSide) bool {
+	if producer.half == nil {
+		return false
+	}
 	for _, claim := range result.Claims {
-		if len(claim.Evidence) >= 2 {
+		if len(claim.Evidence) != 1 || claim.Evidence[0].Digest != producer.half.digest {
 			return false
 		}
 	}

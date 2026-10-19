@@ -211,7 +211,17 @@ func TestTheAdjudicatorsCheckRefuses(t *testing.T) {
 	wrongSigner := other.pair.buyer.signer + ":" + a.pair.buyer.checkpoint
 	crossedA := a.pair.buyer.signer + ":" + a.pair.seller.checkpoint
 	crossedB := a.pair.seller.signer + ":" + a.pair.buyer.checkpoint
+	var b map[string]any
+	require.NoError(t, json.Unmarshal(mustRead(t, a.buyerFile), &b))
+	require.True(t, flipSignature(b), "the copy has a signature to flip")
+	invalid := writeJSONFile(t, "invalid.json", b)
 	for name, args := range map[string][]string{
+		"a copy that does not verify":   {"--check", a.result, "--copy", invalid, "--copy", a.sellerFile, "--party-key", a.buyerKeys, "--party-key", a.sellerKeys},
+		"a checkpoint signed by no key": {"--check", a.result, "--copy", a.buyerFile, "--copy", a.sellerFile, "--party-key", a.buyerKeys, "--party-key", other.sellerKeys},
+		"no --copy":                     {"--check", a.result, "--party-key", a.buyerKeys, "--party-key", a.sellerKeys},
+		"with --share":                  a.args("--share", "counterparty"),
+		"with --recipient":              a.args("--recipient", "the platform"),
+		"with --record":                 a.args("--record", strings.Repeat("0", 64)),
 		"copies of different deals":     {"--check", a.result, "--copy", a.buyerFile, "--copy", other.sellerFile, "--party-key", a.buyerKeys, "--party-key", other.sellerKeys},
 		"one party's file twice":        {"--check", a.result, "--copy", a.buyerFile, "--copy", a.buyerFile, "--party-key", a.buyerKeys, "--party-key", a.sellerKeys},
 		"a wrong pinned signing key":    {"--check", a.result, "--copy", a.buyerFile, "--copy", a.sellerFile, "--party-key", wrongSigner, "--party-key", a.sellerKeys},
@@ -234,6 +244,39 @@ func TestTheAdjudicatorsCheckRefuses(t *testing.T) {
 			assert.NotEqual(t, termsCheckCannotReproduce, out["check"], "refused before any outcome")
 		})
 	}
+	// Each guard refuses for its own reason.
+	for copyPath, guard := range map[string]string{invalid: "not VALID", a.sellerFile: "signed by no --party-key's checkpoint key"} {
+		_, err := asAdjudicator(t, "--check", a.result, "--copy", copyPath, "--copy", a.buyerFile, "--party-key", a.buyerKeys, "--party-key", other.sellerKeys)
+		assert.ErrorContains(t, err, guard)
+	}
+}
+
+// flipSignature changes one character of the first signature in a decoded
+// copy, so the copy no longer verifies.
+func flipSignature(v any) bool {
+	switch t := v.(type) {
+	case map[string]any:
+		if sig, ok := t["signature"].(string); ok && sig != "" {
+			flip := byte('0')
+			if sig[0] == '0' {
+				flip = '1'
+			}
+			t["signature"] = string(flip) + sig[1:]
+			return true
+		}
+		for _, child := range t {
+			if flipSignature(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range t {
+			if flipSignature(child) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // The outcomes from what the files carry: one file, or a missing field, is
@@ -289,6 +332,26 @@ func TestTheAdjudicatorsOutcomes(t *testing.T) {
 
 	var doc map[string]any
 	require.NoError(t, json.Unmarshal(mustRead(t, a.result), &doc))
+	evidenceOf := func(digest string) string {
+		var changed map[string]any
+		require.NoError(t, json.Unmarshal(mustRead(t, a.result), &changed))
+		for _, c := range changed["claims"].([]any) {
+			c.(map[string]any)["evidence"] = []any{map[string]any{"digest": digest}}
+		}
+		return writeJSONFile(t, "one-half.json", changed)
+	}
+	ownHalf, err := soleDigest(mustOpenings(t, a.buyerFile))
+	require.NoError(t, err)
+	peerHalf, err := soleDigest(mustOpenings(t, a.sellerFile))
+	require.NoError(t, err)
+	for digest, omits := range map[string]bool{ownHalf: true, peerHalf: false, strings.Repeat("d", 64): false} {
+		out, err := asAdjudicator(t, "--check", evidenceOf(digest), "--copy", a.buyerFile, "--copy", a.sellerFile, "--party-key", a.buyerKeys, "--party-key", a.sellerKeys)
+		require.ErrorIs(t, err, cli.ErrConflict)
+		assert.Equal(t, termsCheckDiffers, out["check"])
+		detail, _ := out["detail"].(string)
+		assert.Equal(t, omits, strings.Contains(detail, "omits the other party's half"), "only the producer's own lone half reads as omitted: %s", detail)
+		assert.Contains(t, detail, a.sellerFile, "the outcome names the files")
+	}
 	for name, change := range map[string]func(map[string]any){
 		"a tally":                      func(c map[string]any) { c["reconcile"].(map[string]any)["tallies"].(map[string]any)["matched"] = 2 },
 		"a peer that is neither party": func(c map[string]any) { c["reconcile"].(map[string]any)["peer"] = strings.Repeat("c", 64) },
@@ -310,4 +373,12 @@ func TestTheAdjudicatorsOutcomes(t *testing.T) {
 			assert.Equal(t, termsCheckDiffers, out["check"])
 		})
 	}
+}
+
+// mustOpenings are the field_openings of a disclose file.
+func mustOpenings(t *testing.T, path string) map[string]map[string]evidencebook.Opening {
+	t.Helper()
+	openings, err := dealOpeningsFile(mustRead(t, path))
+	require.NoError(t, err)
+	return openings
 }
