@@ -8,15 +8,15 @@ never change what a core verb -- especially `verify` -- says.**
 
 ## What a plugin is
 
-A plugin is a single executable file named `capsulectl-<name>`, installed by
-an operator (never by `capsulectl` itself) into one of the trusted discovery
-roots below. `capsulectl` discovers it, runs a handshake, and if the
-handshake passes, wires `<name>` up as a top-level subcommand that execs the
-launcher with the remaining CLI arguments passed through unchanged.
+A plugin is a single executable file named `capsulectl-<name>` on one of the
+trusted discovery roots below. `capsulectl` discovers it, runs a handshake,
+and if the handshake passes, wires `<name>` up as a top-level subcommand that
+execs the launcher with the remaining CLI arguments passed through unchanged.
 
-There is no install/enable/disable verb. The core never mutates plugin
-state; putting a launcher on a trusted root, and taking it off, is entirely
-an operator step outside `capsulectl`.
+A launcher gets there by an operator copying it onto a root, or by
+`capsulectl plugin install` (see "Installing plugins" below), which places it
+on the per-user root. There is no enable/disable state: a launcher on a
+trusted root is the whole of a plugin's installation.
 
 ## Discovery roots
 
@@ -49,9 +49,12 @@ discovery model is the reference):
   - owned by the current user or by root, and
   - not group-writable and not other-writable.
 
-  The root's own parents are not walked -- they are system directories,
-  trusted by definition -- but everything from the root down to the launcher
-  is.
+  The root's own parents are not walked -- they are treated as system
+  directories -- but everything from the root down to the launcher is. That
+  is not always true of the per-user root's parents (`~/.local` can be
+  group-writable, or a symlink into a shared directory); hardening dispatch
+  for them is [capsule-cli#270](https://github.com/action-state-group/capsule-cli/issues/270).
+  `plugin install` is stricter meanwhile (below).
 
 A launcher that fails any of these checks is skipped during discovery: it is
 never wired up as a command, and `capsulectl plugin ls` lists it under
@@ -78,7 +81,7 @@ and expects exactly one line of JSON on stdout:
 |---------------|----------|---------------------------------------------------------------------|
 | `name`        | yes      | Must equal the launcher's filename with the `capsulectl-` prefix stripped. A mismatch is a handshake failure. |
 | `vendor`      | no       | Free text, shown in `capsulectl plugin ls` and in the command's `--help`. |
-| `version`     | no       | Free text, shown in `capsulectl plugin ls`. |
+| `version`     | no       | Free text, shown in `capsulectl plugin ls`. For the first-party plugins it is the release tag, and see "Versions" below. |
 | `plugin_api`  | yes      | Must be exactly `"cli-plugin/v1"`. Any other value (including a newer or older version string) is a handshake failure -- there is no negotiation. |
 | `subcommands` | no       | Free text list, shown in the command's `--help` as a hint; `capsulectl` does not parse or validate it. |
 
@@ -118,6 +121,91 @@ the same profile; a `--profile` it does pass wins. When `--profile` is given
 both before and after the plugin's name, the later one wins, as it does for
 any repeated flag.
 
+## Installing plugins
+
+```
+capsulectl plugin install book|deal         # this release's first-party plugin
+capsulectl plugin install ./capsulectl-x    # a launcher file (an operand containing /)
+capsulectl plugin remove NAME
+```
+
+Both manage only the per-user root, `$HOME/.local/lib/capsulectl/plugins`. A
+system-wide plugin stays an operator step. Windows is out of scope: plugins,
+their trust checks and these commands are Unix-only.
+
+**Who may run them.** They refuse to run through `sudo` (`SUDO_UID` set) or
+as anyone other than the owner of `$HOME`. Root installing into its own home
+is fine. For these two commands `capsulectl` skips plugin discovery, so no
+installed plugin runs before their checks. With `CAPSULECTL_PLUGIN_ROOTS`
+set, the list must contain the per-user root.
+
+**The path check.** Until capsule-cli#270 hardens dispatch, install is
+stricter than the trust walk. Before it writes or runs anything, it resolves
+the path once and checks every component of the resolved path from `/`
+down: each must be owned by the user or root and neither group- nor
+other-writable. The only exception is a root-owned directory with the
+sticky bit set (`/tmp`), and only in this check. A symlinked `~/.local` is
+judged by where it leads. One refusal lists every failing component and the
+fix (on stock Ubuntu, `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`).
+From then on install and remove use only that checked canonical path: to
+open the root, to run the handshake, and to inspect other roots' launchers.
+Dispatch is unchanged.
+
+**Install from a file.**
+
+1. Missing directories of the root are created one at a time, 0755.
+2. The file is copied into the root under a temporary name discovery never
+   runs (`.install-*`), and its handshake runs.
+3. The name it reports must match `^[a-z][a-z0-9-]{0,62}$` and must not
+   be a core command.
+4. A first-party plugin's version is checked (see "Versions").
+5. If an earlier root holds a launcher of that name that discovery would
+   accept, install refuses (exit 5), because that one would still run. A
+   launcher there that sits on an unsafe path is never run, and is reported
+   as a possible shadow. One the walk refuses does not shadow.
+6. The temporary file is renamed over `capsulectl-<name>`. The rename is
+   the commit point. If the directory cannot be synced afterwards, install
+   says so ("durability not confirmed") rather than reporting a refusal.
+
+Any refusal before the rename leaves the destination unchanged and removes
+the temporary file. A killed install can leave a `.install-*` file behind.
+It is inert, and `plugin ls` lists it under `interrupted_installs`.
+
+**Install by name** (`book` or `deal`) needs a release build of the core.
+- **Release tag.** A release build's version matches the release tag
+  policy `^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$`,
+  which the release workflow also enforces.
+- **Download.** Install fetches `capsulectl-<tag>-plugin-<name>-<os>-<arch>`
+  and `SHA256SUMS` from the core's own release, over HTTPS only (redirects
+  included), with size caps.
+- **Checksum.** It checks the asset against the one `SHA256SUMS` line that
+  names it.
+- **Provenance.** When `gh` is installed, install also runs the README's
+  `gh attestation verify` against the release's attestation bundle. A
+  failed verification, or a `gh` that could not run (network, trust root),
+  refuses. Without `gh`, provenance is reported as not checked.
+
+The output always lists the checks that ran. A development build refuses
+the name form and gives the file-form command instead.
+
+**Remove** deletes `capsulectl-NAME` from the per-user root if it is a
+regular file. It leaves a `capsulectl-NAME.d/` presentation directory in
+place, and reports which launcher, if any, dispatch would now select from
+another root.
+
+### Versions
+
+- The handshake's `version` stays free text on the wire.
+- **First-party plugins.** `book` and `deal` share core code, so their
+  version is expected to equal the core's:
+  - `plugin install` refuses a mismatch on a release core unless
+    `--allow-version-mismatch` is given.
+  - A development core does not check it.
+  - Dispatch, on a release core, prints a one-line warning naming the
+    launcher and how to update it, then runs the command.
+  - `doctor --install-check --profile P` fails when the plugin P needs is
+    missing or mismatched.
+
 ## The first-party plugins: `capsulectl-book` and `capsulectl-deal`
 
 The core (capsule-cli#236) keeps no evidence book and no deal store, and
@@ -134,8 +222,9 @@ with the name its filename carries. A release names them
 `capsulectl-<version>-plugin-book-<os>-<arch>` and
 `capsulectl-<version>-plugin-deal-<os>-<arch>`, beside the core's own
 `capsulectl-<version>-<os>-<arch>`, under the same `SHA256SUMS`, attestation
-and release statement; install each as `capsulectl-book` or
-`capsulectl-deal` on a plugin root. `make build` builds all three.
+and release statement. `capsulectl plugin install book` and `... deal` fetch
+and install them; `make build` builds all three, and `make install`
+installs all three.
 
 Each plugin is a whole `capsulectl` command tree with its own commands
 added, so the core can hand it a core command it cannot run itself:

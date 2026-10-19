@@ -38,8 +38,24 @@ func releaseBuild(t *testing.T, version, commit string) {
 	t.Cleanup(func() { cli.CLIVersion, cli.CLICommit = oldV, oldC })
 }
 
+// dealPluginAt puts a capsulectl-deal launcher reporting version on a
+// private plugin root, so the check reads it and never the user's own roots.
+// An empty version installs nothing.
+func dealPluginAt(t *testing.T, version string) {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "plugins")
+	require.NoError(t, os.MkdirAll(root, 0o755))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	if version == "" {
+		return
+	}
+	script := "#!/bin/sh\nif [ \"$1\" = cli-plugin-metadata ]; then echo '{\"name\":\"deal\",\"vendor\":\"v\",\"version\":\"" + version + "\",\"plugin_api\":\"cli-plugin/v1\"}'; fi\n"
+	require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-deal"), []byte(script), 0o755))
+}
+
 func witnessedDealProfile(t *testing.T) {
 	t.Helper()
+	dealPluginAt(t, "v0.1.0-rc3")
 	pub, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	cadenceFixture(t, "https://witness.example", pub, "1h", "10m", 1)
@@ -94,6 +110,7 @@ func TestInstallCheckFindsABackupSkillLeftInTheSkillsDir(t *testing.T) {
 
 func TestInstallCheckFindsADriftedBinary(t *testing.T) {
 	witnessedDealProfile(t)
+	dealPluginAt(t, "v0.1.0-rc2")
 	releaseBuild(t, "v0.1.0-rc2", strings.Repeat("0d", 20))
 	dir := skillsDir(t, map[string]string{"deal/SKILL.md": dealSkillText})
 	check, _, err := installCheckRun(t, dir)
@@ -180,6 +197,7 @@ func TestInstallCheckFindsAWitnessWithoutItsKey(t *testing.T) {
 
 func TestInstallCheckFindsAProfileWithNoWitness(t *testing.T) {
 	dealFixture(t) // no witness
+	dealPluginAt(t, "v0.1.0-rc3")
 	releaseBuild(t, "v0.1.0-rc3", releaseCommit)
 	dir := skillsDir(t, map[string]string{"deal/SKILL.md": dealSkillText})
 	check, _, err := installCheckRun(t, dir)
@@ -191,4 +209,29 @@ func TestInstallCheckNeedsItsInputs(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	_, err := invoke(t, "", "doctor", "--install-check", "--profile", "deal")
 	require.ErrorIs(t, err, cli.ErrInput)
+}
+
+func TestInstallCheckNeedsTheProfilesPlugin(t *testing.T) {
+	witnessedDealProfile(t)
+	releaseBuild(t, "v0.1.0-rc3", releaseCommit)
+	dir := skillsDir(t, map[string]string{"deal/SKILL.md": dealSkillText})
+	check, _, err := installCheckRun(t, dir)
+	require.NoError(t, err)
+	assert.Equal(t, "matches", check["plugin"].(map[string]any)["version_check"])
+
+	dealPluginAt(t, "v0.1.0-rc2")
+	check, _, err = installCheckRun(t, dir)
+	require.ErrorIs(t, err, cli.ErrPartial)
+	assert.Contains(t, check["issues"], "capsulectl-deal is v0.1.0-rc2, this capsulectl is v0.1.0-rc3: run capsulectl plugin install deal")
+
+	dealPluginAt(t, "")
+	check, _, err = installCheckRun(t, dir)
+	require.ErrorIs(t, err, cli.ErrPartial)
+	assert.Contains(t, check["issues"], "capsulectl-deal is not installed: run capsulectl plugin install deal")
+
+	// A development build reports the version without checking it.
+	dealPluginAt(t, "0.1.0-dev")
+	releaseBuild(t, "0.1.0-dev", releaseCommit)
+	check, _, _ = installCheckRun(t, dir)
+	assert.Equal(t, "not checked: development build 0.1.0-dev", check["plugin"].(map[string]any)["version_check"])
 }

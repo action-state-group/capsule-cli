@@ -214,10 +214,13 @@ capsulectl plugin ls
 
 Read-only. Lists the trusted, handshake-valid `capsulectl-*` plugins
 discovered on the trusted plugin roots (`{roots: [...], plugins: [{name,
-vendor, version, plugin_api, subcommands, path}, ...]}`). There is
-deliberately no install/enable/disable here — the core never mutates plugin
-state; a plugin is installed onto a trusted root as a separate operator step,
-outside this skill's authority.
+vendor, version, plugin_api, subcommands, path}, ...]}`).
+
+Installing a plugin is the user's step, outside this skill's authority.
+`capsulectl plugin install book|deal|./FILE` and `capsulectl plugin remove
+NAME` exist for the user. When a command says a plugin is not installed,
+stop and show the user the exact command it prints; never run `plugin
+install` or `plugin remove` yourself.
 
 ## Seal a Result into the book
 

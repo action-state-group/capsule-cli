@@ -105,6 +105,25 @@ mkdir -p ~/.local/bin && install -m 0755 "capsulectl-$V-$OS-$ARCH" ~/.local/bin/
 export PATH="$HOME/.local/bin:$PATH"   # add this line to ~/.bashrc or ~/.zshrc to keep it
 ```
 
+The evidence book and the deal store are plugins. With the release core
+installed, install the ones you use (both are from the same release as the
+core):
+
+```bash
+capsulectl plugin install book   # book profiles: close, reconcile, result, report, ...
+capsulectl plugin install deal   # deal profiles: capsulectl deal ...
+```
+
+Each fetches `capsulectl-$V-plugin-<name>-$OS-$ARCH` from the core's own
+release, checks it against `SHA256SUMS` and, when `gh` is installed, its build
+provenance with the same `gh attestation verify` as above, and puts it in
+`~/.local/lib/capsulectl/plugins`. Its output lists the checks that ran. It
+never runs through `sudo`, and it refuses a plugin root on a path another user
+could change; on a stock Ubuntu account that means a one-time
+`chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`, which it prints.
+From a source checkout, `make install` installs the core and both plugins.
+See [docs/PLUGINS.md](docs/PLUGINS.md).
+
 Release builds are reproducible: `scripts/release-build.sh VERSION COMMIT OUTDIR`
 is the exact command the release workflow runs, so checking out a tag and running
 it with the Go version in `go.mod` gives byte-identical binaries.
@@ -247,7 +266,7 @@ stale name does not shadow the new one:
 
 ```bash
 BIN="$(go env GOBIN)"; GOPATH="$(go env GOPATH)"; rm -f "${BIN:-${GOPATH%%:*}/bin}/capsule"
-make install   # installs capsulectl
+make install   # installs capsulectl and its book and deal plugins (on stock Ubuntu, first: chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl, as it prints)
 ```
 
 ## Commands

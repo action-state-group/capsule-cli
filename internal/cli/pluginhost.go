@@ -154,7 +154,10 @@ func ForwardToPlugin(c *cobra.Command, name string, args []string) error {
 }
 
 func missingPluginError(name string) error {
-	return InputError(fmt.Sprintf("this needs the capsulectl-%s plugin, which is not installed: put the capsulectl-%s launcher on a plugin root (%s); see `capsulectl plugin ls`", name, name, strings.Join(trustedPluginRoots(), ", ")))
+	if isReleaseCore() {
+		return InputError(fmt.Sprintf("this needs the capsulectl-%s plugin, which is not installed: install it with: capsulectl plugin install %s", name, name))
+	}
+	return InputError(fmt.Sprintf("this needs the capsulectl-%s plugin, which is not installed; this capsulectl is a development build, so build it (make build), then: capsulectl plugin install ./capsulectl-%s", name, name))
 }
 
 // profileInArgs is the profile a plugin's raw command line selects: the last

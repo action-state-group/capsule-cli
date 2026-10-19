@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -84,6 +85,13 @@ func installCheck(c *cobra.Command) error {
 			issues = append(issues, issue)
 		default:
 			witness["public_key_ok"] = true
+		}
+		if plugin := profilePlugin(p); plugin != "" {
+			check, issue := pluginInstallCheck(plugin)
+			report["plugin"] = check
+			if issue != "" {
+				issues = append(issues, issue)
+			}
 		}
 	}
 	report["profile_witness"] = witness
@@ -164,4 +172,40 @@ func SkillName(path string) string {
 		}
 	}
 	return ""
+}
+
+// profilePlugin is the first-party plugin a profile's commands run in: deal
+// for a deal (sqlite) profile, book for a book profile, none for a plain one.
+func profilePlugin(p Profile) string {
+	switch {
+	case p.Type == "sqlite":
+		return DealPluginName
+	case p.IsBook():
+		return BookPluginName
+	}
+	return ""
+}
+
+// pluginInstallCheck reports the installed first-party plugin: present, and
+// on a release core the same version. A development core reports the
+// version without checking it.
+func pluginInstallCheck(name string) (map[string]any, string) {
+	check := map[string]any{"name": name, "installed": false}
+	for _, info := range discoverPlugins() {
+		if info.Name != name {
+			continue
+		}
+		check["installed"], check["path"], check["version"] = true, info.path, info.Version
+		switch {
+		case !isReleaseCore():
+			check["version_check"] = "not checked: development build " + CLIVersion
+		case info.Version != CLIVersion:
+			check["version_check"] = "mismatch"
+			return check, fmt.Sprintf("capsulectl-%s is %s, this capsulectl is %s: run capsulectl plugin install %s", name, FirstNonEmpty(info.Version, "unversioned"), CLIVersion, name)
+		default:
+			check["version_check"] = "matches"
+		}
+		return check, ""
+	}
+	return check, "capsulectl-" + name + " is not installed: run capsulectl plugin install " + name
 }

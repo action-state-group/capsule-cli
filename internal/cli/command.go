@@ -633,7 +633,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	root.AddCommand(mapCommand())
 	root.AddCommand(doctorCommand())
 	root.AddCommand(pluginGroup())
-	if discover {
+	if discover && !isPluginManagement(root, os.Args[1:]) {
 		addPluginCommands(root)
 	}
 	replaceCommands(root, extra)

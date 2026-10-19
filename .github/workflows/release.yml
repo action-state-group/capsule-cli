@@ -42,6 +42,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Check the tag follows the release tag policy
+        # The same policy as internal/cli/plugin_install.go (releaseTagPolicy):
+        # a core whose version matches it is a release build, so
+        # `plugin install book|deal` fetches from its release.
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          printf '%s\n' "$VERSION" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?' \
+            || { echo "tag $VERSION does not follow the release tag policy"; exit 1; }
       - name: Vet
         run: go vet ./...
       - name: Build release binaries
