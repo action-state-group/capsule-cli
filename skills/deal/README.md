@@ -10,7 +10,7 @@ proposed, approved and done, and the host elects to call it; its `pause`
 verdict is advice to the host, not a lock. It holds an action only where the
 host runs `deal check` from a pre-action hook. Without one:
 
-- **`deal reconcile`** ([RECONCILE.md](RECONCILE.md)) reads the host's own
+- **`deal audit-host`** ([AUDIT-HOST.md](AUDIT-HOST.md)) reads the host's own
   execution records, the tool calls of the agent and of every sub-task it
   started, and lists each consequential action that has no deal record, with
   what it cannot see printed on its face. It does not depend on the agent
@@ -61,7 +61,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal report --email FILE [--bundle FILE]` | Writes the receipt as a ready-to-send email (.eml, no sender or recipient) for the agent host's own email tool: a plain and a static HTML body that read on a phone, with `receipt.html` and `bundle.json` attached. `--bundle` writes the Evidence Bundle for `capsulectl verify --bundle`. Nothing is sent by capsulectl. |
 | `deal countersign --bundle FILE --directory DIR [--entry FILE]` | Verifies (and with `--entry`, attaches) a countersignature you already hold over this deal's report bundle, and names its rung; a self-countersignature is shown as NOT INDEPENDENT. Sends nothing. See [COUNTERSIGN.md](COUNTERSIGN.md). |
 | `deal report --from-bundle FILE --directory DIR` | Renders the receipt from that same bundle file, so a countersignature covers what it shows. Every receipt names its countersign rung; without one it says "Not countersigned". |
-| `deal reconcile --executions FILE [--approvals FILE] [--from T] [--to T]` | Reads the agent host's execution records (tool calls of the agent and its sub-tasks, in the format in [RECONCILE.md](RECONCILE.md)) and lists each consequential action that has no deal record, with what the pass cannot see. Seals nothing; exits 3 when anything is unrecorded. |
+| `deal audit-host --executions FILE [--approvals FILE] [--from T] [--to T]` | Reads the agent host's execution records (tool calls of the agent and its sub-tasks, in the format in [AUDIT-HOST.md](AUDIT-HOST.md)) and lists each consequential action that has no deal record, with what the pass cannot see. Seals nothing; exits 3 when anything is unrecorded. `deal reconcile` is its former name, which still runs it with a warning for one release. |
 | `deal terms-result --deal ID --response RECORD --openings FILE --out FILE` | Reconciles your final close of a deal with the counterparty's under the Deal Reconcile Contract (`ec:deal-reconcile@1`), and writes an Evidence Result with two claims: both closes commit to the same amount, and to the same currency. The counterparty's close is read from the copy you recorded (`deal request --response`, `--response` names it). Its terms are opened with the `field_openings` of the counterparty's `disclose --share counterparty` file (`--openings`), and nothing else is read from that file. Without the openings, both claims are not evaluable. `--from`/`--to` set the period (default: the two closes' recorded times). The Result names the counterparty's signing key as its peer. Seals nothing. |
 | `deal terms-result --deal ID --response RECORD --check RESULT [--openings FILE] [--sent FILE]` | Checks such a Result against the inputs given, and writes nothing: `equal`, `differs` (exit 5), or `cannot_reproduce` (exit 2) when the inputs it needs are not held. The Result names its two closes by digest, and the closes read must be exactly those. It does not record which openings were carried, or a coverage declaration, so when the counterparty made the Result, `--sent` is the disclose file you handed them, and your openings are read from it only. A `differs` says the Result is not the recompute of these inputs, not that a claim is false. `result build` does not seal these Results, and `result open` lists their claims as not recomputed. |
 | `deal report --html FILE --share counterparty --to WHO` | A copy for someone else. It leaves out what that reader must not get, and seals a disclosure record of the share before the file is written. |
@@ -752,5 +752,5 @@ binary instead of building from source). The card it must produce is in
 fixed price, where nothing differs. The user's request does not name the
 skill. The Go tests walk the Purchase procedure in SKILL.md step by step
 against it: its final-review step seals the deal, the check passes quietly,
-and a `deal reconcile` over the host's execution records for the same period
+and a `deal audit-host` over the host's execution records for the same period
 lists no unrecorded action.

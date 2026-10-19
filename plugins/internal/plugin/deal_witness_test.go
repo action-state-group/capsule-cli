@@ -33,7 +33,7 @@ func TestDealReceiptsStateTheirScope(t *testing.T) {
 	}
 
 	path := writeJSON(t, `{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","amount_minor":627,"currency":"USD","status":"succeeded"}`)
-	result, err := reconcileRun(t, "--executions", path, "--to", "2026-09-28T00:00:00Z")
+	result, err := auditHostRun(t, "--executions", path, "--to", "2026-09-28T00:00:00Z")
 	require.NoError(t, err)
 	assert.Equal(t, "This pass covers the execution records it was given, for this period. It is not a record of everything the agent did.", result["scope"])
 
@@ -52,12 +52,12 @@ func TestDealReceiptsStateTheirScope(t *testing.T) {
 // A host that records only a spend approval with a ceiling, not the payment
 // or the charged amount: the deal still accounts for it, and the output says
 // on its face what the source cannot show.
-func TestDealReconcileSaysWhatASpendApprovalCannotShow(t *testing.T) {
+func TestDealAuditHostSaysWhatASpendApprovalCannotShow(t *testing.T) {
 	dealFixture(t)
 	dealID := dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))["deal_id"].(string)
 	dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(retailDemo, "check-pay.json"))
 	path := filepath.Join(bookingFixture, "..", "executions-spend-approval.jsonl")
-	result, err := reconcileRun(t, "--executions", path, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
+	result, err := auditHostRun(t, "--executions", path, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
 	require.NoError(t, err)
 	recorded := result["recorded"].([]any)
 	require.Len(t, recorded, 1, "a $10.00 ceiling covers the $6.27 the deal checked")
@@ -71,13 +71,13 @@ func TestDealReconcileSaysWhatASpendApprovalCannotShow(t *testing.T) {
 
 	// A ceiling below what the deal checked does not cover it.
 	low := writeJSON(t, `{"id":"spend-2","at":"2026-09-27T18:00:40Z","tool":"spend_request","action":"pay","amount_minor":500,"amount_kind":"ceiling","currency":"USD","observed":"approval","status":"unknown"}`)
-	_, err = reconcileRun(t, "--executions", low, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
+	_, err = auditHostRun(t, "--executions", low, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
 	require.ErrorIs(t, err, cli.ErrPartial)
 }
 
 // Worker rows can hold filled form values in cleartext. None of it may reach
-// reconcile's output, its errors, or the store, wherever a reader puts it.
-func TestDealReconcileNeverCarriesPersonalDetails(t *testing.T) {
+// audit-host's output, its errors, or the store, wherever a reader puts it.
+func TestDealAuditHostNeverCarriesPersonalDetails(t *testing.T) {
 	dir := dealFixture(t)
 	const email, phone, street = "jane.doe@example.com", "+15550100123", "12 Main Street"
 	good := `{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"other","status":"succeeded"}`
@@ -91,7 +91,7 @@ func TestDealReconcileNeverCarriesPersonalDetails(t *testing.T) {
 		`{"id":"call` + phone + `","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"other","status":"succeeded"}`,
 		`{"id":"c2","at":"2026-09-27T18:05:00Z","parent_task":"jane.doe@example","tool":"browser_automation","action":"other","status":"succeeded"}`,
 	} {
-		out, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", writeJSON(t, good+"\n"+bad))
+		out, err := invoke(t, "", "--profile", "deal", "deal", "audit-host", "--executions", writeJSON(t, good+"\n"+bad))
 		require.ErrorIs(t, err, cli.ErrInput, bad)
 		for _, secret := range []string{email, phone, street, "jane.doe"} {
 			assert.NotContains(t, out, secret, bad)
@@ -105,7 +105,7 @@ func TestDealReconcileNeverCarriesPersonalDetails(t *testing.T) {
 }
 
 // The approval records take the same guard.
-func TestDealReconcileApprovalsNeverCarryPersonalDetails(t *testing.T) {
+func TestDealAuditHostApprovalsNeverCarryPersonalDetails(t *testing.T) {
 	dealFixture(t)
 	const email, phone, street = "jane.doe@example.com", "+15550100123", "12 Main Street"
 	executions := writeJSON(t, `{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"browser_automation","action":"other","status":"succeeded"}`)
@@ -115,7 +115,7 @@ func TestDealReconcileApprovalsNeverCarryPersonalDetails(t *testing.T) {
 		`{"id":"a1","at":"2026-09-27T18:00:00Z","decision":"approved","execution_id":"` + street + `"}`,
 		`{"id":"a1","at":"2026-09-27T18:00:00Z","decision":"approved","note":"ship to ` + street + `"}`,
 	} {
-		out, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", executions, "--approvals", writeJSON(t, bad))
+		out, err := invoke(t, "", "--profile", "deal", "deal", "audit-host", "--executions", executions, "--approvals", writeJSON(t, bad))
 		require.ErrorIs(t, err, cli.ErrInput, bad)
 		for _, secret := range []string{email, phone, street, "jane.doe"} {
 			assert.NotContains(t, out, secret, bad)

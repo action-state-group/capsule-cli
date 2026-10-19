@@ -16,8 +16,8 @@ review starts, checks the step against it, and seals the answer, using
 Nothing makes your agent host run this skill. On a host with no hook before
 a tool call, the final review runs because you follow the procedure, not
 because anything enforces it. On such a host a skipped review is found
-afterwards, not prevented: `deal reconcile` lists it from the host's own
-execution records (see "Daily reconciliation" below).
+afterwards, not prevented: `deal audit-host` lists it from the host's own
+execution records (see "Daily check of host actions" below).
 
 ## When this applies: the action decides, never the counterparty
 
@@ -816,17 +816,17 @@ did is the agent's own report until an independent source, such as the
 merchant's own email, is attached. A witness shows the record existed
 unchanged; it does not confirm what the agent did.
 
-## Daily reconciliation
+## Daily check of host actions
 
 Once a day (a scheduled task on the host is enough), run:
 
 ```sh
-capsulectl --profile deal deal reconcile --executions executions.jsonl
+capsulectl --profile deal deal audit-host --executions executions.jsonl
 ```
 
 `executions.jsonl` is the host's own record of the tool calls that ran in
 the period, those of the agent and of every sub-task it started, written in
-the format in `RECONCILE.md`. Read the execution records, not the
+the format in `AUDIT-HOST.md`. Read the execution records, not the
 conversation: the payment is usually a sub-task's action, not one you can see
 in the chat. The pass lists each consequential action with no deal record
 (`unrecorded`), and prints on its face what it cannot see. It exits 3 when
@@ -860,7 +860,7 @@ trailing whitespace (the file ends in a newline; the card does not).
   advice to the host. It holds an action only where the host runs `deal check`
   from a pre-action hook. Without one, the backstop is detection: a skipped
   check shows in the trail, and an action with no deal at all shows in
-  `deal reconcile`.
+  `deal audit-host`.
 - It checks the agreement, not the settlement: it cannot see the payment rail
   unless you record it.
 - Say "flags the warning signs before you pay" and "a record you can check

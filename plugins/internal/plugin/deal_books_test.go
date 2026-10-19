@@ -453,7 +453,7 @@ func TestABookDealMissingItsLastRecordIsRefused(t *testing.T) {
 	require.Error(t, err)
 }
 
-// No command reaches the reconcile engine in PR3: there is no halves verb.
+// No command is named for the halves: the terms reconcile is `deal terms-result`.
 func TestNoCommandReachesTheHalvesEngine(t *testing.T) {
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
@@ -485,7 +485,7 @@ func TestABookDealsReceiptIsReportedAndItLeavesTheTick(t *testing.T) {
 	require.Equal(t, "ticked", tick["state"])
 	// The receipt is reported in a session past its migration, holding the
 	// step source over both kinds of deal, as deal tick's delivery reports
-	// one: the reconcile on open would report it with the SQLite index only.
+	// one: the repair on open would report it with the SQLite index only.
 	s, err := openDealSession(t.Context(), p)
 	require.NoError(t, err)
 	c, cp, err := s.cadenceOf(t.Context())

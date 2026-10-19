@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// `deal reconcile` is the detective control behind the deal skill. Calling
+// `deal audit-host` is the detective control behind the deal skill. Calling
 // `deal check` is advisory: an agent host that has no hook before a tool call
 // cannot make the agent call it. So this pass reads the host's own record of
 // what was executed, at the layer where actions happen (the tool calls of the
@@ -25,7 +25,7 @@ import (
 // changes no deal.
 //
 // What it reads is a plain file in a documented format (skills/deal/
-// RECONCILE.md), produced by a reader for the agent host. The pass holds no
+// AUDIT-HOST.md), produced by a reader for the agent host. The pass holds no
 // host-specific code: a host's tool-call and execution tables are turned into
 // that format outside this repository, and the tests use fixture files.
 
@@ -272,8 +272,8 @@ var dealCoverageGaps = []string{
 	"It runs on the agent's own machine, over the agent host's own records: it can list actions that have no deal record, but it cannot prove that nothing else happened.",
 }
 
-// dealReconcileScope is printed with every result: what this pass is about.
-const dealReconcileScope = "This pass covers the execution records it was given, for this period. It is not a record of everything the agent did."
+// dealAuditHostScope is printed with every result: what this pass is about.
+const dealAuditHostScope = "This pass covers the execution records it was given, for this period. It is not a record of everything the agent did."
 
 // Added when the records say so: what the source itself cannot show.
 const (
@@ -396,10 +396,10 @@ func (rec dealExecutionRecord) row() map[string]any {
 	return m
 }
 
-// reconcileDeals matches the period's consequential records to sealed steps.
+// auditHostActions matches the period's consequential records to sealed steps.
 // Acts are preferred to checks, and each step accounts for one action.
 // approvals is nil when the host's approval history was not given.
-func reconcileDeals(records []dealExecutionRecord, approvals []dealHostApproval, steps []*dealCoverStep, from, to time.Time, window time.Duration) map[string]any {
+func auditHostActions(records []dealExecutionRecord, approvals []dealHostApproval, steps []*dealCoverStep, from, to time.Time, window time.Duration) map[string]any {
 	sort.SliceStable(records, func(i, j int) bool { return records[i].at.Before(records[j].at) })
 	recorded, unrecorded, failed := []map[string]any{}, []map[string]any{}, []map[string]any{}
 	read, outside, other := 0, 0, 0
@@ -465,7 +465,7 @@ func reconcileDeals(records []dealExecutionRecord, approvals []dealHostApproval,
 	summary := fmt.Sprintf("%d of %d consequential actions have no deal record (%d execution records read for %s to %s). This lists what is missing from the records read; it cannot prove that nothing else happened.",
 		len(unrecorded), consequential, read, from.Format(time.RFC3339), to.Format(time.RFC3339))
 	return map[string]any{
-		"scope":             dealReconcileScope,
+		"scope":             dealAuditHostScope,
 		"period":            map[string]any{"from": from.Format(time.RFC3339), "to": to.Format(time.RFC3339)},
 		"summary":           summary,
 		"records_read":      read,
@@ -479,8 +479,8 @@ func reconcileDeals(records []dealExecutionRecord, approvals []dealHostApproval,
 	}
 }
 
-func dealReconcileCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "reconcile", Short: "List consequential actions in the agent host's execution records that have no deal record; seals nothing", Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+func dealAuditHostCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "audit-host", Short: "List host actions that have no deal record; seals nothing", Long: dealAuditHostLong, Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		path, _ := c.Flags().GetString("executions")
 		approvalsPath, _ := c.Flags().GetString("approvals")
 		window, _ := c.Flags().GetDuration("window")
@@ -525,7 +525,7 @@ func dealReconcileCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			result = reconcileDeals(records, approvals, steps, from, to, window)
+			result = auditHostActions(records, approvals, steps, from, to, window)
 			return nil
 		})
 		if err != nil {
@@ -539,13 +539,45 @@ func dealReconcileCommand() *cobra.Command {
 		}
 		return nil
 	}}
-	cmd.Flags().String("executions", "", "deal-execution-record/v0 JSONL file of the agent host's executed tool calls (see skills/deal/RECONCILE.md)")
+	cmd.Flags().String("executions", "", "deal-execution-record/v0 JSONL file of the agent host's executed tool calls (see skills/deal/AUDIT-HOST.md)")
 	cmd.Flags().String("approvals", "", "Optional deal-host-approval-record/v0 JSONL file of the approvals the agent host raised; without it the output says approvals were not available")
 	cmd.Flags().String("from", "", "Start of the period, RFC 3339 (default: 24 hours before --to)")
 	cmd.Flags().String("to", "", "End of the period, RFC 3339, exclusive (default: now)")
 	cmd.Flags().Duration("window", 30*time.Minute, "How far apart an action and its deal step may be when the record names no deal")
 	return cmd
 }
+
+// dealAuditHostLong is the command's help: the wording stays "host actions
+// with no deal record", so it is not read as an audit of the deal itself.
+const dealAuditHostLong = `List host actions that have no deal record; seals nothing.
+
+It reads the agent host's own execution records (the tool calls of the agent
+and of every sub-task it started, in the format in skills/deal/AUDIT-HOST.md)
+for a period, and lists each consequential action that has no deal record,
+with what the pass cannot see. It exits 3 when anything is unrecorded.`
+
+// dealReconcileAlias is `deal reconcile`, the name this command shipped under
+// in v0.1.0-rc16 and before. It runs the same command after a warning on
+// stderr, so a script or skill that still calls it keeps working for one
+// release; the alias is then removed. It is hidden from help, and it writes
+// the warning itself rather than through cobra's Deprecated, which prints to
+// the command's output and so could land in the JSON a caller parses.
+func dealReconcileAlias() *cobra.Command {
+	cmd := dealAuditHostCommand()
+	run := cmd.RunE
+	cmd.Use, cmd.Hidden = "reconcile", true
+	cmd.Short = "Deprecated name of `deal audit-host`; removed in the next release"
+	cmd.Long = ""
+	cmd.RunE = func(c *cobra.Command, args []string) error {
+		if _, err := fmt.Fprintln(c.ErrOrStderr(), dealReconcileDeprecation); err != nil {
+			return err
+		}
+		return run(c, args)
+	}
+	return cmd
+}
+
+const dealReconcileDeprecation = "warning: `deal reconcile` is now `deal audit-host`; the old name is removed in the next release"
 
 // allCoverSteps reads every deal in the store, verifying each as `deal report`
 // does, and returns the steps that can account for an executed action.

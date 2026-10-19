@@ -154,7 +154,7 @@ func (s *dealSession) ended(ctx context.Context, logID string) (bool, error) {
 }
 
 // migrate takes a store a released build wrote onto the shelf, once (note
-// §3.2, §7.2), and on every later open reconciles what a released build
+// §3.2, §7.2), and on every later open repairs what a released build
 // wrote since (note §3.3).
 func (s *dealSession) migrate(ctx context.Context) error {
 	var seen, mutations int64
@@ -254,7 +254,7 @@ ON CONFLICT(id) DO UPDATE SET seen = excluded.seen`, dealShelfVersion); err != n
 	return nil
 }
 
-// dealMigrateStopsAt is a test hook: the migration or reconcile stops with
+// dealMigrateStopsAt is a test hook: the migration or repair stops with
 // its error at a stage, standing in for a crash or a cancellation there.
 var dealMigrateStopsAt = func(stage string) error { return nil }
 
@@ -321,9 +321,9 @@ func (s *dealSession) legacyTicks(ctx context.Context, p cli.Profile) (_ []evide
 // cadence log holds for a tick the cadence has not recorded as witnessed:
 // one a released build delivered on the shared log (note §7.2), or one this
 // build stored but did not report (deliverCadence). Both are writes this
-// build did not see, so it runs only in the reconcile they trigger. It walks
+// build did not see, so it runs only in the repair they trigger. It walks
 // back from the newest tick to the newest witnessed one: with a witness that
-// never answers, that is every tick, which the reconcile's rarity bounds.
+// never answers, that is every tick, which the repair's rarity bounds.
 func (s *dealSession) witnessNativeTicks(ctx context.Context, c *evidencebook.Cadence, p cli.Profile) (err error) {
 	service, err := cli.ServiceID(p)
 	if err != nil || service == "" {
@@ -386,7 +386,7 @@ func verifiedReceipt(ctx context.Context, p cli.Profile, log cll.WitnessStateSto
 
 // markSeen records the mutation counter as seen: every write so far is
 // this build's own. Run before the shelf is released; a crash before it
-// only makes the next open reconcile once more.
+// only makes the next open repair once more.
 func (s *dealSession) markSeen(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE deal_shelf SET seen = (SELECT n FROM shelf_mutations WHERE id = 1) WHERE id = 1`)
 	if err != nil && strings.Contains(err.Error(), "no such table") {
