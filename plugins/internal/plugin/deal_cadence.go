@@ -97,9 +97,6 @@ func (s *dealSession) tick(ctx context.Context) (map[string]any, error) {
 		return out, nil
 	}
 	out["witness_sees"] = dealWitnessSees
-	if err := s.witnessNativeTicks(ctx, c, p); err != nil {
-		return nil, err
-	}
 	delivered, pending, err := s.deliverCadence(ctx, c, p, service, now)
 	if err != nil {
 		return nil, err
@@ -111,7 +108,10 @@ func (s *dealSession) tick(ctx context.Context) (map[string]any, error) {
 // deliverCadence makes one delivery attempt of every cadence checkpoint
 // still pending for the witness, and reports each verified receipt to the
 // cadence (Witnessed), which records its leaves as witnessed and lets ended
-// deals leave the live set.
+// deals leave the live set. A receipt stored but not reported (an error in
+// between) leaves the session unmigrated, so close does not mark the store
+// seen and the next open's reconcile reports it (witnessNativeTicks); a
+// receipt a released build stored is found the same way.
 func (s *dealSession) deliverCadence(ctx context.Context, c *evidencebook.Cadence, p cli.Profile, service string, now time.Time) (delivered []uint64, pending []map[string]any, err error) {
 	t, err := cli.OpenDealTarget(ctx, p, cli.UseCLL, s)
 	if err != nil {
@@ -133,22 +133,28 @@ func (s *dealSession) deliverCadence(ctx context.Context, c *evidencebook.Cadenc
 			pending = append(pending, map[string]any{"checkpoint": w.CheckpointSize, "reason": reason, "text": text})
 			continue
 		}
+		migrated := s.migrated
+		s.migrated = false
 		receipt, ok, err := verifiedReceipt(ctx, p, t.Log, service, w.CheckpointSize)
 		if err != nil {
 			return nil, nil, err
 		}
-		if ok {
-			n, found, err := tickAtSize(ctx, c, w.CheckpointSize)
-			if err != nil {
+		if !ok {
+			return nil, nil, fmt.Errorf("%w: the witness receipt for cadence checkpoint %d does not verify once stored", cli.ErrConflict, w.CheckpointSize)
+		}
+		n, found, err := tickAtSize(ctx, c, w.CheckpointSize)
+		if err != nil {
+			return nil, nil, err
+		}
+		// A cadence checkpoint no tick holds (a released build's core write,
+		// note §3.3) is witnessed on the log but not part of the cadence.
+		if found {
+			if err := c.Witnessed(ctx, n, *receipt); err != nil {
 				return nil, nil, err
 			}
-			if found {
-				if err := c.Witnessed(ctx, n, *receipt); err != nil {
-					return nil, nil, err
-				}
-			}
+			delivered = append(delivered, w.CheckpointSize)
 		}
-		delivered = append(delivered, w.CheckpointSize)
+		s.migrated = migrated
 	}
 	return delivered, pending, nil
 }

@@ -67,11 +67,10 @@ type dealSession struct {
 	closed bool
 	// shelf is the deal store's one writer (deal_shelf.go), open from
 	// openDealSession until close; legacy is the current deal's log on it,
-	// cadence the profile's cadence once opened, and clock the shelf's.
+	// and cadence the profile's cadence once opened.
 	shelf   *evidencebook.Shelf
 	legacy  *evidencebook.LegacyLog
 	cadence *evidencebook.Cadence
-	clock   *dealShelfClock
 	// migrated is set once migrate has completed this session: only then
 	// does close record the mutation counter as seen, so a failed or
 	// interrupted reconcile is run again on the next open.
@@ -957,12 +956,14 @@ func dealInitCommand() *cobra.Command {
 		// The first session puts the new store on its shelf: the shelf's
 		// tables, its migration marker, and the mutation counter and its
 		// triggers, so a fresh store is protected as a migrated one is.
+		// The profile and store exist by now, so a failure here names the
+		// way on rather than leaving an init that cannot be re-run.
 		s, err := openDealSession(c.Context(), p)
-		if err != nil {
-			return err
+		if err == nil {
+			err = s.close()
 		}
-		if err = s.close(); err != nil {
-			return err
+		if err != nil {
+			return fmt.Errorf("deal profile %s and its store were created, but putting the store on its shelf failed; run `capsulectl --profile %s deal tick` to finish: %w", name, name, err)
 		}
 		out := map[string]any{
 			"profile": name, "store": p.Connection.Database, "public_key": public, "witness": witness, "cadence_log": p.LogID,

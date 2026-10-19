@@ -29,13 +29,20 @@ type rc16Deals struct {
 // key. Its two ticks' deliveries are pending (the witness was unreachable).
 func rc16Store(t *testing.T) (cli.Profile, rc16Deals, ed25519.PrivateKey) {
 	t.Helper()
+	return rc16StoreFrom(t, filepath.Join("store", "deal.db"))
+}
+
+// rc16StoreFrom is rc16Store with the fixture's deal.db replaced by db, a
+// path in the fixture directory written from the same store.
+func rc16StoreFrom(t *testing.T, db string) (cli.Profile, rc16Deals, ed25519.PrivateKey) {
+	t.Helper()
 	home := t.TempDir()
 	dealTestEnv(t, home)
 	src := filepath.Join("testdata", "deal", "rc16-store")
 	store := filepath.Join(t.TempDir(), "store")
 	require.NoError(t, os.MkdirAll(store, 0o700))
-	for _, name := range []string{"deal.db", "signing.seed", "checkpoint.seed"} {
-		b, err := os.ReadFile(filepath.Join(src, "store", name))
+	for name, from := range map[string]string{"deal.db": db, "signing.seed": filepath.Join("store", "signing.seed"), "checkpoint.seed": filepath.Join("store", "checkpoint.seed")} {
+		b, err := os.ReadFile(filepath.Join(src, from))
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(filepath.Join(store, name), b, 0o600))
 	}
@@ -169,6 +176,70 @@ func TestAReleasedBuildsWriteIsReconciled(t *testing.T) {
 	assert.Contains(t, liveLogs(t, p), cli.DealLogID(deals.Closed), "the reconcile on open put the grown deal back")
 }
 
+// A receipt the cadence log holds but the cadence was never told of (a
+// released build's delivery, or this build's, stopped before it reported)
+// is a write the next open did not see: its reconcile reports it, with no
+// tick due and no delivery made.
+func TestAReceiptStoredOutsideTheCadenceIsReportedOnTheNextOpen(t *testing.T) {
+	p, _, witnessKey := rc16Store(t)
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 28, 0, 0, time.UTC) }
+	third := dealRun(t, "tick")
+	require.Equal(t, "ticked", third["state"])
+	storeReceipt(t, p, uint64(third["checkpoint"].(float64)), witnessKey)
+	require.Equal(t, 0, storeCount(t, p, `SELECT COUNT(*) FROM cadence_ticks WHERE tick = 3 AND witnessed = 1`))
+	again := dealRun(t, "tick")
+	require.Equal(t, "not_due", again["state"])
+	assert.Equal(t, 1, storeCount(t, p, `SELECT COUNT(*) FROM cadence_ticks WHERE tick = 3 AND witnessed = 1`))
+	seen, counter := shelfSeen(t, p)
+	assert.Equal(t, counter, seen)
+}
+
+// A read of a store no build with the shelf has opened is refused before
+// the shelf is opened: the store's files are left exactly as they were.
+func TestAReadOfAnUnmigratedStoreLeavesItAsItWas(t *testing.T) {
+	p, _, _ := rc16Store(t)
+	dir := filepath.Dir(p.Connection.Database)
+	snapshot := func() map[string]string {
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		out := map[string]string{}
+		for _, e := range entries {
+			b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+			require.NoError(t, err)
+			out[e.Name()] = hex.EncodeToString(b)
+		}
+		return out
+	}
+	before := snapshot()
+	_, err := invoke(t, "", "--profile", "deal", "deal", "list")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not moved onto its shelf")
+	assert.Equal(t, before, snapshot())
+}
+
+// A released build's `deal tick` on a migrated store writes a deal_cadence
+// row and its cadence-log tick past the shelf (testdata make-downgrade.sh:
+// this build migrated the rc16 store and cut tick 3, then rc16 cut its own
+// tick at cadence checkpoint 7). The next open imports it after the
+// cadence's own ticks, and the cadence continues from it (note §3.3).
+func TestAReleasedBuildsTickIsImportedOnTheNextOpen(t *testing.T) {
+	p, _, _ := rc16StoreFrom(t, "downgrade.db")
+	seen, counter := shelfSeen(t, p)
+	require.Less(t, seen, counter, "rc16's tick moved the counter")
+	require.Equal(t, 3, storeCount(t, p, `SELECT COUNT(*) FROM cadence_ticks`))
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 16, 25, 0, 0, time.UTC) }
+	tick := dealRun(t, "tick")
+	assert.Equal(t, "not_due", tick["state"], "rc16's tick set the due time")
+	assert.Equal(t, "2026-10-19T16:25:16Z", tick["due"])
+	assert.Equal(t, 1, storeCount(t, p, `SELECT COUNT(*) FROM cadence_ticks WHERE tick = 4 AND entry_seq = 4 AND checkpoint_size = 7`), "rc16's tick, numbered after the cadence's own")
+	seen, counter = shelfSeen(t, p)
+	assert.Equal(t, counter, seen)
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 16, 26, 0, 0, time.UTC) }
+	next := dealRun(t, "tick")
+	require.Equal(t, "ticked", next["state"])
+	assert.EqualValues(t, 5, next["tick"])
+}
+
 // The mutation counter fails closed: with its row gone, a released build's
 // write is refused by the trigger and the shelf refuses to open.
 func TestAMissingMutationCounterFailsClosed(t *testing.T) {
@@ -207,28 +278,61 @@ func tickLeaves(t *testing.T, p cli.Profile, n int) storedTickLeaves {
 
 // A reconcile that fails part way (a crash, a cancellation) leaves the
 // released build's write unseen-as-handled: the next open runs it again.
+// It stops before any repair ("start") and after the import has already
+// restored the live set ("imported"); either way seen stays behind the
+// counter until a reconcile completes.
 func TestAFailedReconcileRunsAgain(t *testing.T) {
-	p, deals, witnessKey := rc16Store(t)
-	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 28, 0, 0, time.UTC) }
-	third := dealRun(t, "tick")
-	deliver(t, p, uint64(third["checkpoint"].(float64)), witnessKey)
-	require.NotContains(t, liveLogs(t, p), cli.DealLogID(deals.Closed))
-	log, err := cllsqlite.Open(p.Connection.Database, cli.DealLogID(deals.Closed))
-	require.NoError(t, err)
-	_, err = log.Append(t.Context(), cll.AppendInput{Value: []byte(strings.Repeat("r", 32)), AppendedAt: time.Now().UTC()})
-	require.NoError(t, err)
-	require.NoError(t, log.Close())
-	old := dealMigrateStopsAt
-	dealMigrateStopsAt = func(stage string) error {
-		if stage == "imported" {
-			return assert.AnError
-		}
-		return nil
+	for _, stage := range []string{"start", "imported"} {
+		t.Run(stage, func(t *testing.T) {
+			p, deals, witnessKey := rc16Store(t)
+			cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 28, 0, 0, time.UTC) }
+			third := dealRun(t, "tick")
+			deliver(t, p, uint64(third["checkpoint"].(float64)), witnessKey)
+			require.NotContains(t, liveLogs(t, p), cli.DealLogID(deals.Closed))
+			log, err := cllsqlite.Open(p.Connection.Database, cli.DealLogID(deals.Closed))
+			require.NoError(t, err)
+			_, err = log.Append(t.Context(), cll.AppendInput{Value: []byte(strings.Repeat("r", 32)), AppendedAt: time.Now().UTC()})
+			require.NoError(t, err)
+			require.NoError(t, log.Close())
+			seen, counter := shelfSeen(t, p)
+			require.Less(t, seen, counter, "the released build's append is counted and not yet seen")
+
+			old := dealMigrateStopsAt
+			t.Cleanup(func() { dealMigrateStopsAt = old })
+			dealMigrateStopsAt = func(at string) error {
+				if at == stage {
+					return assert.AnError
+				}
+				return nil
+			}
+			_, err = invoke(t, "", "--profile", "deal", "deal", "tick")
+			require.ErrorIs(t, err, assert.AnError)
+			afterSeen, afterCounter := shelfSeen(t, p)
+			assert.Equal(t, seen, afterSeen, "a failed reconcile records nothing as seen")
+			assert.Less(t, afterSeen, afterCounter)
+
+			ran := false
+			dealMigrateStopsAt = func(at string) error {
+				ran = ran || at == "imported"
+				return nil
+			}
+			dealRun(t, "tick")
+			assert.True(t, ran, "the next open reconciled again")
+			assert.Contains(t, liveLogs(t, p), cli.DealLogID(deals.Closed))
+			finalSeen, finalCounter := shelfSeen(t, p)
+			assert.Equal(t, finalCounter, finalSeen)
+		})
 	}
-	_, err = invoke(t, "", "--profile", "deal", "deal", "tick")
-	require.ErrorIs(t, err, assert.AnError)
-	dealMigrateStopsAt = old
-	assert.Contains(t, liveLogs(t, p), cli.DealLogID(deals.Closed), "the next open reconciled again")
+}
+
+// shelfSeen is the deal_shelf marker's seen and the mutation counter.
+func shelfSeen(t *testing.T, p cli.Profile) (seen, counter int64) {
+	t.Helper()
+	db, _, err := cli.SqliteConnection(p)
+	require.NoError(t, err)
+	defer db.Close()
+	require.NoError(t, db.QueryRow(`SELECT (SELECT seen FROM deal_shelf WHERE id = 1), (SELECT n FROM shelf_mutations WHERE id = 1)`).Scan(&seen, &counter))
+	return seen, counter
 }
 
 // Witness standing is read for the witness the profile names now: a
@@ -253,10 +357,27 @@ func TestWitnessStandingFollowsTheProfilesWitness(t *testing.T) {
 	assert.Equal(t, "scheduled", witness["current"].(map[string]any)["state"], "the report waits for the next tick")
 
 	// Another witness key: the stored receipt no longer counts.
-	other, _, err := ed25519.GenerateKey(nil)
+	other, otherKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	p.Checkpoint.PublicKey = hex.EncodeToString(other)
 	require.NoError(t, cli.SaveProfile(p, true))
 	witness = checkpointStatusOf(t, deals.Open)["witness"].(map[string]any)
 	assert.NotEqual(t, "witnessed", witness["state"])
+	require.NotEqual(t, "witnessed", checkpointStatusOf(t, deals.Later)["witness"].(map[string]any)["state"])
+
+	// The new witness signs the next tick. The later deal has not grown, so
+	// that tick carries the very checkpoint the old witness's tick did, and
+	// its standing comes back from the new witness's tick.
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 40, 0, 0, time.UTC) }
+	fourth := dealRun(t, "tick")
+	deliver(t, p, uint64(fourth["checkpoint"].(float64)), otherKey)
+	witness = checkpointStatusOf(t, deals.Later)["witness"].(map[string]any)
+	assert.Equal(t, "witnessed", witness["state"])
+	assert.Equal(t, "all", witness["extent"])
+	path := filepath.Join(t.TempDir(), "later.json")
+	dealRun(t, "report", "--deal", deals.Later, "--bundle", path)
+	result, err := verifyWithDirectory(t, path, writeDirectory(t, rawKeyRow(p.Checkpoint.Endpoint, other)))
+	require.NoError(t, err)
+	status, _ := bundleWitnesses(result)
+	assert.Equal(t, "pass", status, "the bundle's chain runs through the new witness's tick")
 }

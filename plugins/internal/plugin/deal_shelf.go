@@ -58,17 +58,6 @@ func errNoCheckpointKey(p cli.Profile) error {
 	return cli.InputError("deal profile " + p.Name + " has no checkpoint key, which its deal store needs to checkpoint each deal: `capsulectl profile update --profile " + p.Name + " --checkpoint-signing-key-file FILE --checkpoint-trusted-key <64-hex public key>`")
 }
 
-// dealClockNow is the shelf's clock: the time a step being sealed carries
-// while its append runs (inFlight), the wall clock otherwise (note §2.2).
-type dealShelfClock struct{ inFlight time.Time }
-
-func (c *dealShelfClock) now() time.Time {
-	if !c.inFlight.IsZero() {
-		return c.inFlight
-	}
-	return cli.DealClock().UTC()
-}
-
 // openShelf opens the deal store's shelf, taking its writer lock (the same
 // lock file every released build takes), in place of lockDealStore.
 func (s *dealSession) openShelf(ctx context.Context, dbPath string, originals evidencebook.ArtifactStore) error {
@@ -83,12 +72,12 @@ func (s *dealSession) openShelf(ctx context.Context, dbPath string, originals ev
 	if err != nil {
 		return err
 	}
-	s.clock = &dealShelfClock{}
 	shelf, err := evidencebook.OpenSQLiteShelf(ctx, evidencebook.ShelfConfig{
 		Path: dbPath, LockPath: dbPath + ".deal.lock",
 		Operator: s.p.Name, Developer: "capsulectl-deal",
 		Signer: signer, CheckpointKey: checkpointKey, Originals: originals,
-		Now: s.clock.now,
+		// The deal clock, which tests set (cli.DealClock).
+		Now: func() time.Time { return cli.DealClock().UTC() },
 		// A deal's log holds its own steps and reports only: no
 		// authenticated index, so no index_root leaves (note §2.2).
 		AuthenticatedIndexes: func(string) []evidencebook.AuthenticatedIndex { return []evidencebook.AuthenticatedIndex{} },
@@ -319,9 +308,10 @@ func (s *dealSession) legacyTicks(ctx context.Context, p cli.Profile) (_ []evide
 // witnessNativeTicks reports to the cadence each verified receipt the
 // cadence log holds for a tick the cadence has not recorded as witnessed:
 // one a released build delivered on the shared log (note §7.2), or one this
-// build delivered before a crash kept it from reporting it. It walks back
-// from the newest tick to the newest witnessed one, so the work is the
-// ticks since the last witnessed, not the profile's lifetime.
+// build stored but did not report (deliverCadence). Both are writes this
+// build did not see, so it runs only in the reconcile they trigger. It walks
+// back from the newest tick to the newest witnessed one: with a witness that
+// never answers, that is every tick, which the reconcile's rarity bounds.
 func (s *dealSession) witnessNativeTicks(ctx context.Context, c *evidencebook.Cadence, p cli.Profile) (err error) {
 	service, err := cli.ServiceID(p)
 	if err != nil || service == "" {

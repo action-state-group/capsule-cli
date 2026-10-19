@@ -53,13 +53,14 @@ func dealCheckpointStatusCommand() *cobra.Command {
 }
 
 // openDealSessionRead opens the deal store and a known deal's own log for
-// reading only. It writes nothing, not even what openDealSession provisions
-// (the index tables, the store secret, the lock file), so it serves a
-// read-only profile too: every query it makes is a SELECT. It uses the
+// reading only. It provisions nothing in the store and never migrates. On a
+// migrated store the shelf it opens finds its tables already there, so the
+// read changes no row and serves a read-only store file too; only the
+// shelf's lock file, beside the store, is created if no writer has made it.
+// An unmigrated store is refused before the shelf is opened. It uses the
 // store's own handle (sqliteConnection), which closes last, so SQLite's -wal
-// and -shm files are left as the read found them (a read-only handle closing
-// last would leave them behind). When the store's lock file exists it holds a
-// shared lock on it, so the read never sees a step half sealed.
+// and -shm files are left as the read found them. Holding the shelf's lock,
+// the read never sees a step half sealed.
 func openDealSessionRead(ctx context.Context, p cli.Profile, dealID string) (_ *dealSession, err error) {
 	s, err := openDealStoreRead(ctx, p)
 	if err != nil {
@@ -87,10 +88,10 @@ func openDealSessionRead(ctx context.Context, p cli.Profile, dealID string) (_ *
 
 // openDealStoreRead is openDealSessionRead without a deal: the store's
 // handle, holding its shelf (and so its lock: a read waits for a step being
-// sealed, never for a tick's sleep), and no log opened. A read session never
-// writes, never migrates and is no writer (HoldsDealStore); a store a
-// released build wrote and no writer has opened since is read once a deal
-// command has run on a writable profile.
+// sealed, never for a tick's sleep), and no log opened. A read session
+// never migrates and is no writer (HoldsDealStore); a store no build with
+// the shelf has opened yet is refused, untouched, until a deal command has
+// run on a writable profile.
 func openDealStoreRead(ctx context.Context, p cli.Profile) (_ *dealSession, err error) {
 	if p.Type != "sqlite" {
 		return nil, cli.InputError("deal commands need a sqlite profile; create one with `deal init`")
@@ -122,14 +123,8 @@ func openDealStoreRead(ctx context.Context, p cli.Profile) (_ *dealSession, err 
 	if s.db, _, err = cli.SqliteConnection(p); err != nil {
 		return nil, err
 	}
-	originals, err := cli.NewArtifactStore(p, s.db, keys)
-	if err != nil {
-		return nil, err
-	}
-	if err = s.openShelf(ctx, dbPath, originals); err != nil {
-		return nil, err
-	}
-	s.index = sqliteDealIndex{s.db}
+	// An unmigrated store is refused before anything is opened on it, so the
+	// refusal leaves the file as it was.
 	var marked int
 	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'deal_shelf'`).Scan(&marked); err != nil {
 		return nil, err
@@ -143,6 +138,14 @@ func openDealStoreRead(ctx context.Context, p cli.Profile) (_ *dealSession, err 
 			return nil, cli.InputError("the deal store has not moved onto its shelf yet: run any deal command on its writable profile once, then read it again")
 		}
 	}
+	originals, err := cli.NewArtifactStore(p, s.db, keys)
+	if err != nil {
+		return nil, err
+	}
+	if err = s.openShelf(ctx, dbPath, originals); err != nil {
+		return nil, err
+	}
+	s.index = sqliteDealIndex{s.db}
 	return s, nil
 }
 
