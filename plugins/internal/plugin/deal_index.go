@@ -20,7 +20,8 @@ type dealIndex interface {
 	steps(ctx context.Context, f stepFilter) ([]indexedStep, error)
 	// dealIDs are every deal and sale with an indexed step, in id order.
 	dealIDs(ctx context.Context) ([]string, error)
-	// prepareStep indexes a step before it reaches the log (sequence 0),
+	// prepareStep indexes a step before it reaches the log, at sequence 0
+	// whatever st.Sequence holds,
 	// publishedStep records its log position, and withdrawStep removes a
 	// step that never reached the log.
 	prepareStep(ctx context.Context, st indexedStep) error
@@ -44,6 +45,28 @@ type dealIndex interface {
 	reportAt(ctx context.Context, dealID, audience string, sequence uint64) (capsuleID string, ok bool, err error)
 }
 
+// The SQLite index's two tables, created with the rest of the store
+// (dealIndexSchema).
+const (
+	dealStepsTable = `CREATE TABLE IF NOT EXISTS deal_steps (
+	deal_id TEXT NOT NULL,
+	n INTEGER NOT NULL,
+	kind TEXT NOT NULL,
+	capsule_id TEXT NOT NULL,
+	cll_sequence INTEGER NOT NULL,
+	record_digest TEXT NOT NULL,
+	local TEXT NOT NULL,
+	PRIMARY KEY (deal_id, n)
+)`
+	dealReportsTable = `CREATE TABLE IF NOT EXISTS deal_reports (
+	deal_id TEXT NOT NULL,
+	capsule_id TEXT NOT NULL,
+	audience TEXT NOT NULL,
+	cll_sequence INTEGER NOT NULL,
+	PRIMARY KEY (deal_id, capsule_id)
+)`
+)
+
 // indexedStep is one step as the index holds it. Sequence is 0 while the
 // step is prepared but not yet in the log.
 type indexedStep struct {
@@ -58,7 +81,11 @@ type indexedStep struct {
 
 // stepFilter selects indexed steps. An empty field selects every value.
 // Steps come in deal id then step order, or, with Indexed, in the order they
-// were indexed across deals.
+// were indexed across deals: the order their steps were prepared, which the
+// rules history keeps among acts of the same second. The SQLite index has
+// it as deal_steps' rowid. A store of books on one shelf has it as the order
+// their leaves were appended across the file (the CLL entries' rowid), and
+// must give the same order.
 type stepFilter struct {
 	DealID    string
 	Kinds     []string

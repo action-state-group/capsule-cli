@@ -136,3 +136,20 @@ func TestSQLiteDealIndexReports(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, ids)
 }
+
+// A sale whose task authority is missing reports it with the no-row cause,
+// as it did when saleOf read the table itself; an unknown sale is an input
+// error.
+func TestSaleOfMissingAuthority(t *testing.T) {
+	ctx := t.Context()
+	x := newTestDealIndex(t)
+	s := &dealSession{index: x}
+	const sale = "sale-0123456789abcdef"
+	_, _, err := s.saleOf(ctx, sale)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown sale")
+	require.NoError(t, x.prepareStep(ctx, indexedStep{DealID: sale, N: 1, Kind: "sale", CapsuleID: "c1", Digest: "d1", Local: `{}`}))
+	_, _, err = s.saleOf(ctx, sale)
+	require.ErrorIs(t, err, sql.ErrNoRows)
+	assert.Contains(t, err.Error(), "has no task authority")
+}

@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -141,7 +142,10 @@ func (s *dealSession) saleOf(ctx context.Context, saleID string) (dealOpen, stri
 		return dealOpen{}, "", cli.InputError("unknown sale: " + saleID)
 	}
 	authority, err := s.index.steps(ctx, stepFilter{DealID: saleID, N: 2, Kinds: []string{"task_authority"}})
-	if err != nil || len(authority) == 0 {
+	if err == nil && len(authority) == 0 {
+		err = sql.ErrNoRows
+	}
+	if err != nil {
 		return dealOpen{}, "", errors.Join(cli.InputError("the sale "+saleID+" has no task authority"), err)
 	}
 	digest := authority[0].Digest

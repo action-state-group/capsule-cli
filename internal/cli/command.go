@@ -401,7 +401,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		return Output(c, value)
 	}}
 	get.Flags().String("capsule-id", "", "Capsule ID")
-	get.Flags().Bool("raw", false, "Preserve SDK byte fields as base64 for exact-byte export and verify")
+	get.Flags().Bool("raw", false, "Preserve SDK byte fields as base64 for exact-byte export and verify; field openings (opening.* originals, which the capsule does not bind) are left out of either view")
 	get.Flags().String("output", "", "Write readable JSON to a file; use --raw for a verifiable artifact.Record")
 	root.AddCommand(get)
 	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts, or an Evidence Bundle offline", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {

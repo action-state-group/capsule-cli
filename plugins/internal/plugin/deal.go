@@ -32,16 +32,7 @@ import (
 // deal_keys each deal's key, and deal_store the store secret the keys derive
 // from. What is sealed is only the x-deal-v0 record derived from them.
 var dealIndexSchema = []string{
-	`CREATE TABLE IF NOT EXISTS deal_steps (
-	deal_id TEXT NOT NULL,
-	n INTEGER NOT NULL,
-	kind TEXT NOT NULL,
-	capsule_id TEXT NOT NULL,
-	cll_sequence INTEGER NOT NULL,
-	record_digest TEXT NOT NULL,
-	local TEXT NOT NULL,
-	PRIMARY KEY (deal_id, n)
-)`,
+	dealStepsTable,
 	`CREATE TABLE IF NOT EXISTS deal_disclosures (
 	deal_id TEXT NOT NULL,
 	n INTEGER NOT NULL,
@@ -50,13 +41,7 @@ var dealIndexSchema = []string{
 	record TEXT NOT NULL,
 	PRIMARY KEY (deal_id, n)
 )`,
-	`CREATE TABLE IF NOT EXISTS deal_reports (
-	deal_id TEXT NOT NULL,
-	capsule_id TEXT NOT NULL,
-	audience TEXT NOT NULL,
-	cll_sequence INTEGER NOT NULL,
-	PRIMARY KEY (deal_id, capsule_id)
-)`,
+	dealReportsTable,
 	`CREATE TABLE IF NOT EXISTS deal_keys (deal_id TEXT PRIMARY KEY, deal_key BLOB NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS deal_store (id INTEGER PRIMARY KEY CHECK (id = 1), secret BLOB NOT NULL)`,
 	dealCadenceSchema,
