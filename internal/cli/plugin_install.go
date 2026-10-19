@@ -540,7 +540,7 @@ func ghAttestation(ctx context.Context, asset, bundle string) (ran bool, err err
 	case strings.Contains(text, "error creating sigstore verifier"), strings.Contains(text, "no valid sigstore verifiers"):
 		return true, couldNotRun(lastLine(string(out)))
 	}
-	return true, Hint(ErrConflict, "not installed: the provenance check failed ("+FirstNonEmpty(lastLine(string(out)), runErr.Error())+"): this file is not the release's build")
+	return true, Hint(ErrConflict, "not installed: the provenance check failed (gh: "+FirstNonEmpty(lastLine(string(out)), runErr.Error())+")")
 }
 
 func pluginInstallCommand() *cobra.Command {
