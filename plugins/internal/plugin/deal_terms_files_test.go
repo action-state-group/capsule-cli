@@ -169,7 +169,10 @@ func TestACloseAtTheLimitReconcilesForEveryone(t *testing.T) {
 	buyerCounterparty, note := discloseAs(t, id, "counterparty", "the seller")
 	require.True(t, strings.HasPrefix(note, "carried:"), "an amount equal to the limit is carried: %s", note)
 	raw := string(mustRead(t, buyerCounterparty))
-	assert.Contains(t, raw, "field_openings")
+	for _, held := range mustOpenings(t, buyerCounterparty) {
+		assert.Contains(t, held, dealAmountField, "the terms amount opening is not a bound field")
+		assert.Contains(t, held, dealCurrencyField, "nor is the currency's")
+	}
 	assert.NotContains(t, raw, "max_total_minor", "the bound field itself is never in a counterparty copy")
 	buyerAdjudicator, note := discloseAs(t, id, "adjudicator", "the platform")
 	require.True(t, strings.HasPrefix(note, "carried:"), note)

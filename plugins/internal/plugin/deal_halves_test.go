@@ -898,7 +898,12 @@ func TestTheBoundsAreKeptByFieldAndInFreeText(t *testing.T) {
 	path, note := discloseWithNote(t, id, "the seller")
 	assert.True(t, strings.HasPrefix(note, "carried:"), note)
 	raw := string(mustRead(t, path))
-	assert.Contains(t, raw, "field_openings")
+	openings := mustOpenings(t, path)
+	require.Len(t, openings, 1)
+	for _, held := range openings {
+		assert.Equal(t, "200000", held[dealAmountField].Text, "the terms amount opening equals the limit and travels")
+		assert.Equal(t, "USD", held[dealCurrencyField].Text)
+	}
 	assert.NotContains(t, raw, "max_total_minor")
 	events := chainSteps(t, id)
 	for _, prose := range []string{"my max is $2,000.00", "budget tops out at USD 2000"} {

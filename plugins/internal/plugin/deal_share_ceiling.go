@@ -15,11 +15,17 @@ import (
 // all (only its commitment). The adjudicator's copy may carry the maximum (it
 // is how "over your limit" is judged). The party role changes only the words.
 //
+// The bound fields are the private bounds only: intent.max_total_minor,
+// intent.min_total_minor, and their openings (bounds_openings and
+// commercial_bounds_opening; the maximum has no opening of its own). The
+// final close's terms amount and currency openings are not bound fields:
+// they travel in `disclose --share counterparty` (§2.10 Decision 3).
+//
 // Two rules keep them, by what can label a number as a bound (Ethan's
 // decision on capsule-cli#278):
 //   - Structured amount fields are governed by field rules only. The bound
-//     fields and their openings are never in a counterparty copy (a record
-//     that carries either is withheld), and the floor is in no shared copy.
+//     fields are never in a counterparty copy (a record that carries one is
+//     withheld), and the floor and its openings are in no shared copy.
 //     Every other amount field (the close's amount and its opening, price
 //     and deposit terms, snapshot and act amounts) is shared as its field's
 //     rules say, even when its value equals a bound: a bare number never
