@@ -231,7 +231,47 @@ func missingLogIDReason(p Profile) string {
 	return "profile " + p.Name + " has no log_id, which this command needs: `capsulectl profile update --profile " + p.Name + " --log-id NAME`"
 }
 
-func OpenTarget(ctx context.Context, p Profile, use TargetUse) (_ *Target, err error) {
+// ErrDealProfileWrite refuses a core write on a deal profile: only
+// capsulectl deal writes its logs, so each write keeps the deal store's
+// bookkeeping (its index and the cadence's live set) whole. A plain write
+// would otherwise land on the witnessed cadence log.
+var ErrDealProfileWrite = InputError("a deal profile is written by `capsulectl deal` only; this command would write to its logs. Read it with `cll list` or `get`, or deliver a pending cadence checkpoint with `capsulectl deal tick`")
+
+// writes reports whether a target opened for use can write.
+func (use TargetUse) writes() bool {
+	return use == UseCLL || use == UsePublication || use == UseInitialization
+}
+
+// DealStoreWriter is held by capsulectl deal while it holds a deal store's
+// writer lock. OpenDealTarget takes it, so that a core command, which has
+// none, never opens a deal profile's logs for writing. It guards against a
+// write by mistake, not against code that implements it to get around it.
+type DealStoreWriter interface {
+	// HoldsDealStore reports whether the writer lock is still held.
+	HoldsDealStore() bool
+}
+
+// OpenTarget opens p for use. A deal profile is never opened for writing
+// here (ErrDealProfileWrite): capsulectl deal opens it with OpenDealTarget.
+func OpenTarget(ctx context.Context, p Profile, use TargetUse) (*Target, error) {
+	if p.IsShelf() && use.writes() {
+		return nil, ErrDealProfileWrite
+	}
+	return openTarget(ctx, p, use)
+}
+
+// OpenDealTarget opens a log of a deal store for use by capsulectl deal,
+// which holds the store's writer lock (w). p is the deal profile, or a
+// view of it on one of its logs (a side log is opened without the artifact
+// store, with its namespace cleared).
+func OpenDealTarget(ctx context.Context, p Profile, use TargetUse, w DealStoreWriter) (*Target, error) {
+	if use.writes() && (w == nil || !w.HoldsDealStore()) {
+		return nil, ErrDealProfileWrite
+	}
+	return openTarget(ctx, p, use)
+}
+
+func openTarget(ctx context.Context, p Profile, use TargetUse) (_ *Target, err error) {
 	needsArtifacts := use == UseArtifacts || use == UsePublication || use == UseRead || (use == UseInitialization && p.Namespace != "") ||
 		// A book keeps its records' originals in the artifact store.
 		(use == UseCLL && p.IsBook() && p.Namespace != "")

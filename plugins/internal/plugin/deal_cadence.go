@@ -309,7 +309,7 @@ func (s *dealSession) cutTick(ctx context.Context, p cli.Profile, cfg cli.DealCa
 	if err != nil {
 		return dealTick{}, err
 	}
-	t, err := cli.OpenTarget(ctx, p, cli.UseInitialization)
+	t, err := cli.OpenDealTarget(ctx, p, cli.UseInitialization, s)
 	if err != nil {
 		return dealTick{}, err
 	}
@@ -355,7 +355,7 @@ func (s *dealSession) cutTick(ctx context.Context, p cli.Profile, cfg cli.DealCa
 // deliverCadence offers every cadence checkpoint still waiting for the
 // witness. A witness that is slow or down leaves it pending; deals go on.
 func (s *dealSession) deliverCadence(ctx context.Context, p cli.Profile, service string, now time.Time) (delivered []uint64, pending []map[string]any, err error) {
-	t, err := cli.OpenTarget(ctx, p, cli.UseCLL)
+	t, err := cli.OpenDealTarget(ctx, p, cli.UseCLL, s)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -626,7 +626,7 @@ var dealSleep = func(ctx context.Context, d time.Duration) error {
 // nothing. The waiting happens with the store unlocked, and every publish
 // re-checks the due time under the lock.
 func dealTickCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "tick", Short: "The checkpoint cadence's poll: when a tick is due, publish the profile's cadence checkpoint to its witness; a run that is not due publishes nothing (schedule it every 5 minutes with --wait-up-to 5m; deal events never publish)", Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "tick", Short: "The checkpoint cadence's poll: when a tick is due, publish the profile's cadence checkpoint to its witness; a run that is not due cuts no tick and only retries any delivery still pending (schedule it every 5 minutes with --wait-up-to 5m; deal events never publish)", Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		wait, _ := c.Flags().GetDuration("wait-up-to")
 		if wait < 0 {
 			return cli.InputError("--wait-up-to must not be negative")
