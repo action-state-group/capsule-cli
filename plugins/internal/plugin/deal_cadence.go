@@ -626,7 +626,7 @@ var dealSleep = func(ctx context.Context, d time.Duration) error {
 // nothing. The waiting happens with the store unlocked, and every publish
 // re-checks the due time under the lock.
 func dealTickCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "tick", Short: "The checkpoint cadence's poll: when a tick is due, publish the profile's cadence checkpoint to its witness; a run that is not due publishes nothing (schedule it every 5 minutes with --wait-up-to 5m; deal events never publish)", Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "tick", Short: "The checkpoint cadence's poll: when a tick is due, publish the profile's cadence checkpoint to its witness; a run that is not due cuts no tick and only retries any delivery still pending (schedule it every 5 minutes with --wait-up-to 5m; deal events never publish)", Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		wait, _ := c.Flags().GetDuration("wait-up-to")
 		if wait < 0 {
 			return cli.InputError("--wait-up-to must not be negative")

@@ -193,6 +193,9 @@ func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) e
 }
 
 func (s *dealSession) close() error {
+	if s.closed {
+		return nil
+	}
 	var e error
 	if s.t != nil {
 		e = s.t.Close()
@@ -925,7 +928,7 @@ func dealInitCommand() *cobra.Command {
 					cadence += ", give or take " + cli.ShortDuration(cfg.Jitter)
 				}
 			}
-			out["next"] = "set up the checkpoint cadence: schedule `capsulectl --profile " + name + " cll checkpoint cadence --wait-up-to 5m` every 5 minutes. Each run is a poll: it waits for a tick due within its 5 minutes and publishes it on time, and a run with none due publishes nothing. The witness hears from this profile once per tick (" + cadence + ")"
+			out["next"] = "set up the checkpoint cadence: schedule `capsulectl --profile " + name + " cll checkpoint cadence --wait-up-to 5m` every 5 minutes. Each run is a poll: it waits for a tick due within its 5 minutes and publishes it on time, and a run with none due cuts no tick, only retrying any delivery still pending. The witness hears from this profile once per tick (" + cadence + ")"
 		}
 		return cli.Output(c, out)
 	}}

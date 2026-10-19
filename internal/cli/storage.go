@@ -243,8 +243,9 @@ func (use TargetUse) writes() bool {
 }
 
 // DealStoreWriter is held by capsulectl deal while it holds a deal store's
-// writer lock. OpenDealTarget takes it, so that only the deal plugin's own
-// write paths, never a core command, open a deal profile's logs for writing.
+// writer lock. OpenDealTarget takes it, so that a core command, which has
+// none, never opens a deal profile's logs for writing. It guards against a
+// write by mistake, not against code that implements it to get around it.
 type DealStoreWriter interface {
 	// HoldsDealStore reports whether the writer lock is still held.
 	HoldsDealStore() bool
