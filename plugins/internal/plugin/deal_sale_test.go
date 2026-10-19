@@ -239,6 +239,7 @@ func TestAThreadIsUnderTheSale(t *testing.T) {
 // A check on a thread is refused when the sale's task authority is no
 // longer the one the thread was opened under.
 func TestAThreadRefusesASaleThatChanged(t *testing.T) {
+	legacyDeals(t)
 	dealFixture(t)
 	saleID, _ := newSale(t)
 	a := buyerThread(t, saleID, "buyer-a.example")

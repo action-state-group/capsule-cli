@@ -80,7 +80,19 @@ func openDealSessionRead(ctx context.Context, p cli.Profile, dealID string) (_ *
 	}
 	s.dp = p
 	s.dp.LogID = cli.DealLogID(dealID)
-	if s.t, err = cli.OpenTarget(ctx, s.dp, cli.UseCLLRead); err != nil {
+	if x, ok := s.index.(shelfDealIndex); ok {
+		legacy, err := x.isLegacy(ctx, dealID)
+		if err != nil {
+			return nil, err
+		}
+		s.onBook = !legacy
+	}
+	use := cli.UseCLLRead
+	if s.onBook {
+		// A book deal's steps are re-verified from its records' originals.
+		use = cli.UseRead
+	}
+	if s.t, err = cli.OpenTarget(ctx, s.dp, use); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -145,7 +157,8 @@ func openDealStoreRead(ctx context.Context, p cli.Profile) (_ *dealSession, err 
 	if err = s.openShelf(ctx, dbPath, originals); err != nil {
 		return nil, err
 	}
-	s.index = sqliteDealIndex{s.db}
+	s.originals = originals
+	s.index = s.books()
 	return s, nil
 }
 

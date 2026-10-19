@@ -76,8 +76,14 @@ func (s *dealSession) openShelf(ctx context.Context, dbPath string, originals ev
 		Path: dbPath, LockPath: dbPath + ".deal.lock",
 		Operator: s.p.Name, Developer: "capsulectl-deal",
 		Signer: signer, CheckpointKey: checkpointKey, Originals: originals,
-		// The deal clock, which tests set (cli.DealClock).
-		Now: func() time.Time { return cli.DealClock().UTC() },
+		// The deal clock (cli.DealClock), or, while a book record is appended,
+		// the time it carries (appendBook, note §2.2).
+		Now: func() time.Time {
+			if !s.inFlight.IsZero() {
+				return s.inFlight
+			}
+			return cli.DealClock().UTC()
+		},
 		// A deal's log holds its own steps and reports only: no
 		// authenticated index, so no index_root leaves (note §2.2).
 		AuthenticatedIndexes: func(string) []evidencebook.AuthenticatedIndex { return []evidencebook.AuthenticatedIndex{} },
@@ -120,13 +126,19 @@ func (s *dealSession) cadenceOf(ctx context.Context) (*evidencebook.Cadence, cli
 // ended is the cadence's Ended predicate for the profile's logs: a deal has
 // ended once its final close is indexed (finalClose: a close whose outcome
 // is not open; a pending close leaves it open, note §2.4). A sale has no
-// close, so it never ends. It reads the deal index only, never the shelf.
+// close, so it never ends. The cadence calls it under the shelf's lock, so it
+// never reads the shelf: a legacy deal is answered from the SQLite index, a
+// book deal from bookEnded, read before a receipt is reported (settleEnded).
 func (s *dealSession) ended(ctx context.Context, logID string) (bool, error) {
 	dealID, ok := strings.CutPrefix(logID, "deal/")
 	if !ok || !cli.DealIDPattern.MatchString(dealID) {
 		return false, nil
 	}
-	steps, err := s.index.steps(ctx, stepFilter{DealID: dealID})
+	legacy := sqliteDealIndex{s.db}
+	if n, err := legacy.stepCount(ctx, dealID); err != nil || n == 0 {
+		return s.bookEnded[dealID], err
+	}
+	steps, err := legacy.steps(ctx, stepFilter{DealID: dealID})
 	if err != nil {
 		return false, err
 	}
@@ -315,6 +327,9 @@ func (s *dealSession) legacyTicks(ctx context.Context, p cli.Profile) (_ []evide
 func (s *dealSession) witnessNativeTicks(ctx context.Context, c *evidencebook.Cadence, p cli.Profile) (err error) {
 	service, err := cli.ServiceID(p)
 	if err != nil || service == "" {
+		return err
+	}
+	if err := s.settleEnded(ctx, c); err != nil {
 		return err
 	}
 	last, ok, err := c.Last(ctx)

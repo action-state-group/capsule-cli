@@ -97,6 +97,9 @@ func (s *dealSession) tick(ctx context.Context) (map[string]any, error) {
 		return out, nil
 	}
 	out["witness_sees"] = dealWitnessSees
+	if err := s.settleEnded(ctx, c); err != nil {
+		return nil, err
+	}
 	delivered, pending, err := s.deliverCadence(ctx, c, p, service, now)
 	if err != nil {
 		return nil, err

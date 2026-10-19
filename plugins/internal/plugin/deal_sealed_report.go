@@ -44,13 +44,20 @@ func (s *dealSession) dealSealReport(ctx context.Context, dealID, audience strin
 	if err != nil {
 		return "", err
 	}
+	at := cli.DealClock().UTC().Truncate(time.Second)
 	request := cli.Request{
 		Version: "capsule-seal-request/v1",
 		Capsule: emit.Input{
 			ActionID: cli.DealReportActionID, ActionType: emit.ActionTypeFYI, Operator: s.p.Name, Developer: "capsulectl-deal",
-			Timestamp: cli.DealClock().UTC().Truncate(time.Second),
+			Timestamp: at,
 		},
 		Payload: payload,
+	}
+	if s.onBook {
+		if s.book == nil {
+			return "", cli.ErrReadOnlyCLL
+		}
+		return s.sealBookReport(ctx, at, request)
 	}
 	record, err := cli.Seal(request, s.key)
 	if err != nil {

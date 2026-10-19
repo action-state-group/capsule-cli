@@ -200,6 +200,7 @@ func TestDealOverCapPaymentIsSelectedByItsClass(t *testing.T) {
 // A step an earlier release prepared (all fyi) but never published is still
 // recovered: the Capsule it prepared is the legacy one, so recovery uses it.
 func TestDealRecoversAStepAnEarlierReleasePrepared(t *testing.T) {
+	legacyDeals(t)
 	dealFixture(t)
 	id := openSticker(t, true)
 	c := checkAct(t, id, "pay", 600)
@@ -402,6 +403,7 @@ func TestASellersOfferAndCommitActsAreDecide(t *testing.T) {
 // and a step prepared before it (classed, no deal_id) is still recovered as
 // it was prepared.
 func TestDealRecoversAStepPreparedBeforeDealID(t *testing.T) {
+	legacyDeals(t)
 	dealFixture(t)
 	id := openSticker(t, true)
 	c := checkAct(t, id, "pay", 600)
