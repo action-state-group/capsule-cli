@@ -304,6 +304,22 @@ func (x shelfDealIndex) bookDealIDs(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
+// dealResultsLogID names a deal's results book, where `deal terms-result`
+// seals its Results (note §2.10 v7, Decision 7.1): a book of its own,
+// never the deal's book deal/<id>, so no copy of the deal carries one.
+func dealResultsLogID(dealID string) string { return cli.DealLogID(dealID) + "/results" }
+
+// dealOfResultsBook is the deal a results book belongs to, from its id
+// deal/<id>/results.
+func dealOfResultsBook(bookID string) (string, bool) {
+	rest, ok := strings.CutPrefix(bookID, "deal/")
+	if !ok {
+		return "", false
+	}
+	id, ok := strings.CutSuffix(rest, "/results")
+	return id, ok && cli.DealIDPattern.MatchString(id)
+}
+
 // dealOfBook is the deal or sale a book holds, from its id deal/<id>.
 func dealOfBook(bookID string) (string, bool) {
 	id, ok := strings.CutPrefix(bookID, "deal/")
@@ -604,6 +620,12 @@ func (s *dealSession) sealBookStep(ctx context.Context, dealID string, events []
 // at while the append runs (s.inFlight), so the record states one time, the
 // Capsule's.
 func (s *dealSession) appendBook(ctx context.Context, at time.Time, request cli.Request, entry evidencebook.Entry) (evidencebook.Record, error) {
+	return s.appendTo(ctx, s.book, at, request, entry)
+}
+
+// appendTo is appendBook on any book of the profile's shelf: the deal's own,
+// or its results book (note §2.10 v7).
+func (s *dealSession) appendTo(ctx context.Context, book *evidencebook.Book, at time.Time, request cli.Request, entry evidencebook.Entry) (evidencebook.Record, error) {
 	plain, err := cli.Seal(request, s.key)
 	if err != nil {
 		return evidencebook.Record{}, err
@@ -625,7 +647,7 @@ func (s *dealSession) appendBook(ctx context.Context, at time.Time, request cli.
 	}
 	s.inFlight = at.UTC()
 	defer func() { s.inFlight = time.Time{} }()
-	return s.book.AppendCapsule(ctx, entry, plain.Artifacts, seal)
+	return book.AppendCapsule(ctx, entry, plain.Artifacts, seal)
 }
 
 // dealBookSealStops is a test hook: a seal that fails while the book holds
@@ -755,8 +777,14 @@ func (s *dealSession) settleEnded(ctx context.Context, c *evidencebook.Cadence) 
 	}
 	ended := map[string]bool{}
 	for _, logID := range live {
+		// A live results book ends with its deal (note §2.10 v7, 7.1), so
+		// its deal is settled even after the deal itself has left the live
+		// set.
 		id, ok := dealOfBook(logID)
-		if !ok || !cli.DealIDPattern.MatchString(id) {
+		if !ok {
+			id, ok = dealOfResultsBook(logID)
+		}
+		if _, done := ended[id]; !ok || done || !cli.DealIDPattern.MatchString(id) {
 			continue
 		}
 		if legacy, err := x.isLegacy(ctx, id); err != nil || legacy {

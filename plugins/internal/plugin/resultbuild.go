@@ -609,37 +609,21 @@ func resultBuildCommand() *cobra.Command {
 		for _, link := range links {
 			result.Cites = append(result.Cites, link.Target)
 		}
-		sealed, already, e := priorResult(c.Context(), book, digest)
-		if e != nil {
+		// The statement is the document exactly as supplied (the book
+		// canonicalizes the header it seals); a repeat of the same document
+		// finds the record it sealed.
+		sealed, already, checkpoint, e := sealResultRecord(c.Context(), book, raw, checked.contractRef, links, func() (evidencebook.Record, bool, error) {
+			return priorResult(c.Context(), book, digest)
+		}, func(entry evidencebook.Entry) (evidencebook.Record, error) {
+			return book.Append(c.Context(), entry)
+		})
+		if sealed.RecordID == "" {
 			return e
 		}
 		result.AlreadyBuilt = already
-		if !already {
-			// The statement is the document exactly as supplied (the book
-			// canonicalizes the header it seals) and the subject is the one
-			// contract it reports, when there is one; a checkpoint then
-			// covers the record, so a bundle can be built on it at once.
-			if sealed, e = book.Append(c.Context(), evidencebook.Entry{
-				RecordType: resultRecordType, EpistemicType: evidencebook.DerivedMetric,
-				SubjectRef: checked.contractRef, Links: links, Statement: json.RawMessage(raw),
-			}); e != nil {
-				return bookError(e)
-			}
-		}
-		result.RecordID, result.Seq = sealed.RecordID, sealed.Seq
-		// A checkpoint covers the record whenever none does yet: on the first
-		// build, and on a repeat whose earlier run sealed the record but
-		// failed before its checkpoint.
-		covered, e := checkpointCovers(c.Context(), book, sealed.Seq)
+		result.RecordID, result.Seq, result.Checkpoint = sealed.RecordID, sealed.Seq, checkpoint
 		if e != nil {
 			return errors.Join(e, cli.Output(c, result))
-		}
-		if !covered {
-			checkpoint, e := book.Checkpoint(c.Context())
-			if e != nil {
-				return errors.Join(e, cli.Output(c, result))
-			}
-			result.Checkpoint = checkpoint.Entries
 		}
 		// The record is sealed from here on: a failure writing either file
 		// still reports its record_id, so the caller never loses it. A
@@ -655,6 +639,51 @@ func resultBuildCommand() *cobra.Command {
 	cmd.Flags().String("out", "", "Write the sealed document in its canonical (JCS) form, the bytes the record's statement digest covers")
 	cmd.Flags().String("capsule-out", "", "Also write the evidence_result record as an artifact.Record for `verify --capsule`")
 	return cmd
+}
+
+// sealResultRecord seals an Evidence Result as an evidence_result record on
+// book, the one sealing path `result build` and `deal terms-result` share
+// (note §2.10 v7, Decision 7.3): reuse names an earlier record a repeat
+// returns instead, the subject is the one contract the Result reports, and
+// add appends the entry: the book's own seal for `result build`, a
+// caller-sealed Capsule for a deal's results book, whose copies are bundled
+// from the artifact store as a deal's are.
+// A checkpoint then covers the record whenever none does yet: on the first
+// seal, and on a repeat whose earlier run sealed the record but failed
+// before its checkpoint, so a bundle can be built on it at once. checkpoint
+// is the size of the checkpoint cut, or 0 when none was. A failure after
+// the record is sealed returns it with the error, so the caller never loses
+// its id.
+func sealResultRecord(ctx context.Context, book *evidencebook.Book, statement []byte, subject string, links []evidencebook.Link, reuse func() (evidencebook.Record, bool, error), add func(evidencebook.Entry) (evidencebook.Record, error)) (sealed evidencebook.Record, already bool, checkpoint uint64, err error) {
+	if sealed, already, err = reuse(); err != nil {
+		return evidencebook.Record{}, false, 0, err
+	}
+	if !already {
+		if sealed, err = add(evidencebook.Entry{
+			RecordType: resultRecordType, EpistemicType: evidencebook.DerivedMetric,
+			SubjectRef: subject, Links: links, Statement: json.RawMessage(statement),
+		}); err != nil {
+			// A failure after the book committed the record (indexing, an
+			// automatic checkpoint) returns it with the error: keep it, so
+			// the caller still reports it.
+			if sealed.RecordID != "" {
+				return sealed, false, 0, bookError(err)
+			}
+			return evidencebook.Record{}, false, 0, bookError(err)
+		}
+	}
+	covered, err := checkpointCovers(ctx, book, sealed.Seq)
+	if err != nil {
+		return sealed, already, 0, err
+	}
+	if !covered {
+		cp, err := book.Checkpoint(ctx)
+		if err != nil {
+			return sealed, already, 0, err
+		}
+		checkpoint = cp.Entries
+	}
+	return sealed, already, checkpoint, nil
 }
 
 // checkpointCovers reports whether the book's latest checkpoint covers seq.

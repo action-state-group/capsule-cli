@@ -130,6 +130,11 @@ func (s *dealSession) cadenceOf(ctx context.Context) (*evidencebook.Cadence, cli
 // never reads the shelf: a legacy deal is answered from the SQLite index, a
 // book deal from bookEnded, read before a receipt is reported (settleEnded).
 func (s *dealSession) ended(ctx context.Context, logID string) (bool, error) {
+	// A results book has ended exactly when its deal has (note §2.10 v7,
+	// 7.1). Only book deals have one, and settleEnded settled its deal.
+	if dealID, ok := dealOfResultsBook(logID); ok {
+		return s.bookEnded[dealID], nil
+	}
 	dealID, ok := strings.CutPrefix(logID, "deal/")
 	if !ok || !cli.DealIDPattern.MatchString(dealID) {
 		return false, nil
