@@ -71,6 +71,13 @@ type dealSession struct {
 	shelf   *evidencebook.Shelf
 	legacy  *evidencebook.LegacyLog
 	cadence *evidencebook.Cadence
+	// onBook is set when the current deal is kept on a book (deal_books.go),
+	// and book is that book, opened by a writer only (opening a book can
+	// commit a pending record); legacy is nil then. inFlight is the time the
+	// shelf's clock gives while a record is appended (appendBook).
+	onBook   bool
+	book     *evidencebook.Book
+	inFlight time.Time
 	// migrated is set once migrate has completed this session: only then
 	// does close record the mutation counter as seen, so a failed or
 	// interrupted reconcile is run again on the next open.
@@ -155,6 +162,9 @@ func openDealSession(ctx context.Context, p cli.Profile) (_ *dealSession, err er
 	if err = s.migrate(ctx); err != nil {
 		return nil, err
 	}
+	// The migration reads legacy deals only; from here on the step source
+	// holds book deals too (deal_books.go).
+	s.index = shelfDealIndex{legacy: sqliteDealIndex{s.db}, shelf: s.shelf, originals: originals, db: s.db}
 	return s, nil
 }
 
@@ -199,6 +209,29 @@ func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) e
 	}
 	s.dp = s.p
 	s.dp.LogID = cli.DealLogID(dealID)
+	s.onBook, s.book, s.legacy = false, nil, nil
+	if x, ok := s.index.(shelfDealIndex); ok {
+		legacy, err := x.isLegacy(ctx, dealID)
+		if err != nil {
+			return err
+		}
+		s.onBook = !legacy && (!create || dealNewDealsOnBooks)
+	}
+	if s.onBook {
+		// A deal opened since books: its book appends every record, and the
+		// target reads its originals, entries and checkpoints only.
+		book, err := s.shelf.Open(ctx, s.dp.LogID)
+		if err != nil {
+			return err
+		}
+		s.book = book
+		t, err := cli.OpenDealTarget(ctx, s.dp, cli.UseRead, s)
+		if err != nil {
+			return err
+		}
+		s.t = t
+		return nil
+	}
 	use := cli.UsePublication
 	if create {
 		use = cli.UseInitialization
@@ -242,6 +275,9 @@ func (s *dealSession) close() error {
 // stepEntries reads the deal's log, in order, without the entries of its
 // sealed reports: the steps alone.
 func (s *dealSession) stepEntries(ctx context.Context, dealID string) ([]cll.Entry, error) {
+	if x, ok := s.bookIndex(); ok {
+		return x.bookEntries(ctx, dealID, true)
+	}
 	entries, err := s.logEntries(ctx)
 	if err != nil {
 		return nil, err
@@ -261,6 +297,10 @@ func (s *dealSession) stepEntries(ctx context.Context, dealID string) ([]cll.Ent
 
 // logEntries reads the deal's whole log, in order.
 func (s *dealSession) logEntries(ctx context.Context) ([]cll.Entry, error) {
+	if x, ok := s.bookIndex(); ok {
+		dealID, _ := dealOfBook(s.dp.LogID)
+		return x.bookEntries(ctx, dealID, false)
+	}
 	var out []cll.Entry
 	for after := uint64(0); ; {
 		batch, err := s.t.Log.ScanEntries(ctx, after, cll.MaxScanLimit)
@@ -285,6 +325,9 @@ func (s *dealSession) logEntries(ctx context.Context) ([]cll.Entry, error) {
 // the log (a crash between the two writes) is recovered by publishing it
 // from the stored step; its Capsule must come out identical.
 func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent, err error) {
+	if s.onBook {
+		return s.loadBook(ctx, dealID)
+	}
 	index, err := s.index.steps(ctx, stepFilter{DealID: dealID})
 	if err != nil {
 		return nil, err
@@ -681,6 +724,32 @@ func (s *dealSession) stepRequest(events []sealedEvent, ev dealEvent, form dealC
 // reaches the log, so a crash can never leave a logged step with no local
 // record of it.
 func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []sealedEvent, ev dealEvent) (cli.Request, sealedEvent, error) {
+	ev, err := s.fixStep(dealID, events, ev)
+	if err != nil {
+		return cli.Request{}, sealedEvent{}, err
+	}
+	request, digest, err := s.stepRequest(events, ev, dealCapsuleCurrent)
+	if err != nil {
+		return cli.Request{}, sealedEvent{}, err
+	}
+	record, err := cli.Seal(request, s.key)
+	if err != nil {
+		return cli.Request{}, sealedEvent{}, err
+	}
+	local, err := json.Marshal(ev)
+	if err != nil {
+		return cli.Request{}, sealedEvent{}, err
+	}
+	if err = s.index.prepareStep(ctx, indexedStep{DealID: dealID, N: ev.N, Kind: ev.Kind, CapsuleID: record.CapsuleID, Digest: digest, Local: string(local)}); err != nil {
+		return cli.Request{}, sealedEvent{}, err
+	}
+	return request, sealedEvent{CapsuleID: record.CapsuleID, Digest: digest, Event: ev}, nil
+}
+
+// fixStep fixes a step's number, time, chain and nonces, and the versions
+// this producer seals it under: what a step is before it is sealed, on a
+// book or a legacy log alike.
+func (s *dealSession) fixStep(dealID string, events []sealedEvent, ev dealEvent) (dealEvent, error) {
 	now := cli.DealClock().UTC().Truncate(time.Second)
 	ev.DealID = dealID
 	ev.N = int64(len(events) + 1)
@@ -706,26 +775,11 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	for name := range dealTexts(ev) {
 		nonce := make([]byte, 32)
 		if _, err := rand.Read(nonce); err != nil {
-			return cli.Request{}, sealedEvent{}, err
+			return dealEvent{}, err
 		}
 		ev.Nonces[name] = hex.EncodeToString(nonce)
 	}
-	request, digest, err := s.stepRequest(events, ev, dealCapsuleCurrent)
-	if err != nil {
-		return cli.Request{}, sealedEvent{}, err
-	}
-	record, err := cli.Seal(request, s.key)
-	if err != nil {
-		return cli.Request{}, sealedEvent{}, err
-	}
-	local, err := json.Marshal(ev)
-	if err != nil {
-		return cli.Request{}, sealedEvent{}, err
-	}
-	if err = s.index.prepareStep(ctx, indexedStep{DealID: dealID, N: ev.N, Kind: ev.Kind, CapsuleID: record.CapsuleID, Digest: digest, Local: string(local)}); err != nil {
-		return cli.Request{}, sealedEvent{}, err
-	}
-	return request, sealedEvent{CapsuleID: record.CapsuleID, Digest: digest, Event: ev}, nil
+	return ev, nil
 }
 
 // publishStep persists and appends a prepared step and records its log
@@ -766,6 +820,12 @@ func (s *dealSession) recoverStep(ctx context.Context, events []sealedEvent, ev 
 // that is not sealed was not checked. If the step never reached
 // the log, its index row is withdrawn; if it did, the next read recovers it.
 func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEvent, ev dealEvent) (sealedEvent, error) {
+	if s.onBook {
+		if s.book == nil {
+			return sealedEvent{}, cli.ErrReadOnlyCLL
+		}
+		return s.sealBookStep(ctx, dealID, events, ev)
+	}
 	request, se, err := s.prepareStep(ctx, dealID, events, ev)
 	if err != nil {
 		return sealedEvent{}, err
@@ -789,11 +849,11 @@ func (s *dealSession) milestone(ctx context.Context) (map[string]any, error) {
 	if s.p.Checkpoint.Signing == (cli.Secret{}) {
 		return map[string]any{"state": "not_configured"}, nil
 	}
-	cp, err := cli.CutCheckpoint(ctx, localOnly(s.dp), s.t.Log)
+	size, err := s.cutMilestone(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"state": "signed", "checkpoint": cp.Size, "witness": "not_configured"}
+	out := map[string]any{"state": "signed", "checkpoint": size, "witness": "not_configured"}
 	service, err := cli.ServiceID(s.dp)
 	if err != nil {
 		return nil, err

@@ -76,8 +76,14 @@ func (s *dealSession) openShelf(ctx context.Context, dbPath string, originals ev
 		Path: dbPath, LockPath: dbPath + ".deal.lock",
 		Operator: s.p.Name, Developer: "capsulectl-deal",
 		Signer: signer, CheckpointKey: checkpointKey, Originals: originals,
-		// The deal clock, which tests set (cli.DealClock).
-		Now: func() time.Time { return cli.DealClock().UTC() },
+		// The deal clock (cli.DealClock), or, while a book record is appended,
+		// the time it carries (appendBook, note §2.2).
+		Now: func() time.Time {
+			if !s.inFlight.IsZero() {
+				return s.inFlight
+			}
+			return cli.DealClock().UTC()
+		},
 		// A deal's log holds its own steps and reports only: no
 		// authenticated index, so no index_root leaves (note §2.2).
 		AuthenticatedIndexes: func(string) []evidencebook.AuthenticatedIndex { return []evidencebook.AuthenticatedIndex{} },

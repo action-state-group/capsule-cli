@@ -82,6 +82,7 @@ func storeDeals(t *testing.T) []storeDeal {
 // SQLite path returned, in its order, with the same first and last step
 // times, and those times are the sealed records' own (`deal export`).
 func TestDealListMatchesTheStore(t *testing.T) {
+	legacyDeals(t)
 	closed, open, sale, thread := stickerStore(t)
 	raw := dealListOf(t, "--json")
 	var list []map[string]any
@@ -175,6 +176,7 @@ func TestDealListEmptyStore(t *testing.T) {
 // An index row that `load` would refuse is a conflict, never a silently
 // different list, and the refusal writes nothing.
 func TestDealListRefusesAnInconsistentIndex(t *testing.T) {
+	legacyDeals(t)
 	for name, tamper := range map[string]string{
 		"a missing step":                     `DELETE FROM deal_steps WHERE deal_id=? AND n=1`,
 		"a kind its record does not carry":   `UPDATE deal_steps SET kind='note' WHERE deal_id=? AND n=1`,

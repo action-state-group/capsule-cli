@@ -225,6 +225,7 @@ func TestDealRejectsUnknownActionAndBadInput(t *testing.T) {
 }
 
 func TestDealDetectsIndexTampering(t *testing.T) {
+	legacyDeals(t)
 	dir := dealFixture(t)
 	dealID := openJetSki(t)
 	var p cli.Profile
@@ -376,6 +377,7 @@ func TestDealIdentityEvidenceAfterAPassingCheckRefusesTheAct(t *testing.T) {
 // B3: deleting the LAST index row (here a skipped check) must not make the
 // step disappear: the deal's log still has it, so report and close refuse.
 func TestDealDroppedLastStepIsAConflict(t *testing.T) {
+	legacyDeals(t)
 	dir := dealFixture(t)
 	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
 	act := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":38000}`))
@@ -396,6 +398,7 @@ func TestDealDroppedLastStepIsAConflict(t *testing.T) {
 // B3: a step whose index row was written but whose Capsule never reached the
 // log (a crash in between) is recovered on the next read, not lost.
 func TestDealRecoversAStepThatNeverReachedTheLog(t *testing.T) {
+	legacyDeals(t)
 	dealFixture(t)
 	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
 	p, err := cli.LoadProfile("deal")
