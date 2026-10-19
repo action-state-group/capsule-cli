@@ -27,7 +27,7 @@ import (
 // verifier.
 func dealBundleRun(c *cobra.Command, use string) error {
 	if use == "permalink" {
-		return cli.InputError("a deal is not shared as a link: hand over the report file instead, `deal report --deal ID --html FILE` or `--email FILE` (your own copy), or `deal report --deal ID --share counterparty|adjudicator --to WHO --html FILE` (a copy for someone else)")
+		return cli.InputError("a deal is not shared as a link: hand over the report file instead, `deal report --deal ID --html FILE` or `--email FILE` (your own copy), or `deal report --deal ID --share counterparty|adjudicator --to WHO --html FILE` (a copy for someone else); for the other party to reconcile the deal, `disclose --deal ID --share counterparty --to WHO --out FILE`")
 	}
 	if c.Flags().Changed("root") || c.Flags().Changed("closure-depth") || c.Flags().Changed("log-id") {
 		return cli.InputError("--deal takes the whole deal from its own log: --root, --closure-depth and --log-id do not apply")
@@ -67,6 +67,19 @@ func dealBundleRun(c *cobra.Command, use string) error {
 		b, err := s.dealReportBundle(ctx, events, report, audience, verify, true)
 		if err != nil {
 			return err
+		}
+		if use == "disclose" && audience == cli.DealAudienceCounterparty {
+			// The user's own copy for the other party carries the openings
+			// of the final close's money terms, so they can reconcile it
+			// (note §2.10 Decision 3). They are in the bytes the gate reads
+			// and the share hashes.
+			openings, err := s.closeOpenings(ctx, dealID, events, b)
+			if err != nil {
+				return err
+			}
+			if openings != nil {
+				b["field_openings"] = openings
+			}
 		}
 		encoded, err := json.Marshal(b)
 		if err != nil {

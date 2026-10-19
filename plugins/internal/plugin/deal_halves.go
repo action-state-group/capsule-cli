@@ -3,9 +3,13 @@ package plugin
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"sort"
 	"strconv"
+	"time"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/envelope"
@@ -13,91 +17,98 @@ import (
 	"github.com/action-state-group/evidencebook"
 )
 
-// The deal-half reconcile (design note §2.9): each party's final close of a
-// deal is its half, and two halves agree when both parties closed on the same
-// money terms. It is an internal engine in PR3, reached by no command; the
-// claim that cites the deal reconcile contract (AAC u436) is built on it in a
-// follow-up, where it is the Result builder's recompute path.
-
-// dealPeerHalf is the counterparty's side of the reconcile, every input
-// explicit: the deal, the response this profile recorded for its request for
-// the counterparty's copy (whose kept reply holds the verified copy and whose
-// record holds the pinned signing key), the record in that copy taken as the
-// counterparty's half, and the openings of that record's fields.
-type dealPeerHalf struct {
-	DealID         string
-	ResponseRecord string
-	RecordID       string
-	Openings       map[string]evidencebook.Opening
-}
+// The deal reconcile (design note §2.10): each party's final close of a deal
+// is its half, and the two halves are reconciled under the Deal Reconcile
+// Contract, ec:deal-reconcile@1, by evidencebook's recompute. This file reads
+// the halves and admits them; deal_reconcile_result.go is the verb.
+//
+// A half is the close's bundle record, the object cli.GetCapsule builds and
+// every copy carries: the Capsule with its producer signature and key_id.
+// Its octets are the JCS of that object and its digest their SHA-256, so
+// both parties compute one digest from one record, whichever holds it.
 
 // dealHalfFields are the fields two halves are compared on.
 var dealHalfFields = []string{dealAmountField, dealCurrencyField}
 
-// dealHalfCheck is OpenedFieldsAgree on the money terms, except that an
-// opened empty text (a step that is not a received close) is no value: the
-// pair is Undecided (INSUFFICIENT), never two empty texts agreeing.
-func dealHalfCheck(a, b evidencebook.Half) evidencebook.ContentVerdict {
-	for _, h := range []evidencebook.Half{a, b} {
-		for _, f := range dealHalfFields {
-			if text, opened := h.Opened[f]; opened && text == "" {
-				return evidencebook.Undecided
-			}
-		}
+// dealHalfMapping is the deal profile's half mapping (DR §4.2), which
+// PROFILE.md declares. book_id is the key the record's producer signature
+// verified under: both parties' books are named deal/<deal_id>, so the
+// signer is the one per-party identity a half carries.
+var dealHalfMapping = evidencebook.HalfMapping{Profile: cli.DealProfile, Members: map[string]string{
+	evidencebook.HalfMemberDealID:             "/deal_id",
+	evidencebook.HalfMemberBookID:             "/key_id",
+	evidencebook.HalfMemberRecordedAt:         "/" + evidencebook.RecordHeaderMember + "/committed_at",
+	evidencebook.HalfMemberCommitAlg:          "/" + evidencebook.RecordHeaderMember + "/commit_alg",
+	evidencebook.HalfMemberAmountCommitment:   "/" + evidencebook.RecordHeaderMember + "/field_commitments/" + dealAmountField,
+	evidencebook.HalfMemberCurrencyCommitment: "/" + evidencebook.RecordHeaderMember + "/field_commitments/" + dealCurrencyField,
+}}
+
+// dealHalf is one admitted half.
+type dealHalf struct {
+	recordID string
+	// book is the hex key the half's producer signature verified under.
+	book       string
+	octets     []byte
+	digest     string
+	recordedAt time.Time
+	header     evidencebook.Header
+}
+
+// halfOf is the half a bundle record makes.
+func halfOf(record map[string]interface{}) (dealHalf, error) {
+	octets, err := canonical.JCS(record)
+	if err != nil {
+		return dealHalf{}, err
 	}
-	return evidencebook.OpenedFieldsAgree(dealHalfFields...)(a, b)
+	id, _ := record["capsule_id"].(string)
+	book, _ := record["key_id"].(string)
+	h := dealHalf{recordID: id, book: book, octets: octets, digest: cli.BytesDigest(octets)}
+	h.header, err = inlineHeader(record)
+	if err != nil {
+		return dealHalf{}, err
+	}
+	h.recordedAt, err = time.Parse(time.RFC3339, h.header.CommittedAt)
+	if err != nil {
+		return dealHalf{}, cli.InputError("record " + id + " carries no committed_at")
+	}
+	return h, nil
 }
 
-// dealHalfCorrelation pairs the two halves of a deal in memory only: it is
-// never written to a header, where it would mark which withheld step is the
-// close (note §2.9).
-func dealHalfCorrelation(dealID string) evidencebook.Correlation {
-	return evidencebook.Correlation{ExchangeID: "deal:" + dealID + ":close"}
+// inlineHeader is the record header a Capsule carries inline: it is a
+// Capsule member, so the Capsule's signature covers it.
+func inlineHeader(record map[string]interface{}) (evidencebook.Header, error) {
+	var header evidencebook.Header
+	raw, err := json.Marshal(record[evidencebook.RecordHeaderMember])
+	if err != nil || record[evidencebook.RecordHeaderMember] == nil || json.Unmarshal(raw, &header) != nil {
+		id, _ := record["capsule_id"].(string)
+		return evidencebook.Header{}, cli.InputError("record " + id + " carries no record header")
+	}
+	return header, nil
 }
 
-// reconcileDealHalves reconciles this profile's half of a book deal with the
-// counterparty's: the session must have the deal in use (useDeal).
-func (s *dealSession) reconcileDealHalves(ctx context.Context, dealID string, peer dealPeerHalf) ([]evidencebook.PairResult, evidencebook.Tallies, error) {
+// ownDealHalf is this profile's final close of a book deal as its half, with
+// its openings from the artifact store, or nil when the deal has no final
+// close. The session must have the deal in use (useDeal).
+func (s *dealSession) ownDealHalf(ctx context.Context, dealID string) (*dealHalf, map[string]evidencebook.Opening, error) {
 	if !s.onBook {
-		return nil, evidencebook.Tallies{}, cli.InputError("deal " + dealID + " is a legacy deal: it has no record header and no field commitments, so it has no halves")
+		return nil, nil, cli.InputError("deal " + dealID + " is a legacy deal: it has no record header and no field commitments, so it has no halves")
 	}
 	if s.book == nil {
-		return nil, evidencebook.Tallies{}, cli.ErrReadOnlyCLL
+		return nil, nil, cli.ErrReadOnlyCLL
 	}
-	own, err := s.ownHalf(ctx, dealID)
-	if err != nil {
-		return nil, evidencebook.Tallies{}, err
-	}
-	theirs, err := s.peerHalf(ctx, dealID, peer)
-	if err != nil {
-		return nil, evidencebook.Tallies{}, err
-	}
-	a := evidencebook.HalfSet{}
-	if own != nil {
-		a = evidencebook.HalfSet{Halves: []evidencebook.Half{*own}, Complete: own.Covered}
-	}
-	// A copy can never prove the counterparty has no close: withheld steps
-	// share one header shape. So their side is never complete.
-	b := evidencebook.HalfSet{Halves: []evidencebook.Half{theirs}}
-	results, tallies := evidencebook.ReconcileHalvesWith(a, b, dealHalfCheck)
-	return results, tallies, nil
-}
-
-// ownHalf is this profile's final close as its half, or nil when the deal
-// has none.
-func (s *dealSession) ownHalf(ctx context.Context, dealID string) (*evidencebook.Half, error) {
+	// loadBook verifies every step's Capsule under the profile's keys.
 	events, err := s.loadBook(ctx, dealID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	i := finalClose(events)
 	if i < 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	x := s.index.(shelfDealIndex)
 	records, err := x.records(ctx, dealID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var record *evidencebook.ShelfRecord
 	for j := range records {
@@ -106,110 +117,239 @@ func (s *dealSession) ownHalf(ctx context.Context, dealID string) (*evidencebook
 		}
 	}
 	if record == nil {
-		return nil, cli.ErrConflict
+		return nil, nil, cli.ErrConflict
 	}
 	checkpoints, err := s.book.Checkpoints(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	covered := false
 	for _, cp := range checkpoints {
 		covered = covered || cp.Entries >= record.Seq
 	}
+	if !covered {
+		return nil, nil, cli.InputError("the deal's final close is not under a checkpoint yet: run `deal checkpoint` first")
+	}
+	capsule, err := cli.GetCapsule(ctx, s.t.Artifacts, record.RecordID)
+	if err != nil {
+		return nil, nil, err
+	}
+	half, err := halfOf(capsule)
+	if err != nil {
+		return nil, nil, err
+	}
+	if half.book != hex.EncodeToString(s.key.Public().(ed25519.PublicKey)) {
+		return nil, nil, cli.Hint(cli.ErrConflict, "the deal's final close is not signed under this profile's signing key")
+	}
+	if half.header.RecordType != dealStepRecordType || half.header.BookID != cli.DealLogID(dealID) {
+		return nil, nil, cli.ErrConflict
+	}
 	openings := map[string]evidencebook.Opening{}
 	for _, f := range dealHalfFields {
-		o, err := x.openingOf(ctx, *record, f)
-		if err != nil {
-			return nil, err
+		if openings[f], err = x.openingOf(ctx, *record, f); err != nil {
+			return nil, nil, err
 		}
-		openings[f] = o
 	}
-	// loadBook re-verified the close's Capsule under the profile's keys.
-	half := evidencebook.OpenHalf(evidencebook.Half{
-		RecordID: record.RecordID, Seq: record.Seq, Correlation: dealHalfCorrelation(dealID),
-		PayloadCommitments: record.Header.PayloadCommitments, FieldCommitments: record.Header.FieldCommitments,
-		Covered: covered, Trusted: true,
-	}, openings)
-	return &half, nil
+	return &half, openings, nil
 }
 
-// peerHalf is the counterparty's half: the selected record of the copy this
-// profile recorded, checked against every peer input (note §2.9).
-func (s *dealSession) peerHalf(ctx context.Context, dealID string, peer dealPeerHalf) (evidencebook.Half, error) {
-	if peer.DealID != dealID {
-		return evidencebook.Half{}, cli.InputError("the counterparty's half is of deal " + peer.DealID + ", not " + dealID)
-	}
-	rows, err := s.exchangeRows(ctx, `kind=? AND record_digest=?`, dealExchangeResponse, peer.ResponseRecord)
+// dealPeerCopy is the counterparty's copy of a deal as this profile recorded
+// it (`deal request --response`, outcome artifact), with the responder key
+// that response pinned.
+type dealPeerCopy struct {
+	bundle map[string]interface{}
+	pinned string
+}
+
+// peerCopy reads the verified copy recorded for a response of the deal.
+func (s *dealSession) peerCopy(ctx context.Context, dealID, response string) (dealPeerCopy, error) {
+	rows, err := s.exchangeRows(ctx, `kind=? AND record_digest=?`, dealExchangeResponse, response)
 	if err != nil {
-		return evidencebook.Half{}, err
+		return dealPeerCopy{}, err
 	}
 	if len(rows) != 1 || rows[0].dealID != dealID {
-		return evidencebook.Half{}, cli.InputError(peer.ResponseRecord + " is no response this profile recorded for deal " + dealID + ": record the counterparty's copy with `deal request --response`")
+		return dealPeerCopy{}, cli.InputError(response + " is no response this profile recorded for deal " + dealID + ": record the counterparty's copy with `deal request --response`")
 	}
 	row := rows[0]
 	if row.record["outcome"] != evidencebook.OutcomeArtifact {
-		return evidencebook.Half{}, cli.InputError("response " + peer.ResponseRecord + " is not a verified copy (outcome " + strconv.Quote(fmtAny(row.record["outcome"])) + ")")
+		return dealPeerCopy{}, cli.InputError("response " + response + " is not a verified copy (outcome " + strconv.Quote(fmtAny(row.record["outcome"])) + ")")
 	}
 	raw, held, err := s.keptReply(ctx, &row)
 	if err != nil {
-		return evidencebook.Half{}, err
+		return dealPeerCopy{}, err
 	}
 	if !held {
-		return evidencebook.Half{}, cli.InputError("response " + peer.ResponseRecord + "'s octets are not in the artifact store")
+		return dealPeerCopy{}, cli.InputError("response " + response + "'s octets are not in the artifact store")
 	}
 	var resp dealResponse
 	if err := json.Unmarshal(raw, &resp); err != nil || resp.Artifact == nil {
-		return evidencebook.Half{}, cli.ErrConflict
+		return dealPeerCopy{}, cli.ErrConflict
 	}
 	bundle, err := cli.DecodeBundleJSON(resp.Artifact.Artifact)
 	if err != nil {
-		return evidencebook.Half{}, cli.ErrConflict
+		return dealPeerCopy{}, cli.ErrConflict
 	}
-	own, err := s.index.(shelfDealIndex).records(ctx, dealID)
-	if err != nil {
-		return evidencebook.Half{}, err
-	}
-	for _, r := range own {
-		if r.RecordID == peer.RecordID {
-			return evidencebook.Half{}, cli.InputError("record " + peer.RecordID + " is on this profile's own book: the counterparty's half is a record of their copy")
+	return dealPeerCopy{bundle: bundle, pinned: fmtAny(row.record["key_id"])}, nil
+}
+
+// copyHalves are a copy's records as halves, by half digest. A record that
+// carries no readable header is left out here: the finality check refuses
+// a copy where one follows the candidate.
+func copyHalves(bundle map[string]interface{}) map[string]dealHalf {
+	out := map[string]dealHalf{}
+	records, _ := bundle["records"].([]interface{})
+	for _, r := range records {
+		m, ok := r.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if h, err := halfOf(m); err == nil {
+			out[h.digest] = h
 		}
 	}
-	capsule := copyRecord(bundle, peer.RecordID)
-	if capsule == nil {
-		return evidencebook.Half{}, cli.InputError("the recorded copy holds no record " + peer.RecordID)
+	return out
+}
+
+// admitPeerHalf admits the record of the counterparty's copy whose half
+// digest the counterparty's openings name (note §2.10 Decision 2, peer
+// checks 1 to 5). Any failed check refuses the reconcile.
+func admitPeerHalf(dealID string, peer dealPeerCopy, digest string, openings map[string]evidencebook.Opening) (dealHalf, error) {
+	half, ok := copyHalves(peer.bundle)[digest]
+	if !ok {
+		return dealHalf{}, cli.InputError("the counterparty's openings name " + digest + ", which is no record of the copy recorded for the response")
 	}
-	var header evidencebook.Header
-	rawHeader, _ := json.Marshal(capsule[evidencebook.RecordHeaderMember])
-	if json.Unmarshal(rawHeader, &header) != nil || header.BookID != cli.DealLogID(dealID) {
-		return evidencebook.Half{}, cli.InputError("record " + peer.RecordID + " carries no record header of deal " + dealID)
+	record := copyRecord(peer.bundle, half.recordID)
+	// 1. Signed under the responder key the response pinned.
+	if half.book != peer.pinned || !signedBy(record, half.recordID, peer.pinned) {
+		return dealHalf{}, cli.InputError("record " + half.recordID + " is not signed under the responder key pinned for the response")
 	}
-	for _, f := range dealHalfFields {
-		if _, ok := header.FieldCommitments[f]; !ok {
-			return evidencebook.Half{}, cli.InputError("record " + peer.RecordID + " commits no " + f)
-		}
+	// 2. A step of this deal's book.
+	if half.header.RecordType != dealStepRecordType || half.header.BookID != cli.DealLogID(dealID) {
+		return dealHalf{}, cli.InputError("record " + half.recordID + " is not a step of deal " + dealID)
 	}
-	checkpoint, _ := bundle["checkpoint"].(map[string]interface{})
+	// 3. Under the copy's verified checkpoint.
+	checkpoint, _ := peer.bundle["checkpoint"].(map[string]interface{})
 	size, _ := cli.JSONUint(checkpoint["mmr_size"])
-	half := evidencebook.Half{
-		RecordID: peer.RecordID, Seq: header.Seq, Correlation: dealHalfCorrelation(dealID),
-		PayloadCommitments: header.PayloadCommitments, FieldCommitments: header.FieldCommitments,
-		Covered: header.Seq >= 1 && header.Seq <= mmrLeafCount(size),
-		Trusted: signedBy(capsule, peer.RecordID, fmtAny(row.record["key_id"])),
+	leaves := mmrLeafCount(size)
+	if half.header.Seq < 1 || half.header.Seq > leaves {
+		return dealHalf{}, cli.InputError("record " + half.recordID + " is not under the copy's checkpoint")
 	}
-	half = evidencebook.OpenHalf(half, peer.Openings)
-	half.Trusted = crossChecked(half, bundle, peer.RecordID)
+	// 4. The final close as far as the copy shows.
+	if err := lastStep(peer.bundle, half, leaves); err != nil {
+		return dealHalf{}, err
+	}
+	// 5. What the copy discloses of it, against the openings that verify.
+	if err := disclosedCloseHolds(peer.bundle, half, openings); err != nil {
+		return dealHalf{}, err
+	}
 	return half, nil
 }
 
-// crossChecked is whether a half stays trusted after the cross-check, which
-// runs, after the openings, only when the half asserts a value: a half whose
-// openings are all empty or omitted is insufficient whatever its disclosed
-// payload shows, so its payload is never checked (note §2.9).
-func crossChecked(half evidencebook.Half, bundle map[string]interface{}, id string) bool {
-	if !half.Trusted || !asserts(half) {
-		return half.Trusted
+// lastStep is check 4, read from the Capsules and their inline headers,
+// which every copy carries whether or not a payload is withheld: the
+// candidate chains follows, and every later deal_step under the checkpoint
+// chains confirms to it. A finally closed deal takes later evidence only,
+// linked to the close (deal.go, `deal note`), so the final close is its
+// last step chained follows. Sealed reports carry no link and are passed
+// over; any other later record fails the check.
+func lastStep(bundle map[string]interface{}, half dealHalf, leaves uint64) error {
+	refuse := cli.InputError("record " + half.recordID + " is not the counterparty's final close as their copy shows it: name the close the deal ended with")
+	if relation, _ := chainOf(copyRecord(bundle, half.recordID)); relation != "follows" {
+		return refuse
 	}
-	return disclosedCloseAgrees(bundle, id, half)
+	records, _ := bundle["records"].([]interface{})
+	for _, r := range records {
+		m, _ := r.(map[string]interface{})
+		if m == nil || m["capsule_id"] == half.recordID {
+			continue
+		}
+		header, err := inlineHeader(m)
+		if err != nil {
+			return refuse
+		}
+		if header.Seq <= half.header.Seq || header.Seq > leaves {
+			continue
+		}
+		switch header.RecordType {
+		case dealReportRecordType:
+		case dealStepRecordType:
+			if relation, parent := chainOf(m); relation != "confirms" || parent != half.recordID {
+				return refuse
+			}
+		default:
+			return refuse
+		}
+	}
+	return nil
+}
+
+// chainOf is a Capsule's chain relation and parent.
+func chainOf(record map[string]interface{}) (relation, parent string) {
+	chain, _ := record["chain"].(map[string]interface{})
+	relation, _ = chain["relation"].(string)
+	parent, _ = chain["parent_capsule_id"].(string)
+	return relation, parent
+}
+
+// disclosedCloseHolds is check 5. A disclosed payload must be a close whose
+// outcome is not open. Its money terms are compared only with the fields
+// whose opening was carried and verifies against the half's own commitment:
+// a missing or failed opening is left to the contract's rules 3 and 4. A
+// withheld payload is no finding.
+func disclosedCloseHolds(bundle map[string]interface{}, half dealHalf, openings map[string]evidencebook.Opening) error {
+	disclosed, ok := disclosedPayloads(bundle)[half.recordID]
+	if !ok {
+		return nil
+	}
+	block, _ := disclosed[cli.DealProfile].(map[string]interface{})
+	body, _ := disclosed["body"].(map[string]interface{})
+	if block["record_type"] != "close" || body["outcome"] == "open" {
+		return cli.InputError("record " + half.recordID + " is not a final close: the copy discloses it")
+	}
+	verified := evidencebook.Half{Opened: map[string]string{}}
+	if half.header.CommitAlg == evidencebook.CommitAlgNonce256 {
+		for f, o := range openings {
+			if c, ok := half.header.FieldCommitments[f]; ok && evidencebook.VerifyOpening(c, o) {
+				verified.Opened[f] = o.Text
+			}
+		}
+	}
+	if asserts(verified) && !disclosedCloseAgrees(bundle, half.recordID, verified) {
+		return cli.InputError("the counterparty's opened terms contradict the close their copy discloses")
+	}
+	return nil
+}
+
+// dealOpeningsFile is the field_openings a `disclose --share counterparty`
+// file carries (note §2.10 Decision 3), by half digest. Only they are read
+// from it: nothing else in the file is trusted.
+func dealOpeningsFile(raw []byte) (map[string]map[string]evidencebook.Opening, error) {
+	var file struct {
+		FieldOpenings map[string]map[string]evidencebook.Opening `json:"field_openings"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if err := decoder.Decode(&file); err != nil {
+		return nil, cli.InputError("the openings file is not a deal copy: " + err.Error())
+	}
+	return file.FieldOpenings, nil
+}
+
+// soleDigest is the one half a set of field openings names, or "" when it
+// names none; more than one is refused, since at most one record can be the
+// final close.
+func soleDigest(openings map[string]map[string]evidencebook.Opening) (string, error) {
+	digests := make([]string, 0, len(openings))
+	for d := range openings {
+		digests = append(digests, d)
+	}
+	sort.Strings(digests)
+	switch len(digests) {
+	case 0:
+		return "", nil
+	case 1:
+		return digests[0], nil
+	}
+	return "", cli.InputError("the openings name more than one record; a deal copy carries openings for its final close only")
 }
 
 // copyRecord is the capsule a copy carries for id.
@@ -340,4 +480,46 @@ func fmtAny(v interface{}) string {
 	}
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+// closeOpenings are the field_openings a `disclose --share counterparty`
+// copy carries (note §2.10 Decision 3): the openings of the deal's final
+// close, under its half digest in the copy, when the close commits non-empty
+// money terms and the amount written as money passes the counterparty's
+// ceiling gate. A legacy deal, an open one, or a close no checkpoint covers
+// yet carries none.
+func (s *dealSession) closeOpenings(ctx context.Context, dealID string, events []sealedEvent, b map[string]interface{}) (map[string]map[string]evidencebook.Opening, error) {
+	if !s.onBook {
+		return nil, nil
+	}
+	own, openings, err := s.ownDealHalf(ctx, dealID)
+	if errors.Is(err, cli.ErrInput) || own == nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	amount, currency := openings[dealAmountField].Text, openings[dealCurrencyField].Text
+	if amount == "" || currency == "" {
+		return nil, nil
+	}
+	minor, err := strconv.ParseInt(amount, 10, 64)
+	if err != nil {
+		return nil, cli.ErrConflict
+	}
+	if dealCeilingGate([]byte(formatMoney(minor, currency)), events, cli.DealAudienceCounterparty) != nil {
+		return nil, nil
+	}
+	record := copyRecord(b, own.recordID)
+	if record == nil {
+		return nil, cli.ErrConflict
+	}
+	half, err := halfOf(record)
+	if err != nil {
+		return nil, err
+	}
+	if half.digest != own.digest {
+		return nil, cli.Hint(cli.ErrConflict, "the copy's record of the final close is not the one the store holds")
+	}
+	return map[string]map[string]evidencebook.Opening{half.digest: openings}, nil
 }

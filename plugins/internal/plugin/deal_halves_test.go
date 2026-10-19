@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -15,20 +16,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// halvesScenario is one deal two parties each hold on a book: the buyer has
-// recorded the seller's copy over the existing exchange, and peer is the
-// seller's final close as the buyer's engine takes it.
-type halvesScenario struct {
+// reconcilePair is one deal two parties each closed on a book. The buyer has
+// recorded the seller's copy over the evidence-request exchange, and holds
+// the disclose file the seller handed it.
+type reconcilePair struct {
 	id            string
 	buyer, seller dealParty
-	peer          dealPeerHalf
+	// response is the buyer's record of the seller's copy.
+	response string
+	// sellerFile is the seller's `disclose --share counterparty` file.
+	sellerFile string
 }
 
-// closedHalves opens one deal on both sides and closes each with its own
-// input, then has the buyer ask for and record the seller's copy. The
-// seller's openings come from the seller's book, standing in for the copy
-// that carries them from the follow-up on (note §2.9).
-func closedHalves(t *testing.T, buyerClose, sellerClose string) halvesScenario {
+const received = `{"status":"received"}`
+
+// closedPair opens one deal on both sides, closes each with its own input,
+// has the buyer ask for and record the seller's copy, and has the seller
+// disclose its copy to the buyer. before runs as the seller after its close,
+// before the copy is asked for. It returns with the buyer selected.
+func closedPair(t *testing.T, buyerClose, sellerClose string, before ...func(id string)) reconcilePair {
 	t.Helper()
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
@@ -37,24 +43,41 @@ func closedHalves(t *testing.T, buyerClose, sellerClose string) halvesScenario {
 	dealFixture(t)
 	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
 	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, sellerClose))
+	for _, fn := range before {
+		fn(id)
+	}
 	seller := thisDealParty(t)
-	peer := dealPeerHalf{DealID: id, RecordID: finalCloseRecord(t, id), Openings: map[string]evidencebook.Opening{}}
-	r := shelfRecord(t, id, peer.RecordID)
-	withSession(t, func(s *dealSession) {
-		for _, f := range dealHalfFields {
-			o, err := s.index.(shelfDealIndex).openingOf(t.Context(), r, f)
-			require.NoError(t, err)
-			peer.Openings[f] = o
-		}
-	})
-	ask := askFor(t, buyer, seller, id, map[string]any{"min_freshness": map[string]any{"size": 1}})
+	pair := reconcilePair{id: id, buyer: buyer, seller: seller}
+	pair.response = recordedCopy(t, buyer, seller, id)
+	party(t, seller.config)
+	pair.sellerFile = discloseTo(t, id, "the buyer")
+	party(t, buyer.config)
+	return pair
+}
+
+// recordedCopy has asker ask for and record responder's copy of the deal,
+// and returns the response record, with asker selected.
+func recordedCopy(t *testing.T, asker, responder dealParty, id string) string {
+	t.Helper()
+	ask := askFor(t, asker, responder, id, map[string]any{"min_freshness": map[string]any{"size": 1}})
 	require.Equal(t, "artifact", ask.outcome)
+	var response string
 	withSession(t, func(s *dealSession) {
 		outcome, err := s.outcomeOf(t.Context(), ask.recordID)
 		require.NoError(t, err)
-		peer.ResponseRecord = outcome.digest
+		response = outcome.digest
 	})
-	return halvesScenario{id: id, buyer: buyer, seller: seller, peer: peer}
+	return response
+}
+
+// discloseTo writes the selected party's `disclose --share counterparty`
+// file for the deal.
+func discloseTo(t *testing.T, id, to string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "disclosed.json")
+	out, err := invoke(t, "", "--profile", "deal", "disclose", "--deal", id, "--share", "counterparty", "--to", to, "--out", path)
+	require.NoError(t, err, out)
+	return path
 }
 
 func withSession(t *testing.T, fn func(s *dealSession)) {
@@ -65,19 +88,282 @@ func withSession(t *testing.T, fn func(s *dealSession)) {
 	fn(s)
 }
 
-// finalCloseRecord is the record id of the profile's final close of id.
-func finalCloseRecord(t *testing.T, id string) string {
+// reconcileResult runs the verb as the selected party, writing the Result.
+func runReconcileResult(t *testing.T, id, response string, extra ...string) (map[string]any, evidencebook.DealReconcileResult, string, error) {
 	t.Helper()
-	var record string
+	out := filepath.Join(t.TempDir(), "result.json")
+	args := append([]string{"--profile", "deal", "deal", "reconcile-result", "--deal", id, "--response", response, "--out", out}, extra...)
+	text, err := invoke(t, "", args...)
+	if err != nil {
+		return nil, evidencebook.DealReconcileResult{}, text, err
+	}
+	var summary map[string]any
+	require.NoError(t, json.Unmarshal([]byte(text), &summary), text)
+	var result evidencebook.DealReconcileResult
+	require.NoError(t, json.Unmarshal(mustRead(t, out), &result))
+	return summary, result, out, nil
+}
+
+// claimsOf are a Result's claims by requirement.
+func claimsOf(result evidencebook.DealReconcileResult) map[string]evidencebook.ReconcileClaim {
+	out := map[string]evidencebook.ReconcileClaim{}
+	for _, c := range result.Claims {
+		out[c.RequirementRef] = c
+	}
+	return out
+}
+
+const (
+	amountReq   = "amount-commitment-matched"
+	currencyReq = "currency-commitment-matched"
+)
+
+// #36's acceptance, end to end: two real parties close as received,
+// exchange copies, and the buyer's Result has both claims met, each with
+// tallies matched 1, citing no Close. No deal state is shown anywhere.
+func TestReconcileResultOfTwoPartiesIsMet(t *testing.T) {
+	pair := closedPair(t, received, received)
+	summary, result, out, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+	require.NoError(t, err)
+	claims := claimsOf(result)
+	for _, req := range []string{amountReq, currencyReq} {
+		c := claims[req]
+		assert.Equal(t, "met", c.Verdict, req)
+		assert.Equal(t, evidencebook.ResultTallies{Matched: 1}, c.Reconcile.Tallies, req)
+		assert.Equal(t, evidencebook.DealReconcileContractRef, c.ContractRef)
+		assert.Equal(t, pair.seller.signer, c.Reconcile.Peer, "the peer is the seller's signing key")
+		assert.Len(t, c.Evidence, 2, "the two half digests, nothing else")
+	}
+	written := string(mustRead(t, out))
+	encodedSummary, err := json.Marshal(summary)
+	require.NoError(t, err)
+	help, err := invoke(t, "", "--profile", "deal", "deal", "reconcile-result", "--help")
+	require.NoError(t, err)
+	for _, text := range []string{written, string(encodedSummary), help} {
+		assert.NotContains(t, text, "reconciled")
+		assert.NotContains(t, text, "deal_state")
+		assert.NotContains(t, text, "close_ref")
+	}
+	assert.Equal(t, pair.id, summary["deal_id"])
+}
+
+func TestReconcileResultWithADifferentPriceConflicts(t *testing.T) {
+	pair := closedPair(t, received, `{"status":"received","delivered":{"price_minor":185000}}`)
+	_, result, _, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+	require.NoError(t, err)
+	claims := claimsOf(result)
+	assert.Equal(t, evidencebook.ResultTallies{Conflicting: 1}, claims[amountReq].Reconcile.Tallies)
+	assert.Equal(t, "not_met", claims[amountReq].Verdict)
+	assert.Equal(t, "met", claims[currencyReq].Verdict)
+}
+
+// A side that did not receive commits empty money terms: not evaluable,
+// never two empty texts matching. A seller that did not receive discloses
+// no openings at all.
+func TestReconcileResultWhenOneSideDidNotReceive(t *testing.T) {
+	notReceived := `{"status":"not_received","reason":"not_delivered"}`
+	for name, closes := range map[string][2]string{"buyer": {notReceived, received}, "seller": {received, notReceived}} {
+		t.Run(name, func(t *testing.T) {
+			pair := closedPair(t, closes[0], closes[1])
+			_, result, _, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+			require.NoError(t, err)
+			for _, c := range result.Claims {
+				assert.Equal(t, evidencebook.ResultTallies{Insufficient: 1}, c.Reconcile.Tallies, c.RequirementRef)
+				assert.Equal(t, "not_evaluable", c.Verdict)
+			}
+		})
+	}
+}
+
+// editOpenings rewrites a disclose file's field_openings.
+func editOpenings(t *testing.T, path string, edit func(map[string]map[string]evidencebook.Opening)) string {
+	t.Helper()
+	openings, err := dealOpeningsFile(mustRead(t, path))
+	require.NoError(t, err)
+	edit(openings)
+	return writeJSONFile(t, "openings.json", map[string]any{"field_openings": openings})
+}
+
+// A tampered amount opening fails only the amount: UNRESOLVED, with the
+// currency still met. A missing one is INSUFFICIENT.
+func TestReconcileResultWithATamperedOrMissingOpening(t *testing.T) {
+	pair := closedPair(t, received, received)
+	tampered := editOpenings(t, pair.sellerFile, func(m map[string]map[string]evidencebook.Opening) {
+		for d, fields := range m {
+			o := fields[dealAmountField]
+			o.Text = "1"
+			m[d][dealAmountField] = o
+		}
+	})
+	_, result, _, err := runReconcileResult(t, pair.id, pair.response, "--openings", tampered)
+	require.NoError(t, err)
+	claims := claimsOf(result)
+	assert.Equal(t, evidencebook.ResultTallies{Unresolved: 1}, claims[amountReq].Reconcile.Tallies)
+	assert.Equal(t, "met", claims[currencyReq].Verdict)
+
+	missing := editOpenings(t, pair.sellerFile, func(m map[string]map[string]evidencebook.Opening) {
+		for d := range m {
+			delete(m[d], dealAmountField)
+		}
+	})
+	_, result, _, err = runReconcileResult(t, pair.id, pair.response, "--openings", missing)
+	require.NoError(t, err)
+	claims = claimsOf(result)
+	assert.Equal(t, evidencebook.ResultTallies{Insufficient: 1}, claims[amountReq].Reconcile.Tallies)
+	assert.Equal(t, "met", claims[currencyReq].Verdict)
+}
+
+// Without the seller's openings there is no peer half: the buyer's lone
+// half is INSUFFICIENT, never "no close".
+func TestReconcileResultWithoutOpenings(t *testing.T) {
+	pair := closedPair(t, received, received)
+	for _, extra := range [][]string{nil, {"--openings", writeJSONFile(t, "empty.json", map[string]any{"records": []any{}})}} {
+		_, result, _, err := runReconcileResult(t, pair.id, pair.response, extra...)
+		require.NoError(t, err)
+		for _, c := range result.Claims {
+			assert.Equal(t, evidencebook.ResultTallies{Insufficient: 1}, c.Reconcile.Tallies)
+			assert.Len(t, c.Evidence, 1)
+		}
+	}
+}
+
+// The seller's half digest is the same on both sides: the key of its own
+// disclose file, the half of its own close, and the record of the copy the
+// buyer recorded.
+func TestBothPartiesComputeOneHalfDigest(t *testing.T) {
+	pair := closedPair(t, received, received)
+	openings, err := dealOpeningsFile(mustRead(t, pair.sellerFile))
+	require.NoError(t, err)
+	digest, err := soleDigest(openings)
+	require.NoError(t, err)
+	require.NotEmpty(t, digest)
+	party(t, pair.seller.config)
+	withSession(t, func(s *dealSession) {
+		require.NoError(t, s.useDeal(t.Context(), pair.id, false))
+		own, ownOpenings, err := s.ownDealHalf(t.Context(), pair.id)
+		require.NoError(t, err)
+		require.NotNil(t, own)
+		assert.Equal(t, digest, own.digest)
+		assert.Equal(t, ownOpenings, openings[digest], "the file carries the store's openings")
+		// The half mapping resolves on the real record.
+		var doc map[string]any
+		require.NoError(t, json.Unmarshal(own.octets, &doc))
+		assert.Equal(t, pair.id, doc["deal_id"])
+		assert.Equal(t, pair.seller.signer, doc["key_id"])
+	})
+	party(t, pair.buyer.config)
+	withSession(t, func(s *dealSession) {
+		peer, err := s.peerCopy(t.Context(), pair.id, pair.response)
+		require.NoError(t, err)
+		half, ok := copyHalves(peer.bundle)[digest]
+		require.True(t, ok, "the recorded copy holds the same record, with the same digest")
+		assert.Equal(t, pair.seller.signer, half.book)
+	})
+}
+
+// Openings travel only in the user's own counterparty share, for the final
+// close only: never in a respond copy, an adjudicator's copy or the user's
+// own bundle. The share's recorded digest is the file's.
+func TestOpeningsTravelOnlyInACounterpartyDisclose(t *testing.T) {
+	pair := closedPair(t, received, received)
+	party(t, pair.seller.config)
+	var b map[string]any
+	require.NoError(t, json.Unmarshal(mustRead(t, pair.sellerFile), &b))
+	require.Contains(t, b, "field_openings")
+	assert.Len(t, b["field_openings"], 1, "the final close only")
+	withSession(t, func(s *dealSession) {
+		recorded, err := s.recordedCounterpartyShare(t.Context(), pair.id, digestOfFile(t, pair.sellerFile))
+		require.NoError(t, err)
+		assert.True(t, recorded, "receipt_sha256 is the file's SHA-256")
+	})
+	adjudicator, _ := sharedCopy(t, pair.id, "adjudicator", "the platform")
+	assert.NotContains(t, adjudicator, "field_openings")
+	own := filepath.Join(t.TempDir(), "own.json")
+	_, err := invoke(t, "", "--profile", "deal", "bundle", "--deal", pair.id, "--out", own)
+	require.NoError(t, err)
+	assert.NotContains(t, string(mustRead(t, own)), "field_openings")
+
+	ask := askFor(t, pair.buyer, pair.seller, pair.id, map[string]any{"min_freshness": map[string]any{"size": 1}})
+	require.Equal(t, "artifact", ask.outcome)
+	assert.NotContains(t, string(mustRead(t, ask.responsePath)), "field_openings", "a respond copy goes to an unchecked requester")
+
+	// The core verifier accepts the copy that carries them.
+	result, err := verifyWithDirectory(t, pair.sellerFile, "")
+	require.NoError(t, err)
+	assert.Equal(t, "VALID", result["verdict"])
+}
+
+// A deal that is still open discloses no openings.
+func TestAnOpenDealDisclosesNoOpenings(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	assert.NotContains(t, string(mustRead(t, discloseTo(t, id, "the seller"))), "field_openings")
+}
+
+// The final close is admitted when later evidence confirms it and reports
+// follow it in the copy.
+func TestTheFinalCloseIsAdmittedPastLaterEvidenceAndReports(t *testing.T) {
+	pair := closedPair(t, received, received, func(id string) {
+		dealRun(t, "note", "--deal", id, "--kind", "evidence", "--input", writeJSON(t, `{"about": "the parcel arrived", "source": "agent"}`))
+	})
+	_, result, _, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+	require.NoError(t, err)
+	assert.Equal(t, "met", result.Claims[0].Verdict)
+}
+
+// Every step command but later evidence refuses a finally closed deal, and
+// later evidence confirms the close: check 4 relies on it.
+func TestAClosedDealTakesLaterEvidenceOnly(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	for _, args := range [][]string{
+		{"close", "--deal", id, "--input", writeJSON(t, received)},
+		{"check", "--deal", id, "--input", writeJSON(t, `{}`)},
+		{"note", "--deal", id, "--kind", "message", "--input", writeJSON(t, `{"from": "user", "text": "hello"}`)},
+	} {
+		err := dealRunErr(t, args...)
+		require.ErrorIs(t, err, cli.ErrInput, args[0])
+		assert.Contains(t, cli.SafeError(err), "closed", args[0])
+	}
+	late := dealRun(t, "note", "--deal", id, "--kind", "evidence", "--input", writeJSON(t, `{"about": "the parcel arrived", "source": "agent"}`))
 	withSession(t, func(s *dealSession) {
 		require.NoError(t, s.useDeal(t.Context(), id, false))
 		events, err := s.load(t.Context(), id)
 		require.NoError(t, err)
-		i := finalClose(events)
-		require.GreaterOrEqual(t, i, 0)
-		record = events[i].CapsuleID
+		last := events[len(events)-1]
+		assert.Equal(t, late["capsule_id"], last.CapsuleID)
+		assert.Equal(t, events[finalClose(events)].CapsuleID, last.Event.Confirms, "later evidence confirms the close")
 	})
-	return record
+}
+
+// writeOpeningsFor writes a field_openings file naming one record of the
+// buyer's recorded copy, with the seller's store openings of that record.
+func writeOpeningsFor(t *testing.T, pair reconcilePair, recordID string) string {
+	t.Helper()
+	party(t, pair.seller.config)
+	openings := map[string]evidencebook.Opening{}
+	r := shelfRecord(t, pair.id, recordID)
+	withSession(t, func(s *dealSession) {
+		for _, f := range dealHalfFields {
+			o, err := s.index.(shelfDealIndex).openingOf(t.Context(), r, f)
+			require.NoError(t, err)
+			openings[f] = o
+		}
+	})
+	party(t, pair.buyer.config)
+	var digest string
+	withSession(t, func(s *dealSession) {
+		peer, err := s.peerCopy(t.Context(), pair.id, pair.response)
+		require.NoError(t, err)
+		for d, h := range copyHalves(peer.bundle) {
+			if h.recordID == recordID {
+				digest = d
+			}
+		}
+	})
+	require.NotEmpty(t, digest)
+	return writeJSONFile(t, "named.json", map[string]any{"field_openings": map[string]any{digest: openings}})
 }
 
 func shelfRecord(t *testing.T, id, recordID string) evidencebook.ShelfRecord {
@@ -91,150 +377,150 @@ func shelfRecord(t *testing.T, id, recordID string) evidencebook.ShelfRecord {
 	return evidencebook.ShelfRecord{}
 }
 
-// reconcileAs runs the engine as party, for the deal and peer input given.
-func reconcileAs(t *testing.T, party_ dealParty, id string, peer dealPeerHalf) (evidencebook.Tallies, error) {
-	t.Helper()
-	party(t, party_.config)
-	var tallies evidencebook.Tallies
-	var err error
-	withSession(t, func(s *dealSession) {
-		require.NoError(t, s.useDeal(t.Context(), id, false))
-		_, tallies, err = s.reconcileDealHalves(t.Context(), id, peer)
-	})
-	return tallies, err
-}
-
-const received = `{"status":"received"}`
-
-// Same terms on both sides: the two halves match, with both openings
-// verified on each half.
-func TestHalvesClosedOnTheSameTermsMatch(t *testing.T) {
-	sc := closedHalves(t, received, received)
-	assert.Equal(t, "190000", sc.peer.Openings[dealAmountField].Text)
-	tallies, err := reconcileAs(t, sc.buyer, sc.id, sc.peer)
-	require.NoError(t, err)
-	assert.Equal(t, evidencebook.Tallies{Matched: 1}, tallies)
-}
-
-// A different delivered price on one side is a conflict.
-func TestHalvesWithADifferentPriceConflict(t *testing.T) {
-	sc := closedHalves(t, received, `{"status":"received","delivered":{"price_minor":185000}}`)
-	tallies, err := reconcileAs(t, sc.buyer, sc.id, sc.peer)
-	require.NoError(t, err)
-	assert.Equal(t, evidencebook.Tallies{Conflicting: 1}, tallies)
-}
-
-// Only the money terms are compared: a close that differs on the item only
-// still matches.
-func TestHalvesCompareTheMoneyTermsOnly(t *testing.T) {
-	sc := closedHalves(t, received, `{"status":"received","delivered":{"item":"example bicycle, blue"}}`)
-	tallies, err := reconcileAs(t, sc.buyer, sc.id, sc.peer)
-	require.NoError(t, err)
-	assert.Equal(t, evidencebook.Tallies{Matched: 1}, tallies)
-}
-
-// A side that did not receive commits empty money terms: the pair is
-// insufficient, never two empty texts matching.
-func TestAHalfThatWasNotReceivedIsInsufficient(t *testing.T) {
-	sc := closedHalves(t, `{"status":"not_received","reason":"not_delivered"}`, `{"status":"not_received","reason":"not_delivered"}`)
-	assert.Empty(t, sc.peer.Openings[dealAmountField].Text)
-	tallies, err := reconcileAs(t, sc.buyer, sc.id, sc.peer)
-	require.NoError(t, err)
-	assert.Equal(t, evidencebook.Tallies{Insufficient: 1}, tallies)
-}
-
-// A missing opening leaves its field unopened: insufficient. A tampered one
-// opens nothing and makes the half untrusted: unresolved.
-func TestHalvesWithAMissingOrTamperedOpening(t *testing.T) {
-	sc := closedHalves(t, received, received)
-	missing := sc.peer
-	missing.Openings = map[string]evidencebook.Opening{dealAmountField: sc.peer.Openings[dealAmountField]}
-	tallies, err := reconcileAs(t, sc.buyer, sc.id, missing)
-	require.NoError(t, err)
-	assert.Equal(t, evidencebook.Tallies{Insufficient: 1}, tallies)
-
-	tampered := sc.peer
-	o := sc.peer.Openings[dealAmountField]
-	o.Text = "1"
-	tampered.Openings = map[string]evidencebook.Opening{dealAmountField: o, dealCurrencyField: sc.peer.Openings[dealCurrencyField]}
-	tallies, err = reconcileAs(t, sc.buyer, sc.id, tampered)
-	require.NoError(t, err)
-	assert.Equal(t, evidencebook.Tallies{Unresolved: 1}, tallies)
-}
-
-// A record of the copy that is not the final close commits empty money
-// terms: insufficient.
-func TestARecordThatIsNotTheCloseIsInsufficient(t *testing.T) {
-	sc := closedHalves(t, received, received)
-	party(t, sc.seller.config)
-	first := bookRecords(t, sc.id)[0]
-	notClose := sc.peer
-	notClose.RecordID = first.RecordID
-	notClose.Openings = map[string]evidencebook.Opening{}
-	withSession(t, func(s *dealSession) {
-		for _, f := range dealHalfFields {
-			o, err := s.index.(shelfDealIndex).openingOf(t.Context(), first, f)
-			require.NoError(t, err)
-			notClose.Openings[f] = o
+// The verb refuses a peer half that fails admission, and inputs it cannot
+// reconcile.
+func TestReconcileResultRefuses(t *testing.T) {
+	pair := closedPair(t, received, received)
+	party(t, pair.seller.config)
+	records := bookRecords(t, pair.id)
+	party(t, pair.buyer.config)
+	var steps []string
+	for _, r := range records {
+		if r.Header.RecordType == dealStepRecordType {
+			steps = append(steps, r.RecordID)
 		}
-	})
-	tallies, err := reconcileAs(t, sc.buyer, sc.id, notClose)
+	}
+	require.GreaterOrEqual(t, len(steps), 3)
+	sellerOpenings, err := dealOpeningsFile(mustRead(t, pair.sellerFile))
 	require.NoError(t, err)
-	assert.Equal(t, evidencebook.Tallies{Insufficient: 1}, tallies)
+	two := map[string]any{}
+	for d, o := range sellerOpenings {
+		two[d] = o
+	}
+	two[strings.Repeat("a", 64)] = map[string]any{}
+
+	for name, c := range map[string]struct {
+		args []string
+		want string
+	}{
+		"a step before the last (check 4)": {[]string{"--openings", writeOpeningsFor(t, pair, steps[1])}, "not the counterparty's final close"},
+		"a digest of no record":            {[]string{"--openings", writeJSONFile(t, "none.json", map[string]any{"field_openings": map[string]any{strings.Repeat("b", 64): map[string]any{}}})}, "no record of the copy"},
+		"two named records":                {[]string{"--openings", writeJSONFile(t, "two.json", map[string]any{"field_openings": two})}, "more than one record"},
+		"a period holding neither close":   {[]string{"--openings", pair.sellerFile, "--from", "2020-01-01T00:00:00Z", "--to", "2020-01-02T00:00:00Z"}, "nothing to reconcile in this period"},
+		"a period that is not seconds":     {[]string{"--openings", pair.sellerFile, "--from", "2026-10-19T00:00:00.5Z"}, "--from is an RFC 3339 UTC time"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, _, text, err := runReconcileResult(t, pair.id, pair.response, c.args...)
+			require.ErrorIs(t, err, cli.ErrInput, text)
+			assert.Contains(t, cli.SafeError(err), c.want)
+		})
+	}
+	_, _, _, err = runReconcileResult(t, pair.id, strings.Repeat("0", 64), "--openings", pair.sellerFile)
+	require.ErrorIs(t, err, cli.ErrInput, "a response that was not recorded")
 }
 
-// The engine refuses an input that is not the counterparty's half: another
-// deal, a record of this profile's own book, a response that was not
-// recorded, and a legacy deal.
-func TestTheEngineRefusesWhatIsNotTheCounterpartysHalf(t *testing.T) {
-	sc := closedHalves(t, received, received)
-	wrongDeal := sc.peer
-	wrongDeal.DealID = "deal-0000000000000000"
-	_, err := reconcileAs(t, sc.buyer, sc.id, wrongDeal)
+// No half at all: the buyer has no final close and the seller's openings
+// name none.
+func TestReconcileResultRefusesWhenNothingIsClosed(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	buyer := thisDealParty(t)
+	dealFixture(t)
+	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
+	seller := thisDealParty(t)
+	response := recordedCopy(t, buyer, seller, id)
+	_, _, _, err := runReconcileResult(t, id, response)
 	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, cli.SafeError(err), "nothing to reconcile")
+}
 
-	party(t, sc.buyer.config)
-	own := sc.peer
-	own.RecordID = finalCloseRecord(t, sc.id)
-	_, err = reconcileAs(t, sc.buyer, sc.id, own)
-	require.ErrorIs(t, err, cli.ErrInput)
-
-	unrecorded := sc.peer
-	unrecorded.ResponseRecord = "0000000000000000000000000000000000000000000000000000000000000000"
-	_, err = reconcileAs(t, sc.buyer, sc.id, unrecorded)
-	require.ErrorIs(t, err, cli.ErrInput)
-
+// A legacy deal has no halves.
+func TestReconcileResultRefusesALegacyDeal(t *testing.T) {
 	legacyDeals(t)
 	dealFixture(t)
-	legacy := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	_, _, _, err := runReconcileResult(t, id, strings.Repeat("0", 64))
+	require.ErrorIs(t, err, cli.ErrInput)
+}
+
+// A copy recorded as failing verification is never a half.
+func TestReconcileResultRefusesACopyThatFailedVerification(t *testing.T) {
+	pair := closedPair(t, received, received)
+	wrong := pair.seller
+	wrong.checkpoint = pair.buyer.checkpoint
+	ask := askFor(t, pair.buyer, wrong, pair.id, map[string]any{"min_freshness": map[string]any{"size": 1}})
+	require.Equal(t, dealOutcomeArtifactFailed, ask.outcome)
+	var failed string
 	withSession(t, func(s *dealSession) {
-		require.NoError(t, s.useDeal(t.Context(), legacy, false))
-		_, _, err := s.reconcileDealHalves(t.Context(), legacy, dealPeerHalf{DealID: legacy})
-		require.ErrorIs(t, err, cli.ErrInput)
+		outcome, err := s.outcomeOf(t.Context(), ask.recordID)
+		require.NoError(t, err)
+		failed = outcome.digest
 	})
+	_, _, _, err := runReconcileResult(t, pair.id, failed, "--openings", pair.sellerFile)
+	require.ErrorIs(t, err, cli.ErrInput)
 }
 
-// A capsule signed under a key other than the pinned responder key is not
-// the counterparty's: untrusted.
-func TestACapsuleUnderAnotherKeyIsNotTrusted(t *testing.T) {
-	assert.False(t, signedBy(map[string]interface{}{"signature": "00", "key_id": "aa"}, "id", "bb"))
+// A close signed under a key other than the responder key pinned for the
+// response (the seller rotated its key, keeping the old one trusted, and
+// answered under the new one) is refused (check 1).
+func TestReconcileResultRefusesACloseUnderAnotherKey(t *testing.T) {
+	pair := closedPair(t, received, received)
+	party(t, pair.seller.config)
+	p := dealProfile(t)
+	public, private, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	seed := filepath.Join(t.TempDir(), "rotated.seed")
+	require.NoError(t, os.WriteFile(seed, []byte(hex.EncodeToString(private.Seed())), 0o600))
+	p.Signing = cli.Secret{File: seed}
+	p.TrustedKeys = append(p.TrustedKeys, hex.EncodeToString(public))
+	require.NoError(t, cli.SaveProfile(p, true))
+	rotated := thisDealParty(t)
+	response := recordedCopy(t, pair.buyer, rotated, pair.id)
+	_, _, _, err = runReconcileResult(t, pair.id, response, "--openings", pair.sellerFile)
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, cli.SafeError(err), "not signed under the responder key pinned")
 }
 
-// The cross-check reads only what a copy discloses: a disclosed close whose
-// outcome record states a delivered price other than the opened amount makes
-// the half untrusted; a withheld one is no finding.
-func TestTheCrossCheckReadsOnlyWhatACopyDiscloses(t *testing.T) {
-	outcome := map[string]interface{}{"x-deal-v0": map[string]interface{}{"record_type": "outcome"}, "body": map[string]interface{}{"status": "received", "delivered": map[string]interface{}{"price_minor": json.Number("185000")}}}
-	digest := jsonDigest(t, outcome)
-	closeRecord := map[string]interface{}{"x-deal-v0": map[string]interface{}{"record_type": "close", "refs": []interface{}{map[string]interface{}{"rel": "outcome", "digest": digest}}}, "body": map[string]interface{}{"outcome": "completed"}}
-	half := evidencebook.Half{Opened: map[string]string{dealAmountField: "190000", dealCurrencyField: "USD"}}
-	both := map[string]interface{}{"disclosures": map[string]interface{}{"c": map[string]interface{}{"agent_input": closeRecord}, "o": map[string]interface{}{"agent_input": outcome}}}
-	assert.False(t, disclosedCloseAgrees(both, "c", half))
-	onlyClose := map[string]interface{}{"disclosures": map[string]interface{}{"c": map[string]interface{}{"agent_input": closeRecord}}}
-	assert.True(t, disclosedCloseAgrees(onlyClose, "c", half), "a withheld outcome record is no finding")
-	assert.True(t, disclosedCloseAgrees(map[string]interface{}{}, "c", half), "a withheld close is no finding")
-	notClose := map[string]interface{}{"disclosures": map[string]interface{}{"c": map[string]interface{}{"agent_input": outcome}}}
-	assert.False(t, disclosedCloseAgrees(notClose, "c", half))
+// Check 5 reads only what a copy discloses, against the openings that
+// verify: a disclosed record that is not a close, or a close whose outcome
+// is open, is refused; a verified opening that contradicts the disclosed
+// outcome is refused; a withheld payload, or an opening that does not
+// verify, is no finding here.
+func TestCheck5ComparesOnlyVerifiedOpenings(t *testing.T) {
+	outcome := map[string]any{"x-deal-v0": map[string]any{"record_type": "outcome"}, "body": map[string]any{"status": "received", "delivered": map[string]any{"price_minor": json.Number("185000")}}}
+	closeOf := func(result string) map[string]any {
+		return map[string]any{"x-deal-v0": map[string]any{"record_type": "close", "refs": []any{map[string]any{"rel": "outcome", "digest": jsonDigest(t, outcome)}}}, "body": map[string]any{"outcome": result}}
+	}
+	amount, err := evidencebook.NewOpening("190000")
+	require.NoError(t, err)
+	agreeing, err := evidencebook.NewOpening("185000")
+	require.NoError(t, err)
+	currency, err := evidencebook.NewOpening("USD")
+	require.NoError(t, err)
+	commit := func(o evidencebook.Opening) string {
+		c, err := o.Commitment()
+		require.NoError(t, err)
+		return c
+	}
+	half := func(o evidencebook.Opening) dealHalf {
+		return dealHalf{recordID: "c", header: evidencebook.Header{CommitAlg: evidencebook.CommitAlgNonce256, FieldCommitments: map[string]string{dealAmountField: commit(o), dealCurrencyField: commit(currency)}}}
+	}
+	bundle := func(closeRecord map[string]any) map[string]any {
+		return map[string]any{"disclosures": map[string]any{"c": map[string]any{"agent_input": closeRecord}, "o": map[string]any{"agent_input": outcome}}}
+	}
+	openings := func(o evidencebook.Opening) map[string]evidencebook.Opening {
+		return map[string]evidencebook.Opening{dealAmountField: o, dealCurrencyField: currency}
+	}
+	require.ErrorIs(t, disclosedCloseHolds(bundle(closeOf("completed")), half(amount), openings(amount)), cli.ErrInput, "a verified amount the disclosed outcome contradicts")
+	require.NoError(t, disclosedCloseHolds(bundle(closeOf("completed")), half(agreeing), openings(agreeing)), "a verified amount the outcome states")
+	tampered := amount
+	tampered.Text = "185000"
+	require.NoError(t, disclosedCloseHolds(bundle(closeOf("completed")), half(amount), openings(tampered)), "an opening that does not verify is left to rule 4")
+	require.NoError(t, disclosedCloseHolds(bundle(closeOf("completed")), half(amount), map[string]evidencebook.Opening{dealCurrencyField: currency}), "a missing opening is left to rule 3")
+	require.ErrorIs(t, disclosedCloseHolds(bundle(closeOf("open")), half(agreeing), openings(agreeing)), cli.ErrInput, "a close whose outcome is open")
+	require.ErrorIs(t, disclosedCloseHolds(map[string]any{"disclosures": map[string]any{"c": map[string]any{"agent_input": outcome}}}, half(agreeing), openings(agreeing)), cli.ErrInput, "a disclosed record that is not a close")
+	require.NoError(t, disclosedCloseHolds(map[string]any{}, half(amount), openings(amount)), "a withheld payload is no finding")
 }
 
 func jsonDigest(t *testing.T, v any) string {
@@ -244,148 +530,142 @@ func jsonDigest(t *testing.T, v any) string {
 	return d
 }
 
-// A real copy's capsule is trusted only under the responder key the request
-// pinned: the seller's key verifies it, another key does not.
-func TestARealCopysCapsuleIsTrustedUnderThePinnedKeyOnly(t *testing.T) {
-	sc := closedHalves(t, received, received)
-	party(t, sc.buyer.config)
-	var capsule map[string]interface{}
-	withSession(t, func(s *dealSession) {
-		rows, err := s.exchangeRows(t.Context(), `kind=? AND record_digest=?`, dealExchangeResponse, sc.peer.ResponseRecord)
-		require.NoError(t, err)
-		require.Len(t, rows, 1)
-		raw, held, err := s.keptReply(t.Context(), &rows[0])
-		require.NoError(t, err)
-		require.True(t, held)
-		var resp dealResponse
-		require.NoError(t, json.Unmarshal(raw, &resp))
-		bundle, err := cli.DecodeBundleJSON(resp.Artifact.Artifact)
-		require.NoError(t, err)
-		capsule = copyRecord(bundle, sc.peer.RecordID)
-	})
-	require.NotNil(t, capsule)
-	assert.True(t, signedBy(capsule, sc.peer.RecordID, sc.seller.signer))
-	assert.False(t, signedBy(capsule, sc.peer.RecordID, sc.buyer.signer), "another key: untrusted")
-}
-
-// Coverage is judged before trust: a tampered opening against an own close
-// no checkpoint covers yet (a crash between the seal and its milestone) is
-// insufficient, not unresolved.
-func TestATamperedOpeningOnAnUncoveredCloseIsInsufficient(t *testing.T) {
-	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
-	old := dealMilestoneStops
-	t.Cleanup(func() { dealMilestoneStops = old })
-	dealMilestoneStops = func() error { return assert.AnError }
-	_, err := invoke(t, "", "--profile", "deal", "deal", "close", "--deal", id, "--input", writeJSON(t, received))
-	require.ErrorIs(t, err, assert.AnError, "sealed, not checkpointed")
-	dealMilestoneStops = old
-	buyer := thisDealParty(t)
-	dealFixture(t)
-	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
-	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
-	seller := thisDealParty(t)
-	peer := dealPeerHalf{DealID: id, RecordID: finalCloseRecord(t, id), Openings: map[string]evidencebook.Opening{}}
-	r := shelfRecord(t, id, peer.RecordID)
-	withSession(t, func(s *dealSession) {
-		for _, f := range dealHalfFields {
-			o, err := s.index.(shelfDealIndex).openingOf(t.Context(), r, f)
-			require.NoError(t, err)
-			peer.Openings[f] = o
-		}
-	})
-	o := peer.Openings[dealAmountField]
-	o.Text = "1"
-	peer.Openings[dealAmountField] = o
-	ask := askFor(t, buyer, seller, id, map[string]any{"min_freshness": map[string]any{"size": 1}})
-	require.Equal(t, "artifact", ask.outcome)
-	withSession(t, func(s *dealSession) {
-		outcome, err := s.outcomeOf(t.Context(), ask.recordID)
-		require.NoError(t, err)
-		peer.ResponseRecord = outcome.digest
-	})
-	tallies, err := reconcileAs(t, buyer, id, peer)
-	require.NoError(t, err)
-	assert.Equal(t, evidencebook.Tallies{Insufficient: 1}, tallies)
-}
-
-// A copy recorded as failing verification is never a half: the engine
-// refuses it.
-func TestACopyThatFailedVerificationIsRefused(t *testing.T) {
-	sc := closedHalves(t, received, received)
-	wrong := sc.seller
-	wrong.checkpoint = sc.buyer.checkpoint
-	ask := askFor(t, sc.buyer, wrong, sc.id, map[string]any{"min_freshness": map[string]any{"size": 1}})
-	require.Equal(t, dealOutcomeArtifactFailed, ask.outcome)
-	failed := sc.peer
-	withSession(t, func(s *dealSession) {
-		outcome, err := s.outcomeOf(t.Context(), ask.recordID)
-		require.NoError(t, err)
-		failed.ResponseRecord = outcome.digest
-	})
-	_, err := reconcileAs(t, sc.buyer, sc.id, failed)
-	require.ErrorIs(t, err, cli.ErrInput)
-}
-
-// The cross-check runs only for a half that asserts a value: a half with
-// empty openings stays trusted (and insufficient) even when its disclosed
-// outcome was not received. And a close whose outcome ref names an
-// unchecked act, not an outcome record, is checked on its outcome only.
-func TestTheCrossCheckSkipsHalvesThatAssertNothingAndActs(t *testing.T) {
-	notReceived := map[string]interface{}{"x-deal-v0": map[string]interface{}{"record_type": "outcome"}, "body": map[string]interface{}{"status": "not_received"}}
-	closeOf := func(ref map[string]interface{}) map[string]interface{} {
-		return map[string]interface{}{"x-deal-v0": map[string]interface{}{"record_type": "close", "refs": []interface{}{map[string]interface{}{"rel": "outcome", "digest": jsonDigest(t, ref)}}}, "body": map[string]interface{}{"outcome": "mismatch"}}
+// checkResult runs --check as the selected party.
+func runReconcileCheck(t *testing.T, id, response, result string, extra ...string) (map[string]any, error) {
+	t.Helper()
+	args := append([]string{"--profile", "deal", "deal", "reconcile-result", "--deal", id, "--response", response, "--check", result}, extra...)
+	text, err := invoke(t, "", args...)
+	var out map[string]any
+	if json.Unmarshal([]byte(text), &out) != nil {
+		out = map[string]any{"text": text}
 	}
-	bundle := map[string]interface{}{"disclosures": map[string]interface{}{"c": map[string]interface{}{"agent_input": closeOf(notReceived)}, "o": map[string]interface{}{"agent_input": notReceived}}}
-	empty := evidencebook.Half{Trusted: true, Opened: map[string]string{dealAmountField: "", dealCurrencyField: ""}}
-	assert.True(t, crossChecked(empty, bundle, "c"), "nothing asserted, nothing checked")
-	asserting := evidencebook.Half{Trusted: true, Opened: map[string]string{dealAmountField: "190000", dealCurrencyField: "USD"}}
-	assert.False(t, crossChecked(asserting, bundle, "c"), "an asserted value against a disclosed not-received outcome")
-
-	act := map[string]interface{}{"x-deal-v0": map[string]interface{}{"record_type": "action"}, "body": map[string]interface{}{"action": "pay"}}
-	actBundle := map[string]interface{}{"disclosures": map[string]interface{}{"c": map[string]interface{}{"agent_input": closeOf(act)}, "a": map[string]interface{}{"agent_input": act}}}
-	assert.True(t, crossChecked(asserting, actBundle, "c"), "an unchecked act has no status to check")
+	return out, err
 }
 
-// A verified copy whose selected close was signed under a key other than the
-// responder key pinned for the response (the seller rotated its key, keeping
-// the old one trusted, and answered under the new one) is untrusted: the
-// engine finds the pair unresolved.
-func TestACloseSignedUnderAnotherKeyIsUnresolved(t *testing.T) {
-	dealFixture(t)
-	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
-	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
-	buyer := thisDealParty(t)
-	dealFixture(t)
-	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
-	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
-	peer := dealPeerHalf{DealID: id, RecordID: finalCloseRecord(t, id), Openings: map[string]evidencebook.Opening{}}
-	r := shelfRecord(t, id, peer.RecordID)
-	withSession(t, func(s *dealSession) {
-		for _, f := range dealHalfFields {
-			o, err := s.index.(shelfDealIndex).openingOf(t.Context(), r, f)
+// --check from both sides: the producer re-checks with its inputs, and the
+// counterparty with the file it sent. "differs" and "cannot reproduce" are
+// kept apart.
+func TestReconcileResultCheck(t *testing.T) {
+	pair := closedPair(t, received, received)
+	_, _, resultPath, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+	require.NoError(t, err)
+	buyerFile := discloseTo(t, pair.id, "the seller")
+
+	out, err := runReconcileCheck(t, pair.id, pair.response, resultPath, "--openings", pair.sellerFile)
+	require.NoError(t, err, out)
+	assert.Equal(t, reconcileCheckEqual, out["check"])
+
+	sellerResponse := recordedCopy(t, pair.seller, pair.buyer, pair.id)
+	out, err = runReconcileCheck(t, pair.id, sellerResponse, resultPath, "--openings", buyerFile, "--sent", pair.sellerFile)
+	require.NoError(t, err, out)
+	assert.Equal(t, reconcileCheckEqual, out["check"], "the counterparty recomputes the same Result")
+
+	for name, args := range map[string][]string{
+		"without --sent":                  {"--openings", buyerFile},
+		"a --sent file no share recorded": {"--openings", buyerFile, "--sent", writeJSONFile(t, "other.json", map[string]any{"field_openings": map[string]any{}})},
+		"the producer's openings missing": {"--sent", pair.sellerFile},
+		"an adjudicator's copy as --sent": {"--openings", buyerFile, "--sent", adjudicatorFile(t, pair.id)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, err := runReconcileCheck(t, pair.id, sellerResponse, resultPath, args...)
+			require.ErrorIs(t, err, cli.ErrInput)
+			assert.Equal(t, reconcileCheckCannotReproduce, out["check"])
+		})
+	}
+
+	party(t, pair.buyer.config)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(mustRead(t, resultPath), &doc))
+	for name, change := range map[string]func(map[string]any){
+		"a tally":   func(c map[string]any) { c["reconcile"].(map[string]any)["tallies"].(map[string]any)["matched"] = 2 },
+		"a verdict": func(c map[string]any) { c["verdict"] = "not_met" },
+		"the peer": func(c map[string]any) {
+			c["reconcile"].(map[string]any)["peer"] = strings.Repeat("c", 64)
+		},
+		// A period is part of the input set: one that holds neither half
+		// recomputes to other tallies. (One that still holds both is the
+		// recompute of these inputs over that period, and is equal.)
+		"the period": func(c map[string]any) {
+			c["reconcile"].(map[string]any)["period"] = map[string]any{"start": "2020-01-01T00:00:00Z", "end": "2020-01-02T00:00:00Z"}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var changed map[string]any
+			raw, err := json.Marshal(doc)
 			require.NoError(t, err)
-			peer.Openings[f] = o
+			require.NoError(t, json.Unmarshal(raw, &changed))
+			for _, c := range changed["claims"].([]any) {
+				change(c.(map[string]any))
+			}
+			out, err := runReconcileCheck(t, pair.id, pair.response, writeJSONFile(t, "changed.json", changed), "--openings", pair.sellerFile)
+			require.ErrorIs(t, err, cli.ErrConflict)
+			assert.Equal(t, reconcileCheckDiffers, out["check"])
+		})
+	}
+}
+
+// A Result made from openings without the amount is the recompute of that
+// input set: the producer's check with it is equal, and the counterparty's
+// check with the share it recorded, which carries the amount, differs and
+// names that file.
+func TestReconcileResultCheckIsAgainstTheInputsGiven(t *testing.T) {
+	pair := closedPair(t, received, received)
+	missing := editOpenings(t, pair.sellerFile, func(m map[string]map[string]evidencebook.Opening) {
+		for d := range m {
+			delete(m[d], dealAmountField)
 		}
 	})
-	// The seller rotates its signing key, keeping the old one trusted.
-	p := dealProfile(t)
-	public, private, err := ed25519.GenerateKey(nil)
+	_, _, resultPath, err := runReconcileResult(t, pair.id, pair.response, "--openings", missing)
 	require.NoError(t, err)
-	seed := filepath.Join(t.TempDir(), "rotated.seed")
-	require.NoError(t, os.WriteFile(seed, []byte(hex.EncodeToString(private.Seed())), 0o600))
-	p.Signing = cli.Secret{File: seed}
-	p.TrustedKeys = append(p.TrustedKeys, hex.EncodeToString(public))
-	require.NoError(t, cli.SaveProfile(p, true))
-	seller := thisDealParty(t)
-	ask := askFor(t, buyer, seller, id, map[string]any{"min_freshness": map[string]any{"size": 1}})
-	require.Equal(t, "artifact", ask.outcome, "a valid copy, answered under the new key")
-	withSession(t, func(s *dealSession) {
-		outcome, err := s.outcomeOf(t.Context(), ask.recordID)
-		require.NoError(t, err)
-		peer.ResponseRecord = outcome.digest
-	})
-	tallies, err := reconcileAs(t, buyer, id, peer)
+	out, err := runReconcileCheck(t, pair.id, pair.response, resultPath, "--openings", missing)
+	require.NoError(t, err, out)
+	assert.Equal(t, reconcileCheckEqual, out["check"])
+
+	buyerFile := discloseTo(t, pair.id, "the seller")
+	sellerResponse := recordedCopy(t, pair.seller, pair.buyer, pair.id)
+	out, err = runReconcileCheck(t, pair.id, sellerResponse, resultPath, "--openings", buyerFile, "--sent", pair.sellerFile)
+	require.ErrorIs(t, err, cli.ErrConflict)
+	assert.Equal(t, reconcileCheckDiffers, out["check"])
+	assert.Contains(t, out["detail"], digestOfFile(t, pair.sellerFile))
+}
+
+func adjudicatorFile(t *testing.T, id string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "adjudicator.json")
+	out, err := invoke(t, "", "--profile", "deal", "disclose", "--deal", id, "--share", "adjudicator", "--to", "the platform", "--out", path)
+	require.NoError(t, err, out)
+	return path
+}
+
+// result build refuses a claim under exactly ec:deal-reconcile@1 before it
+// opens the book, and keeps its own rules for the same claim under another
+// contract_ref. result open names the claim as not recomputed.
+func TestResultCommandsAndTheDealReconcileContract(t *testing.T) {
+	pair := closedPair(t, received, received)
+	_, _, resultPath, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
 	require.NoError(t, err)
-	assert.Equal(t, evidencebook.Tallies{Unresolved: 1}, tallies)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(mustRead(t, resultPath), &doc))
+
+	text, err := invoke(t, "", "result", "open", resultPath)
+	require.NoError(t, err)
+	assert.Contains(t, text, "not recomputed: claim reconcile-amount")
+	out, err := invoke(t, "", "result", "open", resultPath, "--format", "json")
+	require.NoError(t, err)
+	var opened map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &opened))
+	assert.Equal(t, []any{"reconcile-amount", "reconcile-currency"}, opened["not_recomputed"])
+
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p, _ := bookProfile(t, "a") // no store: a refusal from the book would be "no book yet"
+	_, _, err = runResultBuild(t, p, doc)
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, cli.SafeError(err), "deal reconcile-result")
+
+	for _, c := range doc["claims"].([]any) {
+		c.(map[string]any)["contract_ref"] = "ec:deal-reconcile@2"
+	}
+	_, _, err = runResultBuild(t, p, doc)
+	require.Error(t, err)
+	assert.NotContains(t, cli.SafeError(err), "deal reconcile-result", "another version gets no exception and no refusal of this kind")
 }
