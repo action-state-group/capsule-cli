@@ -224,7 +224,7 @@ func sameOriginals(ctx context.Context, artifacts cli.ArtifactStore, existing ev
 		return err
 	}
 	if _, err = artifact.Verify(prepared, []ed25519.PublicKey{key.Public().(ed25519.PublicKey)}); err != nil {
-		return errors.Join(cli.ErrInput, err)
+		return errors.Join(cli.Hint(cli.ErrInput, "the request's artifacts do not verify against its capsule (a name given twice, or a binding the capsule does not commit); fix them in the request"), err)
 	}
 	capsuleID, _ := capsuleIDOf(existing)
 	held, err := artifacts.Get(ctx, capsuleID)
