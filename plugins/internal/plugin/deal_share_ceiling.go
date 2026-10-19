@@ -13,11 +13,24 @@ import (
 // learns what to ask for, and a buyer who learns the seller's floor
 // (intent.min_total_minor) learns what to offer. The floor is never sealed at
 // all (only its commitment). The adjudicator's copy may carry the maximum (it
-// is how "over your limit" is judged). A counterparty copy withholds any
-// record that carries either bound, leaves them out of the merchant section,
-// and the gate refuses a counterparty page or bundle that names either, as
-// the field or as money, unless it equals an amount the copy may show anyway
-// (the price asked, an amount paid). The party role changes only the words.
+// is how "over your limit" is judged). The party role changes only the words.
+//
+// Two rules keep them, by what can label a number as a bound (Ethan's
+// decision on capsule-cli#278):
+//   - Structured amount fields are governed by field rules only. The bound
+//     fields and their openings are never in a counterparty copy (a record
+//     that carries either is withheld), and the floor is in no shared copy.
+//     Every other amount field (the close's amount and its opening, price
+//     and deposit terms, snapshot and act amounts) is shared as its field's
+//     rules say, even when its value equals a bound: a bare number never
+//     says that it is one.
+//   - Free text keeps value matching, since it can label a number ("my max
+//     is 250"): notes, rendered page and report text, and merchant section
+//     prose. The gate refuses a copy whose text states either bound as
+//     money, unless it equals an amount the copy may show anyway (the price
+//     asked, an amount paid). The merchant section's "your limit" basis is
+//     withheld by field: it never states an approved amount that is only
+//     the limit.
 
 // dealPrivateBoundKeys are the bound fields no counterparty copy carries.
 var dealPrivateBoundKeys = map[string]bool{"max_total_minor": true, "min_total_minor": true}

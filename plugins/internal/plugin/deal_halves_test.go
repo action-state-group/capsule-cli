@@ -883,24 +883,42 @@ func TestTheDiscloseRefusesWhenAnOpeningIsMissing(t *testing.T) {
 	assert.True(t, os.IsNotExist(statErr), "nothing written")
 }
 
-// A received close whose delivered price is the buyer's own spending limit,
-// shown nowhere else in the deal, is kept back: the disclose carries no
-// openings and says why, so the counterparty's reconcile is not evaluable.
-func TestTheCeilingGateKeepsBackALimitAsTheAmount(t *testing.T) {
+// The bounds are kept by field, and by value only in free text (Ethan's
+// decision on capsule-cli#278). A close whose amount equals a bound is a
+// structured field and is carried, to the counterparty and to an
+// adjudicator: the buyer's at its limit, the seller's at its floor. Neither
+// copy carries a bound field or its openings, no copy carries the floor, and
+// free text that states either bound as money is still refused.
+func TestTheBoundsAreKeptByFieldAndInFreeText(t *testing.T) {
 	dealFixture(t)
 	open := strings.Replace(crossPartyBuyerOpen, `"max_total_minor":190000`, `"max_total_minor":200000`, 1)
 	id := dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
+	require.ErrorIs(t, agentSays(t, id, "My max is $2,000.00."), cli.ErrInput, "an agent's message is free text")
 	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received","delivered":{"price_minor":200000}}`))
 	path, note := discloseWithNote(t, id, "the seller")
-	assert.NotContains(t, string(mustRead(t, path)), "field_openings")
-	assert.Contains(t, note, "none: the amount, written as money, is one this share keeps from its reader")
-
-	// The same close at the agreed price, which the deal shows, is carried.
-	dealFixture(t)
-	id = dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
-	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
-	_, note = discloseWithNote(t, id, "the seller")
 	assert.True(t, strings.HasPrefix(note, "carried:"), note)
+	raw := string(mustRead(t, path))
+	assert.Contains(t, raw, "field_openings")
+	assert.NotContains(t, raw, "max_total_minor")
+	events := chainSteps(t, id)
+	for _, prose := range []string{"my max is $2,000.00", "budget tops out at USD 2000"} {
+		assert.ErrorContains(t, dealCeilingGate([]byte(raw+" "+prose), events, cli.DealAudienceCounterparty), "your spending limit", prose)
+	}
+	assert.NoError(t, dealCeilingGate([]byte(raw+" my max is $2,000.00"), events, cli.DealAudienceAdjudicator), "the adjudicator may read the limit")
+
+	dealFixture(t)
+	id = dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received","delivered":{"price_minor":170000}}`))
+	events = chainSteps(t, id)
+	for _, audience := range []string{cli.DealAudienceCounterparty, cli.DealAudienceAdjudicator} {
+		path, note := discloseAs(t, id, audience, "someone")
+		assert.True(t, strings.HasPrefix(note, "carried:"), "%s: %s", audience, note)
+		raw := string(mustRead(t, path))
+		for _, k := range dealFloorKeys {
+			assert.NotContains(t, raw, k, "%s: the floor is in no shared copy", audience)
+		}
+		assert.ErrorContains(t, dealCeilingGate([]byte(raw+" lowest I'll take is $1,700.00"), events, audience), "the lowest price you will take", audience)
+	}
 }
 
 // Check 3: a candidate past the copy's checkpoint is not covered by it.
