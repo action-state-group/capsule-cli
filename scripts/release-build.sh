@@ -14,12 +14,24 @@ OUT="${3:?output directory}"
 PKG=github.com/action-state-group/capsule-cli/internal/cli
 TARGETS=(linux/amd64 linux/arm64 darwin/arm64)
 
+# The first-party plugins (capsule-cli#236) are two more binaries per
+# target, built from the plugins module: capsulectl-book and capsulectl-deal.
+# Their assets are named capsulectl-VERSION-plugin-NAME-OS-ARCH, so the
+# release statement covers them like the core binary; an operator installs
+# each as capsulectl-NAME on a plugin root (docs/PLUGINS.md).
+PLUGINS=(book deal)
+
 mkdir -p "$OUT"
+OUT=$(cd "$OUT" && pwd)
+ldflags="-s -w -buildid= -X $PKG.CLIVersion=$VERSION -X $PKG.CLICommit=$COMMIT"
 for target in "${TARGETS[@]}"; do
   os=${target%/*} arch=${target#*/}
   GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -buildvcs=false \
-    -ldflags "-s -w -buildid= -X $PKG.cliVersion=$VERSION -X $PKG.cliCommit=$COMMIT" \
-    -o "$OUT/capsulectl-$VERSION-$os-$arch" ./cmd/capsulectl
+    -ldflags "$ldflags" -o "$OUT/capsulectl-$VERSION-$os-$arch" ./cmd/capsulectl
+  for plugin in "${PLUGINS[@]}"; do
+    (cd plugins && GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+      -ldflags "$ldflags" -o "$OUT/capsulectl-$VERSION-plugin-$plugin-$os-$arch" "./cmd/capsulectl-$plugin")
+  done
 done
 
 cd "$OUT"

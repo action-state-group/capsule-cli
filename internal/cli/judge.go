@@ -45,26 +45,26 @@ func calibrationCommands() *cobra.Command {
 // 700000 and 700000.0 are indistinguishable as a Go float64 but not as JSON
 // text. Same convention as decodeBundleJSON/getCapsule elsewhere in this
 // package.
-func decodeJSONPreserveNumbers(label string, raw []byte, v any) error {
-	if len(raw) > maxInput {
-		return inputError("the input exceeds the 12 MiB size limit")
+func DecodeJSONPreserveNumbers(label string, raw []byte, v any) error {
+	if len(raw) > MaxInput {
+		return InputError("the input exceeds the 12 MiB size limit")
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.UseNumber()
 	d.DisallowUnknownFields()
 	if e := d.Decode(v); e != nil {
-		return inputError(jsonDecodeReason(label, e))
+		return InputError(jsonDecodeReason(label, e))
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return inputError(label + " must hold exactly one JSON value; more follows it")
+		return InputError(label + " must hold exactly one JSON value; more follows it")
 	}
 	return nil
 }
 
 func twoArgs(c *cobra.Command, args []string) error {
 	if len(args) != 2 {
-		return inputError(fmt.Sprintf("%s takes exactly two positional arguments (got %d): %s", c.CommandPath(), len(args), c.Use))
+		return InputError(fmt.Sprintf("%s takes exactly two positional arguments (got %d): %s", c.CommandPath(), len(args), c.Use))
 	}
 	return nil
 }
@@ -98,13 +98,13 @@ func validateSamplingParams(params map[string]any) error {
 			continue
 		case json.Number:
 			if canonical.IsFloat(v) {
-				return inputError("sampling_params[" + key + "] is not digest-safe: floats are forbidden (pre-scale to an integer, e.g. temperature_micros)")
+				return InputError("sampling_params[" + key + "] is not digest-safe: floats are forbidden (pre-scale to an integer, e.g. temperature_micros)")
 			}
 			if canonical.IsUnsafeInt(v) {
-				return inputError("sampling_params[" + key + "] is not digest-safe: integer exceeds the safe range")
+				return InputError("sampling_params[" + key + "] is not digest-safe: integer exceeds the safe range")
 			}
 		default:
-			return inputError("sampling_params[" + key + "] is not digest-safe: only string, bool, or integer values are allowed")
+			return InputError("sampling_params[" + key + "] is not digest-safe: only string, bool, or integer values are allowed")
 		}
 	}
 	return nil
@@ -116,13 +116,13 @@ func validateSamplingParams(params map[string]any) error {
 // for capsule_id and BundleDigest -- this is not a second digest scheme.
 func judgePinDigest(input judgePinInput) (string, error) {
 	if input.ModelID == "" {
-		return "", inputError("model_id is required in the judge pin input: the judging model's id")
+		return "", InputError("model_id is required in the judge pin input: the judging model's id")
 	}
 	if input.PromptDigest == "" {
-		return "", inputError("prompt_digest is required in the judge pin input: the SHA-256 digest of the judge prompt")
+		return "", InputError("prompt_digest is required in the judge pin input: the SHA-256 digest of the judge prompt")
 	}
 	if input.AxesDigest == "" {
-		return "", inputError("axes_digest is required in the judge pin input: the SHA-256 digest of the scoring axes")
+		return "", InputError("axes_digest is required in the judge pin input: the SHA-256 digest of the scoring axes")
 	}
 	if err := validateSamplingParams(input.SamplingParams); err != nil {
 		return "", err
@@ -140,7 +140,7 @@ func judgePinDigest(input judgePinInput) (string, error) {
 	}
 	digest, e := canonical.JSONDigest(canonicalDict)
 	if e != nil {
-		return "", errors.Join(inputError("the judge pin cannot be canonicalized (JCS): it holds a float or an integer outside the safe range"), e)
+		return "", errors.Join(InputError("the judge pin cannot be canonicalized (JCS): it holds a float or an integer outside the safe range"), e)
 	}
 	return digest, nil
 }
@@ -153,21 +153,21 @@ func judgePinCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "pin FILE",
 		Short: "Compute a judge_pin_digest: JSON-DIGEST over model id, model version, sampling params, prompt digest, axes digest",
-		Args:  oneArg,
+		Args:  OneArg,
 		RunE: func(c *cobra.Command, args []string) error {
-			raw, e := readInput(args[0])
+			raw, e := ReadInput(args[0])
 			if e != nil {
 				return e
 			}
 			var input judgePinInput
-			if e := decodeJSONPreserveNumbers(args[0], raw, &input); e != nil {
+			if e := DecodeJSONPreserveNumbers(args[0], raw, &input); e != nil {
 				return e
 			}
 			digest, e := judgePinDigest(input)
 			if e != nil {
 				return e
 			}
-			return output(c, judgePinResult{JudgePinDigest: digest})
+			return Output(c, judgePinResult{JudgePinDigest: digest})
 		},
 	}
 }
@@ -192,19 +192,19 @@ func judgeDriftPinCommand() *cobra.Command {
 		Short: "Compare two judge-pin inputs: same reproducible judge, or a silent config change",
 		Args:  twoArgs,
 		RunE: func(c *cobra.Command, args []string) error {
-			rawA, e := readInput(args[0])
+			rawA, e := ReadInput(args[0])
 			if e != nil {
 				return e
 			}
-			rawB, e := readInput(args[1])
+			rawB, e := ReadInput(args[1])
 			if e != nil {
 				return e
 			}
 			var a, b judgePinInput
-			if e := decodeJSONPreserveNumbers(args[0], rawA, &a); e != nil {
+			if e := DecodeJSONPreserveNumbers(args[0], rawA, &a); e != nil {
 				return e
 			}
-			if e := decodeJSONPreserveNumbers(args[1], rawB, &b); e != nil {
+			if e := DecodeJSONPreserveNumbers(args[1], rawB, &b); e != nil {
 				return e
 			}
 			digestA, e := judgePinDigest(a)
@@ -215,7 +215,7 @@ func judgeDriftPinCommand() *cobra.Command {
 			if e != nil {
 				return e
 			}
-			return output(c, judgeDriftPinResult{
+			return Output(c, judgeDriftPinResult{
 				AJudgePinDigest: digestA, BJudgePinDigest: digestB, PinMatches: digestA == digestB,
 			})
 		},
@@ -235,27 +235,27 @@ type evaluationReportRecord struct {
 }
 
 func readReportSet(path string) ([]evaluationReportRecord, error) {
-	raw, e := readInput(path)
+	raw, e := ReadInput(path)
 	if e != nil {
 		return nil, e
 	}
 	var records []evaluationReportRecord
-	if e := decodeJSONPreserveNumbers(path, raw, &records); e != nil {
+	if e := DecodeJSONPreserveNumbers(path, raw, &records); e != nil {
 		return nil, e
 	}
 	seen := make(map[string]bool, len(records))
 	for _, r := range records {
 		if r.CaseID == "" {
-			return nil, inputError("every report record requires a non-empty case_id")
+			return nil, InputError("every report record requires a non-empty case_id")
 		}
 		if r.JudgePinDigest == "" {
-			return nil, inputError("report record " + r.CaseID + " requires a non-empty judge_pin_digest")
+			return nil, InputError("report record " + r.CaseID + " requires a non-empty judge_pin_digest")
 		}
 		if r.Verdict == "" {
-			return nil, inputError("report record " + r.CaseID + " requires a non-empty verdict")
+			return nil, InputError("report record " + r.CaseID + " requires a non-empty verdict")
 		}
 		if seen[r.CaseID] {
-			return nil, inputError("duplicate case_id in report set: " + r.CaseID)
+			return nil, InputError("duplicate case_id in report set: " + r.CaseID)
 		}
 		seen[r.CaseID] = true
 	}
@@ -351,7 +351,7 @@ func judgeDriftReportsCommand() *cobra.Command {
 				rate := rateMicros(drifted, len(cases))
 				result.DriftRateMicros = &rate
 			}
-			return output(c, result)
+			return Output(c, result)
 		},
 	}
 }
@@ -382,28 +382,28 @@ type humanRatingRecord struct {
 }
 
 func readHumanRatings(path string) ([]humanRatingRecord, error) {
-	raw, e := readInput(path)
+	raw, e := ReadInput(path)
 	if e != nil {
 		return nil, e
 	}
 	var records []humanRatingRecord
-	if e := decodeJSONPreserveNumbers(path, raw, &records); e != nil {
+	if e := DecodeJSONPreserveNumbers(path, raw, &records); e != nil {
 		return nil, e
 	}
 	seen := make(map[string]bool, len(records))
 	for _, r := range records {
 		if r.CaseID == "" {
-			return nil, inputError("every human-rating record requires a non-empty case_id")
+			return nil, InputError("every human-rating record requires a non-empty case_id")
 		}
 		if r.AgreesWithJudge == nil && r.Rating == "" {
-			return nil, inputError("human-rating record " + r.CaseID + " needs either agrees_with_judge or rating")
+			return nil, InputError("human-rating record " + r.CaseID + " needs either agrees_with_judge or rating")
 		}
 		// One canonical rating per case_id: a second, silently-overwriting
 		// rating for the same case is exactly the kind of dropped-without-a-
 		// trace input this codebase never accepts (same discipline as
 		// readReportSet's duplicate-case_id rejection).
 		if seen[r.CaseID] {
-			return nil, inputError("duplicate case_id in human-rating set: " + r.CaseID)
+			return nil, InputError("duplicate case_id in human-rating set: " + r.CaseID)
 		}
 		seen[r.CaseID] = true
 	}
@@ -495,7 +495,7 @@ func calibrationSummarizeCommand() *cobra.Command {
 			if e != nil {
 				return e
 			}
-			return output(c, calibrationSummarizeResult{Pins: summarizeCalibration(reports, ratings)})
+			return Output(c, calibrationSummarizeResult{Pins: summarizeCalibration(reports, ratings)})
 		},
 	}
 }

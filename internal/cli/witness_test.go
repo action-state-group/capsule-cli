@@ -83,11 +83,11 @@ func TestWitnessHTTPSReceiptAndTampering(t *testing.T) {
 	saved, e := store.GetWitness(t.Context(), "service-test", 1)
 	require.NoError(t, e)
 	require.NotNil(t, saved.Receipt)
-	require.NoError(t, verifyWitness(p, saved))
+	require.NoError(t, VerifyWitness(p, saved))
 	assert.Equal(t, "verified", witnessResult(saved)["state"])
 	count, e = delivery.RunOnce(t.Context(), time.Now().UTC(), 1)
 	require.NoError(t, e)
 	assert.Zero(t, count)
 	saved.Receipt.Bytes[0] ^= 1
-	require.Error(t, verifyWitness(p, saved))
+	require.Error(t, VerifyWitness(p, saved))
 }

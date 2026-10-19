@@ -48,7 +48,7 @@ func declaredEvidenceClass(req map[string]any) []string {
 // ever needs the effects[] array, and tolerating the rest lets a hand-built
 // fixture omit them.
 func loadDiscoverEffects(path string) ([]effectBoundary, error) {
-	raw, err := readInput(path)
+	raw, err := ReadInput(path)
 	if err != nil {
 		return nil, err
 	}
@@ -56,10 +56,10 @@ func loadDiscoverEffects(path string) ([]effectBoundary, error) {
 		Effects []effectBoundary `json:"effects"`
 	}
 	if err := json.Unmarshal(raw, &inventory); err != nil {
-		return nil, inputError("--discover must be discover --effects --format json output (invalid JSON)")
+		return nil, InputError("--discover must be discover --effects --format json output (invalid JSON)")
 	}
 	if inventory.Effects == nil {
-		return nil, inputError("--discover must be discover --effects --format json output (no effects[] array found)")
+		return nil, InputError("--discover must be discover --effects --format json output (no effects[] array found)")
 	}
 	return inventory.Effects, nil
 }
@@ -94,17 +94,17 @@ type mapRequirementResult struct {
 func mapRequirements(doc any, effects []effectBoundary) ([]mapRequirementResult, error) {
 	root, ok := doc.(map[string]any)
 	if !ok {
-		return nil, inputError("validated document is not a JSON object")
+		return nil, InputError("validated document is not a JSON object")
 	}
 	reqsRaw, ok := root["requirements"].([]any)
 	if !ok {
-		return nil, inputError("validated document has no top-level requirements[] array; map expects an Evidence Contract shape (id, version, requirements[])")
+		return nil, InputError("validated document has no top-level requirements[] array; map expects an Evidence Contract shape (id, version, requirements[])")
 	}
 	results := make([]mapRequirementResult, 0, len(reqsRaw))
 	for _, raw := range reqsRaw {
 		req, ok := raw.(map[string]any)
 		if !ok {
-			return nil, inputError("a requirements[] entry is not a JSON object")
+			return nil, InputError("a requirements[] entry is not a JSON object")
 		}
 		id, _ := req["id"].(string)
 		names := declaredEvidenceClass(req)
@@ -154,35 +154,35 @@ func mapCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "map CONTRACT",
 		Short: "Read-only join: for each requirement, discovered systems whose declared evidence class matches (never infers equivalence; \"no source found\" otherwise)",
-		Args:  oneArg,
+		Args:  OneArg,
 		RunE: func(c *cobra.Command, args []string) error {
 			schemaLoc, _ := c.Flags().GetString("schema")
 			if schemaLoc == "" {
-				return inputError("--schema is required (a path or URL to a JSON Schema, like contract validate)")
+				return InputError("--schema is required (a path or URL to a JSON Schema, like contract validate)")
 			}
 			discoverPath, _ := c.Flags().GetString("discover")
 			if discoverPath == "" {
-				return inputError("--discover is required (a discover --effects --format json output file)")
+				return InputError("--discover is required (a discover --effects --format json output file)")
 			}
 			format, _ := c.Flags().GetString("format")
 			if format != "text" && format != "json" {
-				return inputError("--format must be text or json")
+				return InputError("--format must be text or json")
 			}
 
-			raw, e := readInput(args[0])
+			raw, e := ReadInput(args[0])
 			if e != nil {
 				return e
 			}
 			doc, e := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 			if e != nil {
-				return inputError("malformed JSON in " + args[0])
+				return InputError("malformed JSON in " + args[0])
 			}
 			schema, schemaRaw, e := loadSchema(schemaLoc)
 			if e != nil {
 				return errors.Join(ErrInput, &schemaLoadError{loc: schemaLoc, err: e})
 			}
-			report := validateContract(schema, schemaRaw, doc)
-			if !report.valid {
+			report := ValidateContract(schema, schemaRaw, doc)
+			if !report.Valid {
 				printReport(c, args[0], report)
 				return ErrSchemaInvalid
 			}
@@ -197,7 +197,7 @@ func mapCommand() *cobra.Command {
 			}
 
 			if format == "json" {
-				return output(c, map[string]any{"requirements": mapResultRows(results)})
+				return Output(c, map[string]any{"requirements": mapResultRows(results)})
 			}
 			_, e = fmt.Fprint(c.OutOrStdout(), renderMapText(results))
 			return e

@@ -42,12 +42,29 @@ jobs:
             exit 1
           fi
       - name: Check formatting and module files
+        # Two modules: the core (the repository root) and the first-party
+        # plugins (plugins/, capsule-cli#236).
         run: |
           test -z "$(gofmt -l .)"
           go mod tidy
-          git diff --exit-code -- go.mod go.sum
+          (cd plugins && go mod tidy)
+          git diff --exit-code -- go.mod go.sum plugins/go.mod plugins/go.sum
+      - name: The core builds without evidencebook
+        # The donatable core (capsule-cli#236): no package of it, its tests
+        # included, imports evidencebook, and its go.mod does not require it.
+        run: |
+          if go list -deps -test ./... | grep evidencebook; then
+            echo "::error::the core module imports evidencebook; it belongs in the plugins module"
+            exit 1
+          fi
+          if grep -n evidencebook go.mod; then
+            echo "::error::the core go.mod requires evidencebook"
+            exit 1
+          fi
       - name: Vet
-        run: go vet ./...
+        run: |
+          go vet ./...
+          (cd plugins && go vet ./...)
       - name: Check the rendered skill files match spec.yaml
         run: go run ./cmd/skillgen --check
       - name: Build CLI
@@ -156,7 +173,9 @@ jobs:
           CAPSULECTL_PRESENTATION_RENDERS: ${{ runner.temp }}/presentation-renders
           FONTCONFIG_FILE: ${{ github.workspace }}/internal/cli/testdata/presentation/fonts.conf
         # The presentation pass has a job of its own (presentation-pass).
-        run: go test -count=1 -v -run 'TestPresentation|TestOverflowBaselineCheck' -skip '^TestPresentationPass' ./internal/cli
+        # The goldens are deal and book bundles' pages: the plugins module's tests.
+        working-directory: plugins
+        run: go test -count=1 -v -run 'TestPresentation|TestOverflowBaselineCheck' -skip '^TestPresentationPass' ./internal/plugin
       - name: Keep the presentation renders
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -167,7 +186,7 @@ jobs:
 
   presentation-pass:
     # The presentation goldens' bundles through `presentation list` and
-    # `presentation build` (internal/cli/presentation_pass_test.go): each page
+    # `presentation build` (plugins/internal/plugin/presentation_pass_test.go): each page
     # is the one offline packaging per (bundle, audience), the packagings not
     # built are refusals, wording, locale and depth flips leave every evidence
     # identifier and verification state, and a failing bundle gets the
@@ -203,7 +222,8 @@ jobs:
           # Chrome (presentation_pass_test.go passChrome).
           CAPSULECTL_PRESENTATION_PINNED: "1"
           FONTCONFIG_FILE: ${{ github.workspace }}/internal/cli/testdata/presentation/fonts.conf
-        run: go test -count=1 -p 1 -v -timeout 10m -run '^TestPresentationPass' ./internal/cli
+        working-directory: plugins
+        run: go test -count=1 -p 1 -v -timeout 10m -run '^TestPresentationPass' ./internal/plugin
 
   interop-at-resolved-versions:
     # evidencebook's own CI runs this Go <-> Python round trip against ITS pins;
@@ -225,6 +245,8 @@ jobs:
           cache: true
       - name: The evidencebook version this module resolves
         id: resolved
+        # evidencebook is the plugins module's (capsule-cli#236), not the core's.
+        working-directory: plugins
         run: |
           version=$(go list -m -f '{{.Version}}' github.com/action-state-group/evidencebook)
           # Module pseudo-versions are not Git refs. Origin identifies the same
@@ -257,11 +279,12 @@ jobs:
           python -m pip install --require-hashes -r scripts/interop-requirements.txt
           python -m pip check
       - name: The round trip, both ways, with the tampered copies refused
-        run: bash scripts/interop-resolved.sh .interop/evidencebook
+        working-directory: plugins
+        run: bash ../scripts/interop-resolved.sh ../.interop/evidencebook
 
   iife:
     # The vendored evidence-graph IIFE (internal/cli/assets) must equal a
-    # fresh build from the agent-action-capsule commit report.go pins.
+    # fresh build from the agent-action-capsule commit evidence_graph_assets.go pins.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -270,7 +293,7 @@ jobs:
       - name: Read the pinned agent-action-capsule commit
         id: pin
         run: |
-          rev=$(sed -n 's/.*evidenceGraphIIFESource = "agent-action-capsule [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' internal/cli/report.go)
+          rev=$(sed -n 's/.*evidenceGraphIIFESource = "agent-action-capsule [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' internal/cli/evidence_graph_assets.go)
           test -n "$rev"
           echo "rev=$rev" >> "$GITHUB_OUTPUT"
       - name: Check out agent-action-capsule's main (ancestor check only, no build)
@@ -291,7 +314,7 @@ jobs:
           REV: ${{ steps.pin.outputs.rev }}
         run: |
           if ! git merge-base --is-ancestor "$REV" HEAD; then
-            echo "::error file=internal/cli/report.go::evidenceGraphIIFESource pins $REV, which is not on agent-action-capsule's main. Pin a merged commit."
+            echo "::error file=internal/cli/evidence_graph_assets.go::evidenceGraphIIFESource pins $REV, which is not on agent-action-capsule's main. Pin a merged commit."
             exit 1
           fi
       - name: Check out agent-action-capsule at the pinned commit

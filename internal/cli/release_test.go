@@ -34,7 +34,7 @@ func TestReleaseReceiptFromTheLiveWitnessVerifiesOffline(t *testing.T) {
 	require.NoError(t, json.Unmarshal(mustRead(t, "testdata/release/live.release.registration.json"), &reg))
 	receipt, err := base64.StdEncoding.DecodeString(reg.ReceiptB64)
 	require.NoError(t, err)
-	authority, err := hex.DecodeString(dealDefaultWitnessKey)
+	authority, err := hex.DecodeString(DealDefaultWitnessKey)
 	require.NoError(t, err)
 	require.NoError(t, verifyStatementReceipt(statement, receipt, reg, authority))
 
@@ -390,7 +390,7 @@ func TestReleaseWatchAlarms(t *testing.T) {
 		},
 		"a statement anyone registered under our subject, claiming a release": {
 			setup: func(t *testing.T, w *releaseWorld) {
-				payload, err := jcsOf(releaseStatement{Type: releaseStatementType, Repo: releaseRepo, Tag: "v9.9.9", Commit: strings.Repeat("cd", 20), Artifacts: map[string]string{}})
+				payload, err := JCSOf(releaseStatement{Type: releaseStatementType, Repo: releaseRepo, Tag: "v9.9.9", Commit: strings.Repeat("cd", 20), Artifacts: map[string]string{}})
 				require.NoError(t, err)
 				w.register(t, payload, releaseIssuer)
 			},

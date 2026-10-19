@@ -37,6 +37,13 @@ func buildOutputs(body string) []string {
 // watch` all name.
 var releaseArtifact = regexp.MustCompile(`^capsulectl-\$VERSION-\$os-\$arch$`)
 
+// firstPartyLaunchers are the build outputs that are meant to be launchers:
+// the first-party plugins capsulectl-book and capsulectl-deal
+// (capsule-cli#236), built by `make build`, and their versioned release
+// downloads, capsulectl-<version>-plugin-<name>-<os>-<arch>, which an
+// operator installs as capsulectl-<name> on a plugin root.
+var firstPartyLaunchers = regexp.MustCompile(`^capsulectl-(book|deal|\$VERSION-plugin-\$plugin-\$os-\$arch)$`)
+
 // TestNoBuildOutputIsNamedLikeAPluginLauncher keeps every binary this repository
 // builds from taking the capsulectl-<name> form that plugin discovery reserves
 // for launchers: a build output with that name, copied onto a plugin root, would
@@ -55,7 +62,7 @@ func TestNoBuildOutputIsNamedLikeAPluginLauncher(t *testing.T) {
 		require.NoError(t, err)
 		for _, base := range buildOutputs(string(body)) {
 			checked++
-			if releaseArtifact.MatchString(base) {
+			if releaseArtifact.MatchString(base) || firstPartyLaunchers.MatchString(base) {
 				exempted++
 				continue
 			}

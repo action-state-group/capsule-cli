@@ -59,11 +59,11 @@ func withheldBundleFixture(t *testing.T) (map[string]interface{}, Profile, ed255
 // entry's countersign/v1 signing input.
 func signCountersignEntry(t *testing.T, key ed25519.PrivateKey, entry *CountersignatureEntry) {
 	t.Helper()
-	statement, err := jsonValue(entry.Statement)
+	statement, err := JSONValue(entry.Statement)
 	require.NoError(t, err)
-	signer, err := jsonValue(entry.Signer)
+	signer, err := JSONValue(entry.Signer)
 	require.NoError(t, err)
-	message, err := countersignSigningInput(entry.Over, signer, statement, entry.Type)
+	message, err := CountersignSigningInput(entry.Over, signer, statement, entry.Type)
 	require.NoError(t, err)
 	entry.Signature = hex.EncodeToString(ed25519.Sign(key, message))
 }
@@ -75,7 +75,7 @@ func countersignerEntry(t *testing.T, digest string, checks []CountersignCheck) 
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	entry := CountersignatureEntry{
-		Type:      countersignAPI,
+		Type:      CountersignAPI,
 		Signer:    CountersignSigner{ID: "countersign.example", KeyID: hex.EncodeToString(public)},
 		Over:      digest,
 		Statement: CountersignStatement{Checks: checks, RecomputedAt: "2026-09-16T00:00:00Z", Scope: CountersignScope{LedgerID: "test-log", ClosureDepth: json.Number("2")}},
@@ -143,7 +143,7 @@ func TestCountersignRequestAgainstMockService(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, hex.EncodeToString(requesterPublic), observedRequesterKeyID)
 
-	require.NoError(t, attachCountersignatures(bundle, entries))
+	require.NoError(t, AttachCountersignatures(bundle, entries))
 	countersignatures, ok := bundle["countersignatures"].([]interface{})
 	require.True(t, ok)
 	require.Len(t, countersignatures, 1)
@@ -157,9 +157,9 @@ func TestCountersignRequestAgainstMockService(t *testing.T) {
 	}))
 	defer dirServer.Close()
 	dirClient := &http.Client{Transport: dirServer.Client().Transport, Timeout: 5 * time.Second}
-	trusted, err := parseKeys(profile.TrustedKeys)
+	trusted, err := ParseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
-	gotDigest2, reports, summary, err := verifyCountersignatures(t.Context(), dirClient, dirServer.URL, bundle, trusted)
+	gotDigest2, reports, summary, err := VerifyCountersignatures(t.Context(), dirClient, dirServer.URL, bundle, trusted)
 	require.NoError(t, err)
 	assert.Equal(t, digest, gotDigest2)
 	require.Len(t, reports, 1)
@@ -183,18 +183,18 @@ func TestCountersignVerifyTamperedEntryFails(t *testing.T) {
 	require.NoError(t, err)
 	sigBytes[0] ^= 1
 	entry.Signature = hex.EncodeToString(sigBytes)
-	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
+	require.NoError(t, AttachCountersignatures(bundle, []CountersignatureEntry{entry}))
 
-	trusted, err := parseKeys(profile.TrustedKeys)
+	trusted, err := ParseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
 	client := &http.Client{Timeout: 5 * time.Second}
-	_, reports, summary, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+	_, reports, summary, err := VerifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assert.Equal(t, "invalid", reports[0].State, "a tampered countersignature must fail verification, not pass silently")
 	assert.Contains(t, reports[0].Detail, "does not verify")
 	assert.Equal(t, "invalid", summary)
-	require.Error(t, hasInvalidCountersignature(reports))
+	require.Error(t, HasInvalidCountersignature(reports))
 }
 
 // TestCountersignVerifyTamperedOverFails covers the other tamper vector: an
@@ -205,17 +205,17 @@ func TestCountersignVerifyTamperedOverFails(t *testing.T) {
 	require.NoError(t, err)
 	entry, _ := countersignerEntry(t, digest, nil)
 	entry.Over = "0000000000000000000000000000000000000000000000000000000000000000"
-	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
+	require.NoError(t, AttachCountersignatures(bundle, []CountersignatureEntry{entry}))
 
-	trusted, err := parseKeys(profile.TrustedKeys)
+	trusted, err := ParseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
 	client := &http.Client{Timeout: 5 * time.Second}
-	_, reports, _, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+	_, reports, _, err := VerifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assert.Equal(t, "invalid", reports[0].State)
 	assert.Contains(t, reports[0].Detail, "different bundle digest")
-	require.Error(t, hasInvalidCountersignature(reports))
+	require.Error(t, HasInvalidCountersignature(reports))
 }
 
 // TestCountersignVerifyUnresolvedSigner is the directory-miss case: a
@@ -227,7 +227,7 @@ func TestCountersignVerifyUnresolvedSigner(t *testing.T) {
 	digest, err := aacbundle.BundleDigest(bundle)
 	require.NoError(t, err)
 	entry, _ := countersignerEntry(t, digest, []CountersignCheck{{Name: "key_hygiene", Result: "pass"}})
-	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
+	require.NoError(t, AttachCountersignatures(bundle, []CountersignatureEntry{entry}))
 
 	emptyDirectory := countersignerDirectory{}
 	dirServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -237,9 +237,9 @@ func TestCountersignVerifyUnresolvedSigner(t *testing.T) {
 	defer dirServer.Close()
 	client := &http.Client{Transport: dirServer.Client().Transport, Timeout: 5 * time.Second}
 
-	trusted, err := parseKeys(profile.TrustedKeys)
+	trusted, err := ParseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
-	_, reports, summary, err := verifyCountersignatures(t.Context(), client, dirServer.URL, bundle, trusted)
+	_, reports, summary, err := VerifyCountersignatures(t.Context(), client, dirServer.URL, bundle, trusted)
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assert.Equal(t, "unresolved_signer", reports[0].State)
@@ -257,18 +257,18 @@ func TestCountersignVerifySelfSignatureNotIndependent(t *testing.T) {
 	public, ok := key.Public().(ed25519.PublicKey)
 	require.True(t, ok)
 	entry := CountersignatureEntry{
-		Type:      countersignAPI,
+		Type:      CountersignAPI,
 		Signer:    CountersignSigner{ID: profile.LogID, KeyID: hex.EncodeToString(public)},
 		Over:      digest,
 		Statement: CountersignStatement{RecomputedAt: "2026-09-16T00:00:00Z", Scope: CountersignScope{LedgerID: profile.LogID}},
 	}
 	signCountersignEntry(t, key, &entry)
-	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
+	require.NoError(t, AttachCountersignatures(bundle, []CountersignatureEntry{entry}))
 
-	trusted, err := parseKeys(profile.TrustedKeys)
+	trusted, err := ParseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
 	client := &http.Client{Timeout: 5 * time.Second}
-	_, reports, summary, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+	_, reports, summary, err := VerifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assert.Equal(t, "not_independent", reports[0].State)
@@ -278,10 +278,10 @@ func TestCountersignVerifySelfSignatureNotIndependent(t *testing.T) {
 
 func TestCountersignVerifyNoEntriesIsNone(t *testing.T) {
 	bundle, profile, _ := withheldBundleFixture(t)
-	trusted, err := parseKeys(profile.TrustedKeys)
+	trusted, err := ParseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
 	client := &http.Client{Timeout: 5 * time.Second}
-	_, reports, summary, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+	_, reports, summary, err := VerifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
 	require.NoError(t, err)
 	assert.Empty(t, reports)
 	assert.Equal(t, "none", summary)
@@ -296,10 +296,10 @@ func TestCountersignVerifyUnknownTypeIsUnverifiedNotRejected(t *testing.T) {
 	raw := map[string]interface{}{"type": "cose-sign1", "signature": "not-a-real-cose-sign1"}
 	bundle["countersignatures"] = []interface{}{raw}
 
-	trusted, err := parseKeys(profile.TrustedKeys)
+	trusted, err := ParseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
 	client := &http.Client{Timeout: 5 * time.Second}
-	_, reports, summary, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+	_, reports, summary, err := VerifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assert.Equal(t, "unverified", reports[0].State)
@@ -311,7 +311,7 @@ func TestCountersignVerifyUnknownTypeIsUnverifiedNotRejected(t *testing.T) {
 func TestCountersignVerifyRequiresADirectory(t *testing.T) {
 	bundle, profile, _ := withheldBundleFixture(t)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	require.NoError(t, saveProfile(profile, false))
+	require.NoError(t, SaveProfile(profile, false))
 	encoded, err := json.Marshal(bundle)
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "bundle.json")
@@ -390,7 +390,7 @@ func TestCountersignVerifyResolvesAgainstADirectoryFile(t *testing.T) {
 	bundle["countersignatures"] = []interface{}{rawEntry}
 
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	require.NoError(t, saveProfile(profile, false))
+	require.NoError(t, SaveProfile(profile, false))
 	encoded, err := json.Marshal(bundle)
 	require.NoError(t, err)
 	dir := t.TempDir()
@@ -523,9 +523,9 @@ func loadCountersignVector(t *testing.T) countersignVector {
 
 // verifyVectorEntry attaches entry to a copy of the vector's bundle and runs
 // the real countersign verify core against the vector's directory.
-func verifyVectorEntry(t *testing.T, vector countersignVector, entry interface{}) (string, []countersignatureReport, string, error) {
+func verifyVectorEntry(t *testing.T, vector countersignVector, entry interface{}) (string, []CountersignatureReport, string, error) {
 	t.Helper()
-	bundle, err := jsonValue(vector.Bundle)
+	bundle, err := JSONValue(vector.Bundle)
 	require.NoError(t, err)
 	bundleMap, ok := bundle.(map[string]interface{})
 	require.True(t, ok)
@@ -536,9 +536,9 @@ func verifyVectorEntry(t *testing.T, vector countersignVector, entry interface{}
 	}))
 	t.Cleanup(dirServer.Close)
 	client := &http.Client{Transport: dirServer.Client().Transport, Timeout: 5 * time.Second}
-	trusted, err := parseKeys([]string{vector.ProducerPublicKeyHex})
+	trusted, err := ParseKeys([]string{vector.ProducerPublicKeyHex})
 	require.NoError(t, err)
-	return verifyCountersignatures(t.Context(), client, dirServer.URL, bundleMap, trusted)
+	return VerifyCountersignatures(t.Context(), client, dirServer.URL, bundleMap, trusted)
 }
 
 // TestCountersignGoldenVectorSigningInput checks this CLI builds exactly the
@@ -550,7 +550,7 @@ func TestCountersignGoldenVectorSigningInput(t *testing.T) {
 	require.True(t, ok)
 	over, _ := entry["over"].(string)
 	entryType, _ := entry["type"].(string)
-	message, err := countersignSigningInput(over, entry["signer"], entry["statement"], entryType)
+	message, err := CountersignSigningInput(over, entry["signer"], entry["statement"], entryType)
 	require.NoError(t, err)
 	assert.Equal(t, vector.SigningInput, string(message))
 }
@@ -590,7 +590,7 @@ func TestCountersignGoldenVectorNegatives(t *testing.T) {
 				assert.Equal(t, "invalid", reports[0].State, "a countersignature whose signing input was altered must fail verification")
 				assert.Contains(t, reports[0].Detail, "does not verify")
 				assert.Nil(t, reports[0].Checks, "checks of an invalid entry must never be displayed")
-				require.Error(t, hasInvalidCountersignature(reports))
+				require.Error(t, HasInvalidCountersignature(reports))
 				return
 			}
 			require.Len(t, reports, 1)
@@ -636,7 +636,7 @@ func TestCountersignRequestRefusesFlippedResult(t *testing.T) {
 func invokeCountersignVerify(t *testing.T, profile Profile, bundle map[string]interface{}) (map[string]interface{}, error) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	require.NoError(t, saveProfile(profile, false))
+	require.NoError(t, SaveProfile(profile, false))
 	encoded, err := json.Marshal(bundle)
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "bundle.json")
@@ -670,7 +670,7 @@ func TestCountersignVerifyInvalidEntryIsReportedNotFatal(t *testing.T) {
 	tampered, _ := countersignerEntry(t, digest, []CountersignCheck{{Name: "range membership", Result: "failed"}})
 	tampered.Statement.Checks[0].Result = "established"
 	good, goodKey := countersignerEntry(t, digest, []CountersignCheck{{Name: "cadence", Result: "established"}})
-	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{tampered, good}))
+	require.NoError(t, AttachCountersignatures(bundle, []CountersignatureEntry{tampered, good}))
 
 	directory := countersignerDirectory{Countersigners: []countersignerDirectoryRow{{Name: "Countersign Test Operator", KeyIDs: []string{goodKey}}}}
 	dirServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -679,10 +679,10 @@ func TestCountersignVerifyInvalidEntryIsReportedNotFatal(t *testing.T) {
 	}))
 	defer dirServer.Close()
 	client := &http.Client{Transport: dirServer.Client().Transport, Timeout: 5 * time.Second}
-	trusted, err := parseKeys(profile.TrustedKeys)
+	trusted, err := ParseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
 
-	_, reports, summary, err := verifyCountersignatures(t.Context(), client, dirServer.URL, bundle, trusted)
+	_, reports, summary, err := VerifyCountersignatures(t.Context(), client, dirServer.URL, bundle, trusted)
 	require.NoError(t, err)
 	require.Len(t, reports, 2)
 	assert.Equal(t, "invalid", reports[0].State)
@@ -702,7 +702,7 @@ func TestCountersignVerifyInvalidEntryFailsTheCommand(t *testing.T) {
 	require.NoError(t, err)
 	entry, _ := countersignerEntry(t, digest, []CountersignCheck{{Name: "range membership", Result: "failed"}})
 	entry.Statement.Checks[0].Result = "established"
-	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
+	require.NoError(t, AttachCountersignatures(bundle, []CountersignatureEntry{entry}))
 
 	result, err := invokeCountersignVerify(t, profile, bundle)
 	require.Error(t, err)
@@ -727,10 +727,10 @@ func TestCountersignVerifyNonArrayCountersignaturesIsAnError(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			bundle, profile, _ := withheldBundleFixture(t)
 			bundle["countersignatures"] = value
-			trusted, err := parseKeys(profile.TrustedKeys)
+			trusted, err := ParseKeys(profile.TrustedKeys)
 			require.NoError(t, err)
 			client := &http.Client{Timeout: 5 * time.Second}
-			_, _, summary, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+			_, _, summary, err := VerifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
 			require.Error(t, err, "a non-array countersignatures member must not be reported as %q", summary)
 			assert.ErrorIs(t, err, ErrInput)
 
@@ -755,11 +755,11 @@ func TestCountersignVerifyRequiresLowercaseHex(t *testing.T) {
 			} else {
 				entry.Signer.KeyID = strings.ToUpper(entry.Signer.KeyID)
 			}
-			require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
-			trusted, err := parseKeys(profile.TrustedKeys)
+			require.NoError(t, AttachCountersignatures(bundle, []CountersignatureEntry{entry}))
+			trusted, err := ParseKeys(profile.TrustedKeys)
 			require.NoError(t, err)
 			client := &http.Client{Timeout: 5 * time.Second}
-			_, reports, _, err := verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+			_, reports, _, err := VerifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
 			require.NoError(t, err)
 			require.Len(t, reports, 1)
 			assert.Equal(t, "invalid", reports[0].State)
@@ -777,11 +777,11 @@ func TestCountersignVerifyMissingTypeIsVerifiedAsV1(t *testing.T) {
 	require.NoError(t, err)
 	entry, _ := countersignerEntry(t, digest, []CountersignCheck{{Name: "cadence", Result: "established"}})
 	entry.Type = ""
-	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
-	trusted, err := parseKeys(profile.TrustedKeys)
+	require.NoError(t, AttachCountersignatures(bundle, []CountersignatureEntry{entry}))
+	trusted, err := ParseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
 	client := &http.Client{Timeout: 5 * time.Second}
-	_, _, _, err = verifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
+	_, _, _, err = VerifyCountersignatures(t.Context(), client, "https://directory.invalid/witnesses.json", bundle, trusted)
 	// Valid and independent, so verify goes on to fetch the (unreachable)
 	// directory: the signature itself was accepted.
 	require.ErrorContains(t, err, "countersigner directory")
@@ -809,10 +809,10 @@ func TestCountersignVerifySpoofedSignerIDIsInvalid(t *testing.T) {
 	_, err = requestCountersignatures(t.Context(), client, server.URL, submission, gotDigest)
 	require.ErrorContains(t, err, "does not verify")
 
-	require.NoError(t, attachCountersignatures(bundle, []CountersignatureEntry{entry}))
-	trusted, err := parseKeys(profile.TrustedKeys)
+	require.NoError(t, AttachCountersignatures(bundle, []CountersignatureEntry{entry}))
+	trusted, err := ParseKeys(profile.TrustedKeys)
 	require.NoError(t, err)
-	_, reports, _, err := verifyCountersignatures(t.Context(), &http.Client{Timeout: 5 * time.Second}, "https://directory.invalid/witnesses.json", bundle, trusted)
+	_, reports, _, err := VerifyCountersignatures(t.Context(), &http.Client{Timeout: 5 * time.Second}, "https://directory.invalid/witnesses.json", bundle, trusted)
 	require.NoError(t, err)
 	require.Len(t, reports, 1)
 	assert.Equal(t, "invalid", reports[0].State)

@@ -15,7 +15,7 @@ import (
 // signed: the parsed checkpoint keeps only the instant, and re-rendering it
 // can differ from the signed text ("…:00.000Z" becomes "…:00Z"), which other
 // verifiers compare as signed.
-func signedCheckpoint(statement []byte) (map[string]interface{}, error) {
+func SignedCheckpoint(statement []byte) (map[string]interface{}, error) {
 	record, err := checkpoint.ParseRecord(statement)
 	if err != nil {
 		return nil, err

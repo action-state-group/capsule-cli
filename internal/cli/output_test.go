@@ -20,7 +20,7 @@ func TestOutputFlatObject(t *testing.T) {
 		var buf bytes.Buffer
 		cmd := &cobra.Command{}
 		cmd.SetOut(&buf)
-		require.NoError(t, output(cmd, value))
+		require.NoError(t, Output(cmd, value))
 		assert.JSONEq(t, `{"spec_version":"capsule-cli-result/v1","sequence":9007199254740993}`, buf.String())
 		var fields map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(buf.Bytes(), &fields))
@@ -34,7 +34,7 @@ func TestOutputRejectsInvalidObjects(t *testing.T) {
 		var buf bytes.Buffer
 		cmd := &cobra.Command{}
 		cmd.SetOut(&buf)
-		require.Error(t, output(cmd, value))
+		require.Error(t, Output(cmd, value))
 		assert.Empty(t, buf.String())
 	}
 }

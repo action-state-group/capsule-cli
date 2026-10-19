@@ -62,11 +62,11 @@ func TestProfiles(t *testing.T) {
 	assert.JSONEq(t, `{"spec_version":"capsule-cli-result/v1","profiles":[]}`, out)
 	_, e = invoke(t, "", "profile", "create", "--name", "one", "--type", "mysql", "--mysql-host", "localhost", "--mysql-database", "local", "--mysql-tls", "false", "--log-id", "log-a", "--mysql-password", "top-secret")
 	require.NoError(t, e)
-	p, e := loadProfile("one")
+	p, e := LoadProfile("one")
 	require.NoError(t, e)
 	assert.Equal(t, "mysql", p.Type)
 	assert.Equal(t, "capsule", p.Namespace)
-	path, e := profilePath("one")
+	path, e := ProfilePath("one")
 	require.NoError(t, e)
 	info, e := os.Stat(path)
 	require.NoError(t, e)
@@ -80,7 +80,7 @@ func TestProfiles(t *testing.T) {
 	out, e = invoke(t, "", "profile", "list")
 	require.NoError(t, e)
 	assert.JSONEq(t, `{"spec_version":"capsule-cli-result/v1","profiles":["one"]}`, out)
-	dir, e := profilesDir()
+	dir, e := ProfilesDir()
 	require.NoError(t, e)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "ignored.txt"), nil, 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "-invalid.yaml"), nil, 0o600))
@@ -99,7 +99,7 @@ func TestProfiles(t *testing.T) {
 	require.Error(t, e)
 	_, e = invoke(t, "", "profile", "update", "--profile", "one", "--mysql-host", "127.0.0.1")
 	require.NoError(t, e)
-	p, e = loadProfile("one")
+	p, e = LoadProfile("one")
 	require.NoError(t, e)
 	assert.Equal(t, "127.0.0.1", p.Connection.Host)
 	assert.Equal(t, "top-secret", p.Credentials.Password.Value)
@@ -107,7 +107,7 @@ func TestProfiles(t *testing.T) {
 	require.Error(t, e)
 	_, e = invoke(t, "", "profile", "update", "--profile", "one", "--mysql-password", "", "--mysql-password-env", "TEST_SECRET")
 	require.NoError(t, e)
-	p, e = loadProfile("one")
+	p, e = LoadProfile("one")
 	require.NoError(t, e)
 	assert.Empty(t, p.Credentials.Password.Value)
 	assert.Equal(t, "TEST_SECRET", p.Credentials.Password.Env)
@@ -120,17 +120,17 @@ func TestGuidedAndUnknownConfig(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	_, e := invoke(t, "guided\nlocalhost\nlocal\nlog-a\nroot\n", "profile", "create", "--interactive")
 	require.NoError(t, e)
-	p, e := loadProfile("guided")
+	p, e := LoadProfile("guided")
 	require.NoError(t, e)
 	assert.Equal(t, "log-a", p.LogID)
-	path, e := profilePath("guided")
+	path, e := ProfilePath("guided")
 	require.NoError(t, e)
 	f, e := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0600)
 	require.NoError(t, e)
 	_, e = f.WriteString("unknown: true\n")
 	require.NoError(t, e)
 	require.NoError(t, f.Close())
-	_, e = loadProfile("guided")
+	_, e = LoadProfile("guided")
 	require.Error(t, e)
 }
 
@@ -143,7 +143,7 @@ func TestSQLiteProfileCreate(t *testing.T) {
 	_, e := invoke(t, "", "profile", "create", "--name", "sq", "--type", "sqlite",
 		"--sqlite-path", dbPath, "--namespace", "demo", "--log-id", "log-s", "--trusted-key", trusted)
 	require.NoError(t, e)
-	p, e := loadProfile("sq")
+	p, e := LoadProfile("sq")
 	require.NoError(t, e)
 	assert.Equal(t, "sqlite", p.Type)
 	assert.Equal(t, dbPath, p.Connection.Database)
@@ -154,7 +154,7 @@ func TestSQLiteProfileCreate(t *testing.T) {
 	dbPath2 := filepath.Join(t.TempDir(), "store2.db")
 	_, e = invoke(t, "sqguided\n"+dbPath2+"\nlog-s2\n", "profile", "create", "--interactive", "--type", "sqlite")
 	require.NoError(t, e)
-	p2, e := loadProfile("sqguided")
+	p2, e := LoadProfile("sqguided")
 	require.NoError(t, e)
 	assert.Equal(t, "sqlite", p2.Type)
 	assert.Equal(t, dbPath2, p2.Connection.Database)
@@ -173,7 +173,7 @@ func TestRequiredProfileAndNoRuntimeOverrides(t *testing.T) {
 	require.NoError(t, e)
 	out, e := invoke(t, "", "--version")
 	require.NoError(t, e)
-	assert.Equal(t, "capsulectl "+cliVersion+" (commit "+cliCommit+")\n", out)
+	assert.Equal(t, "capsulectl "+CLIVersion+" (commit "+CLICommit+")\n", out)
 }
 func TestSecretProtection(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "secret")
@@ -196,7 +196,7 @@ func TestSecretProtection(t *testing.T) {
 func TestSealVerifyExactOriginals(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	dir := t.TempDir()
 	request := filepath.Join(dir, "request.json")
 	recordPath := filepath.Join(dir, "capsule.json")
@@ -213,13 +213,13 @@ func TestSealVerifyExactOriginals(t *testing.T) {
 	assert.Contains(t, out, "not_performed")
 	_, e = invoke(t, "", "seal", "--profile", p.Name, "--request", request, "--output", recordPath)
 	require.Error(t, e)
-	keys, e := parseKeys(p.TrustedKeys)
+	keys, e := ParseKeys(p.TrustedKeys)
 	require.NoError(t, e)
 	record.Artifacts[0].Content = []byte(`{"a":2}`)
 	_, e = artifact.Verify(record, keys)
 	require.Error(t, e)
 	p.TrustedKeys = nil
-	require.NoError(t, saveProfile(p, true))
+	require.NoError(t, SaveProfile(p, true))
 	_, e = invoke(t, "", "verify", "--profile", p.Name, "--capsule", recordPath)
 	require.ErrorIs(t, e, ErrPartial)
 }
@@ -229,7 +229,7 @@ func TestSealVerifyExactOriginals(t *testing.T) {
 func TestEmitVerifyExactOriginals(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	dir := t.TempDir()
 	request := filepath.Join(dir, "request.json")
 	recordPath := filepath.Join(dir, "capsule.json")
@@ -250,32 +250,32 @@ func TestEmitVerifyExactOriginals(t *testing.T) {
 }
 func TestInputBoundsAndUnknownFields(t *testing.T) {
 	var r Request
-	require.Error(t, decodeJSON([]byte(`{"unexpected":true}`), &r))
-	require.Error(t, decodeJSON(append(requestFixture(t), []byte(` {}`)...), &r))
-	require.Error(t, decodeJSON(bytes.Repeat([]byte(" "), maxInput+1), &r))
-	_, e := parseRequest([]byte(`{"spec_version":"old"}`))
+	require.Error(t, DecodeJSON([]byte(`{"unexpected":true}`), &r))
+	require.Error(t, DecodeJSON(append(requestFixture(t), []byte(` {}`)...), &r))
+	require.Error(t, DecodeJSON(bytes.Repeat([]byte(" "), MaxInput+1), &r))
+	_, e := ParseRequest([]byte(`{"spec_version":"old"}`))
 	require.Error(t, e)
 }
 func TestReadOnlyFailsBeforeConnection(t *testing.T) {
 	p, _ := profileFixture(t)
 	p.ReadOnly = true
 	p.Connection.Host = "unreachable.invalid"
-	_, e := openTarget(t.Context(), p, useCLL)
+	_, e := OpenTarget(t.Context(), p, UseCLL)
 	require.ErrorIs(t, e, ErrReadOnlyCLL)
-	_, e = openTarget(t.Context(), p, useInitialization)
+	_, e = OpenTarget(t.Context(), p, UseInitialization)
 	require.ErrorIs(t, e, ErrReadOnlyCLL)
 }
 func TestProfileTargetCanBeUpdated(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	_, e := invoke(t, "", "profile", "update", "--profile", p.Name, "--log-id", "other")
 	require.NoError(t, e)
 }
 func TestCheckpointProof(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, key := profileFixture(t)
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	backend := memory.New()
 	defer func() { require.NoError(t, backend.Close()) }()
 	value := bytes.Repeat([]byte{1}, 32)
@@ -303,21 +303,21 @@ func TestCheckpointProof(t *testing.T) {
 	_, e = invoke(t, "", "cll", "verify", "--profile", p.Name, "--proof", path)
 	require.NoError(t, e)
 	p.LogID = "wrong-log"
-	_, e = verifyCheckpoint(p, state.Checkpoint.Bytes)
+	_, e = VerifyCheckpoint(p, state.Checkpoint.Bytes)
 	require.ErrorIs(t, e, ErrConflict)
 }
 
 func TestVerifyMissingOriginalsIsPartial(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, key := profileFixture(t)
-	require.NoError(t, saveProfile(p, false))
-	request, e := parseRequest(requestFixture(t))
+	require.NoError(t, SaveProfile(p, false))
+	request, e := ParseRequest(requestFixture(t))
 	require.NoError(t, e)
-	r, e := seal(request, key)
+	r, e := Seal(request, key)
 	require.NoError(t, e)
-	assert.Empty(t, missingBindings(r))
+	assert.Empty(t, MissingBindings(r))
 	r.Artifacts = nil
-	assert.Len(t, missingBindings(r), 2)
+	assert.Len(t, MissingBindings(r), 2)
 	raw, e := json.Marshal(r)
 	require.NoError(t, e)
 	path := filepath.Join(t.TempDir(), "missing.json")
@@ -346,7 +346,7 @@ func TestKeyGenerateWritesSeedAndPrintsMatchingPublicKey(t *testing.T) {
 	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 	seedHex, e := os.ReadFile(path)
 	require.NoError(t, e)
-	priv, e := privateKey(Secret{Value: string(seedHex)})
+	priv, e := PrivateKey(Secret{Value: string(seedHex)})
 	require.NoError(t, e)
 
 	// The printed public key is the seed's real Ed25519 public key.
@@ -356,7 +356,7 @@ func TestKeyGenerateWritesSeedAndPrintsMatchingPublicKey(t *testing.T) {
 	assert.NotContains(t, out, string(seedHex)) // the secret seed is never printed
 
 	// It round-trips as a usable producer key in a profile.
-	_, e = parseKeys([]string{result.PublicKey})
+	_, e = ParseKeys([]string{result.PublicKey})
 	require.NoError(t, e)
 }
 
@@ -409,7 +409,7 @@ func TestInputFileErrorNamesPathButProfileErrorStaysGeneric(t *testing.T) {
 	// (which discloses nothing sensitive) instead of the profile-conflated
 	// message, but keeps ErrInput / exit code 2.
 	missing := filepath.Join(t.TempDir(), "nope.json")
-	_, e := readInput(missing)
+	_, e := ReadInput(missing)
 	require.ErrorIs(t, e, ErrInput)
 	assert.Equal(t, 2, ExitCode(e))
 	assert.Equal(t, "input file not found: "+missing, SafeError(e))
@@ -418,14 +418,14 @@ func TestInputFileErrorNamesPathButProfileErrorStaysGeneric(t *testing.T) {
 	regular := filepath.Join(t.TempDir(), "afile")
 	require.NoError(t, os.WriteFile(regular, []byte("x"), 0600))
 	notDir := filepath.Join(regular, "child.json") // parent is a file: ENOTDIR, not ErrNotExist
-	_, e = readInput(notDir)
+	_, e = ReadInput(notDir)
 	require.ErrorIs(t, e, ErrInput)
 	assert.Equal(t, "cannot read input file: "+notDir, SafeError(e))
 
 	// A directory opens but fails to read (EISDIR); it stays exit 2 + named path,
 	// not the generic exit-1 operational catch-all.
 	dir := t.TempDir()
-	_, e = readInput(dir)
+	_, e = ReadInput(dir)
 	require.ErrorIs(t, e, ErrInput)
 	assert.Equal(t, 2, ExitCode(e))
 	assert.Equal(t, "cannot read input file: "+dir, SafeError(e))
@@ -450,7 +450,7 @@ func TestInputExitCodesAreDistinctAndRedacted(t *testing.T) {
 	assert.NotContains(t, SafeError(e), "do-not-print-me", "a mistyped value may be a secret: only the flag is named")
 	assert.Contains(t, SafeError(e), "flag --limit has a value of the wrong type")
 	var value Request
-	e = decodeJSON([]byte(`{"unknown":true}`), &value)
+	e = DecodeJSON([]byte(`{"unknown":true}`), &value)
 	require.Error(t, e)
 	assert.Equal(t, 2, ExitCode(e))
 }
@@ -458,7 +458,7 @@ func TestInputExitCodesAreDistinctAndRedacted(t *testing.T) {
 func TestInputTaxonomyAcrossCommands(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := profileFixture(t)
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 	for _, args := range [][]string{{"seal"}, {"seal", "--output", "unused"}, {"seal", "--request", "does-not-exist", "--output", "unused"}, {"emit"}, {"emit", "--seal-output", "unused"}, {"emit", "--request", "does-not-exist", "--seal-output", "unused"}, {"get"}, {"publish"}, {"cll", "list", "--limit", "0"}, {"cll", "checkpoint", "publish"}, {"cll", "checkpoint", "publish", "--checkpoint", "1"}} {
 		t.Run(strings.Join(args, "-"), func(t *testing.T) {
 			_, e := invoke(t, "", append(args, "--profile", p.Name)...)
@@ -466,7 +466,7 @@ func TestInputTaxonomyAcrossCommands(t *testing.T) {
 			assert.Equal(t, 2, ExitCode(e))
 		})
 	}
-	_, e := parseRequest([]byte(`{"spec_version":"wrong"}`))
+	_, e := ParseRequest([]byte(`{"spec_version":"wrong"}`))
 	require.Error(t, e)
 	assert.Equal(t, 2, ExitCode(e))
 }
@@ -474,7 +474,7 @@ func TestOneSidedOriginalCoverage(t *testing.T) {
 	p, key := profileFixture(t)
 	for _, kind := range []string{"payload", "output", "neither"} {
 		t.Run(kind, func(t *testing.T) {
-			r, e := parseRequest(requestFixture(t))
+			r, e := ParseRequest(requestFixture(t))
 			require.NoError(t, e)
 			if kind != "payload" {
 				r.Payload = nil
@@ -482,10 +482,10 @@ func TestOneSidedOriginalCoverage(t *testing.T) {
 			if kind != "output" {
 				r.AgentOutput = nil
 			}
-			record, e := seal(r, key)
+			record, e := Seal(r, key)
 			require.NoError(t, e)
-			assert.Empty(t, missingBindings(record))
-			keys, e := parseKeys(p.TrustedKeys)
+			assert.Empty(t, MissingBindings(record))
+			keys, e := ParseKeys(p.TrustedKeys)
 			require.NoError(t, e)
 			_, e = artifact.Verify(record, keys)
 			require.NoError(t, e)
@@ -496,10 +496,10 @@ func TestAppendRejectsStrippedOriginalsBeforeConnection(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, key := profileFixture(t)
 	p.Connection.Host = "unreachable.invalid"
-	require.NoError(t, saveProfile(p, false))
-	r, e := parseRequest(requestFixture(t))
+	require.NoError(t, SaveProfile(p, false))
+	r, e := ParseRequest(requestFixture(t))
 	require.NoError(t, e)
-	record, e := seal(r, key)
+	record, e := Seal(r, key)
 	require.NoError(t, e)
 	record.Artifacts = nil
 	raw, e := json.Marshal(record)
@@ -511,9 +511,9 @@ func TestAppendRejectsStrippedOriginalsBeforeConnection(t *testing.T) {
 }
 func TestPublishRequiresItsOwnTrustedKeyBeforeConnection(t *testing.T) {
 	p, key := profileFixture(t)
-	require.NoError(t, requirePublisherKey(p, key))
+	require.NoError(t, RequirePublisherKey(p, key))
 	p.TrustedKeys = nil
-	e := requirePublisherKey(p, key)
+	e := RequirePublisherKey(p, key)
 	require.ErrorIs(t, e, artifact.ErrUntrustedSigner)
 	assert.Equal(t, 2, ExitCode(e))
 	assert.Contains(t, SafeError(e), "trusted_keys")
@@ -523,13 +523,13 @@ func TestCheckpointHexKeyCaseIsNotDifferentIdentity(t *testing.T) {
 	p, _ := profileFixture(t)
 	key := p.Checkpoint.TrustedKeys[0]
 	p.Checkpoint.TrustedKeys = []string{strings.ToUpper(key)}
-	assert.True(t, checkpointSignerTrusted(p, key))
+	assert.True(t, CheckpointSignerTrusted(p, key))
 	p.Checkpoint.Endpoint = "https://example.invalid"
 	p.Checkpoint.PublicKey = key
-	a, e := serviceID(p)
+	a, e := ServiceID(p)
 	require.NoError(t, e)
 	p.Checkpoint.PublicKey = strings.ToUpper(key)
-	b, e := serviceID(p)
+	b, e := ServiceID(p)
 	require.NoError(t, e)
 	assert.Equal(t, a, b)
 }

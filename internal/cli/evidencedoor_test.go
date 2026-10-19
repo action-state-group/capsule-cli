@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -109,6 +110,21 @@ func serveVectors(t *testing.T) func([]byte) (int, []byte) {
 	}
 }
 
+// invokeRemote runs `capsulectl book remote ARGS...` as the capsulectl-book
+// plugin mounts it: the core's RemoteBookCommand under `book`.
+func invokeRemote(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	book := &cobra.Command{Use: BookPluginName}
+	book.AddCommand(RemoteBookCommand())
+	c := NewCommandWith(book)
+	var out bytes.Buffer
+	c.SetOut(&out)
+	c.SetErr(&out)
+	c.SetArgs(append([]string{BookPluginName, "remote"}, args...))
+	e := c.ExecuteContext(t.Context())
+	return out.String(), e
+}
+
 func meshProfile(t *testing.T, url string, extra ...string) {
 	t.Helper()
 	args := append([]string{"profile", "create", "--name", "node", "--type", "mesh-plugin", "--url", url, "--requester-id", testRequesterID}, extra...)
@@ -171,7 +187,7 @@ func TestBookVerbsAgainstPythonResponderVectors(t *testing.T) {
 	// The request the verb builds is byte-identical to the one the Python
 	// responder digested for the same subject.
 	id := vectorCapsuleID(t, "record.request.json")
-	out, e := invoke(t, "", "book", "get", "--profile", "node", "--party", "peer-a", "--capsule-id", id)
+	out, e := invokeRemote(t, "get", "--profile", "node", "--party", "peer-a", "--capsule-id", id)
 	require.NoError(t, e)
 	var got evidenceAnswer
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
@@ -188,7 +204,7 @@ func TestBookVerbsAgainstPythonResponderVectors(t *testing.T) {
 	assert.Equal(t, wantCalls, *seen)
 	assert.NotContains(t, out, "node-token-value")
 
-	out, e = invoke(t, "", "book", "list", "--profile", "node", "--party", "peer-a", "--selector", "a..b", "--page-size", "2")
+	out, e = invokeRemote(t, "list", "--profile", "node", "--party", "peer-a", "--selector", "a..b", "--page-size", "2")
 	require.NoError(t, e)
 	got = evidenceAnswer{}
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
@@ -212,7 +228,7 @@ func TestBookVerbsAgainstPythonResponderVectors(t *testing.T) {
 	assert.Equal(t, want, got)
 	assert.Equal(t, sentRange, string((*seen)[1].Request))
 
-	out, e = invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a")
+	out, e = invokeRemote(t, "head", "--profile", "node", "--party", "peer-a")
 	require.NoError(t, e)
 	var head struct {
 		Head chainHead `json:"head"`
@@ -226,7 +242,7 @@ func TestBookVerbsAgainstPythonResponderVectors(t *testing.T) {
 	pythonChainRequest := evidenceVector(t, "chain_segment.request.json")
 	assert.Equal(t, string(pythonChainRequest), string((*seen)[2].Request))
 
-	out, e = invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a", "--responder-checkpoint-key", strings.ToUpper(cp.KeyID))
+	out, e = invokeRemote(t, "head", "--profile", "node", "--party", "peer-a", "--responder-checkpoint-key", strings.ToUpper(cp.KeyID))
 	require.NoError(t, e)
 	require.NoError(t, json.Unmarshal([]byte(out), &head))
 	wantHead.Pinned = true
@@ -242,11 +258,11 @@ func TestBookVerbsAgainstPythonResponderVectors(t *testing.T) {
 	var refusal refusalWire
 	require.NoError(t, json.Unmarshal(refusalVector, &refusal))
 	for _, pinned := range []bool{false, true} {
-		args := []string{"book", "request", "--profile", "node", "--party", "peer-a", "--request", reordered}
+		args := []string{"request", "--profile", "node", "--party", "peer-a", "--request", reordered}
 		if pinned {
 			args = append(args, "--responder-key", refusal.KeyID)
 		}
-		out, e = invoke(t, "", args...)
+		out, e = invokeRemote(t, args...)
 		require.NoError(t, e)
 		got = evidenceAnswer{}
 		require.NoError(t, json.Unmarshal([]byte(out), &got))
@@ -272,29 +288,29 @@ func TestBookVerbsRefuseWhatTheyCannotStandBehind(t *testing.T) {
 
 	t.Run("get answered with another record", func(t *testing.T) {
 		serve = serveVectors(t)
-		_, e := invoke(t, "", "book", "get", "--profile", "node", "--party", "peer-a", "--capsule-id", strings.Repeat("e", 64))
+		_, e := invokeRemote(t, "get", "--profile", "node", "--party", "peer-a", "--capsule-id", strings.Repeat("e", 64))
 		require.ErrorIs(t, e, ErrConflict)
 	})
 	refusalRequest := filepath.Join("testdata", "evidence-request", "no_such_record.request.json")
 	t.Run("refusal replayed for a different request", func(t *testing.T) {
 		serve = func([]byte) (int, []byte) { return http.StatusOK, evidenceVector(t, "no_such_record.answer.json") }
-		_, e := invoke(t, "", "book", "get", "--profile", "node", "--party", "peer-a", "--capsule-id", strings.Repeat("1", 64))
+		_, e := invokeRemote(t, "get", "--profile", "node", "--party", "peer-a", "--capsule-id", strings.Repeat("1", 64))
 		require.ErrorIs(t, e, ErrConflict)
 	})
 	t.Run("refusal signed by a key other than the responder's", func(t *testing.T) {
 		serve = serveVectors(t)
-		_, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", refusalRequest, "--responder-key", strings.Repeat("ab", 32))
+		_, e := invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", refusalRequest, "--responder-key", strings.Repeat("ab", 32))
 		require.ErrorIs(t, e, ErrConflict)
 	})
 	t.Run("artifact for a different subject kind", func(t *testing.T) {
 		serve = func([]byte) (int, []byte) { return http.StatusOK, evidenceVector(t, "record.answer.json") }
-		_, e := invoke(t, "", "book", "list", "--profile", "node", "--party", "peer-a", "--selector", "a..b")
+		_, e := invokeRemote(t, "list", "--profile", "node", "--party", "peer-a", "--selector", "a..b")
 		require.ErrorIs(t, e, ErrConflict)
 	})
 	t.Run("answer that is both an artifact and a refusal", func(t *testing.T) {
 		both := replaceOnce(t, evidenceVector(t, "no_such_record.answer.json"), `"reason":`, `"bundles": [{}], "subject_kind": "record", "v": 1, "reason":`)
 		serve = func([]byte) (int, []byte) { return http.StatusOK, both }
-		_, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", refusalRequest)
+		_, e := invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", refusalRequest)
 		require.ErrorIs(t, e, ErrPartial)
 	})
 	t.Run("refusal with a broken signature", func(t *testing.T) {
@@ -303,12 +319,12 @@ func TestBookVerbsRefuseWhatTheyCannotStandBehind(t *testing.T) {
 		require.NoError(t, json.Unmarshal(refusal, &r))
 		tampered := replaceOnce(t, refusal, `"sig": "`+r.Sig+`"`, `"sig": "`+flipLastHexByte(t, r.Sig)+`"`)
 		serve = func([]byte) (int, []byte) { return http.StatusOK, tampered }
-		_, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", refusalRequest)
+		_, e := invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", refusalRequest)
 		require.ErrorIs(t, e, ErrPartial)
 	})
 	t.Run("head signed by a key other than the pinned one", func(t *testing.T) {
 		serve = serveVectors(t)
-		_, e := invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a", "--responder-checkpoint-key", strings.Repeat("ab", 32))
+		_, e := invokeRemote(t, "head", "--profile", "node", "--party", "peer-a", "--responder-checkpoint-key", strings.Repeat("ab", 32))
 		require.ErrorIs(t, e, ErrConflict)
 	})
 	chain := evidenceVector(t, "chain_segment.answer.json")
@@ -325,7 +341,7 @@ func TestBookVerbsRefuseWhatTheyCannotStandBehind(t *testing.T) {
 		t.Run("head JSON "+tamper.field+" disagrees with its signed statement", func(t *testing.T) {
 			tampered := replaceOnce(t, chain, tamper.old, tamper.replacement)
 			serve = func([]byte) (int, []byte) { return http.StatusOK, tampered }
-			_, e := invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a")
+			_, e := invokeRemote(t, "head", "--profile", "node", "--party", "peer-a")
 			require.ErrorIs(t, e, ErrConflict)
 		})
 	}
@@ -333,14 +349,14 @@ func TestBookVerbsRefuseWhatTheyCannotStandBehind(t *testing.T) {
 		cose := chainVectorLink(t, chain).CheckpointCOSE
 		tampered := replaceOnce(t, chain, `"`+cose+`"`, `"`+flipLastHexByte(t, cose)+`"`)
 		serve = func([]byte) (int, []byte) { return http.StatusOK, tampered }
-		_, e := invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a")
+		_, e := invokeRemote(t, "head", "--profile", "node", "--party", "peer-a")
 		require.ErrorIs(t, e, ErrPartial)
 	})
 	t.Run("unreachable party is not an answer and its text is not printed", func(t *testing.T) {
 		serve = func([]byte) (int, []byte) {
 			return http.StatusBadGateway, []byte("could not reach peer: secret-looking-detail")
 		}
-		_, e := invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a")
+		_, e := invokeRemote(t, "head", "--profile", "node", "--party", "peer-a")
 		require.ErrorIs(t, e, ErrNoAnswer)
 		assert.NotContains(t, SafeError(e), "secret-looking-detail")
 		assert.Equal(t, ErrNoAnswer.Error(), SafeError(e))
@@ -349,12 +365,12 @@ func TestBookVerbsRefuseWhatTheyCannotStandBehind(t *testing.T) {
 		huge := append([]byte(`{"bundles":["`), bytes.Repeat([]byte("a"), maxMeshAnswerBytes)...)
 		huge = append(huge, []byte(`"],"subject_kind":"range","v":1}`)...)
 		serve = func([]byte) (int, []byte) { return http.StatusOK, huge }
-		_, e := invoke(t, "", "book", "list", "--profile", "node", "--party", "peer-a", "--selector", "a..b")
+		_, e := invokeRemote(t, "list", "--profile", "node", "--party", "peer-a", "--selector", "a..b")
 		require.ErrorIs(t, e, ErrNoAnswer)
 	})
 	t.Run("neither artifact nor refusal", func(t *testing.T) {
 		serve = func([]byte) (int, []byte) { return http.StatusOK, []byte(`{"status":"ok"}`) }
-		_, e := invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a")
+		_, e := invokeRemote(t, "head", "--profile", "node", "--party", "peer-a")
 		require.ErrorIs(t, e, ErrPartial)
 	})
 	for name, body := range map[string]string{
@@ -372,7 +388,7 @@ func TestBookVerbsRefuseWhatTheyCannotStandBehind(t *testing.T) {
 			serve = func([]byte) (int, []byte) { calls++; return http.StatusOK, nil }
 			bad := filepath.Join(t.TempDir(), "req.json")
 			require.NoError(t, os.WriteFile(bad, []byte(body), 0o600))
-			_, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", bad)
+			_, e := invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", bad)
 			require.ErrorIs(t, e, ErrInput)
 			assert.Zero(t, calls)
 		})
@@ -380,7 +396,7 @@ func TestBookVerbsRefuseWhatTheyCannotStandBehind(t *testing.T) {
 	t.Run("HTML characters are sent as themselves, the way the node re-encodes them", func(t *testing.T) {
 		var sent []byte
 		serve = func(r []byte) (int, []byte) { sent = r; return http.StatusOK, evidenceVector(t, "range.answer.json") }
-		_, e := invoke(t, "", "book", "list", "--profile", "node", "--party", "peer-a", "--selector", "a<b&c")
+		_, e := invokeRemote(t, "list", "--profile", "node", "--party", "peer-a", "--selector", "a<b&c")
 		require.NoError(t, e)
 		assert.Equal(t, `{"requester_id":"`+testRequesterID+`","subject":{"kind":"range","selector":"a<b&c"}}`, string(sent))
 	})
@@ -394,14 +410,14 @@ func TestBookVerbsRefuseWhatTheyCannotStandBehind(t *testing.T) {
 			req := filepath.Join(t.TempDir(), "req.json")
 			body := `{"subject":{"kind":"chain_segment","last":` + n + `}}`
 			require.NoError(t, os.WriteFile(req, []byte(body), 0o600))
-			_, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", req)
+			_, e := invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", req)
 			require.NoError(t, e)
 			assert.Equal(t, `{"requester_id":"`+testRequesterID+`",`+body[1:], string(sent))
 		}
 	})
 	t.Run("party id must be printable and present", func(t *testing.T) {
 		for _, party := range []string{"", "peer a", "peer\n"} {
-			_, e := invoke(t, "", "book", "head", "--profile", "node", "--party", party)
+			_, e := invokeRemote(t, "head", "--profile", "node", "--party", party)
 			require.ErrorIs(t, e, ErrInput, "%q", party)
 		}
 	})
@@ -419,7 +435,7 @@ func TestBookVerbsNeverFollowARedirect(t *testing.T) {
 	}))
 	t.Cleanup(node.Close)
 	meshProfile(t, node.URL, "--token", "node-token-value")
-	_, e := invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a")
+	_, e := invokeRemote(t, "head", "--profile", "node", "--party", "peer-a")
 	require.ErrorIs(t, e, ErrNoAnswer)
 	assert.Empty(t, leaked)
 }
@@ -430,7 +446,7 @@ func TestBookVerbsNeedARemoteProfile(t *testing.T) {
 	// A storage profile that happens to carry a URL still has no evidence door.
 	_, e := invoke(t, "", "profile", "create", "--name", "local", "--type", "sqlite", "--sqlite-path", filepath.Join(t.TempDir(), "store.db"), "--log-id", "log-a", "--url", srv.URL)
 	require.NoError(t, e)
-	_, e = invoke(t, "", "book", "head", "--profile", "local", "--party", "peer-a")
+	_, e = invokeRemote(t, "head", "--profile", "local", "--party", "peer-a")
 	require.ErrorIs(t, e, ErrInput)
 	assert.Empty(t, *seen)
 }
@@ -572,7 +588,7 @@ func TestBookVerbsUseTheCurrentPluginTool(t *testing.T) {
 	request := filepath.Join(t.TempDir(), "request.json")
 	require.NoError(t, os.WriteFile(request, []byte(`{"subject":{"kind":"record","capsule_id":"`+strings.Repeat("0", 64)+`"}}`), 0o600))
 
-	out, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", request)
+	out, e := invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", request)
 	require.NoError(t, e, "a genuine refusal of the request sent binds")
 	var got evidenceAnswer
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
@@ -589,7 +605,7 @@ func TestBookVerbsUseTheCurrentPluginTool(t *testing.T) {
 	named := filepath.Join(t.TempDir(), "named.json")
 	other := strings.Repeat("33", 32)
 	require.NoError(t, os.WriteFile(named, []byte(`{"requester_id":"`+other+`","subject":{"kind":"chain_segment","last":1}}`), 0o600))
-	_, e = invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", named)
+	_, e = invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", named)
 	require.NoError(t, e)
 	assert.Contains(t, string((*seen)[1].Request), `"requester_id":"`+other+`"`)
 }
@@ -612,7 +628,7 @@ func TestBookVerbsRejectARefusalOfAnotherRequest(t *testing.T) {
 		relabelled := replaceOnce(t, r, `"requester_id":"`+testRequesterID+`"`, `"requester_id":"`+fakeNodeSelfID+`"`)
 		return http.StatusOK, partyRefusal(t, key, relabelled)
 	}
-	_, e = invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", request)
+	_, e = invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", request)
 	require.ErrorIs(t, e, ErrConflict, "a refusal of the request with another requester names a different request")
 
 	serve = func(r []byte) (int, []byte) {
@@ -621,7 +637,7 @@ func TestBookVerbsRejectARefusalOfAnotherRequest(t *testing.T) {
 		require.NoError(t, json.Unmarshal(refusal, &w))
 		return http.StatusOK, replaceOnce(t, refusal, `"sig":"`+w.Sig+`"`, `"sig":"`+flipLastHexByte(t, w.Sig)+`"`)
 	}
-	_, e = invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", request)
+	_, e = invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", request)
 	require.ErrorIs(t, e, ErrPartial, "a refusal whose signature was altered")
 }
 
@@ -633,7 +649,7 @@ func TestBookVerbsNeedARequesterID(t *testing.T) {
 	srv, seen := fakeNode(t, serveVectors(t))
 	_, e := invoke(t, "", "profile", "create", "--name", "bare", "--type", "mesh-plugin", "--url", srv.URL)
 	require.NoError(t, e)
-	_, e = invoke(t, "", "book", "head", "--profile", "bare", "--party", "peer-a")
+	_, e = invokeRemote(t, "head", "--profile", "bare", "--party", "peer-a")
 	require.ErrorIs(t, e, ErrInput)
 	assert.Contains(t, e.Error(), "--requester-id")
 	assert.Empty(t, *seen)
@@ -652,23 +668,23 @@ func TestBookVerbsCheckWhatTheCallerNamesBeforeSending(t *testing.T) {
 	srv, seen := fakeNode(t, serveVectors(t))
 	meshProfile(t, srv.URL)
 	for _, bad := range []string{"not-hex", strings.Repeat("ab", 31), strings.Repeat("ab", 33)} {
-		_, e := invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a", "--responder-checkpoint-key", bad)
+		_, e := invokeRemote(t, "head", "--profile", "node", "--party", "peer-a", "--responder-checkpoint-key", bad)
 		require.ErrorIs(t, e, ErrInput, bad)
 	}
 	for _, bad := range []string{"", "abc123", strings.Repeat("AB", 32), strings.Repeat("11", 33)} {
 		request := filepath.Join(t.TempDir(), "request.json")
 		require.NoError(t, os.WriteFile(request, []byte(`{"requester_id":"`+bad+`","subject":{"kind":"chain_segment","last":1}}`), 0o600))
-		_, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", request)
+		_, e := invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", request)
 		require.ErrorIs(t, e, ErrInput, bad)
 	}
 	request := filepath.Join(t.TempDir(), "request.json")
 	require.NoError(t, os.WriteFile(request, []byte(`{"requester_id":42,"subject":{"kind":"chain_segment","last":1}}`), 0o600))
-	_, e := invoke(t, "", "book", "request", "--profile", "node", "--party", "peer-a", "--request", request)
+	_, e := invokeRemote(t, "request", "--profile", "node", "--party", "peer-a", "--request", request)
 	require.ErrorIs(t, e, ErrInput, "a requester_id that is not a string")
 	assert.Empty(t, *seen, "nothing reaches the node")
 
 	// A well-formed key, in either case, still pins the head.
 	cp := chainVectorLink(t, evidenceVector(t, "chain_segment.answer.json")).Checkpoint
-	_, e = invoke(t, "", "book", "head", "--profile", "node", "--party", "peer-a", "--responder-checkpoint-key", strings.ToUpper(cp.KeyID))
+	_, e = invokeRemote(t, "head", "--profile", "node", "--party", "peer-a", "--responder-checkpoint-key", strings.ToUpper(cp.KeyID))
 	require.NoError(t, e)
 }

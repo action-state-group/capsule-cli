@@ -16,12 +16,12 @@ import (
 
 // This file is the only place that knows the mesh node's plugin, its tool
 // name and its argument shape. The generic side (evidencedoor.go, profile.go)
-// reaches it only through remoteProfileType, validateRemoteConnection and
+// reaches it only through RemoteProfileType, validateRemoteConnection and
 // openEvidenceDoor.
 
-// remoteProfileType is the profile type that reads a counterparty's book
+// RemoteProfileType is the profile type that reads a counterparty's book
 // through a mesh node's capsules plugin.
-const remoteProfileType = "mesh-plugin"
+const RemoteProfileType = "mesh-plugin"
 
 // meshEvidenceRequestPath is the host's generic plugin tool route for the
 // capsules plugin's evidence-request/1 requester. Called with "verify":
@@ -46,14 +46,14 @@ const meshRequestTimeout = 60 * time.Second
 func validateRemoteConnection(p Profile) error {
 	u, e := url.Parse(p.Connection.URL)
 	if e != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		return inputError(remoteProfileType + " profile needs connection.url: an http(s) base URL with no path, credentials or query")
+		return InputError(RemoteProfileType + " profile needs connection.url: an http(s) base URL with no path, credentials or query")
 	}
-	if id := p.Connection.RequesterID; id != "" && !hex64.MatchString(id) {
-		return inputError(remoteProfileType + " profile's requester_id must be the node's own full peer id: 64 lowercase hex (not the short id the node's status shows)")
+	if id := p.Connection.RequesterID; id != "" && !Hex64.MatchString(id) {
+		return InputError(RemoteProfileType + " profile's requester_id must be the node's own full peer id: 64 lowercase hex (not the short id the node's status shows)")
 	}
 	hasToken := p.Credentials.Token != Secret{}
 	if hasToken && u.Scheme == "http" && !loopbackHost(u.Hostname()) {
-		return inputError(remoteProfileType + " profile sends its token only over https or to a loopback address")
+		return InputError(RemoteProfileType + " profile sends its token only over https or to a loopback address")
 	}
 	return nil
 }
@@ -76,8 +76,8 @@ type meshPluginDoor struct {
 }
 
 func openEvidenceDoor(p Profile) (meshPluginDoor, error) {
-	if p.Type != remoteProfileType {
-		return meshPluginDoor{}, inputError("this profile type cannot read another party's book")
+	if p.Type != RemoteProfileType {
+		return meshPluginDoor{}, InputError("this profile type cannot read another party's book")
 	}
 	if e := validateRemoteConnection(p); e != nil {
 		return meshPluginDoor{}, e

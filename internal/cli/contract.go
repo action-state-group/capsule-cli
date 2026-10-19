@@ -52,38 +52,38 @@ func contractCommands() *cobra.Command {
 	validate := &cobra.Command{
 		Use:   "validate FILE",
 		Short: "Validate FILE against --schema (a path or URL); validate uses no built-in schema",
-		Args:  oneArg,
+		Args:  OneArg,
 		RunE: func(c *cobra.Command, args []string) error {
 			schemaLoc, _ := c.Flags().GetString("schema")
 			if schemaLoc == "" {
-				return inputError("--schema is required (a path or URL to a JSON Schema)")
+				return InputError("--schema is required (a path or URL to a JSON Schema)")
 			}
 			asJSON, _ := c.Flags().GetBool("json")
-			raw, e := readInput(args[0])
+			raw, e := ReadInput(args[0])
 			if e != nil {
 				return e
 			}
 			doc, e := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 			if e != nil {
-				return inputError("malformed JSON in " + args[0])
+				return InputError("malformed JSON in " + args[0])
 			}
 			schema, schemaRaw, e := loadSchema(schemaLoc)
 			if e != nil {
 				return errors.Join(ErrInput, &schemaLoadError{loc: schemaLoc, err: e})
 			}
-			report := validateContract(schema, schemaRaw, doc)
+			report := ValidateContract(schema, schemaRaw, doc)
 			if asJSON {
-				issues := make([]map[string]any, len(report.issues))
-				for i, issue := range report.issues {
+				issues := make([]map[string]any, len(report.Issues))
+				for i, issue := range report.Issues {
 					issues[i] = map[string]any{"path": issue.Path, "message": issue.Message}
 				}
-				if oe := output(c, map[string]any{"file": args[0], "schema": schemaLoc, "valid": report.valid, "issues": issues}); oe != nil {
+				if oe := Output(c, map[string]any{"file": args[0], "schema": schemaLoc, "valid": report.Valid, "issues": issues}); oe != nil {
 					return oe
 				}
 			} else {
 				printReport(c, args[0], report)
 			}
-			if !report.valid {
+			if !report.Valid {
 				return ErrSchemaInvalid
 			}
 			return nil
@@ -97,12 +97,12 @@ func contractCommands() *cobra.Command {
 
 func printReport(c *cobra.Command, file string, report contractReport) {
 	w := c.OutOrStdout()
-	if report.valid {
+	if report.Valid {
 		fmt.Fprintf(w, "%s: valid\n", file)
 		return
 	}
 	fmt.Fprintf(w, "%s: INVALID\n", file)
-	for _, issue := range report.issues {
+	for _, issue := range report.Issues {
 		fmt.Fprintf(w, "  at %s: %s\n", issue.Path, issue.Message)
 	}
 }
@@ -113,8 +113,8 @@ type contractIssue struct {
 }
 
 type contractReport struct {
-	valid  bool
-	issues []contractIssue
+	Valid  bool
+	Issues []contractIssue
 }
 
 // validateContract renders one readable issue per irreducible schema
@@ -123,16 +123,16 @@ type contractReport struct {
 // oneOf is explained in terms of that single field instead of nine parallel,
 // mostly-irrelevant branch failures -- an unknown profile value, or the
 // specific missing block for the profile that was actually named.
-func validateContract(schema *jsonschema.Schema, schemaRaw any, doc any) contractReport {
+func ValidateContract(schema *jsonschema.Schema, schemaRaw any, doc any) contractReport {
 	err := schema.Validate(doc)
 	if err == nil {
-		return contractReport{valid: true}
+		return contractReport{Valid: true}
 	}
 	var ve *jsonschema.ValidationError
 	if !errors.As(err, &ve) {
-		return contractReport{issues: []contractIssue{{Path: "<root>", Message: err.Error()}}}
+		return contractReport{Issues: []contractIssue{{Path: "<root>", Message: err.Error()}}}
 	}
-	discriminator := discriminatorValues(schemaRaw, "profile")
+	discriminator := DiscriminatorValues(schemaRaw, "profile")
 	var issues []contractIssue
 	explainNode(ve, doc, discriminator, &issues)
 	if len(issues) == 0 {
@@ -140,7 +140,7 @@ func validateContract(schema *jsonschema.Schema, schemaRaw any, doc any) contrac
 		// report even if the tree walk above found no leaf -- never claim valid.
 		issues = append(issues, contractIssue{Path: pathString(ve.InstanceLocation), Message: ve.Error()})
 	}
-	return contractReport{issues: issues}
+	return contractReport{Issues: issues}
 }
 
 func explainNode(e *jsonschema.ValidationError, doc any, discriminator []string, issues *[]contractIssue) {
@@ -365,7 +365,7 @@ func valueAt(doc any, loc []string) any {
 // property name the caller names (here "profile") -- it does not assume or
 // hardcode which values exist, so it stays correct as the schema's closed set
 // changes.
-func discriminatorValues(schemaRaw any, key string) []string {
+func DiscriminatorValues(schemaRaw any, key string) []string {
 	seen := map[string]bool{}
 	var walk func(any)
 	walk = func(n any) {
@@ -406,7 +406,7 @@ func schemaIsURL(loc string) bool {
 // through the compiler (which needs to resolve internal $refs). Never reads
 // from a path or URL other than the one the caller supplied in --schema (the
 // built-in schemas are loaded elsewhere: `contract diff`'s by
-// loadEmbeddedContractSchema, `result build`'s by resultschema.go).
+// loadEmbeddedContractSchema, `result build`'s by the capsulectl-book plugin's resultschema.go).
 func loadSchema(loc string) (*jsonschema.Schema, any, error) {
 	raw, e := fetchSchemaBytes(loc)
 	if e != nil {

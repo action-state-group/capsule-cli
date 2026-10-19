@@ -26,7 +26,7 @@ var profileName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 // The current CLL MySQL schema inherits database collation. Restrict v1 log
 // names to lowercase ASCII without whitespace so distinct CLI targets cannot
 // alias through case folding, accents or MySQL's trailing-space comparison.
-var logName = regexp.MustCompile(`^[a-z0-9][a-z0-9._:/-]{0,190}$`)
+var LogName = regexp.MustCompile(`^[a-z0-9][a-z0-9._:/-]{0,190}$`)
 
 // Secret permits precisely one explicit source. Environment variables are only
 // consulted when named here; they never override another profile setting.
@@ -44,7 +44,7 @@ func (s Secret) validate() error {
 		}
 	}
 	if n > 1 {
-		return inputError("a secret may come from only one of a literal value, --*-file or --*-env; the profile sets more than one")
+		return InputError("a secret may come from only one of a literal value, --*-file or --*-env; the profile sets more than one")
 	}
 	return nil
 }
@@ -62,7 +62,7 @@ func (s Secret) resolve() (string, error) {
 	if s.File != "" {
 		b, e := readProtected(s.File)
 		if e != nil {
-			return "", inputError("cannot read the secret file " + s.File + ": it must exist, be a regular file, and be readable only by its owner (chmod 600)")
+			return "", InputError("cannot read the secret file " + s.File + ": it must exist, be a regular file, and be readable only by its owner (chmod 600)")
 		}
 		s.Value = strings.TrimSpace(string(b))
 	}
@@ -70,7 +70,7 @@ func (s Secret) resolve() (string, error) {
 		s.Value = os.Getenv(s.Env)
 	}
 	if (s.File != "" || s.Env != "") && s.Value == "" {
-		return "", inputError(emptySecretReason(s))
+		return "", InputError(emptySecretReason(s))
 	}
 	return s.Value, nil
 }
@@ -87,6 +87,12 @@ type Profile struct {
 	LogID     string `yaml:"log_id" mapstructure:"log_id"`
 	Namespace string `yaml:"namespace" mapstructure:"namespace"`
 	ReadOnly  bool   `yaml:"read_only,omitempty" mapstructure:"read_only"`
+	// Log names who keeps the profile's log (capsule-cli#236): LogCLL, the
+	// core's own CLL, or LogBook, an evidence book kept by the
+	// capsulectl-book plugin. Only a jsonl profile can be a book, and a
+	// profile is one or the other for good. A jsonl profile with a log_id
+	// saved before the field existed reads as a book.
+	Log string `yaml:"log,omitempty" mapstructure:"log" json:",omitempty"`
 	// Operator is the AAC operator value the book verbs write into every
 	// record they seal. Only those verbs require it.
 	Operator string `yaml:"operator,omitempty" mapstructure:"operator"`
@@ -165,7 +171,7 @@ type ProfileRulesChecker struct {
 
 // pinnedDigests is the set of definition digests a checker's ruleset must
 // report one of; none pins no ruleset.
-func (r ProfileRulesChecker) pinnedDigests() []string {
+func (r ProfileRulesChecker) PinnedDigests() []string {
 	if len(r.DefinitionDigests) > 0 {
 		return r.DefinitionDigests
 	}
@@ -175,9 +181,16 @@ func (r ProfileRulesChecker) pinnedDigests() []string {
 	return nil
 }
 
-// isBook reports whether the profile is an evidence book: a jsonl profile with
-// a log_id. Every record a book seals carries the profile's operator.
-func (p Profile) isBook() bool { return p.Type == "jsonl" && p.LogID != "" }
+// The two owners a profile's log can have (Profile.Log).
+const (
+	LogCLL  = "cll"
+	LogBook = "book"
+)
+
+// IsBook reports whether the profile is an evidence book: a jsonl profile
+// with a log_id that is not declared a plain CLL. Every record a book seals
+// carries the profile's operator.
+func (p Profile) IsBook() bool { return p.Type == "jsonl" && p.LogID != "" && p.Log != LogCLL }
 
 // invisibleRune reports whitespace and format characters (Unicode category
 // Cf: U+200B, U+FEFF, U+200D and the like), which print as nothing.
@@ -203,24 +216,30 @@ func operatorVisible(s string) bool {
 // empty, whitespace, or only invisible characters such as U+200B. Such a
 // profile is refused when it is created or updated, and refused at seal time
 // if an earlier capsulectl saved it.
-func (p Profile) operatorMissing() bool {
-	return p.isBook() && !operatorVisible(p.Operator)
+func (p Profile) OperatorMissing() bool {
+	return p.IsBook() && !operatorVisible(p.Operator)
 }
 
 func (p Profile) validate() error {
-	if _, err := p.clockTolerance(); err != nil {
+	if _, err := p.ClockToleranceDuration(); err != nil {
 		return err
 	}
-	if !profileName.MatchString(p.Name) || (p.Type != "mysql" && p.Type != "sqlite" && p.Type != "jsonl" && p.Type != remoteProfileType) {
-		return inputError("profile needs a valid name and a mysql, sqlite, jsonl, or " + remoteProfileType + " type")
+	if !profileName.MatchString(p.Name) || (p.Type != "mysql" && p.Type != "sqlite" && p.Type != "jsonl" && p.Type != RemoteProfileType) {
+		return InputError("profile needs a valid name and a mysql, sqlite, jsonl, or " + RemoteProfileType + " type")
 	}
-	if (p.LogID != "" && !logName.MatchString(p.LogID)) || (p.Namespace != "" && !profileName.MatchString(p.Namespace)) {
-		return inputError("log_id must be lowercase letters, digits and ._:/- (starting with a letter or digit, at most 191 characters); namespace must be letters, digits, _ and - (at most 64)")
+	if (p.LogID != "" && !LogName.MatchString(p.LogID)) || (p.Namespace != "" && !profileName.MatchString(p.Namespace)) {
+		return InputError("log_id must be lowercase letters, digits and ._:/- (starting with a letter or digit, at most 191 characters); namespace must be letters, digits, _ and - (at most 64)")
 	}
 	if p.LogID == "" && p.Namespace == "" {
-		return inputError("configure an artifact namespace, a log_id, or both")
+		return InputError("configure an artifact namespace, a log_id, or both")
 	}
-	if p.Type == remoteProfileType {
+	switch {
+	case p.Log != "" && p.Log != LogCLL && p.Log != LogBook:
+		return InputError("log must be cll (the core keeps the log) or book (an evidence book, kept by the capsulectl-book plugin)")
+	case p.Log == LogBook && (p.Type != "jsonl" || p.LogID == ""):
+		return InputError("only a jsonl profile with a log_id can be a book profile (log: book)")
+	}
+	if p.Type == RemoteProfileType {
 		if e := validateRemoteConnection(p); e != nil {
 			return e
 		}
@@ -229,14 +248,14 @@ func (p Profile) validate() error {
 		// path (a file for sqlite; a directory holding artifacts.jsonl and
 		// cll.jsonl for jsonl) and no host/port/TLS applies.
 		if p.Connection.Database == "" {
-			return inputError("sqlite/jsonl profile needs a filesystem path in connection.database")
+			return InputError("sqlite/jsonl profile needs a filesystem path in connection.database")
 		}
 	} else {
 		if p.Connection.Host == "" || p.Connection.Database == "" || p.Connection.Port < 1 || p.Connection.Port > 65535 {
-			return inputError("profile needs a MySQL host, port and database")
+			return InputError("profile needs a MySQL host, port and database")
 		}
 		if p.Connection.TLS != "true" && p.Connection.TLS != "false" {
-			return inputError("mysql TLS must be true or false; insecure fallback is unsupported")
+			return InputError("mysql TLS must be true or false; insecure fallback is unsupported")
 		}
 	}
 	for _, s := range []Secret{p.Credentials.Password, p.Credentials.Token, p.Signing, p.Checkpoint.Signing, p.Checkpoint.Token} {
@@ -244,41 +263,41 @@ func (p Profile) validate() error {
 			return e
 		}
 	}
-	if _, e := parseKeys(p.TrustedKeys); e != nil {
+	if _, e := ParseKeys(p.TrustedKeys); e != nil {
 		return e
 	}
-	if _, e := parseKeys(p.Checkpoint.TrustedKeys); e != nil {
+	if _, e := ParseKeys(p.Checkpoint.TrustedKeys); e != nil {
 		return e
 	}
 	if len(p.RulesChecker.DefinitionDigests) > 0 && p.RulesChecker.DefinitionDigest != "" {
-		return inputError("rules_checker holds definition_digest or definition_digests, not both: edit the profile file to keep one (profile update reads the file first)")
+		return InputError("rules_checker holds definition_digest or definition_digests, not both: edit the profile file to keep one (profile update reads the file first)")
 	}
 	for _, d := range p.RulesChecker.DefinitionDigests {
-		if !hex64.MatchString(d) {
-			return inputError("rules_checker definition_digests must each be 64 lowercase hex characters: edit the profile file to correct them")
+		if !Hex64.MatchString(d) {
+			return InputError("rules_checker definition_digests must each be 64 lowercase hex characters: edit the profile file to correct them")
 		}
 	}
 	return nil
 }
-func parseKeys(values []string) ([]ed25519.PublicKey, error) {
+func ParseKeys(values []string) ([]ed25519.PublicKey, error) {
 	keys := make([]ed25519.PublicKey, 0, len(values))
 	for _, v := range values {
 		b, e := hex.DecodeString(v)
 		if e != nil || len(b) != 32 {
-			return nil, inputError("trusted keys must be 32-byte Ed25519 public keys in hex")
+			return nil, InputError("trusted keys must be 32-byte Ed25519 public keys in hex")
 		}
 		keys = append(keys, ed25519.PublicKey(b))
 	}
 	return keys, nil
 }
-func privateKey(s Secret) (ed25519.PrivateKey, error) {
+func PrivateKey(s Secret) (ed25519.PrivateKey, error) {
 	v, e := s.resolve()
 	if e != nil {
 		return nil, e
 	}
 	b, e := hex.DecodeString(v)
 	if e != nil || len(b) != ed25519.SeedSize {
-		return nil, inputError("signing secret must contain a 32-byte Ed25519 seed in hex")
+		return nil, InputError("signing secret must contain a 32-byte Ed25519 seed in hex")
 	}
 	return ed25519.NewKeyFromSeed(b), nil
 }
@@ -288,22 +307,22 @@ func readProtected(path string) ([]byte, error) {
 		return nil, e
 	}
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return nil, inputError("file must be regular and accessible only to its owner")
+		return nil, InputError("file must be regular and accessible only to its owner")
 	}
 	return os.ReadFile(path)
 }
-func profilePath(name string) (string, error) {
+func ProfilePath(name string) (string, error) {
 	if !profileName.MatchString(name) {
-		return "", inputError("a profile name is required: letters, digits, _ and - (starting with a letter or digit, at most 64 characters)")
+		return "", InputError("a profile name is required: letters, digits, _ and - (starting with a letter or digit, at most 64 characters)")
 	}
-	dir, e := profilesDir()
+	dir, e := ProfilesDir()
 	if e != nil {
 		return "", e
 	}
 	return filepath.Join(dir, name+".yaml"), nil
 }
 
-func profilesDir() (string, error) {
+func ProfilesDir() (string, error) {
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if base == "" {
 		home, e := os.UserHomeDir()
@@ -313,38 +332,38 @@ func profilesDir() (string, error) {
 		base = filepath.Join(home, ".config")
 	}
 	if !filepath.IsAbs(base) {
-		return "", inputError("XDG_CONFIG_HOME must be an absolute path when it is set")
+		return "", InputError("XDG_CONFIG_HOME must be an absolute path when it is set")
 	}
 	return filepath.Join(base, "capsule", "profiles"), nil
 }
-func loadProfile(name string) (Profile, error) {
-	path, e := profilePath(name)
+func LoadProfile(name string) (Profile, error) {
+	path, e := ProfilePath(name)
 	if e != nil {
 		return Profile{}, e
 	}
 	raw, e := readProtected(path)
 	if e != nil {
-		return Profile{}, inputError("profile " + name + " was not found, or its file is readable by others than its owner (chmod 600): see `capsulectl profile list`, or create it with `capsulectl profile create`")
+		return Profile{}, InputError("profile " + name + " was not found, or its file is readable by others than its owner (chmod 600): see `capsulectl profile list`, or create it with `capsulectl profile create`")
 	}
 	var p Profile
 	d := yaml.NewDecoder(bytes.NewReader(raw))
 	d.KnownFields(true)
 	if e = d.Decode(&p); e != nil {
-		return Profile{}, inputError("profile " + name + " has a field capsulectl does not know, or a field of the wrong type: compare it with `capsulectl profile show`")
+		return Profile{}, InputError("profile " + name + " has a field capsulectl does not know, or a field of the wrong type: compare it with `capsulectl profile show`")
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return p, inputError("the profile file must hold exactly one YAML document")
+		return p, InputError("the profile file must hold exactly one YAML document")
 	}
 	if p.Name != name {
-		return p, inputError("the profile file's name field must match its filename (NAME.yaml holds name: NAME)")
+		return p, InputError("the profile file's name field must match its filename (NAME.yaml holds name: NAME)")
 	}
 	return p, p.validate()
 }
 
 // atomicFile uses link for create-only admission and rename for explicit updates.
 // fsync on both the file and directory makes profile changes restart-durable.
-func atomicFile(path string, data []byte, replace bool) (err error) {
+func AtomicFile(path string, data []byte, replace bool) (err error) {
 	dir := filepath.Dir(path)
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return err
@@ -369,7 +388,7 @@ func atomicFile(path string, data []byte, replace bool) (err error) {
 	if replace {
 		info, e := os.Lstat(path)
 		if e != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-			return inputError("update requires an existing owner-protected regular file")
+			return InputError("update requires an existing owner-protected regular file")
 		}
 		err = os.Rename(name, path)
 	} else {
@@ -384,7 +403,7 @@ func atomicFile(path string, data []byte, replace bool) (err error) {
 	}
 	return errors.Join(d.Sync(), d.Close())
 }
-func saveProfile(p Profile, replace bool) error {
+func SaveProfile(p Profile, replace bool) error {
 	if e := p.validate(); e != nil {
 		return e
 	}
@@ -392,22 +411,22 @@ func saveProfile(p Profile, replace bool) error {
 	if e != nil {
 		return e
 	}
-	path, e := profilePath(p.Name)
+	path, e := ProfilePath(p.Name)
 	if e != nil {
 		return e
 	}
-	return atomicFile(path, b, replace)
+	return AtomicFile(path, b, replace)
 }
 func profileCommands() *cobra.Command {
 	group := &cobra.Command{Use: "profile", Short: "Create, inspect or explicitly update a named target"}
-	list := &cobra.Command{Use: "list", Short: "List configured profile names", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
-		dir, e := profilesDir()
+	list := &cobra.Command{Use: "list", Short: "List configured profile names", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+		dir, e := ProfilesDir()
 		if e != nil {
 			return e
 		}
 		entries, e := os.ReadDir(dir)
 		if errors.Is(e, os.ErrNotExist) {
-			return output(c, map[string]any{"profiles": []string{}})
+			return Output(c, map[string]any{"profiles": []string{}})
 		}
 		if e != nil {
 			return e
@@ -423,10 +442,10 @@ func profileCommands() *cobra.Command {
 			}
 		}
 		slices.Sort(profiles)
-		return output(c, map[string]any{"profiles": profiles})
+		return Output(c, map[string]any{"profiles": profiles})
 	}}
-	show := &cobra.Command{Use: "show NAME", Short: "Show a profile's identity, backend and key-file paths (secrets redacted)", Args: oneArg, RunE: func(c *cobra.Command, args []string) error {
-		p, e := loadProfile(args[0])
+	show := &cobra.Command{Use: "show NAME", Short: "Show a profile's identity, backend and key-file paths (secrets redacted)", Args: OneArg, RunE: func(c *cobra.Command, args []string) error {
+		p, e := LoadProfile(args[0])
 		if e != nil {
 			return errors.Join(ErrInput, e)
 		}
@@ -435,7 +454,7 @@ func profileCommands() *cobra.Command {
 		p.Signing = p.Signing.redact()
 		p.Checkpoint.Signing = p.Checkpoint.Signing.redact()
 		p.Checkpoint.Token = p.Checkpoint.Token.redact()
-		return output(c, p)
+		return Output(c, p)
 	}}
 	group.AddCommand(list, show, profileRetireCommand())
 	for _, update := range []bool{false, true} {
@@ -443,14 +462,15 @@ func profileCommands() *cobra.Command {
 		if update {
 			verb = "update"
 		}
-		c := &cobra.Command{Use: verb, Args: noArgs}
+		c := &cobra.Command{Use: verb, Args: NoArgs}
 		f := c.Flags()
 		f.String("name", "", "New profile name")
 		f.Bool("interactive", false, "Ask for missing nonsecret connection fields")
-		fields := map[string]string{"type": "type", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator", "clock-tolerance": "clock_tolerance", "url": "connection.url", "requester-id": "connection.requester_id"}
+		fields := map[string]string{"type": "type", "log": "log", "log-id": "log_id", "namespace": "namespace", "mysql-host": "connection.host", "mysql-database": "connection.database", "mysql-tls": "connection.tls", "mysql-user": "credentials.username", "checkpoint-endpoint": "checkpoint.endpoint", "checkpoint-public-key": "checkpoint.public_key", "operator": "operator", "clock-tolerance": "clock_tolerance", "url": "connection.url", "requester-id": "connection.requester_id"}
 		for flag := range fields {
 			f.String(flag, "", "Profile setting")
 		}
+		f.Lookup("log").Usage = "Who keeps the profile's log: cll (the core's own CLL) or book (an evidence book, kept by the capsulectl-book plugin; jsonl only). A jsonl profile with a log_id is a book unless it says cll. Fixed once set"
 		f.Int("mysql-port", 3306, "MySQL port")
 		f.String("sqlite-path", "", "SQLite database file path (sets connection.database for --type sqlite)")
 		f.String("jsonl-path", "", "JSONL storage directory (sets connection.database for --type jsonl)")
@@ -468,11 +488,13 @@ func profileCommands() *cobra.Command {
 		c.RunE = func(c *cobra.Command, _ []string) error {
 			v := viper.New()
 			v.SetConfigType("yaml")
+			var before Profile
 			if update {
-				p, e := selected(c)
+				p, e := Selected(c)
 				if e != nil {
 					return e
 				}
+				before = p
 				b, e := yaml.Marshal(p)
 				if e != nil {
 					return e
@@ -507,7 +529,7 @@ func profileCommands() *cobra.Command {
 			}
 			var p Profile
 			if e := v.UnmarshalExact(&p); e != nil {
-				return inputError("the profile settings could not be applied: a value has the wrong type for its field")
+				return InputError("the profile settings could not be applied: a value has the wrong type for its field")
 			}
 			if sp, _ := c.Flags().GetString("sqlite-path"); sp != "" {
 				p.Connection.Database = sp
@@ -531,7 +553,7 @@ func profileCommands() *cobra.Command {
 					prompts = append(prompts, prompt{"SQLite database file path", &p.Connection.Database})
 				case "jsonl":
 					prompts = append(prompts, prompt{"JSONL storage directory", &p.Connection.Database})
-				case remoteProfileType:
+				case RemoteProfileType:
 					prompts = append(prompts, prompt{"Base URL", &p.Connection.URL}, prompt{"The node's own full peer id (64 hex)", &p.Connection.RequesterID})
 				default:
 					prompts = append(prompts, prompt{"MySQL host", &p.Connection.Host}, prompt{"Database", &p.Connection.Database})
@@ -549,7 +571,7 @@ func profileCommands() *cobra.Command {
 					}
 					s, e := reader.ReadString('\n')
 					if e != nil {
-						return inputError("guided configuration requires input; use flags for automation")
+						return InputError("guided configuration requires input; use flags for automation")
 					}
 					*item.target = strings.TrimSpace(s)
 					return nil
@@ -561,7 +583,7 @@ func profileCommands() *cobra.Command {
 				}
 				// Only a book seals records with the operator, and whether this
 				// profile is one depends on the log ID just asked for.
-				if p.isBook() {
+				if p.IsBook() {
 					if e := ask(prompt{"Operator (who signs the book's records)", &p.Operator}); e != nil {
 						return e
 					}
@@ -570,14 +592,14 @@ func profileCommands() *cobra.Command {
 			// A witness endpoint and its public key travel together: never write a
 			// profile whose every witnessed milestone is bound to fail.
 			if update && c.Flags().Changed("checkpoint-endpoint") && !c.Flags().Changed("checkpoint-public-key") && p.Checkpoint.Endpoint != "" {
-				return hint(ErrInput, "--checkpoint-endpoint needs --checkpoint-public-key <64-hex Ed25519 key> in the same call: the key identifies that witness")
+				return Hint(ErrInput, "--checkpoint-endpoint needs --checkpoint-public-key <64-hex Ed25519 key> in the same call: the key identifies that witness")
 			}
 			if e := checkWitnessConfig(p); e != nil {
 				return e
 			}
 			if c.Flags().Changed("materiality") {
 				path, _ := c.Flags().GetString("materiality")
-				if e := pinMateriality(&p, path); e != nil {
+				if e := PinMateriality(&p, path); e != nil {
 					return e
 				}
 			}
@@ -587,14 +609,23 @@ func profileCommands() *cobra.Command {
 					return e
 				}
 			}
-			p.Operator = normalizeOperator(p.Operator)
-			if p.operatorMissing() {
-				return inputError("--operator is required for a jsonl profile with a log_id: the profile is an evidence book, and the operator names who signs every record it seals")
+			// The log's owner is declared when the profile is made, and a
+			// jsonl profile with a log_id is a book unless it says cll. It
+			// never changes: the other owner would not see the log.
+			if p.Type == "jsonl" && p.LogID != "" && p.Log == "" {
+				p.Log = LogBook
 			}
-			if e := saveProfile(p, update); e != nil {
+			if update && before.LogID != "" && before.IsBook() != p.IsBook() {
+				return InputError("a profile's log stays with the owner it was made with (log: " + map[bool]string{true: LogBook, false: LogCLL}[before.IsBook()] + "); make a new profile for the other")
+			}
+			p.Operator = normalizeOperator(p.Operator)
+			if p.OperatorMissing() {
+				return InputError("--operator is required for a jsonl profile with a log_id: the profile is an evidence book, and the operator names who signs every record it seals")
+			}
+			if e := SaveProfile(p, update); e != nil {
 				return e
 			}
-			return output(c, map[string]string{"profile": p.Name, "status": "saved"})
+			return Output(c, map[string]string{"profile": p.Name, "status": "saved"})
 		}
 		group.AddCommand(c)
 	}

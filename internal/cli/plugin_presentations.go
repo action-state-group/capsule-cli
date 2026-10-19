@@ -51,7 +51,7 @@ const presentationFileLimit = 1 << 20
 
 // presentationRoots are where presentations may come from: the built-in
 // trusted roots. A test replaces it; nothing else does.
-var presentationRoots = builtinPluginRoots
+var PresentationRoots = builtinPluginRoots
 
 func builtinPluginRoots() []string {
 	roots := []string{"/usr/local/lib/capsulectl/plugins"}
@@ -124,7 +124,7 @@ var (
 	lowerHexDigest          = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
-func presentationSchema(def string) (*jsonschema.Schema, error) {
+func PresentationSchema(def string) (*jsonschema.Schema, error) {
 	presentationSchemasOnce.Do(func() {
 		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(presentationManifestSchema))
 		if err != nil {
@@ -158,8 +158,8 @@ func loadPresentations(info pluginInfo) ([]presentationModule, error) {
 	if err != nil {
 		return nil, err
 	}
-	if root := rootOf(launcher, presentationRoots()); root == "" {
-		return nil, refuse("untrusted_root", "", "presentations load only from the built-in plugin roots (%s), and %s is not under one", strings.Join(presentationRoots(), ", "), launcher)
+	if root := rootOf(launcher, PresentationRoots()); root == "" {
+		return nil, refuse("untrusted_root", "", "presentations load only from the built-in plugin roots (%s), and %s is not under one", strings.Join(PresentationRoots(), ", "), launcher)
 	}
 	dir := filepath.Dir(launcher)
 	seen := map[string]bool{}
@@ -197,7 +197,7 @@ func rootOf(path string, roots []string) string {
 
 func loadPresentation(dir string, p pluginPresentation) (presentationModule, error) {
 	var m presentationModule
-	schema, err := presentationSchema("manifest")
+	schema, err := PresentationSchema("manifest")
 	if err != nil {
 		return m, err
 	}
@@ -206,7 +206,7 @@ func loadPresentation(dir string, p pluginPresentation) (presentationModule, err
 		return m, refuse("invalid_manifest", "", "the manifest is not JSON")
 	}
 	if err = schema.Validate(doc); err != nil {
-		return m, refuse("invalid_manifest", "", "the manifest is not an aac.presentation-manifest/v0: %s", firstSchemaError(err))
+		return m, refuse("invalid_manifest", "", "the manifest is not an aac.presentation-manifest/v0: %s", FirstSchemaError(err))
 	}
 	if err = json.Unmarshal(p.Manifest, &m.Manifest); err != nil {
 		return m, err
@@ -223,7 +223,7 @@ func loadPresentation(dir string, p pluginPresentation) (presentationModule, err
 			return m, refuse("unsupported_carrier", "", "%s: a plugin's module is carried in the module slot; core-runtime modules ship inside the runtime", m.ID)
 		}
 		script, _ = exec["script_sha256"].(string)
-		for _, s := range asList(exec["style_sha256"]) {
+		for _, s := range AsList(exec["style_sha256"]) {
 			styles = append(styles, s.(string))
 		}
 		wording, _ = exec["wording_sha256"].(string)
@@ -307,19 +307,19 @@ func loadPresentation(dir string, p pluginPresentation) (presentationModule, err
 		if err != nil {
 			return m, refuse("invalid_wording", words[0].Path, "%s: the wording pack is not JSON", m.ID)
 		}
-		schema, err := presentationSchema("wording")
+		schema, err := PresentationSchema("wording")
 		if err != nil {
 			return m, err
 		}
 		if err = schema.Validate(pack); err != nil {
-			return m, refuse("invalid_wording", words[0].Path, "%s: the wording pack is not valid: %s", m.ID, firstSchemaError(err))
+			return m, refuse("invalid_wording", words[0].Path, "%s: the wording pack is not valid: %s", m.ID, FirstSchemaError(err))
 		}
 		m.Wording = &f
 	}
 	return m, nil
 }
 
-func asList(v interface{}) []interface{} {
+func AsList(v interface{}) []interface{} {
 	list, _ := v.([]interface{})
 	return list
 }
@@ -341,7 +341,7 @@ func readPresentationFile(dir, rel string) ([]byte, error) {
 	}
 	// The trust walk stops at the built-in root the plugin is under, never at
 	// a root CAPSULECTL_PLUGIN_ROOTS names.
-	if err = verifyTrustedPathUnder(resolved, presentationRoots()); err != nil {
+	if err = verifyTrustedPathUnder(resolved, PresentationRoots()); err != nil {
 		reason := "path_escape"
 		switch {
 		case errors.Is(err, errNotRegularFile):

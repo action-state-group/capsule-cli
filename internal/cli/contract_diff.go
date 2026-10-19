@@ -102,7 +102,7 @@ var changeSeverity = map[string]string{
 
 // assuranceLadder is the Evidence Result's Grade vocabulary, lowest first:
 // the grade ladder itself (gradeLadder), so the two cannot drift apart.
-var assuranceLadder = gradeLadder
+var AssuranceLadder = GradeLadder
 
 var tierRank = map[string]int{"informational": 0, "must_have": 1}
 
@@ -270,11 +270,11 @@ func gradeFloor(v any) (int, bool) {
 	if len(grades) == 0 {
 		return -1, true
 	}
-	floor := len(assuranceLadder)
+	floor := len(AssuranceLadder)
 	for _, g := range grades {
 		s, _ := g.(string)
 		rank := -1
-		for i, name := range assuranceLadder {
+		for i, name := range AssuranceLadder {
 			if name == s {
 				rank = i
 			}
@@ -641,21 +641,21 @@ func compareRequirement(rid string, a, b map[string]any) []contractChange {
 func requirementsByID(doc map[string]any, side string) (map[string]map[string]any, []string, error) {
 	list, ok := doc["requirements"].([]any)
 	if !ok {
-		return nil, nil, hint(ErrInput, "contract "+side+" has no requirements array")
+		return nil, nil, Hint(ErrInput, "contract "+side+" has no requirements array")
 	}
 	byID := map[string]map[string]any{}
 	var order []string
 	for _, r := range list {
 		req, ok := r.(map[string]any)
 		if !ok {
-			return nil, nil, hint(ErrInput, "contract "+side+" has a requirement that is not an object")
+			return nil, nil, Hint(ErrInput, "contract "+side+" has a requirement that is not an object")
 		}
 		id, ok := req["id"].(string)
 		if !ok {
-			return nil, nil, hint(ErrInput, "contract "+side+" has a requirement with no string id")
+			return nil, nil, Hint(ErrInput, "contract "+side+" has a requirement with no string id")
 		}
 		if _, dup := byID[id]; dup {
-			return nil, nil, errors.Join(errDuplicateRequirementID, hint(ErrInput, "contract "+side+" has two requirements with id "+id))
+			return nil, nil, errors.Join(errDuplicateRequirementID, Hint(ErrInput, "contract "+side+" has two requirements with id "+id))
 		}
 		byID[id] = req
 		order = append(order, id)
@@ -684,11 +684,11 @@ func diffContracts(a, b map[string]any) (contractDiff, error) {
 	}
 	pinA, e := computeContractPin(a)
 	if e != nil {
-		return contractDiff{}, hint(ErrInput, "contract A cannot be canonicalized: "+e.Error())
+		return contractDiff{}, Hint(ErrInput, "contract A cannot be canonicalized: "+e.Error())
 	}
 	pinB, e := computeContractPin(b)
 	if e != nil {
-		return contractDiff{}, hint(ErrInput, "contract B cannot be canonicalized: "+e.Error())
+		return contractDiff{}, Hint(ErrInput, "contract B cannot be canonicalized: "+e.Error())
 	}
 	var changes []contractChange
 	add := func(cs []contractChange) { changes = append(changes, cs...) }
@@ -770,7 +770,7 @@ func diffContracts(a, b map[string]any) (contractDiff, error) {
 // -- command -----------------------------------------------------------------
 
 func decodeContract(path string) (map[string]any, any, error) {
-	raw, e := readInput(path)
+	raw, e := ReadInput(path)
 	if e != nil {
 		return nil, nil, e
 	}
@@ -778,12 +778,12 @@ func decodeContract(path string) (map[string]any, any, error) {
 	dec.UseNumber()
 	var doc map[string]any
 	if e := dec.Decode(&doc); e != nil || doc == nil {
-		return nil, nil, hint(ErrInput, "malformed JSON in "+path+" (expected an object)")
+		return nil, nil, Hint(ErrInput, "malformed JSON in "+path+" (expected an object)")
 	}
 	// The schema validator wants its own decoding of the same bytes.
 	generic, e := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	if e != nil {
-		return nil, nil, hint(ErrInput, "malformed JSON in "+path)
+		return nil, nil, Hint(ErrInput, "malformed JSON in "+path)
 	}
 	return doc, generic, nil
 }
@@ -798,7 +798,7 @@ func contractDiffCommand() *cobra.Command {
 			"2: an input is unreadable or invalid.",
 		Args: func(c *cobra.Command, args []string) error {
 			if len(args) != 2 {
-				return inputError(fmt.Sprintf("%s takes exactly two contract files, OLD and NEW (got %d)", c.CommandPath(), len(args)))
+				return InputError(fmt.Sprintf("%s takes exactly two contract files, OLD and NEW (got %d)", c.CommandPath(), len(args)))
 			}
 			return nil
 		},
@@ -826,11 +826,11 @@ func contractDiffCommand() *cobra.Command {
 				return e
 			}
 			for i, generic := range []any{genericA, genericB} {
-				if report := validateContract(schema, schemaRaw, generic); !report.valid {
+				if report := ValidateContract(schema, schemaRaw, generic); !report.Valid {
 					if !asJSON {
 						printReport(c, args[i], report)
 					}
-					return hint(ErrInput, args[i]+" is not a valid contract under "+against)
+					return Hint(ErrInput, args[i]+" is not a valid contract under "+against)
 				}
 			}
 			d, e := diffContracts(docA, docB)
@@ -842,7 +842,7 @@ func contractDiffCommand() *cobra.Command {
 				for i, ch := range d.Changes {
 					changes[i] = map[string]any{"path": ch.Path, "kind": ch.Kind, "severity": ch.severity(), "reason": ch.Reason}
 				}
-				if oe := output(c, map[string]any{"a": d.A.toJSON(), "b": d.B.toJSON(), "breaking": d.breaking(), "changes": changes}); oe != nil {
+				if oe := Output(c, map[string]any{"a": d.A.toJSON(), "b": d.B.toJSON(), "breaking": d.breaking(), "changes": changes}); oe != nil {
 					return oe
 				}
 			} else {

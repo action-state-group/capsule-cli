@@ -89,7 +89,7 @@ func releaseArtifacts(dir, tag string) (map[string]string, error) {
 		out[name] = hex.EncodeToString(sum[:])
 	}
 	if len(out) == 0 {
-		return nil, inputError("no release artifacts for " + tag + " in " + dir)
+		return nil, InputError("no release artifacts for " + tag + " in " + dir)
 	}
 	return out, nil
 }
@@ -113,7 +113,7 @@ func signReleaseStatement(payload []byte, key ed25519.PrivateKey, issuer, subjec
 }
 
 func releaseRegisterCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "register", Short: "Record a built release in the witness's transparency log (run by the release workflow)", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "register", Short: "Record a built release in the witness's transparency log (run by the release workflow)", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		dir, _ := c.Flags().GetString("dir")
 		tag, _ := c.Flags().GetString("tag")
 		commit, _ := c.Flags().GetString("commit")
@@ -121,9 +121,9 @@ func releaseRegisterCommand() *cobra.Command {
 		witnessKey, _ := c.Flags().GetString("witness-key")
 		subject, _ := c.Flags().GetString("subject")
 		if dir == "" || tag == "" || len(commit) != 40 {
-			return inputError("release register needs --dir, --tag and the full 40-hex --commit")
+			return InputError("release register needs --dir, --tag and the full 40-hex --commit")
 		}
-		authority, err := parseKeys([]string{witnessKey})
+		authority, err := ParseKeys([]string{witnessKey})
 		if err != nil {
 			return err
 		}
@@ -135,7 +135,7 @@ func releaseRegisterCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		payload, err := jcsOf(releaseStatement{Type: releaseStatementType, Repo: releaseRepo, Tag: tag, Commit: commit, Artifacts: artifacts, StatementKey: hex.EncodeToString(public)})
+		payload, err := JCSOf(releaseStatement{Type: releaseStatementType, Repo: releaseRepo, Tag: tag, Commit: commit, Artifacts: artifacts, StatementKey: hex.EncodeToString(public)})
 		if err != nil {
 			return err
 		}
@@ -156,25 +156,25 @@ func releaseRegisterCommand() *cobra.Command {
 		}
 		payloadName, statementName, registrationName := releaseFileNames(tag)
 		for name, body := range map[string][]byte{payloadName: payload, statementName: statement, registrationName: raw} {
-			if err := atomicFile(filepath.Join(dir, name), body, false); err != nil {
+			if err := AtomicFile(filepath.Join(dir, name), body, false); err != nil {
 				return err
 			}
 		}
-		return output(c, map[string]any{"tag": tag, "commit": commit, "artifacts": artifacts, "subject": subject,
+		return Output(c, map[string]any{"tag": tag, "commit": commit, "artifacts": artifacts, "subject": subject,
 			"entry_hash": reg.EntryHash, "leaf_index": reg.LeafIndex, "tree_size": reg.TreeSize,
 			"files": []string{payloadName, statementName, registrationName}})
 	}}
 	cmd.Flags().String("dir", "", "Directory holding the built release files")
 	cmd.Flags().String("tag", "", "The release tag")
 	cmd.Flags().String("commit", "", "The tagged commit (40 hex)")
-	cmd.Flags().String("witness", dealDefaultWitness, "The SCITT transparency service")
-	cmd.Flags().String("witness-key", dealDefaultWitnessKey, "The witness's pinned Ed25519 authority key (hex)")
+	cmd.Flags().String("witness", DealDefaultWitness, "The SCITT transparency service")
+	cmd.Flags().String("witness-key", DealDefaultWitnessKey, "The witness's pinned Ed25519 authority key (hex)")
 	cmd.Flags().String("subject", releaseSubject, "The statement's subject (CWT sub)")
 	return cmd
 }
 
 // jcsOf is the RFC 8785 bytes of v, by way of its JSON form.
-func jcsOf(v any) ([]byte, error) {
+func JCSOf(v any) ([]byte, error) {
 	raw, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
@@ -713,7 +713,7 @@ func checkReleaseAttestation(ctx context.Context, cfg releaseWatchConfig, payloa
 }
 
 func releaseWatchCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "watch", Short: "Compare the repository's releases and the transparency log with the intended releases (maintainer-signed tags); run it off the release infrastructure", Args: noArgs, RunE: func(c *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "watch", Short: "Compare the repository's releases and the transparency log with the intended releases (maintainer-signed tags); run it off the release infrastructure", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		cfg := releaseWatchConfig{knownUnsigned: map[string]bool{}}
 		cfg.repo, _ = c.Flags().GetString("repo")
 		cfg.api, _ = c.Flags().GetString("github-api")
@@ -726,12 +726,12 @@ func releaseWatchCommand() *cobra.Command {
 		cfg.trustedRoot, _ = c.Flags().GetString("trusted-root")
 		cfg.grace, _ = c.Flags().GetDuration("release-grace")
 		if cfg.allowedSigners == "" {
-			return inputError("--allowed-signers is required: the maintainer keys whose signed tags mark an intended release (ssh allowed_signers format)")
+			return InputError("--allowed-signers is required: the maintainer keys whose signed tags mark an intended release (ssh allowed_signers format)")
 		}
 		if _, err := os.Stat(cfg.allowedSigners); err != nil {
-			return inputError("--allowed-signers: cannot read " + cfg.allowedSigners)
+			return InputError("--allowed-signers: cannot read " + cfg.allowedSigners)
 		}
-		authority, err := parseKeys([]string{key})
+		authority, err := ParseKeys([]string{key})
 		if err != nil {
 			return err
 		}
@@ -752,18 +752,18 @@ func releaseWatchCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if err := output(c, out); err != nil {
+		if err := Output(c, out); err != nil {
 			return err
 		}
 		if out["state"] != "ok" {
-			return hint(ErrAlarm, fmt.Sprintf("%d release alarm(s): see alarms", len(out["alarms"].([]string))))
+			return Hint(ErrAlarm, fmt.Sprintf("%d release alarm(s): see alarms", len(out["alarms"].([]string))))
 		}
 		return nil
 	}}
 	cmd.Flags().String("repo", releaseRepo, "The repository whose releases to check")
 	cmd.Flags().String("github-api", "https://api.github.com", "The GitHub API base")
-	cmd.Flags().String("witness", dealDefaultWitness, "The SCITT transparency service")
-	cmd.Flags().String("witness-key", dealDefaultWitnessKey, "The witness's pinned Ed25519 authority key (hex)")
+	cmd.Flags().String("witness", DealDefaultWitness, "The SCITT transparency service")
+	cmd.Flags().String("witness-key", DealDefaultWitnessKey, "The witness's pinned Ed25519 authority key (hex)")
 	cmd.Flags().String("subject", releaseSubject, "The release statements' subject")
 	cmd.Flags().String("allowed-signers", "", "ssh allowed_signers file naming the maintainer keys whose signed tags are intended releases (kept with the monitor, never in the repository)")
 	cmd.Flags().String("gh", "gh", "The gh CLI used to verify release.json's attestation bundle (no account is used)")
@@ -779,7 +779,7 @@ func releaseWatchCommand() *cobra.Command {
 func readKnownUnsigned(path string) ([]string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, inputError("--known-unsigned-file: cannot read " + path)
+		return nil, InputError("--known-unsigned-file: cannot read " + path)
 	}
 	var tags []string
 	for _, line := range strings.Split(string(raw), "\n") {

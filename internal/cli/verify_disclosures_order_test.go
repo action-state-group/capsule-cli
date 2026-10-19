@@ -38,7 +38,7 @@ func TestAssessBundleOrdersWithheldMembers(t *testing.T) {
 	vector := composedVectors(t)[0]
 	var withheld int
 	for range 30 {
-		_, report := bundleVerdict(vector.Container, nil)
+		_, report := BundleVerdict(vector.Container, nil)
 		for _, list := range disclosureLists(roundTrip(t, report)) {
 			for i := 1; i < len(list); i++ {
 				require.False(t, disclosureAfter(list[i-1], list[i]), "%v before %v", list[i-1], list[i])

@@ -2,7 +2,7 @@
 
 `evidence-graph.iife.js` is agent-action-capsule's evidence-graph browser
 runtime, built with `npm run emitter:iife` (esbuild) in that repository's
-`ts/` directory and embedded by `internal/cli/report.go` into every
+`ts/` directory and embedded by `internal/cli/evidence_graph_assets.go` into every
 `report.html` that `capsulectl report build` writes. It is vendored because
 the pinned capsule-viewer Go module ships the emitter shell
 (`go/emitter/shell.html`) but not this file, which is built from aac's `ts/`:
@@ -15,11 +15,11 @@ to render a report.
 | build | `cd ts && npm ci && npm run emitter:iife`, esbuild 0.28.2 |
 | sha256 | `06a3a0513b9d8c882065899037a86854b8758eb0baf8faeea845ae0c13523d05` |
 
-The digest is pinned again in `report.go` (`evidenceGraphIIFEDigest`) and
+The digest is pinned again in `evidence_graph_assets.go` (`evidenceGraphIIFEDigest`) and
 checked by `TestIIFEIsPinned`; `deal report` embeds the same file, with its digest in `evidence-graph.iife.js.sha256`. `scripts/build-evidence-graph-iife.sh [--write]` rebuilds it from the aac commit `go.mod` pins; `scripts/iife-sync.sh <aac checkout>` rebuilds
 and replaces the file, and `make iife-check AAC=<aac checkout>` diffs the
 vendored copy against a fresh build. Refresh the file, the digest here and
-the constants in `report.go` together.
+the constants in `evidence_graph_assets.go` together.
 
 The file bundles agent-action-capsule's runtime (BSD-3-Clause) with cborg
 and @action-state-group/cll (both Apache-2.0); their license texts are in

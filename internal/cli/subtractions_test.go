@@ -31,8 +31,8 @@ func TestSealRejectsInvalidArtifactBeforeWriting(t *testing.T) {
 		t.Run(bad.name, func(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 			p, _ := profileFixture(t)
-			require.NoError(t, saveProfile(p, false))
-			request, err := parseRequest(requestFixture(t))
+			require.NoError(t, SaveProfile(p, false))
+			request, err := ParseRequest(requestFixture(t))
 			require.NoError(t, err)
 			request.Artifacts = []artifact.Artifact{bad.value}
 			raw, err := json.Marshal(request)
@@ -49,19 +49,19 @@ func TestSealRejectsInvalidArtifactBeforeWriting(t *testing.T) {
 
 func TestMySQLPublishRejectsInvalidArtifactBeforePersistence(t *testing.T) {
 	p, key := mysqlProfile(t)
-	target, err := openTarget(t.Context(), p, useInitialization)
+	target, err := OpenTarget(t.Context(), p, UseInitialization)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, target.close()) })
-	request, err := parseRequest(requestFixture(t))
+	t.Cleanup(func() { require.NoError(t, target.Close()) })
+	request, err := ParseRequest(requestFixture(t))
 	require.NoError(t, err)
 	request.Artifacts = []artifact.Artifact{{Name: "extra", Binding: artifact.PayloadDigest, State: artifact.Present, Content: []byte(`{"a":2}`)}}
-	record, err := seal(request, key)
+	record, err := Seal(request, key)
 	require.NoError(t, err)
-	_, err = target.publish(t.Context(), request, key)
+	_, err = target.Publish(t.Context(), request, key)
 	require.ErrorIs(t, err, artifact.ErrDigestMismatch)
-	_, err = target.artifacts.Get(t.Context(), record.CapsuleID)
+	_, err = target.Artifacts.Get(t.Context(), record.CapsuleID)
 	require.ErrorIs(t, err, artifact.ErrNotFound)
-	entries, err := target.log.ScanEntries(t.Context(), 0, 10)
+	entries, err := target.Log.ScanEntries(t.Context(), 0, 10)
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 }
@@ -71,22 +71,22 @@ func TestMySQLCheckpointReadsAndValidatesCLLState(t *testing.T) {
 	p, key := mysqlProfile(t)
 	p.Checkpoint.Endpoint = "https://127.0.0.1:1"
 	p.Checkpoint.PublicKey = p.TrustedKeys[0]
-	target, err := openTarget(t.Context(), p, useInitialization)
+	target, err := OpenTarget(t.Context(), p, UseInitialization)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, target.close()) })
-	require.NoError(t, saveProfile(p, false))
-	request, err := parseRequest(requestFixture(t))
+	t.Cleanup(func() { require.NoError(t, target.Close()) })
+	require.NoError(t, SaveProfile(p, false))
+	request, err := ParseRequest(requestFixture(t))
 	require.NoError(t, err)
-	_, err = target.publish(t.Context(), request, key)
+	_, err = target.Publish(t.Context(), request, key)
 	require.NoError(t, err)
-	service, err := serviceID(p)
+	service, err := ServiceID(p)
 	require.NoError(t, err)
 	signer, err := checkpoint.NewEd25519Signer(key)
 	require.NoError(t, err)
 	cfg := checkpoint.DefaultRunnerConfig(p.LogID)
 	cfg.Cadence.CadenceEntries = 1
 	cfg.WitnessIDs = []string{service}
-	runner, err := checkpoint.NewRunner(cfg, target.log, signer)
+	runner, err := checkpoint.NewRunner(cfg, target.Log, signer)
 	require.NoError(t, err)
 	// Commit only through CLL, as a process can exit immediately after its CAS.
 	_, err = runner.RunOnce(t.Context(), time.Now().UTC())
@@ -99,7 +99,7 @@ func TestMySQLCheckpointReadsAndValidatesCLLState(t *testing.T) {
 	var tables int
 	require.NoError(t, target.db.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='capsule_cli_checkpoints'").Scan(&tables))
 	assert.Zero(t, tables)
-	state, err := target.log.GetWitness(t.Context(), service, 1)
+	state, err := target.Log.GetWitness(t.Context(), service, 1)
 	require.NoError(t, err)
 	var original []byte
 	require.NoError(t, target.db.QueryRowContext(t.Context(), "SELECT witness FROM cll_witnesses WHERE log_id=? AND witness_id=? AND checkpoint_size=?", p.LogID, service, "1").Scan(&original))

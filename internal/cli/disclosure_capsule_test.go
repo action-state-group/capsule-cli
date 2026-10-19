@@ -210,13 +210,13 @@ func TestALaterReportWithholdsEarlierDisclosures(t *testing.T) {
 func TestALegacyBareDisclosureDigestIsNamed(t *testing.T) {
 	d := newDisclosureProfile(t)
 	root := d.publish("check-config", `{"check":"config file","result":"same"}`)
-	p, err := loadProfile("rep")
+	p, err := LoadProfile("rep")
 	require.NoError(t, err)
-	target, err := openTarget(t.Context(), p, usePublication)
+	target, err := OpenTarget(t.Context(), p, UsePublication)
 	require.NoError(t, err)
-	_, err = appendRecordDigest(t.Context(), target.log, map[string]interface{}{"type": "disclosure_record", "root": root})
+	_, err = AppendRecordDigest(t.Context(), target.Log, map[string]interface{}{"type": "disclosure_record", "root": root})
 	require.NoError(t, err)
-	require.NoError(t, target.close())
+	require.NoError(t, target.Close())
 	d.checkpoint()
 
 	_, err = invoke(t, "", "bundle", "--profile", "rep", "--root", root, "--out", filepath.Join(d.dir, "x.json"))

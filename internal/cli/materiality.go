@@ -28,7 +28,7 @@ const materialityPredicateType = "materiality-predicate/v0"
 //
 // An attribute the agent picked is material when it matches at least one
 // matcher in Material.
-type materialityPredicate struct {
+type MaterialityPredicate struct {
 	Type     string               `json:"type"`
 	Name     string               `json:"name"`
 	Version  string               `json:"version"`
@@ -54,11 +54,11 @@ type materialityMatcher struct {
 // member, another type, a matcher that names no field or both kinds, or an
 // empty narrowing word is refused. A predicate that cannot be read never
 // falls back to anything.
-func parseMaterialityPredicate(where string, raw []byte) (*materialityPredicate, error) {
+func ParseMaterialityPredicate(where string, raw []byte) (*MaterialityPredicate, error) {
 	refuse := func(why string) error {
-		return inputError("materiality predicate " + where + ": " + why)
+		return InputError("materiality predicate " + where + ": " + why)
 	}
-	var p materialityPredicate
+	var p MaterialityPredicate
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&p); err != nil {
@@ -90,7 +90,7 @@ func parseMaterialityPredicate(where string, raw []byte) (*materialityPredicate,
 		}
 	}
 	var generic any
-	if err := decodeJSONPreserveNumbers("the materiality predicate", raw, &generic); err != nil {
+	if err := DecodeJSONPreserveNumbers("the materiality predicate", raw, &generic); err != nil {
 		return nil, refuse(err.Error())
 	}
 	digest, err := canonical.JSONDigest(generic)
@@ -112,7 +112,7 @@ const builtinMaterialityPrefix = "builtin:"
 var builtinMaterialityFS embed.FS
 
 // builtinMaterialityNames are the built-in predicates' names, sorted.
-func builtinMaterialityNames() []string {
+func BuiltinMaterialityNames() []string {
 	entries, _ := builtinMaterialityFS.ReadDir("assets/materiality")
 	names := []string{}
 	for _, e := range entries {
@@ -124,7 +124,7 @@ func builtinMaterialityNames() []string {
 // loadMaterialityPredicate reads the predicate ref names: a built-in
 // ("builtin:NAME") or a file path. It returns nil when none is configured
 // (ref empty): the check then fails safe.
-func loadMaterialityPredicate(ref string) (*materialityPredicate, error) {
+func LoadMaterialityPredicate(ref string) (*MaterialityPredicate, error) {
 	if ref == "" {
 		return nil, nil
 	}
@@ -135,22 +135,22 @@ func loadMaterialityPredicate(ref string) (*materialityPredicate, error) {
 			raw, err = builtinMaterialityFS.ReadFile(path.Join("assets/materiality", name+".json"))
 		}
 		if err != nil {
-			return nil, inputError(fmt.Sprintf("no built-in materiality predicate %q; built-in: %s%s", name, builtinMaterialityPrefix, strings.Join(builtinMaterialityNames(), ", "+builtinMaterialityPrefix)))
+			return nil, InputError(fmt.Sprintf("no built-in materiality predicate %q; built-in: %s%s", name, builtinMaterialityPrefix, strings.Join(BuiltinMaterialityNames(), ", "+builtinMaterialityPrefix)))
 		}
-		return parseMaterialityPredicate(ref, raw)
+		return ParseMaterialityPredicate(ref, raw)
 	}
-	raw, err := readInput(ref)
+	raw, err := ReadInput(ref)
 	if err != nil {
 		return nil, err
 	}
-	return parseMaterialityPredicate(ref, raw)
+	return ParseMaterialityPredicate(ref, raw)
 }
 
 // pinMateriality sets p's materiality predicate to the one ref names (a
 // built-in, kept by its name, or a file, kept by its absolute path), pinned
 // by its digest, or removes it when ref is empty. Only the user does this
 // (deal init, profile update): which picks pause is policy.
-func pinMateriality(p *Profile, ref string) error {
+func PinMateriality(p *Profile, ref string) error {
 	if ref == "" {
 		p.Materiality.Predicate, p.Materiality.Digest = "", ""
 		return nil
@@ -162,7 +162,7 @@ func pinMateriality(p *Profile, ref string) error {
 		}
 		ref = abs
 	}
-	predicate, err := loadMaterialityPredicate(ref)
+	predicate, err := LoadMaterialityPredicate(ref)
 	if err != nil {
 		return err
 	}
@@ -173,27 +173,27 @@ func pinMateriality(p *Profile, ref string) error {
 // pinnedMateriality is the predicate a check of p evaluates: the one p
 // pins, refused unless it still has the pinned digest; nil when p pins none
 // (the check fails safe). Nothing about the check run can choose another.
-func pinnedMateriality(p Profile) (*materialityPredicate, error) {
+func PinnedMateriality(p Profile) (*MaterialityPredicate, error) {
 	m := p.Materiality
 	switch {
 	case m.Predicate == "" && m.Digest == "":
 		return nil, nil
 	case m.Predicate == "" || m.Digest == "":
-		return nil, inputError("the profile's materiality predicate is not pinned: set it with `capsulectl --profile " + p.Name + " profile update --materiality FILE` (the user's to run)")
+		return nil, InputError("the profile's materiality predicate is not pinned: set it with `capsulectl --profile " + p.Name + " profile update --materiality FILE` (the user's to run)")
 	}
 	// A built-in has no file to go missing: one this capsulectl does not
 	// ship, or ships with other bytes, refuses below.
 	if !strings.HasPrefix(m.Predicate, builtinMaterialityPrefix) {
 		if _, err := os.Stat(m.Predicate); errors.Is(err, fs.ErrNotExist) {
-			return nil, inputError("materiality predicate file missing (" + m.Predicate + "): re-pin it with `capsulectl --profile " + p.Name + " profile update --materiality FILE`, which is the user's to run")
+			return nil, InputError("materiality predicate file missing (" + m.Predicate + "): re-pin it with `capsulectl --profile " + p.Name + " profile update --materiality FILE`, which is the user's to run")
 		}
 	}
-	predicate, err := loadMaterialityPredicate(m.Predicate)
+	predicate, err := LoadMaterialityPredicate(m.Predicate)
 	if err != nil {
 		return nil, err
 	}
 	if predicate.Digest != m.Digest {
-		return nil, inputError("materiality predicate changed since it was pinned (" + m.Predicate + "): re-pin it with `capsulectl --profile " + p.Name + " profile update --materiality FILE`, which is the user's to run")
+		return nil, InputError("materiality predicate changed since it was pinned (" + m.Predicate + "): re-pin it with `capsulectl --profile " + p.Name + " profile update --materiality FILE`, which is the user's to run")
 	}
 	return predicate, nil
 }
@@ -201,32 +201,23 @@ func pinnedMateriality(p Profile) (*materialityPredicate, error) {
 // dealMateriality is which predicate decided a check's pauses on the agent's
 // picks: its name, version and digest, or digest "none" when no predicate
 // was configured and every pick paused (fail safe).
-type dealMateriality struct {
+type DealMateriality struct {
 	Name    string `json:"name,omitempty"`
 	Version string `json:"version,omitempty"`
 	Digest  string `json:"digest"`
 }
 
-// materialityLabel names a predicate for the card: its name and version, or
-// that none was configured.
-func materialityLabel(m dealMateriality) string {
-	if m.Digest == "none" || m.Name == "" {
-		return "none: every pick asked about"
-	}
-	return m.Name + " " + m.Version
-}
-
-func (p *materialityPredicate) ref() dealMateriality {
+func (p *MaterialityPredicate) Ref() DealMateriality {
 	if p == nil {
-		return dealMateriality{Digest: "none"}
+		return DealMateriality{Digest: "none"}
 	}
-	return dealMateriality{Name: p.Name, Version: p.Version, Digest: p.Digest}
+	return DealMateriality{Name: p.Name, Version: p.Version, Digest: p.Digest}
 }
 
 // material reports whether an attribute the agent picked is material. With
 // no predicate configured (p nil) every pick is: the check fails safe, and
 // the user is asked about everything the agent chose on its own.
-func (p *materialityPredicate) material(a dealAttribute) bool {
+func (p *MaterialityPredicate) IsMaterial(a DealAttribute) bool {
 	if p == nil {
 		return true
 	}
@@ -238,7 +229,7 @@ func (p *materialityPredicate) material(a dealAttribute) bool {
 	return false
 }
 
-func (m materialityMatcher) matches(a dealAttribute) bool {
+func (m materialityMatcher) matches(a DealAttribute) bool {
 	switch {
 	case m.Field != "":
 		if a.Field != m.Field {
@@ -265,29 +256,4 @@ func (m materialityMatcher) matches(a dealAttribute) bool {
 		}
 	}
 	return true
-}
-
-// materialityOpenings are, for each step that committed a materiality
-// predicate's name and version, the step and the opening of its
-// label_commitment: the nonce, name and version. Only the user's own copy
-// carries them.
-func materialityOpenings(events []sealedEvent) []interface{} {
-	out := []interface{}{}
-	for _, se := range events {
-		nonce := se.Event.Nonces["materiality"]
-		if nonce == "" {
-			continue
-		}
-		var m dealMateriality
-		switch {
-		case se.Event.Open != nil:
-			m = se.Event.Open.Materiality
-		case se.Event.Check != nil:
-			m = se.Event.Check.Materiality
-		default:
-			continue
-		}
-		out = append(out, map[string]interface{}{"step": se.CapsuleID, "nonce": nonce, "name": m.Name, "version": m.Version})
-	}
-	return out
 }

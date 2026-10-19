@@ -59,7 +59,7 @@ checkpoint_public_key=$(jq -r .public_key "$work/checkpoint-keygen.json")
 # and a log whose commit times go backwards cannot be closed at all.
 # bookdemo is a fixture helper, not part of capsulectl.
 bookdemo="$work/bookdemo"
-(cd "$repo_root" && go build -o "$bookdemo" ./skills/capsulectl/scripts/bookdemo)
+(cd "$repo_root/plugins" && go build -o "$bookdemo" ./scripts/bookdemo)
 yesterday=$(date -u -v-1d +%Y-%m-%d 2>/dev/null || date -u -d yesterday +%Y-%m-%d)
 "$bookdemo" seed --store "$store" --log-id skill-demo --operator demo-operator \
   --signing-key-file "$seed" --checkpoint-key-file "$checkpoint_seed" --at "${yesterday}T12:00:00Z" \

@@ -33,20 +33,20 @@ type discoverScope struct {
 
 func loadScope(path string) (discoverScope, error) {
 	if path == "" {
-		return discoverScope{}, inputError(
+		return discoverScope{}, InputError(
 			"--scope is required: discover refuses to guess which directories it may read; " +
 				"pass a YAML file with a roots: [] list an operator wrote")
 	}
-	raw, err := readInput(path)
+	raw, err := ReadInput(path)
 	if err != nil {
 		return discoverScope{}, err
 	}
 	var scope discoverScope
 	if err := yaml.Unmarshal(raw, &scope); err != nil {
-		return discoverScope{}, inputError("--scope is not valid YAML")
+		return discoverScope{}, InputError("--scope is not valid YAML")
 	}
 	if len(scope.Roots) == 0 {
-		return discoverScope{}, inputError("--scope roots: [] must name at least one directory")
+		return discoverScope{}, InputError("--scope roots: [] must name at least one directory")
 	}
 	return scope, nil
 }
@@ -343,7 +343,7 @@ func randomActionSuffix() (string, error) {
 // about payloads/secrets/credentials, not about every string this command
 // ever seals.
 func sealScanManifest(p Profile, kind string, manifest any, outputPath string) (map[string]string, error) {
-	key, err := privateKey(p.Signing)
+	key, err := PrivateKey(p.Signing)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func sealScanManifest(p Profile, kind string, manifest any, outputPath string) (
 		},
 		Payload: payload,
 	}
-	record, err := seal(r, key)
+	record, err := Seal(r, key)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +376,7 @@ func sealScanManifest(p Profile, kind string, manifest any, outputPath string) (
 	if err != nil {
 		return nil, err
 	}
-	if err := atomicFile(outputPath, b, false); err != nil {
+	if err := AtomicFile(outputPath, b, false); err != nil {
 		return nil, err
 	}
 	return map[string]string{"capsule_id": record.CapsuleID, "artifact": outputPath}, nil
@@ -386,7 +386,7 @@ func discoverCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "discover",
 		Short: "Read-only inventory of OTel/MCP/gateway/CI/repo config -- never payloads, secrets or credentials",
-		Args:  noArgs,
+		Args:  NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			scopePath, _ := c.Flags().GetString("scope")
 			scope, err := loadScope(scopePath)
@@ -396,13 +396,13 @@ func discoverCommand() *cobra.Command {
 			effectsMode, _ := c.Flags().GetBool("effects")
 			format, _ := c.Flags().GetString("format")
 			if format != "table" && format != "json" {
-				return inputError("--format must be table or json")
+				return InputError("--format must be table or json")
 			}
 			sealOutput, _ := c.Flags().GetString("seal-output")
 			if sealOutput == "" {
-				return inputError("--seal-output is required: every scan seals a capsule of what it scanned")
+				return InputError("--seal-output is required: every scan seals a capsule of what it scanned")
 			}
-			p, err := selected(c)
+			p, err := Selected(c)
 			if err != nil {
 				return err
 			}
@@ -411,7 +411,7 @@ func discoverCommand() *cobra.Command {
 			for _, root := range scope.Roots {
 				files, err := scanRoot(root, scope.Deny)
 				if err != nil {
-					return inputError(fmt.Sprintf("cannot scan root %s: %s", root, err.Error()))
+					return InputError(fmt.Sprintf("cannot scan root %s: %s", root, err.Error()))
 				}
 				allFiles = append(allFiles, files...)
 			}
@@ -426,7 +426,7 @@ func discoverCommand() *cobra.Command {
 					fmt.Fprintf(c.OutOrStdout(), "\nsealed: capsule_id=%s artifact=%s\n", result["capsule_id"], result["artifact"])
 					return nil
 				}
-				return output(c, map[string]any{"files": allFiles, "sealed": result})
+				return Output(c, map[string]any{"files": allFiles, "sealed": result})
 			}
 
 			var boundaries []effectBoundary
@@ -449,7 +449,7 @@ func discoverCommand() *cobra.Command {
 				fmt.Fprintf(c.OutOrStdout(), "\nsealed: capsule_id=%s artifact=%s\n", result["capsule_id"], result["artifact"])
 				return nil
 			}
-			return output(c, map[string]any{"effects": boundaries, "sealed": result})
+			return Output(c, map[string]any{"effects": boundaries, "sealed": result})
 		},
 	}
 	cmd.Flags().String("scope", "", "YAML file naming the roots discover may read (required, operator-authored)")

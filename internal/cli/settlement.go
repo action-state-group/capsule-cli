@@ -27,10 +27,10 @@ func settlementCommands() *cobra.Command {
 			"and derives, per terms leg, the payment state and the delivery state from the legs present. " +
 			"No state is read from a record. A one-sided state is a stated claim, not an agreement; a delivery " +
 			"backed by the seller's own leg alone is the seller's statement of a handoff, not proof of receipt.",
-		Args: noArgs,
+		Args: NoArgs,
 		RunE: runSettlementStatus,
 	}
-	addSettlementStatusFlags(status)
+	AddSettlementStatusFlags(status)
 	group.AddCommand(status)
 	return group
 }
@@ -38,16 +38,16 @@ func settlementCommands() *cobra.Command {
 func runSettlementStatus(c *cobra.Command, _ []string) error {
 	paths, _ := c.Flags().GetStringArray("leg")
 	if len(paths) == 0 {
-		return inputError("settlement status needs at least one --leg file")
+		return InputError("settlement status needs at least one --leg file")
 	}
-	in, err := settlementInput(c, nil, nil)
+	in, err := SettlementInput(c, nil, nil)
 	if err != nil {
 		return err
 	}
-	return writeSettlementResult(c, settlement.Verify(in))
+	return WriteSettlementResult(c, settlement.Verify(in))
 }
 
-func addSettlementStatusFlags(cmd *cobra.Command) {
+func AddSettlementStatusFlags(cmd *cobra.Command) {
 	cmd.Flags().StringArray("leg", nil, "A leg record file (repeatable): an artifact.Record or a bare Capsule with an inline signature and key_id")
 	cmd.Flags().StringArray("object", nil, "A wrapped object's exact octets (repeatable), matched to wrapped entries by SHA-256; used to read the x402 scheme and to detect re-signing")
 	cmd.Flags().StringArray("payer-key", nil, "An Ed25519 public key (hex) accepted for the payer (repeatable)")
@@ -56,14 +56,14 @@ func addSettlementStatusFlags(cmd *cobra.Command) {
 
 // settlementInput is the verifier's input: the given legs and objects, then
 // the --leg and --object files, under the --payer-key/--payee-key policy.
-func settlementInput(c *cobra.Command, legs []settlement.Leg, held map[string][]byte) (settlement.Input, error) {
+func SettlementInput(c *cobra.Command, legs []settlement.Leg, held map[string][]byte) (settlement.Input, error) {
 	in := settlement.Input{Legs: legs, Objects: map[string][]byte{}}
 	for digest, octets := range held {
 		in.Objects[digest] = octets
 	}
 	paths, _ := c.Flags().GetStringArray("leg")
 	for _, path := range paths {
-		l, err := readSettlementLeg(path)
+		l, err := ReadSettlementLeg(path)
 		if err != nil {
 			return settlement.Input{}, err
 		}
@@ -71,7 +71,7 @@ func settlementInput(c *cobra.Command, legs []settlement.Leg, held map[string][]
 	}
 	objects, _ := c.Flags().GetStringArray("object")
 	for _, path := range objects {
-		octets, err := readInput(path)
+		octets, err := ReadInput(path)
 		if err != nil {
 			return settlement.Input{}, err
 		}
@@ -83,7 +83,7 @@ func settlementInput(c *cobra.Command, legs []settlement.Leg, held map[string][]
 	for flag, keys := range map[string][]string{"--payer-key": payerKeys, "--payee-key": payeeKeys} {
 		for _, key := range keys {
 			if !publicKeyHexPattern.MatchString(key) {
-				return settlement.Input{}, inputError(flag + " must be a 32-byte Ed25519 public key in lowercase hex (64 characters)")
+				return settlement.Input{}, InputError(flag + " must be a 32-byte Ed25519 public key in lowercase hex (64 characters)")
 			}
 		}
 	}
@@ -95,12 +95,12 @@ func settlementInput(c *cobra.Command, legs []settlement.Leg, held map[string][]
 
 // writeSettlementResult prints the result with its readings, and fails when a
 // leg failed.
-func writeSettlementResult(c *cobra.Command, result settlement.Result) error {
+func WriteSettlementResult(c *cobra.Command, result settlement.Result) error {
 	readings := make([]map[string]any, 0, len(result.Settlements))
 	for _, s := range result.Settlements {
 		readings = append(readings, map[string]any{"terms": s.Terms, "payment": paymentReading(s), "delivery": deliveryReading(s)})
 	}
-	if err := output(c, map[string]any{"settlement": result, "readings": readings}); err != nil {
+	if err := Output(c, map[string]any{"settlement": result, "readings": readings}); err != nil {
 		return err
 	}
 	if !result.Conforming {
@@ -167,8 +167,8 @@ func deliveryReading(s settlement.Settlement) string {
 }
 
 // readSettlementLeg reads a leg in either capsule file shape `verify` accepts.
-func readSettlementLeg(path string) (settlement.Leg, error) {
-	raw, err := readInput(path)
+func ReadSettlementLeg(path string) (settlement.Leg, error) {
+	raw, err := ReadInput(path)
 	if err != nil {
 		return settlement.Leg{}, err
 	}
@@ -179,16 +179,16 @@ func readSettlementLeg(path string) (settlement.Leg, error) {
 	l := settlement.Leg{Label: path}
 	if shape == capsuleShapeRecord {
 		var r artifact.Record
-		if err := decodeJSONAs("--leg "+path, raw, &r); err != nil {
+		if err := DecodeJSONAs("--leg "+path, raw, &r); err != nil {
 			return settlement.Leg{}, err
 		}
-		if l.Capsule, err = decodeLegCapsule(path, r.Capsule); err != nil {
+		if l.Capsule, err = DecodeLegCapsule(path, r.Capsule); err != nil {
 			return settlement.Leg{}, err
 		}
 		l.Envelope = r.ProducerEnvelope
 		return l, nil
 	}
-	if l.Capsule, err = decodeLegCapsule(path, raw); err != nil {
+	if l.Capsule, err = DecodeLegCapsule(path, raw); err != nil {
 		return settlement.Leg{}, err
 	}
 	signature, hasSignature := l.Capsule["signature"].(string)
@@ -196,18 +196,18 @@ func readSettlementLeg(path string) (settlement.Leg, error) {
 	delete(l.Capsule, "key_id")
 	if hasSignature {
 		if l.Envelope, err = hex.DecodeString(signature); err != nil {
-			return settlement.Leg{}, inputError("--leg " + path + ": signature must be the hex Producer Envelope")
+			return settlement.Leg{}, InputError("--leg " + path + ": signature must be the hex Producer Envelope")
 		}
 	}
 	return l, nil
 }
 
-func decodeLegCapsule(path string, raw []byte) (map[string]any, error) {
+func DecodeLegCapsule(path string, raw []byte) (map[string]any, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	var capsule map[string]any
 	if err := decoder.Decode(&capsule); err != nil || capsule == nil {
-		return nil, inputError("--leg " + path + ": the capsule is not a JSON object")
+		return nil, InputError("--leg " + path + ": the capsule is not a JSON object")
 	}
 	return capsule, nil
 }

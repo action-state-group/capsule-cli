@@ -35,16 +35,16 @@ func installCheck(c *cobra.Command) error {
 	evidenceOut, _ := c.Flags().GetString("evidence-out")
 	name, _ := c.Flags().GetString("profile")
 	if wantVersion == "" || wantCommit == "" || skillsDir == "" || name == "" {
-		return inputError("--install-check needs --expect-version, --expect-commit, --skills-dir and --profile")
+		return InputError("--install-check needs --expect-version, --expect-commit, --skills-dir and --profile")
 	}
 	var issues []string
-	report := map[string]any{"binary_version": cliVersion, "binary_commit": cliCommit, "expected_version": wantVersion, "expected_commit": wantCommit}
-	if cliVersion != wantVersion {
-		issues = append(issues, "binary is "+cliVersion+", expected "+wantVersion)
+	report := map[string]any{"binary_version": CLIVersion, "binary_commit": CLICommit, "expected_version": wantVersion, "expected_commit": wantCommit}
+	if CLIVersion != wantVersion {
+		issues = append(issues, "binary is "+CLIVersion+", expected "+wantVersion)
 	}
 	// The full commit, exactly: a short or partial value never passes.
-	if cliCommit != wantCommit {
-		issues = append(issues, "binary commit is "+cliCommit+", expected "+wantCommit)
+	if CLICommit != wantCommit {
+		issues = append(issues, "binary commit is "+CLICommit+", expected "+wantCommit)
 	}
 
 	skills, err := dealSkills(skillsDir)
@@ -73,7 +73,7 @@ func installCheck(c *cobra.Command) error {
 	}
 
 	witness := map[string]any{"endpoint_set": false, "public_key_ok": false}
-	if p, err := loadProfile(name); err != nil {
+	if p, err := LoadProfile(name); err != nil {
 		issues = append(issues, "profile "+name+" does not load: "+SafeError(err))
 	} else {
 		witness["endpoint_set"] = p.Checkpoint.Endpoint != ""
@@ -103,10 +103,10 @@ func installCheck(c *cobra.Command) error {
 			return err
 		}
 		if err := os.WriteFile(evidenceOut, append(body, '\n'), 0o600); err != nil {
-			return hint(ErrInput, "cannot write --evidence-out "+evidenceOut)
+			return Hint(ErrInput, "cannot write --evidence-out "+evidenceOut)
 		}
 	}
-	if err := output(c, map[string]any{"install_check": report}); err != nil {
+	if err := Output(c, map[string]any{"install_check": report}); err != nil {
 		return err
 	}
 	if len(issues) > 0 {
@@ -135,7 +135,7 @@ func dealSkills(dir string) ([]string, error) {
 		if !d.Type().IsRegular() || d.Name() != "SKILL.md" {
 			return nil
 		}
-		if skillName(path) == "deal" {
+		if SkillName(path) == "deal" {
 			found = append(found, rel)
 		}
 		return nil
@@ -144,7 +144,7 @@ func dealSkills(dir string) ([]string, error) {
 }
 
 // skillName is the `name:` in a SKILL.md's leading front matter, or "".
-func skillName(path string) string {
+func SkillName(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
 		return ""

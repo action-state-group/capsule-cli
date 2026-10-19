@@ -39,12 +39,12 @@ func TestProfileCreateRefusesABookWithoutOperator(t *testing.T) {
 			err := createBook(t, "b-"+tc.name, tc.args...)
 			require.ErrorIs(t, err, ErrInput)
 			assert.Contains(t, SafeError(err), "--operator is required for a jsonl profile with a log_id")
-			_, err = loadProfile("b-" + tc.name)
+			_, err = LoadProfile("b-" + tc.name)
 			assert.Error(t, err, "a refused profile is not saved")
 		})
 	}
 	require.NoError(t, createBook(t, "named", "--operator", "Example Operator"))
-	p, err := loadProfile("named")
+	p, err := LoadProfile("named")
 	require.NoError(t, err)
 	assert.Equal(t, "Example Operator", p.Operator)
 }
@@ -60,7 +60,7 @@ func TestProfileUpdateRefusesBlankingABooksOperator(t *testing.T) {
 	// An update that leaves the operator alone keeps it.
 	_, err := invoke(t, "", "profile", "update", "--profile", "book", "--clock-tolerance", "2m")
 	require.NoError(t, err)
-	p, err := loadProfile("book")
+	p, err := LoadProfile("book")
 	require.NoError(t, err)
 	assert.Equal(t, "Example Operator", p.Operator)
 	assert.Equal(t, "2m", p.ClockTolerance)
@@ -91,34 +91,6 @@ func TestProfileCreateWithoutOperatorWhereNothingSealsIt(t *testing.T) {
 	}
 }
 
-// A book profile saved without an operator by an earlier capsulectl still
-// loads (so `profile update --operator` can repair it), but nothing seals
-// with it: opening the book refuses, naming the fix.
-func TestABookSavedWithoutOperatorRefusesToSeal(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	for i, blank := range []string{"", "   ", "\u200b", "\ufeff"} {
-		name := fmt.Sprintf("legacy%d", i)
-		p, _ := profileFixture(t)
-		p.Name, p.Type, p.LogID, p.Operator = name, "jsonl", name+"-log", blank
-		p.Connection.Database = filepath.Join(t.TempDir(), "store")
-		require.NoError(t, saveProfile(p, false))
-		loaded, err := loadProfile(name)
-		require.NoError(t, err, "an existing profile without an operator still loads")
-
-		_, err = openBook(t.Context(), loaded, true)
-		require.ErrorIs(t, err, ErrInput)
-		msg := SafeError(err)
-		assert.Contains(t, msg, "profile "+name+" has no operator")
-		assert.Contains(t, msg, "capsulectl profile update --profile "+name+" --operator")
-
-		_, err = invoke(t, "", "profile", "update", "--profile", name, "--operator", "Example Operator")
-		require.NoError(t, err, "the named fix works")
-		repaired, err := loadProfile(name)
-		require.NoError(t, err)
-		assert.Equal(t, "Example Operator", repaired.Operator)
-	}
-}
-
 // --interactive asks for the operator once the answers make the profile a book.
 func TestProfileCreateInteractiveAsksABookForItsOperator(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -128,7 +100,7 @@ func TestProfileCreateInteractiveAsksABookForItsOperator(t *testing.T) {
 	}
 	_, err := invoke(t, "asked-log\nExample Operator\n", args("asked")...)
 	require.NoError(t, err)
-	p, err := loadProfile("asked")
+	p, err := LoadProfile("asked")
 	require.NoError(t, err)
 	assert.Equal(t, "asked-log", p.LogID)
 	assert.Equal(t, "Example Operator", p.Operator)
@@ -153,7 +125,7 @@ func TestProfileOperatorIsStoredTrimmed(t *testing.T) {
 	} {
 		name := fmt.Sprintf("trim%d", i)
 		require.NoError(t, createBook(t, name, "--operator", tc.given))
-		p, err := loadProfile(name)
+		p, err := LoadProfile(name)
 		require.NoError(t, err)
 		assert.Equal(t, tc.stored, p.Operator, "--operator %q", tc.given)
 	}
@@ -161,20 +133,20 @@ func TestProfileOperatorIsStoredTrimmed(t *testing.T) {
 	_, err := invoke(t, "asked-log\n  Example Operator \u200b\n", "profile", "create", "--interactive", "--name", "asked",
 		"--type", "jsonl", "--jsonl-path", filepath.Join(t.TempDir(), "store"), "--namespace", "demo")
 	require.NoError(t, err)
-	p, err := loadProfile("asked")
+	p, err := LoadProfile("asked")
 	require.NoError(t, err)
 	assert.Equal(t, "Example Operator", p.Operator, "--interactive stores the same trimmed value")
 
 	_, err = invoke(t, "", "profile", "update", "--profile", "asked", "--operator", " bob ")
 	require.NoError(t, err)
-	p, err = loadProfile("asked")
+	p, err = LoadProfile("asked")
 	require.NoError(t, err)
 	assert.Equal(t, "bob", p.Operator, "update stores it trimmed")
 
 	_, err = invoke(t, "", "profile", "create", "--name", "lite", "--type", "sqlite",
 		"--sqlite-path", filepath.Join(t.TempDir(), "c.db"), "--log-id", "lite-log", "--operator", " alice ")
 	require.NoError(t, err)
-	p, err = loadProfile("lite")
+	p, err = LoadProfile("lite")
 	require.NoError(t, err)
 	assert.Equal(t, "alice", p.Operator, "a profile that is not a book stores it trimmed too")
 }

@@ -12,20 +12,20 @@ import (
 func TestMySQLGetFlatOutput(t *testing.T) {
 	p, key := mysqlProfile(t)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	target, err := openTarget(t.Context(), p, useInitialization)
+	target, err := OpenTarget(t.Context(), p, UseInitialization)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, target.close()) })
-	request, err := parseRequest(requestFixture(t))
+	t.Cleanup(func() { require.NoError(t, target.Close()) })
+	request, err := ParseRequest(requestFixture(t))
 	require.NoError(t, err)
-	record, err := seal(request, key)
+	record, err := Seal(request, key)
 	require.NoError(t, err)
 	record, err = artifact.Prepare(record)
 	require.NoError(t, err)
-	require.NoError(t, target.artifacts.Put(t.Context(), record))
-	stored, err := target.artifacts.Get(t.Context(), record.CapsuleID)
+	require.NoError(t, target.Artifacts.Put(t.Context(), record))
+	stored, err := target.Artifacts.Get(t.Context(), record.CapsuleID)
 	require.NoError(t, err)
 	p.ReadOnly = true
-	require.NoError(t, saveProfile(p, false))
+	require.NoError(t, SaveProfile(p, false))
 
 	for _, raw := range []bool{false, true} {
 		name := "readable"

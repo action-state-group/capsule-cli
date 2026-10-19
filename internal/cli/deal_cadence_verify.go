@@ -23,7 +23,7 @@ import (
 // no witnessed chain. dealStatement is nil when the bundle's checkpoint did
 // not verify.
 func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory *witness.Directory) (result aacbundle.ClaimResult, receipts []map[string]string, present bool) {
-	chain := cadenceChainOf(value)
+	chain := CadenceChainOf(value)
 	if chain["state"] != "witnessed" {
 		return aacbundle.ClaimResult{}, nil, false
 	}
@@ -48,7 +48,7 @@ func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory 
 		if err != nil {
 			return fail("cadence_earlier_checkpoint_malformed")
 		}
-		if _, err = signedCheckpoint(statement); err != nil {
+		if _, err = SignedCheckpoint(statement); err != nil {
 			return fail("cadence_earlier_checkpoint_signature_invalid")
 		}
 		prior, err := checkpoint.ParseRecord(statement)
@@ -71,16 +71,16 @@ func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory 
 		logID, _ = chain["deal_log_id"].(string) // bundles written before the rename
 	}
 	salt, _ := chain["salt"].(string)
-	size, sizeErr := jsonUint(chain["size"])
-	index, indexErr := jsonUint(chain["index"])
+	size, sizeErr := JSONUint(chain["size"])
+	index, indexErr := JSONUint(chain["index"])
 	if logID != deal.LogID || sizeErr != nil || size != deal.MMRSize {
 		return fail("cadence_leaf_does_not_name_this_checkpoint")
 	}
-	if indexErr != nil || index >= 1<<dealCadenceDepth || salt == "" {
+	if indexErr != nil || index >= 1<<DealCadenceDepth || salt == "" {
 		return fail("cadence_leaf_malformed")
 	}
 	rawPath, _ := chain["path"].([]interface{})
-	if len(rawPath) != dealCadenceDepth {
+	if len(rawPath) != DealCadenceDepth {
 		return fail("cadence_path_malformed")
 	}
 	path := make([][]byte, len(rawPath))
@@ -91,7 +91,7 @@ func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory 
 		}
 	}
 	sum := sha256.Sum256(dealStatement)
-	leaf, err := cadenceLeaf(logID, size, hex.EncodeToString(sum[:]), salt)
+	leaf, err := CadenceLeaf(logID, size, hex.EncodeToString(sum[:]), salt)
 	if err != nil {
 		return fail("cadence_leaf_malformed")
 	}
@@ -104,7 +104,7 @@ func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory 
 	if err != nil {
 		return fail("cadence_checkpoint_malformed")
 	}
-	if _, err = signedCheckpoint(statement); err != nil {
+	if _, err = SignedCheckpoint(statement); err != nil {
 		return fail("cadence_checkpoint_signature_invalid")
 	}
 	cadence, err := checkpoint.ParseRecord(statement)
@@ -117,7 +117,7 @@ func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory 
 	if inner["log_id"] != cadence.LogID {
 		return fail("cadence_log_id_mismatch")
 	}
-	entry, entryErr := jsonUint(inner["entry_index"])
+	entry, entryErr := JSONUint(inner["entry_index"])
 	proof, proofErr := parseProofJSON(inner["inclusion_proof"])
 	cadenceRoot, rootErr := hex.DecodeString(cadence.Root)
 	if entryErr != nil || proofErr != nil || rootErr != nil || !mmr.VerifyHexInclusion(cadenceRoot, cadence.MMRSize, entry, hex.EncodeToString(root), proof) {
@@ -128,7 +128,7 @@ func cadenceClaim(value map[string]interface{}, dealStatement []byte, directory 
 	return result, receipts, true
 }
 
-func jsonUint(v interface{}) (uint64, error) {
+func JSONUint(v interface{}) (uint64, error) {
 	switch n := v.(type) {
 	case json.Number:
 		return strconv.ParseUint(n.String(), 10, 64)
@@ -165,13 +165,13 @@ func parseProofJSON(v interface{}) (mmr.InclusionProof, error) {
 	var err error
 	kind, _ := m["kind"].(string)
 	p.Kind = kind
-	if p.V, err = jsonUint(m["v"]); err != nil {
+	if p.V, err = JSONUint(m["v"]); err != nil {
 		return p, err
 	}
-	if p.Size, err = jsonUint(m["size"]); err != nil {
+	if p.Size, err = JSONUint(m["size"]); err != nil {
 		return p, err
 	}
-	if p.LeafIndex, err = jsonUint(m["leaf_index"]); err != nil {
+	if p.LeafIndex, err = JSONUint(m["leaf_index"]); err != nil {
 		return p, err
 	}
 	if p.Witness, err = hashes("witness"); err != nil {
@@ -205,13 +205,13 @@ func parseConsistencyJSON(v interface{}) (mmr.ConsistencyProof, error) {
 	var p mmr.ConsistencyProof
 	var err error
 	p.Kind, _ = m["kind"].(string)
-	if p.V, err = jsonUint(m["v"]); err != nil {
+	if p.V, err = JSONUint(m["v"]); err != nil {
 		return p, err
 	}
-	if p.OldSize, err = jsonUint(m["old_size"]); err != nil {
+	if p.OldSize, err = JSONUint(m["old_size"]); err != nil {
 		return p, err
 	}
-	if p.NewSize, err = jsonUint(m["new_size"]); err != nil {
+	if p.NewSize, err = JSONUint(m["new_size"]); err != nil {
 		return p, err
 	}
 	if p.OldPeaks, err = hashes(m["old_peaks"]); err != nil {

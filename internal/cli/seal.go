@@ -101,24 +101,24 @@ func (c *chainRequest) toEmit() *emit.Chain {
 	return &emit.Chain{ParentCapsuleID: c.ParentCapsuleID, Relation: emit.ChainRelation(c.Relation)}
 }
 
-const maxInput = 12 << 20
+const MaxInput = 12 << 20
 
-func decodeJSON(raw []byte, v any) error { return decodeJSONAs("the JSON input", raw, v) }
+func DecodeJSON(raw []byte, v any) error { return DecodeJSONAs("the JSON input", raw, v) }
 
 // decodeJSONAs decodes one strict JSON value; label names the input in a
 // refusal: the flag or file it came from.
-func decodeJSONAs(label string, raw []byte, v any) error {
-	if len(raw) > maxInput {
-		return inputError("the input exceeds the 12 MiB size limit")
+func DecodeJSONAs(label string, raw []byte, v any) error {
+	if len(raw) > MaxInput {
+		return InputError("the input exceeds the 12 MiB size limit")
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if e := d.Decode(v); e != nil {
-		return inputError(jsonDecodeReason(label, e))
+		return InputError(jsonDecodeReason(label, e))
 	}
 	var extra any
 	if d.Decode(&extra) != io.EOF {
-		return inputError(label + " must hold exactly one JSON value; more follows it")
+		return InputError(label + " must hold exactly one JSON value; more follows it")
 	}
 	return nil
 }
@@ -189,63 +189,63 @@ func jsonTypeName(t reflect.Type) string {
 // caller typed, so naming it in full discloses nothing sensitive — unlike the
 // profile, driver, or config detail SafeError suppresses. It still carries
 // ErrInput (exit code 2); only the SafeError message differs.
-type inputFileError struct {
-	path     string
-	notFound bool
+type InputFileError struct {
+	Path     string
+	NotFound bool
 }
 
-func (e *inputFileError) Error() string {
-	if e.notFound {
-		return "input file not found: " + e.path
+func (e *InputFileError) Error() string {
+	if e.NotFound {
+		return "input file not found: " + e.Path
 	}
-	return "cannot read input file: " + e.path
+	return "cannot read input file: " + e.Path
 }
 
-func readInput(path string) ([]byte, error) {
+func ReadInput(path string) ([]byte, error) {
 	if path == "" {
-		return nil, inputError("an input file is required: pass the command's file flag (see --help)")
+		return nil, InputError("an input file is required: pass the command's file flag (see --help)")
 	}
 	f, e := os.Open(path)
 	if e != nil {
-		return nil, errors.Join(ErrInput, &inputFileError{path: path, notFound: errors.Is(e, fs.ErrNotExist)})
+		return nil, errors.Join(ErrInput, &InputFileError{Path: path, NotFound: errors.Is(e, fs.ErrNotExist)})
 	}
-	b, e := io.ReadAll(io.LimitReader(f, maxInput+1))
+	b, e := io.ReadAll(io.LimitReader(f, MaxInput+1))
 	e = errors.Join(e, f.Close())
 	if e != nil {
 		// A read/close failure on the caller-supplied file (e.g. it is a
 		// directory) is the same input-file class as an open failure: exit 2
 		// and name the path, not the generic operational catch-all.
-		return nil, errors.Join(ErrInput, &inputFileError{path: path})
+		return nil, errors.Join(ErrInput, &InputFileError{Path: path})
 	}
-	if len(b) > maxInput {
-		return nil, inputError("the input exceeds the 12 MiB size limit")
+	if len(b) > MaxInput {
+		return nil, InputError("the input exceeds the 12 MiB size limit")
 	}
 	return b, nil
 }
-func parseRequest(raw []byte) (Request, error) {
+func ParseRequest(raw []byte) (Request, error) {
 	var r Request
-	e := decodeJSONAs("--request", raw, &r)
+	e := DecodeJSONAs("--request", raw, &r)
 	if e != nil {
 		return r, e
 	}
 	if r.Version != "capsule-seal-request/v1" {
-		return r, inputError("spec_version must be capsule-seal-request/v1")
+		return r, InputError("spec_version must be capsule-seal-request/v1")
 	}
 	if r.ProvenanceMode != nil {
 		if r.Capsule.ProvenanceMode != nil {
-			return r, inputError("provenance_mode must not be set on both the request and the capsule")
+			return r, InputError("provenance_mode must not be set on both the request and the capsule")
 		}
 		r.Capsule.ProvenanceMode = r.ProvenanceMode.toEmit()
 	}
 	if r.Chain != nil {
 		if r.Capsule.Chain != nil {
-			return r, inputError("chain must not be set on both the request and the capsule")
+			return r, InputError("chain must not be set on both the request and the capsule")
 		}
 		r.Capsule.Chain = r.Chain.toEmit()
 	}
 	return r, nil
 }
-func seal(r Request, key ed25519.PrivateKey) (artifact.Record, error) {
+func Seal(r Request, key ed25519.PrivateKey) (artifact.Record, error) {
 	identity, e := emit.NewEd25519SigningIdentity(key)
 	if e != nil {
 		return artifact.Record{}, e
@@ -261,7 +261,7 @@ func seal(r Request, key ed25519.PrivateKey) (artifact.Record, error) {
 	if e != nil {
 		// emit's messages name the capsule field and the rule it breaks
 		// ("decide action requires a disposition"), never a payload value.
-		return artifact.Record{}, errors.Join(inputError("emit rejected sealing input: "+e.Error()+"; fix that field in the capsule-seal-request/v1 request (--request)"), e)
+		return artifact.Record{}, errors.Join(InputError("emit rejected sealing input: "+e.Error()+"; fix that field in the capsule-seal-request/v1 request (--request)"), e)
 	}
 	record := artifact.Record{CapsuleID: result.CapsuleID, Capsule: result.Payload, ProducerEnvelope: result.Envelope, Artifacts: append([]artifact.Artifact(nil), r.Artifacts...)}
 	if r.Payload != nil {
@@ -274,11 +274,11 @@ func seal(r Request, key ed25519.PrivateKey) (artifact.Record, error) {
 }
 func readRecord(path string) (artifact.Record, error) {
 	var r artifact.Record
-	b, e := readInput(path)
+	b, e := ReadInput(path)
 	if e != nil {
 		return r, e
 	}
-	e = decodeJSONAs("--capsule "+path, b, &r)
+	e = DecodeJSONAs("--capsule "+path, b, &r)
 	return r, e
 }
 
@@ -287,7 +287,7 @@ func readRecord(path string) (artifact.Record, error) {
 // no retained preimage was supplied in an imported artifact file.
 // TODO: this coverage check belongs in capsule-emit/go; move it there once an
 // SDK release exposes it and bump the go.mod pin.
-func missingBindings(r artifact.Record) []string {
+func MissingBindings(r artifact.Record) []string {
 	payload, err := emit.DecodePayload(r.Capsule)
 	if err != nil {
 		return []string{"capsule could not be decoded"}

@@ -29,13 +29,13 @@ const (
 	fragmentCodecZ1 = "z1."
 	// fragmentMaxInflated caps what a z1 fragment may inflate to, so a small
 	// fragment cannot expand without bound (a compression bomb).
-	fragmentMaxInflated = 1 << 20
+	FragmentMaxInflated = 1 << 20
 )
 
 var fragmentB64 = regexp.MustCompile(`^[A-Za-z0-9_-]*$`)
 
 // encodeFragmentZ1 deflates the bundle's JCS bytes and marks the codec.
-func encodeFragmentZ1(value interface{}) (string, error) {
+func EncodeFragmentZ1(value interface{}) (string, error) {
 	jcs, err := canonical.JCS(value)
 	if err != nil {
 		return "", err
@@ -56,7 +56,7 @@ func encodeFragmentZ1(value interface{}) (string, error) {
 
 // decodeFragmentAny decodes a plain fragment as before, a z1 fragment by
 // inflating it under the cap, and refuses any other codec mark.
-func decodeFragmentAny(fragment string) (interface{}, error) {
+func DecodeFragmentAny(fragment string) (interface{}, error) {
 	mark, body, marked := strings.Cut(fragment, ".")
 	if !marked {
 		return aacbundle.DecodeFragment(fragment)
@@ -73,11 +73,11 @@ func decodeFragmentAny(fragment string) (interface{}, error) {
 	}
 	r := flate.NewReader(bytes.NewReader(compressed))
 	defer r.Close()
-	inflated, err := io.ReadAll(io.LimitReader(r, fragmentMaxInflated+1))
+	inflated, err := io.ReadAll(io.LimitReader(r, FragmentMaxInflated+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(inflated) > fragmentMaxInflated {
+	if len(inflated) > FragmentMaxInflated {
 		return nil, errors.New("fragment inflates past the size cap")
 	}
 	return aacbundle.DecodeFragment(base64.RawURLEncoding.EncodeToString(inflated))

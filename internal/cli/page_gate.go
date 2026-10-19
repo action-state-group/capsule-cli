@@ -20,33 +20,33 @@ import (
 // report/v1 root would show fewer rows than it has. The bundle is judged as
 // `verify --bundle` reads it from a file (its JSON, decoded the same way), so
 // the page and the file can never get different verdicts.
-func pageGate(value map[string]interface{}) error {
+func PageGate(value map[string]interface{}) error {
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	if value, err = decodeBundleJSON(raw); err != nil {
+	if value, err = DecodeBundleJSON(raw); err != nil {
 		return err
 	}
-	verdict, result := bundleVerdict(value, nil)
+	verdict, result := BundleVerdict(value, nil)
 	if verdict != "VALID" {
 		reason := "verification incomplete"
 		class := ErrPartial
 		if verdict == "INVALID" {
 			reason, class = "verification failed", ErrBundleInvalid
 		}
-		return hint(class, fmt.Sprintf("no page written: `verify --bundle` calls this bundle %s (%s: %s), and a page must never claim more than that; write the bundle with --out and check it with `capsulectl verify --bundle`",
-			verdict, reason, strings.Join(unmetClaims(result), ", ")))
+		return Hint(class, fmt.Sprintf("no page written: `verify --bundle` calls this bundle %s (%s: %s), and a page must never claim more than that; write the bundle with --out and check it with `capsulectl verify --bundle`",
+			verdict, reason, strings.Join(UnmetClaims(result), ", ")))
 	}
-	if shown, total, ok := reportRowsShown(value); ok && (total == 0 || shown < total) {
-		return hint(ErrPartial, fmt.Sprintf("no page written: its report would show %d of %d rows, because the records its rows cite are not in this bundle", shown, total))
+	if shown, total, ok := ReportRowsShown(value); ok && (total == 0 || shown < total) {
+		return Hint(ErrPartial, fmt.Sprintf("no page written: its report would show %d of %d rows, because the records its rows cite are not in this bundle", shown, total))
 	}
 	return nil
 }
 
 // unmetClaims names each claim of a bundleVerdict result that did not pass,
 // in a stable order, for the refusal message.
-func unmetClaims(result map[string]any) []string {
+func UnmetClaims(result map[string]any) []string {
 	var unmet []string
 	for name, v := range result {
 		c, ok := v.(claimOutput)
@@ -66,7 +66,7 @@ func unmetClaims(result map[string]any) []string {
 // payload, its rows and those whose every citation is a record in the
 // bundle: what the viewer's report page can show. ok is false when the root
 // is not a report/v1 document (another root family, which has no rows).
-func reportRowsShown(value map[string]interface{}) (shown, total int, ok bool) {
+func ReportRowsShown(value map[string]interface{}) (shown, total int, ok bool) {
 	root, _ := value["root"].(string)
 	disclosures, _ := value["disclosures"].(map[string]interface{})
 	members, _ := disclosures[root].(map[string]interface{})
@@ -101,7 +101,7 @@ func reportRowsShown(value map[string]interface{}) (shown, total int, ok bool) {
 	return shown, len(rows), true
 }
 
-// errJSONLPage refuses a page on a jsonl profile: its bundles carry the
-// evidence book's records about the capsules it sealed, not the capsules
-// themselves, so a page can never show what was sealed.
-var errJSONLPage = hint(ErrInput, "no page written: a jsonl profile's bundle carries its evidence book's records about what you sealed, not the records themselves, so a page cannot show them; publish on a sqlite profile for a page (the README's self-checking report example), or write the bundle with --out")
+// errJSONLPage refuses a page on a book profile: its bundles carry the
+// evidence book's own records (closes, disclosures, index roots) beside the
+// capsules, and discloses headers, none of which a page shows.
+var errJSONLPage = Hint(ErrInput, "no page written: a book profile's bundle carries its evidence book's own records and their headers, which a page cannot show; publish on a plain profile for a page (the README's self-checking report example), or write the bundle with --out")

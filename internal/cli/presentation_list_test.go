@@ -281,7 +281,7 @@ func TestPresentationListMatchesNothingForABundleThatDoesNotVerify(t *testing.T)
 	pluginRoot(t)
 	raw, err := os.ReadFile(presentationBuildBundle)
 	require.NoError(t, err)
-	value, err := decodeBundleJSON(raw)
+	value, err := DecodeBundleJSON(raw)
 	require.NoError(t, err)
 	value["root"] = strings.Repeat("0", 64)
 	stdout, err := invoke(t, "", "presentation", "list", "--bundle", writeBundle(t, value))
@@ -398,7 +398,7 @@ func TestPresentationListShowsARegistrationRefusal(t *testing.T) {
 // command no such fallback is reachable: the built-in fallback collides with
 // it first.)
 func TestPresentationListDisplacementIsTheResolversRegistrationTest(t *testing.T) {
-	dealView, err := aacpresentation.ParseManifest(dealViewManifestJSON)
+	dealView, err := aacpresentation.ParseManifest(DealViewManifestJSON)
 	require.NoError(t, err)
 	module := func(id string, fallback bool) presentationCandidate {
 		p := viewerModuleFixture(t, "capsuleviewer.receipt.unilateral/v0")

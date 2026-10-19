@@ -1,10 +1,12 @@
 # capsule-cli
 
 Standalone Go executable `capsulectl`, wrapping `capsule-emit/go`, its optional
-artifact SDK, `cll-go` and the `evidencebook` Go library. Applications import
-those libraries, not this CLI: everything outside `cmd/` is under Go's
-`internal/` and cannot be imported. This repository is a command-line tool, not
-an SDK.
+artifact SDK and `cll-go`, and two first-party plugins, `capsulectl-book` and
+`capsulectl-deal`, which add the `evidencebook` Go library's evidence book and
+the deal store ([docs/PLUGINS.md](docs/PLUGINS.md)). The core builds without
+evidencebook. Applications import those libraries, not this CLI: everything
+outside `cmd/` is under Go's `internal/` and cannot be imported. This
+repository is a command-line tool, not an SDK.
 No application-specific (investigation/evaluation) semantics, database
 migration tools, selective disclosure, or implicit login/default profile are
 included.
@@ -322,7 +324,7 @@ validation, and it stands in for the `capsule-viewer` build. `result build`
 seals a caller-supplied Result v0 into a jsonl profile's evidence book as an
 `evidence_result` record whose statement is the document and whose `cites`
 links name every book record the claims cite: it validates against the
-vendored `evidence-result-v0` schema (`internal/cli/schema/`, digest pinned
+vendored `evidence-result-v0` schema (`plugins/internal/plugin/schema/`, digest pinned
 in code), refuses headline values that do not recompute from the claims, a
 citation the book does not hold, or a close/reconcile claim whose state or
 tallies differ from what the cited Close's links and statement read, and
@@ -394,12 +396,14 @@ never on activity. `cll checkpoint cadence --wait-up-to 5m`, scheduled every
 consequential actions that have no deal record; see
 [skills/deal](skills/deal/README.md).
 
-The book verbs (`close`, `reconcile`, `request`, `respond`) and a `jsonl`
-profile's log (`publish`, `cll append`, `cll list`) run over an evidence book
-from the `evidencebook` Go library (`internal/cli/book.go`,
-`internal/cli/booklog.go`). The CLI does not implement an evidence book of its
-own: it chooses windows, reads files and writes results, and the library
-composes every proof.
+The book verbs (`capsulectl book close`, `reconcile`, `request`, `respond`)
+and a book profile's log (`publish`, `cll append`, `cll list`) run over an
+evidence book from the `evidencebook` Go library, in the `capsulectl-book`
+plugin (`plugins/internal/plugin/book.go`, `booklog.go`). The CLI does not
+implement an evidence book of its own: it chooses windows, reads files and
+writes results, and the library composes every proof. A profile declares
+whether its log is the core's CLL (`log: cll`) or an evidence book
+(`log: book`).
 
 `cll list --log-id LOG` reads another log in the profile's store: a deal
 profile keeps each deal in its own log, `deal/<deal id>`, and a deal profile
@@ -437,12 +441,14 @@ override is enabled.
 |---|---|
 | `cmd/capsulectl/` | the CLI's entry point |
 | `cmd/skillgen/` | the second binary: renders the agent skill from its spec ([Agent skill](#agent-skill-claude-code-and-codex)) |
-| `internal/cli/` | every command; not importable (Go `internal/`) |
-| `internal/cli/assets/` | what the HTML pages embed: the vendored evidence-graph verifier (with its digest and NOTICE), the deal page's viewer, and the deal profile schema |
+| `internal/cli/` | every core command; not importable (Go `internal/`), except by this repository's plugins module |
+| `internal/cli/assets/` | what the HTML pages embed: the vendored evidence-graph verifier (with its digest and NOTICE) and the deal page's viewer |
 | `internal/cli/schemas/` | the embedded evidence-contract schema (a byte copy of capsule-engine's, pinned by digest) |
-| `internal/cli/confusables_table.go` | **a security control**, generated: Unicode's TR39 confusables, so the deal skill's share check and page gate match a sensitive value even when it is written with lookalike letters from another script. Built by `scripts/genconfusables` from the unmodified `third_party/unicode/confusables.txt` (digest beside it); `scripts/update-confusables.sh` re-vendors a new Unicode version |
+| `plugins/` | the second Go module: `cmd/capsulectl-book` and `cmd/capsulectl-deal`, the first-party plugins, and `internal/plugin`, their evidence book and deal commands; the only module that requires evidencebook |
+| `plugins/internal/plugin/assets/` | the deal profile schema, the typed record schemas and the external-check result schema |
+| `plugins/internal/plugin/confusables_table.go` | **a security control**, generated: Unicode's TR39 confusables, so the deal skill's share check and page gate match a sensitive value even when it is written with lookalike letters from another script. Built by `plugins/scripts/genconfusables` from the unmodified `third_party/unicode/confusables.txt` (digest beside it); `scripts/update-confusables.sh` re-vendors a new Unicode version |
 | `schemas/skill-spec-v0.json` | the schema a skill spec is validated against |
-| `skills/` | the `capsulectl` skill (generated) and the `deal` skill, each with contributor demo scripts (`skills/capsulectl/scripts/bookdemo` is a small Go program the scripted demo runs); `skills/SKILL-SPEC.md` is the spec format |
+| `skills/` | the `capsulectl` skill (generated) and the `deal` skill, each with contributor demo scripts (`plugins/scripts/bookdemo` is a small Go program the scripted demo runs); `skills/SKILL-SPEC.md` is the spec format |
 | `action.yml` | the `Seal PR Capsule` GitHub Action ([below](#github-action-seal-a-capsule-per-pull-request)); its profile is [docs/PR-CAPSULE-PROFILE.md](docs/PR-CAPSULE-PROFILE.md), and `scripts/pr-capsule-*.sh` are its steps |
 | `docs/` | plugins, release transparency, backfill, canary, the test-account harness, and the PR capsule profile |
 | `examples/` | workflow files to copy: adopting the PR-capsule action, a canary watch, a deal-harness watch |
@@ -1084,10 +1090,13 @@ Automated tests use isolated local services, never production.
 ## Tests
 
 ```bash
-go test ./...
-go vet ./...
+go test ./... && (cd plugins && go test ./...)
+go vet ./... && (cd plugins && go vet ./...)
 CAPSULE_CLI_TEST_MYSQL_PORT=<disposable-local-port> go test -race -timeout=15m ./...
 ```
+
+The repository is two modules, the core and `plugins/`; `go test ./...` in
+one does not reach the other, and `scripts/test.sh` (`make test`) runs both.
 
 Integration tests use only `127.0.0.1` and database `capsule_cli_test`, isolated
 namespaces/logs per run. Tests use testify assert/require, real emitter/artifact/CLL
