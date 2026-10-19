@@ -119,8 +119,9 @@ You need the capsule (`capsule.json`, or the artifact record) and read access to
 A PR capsule is ordinary evidence. `capsule_id` commits the payload, not the signing key, so
 publishing the request (the action's `request-path` output) on a plain profile gives the same id
 that the PR comment names. An evidence book (a book profile, capsulectl-book) seals the request as
-its own capsule, which also carries its record header and so has an id of its own; the record's
-`subject_ref` is the id the PR comment names, and the book resolves that id to the record:
+its own capsule, which also carries its record header and so has an id of its own. `publish`
+reports both: `capsule_id` (the record's id) and `sealed_id` (the id the PR comment names, kept as
+the record's `subject_ref`). On a book profile, claims cite the `capsule_id`:
 
 ```bash
 capsulectl publish --profile <book> --request pr-capsule-request.json   # head capsule
@@ -128,7 +129,8 @@ capsulectl publish --profile <book> --request pr-decision-request.json  # decisi
 ```
 
 An Evidence Result v0 **requirement** claim, under a `process` requirement of the Evidence Contract,
-cites both capsule ids in `evidence[]`, e.g. "merged only after review and green CI" (abridged):
+cites both capsule ids in `evidence[]` (on a book profile, the ids `publish` reported as
+`capsule_id`), e.g. "merged only after review and green CI" (abridged):
 
 ```json
 {
@@ -148,7 +150,8 @@ cites both capsule ids in `evidence[]`, e.g. "merged only after review and green
 }
 ```
 
-`capsulectl result build` resolves each cited id to the book record that carries that capsule.
+`capsulectl result build` resolves each cited id to the book record that carries that capsule; a
+`sealed_id` is refused with the record id to cite instead.
 `capsulectl report build --card process` then renders the claim and its evidence the same way it
 renders any other evidence; the PR profile needs no card of its own.
 

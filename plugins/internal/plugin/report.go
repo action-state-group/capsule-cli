@@ -215,8 +215,8 @@ func asSlice(value interface{}) []interface{} {
 
 // unsupportedClaims counts the claims whose cited evidence does not all
 // resolve in the bundle -- by a record's capsule_id (a book profile's own
-// capsule is a record), or by the published capsule a disclosed header of a
-// wrapper that carries it names as its subject. The viewer
+// capsule is a record, cited by that id), or by the published capsule a
+// disclosed header of a wrapper that carries it names as its subject. The viewer
 // renders such a claim `unsupported`, never met; this only reports how many.
 func unsupportedClaims(value map[string]interface{}, checked resultDocument) int {
 	held := make(map[string]bool)
@@ -229,16 +229,11 @@ func unsupportedClaims(value map[string]interface{}, checked resultDocument) int
 			if id != "" {
 				held[id] = true
 			}
+			// A claim cites an own capsule by its record id; the plain id
+			// its header names as subject_ref is a correlation key only, as
+			// the neutral viewer reads it.
 			if _, ok := record[evidencebook.RecordHeaderMember]; ok {
 				inline[id] = true
-			}
-			// A book profile's own capsule is the publication of the request
-			// whose plain id its header names as subject_ref; a claim may
-			// cite that id (the one `seal` or a plain profile gives).
-			if header, ok := record[evidencebook.RecordHeaderMember].(map[string]interface{}); ok && header["record_type"] == recordTypeOwn {
-				if subject, ok := header["subject_ref"].(string); ok && subject != "" {
-					held[subject] = true
-				}
 			}
 		}
 	}

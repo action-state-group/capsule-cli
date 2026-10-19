@@ -49,9 +49,15 @@ type resultBuildResult struct {
 }
 
 // resolveRecord finds the book record a cited digest names: the record that
-// carries a published capsule of that id, or the record with that id.
+// carries a published capsule of that id, or the record with that id. An own
+// capsule is cited by its record id; the sealed id its subject_ref names is
+// refused with the id to cite, so a claim never reads as unsupported in the
+// report or the viewer.
 func resolveRecord(ctx context.Context, book *evidencebook.Book, digest string) (evidencebook.Record, bool, error) {
 	if record, ok, err := publishedRecord(ctx, book, digest); err != nil || ok {
+		if ok && record.Header.RecordType == recordTypeOwn && record.RecordID != digest {
+			return evidencebook.Record{}, false, cli.Hint(cli.ErrInput, fmt.Sprintf("%s is the sealed id of a capsule this book published as record %s; cite %s (the capsule_id publish reported)", digest, record.RecordID, record.RecordID))
+		}
 		return record, ok, err
 	}
 	record, err := book.Get(ctx, digest)

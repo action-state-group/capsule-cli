@@ -482,7 +482,8 @@ func TestUnsupportedClaimsReadsAnOwnCapsulesSubject(t *testing.T) {
 		"capsule_id":                    own,
 		evidencebook.RecordHeaderMember: map[string]interface{}{"record_type": recordTypeOwn, "subject_ref": plain},
 	}}}
-	assert.Equal(t, 0, unsupportedClaims(headed, claims))
+	assert.Equal(t, 1, unsupportedClaims(headed, claims), "a claim cites an own capsule by its record id, not the sealed id")
+	assert.Equal(t, 0, unsupportedClaims(headed, resultDocument{claims: []resultClaim{{evidence: []string{own}}}}))
 	wrapper := map[string]interface{}{"records": []interface{}{map[string]interface{}{
 		"capsule_id":                    own,
 		evidencebook.RecordHeaderMember: map[string]interface{}{"record_type": "close", "subject_ref": plain},

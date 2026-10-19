@@ -26,7 +26,9 @@
   therefore differs from the one `seal` gives the same request; that id is
   the record's subject_ref, so publishing the request again returns the same
   record, and `publish` reports it as `sealed_id` beside `capsule_id`.
-  Claims cite the record's id; `get` by the sealed id says so. A bundle
+  Claims cite the record's id: `result build` refuses the sealed id with
+  the id to cite, `report build` credits only the record id (as the neutral
+  viewer does), and `get` by the sealed id says which id to use. A bundle
   discloses an own capsule's originals as its `agent_input` and
   `agent_output` members, which a neutral verifier matches. `cll append` of a capsule sealed elsewhere wraps it in a
   `published_capsule` record that names it and commits the capsule and its

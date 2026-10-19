@@ -1121,3 +1121,26 @@ func TestResultBuildRefusesAReconcileClaimCitingTwoCloses(t *testing.T) {
 	assert.Contains(t, cli.SafeError(err), `claim "rec-1" (claims[0]) cites 2 Close records; a reconcile claim reports exactly one Close`)
 	assert.Equal(t, before, bookSize(t, b.profile))
 }
+
+// A claim cites an own capsule by its record id. The sealed id (what `seal`
+// gives the same request) is refused with the id to cite, so the claim never
+// reads as unsupported in the report or the viewer.
+func TestResultBuildRefusesASealedIDWithTheRecordID(t *testing.T) {
+	b := newResultBook(t)
+	request, err := cli.ParseRequest(requestFixture(t))
+	require.NoError(t, err)
+	request.Capsule.ActionID = "day-1"
+	target, err := cli.OpenTarget(t.Context(), b.profile, cli.UsePublication)
+	require.NoError(t, err)
+	again, err := target.Publish(t.Context(), request, b.key)
+	require.NoError(t, target.Close())
+	require.NoError(t, err)
+	require.Equal(t, b.capsules[0], again.CapsuleID, "the repeat publish returns the record")
+	require.NotEqual(t, again.CapsuleID, again.SealedID)
+
+	_, _, err = runResultBuild(t, b.profile, resultDoc(testClaim("claim-1", "met", again.SealedID)))
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, cli.SafeError(err), "cite "+again.CapsuleID)
+	_, _, err = runResultBuild(t, b.profile, resultDoc(testClaim("claim-1", "met", again.CapsuleID)))
+	require.NoError(t, err)
+}
