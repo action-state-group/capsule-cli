@@ -111,10 +111,10 @@ printf 'Running all tests, including MySQL integration, on loopback port %s\n' "
 status=0
 for m in "${modules[@]}"; do
   if [[ "$pass" != plain ]]; then
-    (cd "$m" && timed "race $shard ($m)" ${@+"$@"} "${run[@]}" -race -count=1 -timeout=15m ./...) || status=$?
+    (cd "$m" && timed "race $shard ($m)" ${@+"$@"} ${run[@]+"${run[@]}"} -race -count=1 -timeout=15m ./...) || status=$?
   fi
   if [[ "$pass" != race ]]; then
-    (cd "$m" && timed "plain $shard ($m)" ${@+"$@"} "${run[@]}" -count=1 -timeout=10m ./...) || status=$?
+    (cd "$m" && timed "plain $shard ($m)" ${@+"$@"} ${run[@]+"${run[@]}"} -count=1 -timeout=10m ./...) || status=$?
   fi
 done
 exit "$status"

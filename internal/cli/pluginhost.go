@@ -197,7 +197,8 @@ func aliasCommand(use, short string, target func(args []string) (plugin string, 
 				return err
 			}
 			replacement := "capsulectl " + plugin + " " + strings.Join(path, " ")
-			fmt.Fprintf(c.ErrOrStderr(), "capsulectl: `capsulectl %s` is deprecated; use `%s` (the alias is removed in %s)\n", c.CommandPath()[len(c.Root().Name())+1:], replacement, AliasRemovedIn)
+			old := strings.TrimPrefix(c.CommandPath(), c.Root().CommandPath()+" ")
+			fmt.Fprintf(c.ErrOrStderr(), "capsulectl: `capsulectl %s` is deprecated; use `%s` (the alias is removed in %s)\n", old, replacement, AliasRemovedIn)
 			return ForwardToPlugin(c, plugin, append(path, args...))
 		},
 	}
@@ -280,6 +281,9 @@ func NewCommandWith(cmds ...*cobra.Command) *cobra.Command {
 func NewPluginCommand(meta PluginMetadata, cmds ...*cobra.Command) *cobra.Command {
 	root := newCommand(false, cmds)
 	root.Use = pluginLauncherPrefix + meta.Name
+	// It is reached as `capsulectl <name>`, so its help and its messages
+	// name its commands that way: `capsulectl deal history`.
+	root.Annotations = map[string]string{cobra.CommandDisplayNameAnnotation: "capsulectl " + meta.Name}
 	root.SetVersionTemplate(root.Use + " {{.Version}} (commit " + CLICommit + ")\n")
 	handshake := &cobra.Command{Use: "cli-plugin-metadata", Hidden: true, Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		return writePlainJSON(c, pluginInfo{Name: meta.Name, Vendor: meta.Vendor, Version: CLIVersion, PluginAPI: PluginAPI, Subcommands: meta.Subcommands})
