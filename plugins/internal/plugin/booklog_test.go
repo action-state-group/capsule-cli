@@ -3,6 +3,7 @@ package plugin
 import (
 	"bytes"
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	jsonv2 "encoding/json/v2"
@@ -1222,4 +1223,95 @@ func TestAPublishedCapsuleUnderARetentionCommitmentIsNotPurged(t *testing.T) {
 	stored, err := opened.store.GetRecord(t.Context(), published.CapsuleID)
 	require.NoError(t, err)
 	assert.Equal(t, held.Capsule, []byte(stored.Capsule), "never the capsule's own bytes")
+}
+
+// writeRequest writes a capsule-seal-request/v1 file with the given capsule
+// members beside the fixture's.
+func writeRequest(t *testing.T, action, extra string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), action+".json")
+	body := fmt.Sprintf(`{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":%q,"ActionType":"fyi","Operator":"test-operator","Developer":"test-developer","Timestamp":"2026-09-08T00:00:00Z"%s},"payload":{"a":1},"agent_output":{"ok":true}}`, action, extra)
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+	return path
+}
+
+// A published capsule that cites another is linked to it: a bundle on it
+// carries the cited capsule, and its citation does not dangle.
+func TestAnOwnCapsulesCitationsRideInItsBundle(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	_, _ = storedProfile(t, "a")
+	first := publishFile(t, "a", sealRequestFile(t, "cited"))
+	citing := publishFile(t, "a", writeRequest(t, "citing", fmt.Sprintf(`,"References":[{"Type":"agent-action-capsule","DigestAlg":"SHA-256","Digest":%q}]`, first.CapsuleID)))
+	out := filepath.Join(t.TempDir(), "bundle.json")
+	_, err := invoke(t, "", "bundle", "--profile", "a", "--root", citing.CapsuleID, "--out", out)
+	require.NoError(t, err)
+	verified, err := evidencebook.VerifyBundle(mustRead(t, out))
+	require.NoError(t, err)
+	assert.Equal(t, "pass", verified.Claims.GraphClosure, "the cited capsule rides in the bundle")
+	var ids []string
+	for _, r := range verified.Records {
+		ids = append(ids, r.RecordID)
+	}
+	assert.Contains(t, ids, first.CapsuleID)
+}
+
+// Publishing a request again with other originals is a conflict, as it is on
+// a plain profile; the record keeps the first.
+func TestRepublishingWithOtherOriginalsIsRefused(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	_, _ = storedProfile(t, "a")
+	with := func(content string) string {
+		return writeRequestBody(t, fmt.Sprintf(`{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":"att","ActionType":"fyi","Operator":"o","Developer":"d","Timestamp":"2026-09-08T00:00:00Z"},"payload":{"a":1},"artifacts":[{"name":"attachment","state":"present","content":%q}]}`, content))
+	}
+	publishFile(t, "a", with("Zmlyc3Q="))
+	_, err := invoke(t, "", "publish", "--profile", "a", "--request", with("Zmlyc3Q="))
+	require.NoError(t, err, "the same originals are the same publish")
+	_, err = invoke(t, "", "publish", "--profile", "a", "--request", with("c2Vjb25k"))
+	require.ErrorIs(t, err, cli.ErrConflict)
+}
+
+func writeRequestBody(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "request.json")
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+	return path
+}
+
+// An own capsule's record WITHHELD: disclose never carries its originals,
+// in the payloads or in the opt-in extension.
+func TestAWithheldOwnCapsulesOriginalIsNeverAttached(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	p, _ := storedProfile(t, "a")
+	published := publishFile(t, "a", sealRequestFile(t, "withheld"))
+	opened, err := openBook(t.Context(), p, false)
+	require.NoError(t, err)
+	_, err = opened.book.SetRetention(t.Context(), published.CapsuleID, evidencebook.Withheld, "requester")
+	require.NoError(t, err)
+	held, err := opened.originals.Get(t.Context(), published.CapsuleID)
+	require.NoError(t, err)
+	require.NoError(t, opened.release())
+	out, err := invoke(t, "", "disclose", "--profile", "a", "--root", published.CapsuleID, "--payloads", "selected", "--attach-input-originals")
+	require.NoError(t, err)
+	for _, a := range held.Artifacts {
+		assert.NotContains(t, out, base64.RawURLEncoding.EncodeToString(a.Content), "the %s original is withheld", a.Name)
+	}
+	var bundle struct {
+		Extensions map[string]map[string]string `json:"extensions"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(out)), &bundle))
+	assert.NotContains(t, bundle.Extensions[cli.InputOriginalsExtension], published.CapsuleID)
+}
+
+// A book keeps its originals owner-only, as book/payloads was.
+func TestABooksOriginalsAreOwnerOnly(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	p, _ := storedProfile(t, "a")
+	publishFile(t, "a", sealRequestFile(t, "private"))
+	info, err := os.Stat(filepath.Join(p.Connection.Database, cli.JSONLArtifactFile))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }

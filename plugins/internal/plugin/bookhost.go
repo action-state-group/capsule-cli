@@ -43,7 +43,7 @@ type bookLog struct {
 }
 
 func (b *bookLog) Publish(ctx context.Context, r cli.Request, key ed25519.PrivateKey) (cli.Publication, error) {
-	return publishOwn(ctx, b.opened.book, b.profile, r, key)
+	return publishOwn(ctx, b.opened.book, b.opened.originals, b.profile, r, key)
 }
 
 func (b *bookLog) Append(ctx context.Context, record artifact.Record) (uint64, string, error) {

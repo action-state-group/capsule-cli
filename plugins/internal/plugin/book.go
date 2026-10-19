@@ -129,6 +129,8 @@ func openBookUnguarded(ctx context.Context, p cli.Profile, create bool, artifact
 		if artifacts, err = bookOriginals(ctx, p); err != nil {
 			return openedBook{}, errors.Join(err, store.Release(), substrate.Release())
 		}
+	} else if artifacts, err = durableOriginals(p, artifacts); err != nil {
+		return openedBook{}, errors.Join(err, store.Release(), substrate.Release())
 	}
 	// Under the log's lock, before the book reads a payload: the payload
 	// directory an earlier capsulectl kept moves into the artifact store.
@@ -182,8 +184,37 @@ func bookOriginals(ctx context.Context, p cli.Profile) (cli.ArtifactStore, error
 	if err != nil {
 		return nil, err
 	}
-	return store, store.Init(ctx)
+	if err = store.Init(ctx); err != nil {
+		return nil, err
+	}
+	return durableOriginals(p, store)
 }
+
+// durableOriginals is a book profile's artifact store as its book needs it:
+// every Put and Purge synced before it returns (the book stores a record
+// only once its originals are durable), and the file owner-only, since it
+// holds the book's originals, which book/payloads kept private.
+func durableOriginals(p cli.Profile, store cli.ArtifactStore) (cli.ArtifactStore, error) {
+	if _, isRefusing := store.(noOriginals); isRefusing {
+		return store, nil
+	}
+	path := filepath.Join(p.Connection.Database, cli.JSONLArtifactFile)
+	if err := os.Chmod(path, 0o600); err != nil {
+		return nil, err
+	}
+	return durable{ArtifactStore: store, synced: evidencebook.SyncedFile(store, path)}, nil
+}
+
+// durable is a cli.ArtifactStore whose writes go through the synced store.
+type durable struct {
+	cli.ArtifactStore
+	synced evidencebook.ArtifactStore
+}
+
+func (d durable) Put(ctx context.Context, record artifact.Record) error {
+	return d.synced.Put(ctx, record)
+}
+func (d durable) Purge(ctx context.Context, id string) error { return d.synced.Purge(ctx, id) }
 
 // noOriginals is the artifact store of a book profile with no namespace: it
 // holds nothing and refuses to hold anything.
@@ -211,14 +242,13 @@ func migratePayloadDir(ctx context.Context, store *evidencebook.FileStore, origi
 	} else if err != nil {
 		return err
 	}
-	moved, err := evidencebook.MigratePayloadDir(ctx, store, originals, dir)
-	if err != nil {
+	if _, err := evidencebook.MigratePayloadDir(ctx, store, originals, dir); err != nil {
 		return errors.Join(cli.Hint(cli.ErrConflict, "the book's payloads could not be moved into the profile's artifact store; book/payloads is kept and the move is retried at the next open"), err)
 	}
-	if moved > 0 {
-		if err = syncFile(artifactsPath); err != nil {
-			return err
-		}
+	// Synced on every run, a resumed one that moved nothing included: an
+	// earlier run may have stored the payloads and stopped before its sync.
+	if err := syncFile(artifactsPath); err != nil {
+		return err
 	}
 	return os.RemoveAll(dir)
 }

@@ -385,9 +385,9 @@ func dealReplyActionID(responseRecord string) string {
 // a recorded reply's octets, exactly as received. Its payload is the
 // response record that observed them (so its agent_input_digest is that
 // record's id), and the reply is an unbound original whose content digest
-// is the record's response_digest. It is sealed from the response record
-// and the profile's key alone, so compose finds it again with nothing else
-// on record. octets nil seals it without the reply, which names the same
+// is the record's response_digest. Its id follows from the response record
+// alone, whichever key signs it, so compose finds it again with nothing else
+// on record (and after a key rotation that keeps the old key trusted). octets nil seals it without the reply, which names the same
 // capsule.
 func (s *dealSession) replyCapsule(responseRecord string, record map[string]interface{}, octets []byte) (artifact.Record, error) {
 	at, _ := record["at"].(string)
@@ -403,7 +403,7 @@ func (s *dealSession) replyCapsule(responseRecord string, record map[string]inte
 		Version: "capsule-seal-request/v1",
 		Capsule: emit.Input{
 			ActionID: dealReplyActionID(responseRecord), ActionType: emit.ActionTypeFYI,
-			Operator: hex.EncodeToString(s.key.Public().(ed25519.PublicKey)), Developer: "capsulectl-deal",
+			Operator: "capsulectl-deal", Developer: "capsulectl-deal",
 			Timestamp: when.UTC().Truncate(time.Second),
 		},
 		Payload: payload,

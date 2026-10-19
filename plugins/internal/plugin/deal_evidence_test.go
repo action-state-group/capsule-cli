@@ -699,3 +699,18 @@ func TestDealJoinsDeclareWhatTheRootsGround(t *testing.T) {
 	assert.Equal(t, "unjoined", state(refusal, map[string]interface{}{"id": "s", "outcome": "absence"}))
 	assert.Len(t, dealJoins(id, []interface{}{copyOf("a", id), copyOf("b", id), refusal}), 3, "one join per pair")
 }
+
+// A kept reply's capsule id follows from its response record alone: a
+// rotated signing key finds the reply kept under the one before.
+func TestAReplyCapsulesIDDoesNotDependOnTheKey(t *testing.T) {
+	_, k1, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	_, k2, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	record := map[string]interface{}{"type": dealExchangeResponse, "at": "2026-10-19T00:00:00.123456789Z", "response_digest": strings.Repeat("a", 64)}
+	a, err := (&dealSession{key: k1}).replyCapsule(strings.Repeat("b", 64), record, nil)
+	require.NoError(t, err)
+	b, err := (&dealSession{key: k2}).replyCapsule(strings.Repeat("b", 64), record, []byte(`{"x":1}`))
+	require.NoError(t, err)
+	assert.Equal(t, a.CapsuleID, b.CapsuleID)
+}

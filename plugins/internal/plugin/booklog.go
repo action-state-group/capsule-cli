@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -140,7 +141,7 @@ func commitOutcome(committed evidencebook.Record, err error) (seq uint64, warnin
 // the id the same request seals to elsewhere (`seal`, a plain profile).
 // That id, the request's, is the record's subject_ref: publishing the same
 // request again returns the record it already has.
-func publishOwn(ctx context.Context, book *evidencebook.Book, p cli.Profile, r cli.Request, key ed25519.PrivateKey) (cli.Publication, error) {
+func publishOwn(ctx context.Context, book *evidencebook.Book, artifacts cli.ArtifactStore, p cli.Profile, r cli.Request, key ed25519.PrivateKey) (cli.Publication, error) {
 	plain, err := cli.Seal(r, key)
 	if err != nil {
 		return cli.Publication{}, err
@@ -152,6 +153,9 @@ func publishOwn(ctx context.Context, book *evidencebook.Book, p cli.Profile, r c
 	if existing, ok, err := publishedRecord(ctx, book, plain.CapsuleID); err != nil {
 		return cli.Publication{}, err
 	} else if ok {
+		if err = sameOriginals(ctx, artifacts, existing, plain); err != nil {
+			return cli.Publication{}, err
+		}
 		result.CapsuleID, _ = capsuleIDOf(existing)
 		result.Sequence, result.State = existing.Seq, "appended"
 		return result, nil
@@ -173,6 +177,7 @@ func publishOwn(ctx context.Context, book *evidencebook.Book, p cli.Profile, r c
 	}
 	committed, err := book.AppendCapsule(ctx, evidencebook.Entry{
 		RecordType: recordTypeOwn, EpistemicType: evidencebook.ProducerClaim, SubjectRef: plain.CapsuleID,
+		Links: citedCapsules(r),
 	}, plain.Artifacts, seal)
 	seq, warning, err := commitOutcome(committed, err)
 	if err != nil {
@@ -180,6 +185,61 @@ func publishOwn(ctx context.Context, book *evidencebook.Book, p cli.Profile, r c
 	}
 	result.CapsuleID, result.Sequence, result.State, result.Warning = committed.RecordID, seq, "appended", warning
 	return result, nil
+}
+
+// citedCapsules are the capsules a request's capsule cites, as the record's
+// cites links: its references to other capsules and its chain parent. A
+// bundle then follows them as it follows any record's links, so the capsules
+// the record cites ride in its bundle, or are declared missing when the book
+// does not hold them, and the bundle's citations never dangle.
+func citedCapsules(r cli.Request) []evidencebook.Link {
+	var links []evidencebook.Link
+	seen := map[string]bool{}
+	add := func(digest string) {
+		if cli.Hex64.MatchString(digest) && !seen[digest] {
+			seen[digest] = true
+			links = append(links, evidencebook.Link{Type: evidencebook.Cites, Target: digest})
+		}
+	}
+	for _, ref := range r.Capsule.References {
+		if ref.Type == "agent-action-capsule" {
+			add(ref.Digest)
+		}
+	}
+	if r.Capsule.Chain != nil {
+		add(r.Capsule.Chain.ParentCapsuleID)
+	}
+	return links
+}
+
+// sameOriginals refuses a repeated publish whose originals differ from the
+// ones the first stored: the request seals to the same id either way, so
+// only its originals can tell, and a plain profile's store refuses the same
+// conflict.
+func sameOriginals(ctx context.Context, artifacts cli.ArtifactStore, existing evidencebook.Record, plain artifact.Record) error {
+	capsuleID, _ := capsuleIDOf(existing)
+	held, err := artifacts.Get(ctx, capsuleID)
+	if err != nil {
+		return err
+	}
+	digests := func(r artifact.Record) map[string]string {
+		out := map[string]string{}
+		for _, a := range r.Artifacts {
+			if a.State == artifact.Present {
+				sum := sha256.Sum256(a.Content)
+				out[a.Name] = hex.EncodeToString(sum[:])
+			} else if a.State == artifact.Purged {
+				out[a.Name] = a.ContentSHA256
+			} else {
+				out[a.Name] = string(a.State)
+			}
+		}
+		return out
+	}
+	if !maps.Equal(digests(held), digests(plain)) {
+		return cli.Hint(cli.ErrConflict, "this request was published before with other originals; its record keeps the first ones")
+	}
+	return nil
 }
 
 // appendWrapped is `cll append` on a book profile: the capsule, sealed
@@ -985,7 +1045,7 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, artifacts cli.Bund
 		}
 		request.Withhold = append(request.Withhold, withheld...)
 		if attachOriginals {
-			extension, err := inputOriginals(ctx, artifacts, closure)
+			extension, err := inputOriginals(ctx, book, artifacts, closure)
 			if err != nil {
 				return evidencebook.Bundle{}, err
 			}
@@ -1098,14 +1158,26 @@ func bookClosure(ctx context.Context, book *evidencebook.Book, root string, dept
 
 // inputOriginals builds the cli.InputOriginalsExtension for the records in
 // closure that publish a capsule. A capsule whose original is not retained
-// is left out (a reader shows it withheld); a retained original that does
-// not hash to the capsule's agent_input_digest refuses the bundle.
-func inputOriginals(ctx context.Context, artifacts cli.BundleArtifacts, closure []evidencebook.Record) (json.RawMessage, error) {
+// is left out (a reader shows it withheld), and so is an own capsule whose
+// record's retention state yields no bytes (WITHHELD or DELETED): the
+// extension never carries what the book itself would withhold. A retained
+// original that does not hash to the capsule's agent_input_digest refuses
+// the bundle.
+func inputOriginals(ctx context.Context, book *evidencebook.Book, artifacts cli.BundleArtifacts, closure []evidencebook.Record) (json.RawMessage, error) {
 	originals := make(map[string]string)
 	for _, record := range closure {
 		capsuleID, ok := capsuleIDOf(record)
 		if !ok {
 			continue
+		}
+		if record.Header.RecordType == recordTypeOwn && len(record.Header.PayloadCommitments) > 0 {
+			state, err := book.Retention(ctx, record.RecordID)
+			if err != nil {
+				return nil, err
+			}
+			if state == evidencebook.Withheld || state == evidencebook.Deleted {
+				continue
+			}
 		}
 		stored, err := artifacts.Get(ctx, capsuleID)
 		if err != nil {
