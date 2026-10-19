@@ -254,10 +254,45 @@ type DealStoreWriter interface {
 // OpenTarget opens p for use. A deal profile is never opened for writing
 // here (ErrDealProfileWrite): capsulectl deal opens it with OpenDealTarget.
 func OpenTarget(ctx context.Context, p Profile, use TargetUse) (*Target, error) {
-	if p.IsShelf() && use.writes() {
-		return nil, ErrDealProfileWrite
+	if use.writes() {
+		if p.IsShelf() {
+			return nil, ErrDealProfileWrite
+		}
+		// The profile's fields can be edited (profile update --namespace),
+		// so the store says so too: a deal store on its shelf carries the
+		// deal_shelf marker (capsule-cli#242).
+		if shelf, err := isDealShelfStore(ctx, p); err != nil {
+			return nil, err
+		} else if shelf {
+			return nil, ErrDealProfileWrite
+		}
 	}
 	return openTarget(ctx, p, use)
+}
+
+// isDealShelfStore reports whether p's SQLite file holds a deal store on
+// its shelf (the deal_shelf marker), reading it without creating it.
+func isDealShelfStore(ctx context.Context, p Profile) (_ bool, err error) {
+	if p.Type != "sqlite" || p.Connection.Database == "" {
+		return false, nil
+	}
+	absolute, err := filepath.Abs(p.Connection.Database)
+	if err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(absolute); errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	db, err := sql.Open("sqlite", (&url.URL{Scheme: "file", Path: absolute, RawQuery: "mode=ro"}).String())
+	if err != nil {
+		return false, err
+	}
+	defer func() { err = errors.Join(err, db.Close()) }()
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'deal_shelf'`).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // OpenDealTarget opens a log of a deal store for use by capsulectl deal,

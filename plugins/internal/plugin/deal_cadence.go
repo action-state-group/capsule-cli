@@ -1,29 +1,30 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
+	"strconv"
 	"time"
 
-	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/capsule-cli/internal/cli"
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
-	"github.com/action-state-group/checkpointed-local-log/go/mmr"
+	"github.com/action-state-group/evidencebook"
 	"github.com/spf13/cobra"
 )
 
 // dealWitnessSees is said wherever the witness is configured.
 const dealWitnessSees = "The witness sees one checkpoint per tick of this profile's checkpoint cadence: hashes, a size that grows by the same amount every tick, and a time on the cadence. It never sees content, how many deals there are, or when they happen."
 
+// dealCadenceSchema is the table released builds kept their ticks in. The
+// cadence now keeps its own (evidencebook's cadence_ticks); this one is read
+// once, and again after a released build wrote to it, by migrate.
 var dealCadenceSchema = `CREATE TABLE IF NOT EXISTS deal_cadence (
 	tick INTEGER PRIMARY KEY,
 	at TEXT NOT NULL,
@@ -34,150 +35,12 @@ var dealCadenceSchema = `CREATE TABLE IF NOT EXISTS deal_cadence (
 	leaves TEXT NOT NULL
 )`
 
-func cadenceFillerLeaf(nonce []byte) []byte {
-	h := sha256.Sum256(append([]byte{0x03}, nonce...))
-	return h[:]
-}
-
-// cadenceEmpty[h] is the root of an empty subtree of height h.
-var cadenceEmpty = func() [][]byte {
-	levels := make([][]byte, cli.DealCadenceDepth+1)
-	leaf := sha256.Sum256([]byte{0x02})
-	levels[0] = leaf[:]
-	for h := 1; h <= cli.DealCadenceDepth; h++ {
-		levels[h] = cli.CadenceNode(levels[h-1], levels[h-1])
-	}
-	return levels
-}()
-
-// cadenceTree returns the root of the sparse tree over leaves and, for
-// index, its path: the sibling at each height, leaf level first.
-func cadenceTree(leaves map[uint64][]byte, index uint64) (root []byte, path [][]byte) {
-	level := leaves
-	for h := 0; h < cli.DealCadenceDepth; h++ {
-		sibling, ok := level[index^1]
-		if !ok {
-			sibling = cadenceEmpty[h]
-		}
-		path = append(path, sibling)
-		next := make(map[uint64][]byte, len(level)/2+1)
-		for i := range level {
-			parent := i >> 1
-			if _, done := next[parent]; done {
-				continue
-			}
-			left, ok := level[parent<<1]
-			if !ok {
-				left = cadenceEmpty[h]
-			}
-			right, ok := level[parent<<1|1]
-			if !ok {
-				right = cadenceEmpty[h]
-			}
-			next[parent] = cli.CadenceNode(left, right)
-		}
-		level, index = next, index>>1
-	}
-	if r, ok := level[0]; ok {
-		return r, path
-	}
-	return cadenceEmpty[cli.DealCadenceDepth], path
-}
-
-// dealPaddingRecordID is the id of an Evidence Layer padding record:
-// {"record_type": "padding", "epistemic_type": "producer_claim",
-// "store_nonce": <fresh 256-bit value>}, identified by its JCS digest. Its
-// only content is the nonce; it is never an action and never counted.
-func dealPaddingRecordID() ([]byte, error) {
-	nonce, err := randomHex(32)
-	if err != nil {
-		return nil, err
-	}
-	id, err := canonical.JSONDigest(map[string]interface{}{"record_type": "padding", "epistemic_type": "producer_claim", "store_nonce": nonce})
-	if err != nil {
-		return nil, err
-	}
-	return hex.DecodeString(id)
-}
-
 func randomHex(n int) (string, error) {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
-}
-
-// The stored state of one tick: every leaf, so a receipt can carry its path.
-type dealTickLeaf struct {
-	LogID            string `json:"log_id"`
-	Size             uint64 `json:"size"`
-	CheckpointSHA256 string `json:"checkpoint_sha256"`
-	Salt             string `json:"salt"`
-	Index            uint64 `json:"index"`
-	// Statement is the deal checkpoint itself (base64url COSE), kept on the
-	// device so a later report can show that an earlier, witnessed
-	// checkpoint of the deal is a prefix of its current one. It is not part
-	// of the leaf: the leaf commits to its SHA-256.
-	Statement string `json:"statement,omitempty"`
-}
-
-type dealTickLeaves struct {
-	Deals       map[string]dealTickLeaf `json:"deals"`
-	FillerIndex uint64                  `json:"filler_index"`
-	FillerNonce string                  `json:"filler_nonce"`
-}
-
-func (l dealTickLeaves) tree(index uint64) ([]byte, [][]byte, error) {
-	leaves := map[uint64][]byte{}
-	nonce, err := hex.DecodeString(l.FillerNonce)
-	if err != nil {
-		return nil, nil, err
-	}
-	leaves[l.FillerIndex] = cadenceFillerLeaf(nonce)
-	for _, leaf := range l.Deals {
-		value, err := cli.CadenceLeaf(leaf.LogID, leaf.Size, leaf.CheckpointSHA256, leaf.Salt)
-		if err != nil {
-			return nil, nil, err
-		}
-		leaves[leaf.Index] = value
-	}
-	root, path := cadenceTree(leaves, index)
-	return root, path, nil
-}
-
-type dealTick struct {
-	n              int64
-	at, dueNext    time.Time
-	entrySeq, size uint64
-	checkpoint     []byte
-	leaves         dealTickLeaves
-}
-
-func (s *dealSession) ticks(ctx context.Context, limit int) ([]dealTick, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT tick, at, due_next, entry_seq, checkpoint_size, checkpoint, leaves FROM deal_cadence ORDER BY tick DESC LIMIT ?`, limit)
-	if err != nil {
-		return nil, err
-	}
-	var out []dealTick
-	for rows.Next() {
-		var t dealTick
-		var at, due, leaves string
-		if err = rows.Scan(&t.n, &at, &due, &t.entrySeq, &t.size, &t.checkpoint, &leaves); err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
-		if t.at, err = time.Parse(time.RFC3339, at); err == nil {
-			t.dueNext, err = time.Parse(time.RFC3339, due)
-		}
-		if err == nil {
-			err = json.Unmarshal([]byte(leaves), &t.leaves)
-		}
-		if err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
-		out = append(out, t)
-	}
-	return out, errors.Join(rows.Err(), rows.Close())
 }
 
 func (s *dealSession) dealIDs(ctx context.Context) ([]string, error) { return s.index.dealIDs(ctx) }
@@ -205,16 +68,12 @@ func (s *dealSession) cadenceProfile() (cli.Profile, error) {
 
 // tick publishes the cadence checkpoint when a tick is due, and retries any
 // delivery still pending either way. The time a tick is due depends only on
-// the previous tick and a random jitter, never on what the deals did.
+// the previous tick and a random jitter, never on what the deals did. The
+// tick itself is evidencebook's cadence over the shelf: it checkpoints the
+// live logs only, with the occupancy of every log the profile ever had
+// (capsule-cli#242 note §2.5).
 func (s *dealSession) tick(ctx context.Context) (map[string]any, error) {
-	cfg, err := s.p.DealCadence()
-	if err != nil {
-		return nil, err
-	}
-	if s.p.Checkpoint.Signing == (cli.Secret{}) {
-		return nil, cli.InputError("the deal profile has no checkpoint key (see `deal init`)")
-	}
-	p, err := s.cadenceProfile()
+	c, p, err := s.cadenceOf(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -222,31 +81,23 @@ func (s *dealSession) tick(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	last, err := s.ticks(ctx, 1)
+	now := cli.DealClock()
+	result, err := c.Tick(ctx, now)
 	if err != nil {
 		return nil, err
 	}
-	now := cli.DealClock()
 	out := map[string]any{"cadence_log": p.LogID}
-	if len(last) == 1 && now.Before(last[0].dueNext) {
-		out["state"], out["due"] = "not_due", last[0].dueNext.Format(time.RFC3339)
+	if result.Ticked {
+		out["state"], out["tick"], out["checkpoint"], out["due"] = "ticked", result.Tick.N, result.Tick.CheckpointSize, result.Tick.DueNext.Format(time.RFC3339)
 	} else {
-		var n int64 = 1
-		if len(last) == 1 {
-			n = last[0].n + 1
-		}
-		t, err := s.cutTick(ctx, p, cfg, n, now)
-		if err != nil {
-			return nil, err
-		}
-		out["state"], out["tick"], out["checkpoint"], out["due"] = "ticked", t.n, t.size, t.dueNext.Format(time.RFC3339)
+		out["state"], out["due"] = "not_due", result.DueNext.Format(time.RFC3339)
 	}
 	if service == "" {
 		out["witness"] = "not_configured"
 		return out, nil
 	}
 	out["witness_sees"] = dealWitnessSees
-	delivered, pending, err := s.deliverCadence(ctx, p, service, now)
+	delivered, pending, err := s.deliverCadence(ctx, c, p, service, now)
 	if err != nil {
 		return nil, err
 	}
@@ -254,107 +105,14 @@ func (s *dealSession) tick(ctx context.Context) (map[string]any, error) {
 	return out, nil
 }
 
-func (s *dealSession) cutTick(ctx context.Context, p cli.Profile, cfg cli.DealCadenceConfig, n int64, now time.Time) (dealTick, error) {
-	// Times leaving this device are coarsened to the minute.
-	at := now.UTC().Truncate(time.Minute)
-	ids, err := s.dealIDs(ctx)
-	if err != nil {
-		return dealTick{}, err
-	}
-	if len(ids) >= 1<<cli.DealCadenceDepth {
-		return dealTick{}, cli.InputError("too many deals for one cadence tree")
-	}
-	used := map[uint64]bool{}
-	position := func() (uint64, error) {
-		for {
-			var b [8]byte
-			if _, err := rand.Read(b[:]); err != nil {
-				return 0, err
-			}
-			i := binary.BigEndian.Uint64(b[:]) % (1 << cli.DealCadenceDepth)
-			if !used[i] {
-				used[i] = true
-				return i, nil
-			}
-		}
-	}
-	leaves := dealTickLeaves{Deals: map[string]dealTickLeaf{}}
-	if leaves.FillerIndex, err = position(); err != nil {
-		return dealTick{}, err
-	}
-	if leaves.FillerNonce, err = randomHex(32); err != nil {
-		return dealTick{}, err
-	}
-	for _, id := range ids {
-		if err = s.useDeal(ctx, id, false); err != nil {
-			return dealTick{}, err
-		}
-		cp, err := cli.CutCheckpointAt(ctx, localOnly(s.dp), s.t.Log, at)
-		err = errors.Join(err, s.t.Close())
-		s.t = nil
-		if err != nil {
-			return dealTick{}, err
-		}
-		sum := sha256.Sum256(cp.Bytes)
-		leaf := dealTickLeaf{LogID: cli.DealLogID(id), Size: cp.Size, CheckpointSHA256: hex.EncodeToString(sum[:]), Statement: base64.RawURLEncoding.EncodeToString(cp.Bytes)}
-		if leaf.Salt, err = randomHex(32); err != nil {
-			return dealTick{}, err
-		}
-		if leaf.Index, err = position(); err != nil {
-			return dealTick{}, err
-		}
-		leaves.Deals[id] = leaf
-	}
-	root, _, err := leaves.tree(0)
-	if err != nil {
-		return dealTick{}, err
-	}
-	t, err := cli.OpenDealTarget(ctx, p, cli.UseInitialization, s)
-	if err != nil {
-		return dealTick{}, err
-	}
-	defer func() { err = errors.Join(err, t.Close()) }()
-	appended, err := t.Log.Append(ctx, cll.AppendInput{Value: root, AppendedAt: at})
-	if err != nil {
-		return dealTick{}, err
-	}
-	// Padding (Evidence Layer padding records) brings the leaf count to a
-	// multiple of the bucket. With the default bucket of 1 there is none:
-	// each tick adds exactly one entry.
-	for count := appended.Entry.Seq; count%cfg.PadBucket != 0; count++ {
-		id, err := dealPaddingRecordID()
-		if err != nil {
-			return dealTick{}, err
-		}
-		if _, err = t.Log.Append(ctx, cll.AppendInput{Value: id, AppendedAt: at}); err != nil {
-			return dealTick{}, err
-		}
-	}
-	cp, err := cli.CutCheckpointAt(ctx, p, t.Log, at)
-	if err != nil {
-		return dealTick{}, err
-	}
-	jitter := time.Duration(0)
-	if cfg.Jitter > 0 {
-		r, err := rand.Int(rand.Reader, big.NewInt(int64(2*cfg.Jitter)+1))
-		if err != nil {
-			return dealTick{}, err
-		}
-		jitter = time.Duration(r.Int64()) - cfg.Jitter
-	}
-	tick := dealTick{n: n, at: at, dueNext: now.UTC().Add(cfg.Interval + jitter).Truncate(time.Second), entrySeq: appended.Entry.Seq, size: cp.Size, checkpoint: cp.Bytes, leaves: leaves}
-	encoded, err := json.Marshal(leaves)
-	if err != nil {
-		return dealTick{}, err
-	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO deal_cadence (tick, at, due_next, entry_seq, checkpoint_size, checkpoint, leaves) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		tick.n, tick.at.Format(time.RFC3339), tick.dueNext.Format(time.RFC3339), tick.entrySeq, tick.size, tick.checkpoint, string(encoded))
-	return tick, err
-}
-
-// deliverCadence offers every cadence checkpoint still waiting for the
-// witness. A witness that is slow or down leaves it pending; deals go on.
-func (s *dealSession) deliverCadence(ctx context.Context, p cli.Profile, service string, now time.Time) (delivered []uint64, pending []map[string]any, err error) {
+// deliverCadence makes one delivery attempt of every cadence checkpoint
+// still pending for the witness, and reports each verified receipt to the
+// cadence (Witnessed), which records its leaves as witnessed and lets ended
+// deals leave the live set. A receipt stored but not reported (an error in
+// between) leaves the session unmigrated, so close does not mark the store
+// seen and the next open's reconcile reports it (witnessNativeTicks); a
+// receipt a released build stored is found the same way.
+func (s *dealSession) deliverCadence(ctx context.Context, c *evidencebook.Cadence, p cli.Profile, service string, now time.Time) (delivered []uint64, pending []map[string]any, err error) {
 	t, err := cli.OpenDealTarget(ctx, p, cli.UseCLL, s)
 	if err != nil {
 		return nil, nil, err
@@ -369,15 +127,65 @@ func (s *dealSession) deliverCadence(ctx context.Context, p cli.Profile, service
 		if w.WitnessID != service {
 			continue
 		}
-		state, err := cli.DeliverWitness(ctx, p, t.Log, service, w.CheckpointSize)
-		if err != nil || state.Receipt == nil || cli.VerifyWitness(p, state) != nil {
+		// A delivery can store a receipt and still fail (a cancelled read
+		// after the commit), so the session is unmigrated from before the
+		// attempt until the receipt, if one landed, is reported.
+		migrated := s.migrated
+		s.migrated = false
+		// A delivery error is pending, read from state as before; whether a
+		// receipt landed anyway is read back from the log below.
+		state, _ := dealDeliverWitness(ctx, p, t.Log, service, w.CheckpointSize)
+		receipt, ok, err := verifiedReceipt(ctx, p, t.Log, service, w.CheckpointSize)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !ok {
 			reason, text := cli.WitnessPendingReason(state, p.Checkpoint.Endpoint)
 			pending = append(pending, map[string]any{"checkpoint": w.CheckpointSize, "reason": reason, "text": text})
+			s.migrated = migrated
 			continue
 		}
-		delivered = append(delivered, w.CheckpointSize)
+		n, found, err := tickAtSize(ctx, c, w.CheckpointSize)
+		if err != nil {
+			return nil, nil, err
+		}
+		// A cadence checkpoint no tick holds (a released build's core write,
+		// note §3.3) is witnessed on the log but not part of the cadence.
+		if found {
+			if err := c.Witnessed(ctx, n, *receipt); err != nil {
+				return nil, nil, err
+			}
+			delivered = append(delivered, w.CheckpointSize)
+		}
+		s.migrated = migrated
 	}
 	return delivered, pending, nil
+}
+
+// dealDeliverWitness is cli.DeliverWitness, a test hook for a delivery
+// that stores its receipt and then fails.
+var dealDeliverWitness = cli.DeliverWitness
+
+// tickAtSize is the cadence's tick whose checkpoint has size, walking back
+// from the newest: a pending delivery is for a recent tick.
+func tickAtSize(ctx context.Context, c *evidencebook.Cadence, size uint64) (uint64, bool, error) {
+	last, ok, err := c.Last(ctx)
+	if err != nil || !ok {
+		return 0, false, err
+	}
+	for n := last.N; n >= 1; n-- {
+		tick, err := c.Get(ctx, n)
+		if err != nil {
+			return 0, false, err
+		}
+		if tick.CheckpointSize == size {
+			return n, true, nil
+		}
+		if tick.CheckpointSize != 0 && tick.CheckpointSize < size {
+			break
+		}
+	}
+	return 0, false, nil
 }
 
 // dealWitnessState says, for the deal checkpoint a report carries, where it
@@ -385,13 +193,12 @@ func (s *dealSession) deliverCadence(ctx context.Context, p cli.Profile, service
 // a tick), pending (in a tick whose delivery has not completed) or witnessed
 // (with the whole chain a verifier needs).
 //
-// Witnessed comes in two extents. "all": a tick whose receipt verifies holds
-// this very checkpoint. "part": no such tick yet, but a verified tick holds
-// an EARLIER checkpoint of the deal; the chain then carries that checkpoint
-// and an MMR consistency proof from it to the current one, so a verifier
-// sees exactly which steps the witness covers. Of the ticks that hold a
-// checkpoint, the newest whose receipt verifies is used: a later tick still
-// pending never hides an earlier verified one.
+// Witnessed comes in two extents (evidencebook's Cadence.Chain, which is
+// capsule-cli's cadenceChain member for member). "all": a witnessed tick
+// holds this very checkpoint. "part": a witnessed tick holds an EARLIER
+// checkpoint of the deal; the chain then carries that checkpoint and an MMR
+// consistency proof from it to the current one, so a verifier sees exactly
+// which steps the witness covers, and the deal adds its step counts.
 func (s *dealSession) dealWitnessState(ctx context.Context, dealID string, statement []byte) (_ map[string]interface{}, err error) {
 	service, err := cli.ServiceID(s.p)
 	if err != nil || service == "" || s.p.LogID == "" {
@@ -401,201 +208,143 @@ func (s *dealSession) dealWitnessState(ctx context.Context, dealID string, state
 	if err != nil {
 		return nil, err
 	}
-	sum := sha256.Sum256(statement)
-	want := hex.EncodeToString(sum[:])
-	ticks, err := s.ticks(ctx, 1<<20)
+	c, p, err := s.cadenceOf(ctx)
 	if err != nil {
 		return nil, err
 	}
-	t, err := cli.OpenTarget(ctx, s.p, cli.UseCLLRead)
+	raw, err := c.Chain(ctx, statement)
+	if errors.Is(err, evidencebook.ErrNotFound) {
+		return s.notYetWitnessed(ctx, c, p, service, dealID, current)
+	}
 	if err != nil {
 		return nil, err
 	}
-	defer func() { err = errors.Join(err, t.Close()) }()
-	witnessed := func(tick dealTick) (cll.WitnessState, bool, error) {
-		state, err := t.Log.GetWitness(ctx, service, tick.size)
-		if errors.Is(err, cll.ErrNotFound) {
-			return state, false, nil
-		}
-		if err != nil {
-			return state, false, err
-		}
-		return state, state.Receipt != nil && cli.VerifyWitness(s.p, state) == nil, nil
+	chain, err := bundleValue(raw)
+	if err != nil {
+		return nil, err
 	}
-	// This very checkpoint, in the newest tick whose receipt verifies. A tick
-	// that holds an earlier checkpoint with the same steps (only the deal's
-	// sealed reports came after it) is where those steps wait for the witness:
-	// its pending state is this deal's.
+	// The cadence recorded the receipt when it verified; the chain counts
+	// only if it still verifies for the witness this profile names now (a
+	// changed endpoint or key leaves the deal unwitnessed, as before).
+	if ok, err := chainVerifiesNow(ctx, p, service, chain); err != nil {
+		return nil, err
+	} else if !ok {
+		return s.notYetWitnessed(ctx, c, p, service, dealID, current)
+	}
+	if chain["extent"] != "part" {
+		return chain, nil
+	}
+	sizeNumber, _ := chain["size"].(json.Number)
+	size, err := strconv.ParseUint(string(sizeNumber), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("%w: the cadence chain's size: %v", cli.ErrConflict, err)
+	}
+	witnessedSteps, err := s.stepsIn(ctx, dealID, mmrLeafCount(size))
+	if err != nil {
+		return nil, err
+	}
 	steps, err := s.stepsIn(ctx, dealID, mmrLeafCount(current.MMRSize))
 	if err != nil {
 		return nil, err
 	}
-	var held *dealTick
-	var heldState cll.WitnessState
-	for i := range ticks {
-		leaf, ok := ticks[i].leaves.Deals[dealID]
-		if !ok {
-			continue
-		}
-		if leaf.CheckpointSHA256 != want {
-			if held == nil && leaf.Size < current.MMRSize {
-				same, err := s.stepsIn(ctx, dealID, mmrLeafCount(leaf.Size))
-				if err != nil {
-					return nil, err
-				}
-				if state, err := t.Log.GetWitness(ctx, service, ticks[i].size); same == steps && (err == nil || errors.Is(err, cll.ErrNotFound)) && (state.Receipt == nil || cli.VerifyWitness(s.p, state) != nil) {
-					held, heldState = &ticks[i], state
-				}
-			}
-			continue
-		}
-		state, ok, err := witnessed(ticks[i])
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			return s.cadenceChain(ctx, t, ticks[i], dealID, state, nil)
-		}
-		if held == nil {
-			held, heldState = &ticks[i], state
-		}
+	chain["steps_witnessed"], chain["steps"] = cli.Integer(witnessedSteps), cli.Integer(steps)
+	if chain["rest"], err = s.notYetWitnessed(ctx, c, p, service, dealID, current); err != nil {
+		return nil, err
 	}
-	rest := map[string]interface{}{"state": "scheduled", "cadence": s.cadenceWords()}
-	switch {
-	case held != nil:
-		reason, text := cli.WitnessPendingReason(heldState, s.p.Checkpoint.Endpoint)
-		rest = map[string]interface{}{"state": "pending", "tick": cli.Integer(uint64(held.n)), "reason": reason, "text": text, "cadence": s.cadenceWords()}
-	case len(ticks) > 0:
-		rest["due"] = ticks[0].dueNext.Format(time.RFC3339)
-	}
-	// An earlier checkpoint of this deal, in the newest tick whose receipt
-	// verifies.
-	for i := range ticks {
-		leaf, ok := ticks[i].leaves.Deals[dealID]
-		if !ok || leaf.Statement == "" || leaf.Size >= current.MMRSize {
-			continue
-		}
-		state, ok, err := witnessed(ticks[i])
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			continue
-		}
-		out, err := s.cadenceChain(ctx, t, ticks[i], dealID, state, &current)
-		if err != nil {
-			return nil, err
-		}
-		if out != nil {
-			out["rest"] = rest
-			return out, nil
-		}
-	}
-	return rest, nil
+	return chain, nil
 }
 
-// cadenceChain is the witnessed chain for the deal checkpoint a tick holds.
-// With current set, that checkpoint is an earlier one, and the chain also
-// carries it and its consistency proof to current; nil when the stored
-// checkpoint does not match its leaf or is not a prefix of current.
-func (s *dealSession) cadenceChain(ctx context.Context, t *cli.Target, tick dealTick, dealID string, state cll.WitnessState, current *checkpoint.Record) (map[string]interface{}, error) {
-	leaf := tick.leaves.Deals[dealID]
-	_, path, err := tick.leaves.tree(leaf.Index)
+// chainVerifiesNow reports whether the cadence checkpoint a chain names has
+// a receipt, on the cadence log, that verifies for the profile's current
+// witness service and key.
+func chainVerifiesNow(ctx context.Context, p cli.Profile, service string, chain map[string]interface{}) (ok bool, err error) {
+	cadence, _ := chain["cadence"].(map[string]interface{})
+	cp, _ := cadence["checkpoint"].(map[string]interface{})
+	cose, _ := cp["cose"].(string)
+	statement, err := base64.RawURLEncoding.DecodeString(cose)
+	if err != nil {
+		return false, nil
+	}
+	record, err := checkpoint.ParseRecord(statement)
+	if err != nil {
+		return false, nil
+	}
+	t, err := cli.OpenTarget(ctx, p, cli.UseCLLRead)
+	if err != nil {
+		return false, err
+	}
+	defer func() { err = errors.Join(err, t.Close()) }()
+	state, err := t.Log.GetWitness(ctx, service, record.MMRSize)
+	if errors.Is(err, cll.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return state.Receipt != nil && cli.VerifyWitness(p, state) == nil, nil
+}
+
+// bundleValue is v as a bundle's members hold JSON: decoded objects, with
+// every number a json.Number, as cli.Integer writes them, so the bundle's
+// canonical form (JCS) takes it.
+func bundleValue(v map[string]any) (map[string]interface{}, error) {
+	raw, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
-	logState, err := t.Log.LoadCLL(ctx)
-	if err != nil {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.UseNumber()
+	var out map[string]interface{}
+	if err := d.Decode(&out); err != nil {
 		return nil, err
-	}
-	tree, err := mmr.New(logState.Nodes)
-	if err != nil {
-		return nil, err
-	}
-	proof, err := tree.InclusionProof(tick.entrySeq-1, tick.size)
-	if err != nil {
-		return nil, err
-	}
-	hexPath := make([]interface{}, len(path))
-	for i := range path {
-		hexPath[i] = hex.EncodeToString(path[i])
-	}
-	receipt := map[string]interface{}{
-		"ts_url": trimEndpoint(s.p.Checkpoint.Endpoint), "entry_hash": state.Receipt.EntryHash,
-		"receipt_b64": base64.StdEncoding.EncodeToString(state.Receipt.Bytes),
-		"leaf_index":  cli.Integer(uint64(*state.Receipt.LeafIndex)), "tree_size": cli.Integer(uint64(*state.Receipt.TreeSize)),
-	}
-	out := map[string]interface{}{
-		"state": "witnessed", "extent": "all", "checkpoint_at": tick.at.UTC().Format(time.RFC3339),
-		"log_id": leaf.LogID, "size": cli.Integer(leaf.Size), "salt": leaf.Salt,
-		"index": cli.Integer(leaf.Index), "path": hexPath,
-		"cadence": map[string]interface{}{
-			"log_id": s.p.LogID, "entry_index": cli.Integer(tick.entrySeq - 1),
-			"checkpoint":      map[string]interface{}{"cose": base64.RawURLEncoding.EncodeToString(tick.checkpoint)},
-			"inclusion_proof": cli.ProofJSON(proof),
-			"witnesses":       []interface{}{receipt},
-		},
-	}
-	if current == nil {
-		return out, nil
-	}
-	earlier, err := base64.RawURLEncoding.DecodeString(leaf.Statement)
-	if err != nil {
-		return nil, nil
-	}
-	sum := sha256.Sum256(earlier)
-	record, err := checkpoint.ParseRecord(earlier)
-	if err != nil || hex.EncodeToString(sum[:]) != leaf.CheckpointSHA256 || record.LogID != current.LogID || record.MMRSize != leaf.Size {
-		return nil, nil
-	}
-	dealState, err := s.t.Log.LoadCLL(ctx)
-	if err != nil {
-		return nil, err
-	}
-	dealTree, err := mmr.New(dealState.Nodes)
-	if err != nil {
-		return nil, err
-	}
-	consistency, err := dealTree.ConsistencyProof(record.MMRSize, current.MMRSize)
-	if err != nil {
-		return nil, nil
-	}
-	// Counted in steps: the deal's log also holds its sealed reports, which
-	// are not steps.
-	witnessedSteps, err := s.stepsIn(ctx, dealID, mmrLeafCount(record.MMRSize))
-	if err != nil {
-		return nil, err
-	}
-	steps, err := s.stepsIn(ctx, dealID, mmrLeafCount(current.MMRSize))
-	if err != nil {
-		return nil, err
-	}
-	out["extent"] = "part"
-	out["steps_witnessed"] = cli.Integer(witnessedSteps)
-	out["steps"] = cli.Integer(steps)
-	out["earlier"] = map[string]interface{}{
-		"checkpoint":        map[string]interface{}{"cose": leaf.Statement},
-		"consistency_proof": consistencyJSON(consistency),
 	}
 	return out, nil
 }
 
-func consistencyJSON(p mmr.ConsistencyProof) map[string]interface{} {
-	hashes := func(values [][]byte) []interface{} {
-		out := make([]interface{}, len(values))
-		for i := range values {
-			out[i] = hex.EncodeToString(values[i])
-		}
-		return out
+// notYetWitnessed is where a deal checkpoint no witnessed tick holds
+// stands: pending when the newest tick holding the deal's log holds this
+// checkpoint, or an earlier one with the same steps (only the deal's sealed
+// reports came after it), and its delivery has not completed; scheduled
+// otherwise, with the next tick's due time. Only that one tick is read
+// (note §2.5): a live log is in every tick.
+func (s *dealSession) notYetWitnessed(ctx context.Context, c *evidencebook.Cadence, p cli.Profile, service, dealID string, current checkpoint.Record) (_ map[string]interface{}, err error) {
+	rest := map[string]interface{}{"state": "scheduled", "cadence": s.cadenceWords()}
+	last, ok, err := c.Last(ctx)
+	if err != nil || !ok {
+		return rest, err
 	}
-	witness := make([]interface{}, len(p.Witness))
-	for i := range p.Witness {
-		witness[i] = hashes(p.Witness[i])
+	rest["due"] = last.DueNext.Format(time.RFC3339)
+	leaf, in := last.Leaves.Deals[cli.DealLogID(dealID)]
+	if !in || leaf.Size > current.MMRSize {
+		return rest, nil
 	}
-	return map[string]interface{}{
-		"v": cli.Integer(p.V), "kind": p.Kind, "old_size": cli.Integer(p.OldSize), "new_size": cli.Integer(p.NewSize),
-		"old_peaks": hashes(p.OldPeaks), "witness": witness, "new_peaks": hashes(p.NewPeaks),
+	held, err := s.stepsIn(ctx, dealID, mmrLeafCount(leaf.Size))
+	if err != nil {
+		return nil, err
 	}
+	steps, err := s.stepsIn(ctx, dealID, mmrLeafCount(current.MMRSize))
+	if err != nil {
+		return nil, err
+	}
+	if held != steps {
+		return rest, nil
+	}
+	t, err := cli.OpenTarget(ctx, p, cli.UseCLLRead)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, t.Close()) }()
+	state, err := t.Log.GetWitness(ctx, service, last.CheckpointSize)
+	if err != nil && !errors.Is(err, cll.ErrNotFound) {
+		return nil, err
+	}
+	// A tick whose receipt verifies is not pending: what is not yet
+	// witnessed (only sealed reports since) waits for the next tick.
+	if err == nil && state.Receipt != nil && cli.VerifyWitness(p, state) == nil {
+		return rest, nil
+	}
+	reason, text := cli.WitnessPendingReason(state, p.Checkpoint.Endpoint)
+	return map[string]interface{}{"state": "pending", "tick": cli.Integer(last.N), "reason": reason, "text": text, "cadence": s.cadenceWords()}, nil
 }
 
 func trimEndpoint(endpoint string) string {

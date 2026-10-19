@@ -59,7 +59,7 @@ func (s *dealSession) dealSealReport(ctx context.Context, dealID, audience strin
 	if err = s.index.prepareReport(ctx, dealID, record.CapsuleID, audience); err != nil {
 		return "", err
 	}
-	pub, err := s.t.Publish(ctx, request, s.key)
+	pub, err := s.appendLegacy(ctx, func() (cli.Publication, error) { return s.t.Publish(ctx, request, s.key) })
 	if err == nil && pub.CapsuleID != record.CapsuleID {
 		err = cli.ErrConflict
 	}

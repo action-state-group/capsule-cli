@@ -22,6 +22,7 @@ import (
 	"github.com/action-state-group/capsule-emit/go/artifact"
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
+	"github.com/action-state-group/evidencebook"
 	"github.com/spf13/cobra"
 )
 
@@ -64,12 +65,22 @@ type dealSession struct {
 	unlock func() error
 	shared bool // a read under the shared lock (openDealStoreRead)
 	closed bool
+	// shelf is the deal store's one writer (deal_shelf.go), open from
+	// openDealSession until close; legacy is the current deal's log on it,
+	// and cadence the profile's cadence once opened.
+	shelf   *evidencebook.Shelf
+	legacy  *evidencebook.LegacyLog
+	cadence *evidencebook.Cadence
+	// migrated is set once migrate has completed this session: only then
+	// does close record the mutation counter as seen, so a failed or
+	// interrupted reconcile is run again on the next open.
+	migrated bool
 }
 
 // HoldsDealStore is the session's proof, to cli.OpenDealTarget, that it
 // holds the deal store's writer lock: from openDealSession until close. A
 // read session holds only the shared lock, and is no writer.
-func (s *dealSession) HoldsDealStore() bool { return s.unlock != nil && !s.shared && !s.closed }
+func (s *dealSession) HoldsDealStore() bool { return s.shelf != nil && !s.shared && !s.closed }
 
 // dealStoreLock is the writer lock held outside a session: deal init's,
 // while it creates the store.
@@ -102,17 +113,22 @@ func openDealSession(ctx context.Context, p cli.Profile) (_ *dealSession, err er
 	if _, err = os.Stat(dbPath); err != nil {
 		return nil, cli.InputError("deal store does not exist; run `deal init`")
 	}
-	unlock, err := lockDealStore(dbPath)
-	if err != nil {
-		return nil, err
-	}
-	s := &dealSession{p: p, key: key, keys: keys, unlock: unlock}
+	s := &dealSession{p: p, key: key, keys: keys}
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, s.close())
 		}
 	}()
 	if s.db, _, err = cli.SqliteConnection(p); err != nil {
+		return nil, err
+	}
+	originals, err := cli.NewArtifactStore(p, s.db, keys)
+	if err != nil {
+		return nil, err
+	}
+	// The shelf takes the store's writer lock (the lock file every released
+	// build takes), and holds it until close.
+	if err = s.openShelf(ctx, dbPath, originals); err != nil {
 		return nil, err
 	}
 	s.index = sqliteDealIndex{s.db}
@@ -135,6 +151,9 @@ func openDealSession(ctx context.Context, p cli.Profile) (_ *dealSession, err er
 	}
 	if len(s.secret) != 32 {
 		return nil, cli.ErrConflict
+	}
+	if err = s.migrate(ctx); err != nil {
+		return nil, err
 	}
 	return s, nil
 }
@@ -189,6 +208,13 @@ func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) e
 		return err
 	}
 	s.t = t
+	// The deal's log is a legacy log of the shelf: every append to it goes
+	// through the shelf, which keeps it in the cadence (note §3.1).
+	if s.shelf != nil {
+		if s.legacy, err = s.shelf.Legacy(ctx, s.dp.LogID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -197,14 +223,20 @@ func (s *dealSession) close() error {
 		return nil
 	}
 	var e error
+	if s.migrated && s.db != nil && !s.shared {
+		e = s.markSeen(context.Background())
+	}
 	if s.t != nil {
-		e = s.t.Close()
+		e = errors.Join(e, s.t.Close())
 	}
 	if s.db != nil {
 		e = errors.Join(e, s.db.Close())
 	}
 	s.closed = true
-	return errors.Join(e, s.unlock())
+	if s.unlock != nil {
+		e = errors.Join(e, s.unlock())
+	}
+	return e
 }
 
 // stepEntries reads the deal's log, in order, without the entries of its
@@ -699,7 +731,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 // publishStep persists and appends a prepared step and records its log
 // position.
 func (s *dealSession) publishStep(ctx context.Context, request cli.Request, se sealedEvent) (sealedEvent, error) {
-	pub, err := s.t.Publish(ctx, request, s.key)
+	pub, err := s.appendLegacy(ctx, func() (cli.Publication, error) { return s.t.Publish(ctx, request, s.key) })
 	if err != nil {
 		return sealedEvent{}, err
 	}
@@ -902,8 +934,10 @@ func dealInitCommand() *cobra.Command {
 		}
 		lock := &dealStoreLock{held: true}
 		defer func() {
-			lock.held = false
-			err = errors.Join(err, unlock())
+			if lock.held {
+				lock.held = false
+				err = errors.Join(err, unlock())
+			}
 		}()
 		t, err := cli.OpenDealTarget(c.Context(), p, cli.UseInitialization, lock)
 		if err != nil {
@@ -914,6 +948,22 @@ func dealInitCommand() *cobra.Command {
 		}
 		if err = os.Chmod(p.Connection.Database, 0o600); err != nil {
 			return err
+		}
+		lock.held = false
+		if err = unlock(); err != nil {
+			return err
+		}
+		// The first session puts the new store on its shelf: the shelf's
+		// tables, its migration marker, and the mutation counter and its
+		// triggers, so a fresh store is protected as a migrated one is.
+		// The profile and store exist by now, so a failure here names the
+		// way on rather than leaving an init that cannot be re-run.
+		s, err := openDealSession(c.Context(), p)
+		if err == nil {
+			err = s.close()
+		}
+		if err != nil {
+			return fmt.Errorf("deal profile %s and its store were created, but putting the store on its shelf failed; run `capsulectl --profile %s deal tick` to finish: %w", name, name, err)
 		}
 		out := map[string]any{
 			"profile": name, "store": p.Connection.Database, "public_key": public, "witness": witness, "cadence_log": p.LogID,

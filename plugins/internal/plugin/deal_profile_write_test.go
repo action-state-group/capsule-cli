@@ -53,10 +53,24 @@ func TestDealSessionHoldsTheStoreWhileOpen(t *testing.T) {
 	_, err = cli.OpenDealTarget(t.Context(), p, cli.UseCLL, s)
 	assert.ErrorIs(t, err, cli.ErrDealProfileWrite)
 
-	r, err := openDealStoreRead(p)
+	r, err := openDealStoreRead(t.Context(), p)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, r.close()) }()
 	assert.False(t, r.HoldsDealStore(), "a read under the shared lock")
 	_, err = cli.OpenDealTarget(t.Context(), p, cli.UseCLL, r)
+	assert.ErrorIs(t, err, cli.ErrDealProfileWrite)
+}
+
+// A deal profile edited to look plain (its namespace cleared) still cannot
+// be written by core: the store carries the shelf's marker.
+func TestCoreRefusesWritesOnAShelfStoreWhateverTheProfileSays(t *testing.T) {
+	dealFixture(t)
+	retailDeal(t)
+	p, err := cli.LoadProfile("deal")
+	require.NoError(t, err)
+	p.Namespace = "plain"
+	require.NoError(t, cli.SaveProfile(p, true))
+	require.False(t, p.IsShelf())
+	_, err = invoke(t, "", "publish", "--profile", "deal", "--request", sealRequestFile(t, "stray"))
 	assert.ErrorIs(t, err, cli.ErrDealProfileWrite)
 }
