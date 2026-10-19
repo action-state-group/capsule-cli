@@ -1315,3 +1315,46 @@ func TestABooksOriginalsAreOwnerOnly(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
+
+// A republish that names an original under another binding, or twice, is
+// not the same publish.
+func TestRepublishingChecksBindingsAndNames(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	_, _ = storedProfile(t, "a")
+	body := func(artifacts string) string {
+		return writeRequestBody(t, `{"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":"bind","ActionType":"fyi","Operator":"o","Developer":"d","Timestamp":"2026-09-08T00:00:00Z"},"payload":{"a":1},"artifacts":[`+artifacts+`]}`)
+	}
+	plain := `{"name":"attachment","state":"present","content":"eyJhIjoxfQ=="}`
+	publishFile(t, "a", body(plain))
+	_, err := invoke(t, "", "publish", "--profile", "a", "--request", body(`{"name":"attachment","binding":"model_attestation.compute_attestation.agent_input_digest","state":"present","content":"eyJhIjoxfQ=="}`))
+	require.Error(t, err, "the same bytes under another binding are another publish")
+	_, err = invoke(t, "", "publish", "--profile", "a", "--request", body(plain+","+plain))
+	require.Error(t, err, "an original named twice is refused, as on a first publish")
+}
+
+// cll append on a book profile leaves the capsule it wraps durable in the
+// artifact store, and owner-only.
+func TestAppendedCapsuleIsInTheBooksStore(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	bookClock(t, day0)
+	p, _ := storedProfile(t, "a")
+	raw, err := os.ReadFile(sealRequestFile(t, "sealed-elsewhere"))
+	require.NoError(t, err)
+	request, err := cli.ParseRequest(raw)
+	require.NoError(t, err)
+	signing, err := cli.PrivateKey(p.Signing)
+	require.NoError(t, err)
+	record, err := cli.Seal(request, signing)
+	require.NoError(t, err)
+	encoded, err := json.Marshal(record)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "sealed.json")
+	require.NoError(t, os.WriteFile(path, encoded, 0o600))
+	_, err = invoke(t, "", "cll", "append", "--profile", "a", "--capsule", path)
+	require.NoError(t, err)
+	require.Len(t, artifactLines(t, p, record.CapsuleID), 1)
+	info, err := os.Stat(filepath.Join(p.Connection.Database, cli.JSONLArtifactFile))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+}

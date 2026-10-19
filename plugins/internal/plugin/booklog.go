@@ -153,7 +153,7 @@ func publishOwn(ctx context.Context, book *evidencebook.Book, artifacts cli.Arti
 	if existing, ok, err := publishedRecord(ctx, book, plain.CapsuleID); err != nil {
 		return cli.Publication{}, err
 	} else if ok {
-		if err = sameOriginals(ctx, artifacts, existing, plain); err != nil {
+		if err = sameOriginals(ctx, artifacts, existing, plain, key); err != nil {
 			return cli.Publication{}, err
 		}
 		result.CapsuleID, _ = capsuleIDOf(existing)
@@ -216,27 +216,39 @@ func citedCapsules(r cli.Request) []evidencebook.Link {
 // ones the first stored: the request seals to the same id either way, so
 // only its originals can tell, and a plain profile's store refuses the same
 // conflict.
-func sameOriginals(ctx context.Context, artifacts cli.ArtifactStore, existing evidencebook.Record, plain artifact.Record) error {
+func sameOriginals(ctx context.Context, artifacts cli.ArtifactStore, existing evidencebook.Record, plain artifact.Record, key ed25519.PrivateKey) error {
+	// The retry's originals are checked as a first publish's are (names,
+	// bindings, digests) before they are compared.
+	prepared, err := artifact.Prepare(plain)
+	if err != nil {
+		return err
+	}
+	if _, err = artifact.Verify(prepared, []ed25519.PublicKey{key.Public().(ed25519.PublicKey)}); err != nil {
+		return errors.Join(cli.ErrInput, err)
+	}
 	capsuleID, _ := capsuleIDOf(existing)
 	held, err := artifacts.Get(ctx, capsuleID)
 	if err != nil {
 		return err
 	}
-	digests := func(r artifact.Record) map[string]string {
+	// Each original as name, binding, retention and content digest; a purged
+	// one keeps its digest, so it compares as the present one it was.
+	inventory := func(r artifact.Record) map[string]string {
 		out := map[string]string{}
 		for _, a := range r.Artifacts {
-			if a.State == artifact.Present {
+			digest := a.ContentSHA256
+			state := a.State
+			if state == artifact.Present {
 				sum := sha256.Sum256(a.Content)
-				out[a.Name] = hex.EncodeToString(sum[:])
-			} else if a.State == artifact.Purged {
-				out[a.Name] = a.ContentSHA256
-			} else {
-				out[a.Name] = string(a.State)
+				digest = hex.EncodeToString(sum[:])
+			} else if state == artifact.Purged {
+				state = artifact.Present
 			}
+			out[a.Name] = string(a.Binding) + "|" + string(state) + "|" + digest
 		}
 		return out
 	}
-	if !maps.Equal(digests(held), digests(plain)) {
+	if !maps.Equal(inventory(held), inventory(prepared)) {
 		return cli.Hint(cli.ErrConflict, "this request was published before with other originals; its record keeps the first ones")
 	}
 	return nil

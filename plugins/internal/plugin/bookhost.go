@@ -47,6 +47,13 @@ func (b *bookLog) Publish(ctx context.Context, r cli.Request, key ed25519.Privat
 }
 
 func (b *bookLog) Append(ctx context.Context, record artifact.Record) (uint64, string, error) {
+	// The core put the capsule in the artifact store before this. Putting it
+	// again through the book's durable store (a byte-identical retry, which
+	// the store admits) syncs it, so the wrapper never outlives the capsule
+	// it names.
+	if err := b.opened.originals.Put(ctx, record); err != nil {
+		return 0, "", err
+	}
 	return appendWrapped(ctx, b.opened.book, record)
 }
 
