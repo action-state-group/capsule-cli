@@ -90,21 +90,8 @@ func verifyTrustedPathUnder(path string, roots []string) error {
 	// group/other-writable or owned by neither the user nor root defeats the trust.
 	uid := os.Getuid()
 	for p := resolved; ; {
-		info, err := os.Lstat(p)
-		if err != nil {
+		if err := checkTrustedComponent(p, uid, false); err != nil {
 			return err
-		}
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok {
-			return fmt.Errorf("cannot read ownership of %s", p)
-		}
-		if int(stat.Uid) != uid && stat.Uid != 0 {
-			return fmt.Errorf("%s is %w", p, errNotTrustedOwner)
-		}
-		if mode := info.Mode(); mode&0o020 != 0 {
-			return fmt.Errorf("%s is group-writable: %w", p, errWritable)
-		} else if mode&0o002 != 0 {
-			return fmt.Errorf("%s is other-writable: %w", p, errWritable)
 		}
 		if p == realRoot {
 			break
@@ -114,6 +101,36 @@ func verifyTrustedPathUnder(path string, roots []string) error {
 			break
 		}
 		p = parent
+	}
+	return nil
+}
+
+// checkTrustedComponent is the trust rule for one path component: owned by
+// uid or root, and neither group- nor other-writable. allowSticky also
+// accepts a root-owned directory with the sticky bit set (such as /tmp),
+// where other users cannot rename or remove entries they do not own; only
+// install's full-path check passes it, so the walk dispatch runs keeps the
+// strict rule.
+func checkTrustedComponent(p string, uid int, allowSticky bool) error {
+	info, err := os.Lstat(p)
+	if err != nil {
+		return err
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return fmt.Errorf("cannot read ownership of %s", p)
+	}
+	if int(stat.Uid) != uid && stat.Uid != 0 {
+		return fmt.Errorf("%s is %w", p, errNotTrustedOwner)
+	}
+	mode := info.Mode()
+	if allowSticky && stat.Uid == 0 && mode.IsDir() && mode&os.ModeSticky != 0 {
+		return nil
+	}
+	if mode&0o020 != 0 {
+		return fmt.Errorf("%s is group-writable: %w", p, errWritable)
+	} else if mode&0o002 != 0 {
+		return fmt.Errorf("%s is other-writable: %w", p, errWritable)
 	}
 	return nil
 }
@@ -140,6 +157,21 @@ type pluginInfo struct {
 // lets discovery dedupe on the filename while dispatch uses the metadata name:
 // for every accepted launcher the two are the same string.
 func pluginMetadata(path, name string) (pluginInfo, error) {
+	info, err := readPluginMetadata(path, name)
+	if err != nil {
+		return pluginInfo{}, err
+	}
+	if info.Name != name {
+		return pluginInfo{}, fmt.Errorf("%s: metadata names the command %q, but the launcher's filename names %q; they must match", name, info.Name, name)
+	}
+	return info, nil
+}
+
+// readPluginMetadata runs the handshake and checks plugin_api, but not the
+// name: install reads the name from a launcher whose filename carries none.
+// label names the launcher in errors.
+func readPluginMetadata(path, label string) (pluginInfo, error) {
+	name := label
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, "cli-plugin-metadata")
@@ -157,9 +189,6 @@ func pluginMetadata(path, name string) (pluginInfo, error) {
 	}
 	if info.PluginAPI != PluginAPI {
 		return pluginInfo{}, fmt.Errorf("%s: plugin_api %q does not match %q", name, info.PluginAPI, PluginAPI)
-	}
-	if info.Name != name {
-		return pluginInfo{}, fmt.Errorf("%s: metadata names the command %q, but the launcher's filename names %q; they must match", name, info.Name, name)
 	}
 	info.path = path
 	return info, nil
@@ -231,6 +260,9 @@ func discoverPluginsAndRefusals() ([]pluginInfo, []refusedPlugin) {
 func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
 	if err := VerifyTrustedPath(info.path); err != nil {
 		return InputError("refusing to run plugin from an untrusted path")
+	}
+	if warning := driftWarning(info); warning != "" {
+		fmt.Fprintln(c.ErrOrStderr(), warning)
 	}
 	cmd := exec.CommandContext(c.Context(), info.path, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr()
@@ -348,12 +380,12 @@ func FirstNonEmpty(values ...string) string {
 	return ""
 }
 
-// pluginGroup is the read-only `plugin` command group: `plugin ls` lists the
-// discovered launchers. There is deliberately no install/enable/disable — the
-// core never mutates plugin state; installation is an operator step onto a
-// trusted root.
+// pluginGroup is the `plugin` command group: `plugin ls` lists the
+// discovered launchers, and `plugin install` and `plugin remove` manage the
+// per-user root (plugin_install.go). There is no enable/disable state: a
+// launcher on a trusted root is the whole of a plugin's installation.
 func pluginGroup() *cobra.Command {
-	group := &cobra.Command{Use: "plugin", Short: "Inspect discovered capsulectl-* plugins (read-only)"}
+	group := &cobra.Command{Use: "plugin", Short: "List, install and remove capsulectl-* plugins"}
 	ls := &cobra.Command{Use: "ls", Short: "List trusted, handshake-valid plugins discovered on the plugin roots", Args: NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			plugins, refused := discoverPluginsAndRefusals()
@@ -377,9 +409,13 @@ func pluginGroup() *cobra.Command {
 			if refused == nil {
 				refused = []refusedPlugin{}
 			}
-			return Output(c, map[string]any{"roots": trustedPluginRoots(), "plugins": rows, "refused": refused})
+			out := map[string]any{"roots": trustedPluginRoots(), "plugins": rows, "refused": refused}
+			if left := leftoverInstalls(); len(left) > 0 {
+				out["interrupted_installs"] = left
+			}
+			return Output(c, out)
 		}}
-	group.AddCommand(ls)
+	group.AddCommand(ls, pluginInstallCommand(), pluginRemoveCommand())
 	return group
 }
 

@@ -44,6 +44,11 @@ func requestFixture(t *testing.T) []byte {
 }
 func invoke(t *testing.T, input string, args ...string) (string, error) {
 	t.Helper()
+	// NewCommand reads os.Args to skip discovery for plugin install and
+	// remove, as the real binary does.
+	oldArgs := os.Args
+	os.Args = append([]string{"capsulectl"}, args...)
+	defer func() { os.Args = oldArgs }()
 	c := NewCommand()
 	var out bytes.Buffer
 	c.SetIn(strings.NewReader(input))

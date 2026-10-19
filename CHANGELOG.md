@@ -12,6 +12,28 @@
   `capsulectl-<version>-plugin-deal-<os>-<arch>`, under the same
   `SHA256SUMS`, attestation and release statement; install each as
   `capsulectl-<name>` on a plugin root (docs/PLUGINS.md).
+- **Added (plugins):** `capsulectl plugin install book|deal|./FILE` and
+  `capsulectl plugin remove NAME` manage `~/.local/lib/capsulectl/plugins`.
+  - **By name:** fetches the first-party plugin from the core's own release.
+    The asset is checked against `SHA256SUMS`, and its provenance with
+    `gh attestation verify` when `gh` is installed. The output lists the
+    checks that ran.
+  - **Safety:** refuses to run through sudo, and refuses a plugin root on a
+    path another user could change. On stock Ubuntu that means a one-time
+    `chmod g-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`, which it
+    prints.
+  - **Versions:** a first-party plugin must match the core's version unless
+    `--allow-version-mismatch` is given.
+  - **`make install`** installs the core and both plugins, through the core
+    `go install` just wrote (never one found on PATH).
+  - **Missing plugin:** the error prints the install command.
+  - **Drift:** a release core warns when a first-party plugin's version
+    differs from its own.
+  - **`doctor --install-check`** checks the plugin the profile needs.
+  - **Release workflow:** refuses a tag outside the release tag policy.
+  - **Skills:** they tell the agent to show the install command to the
+    user, never to run it.
+  - **Docs:** docs/PLUGINS.md, "Installing plugins".
 - **Changed (profiles):** a profile declares who keeps its log, `log: cll`
   or `log: book` (`profile create --log`), once. A plain profile's CLL is the
   core's, with no plugin. A book profile's log is its evidence book, and the
