@@ -157,6 +157,10 @@ func publishOwn(ctx context.Context, book *evidencebook.Book, artifacts cli.Arti
 		}
 		result.CapsuleID, _ = capsuleIDOf(existing)
 		result.Sequence, result.State = existing.Seq, "appended"
+		if result.CapsuleID == result.SealedID {
+			// A wrapper published it under the sealed id itself.
+			result.SealedID = ""
+		}
 		return result, nil
 	}
 	identity, err := emit.NewEd25519SigningIdentity(key)

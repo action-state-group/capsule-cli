@@ -191,6 +191,20 @@ func TestProfileReachesThePlugin(t *testing.T) {
 	}
 }
 
+// A CAPSULECTL_PROFILE exported in the operator's shell selects nothing: the
+// plugin sees only the profile this run selected.
+func TestAStrayProfileExportDoesNotReachThePlugin(t *testing.T) {
+	firstPartyPlugins(t)
+	t.Setenv(ProfileEnv, "prod")
+	t.Setenv("CAPSULECTL_PLUGIN_API", "")
+	out, err := invoke(t, "", "deal", "list")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "ran capsulectl-deal: list | profile=\n")
+	out, err = invoke(t, "", "deal", "list", "--profile", "b")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "| profile=b")
+}
+
 // A command run back in the core from a plugin uses the profile the plugin
 // was run with (CAPSULECTL_PROFILE), unless it names its own.
 func TestSelectedFallsBackToTheInheritedProfile(t *testing.T) {

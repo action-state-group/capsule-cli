@@ -56,7 +56,7 @@ type resultBuildResult struct {
 func resolveRecord(ctx context.Context, book *evidencebook.Book, digest string) (evidencebook.Record, bool, error) {
 	if record, ok, err := publishedRecord(ctx, book, digest); err != nil || ok {
 		if ok && record.Header.RecordType == recordTypeOwn && record.RecordID != digest {
-			return evidencebook.Record{}, false, cli.Hint(cli.ErrInput, fmt.Sprintf("%s is the sealed id of a capsule this book published as record %s; cite %s (the capsule_id publish reported)", digest, record.RecordID, record.RecordID))
+			return record, false, &sealedIDError{sealed: digest, record: record.RecordID}
 		}
 		return record, ok, err
 	}
@@ -66,6 +66,12 @@ func resolveRecord(ctx context.Context, book *evidencebook.Book, digest string) 
 	}
 	return record, err == nil, err
 }
+
+// sealedIDError is a citation of an own capsule by its sealed id; the
+// caller names the claim and the id to cite.
+type sealedIDError struct{ sealed, record string }
+
+func (e *sealedIDError) Error() string { return "sealed id " + e.sealed + " of record " + e.record }
 
 // recordStore is the part of the book's store the close walk reads: a
 // record's sealed capsule and its Producer Envelope.
@@ -244,6 +250,10 @@ func resolveResultCitations(ctx context.Context, book *evidencebook.Book, store 
 			return record, nil
 		}
 		record, ok, err := resolveRecord(ctx, book, digest)
+		var sealed *sealedIDError
+		if errors.As(err, &sealed) {
+			return evidencebook.Record{}, cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites %s as %s, the sealed id of a capsule this book published as record %s; cite %s (the capsule_id publish reported)", claim.label(), digest, role, sealed.record, sealed.record))
+		}
 		if err != nil {
 			return evidencebook.Record{}, err
 		}

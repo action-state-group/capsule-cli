@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -233,7 +234,12 @@ func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
 	}
 	cmd := exec.CommandContext(c.Context(), info.path, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr()
-	cmd.Env = append(os.Environ(), "CAPSULECTL_PLUGIN_API="+PluginAPI)
+	// The profile a plugin inherits is only the one this run selected
+	// (profileInArgs): a CAPSULECTL_PROFILE exported in the operator's shell
+	// never reaches it, or the plugin would read it as selected.
+	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(kv string) bool {
+		return strings.HasPrefix(kv, ProfileEnv+"=")
+	}), "CAPSULECTL_PLUGIN_API="+PluginAPI)
 	// The profile this command line selects goes with it, so a command the
 	// plugin runs back in the core uses the same one. --profile anywhere in
 	// args still wins inside the plugin.
