@@ -146,7 +146,7 @@ down: each must be owned by the user or root and neither group- nor
 other-writable. The only exception is a root-owned directory with the
 sticky bit set (`/tmp`), and only in this check. A symlinked `~/.local` is
 judged by where it leads. One refusal lists every failing component and the
-fix (on stock Ubuntu, `chmod g-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`).
+fix (on stock Ubuntu, `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`).
 From then on install and remove use only that checked canonical path: to
 open the root, to run the handshake, and to inspect other roots' launchers.
 Dispatch is unchanged.

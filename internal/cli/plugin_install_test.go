@@ -495,15 +495,19 @@ func TestPluginInstallByName(t *testing.T) {
 	assert.Contains(t, installOut(t, out).Checks, "provenance (gh attestation verify)")
 	noLeftovers(t, root)
 
-	pathWithGh(t, "Error: verification failed", 1)
+	// gh 2.102.0's own wording for a tampered artifact, a wrong --repo or a
+	// wrong --signer-workflow: a failed check, with no way around it.
+	pathWithGh(t, `Error: verifying with issuer "sigstore.dev"`, 1)
 	_, err = invoke(t, "", "plugin", "install", "--release-url", base, "deal")
 	require.ErrorIs(t, err, ErrConflict)
 	assert.Contains(t, SafeError(err), "provenance check failed")
+	assert.NotContains(t, SafeError(err), "without gh", "a failed check offers no bypass")
 
-	pathWithGh(t, "Error: failed to fetch trust root: dial tcp: no route", 1)
+	pathWithGh(t, "Error: error creating Sigstore verifier: failed to fetch trust root", 1)
 	_, err = invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-	require.ErrorIs(t, err, ErrPending)
+	require.ErrorIs(t, err, errPluginFetch)
 	assert.Contains(t, SafeError(err), "could not run")
+	assert.Equal(t, 1, ExitCode(err))
 	noLeftovers(t, root)
 }
 
@@ -544,7 +548,7 @@ func TestPluginInstallByNameRefusals(t *testing.T) {
 		maxPluginSums = 10
 		t.Cleanup(func() { maxPluginSums = old })
 		_, err := invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-		require.ErrorIs(t, err, ErrPending)
+		require.ErrorIs(t, err, errPluginFetch)
 		assert.Contains(t, SafeError(err), "refusing to keep part of it")
 	})
 	t.Run("http redirect", func(t *testing.T) {
@@ -663,7 +667,7 @@ func TestPluginInstallByNameCapsTheAssetAndTheBundle(t *testing.T) {
 			*cap = 8
 			t.Cleanup(func() { *cap = old })
 			_, err := invoke(t, "", "plugin", "install", "--release-url", base, "deal")
-			require.ErrorIs(t, err, ErrPending)
+			require.ErrorIs(t, err, errPluginFetch)
 			assert.Contains(t, SafeError(err), "refusing to keep part of it")
 			noLeftovers(t, root)
 			_, statErr := os.Stat(filepath.Join(root, "capsulectl-deal"))

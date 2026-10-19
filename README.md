@@ -120,7 +120,7 @@ provenance with the same `gh attestation verify` as above, and puts it in
 `~/.local/lib/capsulectl/plugins`. Its output lists the checks that ran. It
 never runs through `sudo`, and it refuses a plugin root on a path another user
 could change; on a stock Ubuntu account that means a one-time
-`chmod g-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`, which it prints.
+`chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`, which it prints.
 From a source checkout, `make install` installs the core and both plugins.
 See [docs/PLUGINS.md](docs/PLUGINS.md).
 
@@ -266,7 +266,7 @@ stale name does not shadow the new one:
 
 ```bash
 BIN="$(go env GOBIN)"; GOPATH="$(go env GOPATH)"; rm -f "${BIN:-${GOPATH%%:*}/bin}/capsule"
-make install   # installs capsulectl and its book and deal plugins
+make install   # installs capsulectl and its book and deal plugins (on stock Ubuntu, first: chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl, as it prints)
 ```
 
 ## Commands

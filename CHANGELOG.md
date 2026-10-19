@@ -20,7 +20,7 @@
     checks that ran.
   - **Safety:** refuses to run through sudo, and refuses a plugin root on a
     path another user could change. On stock Ubuntu that means a one-time
-    `chmod g-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`, which it
+    `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`, which it
     prints.
   - **Versions:** a first-party plugin must match the core's version unless
     `--allow-version-mismatch` is given.

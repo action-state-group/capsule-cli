@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -61,7 +62,12 @@ var (
 	maxPluginBundle int64 = 4 << 20
 )
 
-var errPluginDurability = errors.New("durability not confirmed")
+var (
+	errPluginDurability = errors.New("durability not confirmed")
+	// errPluginFetch is a download, or a provenance check that could not
+	// run: nothing was installed, and retrying may succeed (exit 1).
+	errPluginFetch = errors.New("plugin not installed")
+)
 
 // pluginDownloadClient fetches release assets. Every hop must stay on HTTPS
 // (GitHub redirects assets to its object host).
@@ -75,7 +81,8 @@ var pluginDownloadClient = &http.Client{
 		}
 		return nil
 	},
-	Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSHandshakeTimeout: 30 * time.Second, ResponseHeaderTimeout: 60 * time.Second},
+	Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, DialContext: (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout: 30 * time.Second, ResponseHeaderTimeout: 60 * time.Second},
 }
 
 // requireOwnInstall refuses a run on another user's behalf: through sudo,
@@ -502,8 +509,10 @@ func sumFor(sums []byte, file string) (string, error) {
 }
 
 // ghAttestation runs the README's provenance check. ran is false when gh
-// is not installed; err distinguishes a failed verification from a check
-// that could not run.
+// is not installed. Any other non-zero gh exit is a failed check, with no
+// way around it; only a positive sign that gh could not run the check (it
+// did not start, it timed out, or it could not build its Sigstore verifier)
+// is reported as could-not-run.
 func ghAttestation(ctx context.Context, asset, bundle string) (ran bool, err error) {
 	gh, lookErr := exec.LookPath("gh")
 	if lookErr != nil {
@@ -518,12 +527,20 @@ func ghAttestation(ctx context.Context, asset, bundle string) (ran bool, err err
 	if runErr == nil {
 		return true, nil
 	}
-	text := strings.ToLower(string(out))
-	var exit *exec.ExitError
-	if errors.As(runErr, &exit) && (strings.Contains(text, "verification failed") || strings.Contains(text, "failed to verify") || strings.Contains(text, "no matching")) {
-		return true, Hint(ErrConflict, "not installed: the provenance check failed: "+lastLine(string(out)))
+	couldNotRun := func(why string) error {
+		return Hint(errPluginFetch, "the provenance check could not run ("+why+"); fix gh's network or trust root and retry, or install without gh on PATH for a checksum-only install")
 	}
-	return true, Hint(ErrPending, "not installed: the provenance check could not run ("+FirstNonEmpty(lastLine(string(out)), runErr.Error())+"); fix gh's network or trust root and retry, or run without gh on PATH for a checksum-only install")
+	var exit *exec.ExitError
+	text := strings.ToLower(string(out))
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		return true, couldNotRun("gh timed out after " + ghVerifyTimeout.String())
+	case !errors.As(runErr, &exit):
+		return true, couldNotRun(runErr.Error())
+	case strings.Contains(text, "error creating sigstore verifier"), strings.Contains(text, "no valid sigstore verifiers"):
+		return true, couldNotRun(lastLine(string(out)))
+	}
+	return true, Hint(ErrConflict, "not installed: the provenance check failed ("+FirstNonEmpty(lastLine(string(out)), runErr.Error())+"): this file is not the release's build")
 }
 
 func pluginInstallCommand() *cobra.Command {
@@ -619,7 +636,7 @@ func fetchFirstParty(ctx context.Context, r *os.Root, root, base, name string) (
 	if _, err := downloadTo(ctx, prefix+"SHA256SUMS", &sums, maxPluginSums); errors.Is(err, fs.ErrNotExist) {
 		return "", nil, InputError("release " + tag + " has no SHA256SUMS")
 	} else if err != nil {
-		return "", nil, Hint(ErrPending, "not installed: "+err.Error())
+		return "", nil, Hint(errPluginFetch, err.Error())
 	}
 	want, err := sumFor(sums.Bytes(), asset)
 	if err != nil {
@@ -635,7 +652,7 @@ func fetchFirstParty(ctx context.Context, r *os.Root, root, base, name string) (
 	case errors.Is(err, fs.ErrNotExist):
 		return "", nil, InputError("release " + tag + " has no asset " + asset)
 	case err != nil:
-		return "", nil, Hint(ErrPending, "not installed: "+err.Error())
+		return "", nil, Hint(errPluginFetch, err.Error())
 	case got != want:
 		_ = r.Remove(staged)
 		return "", nil, Hint(ErrConflict, "not installed: "+asset+" does not match its SHA256SUMS line")
@@ -661,7 +678,7 @@ func fetchFirstParty(ctx context.Context, r *os.Root, root, base, name string) (
 	switch {
 	case err != nil:
 		_ = r.Remove(staged)
-		return "", nil, Hint(ErrPending, "not installed: "+err.Error())
+		return "", nil, Hint(errPluginFetch, err.Error())
 	case gotBundle != wantBundle:
 		_ = r.Remove(staged)
 		return "", nil, Hint(ErrConflict, "not installed: "+bundleName+" does not match its SHA256SUMS line")
