@@ -97,18 +97,14 @@ func shortDigest(digest string) string {
 // previousSkill is the skill recorded by the deal opened most recently
 // before this one, or nil when there is none or it recorded none.
 func (s *dealSession) previousSkill(ctx context.Context, dealID, openedAt string) (*dealSkill, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT deal_id, local FROM deal_steps WHERE n = 1 AND deal_id <> ?`, dealID)
+	openings, err := s.index.steps(ctx, stepFilter{N: 1, ExceptDeal: dealID})
 	if err != nil {
 		return nil, err
 	}
 	var best *dealEvent
-	for rows.Next() {
-		var id, local string
-		if err = rows.Scan(&id, &local); err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
+	for _, st := range openings {
 		var ev dealEvent
-		if json.Unmarshal([]byte(local), &ev) != nil || ev.Kind != "open" || ev.Open == nil || ev.At > openedAt {
+		if json.Unmarshal([]byte(st.Local), &ev) != nil || ev.Kind != "open" || ev.Open == nil || ev.At > openedAt {
 			continue
 		}
 		if best == nil || ev.At > best.At || (ev.At == best.At && ev.DealID > best.DealID) {
@@ -116,8 +112,8 @@ func (s *dealSession) previousSkill(ctx context.Context, dealID, openedAt string
 			best = &e
 		}
 	}
-	if err = errors.Join(rows.Err(), rows.Close()); err != nil || best == nil {
-		return nil, err
+	if best == nil {
+		return nil, nil
 	}
 	return best.Open.Skill, nil
 }

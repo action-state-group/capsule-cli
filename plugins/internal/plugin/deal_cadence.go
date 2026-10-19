@@ -180,21 +180,7 @@ func (s *dealSession) ticks(ctx context.Context, limit int) ([]dealTick, error) 
 	return out, errors.Join(rows.Err(), rows.Close())
 }
 
-func (s *dealSession) dealIDs(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT deal_id FROM deal_steps ORDER BY deal_id`)
-	if err != nil {
-		return nil, err
-	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
-		ids = append(ids, id)
-	}
-	return ids, errors.Join(rows.Err(), rows.Close())
-}
+func (s *dealSession) dealIDs(ctx context.Context) ([]string, error) { return s.index.dealIDs(ctx) }
 
 // localOnly is the profile with its witness removed: a deal's own checkpoint
 // is signed but never queued for, or sent to, the witness.

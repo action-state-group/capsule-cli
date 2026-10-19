@@ -550,19 +550,8 @@ func dealReconcileCommand() *cobra.Command {
 // allCoverSteps reads every deal in the store, verifying each as `deal report`
 // does, and returns the steps that can account for an executed action.
 func (s *dealSession) allCoverSteps(ctx context.Context) (_ []*dealCoverStep, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT deal_id FROM deal_steps ORDER BY deal_id`)
+	ids, err := s.index.dealIDs(ctx)
 	if err != nil {
-		return nil, err
-	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
-		ids = append(ids, id)
-	}
-	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
 		return nil, err
 	}
 	var steps []*dealCoverStep

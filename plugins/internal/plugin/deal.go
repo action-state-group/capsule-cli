@@ -32,16 +32,7 @@ import (
 // deal_keys each deal's key, and deal_store the store secret the keys derive
 // from. What is sealed is only the x-deal-v0 record derived from them.
 var dealIndexSchema = []string{
-	`CREATE TABLE IF NOT EXISTS deal_steps (
-	deal_id TEXT NOT NULL,
-	n INTEGER NOT NULL,
-	kind TEXT NOT NULL,
-	capsule_id TEXT NOT NULL,
-	cll_sequence INTEGER NOT NULL,
-	record_digest TEXT NOT NULL,
-	local TEXT NOT NULL,
-	PRIMARY KEY (deal_id, n)
-)`,
+	dealStepsTable,
 	`CREATE TABLE IF NOT EXISTS deal_disclosures (
 	deal_id TEXT NOT NULL,
 	n INTEGER NOT NULL,
@@ -50,13 +41,7 @@ var dealIndexSchema = []string{
 	record TEXT NOT NULL,
 	PRIMARY KEY (deal_id, n)
 )`,
-	`CREATE TABLE IF NOT EXISTS deal_reports (
-	deal_id TEXT NOT NULL,
-	capsule_id TEXT NOT NULL,
-	audience TEXT NOT NULL,
-	cll_sequence INTEGER NOT NULL,
-	PRIMARY KEY (deal_id, capsule_id)
-)`,
+	dealReportsTable,
 	`CREATE TABLE IF NOT EXISTS deal_keys (deal_id TEXT PRIMARY KEY, deal_key BLOB NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS deal_store (id INTEGER PRIMARY KEY CHECK (id = 1), secret BLOB NOT NULL)`,
 	dealCadenceSchema,
@@ -70,6 +55,7 @@ type dealSession struct {
 	p      cli.Profile
 	dp     cli.Profile // p with the deal's own log selected
 	db     *sql.DB
+	index  dealIndex // the store's step and report index (deal_index.go)
 	t      *cli.Target
 	key    ed25519.PrivateKey
 	keys   []ed25519.PublicKey
@@ -116,6 +102,7 @@ func openDealSession(ctx context.Context, p cli.Profile) (_ *dealSession, err er
 	if s.db, _, err = cli.SqliteConnection(p); err != nil {
 		return nil, err
 	}
+	s.index = sqliteDealIndex{s.db}
 	for _, stmt := range dealIndexSchema {
 		if _, err = s.db.ExecContext(ctx, stmt); err != nil {
 			return nil, err
@@ -158,8 +145,8 @@ func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) e
 		if n, err := res.RowsAffected(); err != nil {
 			return err
 		} else if n == 0 {
-			var steps int
-			if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_steps WHERE deal_id=?`, dealID).Scan(&steps); err != nil {
+			steps, err := s.index.stepCount(ctx, dealID)
+			if err != nil {
 				return err
 			}
 			if steps > 0 {
@@ -249,25 +236,8 @@ func (s *dealSession) logEntries(ctx context.Context) ([]cll.Entry, error) {
 // the log (a crash between the two writes) is recovered by publishing it
 // from the stored step; its Capsule must come out identical.
 func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent, err error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT n, kind, capsule_id, cll_sequence, record_digest, local FROM deal_steps WHERE deal_id=? ORDER BY n`, dealID)
+	index, err := s.index.steps(ctx, stepFilter{DealID: dealID})
 	if err != nil {
-		return nil, err
-	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
-	type row struct {
-		n                    int64
-		kind, id, digest, lo string
-		seq                  uint64
-	}
-	var index []row
-	for rows.Next() {
-		var r row
-		if err = rows.Scan(&r.n, &r.kind, &r.id, &r.seq, &r.digest, &r.lo); err != nil {
-			return nil, err
-		}
-		index = append(index, r)
-	}
-	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 	entries, err := s.stepEntries(ctx, dealID)
@@ -283,28 +253,28 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 	events := make([]sealedEvent, 0, len(index))
 	for i, r := range index {
 		var ev dealEvent
-		if err = cli.DecodeJSON([]byte(r.lo), &ev); err != nil {
+		if err = cli.DecodeJSON([]byte(r.Local), &ev); err != nil {
 			return nil, cli.ErrConflict
 		}
 		prev := ""
 		if i > 0 {
 			prev = events[i-1].Digest
 		}
-		if ev.DealID != dealID || ev.N != int64(i+1) || ev.N != r.n || ev.Kind != r.kind || ev.Prev != prev {
+		if ev.DealID != dealID || ev.N != int64(i+1) || ev.N != r.N || ev.Kind != r.Kind || ev.Prev != prev {
 			return nil, cli.ErrConflict
 		}
 		if i == len(entries) {
-			se, err := s.recoverStep(ctx, events, ev, r.id)
+			se, err := s.recoverStep(ctx, events, ev, r.CapsuleID)
 			if err != nil {
 				return nil, err
 			}
 			events = append(events, se)
 			continue
 		}
-		if hex.EncodeToString(entries[i].Value) != r.id {
+		if hex.EncodeToString(entries[i].Value) != r.CapsuleID {
 			return nil, cli.ErrConflict
 		}
-		record, err := s.t.Artifacts.Get(ctx, r.id)
+		record, err := s.t.Artifacts.Get(ctx, r.CapsuleID)
 		if err != nil {
 			return nil, err
 		}
@@ -322,10 +292,10 @@ func (s *dealSession) load(ctx context.Context, dealID string) (_ []sealedEvent,
 			return nil, cli.ErrConflict
 		}
 		payload, digest, err := encodeDealRecord(ev, events, s.dkey)
-		if err != nil || !bytes.Equal(payload, content) || digest != r.digest {
+		if err != nil || !bytes.Equal(payload, content) || digest != r.Digest {
 			return nil, cli.ErrConflict
 		}
-		events = append(events, sealedEvent{CapsuleID: r.id, Digest: digest, Sequence: entries[i].Seq, Event: ev})
+		events = append(events, sealedEvent{CapsuleID: r.CapsuleID, Digest: digest, Sequence: entries[i].Seq, Event: ev})
 	}
 	return events, nil
 }
@@ -703,8 +673,7 @@ func (s *dealSession) prepareStep(ctx context.Context, dealID string, events []s
 	if err != nil {
 		return cli.Request{}, sealedEvent{}, err
 	}
-	if _, err = s.db.ExecContext(ctx, `INSERT INTO deal_steps (deal_id, n, kind, capsule_id, cll_sequence, record_digest, local) VALUES (?,?,?,?,0,?,?)`,
-		dealID, ev.N, ev.Kind, record.CapsuleID, digest, string(local)); err != nil {
+	if err = s.index.prepareStep(ctx, indexedStep{DealID: dealID, N: ev.N, Kind: ev.Kind, CapsuleID: record.CapsuleID, Digest: digest, Local: string(local)}); err != nil {
 		return cli.Request{}, sealedEvent{}, err
 	}
 	return request, sealedEvent{CapsuleID: record.CapsuleID, Digest: digest, Event: ev}, nil
@@ -720,7 +689,7 @@ func (s *dealSession) publishStep(ctx context.Context, request cli.Request, se s
 	if pub.CapsuleID != se.CapsuleID {
 		return sealedEvent{}, cli.ErrConflict
 	}
-	if _, err = s.db.ExecContext(ctx, `UPDATE deal_steps SET cll_sequence=? WHERE deal_id=? AND n=?`, pub.Sequence, se.Event.DealID, se.Event.N); err != nil {
+	if err = s.index.publishedStep(ctx, se.Event.DealID, se.Event.N, pub.Sequence); err != nil {
 		return sealedEvent{}, err
 	}
 	se.Sequence = pub.Sequence
@@ -755,8 +724,7 @@ func (s *dealSession) seal(ctx context.Context, dealID string, events []sealedEv
 	published, err := s.publishStep(ctx, request, se)
 	if err != nil {
 		if entries, scanErr := s.stepEntries(ctx, dealID); scanErr == nil && int64(len(entries)) < se.Event.N {
-			_, delErr := s.db.ExecContext(ctx, `DELETE FROM deal_steps WHERE deal_id=? AND n=?`, dealID, se.Event.N)
-			err = errors.Join(err, delErr)
+			err = errors.Join(err, s.index.withdrawStep(ctx, dealID, se.Event.N))
 		}
 		return sealedEvent{}, err
 	}

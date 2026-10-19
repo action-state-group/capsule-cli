@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -748,9 +747,8 @@ func (s *dealSession) reportAtHead(ctx context.Context, dealID string, entries [
 		return "", nil
 	}
 	last := entries[len(entries)-1]
-	var id string
-	err := s.db.QueryRowContext(ctx, `SELECT capsule_id FROM deal_reports WHERE deal_id=? AND audience=? AND cll_sequence=?`, dealID, dealCopyAudience, last.Seq).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
+	id, ok, err := s.index.reportAt(ctx, dealID, dealCopyAudience, last.Seq)
+	if err == nil && !ok {
 		return "", nil
 	}
 	if err != nil || hex.EncodeToString(last.Value) != id {

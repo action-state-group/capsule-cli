@@ -134,19 +134,23 @@ func (s *dealSession) saleOf(ctx context.Context, saleID string) (dealOpen, stri
 	if !cli.SaleIDPattern.MatchString(saleID) {
 		return dealOpen{}, "", cli.InputError("--sale must be a sale id as printed by `deal sale new`: sale- followed by 16 hex characters")
 	}
-	var local, digest string
-	err := s.db.QueryRowContext(ctx, `SELECT local FROM deal_steps WHERE deal_id=? AND n=1 AND kind='sale'`, saleID).Scan(&local)
-	if errors.Is(err, sql.ErrNoRows) {
-		return dealOpen{}, "", cli.InputError("unknown sale: " + saleID)
-	}
+	root, err := s.index.steps(ctx, stepFilter{DealID: saleID, N: 1, Kinds: []string{"sale"}})
 	if err != nil {
 		return dealOpen{}, "", err
 	}
-	if err = s.db.QueryRowContext(ctx, `SELECT record_digest FROM deal_steps WHERE deal_id=? AND n=2 AND kind='task_authority'`, saleID).Scan(&digest); err != nil {
+	if len(root) == 0 {
+		return dealOpen{}, "", cli.InputError("unknown sale: " + saleID)
+	}
+	authority, err := s.index.steps(ctx, stepFilter{DealID: saleID, N: 2, Kinds: []string{"task_authority"}})
+	if err == nil && len(authority) == 0 {
+		err = sql.ErrNoRows
+	}
+	if err != nil {
 		return dealOpen{}, "", errors.Join(cli.InputError("the sale "+saleID+" has no task authority"), err)
 	}
+	digest := authority[0].Digest
 	var ev dealEvent
-	if err = json.Unmarshal([]byte(local), &ev); err != nil || ev.Open == nil || ev.Open.ItemRef == "" {
+	if err = json.Unmarshal([]byte(root[0].Local), &ev); err != nil || ev.Open == nil || ev.Open.ItemRef == "" {
 		return dealOpen{}, "", errors.Join(cli.InputError("the sale "+saleID+" cannot be read"), err)
 	}
 	return *ev.Open, digest, nil
@@ -302,9 +306,15 @@ func (s *dealSession) registerThread(ctx context.Context, saleID, threadID strin
 // one is its task authority: a thread is opened once its task authority is
 // sealed, never by its key row alone (written before anything is sealed).
 func (s *dealSession) threadSteps(ctx context.Context, threadID string) (int, bool, error) {
-	var steps, authority int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(kind='task_authority'), 0) FROM deal_steps WHERE deal_id=?`, threadID).Scan(&steps, &authority)
-	return steps, authority > 0, err
+	steps, err := s.index.steps(ctx, stepFilter{DealID: threadID})
+	if err != nil {
+		return 0, false, err
+	}
+	authority := false
+	for _, st := range steps {
+		authority = authority || st.Kind == "task_authority"
+	}
+	return len(steps), authority, nil
 }
 
 // dealOpenStopsAt is a test hook: the open stops with its error at a stage

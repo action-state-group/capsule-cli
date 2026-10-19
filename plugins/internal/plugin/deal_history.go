@@ -3,7 +3,6 @@ package plugin
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -241,8 +240,8 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 		err = errors.Join(err, s.t.Close())
 		s.t = nil
 	}()
-	var indexed int
-	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_steps WHERE deal_id=?`, dealID).Scan(&indexed); err != nil {
+	indexed, err := s.index.stepCount(ctx, dealID)
+	if err != nil {
 		return nil, 0, 0, err
 	}
 	entries, err := s.stepEntries(ctx, dealID)
@@ -305,16 +304,14 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	var sealedReports int
-	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_reports WHERE deal_id=? AND cll_sequence>0 AND cll_sequence<=?`, dealID, state.Checkpoint.IndexedSeq).Scan(&sealedReports); err != nil {
+	sealedReports, err := s.index.reportsThrough(ctx, dealID, state.Checkpoint.IndexedSeq)
+	if err != nil {
 		return nil, 0, 0, err
 	}
 	var pointer string
 	if sealedReports > 0 {
 		var reportSeq uint64
-		err = s.db.QueryRowContext(ctx, `SELECT capsule_id, cll_sequence FROM deal_reports WHERE deal_id=? AND cll_sequence>0 AND cll_sequence<=? AND audience=? ORDER BY cll_sequence DESC LIMIT 1`,
-			dealID, state.Checkpoint.IndexedSeq, cli.DealAudienceKeep).Scan(&pointer, &reportSeq)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if pointer, reportSeq, _, err = s.index.latestReport(ctx, dealID, cli.DealAudienceKeep, state.Checkpoint.IndexedSeq); err != nil {
 			return nil, 0, 0, err
 		}
 		if pointer == "" || reportSeq < covered[len(covered)-1].Sequence {
