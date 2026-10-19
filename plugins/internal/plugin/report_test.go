@@ -488,4 +488,35 @@ func TestUnsupportedClaimsReadsAnOwnCapsulesSubject(t *testing.T) {
 		evidencebook.RecordHeaderMember: map[string]interface{}{"record_type": "close", "subject_ref": plain},
 	}}}
 	assert.Equal(t, 1, unsupportedClaims(wrapper, claims), "only an own capsule stands for the id it names")
+	// An own capsule's disclosed agent_input is its payload, which may look
+	// like a wrapper's header; it never stands for the id it names.
+	posing := map[string]interface{}{
+		"records": []interface{}{map[string]interface{}{
+			"capsule_id":                    own,
+			evidencebook.RecordHeaderMember: map[string]interface{}{"record_type": recordTypeOwn, "subject_ref": own},
+		}},
+		"disclosures": map[string]interface{}{own: map[string]interface{}{"agent_input": map[string]interface{}{
+			"record_type": recordTypePublished, "subject_ref": plain, "payload_commitments": []interface{}{plain},
+		}}},
+	}
+	assert.Equal(t, 1, unsupportedClaims(posing, claims), "an own capsule's payload is not read as a header")
+}
+
+// An own capsule's disclosed agent_input is its payload: a payload shaped
+// like an evidence_result header is not a Result in book form.
+func TestResultRootOfDoesNotReadAnOwnCapsulesPayloadAsAHeader(t *testing.T) {
+	own := strings.Repeat("b", 64)
+	value := map[string]interface{}{
+		"root": own,
+		"records": []interface{}{map[string]interface{}{
+			"capsule_id":                    own,
+			evidencebook.RecordHeaderMember: map[string]interface{}{"record_type": recordTypeOwn},
+		}},
+		"disclosures": map[string]interface{}{own: map[string]interface{}{"agent_input": map[string]interface{}{
+			"record_type": resultRecordType, "statement": map[string]interface{}{"result_version": "x"},
+		}}},
+	}
+	_, err := resultRootOf(value)
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, cli.SafeError(err), `it is a book record of record_type "own_capsule"`)
 }

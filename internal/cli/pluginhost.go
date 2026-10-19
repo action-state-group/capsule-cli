@@ -158,7 +158,7 @@ func missingPluginError(name string) error {
 }
 
 // profileInArgs is the profile a plugin's raw command line selects: the last
-// --profile value in it (pflag's own rule), else ProfileEnv.
+// --profile value in it (pflag's own rule), else the inherited one.
 func profileInArgs(args []string) string {
 	name := ""
 	for i := 0; i < len(args); i++ {
@@ -173,9 +173,20 @@ func profileInArgs(args []string) string {
 		}
 	}
 	if name == "" {
-		name = os.Getenv(ProfileEnv)
+		name = inheritedProfile()
 	}
 	return name
+}
+
+// inheritedProfile is ProfileEnv, read only inside a plugin run (where
+// capsulectl set CAPSULECTL_PLUGIN_API for the plugin and its children), so
+// a stray export in an operator's shell never selects a profile the command
+// line did not name.
+func inheritedProfile() string {
+	if os.Getenv("CAPSULECTL_PLUGIN_API") == "" {
+		return ""
+	}
+	return os.Getenv(ProfileEnv)
 }
 
 // aliasCommand is a transitional alias (capsule-cli#238): an old top-level

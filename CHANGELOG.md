@@ -25,9 +25,13 @@
   once, with its originals, which the record commits. The capsule's id
   therefore differs from the one `seal` gives the same request; that id is
   the record's subject_ref, so publishing the request again returns the same
-  record. `cll append` of a capsule sealed elsewhere wraps it in a
-  `published_capsule` record that names it and holds no copy, and `book
-  migrate` names each retired capsule the same way. On a book profile,
+  record, and `publish` reports it as `sealed_id` beside `capsule_id`.
+  Claims cite the record's id; `get` by the sealed id says so. A bundle
+  discloses an own capsule's originals as its `agent_input` and
+  `agent_output` members, which a neutral verifier matches. `cll append` of a capsule sealed elsewhere wraps it in a
+  `published_capsule` record that names it and commits the capsule and its
+  envelope as its payloads, so a bundle carries the capsule; `book migrate`
+  backfills each retired capsule the same way. On a book profile,
   `disclose` carries an own capsule's originals as its record's payloads;
   `--suppress agent_input` and `--suppress agent_output` withhold them (with
   `--payloads selected`).

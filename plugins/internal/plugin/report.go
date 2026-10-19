@@ -109,7 +109,9 @@ type resultRoot struct {
 // Result when it names itself one (result_version), and agent_input is the
 // Result in book form when it is an evidence_result record header whose
 // statement is the document (document is nil when the header carries none).
-func resultCandidates(id string, members map[string]interface{}) []resultRoot {
+// A record that carries its header in its capsule (inline) discloses its own
+// agent_input, never a header, so only the first test applies to it.
+func resultCandidates(id string, members map[string]interface{}, inline bool) []resultRoot {
 	var found []resultRoot
 	for _, member := range []string{"agent_output", "agent_input"} {
 		payload, ok := members[member].(map[string]interface{})
@@ -118,7 +120,7 @@ func resultCandidates(id string, members map[string]interface{}) []resultRoot {
 		}
 		if payload["result_version"] == resultVersion {
 			found = append(found, resultRoot{id: id, member: member, form: "payload", document: payload})
-		} else if member == "agent_input" && payload["record_type"] == resultRecordType {
+		} else if member == "agent_input" && !inline && payload["record_type"] == resultRecordType {
 			statement, _ := payload["statement"].(map[string]interface{})
 			found = append(found, resultRoot{id: id, member: member, form: "book", document: statement})
 		}
@@ -134,9 +136,18 @@ func resultCandidates(id string, members map[string]interface{}) []resultRoot {
 func resultRootOf(value map[string]interface{}) (resultRoot, error) {
 	id, _ := value["root"].(string)
 	var rootRecord map[string]interface{}
+	inline := make(map[string]bool)
 	for _, raw := range asSlice(value["records"]) {
-		if record, ok := raw.(map[string]interface{}); ok && record["capsule_id"] == id {
+		record, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		capsuleID, _ := record["capsule_id"].(string)
+		if capsuleID == id {
 			rootRecord = record
+		}
+		if _, ok := record[evidencebook.RecordHeaderMember]; ok {
+			inline[capsuleID] = true
 		}
 	}
 	if rootRecord == nil {
@@ -145,15 +156,20 @@ func resultRootOf(value map[string]interface{}) (resultRoot, error) {
 	disclosures, _ := value["disclosures"].(map[string]interface{})
 	members, _ := disclosures[id].(map[string]interface{})
 	// A book profile's own capsule carries its record header itself; it is
-	// never an evidence_result record, which the book seals.
-	if header, ok := rootRecord[evidencebook.RecordHeaderMember].(map[string]interface{}); ok && len(members) == 0 {
+	// never an evidence_result record, which the book seals, though its
+	// disclosed payload may be a Result document.
+	header, ownRoot := rootRecord[evidencebook.RecordHeaderMember].(map[string]interface{})
+	notResult := func() error {
 		recordType, _ := header["record_type"].(string)
-		return resultRoot{}, cli.Hint(cli.ErrInput, fmt.Sprintf("root %s is not a sealed Evidence Result v0: it is a book record of record_type %q, not %q", id, recordType, resultRecordType))
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("root %s is not a sealed Evidence Result v0: it is a book record of record_type %q, not %q", id, recordType, resultRecordType))
+	}
+	if ownRoot && len(members) == 0 {
+		return resultRoot{}, notResult()
 	}
 	if len(members) == 0 {
 		return resultRoot{}, cli.Hint(cli.ErrInput, fmt.Sprintf("root %s is not a sealed Evidence Result v0: the bundle discloses nothing for it (build the bundle with disclose, not bundle)", id))
 	}
-	if candidates := resultCandidates(id, members); len(candidates) > 0 {
+	if candidates := resultCandidates(id, members, inline[id]); len(candidates) > 0 {
 		if len(candidates) > 1 {
 			return resultRoot{}, cli.Hint(cli.ErrInput, fmt.Sprintf("root %s carries a Result in both its agent_output and its agent_input; a report is rooted on exactly one Result document; nothing was rendered", id))
 		}
@@ -170,14 +186,17 @@ func resultRootOf(value map[string]interface{}) (resultRoot, error) {
 		sort.Strings(others)
 		for _, other := range others {
 			otherMembers, _ := disclosures[other].(map[string]interface{})
-			if second := resultCandidates(other, otherMembers); len(second) > 0 {
+			if second := resultCandidates(other, otherMembers, inline[other]); len(second) > 0 {
 				return resultRoot{}, cli.Hint(cli.ErrInput, fmt.Sprintf("the bundle carries two Result documents: root %s and record %s (its %s); a report is rooted on exactly one Result, so build the bundle on the one it reports, with a closure that reaches no other; nothing was rendered", id, other, second[0].member))
 			}
 		}
 		return root, nil
 	}
-	header, _ := members["agent_input"].(map[string]interface{})
-	if recordType, ok := header["record_type"].(string); ok {
+	if ownRoot {
+		return resultRoot{}, notResult()
+	}
+	input, _ := members["agent_input"].(map[string]interface{})
+	if recordType, ok := input["record_type"].(string); ok {
 		return resultRoot{}, cli.Hint(cli.ErrInput, fmt.Sprintf("root %s is not a sealed Evidence Result v0: its agent_input is a book record header of record_type %q, not %q", id, recordType, resultRecordType))
 	}
 	for _, member := range []string{"agent_output", "agent_input"} {
@@ -201,10 +220,17 @@ func asSlice(value interface{}) []interface{} {
 // renders such a claim `unsupported`, never met; this only reports how many.
 func unsupportedClaims(value map[string]interface{}, checked resultDocument) int {
 	held := make(map[string]bool)
+	// A record that carries its header inside its capsule discloses its own
+	// members (agent_input is its payload), never a header.
+	inline := make(map[string]bool)
 	for _, raw := range asSlice(value["records"]) {
 		if record, ok := raw.(map[string]interface{}); ok {
-			if id, ok := record["capsule_id"].(string); ok {
+			id, _ := record["capsule_id"].(string)
+			if id != "" {
 				held[id] = true
+			}
+			if _, ok := record[evidencebook.RecordHeaderMember]; ok {
+				inline[id] = true
 			}
 			// A book profile's own capsule is the publication of the request
 			// whose plain id its header names as subject_ref; a claim may
@@ -217,7 +243,10 @@ func unsupportedClaims(value map[string]interface{}, checked resultDocument) int
 		}
 	}
 	disclosures, _ := value["disclosures"].(map[string]interface{})
-	for _, raw := range disclosures {
+	for id, raw := range disclosures {
+		if inline[id] {
+			continue
+		}
 		members, _ := raw.(map[string]interface{})
 		if header, ok := members["agent_input"].(map[string]interface{}); ok {
 			subject, _ := header["subject_ref"].(string)

@@ -84,9 +84,8 @@ func publishedRecord(ctx context.Context, book *evidencebook.Book, capsuleID str
 }
 
 // carriesCapsule reports whether a record's own bytes hold the capsule it
-// publishes: an own_capsule is that capsule, and a record written before
-// capsule-cli#236 carries it as its first payload. A wrapper written since
-// carries none; the artifact store holds the capsule under its own id.
+// publishes: an own_capsule is that capsule, and a wrapper carries it as its
+// first payload. A backfilled disclosure digest carries none.
 func carriesCapsule(h evidencebook.Header) bool {
 	switch h.RecordType {
 	case recordTypeOwn:
@@ -98,8 +97,8 @@ func carriesCapsule(h evidencebook.Header) bool {
 }
 
 // backfilledCapsule reports whether a backfilled entry's value is a capsule:
-// one carried as payloads (before capsule-cli#236), or one the artifact store
-// held when it was backfilled (statement.capsule).
+// one carried as payloads, or (statement.capsule) one the artifact store held
+// when it was backfilled.
 func backfilledCapsule(h evidencebook.Header) bool {
 	if len(h.PayloadCommitments) > 0 {
 		return true
@@ -149,7 +148,7 @@ func publishOwn(ctx context.Context, book *evidencebook.Book, artifacts cli.Arti
 	if len(cli.MissingBindings(plain)) != 0 {
 		return cli.Publication{}, cli.ErrPartial
 	}
-	result := cli.Publication{Namespace: p.Namespace, LogID: p.LogID}
+	result := cli.Publication{Namespace: p.Namespace, LogID: p.LogID, SealedID: plain.CapsuleID}
 	if existing, ok, err := publishedRecord(ctx, book, plain.CapsuleID); err != nil {
 		return cli.Publication{}, err
 	} else if ok {
@@ -257,14 +256,19 @@ func sameOriginals(ctx context.Context, artifacts cli.ArtifactStore, existing ev
 // appendWrapped is `cll append` on a book profile: the capsule, sealed
 // elsewhere and already in the artifact store, does not carry this book's
 // record header, so the book wraps it in a published_capsule record whose
-// subject_ref names it. The record carries no copy of it. Appending the same
+// subject_ref names it and whose payloads are the capsule and its envelope,
+// so a bundle carries what it wraps. Appending the same
 // capsule again returns the position it already has.
 func appendWrapped(ctx context.Context, book *evidencebook.Book, record artifact.Record) (seq uint64, warning string, err error) {
 	if existing, ok, err := publishedRecord(ctx, book, record.CapsuleID); err != nil || ok {
 		return existing.Seq, "", err
 	}
+	// The wrapper commits the capsule and its envelope as its payloads, so
+	// a bundle carries the capsule it wraps and a reader (report build, the
+	// neutral viewer) resolves the capsule's id through it.
 	return commitOutcome(book.Append(ctx, evidencebook.Entry{
 		RecordType: recordTypePublished, EpistemicType: evidencebook.ProducerClaim, SubjectRef: record.CapsuleID,
+		Payloads: [][]byte{record.Capsule, record.ProducerEnvelope},
 	}))
 }
 
@@ -421,7 +425,7 @@ type backfillStatement struct {
 	Anchored       bool               `json:"anchored"`
 	ProvenanceMode backfillProvenance `json:"provenance_mode"`
 	// Capsule says the retired value is a capsule the artifact store holds
-	// under that id. The record carries no copy of it.
+	// under that id; the record commits it and its envelope as its payloads.
 	Capsule bool `json:"capsule,omitempty"`
 	// CapsuleOmitted says why a capsule the artifact store holds was not
 	// taken as one: it no longer verifies under the profile's trusted keys.
@@ -642,12 +646,13 @@ func appendBackfilled(ctx context.Context, book *evidencebook.Book, artifacts cl
 	}
 	// A retired entry is a capsule this profile published, or (for a
 	// disclose act) a disclosure digest with no capsule behind it. A capsule
-	// stays where it is, in the artifact store.
+	// is committed as the record's payloads, as a wrapper commits it.
 	if artifacts != nil {
-		_, err := artifacts.Get(ctx, value)
+		held, err := artifacts.Get(ctx, value)
 		switch {
 		case err == nil:
 			statement.Capsule = true
+			e.Payloads = [][]byte{held.Capsule, held.ProducerEnvelope}
 		case errors.Is(err, artifact.ErrUntrustedSigner):
 			statement.CapsuleOmitted = "untrusted_signer"
 		case !errors.Is(err, artifact.ErrNotFound):

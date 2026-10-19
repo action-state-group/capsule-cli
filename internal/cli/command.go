@@ -68,7 +68,7 @@ func Selected(c *cobra.Command) (Profile, error) {
 	if name == "" {
 		// A plugin, and a command a plugin runs back in the core, inherit
 		// the profile its caller selected.
-		name = os.Getenv(ProfileEnv)
+		name = inheritedProfile()
 	}
 	if name == "" {
 		return Profile{}, InputError(c.CommandPath() + " needs --profile NAME (see `capsulectl profile list`)")
@@ -379,6 +379,9 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 		}
 		defer func() { err = errors.Join(err, t.Close()) }()
 		r, e := t.Artifacts.Get(c.Context(), id)
+		if errors.Is(e, artifact.ErrNotFound) && p.IsBook() {
+			return Hint(ErrInput, "the artifact store holds no capsule "+id+"; a capsule published on a book profile has its record's id, not the one `seal` gives (publish reports both, as capsule_id and sealed_id, and `cll list` lists the record ids)")
+		}
 		if e != nil {
 			return e
 		}

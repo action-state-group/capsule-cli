@@ -259,12 +259,16 @@ func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
 			}
 			return &PluginExit{Code: exit.ExitCode()}
 		}
-		return fmt.Errorf("plugin %s failed: %w", info.Name, err)
+		// Not started at all (removed, or no longer executable, since
+		// discovery): the operator needs the plugin's name, not the generic
+		// failure line.
+		return errors.Join(Hint(errPluginStopped, fmt.Sprintf("plugin %s could not be started; check it with `capsulectl plugin ls`", info.Name)), err)
 	}
 	return nil
 }
 
-// errPluginStopped is the class of a plugin killed by a signal.
+// errPluginStopped is the class of a plugin that did not run to its own
+// exit: killed by a signal, or never started.
 var errPluginStopped = errors.New("plugin stopped")
 
 // PluginExit is a plugin's own non-zero exit. The plugin has already said

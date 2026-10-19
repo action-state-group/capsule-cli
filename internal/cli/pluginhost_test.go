@@ -213,10 +213,14 @@ func TestSelectedFallsBackToTheInheritedProfile(t *testing.T) {
 		return got
 	}
 	t.Setenv(ProfileEnv, "inherited")
+	t.Setenv("CAPSULECTL_PLUGIN_API", "")
+	_, err := invoke(t, "", "cll", "list")
+	require.ErrorIs(t, err, ErrInput, "outside a plugin run the variable selects nothing")
+	t.Setenv("CAPSULECTL_PLUGIN_API", PluginAPI)
 	assert.Equal(t, "inherited", selected())
 	assert.Equal(t, "named", selected("--profile", "named"), "--profile wins over the inherited one")
 	t.Setenv(ProfileEnv, "")
-	_, err := invoke(t, "", "cll", "list")
+	_, err = invoke(t, "", "cll", "list")
 	require.ErrorIs(t, err, ErrInput, "neither: the command says it needs --profile")
 }
 
@@ -274,4 +278,15 @@ kill -9 $$
 	assert.Equal(t, 1, ExitCode(err))
 	assert.Contains(t, SafeError(err), "plugin stopped")
 	assert.Contains(t, SafeError(err), "signal: killed")
+}
+
+func TestAPluginThatCannotStartIsNamed(t *testing.T) {
+	root := pluginRoot(t)
+	path := writeLauncher(t, root, "capsulectl-"+DealPluginName, "#!/nonexistent/interpreter\n", 0o755)
+	c := &cobra.Command{}
+	c.SetContext(t.Context())
+	err := execPlugin(c, pluginInfo{Name: DealPluginName, path: path}, []string{"list"})
+	require.Error(t, err)
+	assert.Equal(t, 1, ExitCode(err))
+	assert.Contains(t, SafeError(err), "plugin deal could not be started")
 }

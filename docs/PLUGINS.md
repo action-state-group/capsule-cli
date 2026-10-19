@@ -153,6 +153,16 @@ added, so the core can hand it a core command it cannot run itself:
 - `bundle --deal`, `disclose --deal` and `cll checkpoint cadence` run in
   `capsulectl-deal` the same way.
 
+This hand-over is the one place the core calls into a plugin for a core
+verb, and it applies only to these two launcher names. The core finds them
+as it finds any plugin, by name on a trusted root, with no vendor check: the
+trusted roots' ownership and permission checks are what keep a lookalike
+out. `verify` and `countersign verify` are never handed over.
+
+The `plugins/` module builds against this checkout through `replace ../`,
+so `go install .../plugins/cmd/capsulectl-book@VERSION` does not work:
+build from a checkout (`make build`) or install the release assets.
+
 ### Transitional aliases
 
 The commands that moved into the plugins keep their old names for one
@@ -193,8 +203,9 @@ reserved name that way.
 
 There is also no per-subcommand reservation below the top level: a plugin
 cannot register `capsulectl countersign something` or `capsulectl bundle
-something` -- a plugin is always exactly one new top-level verb, dispatched
-whole to the launcher, which owns everything under it.
+something` -- a third-party plugin is always exactly one new top-level verb,
+dispatched whole to the launcher, which owns everything under it. (The
+first-party plugins above also receive the core verbs of their profiles.)
 
 ## The rule that matters most: a plugin may never change what `verify` says
 
@@ -225,6 +236,6 @@ Everything above is the whole contract: name your executable
 `cli-plugin-metadata` with `plugin_api: "cli-plugin/v1"` and a `name`
 matching your filename, and implement whatever subcommands you want under
 that one top-level verb. `capsulectl` never inspects your plugin's
-behavior beyond the handshake -- there is nothing else it will call into,
-and nothing in `capsule-engine` (or any other repository) that this
-contract depends on.
+behavior beyond the handshake -- for a third-party plugin there is nothing
+else it will call into, and nothing in `capsule-engine` (or any other
+repository) that this contract depends on.

@@ -329,8 +329,13 @@ type Publication struct {
 	Namespace string `json:"namespace"`
 	LogID     string `json:"log_id"`
 	CapsuleID string `json:"capsule_id"`
-	Sequence  uint64 `json:"sequence,omitempty"`
-	State     string `json:"state"`
+	// SealedID is the id `seal` gives the same request, when it differs
+	// from CapsuleID: on a book profile the published capsule carries its
+	// record header, so its id is the record's. The book records SealedID
+	// as the record's subject_ref; claims cite CapsuleID.
+	SealedID string `json:"sealed_id,omitempty"`
+	Sequence uint64 `json:"sequence,omitempty"`
+	State    string `json:"state"`
 	// Warning is set when the record committed but a later step of the
 	// append failed (jsonl profiles); the position stands.
 	Warning string `json:"warning,omitempty"`

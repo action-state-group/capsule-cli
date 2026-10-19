@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
+	emit "github.com/action-state-group/capsule-emit/go"
 	"github.com/action-state-group/capsule-emit/go/artifact"
 	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
@@ -47,6 +48,7 @@ type publishedOut struct {
 	CapsuleID string `json:"capsule_id"`
 	Sequence  uint64 `json:"sequence"`
 	State     string `json:"state"`
+	SealedID  string `json:"sealed_id"`
 }
 
 func publishFile(t *testing.T, profile, request string) publishedOut {
@@ -85,6 +87,11 @@ func TestPublishedCapsuleIsClosedAndBundled(t *testing.T) {
 	published := publishFile(t, "a", sealRequestFile(t, "published-1"))
 	assert.Equal(t, "appended", published.State)
 	assert.Equal(t, before+1, bookSize(t, p), "one publish, one record")
+	require.NotEmpty(t, published.SealedID, "publish reports the id seal gives the request")
+	assert.NotEqual(t, published.CapsuleID, published.SealedID)
+	_, err := invoke(t, "", "get", "--profile", "a", "--capsule-id", published.SealedID)
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, cli.SafeError(err), "sealed_id", "get by the sealed id says where the record id is")
 
 	// One leaf: the capsule's own id, at the position publish reported.
 	entries := bookLogEntries(t, p)
@@ -319,9 +326,9 @@ func TestMigrateBackfillsTheRetiredLogInOrder(t *testing.T) {
 		assert.Equal(t, entries[i].AppendedAt.UTC().Format(time.RFC3339Nano), st.ProvenanceMode.SourceAssertedAt)
 		assert.Equal(t, now.UTC().Format(time.RFC3339Nano), st.ProvenanceMode.ImportedAt)
 		assert.NotEqual(t, st.ProvenanceMode.SourceAssertedAt, st.ProvenanceMode.ImportedAt)
-		// The capsule stays in the artifact store: the record names it and
-		// holds no copy of it.
-		assert.Empty(t, r.Header.PayloadCommitments, "a backfilled entry carries no bytes")
+		// A retired capsule is committed as the record's payloads, as a
+		// wrapper commits one; a bare digest carries no bytes.
+		assert.Equal(t, i < 2, len(r.Header.PayloadCommitments) == 2, "a backfilled capsule carries its capsule and envelope")
 		assert.Equal(t, i < 2, st.Capsule, "a retired capsule is named as one; a bare digest has no capsule behind it")
 	}
 	listedBackfill := map[string]bookEntry{}
@@ -669,7 +676,39 @@ func TestAppendAfterAPayloadlessBackfillCarriesTheCapsule(t *testing.T) {
 		}
 	}
 	assert.Equal(t, recordTypePublished, wrapped.RecordType, "the capsule is published by a record that names it")
-	assert.False(t, wrapped.CapsuleCarried, "the artifact store holds the capsule; the record holds no copy")
+	assert.True(t, wrapped.CapsuleCarried, "the wrapper commits the capsule as its payload")
+
+	// Its bundle carries the capsule, so a reader resolves the capsule's id
+	// through the wrapper.
+	out, err := invoke(t, "", "disclose", "--profile", "a", "--root", wrapped.RecordID, "--payloads", "all")
+	require.NoError(t, err)
+	verified, err := evidencebook.VerifyBundle([]byte(strings.TrimSpace(out)))
+	require.NoError(t, err)
+	carried := false
+	for _, r := range verified.Records {
+		if r.RecordID == wrapped.RecordID && r.Header != nil {
+			carried = len(r.Header.PayloadCommitments) == 2 && r.Header.SubjectRef == id
+		}
+	}
+	assert.True(t, carried, "the bundle carries the wrapper with the capsule it commits")
+	var bundle struct {
+		Extensions struct {
+			Payloads map[string]string `json:"evidencebook/payloads"`
+		} `json:"extensions"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &bundle))
+	var wrapper evidencebook.Record
+	for _, r := range verified.Records {
+		if r.RecordID == wrapped.RecordID {
+			wrapper.Header = *r.Header
+		}
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(bundle.Extensions.Payloads[wrapper.Header.PayloadCommitments[0]])
+	require.NoError(t, err)
+	v, err := emit.VerifyCapsule(raw)
+	require.NoError(t, err)
+	require.NotNil(t, v.CapsuleID)
+	assert.Equal(t, id, *v.CapsuleID, "the wrapped capsule's bytes travel in the bundle")
 }
 
 func TestBookBundleRefusesARootOnlyClosure(t *testing.T) {
