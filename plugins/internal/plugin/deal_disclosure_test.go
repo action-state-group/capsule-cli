@@ -219,13 +219,13 @@ func TestDealDisclosureInputIsRefusedWhenIncomplete(t *testing.T) {
 // The host's own record of a share is read narrowly: metadata only. A sealed
 // disclosure accounts for it; a host row carrying the shared value itself is
 // refused, and the value is not echoed.
-func TestDealReconcileCountsADisclosureAndReadsHostRowsNarrowly(t *testing.T) {
+func TestDealAuditHostCountsADisclosureAndReadsHostRowsNarrowly(t *testing.T) {
 	dealFixture(t)
 	dealID, _, _ := openDisclosureDeal(t)
 	path := writeJSON(t, `{"id":"b1","at":"2026-09-27T18:00:30Z","task":"t-browser","tool":"browser_automation","action":"share_contact","status":"succeeded","deal_id":"`+dealID+`"}
 {"id":"b2","at":"2026-09-27T18:00:40Z","task":"t-browser","tool":"browser_automation","action":"share_contact","status":"succeeded","deal_id":"`+dealID+`"}
 {"id":"b3","at":"2026-09-27T18:00:50Z","task":"t-browser","tool":"browser_automation","action":"share_contact","status":"succeeded","deal_id":"`+dealID+`"}`)
-	result, err := reconcileRun(t, "--executions", path, "--to", "2026-09-28T00:00:00Z")
+	result, err := auditHostRun(t, "--executions", path, "--to", "2026-09-28T00:00:00Z")
 	require.NoError(t, err, "every share is accounted for: %v", result)
 	var by []string
 	for _, r := range result["recorded"].([]any) {
@@ -238,7 +238,7 @@ func TestDealReconcileCountsADisclosureAndReadsHostRowsNarrowly(t *testing.T) {
 		`{"id":"b1","at":"2026-09-27T18:00:30Z","tool":"fill ` + pickupSpot + `","action":"share_contact","status":"succeeded"}`,
 		`{"id":"b1","at":"2026-09-27T18:00:30Z","task":"` + userPhone + `","tool":"browser_automation","action":"share_contact","status":"succeeded"}`,
 	} {
-		out, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", writeJSON(t, bad))
+		out, err := invoke(t, "", "--profile", "deal", "deal", "audit-host", "--executions", writeJSON(t, bad))
 		require.ErrorIs(t, err, cli.ErrInput, bad)
 		assertNoDisclosedValue(t, out+err.Error())
 	}

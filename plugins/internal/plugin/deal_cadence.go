@@ -113,7 +113,7 @@ func (s *dealSession) tick(ctx context.Context) (map[string]any, error) {
 // cadence (Witnessed), which records its leaves as witnessed and lets ended
 // deals leave the live set. A receipt stored but not reported (an error in
 // between) leaves the session unmigrated, so close does not mark the store
-// seen and the next open's reconcile reports it (witnessNativeTicks); a
+// seen and the next open's repair reports it (witnessNativeTicks); a
 // receipt a released build stored is found the same way.
 func (s *dealSession) deliverCadence(ctx context.Context, c *evidencebook.Cadence, p cli.Profile, service string, now time.Time) (delivered []uint64, pending []map[string]any, err error) {
 	t, err := cli.OpenDealTarget(ctx, p, cli.UseCLL, s)

@@ -42,11 +42,11 @@ func procedureSteps(t *testing.T, name string) []string {
 	return steps
 }
 
-// reconcileRun runs `deal reconcile` and decodes its result, which is printed
+// auditHostRun runs `deal audit-host` and decodes its result, which is printed
 // whether or not anything is unrecorded.
-func reconcileRun(t *testing.T, args ...string) (map[string]any, error) {
+func auditHostRun(t *testing.T, args ...string) (map[string]any, error) {
 	t.Helper()
-	out, err := invoke(t, "", append([]string{"--profile", "deal", "deal", "reconcile"}, args...)...)
+	out, err := invoke(t, "", append([]string{"--profile", "deal", "deal", "audit-host"}, args...)...)
 	var m map[string]any
 	require.NoError(t, json.NewDecoder(strings.NewReader(out)).Decode(&m), out)
 	return m, err
@@ -88,7 +88,7 @@ func TestDealSkillSaysInvocationIsAdvisoryAndRetailIsInScope(t *testing.T) {
 // A scripted agent loop walks the Purchase procedure as SKILL.md writes it,
 // for a request that never names the deal skill. The host side of each step
 // (filling the form, the payment) is written as the host's execution records,
-// as a sub-task would leave them; the reconciliation reads those records.
+// as a sub-task would leave them; the pass reads those records.
 func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 	dealFixture(t)
 	request, err := os.ReadFile(filepath.Join(retailDemo, "request.txt"))
@@ -135,7 +135,7 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "executions.jsonl")
 	require.NoError(t, os.WriteFile(path, executions.Bytes(), 0o600))
-	result, err := reconcileRun(t, "--executions", path, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
+	result, err := auditHostRun(t, "--executions", path, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
 	require.NoError(t, err)
 	assert.Empty(t, result["unrecorded"])
 	recorded := result["recorded"].([]any)
@@ -156,7 +156,7 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 
 	approvals := filepath.Join(t.TempDir(), "approvals.jsonl")
 	require.NoError(t, os.WriteFile(approvals, []byte(`{"id":"a1","at":"2026-09-27T18:00:00Z","task":"t-browser","amount_minor":627,"currency":"USD","decision":"approved"}`+"\n"), 0o600))
-	result, err = reconcileRun(t, "--executions", path, "--approvals", approvals, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
+	result, err = auditHostRun(t, "--executions", path, "--approvals", approvals, "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
 	require.NoError(t, err)
 	coverage = result["coverage"].(map[string]any)
 	assert.Equal(t, map[string]any{"available": true, "read": float64(1)}, coverage["host_approvals"])
@@ -188,9 +188,9 @@ func TestDealCheckApprovalTextCarriesTheFindingAndWhenItGoesStale(t *testing.T) 
 	require.ErrorIs(t, err, cli.ErrInput)
 }
 
-func TestDealReconcileListsAPaymentWithNoDeal(t *testing.T) {
+func TestDealAuditHostListsAPaymentWithNoDeal(t *testing.T) {
 	dealFixture(t)
-	result, err := reconcileRun(t, "--executions", filepath.Join(bookingFixture, "..", "executions-unrecorded.jsonl"), "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
+	result, err := auditHostRun(t, "--executions", filepath.Join(bookingFixture, "..", "executions-unrecorded.jsonl"), "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z")
 	require.ErrorIs(t, err, cli.ErrPartial, "anything unrecorded exits partial")
 	unrecorded := result["unrecorded"].([]any)
 	require.Len(t, unrecorded, 1)
@@ -203,18 +203,18 @@ func TestDealReconcileListsAPaymentWithNoDeal(t *testing.T) {
 	assert.NotEmpty(t, result["coverage"].(map[string]any)["cannot_see"])
 }
 
-func TestDealReconcileMatchesAChecksDealAndRefusesBadRecords(t *testing.T) {
+func TestDealAuditHostMatchesAChecksDealAndRefusesBadRecords(t *testing.T) {
 	dealFixture(t)
 	dealID := dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))["deal_id"].(string)
 	dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(retailDemo, "check-pay.json"))
 	path := writeJSON(t, `{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","amount_minor":627,"currency":"USD","status":"unknown","deal_id":"`+dealID+`"}`)
-	result, err := reconcileRun(t, "--executions", path, "--to", "2026-09-28T00:00:00Z")
+	result, err := auditHostRun(t, "--executions", path, "--to", "2026-09-28T00:00:00Z")
 	require.NoError(t, err)
 	assert.Equal(t, "check", result["recorded"].([]any)[0].(map[string]any)["matched_by"])
 
 	// A different amount is not the checked payment.
 	path = writeJSON(t, `{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","amount_minor":9999,"status":"succeeded"}`)
-	_, err = reconcileRun(t, "--executions", path, "--to", "2026-09-28T00:00:00Z")
+	_, err = auditHostRun(t, "--executions", path, "--to", "2026-09-28T00:00:00Z")
 	require.ErrorIs(t, err, cli.ErrPartial)
 
 	for _, bad := range []string{
@@ -223,7 +223,7 @@ func TestDealReconcileMatchesAChecksDealAndRefusesBadRecords(t *testing.T) {
 		`{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"refund","status":"succeeded"}`,
 		`{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","status":"done"}`,
 	} {
-		_, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", writeJSON(t, bad))
+		_, err := invoke(t, "", "--profile", "deal", "deal", "audit-host", "--executions", writeJSON(t, bad))
 		require.ErrorIs(t, err, cli.ErrInput, bad)
 	}
 }
@@ -231,7 +231,7 @@ func TestDealReconcileMatchesAChecksDealAndRefusesBadRecords(t *testing.T) {
 // The reader takes metadata and digests only. A card number, a code or form
 // content in an execution or approval record is refused, and never reaches
 // the output, the error, or the store.
-func TestDealReconcileNeverCarriesACardNumber(t *testing.T) {
+func TestDealAuditHostNeverCarriesACardNumber(t *testing.T) {
 	dir := dealFixture(t)
 	const pan = "4111111111111111"
 	spaced := "4111 1111 1111 1111"
@@ -246,7 +246,7 @@ func TestDealReconcileNeverCarriesACardNumber(t *testing.T) {
 		`{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","status":"succeeded","merchant_domain":"pay.example/` + pan + `"}`,
 		`{"id":"c1","at":"2026-09-27T18:05:00Z","tool":"make_payment","action":"pay","status":"succeeded","reference_sha256":"` + pan + `"}`,
 	} {
-		out, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", writeJSON(t, good+"}\n"+bad))
+		out, err := invoke(t, "", "--profile", "deal", "deal", "audit-host", "--executions", writeJSON(t, good+"}\n"+bad))
 		require.ErrorIs(t, err, cli.ErrInput, bad)
 		assert.NotContains(t, out, pan, bad)
 		assert.NotContains(t, out, spaced, bad)
@@ -258,14 +258,54 @@ func TestDealReconcileNeverCarriesACardNumber(t *testing.T) {
 		`{"id":"a1","at":"2026-09-27T18:00:00Z","execution_id":"` + pan + `","decision":"approved"}`,
 		`{"id":"a1","at":"2026-09-27T18:00:00Z","decision":"approved","card_last4":"1111","card":"` + pan + `"}`,
 	} {
-		out, err := invoke(t, "", "--profile", "deal", "deal", "reconcile", "--executions", writeJSON(t, good+"}"), "--approvals", writeJSON(t, bad))
+		out, err := invoke(t, "", "--profile", "deal", "deal", "audit-host", "--executions", writeJSON(t, good+"}"), "--approvals", writeJSON(t, bad))
 		require.ErrorIs(t, err, cli.ErrInput, bad)
 		assert.NotContains(t, out, pan, bad)
 		assert.NotContains(t, err.Error(), pan, bad)
 	}
-	// Nothing was written to the store either: reconcile seals nothing.
+	// Nothing was written to the store either: audit-host seals nothing.
 	raw, err := os.ReadFile(filepath.Join(dir, "deal.db"))
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), pan)
 	assert.NotContains(t, string(raw), spaced)
+}
+
+// `deal reconcile`, the name this command shipped under, still runs it for
+// one release: the same result on stdout, a warning on stderr only, and no
+// entry in the help.
+func TestDealReconcileIsADeprecatedAliasOfAuditHost(t *testing.T) {
+	dealFixture(t)
+	args := []string{"--executions", filepath.Join(bookingFixture, "..", "executions-unrecorded.jsonl"), "--from", "2026-09-27T00:00:00Z", "--to", "2026-09-28T00:00:00Z"}
+	run := func(verb string) (string, string, error) {
+		c := testCommand()
+		var stdout, stderr bytes.Buffer
+		c.SetOut(&stdout)
+		c.SetErr(&stderr)
+		c.SetArgs(append([]string{"--profile", "deal", "deal", verb}, args...))
+		err := c.ExecuteContext(t.Context())
+		return stdout.String(), stderr.String(), err
+	}
+	newOut, newErr, err := run("audit-host")
+	require.ErrorIs(t, err, cli.ErrPartial)
+	assert.NotContains(t, newErr, dealReconcileDeprecation)
+	oldOut, oldErr, err := run("reconcile")
+	require.ErrorIs(t, err, cli.ErrPartial)
+	assert.Equal(t, newOut, oldOut, "the same stdout, byte for byte")
+	assert.Contains(t, oldErr, dealReconcileDeprecation)
+
+	help, err := invoke(t, "", "--profile", "deal", "deal", "--help")
+	require.NoError(t, err)
+	assert.Contains(t, help, "audit-host")
+	assert.Contains(t, help, "List host actions that have no deal record; seals nothing")
+	assert.NotRegexp(t, `(?m)^\s+reconcile\s`, help, "the alias is hidden")
+}
+
+// The plugin's subcommand list is the deal command tree's, hidden alias
+// included, so `capsulectl plugin ls` names every verb the plugin answers.
+func TestDealMetadataListsEveryDealSubcommand(t *testing.T) {
+	var names []string
+	for _, c := range dealCommands().Commands() {
+		names = append(names, c.Name())
+	}
+	assert.ElementsMatch(t, DealMetadata.Subcommands, names)
 }

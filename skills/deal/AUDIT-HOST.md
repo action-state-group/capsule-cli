@@ -1,13 +1,13 @@
-# deal reconcile
+# deal audit-host
 
-`deal reconcile` is the detective control behind the deal skill. Calling the
+`deal audit-host` is the detective control behind the deal skill. Calling the
 skill is advisory: an agent host with no hook before a tool call cannot make
 the agent run the final review. So once a period, this pass reads the host's
 own record of what was executed and lists every consequential action that
 has no deal record. It seals nothing and changes no deal.
 
 ```sh
-capsulectl --profile deal deal reconcile --executions executions.jsonl [--from TIME] [--to TIME] [--window 30m]
+capsulectl --profile deal deal audit-host --executions executions.jsonl [--from TIME] [--to TIME] [--window 30m]
 ```
 
 The default period is the 24 hours before `--to` (default: now). `--from` is

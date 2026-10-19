@@ -158,9 +158,9 @@ func TestARC16StoreMovesOntoItsShelf(t *testing.T) {
 }
 
 // A released build run on a migrated store is seen on the next open (the
-// mutation counter its writes move) and reconciled: an ended deal it
+// mutation counter its writes move) and repaired: an ended deal it
 // appended to is live again (note §3.3).
-func TestAReleasedBuildsWriteIsReconciled(t *testing.T) {
+func TestAReleasedBuildsWriteIsRepaired(t *testing.T) {
 	p, deals, witnessKey := rc16Store(t)
 	// Migrated, then a witnessed tick holds the closed deal's final
 	// checkpoint: it leaves the tick.
@@ -176,12 +176,12 @@ func TestAReleasedBuildsWriteIsReconciled(t *testing.T) {
 	_, err = log.Append(t.Context(), cll.AppendInput{Value: []byte(strings.Repeat("r", 32)), AppendedAt: time.Now().UTC()})
 	require.NoError(t, err)
 	require.NoError(t, log.Close())
-	assert.Contains(t, liveLogs(t, p), cli.DealLogID(deals.Closed), "the reconcile on open put the grown deal back")
+	assert.Contains(t, liveLogs(t, p), cli.DealLogID(deals.Closed), "the repair on open put the grown deal back")
 }
 
 // A receipt the cadence log holds but the cadence was never told of (a
 // released build's delivery, or this build's, stopped before it reported)
-// is a write the next open did not see: its reconcile reports it, with no
+// is a write the next open did not see: its repair reports it, with no
 // tick due and no delivery made.
 func TestAReceiptStoredOutsideTheCadenceIsReportedOnTheNextOpen(t *testing.T) {
 	p, _, witnessKey := rc16Store(t)
@@ -199,7 +199,7 @@ func TestAReceiptStoredOutsideTheCadenceIsReportedOnTheNextOpen(t *testing.T) {
 
 // A delivery that stores its receipt and then fails (here the read after the
 // commit is cancelled) leaves the session unmigrated: close does not record
-// the store as seen, and the next open's reconcile reports the receipt.
+// the store as seen, and the next open's repair reports the receipt.
 func TestADeliveryThatFailsAfterStoringItsReceiptIsReportedOnTheNextOpen(t *testing.T) {
 	p, _, witnessKey := rc16Store(t)
 	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 27, 0, 0, time.UTC) }
@@ -332,12 +332,12 @@ func tickLeaves(t *testing.T, p cli.Profile, n int) storedTickLeaves {
 	return out
 }
 
-// A reconcile that fails part way (a crash, a cancellation) leaves the
+// A repair that fails part way (a crash, a cancellation) leaves the
 // released build's write unseen-as-handled: the next open runs it again.
 // It stops before any repair ("start") and after the import has already
 // restored the live set ("imported"); either way seen stays behind the
-// counter until a reconcile completes.
-func TestAFailedReconcileRunsAgain(t *testing.T) {
+// counter until a repair completes.
+func TestAFailedRepairRunsAgain(t *testing.T) {
 	for _, stage := range []string{"start", "imported"} {
 		t.Run(stage, func(t *testing.T) {
 			p, deals, witnessKey := rc16Store(t)
@@ -364,7 +364,7 @@ func TestAFailedReconcileRunsAgain(t *testing.T) {
 			_, err = invoke(t, "", "--profile", "deal", "deal", "tick")
 			require.ErrorIs(t, err, assert.AnError)
 			afterSeen, afterCounter := shelfSeen(t, p)
-			assert.Equal(t, seen, afterSeen, "a failed reconcile records nothing as seen")
+			assert.Equal(t, seen, afterSeen, "a failed repair records nothing as seen")
 			assert.Less(t, afterSeen, afterCounter)
 
 			ran := false
@@ -373,7 +373,7 @@ func TestAFailedReconcileRunsAgain(t *testing.T) {
 				return nil
 			}
 			dealRun(t, "tick")
-			assert.True(t, ran, "the next open reconciled again")
+			assert.True(t, ran, "the next open repaired again")
 			assert.Contains(t, liveLogs(t, p), cli.DealLogID(deals.Closed))
 			finalSeen, finalCounter := shelfSeen(t, p)
 			assert.Equal(t, finalCounter, finalSeen)
