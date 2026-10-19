@@ -589,3 +589,28 @@ func TestARetiredBookIsNotReadByCadenceWork(t *testing.T) {
 	out, err := invoke(t, "", "--profile", "deal", "deal", "checkpoint", "status", "--deal", active)
 	require.NoError(t, err, out)
 }
+
+// A sale never ends, so it stays in the tick for good; settling which deals
+// have ended never reads it, so even a live sale's originals gone from the
+// store change nothing for a tick.
+func TestALiveSaleIsNotReadToSettleEndedDeals(t *testing.T) {
+	p, _, witnessKey := rc16Store(t)
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 28, 0, 0, time.UTC) }
+	dealRun(t, "tick")
+	saleID, _ := newSale(t)
+	require.Contains(t, liveLogs(t, p), cli.DealLogID(saleID))
+	db, _, err := cli.SqliteConnection(p)
+	require.NoError(t, err)
+	for _, r := range bookRecords(t, saleID) {
+		for _, table := range []string{"capsule_store_artifacts", "capsule_store_capsules"} {
+			_, err = db.Exec(`DELETE FROM `+table+` WHERE capsule_id = ?`, r.RecordID)
+			require.NoError(t, err)
+		}
+	}
+	require.NoError(t, db.Close())
+	cli.DealClock = func() time.Time { return time.Date(2026, 10, 19, 9, 30, 0, 0, time.UTC) }
+	tick := dealRun(t, "tick")
+	require.Equal(t, "ticked", tick["state"])
+	deliver(t, p, uint64(tick["checkpoint"].(float64)), witnessKey)
+	assert.Contains(t, liveLogs(t, p), cli.DealLogID(saleID), "a sale never ends")
+}

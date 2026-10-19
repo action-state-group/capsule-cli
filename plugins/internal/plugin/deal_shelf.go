@@ -325,11 +325,11 @@ func (s *dealSession) legacyTicks(ctx context.Context, p cli.Profile) (_ []evide
 // back from the newest tick to the newest witnessed one: with a witness that
 // never answers, that is every tick, which the reconcile's rarity bounds.
 func (s *dealSession) witnessNativeTicks(ctx context.Context, c *evidencebook.Cadence, p cli.Profile) (err error) {
-	if err := s.settleEnded(ctx, c); err != nil {
-		return err
-	}
 	service, err := cli.ServiceID(p)
 	if err != nil || service == "" {
+		return err
+	}
+	if err := s.settleEnded(ctx, c); err != nil {
 		return err
 	}
 	last, ok, err := c.Last(ctx)
