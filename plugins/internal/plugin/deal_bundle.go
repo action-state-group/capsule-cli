@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/evidencebook"
 	"github.com/spf13/cobra"
 )
 
@@ -68,13 +69,14 @@ func dealBundleRun(c *cobra.Command, use string) error {
 		if err != nil {
 			return err
 		}
+		openingsNote := ""
 		if use == "disclose" && audience == cli.DealAudienceCounterparty {
 			// The user's own copy for the other party carries the openings
 			// of the final close's money terms, so they can reconcile it
 			// (note §2.10 Decision 3). They are in the bytes the gate reads
 			// and the share hashes.
-			openings, err := s.closeOpenings(ctx, dealID, events, b)
-			if err != nil {
+			var openings map[string]map[string]evidencebook.Opening
+			if openings, openingsNote, err = s.closeOpenings(ctx, dealID, events, b); err != nil {
 				return err
 			}
 			if openings != nil {
@@ -104,6 +106,10 @@ func dealBundleRun(c *cobra.Command, use string) error {
 		if err = cli.AtomicFile(out, encoded, false); err != nil {
 			return err
 		}
-		return cli.Output(c, map[string]any{"deal_id": dealID, "bundle": out, "share": share})
+		result := map[string]any{"deal_id": dealID, "bundle": out, "share": share}
+		if openingsNote != "" {
+			result["field_openings"] = openingsNote
+		}
+		return cli.Output(c, result)
 	})
 }

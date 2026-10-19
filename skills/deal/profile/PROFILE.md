@@ -854,7 +854,7 @@ proposed action, history refs and any platform approvals; a response carries the
 
 ## 10. The two halves of a deal (`ec:deal-reconcile@1`)
 
-Each party to a deal (`deal open --deal-id`) seals its own close. `deal reconcile-result` reconciles
+Each party to a deal (`deal open --deal-id`) seals its own close. `deal terms-result` reconciles
 the two closes under agent-action-capsule's Deal Reconcile Contract, `ec:deal-reconcile@1`
 (`spec/deal-reconcile-contract-v0.md`, cited here as DR), with evidencebook's recompute. This
 section is the profile's declaration that DR-4 asks for.
@@ -892,7 +892,7 @@ match only where both parties closed as received, and every other pair is `INSUF
 rule 5). A finally closed deal takes later evidence only, chained `confirms` to the close, so the
 final close is the deal's last step chained `follows`.
 
-**Admission (DR §4.1).** A half is reconciled only after these checks; any failure refuses the
+**Admission (DR §4.1).** A half is admitted only after these checks; any failure refuses the
 reconcile:
 - its producer signature verifies, under this profile's key for the own half, and under the
   responder key pinned for the recorded copy for the counterparty's;
@@ -900,7 +900,7 @@ reconcile:
 - a verified checkpoint covers it: the book's own, or the copy's;
 - it is the final close. The own half is found by its steps. The counterparty's is the record its
   `field_openings` names, which must chain `follows`, with every later `deal_step` in the copy
-  chaining `confirms` to it (sealed reports are passed over). Where the copy discloses its payload,
+  chaining `confirms` to it (sealed reports are passed over), and no record missing between it and the copy's checkpoint. Where the copy discloses its payload,
   it must be a close whose outcome is not `open`, and a verified opening must not contradict the
   outcome record it refs.
 
@@ -914,5 +914,20 @@ copy, a report page, or the user's own bundle. `deal_local` is never opened.
 Close, with the counterparty's signing key as `peer`. That key is long-lived, so Results about
 different deals with one counterparty can be linked by anyone who holds them. DR §7.5's per-deal
 state is not shown. `result build` refuses a claim under exactly `ec:deal-reconcile@1`, because its
-evidence is not in any book, and `deal reconcile-result --check` checks a Result against the inputs
-given.
+evidence is not in any book.
+
+**Checking a Result.** `deal terms-result --check` recomputes a Result from the inputs given.
+The Result names its halves, since each claim's `evidence` is the sorted digests of every half in
+the reconcile (DR §7.3), so the check requires the halves it reads to be exactly those: the
+producer's halves are provable. Two inputs are not recorded in the Result:
+- which openings were carried, since it carries no opening (DR §7.3). A missing opening is
+  `INSUFFICIENT` where a carried one could match, so a check uses exactly the openings named: the
+  counterparty's own come only from the disclose file it sent (`--sent`), whose digest must be a
+  share it recorded;
+- the coverage declaration, which no claim cites (DR-3). A different coverage input can turn an
+  `A_ONLY` into `INSUFFICIENT`, and a check cannot tell which the producer used. The verb gives
+  none, so its own Results never hold `A_ONLY` or `B_ONLY`.
+
+An adjudicator receives no openings, so it cannot recompute a deal reconcile: its check is
+"cannot reproduce". A path that releases openings to a named adjudicator would be a later
+design.

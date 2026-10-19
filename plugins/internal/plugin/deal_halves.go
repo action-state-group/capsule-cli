@@ -20,7 +20,7 @@ import (
 // The deal reconcile (design note §2.10): each party's final close of a deal
 // is its half, and the two halves are reconciled under the Deal Reconcile
 // Contract, ec:deal-reconcile@1, by evidencebook's recompute. This file reads
-// the halves and admits them; deal_reconcile_result.go is the verb.
+// the halves and admits them; deal_terms_result.go is the verb.
 //
 // A half is the close's bundle record, the object cli.GetCapsule builds and
 // every copy carries: the Capsule with its producer signature and key_id.
@@ -227,11 +227,12 @@ func admitPeerHalf(dealID string, peer dealPeerCopy, digest string, openings map
 	if half.header.RecordType != dealStepRecordType || half.header.BookID != cli.DealLogID(dealID) {
 		return dealHalf{}, cli.InputError("record " + half.recordID + " is not a step of deal " + dealID)
 	}
-	// 3. Under the copy's verified checkpoint.
+	// 3. Under the copy's verified checkpoint, at the position the copy's
+	// verified membership gives it.
 	checkpoint, _ := peer.bundle["checkpoint"].(map[string]interface{})
 	size, _ := cli.JSONUint(checkpoint["mmr_size"])
 	leaves := mmrLeafCount(size)
-	if half.header.Seq < 1 || half.header.Seq > leaves {
+	if !boundSeq(peer.bundle, half.recordID, half.header) || half.header.Seq < 1 || half.header.Seq > leaves {
 		return dealHalf{}, cli.InputError("record " + half.recordID + " is not under the copy's checkpoint")
 	}
 	// 4. The final close as far as the copy shows.
@@ -251,25 +252,30 @@ func admitPeerHalf(dealID string, peer dealPeerCopy, digest string, openings map
 // chains confirms to it. A finally closed deal takes later evidence only,
 // linked to the close (deal.go, `deal note`), so the final close is its
 // last step chained follows. Sealed reports carry no link and are passed
-// over; any other later record fails the check.
+// over; any other later record fails the check. A copy carries every record
+// of the log up to its checkpoint, so one missing after the candidate fails
+// it too: the missing record could be a later step.
 func lastStep(bundle map[string]interface{}, half dealHalf, leaves uint64) error {
 	refuse := cli.InputError("record " + half.recordID + " is not the counterparty's final close as their copy shows it: name the close the deal ended with")
 	if relation, _ := chainOf(copyRecord(bundle, half.recordID)); relation != "follows" {
 		return refuse
 	}
 	records, _ := bundle["records"].([]interface{})
+	held := map[uint64]bool{}
 	for _, r := range records {
 		m, _ := r.(map[string]interface{})
 		if m == nil || m["capsule_id"] == half.recordID {
 			continue
 		}
 		header, err := inlineHeader(m)
-		if err != nil {
+		id, _ := m["capsule_id"].(string)
+		if err != nil || !boundSeq(bundle, id, header) {
 			return refuse
 		}
 		if header.Seq <= half.header.Seq || header.Seq > leaves {
 			continue
 		}
+		held[header.Seq] = true
 		switch header.RecordType {
 		case dealReportRecordType:
 		case dealStepRecordType:
@@ -280,7 +286,25 @@ func lastStep(bundle map[string]interface{}, half dealHalf, leaves uint64) error
 			return refuse
 		}
 	}
+	for seq := half.header.Seq + 1; seq <= leaves; seq++ {
+		if !held[seq] {
+			return refuse
+		}
+	}
 	return nil
+}
+
+// boundSeq is whether a record's inline header names the log position the
+// copy's verified membership gives it: the bundle verifier checks each
+// record's log_coordinates against the checkpoint, never the header's seq,
+// so a seq is read only once it is bound to them.
+func boundSeq(bundle map[string]interface{}, id string, header evidencebook.Header) bool {
+	certificate, _ := bundle["completeness_certificate"].(map[string]interface{})
+	memberships, _ := certificate["memberships"].(map[string]interface{})
+	membership, _ := memberships[id].(map[string]interface{})
+	coordinates, _ := membership["log_coordinates"].(map[string]interface{})
+	seq, err := cli.JSONUint(coordinates["seq"])
+	return err == nil && seq == header.Seq
 }
 
 // chainOf is a Capsule's chain relation and parent.
@@ -486,40 +510,42 @@ func fmtAny(v interface{}) string {
 // copy carries (note §2.10 Decision 3): the openings of the deal's final
 // close, under its half digest in the copy, when the close commits non-empty
 // money terms and the amount written as money passes the counterparty's
-// ceiling gate. A legacy deal, an open one, or a close no checkpoint covers
-// yet carries none.
-func (s *dealSession) closeOpenings(ctx context.Context, dealID string, events []sealedEvent, b map[string]interface{}) (map[string]map[string]evidencebook.Opening, error) {
+// ceiling gate. When it carries none, why says so, for the sharer: the
+// counterparty's reconcile is then not evaluable.
+func (s *dealSession) closeOpenings(ctx context.Context, dealID string, events []sealedEvent, b map[string]interface{}) (openings map[string]map[string]evidencebook.Opening, why string, err error) {
 	if !s.onBook {
-		return nil, nil
+		return nil, "none: a deal opened before the shelf has no openings", nil
 	}
-	own, openings, err := s.ownDealHalf(ctx, dealID)
-	if errors.Is(err, cli.ErrInput) || own == nil {
-		return nil, nil
+	own, held, err := s.ownDealHalf(ctx, dealID)
+	switch {
+	case errors.Is(err, cli.ErrInput):
+		return nil, "none: " + cli.SafeError(err), nil
+	case err != nil:
+		return nil, "", err
+	case own == nil:
+		return nil, "none: the deal has no final close yet", nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	amount, currency := openings[dealAmountField].Text, openings[dealCurrencyField].Text
+	amount, currency := held[dealAmountField].Text, held[dealCurrencyField].Text
 	if amount == "" || currency == "" {
-		return nil, nil
+		return nil, "none: the final close commits no money terms (it was not received, or names no price or currency)", nil
 	}
 	minor, err := strconv.ParseInt(amount, 10, 64)
 	if err != nil {
-		return nil, cli.ErrConflict
+		return nil, "", cli.ErrConflict
 	}
 	if dealCeilingGate([]byte(formatMoney(minor, currency)), events, cli.DealAudienceCounterparty) != nil {
-		return nil, nil
+		return nil, "none: the amount, written as money, is one the counterparty share keeps from them (a limit or floor of yours), so the counterparty cannot reconcile the terms", nil
 	}
 	record := copyRecord(b, own.recordID)
 	if record == nil {
-		return nil, cli.ErrConflict
+		return nil, "", cli.ErrConflict
 	}
 	half, err := halfOf(record)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if half.digest != own.digest {
-		return nil, cli.Hint(cli.ErrConflict, "the copy's record of the final close is not the one the store holds")
+		return nil, "", cli.Hint(cli.ErrConflict, "the copy's record of the final close is not the one the store holds")
 	}
-	return map[string]map[string]evidencebook.Opening{half.digest: openings}, nil
+	return map[string]map[string]evidencebook.Opening{half.digest: held}, "carried: the final close's amount and currency openings", nil
 }

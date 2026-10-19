@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,10 +75,20 @@ func recordedCopy(t *testing.T, asker, responder dealParty, id string) string {
 // file for the deal.
 func discloseTo(t *testing.T, id, to string) string {
 	t.Helper()
+	path, _ := discloseWithNote(t, id, to)
+	return path
+}
+
+// discloseWithNote is discloseTo, with what the output says of the openings.
+func discloseWithNote(t *testing.T, id, to string) (string, string) {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "disclosed.json")
 	out, err := invoke(t, "", "--profile", "deal", "disclose", "--deal", id, "--share", "counterparty", "--to", to, "--out", path)
 	require.NoError(t, err, out)
-	return path
+	var m map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &m), out)
+	note, _ := m["field_openings"].(string)
+	return path, note
 }
 
 func withSession(t *testing.T, fn func(s *dealSession)) {
@@ -88,11 +99,11 @@ func withSession(t *testing.T, fn func(s *dealSession)) {
 	fn(s)
 }
 
-// reconcileResult runs the verb as the selected party, writing the Result.
-func runReconcileResult(t *testing.T, id, response string, extra ...string) (map[string]any, evidencebook.DealReconcileResult, string, error) {
+// runTermsResult runs the verb as the selected party, writing the Result.
+func runTermsResult(t *testing.T, id, response string, extra ...string) (map[string]any, evidencebook.DealReconcileResult, string, error) {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "result.json")
-	args := append([]string{"--profile", "deal", "deal", "reconcile-result", "--deal", id, "--response", response, "--out", out}, extra...)
+	args := append([]string{"--profile", "deal", "deal", "terms-result", "--deal", id, "--response", response, "--out", out}, extra...)
 	text, err := invoke(t, "", args...)
 	if err != nil {
 		return nil, evidencebook.DealReconcileResult{}, text, err
@@ -121,9 +132,9 @@ const (
 // #36's acceptance, end to end: two real parties close as received,
 // exchange copies, and the buyer's Result has both claims met, each with
 // tallies matched 1, citing no Close. No deal state is shown anywhere.
-func TestReconcileResultOfTwoPartiesIsMet(t *testing.T) {
+func TestTermsResultOfTwoPartiesIsMet(t *testing.T) {
 	pair := closedPair(t, received, received)
-	summary, result, out, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+	summary, result, out, err := runTermsResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
 	require.NoError(t, err)
 	claims := claimsOf(result)
 	for _, req := range []string{amountReq, currencyReq} {
@@ -137,7 +148,7 @@ func TestReconcileResultOfTwoPartiesIsMet(t *testing.T) {
 	written := string(mustRead(t, out))
 	encodedSummary, err := json.Marshal(summary)
 	require.NoError(t, err)
-	help, err := invoke(t, "", "--profile", "deal", "deal", "reconcile-result", "--help")
+	help, err := invoke(t, "", "--profile", "deal", "deal", "terms-result", "--help")
 	require.NoError(t, err)
 	for _, text := range []string{written, string(encodedSummary), help} {
 		assert.NotContains(t, text, "reconciled")
@@ -147,9 +158,9 @@ func TestReconcileResultOfTwoPartiesIsMet(t *testing.T) {
 	assert.Equal(t, pair.id, summary["deal_id"])
 }
 
-func TestReconcileResultWithADifferentPriceConflicts(t *testing.T) {
+func TestTermsResultWithADifferentPriceConflicts(t *testing.T) {
 	pair := closedPair(t, received, `{"status":"received","delivered":{"price_minor":185000}}`)
-	_, result, _, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+	_, result, _, err := runTermsResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
 	require.NoError(t, err)
 	claims := claimsOf(result)
 	assert.Equal(t, evidencebook.ResultTallies{Conflicting: 1}, claims[amountReq].Reconcile.Tallies)
@@ -160,12 +171,12 @@ func TestReconcileResultWithADifferentPriceConflicts(t *testing.T) {
 // A side that did not receive commits empty money terms: not evaluable,
 // never two empty texts matching. A seller that did not receive discloses
 // no openings at all.
-func TestReconcileResultWhenOneSideDidNotReceive(t *testing.T) {
+func TestTermsResultWhenOneSideDidNotReceive(t *testing.T) {
 	notReceived := `{"status":"not_received","reason":"not_delivered"}`
 	for name, closes := range map[string][2]string{"buyer": {notReceived, received}, "seller": {received, notReceived}} {
 		t.Run(name, func(t *testing.T) {
 			pair := closedPair(t, closes[0], closes[1])
-			_, result, _, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+			_, result, _, err := runTermsResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
 			require.NoError(t, err)
 			for _, c := range result.Claims {
 				assert.Equal(t, evidencebook.ResultTallies{Insufficient: 1}, c.Reconcile.Tallies, c.RequirementRef)
@@ -186,7 +197,7 @@ func editOpenings(t *testing.T, path string, edit func(map[string]map[string]evi
 
 // A tampered amount opening fails only the amount: UNRESOLVED, with the
 // currency still met. A missing one is INSUFFICIENT.
-func TestReconcileResultWithATamperedOrMissingOpening(t *testing.T) {
+func TestTermsResultWithATamperedOrMissingOpening(t *testing.T) {
 	pair := closedPair(t, received, received)
 	tampered := editOpenings(t, pair.sellerFile, func(m map[string]map[string]evidencebook.Opening) {
 		for d, fields := range m {
@@ -195,7 +206,7 @@ func TestReconcileResultWithATamperedOrMissingOpening(t *testing.T) {
 			m[d][dealAmountField] = o
 		}
 	})
-	_, result, _, err := runReconcileResult(t, pair.id, pair.response, "--openings", tampered)
+	_, result, _, err := runTermsResult(t, pair.id, pair.response, "--openings", tampered)
 	require.NoError(t, err)
 	claims := claimsOf(result)
 	assert.Equal(t, evidencebook.ResultTallies{Unresolved: 1}, claims[amountReq].Reconcile.Tallies)
@@ -206,7 +217,7 @@ func TestReconcileResultWithATamperedOrMissingOpening(t *testing.T) {
 			delete(m[d], dealAmountField)
 		}
 	})
-	_, result, _, err = runReconcileResult(t, pair.id, pair.response, "--openings", missing)
+	_, result, _, err = runTermsResult(t, pair.id, pair.response, "--openings", missing)
 	require.NoError(t, err)
 	claims = claimsOf(result)
 	assert.Equal(t, evidencebook.ResultTallies{Insufficient: 1}, claims[amountReq].Reconcile.Tallies)
@@ -215,10 +226,10 @@ func TestReconcileResultWithATamperedOrMissingOpening(t *testing.T) {
 
 // Without the seller's openings there is no peer half: the buyer's lone
 // half is INSUFFICIENT, never "no close".
-func TestReconcileResultWithoutOpenings(t *testing.T) {
+func TestTermsResultWithoutOpenings(t *testing.T) {
 	pair := closedPair(t, received, received)
 	for _, extra := range [][]string{nil, {"--openings", writeJSONFile(t, "empty.json", map[string]any{"records": []any{}})}} {
-		_, result, _, err := runReconcileResult(t, pair.id, pair.response, extra...)
+		_, result, _, err := runTermsResult(t, pair.id, pair.response, extra...)
 		require.NoError(t, err)
 		for _, c := range result.Claims {
 			assert.Equal(t, evidencebook.ResultTallies{Insufficient: 1}, c.Reconcile.Tallies)
@@ -270,6 +281,8 @@ func TestOpeningsTravelOnlyInACounterpartyDisclose(t *testing.T) {
 	var b map[string]any
 	require.NoError(t, json.Unmarshal(mustRead(t, pair.sellerFile), &b))
 	require.Contains(t, b, "field_openings")
+	_, note := discloseWithNote(t, pair.id, "the buyer, again")
+	assert.True(t, strings.HasPrefix(note, "carried:"), note)
 	assert.Len(t, b["field_openings"], 1, "the final close only")
 	withSession(t, func(s *dealSession) {
 		recorded, err := s.recordedCounterpartyShare(t.Context(), pair.id, digestOfFile(t, pair.sellerFile))
@@ -293,11 +306,58 @@ func TestOpeningsTravelOnlyInACounterpartyDisclose(t *testing.T) {
 	assert.Equal(t, "VALID", result["verdict"])
 }
 
-// A deal that is still open discloses no openings.
-func TestAnOpenDealDisclosesNoOpenings(t *testing.T) {
+// A deal that is still open, or closed as not received, discloses no
+// openings, and the sharer is told why; a received close's are carried.
+func TestTheDiscloseSaysWhetherItCarriesOpenings(t *testing.T) {
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
-	assert.NotContains(t, string(mustRead(t, discloseTo(t, id, "the seller"))), "field_openings")
+	path, note := discloseWithNote(t, id, "the seller")
+	assert.NotContains(t, string(mustRead(t, path)), "field_openings")
+	assert.Equal(t, "none: the deal has no final close yet", note)
+
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"not_received","reason":"not_delivered"}`))
+	path, note = discloseWithNote(t, id, "the seller")
+	assert.NotContains(t, string(mustRead(t, path)), "field_openings")
+	assert.Contains(t, note, "none: the final close commits no money terms")
+
+	dealFixture(t)
+	id = dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	path, note = discloseWithNote(t, id, "the seller")
+	assert.Contains(t, string(mustRead(t, path)), "field_openings")
+	assert.True(t, strings.HasPrefix(note, "carried:"), note)
+}
+
+// A copy carries every record up to its checkpoint: one missing after the
+// named close fails check 4, since it could be a later step.
+func TestCheck4RefusesAGapAfterTheClose(t *testing.T) {
+	pair := closedPair(t, received, received)
+	openings, err := dealOpeningsFile(mustRead(t, pair.sellerFile))
+	require.NoError(t, err)
+	digest, err := soleDigest(openings)
+	require.NoError(t, err)
+	withSession(t, func(s *dealSession) {
+		peer, err := s.peerCopy(t.Context(), pair.id, pair.response)
+		require.NoError(t, err)
+		half := copyHalves(peer.bundle)[digest]
+		checkpoint := peer.bundle["checkpoint"].(map[string]interface{})
+		size, err := cli.JSONUint(checkpoint["mmr_size"])
+		require.NoError(t, err)
+		leaves := mmrLeafCount(size)
+		require.Greater(t, leaves, half.header.Seq, "the copy holds a report after the close")
+		require.NoError(t, lastStep(peer.bundle, half, leaves))
+
+		var kept []interface{}
+		for _, r := range peer.bundle["records"].([]interface{}) {
+			h, err := inlineHeader(r.(map[string]interface{}))
+			require.NoError(t, err)
+			if h.Seq != leaves {
+				kept = append(kept, r)
+			}
+		}
+		peer.bundle["records"] = kept
+		require.ErrorIs(t, lastStep(peer.bundle, half, leaves), cli.ErrInput)
+	})
 }
 
 // The final close is admitted when later evidence confirms it and reports
@@ -306,7 +366,7 @@ func TestTheFinalCloseIsAdmittedPastLaterEvidenceAndReports(t *testing.T) {
 	pair := closedPair(t, received, received, func(id string) {
 		dealRun(t, "note", "--deal", id, "--kind", "evidence", "--input", writeJSON(t, `{"about": "the parcel arrived", "source": "agent"}`))
 	})
-	_, result, _, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+	_, result, _, err := runTermsResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
 	require.NoError(t, err)
 	assert.Equal(t, "met", result.Claims[0].Verdict)
 }
@@ -379,7 +439,7 @@ func shelfRecord(t *testing.T, id, recordID string) evidencebook.ShelfRecord {
 
 // The verb refuses a peer half that fails admission, and inputs it cannot
 // reconcile.
-func TestReconcileResultRefuses(t *testing.T) {
+func TestTermsResultRefuses(t *testing.T) {
 	pair := closedPair(t, received, received)
 	party(t, pair.seller.config)
 	records := bookRecords(t, pair.id)
@@ -410,18 +470,18 @@ func TestReconcileResultRefuses(t *testing.T) {
 		"a period that is not seconds":     {[]string{"--openings", pair.sellerFile, "--from", "2026-10-19T00:00:00.5Z"}, "--from is an RFC 3339 UTC time"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, _, text, err := runReconcileResult(t, pair.id, pair.response, c.args...)
+			_, _, text, err := runTermsResult(t, pair.id, pair.response, c.args...)
 			require.ErrorIs(t, err, cli.ErrInput, text)
 			assert.Contains(t, cli.SafeError(err), c.want)
 		})
 	}
-	_, _, _, err = runReconcileResult(t, pair.id, strings.Repeat("0", 64), "--openings", pair.sellerFile)
+	_, _, _, err = runTermsResult(t, pair.id, strings.Repeat("0", 64), "--openings", pair.sellerFile)
 	require.ErrorIs(t, err, cli.ErrInput, "a response that was not recorded")
 }
 
 // No half at all: the buyer has no final close and the seller's openings
 // name none.
-func TestReconcileResultRefusesWhenNothingIsClosed(t *testing.T) {
+func TestTermsResultRefusesWhenNothingIsClosed(t *testing.T) {
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
 	buyer := thisDealParty(t)
@@ -429,23 +489,23 @@ func TestReconcileResultRefusesWhenNothingIsClosed(t *testing.T) {
 	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
 	seller := thisDealParty(t)
 	response := recordedCopy(t, buyer, seller, id)
-	_, _, _, err := runReconcileResult(t, id, response)
+	_, _, _, err := runTermsResult(t, id, response)
 	require.ErrorIs(t, err, cli.ErrInput)
 	assert.Contains(t, cli.SafeError(err), "nothing to reconcile")
 }
 
 // A legacy deal has no halves.
-func TestReconcileResultRefusesALegacyDeal(t *testing.T) {
+func TestTermsResultRefusesALegacyDeal(t *testing.T) {
 	legacyDeals(t)
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
 	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
-	_, _, _, err := runReconcileResult(t, id, strings.Repeat("0", 64))
+	_, _, _, err := runTermsResult(t, id, strings.Repeat("0", 64))
 	require.ErrorIs(t, err, cli.ErrInput)
 }
 
 // A copy recorded as failing verification is never a half.
-func TestReconcileResultRefusesACopyThatFailedVerification(t *testing.T) {
+func TestTermsResultRefusesACopyThatFailedVerification(t *testing.T) {
 	pair := closedPair(t, received, received)
 	wrong := pair.seller
 	wrong.checkpoint = pair.buyer.checkpoint
@@ -457,14 +517,14 @@ func TestReconcileResultRefusesACopyThatFailedVerification(t *testing.T) {
 		require.NoError(t, err)
 		failed = outcome.digest
 	})
-	_, _, _, err := runReconcileResult(t, pair.id, failed, "--openings", pair.sellerFile)
+	_, _, _, err := runTermsResult(t, pair.id, failed, "--openings", pair.sellerFile)
 	require.ErrorIs(t, err, cli.ErrInput)
 }
 
 // A close signed under a key other than the responder key pinned for the
 // response (the seller rotated its key, keeping the old one trusted, and
 // answered under the new one) is refused (check 1).
-func TestReconcileResultRefusesACloseUnderAnotherKey(t *testing.T) {
+func TestTermsResultRefusesACloseUnderAnotherKey(t *testing.T) {
 	pair := closedPair(t, received, received)
 	party(t, pair.seller.config)
 	p := dealProfile(t)
@@ -477,7 +537,7 @@ func TestReconcileResultRefusesACloseUnderAnotherKey(t *testing.T) {
 	require.NoError(t, cli.SaveProfile(p, true))
 	rotated := thisDealParty(t)
 	response := recordedCopy(t, pair.buyer, rotated, pair.id)
-	_, _, _, err = runReconcileResult(t, pair.id, response, "--openings", pair.sellerFile)
+	_, _, _, err = runTermsResult(t, pair.id, response, "--openings", pair.sellerFile)
 	require.ErrorIs(t, err, cli.ErrInput)
 	assert.Contains(t, cli.SafeError(err), "not signed under the responder key pinned")
 }
@@ -531,9 +591,9 @@ func jsonDigest(t *testing.T, v any) string {
 }
 
 // checkResult runs --check as the selected party.
-func runReconcileCheck(t *testing.T, id, response, result string, extra ...string) (map[string]any, error) {
+func runTermsCheck(t *testing.T, id, response, result string, extra ...string) (map[string]any, error) {
 	t.Helper()
-	args := append([]string{"--profile", "deal", "deal", "reconcile-result", "--deal", id, "--response", response, "--check", result}, extra...)
+	args := append([]string{"--profile", "deal", "deal", "terms-result", "--deal", id, "--response", response, "--check", result}, extra...)
 	text, err := invoke(t, "", args...)
 	var out map[string]any
 	if json.Unmarshal([]byte(text), &out) != nil {
@@ -545,20 +605,20 @@ func runReconcileCheck(t *testing.T, id, response, result string, extra ...strin
 // --check from both sides: the producer re-checks with its inputs, and the
 // counterparty with the file it sent. "differs" and "cannot reproduce" are
 // kept apart.
-func TestReconcileResultCheck(t *testing.T) {
+func TestTermsResultCheck(t *testing.T) {
 	pair := closedPair(t, received, received)
-	_, _, resultPath, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+	_, _, resultPath, err := runTermsResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
 	require.NoError(t, err)
 	buyerFile := discloseTo(t, pair.id, "the seller")
 
-	out, err := runReconcileCheck(t, pair.id, pair.response, resultPath, "--openings", pair.sellerFile)
+	out, err := runTermsCheck(t, pair.id, pair.response, resultPath, "--openings", pair.sellerFile)
 	require.NoError(t, err, out)
-	assert.Equal(t, reconcileCheckEqual, out["check"])
+	assert.Equal(t, termsCheckEqual, out["check"])
 
 	sellerResponse := recordedCopy(t, pair.seller, pair.buyer, pair.id)
-	out, err = runReconcileCheck(t, pair.id, sellerResponse, resultPath, "--openings", buyerFile, "--sent", pair.sellerFile)
+	out, err = runTermsCheck(t, pair.id, sellerResponse, resultPath, "--openings", buyerFile, "--sent", pair.sellerFile)
 	require.NoError(t, err, out)
-	assert.Equal(t, reconcileCheckEqual, out["check"], "the counterparty recomputes the same Result")
+	assert.Equal(t, termsCheckEqual, out["check"], "the counterparty recomputes the same Result")
 
 	for name, args := range map[string][]string{
 		"without --sent":                  {"--openings", buyerFile},
@@ -567,9 +627,9 @@ func TestReconcileResultCheck(t *testing.T) {
 		"an adjudicator's copy as --sent": {"--openings", buyerFile, "--sent", adjudicatorFile(t, pair.id)},
 	} {
 		t.Run(name, func(t *testing.T) {
-			out, err := runReconcileCheck(t, pair.id, sellerResponse, resultPath, args...)
+			out, err := runTermsCheck(t, pair.id, sellerResponse, resultPath, args...)
 			require.ErrorIs(t, err, cli.ErrInput)
-			assert.Equal(t, reconcileCheckCannotReproduce, out["check"])
+			assert.Equal(t, termsCheckCannotReproduce, out["check"])
 		})
 	}
 
@@ -579,6 +639,11 @@ func TestReconcileResultCheck(t *testing.T) {
 	for name, change := range map[string]func(map[string]any){
 		"a tally":   func(c map[string]any) { c["reconcile"].(map[string]any)["tallies"].(map[string]any)["matched"] = 2 },
 		"a verdict": func(c map[string]any) { c["verdict"] = "not_met" },
+		// The Result names its halves (DR §7.3): another digest is another
+		// close, whatever the tallies say.
+		"the evidence": func(c map[string]any) {
+			c["evidence"].([]any)[0].(map[string]any)["digest"] = strings.Repeat("d", 64)
+		},
 		"the peer": func(c map[string]any) {
 			c["reconcile"].(map[string]any)["peer"] = strings.Repeat("c", 64)
 		},
@@ -597,35 +662,50 @@ func TestReconcileResultCheck(t *testing.T) {
 			for _, c := range changed["claims"].([]any) {
 				change(c.(map[string]any))
 			}
-			out, err := runReconcileCheck(t, pair.id, pair.response, writeJSONFile(t, "changed.json", changed), "--openings", pair.sellerFile)
+			out, err := runTermsCheck(t, pair.id, pair.response, writeJSONFile(t, "changed.json", changed), "--openings", pair.sellerFile)
 			require.ErrorIs(t, err, cli.ErrConflict)
-			assert.Equal(t, reconcileCheckDiffers, out["check"])
+			assert.Equal(t, termsCheckDiffers, out["check"])
+			if name == "the evidence" {
+				assert.Contains(t, out["detail"], "DR §7.3")
+			}
 		})
 	}
+
+	// A Result made without the seller's openings names one half: checked
+	// with the seller's openings, the halves read are two, and it differs on
+	// its evidence before any tally is compared.
+	_, _, lone, err := runTermsResult(t, pair.id, pair.response)
+	require.NoError(t, err)
+	out, err = runTermsCheck(t, pair.id, pair.response, lone, "--openings", pair.sellerFile)
+	require.ErrorIs(t, err, cli.ErrConflict)
+	assert.Contains(t, out["detail"], "DR §7.3")
+	out, err = runTermsCheck(t, pair.id, pair.response, lone)
+	require.NoError(t, err, out)
+	assert.Equal(t, termsCheckEqual, out["check"])
 }
 
 // A Result made from openings without the amount is the recompute of that
 // input set: the producer's check with it is equal, and the counterparty's
 // check with the share it recorded, which carries the amount, differs and
 // names that file.
-func TestReconcileResultCheckIsAgainstTheInputsGiven(t *testing.T) {
+func TestTermsResultCheckIsAgainstTheInputsGiven(t *testing.T) {
 	pair := closedPair(t, received, received)
 	missing := editOpenings(t, pair.sellerFile, func(m map[string]map[string]evidencebook.Opening) {
 		for d := range m {
 			delete(m[d], dealAmountField)
 		}
 	})
-	_, _, resultPath, err := runReconcileResult(t, pair.id, pair.response, "--openings", missing)
+	_, _, resultPath, err := runTermsResult(t, pair.id, pair.response, "--openings", missing)
 	require.NoError(t, err)
-	out, err := runReconcileCheck(t, pair.id, pair.response, resultPath, "--openings", missing)
+	out, err := runTermsCheck(t, pair.id, pair.response, resultPath, "--openings", missing)
 	require.NoError(t, err, out)
-	assert.Equal(t, reconcileCheckEqual, out["check"])
+	assert.Equal(t, termsCheckEqual, out["check"])
 
 	buyerFile := discloseTo(t, pair.id, "the seller")
 	sellerResponse := recordedCopy(t, pair.seller, pair.buyer, pair.id)
-	out, err = runReconcileCheck(t, pair.id, sellerResponse, resultPath, "--openings", buyerFile, "--sent", pair.sellerFile)
+	out, err = runTermsCheck(t, pair.id, sellerResponse, resultPath, "--openings", buyerFile, "--sent", pair.sellerFile)
 	require.ErrorIs(t, err, cli.ErrConflict)
-	assert.Equal(t, reconcileCheckDiffers, out["check"])
+	assert.Equal(t, termsCheckDiffers, out["check"])
 	assert.Contains(t, out["detail"], digestOfFile(t, pair.sellerFile))
 }
 
@@ -642,7 +722,7 @@ func adjudicatorFile(t *testing.T, id string) string {
 // contract_ref. result open names the claim as not recomputed.
 func TestResultCommandsAndTheDealReconcileContract(t *testing.T) {
 	pair := closedPair(t, received, received)
-	_, _, resultPath, err := runReconcileResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+	_, _, resultPath, err := runTermsResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
 	require.NoError(t, err)
 	var doc map[string]any
 	require.NoError(t, json.Unmarshal(mustRead(t, resultPath), &doc))
@@ -660,12 +740,144 @@ func TestResultCommandsAndTheDealReconcileContract(t *testing.T) {
 	p, _ := bookProfile(t, "a") // no store: a refusal from the book would be "no book yet"
 	_, _, err = runResultBuild(t, p, doc)
 	require.ErrorIs(t, err, cli.ErrInput)
-	assert.Contains(t, cli.SafeError(err), "deal reconcile-result")
+	assert.Contains(t, cli.SafeError(err), "deal terms-result")
 
 	for _, c := range doc["claims"].([]any) {
 		c.(map[string]any)["contract_ref"] = "ec:deal-reconcile@2"
 	}
 	_, _, err = runResultBuild(t, p, doc)
 	require.Error(t, err)
-	assert.NotContains(t, cli.SafeError(err), "deal reconcile-result", "another version gets no exception and no refusal of this kind")
+	assert.NotContains(t, cli.SafeError(err), "deal terms-result", "another version gets no exception and no refusal of this kind")
+}
+
+// The period is [from, to): its start is inclusive and its end exclusive,
+// and a close outside it is not in the reconcile.
+func TestTermsResultPeriodBounds(t *testing.T) {
+	dealFixture(t)
+	setDealClock(t, "2026-10-19T10:00:00Z")
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	buyer := thisDealParty(t)
+	dealFixture(t)
+	setDealClock(t, "2026-10-19T10:00:10Z")
+	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	seller := thisDealParty(t)
+	response := recordedCopy(t, buyer, seller, id)
+	party(t, seller.config)
+	sellerFile := discloseTo(t, id, "the buyer")
+	openings, err := dealOpeningsFile(mustRead(t, sellerFile))
+	require.NoError(t, err)
+	sellerDigest, err := soleDigest(openings)
+	require.NoError(t, err)
+	party(t, buyer.config)
+
+	_, result, _, err := runTermsResult(t, id, response, "--openings", sellerFile)
+	require.NoError(t, err)
+	assert.Equal(t, evidencebook.ResultPeriod{Start: "2026-10-19T10:00:00Z", End: "2026-10-19T10:00:11Z"}, result.Claims[0].Reconcile.Period, "the default period")
+	assert.Equal(t, "met", result.Claims[0].Verdict)
+
+	for name, c := range map[string]struct {
+		from, to   string
+		withSeller bool
+	}{
+		"the end is exclusive":   {"2026-10-19T10:00:00Z", "2026-10-19T10:00:10Z", false},
+		"the start is inclusive": {"2026-10-19T10:00:10Z", "2026-10-19T10:00:11Z", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, result, _, err := runTermsResult(t, id, response, "--openings", sellerFile, "--from", c.from, "--to", c.to)
+			require.NoError(t, err)
+			for _, claim := range result.Claims {
+				assert.Equal(t, evidencebook.ResultTallies{Insufficient: 1}, claim.Reconcile.Tallies)
+				require.Len(t, claim.Evidence, 1)
+				assert.Equal(t, c.withSeller, claim.Evidence[0].Digest == sellerDigest, "which close is in the period")
+			}
+		})
+	}
+}
+
+// A record's inline seq is read only where the copy's verified membership
+// gives the same position: a later record whose header names another seq
+// fails check 4, and so does a candidate whose own does.
+func TestCheck4BindsSeqsToTheVerifiedMembership(t *testing.T) {
+	pair := closedPair(t, received, received)
+	openings, err := dealOpeningsFile(mustRead(t, pair.sellerFile))
+	require.NoError(t, err)
+	digest, err := soleDigest(openings)
+	require.NoError(t, err)
+	withSession(t, func(s *dealSession) {
+		peer, err := s.peerCopy(t.Context(), pair.id, pair.response)
+		require.NoError(t, err)
+		half := copyHalves(peer.bundle)[digest]
+		checkpoint := peer.bundle["checkpoint"].(map[string]interface{})
+		size, err := cli.JSONUint(checkpoint["mmr_size"])
+		require.NoError(t, err)
+		leaves := mmrLeafCount(size)
+		require.NoError(t, lastStep(peer.bundle, half, leaves))
+		_, err = admitPeerHalf(pair.id, peer, digest, openings[digest])
+		require.NoError(t, err)
+
+		memberships := peer.bundle["completeness_certificate"].(map[string]interface{})["memberships"].(map[string]interface{})
+		moveTo := func(id string, seq uint64) func() {
+			coordinates := memberships[id].(map[string]interface{})["log_coordinates"].(map[string]interface{})
+			was := coordinates["seq"]
+			coordinates["seq"] = json.Number(fmt.Sprint(seq))
+			return func() { coordinates["seq"] = was }
+		}
+		var later string
+		for _, r := range peer.bundle["records"].([]interface{}) {
+			h, err := inlineHeader(r.(map[string]interface{}))
+			require.NoError(t, err)
+			if h.Seq == leaves {
+				later = r.(map[string]interface{})["capsule_id"].(string)
+			}
+		}
+		restore := moveTo(later, half.header.Seq-1)
+		require.ErrorIs(t, lastStep(peer.bundle, half, leaves), cli.ErrInput, "a later record whose header seq is not its verified position")
+		restore()
+		moveTo(half.recordID, half.header.Seq+1)
+		_, err = admitPeerHalf(pair.id, peer, digest, openings[digest])
+		require.ErrorIs(t, err, cli.ErrInput, "a candidate whose header seq is not its verified position")
+	})
+}
+
+// --check needs the producer's file to open both compared fields; any two
+// entries are not enough.
+func TestTermsResultCheckNamesBothFields(t *testing.T) {
+	pair := closedPair(t, received, received)
+	_, _, resultPath, err := runTermsResult(t, pair.id, pair.response, "--openings", pair.sellerFile)
+	require.NoError(t, err)
+	buyerFile := discloseTo(t, pair.id, "the seller")
+	odd := editOpenings(t, buyerFile, func(m map[string]map[string]evidencebook.Opening) {
+		for d := range m {
+			m[d]["unrelated"] = m[d][dealAmountField]
+			delete(m[d], dealAmountField)
+		}
+	})
+	sellerResponse := recordedCopy(t, pair.seller, pair.buyer, pair.id)
+	out, err := runTermsCheck(t, pair.id, sellerResponse, resultPath, "--openings", odd, "--sent", pair.sellerFile)
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Equal(t, termsCheckCannotReproduce, out["check"])
+}
+
+// A stored opening that is missing is an integrity failure: the counterparty
+// share is refused, never written without openings as if none were due.
+func TestTheDiscloseRefusesWhenAnOpeningIsMissing(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	closeID := dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))["capsule_id"].(string)
+	db, _, err := cli.SqliteConnection(dealProfile(t))
+	require.NoError(t, err)
+	res, err := db.Exec(`DELETE FROM capsule_store_artifacts WHERE capsule_id = ? AND name = ?`, closeID, dealOpeningPrefix+dealAmountField)
+	require.NoError(t, err)
+	n, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), n)
+	require.NoError(t, db.Close())
+	path := filepath.Join(t.TempDir(), "disclosed.json")
+	_, err = invoke(t, "", "--profile", "deal", "disclose", "--deal", id, "--share", "counterparty", "--to", "the seller", "--out", path)
+	require.Error(t, err, "the store's integrity check refuses the share")
+	assert.NotErrorIs(t, err, cli.ErrInput)
+	_, statErr := os.Stat(path)
+	assert.True(t, os.IsNotExist(statErr), "nothing written")
 }

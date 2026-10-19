@@ -117,7 +117,7 @@ func resultCommands() *cobra.Command {
 				return e
 			}
 			for _, id := range notRecomputed {
-				if _, e := fmt.Fprintf(c.OutOrStdout(), "not recomputed: claim %s cites %s; `result open` recomputes nothing, `deal reconcile-result --check` checks it\n", id, evidencebook.DealReconcileContractRef); e != nil {
+				if _, e := fmt.Fprintf(c.OutOrStdout(), "not recomputed: claim %s cites %s; `result open` recomputes nothing, `deal terms-result --check` checks it\n", id, evidencebook.DealReconcileContractRef); e != nil {
 					return e
 				}
 			}

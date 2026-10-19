@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -17,7 +18,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const dealReconcileResultLong = `Reconcile your final close of a deal with the counterparty's, and write the
+const dealTermsResultLong = `Reconcile your final close of a deal with the counterparty's, and write the
 result as an Evidence Result with one claim per requirement of the Deal
 Reconcile Contract, ec:deal-reconcile@1: whether both closes commit to the
 same amount, and to the same currency.
@@ -33,16 +34,18 @@ The period defaults to the two closes' recorded times. --from and --to set it
 instead, as [from, to) in RFC 3339 UTC seconds.
 
 --check FILE checks a Result under ec:deal-reconcile@1 against the inputs
-given, and writes nothing. When the Result names your key as its peer (the
-counterparty made it), pass --sent with the disclose file you handed them: your
-openings are then read from that file only, so the check uses the openings
-they had. "differs" means the Result is not the recompute of these inputs. It
-is not a finding that a claim is false. "cannot_reproduce" means the inputs
-needed are not held, and says nothing about the claims. An adjudicator's copy
-carries no openings, so an adjudicator cannot check one.`
+given, and writes nothing. The Result names its two closes by digest, and the
+closes read here must be exactly those. It does not record which openings were
+carried, or a coverage declaration (none is given here), so the check uses the
+openings named: when the Result names your key as its peer (the counterparty
+made it), pass --sent with the disclose file you handed them, and your openings
+are read from that file only. "differs" means the Result is not the recompute
+of these inputs. It is not a finding that a claim is false. "cannot_reproduce"
+means the inputs needed are not held, and says nothing about the claims. An
+adjudicator's copy carries no openings, so an adjudicator cannot check one.`
 
-func dealReconcileResultCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "reconcile-result", Short: "Reconcile your final close of a deal with the counterparty's and write the Evidence Result (ec:deal-reconcile@1), or --check one", Long: dealReconcileResultLong, Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+func dealTermsResultCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "terms-result", Short: "Reconcile your final close of a deal with the counterparty's and write the Evidence Result (ec:deal-reconcile@1), or --check one", Long: dealTermsResultLong, Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		response, _ := c.Flags().GetString("response")
 		openingsPath, _ := c.Flags().GetString("openings")
 		from, _ := c.Flags().GetString("from")
@@ -71,9 +74,9 @@ func dealReconcileResultCommand() *cobra.Command {
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, _ []sealedEvent) error {
 			if check != "" {
-				return s.checkReconcileResult(c, dealID, response, openings, check, sent)
+				return s.checkTermsResult(c, dealID, response, openings, check, sent)
 			}
-			return s.writeReconcileResult(c, dealID, response, openings, from, to, out)
+			return s.writeTermsResult(c, dealID, response, openings, from, to, out)
 		})
 	}}
 	cmd.Flags().String("deal", "", "The deal id")
@@ -185,9 +188,9 @@ func reconcilePeriod(from, to string, sides ...reconcileSide) (evidencebook.Resu
 	return period, nil
 }
 
-// writeReconcileResult is the verb: this profile is side A, the counterparty
+// writeTermsResult is the verb: this profile is side A, the counterparty
 // side B.
-func (s *dealSession) writeReconcileResult(c *cobra.Command, dealID, response string, openings map[string]map[string]evidencebook.Opening, from, to, out string) error {
+func (s *dealSession) writeTermsResult(c *cobra.Command, dealID, response string, openings map[string]map[string]evidencebook.Opening, from, to, out string) error {
 	ctx := c.Context()
 	own, ownOpenings, err := s.ownDealHalf(ctx, dealID)
 	if err != nil {
@@ -213,12 +216,12 @@ func (s *dealSession) writeReconcileResult(c *cobra.Command, dealID, response st
 	if err = cli.AtomicFile(out, append(encoded, '\n'), false); err != nil {
 		return err
 	}
-	return cli.Output(c, reconcileSummary(dealID, out, got.Result))
+	return cli.Output(c, termsSummary(dealID, out, got.Result))
 }
 
-// reconcileSummary is what the verb prints: the claims' verdicts and
+// termsSummary is what the verb prints: the claims' verdicts and
 // tallies. The contract's optional per-deal state is never shown.
-func reconcileSummary(dealID, out string, result evidencebook.DealReconcileResult) map[string]any {
+func termsSummary(dealID, out string, result evidencebook.DealReconcileResult) map[string]any {
 	claims := make([]map[string]any, 0, len(result.Claims))
 	for _, claim := range result.Claims {
 		claims = append(claims, map[string]any{
@@ -234,17 +237,20 @@ func reconcileSummary(dealID, out string, result evidencebook.DealReconcileResul
 
 // Outcomes of --check.
 const (
-	reconcileCheckEqual           = "equal"
-	reconcileCheckDiffers         = "differs"
-	reconcileCheckCannotReproduce = "cannot_reproduce"
+	termsCheckEqual           = "equal"
+	termsCheckDiffers         = "differs"
+	termsCheckCannotReproduce = "cannot_reproduce"
 )
 
-// checkReconcileResult checks a Result against the inputs given (note
-// §2.10 Decision 6). The Result names neither the inputs it was made from
-// nor which openings were carried, so the check recomputes from exactly the
-// openings named: the counterparty's own openings come from the file it
-// sent (--sent), never from its store.
-func (s *dealSession) checkReconcileResult(c *cobra.Command, dealID, response string, openings map[string]map[string]evidencebook.Opening, checkPath, sentPath string) error {
+// checkTermsResult checks a Result against the inputs given (note
+// §2.10 Decision 6). The Result names its halves: each claim's evidence is
+// the sorted digests of every half in the reconcile (DR §7.3), and the
+// halves read here must be exactly those. It records neither which openings
+// were carried nor a coverage declaration (DR §7.3, DR-3), so the check
+// recomputes from exactly the openings named: the counterparty's own
+// openings come from the file it sent (--sent), never from its store. No
+// coverage declaration is given, as the verb gives none.
+func (s *dealSession) checkTermsResult(c *cobra.Command, dealID, response string, openings map[string]map[string]evidencebook.Opening, checkPath, sentPath string) error {
 	ctx := c.Context()
 	report := func(outcome, detail string) error {
 		out := map[string]any{"deal_id": dealID, "check": outcome, "detail": detail}
@@ -252,9 +258,9 @@ func (s *dealSession) checkReconcileResult(c *cobra.Command, dealID, response st
 			return err
 		}
 		switch outcome {
-		case reconcileCheckDiffers:
+		case termsCheckDiffers:
 			return cli.Hint(cli.ErrConflict, "the Result is not the recompute of the inputs given: "+detail)
-		case reconcileCheckCannotReproduce:
+		case termsCheckCannotReproduce:
 			return cli.Hint(cli.ErrInput, "cannot reproduce the Result's inputs: "+detail)
 		}
 		return nil
@@ -269,14 +275,14 @@ func (s *dealSession) checkReconcileResult(c *cobra.Command, dealID, response st
 	}
 	var result evidencebook.DealReconcileResult
 	if err = json.Unmarshal(raw, &result); err != nil || len(result.Claims) == 0 {
-		return report(reconcileCheckDiffers, "the Result holds no reconcile claims")
+		return report(termsCheckDiffers, "the Result holds no reconcile claims")
 	}
 	for _, claim := range result.Claims {
 		if claim.ContractRef != evidencebook.DealReconcileContractRef {
-			return report(reconcileCheckDiffers, "claim "+claim.ID+" is not under "+evidencebook.DealReconcileContractRef)
+			return report(termsCheckDiffers, "claim "+claim.ID+" is not under "+evidencebook.DealReconcileContractRef)
 		}
 		if claim.Reconcile.Peer != result.Claims[0].Reconcile.Peer || claim.Reconcile.Period != result.Claims[0].Reconcile.Period {
-			return report(reconcileCheckDiffers, "the claims name different peers or periods")
+			return report(termsCheckDiffers, "the claims name different peers or periods")
 		}
 	}
 	peerKey, period := result.Claims[0].Reconcile.Peer, result.Claims[0].Reconcile.Period
@@ -295,7 +301,7 @@ func (s *dealSession) checkReconcileResult(c *cobra.Command, dealID, response st
 		// The counterparty made the Result: it is side A, and this profile's
 		// openings are the ones the file it was handed carried.
 		if sentPath == "" {
-			return report(reconcileCheckCannotReproduce, "the Result names this profile as its peer: pass --sent, the disclose file you handed the counterparty")
+			return report(termsCheckCannotReproduce, "the Result names this profile as its peer: pass --sent, the disclose file you handed the counterparty")
 		}
 		sent, err := os.ReadFile(sentPath)
 		if err != nil {
@@ -306,7 +312,7 @@ func (s *dealSession) checkReconcileResult(c *cobra.Command, dealID, response st
 			return err
 		}
 		if !recorded {
-			return report(reconcileCheckCannotReproduce, "--sent is no `disclose --share counterparty` file this profile recorded for the deal")
+			return report(termsCheckCannotReproduce, "--sent is no `disclose --share counterparty` file this profile recorded for the deal")
 		}
 		sentOpenings, err := dealOpeningsFile(sent)
 		if err != nil {
@@ -318,22 +324,25 @@ func (s *dealSession) checkReconcileResult(c *cobra.Command, dealID, response st
 		}
 		// The maker held every opening of its own close, so its file must
 		// carry both for the check to have what it had.
-		if other.half == nil || len(other.openings) != len(dealHalfFields) {
-			return report(reconcileCheckCannotReproduce, "--openings, the counterparty's disclose file, does not carry both openings of their close")
+		if other.half == nil || !opensEvery(other.openings) {
+			return report(termsCheckCannotReproduce, "--openings, the counterparty's disclose file, does not carry both openings of their close")
 		}
 		a, b = other, mine
 		inputs = "the counterparty's openings file and the file sent to them (" + cli.BytesDigest(sent) + ")"
 	} else if peerKey != other.book {
-		return report(reconcileCheckDiffers, "the Result's peer is not the responder of the copy recorded for --response")
+		return report(termsCheckDiffers, "the Result's peer is not the responder of the copy recorded for --response")
+	}
+	if !sameHalves(result, period, a, b) {
+		return report(termsCheckDiffers, "the Result's evidence (DR §7.3) names halves other than the closes read here")
 	}
 	got, err := recompute(a, b, period, result.GeneratedAt)
 	if err != nil {
-		return report(reconcileCheckDiffers, "the inputs do not recompute: "+err.Error())
+		return report(termsCheckDiffers, "the inputs do not recompute: "+err.Error())
 	}
 	if member := firstDifference(doc, got.Result); member != "" {
-		return report(reconcileCheckDiffers, member+" differs from the recompute of "+inputs)
+		return report(termsCheckDiffers, member+" differs from the recompute of "+inputs)
 	}
-	return report(reconcileCheckEqual, "the Result is the recompute of "+inputs)
+	return report(termsCheckEqual, "the Result is the recompute of "+inputs)
 }
 
 // recordedCounterpartyShare is whether a counterparty share this profile
@@ -415,4 +424,41 @@ func firstDifference(doc map[string]interface{}, want evidencebook.DealReconcile
 		}
 	}
 	return "a member the Result adds"
+}
+
+// sameHalves is whether every claim's evidence is exactly the digests of the
+// halves read here that lie in the period (DR §7.3).
+func sameHalves(result evidencebook.DealReconcileResult, period evidencebook.ResultPeriod, sides ...reconcileSide) bool {
+	start, errStart := time.Parse(time.RFC3339, period.Start)
+	end, errEnd := time.Parse(time.RFC3339, period.End)
+	if errStart != nil || errEnd != nil {
+		return false
+	}
+	var want []string
+	for _, side := range sides {
+		if h := side.half; h != nil && !h.recordedAt.Before(start) && h.recordedAt.Before(end) {
+			want = append(want, h.digest)
+		}
+	}
+	sort.Strings(want)
+	for _, claim := range result.Claims {
+		got := make([]string, 0, len(claim.Evidence))
+		for _, e := range claim.Evidence {
+			got = append(got, e.Digest)
+		}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			return false
+		}
+	}
+	return true
+}
+
+// opensEvery is whether openings carry an opening for each compared field.
+func opensEvery(openings map[string]evidencebook.Opening) bool {
+	for _, f := range dealHalfFields {
+		if _, ok := openings[f]; !ok {
+			return false
+		}
+	}
+	return true
 }

@@ -13,7 +13,7 @@ const Vendor = "action-state-group"
 // BookMetadata and DealMetadata are the plugins' cli-plugin-metadata answers.
 var (
 	BookMetadata = cli.PluginMetadata{Name: cli.BookPluginName, Vendor: Vendor, Subcommands: []string{"close", "reconcile", "request", "respond", "remote", "result", "report", "backfill", "migrate"}}
-	DealMetadata = cli.PluginMetadata{Name: cli.DealPluginName, Vendor: Vendor, Subcommands: []string{"init", "open", "check", "note", "close", "report", "export", "list", "history", "deadlines", "settlement", "reconcile", "countersign", "verify-email", "verifier-statement", "verify-statement", "tick", "checkpoint", "sale", "compose", "request", "respond", "reconcile-result"}}
+	DealMetadata = cli.PluginMetadata{Name: cli.DealPluginName, Vendor: Vendor, Subcommands: []string{"init", "open", "check", "note", "close", "report", "export", "list", "history", "deadlines", "settlement", "reconcile", "countersign", "verify-email", "verifier-statement", "verify-statement", "tick", "checkpoint", "sale", "compose", "request", "respond", "terms-result"}}
 )
 
 // BookCommands are capsulectl-book's own commands: `capsulectl book ...`.

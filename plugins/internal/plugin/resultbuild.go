@@ -580,7 +580,7 @@ func resultBuildCommand() *cobra.Command {
 		// refused here, before the book is opened or any citation resolved,
 		// so this is the message its builder sees.
 		if ids := dealReconcileClaimIDs(doc); len(ids) > 0 {
-			return cli.InputError("result build does not seal a claim under " + evidencebook.DealReconcileContractRef + " (" + strings.Join(ids, ", ") + "): its evidence is in a deal store and a recorded copy, not in a book; `deal reconcile-result` writes that Result, and `deal reconcile-result --check` checks it")
+			return cli.InputError("result build does not seal a claim under " + evidencebook.DealReconcileContractRef + " (" + strings.Join(ids, ", ") + "): its evidence is in a deal store and a recorded copy, not in a book; `deal terms-result` writes that Result, and `deal terms-result --check` checks it")
 		}
 		// Everything the document alone can be checked for (schema, headline
 		// cross-checks, --contract) is checked before the book is opened, so
