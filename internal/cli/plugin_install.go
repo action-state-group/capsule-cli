@@ -539,6 +539,19 @@ func sumFor(sums []byte, file string) (string, error) {
 	return found, nil
 }
 
+// releaseRepo is the repository whose release workflow builds capsulectl and
+// its first-party plugins.
+const releaseRepo = "action-state-group/capsule-cli"
+
+// lastLine is the last line of s, trimmed: the line a failing tool ends on.
+func lastLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.LastIndex(s, "\n"); i >= 0 {
+		return s[i+1:]
+	}
+	return s
+}
+
 // ghAttestation runs the README's provenance check. ran is false when gh
 // is not installed. Any other non-zero gh exit is a failed check, with no
 // way around it; only a positive sign that gh could not run the check (it

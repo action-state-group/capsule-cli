@@ -10,9 +10,8 @@ name: Release
 #     --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
 # The attestation bundle is also published, as capsulectl-<version>.sigstore.json,
 # so the same check runs with no GitHub account: add --bundle with that file.
-# Each release is also registered in a public transparency log, and a
-# monitor off GitHub checks every v* tag's release against it
-# (docs/RELEASE-TRANSPARENCY.md).
+# What these prove, and what keeps a release nobody meant from reaching
+# users, is in docs/RELEASE-TRANSPARENCY.md.
 #
 # Nothing is published until a person approves the run (docs/RELEASING.md).
 # A full release runs in the `release` environment, where whoever pushed the
@@ -100,34 +99,12 @@ jobs:
         run: |
           cp "$BUNDLE" "dist/capsulectl-$VERSION.sigstore.json"
           (cd dist && sha256sum "capsulectl-$VERSION.sigstore.json" >> SHA256SUMS)
-      - name: Register the release in the transparency log
-        # docs/RELEASE-TRANSPARENCY.md. Writes capsulectl-<tag>.release.json
-        # (tag, commit, every binary's and the bundle's SHA-256), signs it as
-        # a COSE statement with a key made for this release and discarded,
-        # registers it at the public witness, and checks the receipt offline.
-        # A release that cannot be logged is not published.
-        env:
-          VERSION: ${{ github.ref_name }}
-          COMMIT: ${{ github.sha }}
-        run: go run ./cmd/capsulectl release register --dir dist --tag "$VERSION" --commit "$COMMIT"
-      - name: Attest release.json
-        # Ties the statement (and the one-release key it names) to this
-        # workflow at this tag: the statement's own signature cannot.
-        id: attest-release
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
-        with:
-          subject-path: dist/*.release.json
-      - name: Attach the release statement files
-        env:
-          BUNDLE: ${{ steps.attest-release.outputs.bundle-path }}
-          VERSION: ${{ github.ref_name }}
-        run: |
-          cp "$BUNDLE" "dist/capsulectl-$VERSION.release.sigstore.json"
-          (cd dist && sha256sum "capsulectl-$VERSION.release.json" "capsulectl-$VERSION.release.cose" \
-            "capsulectl-$VERSION.release.registration.json" "capsulectl-$VERSION.release.sigstore.json" >> SHA256SUMS)
       - name: Publish GitHub release
         # A tag with a hyphen (v0.1.0-rc4, v1.0.0-beta1) is a pre-release:
-        # published as such and never marked the latest release.
+        # published as such and never marked the latest release. gh creates
+        # the release as a draft, uploads, then publishes, which immutable
+        # releases allow. A draft left by a run that died mid-upload is
+        # finished here; a published release is never changed.
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
@@ -136,11 +113,13 @@ jobs:
           case "$VERSION" in
             *-*) flags=(--prerelease --latest=false) ;;
           esac
-          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
-            if [ "${#flags[@]}" -gt 0 ]; then
-              gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" "${flags[@]}"
+          if draft="$(gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [ "$draft" != true ]; then
+              echo "release $VERSION is already published and cannot change: cut the next version"
+              exit 1
             fi
+            gh release upload "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false "${flags[@]}"
           else
             gh release create "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag "${flags[@]}" \
               --title "capsulectl $VERSION" \

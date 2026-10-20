@@ -11,19 +11,15 @@
   can. A tag ruleset limits who can create `v*` tags and stops anyone,
   admins included, from moving or deleting one. `docs/RELEASING.md` has the
   procedure; `scripts/release-settings.sh` has the repository settings.
-- **Changed (breaking): `release watch` takes no key file.** It drops
-  `--allowed-signers`, `--known-unsigned` and `--known-unsigned-file`, and
-  checks every `v*` tag: each has a release within `--release-grace`, now 24
-  hours by default to cover the wait for approval, and each release's
-  statement, attestation and log entry verify. It also checks the approval
-  of the run that built each release after `v0.1.0-rc17`, as GitHub records
-  it: in the right environment and, for a full release, by someone other
-  than whoever pushed the tag or started the run. A tag dated in the future
-  with no release is an alarm. The releases before
-  `release register` existed (`v0.1.0-rc1` to `v0.1.0-rc4`) need no
-  statement. Its result names the checked tags as `tags`, not
-  `intended_tags`. A monitor's operator removes those flags from its
-  schedule.
+- **Removed (breaking): `capsulectl release register` and `capsulectl
+  release watch`.** Releases are no longer registered in the witness's
+  transparency log, and no release-statement files (`.release.json`,
+  `.release.cose`, `.release.registration.json`, `.release.sigstore.json`)
+  are published from this version on. What keeps a release nobody meant
+  from reaching users is the reviewed change that pins its hashes on the
+  install page; the build attestations stay, and are logged in Sigstore's
+  public Rekor. `docs/RELEASE-TRANSPARENCY.md` says what each covers. A
+  monitor that ran `release watch` can be retired.
 - **Removed:** `release/known-unsigned.txt`.
 
 ### A jsonl profile's bundles verify VALID, so `report build` writes their page (capsule-cli#148, #312)

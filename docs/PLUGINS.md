@@ -245,8 +245,7 @@ They ship as two binaries, one per launcher, each answering the handshake
 with the name its filename carries. A release names them
 `capsulectl-<version>-plugin-book-<os>-<arch>` and
 `capsulectl-<version>-plugin-deal-<os>-<arch>`, beside the core's own
-`capsulectl-<version>-<os>-<arch>`, under the same `SHA256SUMS`, attestation
-and release statement. `capsulectl plugin install book` and `... deal` fetch
+`capsulectl-<version>-<os>-<arch>`, under the same `SHA256SUMS` and attestation. `capsulectl plugin install book` and `... deal` fetch
 and install them; `make build` builds all three, and `make install`
 installs all three.
 
