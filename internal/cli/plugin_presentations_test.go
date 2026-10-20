@@ -353,3 +353,40 @@ func TestTheTrustWalkStopsAtTheRootsItIsGiven(t *testing.T) {
 	require.NoError(t, os.Chmod(file, 0o664))
 	assert.ErrorIs(t, verifyTrustedPathUnder(file, []string{builtin}), errWritable)
 }
+
+// Presentations load beside the binary the handshake ran: a launcher name
+// repointed after the handshake does not change where the modules come from.
+func TestPresentationsLoadBesideTheCheckedLauncher(t *testing.T) {
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	a, b := filepath.Join(root, "a"), filepath.Join(root, "b")
+	require.NoError(t, os.Mkdir(a, 0o755))
+	require.NoError(t, os.Mkdir(b, 0o755))
+	presentationPlugin(t, a, "view", moduleSlotFixture())
+	other := moduleSlotFixture()
+	other.files = map[string][]byte{"view.js": []byte(`globalThis.otherView = 1;`), "view.css": fixtureStyle, "wording.json": fixtureWording}
+	presentationPlugin(t, b, "view", other)
+	name := filepath.Join(root, "capsulectl-view")
+	require.NoError(t, os.Symlink(filepath.Join(a, "capsulectl-view"), name))
+
+	checked, err := CheckedTrustedPath(name)
+	require.NoError(t, err)
+	info, err := pluginMetadataAs(checked, name, "view")
+	require.NoError(t, err)
+	// Repointed after the handshake, to a launcher whose files differ from
+	// what the handshake's manifest pins.
+	require.NoError(t, os.Remove(name))
+	require.NoError(t, os.Symlink(filepath.Join(b, "capsulectl-view"), name))
+
+	modules, err := loadPresentations(info)
+	require.NoError(t, err)
+	require.Len(t, modules, 1)
+	assert.Equal(t, fixtureScript, modules[0].Script.Bytes, "the modules come from beside the checked launcher")
+
+	// Without a checked path nothing is resolved again: the refusal says so
+	// (a fallback re-resolving name would reach b/ and refuse on a digest).
+	_, err = loadPresentations(pluginInfo{path: name, Presentations: info.Presentations})
+	var refusal *presentationRefusal
+	require.ErrorAs(t, err, &refusal, "no checked path, no presentations")
+	assert.Equal(t, "unreadable", refusal.Reason)
+}

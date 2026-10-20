@@ -410,9 +410,23 @@ func TestTheHopCheckLeavesTheRootsParentsToTheRootsRule(t *testing.T) {
 	assert.NoError(t, VerifyTrustedPath(filepath.Join(root, "capsulectl-acme")))
 }
 
+func TestInsideHopRootsCoversBothRoots(t *testing.T) {
+	// Found under A, resolving into B: directories in either are strict,
+	// and only a directory outside both may be a root-owned sticky one.
+	a, b := "/r/a", "/r/b"
+	assert.True(t, insideHopRoots("/r/a", a, b), "the root it was found under")
+	assert.True(t, insideHopRoots("/r/a/hop", a, b), "inside the root it was found under")
+	assert.True(t, insideHopRoots("/r/b/bin", a, b), "inside the root it resolves into")
+	assert.False(t, insideHopRoots("/tmp", a, b), "outside both")
+	assert.False(t, insideHopRoots("/r/ab", a, b), "a sibling sharing a prefix")
+}
+
 func TestALauncherFoundInOneRootResolvingIntoAnother(t *testing.T) {
-	// Found in root A, resolving into root B through a hop held in A: A's
-	// directories get the strict rule too.
+	// Found in root A, resolving into root B through a hop held in A: the
+	// launcher runs B's file, and a writable hop directory in A is refused.
+	// (A hop directory there could only be relaxed if it were root-owned
+	// and sticky, which a test cannot make: TestInsideHopRootsCoversBothRoots
+	// holds that rule.)
 	a := pluginRoot(t)
 	b := t.TempDir()
 	require.NoError(t, os.Chmod(b, 0o755))

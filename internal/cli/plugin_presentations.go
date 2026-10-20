@@ -154,14 +154,11 @@ func loadPresentations(info pluginInfo) ([]presentationModule, error) {
 	if len(info.Presentations) == 0 {
 		return nil, nil
 	}
-	// The path the handshake ran, not info.path resolved again, so the
+	// The path the handshake ran, never info.path resolved again, so the
 	// modules come from beside the binary that listed them.
 	launcher := info.checked
 	if launcher == "" {
-		var err error
-		if launcher, err = filepath.EvalSymlinks(info.path); err != nil {
-			return nil, err
-		}
+		return nil, refuse("unreadable", "", "%s: no checked launcher path to load presentations beside", info.path)
 	}
 	if root := rootOf(launcher, PresentationRoots()); root == "" {
 		return nil, refuse("untrusted_root", "", "presentations load only from the built-in plugin roots (%s), and %s is not under one", strings.Join(PresentationRoots(), ", "), launcher)
