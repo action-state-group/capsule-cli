@@ -39,6 +39,8 @@
   countersignature by that key on a Close bundle now reads as not
   independent.
 - **Changed (build):** evidencebook moves to v0.7.0.
+- The tests and their approach are adapted from Jody Edmondson's
+  capsule-cli#231, and Jody diagnosed capsule-cli#148.
 
 ## v0.1.0-rc17
 
