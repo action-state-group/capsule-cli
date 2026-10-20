@@ -115,12 +115,25 @@ portable_checks() {
   facts records.json >facts.txt || true
   check "the typed records carry the facts: authorized, proposed, checked DO, paid \$6.27 by card" \
     contains facts.txt "authorized=pay proposed=pay:627:USD:max627 evaluated=DO paid=out:pay:627:USD:card"
-  # Both layers state the same thing.
-  local paid line
-  paid=$(jq -r '[.[] | select(.type == "action-record/v0") | .body] | if length == 1 then .[0] | "\(.action) \(.amount_minor) \(.rail)" else empty end' records.json 2>/dev/null) || true
-  read -r action minor rail <<<"$paid"
-  [[ "${minor:-}" =~ ^[0-9]+$ ]] && line=$(printf 'Did: %s $%d.%02d by %s' "$action" $((minor / 100)) $((minor % 100)) "$rail") || line="(no action record)"
+  # Both layers state the same thing: each line the page shows for a step
+  # is the one the typed record of that step implies.
+  check "the page lists as many records as were exported" \
+    contains page.html.dom "<summary>$(jq length records.json) records, by capsule id</summary>"
+  local line
+  line=$(record_line records.json proposed-action/v0 '"About to \(.action) \(money)"')
+  check "the page shows what the proposed action says ($line)" contains page.html.dom "<span>$line</span>"
+  line=$(record_line records.json action-evaluation/v0 'if .disposition == "DO" and .findings == [] then "Check: no differences" else "(evaluated \(.disposition))" end')
+  check "the page shows what the evaluation says ($line)" contains page.html.dom "<span>$line</span>"
+  line=$(record_line records.json action-record/v0 '"Did: \(.action) \(money) by \(.rail)"')
   check "the page shows what the action record says was done ($line)" contains page.html.dom "<span>$line</span>"
+}
+
+# record_line RECORDS TYPE FILTER: FILTER (jq) on the body of the one record
+# of TYPE, with money its amount as the page writes it ($6.27); a stand-in
+# that no page shows when there is not exactly one.
+record_line() {
+  jq -r --arg type "$2" 'def money: "$\(.amount_minor / 100 | floor).\(.amount_minor % 100 + 100 | tostring | .[1:])";
+    [.[] | select(.type == $type) | .body] | if length == 1 then .[0] | '"$3"' else "(not one \($type))" end' "$1" 2>/dev/null || echo "(unreadable records)"
 }
 
 # on_book BUNDLE: every record is on the deal's evidence book (the deal store
@@ -183,15 +196,33 @@ else
   fail=1
 fi
 
-# 5. Broken copies: each must fail the same check.
-broken() { # name, page, records
-  if portable "$2" "$3" >"$work/$1.log" 2>&1; then
-    sed 's/^/     /' "$work/$1.log" >&2
-    echo "FAIL $1: the check fails" >&2
+# 5. Broken copies: each must fail the same check, and fail it where the
+# break is: the checks named after the page and records must be among those
+# that failed.
+broken() { # name, page, records, then the checks that must fail
+  local name="$1" page="$2" records="$3" want missing=""
+  shift 3
+  if portable "$page" "$records" >"$work/$name.log" 2>&1; then
+    sed 's/^/     /' "$work/$name.log" >&2
+    echo "FAIL $name: the check fails" >&2
+    fail=1
+    return
+  fi
+  for want in "$@"; do
+    grep -qxF "FAIL $want" "$work/$name.log" || missing="$missing; $want"
+  done
+  if [[ -n "$missing" ]]; then
+    sed 's/^/     /' "$work/$name.log" >&2
+    echo "FAIL $name: the check fails where it should (passed:${missing#;})" >&2
     fail=1
   else
-    echo "ok   $1: the check fails ($(grep -c '^FAIL' "$work/$1.log") failed: $(grep '^FAIL' "$work/$1.log" | head -1 | cut -c6-))"
+    echo "ok   $name: the check fails ($(grep -c '^FAIL' "$work/$name.log") failed, among them: $(printf '%s; ' "$@" | sed 's/; $//'))"
   fi
+}
+# refused PAGE: opened offline, the page itself says its bundle failed.
+refused() {
+  render "$1"
+  contains "$1.dom" 'Bundle verification failed' && lacks "$1.dom" '<p data-verify="verified"'
 }
 cd "$work/out"
 page_bundle recipient.html >bundle.json
@@ -203,17 +234,21 @@ jq -c --arg last "$(jq -r '.records | max_by(.evidence_record_header.seq) | .cap
 replace_bundle recipient.html broken-bundle.json >broken-bundle.html
 rehash_bundle_csp recipient.html broken-bundle.html
 check "broken-bundle: the copy differs" differs recipient.html broken-bundle.html
-broken broken-bundle broken-bundle.html records.json
+broken broken-bundle broken-bundle.html records.json "verify --bundle: VALID, exit 0" "the page says its bundle verified"
+check "broken-bundle: the page says its bundle failed" refused broken-bundle.html
 
 # dropped-record: the bundle without its last record (the action taken).
 jq -c '.records |= (sort_by(.evidence_record_header.seq) | .[:-1])' bundle.json >dropped-record.json
 replace_bundle recipient.html dropped-record.json >dropped-record.html
 rehash_bundle_csp recipient.html dropped-record.html
-broken dropped-record dropped-record.html records.json
+broken dropped-record dropped-record.html records.json "verify --bundle: VALID, exit 0" "the page says its bundle verified"
+check "dropped-record: the page says its bundle failed" refused dropped-record.html
 
 # broken-records: the exported action record says $62.70 was paid.
 jq -c '(.[] | select(.type == "action-record/v0") | .body.amount_minor) |= 6270' records.json | tr -d '\n' >broken-records.json
 check "broken-records: the records differ" differs records.json broken-records.json
-broken broken-records recipient.html broken-records.json
+broken broken-records recipient.html broken-records.json \
+  "the exported records are the payloads the bundle's records commit to, in order" \
+  "the page shows what the action record says was done (Did: pay \$62.70 by card)"
 
 exit "$fail"

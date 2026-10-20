@@ -39,20 +39,21 @@ differs() { ! cmp -s "$1" "$2"; }
 # console.error, uncaught error and unhandled rejection into
 # data-render-errors on <html>, which the DOM dump carries; it marks itself
 # installed (data-render-hook), so a hook that never ran fails the check.
-# Headless Chrome uses its own throwaway profile (a --user-data-dir keeps it
-# from exiting on macOS) and resolves no host name, so a page that needs the
-# network renders without it; the alarm bounds a run that hangs anyway,
-# which then fails for want of a DOM.
+# Headless Chrome uses a throwaway profile next to the page, under the
+# caller's temp directory (a --user-data-dir keeps it from exiting on
+# macOS), never the system keychain (no macOS keychain dialog), and
+# resolves no host name, so a page that needs the network renders without
+# it; the alarm bounds a run that hangs anyway, which then fails for want of
+# a DOM.
 hook='<script>(function(){document.documentElement.setAttribute("data-render-hook","installed");var seen=[];function note(kind,detail){seen.push(kind+": "+String(detail));document.documentElement.setAttribute("data-render-errors",JSON.stringify(seen));}var error=console.error;console.error=function(){note("console.error",Array.prototype.join.call(arguments," "));return error.apply(console,arguments);};window.addEventListener("error",function(e){note("uncaught",e.message);});window.addEventListener("unhandledrejection",function(e){note("unhandled rejection",e.reason?e.reason.message||e.reason:e.reason);});})();</script>'
 render() {
-  local page dir
+  local page
   page="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
   awk -v hook="$hook" '!done && (i = index($0, "<head>")) {$0 = substr($0, 1, i + 5) hook substr($0, i + 6); done = 1} {print}' "$page" >"$page.probe.html"
-  dir="$(mktemp -d)"
   perl -e 'alarm 60; exec @ARGV' "$chrome" --headless --no-sandbox --disable-gpu --no-first-run \
-    --user-data-dir="$dir" --host-resolver-rules='MAP * ~NOTFOUND' \
+    --use-mock-keychain --password-store=basic --user-data-dir="$page.profile" --host-resolver-rules='MAP * ~NOTFOUND' \
     --virtual-time-budget=10000 --dump-dom "file://$page.probe.html" >"$page.dom" 2>/dev/null || true
-  rm -rf "$dir"
+  rm -rf "$page.profile"
 }
 no_render_errors() {
   if contains "$1" 'data-render-errors='; then
