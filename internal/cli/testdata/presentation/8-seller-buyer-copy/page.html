@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-b/To888MWjLBQjn0Vg0gc87nU90lGk3hThOUhoFXzn0=' 'sha256-l60QgUk5ZYTI54RGumSG4EUimGEDm7FO0PAuaBj2fag=' 'sha256-DqEYoNOS5JHkc26oMRLis+zynHjqWZs7yOepOQIOlfA=' 'sha256-KEx+cGS3Xmx/LP2+YH63/8yG8FVowC5/7ok7m+yxAjM='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-b/To888MWjLBQjn0Vg0gc87nU90lGk3hThOUhoFXzn0=' 'sha256-JWeaIrg3Vi+lF58lQDB1FKh0iLTGwIi2Agbv5bSGJto=' 'sha256-DqEYoNOS5JHkc26oMRLis+zynHjqWZs7yOepOQIOlfA=' 'sha256-KEx+cGS3Xmx/LP2+YH63/8yG8FVowC5/7ok7m+yxAjM='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: a shared copy for the other party</title>
     <style>
@@ -8404,11 +8404,15 @@ ${body}
     ))
       outcome.set("countersignature-receipts", "notChecked");
     const pick = (which) => VERIFICATION_CHECK_IDS.filter((id) => outcome.get(id) === which);
+    const failed2 = pick("failed");
     return {
       page: pick("page"),
-      failed: pick("failed"),
+      failed: failed2,
       notChecked: pick("notChecked"),
-      passedWithoutCheckpoint
+      // The note says the page shows the bundle as passing: true only when
+      // the page's own verdict (bundleVerified, the banner's) passes and no
+      // check on this page failed.
+      passedWithoutCheckpoint: passedWithoutCheckpoint && failed2.length === 0 && bundleVerified(verified)
     };
   }
   var VERIFY_INDEPENDENTLY_LINE = "verify independently at verify.agentactioncapsule.org or with a full verifier";

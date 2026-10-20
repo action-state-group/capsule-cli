@@ -8272,11 +8272,15 @@ ${body}
     ))
       outcome.set("countersignature-receipts", "notChecked");
     const pick = (which) => VERIFICATION_CHECK_IDS.filter((id) => outcome.get(id) === which);
+    const failed2 = pick("failed");
     return {
       page: pick("page"),
-      failed: pick("failed"),
+      failed: failed2,
       notChecked: pick("notChecked"),
-      passedWithoutCheckpoint
+      // The note says the page shows the bundle as passing: true only when
+      // the page's own verdict (bundleVerified, the banner's) passes and no
+      // check on this page failed.
+      passedWithoutCheckpoint: passedWithoutCheckpoint && failed2.length === 0 && bundleVerified(verified)
     };
   }
   var VERIFY_INDEPENDENTLY_LINE = "verify independently at verify.agentactioncapsule.org or with a full verifier";

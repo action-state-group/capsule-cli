@@ -5,7 +5,7 @@
 ### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
 
 - **Changed (pages):** the browser viewer every page embeds is rebuilt from
-  agent-action-capsule main 60aabc6 (it was 6f5b48f). Every page's
+  agent-action-capsule main 6ffe7c1 (it was 6f5b48f). Every page's
   verification section now lists what it "Checked on this page" and what it
   did "Not checked on this page" (the checkpoint signature and producer
   signatures), and points to "a full verifier" rather than "the CLI".

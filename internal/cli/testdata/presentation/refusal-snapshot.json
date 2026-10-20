@@ -86,7 +86,7 @@
     "That each record bound to a log position sits at that position.",
     "Each disclosed value against the digest its record committed to.",
     "Not checked on this page",
-    "The signature on the log's checkpoint. This page could not check it, and shows the bundle as passing without it.",
+    "The signature on the log's checkpoint.",
     "The producer signature on every record.",
     "To run these checks, verify the bundle with a full verifier.",
     "None of these checks says who produced the records, or that this file is the most recent copy.",
