@@ -1,6 +1,7 @@
-# Releasing capsulectl (a release candidate, v0.1.0-rcNN)
+# Releasing capsulectl
 
-How a release candidate is cut, verified and shipped. This is the procedure the rc9 and rc10 cuts
+How a release is cut, approved, verified and shipped. The examples use a release candidate,
+`v0.1.0-rcNN`; a full release follows the same steps under the stricter approval rule below. This is the procedure the rc9 and rc10 cuts
 followed, written down once and generalised to rcNN. The tag runs
 [`release.yml`](../.github/workflows/release.yml), which runs
 [`scripts/release-build.sh`](../scripts/release-build.sh). What each release proves, and how an
@@ -27,7 +28,7 @@ one the rc9 and rc10 cuts used.
 3. the companion plugin and skill, if you serve them.
 
 A tag can be cut and published while installs stay on the previous triple. A release is shipped
-when the install page moves to the new triple (step 6).
+when the install page moves to the new triple (step 7).
 
 | Part | Where it comes from | What is verified |
 | --- | --- | --- |
@@ -37,7 +38,7 @@ when the install page moves to the new triple (step 6).
 
 ## Before the tag
 
-The checks before the tag are lettered A to C; the release steps after them are numbered 1 to 8.
+The checks before the tag are lettered A to C; the release steps after them are numbered 1 to 9.
 
 A. **Everything the tag must carry has merged.** That means every code change, and every change
    to `skills/deal/` (see the box above).
@@ -57,46 +58,49 @@ C. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tag
    empty. A version shipped without this leaves its changes under Unreleased. Then the release
    state has to be rebuilt from the tags (`git log v0.1.0-rcPREV..v0.1.0-rcNN`).
 
+## Who releases
+
+**The release reviewers are Ethan Zhang (@ethanyzhang) and Steven Mih (@StevenMih).** Either may
+cut a release. Steps marked "reviewer decision" are taken only on a release reviewer's go; every
+release is one.
+
+**A person approves every release run, in GitHub.** Pushing a tag starts
+[`release.yml`](../.github/workflows/release.yml), which waits in a deployment environment until a
+reviewer approves it. Nothing is built or published before that.
+
+| Tag | Environment | Who may approve the run |
+| --- | --- | --- |
+| a pre-release, with a hyphen (`v0.1.0-rcNN`, `v1.0.0-beta1`) | `release-candidate` | either reviewer, including whoever pushed the tag |
+| a full release (`v1.0.0`) | `release` | the other reviewer: whoever pushed the tag cannot approve it |
+
+**Agents never approve a release run.** A reviewer approves it in GitHub's web UI or mobile app.
+This is a rule, not a technical control: an agent working with a reviewer's GitHub credentials
+could call the approval API, and GitHub cannot tell it from the person. An agent may cut the tag,
+watch the run and report that it waits for approval; it never approves a deployment, and it
+never asks for credentials or a token with which it could.
+
 ## The cut
 
-**Steps marked "maintainer decision" are taken only on the maintainer's go.** Every release is.
+1. **Tag** (reviewer decision). On a fresh `main`, fetch, fast-forward, and tag the merge commit
+   that carries the CHANGELOG cut (step C). Use an annotated tag: the release monitor measures its
+   grace window from the tagger time.
 
-1. **Tag** (maintainer decision). From `v0.1.0-rc15` on, every tag is **signed** with the
-   maintainer's SSH signing key. Its public key is in the release monitor's allowed-signers file
-   (RELEASE-TRANSPARENCY.md, section 5). That key never touches CI.
-   - **Prepare** (whoever cuts the release): on a fresh `main`, fetch, fast-forward, and record the
-     merge commit to tag. Hand the maintainer that commit and the tag name.
+   ```sh
+   git fetch origin && git checkout main && git pull --ff-only
+   git rev-parse HEAD      # the merge commit to tag: record it
+   git tag -a v0.1.0-rcNN <merge-commit> -m "capsulectl v0.1.0-rcNN" && git push origin v0.1.0-rcNN
+   ```
 
-     ```sh
-     git fetch origin && git checkout main && git pull --ff-only
-     git rev-parse HEAD      # the merge commit to tag: record it
-     ```
-   - **Sign and push** (the maintainer, one line, with the recorded commit). The `-c` settings make
-     the signature SSH, whatever the machine signs commits with; the monitor accepts only an SSH
-     signature by an allowed key.
-
-     ```sh
-     git -c gpg.format=ssh -c user.signingkey="$HOME/.ssh/RELEASE_KEY.pub" tag -s v0.1.0-rcNN <merge-commit> -m "capsulectl v0.1.0-rcNN" && git push origin v0.1.0-rcNN
-     ```
-   - **Check** that the tag verifies before release CI's result is relied on:
-
-     ```sh
-     git -c gpg.ssh.allowedSignersFile="$HOME/release-monitor/allowed_signers" tag -v v0.1.0-rcNN
-     ```
-
-   **An unsigned tag is never added to the monitor's list of tags made before signing.** That list
-   is frozen at `v0.1.0-rc14` (`release/known-unsigned.txt` is its reference copy; see
-   RELEASE-TRANSPARENCY.md, section 5). A tag pushed unsigned by mistake raises the monitor's
-   alarm, as it should. Do not move or delete it; cut the next rc, signed.
-
-   The monitor's operator copies `release/known-unsigned.txt` **once**, from the signed
-   `v0.1.0-rc15` tag, into the monitor's own directory, and checks its SHA-256 against the value
-   in RELEASE-TRANSPARENCY.md, section 5. They never point the monitor at the repository's file
-   and never re-sync it. A later edit of the repository's file is itself a red flag.
-2. **Release CI is green.** It builds, checks the version each binary reports, attests the
+   Only maintainers and admins can create a `v*` tag, and nobody can move or delete one once it is
+   pushed (the tag rulesets under [Repository settings](#repository-settings)). Check the tag
+   name and commit before pushing: a wrong tag stays, and the fix is the next version.
+2. **Approve the run** (reviewer decision). Open the run (Actions, Release, the run for the tag),
+   check that its tag and commit are the ones recorded in step 1, and approve it under "Review
+   deployments". For a full release, the reviewer who did not push the tag approves.
+3. **Release CI is green.** It builds, checks the version each binary reports, attests the
    binaries, registers the release statement in the transparency log, and publishes the
-   pre-release.
-3. **Verify from the downloaded assets, not from the build.** In an empty directory, with a clone
+   release (a pre-release for a tag with a hyphen).
+4. **Verify from the downloaded assets, not from the build.** In an empty directory, with a clone
    of this repository at `$CLONE` (for the tagged commit's `SKILL.md`):
 
    ```sh
@@ -118,7 +122,7 @@ C. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tag
    Record the tag, its commit, each binary's SHA-256, the attestation bundle's, the skill
    archive's and `SKILL.md`'s. The install page and the companion release compare against these
    values, not against a build.
-4. **Publish the reviewed release notes, the upgrade note and security first.** When the release
+5. **Publish the reviewed release notes, the upgrade note and security first.** When the release
    cannot be undone on an existing store, its upgrade note opens the notes: it is what a reader
    must act on before installing. A fix that changes what verification accepts or what a record
    discloses comes next, or opens the notes when there is no such upgrade note. Then come
@@ -127,29 +131,55 @@ C. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tag
 
 ## After the tag
 
-5. **Re-cut the companion plugin and skill, if you serve them,** from their own source. Hand over
+6. **Re-cut the companion plugin and skill, if you serve them,** from their own source. Hand over
    both `.sha256` files with them, unregenerated, so the install page can compare them byte for
    byte.
-6. **Re-aim the install page at the new triple.**
+7. **Re-aim the install page at the new triple.**
    - Add the new version alongside the existing ones. Leave every older binary, plugin and skill
      file untouched; a published version is frozen.
    - Bind the page's check to the steps and digests it publishes.
-7. **Build the site image and run the render gate on real installs.** Render the reports that
+8. **Build the site image and run the render gate on real installs.** Render the reports that
    fresh installs actually produce, on more than one base system (not a fixture). Check:
    - the title and every row;
    - no console error;
    - a tampered copy reads as failing verification.
-8. **One deploy** (maintainer decision), held until A to C and steps 1 to 7 are reported.
+9. **One deploy** (reviewer decision), held until A to C and steps 1 to 8 are reported.
 
 **Acceptance is a fresh install on a clean machine,** running a real deal check end to end against
-the new triple. It is the maintainer's own run, not a fixture. If a previous release left profiles
+the new triple. It is a release reviewer's own run, not a fixture. If a previous release left profiles
 in an older layout, confirm such a profile does not block the install.
 
 ## When it goes wrong
 
 - **A change to `skills/deal/` merged after the tag.** The install page's skill value no longer
   matches the tag. Do not edit the published values: cut the next rc.
-- **Release CI failed after the tag was pushed.** Fix it on `main` and cut the next rc. Deleting or
-  moving a pushed tag is what the release monitor alarms on (RELEASE-TRANSPARENCY.md, section 5).
+- **Release CI failed after the tag was pushed, or a run was rejected.** Fix it on `main` and cut
+  the next version (the next rc, or the next patch for a full release). A pushed tag cannot be moved or deleted, and a tag with no release raises the
+  release monitor's alarm once its grace window passes (RELEASE-TRANSPARENCY.md, section 5).
+  Expect that alarm and confirm it is this tag.
 - **A release workflow was re-run.** Each run registers a new release statement under a new key,
-  and the monitor names it. Expect that alarm and confirm it is the re-run.
+  and the monitor names it. Expect that alarm and confirm it is the re-run. A full release
+  re-run by anyone other than whoever pushed its tag stops before it builds: whoever re-runs a
+  run counts as starting it, so the tag's pusher could otherwise approve it. Cut the next
+  version instead.
+
+## Repository settings
+
+The approval rule and the tag protection are repository settings. A repository admin applies them
+with [`scripts/release-settings.sh`](../scripts/release-settings.sh): run it with no argument to
+print what it would set, `--apply` to set it, and `--show` to print what GitHub holds. It sets:
+
+- **Two deployment environments,** each with both release reviewers as required reviewers and no
+  admin bypass:
+  - `release`, with prevent self-review on, accepting only tags matching `v*`;
+  - `release-candidate`, with prevent self-review off, accepting only tags matching `v*-*`, so a
+    full release cannot run in it.
+- **Two tag rulesets on `refs/tags/v*`,** both active:
+  - "release tags: maintainers create": only the maintain and admin roles may create a release tag;
+  - "release tags: immutable": nobody may update, force-move or delete a release tag. It has no
+    bypass actors, so admins are bound too.
+
+Every Action in `release.yml` is pinned by full commit SHA; keep it so when you bump one.
+
+The release monitor that checks every release from outside GitHub is described in
+[RELEASE-TRANSPARENCY.md](RELEASE-TRANSPARENCY.md), section 5.

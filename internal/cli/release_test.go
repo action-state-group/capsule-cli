@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -120,6 +119,9 @@ type relGitHub struct {
 	tags     []map[string]any
 	refs     map[string]map[string]any
 	tagObjs  map[string]map[string]any
+	commits  map[string]map[string]any
+	runs     map[string]map[string]any   // "run id/attempt" -> the attempt (actor, triggering_actor)
+	reviews  map[string][]map[string]any // run id -> its approvals
 	releases []map[string]any
 	files    map[string][]byte
 }
@@ -167,6 +169,16 @@ func (g *relGitHub) handler() http.Handler {
 		case strings.Contains(p, "/git/tags/"):
 			v, ok := g.tagObjs[last]
 			write(v, ok)
+		case strings.Contains(p, "/git/commits/"):
+			v, ok := g.commits[last]
+			write(v, ok)
+		case strings.Contains(p, "/actions/runs/") && strings.HasSuffix(p, "/approvals"):
+			run := strings.TrimSuffix(strings.TrimPrefix(p[strings.Index(p, "/actions/runs/"):], "/actions/runs/"), "/approvals")
+			v, ok := g.reviews[run]
+			write(v, ok)
+		case strings.Contains(p, "/actions/runs/"):
+			v, ok := g.runs[strings.Replace(p[strings.Index(p, "/actions/runs/")+len("/actions/runs/"):], "/attempts/", "/", 1)]
+			write(v, ok)
 		case strings.HasSuffix(p, "/releases"):
 			list(g.releases)
 		default:
@@ -179,46 +191,32 @@ func (g *relGitHub) handler() http.Handler {
 	})
 }
 
-type relSSHSigner struct{ key, allowed string }
-
-func newRelSSHSigner(t *testing.T, principal string) relSSHSigner {
-	t.Helper()
-	if _, err := exec.LookPath("ssh-keygen"); err != nil {
-		t.Skip("ssh-keygen is needed to sign test tags")
-	}
-	dir := t.TempDir()
-	key := filepath.Join(dir, "id")
-	require.NoError(t, exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", principal, "-f", key).Run())
-	pub := strings.TrimSpace(string(mustRead(t, key+".pub")))
-	allowed := filepath.Join(dir, "allowed_signers")
-	require.NoError(t, os.WriteFile(allowed, []byte(principal+` namespaces="git" `+pub+"\n"), 0o600))
-	return relSSHSigner{key: key, allowed: allowed}
-}
-
-func (s relSSHSigner) sign(t *testing.T, payload string) string {
-	t.Helper()
-	file := filepath.Join(t.TempDir(), "payload")
-	require.NoError(t, os.WriteFile(file, []byte(payload), 0o600))
-	require.NoError(t, exec.Command("ssh-keygen", "-q", "-Y", "sign", "-f", s.key, "-n", "git", file).Run())
-	return string(mustRead(t, file+".sig"))
-}
-
 type releaseWorld struct {
 	gh      *relGitHub
 	wit     *relWitness
 	ghURL   string
 	witURL  string
 	authHex string
-	signer  relSSHSigner
 	commit  string
 }
 
 // The stand-in for gh and Sigstore: a bundle "attests" a release.json when
 // it names that file's digest, the release workflow at the tag, and the
-// commit.
-func fakeAttestation(payload []byte, identity, commit string) []byte {
+// commit; its run stands in for the certificate's Run Invocation URI.
+func fakeAttestation(payload []byte, identity, commit, run string) []byte {
 	sum := sha256.Sum256(payload)
-	return []byte(hex.EncodeToString(sum[:]) + " " + identity + " " + commit)
+	bundle, _ := json.Marshal(map[string]string{"attests": hex.EncodeToString(sum[:]) + " " + identity + " " + commit,
+		"run": "https://github.com/" + releaseRepo + "/actions/runs/" + run + "/attempts/1"})
+	return bundle
+}
+
+// fakeAttested returns the run of bundle when it is fakeAttestation's for
+// payload, identity and commit.
+func fakeAttested(bundle, payload []byte, identity, commit string) (string, bool) {
+	var b map[string]string
+	sum := sha256.Sum256(payload)
+	ok := json.Unmarshal(bundle, &b) == nil && b["attests"] == hex.EncodeToString(sum[:])+" "+identity+" "+commit
+	return b["run"], ok
 }
 
 func releaseWorkflowIdentity(tag string) string {
@@ -229,43 +227,47 @@ func newReleaseWorld(t *testing.T) *releaseWorld {
 	t.Helper()
 	public, key, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	w := &releaseWorld{gh: &relGitHub{refs: map[string]map[string]any{}, tagObjs: map[string]map[string]any{}, files: map[string][]byte{}},
-		wit: &relWitness{key: key}, authHex: hex.EncodeToString(public),
-		signer: newRelSSHSigner(t, "maintainer@example.org"), commit: strings.Repeat("ab", 20)}
+	w := &releaseWorld{gh: &relGitHub{refs: map[string]map[string]any{}, tagObjs: map[string]map[string]any{}, commits: map[string]map[string]any{},
+		runs: map[string]map[string]any{}, reviews: map[string][]map[string]any{}, files: map[string][]byte{}},
+		wit: &relWitness{key: key}, authHex: hex.EncodeToString(public), commit: strings.Repeat("ab", 20)}
 	gh := httptest.NewServer(w.gh.handler())
 	wit := httptest.NewServer(w.wit.handler(t))
 	t.Cleanup(gh.Close)
 	t.Cleanup(wit.Close)
 	w.ghURL, w.witURL = gh.URL, wit.URL
 	saved := releaseAttestationCheck
-	releaseAttestationCheck = func(_ context.Context, _ releaseWatchConfig, file, bundle, tag, commit string) error {
-		if string(mustRead(t, bundle)) != string(fakeAttestation(mustRead(t, file), releaseWorkflowIdentity(tag), commit)) {
-			return errors.New("no attestation by the release workflow at this tag and commit")
+	releaseAttestationCheck = func(_ context.Context, _ releaseWatchConfig, file, bundle, tag, commit string) (string, error) {
+		run, ok := fakeAttested(mustRead(t, bundle), mustRead(t, file), releaseWorkflowIdentity(tag), commit)
+		if !ok {
+			return "", errors.New("no attestation by the release workflow at this tag and commit")
 		}
-		return nil
+		return run, nil
 	}
 	t.Cleanup(func() { releaseAttestationCheck = saved })
 	return w
 }
 
-// addTag adds an annotated tag, signed by signer when it is set.
-func (w *releaseWorld) addTag(t *testing.T, tag string, signer *relSSHSigner) {
+// addTag adds an annotated tag.
+func (w *releaseWorld) addTag(t *testing.T, tag string) {
 	t.Helper()
-	w.addTagAt(t, tag, signer, 0)
+	w.addTagAt(t, tag, time.Unix(0, 0))
 }
 
-// addTagAt adds a tag whose signed tagger line carries unix time at.
-func (w *releaseWorld) addTagAt(t *testing.T, tag string, signer *relSSHSigner, at int64) {
+// addTagAt adds an annotated tag whose tagger time is at.
+func (w *releaseWorld) addTagAt(t *testing.T, tag string, at time.Time) {
 	t.Helper()
 	sha := fmt.Sprintf("%040x", len(w.gh.tags)+1)
 	w.gh.tags = append(w.gh.tags, map[string]any{"name": tag, "commit": map[string]any{"sha": w.commit}})
 	w.gh.refs[tag] = map[string]any{"object": map[string]any{"type": "tag", "sha": sha}}
-	payload := "object " + w.commit + "\ntype commit\ntag " + tag + "\ntagger M <m@example.org> " + fmt.Sprint(at) + " +0000\n\n" + tag + "\n"
-	verification := map[string]any{"signature": "", "payload": payload}
-	if signer != nil {
-		verification["signature"] = signer.sign(t, payload)
-	}
-	w.gh.tagObjs[sha] = map[string]any{"verification": verification}
+	w.gh.tagObjs[sha] = map[string]any{"tag": tag, "tagger": map[string]any{"name": "M", "date": at.UTC().Format(time.RFC3339)}}
+}
+
+// addLightweightTagAt adds a lightweight tag on a commit made at at.
+func (w *releaseWorld) addLightweightTagAt(t *testing.T, tag string, at time.Time) {
+	t.Helper()
+	w.gh.tags = append(w.gh.tags, map[string]any{"name": tag, "commit": map[string]any{"sha": w.commit}})
+	w.gh.refs[tag] = map[string]any{"object": map[string]any{"type": "commit", "sha": w.commit}}
+	w.gh.commits[w.commit] = map[string]any{"committer": map[string]any{"name": "M", "date": at.UTC().Format(time.RFC3339)}}
 }
 
 // addRelease builds a release's files; when register is set it runs
@@ -281,11 +283,31 @@ func (w *releaseWorld) addRelease(t *testing.T, tag string, register bool) strin
 		out, err := invoke(t, "", "release", "register", "--dir", dir, "--tag", tag, "--commit", w.commit, "--witness", w.witURL, "--witness-key", w.authHex)
 		require.NoError(t, err, out)
 		payloadName, _, _ := releaseFileNames(tag)
-		attestation := fakeAttestation(mustRead(t, filepath.Join(dir, payloadName)), releaseWorkflowIdentity(tag), w.commit)
+		run := w.addRun(tag, "pusher", "pusher", "reviewer")
+		attestation := fakeAttestation(mustRead(t, filepath.Join(dir, payloadName)), releaseWorkflowIdentity(tag), w.commit, run)
 		require.NoError(t, os.WriteFile(filepath.Join(dir, releaseAttestationName(tag)), attestation, 0o600))
 	}
 	w.publish(t, tag, dir)
 	return dir
+}
+
+// addRun records a release run for tag, pushed by actor and started by
+// triggering, approved by approver in the environment the tag implies (none
+// when approver is empty), and returns its id.
+func (w *releaseWorld) addRun(tag, actor, triggering, approver string) string {
+	run := fmt.Sprint(1000 + len(w.gh.runs))
+	w.gh.runs[run+"/1"] = map[string]any{"actor": map[string]any{"login": actor}, "triggering_actor": map[string]any{"login": triggering}}
+	w.gh.reviews[run] = []map[string]any{}
+	if approver != "" {
+		w.approve(run, releaseEnvironment(tag), approver)
+	}
+	return run
+}
+
+// approve adds an approval of run in env by login.
+func (w *releaseWorld) approve(run, env, login string) {
+	w.gh.reviews[run] = append(w.gh.reviews[run], map[string]any{"state": "approved",
+		"environments": []map[string]any{{"name": env}}, "user": map[string]any{"login": login}})
 }
 
 // publish (re)publishes every file in dir as the release's assets.
@@ -325,7 +347,7 @@ func (w *releaseWorld) register(t *testing.T, payload []byte, issuer string) []b
 
 func (w *releaseWorld) watch(t *testing.T, extra ...string) (map[string]any, error) {
 	t.Helper()
-	args := append([]string{"release", "watch", "--github-api", w.ghURL, "--witness", w.witURL, "--witness-key", w.authHex, "--allowed-signers", w.signer.allowed}, extra...)
+	args := append([]string{"release", "watch", "--github-api", w.ghURL, "--witness", w.witURL, "--witness-key", w.authHex}, extra...)
 	out, err := invoke(t, "", args...)
 	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &result), out)
@@ -342,7 +364,7 @@ func alarmsOf(result map[string]any) string {
 
 func TestReleaseWatchAcceptsAnIntendedRegisteredRelease(t *testing.T) {
 	w := newReleaseWorld(t)
-	w.addTag(t, "v1.0.0", &w.signer)
+	w.addTag(t, "v1.0.0")
 	w.addRelease(t, "v1.0.0", true)
 	result, err := w.watch(t)
 	require.NoError(t, err, alarmsOf(result))
@@ -356,7 +378,7 @@ func TestReleaseWatchAcceptsAnIntendedRegisteredRelease(t *testing.T) {
 func (w *releaseWorld) replaceStatement(t *testing.T, tag, issuer string) {
 	t.Helper()
 	dir := w.addRelease(t, tag, true)
-	w.addTag(t, tag, &w.signer)
+	w.addTag(t, tag)
 	payloadName, statementName, _ := releaseFileNames(tag)
 	forged := w.register(t, mustRead(t, filepath.Join(dir, payloadName)), issuer)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, statementName), forged, 0o600))
@@ -368,19 +390,17 @@ func TestReleaseWatchAlarms(t *testing.T) {
 		setup func(t *testing.T, w *releaseWorld)
 		want  string
 	}{
-		"an unsigned tag released (a stolen token or a compromised CI)": {
-			setup: func(t *testing.T, w *releaseWorld) { w.addTag(t, "v6.6.6", nil); w.addRelease(t, "v6.6.6", true) },
-			want:  "unintended release v6.6.6",
+		"a release whose tag was deleted": {
+			setup: func(t *testing.T, w *releaseWorld) { w.addRelease(t, "v6.6.6", true) },
+			want:  "release v6.6.6 has no v* tag of that name",
 		},
-		"a tag signed by a key that is not an allowed signer": {
+		"a tag moved to another commit after its release": {
 			setup: func(t *testing.T, w *releaseWorld) {
-				rogue := newRelSSHSigner(t, "rogue@example.org")
-				w.addTag(t, "v6.6.7", &rogue)
-				w.addRelease(t, "v6.6.7", true)
+				w.gh.tags[0]["commit"] = map[string]any{"sha": strings.Repeat("cd", 20)}
 			},
-			want: "unintended tag v6.6.7: signed by a key not in the allowed signers",
+			want: "release v1.0.0: its statement names " + releaseRepo + " v1.0.0 at " + strings.Repeat("ab", 20) + ", not this tag's commit " + strings.Repeat("cd", 20),
 		},
-		"an intended release missing from the log": {
+		"a release missing from the log": {
 			setup: func(t *testing.T, w *releaseWorld) {
 				w.wit.mu.Lock()
 				w.wit.entries = nil
@@ -396,7 +416,7 @@ func TestReleaseWatchAlarms(t *testing.T) {
 			},
 			want: "statement under " + releaseSubject + " that does not verify as one of our releases: entry",
 		},
-		"a statement on an intended release signed by a key its payload does not name": {
+		"a statement on a release signed by a key its payload does not name": {
 			setup: func(t *testing.T, w *releaseWorld) { w.replaceStatement(t, "v1.1.0", releaseIssuer) },
 			want:  "release v1.1.0: its statement's signature does not verify: the signature does not verify under its statement key",
 		},
@@ -409,7 +429,7 @@ func TestReleaseWatchAlarms(t *testing.T) {
 		"release.json with no attestation": {
 			setup: func(t *testing.T, w *releaseWorld) {
 				dir := w.addRelease(t, "v1.1.0", true)
-				w.addTag(t, "v1.1.0", &w.signer)
+				w.addTag(t, "v1.1.0")
 				require.NoError(t, os.Remove(filepath.Join(dir, releaseAttestationName("v1.1.0"))))
 				w.publish(t, "v1.1.0", dir)
 			},
@@ -418,9 +438,9 @@ func TestReleaseWatchAlarms(t *testing.T) {
 		"release.json attested by the workflow at another tag": {
 			setup: func(t *testing.T, w *releaseWorld) {
 				dir := w.addRelease(t, "v1.1.0", true)
-				w.addTag(t, "v1.1.0", &w.signer)
+				w.addTag(t, "v1.1.0")
 				payloadName, _, _ := releaseFileNames("v1.1.0")
-				other := fakeAttestation(mustRead(t, filepath.Join(dir, payloadName)), releaseWorkflowIdentity("v1.0.0"), w.commit)
+				other := fakeAttestation(mustRead(t, filepath.Join(dir, payloadName)), releaseWorkflowIdentity("v1.0.0"), w.commit, "1")
 				require.NoError(t, os.WriteFile(filepath.Join(dir, releaseAttestationName("v1.1.0")), other, 0o600))
 				w.publish(t, "v1.1.0", dir)
 			},
@@ -436,9 +456,52 @@ func TestReleaseWatchAlarms(t *testing.T) {
 			},
 			want: "release v1.0.0: asset capsulectl-v1.0.0-linux-amd64 (sha256 " + strings.Repeat("00", 32) + ") is not what its statement records",
 		},
-		"an intended release with no statement": {
+		"a run with no approval (a release.yml with no environment)": {
+			setup: func(t *testing.T, w *releaseWorld) { w.gh.reviews["1000"] = nil },
+			want:  "release v1.0.0: run 1000 has no approval in the release environment",
+		},
+		"a full release approved only in the pre-release environment": {
 			setup: func(t *testing.T, w *releaseWorld) {
-				w.addTag(t, "v1.1.0", &w.signer)
+				w.gh.reviews["1000"] = nil
+				w.approve("1000", "release-candidate", "reviewer")
+			},
+			want: "release v1.0.0: run 1000 has no approval in the release environment",
+		},
+		"a rejected run": {
+			setup: func(t *testing.T, w *releaseWorld) { w.gh.reviews["1000"][0]["state"] = "rejected" },
+			want:  "release v1.0.0: run 1000 has no approval in the release environment",
+		},
+		"a full release approved by whoever pushed its tag": {
+			setup: func(t *testing.T, w *releaseWorld) {
+				w.gh.reviews["1000"] = nil
+				w.approve("1000", "release", "pusher")
+			},
+			want: "release v1.0.0: run 1000 was approved in release only by pusher, who pushed the tag or started attempt 1",
+		},
+		"a full release re-run and approved by whoever re-ran it": {
+			setup: func(t *testing.T, w *releaseWorld) {
+				w.gh.runs["1000/1"]["triggering_actor"] = map[string]any{"login": "reviewer"}
+			},
+			want: "release v1.0.0: run 1000 was approved in release only by reviewer, who pushed the tag or started attempt 1",
+		},
+		"an attestation whose certificate names another repository's run": {
+			setup: func(t *testing.T, w *releaseWorld) {
+				dir := w.addRelease(t, "v1.1.0", true)
+				w.addTag(t, "v1.1.0")
+				file := filepath.Join(dir, releaseAttestationName("v1.1.0"))
+				var b map[string]string
+				require.NoError(t, json.Unmarshal(mustRead(t, file), &b))
+				b["run"] = strings.Replace(b["run"], releaseRepo, "someone/else", 1)
+				bundle, err := json.Marshal(b)
+				require.NoError(t, err)
+				require.NoError(t, os.WriteFile(file, bundle, 0o600))
+				w.publish(t, "v1.1.0", dir)
+			},
+			want: "release v1.1.0: release.json's attestation names no workflow run attempt of " + releaseRepo,
+		},
+		"a release with no statement": {
+			setup: func(t *testing.T, w *releaseWorld) {
+				w.addTag(t, "v1.1.0")
 				w.addRelease(t, "v1.1.0", false)
 			},
 			want: "release v1.1.0 has no release statement",
@@ -447,7 +510,7 @@ func TestReleaseWatchAlarms(t *testing.T) {
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			w := newReleaseWorld(t)
-			w.addTag(t, "v1.0.0", &w.signer)
+			w.addTag(t, "v1.0.0")
 			w.addRelease(t, "v1.0.0", true)
 			c.setup(t, w)
 			result, err := w.watch(t)
@@ -458,23 +521,61 @@ func TestReleaseWatchAlarms(t *testing.T) {
 	}
 }
 
-// Tags made before signing began are accepted as named exceptions, and a
-// release made then needs no statement.
-func TestReleaseWatchKnownExceptions(t *testing.T) {
+// The releases cut before `release register` existed need no statement;
+// any later release does.
+func TestReleaseWatchReleasesBeforeStatements(t *testing.T) {
 	w := newReleaseWorld(t)
-	w.addTag(t, "v0.1.0-rc4", nil)
-	w.addRelease(t, "v0.1.0-rc4", false)
+	for _, tag := range []string{"v0.1.0-rc1", "v0.1.0-rc4"} {
+		w.addTag(t, tag)
+		w.addRelease(t, tag, false)
+	}
 	result, err := w.watch(t)
-	require.ErrorIs(t, err, ErrAlarm)
-	assert.Contains(t, alarmsOf(result), "unintended release v0.1.0-rc4")
-	result, err = w.watch(t, "--known-unsigned", "v0.1.0-rc4")
 	require.NoError(t, err, alarmsOf(result))
 	assert.Equal(t, "ok", result["state"])
+	assert.Equal(t, []any{"v0.1.0-rc1", "v0.1.0-rc4"}, result["tags"])
+
+	w.addTag(t, "v0.1.0-rc5")
+	w.addRelease(t, "v0.1.0-rc5", false)
+	result, err = w.watch(t)
+	require.ErrorIs(t, err, ErrAlarm)
+	assert.Equal(t, "release v0.1.0-rc5 has no release statement", alarmsOf(result))
 }
 
-func TestReleaseWatchNeedsAllowedSigners(t *testing.T) {
-	_, err := invoke(t, "", "release", "watch")
-	require.ErrorIs(t, err, ErrInput)
+// A pre-release may be approved by whoever pushed its tag. The releases cut
+// before release.yml waited for approval (up to v0.1.0-rc17) need none; any
+// later one does.
+func TestReleaseWatchApprovals(t *testing.T) {
+	w := newReleaseWorld(t)
+	w.addTag(t, "v1.1.0-rc1")
+	w.addRelease(t, "v1.1.0-rc1", true)
+	run := fmt.Sprint(1000 + len(w.gh.runs) - 1)
+	w.gh.reviews[run] = nil
+	w.approve(run, "release-candidate", "pusher")
+	result, err := w.watch(t)
+	require.NoError(t, err, alarmsOf(result))
+
+	w.addTag(t, "v0.1.0-rc17")
+	w.addRelease(t, "v0.1.0-rc17", true)
+	w.gh.reviews[fmt.Sprint(1000+len(w.gh.runs)-1)] = nil
+	result, err = w.watch(t)
+	require.NoError(t, err, alarmsOf(result))
+
+	w.addTag(t, "v0.1.0-rc18")
+	w.addRelease(t, "v0.1.0-rc18", true)
+	run = fmt.Sprint(1000 + len(w.gh.runs) - 1)
+	w.gh.reviews[run] = nil
+	result, err = w.watch(t)
+	require.ErrorIs(t, err, ErrAlarm)
+	assert.Equal(t, "release v0.1.0-rc18: run "+run+" has no approval in the release-candidate environment", alarmsOf(result))
+}
+
+// The signed-tag flags are gone: the monitor needs no key file.
+func TestReleaseWatchHasNoSignerFlags(t *testing.T) {
+	for _, flag := range []string{"--allowed-signers", "--known-unsigned", "--known-unsigned-file"} {
+		_, err := invoke(t, "", "release", "watch", flag, "x")
+		require.Error(t, err, flag)
+		assert.ErrorContains(t, err, "has no flag "+flag)
+	}
 }
 
 func TestReleaseRegisterNeedsTheTaggedCommit(t *testing.T) {
@@ -482,35 +583,46 @@ func TestReleaseRegisterNeedsTheTaggedCommit(t *testing.T) {
 	require.ErrorIs(t, err, ErrInput)
 }
 
-// A signed tag is a promise of a release: past the grace window, a tag with
-// no release (never published, or deleted) is an alarm.
-func TestReleaseWatchIntendedTagWithNoRelease(t *testing.T) {
+// A release tag is a promise of a release: past the grace window (time for
+// a reviewer to approve the run, and for the build), a tag with no release
+// (never approved, failed, or deleted) is an alarm.
+func TestReleaseWatchTagWithNoRelease(t *testing.T) {
 	saved := releaseNow
 	t.Cleanup(func() { releaseNow = saved })
 	tagged := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
 
-	w := newReleaseWorld(t)
-	w.addTag(t, "v1.0.0", &w.signer)
-	w.addRelease(t, "v1.0.0", true)
-	w.addTagAt(t, "v1.1.0", &w.signer, tagged.Unix())
+	for name, add := range map[string]func(w *releaseWorld){
+		"annotated":   func(w *releaseWorld) { w.addTagAt(t, "v1.1.0", tagged) },
+		"lightweight": func(w *releaseWorld) { w.addLightweightTagAt(t, "v1.1.0", tagged) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := newReleaseWorld(t)
+			w.addTag(t, "v1.0.0")
+			w.addRelease(t, "v1.0.0", true)
+			add(w)
 
-	releaseNow = func() time.Time { return tagged.Add(90 * time.Minute) }
-	result, err := w.watch(t)
-	require.NoError(t, err, "within the grace window the release may still be building: %s", alarmsOf(result))
+			releaseNow = func() time.Time { return tagged.Add(20 * time.Hour) }
+			result, err := w.watch(t)
+			require.NoError(t, err, "within the grace window the release may still await approval: %s", alarmsOf(result))
 
-	releaseNow = func() time.Time { return tagged.Add(3 * time.Hour) }
-	result, err = w.watch(t)
-	require.ErrorIs(t, err, ErrAlarm)
-	assert.Contains(t, alarmsOf(result), "intended tag v1.1.0 has no release (tagged 2026-10-04T12:00:00Z; grace 2h0m0s)")
+			releaseNow = func() time.Time { return tagged.Add(25 * time.Hour) }
+			result, err = w.watch(t)
+			require.ErrorIs(t, err, ErrAlarm)
+			assert.Equal(t, "tag v1.1.0 has no release (tagged 2026-10-04T12:00:00Z; grace 24h0m0s)", alarmsOf(result))
 
-	result, err = w.watch(t, "--release-grace", "4h")
-	require.NoError(t, err, alarmsOf(result))
+			result, err = w.watch(t, "--release-grace", "48h")
+			require.NoError(t, err, alarmsOf(result))
 
-	// A known exception is not expected to have a release.
-	w.gh.tags = w.gh.tags[:1]
-	w.addTagAt(t, "v0.1.0-rc5", nil, tagged.Unix())
-	result, err = w.watch(t, "--known-unsigned", "v0.1.0-rc5")
-	require.NoError(t, err, alarmsOf(result))
+			// A tag dated in the future cannot hold the alarm off.
+			releaseNow = func() time.Time { return tagged.Add(-2 * time.Hour) }
+			result, err = w.watch(t)
+			require.ErrorIs(t, err, ErrAlarm)
+			assert.Equal(t, "tag v1.1.0 has no release and is dated in the future (2026-10-04T12:00:00Z)", alarmsOf(result))
+			releaseNow = func() time.Time { return tagged.Add(-30 * time.Minute) }
+			result, err = w.watch(t)
+			require.NoError(t, err, "within the clock skew: %s", alarmsOf(result))
+		})
+	}
 }
 
 // Tags and releases are read across every page; past the page limit the
@@ -519,24 +631,23 @@ func TestReleaseWatchFollowsEveryPage(t *testing.T) {
 	w := newReleaseWorld(t)
 	w.gh.pageSize = 1
 	for _, tag := range []string{"v1.0.0", "v1.1.0", "v1.2.0"} {
-		w.addTag(t, tag, &w.signer)
+		w.addTag(t, tag)
 		w.addRelease(t, tag, true)
 	}
 	result, err := w.watch(t)
 	require.NoError(t, err, alarmsOf(result))
 	assert.Equal(t, []any{"v1.0.0", "v1.1.0", "v1.2.0"}, result["releases_checked"])
 
-	// An unintended release on the last page is still seen.
-	w.addTag(t, "v6.6.6", nil)
+	// A release with no tag, on the last page, is still seen.
 	w.addRelease(t, "v6.6.6", true)
 	result, err = w.watch(t)
 	require.ErrorIs(t, err, ErrAlarm)
-	assert.Contains(t, alarmsOf(result), "unintended release v6.6.6")
+	assert.Contains(t, alarmsOf(result), "release v6.6.6 has no v* tag of that name")
 
 	saved := releaseMaxPages
 	t.Cleanup(func() { releaseMaxPages = saved })
 	releaseMaxPages = 2
-	_, err = invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", w.witURL, "--witness-key", w.authHex, "--allowed-signers", w.signer.allowed)
+	_, err = invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", w.witURL, "--witness-key", w.authHex)
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, ErrAlarm, "a partial list is a failure to check, not a verdict")
 }
@@ -557,19 +668,19 @@ func TestReleaseWatchFailsClosedOnAPartialLog(t *testing.T) {
 	for name, witness := range map[string]string{"a cursor": paged.URL, "a Link header": linked.URL} {
 		t.Run(name, func(t *testing.T) {
 			w := newReleaseWorld(t)
-			_, err := invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", witness, "--witness-key", w.authHex, "--allowed-signers", w.signer.allowed)
+			_, err := invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", witness, "--witness-key", w.authHex)
 			require.Error(t, err)
 			assert.NotErrorIs(t, err, ErrAlarm)
 		})
 	}
 	t.Run("an answer over the size limit", func(t *testing.T) {
 		w := newReleaseWorld(t)
-		w.addTag(t, "v1.0.0", &w.signer)
+		w.addTag(t, "v1.0.0")
 		w.addRelease(t, "v1.0.0", true)
 		saved := releaseMaxListBody
 		t.Cleanup(func() { releaseMaxListBody = saved })
 		releaseMaxListBody = 64
-		_, err := invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", w.witURL, "--witness-key", w.authHex, "--allowed-signers", w.signer.allowed)
+		_, err := invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", w.witURL, "--witness-key", w.authHex)
 		require.Error(t, err)
 		assert.NotErrorIs(t, err, ErrAlarm)
 		assert.ErrorContains(t, err, "refusing to check part of it", "refused for its size, not because a cut-off answer happened not to parse")
@@ -583,27 +694,29 @@ func TestNextLink(t *testing.T) {
 	assert.Equal(t, "", nextLink(""))
 }
 
-// The known exceptions can come from a file kept with the monitor: one tag
-// per line, comments and blank lines ignored.
-func TestReleaseWatchKnownUnsignedFile(t *testing.T) {
+// The run comes from gh's verified certificate, in the shape gh attestation
+// verify --format json prints (abridged from v0.1.0-rc17's check).
+func TestVerifiedRunInvocation(t *testing.T) {
+	out := []byte(`[{"verificationResult":{"signature":{"certificate":{
+		"runInvocationURI":"https://github.com/action-state-group/capsule-cli/actions/runs/39489783877/attempts/1",
+		"sourceRepositoryRef":"refs/tags/v0.1.0-rc17"}}}}]`)
+	run, err := verifiedRunInvocation(out)
+	require.NoError(t, err)
+	assert.Equal(t, "https://github.com/action-state-group/capsule-cli/actions/runs/39489783877/attempts/1", run)
+
+	for _, bad := range []string{`[]`, `[{},{}]`, `not json`} {
+		_, err := verifiedRunInvocation([]byte(bad))
+		assert.Error(t, err, bad)
+	}
+}
+
+// A later attempt of a full release's run (a re-run someone else started)
+// does not change the verdict on the attempt that built the release.
+func TestReleaseApprovalIsJudgedOnTheAttemptThatBuilt(t *testing.T) {
 	w := newReleaseWorld(t)
-	w.addTag(t, "v0.1.0-rc4", nil)
-	w.addRelease(t, "v0.1.0-rc4", false)
-	w.addTag(t, "v0.1.0-rc5", nil)
-	w.addRelease(t, "v0.1.0-rc5", true)
-	file := filepath.Join(t.TempDir(), "known-unsigned")
-	require.NoError(t, os.WriteFile(file, []byte("# before signing\nv0.1.0-rc4  # first with a bundle\n\n"), 0o600))
-	result, err := w.watch(t, "--known-unsigned-file", file)
-	require.ErrorIs(t, err, ErrAlarm)
-	assert.Contains(t, alarmsOf(result), "unintended release v0.1.0-rc5")
-	assert.NotContains(t, alarmsOf(result), "v0.1.0-rc4")
-
-	require.NoError(t, os.WriteFile(file, []byte("# before signing\nv0.1.0-rc4  # first with a bundle\nv0.1.0-rc5\n"), 0o600))
-	result, err = w.watch(t, "--known-unsigned-file", file)
+	w.addTag(t, "v1.0.0")
+	w.addRelease(t, "v1.0.0", true)
+	w.gh.runs["1000/2"] = map[string]any{"actor": map[string]any{"login": "pusher"}, "triggering_actor": map[string]any{"login": "reviewer"}}
+	result, err := w.watch(t)
 	require.NoError(t, err, alarmsOf(result))
-	assert.Equal(t, []any{"v0.1.0-rc5"}, result["releases_checked"])
-
-	_, err = invoke(t, "", "release", "watch", "--github-api", w.ghURL, "--witness", w.witURL, "--witness-key", w.authHex,
-		"--allowed-signers", w.signer.allowed, "--known-unsigned-file", filepath.Join(t.TempDir(), "missing"))
-	require.ErrorIs(t, err, ErrInput)
 }
