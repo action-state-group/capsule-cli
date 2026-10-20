@@ -9,8 +9,9 @@ sha256 `008d4c2c…090cdd`). `TestPresentationGoldens`
   does and checks the page gate's decision. While the vendored viewer is unchanged,
   the result must equal `page.html` byte for byte.
 - **With `CAPSULECTL_CHROME` set:** it also opens each page headless, with no network:
-  Chrome resolves no host name, and a request for anything outside the page fails the
-  test. At 1280px its DOM must match `snapshot.json`: the verification state, the
+  Chrome resolves no host name or IP literal, and a request for anything outside the
+  page fails the test, whether the page, one of its iframes or workers, or a WebSocket
+  makes it. At 1280px its DOM must match `snapshot.json`: the verification state, the
   views, the evidence identifiers, and the words in order. Layout is not compared.
 - **With `CAPSULECTL_PRESENTATION_PINNED=1` as well** (CI only), the browser must be the
   Chrome `known-overflow.json` names. At 390px, 1280px and in print, each page is held
