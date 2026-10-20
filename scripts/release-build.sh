@@ -16,8 +16,8 @@ TARGETS=(linux/amd64 linux/arm64 darwin/arm64)
 
 # The first-party plugins (capsule-cli#236) are two more binaries per
 # target, built from the plugins module: capsulectl-book and capsulectl-deal.
-# Their assets are named capsulectl-VERSION-plugin-NAME-OS-ARCH, so the
-# release statement covers them like the core binary; an operator installs
+# Their assets are named capsulectl-VERSION-plugin-NAME-OS-ARCH, so
+# SHA256SUMS and the build attestation cover them like the core binary; an operator installs
 # each as capsulectl-NAME on a plugin root (docs/PLUGINS.md).
 PLUGINS=(book deal)
 

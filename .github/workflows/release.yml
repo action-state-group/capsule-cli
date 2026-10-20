@@ -101,7 +101,10 @@ jobs:
           (cd dist && sha256sum "capsulectl-$VERSION.sigstore.json" >> SHA256SUMS)
       - name: Publish GitHub release
         # A tag with a hyphen (v0.1.0-rc4, v1.0.0-beta1) is a pre-release:
-        # published as such and never marked the latest release.
+        # published as such and never marked the latest release. gh creates
+        # the release as a draft, uploads, then publishes, which immutable
+        # releases allow. A draft left by a run that died mid-upload is
+        # finished here; a published release is never changed.
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
@@ -110,11 +113,13 @@ jobs:
           case "$VERSION" in
             *-*) flags=(--prerelease --latest=false) ;;
           esac
-          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
-            if [ "${#flags[@]}" -gt 0 ]; then
-              gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" "${flags[@]}"
+          if draft="$(gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [ "$draft" != true ]; then
+              echo "release $VERSION is already published and cannot change: cut the next version"
+              exit 1
             fi
+            gh release upload "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false "${flags[@]}"
           else
             gh release create "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag "${flags[@]}" \
               --title "capsulectl $VERSION" \

@@ -59,9 +59,9 @@ by its pinned values, not by "the newest one":
   on, so a release published before then is only as safe as its assets
   have stayed.
 
-So the control is the reviewed change that pins a release's values. GitHub
-notifies the maintainers of every published release, which surfaces one
-that nobody meant. A release made by someone who controls the whole GitHub
+So the control is the reviewed change that pins a release's values. The
+release reviewers watch the repository for releases, so GitHub tells them
+about every one published, which surfaces one that nobody meant. A release made by someone who controls the whole GitHub
 organisation is the accepted residual risk: such a person can change every
 setting above.
 

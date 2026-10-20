@@ -154,9 +154,11 @@ in an older layout, confirm such a profile does not block the install.
 - **Release CI failed after the tag was pushed, or a run was rejected.** Fix it on `main` and cut
   the next version (the next rc, or the next patch for a full release). A pushed tag cannot be
   moved or deleted.
-- **A release workflow was re-run.** A full release re-run by anyone other than whoever pushed
-  its tag stops before it builds: whoever re-runs a run counts as starting it, so the tag's pusher
-  could otherwise approve it. Cut the next version instead.
+- **A release workflow was re-run.** A published release cannot change, so a re-run of any
+  release fails at the publish step; only a draft left by a run that died mid-upload is finished.
+  A full release re-run by anyone other than whoever pushed its tag stops even earlier, before it
+  builds: whoever re-runs a run counts as starting it, so the tag's pusher could otherwise approve
+  it. Cut the next version instead.
 
 ## Repository settings
 
@@ -175,8 +177,9 @@ print what it would set, `--apply` to set it, and `--show` to print what GitHub 
     bypass actors, so admins are bound too.
 - **Immutable releases:** once a release is published, nobody can replace or remove its assets.
   `capsulectl plugin install` relies on this: it trusts the `SHA256SUMS` of the release it fetches
-  from (RELEASE-TRANSPARENCY.md, section 3). It covers releases published after it is turned on. Enforce it
-  for the organisation too, so that turning it off takes an organisation owner, not a repository
-  admin.
+  from (RELEASE-TRANSPARENCY.md, section 3). It covers releases published after it is turned on.
+
+Each release reviewer watches the repository for releases (Watch, Custom, Releases), so GitHub
+tells them about every release published; that is how a release nobody meant gets noticed.
 
 Every Action in `release.yml` is pinned by full commit SHA; keep it so when you bump one.
