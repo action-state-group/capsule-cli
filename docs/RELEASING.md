@@ -118,10 +118,12 @@ C. **The CHANGELOG is cut at the tag.** In the pull request that becomes the tag
    Record the tag, its commit, each binary's SHA-256, the attestation bundle's, the skill
    archive's and `SKILL.md`'s. The install page and the companion release compare against these
    values, not against a build.
-4. **Publish the reviewed release notes, security first.** A fix that changes what verification
-   accepts or what a record discloses opens the notes. Then come behaviour and wire changes,
-   migration, what is new, fixes, dependencies, and the verify commands. The notes are reviewed
-   before they are published.
+4. **Publish the reviewed release notes, the upgrade note and security first.** When the release
+   cannot be undone on an existing store, its upgrade note opens the notes: it is what a reader
+   must act on before installing. A fix that changes what verification accepts or what a record
+   discloses comes next, or opens the notes when there is no such upgrade note. Then come
+   behaviour and wire changes, migration, what is new, fixes, dependencies, and the verify
+   commands. The notes are reviewed before they are published.
 
 ## After the tag
 
