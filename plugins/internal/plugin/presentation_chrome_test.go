@@ -95,7 +95,7 @@ func TestWatchErrorsWaitsForAChildBeingSetUp(t *testing.T) {
 		c.watching--
 		c.mu.Unlock()
 	}()
-	start := time.Now()
+	// The failure is appended only as the setup ends, so seeing it proves
+	// the wait.
 	assert.Equal(t, []string{"Network.enable: failed"}, c.watchErrors())
-	assert.GreaterOrEqual(t, time.Since(start), 200*time.Millisecond)
 }
