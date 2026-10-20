@@ -737,7 +737,8 @@ func addPluginCommands(root *cobra.Command) {
 	for _, c := range root.Commands() {
 		reserved[c.Name()] = true
 	}
-	for _, info := range discoverPlugins() {
+	plugins, refused := discoverPluginsAndRefusals()
+	for _, info := range plugins {
 		if strings.ContainsAny(info.Name, " \t") {
 			continue
 		}
@@ -747,6 +748,16 @@ func addPluginCommands(root *cobra.Command) {
 		}
 		root.AddCommand(cmd)
 		reserved[cmd.Name()] = true
+	}
+	// A refused launcher still answers its name, with why and the fix. A
+	// first-party one answers through its placeholder below.
+	for _, r := range refused {
+		name := strings.TrimPrefix(filepath.Base(r.Path), pluginLauncherPrefix)
+		if strings.ContainsAny(name, " \t") || reserved[name] || name == BookPluginName || name == DealPluginName {
+			continue
+		}
+		root.AddCommand(refusedPluginPlaceholder(name, refused))
+		reserved[name] = true
 	}
 	// A first-party plugin that is not installed still answers its name, to
 	// say what to install.

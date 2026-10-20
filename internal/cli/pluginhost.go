@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -154,6 +155,10 @@ func ForwardToPlugin(c *cobra.Command, name string, args []string) error {
 }
 
 func missingPluginError(name string) error {
+	_, refused := discoverPluginsAndRefusals()
+	if err := refusedPluginError(name, refused); err != nil {
+		return err
+	}
 	if isReleaseCore() {
 		return InputError(fmt.Sprintf("this needs the capsulectl-%s plugin, which is not installed: install it with: capsulectl plugin install %s", name, name))
 	}
@@ -270,6 +275,32 @@ func firstPartyPlaceholder(name, short string) *cobra.Command {
 		DisableFlagParsing: true,
 		RunE: func(*cobra.Command, []string) error {
 			return missingPluginError(name)
+		},
+	}
+}
+
+// refusedPluginError is the refusal of a capsulectl-<name> launcher that
+// discovery found and did not wire up, with its reason (which names the fix,
+// such as the chmod for a group-writable ~/.local), or nil when none was
+// refused: a refused plugin is installed, so "not installed" would mislead.
+func refusedPluginError(name string, refused []refusedPlugin) error {
+	for _, r := range refused {
+		if filepath.Base(r.Path) == pluginLauncherPrefix+name {
+			return InputError(fmt.Sprintf("the capsulectl-%s plugin at %s is refused: %s", name, r.Path, r.Reason))
+		}
+	}
+	return nil
+}
+
+// refusedPluginPlaceholder answers a refused launcher's name with its
+// refusal, where cobra would say only "unknown command".
+func refusedPluginPlaceholder(name string, refused []refusedPlugin) *cobra.Command {
+	return &cobra.Command{
+		Use:                name,
+		Short:              "(plugin capsulectl-" + name + ", refused: see capsulectl plugin ls)",
+		DisableFlagParsing: true,
+		RunE: func(*cobra.Command, []string) error {
+			return refusedPluginError(name, refused)
 		},
 	}
 }

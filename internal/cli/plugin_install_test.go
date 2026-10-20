@@ -1056,3 +1056,49 @@ func TestProfilePlugin(t *testing.T) {
 	assert.Equal(t, "", profilePlugin(Profile{Type: "jsonl", LogID: "l", Log: LogCLL}))
 	assert.Equal(t, "", profilePlugin(Profile{Type: "mysql"}))
 }
+
+// A plugin installed before ~/.local turned group-writable (stock Ubuntu,
+// umask 002) is refused at dispatch and listed refused by `plugin ls`, each
+// with the exact chmod that fixes it (capsule-cli#270).
+func TestARefusedUserRootNamesItsFixInLsAndAtDispatch(t *testing.T) {
+	home, _ := installHome(t)
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+	require.NoError(t, err)
+	local := filepath.Join(home, ".local")
+	require.NoError(t, os.Chmod(local, 0o775))
+	realLocal, err := filepath.EvalSymlinks(local)
+	require.NoError(t, err)
+	fix := "chmod go-w " + realLocal
+
+	out, err := invoke(t, "", "plugin", "ls")
+	require.NoError(t, err, out)
+	var listed struct {
+		Refused []struct{ Path, Reason string } `json:"refused"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &listed), out)
+	require.Len(t, listed.Refused, 1, out)
+	assert.Contains(t, listed.Refused[0].Reason, "is group-writable")
+	assert.Contains(t, listed.Refused[0].Reason, fix)
+
+	_, err = invoke(t, "", "acme")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "capsulectl-acme plugin at")
+	assert.Contains(t, SafeError(err), fix, "dispatch names the fix, not \"unknown command\"")
+}
+
+// A first-party plugin that is installed but refused says so, with the fix,
+// not that it is not installed.
+func TestARefusedFirstPartyPluginIsNotCalledMissing(t *testing.T) {
+	home, _ := installHome(t)
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, DealPluginName, "1", ""))
+	require.NoError(t, err)
+	local := filepath.Join(home, ".local")
+	require.NoError(t, os.Chmod(local, 0o775))
+	realLocal, err := filepath.EvalSymlinks(local)
+	require.NoError(t, err)
+	_, err = invoke(t, "", "deal", "list")
+	require.ErrorIs(t, err, ErrInput)
+	msg := SafeError(err)
+	assert.Contains(t, msg, "chmod go-w "+realLocal)
+	assert.NotContains(t, msg, "not installed")
+}
