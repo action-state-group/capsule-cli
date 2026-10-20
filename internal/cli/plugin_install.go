@@ -148,9 +148,10 @@ func canonicalPath(path string) (canonical, existing string, missing []string, e
 
 // unsafePathProblem is one component the full-path check refused.
 type unsafePathProblem struct {
-	path  string
-	owner bool // owned by another user, else writable by others
-	err   error
+	path       string
+	owner      bool // owned by another user, else writable by others
+	unresolved bool // could not be resolved (a loop, a dangling or unreadable link)
+	err        error
 }
 
 // fullPathCheck checks every component of an existing canonical path, from
@@ -181,12 +182,15 @@ func unsafePathError(what string, problems []unsafePathProblem) error {
 }
 
 func unsafePathMessage(what string, problems []unsafePathProblem) string {
-	var writable, owned, reasons []string
+	var writable, owned, unresolved, reasons []string
 	for _, p := range problems {
 		reasons = append(reasons, p.err.Error())
-		if p.owner {
+		switch {
+		case p.unresolved:
+			unresolved = append(unresolved, p.path)
+		case p.owner:
 			owned = append(owned, p.path)
-		} else {
+		default:
 			writable = append(writable, p.path)
 		}
 	}
@@ -196,6 +200,9 @@ func unsafePathMessage(what string, problems []unsafePathProblem) string {
 	}
 	if len(owned) > 0 {
 		fixes = append(fixes, "make "+strings.Join(owned, " ")+" yours (chown) or move the plugin root off it")
+	}
+	if len(unresolved) > 0 {
+		fixes = append(fixes, "repair or remove the links on "+strings.Join(unresolved, " "))
 	}
 	return fmt.Sprintf("%s is on a path another user could change (%s); fix: %s", what, strings.Join(reasons, "; "), strings.Join(fixes, "; then "))
 }

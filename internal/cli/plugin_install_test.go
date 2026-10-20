@@ -412,8 +412,69 @@ func TestLookupDirsRefusesASymlinkLoop(t *testing.T) {
 	require.NoError(t, os.Symlink("b", filepath.Join(dir, "a")))
 	require.NoError(t, os.Symlink("a", filepath.Join(dir, "b")))
 	hops := 0
-	_, _, err = lookupDirs(dir, "a", &hops)
+	var links []string
+	_, _, err = lookupDirs(dir, "a", &hops, &links)
 	assert.ErrorContains(t, err, "too many levels of symbolic links")
+}
+
+func TestAncestryRefusesAnotherUsersSymlink(t *testing.T) {
+	// A link in a sticky directory (such as /tmp) is its owner's to
+	// repoint. A test cannot create a link another user owns, so the
+	// user's own link is judged as if by another uid.
+	home, _ := installHome(t)
+	safe := filepath.Join(safeTempDir(t), "local")
+	require.NoError(t, os.Mkdir(safe, 0o755))
+	link := filepath.Join(home, ".local")
+	require.NoError(t, os.Symlink(safe, link))
+	handInstalled(t, home)
+	real, err := filepath.EvalSymlinks(home)
+	require.NoError(t, err)
+	hops := 0
+	var links []string
+	_, _, err = lookupDirs(real, filepath.Join(".local", "lib", "capsulectl", "plugins"), &hops, &links)
+	require.NoError(t, err)
+	// links also holds root-owned system links in the target's path
+	// (/var on macOS).
+	require.Contains(t, links, filepath.Join(real, ".local"), "the followed link is recorded")
+	assert.Empty(t, linkOwnerProblems(links, os.Getuid()))
+	if os.Getuid() == 0 {
+		return // root owns every link and is trusted
+	}
+	problems := linkOwnerProblems([]string{filepath.Join(real, ".local")}, os.Getuid()+1)
+	require.Len(t, problems, 1)
+	assert.True(t, problems[0].owner)
+	assert.ErrorIs(t, problems[0].err, errNotTrustedOwner)
+	assert.Contains(t, unsafePathMessage("the plugin root", problems), "chown")
+}
+
+func TestDispatchChecksAUserRootLinkedIntoAnotherRoot(t *testing.T) {
+	// The per-user root links into a subdirectory of an earlier root. The
+	// launcher resolves under that root, but it was found in the per-user
+	// one, so the per-user ancestry still decides.
+	home, user := installHome(t)
+	system := filepath.Join(safeTempDir(t), "system")
+	require.NoError(t, os.MkdirAll(filepath.Join(system, "sub"), 0o755))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", system+string(os.PathListSeparator)+user)
+	require.NoError(t, os.MkdirAll(filepath.Dir(user), 0o755))
+	require.NoError(t, os.Symlink(filepath.Join(system, "sub"), user))
+	launcher := handInstalled(t, home)
+	require.NoError(t, VerifyTrustedPath(launcher))
+	require.NoError(t, os.Chmod(filepath.Join(home, ".local"), 0o775))
+	assert.ErrorIs(t, VerifyTrustedPath(launcher), errWritable)
+}
+
+func TestAncestryNamesAnUnresolvablePathWithoutAChmod(t *testing.T) {
+	home, _ := installHome(t)
+	lib := filepath.Join(home, ".local", "lib")
+	require.NoError(t, os.MkdirAll(lib, 0o755))
+	require.NoError(t, os.Symlink("capsulectl", filepath.Join(lib, "capsulectl")))
+	problems := userRootAncestryProblems(home)
+	require.Len(t, problems, 1)
+	assert.True(t, problems[0].unresolved)
+	msg := unsafePathMessage("the plugin root", problems)
+	assert.Contains(t, msg, "too many levels of symbolic links")
+	assert.Contains(t, msg, "repair or remove the links on")
+	assert.NotContains(t, msg, "chmod")
 }
 
 func TestDispatchLeavesOtherRootsAncestryAlone(t *testing.T) {

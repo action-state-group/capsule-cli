@@ -56,7 +56,11 @@ discovery model is the reference):
   checked with the same rule, including those inside each symlink's target
   (every hop of a chain), along with the resolved root and the parents of
   each up to `$HOME` (up to `/` for one outside `$HOME`; a root-owned sticky
-  directory such as `/tmp` is accepted there). No group
+  directory such as `/tmp` is accepted there). Each symlink followed must
+  be owned by the user or root, since in a sticky directory a link stays its
+  owner's to repoint. `$HOME` itself is checked; its parents, and the
+  directories a symlinked `$HOME` passes through, are not: they are the
+  account's, as the system root's parents are the system's. No group
   is exempt, not even the user's own: a group's name or id says nothing
   about who else belongs to it. On stock Ubuntu (umask 002) that means a
   one-time `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`; the
