@@ -31,7 +31,7 @@ func sealStepsAs(t *testing.T, exchangeID string) func() {
 // mixedPair opens and closes one deal with the buyer on this build's writer
 // and the seller on the later writer, then has each record the other's
 // copy and disclose its own, with the buyer selected.
-func mixedPair(t *testing.T, sellerExchangeID string) (pair reconcilePair, buyerFile, sellerResponse string) {
+func mixedPair(t *testing.T, sellerExchangeID string, sellerAfterClose ...func(id string)) (pair reconcilePair, buyerFile, sellerResponse string) {
 	t.Helper()
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
@@ -41,6 +41,9 @@ func mixedPair(t *testing.T, sellerExchangeID string) (pair reconcilePair, buyer
 	dealFixture(t)
 	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
 	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	for _, fn := range sellerAfterClose {
+		fn(id)
+	}
 	restore()
 	seller := thisDealParty(t)
 	pair = reconcilePair{id: id, buyer: buyer, seller: seller}
@@ -58,7 +61,11 @@ func mixedPair(t *testing.T, sellerExchangeID string) (pair reconcilePair, buyer
 // correlation identifier, and that party's own reads and its own half work
 // on those steps.
 func TestHalvesAdmitTheHistoryProfilesStepHeaders(t *testing.T) {
-	pair, buyerFile, sellerResponse := mixedPair(t, "")
+	// Later evidence confirms the close, sealed under the later writer too,
+	// so check 4 reads a later step of the new kind.
+	pair, buyerFile, sellerResponse := mixedPair(t, "", func(id string) {
+		dealRun(t, "note", "--deal", id, "--kind", "evidence", "--input", writeJSON(t, `{"about": "the parcel arrived", "source": "agent"}`))
+	})
 
 	// The seller's steps carry the later headers.
 	party(t, pair.seller.config)
@@ -91,6 +98,18 @@ func TestHalvesAdmitTheHistoryProfilesStepHeaders(t *testing.T) {
 	// The seller reads its own steps of the later kind: its own half is
 	// found, and it admits the buyer's half of this build's kind.
 	party(t, pair.seller.config)
+	// Its step source and its step entries agree on steps of the later
+	// kind, and a History of the deal counts every step on the log.
+	withSession(t, func(s *dealSession) {
+		x := s.index.(shelfDealIndex)
+		steps, err := x.bookSteps(t.Context(), pair.id)
+		require.NoError(t, err)
+		entries, err := x.bookEntries(t.Context(), pair.id, true)
+		require.NoError(t, err)
+		assert.Len(t, entries, len(steps), "every step of the later kind is a step entry")
+		assert.Len(t, steps, 5, "open, task authority, outcome, close and later evidence")
+	})
+	dealRun(t, "history", "--deal", pair.id, "--to", "a reader", "--out", t.TempDir()+"/history.json")
 	_, result, _, err = runTermsResult(t, pair.id, sellerResponse, "--openings", buyerFile)
 	require.NoError(t, err)
 	for _, req := range []string{amountReq, currencyReq} {
@@ -99,16 +118,18 @@ func TestHalvesAdmitTheHistoryProfilesStepHeaders(t *testing.T) {
 }
 
 // A step whose correlation identifier names another deal is not a step of
-// this deal, whatever its book. The party holding such steps finds no half
-// of its own, so its counterparty file refuses (stored state conflicts);
-// the counterparty's admission check 2 uses the same rule (stepOfDeal,
-// TestStepHeaderPredicates).
+// this deal, whatever its book: every reader of the deal's steps refuses it
+// (stored state conflicts), and the counterparty's admission checks 2 and 4
+// use the same rule (stepOfDeal, TestStepHeaderPredicates).
 func TestAStepCorrelatedToAnotherDealIsNoStepOfThisDeal(t *testing.T) {
 	sealStepsAs(t, "deal-feedfacecafebeef")
 	dealFixture(t)
 	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerTyped))["deal_id"].(string)
-	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, received))
-	_, err := invoke(t, "", "--profile", "deal", "disclose", "--deal", id, "--share", "counterparty", "--to", "the buyer", "--out", t.TempDir()+"/copy.json")
+	// The first read after the foreign seal refuses: the step source does
+	// not take the step as this deal's.
+	err := dealRunErr(t, "close", "--deal", id, "--input", writeJSON(t, received))
+	require.ErrorIs(t, err, cli.ErrConflict)
+	_, err = invoke(t, "", "--profile", "deal", "deal", "list", "--json")
 	require.ErrorIs(t, err, cli.ErrConflict)
 }
 

@@ -414,6 +414,10 @@ func (x shelfDealIndex) bookSteps(ctx context.Context, dealID string) ([]indexed
 // step it names checked against the record's book and position.
 func (x shelfDealIndex) bookStep(ctx context.Context, r evidencebook.ShelfRecord) (indexedStep, error) {
 	dealID, _ := dealOfBook(r.BookID)
+	if !stepOfDeal(r.Header, dealID) {
+		// A step correlated to another deal is no step of this one.
+		return indexedStep{}, fmt.Errorf("%w: step record %s of %s is correlated to another deal", cli.ErrConflict, r.RecordID, dealID)
+	}
 	if r.Retention == evidencebook.Withheld || r.Retention == evidencebook.Deleted {
 		// No deal verb sets a retention in #242 (note §2.8).
 		return indexedStep{}, fmt.Errorf("%w: step record %s of %s is %s", cli.ErrConflict, r.RecordID, dealID, r.Retention)
@@ -566,6 +570,9 @@ func (x shelfDealIndex) bookEntries(ctx context.Context, dealID string, steps bo
 	for _, r := range records {
 		if steps && !isDealStep(r.Header.RecordType) {
 			continue
+		}
+		if dealOf, _ := dealOfBook(r.BookID); steps && !stepOfDeal(r.Header, dealOf) {
+			return nil, fmt.Errorf("%w: step record %s of %s is correlated to another deal", cli.ErrConflict, r.RecordID, dealOf)
 		}
 		value, err := hex.DecodeString(r.RecordID)
 		if err != nil {
