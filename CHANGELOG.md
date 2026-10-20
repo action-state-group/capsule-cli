@@ -2,10 +2,33 @@
 
 ## Unreleased
 
-### Upgrade: one-way for a store
+### Before you upgrade: there is no going back to an older version
 
-Once this version has written to a deal store, do not run an older
-capsulectl on that store. Three changes make the upgrade one-way:
+After this version opens your deals, keep using this version or a newer one.
+An older capsulectl may refuse to open your deals, and copies it makes can
+show when a deal was shared.
+
+- **Want the option to go back?** Make a backup of your capsulectl data
+  before you upgrade, while no capsulectl command is running. Your data is
+  two things: the folder you gave `deal init --dir` (the deal skill uses
+  `~/.local/share/capsule-deal`), and your profile file,
+  `~/.config/capsule/profiles/deal.yaml` (under `$XDG_CONFIG_HOME/capsule/`
+  if you set it). For example:
+
+  ```
+  mkdir ~/capsulectl-backup
+  cp -Rp ~/.local/share/capsule-deal ~/.config/capsule/profiles/deal.yaml ~/capsulectl-backup/
+  ```
+
+  To go back, copy both back to where they were, then run the older version.
+  Anything you recorded after the backup is lost.
+- **Sending receipts or deal copies?** Ask the people you send them to to
+  update too. An older capsulectl shows copies made by this version as
+  INVALID, even though they are valid.
+- **Using capsulectl through Muse?** Nothing to do. Muse updates its own
+  copy.
+
+Details, for developers. Three changes make the upgrade one-way:
 
 - **The shelf (capsule-cli#242):** the first deal command that writes moves
   the store onto its evidencebook shelf, once. An older build can still run
@@ -52,11 +75,11 @@ capsulectl on that store. Three changes make the upgrade one-way:
   stripped of both its deal section and its report is its steps only and
   verifies as such: it shows no report text.
 - **Compatibility:** verify new copies with this version or later: an older
-  capsulectl reports them as INVALID. Do not run an older build on the
-  store (see "Upgrade: one-way for a store" above).
-  A deal an earlier build made with no report on its log, and steps after its
-  last checkpoint, is covered at its last step's time by its next command or
-  `deal tick`; until then `deal history` refuses it.
+  capsulectl reports them as INVALID. Do not run an older build on the store
+  (see "Before you upgrade" above). A deal an earlier build made with no
+  report on its log, and steps after its last checkpoint, is covered at its
+  last step's time by its next command or `deal tick`; until then `deal
+  history` refuses it.
 
 ### A shared copy keeps the bounds back by field, and reads text, not code (capsule-cli#247, #286)
 
@@ -135,13 +158,12 @@ capsulectl on that store. Three changes make the upgrade one-way:
   sale "stops taking new buyers" and how many negotiations are still open
   (`status`, `open_negotiations`).
 - **Compatibility:** existing sale bundles verify unchanged, and an older
-  `capsulectl verify --bundle` skips the new record. An older profile
-  checker refuses it. An older capsulectl cannot load a closed sale's log:
-  its `deal open --sale`, `deal sale bundle` and `deal sale export` on that
-  sale fail with the store's conflict error, and if this version crashed
-  after indexing a record on a closed sale but before appending it, an
-  older build refuses to open the whole store (see "Upgrade: one-way for a
-  store" above).
+  `capsulectl verify --bundle` skips the new record. An older profile checker
+  refuses it. An older capsulectl cannot load a closed sale's log: its `deal
+  open --sale`, `deal sale bundle` and `deal sale export` on that sale fail
+  with the store's conflict error, and if this version crashed after indexing
+  a record on a closed sale but before appending it, an older build refuses to
+  open the whole store (see "Before you upgrade" above).
 
 ### Dispatch checks the per-user plugin root's parents (capsule-cli#270)
 
@@ -262,10 +284,10 @@ capsulectl on that store. Three changes make the upgrade one-way:
   store, and on one not yet moved it says to run a deal command first. A
   released build can still run on a moved store, and the next command takes in
   what it wrote, but its ticks show how many book deals the store holds (see
-  "Upgrade: one-way for a store" above). A store whose mutation
-  counter row is missing is refused, with "restore from a backup". A request
-  with an artifact named `opening.*` must rename it. Verify a new deal's
-  copies with this version or later (see capsule-cli#294 above).
+  "Before you upgrade" above). A store whose mutation counter row is missing
+  is refused, with "restore from a backup". A request with an artifact named
+  `opening.*` must rename it. Verify a new deal's copies with this version or
+  later (see capsule-cli#294 above).
 
 ### The core builds without evidencebook; the book and the deals are plugins (capsule-cli#236)
 
