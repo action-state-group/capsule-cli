@@ -1127,7 +1127,7 @@ func TestARefusedLaunchersNameNeverReachesTheTerminalRaw(t *testing.T) {
 	assert.Contains(t, out, `\u001b[31mil`)
 
 	assert.Equal(t, `a\x1bb\x0ac`, terminalSafe("a\x1bb\nc"))
-	assert.Equal(t, `x\x202ey\x2028z`, terminalSafe("x\u202ey\u2028z"))
+	assert.Equal(t, `x\u202ey\u2028z`, terminalSafe("x\u202ey\u2028z"))
 	assert.Equal(t, "plain /path é", terminalSafe("plain /path é"))
 }
 
@@ -1212,6 +1212,11 @@ func TestRefusedLaunchersAddOneCommandPerName(t *testing.T) {
 	counts := map[string]int{}
 	for _, c := range NewCommand().Commands() {
 		counts[c.Name()]++
+		if c.Name() == DealPluginName {
+			assert.True(t, strings.HasPrefix(c.Short, "Deals:"), "deal keeps its first-party placeholder: %s", c.Short)
+			assert.Contains(t, c.Short, "refused: see capsulectl plugin ls")
+			assert.NotContains(t, c.Short, "not installed")
+		}
 	}
 	for _, name := range []string{"acme", "verify", "zeta", DealPluginName} {
 		assert.Equal(t, 1, counts[name], name)
