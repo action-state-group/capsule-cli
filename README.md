@@ -397,12 +397,13 @@ still writes the bundle (`verify --bundle` states its verdict), and `disclose` w
 nothing and puts no disclosure on record. A jsonl profile writes no page: its bundle
 carries its evidence book's records about what you sealed, not the records themselves.
 
-Every bundle `bundle`, `disclose`, `permalink` and `countersign request --root`
-build declares the producer's own Ed25519 key in the `producer-key/v1` bundle
+Every bundle `bundle`, `disclose`, `permalink`, `countersign request --root` and
+`close --bundle-out` build declares the producer's own Ed25519 key in the `producer-key/v1` bundle
 extension, `{"extensions": {"producer-key/v1": {"public_key": "<64 lowercase hex>"}}}`:
 by default the public half of the profile's signing key (the key that sealed
 its records), or `--producer-key HEX` when the operator countersigns with a
-different key of its own. The extension is covered by the bundle digest, so it
+different key of its own (`close --bundle-out` takes no `--producer-key` and
+always declares the profile's signing key). The extension is covered by the bundle digest, so it
 is fixed before anyone countersigns. A viewer, and `countersign verify`, reports
 a countersignature by the declared key as not independent. A profile with no
 signing key declares none.
