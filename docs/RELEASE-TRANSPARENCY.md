@@ -118,10 +118,11 @@ and its statement, and reads every statement under the release subject. It
   release workflow at `refs/tags/<tag>` on the tagged commit (checked with
   `gh attestation verify --bundle`, with no account). The attestation's own
   inclusion in Sigstore's public Rekor log is part of that check;
-- a release whose run, the one its verified attestation names, has no
-  approval in the environment its tag implies (`release-candidate` for a tag
-  with a hyphen, `release` otherwise). For a full release, the approval must
-  come from someone other than whoever pushed the tag or started the run.
+- a release whose run has no approval in the environment its tag implies
+  (`release-candidate` for a tag with a hyphen, `release` otherwise). The run
+  is the one named in the attestation's signing certificate, which the
+  workflow cannot choose. For a full release, the approval must come from
+  someone other than whoever pushed the tag or started that run attempt.
   This catches a release built by a `release.yml` that no longer asks for
   approval. Releases up to `v0.1.0-rc17`, cut before approval began, are
   exempt;
@@ -156,11 +157,13 @@ than one such place. Each run needs:
 - a capsulectl binary that was verified once by hand from a release (its
   `SHA256SUMS` and its attestation). It is never updated automatically from
   the repository it watches;
-- `gh`, for the attestation check. It runs with no token: the monitor's
-  GitHub reads are anonymous. A run makes a few API calls plus one or two per
-  release since `v0.1.0-rc17`. GitHub allows 60 anonymous calls an hour, so
-  run it hourly and less often once releases make that tight. A refusal for
-  the rate limit is an error, like any other, and needs a person;
+- `gh`, for the attestation check, which runs with no account;
+- for GitHub's API, nothing at first: a run makes a few calls plus one or two
+  per release after `v0.1.0-rc17`, and GitHub allows 60 anonymous calls an
+  hour. Before releases make one run exceed that, set `GITHUB_TOKEN` to a
+  token with no scopes or repository access. It only raises the limit; the
+  data read is public either way. A refusal for the rate limit is an error,
+  like any other, and needs a person;
 - a way to reach a person on any exit other than 0, with the output;
 - a notice when it has **not** run. A monitor that stopped looks like one
   that found nothing, so each successful run should check in with

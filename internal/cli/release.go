@@ -268,22 +268,46 @@ var (
 )
 
 // releaseAttestationCheck verifies that file's keyless attestation (bundle)
-// was made by the release workflow running at refs/tags/<tag> on commit. A
-// variable so tests can stand in for gh and Sigstore.
-var releaseAttestationCheck = func(ctx context.Context, cfg releaseWatchConfig, file, bundle, tag, commit string) error {
+// was made by the release workflow running at refs/tags/<tag> on commit, and
+// returns the workflow run that made it: the Run Invocation URI in the
+// signing certificate, which Sigstore's CA takes from GitHub's token for the
+// run, not from anything the workflow wrote. A variable so tests can stand
+// in for gh and Sigstore.
+var releaseAttestationCheck = func(ctx context.Context, cfg releaseWatchConfig, file, bundle, tag, commit string) (string, error) {
 	args := []string{"attestation", "verify", file, "--bundle", bundle, "--repo", cfg.repo,
 		"--cert-identity", "https://github.com/" + cfg.repo + "/.github/workflows/release.yml@refs/tags/" + tag,
-		"--source-ref", "refs/tags/" + tag, "--source-digest", commit, "--deny-self-hosted-runners"}
+		"--source-ref", "refs/tags/" + tag, "--source-digest", commit, "--deny-self-hosted-runners", "--format", "json"}
 	if cfg.trustedRoot != "" {
 		args = append(args, "--custom-trusted-root", cfg.trustedRoot)
 	}
 	cmd := exec.CommandContext(ctx, cfg.gh, args...)
 	// No account is used or needed: the bundle carries the attestation.
 	cmd.Env = append(os.Environ(), "GH_TOKEN=", "GITHUB_TOKEN=", "GH_CONFIG_DIR="+os.TempDir()+"/capsulectl-release-watch-gh")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("%s", strings.TrimSpace(lastLine(string(out))))
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("%s", strings.TrimSpace(lastLine(stderr.String()+string(out))))
 	}
-	return nil
+	return verifiedRunInvocation(out)
+}
+
+// verifiedRunInvocation reads the Run Invocation URI of the one verified
+// attestation in gh attestation verify's JSON output.
+func verifiedRunInvocation(out []byte) (string, error) {
+	var results []struct {
+		VerificationResult struct {
+			Signature struct {
+				Certificate struct {
+					RunInvocationURI string `json:"runInvocationURI"`
+				} `json:"certificate"`
+			} `json:"signature"`
+		} `json:"verificationResult"`
+	}
+	if err := json.Unmarshal(out, &results); err != nil || len(results) != 1 {
+		return "", fmt.Errorf("gh attestation verify: expected one verified attestation in its output")
+	}
+	return results[0].VerificationResult.Signature.Certificate.RunInvocationURI, nil
 }
 
 func lastLine(s string) string {
@@ -566,12 +590,13 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 			alarm("release %s: release.json has no attestation (%s), so nothing ties its statement to the release workflow", tag, releaseAttestationName(tag))
 			continue
 		}
-		if err := checkReleaseAttestation(ctx, cfg, payload, attestation, tag); err != nil {
+		runURI, err := checkReleaseAttestation(ctx, cfg, payload, attestation, tag)
+		if err != nil {
 			alarm("release %s: release.json's attestation does not verify as the release workflow at refs/tags/%s on %s: %v", tag, tag, st.Commit, err)
 			continue
 		}
 		if !releasesBeforeApproval[tag] {
-			why, err := cfg.checkApproval(ctx, attestation, tag)
+			why, err := cfg.checkApproval(ctx, runURI, tag)
 			if err != nil {
 				return nil, err
 			}
@@ -661,34 +686,19 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 		"releases_checked": checked, "statements_in_log": len(logged.Entries), "alarms": alarms}, nil
 }
 
-// checkApproval reports why the run that built tag's release was not approved
-// as docs/RELEASING.md requires, or "" when it was: a reviewer approved it in
-// the environment the tag implies, and for a full release that reviewer is
-// neither who pushed the tag nor who started the run (a re-run). The run is
-// the one the verified attestation names, so release.yml cannot hide it. A
+// checkApproval reports why the run attempt that built tag's release was not
+// approved as docs/RELEASING.md requires, or "" when it was: a reviewer
+// approved the run in the environment the tag implies, and for a full
+// release that reviewer is neither who pushed the tag nor who started that
+// attempt (a re-run). runURI is the verified certificate's Run Invocation URI,
+// so release.yml can neither hide its run nor point at another one. A
 // release.yml that drops its environment leaves the run with no approval,
 // which is what this catches.
-func (cfg releaseWatchConfig) checkApproval(ctx context.Context, bundle []byte, tag string) (string, error) {
-	var b struct {
-		DSSE struct {
-			Payload []byte `json:"payload"`
-		} `json:"dsseEnvelope"`
-	}
-	var st struct {
-		Predicate struct {
-			RunDetails struct {
-				Metadata struct {
-					InvocationID string `json:"invocationId"`
-				} `json:"metadata"`
-			} `json:"runDetails"`
-		} `json:"predicate"`
-	}
-	if json.Unmarshal(bundle, &b) != nil || json.Unmarshal(b.DSSE.Payload, &st) != nil {
-		return "release.json's attestation names no workflow run", nil
-	}
-	run, ok := strings.CutPrefix(st.Predicate.RunDetails.Metadata.InvocationID, "https://github.com/"+cfg.repo+"/actions/runs/")
-	if run, _, _ = strings.Cut(run, "/"); !ok || run == "" || strings.Trim(run, "0123456789") != "" {
-		return "release.json's attestation names no workflow run of " + cfg.repo, nil
+func (cfg releaseWatchConfig) checkApproval(ctx context.Context, runURI, tag string) (string, error) {
+	rest, ok := strings.CutPrefix(runURI, "https://github.com/"+cfg.repo+"/actions/runs/")
+	run, attempt, _ := strings.Cut(rest, "/attempts/")
+	if !ok || !releaseDigits(run) || !releaseDigits(attempt) {
+		return fmt.Sprintf("release.json's attestation names no workflow run attempt of %s (%q)", cfg.repo, runURI), nil
 	}
 	var approvals []struct {
 		State        string `json:"state"`
@@ -709,7 +719,7 @@ func (cfg releaseWatchConfig) checkApproval(ctx context.Context, bundle []byte, 
 			Actor           struct{ Login string } `json:"actor"`
 			TriggeringActor struct{ Login string } `json:"triggering_actor"`
 		}
-		if err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/actions/runs/"+run, &r); err != nil {
+		if err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/actions/runs/"+run+"/attempts/"+attempt, &r); err != nil {
 			return "", err
 		}
 		excluded = map[string]bool{r.Actor.Login: true, r.TriggeringActor.Login: true}
@@ -728,30 +738,35 @@ func (cfg releaseWatchConfig) checkApproval(ctx context.Context, bundle []byte, 
 		}
 	}
 	if self != "" {
-		return fmt.Sprintf("run %s was approved in %s only by %s, who pushed the tag or started the run", run, env, self), nil
+		return fmt.Sprintf("run %s was approved in %s only by %s, who pushed the tag or started attempt %s", run, env, self, attempt), nil
 	}
 	return fmt.Sprintf("run %s has no approval in the %s environment", run, env), nil
 }
 
+// releaseDigits reports whether s is a non-empty run of ASCII digits.
+func releaseDigits(s string) bool {
+	return s != "" && strings.Trim(s, "0123456789") == ""
+}
+
 // checkReleaseAttestation runs releaseAttestationCheck on payload and its
-// bundle, written to a scratch directory.
-func checkReleaseAttestation(ctx context.Context, cfg releaseWatchConfig, payload, bundle []byte, tag string) error {
+// bundle, written to a scratch directory, and returns the run it names.
+func checkReleaseAttestation(ctx context.Context, cfg releaseWatchConfig, payload, bundle []byte, tag string) (string, error) {
 	var st releaseStatement
 	if err := json.Unmarshal(payload, &st); err != nil {
-		return err
+		return "", err
 	}
 	dir, err := os.MkdirTemp("", "release-watch-")
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer os.RemoveAll(dir)
 	payloadName, _, _ := releaseFileNames(tag)
 	file, bundleFile := filepath.Join(dir, payloadName), filepath.Join(dir, releaseAttestationName(tag))
 	if err := os.WriteFile(file, payload, 0o600); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.WriteFile(bundleFile, bundle, 0o600); err != nil {
-		return err
+		return "", err
 	}
 	return releaseAttestationCheck(ctx, cfg, file, bundleFile, tag, st.Commit)
 }

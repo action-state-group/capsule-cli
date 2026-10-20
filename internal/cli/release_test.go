@@ -120,7 +120,7 @@ type relGitHub struct {
 	refs     map[string]map[string]any
 	tagObjs  map[string]map[string]any
 	commits  map[string]map[string]any
-	runs     map[string]map[string]any   // run id -> the run (actor, triggering_actor)
+	runs     map[string]map[string]any   // "run id/attempt" -> the attempt (actor, triggering_actor)
 	reviews  map[string][]map[string]any // run id -> its approvals
 	releases []map[string]any
 	files    map[string][]byte
@@ -177,7 +177,7 @@ func (g *relGitHub) handler() http.Handler {
 			v, ok := g.reviews[run]
 			write(v, ok)
 		case strings.Contains(p, "/actions/runs/"):
-			v, ok := g.runs[last]
+			v, ok := g.runs[strings.Replace(p[strings.Index(p, "/actions/runs/")+len("/actions/runs/"):], "/attempts/", "/", 1)]
 			write(v, ok)
 		case strings.HasSuffix(p, "/releases"):
 			list(g.releases)
@@ -202,32 +202,21 @@ type releaseWorld struct {
 
 // The stand-in for gh and Sigstore: a bundle "attests" a release.json when
 // it names that file's digest, the release workflow at the tag, and the
-// commit. Like a real bundle, its DSSE payload names the workflow run.
+// commit; its run stands in for the certificate's Run Invocation URI.
 func fakeAttestation(payload []byte, identity, commit, run string) []byte {
 	sum := sha256.Sum256(payload)
-	statement, _ := json.Marshal(map[string]any{
-		"fake": hex.EncodeToString(sum[:]) + " " + identity + " " + commit,
-		"predicate": map[string]any{"runDetails": map[string]any{"metadata": map[string]any{
-			"invocationId": "https://github.com/" + releaseRepo + "/actions/runs/" + run + "/attempts/1"}}},
-	})
-	bundle, _ := json.Marshal(map[string]any{"dsseEnvelope": map[string]any{"payload": statement}})
+	bundle, _ := json.Marshal(map[string]string{"attests": hex.EncodeToString(sum[:]) + " " + identity + " " + commit,
+		"run": "https://github.com/" + releaseRepo + "/actions/runs/" + run + "/attempts/1"})
 	return bundle
 }
 
-// fakeAttested reports whether bundle is fakeAttestation's for payload,
-// identity and commit, whatever run it names.
-func fakeAttested(bundle, payload []byte, identity, commit string) bool {
-	var b struct {
-		DSSE struct {
-			Payload []byte `json:"payload"`
-		} `json:"dsseEnvelope"`
-	}
-	var st struct {
-		Fake string `json:"fake"`
-	}
+// fakeAttested returns the run of bundle when it is fakeAttestation's for
+// payload, identity and commit.
+func fakeAttested(bundle, payload []byte, identity, commit string) (string, bool) {
+	var b map[string]string
 	sum := sha256.Sum256(payload)
-	return json.Unmarshal(bundle, &b) == nil && json.Unmarshal(b.DSSE.Payload, &st) == nil &&
-		st.Fake == hex.EncodeToString(sum[:])+" "+identity+" "+commit
+	ok := json.Unmarshal(bundle, &b) == nil && b["attests"] == hex.EncodeToString(sum[:])+" "+identity+" "+commit
+	return b["run"], ok
 }
 
 func releaseWorkflowIdentity(tag string) string {
@@ -247,11 +236,12 @@ func newReleaseWorld(t *testing.T) *releaseWorld {
 	t.Cleanup(wit.Close)
 	w.ghURL, w.witURL = gh.URL, wit.URL
 	saved := releaseAttestationCheck
-	releaseAttestationCheck = func(_ context.Context, _ releaseWatchConfig, file, bundle, tag, commit string) error {
-		if !fakeAttested(mustRead(t, bundle), mustRead(t, file), releaseWorkflowIdentity(tag), commit) {
-			return errors.New("no attestation by the release workflow at this tag and commit")
+	releaseAttestationCheck = func(_ context.Context, _ releaseWatchConfig, file, bundle, tag, commit string) (string, error) {
+		run, ok := fakeAttested(mustRead(t, bundle), mustRead(t, file), releaseWorkflowIdentity(tag), commit)
+		if !ok {
+			return "", errors.New("no attestation by the release workflow at this tag and commit")
 		}
-		return nil
+		return run, nil
 	}
 	t.Cleanup(func() { releaseAttestationCheck = saved })
 	return w
@@ -306,7 +296,7 @@ func (w *releaseWorld) addRelease(t *testing.T, tag string, register bool) strin
 // when approver is empty), and returns its id.
 func (w *releaseWorld) addRun(tag, actor, triggering, approver string) string {
 	run := fmt.Sprint(1000 + len(w.gh.runs))
-	w.gh.runs[run] = map[string]any{"actor": map[string]any{"login": actor}, "triggering_actor": map[string]any{"login": triggering}}
+	w.gh.runs[run+"/1"] = map[string]any{"actor": map[string]any{"login": actor}, "triggering_actor": map[string]any{"login": triggering}}
 	w.gh.reviews[run] = []map[string]any{}
 	if approver != "" {
 		w.approve(run, releaseEnvironment(tag), approver)
@@ -486,28 +476,28 @@ func TestReleaseWatchAlarms(t *testing.T) {
 				w.gh.reviews["1000"] = nil
 				w.approve("1000", "release", "pusher")
 			},
-			want: "release v1.0.0: run 1000 was approved in release only by pusher, who pushed the tag or started the run",
+			want: "release v1.0.0: run 1000 was approved in release only by pusher, who pushed the tag or started attempt 1",
 		},
 		"a full release re-run and approved by whoever re-ran it": {
 			setup: func(t *testing.T, w *releaseWorld) {
-				w.gh.runs["1000"]["triggering_actor"] = map[string]any{"login": "reviewer"}
+				w.gh.runs["1000/1"]["triggering_actor"] = map[string]any{"login": "reviewer"}
 			},
-			want: "release v1.0.0: run 1000 was approved in release only by reviewer, who pushed the tag or started the run",
+			want: "release v1.0.0: run 1000 was approved in release only by reviewer, who pushed the tag or started attempt 1",
 		},
-		"an attestation that names another repository's run": {
+		"an attestation whose certificate names another repository's run": {
 			setup: func(t *testing.T, w *releaseWorld) {
 				dir := w.addRelease(t, "v1.1.0", true)
 				w.addTag(t, "v1.1.0")
 				file := filepath.Join(dir, releaseAttestationName("v1.1.0"))
-				var b map[string]map[string][]byte
+				var b map[string]string
 				require.NoError(t, json.Unmarshal(mustRead(t, file), &b))
-				b["dsseEnvelope"]["payload"] = []byte(strings.Replace(string(b["dsseEnvelope"]["payload"]), releaseRepo+"/actions", "someone/else/actions", 1))
+				b["run"] = strings.Replace(b["run"], releaseRepo, "someone/else", 1)
 				bundle, err := json.Marshal(b)
 				require.NoError(t, err)
 				require.NoError(t, os.WriteFile(file, bundle, 0o600))
 				w.publish(t, "v1.1.0", dir)
 			},
-			want: "release v1.1.0: release.json's attestation names no workflow run of " + releaseRepo,
+			want: "release v1.1.0: release.json's attestation names no workflow run attempt of " + releaseRepo,
 		},
 		"a release with no statement": {
 			setup: func(t *testing.T, w *releaseWorld) {
@@ -704,20 +694,29 @@ func TestNextLink(t *testing.T) {
 	assert.Equal(t, "", nextLink(""))
 }
 
-// The run is read from a real attestation bundle: v0.1.0-rc17's, as
-// published with that release.
-func TestReleaseApprovalReadsTheRunFromARealBundle(t *testing.T) {
-	w := newReleaseWorld(t)
-	w.gh.runs["39489783877"] = map[string]any{"actor": map[string]any{"login": "StevenMih"}, "triggering_actor": map[string]any{"login": "StevenMih"}}
-	w.gh.reviews["39489783877"] = nil
-	cfg := releaseWatchConfig{repo: releaseRepo, api: w.ghURL}
-	bundle := mustRead(t, "testdata/release/v0.1.0-rc17.release.sigstore.json")
-	why, err := cfg.checkApproval(context.Background(), bundle, "v1.0.0")
+// The run comes from gh's verified certificate, in the shape gh attestation
+// verify --format json prints (abridged from v0.1.0-rc17's check).
+func TestVerifiedRunInvocation(t *testing.T) {
+	out := []byte(`[{"verificationResult":{"signature":{"certificate":{
+		"runInvocationURI":"https://github.com/action-state-group/capsule-cli/actions/runs/39489783877/attempts/1",
+		"sourceRepositoryRef":"refs/tags/v0.1.0-rc17"}}}}]`)
+	run, err := verifiedRunInvocation(out)
 	require.NoError(t, err)
-	assert.Equal(t, "run 39489783877 has no approval in the release environment", why)
+	assert.Equal(t, "https://github.com/action-state-group/capsule-cli/actions/runs/39489783877/attempts/1", run)
 
-	w.approve("39489783877", "release", "ethanyzhang")
-	why, err = cfg.checkApproval(context.Background(), bundle, "v1.0.0")
-	require.NoError(t, err)
-	assert.Empty(t, why)
+	for _, bad := range []string{`[]`, `[{},{}]`, `not json`} {
+		_, err := verifiedRunInvocation([]byte(bad))
+		assert.Error(t, err, bad)
+	}
+}
+
+// A later attempt of a full release's run (a re-run someone else started)
+// does not change the verdict on the attempt that built the release.
+func TestReleaseApprovalIsJudgedOnTheAttemptThatBuilt(t *testing.T) {
+	w := newReleaseWorld(t)
+	w.addTag(t, "v1.0.0")
+	w.addRelease(t, "v1.0.0", true)
+	w.gh.runs["1000/2"] = map[string]any{"actor": map[string]any{"login": "pusher"}, "triggering_actor": map[string]any{"login": "reviewer"}}
+	result, err := w.watch(t)
+	require.NoError(t, err, alarmsOf(result))
 }
