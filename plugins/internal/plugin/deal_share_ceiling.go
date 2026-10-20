@@ -126,7 +126,9 @@ func dealShownAmounts(events []sealedEvent) map[int64]bool {
 			shown[*e.Act.AmountMinor] = true
 		}
 		// A charge in another currency shows a different amount, whatever
-		// its minor units: ¥6,400 is not $64.00.
+		// its minor units: ¥6,400 is not $64.00. A receipt that names no
+		// currency, or a deal with none, is read in the deal's: the charge
+		// is still an amount paid that the copy shows.
 		if e.Evidence != nil && e.Evidence.Email != nil && e.Evidence.Email.Parsed.TotalMinor != nil {
 			if p := e.Evidence.Email.Parsed; p.Currency == "" || currency == "" || strings.EqualFold(p.Currency, currency) {
 				shown[*p.TotalMinor] = true
