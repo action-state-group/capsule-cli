@@ -194,6 +194,12 @@ func buildDealLifecycle(events []sealedEvent, now time.Time) dealLifecycle {
 	i := finalClose(events)
 	if i < 0 {
 		l.Open = openDealListing(events, now)
+		if l.Open == nil {
+			// A closed sale has ended with no deal close; nothing reads a
+			// sale's lifecycle today, so this only keeps it from failing.
+			l.State = "closed"
+			return l
+		}
 		l.State, l.Text = "open", l.Open.Text
 		// An authorized cancel ends the deal's business before any close is
 		// sealed: the deal is cancelled, not open.

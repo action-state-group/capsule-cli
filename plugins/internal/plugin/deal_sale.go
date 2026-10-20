@@ -151,11 +151,6 @@ func (s *dealSession) closeSale(ctx context.Context, saleID string) (sealedEvent
 			return sealedEvent{}, nil, err
 		}
 	}
-	if s.t == nil {
-		if err := s.useDeal(ctx, saleID, false); err != nil {
-			return sealedEvent{}, nil, err
-		}
-	}
 	if events, err = s.load(ctx, saleID); err != nil {
 		return sealedEvent{}, nil, err
 	}
