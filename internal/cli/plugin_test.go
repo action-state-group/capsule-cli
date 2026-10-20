@@ -342,7 +342,12 @@ func TestDispatchRunsThePathItChecked(t *testing.T) {
 	assert.Contains(t, out, "good ran="+checked, "the checked file ran, by its checked path")
 	assert.NotContains(t, out, "evil")
 
-	// The next dispatch checks again and refuses the swapped link.
+	// The next check refuses the swapped link: its target's directory is
+	// writable by others.
+	_, err = CheckedTrustedPath(filepath.Join(root, "capsulectl-acme"))
+	require.ErrorIs(t, err, errWritable)
+	realEvil, _ := filepath.EvalSymlinks(evilDir)
+	assert.Contains(t, err.Error(), realEvil+" is")
 	_, err = invoke(t, "", "acme")
 	require.Error(t, err)
 }
@@ -372,4 +377,56 @@ func TestLauncherCommandKeepsTheNameAsArgv0(t *testing.T) {
 	cmd := launcherCommand(t.Context(), "/real/b/acme", "/root/capsulectl-acme", "x", "--y")
 	assert.Equal(t, "/real/b/acme", cmd.Path, "the checked path is executed")
 	assert.Equal(t, []string{"/root/capsulectl-acme", "x", "--y"}, cmd.Args, "argv[0] is the name the launcher was found by")
+}
+
+func TestARelativeRootStillDispatches(t *testing.T) {
+	// CAPSULECTL_PLUGIN_ROOTS=plugins, relative to the working directory:
+	// the path and the root are made absolute before they are compared.
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o755))
+	t.Chdir(dir)
+	require.NoError(t, os.Mkdir("plugins", 0o755))
+	writeLauncher(t, "plugins", "capsulectl-acme", strings.Replace(argvPlugin, "VARIANT", "relative", 1), 0o755)
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", "plugins")
+	checked, err := CheckedTrustedPath(filepath.Join("plugins", "capsulectl-acme"))
+	require.NoError(t, err)
+	assert.True(t, filepath.IsAbs(checked), "the checked path is absolute")
+	out, err := invoke(t, "", "acme")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "relative ran=")
+}
+
+func TestTheHopCheckLeavesTheRootsParentsToTheRootsRule(t *testing.T) {
+	// An absolute link inside the root passes through the root's parents
+	// (Intel Homebrew's /usr/local is 0775). The walk trusts the system
+	// root's parents, so the hop check does too.
+	parent := filepath.Join(t.TempDir(), "usr-local")
+	root := filepath.Join(parent, "plugins")
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "bin"), 0o755))
+	writeLauncher(t, filepath.Join(root, "bin"), "acme", strings.Replace(argvPlugin, "VARIANT", "abs", 1), 0o755)
+	require.NoError(t, os.Symlink(filepath.Join(root, "bin", "acme"), filepath.Join(root, "capsulectl-acme")))
+	require.NoError(t, os.Chmod(parent, 0o775))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	assert.NoError(t, VerifyTrustedPath(filepath.Join(root, "capsulectl-acme")))
+}
+
+func TestALauncherFoundInOneRootResolvingIntoAnother(t *testing.T) {
+	// Found in root A, resolving into root B through a hop held in A: A's
+	// directories get the strict rule too.
+	a := pluginRoot(t)
+	b := t.TempDir()
+	require.NoError(t, os.Chmod(b, 0o755))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", a+string(os.PathListSeparator)+b)
+	writeLauncher(t, b, "acme", strings.Replace(argvPlugin, "VARIANT", "b", 1), 0o755)
+	hop := filepath.Join(a, "hop")
+	require.NoError(t, os.Mkdir(hop, 0o755))
+	require.NoError(t, os.Symlink(filepath.Join(b, "acme"), filepath.Join(hop, "link")))
+	launcher := filepath.Join(a, "capsulectl-acme")
+	require.NoError(t, os.Symlink(filepath.Join(hop, "link"), launcher))
+	checked, err := CheckedTrustedPath(launcher)
+	require.NoError(t, err)
+	realB, _ := filepath.EvalSymlinks(filepath.Join(b, "acme"))
+	assert.Equal(t, realB, checked)
+	require.NoError(t, os.Chmod(hop, 0o775))
+	assert.ErrorIs(t, VerifyTrustedPath(launcher), errWritable)
 }

@@ -78,7 +78,13 @@ func verifyTrustedPathUnder(path string, roots []string) error {
 
 // checkedTrustedPathUnder is CheckedTrustedPath against the given roots.
 func checkedTrustedPathUnder(path string, roots []string) (string, error) {
-	resolved, err := filepath.EvalSymlinks(path)
+	// Absolute from the start, so a relative path or root (a relative
+	// CAPSULECTL_PLUGIN_ROOTS entry) compares like for like below.
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve %s: %w", path, err)
 	}
@@ -89,7 +95,11 @@ func checkedTrustedPathUnder(path string, roots []string) (string, error) {
 	}
 	realRoot := ""
 	for _, root := range roots {
-		rr, err := filepath.EvalSymlinks(root)
+		absRoot, err := filepath.Abs(root)
+		if err != nil {
+			continue
+		}
+		rr, err := filepath.EvalSymlinks(absRoot)
 		if err != nil {
 			continue
 		}
@@ -137,8 +147,9 @@ func checkedTrustedPathUnder(path string, roots []string) (string, error) {
 // that holds a hop but is not on it (R/capsulectl-x -> R/a/link -> R/b/x
 // leaves R/a off it) is checked here: path is resolved again one name at a
 // time from that root (lookupDirs), every directory a name is looked up in
-// must pass checkTrustedComponent (strictly inside the root; outside it a
-// root-owned sticky directory is accepted, as for the per-user ancestry),
+// must pass checkTrustedComponent (strictly inside the root it was found
+// under or resolves into; outside them a root-owned sticky directory is
+// accepted, as for the per-user ancestry),
 // and every link followed must be owned by the user or root. The lookup
 // must also arrive at resolved. A directory above the root (an absolute
 // link target passes through them) is left to the root's own rule: the
@@ -190,7 +201,7 @@ func launcherHopProblems(path, resolved, realRoot string, roots []string) []unsa
 		if under(realRoot, dir) || under(start, dir) {
 			continue
 		}
-		inside := dir == realRoot || under(dir, realRoot)
+		inside := dir == realRoot || under(dir, realRoot) || dir == start || under(dir, start)
 		if err := checkTrustedComponent(dir, uid, !inside); err != nil {
 			problems = append(problems, unsafePathProblem{path: dir, owner: errors.Is(err, errNotTrustedOwner), err: err})
 		}
@@ -397,6 +408,9 @@ type pluginInfo struct {
 	// (plugin_presentations.go). An older capsulectl ignores the member.
 	Presentations []pluginPresentation `json:"presentations,omitempty"`
 	path          string
+	// checked is the resolved path the handshake ran, which the trust walk
+	// judged; presentations load beside it.
+	checked string
 	// presentations are the checked modules, or refusal why there are none.
 	presentations []presentationModule
 	refusal       *presentationRefusal
@@ -455,7 +469,7 @@ func readPluginMetadataAs(execPath, argv0, label string) (pluginInfo, error) {
 	if info.PluginAPI != PluginAPI {
 		return pluginInfo{}, fmt.Errorf("%s: plugin_api %q does not match %q", name, info.PluginAPI, PluginAPI)
 	}
-	info.path = argv0
+	info.path, info.checked = argv0, execPath
 	return info, nil
 }
 
