@@ -2,6 +2,78 @@
 
 ## Unreleased
 
+### Before you upgrade: there is no going back to an older version
+
+After this version opens your deals, keep using this version or a newer one.
+An older capsulectl may refuse to open your deals, and copies it makes can
+show when a deal was shared.
+
+- **Want the option to go back?** Make a backup of your capsulectl data
+  before you upgrade. First pause anything that runs `deal tick` on a
+  schedule (cron, launchd), and make sure no capsulectl command is running.
+  For a deal profile set up the usual way, your data is two things: the
+  folder you gave `deal init --dir` (the deal skill uses
+  `~/.local/share/capsule-deal`), and your profile file,
+  `~/.config/capsule/profiles/deal.yaml` (named after your profile, under
+  `$XDG_CONFIG_HOME/capsule/` if you set it). If your profile points at files
+  outside that folder, such as a rules file given to `--materiality` or keys
+  moved with `profile update`, back those up too. For example:
+
+  ```
+  mkdir ~/capsulectl-backup
+  cp -Rp ~/.local/share/capsule-deal ~/.config/capsule/profiles/deal.yaml ~/capsulectl-backup/
+  ```
+
+  To go back, with nothing running, move the upgraded folder aside rather
+  than copying over it, then copy the backup in:
+
+  ```
+  mv ~/.local/share/capsule-deal ~/.local/share/capsule-deal.after-upgrade
+  cp -Rp ~/capsulectl-backup/capsule-deal ~/.local/share/
+  cp -p ~/capsulectl-backup/deal.yaml ~/.config/capsule/profiles/deal.yaml
+  ```
+
+  Then run the older version. Anything recorded after the backup is not in
+  the restored copy; it stays in the folder you moved aside.
+- **Sending receipts or deal copies?** Ask the people you send them to to
+  update too. An older capsulectl shows copies made by this version as
+  INVALID, even though they are valid.
+- **Using capsulectl through Muse?** Nothing to do. Muse updates its own
+  copy.
+
+Details, for developers. Three changes make the upgrade one-way:
+
+- **The shelf (capsule-cli#242):** the first deal command that writes moves
+  the store onto its evidencebook shelf, once. An older build can still run
+  on it, but its ticks show how many book deals the store holds.
+- **Standalone reports (capsule-cli#294):** a copy an older build makes puts
+  the deal's reports back in its log, where they show when the deal was
+  shared. An older capsulectl also reports new copies as INVALID: verify them
+  with this version or later.
+- **A closed sale (capsule-cli#271):** an older build cannot load a closed
+  sale's log, and if this version crashed at the wrong moment, an older build
+  refuses to open the whole store.
+
+### A deal's shared copy is checked with capsulectl alone (capsule-cli#243)
+
+- **Added (tests, CI):** a `portability` job runs a deal on a shelf book with
+  typed records, shares it with its counterparty and exports its records, then
+  deletes the session (home, profile and keys, deal store, plugin root). With
+  capsulectl alone, it opens the shared page offline in headless Chrome, runs
+  `verify --bundle`, and checks that each exported typed record is the exact
+  payload a bundle record commits to, that the chain links, and that the page
+  shows what each step's record says. An edited bundle, a dropped record and
+  an edited exported record must each fail. The Chrome render helpers move to
+  `scripts/lib/page-checks.sh`.
+
+### Presentation manifests follow presentation contract revision 1 (capsule-cli#293)
+
+- **Fixed:** capsulectl checks plugin presentation manifests against
+  presentation contract revision 1 (agent-action-capsule 81e804a): a
+  declarative field may name the `member` it reads (`agent_input` or
+  `agent_output`), and wording packs document the reserved `page.title` and
+  `module.title` keys. This only widens what is accepted.
+
 ### Dispatch runs the launcher it checked (capsule-cli#296)
 
 - **Fixed (security):** the trust walk judged a launcher's resolved path,
@@ -36,11 +108,11 @@
   stripped of both its deal section and its report is its steps only and
   verifies as such: it shows no report text.
 - **Compatibility:** verify new copies with this version or later: an older
-  capsulectl reports them as INVALID. Do not run an older build on a store
-  with such deals: a copy it makes puts the deal's reports back in its log.
-  A deal an earlier build made with no report on its log, and steps after its
-  last checkpoint, is covered at its last step's time by its next command or
-  `deal tick`; until then `deal history` refuses it.
+  capsulectl reports them as INVALID. Do not run an older build on the store
+  (see "Before you upgrade" above). A deal an earlier build made with no
+  report on its log, and steps after its last checkpoint, is covered at its
+  last step's time by its next command or `deal tick`; until then `deal
+  history` refuses it.
 
 ### A shared copy keeps the bounds back by field, and reads text, not code (capsule-cli#247, #286)
 
@@ -60,6 +132,23 @@
   with no bundle script, is read whole, less the two vendored scripts where
   they match byte for byte; a data script whose value does not decode is
   read whole.
+
+### A merchant email's seal claims only the seal time (capsule-cli#289, #306)
+
+- **Fixed (copy):** the receipt email's note and the deal page said our seal
+  shows this device "kept these exact bytes from that time on", and the skill
+  "from this time on", which a seal does not show. All three now say it held
+  them no later than the seal time. The email note and the page add that who
+  signed them is checked by the signing domain's DKIM signature, not by our
+  seal; the DKIM signature is described as the signing domain's (the
+  merchant's, or its mail provider's), showing what that domain signed.
+- **Fixed (copy):** the labels around it say the same. The receipt email and
+  the deal page label the signature "DKIM signature:" and its key "Signing
+  domain's key", where both said the merchant's. An email whose key can't be
+  read yet says "the email's signature will be checked later". The skill and
+  README name the signing domain's key, and our seal's words in `we_say` say
+  "no later than this time". An email is still called merchant-confirmed only
+  when a passing DKIM signature's domain is aligned with the sender's.
 
 ### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
 
@@ -105,15 +194,16 @@
   own. A closed sale leaves the cadence's live set once a witnessed tick
   holds its last checkpoint, so ticks stop re-checkpointing it; a later
   `deal sale bundle` cut brings it back until the next one. `deal list` and
-  the sale bundle's summary show the sale closed.
+  the sale bundle's summary show the sale closed. The command prints that the
+  sale "stops taking new buyers" and how many negotiations are still open
+  (`status`, `open_negotiations`).
 - **Compatibility:** existing sale bundles verify unchanged, and an older
-  `capsulectl verify --bundle` skips the new record. An older profile
-  checker refuses it. An older capsulectl cannot load a closed sale's log:
-  its `deal open --sale`, `deal sale bundle` and `deal sale export` on that
-  sale fail with the store's conflict error, and if this version crashed
-  after indexing a record on a closed sale but before appending it, an
-  older build refuses to open the whole store. Do not run an older build on
-  a store that holds a closed sale.
+  `capsulectl verify --bundle` skips the new record. An older profile checker
+  refuses it. An older capsulectl cannot load a closed sale's log: its `deal
+  open --sale`, `deal sale bundle` and `deal sale export` on that sale fail
+  with the store's conflict error, and if this version crashed after indexing
+  a record on a closed sale but before appending it, an older build refuses to
+  open the whole store (see "Before you upgrade" above).
 
 ### Dispatch checks the per-user plugin root's parents (capsule-cli#270)
 
@@ -130,6 +220,12 @@
   `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`. The same
   holds for presentations and the rules checker, which use the walk, and for
   a `~/.local` symlinked into a directory another user can write.
+- **Fixed:** running a refused plugin, or `deal` or `book` when theirs is
+  refused, prints the refusal and its fix, where it said only "operation
+  failed" or that the plugin was not installed. The fix's `chmod go-w` names
+  each path as one shell word, so it runs as pasted. A refused launcher whose
+  name is not a plugin name is listed by `plugin ls` only, and a refusal's
+  paths are printed with control characters escaped.
 
 ### A held object on a buyer's deal (capsule-cli#250)
 
@@ -227,11 +323,11 @@
   read-only command (`deal list`, `deal checkpoint status`) never moves a
   store, and on one not yet moved it says to run a deal command first. A
   released build can still run on a moved store, and the next command takes in
-  what it wrote, but its ticks show how many book deals the store holds: do
-  not run an older build on a store after it moves. A store whose mutation
-  counter row is missing is refused, with "restore from a backup". A request
-  with an artifact named `opening.*` must rename it. Verify a new deal's
-  copies with this version or later (see capsule-cli#294 above).
+  what it wrote, but its ticks show how many book deals the store holds (see
+  "Before you upgrade" above). A store whose mutation counter row is missing
+  is refused, with "restore from a backup". A request with an artifact named
+  `opening.*` must rename it. Verify a new deal's copies with this version or
+  later (see capsule-cli#294 above).
 
 ### The core builds without evidencebook; the book and the deals are plugins (capsule-cli#236)
 
