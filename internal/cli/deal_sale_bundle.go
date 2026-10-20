@@ -316,8 +316,10 @@ func threadBinding(tb map[string]interface{}, threadID, regDigest, saleKey strin
 
 // lastRecordDigest is the record digest of a deal bundle's last record on
 // its log: the capsule its completeness certificate places at the highest
-// log seq (the copy's own sealed report, when the bundle step sealed one),
-// as its capsule commits to it (agent_input_digest), disclosed or not.
+// log seq (the copy's own sealed report, when the bundle step sealed one in
+// the thread's log; its last step, when the thread's reports are off its log,
+// capsule-cli#294), as its capsule commits to it (agent_input_digest),
+// disclosed or not.
 func LastRecordDigest(tb map[string]interface{}) string {
 	cert, _ := tb["completeness_certificate"].(map[string]interface{})
 	memberships, _ := cert["memberships"].(map[string]interface{})
@@ -367,15 +369,7 @@ func SaleOpensTo(opening map[string]interface{}, text, commitment string) bool {
 // x-deal-v0 extension names, or the extension itself in a copy whose report
 // was not sealed.
 func sealedOrInlineReport(b map[string]interface{}) map[string]interface{} {
-	exts, _ := b["extensions"].(map[string]interface{})
-	report, _ := exts[DealProfile].(map[string]interface{})
-	if id, ok := report[DealReportPointer].(string); ok {
-		disclosures, _ := b["disclosures"].(map[string]interface{})
-		d, _ := disclosures[id].(map[string]interface{})
-		in, _ := d["agent_input"].(map[string]interface{})
-		sealed, _ := in["report"].(map[string]interface{})
-		return sealed
-	}
+	report, _, _ := DealSealedReport(b)
 	return report
 }
 

@@ -233,6 +233,18 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 	}
 	s.dp = s.p
 	s.dp.LogID = cli.DealLogID(dealID)
+	// Whether the deal's reports are off its log is read from the store, as
+	// a deal command reads it (reportsOffLog).
+	savedOnBook := s.onBook
+	defer func() { s.onBook = savedOnBook }()
+	s.onBook = false
+	if x, ok := s.index.(shelfDealIndex); ok {
+		legacy, err := x.isLegacy(ctx, dealID)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		s.onBook = !legacy
+	}
 	if s.t, err = cli.OpenTarget(ctx, s.dp, cli.UseRead); err != nil {
 		return nil, 0, 0, err
 	}
@@ -265,6 +277,15 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 	covered := events
 	for len(covered) > 0 && covered[len(covered)-1].Sequence > state.Checkpoint.IndexedSeq {
 		covered = covered[:len(covered)-1]
+	}
+	// A deal whose reports are off its log has a checkpoint at every step;
+	// a step without one is a write a crash interrupted, which the deal's
+	// next command finishes (coverSteps). History writes nothing, so it
+	// refuses rather than show the deal before that step.
+	if offLog, err := s.reportsOffLog(ctx, dealID); err != nil {
+		return nil, 0, 0, err
+	} else if offLog && len(covered) < len(events) {
+		return nil, 0, 0, cli.InputError("deal " + dealID + " has a step its checkpoint does not cover yet (an interrupted write, or a step an earlier capsulectl made), which the deal's next command, such as `deal tick`, covers: pick it again after that")
 	}
 	if len(covered) == 0 {
 		return nil, 0, 0, cli.InputError("deal " + dealID + " has no step under its latest checkpoint")
@@ -324,7 +345,21 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 		return nil, 0, 0, err
 	}
 	ext := map[string]interface{}{cli.DealReportPointer: pointer}
+	var standalone map[string]interface{}
 	if pointer == "" {
+		// A deal whose reports are off its log (capsule-cli#294) gets a
+		// fresh keep report bound to the checkpoint this copy is at, and
+		// computed at its time.
+		offLog, err := s.reportsOffLog(ctx, dealID)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		if offLog {
+			if s.reportAt, err = bundleCheckpointTime(b); err != nil {
+				return nil, 0, 0, err
+			}
+			defer func() { s.reportAt = time.Time{} }()
+		}
 		report, err := s.dealReportFor(ctx, covered)
 		if err != nil {
 			return nil, 0, 0, err
@@ -332,8 +367,23 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 		if ext, err = s.dealReportExtension(covered, report, cli.DealAudienceKeep, verify, dealPrivate{}, withhold, witnessCoverage(covered, cadence)); err != nil {
 			return nil, 0, 0, err
 		}
+		if offLog {
+			var id string
+			if id, standalone, err = s.dealStandaloneReport(dealID, cli.DealAudienceKeep, ext, b); err != nil {
+				return nil, 0, 0, err
+			}
+			ext = map[string]interface{}{cli.DealReportPointer: id}
+		}
 	}
 	extensions := map[string]interface{}{cli.DealCadenceExtension: cadence, cli.DealProfile: ext}
+	if standalone != nil {
+		extensions[cli.DealReportExtension] = standalone
+	}
+	defer func() {
+		if err == nil && standalone != nil {
+			err = checkProducedReport(b)
+		}
+	}()
 	if dealRole(covered) == dealRoleSeller {
 		extensions[dealSellerExtension] = map[string]interface{}{}
 	}

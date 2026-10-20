@@ -17,6 +17,31 @@
   within a safe root, runs as before. A shell-script launcher's `$0` is now
   its resolved path; argv[0] is unchanged.
 
+### A deal's copies no longer show when it was shared (capsule-cli#294)
+
+- **Changed (privacy):** a deal on the shelf whose log holds no sealed report
+  seals each copy's report as a standalone signed record, carried in the copy
+  (`x-deal-report/v0`) and on no log, bound to the deal checkpoint the copy is
+  made at. Such a deal cuts a checkpoint at every step, at the step's time, so
+  a copy cuts none. Its log, its copies and its History no longer show when or
+  how often the deal was shared, and a copy carries no other copy's report.
+- **Limits:** a deal whose log already holds a report, and every legacy deal,
+  keeps its reports in its log, where they still show when it was shared. A
+  report can be bound to an earlier state of the deal, and is shown as of that
+  checkpoint's time. A `deal respond` time floor later than the deal's last
+  step cannot be met. A standalone report rests on the step-signing key alone.
+  After a signing-key change, a deal can be copied again only once it has a
+  step under the new key. A sale's own log still records each sale bundle's
+  cut, so a sale's bundle shows when and how often it was made. A copy
+  stripped of both its deal section and its report is its steps only and
+  verifies as such: it shows no report text.
+- **Compatibility:** verify new copies with this version or later: an older
+  capsulectl reports them as INVALID. Do not run an older build on a store
+  with such deals: a copy it makes puts the deal's reports back in its log.
+  A deal an earlier build made with no report on its log, and steps after its
+  last checkpoint, is covered at its last step's time by its next command or
+  `deal tick`; until then `deal history` refuses it.
+
 ### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
 
 - **Changed (pages):** the browser viewer every page embeds is rebuilt from

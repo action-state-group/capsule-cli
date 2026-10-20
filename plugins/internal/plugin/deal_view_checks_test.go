@@ -24,6 +24,7 @@ const [script] = process.argv.slice(2);
 let registered;
 const contexts = JSON.parse(fs.readFileSync(0, "utf8"));
 const out = {};
+(async () => {
 for (const [name, c] of Object.entries(contexts)) {
   const payloads = new Map(Object.entries(c.payloads));
   globalThis.EvidenceGraph = {
@@ -35,9 +36,10 @@ for (const [name, c] of Object.entries(contexts)) {
   globalThis.document = undefined;
   new Function(fs.readFileSync(script, "utf8"))();
   const context = { ...c, recordIndex: new Map(c.records.map((r) => [r.capsule_id, r])) };
-  out[name] = registered.buildModel(context).checks;
+  out[name] = (await registered.buildModel(context)).checks;
 }
 process.stdout.write(JSON.stringify(out));
+})();
 `
 
 // The lists say what the page's verification recorded and what the file

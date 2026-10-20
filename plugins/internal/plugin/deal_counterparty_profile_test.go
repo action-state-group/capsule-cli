@@ -581,10 +581,7 @@ func TestASaleThreadCheckNamingAPayeeSealsAWithheldCompanion(t *testing.T) {
 // sharedSteps is the steps a shared copy's sealed report lists.
 func sharedSteps(t *testing.T, b map[string]any) []map[string]any {
 	t.Helper()
-	disclosures, _ := b["disclosures"].(map[string]any)
-	for _, d := range disclosures {
-		input, _ := d.(map[string]any)["agent_input"].(map[string]any)
-		report, _ := input["report"].(map[string]any)
+	if report, _, _ := cli.DealSealedReport(b); report != nil {
 		if steps, ok := report["steps"].([]any); ok {
 			out := make([]map[string]any, len(steps))
 			for i, s := range steps {
@@ -663,7 +660,7 @@ func sharedCopyGivesTheCompanionANeutralKind(t *testing.T, open func(t *testing.
 		}
 	}
 	assert.Equal(t, 1, private, "the companion is still accounted for")
-	assert.Len(t, b["records"], len(steps)+1, "every step of the log, and the sealed report")
+	assert.Len(t, b["records"], len(steps), "every step of the log; the report rides off it (capsule-cli#294)")
 	out, err = invoke(t, "", "verify", "--bundle", shared)
 	require.NoError(t, err, "the shared copy verifies: %s", out)
 }

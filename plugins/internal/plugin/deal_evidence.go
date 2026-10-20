@@ -647,9 +647,9 @@ func dealRespond(c *cobra.Command, p cli.Profile, raw []byte, requester, path st
 			return refuse(evidencebook.ReasonRequestMalformed)
 		}
 	}
+	var notBefore time.Time
 	if floor := req.Coverage.MinFreshness; floor != nil && floor.Time != "" {
-		notBefore, e := time.Parse(time.RFC3339Nano, floor.Time)
-		if e != nil {
+		if notBefore, e = time.Parse(time.RFC3339Nano, floor.Time); e != nil {
 			return refuse(evidencebook.ReasonRequestMalformed)
 		}
 		if notBefore.After(cli.DealClock()) {
@@ -670,8 +670,30 @@ func dealRespond(c *cobra.Command, p cli.Profile, raw []byte, requester, path st
 	if e != nil {
 		return e
 	}
+	offLog, e := s.reportsOffLog(ctx, dealID)
+	if e != nil {
+		return e
+	}
 	held := ""
-	if req.Coverage.ExpectedPin != nil {
+	if offLog {
+		// The copy's report is off the log (capsule-cli#294): the copy is
+		// the log as it stands, at its latest checkpoint, whose time is the
+		// last step's. A pin is met by a fresh report bound to it while the
+		// log is still there (checked below); a floor past what the log
+		// holds, or later than its checkpoint, cannot be.
+		if floor := req.Coverage.MinFreshness; floor != nil && floor.Size > uint64(len(entries)) {
+			return refuse(evidencebook.ReasonCoverageUnsatisfiable)
+		}
+		if !notBefore.IsZero() {
+			checkpoints, e := s.book.Checkpoints(ctx)
+			if e != nil {
+				return e
+			}
+			if len(checkpoints) == 0 || notBefore.After(checkpoints[len(checkpoints)-1].IssuedAt) {
+				return refuse(evidencebook.ReasonCoverageUnsatisfiable)
+			}
+		}
+	} else if req.Coverage.ExpectedPin != nil {
 		if held, e = s.reportAtHead(ctx, dealID, entries); e != nil {
 			return e
 		}
@@ -687,6 +709,9 @@ func dealRespond(c *cobra.Command, p cli.Profile, raw []byte, requester, path st
 		return e
 	}
 	b, e := s.dealReportBundleAt(ctx, events, report, dealCopyAudience, dealVerifyCommand("bundle.json"), held == "", held)
+	if errors.Is(e, errDealKeyChanged) {
+		return refuse(evidencebook.ReasonCoverageUnsatisfiable)
+	}
 	if e != nil {
 		return e
 	}

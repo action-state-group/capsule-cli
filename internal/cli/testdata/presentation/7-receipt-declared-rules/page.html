@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-JWeaIrg3Vi+lF58lQDB1FKh0iLTGwIi2Agbv5bSGJto=' 'sha256-DqEYoNOS5JHkc26oMRLis+zynHjqWZs7yOepOQIOlfA=' 'sha256-eApYtpWzjL0YwRGFhFyYTSUF8XUEYhDm1VnJe5ocFjo='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-JWeaIrg3Vi+lF58lQDB1FKh0iLTGwIi2Agbv5bSGJto=' 'sha256-pVhxWo76qngSlsIj6IO9GghHCWmyuWkv6JoN/UxQHnk=' 'sha256-eApYtpWzjL0YwRGFhFyYTSUF8XUEYhDm1VnJe5ocFjo='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: “Order the cat sticker in my cart at Example Stickers”</title>
     <style>
@@ -13428,7 +13428,76 @@ const dealViewVerified = (context) => {
   );
 };
 
-const dealViewModel = (context) => {
+// A copy's standalone report (capsule-cli#294) rides in x-deal-report/v0,
+// on no log, bound to the deal checkpoint the copy is made at. The page
+// checks what `capsulectl verify` checks: its signature, under the key
+// that signed the deal's last step (each step's envelope verified here,
+// its key_id held to the key it verified under); its disclosure; that it
+// is this deal's report for a copy audience; that it binds this bundle's
+// checkpoint and states that checkpoint's time; and that the bundle holds
+// no report record. Anything less is refused, never shown as checked.
+// The evidence record header types of a deal's steps on its book.
+const dealStepTypes = ["deal_step", "step_completed", "step_failed"];
+const dealHexBytes = (hex) => {
+  if (typeof hex !== "string" || hex.length % 2 !== 0 || !/^[0-9a-f]*$/u.test(hex)) return undefined;
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(2 * i, 2 * i + 2), 16);
+  return out;
+};
+const dealBytesHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+const dealVerifiedKey = async (record) => {
+  const sig = dealHexBytes(record && record.signature);
+  if (!sig || typeof record.capsule_id !== "string" || typeof record.key_id !== "string") return undefined;
+  const result = await EvidenceGraph.verifyProducerEnvelope(record.capsule_id, sig);
+  if (!result || !result.ok || !result.publicKey) return undefined;
+  const key = dealBytesHex(result.publicKey);
+  return key === record.key_id ? key : undefined;
+};
+const dealStandaloneReport = async (context, bundle, x, sealedId) => {
+  const refused = { refusal: "⚠️ The deal's text could not be checked against its sealed report. Do not rely on it." };
+  if (!EvidenceGraph.ed25519Available()) {
+    return { refusal: "⚠️ This viewer cannot check the report's signature here. Run capsulectl verify on the file before relying on it." };
+  }
+  if (!x || typeof x !== "object" || Object.keys(x).length !== 2) return refused;
+  const record = x.record;
+  const input = x.agent_input;
+  if (!record || !input || typeof input !== "object" || record.capsule_id !== sealedId || record.action_id !== "capsulectl-deal-report") return refused;
+  const reportKey = await dealVerifiedKey(record);
+  if (!reportKey) return refused;
+  const memberships = ((bundle.completeness_certificate || {}).memberships) || {};
+  let lastKey;
+  let lastSeq = -1;
+  for (const r of context.records) {
+    const header = r && r.evidence_record_header;
+    if (!header || !dealStepTypes.includes(header.record_type)) continue;
+    const key = await dealVerifiedKey(r);
+    if (!key) return refused;
+    const seq = Number((((memberships[r.capsule_id] || {}).log_coordinates) || {}).seq);
+    if (Number.isFinite(seq) && seq > lastSeq) {
+      lastSeq = seq;
+      lastKey = key;
+    }
+  }
+  if (!lastKey || lastKey !== reportKey) return refused;
+  const capsule = {};
+  for (const [k, v] of Object.entries(record)) if (k !== "signature" && k !== "key_id") capsule[k] = v;
+  const disclosed = await EvidenceGraph.verifyDisclosureEnvelope({ capsule, disclosures: { agent_input: input } });
+  if (!disclosed || !disclosed.ok) return refused;
+  const logId = ((bundle.completeness_certificate || {}).log_id) || "";
+  const audiences = ["counterparty", "adjudicator", "keep"];
+  if (input.type !== "deal_report" || input.profile !== "x-deal-v0" || "deal/" + input.deal_id !== logId || !audiences.includes(input.audience)) return refused;
+  const cp = bundle.checkpoint || {};
+  const bound = input.deal_checkpoint || {};
+  if (Object.keys(bound).length !== 3 || bound.log_id !== logId || String(bound.mmr_size) !== String(cp.mmr_size) || bound.root !== cp.root) return refused;
+  if (context.records.some((r) => r && r.action_id === "capsulectl-deal-report")) return refused;
+  const report = input.report;
+  if (!report || typeof report !== "object") return refused;
+  const asOf = Date.parse((report.lifecycle || {}).as_of);
+  if (!Number.isFinite(asOf) || asOf !== Date.parse(cp.timestamp)) return refused;
+  return { report };
+};
+
+const dealViewModel = async (context) => {
   const page = globalThis.capsulectlDealPage || {};
   // The context's own frozen copy of the bundle, read only for what no
   // record seals: the extension blocks and the checkpoint's witnesses.
@@ -13458,12 +13527,25 @@ const dealViewModel = (context) => {
   // under the "not checked" label.
   const reportRecords = context.records.filter((r) => r && r.action_id === "capsulectl-deal-report");
   let report = dealExt;
-  if (sealedId !== undefined || otherReports.length > 0 || reportRecords.length > 0) {
+  const standalone = (bundle.extensions || {})["x-deal-report/v0"];
+  // A copy of a deal on a book whose log holds no report record names a
+  // standalone one: inline text there is a stripped copy, refused.
+  const bookSteps = context.records.some((r) => r && r.evidence_record_header && dealStepTypes.includes(r.evidence_record_header.record_type));
+  if (standalone !== undefined) {
+    if (sealedId === undefined || Object.keys(dealExt).length !== 1) {
+      return { refusal: "⚠️ The deal's text could not be checked against its sealed report. Do not rely on it." };
+    }
+    const checked = await dealStandaloneReport(context, bundle, standalone, sealedId);
+    if (checked.refusal) return checked;
+    report = checked.report;
+  } else if (sealedId !== undefined || otherReports.length > 0 || reportRecords.length > 0) {
     const input = sealedId !== undefined ? payload(sealedId) : undefined;
     if (otherReports.length > 0 || !input || input.type !== "deal_report" || typeof input.report !== "object" || input.report === null) {
       return { refusal: "⚠️ The deal's text could not be checked against its sealed record. Do not rely on it." };
     }
     report = input.report;
+  } else if (bookSteps) {
+    return { refusal: "⚠️ The deal's text could not be checked against its sealed report. Do not rely on it." };
   }
   const shared = report.audience === "counterparty" || report.audience === "adjudicator";
   const base = payload(report.asked_step);
@@ -13529,7 +13611,8 @@ const dealViewModel = (context) => {
   // membership and the range proof, matches opened words against their
   // sealed digests, checks a countersignature's signature under the key it
   // names, and checks the agent's signature only on the records it cites as
-  // signers (a Close and the records that acknowledge or rebut it). It has no
+  // signers (a Close and the records that acknowledge or rebut it), and, for a
+  // standalone report (capsule-cli#294), every step's. Otherwise it has no
   // verifier for the records' own signatures in general, a witness receipt or
   // a consistency proof, and it passes a bundle whose checkpoint signature it
   // could not check, recording checkpoint_unverified. A viewer with no
@@ -13556,7 +13639,10 @@ const dealViewModel = (context) => {
     const unchecked = [v.perRecordMembership, v.intervalCoverage].some((c) => (c.findings || []).includes("checkpoint_unverified"));
     (unchecked ? checks.cli : checks.page).push("checkpoint-signature");
   }
-  if (context.records.some((r) => r && typeof r.signature === "string" && r.signature)) checks.cli.push("producer-signatures");
+  // A standalone report's checks verified every step's envelope here
+  // (dealStandaloneReport), so the steps' signatures were checked by this page.
+  if (standalone !== undefined) checks.page.push("producer-signatures");
+  else if (context.records.some((r) => r && typeof r.signature === "string" && r.signature)) checks.cli.push("producer-signatures");
   if (witnesses.length > 0) checks.cli.push("witness-receipt");
   if (cadence.earlier && typeof cadence.earlier === "object") checks.cli.push("consistency");
 
@@ -13573,6 +13659,7 @@ const dealViewModel = (context) => {
     page,
     report,
     sealed: sealedId !== undefined,
+    standalone: standalone !== undefined,
     shared,
     demo: !!(base && base.body && base.body.demo),
     matched,
@@ -13902,6 +13989,17 @@ const dealViewRender = (model, regions) => {
     host.append(el("h2", "Where this deal stands"), el("p", life.text));
     (life.later || []).forEach((l) => host.append(item(`${l.at} · confirms the close: ${l.text}`, [l.capsule_id])));
     host.append(el("p", `${life.may_change} (as of ${life.as_of})`, "deal-note"));
+    // A report off the deal's log (capsule-cli#294) states the deal as of
+    // its checkpoint, the deal's last step. Where it stands today, the page
+    // works out from the viewer's clock, apart, and says so: it is not part
+    // of the report.
+    if (model.standalone) {
+      const today = new Date().toISOString().slice(0, 10);
+      const due = life.open && typeof life.open.expect_close_by === "string" ? life.open.expect_close_by : "";
+      const passed = life.state === "open" && due !== "" && due < today ? ` The expected close, ${due}, has passed as of today.` : "";
+      host.append(el("p", `This report states the deal as of its checkpoint at ${life.as_of} (the producer's time); whether a witness saw that checkpoint is checked by capsulectl verify, not here.`, "deal-note"));
+      host.append(el("p", `Not part of the report, worked out by this page when you opened it: today is ${today}.${passed}`, "deal-note"));
+    }
   }
 
   // What this receipt can prove and how to check it, after the facts it is about.
@@ -13960,6 +14058,13 @@ const dealViewRender = (model, regions) => {
       const live = d.status === "open" || d.status === "carried_at_close";
       const li = el("li", undefined, live ? "deal-bad" : undefined);
       li.append(el("span", `${d.cancel_by || d.due_by} · ${d.marking || d.status}: `), el("span", `${d.text}. ${d.holds || ""}`));
+      // A report off the deal's log is as of its checkpoint: a date that has
+      // passed since, the page says so when opened, apart from the report.
+      const date = d.cancel_by || d.due_by || "";
+      const today = new Date().toISOString().slice(0, 10);
+      if (model.standalone && live && date !== "" && date < today) {
+        li.append(el("span", ` Not part of the report, worked out by this page when you opened it: this date has passed as of today, ${today}.`, "deal-note"));
+      }
       list.append(li);
     });
     host.append(list, el("p", deadlines[0].note, "deal-note"));

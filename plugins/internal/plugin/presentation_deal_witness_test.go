@@ -93,13 +93,19 @@ func TestPresentationDealWitnessLine(t *testing.T) {
 // `capsulectl verify` runs, rendered in Chrome on a deal shaped like a
 // shared receipt whose witness covers part of it (an earlier checkpoint, a
 // receipt, a consistency proof), on every copy. No "verified" appears in
-// the deal section except as "not verified" or "verified or not".
+// the deal section except as "not verified" or "verified or not". A copy
+// with a standalone report (capsule-cli#294) has every step's signature
+// checked by the page itself, so producer-signatures is the page's there.
 func TestPresentationDealSaysWhichChecksRan(t *testing.T) {
 	binary := os.Getenv("CAPSULECTL_CHROME")
 	if binary == "" {
 		t.Skip("CAPSULECTL_CHROME is not set")
 	}
 	chrome := startHeadlessChrome(t, binary)
+	inBothReportModes(t, func(t *testing.T, inLog bool) { dealSaysWhichChecksRan(t, chrome, inLog) })
+}
+
+func dealSaysWhichChecksRan(t *testing.T, chrome *headlessChrome, inLog bool) {
 	public, key, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	endpoint, _ := countingWitness(t)
@@ -133,8 +139,12 @@ func TestPresentationDealSaysWhichChecksRan(t *testing.T) {
     text: document.getElementById("deal").textContent,
   };
 })()`, &got)
-		assert.Equal(t, []string{"digests", "membership", "range", "disclosures"}, got.Page, name)
-		assert.Equal(t, []string{"checkpoint-signature", "producer-signatures", "witness-receipt", "consistency"}, got.CLI, name)
+		onPage, byCLI := []string{"digests", "membership", "range", "disclosures", "producer-signatures"}, []string{"checkpoint-signature", "witness-receipt", "consistency"}
+		if inLog {
+			onPage, byCLI = []string{"digests", "membership", "range", "disclosures"}, []string{"checkpoint-signature", "producer-signatures", "witness-receipt", "consistency"}
+		}
+		assert.Equal(t, onPage, got.Page, name)
+		assert.Equal(t, byCLI, got.CLI, name)
 		assert.Contains(t, got.CLIText[0], "This page cannot check it, and it shows the bundle as passing without it.", name)
 		assert.Regexp(t, `^capsulectl verify --bundle \S+ --witness-directory DIRECTORY\.json$`, got.Command, name)
 		scan := strings.NewReplacer("not verified", "", "verified or not", "").Replace(got.Text)

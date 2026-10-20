@@ -62,6 +62,10 @@ func TestDealBundleClaimsClosureOverEveryStep(t *testing.T) {
 // closure too: the latest step is the root, and the walk back reaches the
 // close and everything before it.
 func TestDealBundleClosureCoversStepsAfterAClose(t *testing.T) {
+	inBothReportModes(t, dealBundleClosureCoversStepsAfterAClose)
+}
+
+func dealBundleClosureCoversStepsAfterAClose(t *testing.T, inLog bool) {
 	dealFixture(t)
 	setDealClock(t, "2026-10-03T21:00:00Z")
 	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})
@@ -85,7 +89,11 @@ func TestDealBundleClosureCoversStepsAfterAClose(t *testing.T) {
 	}
 	assert.True(t, records[closeID], "the close is inside the closure")
 	assert.True(t, records[lateID], "the late step is inside the closure")
-	assert.Len(t, records, len(steps)+1, "every step, before and after the close, and the copy's sealed report")
+	if inLog {
+		assert.Len(t, records, len(steps)+1, "every step, before and after the close, and the copy's sealed report")
+	} else {
+		assert.Len(t, records, len(steps), "every step, before and after the close; the report rides off the log")
+	}
 	out, err := invoke(t, "", "verify", "--bundle", path)
 	require.NoError(t, err, out)
 	var verified map[string]any

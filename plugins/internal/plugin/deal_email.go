@@ -223,11 +223,16 @@ type dealEmailView struct {
 	Deadlines      []dealDeadline
 	Cancellations  []dealCancellation
 	Lifecycle      dealLifecycle
-	EmailScope     string
-	Steps          int
-	VerifyLine     string
-	NotClaimed     []string
-	CheckedNote    string
+	// ComposedNote, for a report off the deal's log (capsule-cli#294), says
+	// where the deal stood when capsulectl made this email, dated, apart
+	// from the report, which is as of its checkpoint: a mail app runs no
+	// script, so the email cannot say where it stands when it is read.
+	ComposedNote string
+	EmailScope   string
+	Steps        int
+	VerifyLine   string
+	NotClaimed   []string
+	CheckedNote  string
 	// MerchantNote says what stands behind the merchant section, once.
 	MerchantNote string
 	DeadlineNote string
@@ -278,6 +283,7 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <p style="margin:0 0 4px;">{{.Lifecycle.Text}}</p>
 {{if .Lifecycle.Later}}<ul style="margin:0;padding-left:20px;">{{range .Lifecycle.Later}}<li>{{.At}} &middot; confirms the close: {{.Text}}</li>{{end}}</ul>{{end}}
 <p style="margin:4px 0 0;color:#444;">{{.Lifecycle.MayChange}} (as of {{.Lifecycle.AsOf}})</p>
+{{if .ComposedNote}}<p style="margin:4px 0 0;color:#444;">{{.ComposedNote}}</p>{{end}}
 {{if .Deadlines}}<h2 style="font-size:16px;margin:16px 0 4px;">{{.DeadlinesHeading}}</h2>
 <ul style="margin:0;padding-left:20px;">{{range .Deadlines}}<li>{{.Date}} &middot; {{.Marking}}: {{.Text}}. {{.Holds}}</li>{{end}}</ul>
 <p style="margin:4px 0 0;color:#444;">{{.DeadlineNote}}</p>{{end}}
@@ -379,6 +385,9 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 		fmt.Fprintf(&tb, "- %s · confirms the close: %s\n", l.At, l.Text)
 	}
 	fmt.Fprintf(&tb, "%s (as of %s)\n", view.Lifecycle.MayChange, view.Lifecycle.AsOf)
+	if view.ComposedNote != "" {
+		fmt.Fprintf(&tb, "%s\n", view.ComposedNote)
+	}
 	if len(view.Deadlines) > 0 {
 		tb.WriteString("\n" + view.DeadlinesHeading() + ":\n")
 		for _, d := range view.Deadlines {

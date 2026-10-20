@@ -603,6 +603,19 @@ func DisclosureRecord(bundle map[string]interface{}) (map[string]interface{}, er
 		}
 		revealed[id] = digestByMember
 	}
+	// A standalone report (capsule-cli#294) is disclosed beside the records:
+	// the copy reveals its input too.
+	exts, _ := bundle["extensions"].(map[string]interface{})
+	if x, ok := exts[DealReportExtension].(map[string]interface{}); ok {
+		record, _ := x["record"].(map[string]interface{})
+		if id, _ := record["capsule_id"].(string); id != "" {
+			digest, err := canonical.JSONDigest(x["agent_input"])
+			if err != nil {
+				return nil, fmt.Errorf("digest the standalone report %s: %w", id, err)
+			}
+			revealed[id] = map[string]interface{}{"agent_input": digest}
+		}
+	}
 	return map[string]interface{}{
 		"type":              "disclosure_record",
 		"root":              bundle["root"],

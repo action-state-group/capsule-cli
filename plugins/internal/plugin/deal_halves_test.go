@@ -332,6 +332,7 @@ func TestTheDiscloseSaysWhetherItCarriesOpenings(t *testing.T) {
 // A copy carries every record up to its checkpoint: one missing after the
 // named close fails check 4, since it could be a later step.
 func TestCheck4RefusesAGapAfterTheClose(t *testing.T) {
+	inLogReports(t)
 	pair := closedPair(t, received, received)
 	openings, err := dealOpeningsFile(mustRead(t, pair.sellerFile))
 	require.NoError(t, err)
@@ -526,6 +527,7 @@ func TestTermsResultRefusesACopyThatFailedVerification(t *testing.T) {
 // response (the seller rotated its key, keeping the old one trusted, and
 // answered under the new one) is refused (check 1).
 func TestTermsResultRefusesACloseUnderAnotherKey(t *testing.T) {
+	inLogReports(t)
 	pair := closedPair(t, received, received)
 	party(t, pair.seller.config)
 	p := dealProfile(t)
@@ -801,6 +803,7 @@ func TestTermsResultPeriodBounds(t *testing.T) {
 // gives the same position: a later record whose header names another seq
 // fails check 4, and so does a candidate whose own does.
 func TestCheck4BindsSeqsToTheVerifiedMembership(t *testing.T) {
+	inLogReports(t)
 	pair := closedPair(t, received, received)
 	openings, err := dealOpeningsFile(mustRead(t, pair.sellerFile))
 	require.NoError(t, err)
@@ -981,6 +984,7 @@ func TestTermsResultCheckTakesOpeningsAsNamed(t *testing.T) {
 // it cut for that answer, and the close before it is still the final close
 // as the copy shows it: admitted, with the report passed over.
 func TestARespondCopyEndingInAReportAdmitsTheClose(t *testing.T) {
+	inLogReports(t)
 	pair := closedPair(t, received, received)
 	openings, err := dealOpeningsFile(mustRead(t, pair.sellerFile))
 	require.NoError(t, err)

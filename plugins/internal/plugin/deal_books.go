@@ -624,6 +624,10 @@ func (s *dealSession) sealBookStep(ctx context.Context, dealID string, events []
 	if err != nil {
 		return sealedEvent{}, err
 	}
+	offLog, err := s.reportsOffLog(ctx, dealID)
+	if err != nil {
+		return sealedEvent{}, err
+	}
 	request, digest, err := s.stepRequest(events, ev, dealCapsuleCurrent)
 	if err != nil {
 		return sealedEvent{}, err
@@ -656,7 +660,116 @@ func (s *dealSession) sealBookStep(ctx context.Context, dealID string, events []
 	if len(record.Header.PayloadCommitments) != 1 || record.Header.PayloadCommitments[0] != digest {
 		return sealedEvent{}, cli.ErrConflict
 	}
+	// A deal whose reports are off its log has a checkpoint at every step,
+	// stamped with the step's own time, so a copy never cuts one and no
+	// checkpoint says when the deal was shared (capsule-cli#294).
+	if offLog {
+		if err := dealStepCutStops(); err != nil {
+			return sealedEvent{}, err
+		}
+		if _, err := s.book.CheckpointAt(ctx, at); err != nil {
+			return sealedEvent{}, err
+		}
+	}
 	return sealedEvent{CapsuleID: record.RecordID, Digest: digest, Sequence: record.Seq, Event: ev}, nil
+}
+
+// dealReportsOffLog is a test hook: off, every deal seals its reports in
+// its log, as a build before capsule-cli#294 did, so the in-log path that
+// legacy and already-shared deals keep stays tested.
+var dealReportsOffLog = true
+
+// dealStepCutStops is a test hook: the step is on the book, and its
+// checkpoint is not cut yet (a crash there).
+var dealStepCutStops = func() error { return nil }
+
+// reportsOffLog is whether the deal seals each copy's report as a
+// standalone Capsule instead of a record of its log (capsule-cli#294): a
+// book deal whose log holds no deal_report. A deal that already holds one,
+// and every legacy deal, keeps its reports in its log.
+func (s *dealSession) reportsOffLog(ctx context.Context, dealID string) (bool, error) {
+	if !s.onBook || !dealReportsOffLog {
+		return false, nil
+	}
+	ids, err := s.reportIDs(ctx, dealID)
+	return len(ids) == 0, err
+}
+
+// coverSteps cuts, on a deal whose reports are off its log, the checkpoint
+// a crash between a step and its cut left out, stamped with the deal's last
+// step's time, so it equals the one skipped. It runs before anything reads
+// the deal's checkpoint, appends to it, copies it or ticks it: a tick would
+// otherwise cut the step at the tick's minute, and a later cut at the same
+// size cannot replace that.
+func (s *dealSession) coverSteps(ctx context.Context, dealID string, book *evidencebook.Book) error {
+	offLog, err := s.reportsOffLog(ctx, dealID)
+	if err != nil || !offLog {
+		return err
+	}
+	checkpoints, err := book.Checkpoints(ctx)
+	if err != nil {
+		return err
+	}
+	var covered uint64
+	if len(checkpoints) > 0 {
+		covered = checkpoints[len(checkpoints)-1].Entries
+	}
+	if book.Size() <= covered {
+		return nil
+	}
+	steps, err := s.index.steps(ctx, stepFilter{DealID: dealID})
+	if err != nil || len(steps) == 0 {
+		return err
+	}
+	var last dealEvent
+	if err := json.Unmarshal([]byte(steps[len(steps)-1].Local), &last); err != nil {
+		return cli.ErrConflict
+	}
+	at, err := time.Parse("2006-01-02T15:04:05Z", last.At)
+	if err != nil {
+		return cli.ErrConflict
+	}
+	if err := dealCoverStops(); err != nil {
+		return err
+	}
+	_, err = book.CheckpointAt(ctx, at)
+	return err
+}
+
+// dealCoverStops is a test hook: the recovery cut fails.
+var dealCoverStops = func() error { return nil }
+
+// coverLiveSteps is coverSteps for every live deal book, before a tick cuts
+// them.
+func (s *dealSession) coverLiveSteps(ctx context.Context, c *evidencebook.Cadence) error {
+	live, err := c.Live(ctx)
+	if err != nil {
+		return err
+	}
+	for _, logID := range live {
+		dealID, ok := dealOfBook(logID)
+		if !ok {
+			continue
+		}
+		if legacy, err := s.books().isLegacy(ctx, dealID); err != nil || legacy {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		book, err := s.shelf.Open(ctx, logID)
+		if err != nil {
+			return err
+		}
+		saved := s.onBook
+		s.onBook = true
+		err = s.coverSteps(ctx, dealID, book)
+		s.onBook = saved
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // appendBook seals request as the next record of the deal's book, under the

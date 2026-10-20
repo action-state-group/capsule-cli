@@ -50,6 +50,7 @@ func sharedCopy(t *testing.T, dealID, audience, recipient string) (map[string]an
 // bundle --deal is the user's own copy, built as `deal report` builds it,
 // from the deal's own log and nothing else.
 func TestDealBundleIsTheDealsOwnLog(t *testing.T) {
+	inLogReports(t)
 	dealFixture(t)
 	dealID := retailDeal(t)
 	path := filepath.Join(t.TempDir(), "b.json")
@@ -115,6 +116,10 @@ func TestDealPermalinkRefusesADeal(t *testing.T) {
 // show as WITHHELD), and each share is on the disclosure log before the file
 // exists.
 func TestDealDiscloseCarriesNoPrivateValues(t *testing.T) {
+	inBothReportModes(t, dealDiscloseCarriesNoPrivateValues)
+}
+
+func dealDiscloseCarriesNoPrivateValues(t *testing.T, inLog bool) {
 	dealFixture(t)
 	dealID := openPrivateDeal(t)
 	steps := len(dealLogEntries(t, dealID))
@@ -142,12 +147,17 @@ func TestDealDiscloseCarriesNoPrivateValues(t *testing.T) {
 		assert.NotEmpty(t, records[i]["withheld_records"])
 		assert.Len(t, onLog, i+1)
 	}
-	assert.Len(t, dealLogEntries(t, dealID), steps+2, "the deal's own log takes its steps and one sealed report per copy, never a disclosure record")
+	if inLog {
+		assert.Len(t, dealLogEntries(t, dealID), steps+2, "the deal's own log takes its steps and one sealed report per copy, never a disclosure record")
+	} else {
+		assert.Len(t, dealLogEntries(t, dealID), steps, "the deal's own log takes its steps only: reports are off it, and so are disclosure records")
+	}
 }
 
 // disclose --deal is a share too: it writes the shared bundle file, and its
 // disclosure record goes on the deal's disclosure log, never the deal's own.
 func TestDealDiscloseIsAShareOnTheDisclosureLog(t *testing.T) {
+	inLogReports(t)
 	dealFixture(t)
 	dealID := openPrivateDeal(t)
 	steps := len(dealLogEntries(t, dealID))

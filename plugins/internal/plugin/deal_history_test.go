@@ -50,6 +50,14 @@ type storeTemplate struct {
 func (s *storeTemplate) use(t *testing.T, build func(t *testing.T, dir string)) string {
 	t.Helper()
 	s.once.Do(func() {
+		// The template is built in the default mode whichever test builds
+		// it first: a caller under inLogReports would otherwise give every
+		// later test deals made as a build before capsule-cli#294 made them
+		// (steps after the last checkpoint, no report), which History
+		// rightly refuses until they are covered.
+		saved := dealReportsOffLog
+		dealReportsOffLog = true
+		defer func() { dealReportsOffLog = saved }()
 		var err error
 		s.dir, err = os.MkdirTemp("", "capsule-history-store-")
 		require.NoError(t, err)
@@ -464,6 +472,7 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 // the deal's sealed selection entry, which verify reports (the holder's own
 // word: holder_stated).
 func TestDealHistoryStopsAtTheLatestCheckpoint(t *testing.T) {
+	inLogReports(t)
 	d := historyStore(t)
 	dealRun(t, "check", "--deal", d.opened, "--input", filepath.Join(retailDemo, "check-pay.json"))
 	state := dealRun(t, "checkpoint", "status", "--deal", d.opened)
@@ -626,6 +635,7 @@ func TestDealHistoryFailsDealsSignedByTwoKeys(t *testing.T) {
 // cover every step is refused: its copy would have to name a report written
 // before its later steps. A history copy carries no report, so it is not.
 func TestDealHistoryRefusesAStaleOwnReport(t *testing.T) {
+	inLogReports(t)
 	raceSkip(t)
 	d := historyStore(t)
 	dealRun(t, "note", "--deal", d.private, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","channel":"web","text":"shipped"}`))

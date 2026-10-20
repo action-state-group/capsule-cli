@@ -944,6 +944,19 @@ text and discloses no other copy's. A receipt written before this change carries
 its text in the extension itself: `uninterpreted`, with the finding
 `extension_unbound`, and its page says the text is not checked.
 
+**Reports off the deal's log (capsule-cli#294).** A deal on the shelf whose log
+holds no sealed report seals each copy's report as a standalone signed Capsule,
+carried in the copy's `x-deal-report/v0` extension and on no log, bound to the
+deal checkpoint the copy is made at. Its log, its copies and its History then
+never show when or how often it was shared. `verify --bundle` checks that the
+report is signed by the key of the deal's last step, matches its disclosure,
+binds the copy's checkpoint and states that checkpoint's time; the page checks
+the same. A copy of such a deal whose deal section carries text instead of
+naming a standalone report is INVALID (`sealed_report_not_named`); one stripped
+of both sections is its steps only, verifies as such, and shows no report text.
+A sale's own log still records each sale bundle's cut, so it shows when a sale
+was bundled. An older capsulectl reports these copies as INVALID.
+
 **composed/v1.** A bundle carrying the `composed/v1` extension
 (draft-mih-zhang-agent-disclosure-bundle-01 §7.2: one evidence set built from
 several responders' answers to Evidence Requests) is checked too, through the

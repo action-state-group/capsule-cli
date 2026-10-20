@@ -104,12 +104,20 @@ func openShortMerchantDeal(t *testing.T) string {
 // raw .eml stays in the local deal store (`deal verify-email` re-checks it
 // there); not even the user's own bundle carries it.
 func TestDealSharedMerchantEmailIsDigestAndVerdict(t *testing.T) {
+	inBothReportModes(t, dealSharedMerchantEmailIsDigestAndVerdict)
+}
+
+func dealSharedMerchantEmailIsDigestAndVerdict(t *testing.T, inLog bool) {
 	dealFixture(t)
 	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})
 	dealID := openShortMerchantDeal(t)
 	for i, audience := range []string{cli.DealAudienceCounterparty, cli.DealAudienceAdjudicator} {
 		b, raw := sharedCopy(t, dealID, audience, "x")
-		require.Len(t, b["records"], 6+i+1, "the 6 steps (the check's counterparty_profile among them, withheld) and every copy's sealed report so far")
+		if inLog {
+			require.Len(t, b["records"], 6+i+1, "the 6 steps (the check's counterparty_profile among them, withheld) and every copy's sealed report so far")
+		} else {
+			require.Len(t, b["records"], 6, "the 6 steps (the check's counterparty_profile among them, withheld); no copy's report is on the log")
+		}
 		assert.Contains(t, raw, `"message_digest":"`)
 		assert.Contains(t, raw, `"key_records_digest":"`)
 		assert.Contains(t, raw, `"dkim":"pass"`)
