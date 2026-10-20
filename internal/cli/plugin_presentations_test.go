@@ -383,6 +383,10 @@ func TestPresentationsLoadBesideTheCheckedLauncher(t *testing.T) {
 	require.Len(t, modules, 1)
 	assert.Equal(t, fixtureScript, modules[0].Script.Bytes, "the modules come from beside the checked launcher")
 
+	// Without a checked path nothing is resolved again: the refusal says so
+	// (a fallback re-resolving name would reach b/ and refuse on a digest).
 	_, err = loadPresentations(pluginInfo{path: name, Presentations: info.Presentations})
-	assert.Error(t, err, "no checked path, no presentations")
+	var refusal *presentationRefusal
+	require.ErrorAs(t, err, &refusal, "no checked path, no presentations")
+	assert.Equal(t, "unreadable", refusal.Reason)
 }
