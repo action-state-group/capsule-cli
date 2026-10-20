@@ -766,7 +766,7 @@ func addPluginCommands(root *cobra.Command) {
 	// say what to install.
 	for name, short := range map[string]string{BookPluginName: "Evidence books: close, reconcile, request, respond, remote, result, report, backfill, migrate", DealPluginName: "Deals: open, check, close, report, request, respond, compose, ..."} {
 		if !reserved[name] {
-			root.AddCommand(firstPartyPlaceholder(name, short))
+			root.AddCommand(firstPartyPlaceholder(name, short, refused))
 		}
 	}
 }

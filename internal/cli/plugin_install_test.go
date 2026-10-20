@@ -686,9 +686,9 @@ func TestMissingPluginSaysHowToInstall(t *testing.T) {
 	old := CLIVersion
 	t.Cleanup(func() { CLIVersion = old })
 	CLIVersion = "v0.2.0"
-	assert.Contains(t, SafeError(missingPluginError("deal")), "install it with: capsulectl plugin install deal")
+	assert.Contains(t, SafeError(missingPluginError("deal", nil)), "install it with: capsulectl plugin install deal")
 	CLIVersion = "0.1.0-dev"
-	assert.Contains(t, SafeError(missingPluginError("deal")), "capsulectl plugin install ./capsulectl-deal")
+	assert.Contains(t, SafeError(missingPluginError("deal", nil)), "capsulectl plugin install ./capsulectl-deal")
 }
 
 func TestDispatchWarnsOnAMismatchedFirstPartyPlugin(t *testing.T) {
@@ -1127,4 +1127,40 @@ func TestARefusedLaunchersNameNeverReachesTheTerminalRaw(t *testing.T) {
 
 	assert.Equal(t, `a\x1bb\x0ac`, terminalSafe("a\x1bb\nc"))
 	assert.Equal(t, "plain /path é", terminalSafe("plain /path é"))
+}
+
+// Refused launchers on a group-writable ~/.local never run, never take a
+// name from an accepted launcher in a later root or from a core command, and
+// a refused first-party book says it is refused, as deal does.
+func TestRefusedLaunchersNeverRunOrShadow(t *testing.T) {
+	home, root := installHome(t)
+	marker := filepath.Join(t.TempDir(), "refused-ran")
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", marker))
+	require.NoError(t, err)
+	for _, name := range []string{"verify", BookPluginName} {
+		require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-"+name), []byte(launcherScript(name, "1", marker)), 0o755))
+	}
+	require.NoError(t, os.Remove(marker), "install's own handshake ran it once")
+	later := safeTempDir(t)
+	require.NoError(t, os.Chmod(later, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(later, "capsulectl-acme"), []byte(launcherScript("acme", "2", "")), 0o755))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root+string(os.PathListSeparator)+later)
+	require.NoError(t, os.Chmod(filepath.Join(home, ".local"), 0o775))
+
+	out, err := invoke(t, "", "acme", "hello")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "ran acme: hello", "the accepted launcher in the later root runs")
+
+	out, err = invoke(t, "", "verify", "--help")
+	require.NoError(t, err)
+	assert.Contains(t, out, "--bundle", "the core verify keeps its name")
+
+	_, err = invoke(t, "", "book", "close")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "capsulectl-book plugin at")
+	assert.Contains(t, SafeError(err), "chmod go-w ")
+	assert.NotContains(t, SafeError(err), "not installed")
+
+	_, err = os.Stat(marker)
+	assert.ErrorIs(t, err, os.ErrNotExist, "no refused launcher ran")
 }

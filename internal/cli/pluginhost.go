@@ -147,16 +147,19 @@ func CommandLine(c *cobra.Command, args []string) []string {
 // ForwardToPlugin runs the first-party plugin name with args, or says it is
 // not installed and where to install it.
 func ForwardToPlugin(c *cobra.Command, name string, args []string) error {
-	for _, info := range discoverPlugins() {
+	plugins, refused := discoverPluginsAndRefusals()
+	for _, info := range plugins {
 		if info.Name == name {
 			return execPlugin(c, info, args)
 		}
 	}
-	return missingPluginError(name)
+	return missingPluginError(name, refused)
 }
 
-func missingPluginError(name string) error {
-	_, refused := discoverPluginsAndRefusals()
+// missingPluginError says a first-party plugin is refused, with why, when
+// discovery refused it (refused is that discovery's, so no launcher is run
+// again), and otherwise that it is not installed and how to install it.
+func missingPluginError(name string, refused []refusedPlugin) error {
 	if err := refusedPluginError(name, refused); err != nil {
 		return err
 	}
@@ -267,15 +270,19 @@ func transitionalAliases() []*cobra.Command {
 }
 
 // firstPartyPlaceholder stands in for a first-party plugin that is not
-// installed, so `capsulectl book ...` says what to install instead of
-// reporting an unknown command.
-func firstPartyPlaceholder(name, short string) *cobra.Command {
+// installed, or that discovery refused, so `capsulectl book ...` says what to
+// install or why it is refused instead of reporting an unknown command.
+func firstPartyPlaceholder(name, short string, refused []refusedPlugin) *cobra.Command {
+	state := "not installed"
+	if refusedPluginError(name, refused) != nil {
+		state = "refused: see capsulectl plugin ls"
+	}
 	return &cobra.Command{
 		Use:                name,
-		Short:              short + " (plugin capsulectl-" + name + ", not installed)",
+		Short:              short + " (plugin capsulectl-" + name + ", " + state + ")",
 		DisableFlagParsing: true,
 		RunE: func(*cobra.Command, []string) error {
-			return missingPluginError(name)
+			return missingPluginError(name, refused)
 		},
 	}
 }
