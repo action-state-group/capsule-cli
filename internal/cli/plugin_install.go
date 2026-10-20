@@ -288,11 +288,11 @@ func candidateLauncher(root, name string) (state, path string) {
 	if _, err := os.Lstat(path); err != nil {
 		return "", path
 	}
-	if VerifyTrustedPath(path) != nil {
+	canonical, err := CheckedTrustedPath(path)
+	if err != nil {
 		return "", path
 	}
-	canonical, err := filepath.EvalSymlinks(path)
-	if err != nil || len(fullPathCheck(canonical)) > 0 {
+	if len(fullPathCheck(canonical)) > 0 {
 		return "unsafe", path
 	}
 	if _, err := pluginMetadata(canonical, name); err != nil {

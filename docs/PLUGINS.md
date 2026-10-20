@@ -65,12 +65,26 @@ discovery model is the reference):
   about who else belongs to it. On stock Ubuntu (umask 002) that means a
   one-time `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`; the
   refusal names each directory and the `chmod` that fixes it.
+- The symlink hops on the launcher's own path below its root are checked
+  the same way. The walk above follows only the resolved path, so a
+  directory holding a hop off that path (`R/capsulectl-x` -> `R/a/link` ->
+  `R/b/x` leaves `R/a` off it) is checked here: every directory a name is
+  looked up in from the root down, and the owner of every link followed.
+  Inside the root the strict rule applies; outside it (a hop through
+  another directory), a root-owned sticky directory is accepted.
 
 A launcher that fails any of these checks is skipped during discovery: it is
 never wired up as a command, and `capsulectl plugin ls` lists it under
 `refused` with the reason. This is re-checked again at dispatch time, immediately before
 exec, so a launcher swapped out between discovery and invocation is still
 caught.
+
+**What runs is what was checked.** The handshake, dispatch and the rules
+checker execute (or read) the resolved path the checks judged, never the
+name the launcher was found by. A symlink on that name swapped after the
+check reaches nothing that runs. argv[0] is still the name it was found by;
+a shell-script launcher's `$0`, which is the path the kernel executed, is
+the resolved path.
 
 ## The handshake
 

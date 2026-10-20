@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Dispatch runs the launcher it checked (capsule-cli#296)
+
+- **Fixed (security):** the trust walk judged a launcher's resolved path,
+  but the handshake and dispatch executed the name it was found by, so a
+  symlink hop on that name could be repointed between the check and the
+  exec. The handshake, dispatch and the rules checker now execute or read
+  the checked resolved path. The walk also checks the hops below the root:
+  every directory a name is looked up in, and the owner of every link
+  followed.
+- **Existing installs:** a launcher reached through a symlink in a directory
+  another user can write, or through another user's symlink, is refused,
+  with the directory and the fix named. A plain launcher, or one linked
+  within a safe root, runs as before. A shell-script launcher's `$0` is now
+  its resolved path; argv[0] is unchanged.
+
 ### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
 
 - **Changed (pages):** the browser viewer every page embeds is rebuilt from
