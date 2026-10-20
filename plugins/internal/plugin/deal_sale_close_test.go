@@ -215,3 +215,33 @@ func TestASaleCloseSaysHowManyNegotiationsAreStillOpen(t *testing.T) {
 		})
 	}
 }
+
+// The count's edges: a thread whose opening a crash left out counts while
+// it has no final close; a thread registered but never opened does not; a
+// close whose outcome is still open (pending) does not end a negotiation.
+func TestASaleCloseCountsOnlyOpenedUnfinishedThreads(t *testing.T) {
+	t.Run("an opening a crash left out", func(t *testing.T) {
+		dealFixture(t)
+		saleID, _ := newSale(t)
+		openThreadStoppingAt(t, saleID, "authority")
+		closed := dealRun(t, "sale", "close", "--sale", saleID)
+		assert.Equal(t, float64(1), closed["open_negotiations"])
+	})
+	t.Run("never opened", func(t *testing.T) {
+		dealFixture(t)
+		saleID, _ := newSale(t)
+		openThreadStoppingAt(t, saleID, "baseline")
+		buyerThread(t, saleID, "buyer-b.example")
+		closed := dealRun(t, "sale", "close", "--sale", saleID)
+		assert.Equal(t, float64(1), closed["open_negotiations"])
+		assert.Equal(t, "stops taking new buyers; 1 negotiation still open", closed["status"])
+	})
+	t.Run("a pending close", func(t *testing.T) {
+		dealFixture(t)
+		saleID, _ := newSale(t)
+		th := buyerThread(t, saleID, "buyer-a.example")
+		dealRun(t, "close", "--deal", th, "--input", writeJSON(t, `{"status":"pending"}`))
+		closed := dealRun(t, "sale", "close", "--sale", saleID)
+		assert.Equal(t, float64(1), closed["open_negotiations"])
+	})
+}

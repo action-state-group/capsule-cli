@@ -6,6 +6,7 @@
 
 Once this version has written to a deal store, do not run an older
 capsulectl on that store. Three changes make the upgrade one-way:
+
 - **The shelf (capsule-cli#242):** the first deal command that writes moves
   the store onto its evidencebook shelf, once. An older build can still run
   on it, but its ticks show how many book deals the store holds.
@@ -14,8 +15,8 @@ capsulectl on that store. Three changes make the upgrade one-way:
   shared. An older capsulectl also reports new copies as INVALID: verify them
   with this version or later.
 - **A closed sale (capsule-cli#271):** an older build cannot load a closed
-  sale's log, and if this version crashed at the wrong moment, it refuses to
-  open the whole store.
+  sale's log, and if this version crashed at the wrong moment, an older build
+  refuses to open the whole store.
 
 ### Dispatch runs the launcher it checked (capsule-cli#296)
 
@@ -78,11 +79,13 @@ capsulectl on that store. Three changes make the upgrade one-way:
 
 ### A merchant email's seal claims only the seal time (capsule-cli#289)
 
-- **Fixed (copy):** the receipt email's note, the deal page and the skill
-  said our seal shows this device "kept these exact bytes from that time on",
-  which a seal does not show. They now say it held them no later than the
-  seal time, and that who sent them is checked by the sender's DKIM
-  signature, not by our seal.
+- **Fixed (copy):** the receipt email's note and the deal page said our seal
+  shows this device "kept these exact bytes from that time on", and the skill
+  "from this time on", which a seal does not show. They now say it held them
+  no later than the seal time, and that who signed them is checked by the
+  signing domain's DKIM signature, not by our seal. The DKIM signature is
+  described as the signing domain's (the merchant's, or its mail
+  provider's), showing what that domain signed.
 
 ### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
 
@@ -156,8 +159,9 @@ capsulectl on that store. Three changes make the upgrade one-way:
   holds for presentations and the rules checker, which use the walk, and for
   a `~/.local` symlinked into a directory another user can write.
 - **Fixed:** running a refused plugin, or `deal` or `book` when theirs is
-  refused, prints the refusal and its fix, where it said "unknown command" or
-  that the plugin was not installed. A refused launcher whose name is not a
+  refused, prints the refusal and its fix, where it said only "operation
+  failed" or that the plugin was not installed. The fix's `chmod go-w` names
+  each path as one shell word, so it runs as pasted. A refused launcher whose name is not a
   plugin name is listed by `plugin ls` only, and a refusal's paths are
   printed with control characters escaped.
 

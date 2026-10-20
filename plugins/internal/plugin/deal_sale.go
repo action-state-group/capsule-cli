@@ -110,12 +110,6 @@ func dealSaleCloseCommand() *cobra.Command {
 	return cmd
 }
 
-// closeSale seals a sale's sale_close and cuts its checkpoint
-// (capsule-cli#271), so the cadence takes the sale's log out of its live
-// set once a witnessed tick covers it. Every opened thread's opening is
-// sealed first (a crash may have come between a thread's task authority
-// and it), so a sale_cut is the only record that ever follows the close.
-// It leaves the session on the sale's log.
 // saleClosedStatus is the line `deal sale close` prints: the sale takes no
 // new buyer, and how many buyers' threads are still negotiating.
 func saleClosedStatus(open int) string {
@@ -128,8 +122,13 @@ func saleClosedStatus(open int) string {
 	return fmt.Sprintf("stops taking new buyers; %d negotiations still open", open)
 }
 
-// closeSale seals the sale's sale_close, and returns how many of its
-// buyers' threads are still open: opened, with no final close.
+// closeSale seals a sale's sale_close and cuts its checkpoint
+// (capsule-cli#271), so the cadence takes the sale's log out of its live
+// set once a witnessed tick covers it. Every opened thread's opening is
+// sealed first (a crash may have come between a thread's task authority
+// and it), so a sale_cut is the only record that ever follows the close.
+// It leaves the session on the sale's log, and returns how many of the
+// sale's buyers' threads are still open: opened, with no final close.
 func (s *dealSession) closeSale(ctx context.Context, saleID string) (sealedEvent, interface{}, int, error) {
 	if _, _, err := s.saleOf(ctx, saleID); err != nil {
 		return sealedEvent{}, nil, 0, err
@@ -187,7 +186,8 @@ func (s *dealSession) closeSale(ctx context.Context, saleID string) (sealedEvent
 
 // threadState is whether a buyer's thread has opened (its task authority
 // is sealed), and whether it is still open: opened, with no final close.
-// Both are read from its sealed steps.
+// Both are read from its sealed steps; "final close" is finalClose's rule
+// (a close whose outcome is not open), applied to the index's steps.
 func (s *dealSession) threadState(ctx context.Context, threadID string) (opened, still bool, err error) {
 	steps, err := s.index.steps(ctx, stepFilter{DealID: threadID})
 	if err != nil {
