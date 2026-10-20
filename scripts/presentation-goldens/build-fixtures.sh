@@ -21,7 +21,14 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 here="$root/scripts/presentation-goldens"
 out="$root/internal/cli/testdata/presentation"
 aac="${1:?usage: build-fixtures.sh AAC_CHECKOUT}"
-aac_commit=$(cd "$root" && go list -m -f '{{.Version}}' github.com/action-state-group/agent-action-capsule/go | sed 's/.*-//')
+# The Git ref of the agent-action-capsule commit go.mod pins: a
+# pseudo-version's commit hash, or the go module's tag (go/vX.Y.Z).
+aac_version=$(cd "$root" && go list -m -f '{{.Version}}' github.com/action-state-group/agent-action-capsule/go)
+if [[ "$aac_version" =~ [0-9]{14}-([0-9a-f]{12})$ ]]; then
+  aac_commit="${BASH_REMATCH[1]}"
+else
+  aac_commit="go/$aac_version"
+fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
