@@ -56,6 +56,7 @@ capsulectl get --profile NAME --capsule-id ID
 capsulectl get --profile NAME --capsule-id ID --raw --output RECORD.json
 capsulectl verify --profile NAME --capsule RECORD.json
 capsulectl verify --bundle BUNDLE.json   # an Evidence Bundle, offline, no profile
+capsulectl verify --history HISTORY.json --holder-key HEX   # a personal_history_basic/1 History, offline
 ```
 
 Readable `get` exposes capsule_id, capsule, producer_envelope, artifacts at

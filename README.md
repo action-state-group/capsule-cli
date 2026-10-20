@@ -285,6 +285,7 @@ capsulectl emit --profile NAME --request INPUT.json --seal-output ARTIFACT.json
 capsulectl get --profile NAME --capsule-id ID [--raw] [--output FILE.json]
 capsulectl verify --profile NAME --capsule ARTIFACT.json|CAPSULE.json
 capsulectl verify --bundle BUNDLE.json [--witness-directory WITNESSES.json]
+capsulectl verify --history HISTORY.json [--holder-key HEX]...
 capsulectl publish --profile NAME --request INPUT.json
 capsulectl cll list --profile NAME --after SEQ [--through SEQ] [--limit 100] [--log-id LOG]
 capsulectl cll append --profile NAME --capsule ARTIFACT.json
@@ -999,6 +1000,32 @@ Its verdicts agree with capsule-emit's offline bundle verifier, given the same
 witness directory. Bundles from `capsulectl bundle` carry the checkpoint's
 signed fields and `checkpoint.cose`, and each record's producer signature
 inline.
+
+`verify --history HISTORY.json` checks a History at the Basic level of the
+Personal-Agent History Profile v0 (`personal_history_basic/1`). The file is the
+profile's one-file form: the definition, and each request and reply as carried.
+It is checked offline, from the file alone, with agent-action-capsule's
+evidence-interop/0 verifier and History evaluator:
+
+- each reply's envelope properties, and whether the profile accepts it;
+- the seven History properties (`definition_form`, `definition_binding`,
+  `selection_coverage`, `single_signer`, `single_anchor`, `artifact_form`,
+  `record_kinds`);
+- for an accepted History, each selected deal's state, counted in deals.
+
+`--holder-key` names a holder key you accept, obtained from the holder by
+another channel; repeat it for each. Without one, no envelope passes
+`responder_trust`, so no History is accepted. The output then names the key the
+History is signed by, runs the other checks as if that key were trusted, and
+exits 3.
+
+The output starts with what a Basic History never establishes: any outcome,
+that the selection is complete, that anything happened at a claimed time, and
+who holds the key. It lists the checks that cannot run at this level: record
+inclusion against the anchor, and whether the anchor is a witnessed tick. It
+ends with the History's limits. The exit is 0 when the History is accepted, 3
+when nothing failed but no holder key was given, and 1 when a check failed. A
+released `x-history-selection/v0` file still verifies with `verify --bundle`.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
 
