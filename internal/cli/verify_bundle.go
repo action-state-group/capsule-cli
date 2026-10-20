@@ -292,6 +292,9 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 		if x.Kind == DealProfile && x.Status == "uninterpreted" {
 			dealSeen = true
 			entry = DealReportEntry(value, result)
+			if entry["report"] == "standalone" {
+				entry["as_of"] = dealReportAsOf(value, witnesses, anchored)
+			}
 			if entry["status"] == "fail" {
 				claims = append(claims, aacbundle.ClaimResult{Status: "fail", Findings: entry["findings"].([]string)})
 			}
@@ -317,7 +320,10 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 		extensions = append(extensions, entry)
 	}
 	// A deal bundle that discloses a sealed report but carries no x-deal-v0
-	// extension at all had it removed.
+	// extension at all had it removed. A copy whose report is standalone
+	// (capsule-cli#294) and that has lost both sections is its steps only:
+	// it shows no report text, and nothing here can tell it from a book's
+	// own bundle, so it is judged as one (a stated limit).
 	if !dealSeen {
 		if entry := DealReportEntry(value, result); entry["status"] == "fail" {
 			extensions = append(extensions, entry)
@@ -435,6 +441,22 @@ func nonNilStrings(values []string) []string {
 //   - a bundle written before reports were sealed carries the text in the
 //     extension itself, which no record seals: uninterpreted, with the
 //     finding extension_unbound (editing it leaves the verdict VALID).
+//
+// CheckDealStandaloneReport runs a copy's standalone report checks
+// (capsule-cli#294) as verify --bundle does, for a producer or a reader that
+// admits a copy without the full verify: nil when the copy carries none or
+// it passes.
+func CheckDealStandaloneReport(value map[string]interface{}) error {
+	exts, _ := value["extensions"].(map[string]interface{})
+	if _, ok := exts[DealReportExtension]; !ok {
+		return nil
+	}
+	if entry := DealReportEntry(value, aacbundle.VerificationResult{}); entry["status"] != "pass" {
+		return errors.Join(ErrBundleInvalid, errors.New("the copy's standalone report does not verify (sealed_report_unverified)"))
+	}
+	return nil
+}
+
 func DealReportEntry(value map[string]interface{}, result aacbundle.VerificationResult) map[string]any {
 	reports := map[string]bool{}
 	records, _ := value["records"].([]interface{})

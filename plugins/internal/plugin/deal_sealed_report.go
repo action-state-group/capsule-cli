@@ -133,7 +133,10 @@ func (s *dealSession) dealStandaloneReport(dealID, audience string, ext, b map[s
 	}
 	// The report is signed by the key that signed the deal's last step, or
 	// a copy made now would not verify (DealReportEntry check 2).
-	if cli.DealLastStepKey(b) != hex.EncodeToString(s.key.Public().(ed25519.PublicKey)) {
+	switch last := cli.DealLastStepKey(b); {
+	case last == "":
+		return "", nil, cli.Hint(cli.ErrConflict, "the copy's last step does not verify, so no report can be bound to it")
+	case last != hex.EncodeToString(s.key.Public().(ed25519.PublicKey)):
 		return "", nil, errDealKeyChanged
 	}
 	nonce := make([]byte, 32)
@@ -177,6 +180,24 @@ func (s *dealSession) dealStandaloneReport(dealID, audience string, ext, b map[s
 		return "", nil, err
 	}
 	return record.CapsuleID, map[string]interface{}{"record": capsule, "agent_input": input}, nil
+}
+
+// checkProducedReport runs a produced copy's standalone report checks over
+// its JSON form, as a reader decodes it: a copy that would not verify is
+// refused, never written.
+func checkProducedReport(b map[string]interface{}) error {
+	raw, err := json.Marshal(b)
+	if err != nil {
+		return err
+	}
+	decoded, err := cli.DecodeBundleJSON(raw)
+	if err != nil {
+		return err
+	}
+	if err = cli.CheckDealStandaloneReport(decoded); err != nil {
+		return cli.Hint(cli.ErrConflict, "the copy's report does not verify against its own checkpoint, so no copy is written: "+err.Error())
+	}
+	return nil
 }
 
 // errDealKeyChanged refuses a copy of a deal whose last step was signed

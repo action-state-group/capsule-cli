@@ -29,6 +29,19 @@ func inLogReports(t *testing.T) {
 	t.Cleanup(func() { dealReportsOffLog = old })
 }
 
+// inBothReportModes runs fn with reports off the deal's log (the default
+// since capsule-cli#294) and in it (legacy and already-shared deals).
+func inBothReportModes(t *testing.T, fn func(t *testing.T, inLog bool)) {
+	for _, inLog := range []bool{false, true} {
+		t.Run(map[bool]string{false: "standalone reports", true: "in-log reports"}[inLog], func(t *testing.T) {
+			if inLog {
+				inLogReports(t)
+			}
+			fn(t, inLog)
+		})
+	}
+}
+
 func legacyDeals(t *testing.T) {
 	t.Helper()
 	old := dealNewDealsOnBooks

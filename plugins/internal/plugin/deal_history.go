@@ -235,6 +235,8 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 	s.dp.LogID = cli.DealLogID(dealID)
 	// Whether the deal's reports are off its log is read from the store, as
 	// a deal command reads it (reportsOffLog).
+	savedOnBook := s.onBook
+	defer func() { s.onBook = savedOnBook }()
 	s.onBook = false
 	if x, ok := s.index.(shelfDealIndex); ok {
 		legacy, err := x.isLegacy(ctx, dealID)
@@ -243,7 +245,6 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 		}
 		s.onBook = !legacy
 	}
-	defer func() { s.onBook = false }()
 	if s.t, err = cli.OpenTarget(ctx, s.dp, cli.UseRead); err != nil {
 		return nil, 0, 0, err
 	}
@@ -378,6 +379,11 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 	if standalone != nil {
 		extensions[cli.DealReportExtension] = standalone
 	}
+	defer func() {
+		if err == nil && standalone != nil {
+			err = checkProducedReport(b)
+		}
+	}()
 	if dealRole(covered) == dealRoleSeller {
 		extensions[dealSellerExtension] = map[string]interface{}{}
 	}

@@ -92,7 +92,10 @@ func TestDealReportAgentAndCounterpartyAnomalies(t *testing.T) {
 }
 
 func TestDealReportIsOneLocalVerifyingPage(t *testing.T) {
-	inLogReports(t)
+	inBothReportModes(t, dealReportIsOneLocalVerifyingPage)
+}
+
+func dealReportIsOneLocalVerifyingPage(t *testing.T, inLog bool) {
 	dealFixture(t)
 	dealID := openJetSki(t)
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
@@ -116,7 +119,13 @@ func TestDealReportIsOneLocalVerifyingPage(t *testing.T) {
 	assert.Equal(t, "pass", v.GraphClosure.Status)
 	assert.Equal(t, "pass", v.IntervalCoverage.Status, v.IntervalCoverage.Findings)
 	assert.Equal(t, "pass", v.PerRecordMembership.Status, v.PerRecordMembership.Findings)
-	assert.Len(t, b["records"], 10, "exactly this deal's 9 steps (its check's counterparty_profile among them) and this copy's sealed report, nothing from any other deal")
+	if inLog {
+		assert.Len(t, b["records"], 10, "exactly this deal's 9 steps (its check's counterparty_profile among them) and this copy's sealed report, nothing from any other deal")
+	} else {
+		assert.Len(t, b["records"], 9, "exactly this deal's 9 steps (its check's counterparty_profile among them), nothing from any other deal; the report rides off the log")
+		_, ok := b["extensions"].(map[string]interface{})[cli.DealReportExtension]
+		assert.True(t, ok, "the page's own text is the standalone report")
+	}
 	for _, d := range v.Disclosures {
 		assert.Equal(t, "disclosure_match", string(d.Status), "every step's record is disclosed: it carries no raw values")
 	}

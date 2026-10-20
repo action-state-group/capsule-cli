@@ -166,6 +166,9 @@ func (s *dealSession) dealBundleOf(path, dealID string, events []sealedEvent) (m
 	if err = cli.VerifyProducedBundle(b, true); err != nil {
 		return nil, notThis("it does not verify")
 	}
+	if err = cli.CheckDealStandaloneReport(b); err != nil {
+		return nil, notThis("its report does not verify")
+	}
 	cert, _ := b["completeness_certificate"].(map[string]interface{})
 	if fmt.Sprint(cert["log_id"]) != s.dp.LogID {
 		return nil, notThis("its log is not this deal's")

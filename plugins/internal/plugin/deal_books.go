@@ -729,9 +729,15 @@ func (s *dealSession) coverSteps(ctx context.Context, dealID string, book *evide
 	if err != nil {
 		return cli.ErrConflict
 	}
+	if err := dealCoverStops(); err != nil {
+		return err
+	}
 	_, err = book.CheckpointAt(ctx, at)
 	return err
 }
+
+// dealCoverStops is a test hook: the recovery cut fails.
+var dealCoverStops = func() error { return nil }
 
 // coverLiveSteps is coverSteps for every live deal book, before a tick cuts
 // them.

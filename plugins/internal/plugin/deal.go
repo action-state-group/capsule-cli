@@ -2228,15 +2228,29 @@ func dealReportCommand() *cobra.Command {
 				// shows that, and says apart, dated, where the deal stood when
 				// it was made (capsule-cli#294). Its cancel-by dates are the
 				// email's own, dated as of when it was made.
-				now, at := cli.DealClock(), cli.DealClock()
+				now := cli.DealClock()
+				lifecycle := buildDealLifecycle(events, now)
 				composed := ""
-				if _, _, form := cli.DealSealedReport(b); form == "standalone" {
-					if at, err = bundleCheckpointTime(b); err != nil {
+				if signed, _, form := cli.DealSealedReport(b); form == "standalone" {
+					// The lifecycle is the one the report signed, as of its
+					// checkpoint, even when the bundle is an earlier one
+					// (--from-bundle); where the deal stands now is the
+					// composed note's, dated.
+					at, err := bundleCheckpointTime(b)
+					if err != nil {
 						return err
+					}
+					raw, err := json.Marshal(signed["lifecycle"])
+					if err != nil {
+						return err
+					}
+					lifecycle = dealLifecycle{}
+					if err = json.Unmarshal(raw, &lifecycle); err != nil {
+						return cli.ErrConflict
 					}
 					composed = fmt.Sprintf("Made by capsulectl at %s, when the deal stood so: %s This report shows the deal as of %s; open the attached page for where it stands now.", now.UTC().Format("2006-01-02T15:04:05Z"), buildDealLifecycle(events, now).Text, at.Format("2006-01-02T15:04:05Z"))
 				}
-				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Authority: report.Authority, AuthorityOrder: dealAuthorityOrder, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, now, 2), Cancellations: dealCancellations(events), Lifecycle: buildDealLifecycle(events, at), ComposedNote: composed, Steps: len(events)}
+				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Authority: report.Authority, AuthorityOrder: dealAuthorityOrder, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, now, 2), Cancellations: dealCancellations(events), Lifecycle: lifecycle, ComposedNote: composed, Steps: len(events)}
 				eml, subject, text, htmlBody, err := dealEmail(view, []byte(page), bundle, cli.DealClock())
 				if err != nil {
 					return err

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
 	"github.com/action-state-group/agent-action-capsule/go/envelope"
 )
@@ -84,7 +85,7 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 		return fail
 	}
 	key, ok := verifiedProducerKey(record)
-	if !ok || key != lastStepKey(value) {
+	if !ok || key != DealLastStepKey(value) {
 		return fail
 	}
 	capsule := make(map[string]interface{}, len(record))
@@ -127,6 +128,35 @@ func standaloneReportEntry(value map[string]interface{}, x map[string]interface{
 	return map[string]any{"kind": DealProfile, "status": "pass", DealReportPointer: id, "report": "standalone"}
 }
 
+// dealReportAsOf says when a standalone report's deal state is from, and what
+// backs it (capsule-cli#294): the bound checkpoint's signed time, which is
+// the deal's last step's when that step's record states the same time, and
+// separately whether a witness saw that very checkpoint. No time is taken
+// from a cadence tick or from the report's own Capsule.
+func dealReportAsOf(value map[string]interface{}, witnesses aacbundle.ClaimResult, anchored bool) string {
+	cp, _ := value["checkpoint"].(map[string]interface{})
+	at, err := time.Parse(time.RFC3339Nano, fmt.Sprint(cp["timestamp"]))
+	if err != nil {
+		return "as of an unreadable checkpoint time"
+	}
+	basis := "the deal's checkpoint"
+	if last := lastStepRecord(value); last != nil {
+		header, _ := last["evidence_record_header"].(map[string]interface{})
+		if stepAt, err := time.Parse(time.RFC3339Nano, fmt.Sprint(header["committed_at"])); err == nil && stepAt.Equal(at) {
+			basis = "the deal's last step"
+		}
+	}
+	witnessed := "not witnessed"
+	chain := CadenceChainOf(value)
+	switch {
+	case witnesses.Status == "fail":
+		witnessed = "its witness claim failed"
+	case anchored && witnesses.Status == "pass" && chain["extent"] != "part":
+		witnessed = "witnessed"
+	}
+	return fmt.Sprintf("as of %s at %s (the producer's time); %s", basis, at.UTC().Format("2006-01-02T15:04:05Z"), witnessed)
+}
+
 // dealCopyAudiences are the audiences a copy's report is made for.
 var dealCopyAudiences = map[string]bool{DealAudienceCounterparty: true, DealAudienceAdjudicator: true, DealAudienceKeep: true}
 
@@ -152,10 +182,21 @@ func verifiedProducerKey(record map[string]interface{}) (string, bool) {
 // in a bundle: the record at the highest log position whose evidence record
 // header is a step's. "" when there is none, or it does not verify. A
 // standalone report must be signed by it (capsule-cli#294).
-func DealLastStepKey(value map[string]interface{}) string { return lastStepKey(value) }
+func DealLastStepKey(value map[string]interface{}) string {
+	last := lastStepRecord(value)
+	if last == nil {
+		return ""
+	}
+	key, ok := verifiedProducerKey(last)
+	if !ok {
+		return ""
+	}
+	return key
+}
 
-// lastStepKey is DealLastStepKey.
-func lastStepKey(value map[string]interface{}) string {
+// lastStepRecord is a deal's last step in a bundle: the record at the
+// highest log position whose evidence record header is a step's.
+func lastStepRecord(value map[string]interface{}) map[string]interface{} {
 	cert, _ := value["completeness_certificate"].(map[string]interface{})
 	memberships, _ := cert["memberships"].(map[string]interface{})
 	records, _ := value["records"].([]interface{})
@@ -176,14 +217,7 @@ func lastStepKey(value map[string]interface{}) string {
 			last, lastSeq = r, seq
 		}
 	}
-	if last == nil {
-		return ""
-	}
-	key, ok := verifiedProducerKey(last)
-	if !ok {
-		return ""
-	}
-	return key
+	return last
 }
 
 // holdsDealSteps is whether a bundle's records include a deal step on a

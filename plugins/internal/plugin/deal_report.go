@@ -140,6 +140,11 @@ func (s *dealSession) dealReportBundleAt(ctx context.Context, events []sealedEve
 	if err = cli.VerifyProducedBundle(b, true); err != nil {
 		return nil, err
 	}
+	// A copy is written only when its standalone report verifies, as a
+	// reader's verify --bundle checks it.
+	if err = checkProducedReport(b); err != nil {
+		return nil, err
+	}
 	return b, nil
 }
 

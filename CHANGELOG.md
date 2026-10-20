@@ -31,7 +31,10 @@
   checkpoint's time. A `deal respond` time floor later than the deal's last
   step cannot be met. A standalone report rests on the step-signing key alone.
   After a signing-key change, a deal can be copied again only once it has a
-  step under the new key.
+  step under the new key. A sale's own log still records each sale bundle's
+  cut, so a sale's bundle shows when and how often it was made. A copy
+  stripped of both its deal section and its report is its steps only and
+  verifies as such: it shows no report text.
 - **Compatibility:** verify new copies with this version or later: an older
   capsulectl reports them as INVALID. Do not run an older build on a store
   with such deals: a copy it makes puts the deal's reports back in its log.

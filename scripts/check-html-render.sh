@@ -200,10 +200,14 @@ else
 fi
 
 # A deal receipt: its deal text (summary lines, step lines, amounts) is
-# sealed as a record in the bundle (internal/cli/deal_sealed_report.go). The
-# page renders it and says it checked it; a copy with one sealed line edited
-# says it did not verify and shows none of it, and verify --bundle calls it
-# INVALID. The deal is the synthetic retail-checkout demo.
+# sealed as a standalone signed report the copy carries in x-deal-report/v0
+# (internal/cli/deal_sealed_report.go). The page renders it and says it
+# checked it; a copy with one sealed line edited, or its report stripped to
+# inline text, is refused and shows none of it, and verify --bundle calls it
+# INVALID. The deal is the synthetic retail-checkout demo. The page's refusal
+# of a downgraded receipt sealed on the deal's log, as capsulectl wrote before
+# capsule-cli#294, is checked under node in
+# plugins/internal/plugin/deal_page_standalone_test.go.
 demo="$root/skills/deal/demo/retail-checkout"
 mkdir deal-receipt
 (
@@ -224,9 +228,13 @@ check "deal-receipt: the page says its text is sealed and checked" contains rece
 capsulectl verify --bundle receipt.html >receipt-verify.json && verdict=0 || verdict=$?
 check "deal-receipt: verify --bundle: VALID, exit 0" test "$verdict" -eq 0
 perl -0ne 'print $1 if /window\.__BUNDLE__ = (.*?);<\/script>/s' receipt.html >receipt.json
-did_line=$(jq -r '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report.did_line' receipt.json)
+did_line=$(jq -r '.extensions["x-deal-report/v0"].agent_input.report.did_line' receipt.json)
 check "deal-receipt: the page renders its sealed summary line" contains receipt.html.dom "<p class=\"deal-note\">$did_line</p>"
-jq -c '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report.did_line = "A line nobody sealed."' receipt.json >receipt-edited.json
+
+# deal-receipt-edited: one line of the signed report edited. The bundle's own
+# records still verify, so the page's runtime runs the deal view, which
+# refuses: the report's signature no longer verifies.
+jq -c '.extensions["x-deal-report/v0"].agent_input.report.did_line = "A line nobody sealed."' receipt.json >receipt-edited.json
 perl -0pe 'BEGIN{open my $f,"<","receipt-edited.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-edited.html
 rehash_bundle_csp receipt.html receipt-edited.html
 check "deal-receipt-edited: the page carries the edited line" contains receipt-edited.html 'A line nobody sealed.'
@@ -238,28 +246,27 @@ render receipt-unpinned.html
 check "deal-receipt-unpinned: an edited bundle the CSP does not pin shows no deal text" lacks receipt-unpinned.html.dom '<p class="deal-note">A line nobody sealed.</p>'
 check "deal-receipt-unpinned: and no deal section" lacks receipt-unpinned.html.dom '<h1>Deal report</h1>'
 render receipt-edited.html
-# The page's runtime says the bundle failed and selects no presentation: the
-# deal view never runs on a bundle that did not verify.
-check "deal-receipt-edited: the page says the bundle did not verify" contains receipt-edited.html.dom 'data-refusal="unverified-bundle"'
-check "deal-receipt-edited: and no deal section" lacks receipt-edited.html.dom '<h1>Deal report</h1>'
+check "deal-receipt-edited: the page says the text could not be checked" contains receipt-edited.html.dom "<p class=\"deal-bad\">⚠️ The deal's text could not be checked against its sealed report"
 check "deal-receipt-edited: the page shows no edited line" lacks receipt-edited.html.dom '<p class="deal-note">A line nobody sealed.</p>'
+check "deal-receipt-edited: no \"not checked\" label" lacks receipt-edited.html.dom 'data-unchecked="x-deal-v0"'
 capsulectl verify --bundle receipt-edited.html >/dev/null 2>&1 && verdict=0 || verdict=$?
 check "deal-receipt-edited: verify --bundle: INVALID, exit 1" test "$verdict" -eq 1
 
-# deal-receipt-downgraded: the sealed report's record kept, its disclosure
-# dropped, and edited text put inline in the extension, as a receipt from
-# before reports were sealed carries it. The page refuses rather than show
-# it under the "not checked" label; verify --bundle calls it INVALID.
-jq -c '.extensions["x-deal-v0"].sealed_report as $id | .disclosures[$id].agent_input.report as $text
-  | .extensions["x-deal-v0"] = ($text | .did_line = "A line nobody sealed.") | del(.disclosures[$id])' receipt.json >receipt-downgraded.json
+# deal-receipt-downgraded: the standalone report dropped and edited text put
+# inline in x-deal-v0, as a receipt from before reports were sealed carries
+# it. The page refuses rather than show it under the "not checked" label;
+# verify --bundle calls it INVALID: the copy names no sealed report.
+jq -c '.extensions["x-deal-report/v0"].agent_input.report as $text
+  | .extensions["x-deal-v0"] = ($text | .did_line = "A line nobody sealed.") | del(.extensions["x-deal-report/v0"])' receipt.json >receipt-downgraded.json
 perl -0pe 'BEGIN{open my $f,"<","receipt-downgraded.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-downgraded.html
 rehash_bundle_csp receipt.html receipt-downgraded.html
 check "deal-receipt-downgraded: the page carries the inline line" contains receipt-downgraded.html 'A line nobody sealed.'
 render receipt-downgraded.html
-check "deal-receipt-downgraded: the page says the text could not be checked" contains receipt-downgraded.html.dom "<p class=\"deal-bad\">⚠️ The deal's text could not be checked against its sealed record"
+check "deal-receipt-downgraded: the page says the text could not be checked" contains receipt-downgraded.html.dom "<p class=\"deal-bad\">⚠️ The deal's text could not be checked against its sealed report"
 check "deal-receipt-downgraded: the page shows no inline line" lacks receipt-downgraded.html.dom '<p class="deal-note">A line nobody sealed.</p>'
 check "deal-receipt-downgraded: no \"not checked\" label" lacks receipt-downgraded.html.dom 'data-unchecked="x-deal-v0"'
-capsulectl verify --bundle receipt-downgraded.html >/dev/null 2>&1 && verdict=0 || verdict=$?
+capsulectl verify --bundle receipt-downgraded.html >receipt-downgraded-verify.json 2>/dev/null && verdict=0 || verdict=$?
 check "deal-receipt-downgraded: verify --bundle: INVALID, exit 1" test "$verdict" -eq 1
+check "deal-receipt-downgraded: verify --bundle names the missing sealed report" contains receipt-downgraded-verify.json 'sealed_report_not_named'
 
 exit "$fail"

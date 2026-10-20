@@ -240,7 +240,8 @@ const dealViewModel = async (context) => {
   // membership and the range proof, matches opened words against their
   // sealed digests, checks a countersignature's signature under the key it
   // names, and checks the agent's signature only on the records it cites as
-  // signers (a Close and the records that acknowledge or rebut it). It has no
+  // signers (a Close and the records that acknowledge or rebut it), and, for a
+  // standalone report (capsule-cli#294), every step's. Otherwise it has no
   // verifier for the records' own signatures in general, a witness receipt or
   // a consistency proof, and it passes a bundle whose checkpoint signature it
   // could not check, recording checkpoint_unverified. A viewer with no
@@ -267,7 +268,10 @@ const dealViewModel = async (context) => {
     const unchecked = [v.perRecordMembership, v.intervalCoverage].some((c) => (c.findings || []).includes("checkpoint_unverified"));
     (unchecked ? checks.cli : checks.page).push("checkpoint-signature");
   }
-  if (context.records.some((r) => r && typeof r.signature === "string" && r.signature)) checks.cli.push("producer-signatures");
+  // A standalone report's checks verified every step's envelope here
+  // (dealStandaloneReport), so the steps' signatures were checked by this page.
+  if (standalone !== undefined) checks.page.push("producer-signatures");
+  else if (context.records.some((r) => r && typeof r.signature === "string" && r.signature)) checks.cli.push("producer-signatures");
   if (witnesses.length > 0) checks.cli.push("witness-receipt");
   if (cadence.earlier && typeof cadence.earlier === "object") checks.cli.push("consistency");
 
@@ -622,7 +626,8 @@ const dealViewRender = (model, regions) => {
       const today = new Date().toISOString().slice(0, 10);
       const due = life.open && typeof life.open.expect_close_by === "string" ? life.open.expect_close_by : "";
       const passed = life.state === "open" && due !== "" && due < today ? ` The expected close, ${due}, has passed as of today.` : "";
-      host.append(el("p", `Not part of the report, worked out by this page when you opened it: today is ${today}; this report's state is as of ${life.as_of}.${passed}`, "deal-note"));
+      host.append(el("p", `This report states the deal as of its checkpoint at ${life.as_of} (the producer's time); whether a witness saw that checkpoint is checked by capsulectl verify, not here.`, "deal-note"));
+      host.append(el("p", `Not part of the report, worked out by this page when you opened it: today is ${today}.${passed}`, "deal-note"));
     }
   }
 

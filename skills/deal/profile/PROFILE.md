@@ -136,7 +136,10 @@ when or how often the deal was shared:
   the key of the bundle's last step; its disclosure matches; it is a `deal_report` of the
   bundle's deal for a copy audience; `deal_checkpoint` is the bundle's checkpoint; its
   lifecycle's `as_of` is that checkpoint's time; and the bundle holds no `deal_report` record.
-  A copy of a deal on the shelf that holds no report record and names no standalone one fails.
+  A copy of a deal on the shelf that holds no report record and carries deal text without naming a
+  standalone report fails; one stripped of both sections is its steps only, with no report text.
+- **Not covered:** a sale's own log still records each sale bundle's `sale_cut`, so a sale's
+  bundle shows when and how often it was made.
 - **A deal whose log already holds a report,** and every legacy deal, keeps sealing its reports
   in its log, where their positions still show when it was shared.
 

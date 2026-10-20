@@ -149,7 +149,11 @@ func TestAStandaloneReportIsCheckedWhole(t *testing.T) {
 		"4: another deal":            resealed(t, b, key, func(in map[string]any) { in["deal_id"] = "deal-0000000000000000" }),
 		"4: not a copy audience":     resealed(t, b, key, func(in map[string]any) { in["audience"] = cli.DealAudienceHistory }),
 		"5: another checkpoint root": resealed(t, b, key, func(in map[string]any) { in["deal_checkpoint"].(map[string]any)["root"] = strings.Repeat("0", 64) }),
-		"6: another member":          edit(func(c map[string]any) { sectionOf(c)["extra"] = true }),
+		"5: another checkpoint size": resealed(t, b, key, func(in map[string]any) { in["deal_checkpoint"].(map[string]any)["mmr_size"] = json.Number("1") }),
+		"5: another log": resealed(t, b, key, func(in map[string]any) {
+			in["deal_checkpoint"].(map[string]any)["log_id"] = "deal/deal-0000000000000000"
+		}),
+		"6: another member": edit(func(c map[string]any) { sectionOf(c)["extra"] = true }),
 		"7: another as_of": resealed(t, b, key, func(in map[string]any) {
 			in["report"].(map[string]any)["lifecycle"].(map[string]any)["as_of"] = "2020-01-01T00:00:00Z"
 		}),
@@ -207,6 +211,7 @@ func TestACrashBeforeAStepsCutIsRecoveredAtTheStepsTime(t *testing.T) {
 
 	_, err = invoke(t, "", "--profile", "deal", "deal", "history", "--deal", id, "--to", "a friend", "--out", filepath.Join(t.TempDir(), "h.json"))
 	require.Error(t, err, "History writes nothing, so it refuses over the uncovered step")
+	assert.Contains(t, err.Error(), "does not cover yet")
 
 	setDealClock(t, "2026-10-19T09:31:00Z")
 	dealRun(t, "tick")
@@ -283,4 +288,132 @@ func TestARespondTimeFloorPastTheLastStepIsRefused(t *testing.T) {
 	assert.Equal(t, "refusal", late.outcome, "later than the buyer's last step")
 	early := askFor(t, seller, buyer, id, map[string]any{"min_freshness": map[string]any{"time": "2026-09-27T17:00:00Z"}})
 	assert.Equal(t, "artifact", early.outcome)
+}
+
+// crashBeforeTheCut seals a claim on the deal and stops before its cut, as a
+// crash there would.
+func crashBeforeTheCut(t *testing.T, id string) {
+	t.Helper()
+	saved := dealStepCutStops
+	dealStepCutStops = func() error { return errors.New("stopped before the cut") }
+	defer func() { dealStepCutStops = saved }()
+	_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "claim", "--input", writeJSON(t, `{"text": "Room confirmed", "source_kind": "merchant", "source": "listing_page"}`))
+	require.Error(t, err)
+}
+
+// Every writer recovers a cut a crash left out, before it reads or extends
+// the deal: a share with no tick between is at the step's time; the next
+// step first covers the earlier one; a recovery that fails aborts the
+// command, which then writes nothing.
+func TestAWriterRecoversACutBeforeItUsesTheDeal(t *testing.T) {
+	t.Run("a share, with no tick between", func(t *testing.T) {
+		dealFixture(t)
+		setDealClock(t, "2026-10-19T09:28:13Z")
+		id := retailDeal(t)
+		setDealClock(t, "2026-10-19T09:29:07Z")
+		crashBeforeTheCut(t, id)
+		setDealClock(t, "2026-10-19T10:00:00Z")
+		b, _ := sharedCopy(t, id, cli.DealAudienceCounterparty, "the shop")
+		assert.Contains(t, b["checkpoint"].(map[string]any)["timestamp"], "2026-10-19T09:29:07")
+		verdict, findings := verdictOf(t, b)
+		assert.Equal(t, "VALID", verdict, "%v", findings)
+	})
+	t.Run("the next step", func(t *testing.T) {
+		dealFixture(t)
+		setDealClock(t, "2026-10-19T09:28:13Z")
+		id := retailDeal(t)
+		before := deckCheckpoints(t, id)
+		setDealClock(t, "2026-10-19T09:29:07Z")
+		crashBeforeTheCut(t, id)
+		setDealClock(t, "2026-10-19T09:40:00Z")
+		dealRun(t, "note", "--deal", id, "--kind", "claim", "--input", writeJSON(t, `{"text": "Late checkout", "source_kind": "merchant", "source": "listing_page"}`))
+		assert.Equal(t, before+2, deckCheckpoints(t, id), "the crashed step's cut, then the new step's")
+	})
+	t.Run("a recovery that fails", func(t *testing.T) {
+		dealFixture(t)
+		id := retailDeal(t)
+		crashBeforeTheCut(t, id)
+		saved := dealCoverStops
+		dealCoverStops = func() error { return errors.New("recovery failed") }
+		defer func() { dealCoverStops = saved }()
+		path := filepath.Join(t.TempDir(), "shared.json")
+		_, err := invoke(t, "", "--profile", "deal", "disclose", "--deal", id, "--share", cli.DealAudienceCounterparty, "--to", "the shop", "--out", path)
+		require.Error(t, err)
+		_, statErr := os.Stat(path)
+		assert.True(t, os.IsNotExist(statErr), "no copy over an uncovered step")
+	})
+}
+
+// A copy whose standalone report does not verify is refused for
+// countersigning, as verify --bundle refuses it.
+func TestCountersignRefusesAnEditedStandaloneReport(t *testing.T) {
+	dealFixture(t)
+	id := retailDeal(t)
+	path := filepath.Join(t.TempDir(), "own.json")
+	dealRun(t, "report", "--deal", id, "--bundle", path)
+	b, err := cli.DecodeBundleJSON(mustRead(t, path))
+	require.NoError(t, err)
+	b["extensions"].(map[string]any)[cli.DealReportExtension].(map[string]any)["agent_input"].(map[string]any)["report"].(map[string]any)["scope"] = "edited"
+	edited := writeBundle(t, b)
+	out, err := invoke(t, "", "--profile", "deal", "deal", "report", "--deal", id, "--from-bundle", edited)
+	require.ErrorIs(t, err, cli.ErrInput, out)
+	assert.Contains(t, err.Error(), "its report does not verify")
+}
+
+// An email made from an earlier bundle shows that report's own lifecycle,
+// as of its checkpoint, not one rebuilt from the deal's later steps: where
+// the deal stands now is the composed note's.
+func TestAnEmailFromAnEarlierBundleShowsItsReportsLifecycle(t *testing.T) {
+	dealFixture(t)
+	setDealClock(t, "2026-09-27T18:00:00Z")
+	id := retailDeal(t)
+	path := filepath.Join(t.TempDir(), "own.json")
+	dealRun(t, "report", "--deal", id, "--bundle", path)
+	setDealClock(t, "2026-09-28T10:00:00Z")
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received"}`))
+	out := dealRun(t, "report", "--deal", id, "--from-bundle", path, "--email", filepath.Join(t.TempDir(), "r.eml"))
+	text := out["email"].(map[string]any)["text"].(string)
+	stands := text[strings.Index(text, "Where this deal stands:"):]
+	assert.True(t, strings.HasPrefix(stands, "Where this deal stands:\nOpen"), "the report's own state: %.120s", stands)
+	assert.Contains(t, text, "when the deal stood so: Closed", "now is the composed note's")
+}
+
+// verify --bundle says when a standalone report's state is from, and what
+// backs it: the deal's last step's time, and whether a witness saw it.
+func TestVerifySaysWhenAStandaloneReportIsAsOf(t *testing.T) {
+	dealFixture(t)
+	setDealClock(t, "2026-09-27T18:00:00Z")
+	id := retailDeal(t)
+	b, _ := sharedCopy(t, id, cli.DealAudienceCounterparty, "the shop")
+	result, _ := verifyBundleOutput(t, writeBundle(t, b))
+	for _, raw := range result["extensions"].([]any) {
+		if e := raw.(map[string]any); e["kind"] == cli.DealProfile {
+			assert.Equal(t, "as of the deal's last step at 2026-09-27T18:00:00Z (the producer's time); not witnessed", e["as_of"])
+			return
+		}
+	}
+	t.Fatal("no x-deal-v0 entry")
+}
+
+// deal respond, for a deal whose reports are off its log: a pin past the
+// log, or a size floor one past what it holds, is refused; and after the
+// signing key changes, so is any copy.
+func TestRespondRefusesWhatAStandaloneReportCannotMeet(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, crossPartyBuyerOpen))["deal_id"].(string)
+	buyer := thisDealParty(t)
+	dealFixture(t)
+	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
+	seller := thisDealParty(t)
+	first, pin := pinnedCopy(t, seller, buyer, id)
+	require.Equal(t, "artifact", first.outcome)
+	party(t, buyer.config)
+	dealRun(t, "note", "--deal", id, "--kind", "claim", "--input", writeJSON(t, `{"text": "Ships today", "source_kind": "merchant", "source": "listing_page"}`))
+	assert.Equal(t, "refusal", askFor(t, seller, buyer, id, map[string]any{"expected_pin": pin}).outcome, "the log has moved past the pin")
+	size := float64(len(bookRecords(t, id)) + 1)
+	party(t, buyer.config)
+	assert.Equal(t, "refusal", askFor(t, seller, buyer, id, map[string]any{"min_freshness": map[string]any{"size": size}}).outcome, "a copy adds nothing to the log")
+	party(t, buyer.config)
+	buyer.signer = rotateSigningKey(t)
+	assert.Equal(t, "refusal", askFor(t, seller, buyer, id, map[string]any{"min_freshness": map[string]any{"size": 1}}).outcome, "the last step is under the earlier key")
 }
