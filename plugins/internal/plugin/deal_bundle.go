@@ -70,13 +70,14 @@ func dealBundleRun(c *cobra.Command, use string) error {
 			return err
 		}
 		openingsNote := ""
-		if use == "disclose" && audience == cli.DealAudienceCounterparty {
-			// The user's own copy for the other party carries the openings
-			// of the final close's money terms, so they can reconcile it
-			// (note §2.10 Decision 3). They are in the bytes the gate reads
-			// and the share hashes.
+		if use == "disclose" {
+			// The user's own copy for the other party, or for an
+			// adjudicator they name, carries the openings of the final
+			// close's money terms, so its reader can recompute a terms
+			// Result (note §2.10 Decision 3; capsule-cli#278 Decision 1).
+			// They are in the bytes the gate reads and the share hashes.
 			var openings map[string]map[string]evidencebook.Opening
-			if openings, openingsNote, err = s.closeOpenings(ctx, dealID, events, b); err != nil {
+			if openings, openingsNote, err = s.closeOpenings(ctx, dealID, events, b, audience); err != nil {
 				return err
 			}
 			if openings != nil {
