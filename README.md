@@ -24,8 +24,12 @@ verbs and the card it needs are not in a release yet.
 
 Each `v*` tag publishes `capsulectl` for linux/amd64, linux/arm64 and
 darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
-The current release is the pre-release `v0.1.0-rc6`; there is no final `v0.1.0`
-yet, so GitHub's "latest release" link does not resolve.
+Every release so far is a pre-release (`v0.1.0-rcNN`); there is no final
+`v0.1.0` yet, so GitHub's "latest release" link does not resolve. The install
+page, [actionstate.ai/install](https://actionstate.ai/install), names the
+current release; otherwise take the newest `v0.1.0-rc` tag on the Releases
+page. Read its CHANGELOG section before upgrading: some releases cannot be
+undone on an existing store.
 Releases after `v0.1.0-rc2` also carry a GitHub build provenance attestation
 for each binary (Sigstore, keyless: there is no release key to hold or
 leak). It shows the file was built by this repository's release workflow
@@ -74,18 +78,10 @@ the right repository), is in
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
 `modernc.org/sqlite`), so they need no system libraries.
 
-`v0.1.0-rc6` (commit `14bf3bcdeec0c9a83e5537cc02bd6ee349c07d9f`), SHA-256 of
-each file, to compare against the downloaded `SHA256SUMS`:
-
-| File | SHA-256 |
-|---|---|
-| `capsulectl-v0.1.0-rc6-linux-amd64` | `4b1f442a283d8bb5ad463001d4526947865d86a92702be9702b93a5669fe0a82` |
-| `capsulectl-v0.1.0-rc6-linux-arm64` | `b105449299f04690aea7bf8c9db3b9d615a5bcd379bf2ef79b5c1d65b2d37601` |
-| `capsulectl-v0.1.0-rc6-darwin-arm64` | `6af37d76ca1ec2ca2ad487b372f1360b472b2a527a6265f86c7896d11b17a11a` |
-| `capsulectl-v0.1.0-rc6.sigstore.json` (the attestation bundle) | `d759f14f3d60cdb34328f1a724ef4af789d93149d8ffc4142e3773652cc13e07` |
+Set `V` to the current release, then download, check and install it:
 
 ```bash
-V=v0.1.0-rc6; OS=linux; ARCH=amd64   # pre-release; or linux/arm64, darwin/arm64
+V=v0.1.0-rcNN; OS=linux; ARCH=amd64   # the release https://actionstate.ai/install names; or linux/arm64, darwin/arm64
 base=https://github.com/action-state-group/capsule-cli/releases/download/$V
 curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/capsulectl-$V.sigstore.json" -O "$base/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
@@ -94,7 +90,7 @@ gh attestation verify "capsulectl-$V-$OS-$ARCH" --bundle "capsulectl-$V.sigstore
   --repo action-state-group/capsule-cli \
   --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
 sudo install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
-capsulectl --version                        # capsulectl v0.1.0-rc6 (commit 14bf3bcdeec0c9a83e5537cc02bd6ee349c07d9f)
+capsulectl --version                        # capsulectl $V (commit <the tagged commit>)
 ```
 
 Writing to `/usr/local/bin` needs `sudo`. Without it, install into a directory
@@ -138,7 +134,7 @@ tag as your binary, so that every verb it lists exists in that binary
 (`capsulectl <verb> --help` confirms one).
 
 ```bash
-V=v0.1.0-rc6   # the same tag as the binary you installed (a pre-release)
+V=v0.1.0-rcNN   # the same tag as the binary you installed (capsulectl --version)
 git clone --depth 1 --branch "$V" https://github.com/action-state-group/capsule-cli.git
 
 # Claude Code: a personal skill (or .claude/skills/ inside one project)
