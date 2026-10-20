@@ -1,0 +1,67 @@
+{
+  "spec_version": "aac.presentation-manifest/v0",
+  "id": "org.example.rules-outcome/v0",
+  "presentation_api": "aac.presentation-api/v0",
+  "runtime_min": "0.1.0",
+  "trust_class": "declarative",
+  "requires": {
+    "bundle_kind": "evidence-bundle/v2",
+    "profiles": [
+      "spec_version:org.example.rules-run/v0"
+    ]
+  },
+  "audiences": [
+    "*"
+  ],
+  "formats": [
+    "html",
+    "fragment",
+    "embedded"
+  ],
+  "fallback": false,
+  "priority": 1,
+  "declarative": {
+    "renderer": "aac.declarative-renderer/v0",
+    "wording_sha256": "088cf0646d4a8fa063eb6d097aa8da77394dad470b20b2746d6964c91c3d29a3",
+    "fields": [
+      {
+        "level": "L0",
+        "source": "/run_id",
+        "kind": "identifier",
+        "label_key": "field.run"
+      },
+      {
+        "level": "L0",
+        "member": "agent_output",
+        "source": "/failed_count",
+        "kind": "count",
+        "label_key": "count.failed"
+      },
+      {
+        "level": "L1",
+        "member": "agent_output",
+        "source": "/rules",
+        "kind": "rows",
+        "label_key": "heading.l1",
+        "columns": [
+          {
+            "source": "/rule_id",
+            "kind": "identifier",
+            "label_key": "column.rule"
+          },
+          {
+            "source": "/outcome",
+            "kind": "enum",
+            "label_key": "column.outcome",
+            "value_key_prefix": "outcome."
+          },
+          {
+            "source": "/evidence",
+            "kind": "digest",
+            "label_key": "column.evidence"
+          }
+        ]
+      }
+    ]
+  }
+}

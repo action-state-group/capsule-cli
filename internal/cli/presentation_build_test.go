@@ -180,6 +180,32 @@ func TestPresentationBuildCarriesAPluginsModule(t *testing.T) {
 	assert.Regexp(t, `^Rendered by the example module over [1-9][0-9]* records$`, text)
 }
 
+// The page's <title> is its wording pack's reserved page.title
+// (presentation contract revision 1, section 7.4), and --title wins over it.
+// module.title, the module's own name, never titles the page.
+func TestPresentationBuildTitlesThePageFromTheWordingPack(t *testing.T) {
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	pack := []byte(`{"wording_pack_version": "aac.wording-pack/v0", "id": "org.example.view.wording/v0", "locale": "en", "entries": {"page.title": "Example evidence page", "module.title": "Example view"}}`)
+	fixture := exampleDealFixture(t)
+	fixture.manifest["executable"].(map[string]any)["wording_sha256"] = hexSHA256(pack)
+	fixture.files["wording.json"] = pack
+	fixture.entries[2]["sha256"] = hexSHA256(pack)
+	presentationPlugin(t, root, "dealview", fixture)
+	for _, c := range []struct {
+		args  []string
+		title string
+	}{{nil, "Example evidence page"}, {[]string{"--title", "Chosen title"}, "Chosen title"}} {
+		out := presentationOut(t)
+		stdout, err := invoke(t, "", append([]string{"presentation", "build", "--bundle", presentationBuildBundle, "--out", out}, c.args...)...)
+		require.NoError(t, err, stdout)
+		assert.Equal(t, "passed", decodeBuild(t, stdout).Modules[0]["wording"])
+		page, err := os.ReadFile(out)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"<title>" + c.title + "</title>"}, regexp.MustCompile(`<title>[^<]*</title>`).FindAllString(string(page), -1))
+	}
+}
+
 // The page's runtime would refuse the module, so no page is written and
 // the refusal names the module, its API and runtime_min, and the runtime.
 func TestPresentationBuildRefusesAModuleThePagesRuntimeWouldRefuse(t *testing.T) {
@@ -271,7 +297,7 @@ func TestPresentationChecksAgreeWithTheContractsVectors(t *testing.T) {
 	require.Len(t, builtins, 6)
 	assert.NoError(t, StaticPresentationCheck(builtins))
 	var examples []map[string]interface{}
-	for _, name := range []string{"example-composition-aware", "example-declarative-rules", "example-generic-fallback", "example-unilateral"} {
+	for _, name := range []string{"example-composition-aware", "example-declarative-outcome", "example-declarative-rules", "example-generic-fallback", "example-unilateral"} {
 		examples = append(examples, load(name))
 	}
 	assert.NoError(t, StaticPresentationCheck(examples))

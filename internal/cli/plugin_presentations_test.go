@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -127,21 +129,72 @@ func TestAPluginsPresentationLoads(t *testing.T) {
 	assert.NotContains(t, ls.Plugins[0], "presentations_refused")
 }
 
-// A declarative module is a manifest and a wording pack, no code.
-func TestADeclarativePresentationLoads(t *testing.T) {
-	root := pluginRoot(t)
-	trustPresentationsIn(t, root)
+// declarativeFixture is a declarative module with one field: a manifest
+// and a wording pack, no code.
+func declarativeFixture(field map[string]any) presentationFixture {
 	p := moduleSlotFixture()
 	delete(p.manifest, "executable")
 	p.manifest["trust_class"] = "declarative"
 	p.manifest["declarative"] = map[string]any{"renderer": "aac.declarative-renderer/v0", "wording_sha256": hexSHA256(fixtureWording),
-		"fields": []any{map[string]any{"level": "L0", "source": "/body/state", "kind": "identifier", "label_key": "heading.l0"}}}
+		"fields": []any{field}}
 	p.entries = p.entries[2:]
-	presentationPlugin(t, root, "rules", p)
+	return p
+}
+
+// A declarative module is a manifest and a wording pack, no code. A field
+// may name the root record's member it reads (presentation contract
+// revision 1, section 5.2); agent_input is the default.
+func TestADeclarativePresentationLoads(t *testing.T) {
+	for _, member := range []string{"", "agent_input", "agent_output"} {
+		t.Run("member "+member, func(t *testing.T) {
+			root := pluginRoot(t)
+			trustPresentationsIn(t, root)
+			field := map[string]any{"level": "L0", "source": "/body/state", "kind": "identifier", "label_key": "heading.l0"}
+			if member != "" {
+				field["member"] = member
+			}
+			presentationPlugin(t, root, "rules", declarativeFixture(field))
+			got := discovered(t, "rules")
+			require.Nil(t, got.refusal)
+			require.Len(t, got.presentations, 1)
+			assert.Nil(t, got.presentations[0].Script)
+		})
+	}
+}
+
+// A declarative field reads agent_input or agent_output and nothing else.
+func TestADeclarativeFieldsUnknownMemberIsRefused(t *testing.T) {
+	root := pluginRoot(t)
+	trustPresentationsIn(t, root)
+	presentationPlugin(t, root, "rules", declarativeFixture(map[string]any{
+		"level": "L0", "member": "disclosures", "source": "/body/state", "kind": "identifier", "label_key": "heading.l0"}))
 	got := discovered(t, "rules")
-	require.Nil(t, got.refusal)
-	require.Len(t, got.presentations, 1)
-	assert.Nil(t, got.presentations[0].Script)
+	assert.Empty(t, got.presentations)
+	require.NotNil(t, got.refusal)
+	assert.Equal(t, "invalid_manifest", got.refusal.Reason, got.refusal.Detail)
+}
+
+// AAC's own vectors (schemas/examples/presentation-manifest-v0 at the
+// pinned commit) meet the vendored schema as AAC says they do: each
+// example manifest and wording pack is accepted, and a declarative field
+// naming a member other than agent_input or agent_output is not.
+func TestTheContractsVectorsMeetTheSchema(t *testing.T) {
+	check := func(def, name string) error {
+		raw, err := os.ReadFile(filepath.Join("testdata/presentation-manifests", name+".json"))
+		require.NoError(t, err)
+		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+		require.NoError(t, err)
+		schema, err := PresentationSchema(def)
+		require.NoError(t, err)
+		return schema.Validate(doc)
+	}
+	for _, name := range []string{"example-composition-aware", "example-declarative-outcome", "example-declarative-rules", "example-generic-fallback", "example-unilateral"} {
+		assert.NoError(t, check("manifest", name), name)
+	}
+	for _, name := range []string{"example-wording-pack", "example-wording-pack-outcome"} {
+		assert.NoError(t, check("wording", name), name)
+	}
+	assert.ErrorContains(t, check("manifest", "neg-declarative-member"), "/declarative/fields/1/member")
 }
 
 // Every way a presentation can fail refuses all of that plugin's
@@ -245,7 +298,7 @@ func TestAnOlderHostIgnoresPresentations(t *testing.T) {
 // The vendored manifest schema is agent-action-capsule's, unmodified, at the
 // commit go.mod pins (assets/presentation/README.md).
 func TestThePresentationSchemaIsPinned(t *testing.T) {
-	assert.Equal(t, "077a69fd0dc670bdff6f9fe9793540ffb241873fb5687000cc519241e69ef5a1", hexSHA256(presentationManifestSchema), "refresh from agent-action-capsule at the pinned commit; never hand-edit")
+	assert.Equal(t, "0dd26b529332eaefeffde39fd474da1707b46d686cb4199b771b45c37b18a6be", hexSHA256(presentationManifestSchema), "refresh from agent-action-capsule at the pinned commit; never hand-edit")
 }
 
 // inDotD moves a fixture's files under <launcher>.d/presentations/<module>/,

@@ -1,0 +1,18 @@
+{
+  "wording_pack_version": "aac.wording-pack/v0",
+  "id": "org.example.rules-outcome.wording/v0",
+  "locale": "en",
+  "entries": {
+    "module.title": "Rule outcomes",
+    "page.title": "Rule outcomes for one run",
+    "field.run": "Run",
+    "count.failed": "Rules that failed",
+    "heading.l1": "Each rule's outcome",
+    "column.rule": "Rule",
+    "column.outcome": "Outcome",
+    "column.evidence": "Evidence record",
+    "outcome.pass": "Passed",
+    "outcome.fail": "Failed",
+    "outcome.not_run": "Not run"
+  }
+}
