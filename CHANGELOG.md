@@ -81,11 +81,11 @@ capsulectl on that store. Three changes make the upgrade one-way:
 
 - **Fixed (copy):** the receipt email's note and the deal page said our seal
   shows this device "kept these exact bytes from that time on", and the skill
-  "from this time on", which a seal does not show. They now say it held them
-  no later than the seal time, and that who signed them is checked by the
-  signing domain's DKIM signature, not by our seal. The DKIM signature is
-  described as the signing domain's (the merchant's, or its mail
-  provider's), showing what that domain signed.
+  "from this time on", which a seal does not show. All three now say it held
+  them no later than the seal time. The email note and the page add that who
+  signed them is checked by the signing domain's DKIM signature, not by our
+  seal; the DKIM signature is described as the signing domain's (the
+  merchant's, or its mail provider's), showing what that domain signed.
 
 ### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
 
@@ -161,9 +161,9 @@ capsulectl on that store. Three changes make the upgrade one-way:
 - **Fixed:** running a refused plugin, or `deal` or `book` when theirs is
   refused, prints the refusal and its fix, where it said only "operation
   failed" or that the plugin was not installed. The fix's `chmod go-w` names
-  each path as one shell word, so it runs as pasted. A refused launcher whose name is not a
-  plugin name is listed by `plugin ls` only, and a refusal's paths are
-  printed with control characters escaped.
+  each path as one shell word, so it runs as pasted. A refused launcher whose
+  name is not a plugin name is listed by `plugin ls` only, and a refusal's
+  paths are printed with control characters escaped.
 
 ### A held object on a buyer's deal (capsule-cli#250)
 
