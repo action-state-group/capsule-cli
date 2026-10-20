@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -496,4 +497,60 @@ func TestAStandaloneCopyHoldsNoReportRecord(t *testing.T) {
 	require.NoError(t, cli.CheckDealStandaloneReport(b), "the copy as written")
 	b["records"] = append(b["records"].([]any), map[string]any{"capsule_id": strings.Repeat("e", 64), "action_id": cli.DealReportActionID})
 	assert.ErrorIs(t, cli.CheckDealStandaloneReport(b), cli.ErrBundleInvalid)
+}
+
+// verify --bundle's as_of line on real copies under a witnessed cadence:
+// unwitnessed before a tick; witnessed once the tick's checkpoint is; not
+// witnessed after a later step the witness has not seen; witnessed again
+// when a later tick's checkpoint includes that step, still as of the step's
+// time, not the tick's; and a receipt that does not verify is a failing
+// claim, never shown as merely unwitnessed.
+func TestTheAsOfLineOnWitnessedCopies(t *testing.T) {
+	public, key, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	endpoint, _ := countingWitness(t)
+	p := cadenceFixture(t, endpoint, public, "1h", "0s", 0)
+	now := clockAt(t, time.Date(2026, 10, 4, 9, 0, 0, 0, time.UTC))
+	id := retailDeal(t)
+	dir := t.TempDir()
+	directory := writeDirectory(t, rawKeyRow(endpoint, public))
+	asOf := func(path string) string {
+		t.Helper()
+		result, _ := verifyWithDirectory(t, path, directory)
+		for _, raw := range result["extensions"].([]any) {
+			if e := raw.(map[string]any); e["kind"] == cli.DealProfile {
+				return fmt.Sprint(e["as_of"])
+			}
+		}
+		t.Fatal("no x-deal-v0 entry")
+		return ""
+	}
+	copyNamed := func(name string) string {
+		t.Helper()
+		path := filepath.Join(dir, name+".json")
+		dealRun(t, "report", "--deal", id, "--bundle", path)
+		return path
+	}
+	const first, later = "as of the deal's last step at 2026-10-04T09:00:00Z (the producer's time); ", "as of the deal's last step at 2026-10-04T09:10:00Z (the producer's time); "
+	assert.Equal(t, first+"not witnessed", asOf(copyNamed("none")))
+	require.Equal(t, "ticked", dealRun(t, "tick")["state"])
+	deliver(t, p, cadenceSize(t, p), key)
+	all := copyNamed("all")
+	assert.Equal(t, first+"witnessed", asOf(all))
+
+	b, err := cli.DecodeBundleJSON(mustRead(t, all))
+	require.NoError(t, err)
+	receipt := b["extensions"].(map[string]any)[cli.DealCadenceExtension].(map[string]any)["cadence"].(map[string]any)["witnesses"].([]any)[0].(map[string]any)
+	sig := receipt["receipt_b64"].(string)
+	flip := map[bool]string{true: "A", false: "B"}[sig[len(sig)-3] != 'A']
+	receipt["receipt_b64"] = sig[:len(sig)-3] + flip + sig[len(sig)-2:]
+	assert.Equal(t, first+"its witness claim failed", asOf(writeBundle(t, b)))
+
+	*now = now.Add(10 * time.Minute)
+	dealRun(t, "note", "--deal", id, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","text":"Your order has shipped."}`))
+	assert.Equal(t, later+"not witnessed", asOf(copyNamed("part")))
+	*now = now.Add(2 * time.Hour)
+	require.Equal(t, "ticked", dealRun(t, "tick")["state"])
+	deliver(t, p, cadenceSize(t, p), key)
+	assert.Equal(t, later+"witnessed", asOf(copyNamed("later-tick")))
 }
