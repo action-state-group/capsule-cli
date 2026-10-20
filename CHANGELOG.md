@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### A jsonl profile's bundles verify VALID, so `report build` writes their page (capsule-cli#148, #312)
+
+- **Fixed:** `bundle`, `disclose`, `permalink` and `close --bundle-out` on a
+  jsonl profile now carry each record's producer signature, the one stored
+  when the record was sealed, so `verify --bundle` calls them VALID instead
+  of INCOMPLETE ("producer_signatures withheld"). `report build` now writes
+  the page for a Result disclosed from a `result build` record. Nothing is
+  re-signed. Each record also shows the key that signed it.
+- **Changed:** `close --bundle-out` now declares the profile's signing key as
+  its producer key, as `bundle` and `disclose` already did. A
+  countersignature by that key on a Close bundle now reads as not
+  independent.
+- **Changed (build):** evidencebook moves to v0.7.0.
+
 ## v0.1.0-rc17
 
 ### Before you upgrade: there is no going back to an older version

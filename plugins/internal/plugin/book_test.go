@@ -197,6 +197,12 @@ func TestCloseSigningPath(t *testing.T) {
 		closeVerified = closeVerified || (r.RecordID == result.RecordID && r.HeaderVerified && r.CapsuleOK && r.Header.RecordType == evidencebook.RecordTypeClose)
 	}
 	assert.True(t, closeVerified, "the bundle discloses the Close with a verified header")
+	checked, err := verifyBundleOutput(t, bundlePath)
+	require.NoError(t, err)
+	assert.Equal(t, "pass", status(checked, "producer_signatures"), "every record carries the producer signature the book stored")
+	declared, ok := cli.DeclaredProducerKey(decoded)
+	require.True(t, ok, "the Close bundle declares the profile's key, as disclose does")
+	assert.Equal(t, keys.record, declared)
 	assert.True(t, verified.AnchorAuthenticated)
 	assert.Equal(t, hex.EncodeToString(keys.checkpoint), verified.AnchorKeyID)
 }

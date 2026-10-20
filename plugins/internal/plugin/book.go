@@ -824,7 +824,15 @@ func closeOutputs(c *cobra.Command, opened openedBook, p cli.Profile, result *cl
 	if err != nil {
 		return err
 	}
-	bundle, err := opened.book.Bundle(c.Context(), evidencebook.BundleRequest{Root: sealed.RecordID, Include: include, WithholdPayloads: true})
+	// Declare the profile's key, as `bundle` and `disclose` do. Each record
+	// already carries its signer's key_id beside its Producer Envelope
+	// (evidencebook#84 §4), so the declaration reveals nothing more to the
+	// counterparty.
+	key, err := cli.PrivateKey(p.Signing)
+	if err != nil {
+		return err
+	}
+	bundle, err := opened.book.Bundle(c.Context(), evidencebook.BundleRequest{Root: sealed.RecordID, Include: include, WithholdPayloads: true, ProducerKey: key.Public().(ed25519.PublicKey)})
 	if err != nil {
 		return bookError(err)
 	}
