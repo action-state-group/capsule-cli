@@ -1126,6 +1126,7 @@ func TestARefusedLaunchersNameNeverReachesTheTerminalRaw(t *testing.T) {
 	assert.Contains(t, out, `\u001b[31mil`)
 
 	assert.Equal(t, `a\x1bb\x0ac`, terminalSafe("a\x1bb\nc"))
+	assert.Equal(t, `x\x202ey\x2028z`, terminalSafe("x\u202ey\u2028z"))
 	assert.Equal(t, "plain /path é", terminalSafe("plain /path é"))
 }
 
@@ -1163,4 +1164,74 @@ func TestRefusedLaunchersNeverRunOrShadow(t *testing.T) {
 
 	_, err = os.Stat(marker)
 	assert.ErrorIs(t, err, os.ErrNotExist, "no refused launcher ran")
+}
+
+// A refusal's path is escaped at dispatch too: a plugin name that passes the
+// name check, on a root whose own path carries an escape sequence and that
+// another user can write.
+func TestARefusalsPathsAreEscapedAtDispatch(t *testing.T) {
+	installHome(t)
+	parent := safeTempDir(t)
+	root := filepath.Join(parent, "r\x1b[31m")
+	require.NoError(t, os.Mkdir(root, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-acme"), []byte(launcherScript("acme", "1", "")), 0o755))
+	require.NoError(t, os.Chmod(root, 0o775))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", root)
+	_, err := invoke(t, "", "acme")
+	require.ErrorIs(t, err, ErrInput)
+	msg := SafeError(err)
+	assert.Contains(t, msg, "capsulectl-acme plugin at")
+	assert.NotContains(t, msg, "\x1b[", "no raw escape reaches the terminal")
+	assert.Contains(t, msg, `r\x1b[31m`)
+}
+
+// The command tree holds one command per name: a refused launcher adds none
+// for a name an accepted launcher or a core command holds, and two roots
+// refusing the same name add one. A refused deal reached through an alias
+// (compose) says it is refused, and an error runs no accepted launcher's
+// handshake again.
+func TestRefusedLaunchersAddOneCommandPerName(t *testing.T) {
+	home, root := installHome(t)
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+	require.NoError(t, err)
+	for _, name := range []string{"verify", DealPluginName, "zeta"} {
+		require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-"+name), []byte(launcherScript(name, "1", "")), 0o755))
+	}
+	second := filepath.Join(safeTempDir(t), "second")
+	require.NoError(t, os.Mkdir(second, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(second, "capsulectl-zeta"), []byte(launcherScript("zeta", "1", "")), 0o755))
+	require.NoError(t, os.Chmod(second, 0o775))
+	later := safeTempDir(t)
+	require.NoError(t, os.Chmod(later, 0o755))
+	handshakes := filepath.Join(t.TempDir(), "handshakes")
+	require.NoError(t, os.WriteFile(filepath.Join(later, "capsulectl-acme"), []byte(launcherScript("acme", "2", handshakes)), 0o755))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", strings.Join([]string{root, second, later}, string(os.PathListSeparator)))
+	require.NoError(t, os.Chmod(filepath.Join(home, ".local"), 0o775))
+
+	counts := map[string]int{}
+	for _, c := range NewCommand().Commands() {
+		counts[c.Name()]++
+	}
+	for _, name := range []string{"acme", "verify", "zeta", DealPluginName} {
+		assert.Equal(t, 1, counts[name], name)
+	}
+	require.NoError(t, os.Remove(handshakes), "building the tree ran the accepted acme's handshake")
+
+	_, err = invoke(t, "", "compose", "--member", "x")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), "capsulectl-deal plugin at")
+	assert.Contains(t, SafeError(err), "chmod go-w ")
+
+	runs := func() int {
+		raw, err := os.ReadFile(handshakes)
+		if errors.Is(err, os.ErrNotExist) {
+			return 0
+		}
+		require.NoError(t, err)
+		return strings.Count(string(raw), "ran")
+	}
+	require.NoError(t, os.Remove(handshakes))
+	_, err = invoke(t, "", "deal", "list")
+	require.ErrorIs(t, err, ErrInput)
+	assert.Equal(t, 1, runs(), "the tree's discovery only: the error runs no handshake again")
 }

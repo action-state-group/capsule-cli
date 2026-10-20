@@ -300,14 +300,16 @@ func refusedPluginError(name string, refused []refusedPlugin) error {
 	return nil
 }
 
-// terminalSafe escapes the control characters in s. A refused launcher's
-// path, and the paths its refusal names, may be written by the very user the
-// refusal is about, who must not reach the operator's terminal with escape
-// sequences or line breaks.
+// terminalSafe escapes the control characters in s, and the format and
+// line or paragraph separator characters (a right-to-left override can
+// reorder what a line shows). A refused launcher's path, and the paths its
+// refusal names, may be written by the very user the refusal is about, who
+// must not reach the operator's terminal with escape sequences or line
+// breaks.
 func terminalSafe(s string) string {
 	var b strings.Builder
 	for _, r := range s {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) {
 			fmt.Fprintf(&b, "\\x%02x", r)
 			continue
 		}
