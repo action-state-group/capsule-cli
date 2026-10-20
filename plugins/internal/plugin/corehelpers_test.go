@@ -295,6 +295,10 @@ func startHeadlessChrome(t *testing.T, binary string) *headlessChrome {
 		"--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
 		"--host-resolver-rules=MAP * ~NOTFOUND", "--disable-background-networking",
 		"--disable-component-update", "--disable-sync",
+		// A fresh profile would otherwise make Chrome create its Safe
+		// Storage key in the OS keychain, which on macOS asks the person
+		// at the screen (a "Keychain Not Found" dialog) from a test.
+		"--use-mock-keychain", "--password-store=basic",
 		"--user-data-dir="+profile, "about:blank")
 	cmd.ExtraFiles = []*os.File{toChrome, fromChrome}
 	chromeProcessGroup(cmd)
