@@ -48,9 +48,11 @@ through the real CLI. Run it only to change a fixture on purpose.
   viewer has no composed/v1 view either. The fixture is kept so a composed view, once
   added, has a bundle to render.
 - **Fixtures 4 and 5 seal their Result v0 as the payload of a SQLite record.**
-  `result build` seals only into a jsonl evidence book. That book's bundles leave out
-  producer signatures, so `verify --bundle` calls them INCOMPLETE and `report build`
-  writes no page for them.
+  `result build` seals only into a jsonl evidence book, and when these fixtures were
+  taken that book's bundles left out producer signatures, so `verify --bundle` called
+  them INCOMPLETE and `report build` wrote no page for them (capsule-cli#148). Since
+  evidencebook v0.7.0 they carry them, verify VALID and get a page; the fixtures are
+  unchanged.
 - **Fixture 6-unknown-extension renders exactly as fixture 6** except for the bundle
   digest on the verification page: the viewer ignores an extension it does not know.
 - **No page overflows** a 390px viewport, 1280px or print in CI's pinned environment

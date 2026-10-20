@@ -1073,23 +1073,11 @@ func bookBundle(ctx context.Context, book *evidencebook.Book, artifacts cli.Bund
 			request.Extensions = map[string]json.RawMessage{cli.InputOriginalsExtension: extension}
 		}
 	}
-	if producerKey != nil {
-		// Passed to the book, not added afterwards: the book digests the
-		// bundle (extensions included) into its disclosure record.
-		extensions, err := cli.ProducerKeyExtension(producerKey)
-		if err != nil {
-			return evidencebook.Bundle{}, err
-		}
-		// Add to, never replace, extensions set above (--attach-input-originals).
-		if request.Extensions == nil {
-			request.Extensions = make(map[string]json.RawMessage, len(extensions))
-		}
-		for kind, block := range extensions {
-			if request.Extensions[kind], err = json.Marshal(block); err != nil {
-				return evidencebook.Bundle{}, err
-			}
-		}
-	}
+	// The book declares it (producer-key/v1) inside the bundle it digests
+	// into its disclosure record. Every carried record also carries the
+	// Producer Envelope the book stored when it sealed it, so the bundle
+	// verifies VALID as written (#148).
+	request.ProducerKey = producerKey
 	bundle, err := book.Bundle(ctx, request)
 	if err != nil {
 		return evidencebook.Bundle{}, bookError(err)

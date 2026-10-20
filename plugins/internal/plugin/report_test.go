@@ -15,7 +15,6 @@ import (
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/capsule-cli/internal/cli"
-	emit "github.com/action-state-group/capsule-emit/go"
 	"github.com/action-state-group/capsule-viewer/go/emitter"
 	"github.com/action-state-group/evidencebook"
 	"github.com/stretchr/testify/assert"
@@ -91,50 +90,40 @@ func runReportBuild(t *testing.T, bundlePath string, extra ...string) (reportBui
 	return result, out, err
 }
 
-// signBundleRecords writes a copy of a bundle whose every record carries its
-// producer signature inline (signature: the hex COSE_Sign1 envelope over its
-// capsule_id; key_id: the signer's public key), the form `verify --bundle`
-// checks. A book's bundle does not carry them yet, so it verifies INCOMPLETE
-// (producer_signature_unclaimed); signed, it is VALID.
-func signBundleRecords(t *testing.T, path string, key ed25519.PrivateKey) string {
-	t.Helper()
-	raw, err := os.ReadFile(path)
-	require.NoError(t, err)
-	value, err := cli.DecodeBundleJSON(raw)
-	require.NoError(t, err)
-	identity, err := emit.NewEd25519SigningIdentity(key)
-	require.NoError(t, err)
-	public := hex.EncodeToString(key.Public().(ed25519.PublicKey))
-	for _, r := range value["records"].([]interface{}) {
-		record := r.(map[string]interface{})
-		body, err := json.Marshal(record)
-		require.NoError(t, err)
-		envelope, err := emit.Sign(emit.BuiltPayload{CapsuleID: record["capsule_id"].(string), JSON: body}, identity)
-		require.NoError(t, err)
-		record["signature"], record["key_id"] = hex.EncodeToString(envelope), public
-	}
-	encoded, err := json.Marshal(value)
-	require.NoError(t, err)
-	signed := filepath.Join(t.TempDir(), "signed-bundle.json")
-	require.NoError(t, os.WriteFile(signed, encoded, 0o600))
-	return signed
-}
-
-// signedBookBundle is a book-form Result-root bundle, signed so that
-// `verify --bundle` calls it VALID, and the unsigned bundle it came from.
-func signedBookBundle(t *testing.T) (signed, unsigned string, root string) {
+// bookFormBundle is a book-form Result-root bundle as `disclose` writes it.
+// Every record carries the producer envelope its book stored when it sealed
+// it (signature and key_id), so `verify --bundle` calls it VALID as written:
+// nothing is re-signed after the fact.
+func bookFormBundle(t *testing.T) (path string, root string) {
 	t.Helper()
 	b := newResultBook(t)
 	built, _, err := runResultBuild(t, b.profile, resultDoc(testClaim("claim-1", "met", b.capsules[0]), testClaim("claim-2", "not_evaluable", b.capsules[1])))
 	require.NoError(t, err)
-	unsigned = filepath.Join(t.TempDir(), "bundle.json")
-	_, err = invoke(t, "", "disclose", "--profile", b.profile.Name, "--root", built.RecordID, "--payloads", "selected", "--out", unsigned)
+	path = filepath.Join(t.TempDir(), "bundle.json")
+	_, err = invoke(t, "", "disclose", "--profile", b.profile.Name, "--root", built.RecordID, "--payloads", "selected", "--out", path)
 	require.NoError(t, err)
-	signed = signBundleRecords(t, unsigned, b.key)
-	result, err := verifyBundleOutput(t, signed)
+	result, err := verifyBundleOutput(t, path)
 	require.NoError(t, err)
 	require.Equal(t, "VALID", result["verdict"])
-	return signed, unsigned, built.RecordID
+	value := readBundle(t, path)
+	public := hex.EncodeToString(b.key.Public().(ed25519.PublicKey))
+	for _, r := range value["records"].([]interface{}) {
+		record := r.(map[string]interface{})
+		assert.Equal(t, public, record["key_id"], "record %v is signed by the book's producer key", record["capsule_id"])
+	}
+	return path, built.RecordID
+}
+
+// rewriteBundle writes a copy of a bundle file with edit applied.
+func rewriteBundle(t *testing.T, path string, edit func(map[string]interface{})) string {
+	t.Helper()
+	value := readBundle(t, path)
+	edit(value)
+	encoded, err := json.Marshal(value)
+	require.NoError(t, err)
+	out := filepath.Join(t.TempDir(), "edited-bundle.json")
+	require.NoError(t, os.WriteFile(out, encoded, 0o600))
+	return out
 }
 
 // embeddedBundle reads the bundle a report page embeds, as the shell does.
@@ -179,33 +168,33 @@ func TestReportBuildWritesNoPageForAnIncompleteBundle(t *testing.T) {
 	assert.Empty(t, result.Permalink, "no page, no permalink")
 }
 
-// A book's bundle as it is built today carries no producer signatures:
-// INCOMPLETE, no page. One whose record signature does not verify is
+// A book's bundle whose records carry no producer signatures is
+// INCOMPLETE: no page. One whose record signature does not verify is
 // INVALID: no page either, and the refusal says so.
 func TestReportBuildWritesNoPageUnlessTheBundleIsValid(t *testing.T) {
-	signed, unsigned, _ := signedBookBundle(t)
+	disclosed, _ := bookFormBundle(t)
+	unsigned := rewriteBundle(t, disclosed, func(value map[string]interface{}) {
+		for _, r := range value["records"].([]interface{}) {
+			delete(r.(map[string]interface{}), "signature")
+			delete(r.(map[string]interface{}), "key_id")
+		}
+	})
 	result, out, err := runReportBuild(t, unsigned, "--card", "obligation")
 	require.ErrorIs(t, err, cli.ErrPartial)
 	assert.NoFileExists(t, out)
 	assert.Equal(t, "INCOMPLETE", result.Verdict)
-	assert.Equal(t, []string{"producer_signatures withheld"}, result.UnmetClaims, "a book's bundle carries no producer signatures yet")
+	assert.Equal(t, []string{"producer_signatures withheld"}, result.UnmetClaims)
 
-	raw, err := os.ReadFile(signed)
-	require.NoError(t, err)
-	value, err := cli.DecodeBundleJSON(raw)
-	require.NoError(t, err)
-	record := value["records"].([]interface{})[0].(map[string]interface{})
-	sig := []byte(record["signature"].(string))
-	if sig[len(sig)-1] == '0' {
-		sig[len(sig)-1] = '1'
-	} else {
-		sig[len(sig)-1] = '0'
-	}
-	record["signature"] = string(sig)
-	encoded, err := json.Marshal(value)
-	require.NoError(t, err)
-	tampered := filepath.Join(t.TempDir(), "tampered.json")
-	require.NoError(t, os.WriteFile(tampered, encoded, 0o600))
+	tampered := rewriteBundle(t, disclosed, func(value map[string]interface{}) {
+		record := value["records"].([]interface{})[0].(map[string]interface{})
+		sig := []byte(record["signature"].(string))
+		if sig[len(sig)-1] == '0' {
+			sig[len(sig)-1] = '1'
+		} else {
+			sig[len(sig)-1] = '0'
+		}
+		record["signature"] = string(sig)
+	})
 	result, out, err = runReportBuild(t, tampered, "--card", "obligation")
 	require.ErrorIs(t, err, cli.ErrBundleInvalid)
 	assert.Equal(t, 1, cli.ExitCode(err))
@@ -217,8 +206,8 @@ func TestReportBuildWritesNoPageUnlessTheBundleIsValid(t *testing.T) {
 // The book form, end to end: result build -> disclose -> report build ->
 // both verifiers over the written bundle.
 func TestReportBuildRendersABookFormResultRoot(t *testing.T) {
-	bundlePath, unsigned, rootID := signedBookBundle(t)
-	verifyTestBundleFile(t, unsigned)
+	bundlePath, rootID := bookFormBundle(t)
+	verifyTestBundleFile(t, bundlePath)
 
 	presentation := writeTestJSON(t, "presentation.json", map[string]any{"producer_display_name": "Demo Co", "title": "Week 38"})
 	result, out, err := runReportBuild(t, bundlePath, "--card", "obligation", "--presentation", presentation, "--permalink")
@@ -283,7 +272,7 @@ func TestReportBuildRendersABookFormResultRoot(t *testing.T) {
 }
 
 func TestReportBuildDryRunWritesADraftAndNoPermalink(t *testing.T) {
-	bundle, _, _ := signedBookBundle(t)
+	bundle, _ := bookFormBundle(t)
 	result, out, err := runReportBuild(t, bundle, "--card", "human_role", "--permalink", "--dry-run")
 	require.NoError(t, err)
 	assert.True(t, result.Draft)
@@ -458,7 +447,7 @@ func TestReportBuildRefusesABadCardOrPresentation(t *testing.T) {
 			assert.NoFileExists(t, out)
 		})
 	}
-	valid, _, _ := signedBookBundle(t)
+	valid, _ := bookFormBundle(t)
 	_, _, err = runReportBuild(t, valid, "--card", "outcome", "--presentation", writeTestJSON(t, "p.json", map[string]any{"logo_data_url": "data:image/png;base64,AAAA"}))
 	require.NoError(t, err)
 
@@ -495,7 +484,7 @@ func TestHeldBundleAcceptanceNamesAWithheldClosure(t *testing.T) {
 func TestReportBuildRefusesAnExistingOut(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "report.html")
 	require.NoError(t, os.WriteFile(out, []byte("keep"), 0o600))
-	valid, _, _ := signedBookBundle(t)
+	valid, _ := bookFormBundle(t)
 	_, err := invoke(t, "", "report", "build", "--bundle", valid, "--card", "outcome", "--out", out)
 	require.ErrorIs(t, err, cli.ErrInput)
 	assert.Contains(t, cli.SafeError(err), "--out "+out+" already exists")
