@@ -51,11 +51,12 @@ discovery model is the reference):
 
   The system root's parents are not walked: they are system directories.
   The per-user root's are, because `~/.local` can be group-writable or a
-  symlink into a shared directory. Every directory holding an entry on the
-  path `$HOME/.local/lib/capsulectl/plugins`, from `$HOME` down, is resolved
-  and checked with the same rule, along with each resolved directory's
-  parents up to `$HOME` (up to `/` where a symlink leads outside `$HOME`; a
-  root-owned sticky directory such as `/tmp` is accepted there). No group
+  symlink into a shared directory. Every directory a name is looked up in
+  while `$HOME/.local/lib/capsulectl/plugins` resolves from `$HOME` is
+  checked with the same rule, including those inside each symlink's target
+  (every hop of a chain), along with the resolved root and the parents of
+  each up to `$HOME` (up to `/` for one outside `$HOME`; a root-owned sticky
+  directory such as `/tmp` is accepted there). No group
   is exempt, not even the user's own: a group's name or id says nothing
   about who else belongs to it. On stock Ubuntu (umask 002) that means a
   one-time `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`; the
@@ -149,7 +150,8 @@ check above, and checks more. Before it writes or runs anything, it resolves
 the path once and checks every component of the resolved path from `/`
 down: each must be owned by the user or root and neither group- nor
 other-writable. The only exception is a root-owned directory with the
-sticky bit set (`/tmp`), and only in this check. A symlinked `~/.local` is
+sticky bit set (`/tmp`), as in the per-user root check, never for the walk
+from a launcher up to its root. A symlinked `~/.local` is
 judged by where it leads. One refusal lists every failing component and the
 fix (on stock Ubuntu, `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`).
 From then on install and remove use only that checked canonical path: to

@@ -357,6 +357,65 @@ func TestDispatchChecksTheDirectoryHoldingEachSymlink(t *testing.T) {
 	assert.Contains(t, SafeError(err), filepath.Base(writable)+" is group-writable")
 }
 
+func TestDispatchChecksASymlinkedRoot(t *testing.T) {
+	// The plugins directory itself links into a shared directory: the
+	// launcher walk stops at the target, so its parent is the ancestry
+	// check's.
+	home, _ := installHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".local", "lib", "capsulectl"), 0o755))
+	shared := filepath.Join(safeTempDir(t), "shared")
+	require.NoError(t, os.MkdirAll(filepath.Join(shared, "plugins"), 0o755))
+	require.NoError(t, os.Symlink(filepath.Join(shared, "plugins"), userPluginRoot(home)))
+	launcher := handInstalled(t, home)
+	require.NoError(t, VerifyTrustedPath(launcher))
+	require.NoError(t, os.Chmod(shared, 0o777))
+	err := VerifyTrustedPath(launcher)
+	require.ErrorIs(t, err, errWritable)
+	assert.Contains(t, err.Error(), filepath.Base(shared)+" is group-writable")
+}
+
+func TestDispatchChecksEveryHopOfASymlinkChain(t *testing.T) {
+	// ~/.local -> shared/link -> safe/local: every resolved directory is
+	// under safe, but whoever writes shared can repoint link.
+	home, _ := installHome(t)
+	shared := filepath.Join(safeTempDir(t), "shared")
+	require.NoError(t, os.Mkdir(shared, 0o755))
+	safe := filepath.Join(safeTempDir(t), "local")
+	require.NoError(t, os.Mkdir(safe, 0o755))
+	require.NoError(t, os.Symlink(safe, filepath.Join(shared, "link")))
+	require.NoError(t, os.Symlink(filepath.Join(shared, "link"), filepath.Join(home, ".local")))
+	launcher := handInstalled(t, home)
+	require.NoError(t, VerifyTrustedPath(launcher))
+	require.NoError(t, os.Chmod(shared, 0o775))
+
+	err := VerifyTrustedPath(launcher)
+	require.ErrorIs(t, err, errWritable)
+	assert.Contains(t, err.Error(), filepath.Base(shared)+" is group-writable")
+	_, err = invoke(t, "", "plugin", "install", launcherFile(t, "acme", "2", ""))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), filepath.Base(shared)+" is group-writable")
+
+	// A relative hop is followed from the directory holding it.
+	require.NoError(t, os.Chmod(shared, 0o755))
+	require.NoError(t, os.Remove(filepath.Join(home, ".local")))
+	rel, err := filepath.Rel(home, filepath.Join(shared, "link"))
+	require.NoError(t, err)
+	require.NoError(t, os.Symlink(rel, filepath.Join(home, ".local")))
+	require.NoError(t, VerifyTrustedPath(launcher))
+	require.NoError(t, os.Chmod(shared, 0o775))
+	assert.ErrorIs(t, VerifyTrustedPath(launcher), errWritable)
+}
+
+func TestLookupDirsRefusesASymlinkLoop(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	require.NoError(t, os.Symlink("b", filepath.Join(dir, "a")))
+	require.NoError(t, os.Symlink("a", filepath.Join(dir, "b")))
+	hops := 0
+	_, _, err = lookupDirs(dir, "a", &hops)
+	assert.ErrorContains(t, err, "too many levels of symbolic links")
+}
+
 func TestDispatchLeavesOtherRootsAncestryAlone(t *testing.T) {
 	// The ancestry check is the per-user root's: a root
 	// CAPSULECTL_PLUGIN_ROOTS names elsewhere keeps the walk's rule, which

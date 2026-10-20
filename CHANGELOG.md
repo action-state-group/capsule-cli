@@ -6,10 +6,11 @@
 
 - **Changed (security):** the trust walk now checks the per-user root's
   ancestry, from `$HOME` down to `~/.local/lib/capsulectl/plugins`, where it
-  used to trust the root's parents. Each directory on the path, resolved,
-  and each resolved directory's parents up to `$HOME` (up to `/` when a
-  symlink leads out of `$HOME`) must be owned by the user or root and
-  neither group- nor other-writable. The user's own group is not exempt.
+  used to trust the root's parents. Every directory a name is looked up in
+  while the path resolves, through every symlink hop, the resolved root,
+  and the parents of each up to `$HOME` (up to `/` outside `$HOME`) must be
+  owned by the user or root and neither group- nor other-writable. The
+  user's own group is not exempt.
 - **Existing installs:** a plugin installed by hand under a group-writable
   `~/.local` (stock Ubuntu, umask 002) no longer runs; `capsulectl plugin ls`
   lists it as refused, with the fix:
