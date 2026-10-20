@@ -620,5 +620,9 @@ func TestOurSealIsBoundedToTheSealTime(t *testing.T) {
 		assert.Contains(t, text, "held these exact bytes no later than the seal time", name)
 		assert.Contains(t, text, "checked by the sender", name)
 		assert.NotContains(t, text, "from that time on", name)
+		// DKIM's signer is the sending domain, which may be the merchant's
+		// mail provider, not the merchant.
+		assert.Contains(t, text, "what the sending domain signed", name)
+		assert.NotContains(t, text, "what the merchant sent", name)
 	}
 }

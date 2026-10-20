@@ -249,7 +249,7 @@ func (view dealEmailView) DeadlinesHeading() string {
 	return "Cancel-by dates"
 }
 
-const dealEmailMerchantNote = "Two different things stand behind each email. The merchant's signature, checked against the merchant's key saved when the email was sealed, shows what the merchant sent, independent of the agent. Our seal shows this device held these exact bytes no later than the seal time; who sent them is checked by the sender's DKIM signature, not by our seal. Amounts, dates and order numbers are read from the email by capsulectl and may be misread."
+const dealEmailMerchantNote = "Two different things stand behind each email. The merchant's signature, checked against the merchant's key saved when the email was sealed, shows what the sending domain signed, independent of the agent. Our seal shows this device held these exact bytes no later than the seal time; who sent them is checked by the sender's DKIM signature, not by our seal. Amounts, dates and order numbers are read from the email by capsulectl and may be misread."
 
 var dealEmailNotClaimed = []string{
 	"Tamper-evident against ourselves and the agent, not non-repudiation: it shows the record was not changed after it was made, not who made it.",
