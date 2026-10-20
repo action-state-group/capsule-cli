@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -96,12 +97,13 @@ func dealSaleCloseCommand() *cobra.Command {
 			return cli.InputError("--sale (a sale id as printed by `deal sale new`) is required")
 		}
 		return runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
-			se, cp, err := s.closeSale(ctx, saleID)
+			se, cp, open, err := s.closeSale(ctx, saleID)
 			if err != nil {
 				return err
 			}
 			return cli.Output(c, map[string]any{"sale_id": saleID, "capsule_id": se.CapsuleID, "checkpoint": cp,
-				"next": "deal sale bundle --sale " + saleID + " still writes the sale's copy; its threads close on their own"})
+				"status": saleClosedStatus(open), "open_negotiations": open,
+				"next": "deal sale bundle --sale " + saleID + " still writes the sale's copy"})
 		})
 	}}
 	cmd.Flags().String("sale", "", "Sale ID from `deal sale new`")
@@ -114,19 +116,33 @@ func dealSaleCloseCommand() *cobra.Command {
 // sealed first (a crash may have come between a thread's task authority
 // and it), so a sale_cut is the only record that ever follows the close.
 // It leaves the session on the sale's log.
-func (s *dealSession) closeSale(ctx context.Context, saleID string) (sealedEvent, interface{}, error) {
+// saleClosedStatus is the line `deal sale close` prints: the sale takes no
+// new buyer, and how many buyers' threads are still negotiating.
+func saleClosedStatus(open int) string {
+	switch open {
+	case 0:
+		return "stops taking new buyers; no negotiations still open"
+	case 1:
+		return "stops taking new buyers; 1 negotiation still open"
+	}
+	return fmt.Sprintf("stops taking new buyers; %d negotiations still open", open)
+}
+
+// closeSale seals the sale's sale_close, and returns how many of its
+// buyers' threads are still open: opened, with no final close.
+func (s *dealSession) closeSale(ctx context.Context, saleID string) (sealedEvent, interface{}, int, error) {
 	if _, _, err := s.saleOf(ctx, saleID); err != nil {
-		return sealedEvent{}, nil, err
+		return sealedEvent{}, nil, 0, err
 	}
 	if err := s.useDeal(ctx, saleID, false); err != nil {
-		return sealedEvent{}, nil, err
+		return sealedEvent{}, nil, 0, err
 	}
 	events, err := s.load(ctx, saleID)
 	if err != nil {
-		return sealedEvent{}, nil, err
+		return sealedEvent{}, nil, 0, err
 	}
 	if saleClosed(events) {
-		return sealedEvent{}, nil, cli.InputError("the sale " + saleID + " is already closed")
+		return sealedEvent{}, nil, 0, cli.InputError("the sale " + saleID + " is already closed")
 	}
 	type registration struct{ digest, thread string }
 	var registrations []registration
@@ -135,34 +151,62 @@ func (s *dealSession) closeSale(ctx context.Context, saleID string) (sealedEvent
 			registrations = append(registrations, registration{se.Digest, th.ThreadID})
 		}
 	}
+	open := 0
 	for _, r := range registrations {
-		_, opened, err := s.threadSteps(ctx, r.thread)
+		opened, still, err := s.threadState(ctx, r.thread)
 		if err != nil {
-			return sealedEvent{}, nil, err
+			return sealedEvent{}, nil, 0, err
+		}
+		if still {
+			open++
 		}
 		if !opened {
 			continue
 		}
 		authority, err := s.threadAuthority(ctx, r.thread)
 		if err != nil {
-			return sealedEvent{}, nil, err
+			return sealedEvent{}, nil, 0, err
 		}
 		if err := s.sealThreadOpened(ctx, saleID, r.digest, authority); err != nil {
-			return sealedEvent{}, nil, err
+			return sealedEvent{}, nil, 0, err
 		}
 	}
 	if events, err = s.load(ctx, saleID); err != nil {
-		return sealedEvent{}, nil, err
+		return sealedEvent{}, nil, 0, err
 	}
 	se, err := s.seal(ctx, saleID, events, dealEvent{Kind: "sale_close"})
 	if err != nil {
-		return sealedEvent{}, nil, err
+		return sealedEvent{}, nil, 0, err
 	}
 	cp, err := s.milestone(ctx)
 	if err != nil {
-		return sealedEvent{}, nil, err
+		return sealedEvent{}, nil, 0, err
 	}
-	return se, cp, nil
+	return se, cp, open, nil
+}
+
+// threadState is whether a buyer's thread has opened (its task authority
+// is sealed), and whether it is still open: opened, with no final close.
+// Both are read from its sealed steps.
+func (s *dealSession) threadState(ctx context.Context, threadID string) (opened, still bool, err error) {
+	steps, err := s.index.steps(ctx, stepFilter{DealID: threadID})
+	if err != nil {
+		return false, false, err
+	}
+	closed := false
+	for _, st := range steps {
+		switch st.Kind {
+		case "task_authority":
+			opened = true
+		case "close":
+			var ev dealEvent
+			if err := json.Unmarshal([]byte(st.Local), &ev); err != nil {
+				return false, false, cli.ErrConflict
+			}
+			closed = closed || (ev.Close != nil && ev.Close.Outcome != "open")
+		}
+	}
+	return opened, opened && !closed, nil
 }
 
 func dealSaleExportCommand() *cobra.Command {

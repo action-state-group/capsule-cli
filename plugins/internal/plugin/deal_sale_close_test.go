@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -178,6 +179,39 @@ func TestAClosedSaleLeavesTheTick(t *testing.T) {
 			deliver(t, p, tick(), witnessKey)
 			assert.NotContains(t, liveLogs(t, p), log)
 			assert.NotContains(t, liveLogs(t, p), cli.DealLogID(thread))
+		})
+	}
+}
+
+// `deal sale close` says the sale stops taking new buyers and how many
+// buyers' threads are still negotiating: none, one, or several, counting a
+// thread only while it has no final close.
+func TestASaleCloseSaysHowManyNegotiationsAreStillOpen(t *testing.T) {
+	for _, c := range []struct {
+		name           string
+		threads, close int
+		want           string
+	}{
+		{"none", 0, 0, "stops taking new buyers; no negotiations still open"},
+		{"one", 1, 0, "stops taking new buyers; 1 negotiation still open"},
+		{"two", 2, 0, "stops taking new buyers; 2 negotiations still open"},
+		{"one of two closed", 2, 1, "stops taking new buyers; 1 negotiation still open"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dealFixture(t)
+			saleID, _ := newSale(t)
+			var threads []string
+			for i := 0; i < c.threads; i++ {
+				threads = append(threads, buyerThread(t, saleID, fmt.Sprintf("buyer-%d.example", i)))
+			}
+			for _, th := range threads[:c.close] {
+				dealRun(t, "check", "--deal", th, "--input", writeJSON(t, offerInput))
+				dealRun(t, "close", "--deal", th, "--input", writeJSON(t, received))
+			}
+			closed := dealRun(t, "sale", "close", "--sale", saleID)
+			assert.Equal(t, c.want, closed["status"])
+			assert.Equal(t, float64(c.threads-c.close), closed["open_negotiations"])
+			assert.NotContains(t, closed["next"], "close on their own")
 		})
 	}
 }
