@@ -213,7 +213,8 @@ func unsafePathMessage(what string, problems []unsafePathProblem) string {
 
 // shellQuote is s as one POSIX shell word, so a printed fix can be pasted
 // as is: unchanged when every byte is one a shell takes literally, else in
-// single quotes, each ' written '\”.
+// single quotes, where a single quote inside closes the quoting, is
+// escaped with a backslash, and opens it again.
 func shellQuote(s string) string {
 	if s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./+-@%:,=") == "" {
 		return s

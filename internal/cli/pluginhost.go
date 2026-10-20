@@ -310,7 +310,9 @@ func terminalSafe(s string) string {
 	var b strings.Builder
 	for _, r := range s {
 		if unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) {
-			if r > 0xff {
+			if r > 0xffff {
+				fmt.Fprintf(&b, "\\U%08x", r)
+			} else if r > 0xff {
 				fmt.Fprintf(&b, "\\u%04x", r)
 			} else {
 				fmt.Fprintf(&b, "\\x%02x", r)

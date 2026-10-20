@@ -1128,6 +1128,7 @@ func TestARefusedLaunchersNameNeverReachesTheTerminalRaw(t *testing.T) {
 
 	assert.Equal(t, `a\x1bb\x0ac`, terminalSafe("a\x1bb\nc"))
 	assert.Equal(t, `x\u202ey\u2028z`, terminalSafe("x\u202ey\u2028z"))
+	assert.Equal(t, `a\U000e0001b`, terminalSafe("a\U000e0001b"))
 	assert.Equal(t, "plain /path é", terminalSafe("plain /path é"))
 }
 
@@ -1280,4 +1281,7 @@ func TestThePrintedFixRunsAsPastedWithASpaceInHome(t *testing.T) {
 	assert.Equal(t, "/plain/path-1.x", shellQuote("/plain/path-1.x"))
 	assert.Equal(t, `'/it'\''s here'`, shellQuote("/it's here"))
 	assert.Equal(t, "''", shellQuote(""))
+	for _, s := range []string{"/a$b", "/a*b", "/~a", "/a`b`", "/a\"b"} {
+		assert.Equal(t, "'"+s+"'", shellQuote(s), "a shell would expand or split %s", s)
+	}
 }
