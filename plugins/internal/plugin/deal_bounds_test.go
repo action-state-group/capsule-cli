@@ -281,9 +281,11 @@ func TestASellersCounterpartyIsTheBuyer(t *testing.T) {
 	assert.Equal(t, "fulfilling_merchant", sealed["recipient_role"])
 }
 
-// No shared copy, for any audience, carries the floor: not its field, not
-// its openings, not its amount. The buyer's limit is kept from the
-// counterparty only (the adjudicator judges "over your limit" with it).
+// No shared copy, for any audience, carries the floor: not its field and
+// not its openings, nor prose that states it. A close amount that equals the
+// floor is a structured field and travels (capsule-cli#278). The buyer's
+// limit is kept from the counterparty only (the adjudicator judges "over
+// your limit" with it).
 func TestNoSharedCopyCarriesTheFloor(t *testing.T) {
 	dealFixture(t)
 	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, sellerWithFloor))["deal_id"].(string)

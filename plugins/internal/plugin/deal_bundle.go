@@ -77,7 +77,7 @@ func dealBundleRun(c *cobra.Command, use string) error {
 			// Result (note §2.10 Decision 3; capsule-cli#278 Decision 1).
 			// They are in the bytes the gate reads and the share hashes.
 			var openings map[string]map[string]evidencebook.Opening
-			if openings, openingsNote, err = s.closeOpenings(ctx, dealID, events, b, audience); err != nil {
+			if openings, openingsNote, err = s.closeOpenings(ctx, dealID, b); err != nil {
 				return err
 			}
 			if openings != nil {

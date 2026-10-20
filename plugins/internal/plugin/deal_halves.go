@@ -513,11 +513,11 @@ func fmtAny(v interface{}) string {
 // or `--share adjudicator` copy carries (note §2.10 Decision 3,
 // capsule-cli#278 Decision 1): the openings of the deal's final close,
 // under its half digest in the copy, when the close commits non-empty money
-// terms and the amount written as money passes the ceiling gate for the
-// copy's audience. That gate keeps the floor from every share, and the
-// spending limit from the counterparty's only. When it carries none, why
-// says so, for the sharer: its reader's reconcile is then not evaluable.
-func (s *dealSession) closeOpenings(ctx context.Context, dealID string, events []sealedEvent, b map[string]interface{}, audience string) (openings map[string]map[string]evidencebook.Opening, why string, err error) {
+// terms. The close's amount is a structured field, so field rules govern it
+// and no bound's value does: an amount that equals the user's limit or floor
+// is carried (deal_share_ceiling.go). When it carries none, why says so, for
+// the sharer: its reader's reconcile is then not evaluable.
+func (s *dealSession) closeOpenings(ctx context.Context, dealID string, b map[string]interface{}) (openings map[string]map[string]evidencebook.Opening, why string, err error) {
 	if !s.onBook {
 		return nil, "none: a deal opened before the shelf has no openings", nil
 	}
@@ -534,12 +534,8 @@ func (s *dealSession) closeOpenings(ctx context.Context, dealID string, events [
 	if amount == "" || currency == "" {
 		return nil, "none: the final close commits no money terms (it was not received, or names no price or currency)", nil
 	}
-	minor, err := strconv.ParseInt(amount, 10, 64)
-	if err != nil {
+	if _, err := strconv.ParseInt(amount, 10, 64); err != nil {
 		return nil, "", cli.ErrConflict
-	}
-	if dealCeilingGate([]byte(formatMoney(minor, currency)), events, audience) != nil {
-		return nil, "none: the amount, written as money, is one this share keeps from its reader (a limit or floor of yours), so they cannot reconcile the terms", nil
 	}
 	record := copyRecord(b, own.recordID)
 	if record == nil {

@@ -137,36 +137,24 @@ func discloseAs(t *testing.T, id, audience, to string) (string, string) {
 	return path, note
 }
 
-// The ceiling gate is per audience: a received close whose amount is the
-// buyer's own spending limit, shown nowhere else, is kept from the
-// counterparty and carried to a named adjudicator, whose copy may already
-// carry that limit.
-func TestTheGateIsPerAudience(t *testing.T) {
-	dealFixture(t)
-	open := strings.Replace(crossPartyBuyerOpen, `"max_total_minor":190000`, `"max_total_minor":200000`, 1)
-	id := dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
-	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received","delivered":{"price_minor":200000}}`))
-	_, note := discloseAs(t, id, "counterparty", "the seller")
-	assert.Contains(t, note, "none: the amount, written as money, is one this share keeps from its reader")
-	path, note := discloseAs(t, id, "adjudicator", "the platform")
-	assert.True(t, strings.HasPrefix(note, "carried:"), note)
-	assert.Contains(t, string(mustRead(t, path)), "field_openings")
-}
-
-// The gate's exception, end to end: a buyer at its limit hands the seller a
-// counterparty file with no openings, and the adjudicator a file with them.
-// The seller's Result has one half and differs in file mode on its
-// evidence, without calling the claim false; the buyer's Result is equal in
-// file mode, and the seller's own --sent check of it cannot reproduce.
-func TestTheGateExceptionAcrossChecks(t *testing.T) {
-	limit := strings.Replace(crossPartyBuyerOpen, `"max_total_minor":190000`, `"max_total_minor":185000`, 1)
+// A close whose amount equals the buyer's spending limit is a structured
+// field, shared by its field's rules (Ethan's decision on capsule-cli#278):
+// with the agreed price 1900.00, a limit of 2000.00 and both parties closing
+// at 2000.00, each party's counterparty file carries its openings, each
+// party's Result names both halves, and every check of either Result is
+// equal: the seller's --sent check of the buyer's, and the adjudicator's
+// file-mode check of both. The adjudicator's file carries them too, as
+// before.
+func TestACloseAtTheLimitReconcilesForEveryone(t *testing.T) {
+	limit := strings.Replace(crossPartyBuyerOpen, `"max_total_minor":190000`, `"max_total_minor":200000`, 1)
+	atLimit := `{"status":"received","delivered":{"price_minor":200000}}`
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", writeJSON(t, limit))["deal_id"].(string)
-	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received","delivered":{"price_minor":185000}}`))
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, atLimit))
 	buyer := thisDealParty(t)
 	dealFixture(t)
 	dealRun(t, "open", "--records", "typed", "--deal-id", id, "--input", writeJSON(t, sellerTyped))
-	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received","delivered":{"price_minor":185000}}`))
+	dealRun(t, "close", "--deal", id, "--input", writeJSON(t, atLimit))
 	seller := thisDealParty(t)
 
 	// The buyer's Result, from the seller's counterparty file.
@@ -175,32 +163,41 @@ func TestTheGateExceptionAcrossChecks(t *testing.T) {
 	sellerCounterparty := discloseTo(t, id, "the buyer")
 	sellerAdjudicator := adjudicatorFile(t, id)
 	party(t, buyer.config)
-	_, _, buyerResult, err := runTermsResult(t, id, buyerResponse, "--openings", sellerCounterparty)
+	_, buyerDoc, buyerResult, err := runTermsResult(t, id, buyerResponse, "--openings", sellerCounterparty)
 	require.NoError(t, err)
+	require.Len(t, buyerDoc.Claims[0].Evidence, 2)
 	buyerCounterparty, note := discloseAs(t, id, "counterparty", "the seller")
-	require.Contains(t, note, "none:", "kept back at the buyer's limit")
-	buyerAdjudicator := adjudicatorFile(t, id)
+	require.True(t, strings.HasPrefix(note, "carried:"), "an amount equal to the limit is carried: %s", note)
+	raw := string(mustRead(t, buyerCounterparty))
+	carried := mustOpenings(t, buyerCounterparty)
+	require.Len(t, carried, 1)
+	for _, held := range carried {
+		assert.Contains(t, held, dealAmountField, "the terms amount opening is not a bound field")
+		assert.Contains(t, held, dealCurrencyField, "nor is the currency's")
+	}
+	assert.NotContains(t, raw, "max_total_minor", "the bound field itself is never in a counterparty copy")
+	buyerAdjudicator, note := discloseAs(t, id, "adjudicator", "the platform")
+	require.True(t, strings.HasPrefix(note, "carried:"), note)
 
-	// The seller's Result, from the buyer's counterparty file: one half.
+	// The seller's Result, from the buyer's counterparty file: two halves.
 	sellerResponse := recordedCopy(t, seller, buyer, id)
-	_, sellerResultDoc, sellerResult, err := runTermsResult(t, id, sellerResponse, "--openings", buyerCounterparty)
+	_, sellerDoc, sellerResult, err := runTermsResult(t, id, sellerResponse, "--openings", buyerCounterparty)
 	require.NoError(t, err)
-	require.Len(t, sellerResultDoc.Claims[0].Evidence, 1)
+	require.Len(t, sellerDoc.Claims[0].Evidence, 2)
+	claims := claimsOf(sellerDoc)
+	assert.Equal(t, evidencebook.ResultTallies{Matched: 1}, claims[amountReq].Reconcile.Tallies)
+
+	check, err := runTermsCheck(t, id, sellerResponse, buyerResult, "--openings", buyerCounterparty, "--sent", sellerCounterparty)
+	require.NoError(t, err, check)
+	assert.Equal(t, termsCheckEqual, check["check"])
 
 	keys := []string{"--party-key", buyer.signer + ":" + buyer.checkpoint, "--party-key", seller.signer + ":" + seller.checkpoint}
 	files := []string{"--copy", buyerAdjudicator, "--copy", sellerAdjudicator}
-	out, err := asAdjudicator(t, append(append([]string{"--check", sellerResult}, files...), keys...)...)
-	require.ErrorIs(t, err, cli.ErrConflict)
-	assert.Equal(t, termsCheckDiffers, out["check"])
-	assert.Contains(t, out["detail"], "omits the other party's half supplied here")
-	out, err = asAdjudicator(t, append(append([]string{"--check", buyerResult}, files...), keys...)...)
-	require.NoError(t, err, out)
-	assert.Equal(t, termsCheckEqual, out["check"])
-
-	party(t, seller.config)
-	check, err := runTermsCheck(t, id, sellerResponse, buyerResult, "--openings", buyerCounterparty, "--sent", sellerCounterparty)
-	require.ErrorIs(t, err, cli.ErrInput)
-	assert.Equal(t, termsCheckCannotReproduce, check["check"])
+	for _, result := range []string{buyerResult, sellerResult} {
+		out, err := asAdjudicator(t, append(append([]string{"--check", result}, files...), keys...)...)
+		require.NoError(t, err, out)
+		assert.Equal(t, termsCheckEqual, out["check"])
+	}
 }
 
 // The trust boundary and the flag contract of the file mode.

@@ -13,11 +13,33 @@ import (
 // learns what to ask for, and a buyer who learns the seller's floor
 // (intent.min_total_minor) learns what to offer. The floor is never sealed at
 // all (only its commitment). The adjudicator's copy may carry the maximum (it
-// is how "over your limit" is judged). A counterparty copy withholds any
-// record that carries either bound, leaves them out of the merchant section,
-// and the gate refuses a counterparty page or bundle that names either, as
-// the field or as money, unless it equals an amount the copy may show anyway
-// (the price asked, an amount paid). The party role changes only the words.
+// is how "over your limit" is judged). The party role changes only the words.
+//
+// The bound fields are the private bounds only: intent.max_total_minor,
+// intent.min_total_minor, and their openings (bounds_openings and
+// commercial_bounds_opening; the maximum has no opening of its own). The
+// final close's terms amount and currency openings are not bound fields:
+// they travel in `disclose --share counterparty` (§2.10 Decision 3).
+//
+// Two rules keep them, by what can label a number as a bound (Ethan's
+// decision on capsule-cli#278):
+//   - Structured amount fields are governed by field rules only. The bound
+//     fields are never in a counterparty copy (a record that carries one is
+//     withheld), and the floor and its openings are in no shared copy.
+//     Every other amount field (the close's amount and its opening, price
+//     and deposit terms, snapshot and act amounts, the merchant's charged
+//     total) is shared as its field's rules say, even when its value equals
+//     a bound: a bare number never says that it is one. The gate still reads
+//     a whole copy, so this holds because such a field is either written
+//     in minor units, which the money reader does not take as a bound
+//     ("200000"), or is an amount the copy shows anyway (dealShownAmounts).
+//   - Free text keeps value matching, since it can label a number ("my max
+//     is 250"): notes, rendered page and report text, and merchant section
+//     prose. The gate refuses a copy whose text states either bound as
+//     money, unless it equals an amount the copy may show anyway (the price
+//     asked, an amount paid). The merchant section's "your limit" basis is
+//     withheld by field: it never states an approved amount that is only
+//     the limit.
 
 // dealPrivateBoundKeys are the bound fields no counterparty copy carries.
 var dealPrivateBoundKeys = map[string]bool{"max_total_minor": true, "min_total_minor": true}
@@ -68,7 +90,8 @@ func dealCeilings(events []sealedEvent) []dealCeiling {
 }
 
 // dealShownAmounts are the amounts a counterparty copy may carry: what the
-// seller asked and what was paid, which the seller knows already.
+// seller asked and what was paid, which the seller knows already, among them
+// the total the merchant's own email says it charged.
 func dealShownAmounts(events []sealedEvent) map[int64]bool {
 	shown := map[int64]bool{}
 	terms := func(t *dealTerms) {
@@ -80,6 +103,10 @@ func dealShownAmounts(events []sealedEvent) map[int64]bool {
 				shown[*v] = true
 			}
 		}
+	}
+	currency := ""
+	if len(events) > 0 && events[0].Event.Open != nil {
+		currency = events[0].Event.Open.Terms.Currency
 	}
 	for _, se := range events {
 		e := se.Event
@@ -97,6 +124,15 @@ func dealShownAmounts(events []sealedEvent) map[int64]bool {
 		}
 		if e.Act != nil && e.Act.AmountMinor != nil {
 			shown[*e.Act.AmountMinor] = true
+		}
+		// A charge in another currency shows a different amount, whatever
+		// its minor units: ¥6,400 is not $64.00. A receipt that names no
+		// currency, or a deal with none, is read in the deal's: the charge
+		// is still an amount paid that the copy shows.
+		if e.Evidence != nil && e.Evidence.Email != nil && e.Evidence.Email.Parsed.TotalMinor != nil {
+			if p := e.Evidence.Email.Parsed; p.Currency == "" || currency == "" || strings.EqualFold(p.Currency, currency) {
+				shown[*p.TotalMinor] = true
+			}
 		}
 	}
 	return shown

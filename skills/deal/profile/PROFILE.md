@@ -925,9 +925,10 @@ reconcile:
 **Openings (DR §5).** A `disclose --deal ID --share counterparty --to WHO` file, and a
 `disclose --deal ID --share adjudicator --to WHO` file for an adjudicator the user names, carries
 `field_openings` for the party's own final close only, keyed by its half digest. It does so when
-the close commits non-empty terms and the amount written as money passes the share gate for that
-audience. The gate keeps the user's floor from every share, and the spending limit from the
-counterparty's only, so an adjudicator does receive an amount that equals the limit. Each release
+the close commits non-empty terms. The close's amount is a structured field, so it is carried
+even when it equals the user's spending limit or floor: the bounds are kept by field (the bound
+fields and their openings are in no counterparty copy, and the floor is in no shared copy), and by
+value only in free text, which can say that a number is a bound. Each release
 is on record on the deal's disclosures log, and each party releases only its own openings. No
 other copy carries openings: not a `deal respond` answer (its requester is not checked), a report
 page, the user's own bundle, or a History. `deal_local` is never opened.
