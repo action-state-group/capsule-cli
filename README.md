@@ -335,7 +335,7 @@ capsulectl backfill run|status --profile NAME [...]
 capsulectl canary run --profile NAME [--skill FILE] [--expect-version TAG] [--expect-skill-sha256 HEX]
 capsulectl canary watch --log-id ID --expect-every DURATION [--witness URL] [--state FILE]
 capsulectl release register --dir DIR --tag TAG --commit SHA [--witness URL --witness-key HEX]
-capsulectl release watch --allowed-signers FILE [--repo OWNER/NAME] [--known-unsigned-file FILE] [--trusted-root FILE]
+capsulectl release watch [--repo OWNER/NAME] [--release-grace DURATION] [--trusted-root FILE]
 ```
 
 `capsulectl <command> --help` gives every flag; this list is the shape of each
@@ -378,9 +378,9 @@ contract (`cli-plugin/v1`: discovery roots, handshake, and what a plugin can
 never change) is all in [docs/PLUGINS.md](docs/PLUGINS.md).
 
 `release register` records a built release in the witness's transparency log;
-the release workflow runs it. `release watch` compares the repository's
-releases and that log with the intended releases, the tags signed by the keys
-in `--allowed-signers`, and is meant to run off the release infrastructure.
+the release workflow runs it. `release watch` checks every `v*` tag's
+release against its statement, its attestation and that log, and is meant to
+run off the release infrastructure.
 What each covers, and what it does not, is in
 [docs/RELEASE-TRANSPARENCY.md](docs/RELEASE-TRANSPARENCY.md).
 

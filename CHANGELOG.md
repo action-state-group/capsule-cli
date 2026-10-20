@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Releases are approved in GitHub, not signed on a laptop
+
+- **Changed (release procedure).** Release tags are no longer SSH-signed. A
+  release run now waits for a person to approve it in a GitHub deployment
+  environment: `release` for a full release, where whoever pushed the tag
+  cannot approve it, and `release-candidate` for a pre-release, where they
+  can. A tag ruleset limits who can create `v*` tags and stops anyone,
+  admins included, from moving or deleting one. `docs/RELEASING.md` has the
+  procedure; `scripts/release-settings.sh` has the repository settings.
+- **Changed (breaking): `release watch` takes no key file.** It drops
+  `--allowed-signers`, `--known-unsigned` and `--known-unsigned-file`, and
+  checks every `v*` tag: each has a release within `--release-grace`, now 24
+  hours by default to cover the wait for approval, and each release's
+  statement, attestation and log entry verify. The releases before
+  `release register` existed (`v0.1.0-rc1` to `v0.1.0-rc4`) need no
+  statement. Its result names the checked tags as `tags`, not
+  `intended_tags`. A monitor's operator removes those flags from its
+  schedule.
+- **Removed:** `release/known-unsigned.txt`.
+
 ### A jsonl profile's bundles verify VALID, so `report build` writes their page (capsule-cli#148, #312)
 
 - **Fixed:** `bundle`, `disclose`, `permalink` and `close --bundle-out` on a

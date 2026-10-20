@@ -21,12 +21,22 @@ No GitHub account is needed with `--bundle`.
 
 ## 2. What it does not prove
 
-**It does not prove the project meant to release the file.** Three things
-all produce perfectly valid attestations, because each uses the real signing
-path:
-- a stolen token that can push a tag;
-- a compromised CI;
-- a maintainer acting alone.
+**It does not prove the project meant to release the file.** Anything
+that can make the release workflow run at a tag produces a perfectly valid
+attestation, because it uses the real signing path.
+
+What limits that is GitHub's own enforcement, set up as
+[RELEASING.md](RELEASING.md#repository-settings) describes:
+- only maintainers and admins can create a `v*` tag, and nobody, admins
+  included, can move or delete one;
+- the release workflow waits for a named reviewer to approve the run. For a
+  full release, whoever pushed the tag cannot be that reviewer.
+
+These are settings in GitHub, so they hold only as long as GitHub and the
+organisation's admins do. Someone who controls the organisation can change
+them. And the approval holds only while the workflow at the tagged commit
+asks for it, so a change to `release.yml` deserves the same review as the
+release.
 
 ## 3. What registration adds: "logged", not "from us"
 
@@ -62,7 +72,7 @@ itself:
 - its COSE signature, under the key its payload names;
 - the attestation of its `release.json`, made by the release workflow at
   that tag and commit;
-- the tag itself (section 5).
+- the tag itself: it exists and still points at that commit (section 5).
 
 ## 4. What Rekor anchoring adds
 
@@ -85,33 +95,29 @@ Where this is in the service's source (capsule-anchor, at `04447927e2db`):
   not been published yet. The publisher thread calls it on each interval
   ([`start_publisher_thread`](https://github.com/action-state-group/capsule-anchor/blob/04447927e2db3d299ad8c4dede394e1f640feab0/packages/capsule_anchor/public_log/scheduler.py#L124)).
 
-## 5. What the monitor adds: comparison with intent, from outside
+## 5. What the monitor adds: a check from outside
 
-An **intended release** is a `v*` tag whose SSH signature verifies under a
-maintainer key in an allowed-signers file. That key never touches CI, so a
-stolen token or a compromised workflow can create a tag and a release, but
-not a signed tag.
-
-`capsulectl release watch` reads only public data and needs no account. It
-lists the repository's tags and checks each signature with
-`ssh-keygen -Y verify`. It then checks every release and every statement
-under the release subject, and it **alarms** (exits non-zero and names the
-problem) on any of:
-- a tag or release that is not intended (unsigned, or signed by a key that
-  is not allowed);
-- an intended tag with no release once a grace window has passed since it
-  was tagged (`--release-grace`, default two hours, measured from the
-  tagger time the tag's signature covers). This catches a release that was
-  never published or was deleted;
-- an intended release with no statement, or whose statement does not match
-  the tag, its commit or its assets;
+`capsulectl release watch` reads only public data and needs no account or
+key. It lists the repository's `v*` tags and releases, checks each release
+and its statement, and reads every statement under the release subject. It
+**alarms** (exits 6 and names the problem) on any of:
+- a `v*` tag with no release once a grace window has passed since it was
+  tagged (`--release-grace`, default 24 hours, to cover the wait for a
+  reviewer's approval). This catches a release that was never approved,
+  failed, or was deleted;
+- a release with no `v*` tag of its name, or whose statement names another
+  commit than the tag points at now. This catches a deleted or moved tag;
+- a release with no statement, or whose statement does not match its
+  assets. The releases from before `release register` existed,
+  `v0.1.0-rc1` to `v0.1.0-rc4`, are the only ones that need none;
 - a statement whose signature does not verify under the key its payload
   names, or whose issuer or subject is not the release workflow's;
 - a `release.json` with no attestation, or one that does not verify as the
   release workflow at `refs/tags/<tag>` on the tagged commit (checked with
-  `gh attestation verify --bundle`, with no account);
+  `gh attestation verify --bundle`, with no account). The attestation's own
+  inclusion in Sigstore's public Rekor log is part of that check;
 - a receipt that does not verify offline against the service's pinned key;
-- an intended release whose statement is missing from the log;
+- a release whose statement is missing from the log;
 - **any statement under the release subject that does not verify as one
   of these releases.** Since registration is open, this also fires on spam
   or a probe. That is intended: a person looks at it, and the alarm names
@@ -119,62 +125,10 @@ problem) on any of:
   registers a new statement under a new key.
 
 ```sh
-capsulectl release watch --allowed-signers ~/release-monitor/allowed_signers \
-  --known-unsigned-file ~/release-monitor/known-unsigned
+capsulectl release watch
 ```
 
-where `~/release-monitor/allowed_signers` holds the maintainer keys and
-`~/release-monitor/known-unsigned` lists the tags made before tag signing
-began. Both live in the monitor's own directory.
-
-**The allowed signers.** Use one line per maintainer key, in ssh
-`allowed_signers` format, limited to the `git` namespace. The principal is
-only a label. This example has a placeholder where the key goes; the real
-key is the maintainer's public key, given to whoever runs the monitor:
-
-```text
-maintainer@example.org namespaces="git" ssh-ed25519 <the maintainer's public key, base64>
-```
-
-**The tags made before signing.** Tag signing begins at `v0.1.0-rc15`. Every
-earlier tag, `v0.1.0-rc1` through `v0.1.0-rc14`, is unsigned. This repository
-keeps a reference copy of that list at
-[`release/known-unsigned.txt`](../release/known-unsigned.txt), with SHA-256:
-
-```text
-fa53f40efe7243a45fb47863b3cd2a5a5b31868a58dbf193a04abc4e54d48aa4
-```
-
-Copy it **once** into the monitor's own directory, from the first signed
-tag (whose signature covers it) rather than from `main`. Then check the
-copy's SHA-256 against the value above before you use it:
-
-```sh
-git -C ~/src/capsule-cli fetch --tags origin
-git -C ~/src/capsule-cli -c gpg.ssh.allowedSignersFile="$HOME/release-monitor/allowed_signers" \
-  tag -v v0.1.0-rc15                                # the tag verifies under an allowed signer
-git -C ~/src/capsule-cli show v0.1.0-rc15:release/known-unsigned.txt > ~/release-monitor/known-unsigned
-shasum -a 256 ~/release-monitor/known-unsigned   # must equal the value above
-```
-
-- **Never point the monitor at the repository's file, and never re-sync
-  from it.** The list is frozen at `v0.1.0-rc14`. From `v0.1.0-rc15` on,
-  every tag is signed, so the list never grows. A tag made after signing
-  began is never added to it. An unsigned tag is an alarm, whatever its
-  name.
-- **A later edit of the repository's file is itself a red flag.** Whoever
-  can change the repository must not be able to change what counts as
-  intended. The monitor's copy is what it trusts, and the repository's copy
-  is only where it came from.
-
-- `--allowed-signers` (ssh `allowed_signers` format) belongs to whoever
-  runs the monitor, never to this repository. An attacker who can change
-  the repository must not be able to change what counts as intended.
-- `--known-unsigned-file` (or `--known-unsigned`, comma-separated) names the
-  tags made before tag signing began, which are accepted as known
-  exceptions. Like the allowed signers, the file the monitor reads belongs
-  to the monitor, never to this repository: the repository's
-  `release/known-unsigned.txt` is a reference copy, taken once.
+- `--release-grace` sets how long a tag may wait for its release.
 - `--trusted-root` passes a Sigstore trusted root to gh, for a fully
   offline check.
 
@@ -185,14 +139,27 @@ exceeds the size limit, the monitor fails with an error instead of judging
 part of the log. An error, like an alarm, needs a person.
 
 **Where it runs.** A monitor running on the infrastructure it monitors is
-decoration. Run it on a schedule somewhere a compromise of this
-repository, its CI or its GitHub organisation does not reach, such as a
-maintainer's own machine (cron or launchd). Ideally run it in more than
-one such place.
+decoration. Run it on a schedule (cron or launchd) somewhere a compromise of
+this repository, its CI or its GitHub organisation does not reach. That
+rules out GitHub Actions. It also rules out the cloud project that runs the
+transparency service, which the monitor checks too. Ideally run it in more
+than one such place. Each run needs:
+- a capsulectl binary that was verified once by hand from a release (its
+  `SHA256SUMS` and its attestation). It is never updated automatically from
+  the repository it watches;
+- `gh`, for the attestation check. It runs with no token: the monitor's
+  GitHub reads are anonymous, a handful of API calls a run, well inside
+  GitHub's anonymous rate limit when run hourly;
+- a way to reach a person on any exit other than 0, with the output;
+- a notice when it has **not** run. A monitor that stopped looks like one
+  that found nothing, so each successful run should check in with
+  something that alerts when the check-ins stop.
 
-**What it does not stop:** a maintainer whose own key is allowed. That
-release is intended by this definition. The monitor makes it public,
-timestamped and attributable to a key, which is the most a log can do.
+**What it does not stop:** anyone GitHub lets cut a release. A maintainer
+who tags a commit, and a reviewer who approves the run, make a release that
+passes every check above. The monitor makes it public, timestamped and
+consistent, which is the most a log can do. Nor does it see who approved a
+run: that record stays in GitHub.
 
 ## 6. What none of this addresses: name resolution
 

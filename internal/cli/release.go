@@ -34,10 +34,12 @@ import (
 // Signed Statement naming the tag, the commit and every artifact's digest,
 // signed by a key made for that one release and thrown away (the statement
 // is attested like the binaries, so no key is held anywhere). `release
-// watch` (run OFF the release infrastructure) compares three public records
-// with what was intended, a tag signed by a maintainer key the monitor pins:
-// the repository's tags and releases, each release's statement, and the
-// witness's entries under the release subject.
+// watch` (run OFF the release infrastructure) checks three public records
+// against each other: the repository's v* tags and releases, each release's
+// statement and its attestation, and the witness's entries under the release
+// subject. Who may cut a release is GitHub's to enforce (a tag ruleset and
+// the release environments' reviewers); the monitor makes what was released
+// public and consistent, or alarms.
 
 const (
 	releaseStatementType = "capsule-cli-release/v1"
@@ -46,6 +48,12 @@ const (
 	releaseIssuer        = "https://github.com/action-state-group/capsule-cli/.github/workflows/release.yml"
 	releaseMaxAsset      = 1 << 20
 )
+
+// releasesBeforeStatements are the releases cut before `release register`
+// existed. They have no statement, and are not expected to.
+var releasesBeforeStatements = map[string]bool{
+	"v0.1.0-rc1": true, "v0.1.0-rc2": true, "v0.1.0-rc3": true, "v0.1.0-rc4": true,
+}
 
 // releaseStatement is the payload: JCS bytes of this object.
 type releaseStatement struct {
@@ -220,8 +228,6 @@ func registerStatement(ctx context.Context, witnessURL string, statement []byte)
 
 type releaseWatchConfig struct {
 	repo, api, witness, subject string
-	allowedSigners              string
-	knownUnsigned               map[string]bool
 	authority                   ed25519.PublicKey
 	gh, trustedRoot             string
 	grace                       time.Duration
@@ -414,9 +420,9 @@ func releaseGet(ctx context.Context, rawURL string, limit int64) ([]byte, http.H
 	return raw, resp.Header, nil
 }
 
-// tagSignedBy reports the allowed signer whose SSH signature verifies the
-// tag, or "" and why not, and the tagger time from the signed tag object.
-func (cfg releaseWatchConfig) tagSignedBy(ctx context.Context, tag string) (string, string, time.Time, error) {
+// tagTime is when tag was cut: the tagger time of an annotated tag, or the
+// committer time of a lightweight tag's commit, which can only be earlier.
+func (cfg releaseWatchConfig) tagTime(ctx context.Context, tag string) (time.Time, error) {
 	var ref struct {
 		Object struct {
 			Type string `json:"type"`
@@ -424,76 +430,18 @@ func (cfg releaseWatchConfig) tagSignedBy(ctx context.Context, tag string) (stri
 		} `json:"object"`
 	}
 	if err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/git/ref/tags/"+url.PathEscape(tag), &ref); err != nil {
-		return "", "", time.Time{}, err
-	}
-	if ref.Object.Type != "tag" {
-		return "", "a lightweight tag carries no signature", time.Time{}, nil
+		return time.Time{}, err
 	}
 	var obj struct {
-		Verification struct {
-			Signature string `json:"signature"`
-			Payload   string `json:"payload"`
-		} `json:"verification"`
+		Tagger    struct{ Date time.Time } `json:"tagger"`
+		Committer struct{ Date time.Time } `json:"committer"`
 	}
-	if err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/git/tags/"+ref.Object.SHA, &obj); err != nil {
-		return "", "", time.Time{}, err
+	if ref.Object.Type == "tag" {
+		err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/git/tags/"+ref.Object.SHA, &obj)
+		return obj.Tagger.Date, err
 	}
-	sig := obj.Verification.Signature
-	switch {
-	case sig == "":
-		return "", "unsigned", time.Time{}, nil
-	case !strings.Contains(sig, "BEGIN SSH SIGNATURE"):
-		return "", "not an SSH signature", time.Time{}, nil
-	}
-	signer, why, err := verifySSHSignature(ctx, cfg.allowedSigners, []byte(obj.Verification.Payload), []byte(sig))
-	return signer, why, taggerTime(obj.Verification.Payload), err
-}
-
-// taggerTime reads the time from a tag object's "tagger Name <email>
-// <unix seconds> <zone>" line, which the tag's signature covers.
-func taggerTime(payload string) time.Time {
-	for _, line := range strings.Split(payload, "\n") {
-		if line == "" {
-			break
-		}
-		if rest, ok := strings.CutPrefix(line, "tagger "); ok {
-			fields := strings.Fields(rest[strings.LastIndex(rest, ">")+1:])
-			if len(fields) >= 1 {
-				var secs int64
-				if _, err := fmt.Sscan(fields[0], &secs); err == nil {
-					return time.Unix(secs, 0)
-				}
-			}
-		}
-	}
-	return time.Time{}
-}
-
-// verifySSHSignature checks a git SSH signature (namespace "git") against an
-// allowed_signers file with ssh-keygen, and names the signer.
-func verifySSHSignature(ctx context.Context, allowed string, payload, sig []byte) (string, string, error) {
-	dir, err := os.MkdirTemp("", "release-watch-")
-	if err != nil {
-		return "", "", err
-	}
-	defer os.RemoveAll(dir)
-	sigPath := filepath.Join(dir, "tag.sig")
-	if err := os.WriteFile(sigPath, sig, 0o600); err != nil {
-		return "", "", err
-	}
-	find := exec.CommandContext(ctx, "ssh-keygen", "-Y", "find-principals", "-f", allowed, "-s", sigPath)
-	principals, err := find.Output()
-	if err != nil {
-		return "", "signed by a key not in the allowed signers", nil
-	}
-	for _, principal := range strings.Fields(string(principals)) {
-		verify := exec.CommandContext(ctx, "ssh-keygen", "-Y", "verify", "-f", allowed, "-I", principal, "-n", "git", "-s", sigPath)
-		verify.Stdin = bytes.NewReader(payload)
-		if verify.Run() == nil {
-			return principal, "", nil
-		}
-	}
-	return "", "the signature does not verify", nil
+	err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/git/commits/"+ref.Object.SHA, &obj)
+	return obj.Committer.Date, err
 }
 
 func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, error) {
@@ -504,28 +452,11 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 	if err != nil {
 		return nil, err
 	}
-	taggedAt := map[string]time.Time{}
 	commitOf := map[string]string{}
-	intended := map[string]string{} // tag -> who signed, or "known exception"
 	for _, t := range tags {
-		if !strings.HasPrefix(t.Name, "v") {
-			continue
+		if strings.HasPrefix(t.Name, "v") {
+			commitOf[t.Name] = t.Commit.SHA
 		}
-		commitOf[t.Name] = t.Commit.SHA
-		if cfg.knownUnsigned[t.Name] {
-			intended[t.Name] = "known exception"
-			continue
-		}
-		signer, why, at, err := cfg.tagSignedBy(ctx, t.Name)
-		if err != nil {
-			return nil, err
-		}
-		taggedAt[t.Name] = at
-		if signer == "" {
-			alarm("unintended tag %s: %s", t.Name, why)
-			continue
-		}
-		intended[t.Name] = signer
 	}
 
 	releases, err := releaseGetAll[githubRelease](ctx, cfg.api+"/repos/"+cfg.repo+"/releases?per_page=100")
@@ -536,22 +467,27 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 	for _, r := range releases {
 		released[r.TagName] = true
 	}
-	for tag := range intended {
-		if released[tag] || cfg.knownUnsigned[tag] {
+	for tag := range commitOf {
+		if released[tag] {
 			continue
 		}
-		// A signed tag is a promise of a release: one never published, or
-		// deleted, must not pass quietly.
-		if at := taggedAt[tag]; at.IsZero() || releaseNow().Sub(at) > cfg.grace {
-			alarm("intended tag %s has no release (tagged %s; grace %s)", tag, at.UTC().Format(time.RFC3339), cfg.grace)
+		// A release tag is a promise of a release: one never published, or
+		// deleted, must not pass quietly. The grace covers the wait for a
+		// reviewer to approve the run, and the build.
+		at, err := cfg.tagTime(ctx, tag)
+		if err != nil {
+			return nil, err
+		}
+		if at.IsZero() || releaseNow().Sub(at) > cfg.grace {
+			alarm("tag %s has no release (tagged %s; grace %s)", tag, at.UTC().Format(time.RFC3339), cfg.grace)
 		}
 	}
 	expected := map[string]string{} // entry hash -> tag
 	checked := []string{}
 	for _, r := range releases {
 		tag := r.TagName
-		if _, ok := intended[tag]; !ok {
-			alarm("unintended release %s: its tag is not signed by an allowed signer", tag)
+		if _, ok := commitOf[tag]; !ok {
+			alarm("release %s has no v* tag of that name (deleted, or never a release tag)", tag)
 			continue
 		}
 		payloadName, statementName, registrationName := releaseFileNames(tag)
@@ -562,7 +498,7 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 			urls[a.Name] = a.URL
 		}
 		if urls[payloadName] == "" || urls[statementName] == "" || urls[registrationName] == "" {
-			if !cfg.knownUnsigned[tag] {
+			if !releasesBeforeStatements[tag] {
 				alarm("release %s has no release statement", tag)
 			}
 			continue
@@ -673,8 +609,8 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 
 	sort.Strings(alarms)
 	sort.Strings(checked)
-	names := make([]string, 0, len(intended))
-	for t := range intended {
+	names := make([]string, 0, len(commitOf))
+	for t := range commitOf {
 		names = append(names, t)
 	}
 	sort.Strings(names)
@@ -685,7 +621,7 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 	if alarms == nil {
 		alarms = []string{}
 	}
-	return map[string]any{"state": state, "repo": cfg.repo, "subject": cfg.subject, "intended_tags": names,
+	return map[string]any{"state": state, "repo": cfg.repo, "subject": cfg.subject, "tags": names,
 		"releases_checked": checked, "statements_in_log": len(logged.Entries), "alarms": alarms}, nil
 }
 
@@ -713,41 +649,21 @@ func checkReleaseAttestation(ctx context.Context, cfg releaseWatchConfig, payloa
 }
 
 func releaseWatchCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "watch", Short: "Compare the repository's releases and the transparency log with the intended releases (maintainer-signed tags); run it off the release infrastructure", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
-		cfg := releaseWatchConfig{knownUnsigned: map[string]bool{}}
+	cmd := &cobra.Command{Use: "watch", Short: "Check every v* tag's release against its statement, its attestation and the transparency log; run it off the release infrastructure", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+		cfg := releaseWatchConfig{}
 		cfg.repo, _ = c.Flags().GetString("repo")
 		cfg.api, _ = c.Flags().GetString("github-api")
 		cfg.witness, _ = c.Flags().GetString("witness")
 		cfg.subject, _ = c.Flags().GetString("subject")
-		cfg.allowedSigners, _ = c.Flags().GetString("allowed-signers")
 		key, _ := c.Flags().GetString("witness-key")
-		known, _ := c.Flags().GetStringSlice("known-unsigned")
 		cfg.gh, _ = c.Flags().GetString("gh")
 		cfg.trustedRoot, _ = c.Flags().GetString("trusted-root")
 		cfg.grace, _ = c.Flags().GetDuration("release-grace")
-		if cfg.allowedSigners == "" {
-			return InputError("--allowed-signers is required: the maintainer keys whose signed tags mark an intended release (ssh allowed_signers format)")
-		}
-		if _, err := os.Stat(cfg.allowedSigners); err != nil {
-			return InputError("--allowed-signers: cannot read " + cfg.allowedSigners)
-		}
 		authority, err := ParseKeys([]string{key})
 		if err != nil {
 			return err
 		}
 		cfg.authority = authority[0]
-		for _, t := range known {
-			cfg.knownUnsigned[strings.TrimSpace(t)] = true
-		}
-		if file, _ := c.Flags().GetString("known-unsigned-file"); file != "" {
-			tags, err := readKnownUnsigned(file)
-			if err != nil {
-				return err
-			}
-			for _, t := range tags {
-				cfg.knownUnsigned[t] = true
-			}
-		}
 		out, err := releaseWatch(c.Context(), cfg)
 		if err != nil {
 			return err
@@ -765,34 +681,14 @@ func releaseWatchCommand() *cobra.Command {
 	cmd.Flags().String("witness", DealDefaultWitness, "The SCITT transparency service")
 	cmd.Flags().String("witness-key", DealDefaultWitnessKey, "The witness's pinned Ed25519 authority key (hex)")
 	cmd.Flags().String("subject", releaseSubject, "The release statements' subject")
-	cmd.Flags().String("allowed-signers", "", "ssh allowed_signers file naming the maintainer keys whose signed tags are intended releases (kept with the monitor, never in the repository)")
 	cmd.Flags().String("gh", "gh", "The gh CLI used to verify release.json's attestation bundle (no account is used)")
 	cmd.Flags().String("trusted-root", "", "Optional Sigstore trusted_root.jsonl, passed to gh as --custom-trusted-root for an offline check")
-	cmd.Flags().Duration("release-grace", 2*time.Hour, "How long after a signed tag its release may take before its absence is an alarm")
-	cmd.Flags().StringSlice("known-unsigned", nil, "Tags made before signing began, accepted as known exceptions (comma-separated)")
-	cmd.Flags().String("known-unsigned-file", "", "File of tags made before signing began, one per line (# starts a comment), accepted as known exceptions; kept with the monitor")
+	cmd.Flags().Duration("release-grace", 24*time.Hour, "How long after a v* tag its release may take (approval and build) before its absence is an alarm")
 	return cmd
 }
 
-// readKnownUnsigned reads one tag per line; blank lines and anything after
-// "#" are ignored.
-func readKnownUnsigned(path string) ([]string, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, InputError("--known-unsigned-file: cannot read " + path)
-	}
-	var tags []string
-	for _, line := range strings.Split(string(raw), "\n") {
-		line, _, _ = strings.Cut(line, "#")
-		if line = strings.TrimSpace(line); line != "" {
-			tags = append(tags, line)
-		}
-	}
-	return tags, nil
-}
-
 func releaseCommands() *cobra.Command {
-	release := &cobra.Command{Use: "release", Short: "Record releases in a transparency log, and watch that log against the intended releases"}
+	release := &cobra.Command{Use: "release", Short: "Record releases in a transparency log, and check every release against that log"}
 	release.AddCommand(releaseRegisterCommand(), releaseWatchCommand())
 	return release
 }
