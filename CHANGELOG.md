@@ -42,6 +42,22 @@
   last checkpoint, is covered at its last step's time by its next command or
   `deal tick`; until then `deal history` refuses it.
 
+### A shared copy keeps the bounds back by field, and reads text, not code (capsule-cli#247, #286)
+
+- **Changed (privacy):** structured amounts are kept back by field, never by
+  value. The private bounds (`intent.max_total_minor`,
+  `intent.min_total_minor` and their openings) stay out of every counterparty
+  copy, and the floor stays out of every shared copy. A final close's amount
+  and currency openings travel whenever the close commits money terms, also
+  when the amount equals a bound. A merchant charge in the deal's currency
+  counts as an amount paid, so a receipt charging exactly the limit is
+  shared. Free text (notes, page and report text, merchant prose) is still
+  matched by value.
+- **Fixed:** the share gate reads a page's markup outside every `<script>`
+  and `<style>`, its bundle and its page data, never script or style code.
+  A currency string in the vendored verifier no longer refuses a share. A
+  page whose bundle or data it cannot place is read whole.
+
 ### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
 
 - **Changed (pages):** the browser viewer every page embeds is rebuilt from
@@ -54,6 +70,28 @@
   a 390px viewport.
 - **Changed (build):** capsule-viewer/go moves to main 42ee2e5, whose
   Content-Security-Policy lists the outcome report's new stylesheet.
+
+### `verify --history`, and deal steps under the History profile's headers (capsule-cli#264)
+
+- **Added (verify):** `capsulectl verify --history FILE [--holder-key HEX]...`
+  checks a one-file History at the Basic level of the Personal-Agent History
+  Profile v0 (`personal_history_basic/1`) with agent-action-capsule's
+  verification. The output keeps the profile's order: what a Basic History
+  never establishes, coverage, each deal's state and records (committed and
+  claimed times apart), the checks not run, and the limits. `--holder-key`
+  pins the holder's keys; without one it names the keys the envelopes carry
+  and exits 3 if nothing else failed. It exits 0 when the History is
+  accepted, 1 when it is not, and 2 for a file that is not the profile's
+  container or for conflicting flags.
+- **Changed (deal):** readers admit a deal step sealed with the History
+  profile's headers, `record_type` `step_completed` or `step_failed` with
+  `correlation.exchange_id` the deal id, as a step: the step source, `deal
+  history` and the terms reconcile's half admission. A step correlated to
+  another deal is refused as a conflict.
+- **Compatibility:** this build still seals `deal_step`; it reads the new
+  headers one release before a writer emits them. `verify --bundle` on an
+  `x-history-selection/v0` file is unchanged and reads it as legacy.
+- **Changed (build):** agent-action-capsule/go moves to main 81e804a.
 
 ### A sale can close, and then leaves the cadence (capsule-cli#271)
 
@@ -107,6 +145,81 @@
 - **Changed (profile):** x-deal-v0 `evidence` records gain the optional
   `wrapped`, `wrapped_octets`, `wrapped_held` and `carrier_headers_commitment`
   members, and the `wrapped_object` source.
+
+### `deal terms-result`: both halves of a deal's terms, reconciled and sealed (capsule-cli#242, #278)
+
+- **Added (deal):** `deal terms-result --deal ID --response RECORD --openings
+  FILE --out FILE` reconciles the profile's own final close with the
+  counterparty's, read from the copy recorded with `deal request --response`
+  and opened with the `field_openings` of the counterparty's `disclose
+  --share counterparty` file. It writes an `evidence-result/v0` Result with
+  two `type: reconcile` claims, amount and currency, cited against
+  `ec:deal-reconcile@1`, and prints their verdicts and tallies only.
+  `--from`/`--to` set the period, by default the two closes' recorded times.
+  A half that is not signed under the expected key, not a step of the deal,
+  not covered by a checkpoint or not final refuses the reconcile.
+- **Added (deal):** every Result is sealed before its file is written, as an
+  `evidence_result` record on the deal's results book, `deal/<id>/results`,
+  never on the deal's own book; a retry returns the same record. `deal
+  terms-result --share counterparty --recipient WHO [--record ID] --out FILE`
+  shares one Result, with only its payload disclosed, and records the share.
+  No deal copy carries a results record.
+- **Added (deal):** `--check RESULT [--sent FILE]` checks a Result against
+  the inputs given: `equal`, `differs` (exit 5) or `cannot_reproduce` (exit
+  2). A third party both parties name checks one from files alone, with no
+  profile or store: `--check RESULT --copy FILE --copy FILE --party-key
+  SIGNER:CHECKPOINT --party-key SIGNER:CHECKPOINT`.
+- **Changed (disclose):** `disclose --deal ID --share counterparty`, and
+  `--share adjudicator --to WHO`, carry the openings of the party's own final
+  close when it commits money terms, and the output says whether the file
+  carries them and, if not, why. Respond copies, report pages, the user's own
+  bundle and History carry none.
+- **Changed:** `result build` refuses a claim under `ec:deal-reconcile@1`,
+  and `result open` lists such claims as not recomputed.
+- **Privacy:** a Result names the counterparty's long-lived key.
+
+### `deal reconcile` is now `deal audit-host`
+
+- **Changed (deal):** `deal reconcile` is renamed `deal audit-host`. It lists
+  host actions that have no deal record, and seals nothing.
+  `skills/deal/RECONCILE.md` is now `AUDIT-HOST.md`.
+- **Deprecated:** `deal reconcile` runs `deal audit-host` for one more
+  release, hidden from help, with a warning on stderr; its output is
+  unchanged. `book reconcile`, `type: reconcile`, `ec:deal-reconcile@1` and
+  `deal terms-result` keep the word.
+
+### The deal store is an evidencebook shelf; a new deal is a book (capsule-cli#242)
+
+- **Changed (deal store):** the deal store is an evidencebook shelf, opened
+  by one writer under the lock file a released build takes. The witness
+  cadence is evidencebook's: a tick checkpoints the live logs only, and
+  always holds as many leaves as logs the profile ever had, plus one, with
+  fillers. A deal is live until it is finally closed and witnessed, and again
+  after a later write; a sale never ends.
+- **Added (deal):** a deal opened from now on is a book on the shelf. Each
+  step and sealed report is a record the deal profile seals, carrying
+  `evidence_record_header` (`record_type` `deal_step` or `deal_report`;
+  `committed_at` the step's own time). A step's local event, and a received
+  final close's amount and currency, are salted field commitments whose
+  openings stay in the artifact store. A new sale and each new thread are
+  books too. A deal opened before keeps its log and reads as before.
+- **Changed:** only `capsulectl deal` writes a deal profile. Core `publish`,
+  `cll append`, `cll checkpoint create|publish`, `store init` and generic `disclose`
+  are refused on a deal profile, and on any store moved onto a shelf; reads
+  are unchanged.
+- **Changed:** every deal command refuses a deal profile without its
+  checkpoint key, naming `profile update --checkpoint-signing-key-file` and
+  `--checkpoint-trusted-key`.
+- **Changed (build):** the deal plugin pins evidencebook v0.6.0.
+- **Compatibility:** the first deal command that writes moves a store a
+  released build wrote onto its shelf, once. Prepared steps are recovered,
+  and the cadence continues from the released build's ticks and due time. A
+  read-only command (`deal list`, `deal checkpoint status`) never moves a
+  store, and on one not yet moved it says to run a deal command first. A
+  released build can still run on a moved store, and the next command takes
+  in what it wrote, but its ticks show how many book deals the store holds:
+  do not run an older build on a store after it moves. A book deal's bundle
+  and counterparty copy verify under v0.1.0-rc16.
 
 ### The core builds without evidencebook; the book and the deals are plugins (capsule-cli#236)
 
