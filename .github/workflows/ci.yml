@@ -184,6 +184,30 @@ jobs:
           path: ${{ runner.temp }}/presentation-renders
           if-no-files-found: ignore
 
+  portability:
+    # A deal's shared copy and exported records stand on their own
+    # (capsule-cli#243): the deal plugin's flow on a shelf book, shared and
+    # exported, the session deleted, then the page opened offline in
+    # headless Chrome (the runner's own), `capsulectl verify --bundle`, and
+    # the facts read back from the exported typed records, with capsulectl
+    # alone. An edited bundle, a dropped record and an edited exported record
+    # must each fail the same check. See scripts/check-portability.sh.
+    name: shared deal copy verifies without the session
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Deal, share, export, delete the session, verify offline
+        env:
+          CHROME: google-chrome
+        run: bash scripts/check-portability.sh
+
   presentation-pass:
     # The presentation goldens' bundles through `presentation list` and
     # `presentation build` (plugins/internal/plugin/presentation_pass_test.go): each page

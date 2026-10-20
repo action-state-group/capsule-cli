@@ -472,7 +472,7 @@ override is enabled.
 | `action.yml` | the `Seal PR Capsule` GitHub Action ([below](#github-action-seal-a-capsule-per-pull-request)); its profile is [docs/PR-CAPSULE-PROFILE.md](docs/PR-CAPSULE-PROFILE.md), and `scripts/pr-capsule-*.sh` are its steps |
 | `docs/` | plugins, release transparency, backfill, canary, the test-account harness, and the PR capsule profile |
 | `examples/` | workflow files to copy: adopting the PR-capsule action, a canary watch, a deal-harness watch |
-| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, the confusables tools, `build-evidence-graph-iife.sh`, which rebuilds the vendored verifier, and `check-html-render.sh`, which opens the report example's page in headless Chrome |
+| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, the confusables tools, `build-evidence-graph-iife.sh`, which rebuilds the vendored verifier, `check-html-render.sh`, which opens the report example's page in headless Chrome, and `check-portability.sh`, which checks a deal's shared copy and exported records with capsulectl alone after the session is deleted (both share `lib/page-checks.sh`) |
 | `third_party/unicode/` | Unicode's confusables data, vendored unmodified with its terms of use |
 
 ## Profile setup
@@ -1178,7 +1178,11 @@ GitHub Actions runs on pull requests and pushes to `main`, with manual dispatch
 also available. It checks formatting, module-file consistency, vet, and the CLI
 build. It also builds the report above and opens its page in headless Chrome
 (`scripts/check-html-render.sh`): the page must render the report and say it
-verified, and a copy with one payload edited must say it failed. Tests run with the race detector against a disposable MySQL 8.4 service;
+verified, and a copy with one payload edited must say it failed. A deal shared with its counterparty and exported
+is then checked with capsulectl alone, after its session is deleted
+(`scripts/check-portability.sh`): its page opens offline and verifies, and its
+exported typed records are the ones the bundle commits to and say what the page
+shows; an edited bundle or record fails the check. Tests run with the race detector against a disposable MySQL 8.4 service;
 `CAPSULE_CLI_TEST_MYSQL_PORT` is set so MySQL integration tests are not skipped.
 No production credentials or database tunnels are used.
 
