@@ -39,8 +39,9 @@ var (
 // keeps the two in step. The file and its digest are the same ones `deal
 // report` and `presentation build` embed (EvidenceGraphIIFE,
 // EvidenceGraphIIFESHA256, below);
-// scripts/build-evidence-graph-iife.sh rebuilds it from the aac commit go.mod
-// pins, and scripts/iife-sync.sh from any aac checkout. The report is only as
+// scripts/build-evidence-graph-iife.sh rebuilds it from the aac commit
+// evidenceGraphIIFESource records, and scripts/iife-sync.sh from any aac
+// checkout. The report is only as
 // current as that file.
 
 const (

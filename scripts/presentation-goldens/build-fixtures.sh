@@ -7,8 +7,8 @@
 #
 #   scripts/presentation-goldens/build-fixtures.sh AAC_CHECKOUT
 #
-# AAC_CHECKOUT is an agent-action-capsule clone that has the commit go.mod
-# pins (fixture 3 is built with its composed/v1 vector generator). Each page
+# AAC_CHECKOUT is an agent-action-capsule clone that has the commit or the
+# go/ tag go.mod pins (fixture 3 is built with its composed/v1 vector generator). Each page
 # is emitted by the real CLI, so the page gate (internal/cli/page_gate.go)
 # applies: a refused page is recorded with the refusal instead. Keys and
 # capsule ids are fresh on every run, so a rebuild rewrites every fixture.

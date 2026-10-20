@@ -16,7 +16,7 @@ asset="$root/internal/cli/assets/evidence-graph.iife.js"
 # The agent-action-capsule commit the vendored IIFE was built from, as
 # evidenceGraphIIFESource records it. It is pinned apart from go.mod, so the
 # Go module can move to a release tag without the browser verifier moving.
-aac_commit=$(sed -n 's/.*evidenceGraphIIFESource = "agent-action-capsule main@\([0-9a-f]\{40\}\) .*/\1/p' "$root/internal/cli/evidence_graph_assets.go")
+aac_commit=$(sed -n 's/.*evidenceGraphIIFESource *= *"agent-action-capsule [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' "$root/internal/cli/evidence_graph_assets.go")
 [[ -n "$aac_commit" ]] || { echo "build-evidence-graph-iife: no source commit in evidenceGraphIIFESource" >&2; exit 2; }
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
