@@ -142,6 +142,15 @@ func checkedTrustedPathUnder(path string, roots []string) (string, error) {
 	return resolved, nil
 }
 
+// insideHopRoots reports whether dir is in the root a launcher was found
+// under (start) or the one it resolves into (realRoot): the hop check holds
+// those to the strict rule and allows a root-owned sticky directory only
+// outside both.
+func insideHopRoots(dir, start, realRoot string) bool {
+	in := func(root string) bool { return dir == root || strings.HasPrefix(dir, root+string(os.PathSeparator)) }
+	return in(realRoot) || in(start)
+}
+
 // launcherHopProblems checks the symlink hops on path below the root it is
 // found under. The walk above judges only the resolved path, so a directory
 // that holds a hop but is not on it (R/capsulectl-x -> R/a/link -> R/b/x
@@ -201,8 +210,7 @@ func launcherHopProblems(path, resolved, realRoot string, roots []string) []unsa
 		if under(realRoot, dir) || under(start, dir) {
 			continue
 		}
-		inside := dir == realRoot || under(dir, realRoot) || dir == start || under(dir, start)
-		if err := checkTrustedComponent(dir, uid, !inside); err != nil {
+		if err := checkTrustedComponent(dir, uid, !insideHopRoots(dir, start, realRoot)); err != nil {
 			problems = append(problems, unsafePathProblem{path: dir, owner: errors.Is(err, errNotTrustedOwner), err: err})
 		}
 	}
@@ -408,8 +416,10 @@ type pluginInfo struct {
 	// (plugin_presentations.go). An older capsulectl ignores the member.
 	Presentations []pluginPresentation `json:"presentations,omitempty"`
 	path          string
-	// checked is the resolved path the handshake ran, which the trust walk
-	// judged; presentations load beside it.
+	// checked is the path the handshake executed. For a discovered plugin
+	// that is the resolved path the trust walk judged, and presentations
+	// load beside it; install's handshake on a file it staged itself sets it
+	// to that file.
 	checked string
 	// presentations are the checked modules, or refusal why there are none.
 	presentations []presentationModule
