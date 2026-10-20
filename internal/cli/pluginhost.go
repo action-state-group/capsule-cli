@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/action-state-group/capsule-emit/go/artifact"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
@@ -286,10 +287,26 @@ func firstPartyPlaceholder(name, short string) *cobra.Command {
 func refusedPluginError(name string, refused []refusedPlugin) error {
 	for _, r := range refused {
 		if filepath.Base(r.Path) == pluginLauncherPrefix+name {
-			return InputError(fmt.Sprintf("the capsulectl-%s plugin at %s is refused: %s", name, r.Path, r.Reason))
+			return InputError(fmt.Sprintf("the capsulectl-%s plugin at %s is refused: %s", name, terminalSafe(r.Path), terminalSafe(r.Reason)))
 		}
 	}
 	return nil
+}
+
+// terminalSafe escapes the control characters in s. A refused launcher's
+// path, and the paths its refusal names, may be written by the very user the
+// refusal is about, who must not reach the operator's terminal with escape
+// sequences or line breaks.
+func terminalSafe(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.IsControl(r) {
+			fmt.Fprintf(&b, "\\x%02x", r)
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // refusedPluginPlaceholder answers a refused launcher's name with its

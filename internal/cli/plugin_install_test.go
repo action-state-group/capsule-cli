@@ -1102,3 +1102,29 @@ func TestARefusedFirstPartyPluginIsNotCalledMissing(t *testing.T) {
 	assert.Contains(t, msg, "chmod go-w "+realLocal)
 	assert.NotContains(t, msg, "not installed")
 }
+
+// A refused launcher's filename is chosen by whoever could write its
+// folder: one that is not a plugin name gets no command, so it never reaches
+// help, and a refusal's paths reach the terminal with control characters
+// escaped.
+func TestARefusedLaunchersNameNeverReachesTheTerminalRaw(t *testing.T) {
+	home, root := installHome(t)
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+	require.NoError(t, err)
+	evil := "capsulectl-ev\x1b[31mil"
+	require.NoError(t, os.WriteFile(filepath.Join(root, evil), []byte(launcherScript("evil", "1", "")), 0o755))
+	require.NoError(t, os.Chmod(filepath.Join(home, ".local"), 0o775))
+
+	out, err := invoke(t, "", "--help")
+	require.NoError(t, err)
+	assert.NotContains(t, out, "\x1b", "no refused name in help")
+	assert.Contains(t, out, "acme", "a refused plugin name is still listed")
+
+	out, err = invoke(t, "", "plugin", "ls")
+	require.NoError(t, err)
+	assert.NotContains(t, out, "\x1b", "plugin ls escapes it")
+	assert.Contains(t, out, `\u001b[31mil`)
+
+	assert.Equal(t, `a\x1bb\x0ac`, terminalSafe("a\x1bb\nc"))
+	assert.Equal(t, "plain /path é", terminalSafe("plain /path é"))
+}

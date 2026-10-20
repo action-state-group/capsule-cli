@@ -749,11 +749,14 @@ func addPluginCommands(root *cobra.Command) {
 		root.AddCommand(cmd)
 		reserved[cmd.Name()] = true
 	}
-	// A refused launcher still answers its name, with why and the fix. A
-	// first-party one answers through its placeholder below.
+	// A refused launcher still answers its name, with why and the fix, when
+	// the name is one an accepted plugin could have: whoever could write the
+	// refused one chose its filename, which must not reach help or errors
+	// unchecked. Any other stays in `plugin ls` only. A first-party one
+	// answers through its placeholder below.
 	for _, r := range refused {
 		name := strings.TrimPrefix(filepath.Base(r.Path), pluginLauncherPrefix)
-		if strings.ContainsAny(name, " \t") || reserved[name] || name == BookPluginName || name == DealPluginName {
+		if !pluginNameGrammar.MatchString(name) || reserved[name] || name == BookPluginName || name == DealPluginName {
 			continue
 		}
 		root.AddCommand(refusedPluginPlaceholder(name, refused))
