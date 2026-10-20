@@ -78,6 +78,10 @@ type dealSession struct {
 	onBook   bool
 	book     *evidencebook.Book
 	inFlight time.Time
+	// reportAt, when set, is the time a copy's report is computed at: the
+	// bound checkpoint's, for a report off the deal's log (capsule-cli#294),
+	// so its lifecycle never states when the copy was made.
+	reportAt time.Time
 	// originals is the store's artifact store, the shelf's; bookEnded is
 	// which live book deals have ended, read before a receipt is reported
 	// (settleEnded).
@@ -236,6 +240,11 @@ func (s *dealSession) useDeal(ctx context.Context, dealID string, create bool) e
 			return err
 		}
 		s.t = t
+		// A writer finishes a step a crash left without its checkpoint before
+		// anything else reads or extends the deal (deal_books.go coverSteps).
+		if !create && !s.shared {
+			return s.coverSteps(ctx, dealID, book)
+		}
 		return nil
 	}
 	use := cli.UsePublication
@@ -2215,7 +2224,19 @@ func dealReportCommand() *cobra.Command {
 				out["bundle"] = bundlePath
 			}
 			if emailPath != "" {
-				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Authority: report.Authority, AuthorityOrder: dealAuthorityOrder, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, cli.DealClock(), 2), Cancellations: dealCancellations(events), Lifecycle: buildDealLifecycle(events, cli.DealClock()), Steps: len(events)}
+				// A report off the deal's log is as of its checkpoint; the email
+				// shows that, and says apart, dated, where the deal stood when
+				// it was made (capsule-cli#294). Its cancel-by dates are the
+				// email's own, dated as of when it was made.
+				now, at := cli.DealClock(), cli.DealClock()
+				composed := ""
+				if _, _, form := cli.DealSealedReport(b); form == "standalone" {
+					if at, err = bundleCheckpointTime(b); err != nil {
+						return err
+					}
+					composed = fmt.Sprintf("Made by capsulectl at %s, when the deal stood so: %s This report shows the deal as of %s; open the attached page for where it stands now.", now.UTC().Format("2006-01-02T15:04:05Z"), buildDealLifecycle(events, now).Text, at.Format("2006-01-02T15:04:05Z"))
+				}
+				view := dealEmailView{Demo: events[0].Event.Open.Demo, Asked: report.Asked, Outcome: outcome, Assurance: assurance["text"].(string), Countersign: countersign.Text, Did: report.Did, Authority: report.Authority, AuthorityOrder: dealAuthorityOrder, Anomalies: report.Anomalies, Merchant: report.Merchant, Deadlines: dealDeadlines(events, now, 2), Cancellations: dealCancellations(events), Lifecycle: buildDealLifecycle(events, at), ComposedNote: composed, Steps: len(events)}
 				eml, subject, text, htmlBody, err := dealEmail(view, []byte(page), bundle, cli.DealClock())
 				if err != nil {
 					return err

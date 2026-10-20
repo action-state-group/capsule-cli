@@ -60,6 +60,7 @@ func reportIDOf(t *testing.T, b map[string]interface{}) string {
 // like every record, so editing any line, or removing or replacing the
 // extension, makes the bundle INVALID.
 func TestDealReportTextIsSealed(t *testing.T) {
+	inLogReports(t)
 	id := cancelAfterPurchase(t)
 	page, b := dealReceipt(t, id)
 	result, err := verifyBundleOutput(t, page)
@@ -145,6 +146,7 @@ func TestDealReportEntryOfABundleBeforeSealing(t *testing.T) {
 // bundle covers) with its input withheld. A shared copy seals the section
 // already rewritten for its audience, never the user's own.
 func TestDealCopiesSealTheirOwnReport(t *testing.T) {
+	inLogReports(t)
 	id := cancelAfterPurchase(t)
 	_, own := dealReceipt(t, id)
 	ownID := reportIDOf(t, own)

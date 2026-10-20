@@ -62,6 +62,7 @@ func TestDealBundleClaimsClosureOverEveryStep(t *testing.T) {
 // closure too: the latest step is the root, and the walk back reaches the
 // close and everything before it.
 func TestDealBundleClosureCoversStepsAfterAClose(t *testing.T) {
+	inLogReports(t)
 	dealFixture(t)
 	setDealClock(t, "2026-10-03T21:00:00Z")
 	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})

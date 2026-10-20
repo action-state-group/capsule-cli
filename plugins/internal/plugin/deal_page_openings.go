@@ -40,12 +40,7 @@ func dealPageOpenings(b map[string]interface{}) (map[string]interface{}, error) 
 		in, _ := d["agent_input"].(map[string]interface{})
 		return in
 	}
-	exts, _ := bundle["extensions"].(map[string]interface{})
-	report, _ := exts[cli.DealProfile].(map[string]interface{})
-	if id, ok := report["sealed_report"].(string); ok {
-		sealed, _ := input(id)["report"].(map[string]interface{})
-		report = sealed
-	}
+	report, _, _ := cli.DealSealedReport(bundle)
 	out := map[string]interface{}{"asked": false, "representations": []interface{}{}}
 	if report == nil {
 		return out, nil

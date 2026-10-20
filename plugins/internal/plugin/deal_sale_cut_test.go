@@ -53,6 +53,7 @@ func saleBodies(t *testing.T, bundle map[string]any, recordType string) []map[st
 // step sealed in it. A cut before the reports would name an earlier
 // record, and this test fails.
 func TestASaleBundleSealsTheReportsThenTheCutThenTheCheckpoint(t *testing.T) {
+	inLogReports(t)
 	saleID, a, b := twoThreadSale(t)
 	bundle, res := saleBundle(t, saleID)
 	require.Equal(t, "VALID", res["verdict"])

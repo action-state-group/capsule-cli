@@ -120,6 +120,26 @@ deal's log:
 - **Not steps:** a sealed report has no `seq` and no record in the step chain. A verifier
   checking a deal's steps (section 6) sets these Capsules aside.
 
+**Standalone reports (capsule-cli#294).** A deal on the shelf whose log holds no sealed
+report seals each copy's report off its log, so the log, its copies and a History never show
+when or how often the deal was shared:
+- **The Capsule** is the same, signed by the key that signed the deal's last step, and appended
+  to no log. Its payload adds `deal_checkpoint`: `{log_id, mmr_size, root}` of the deal checkpoint
+  the copy is made at. Its `report` is computed at that checkpoint's time, so its `lifecycle`'s
+  `as_of` is that time.
+- **Checkpoints:** such a deal cuts a checkpoint at every step, stamped with the step's time, so
+  a copy never cuts one and a checkpoint's time is a step's.
+- **In the bundle:** `x-deal-v0` is `{"sealed_report": "<capsule id>"}`, and `x-deal-report/v0`
+  carries `{"record": <the Capsule with its signature and key_id>, "agent_input": <payload>}`.
+  The copy carries this report only.
+- **Verification** (`verify --bundle`, and the page): the record's signature verifies under
+  the key of the bundle's last step; its disclosure matches; it is a `deal_report` of the
+  bundle's deal for a copy audience; `deal_checkpoint` is the bundle's checkpoint; its
+  lifecycle's `as_of` is that checkpoint's time; and the bundle holds no `deal_report` record.
+  A copy of a deal on the shelf that holds no report record and names no standalone one fails.
+- **A deal whose log already holds a report,** and every legacy deal, keeps sealing its reports
+  in its log, where their positions still show when it was shared.
+
 ## 2. The extension block `x-deal-v0`
 
 | Field | Type | Req | Meaning |
@@ -581,9 +601,11 @@ A verifier holding one deal's records in `seq` order checks:
     (withheld; no `nonce` or `thread_id`) or `never_opened`; a `present` entry also carries
     `opened: {nonce}` (opening its `thread_opened`) and `head: {nonce, record_digest}` (opening its
     head in the bundle's `sale_cut`). The bundle is made in this order: each opened thread's
-    report is sealed in its own log, then the `sale_cut` naming each thread's last record (that
-    report), then the sale log's checkpoint, which is therefore new and certifies the cut: the
-    interval covers every thread's acts up to the bundle. `capsulectl verify` opens each
+    report is sealed (in its own log, or, for a thread whose reports are off its log, as a
+    standalone report bound to its checkpoint), then the `sale_cut` naming each thread's last
+    record (that report, or the thread's last step), then the sale log's checkpoint, which is
+    therefore new and certifies the cut: the interval covers every thread's acts up to the
+    bundle. `capsulectl verify` opens each
     registration, holds the carried threads to exactly the `present` ones, verifies each as its
     own Evidence Bundle, and checks it names its registration and opens its
     `sale_authority_commitment` to this sale's task authority, that its `thread_opened` opens to

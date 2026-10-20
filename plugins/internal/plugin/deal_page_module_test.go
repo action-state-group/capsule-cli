@@ -150,8 +150,9 @@ func TestADealPageWhoseWordsDoNotMatchIsNotWritten(t *testing.T) {
 		return b
 	}
 	report := func(b map[string]interface{}) map[string]interface{} {
-		id := b["extensions"].(map[string]interface{})[cli.DealProfile].(map[string]interface{})["sealed_report"].(string)
-		return b["disclosures"].(map[string]interface{})[id].(map[string]interface{})["agent_input"].(map[string]interface{})["report"].(map[string]interface{})
+		r, _, _ := cli.DealSealedReport(b)
+		require.NotNil(t, r)
+		return r
 	}
 	_, err := dealPageOpenings(fresh())
 	require.NoError(t, err, "the deal as sealed")

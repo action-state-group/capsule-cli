@@ -104,6 +104,7 @@ func openShortMerchantDeal(t *testing.T) string {
 // raw .eml stays in the local deal store (`deal verify-email` re-checks it
 // there); not even the user's own bundle carries it.
 func TestDealSharedMerchantEmailIsDigestAndVerdict(t *testing.T) {
+	inLogReports(t)
 	dealFixture(t)
 	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})
 	dealID := openShortMerchantDeal(t)

@@ -92,6 +92,7 @@ func TestDealReportAgentAndCounterpartyAnomalies(t *testing.T) {
 }
 
 func TestDealReportIsOneLocalVerifyingPage(t *testing.T) {
+	inLogReports(t)
 	dealFixture(t)
 	dealID := openJetSki(t)
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))

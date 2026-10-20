@@ -98,8 +98,9 @@ func (s *dealSession) dealSaleBundle(ctx context.Context, saleID, verify string)
 				return nil, nil, err
 			}
 			// The head is this copy's last record on the thread's log: the
-			// report just sealed in it, read from the bundle as a verifier
-			// reads it.
+			// report just sealed in it, or, for a thread whose reports are off
+			// its log (capsule-cli#294), its last step; read from the bundle
+			// as a verifier reads it.
 			raw, err := json.Marshal(tb)
 			if err != nil {
 				return nil, nil, err

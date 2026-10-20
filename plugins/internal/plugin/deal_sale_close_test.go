@@ -114,8 +114,8 @@ func checkSaleProfile(t *testing.T, saleID string) {
 // A closed sale leaves the tick once a witnessed tick covers its log; an
 // open one never does. A receipt for a tick that held the sale before a
 // later append does not take it out, and a bundle after it has left, which
-// seals a late report on its closed thread and a cut on the sale, brings
-// both back until the next witnessed tick. Each receipt is reported in a
+// seals a cut on the sale, brings the sale back until the next witnessed
+// tick; its thread, whose reports are off its log, stays out. Each receipt is reported in a
 // fresh session (deliver), so settleEnded settles the sale.
 func TestAClosedSaleLeavesTheTick(t *testing.T) {
 	for _, legacy := range []bool{false, true} {
@@ -151,22 +151,30 @@ func TestAClosedSaleLeavesTheTick(t *testing.T) {
 			assert.Contains(t, liveLogs(t, p), log, "a pending tick keeps it")
 
 			// The pending tick holds the closed sale; a bundle then appends
-			// a cut to it (and a report to its thread) before that tick's
-			// receipt comes: the receipt covers less than the sale holds,
-			// so it does not take the sale out.
+			// a cut to it before that tick's receipt comes: the receipt
+			// covers less than the sale holds, so it does not take the sale
+			// out. The bundle appends nothing to its thread, whose report is
+			// off its log (capsule-cli#294).
 			saleBundle(t, saleID)
 			deliver(t, p, pending, witnessKey)
 			assert.Contains(t, liveLogs(t, p), log, "a receipt for a tick cut before the append")
-			assert.Contains(t, liveLogs(t, p), cli.DealLogID(thread))
 			deliver(t, p, tick(), witnessKey)
 			assert.NotContains(t, liveLogs(t, p), log, "closed and witnessed whole: it leaves")
 			assert.NotContains(t, liveLogs(t, p), cli.DealLogID(thread), "its closed thread left too")
 
-			// A later bundle brings both back until the next witnessed tick.
+			// A later bundle brings the sale back until the next witnessed
+			// tick; its closed thread, which the bundle no longer writes to,
+			// stays out.
 			_, res := saleBundle(t, saleID)
 			assert.Equal(t, "VALID", res["verdict"])
 			require.Contains(t, liveLogs(t, p), log, "an append brings it back")
-			require.Contains(t, liveLogs(t, p), cli.DealLogID(thread), "the late report brings the thread back")
+			if legacy {
+				// A legacy thread keeps its reports in its log: the copy's
+				// report brings it back too.
+				assert.Contains(t, liveLogs(t, p), cli.DealLogID(thread), "a legacy thread's late report brings it back")
+			} else {
+				assert.NotContains(t, liveLogs(t, p), cli.DealLogID(thread), "a copy writes nothing to the thread")
+			}
 			deliver(t, p, tick(), witnessKey)
 			assert.NotContains(t, liveLogs(t, p), log)
 			assert.NotContains(t, liveLogs(t, p), cli.DealLogID(thread))

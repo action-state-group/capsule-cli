@@ -81,6 +81,9 @@ func (s *dealSession) tick(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := s.coverLiveSteps(ctx, c); err != nil {
+		return nil, err
+	}
 	now := cli.DealClock()
 	result, err := c.Tick(ctx, now)
 	if err != nil {

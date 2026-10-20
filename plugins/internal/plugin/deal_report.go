@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -86,12 +87,31 @@ func (s *dealSession) dealReportBundleAt(ctx context.Context, events []sealedEve
 	if err != nil {
 		return nil, err
 	}
+	offLog, err := s.reportsOffLog(ctx, dealID)
+	if err != nil {
+		return nil, err
+	}
+	var standalone map[string]interface{}
+	if offLog && sealReport && heldReport == "" {
+		// The report is computed at the bound checkpoint's time, so its
+		// lifecycle states the deal's state then, never the copy's time.
+		if s.reportAt, err = bundleCheckpointTime(b); err != nil {
+			return nil, err
+		}
+		defer func() { s.reportAt = time.Time{} }()
+	}
 	coverage := witnessCoverage(events, cadence)
 	ext, err := s.dealReportExtension(events, report, audience, verifyCommand, private, withhold, coverage)
 	if err != nil {
 		return nil, err
 	}
-	if heldReport != "" {
+	if offLog && sealReport && heldReport == "" {
+		var id string
+		if id, standalone, err = s.dealStandaloneReport(dealID, audience, ext, b); err != nil {
+			return nil, err
+		}
+		ext = map[string]interface{}{cli.DealReportPointer: id}
+	} else if heldReport != "" {
 		ext = map[string]interface{}{cli.DealReportPointer: heldReport}
 	} else if sealReport {
 		id, err := s.dealSealReport(ctx, dealID, audience, ext)
@@ -110,6 +130,9 @@ func (s *dealSession) dealReportBundleAt(ctx context.Context, events []sealedEve
 		ext = map[string]interface{}{cli.DealReportPointer: id}
 	}
 	extensions := map[string]interface{}{cli.DealCadenceExtension: cadence, cli.DealProfile: ext}
+	if standalone != nil {
+		extensions[cli.DealReportExtension] = standalone
+	}
 	if dealRole(events) == dealRoleSeller {
 		extensions[dealSellerExtension] = map[string]interface{}{}
 	}
@@ -124,10 +147,18 @@ func (s *dealSession) dealReportBundleAt(ctx context.Context, events []sealedEve
 // records in withhold withheld, the checkpoint's portable signature, a held
 // witness receipt, and the deal's witness state through the cadence log.
 func (s *dealSession) dealAssemble(ctx context.Context, events []sealedEvent, withhold map[string]bool) (map[string]interface{}, map[string]interface{}, error) {
+	// A deal whose reports are off its log has a checkpoint at every step
+	// already: a copy cuts none, so no checkpoint says when it was made.
+	offLog, err := s.reportsOffLog(ctx, events[0].Event.DealID)
+	if err != nil {
+		return nil, nil, err
+	}
 	// Cut locally: a report, like every deal event, never queues anything
 	// for the witness; only a due tick does.
-	if _, err := cli.CutCheckpoint(ctx, localOnly(s.dp), s.t.Log); err != nil {
-		return nil, nil, err
+	if !offLog {
+		if _, err := cli.CutCheckpoint(ctx, localOnly(s.dp), s.t.Log); err != nil {
+			return nil, nil, err
+		}
 	}
 	return s.dealAssembleAtCheckpoint(ctx, events, withhold)
 }
@@ -177,6 +208,9 @@ func (s *dealSession) dealAssembleAtCheckpoint(ctx context.Context, events []sea
 func (s *dealSession) dealReportExtension(events []sealedEvent, report dealReport, audience, verifyCommand string, private dealPrivate, withhold map[string]bool, coverage map[string]interface{}) (map[string]interface{}, error) {
 	if audience != cli.DealAudienceKeep {
 		ext := dealShareExtension(events, report, audience, private, withhold)
+		if !s.reportAt.IsZero() {
+			ext["lifecycle"] = shareLifecycle(buildDealLifecycle(events, s.reportAt))
+		}
 		if coverage != nil {
 			ext["witness_coverage"] = coverage
 		}
@@ -281,7 +315,11 @@ func (s *dealSession) dealReportExtension(events []sealedEvent, report dealRepor
 		}
 		ext["authority"], ext["authority_order"] = authority, dealAuthorityOrder
 	}
-	for key, v := range map[string]any{"deadlines": dealDeadlines(events, cli.DealClock(), 2), "cancellations": dealCancellations(events), "lifecycle": buildDealLifecycle(events, cli.DealClock())} {
+	now := cli.DealClock()
+	if !s.reportAt.IsZero() {
+		now = s.reportAt
+	}
+	for key, v := range map[string]any{"deadlines": dealDeadlines(events, now, 2), "cancellations": dealCancellations(events), "lifecycle": buildDealLifecycle(events, now)} {
 		generic, err := bundleJSON(v)
 		if err != nil {
 			return nil, err
@@ -424,17 +462,10 @@ func dealPageTitle(b map[string]interface{}, openings map[string]interface{}) st
 }
 
 // dealPageReport is the report text the page shows: the sealed report's
-// input, or (a bundle written before reports were sealed) the extension.
+// input, in the log or standalone, or (a bundle written before reports were
+// sealed) the extension.
 func dealPageReport(b map[string]interface{}) map[string]interface{} {
-	exts, _ := b["extensions"].(map[string]interface{})
-	report, _ := exts[cli.DealProfile].(map[string]interface{})
-	if id, ok := report["sealed_report"].(string); ok {
-		disclosures, _ := b["disclosures"].(map[string]interface{})
-		d, _ := disclosures[id].(map[string]interface{})
-		in, _ := d["agent_input"].(map[string]interface{})
-		sealed, _ := in["report"].(map[string]interface{})
-		return sealed
-	}
+	report, _, _ := cli.DealSealedReport(b)
 	return report
 }
 

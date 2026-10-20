@@ -461,6 +461,16 @@ func DealReportEntry(value map[string]interface{}, result aacbundle.Verification
 		return map[string]any{"kind": DealProfile, "status": "fail", "findings": []string{finding}}
 	}
 	id, sealed := deal[DealReportPointer].(string)
+	// A standalone report (capsule-cli#294) is named by a pointer-only
+	// section; the extension without one, or beside any other section,
+	// fails.
+	if raw, standalone := ext[DealReportExtension]; standalone {
+		x, _ := raw.(map[string]interface{})
+		if !sealed || len(deal) != 1 || x == nil {
+			return fail("sealed_report_unverified")
+		}
+		return standaloneReportEntry(value, x, id)
+	}
 	switch {
 	case sealed && (!matched[id] || len(disclosed) != 1):
 		return fail("sealed_report_unverified")
@@ -484,6 +494,14 @@ func DealReportEntry(value map[string]interface{}, result aacbundle.Verification
 			"kind": DealProfile, "status": "uninterpreted", "findings": []string{"extension_unbound"},
 			"note": "a sale's section: its sale_threads openings are checked against the sealed registrations under " + DealSaleExtension,
 		}
+	}
+	// A deal on a book sealed its reports in its log until reports moved off
+	// it (capsule-cli#294), so a copy of a book deal whose log holds none
+	// names a standalone report: text in the section instead is a stripped
+	// copy. Without an x-deal-v0 section at all, a copy is steps only and
+	// shows no report text, which a book's own bundle may be.
+	if deal != nil && holdsDealSteps(value) {
+		return fail("sealed_report_not_named")
 	}
 	return map[string]any{
 		"kind": DealProfile, "status": "uninterpreted", "findings": []string{"extension_unbound"},

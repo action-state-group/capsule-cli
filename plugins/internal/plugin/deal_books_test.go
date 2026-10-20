@@ -19,6 +19,16 @@ import (
 // legacyDeals makes the deals a test opens legacy deals, as a release from
 // before books opened them, for the tests of the legacy step path (prepared
 // steps, index rows, recovery): a store keeps both kinds (note §3.1).
+// inLogReports has every deal seal its reports in its log, as a build
+// before capsule-cli#294 did (the path legacy and already-shared deals
+// keep).
+func inLogReports(t *testing.T) {
+	t.Helper()
+	old := dealReportsOffLog
+	dealReportsOffLog = false
+	t.Cleanup(func() { dealReportsOffLog = old })
+}
+
 func legacyDeals(t *testing.T) {
 	t.Helper()
 	old := dealNewDealsOnBooks
@@ -119,6 +129,7 @@ func TestANewDealsStepsAreRecordsOnItsBook(t *testing.T) {
 // A sealed report is a record too: a constant type, no subject_ref (every
 // report shares one action id), no link and no field commitment.
 func TestASealedReportIsARecordOnTheDealsBook(t *testing.T) {
+	inLogReports(t)
 	dealFixture(t)
 	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
 	steps := len(bookRecords(t, dealID))

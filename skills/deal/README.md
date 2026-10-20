@@ -78,9 +78,12 @@ verified again, so a dropped or edited step is reported as a conflict.
 
 The SQLite file is an evidencebook **shelf**: one evidence book per deal, each
 book its deal's own log.
-- A deal opened now is a book. Each step and sealed report is a record the
-  profile seals itself, and its Capsule carries the record header the book
-  assigned (`evidence_record_header`, see `profile/PROFILE.md`).
+- A deal opened now is a book. Each step is a record the profile seals
+  itself, and its Capsule carries the record header the book assigned
+  (`evidence_record_header`, see `profile/PROFILE.md`). Each copy's report is
+  a signed Capsule on no log, carried in the copy and bound to the deal's
+  checkpoint, so the deal's log never shows when it was shared; a deal whose
+  log already holds a report keeps sealing them there.
 - The step's local event (raw values and the nonces of its commitments) is a
   salted field commitment, and its opening is kept in the profile's artifact
   store.

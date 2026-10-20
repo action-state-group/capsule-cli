@@ -2,10 +2,12 @@ package plugin
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -109,20 +111,101 @@ func holdsEntry(entries []cll.Entry, capsuleID string) bool {
 	return false
 }
 
-// dealReportOf is the deal text a report bundle carries: the input of the
-// sealed report its x-deal-v0 extension points at, when that is disclosed;
-// for a bundle written before reports were sealed, the extension itself;
-// nil when the pointer names nothing disclosed.
+// dealReportOf is the deal text a report bundle carries: the input of its
+// sealed report, in the log or standalone (cli.DealSealedReport); for a
+// bundle written before reports were sealed, the extension itself; nil when
+// the pointer names nothing the copy carries.
 func dealReportOf(b map[string]interface{}) map[string]interface{} {
-	ext, _ := b["extensions"].(map[string]interface{})
-	deal, _ := ext[cli.DealProfile].(map[string]interface{})
-	id, sealed := deal[cli.DealReportPointer].(string)
-	if !sealed {
-		return deal
-	}
-	disclosures, _ := b["disclosures"].(map[string]interface{})
-	d, _ := disclosures[id].(map[string]interface{})
-	input, _ := d["agent_input"].(map[string]interface{})
-	report, _ := input["report"].(map[string]interface{})
+	report, _, _ := cli.DealSealedReport(b)
 	return report
+}
+
+// dealStandaloneReport seals one copy's own deal text as a deal_report
+// Capsule that no log holds (capsule-cli#294), bound to the deal checkpoint
+// b is assembled at: so a deal's log, its copies and its History never show
+// when or how often it was shared, and the copy carries this report only.
+// It returns the report's capsule id and the copy's x-deal-report/v0
+// section. Nothing is stored: a later copy seals its own.
+func (s *dealSession) dealStandaloneReport(dealID, audience string, ext, b map[string]interface{}) (string, map[string]interface{}, error) {
+	bound, err := dealBoundCheckpoint(b)
+	if err != nil {
+		return "", nil, err
+	}
+	// The report is signed by the key that signed the deal's last step, or
+	// a copy made now would not verify (DealReportEntry check 2).
+	if cli.DealLastStepKey(b) != hex.EncodeToString(s.key.Public().(ed25519.PublicKey)) {
+		return "", nil, errDealKeyChanged
+	}
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		return "", nil, err
+	}
+	raw, err := json.Marshal(map[string]interface{}{
+		"type": "deal_report", "profile": cli.DealProfile, "deal_id": dealID, "audience": audience,
+		"nonce": hex.EncodeToString(nonce), "report": ext, "deal_checkpoint": bound,
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	generic, err := cli.DecodeBundleJSON(raw)
+	if err != nil {
+		return "", nil, err
+	}
+	payload, err := canonical.JCS(generic)
+	if err != nil {
+		return "", nil, err
+	}
+	record, err := cli.Seal(cli.Request{
+		Version: "capsule-seal-request/v1",
+		Capsule: emit.Input{
+			ActionID: cli.DealReportActionID, ActionType: emit.ActionTypeFYI, Operator: s.p.Name, Developer: "capsulectl-deal",
+			Timestamp: cli.DealClock().UTC().Truncate(time.Second),
+		},
+		Payload: payload,
+	}, s.key)
+	if err != nil {
+		return "", nil, err
+	}
+	capsule, err := cli.DecodeBundleJSON(record.Capsule)
+	if err != nil {
+		return "", nil, err
+	}
+	capsule["signature"] = hex.EncodeToString(record.ProducerEnvelope)
+	capsule["key_id"] = hex.EncodeToString(s.key.Public().(ed25519.PublicKey))
+	input, err := cli.DecodeBundleJSON(payload)
+	if err != nil {
+		return "", nil, err
+	}
+	return record.CapsuleID, map[string]interface{}{"record": capsule, "agent_input": input}, nil
+}
+
+// errDealKeyChanged refuses a copy of a deal whose last step was signed
+// with a key the profile no longer signs with: its standalone report could
+// not be signed by that step's key.
+var errDealKeyChanged = cli.InputError("this deal's last step was signed with an earlier key, so a copy made now would not verify; share it from the store that holds that key")
+
+// dealBoundCheckpoint is the deal checkpoint a bundle is assembled at, as a
+// standalone report binds it: the certificate's log id, and the
+// checkpoint's MMR size and root.
+func dealBoundCheckpoint(b map[string]interface{}) (map[string]interface{}, error) {
+	cp, _ := b["checkpoint"].(map[string]interface{})
+	cert, _ := b["completeness_certificate"].(map[string]interface{})
+	logID, _ := cert["log_id"].(string)
+	root, _ := cp["root"].(string)
+	size, err := cli.JSONUint(cp["mmr_size"])
+	if err != nil || logID == "" || root == "" {
+		return nil, errors.Join(cli.ErrConflict, err)
+	}
+	return map[string]interface{}{"log_id": logID, "mmr_size": cli.Integer(size), "root": root}, nil
+}
+
+// bundleCheckpointTime is the signed time of the checkpoint a bundle is
+// assembled at.
+func bundleCheckpointTime(b map[string]interface{}) (time.Time, error) {
+	cp, _ := b["checkpoint"].(map[string]interface{})
+	at, err := time.Parse(time.RFC3339Nano, fmt.Sprint(cp["timestamp"]))
+	if err != nil {
+		return time.Time{}, errors.Join(cli.ErrConflict, err)
+	}
+	return at.UTC(), nil
 }
