@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/action-state-group/capsule-emit/go/artifact"
 	"github.com/action-state-group/checkpointed-local-log/go/cll"
@@ -145,15 +147,22 @@ func CommandLine(c *cobra.Command, args []string) []string {
 // ForwardToPlugin runs the first-party plugin name with args, or says it is
 // not installed and where to install it.
 func ForwardToPlugin(c *cobra.Command, name string, args []string) error {
-	for _, info := range discoverPlugins() {
+	plugins, refused := discoverPluginsAndRefusals()
+	for _, info := range plugins {
 		if info.Name == name {
 			return execPlugin(c, info, args)
 		}
 	}
-	return missingPluginError(name)
+	return missingPluginError(name, refused)
 }
 
-func missingPluginError(name string) error {
+// missingPluginError says a first-party plugin is refused, with why, when
+// discovery refused it (refused is that discovery's, so no launcher is run
+// again), and otherwise that it is not installed and how to install it.
+func missingPluginError(name string, refused []refusedPlugin) error {
+	if err := refusedPluginError(name, refused); err != nil {
+		return err
+	}
 	if isReleaseCore() {
 		return InputError(fmt.Sprintf("this needs the capsulectl-%s plugin, which is not installed: install it with: capsulectl plugin install %s", name, name))
 	}
@@ -261,15 +270,69 @@ func transitionalAliases() []*cobra.Command {
 }
 
 // firstPartyPlaceholder stands in for a first-party plugin that is not
-// installed, so `capsulectl book ...` says what to install instead of
-// reporting an unknown command.
-func firstPartyPlaceholder(name, short string) *cobra.Command {
+// installed, or that discovery refused, so `capsulectl book ...` says what to
+// install or why it is refused instead of reporting an unknown command.
+func firstPartyPlaceholder(name, short string, refused []refusedPlugin) *cobra.Command {
+	state := "not installed"
+	if refusedPluginError(name, refused) != nil {
+		state = "refused: see capsulectl plugin ls"
+	}
 	return &cobra.Command{
 		Use:                name,
-		Short:              short + " (plugin capsulectl-" + name + ", not installed)",
+		Short:              short + " (plugin capsulectl-" + name + ", " + state + ")",
 		DisableFlagParsing: true,
 		RunE: func(*cobra.Command, []string) error {
-			return missingPluginError(name)
+			return missingPluginError(name, refused)
+		},
+	}
+}
+
+// refusedPluginError is the refusal of a capsulectl-<name> launcher that
+// discovery found and did not wire up, with its reason (which names the fix,
+// such as the chmod for a group-writable ~/.local), or nil when none was
+// refused: a refused plugin is installed, so "not installed" would mislead.
+func refusedPluginError(name string, refused []refusedPlugin) error {
+	for _, r := range refused {
+		if filepath.Base(r.Path) == pluginLauncherPrefix+name {
+			return InputError(fmt.Sprintf("the capsulectl-%s plugin at %s is refused: %s", name, terminalSafe(r.Path), terminalSafe(r.Reason)))
+		}
+	}
+	return nil
+}
+
+// terminalSafe escapes the control characters in s, and the format and
+// line or paragraph separator characters (a right-to-left override can
+// reorder what a line shows). A refused launcher's path, and the paths its
+// refusal names, may be written by the very user the refusal is about, who
+// must not reach the operator's terminal with escape sequences or line
+// breaks.
+func terminalSafe(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) {
+			if r > 0xffff {
+				fmt.Fprintf(&b, "\\U%08x", r)
+			} else if r > 0xff {
+				fmt.Fprintf(&b, "\\u%04x", r)
+			} else {
+				fmt.Fprintf(&b, "\\x%02x", r)
+			}
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// refusedPluginPlaceholder answers a refused launcher's name with its
+// refusal, where cobra would say only "unknown command".
+func refusedPluginPlaceholder(name string, refused []refusedPlugin) *cobra.Command {
+	return &cobra.Command{
+		Use:                name,
+		Short:              "(plugin capsulectl-" + name + ", refused: see capsulectl plugin ls)",
+		DisableFlagParsing: true,
+		RunE: func(*cobra.Command, []string) error {
+			return refusedPluginError(name, refused)
 		},
 	}
 }

@@ -289,7 +289,7 @@ func TestTheWalkChecksTheDirectoryHoldingEachHopBelowTheRoot(t *testing.T) {
 	require.ErrorIs(t, err, errWritable)
 	realA, _ := filepath.EvalSymlinks(a)
 	assert.Contains(t, err.Error(), realA+" is group-writable")
-	assert.Contains(t, err.Error(), "chmod go-w "+realA, "the refusal names the fix")
+	assert.Contains(t, err.Error(), "chmod go-w "+shellQuote(realA), "the refusal names the fix")
 	assert.Contains(t, err.Error(), "the launcher "+launcher)
 	assert.Empty(t, discoverPlugins(), "discovery refuses it")
 }

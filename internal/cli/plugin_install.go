@@ -196,7 +196,11 @@ func unsafePathMessage(what string, problems []unsafePathProblem) string {
 	}
 	var fixes []string
 	if len(writable) > 0 {
-		fixes = append(fixes, "chmod go-w "+strings.Join(writable, " "))
+		quoted := make([]string, len(writable))
+		for i, w := range writable {
+			quoted[i] = shellQuote(w)
+		}
+		fixes = append(fixes, "chmod go-w "+strings.Join(quoted, " "))
 	}
 	if len(owned) > 0 {
 		fixes = append(fixes, "make "+strings.Join(owned, " ")+" yours (chown) or move the plugin root off it")
@@ -205,6 +209,17 @@ func unsafePathMessage(what string, problems []unsafePathProblem) string {
 		fixes = append(fixes, "repair or remove the links on "+strings.Join(unresolved, " "))
 	}
 	return fmt.Sprintf("%s is on a path another user could change (%s); fix: %s", what, strings.Join(reasons, "; "), strings.Join(fixes, "; then "))
+}
+
+// shellQuote is s as one POSIX shell word, so a printed fix can be pasted
+// as is: unchanged when every byte is one a shell takes literally, else in
+// single quotes, where a single quote inside closes the quoting, is
+// escaped with a backslash, and opens it again.
+func shellQuote(s string) string {
+	if s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./+-@%:,=") == "" {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // installRoot returns the canonical per-user plugin root, creating missing
