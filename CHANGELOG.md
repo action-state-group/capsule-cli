@@ -54,6 +54,18 @@ Details, for developers. Three changes make the upgrade one-way:
   sale's log, and if this version crashed at the wrong moment, an older build
   refuses to open the whole store.
 
+### A deal's shared copy is checked with capsulectl alone (capsule-cli#243)
+
+- **Added (CI):** a `portability` job runs a deal on a shelf book with typed
+  records, shares it with its counterparty and exports its records, then
+  deletes the session (home, profile and keys, deal store, plugin root). With
+  capsulectl alone, it opens the shared page offline in headless Chrome, runs
+  `verify --bundle`, and checks that each exported typed record is the exact
+  payload a bundle record commits to, that the chain links, and that the page
+  shows what each step's record says. An edited bundle, a dropped record and
+  an edited exported record must each fail. The Chrome render helpers move to
+  `scripts/lib/page-checks.sh`.
+
 ### Presentation manifests follow presentation contract revision 1 (capsule-cli#293)
 
 - **Fixed:** capsulectl checks plugin presentation manifests against
