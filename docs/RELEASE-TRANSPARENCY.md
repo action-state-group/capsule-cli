@@ -34,9 +34,9 @@ What limits that is GitHub's own enforcement, set up as
 
 These are settings in GitHub, so they hold only as long as GitHub and the
 organisation's admins do. Someone who controls the organisation can change
-them. And the approval holds only while the workflow at the tagged commit
-asks for it, so a change to `release.yml` deserves the same review as the
-release.
+them. The approval is enforced only while the workflow at the tagged commit
+asks for it; a run that skipped it is what the monitor's approval check
+(section 5) catches.
 
 ## 3. What registration adds: "logged", not "from us"
 
@@ -105,6 +105,8 @@ and its statement, and reads every statement under the release subject. It
   tagged (`--release-grace`, default 24 hours, to cover the wait for a
   reviewer's approval). This catches a release that was never approved,
   failed, or was deleted;
+- a tag dated more than an hour in the future with no release, since such a
+  date would hold the alarm above off;
 - a release with no `v*` tag of its name, or whose statement names another
   commit than the tag points at now. This catches a deleted or moved tag;
 - a release with no statement, or whose statement does not match its
@@ -116,6 +118,13 @@ and its statement, and reads every statement under the release subject. It
   release workflow at `refs/tags/<tag>` on the tagged commit (checked with
   `gh attestation verify --bundle`, with no account). The attestation's own
   inclusion in Sigstore's public Rekor log is part of that check;
+- a release whose run, the one its verified attestation names, has no
+  approval in the environment its tag implies (`release-candidate` for a tag
+  with a hyphen, `release` otherwise). For a full release, the approval must
+  come from someone other than whoever pushed the tag or started the run.
+  This catches a release built by a `release.yml` that no longer asks for
+  approval. Releases up to `v0.1.0-rc17`, cut before approval began, are
+  exempt;
 - a receipt that does not verify offline against the service's pinned key;
 - a release whose statement is missing from the log;
 - **any statement under the release subject that does not verify as one
@@ -148,8 +157,10 @@ than one such place. Each run needs:
   `SHA256SUMS` and its attestation). It is never updated automatically from
   the repository it watches;
 - `gh`, for the attestation check. It runs with no token: the monitor's
-  GitHub reads are anonymous, a handful of API calls a run, well inside
-  GitHub's anonymous rate limit when run hourly;
+  GitHub reads are anonymous. A run makes a few API calls plus one or two per
+  release since `v0.1.0-rc17`. GitHub allows 60 anonymous calls an hour, so
+  run it hourly and less often once releases make that tight. A refusal for
+  the rate limit is an error, like any other, and needs a person;
 - a way to reach a person on any exit other than 0, with the output;
 - a notice when it has **not** run. A monitor that stopped looks like one
   that found nothing, so each successful run should check in with
@@ -158,8 +169,9 @@ than one such place. Each run needs:
 **What it does not stop:** anyone GitHub lets cut a release. A maintainer
 who tags a commit, and a reviewer who approves the run, make a release that
 passes every check above. The monitor makes it public, timestamped and
-consistent, which is the most a log can do. Nor does it see who approved a
-run: that record stays in GitHub.
+consistent, which is the most a log can do. The approval it checks is
+GitHub's record of who approved, and it cannot tell a person from an agent
+using that person's account.
 
 ## 6. What none of this addresses: name resolution
 

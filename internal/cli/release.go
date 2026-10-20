@@ -55,6 +55,30 @@ var releasesBeforeStatements = map[string]bool{
 	"v0.1.0-rc1": true, "v0.1.0-rc2": true, "v0.1.0-rc3": true, "v0.1.0-rc4": true,
 }
 
+// releasesBeforeApproval are the releases cut before release.yml waited for
+// a reviewer's approval (v0.1.0-rc1 to v0.1.0-rc17). Their runs have none.
+var releasesBeforeApproval = func() map[string]bool {
+	tags := map[string]bool{}
+	for i := 1; i <= 17; i++ {
+		tags[fmt.Sprintf("v0.1.0-rc%d", i)] = true
+	}
+	return tags
+}()
+
+// releaseEnvironment is the deployment environment whose approval a tag's
+// run needs: release-candidate for a pre-release (a tag with a hyphen),
+// release otherwise (docs/RELEASING.md).
+func releaseEnvironment(tag string) string {
+	if strings.Contains(tag, "-") {
+		return "release-candidate"
+	}
+	return "release"
+}
+
+// releaseClockSkew is how far in the future a tag's time may be before the
+// monitor treats it as a tag dated to dodge the missing-release alarm.
+const releaseClockSkew = time.Hour
+
 // releaseStatement is the payload: JCS bytes of this object.
 type releaseStatement struct {
 	Type         string            `json:"type"`
@@ -478,7 +502,10 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 		if err != nil {
 			return nil, err
 		}
-		if at.IsZero() || releaseNow().Sub(at) > cfg.grace {
+		switch {
+		case at.After(releaseNow().Add(releaseClockSkew)):
+			alarm("tag %s has no release and is dated in the future (%s)", tag, at.UTC().Format(time.RFC3339))
+		case at.IsZero() || releaseNow().Sub(at) > cfg.grace:
 			alarm("tag %s has no release (tagged %s; grace %s)", tag, at.UTC().Format(time.RFC3339), cfg.grace)
 		}
 	}
@@ -542,6 +569,15 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 		if err := checkReleaseAttestation(ctx, cfg, payload, attestation, tag); err != nil {
 			alarm("release %s: release.json's attestation does not verify as the release workflow at refs/tags/%s on %s: %v", tag, tag, st.Commit, err)
 			continue
+		}
+		if !releasesBeforeApproval[tag] {
+			why, err := cfg.checkApproval(ctx, attestation, tag)
+			if err != nil {
+				return nil, err
+			}
+			if why != "" {
+				alarm("release %s: %s", tag, why)
+			}
 		}
 		for name, digest := range assets {
 			if strings.HasPrefix(name, "capsulectl-"+tag+"-") || name == "capsulectl-"+tag+".sigstore.json" {
@@ -623,6 +659,78 @@ func releaseWatch(ctx context.Context, cfg releaseWatchConfig) (map[string]any, 
 	}
 	return map[string]any{"state": state, "repo": cfg.repo, "subject": cfg.subject, "tags": names,
 		"releases_checked": checked, "statements_in_log": len(logged.Entries), "alarms": alarms}, nil
+}
+
+// checkApproval reports why the run that built tag's release was not approved
+// as docs/RELEASING.md requires, or "" when it was: a reviewer approved it in
+// the environment the tag implies, and for a full release that reviewer is
+// neither who pushed the tag nor who started the run (a re-run). The run is
+// the one the verified attestation names, so release.yml cannot hide it. A
+// release.yml that drops its environment leaves the run with no approval,
+// which is what this catches.
+func (cfg releaseWatchConfig) checkApproval(ctx context.Context, bundle []byte, tag string) (string, error) {
+	var b struct {
+		DSSE struct {
+			Payload []byte `json:"payload"`
+		} `json:"dsseEnvelope"`
+	}
+	var st struct {
+		Predicate struct {
+			RunDetails struct {
+				Metadata struct {
+					InvocationID string `json:"invocationId"`
+				} `json:"metadata"`
+			} `json:"runDetails"`
+		} `json:"predicate"`
+	}
+	if json.Unmarshal(bundle, &b) != nil || json.Unmarshal(b.DSSE.Payload, &st) != nil {
+		return "release.json's attestation names no workflow run", nil
+	}
+	run, ok := strings.CutPrefix(st.Predicate.RunDetails.Metadata.InvocationID, "https://github.com/"+cfg.repo+"/actions/runs/")
+	if run, _, _ = strings.Cut(run, "/"); !ok || run == "" || strings.Trim(run, "0123456789") != "" {
+		return "release.json's attestation names no workflow run of " + cfg.repo, nil
+	}
+	var approvals []struct {
+		State        string `json:"state"`
+		Environments []struct {
+			Name string `json:"name"`
+		} `json:"environments"`
+		User struct {
+			Login string `json:"login"`
+		} `json:"user"`
+	}
+	if err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/actions/runs/"+run+"/approvals", &approvals); err != nil {
+		return "", err
+	}
+	env := releaseEnvironment(tag)
+	var excluded map[string]bool
+	if env == "release" {
+		var r struct {
+			Actor           struct{ Login string } `json:"actor"`
+			TriggeringActor struct{ Login string } `json:"triggering_actor"`
+		}
+		if err := releaseGetJSON(ctx, cfg.api+"/repos/"+cfg.repo+"/actions/runs/"+run, &r); err != nil {
+			return "", err
+		}
+		excluded = map[string]bool{r.Actor.Login: true, r.TriggeringActor.Login: true}
+	}
+	self := ""
+	for _, a := range approvals {
+		for _, e := range a.Environments {
+			if a.State != "approved" || e.Name != env {
+				continue
+			}
+			if excluded[a.User.Login] {
+				self = a.User.Login
+				continue
+			}
+			return "", nil
+		}
+	}
+	if self != "" {
+		return fmt.Sprintf("run %s was approved in %s only by %s, who pushed the tag or started the run", run, env, self), nil
+	}
+	return fmt.Sprintf("run %s has no approval in the %s environment", run, env), nil
 }
 
 // checkReleaseAttestation runs releaseAttestationCheck on payload and its

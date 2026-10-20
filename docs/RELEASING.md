@@ -154,11 +154,14 @@ in an older layout, confirm such a profile does not block the install.
 - **A change to `skills/deal/` merged after the tag.** The install page's skill value no longer
   matches the tag. Do not edit the published values: cut the next rc.
 - **Release CI failed after the tag was pushed, or a run was rejected.** Fix it on `main` and cut
-  the next rc. A pushed tag cannot be moved or deleted, and a tag with no release raises the
+  the next version (the next rc, or the next patch for a full release). A pushed tag cannot be moved or deleted, and a tag with no release raises the
   release monitor's alarm once its grace window passes (RELEASE-TRANSPARENCY.md, section 5).
   Expect that alarm and confirm it is this tag.
 - **A release workflow was re-run.** Each run registers a new release statement under a new key,
-  and the monitor names it. Expect that alarm and confirm it is the re-run.
+  and the monitor names it. Expect that alarm and confirm it is the re-run. A full release
+  re-run by anyone other than whoever pushed its tag stops before it builds: whoever re-runs a
+  run counts as starting it, so the tag's pusher could otherwise approve it. Cut the next
+  version instead.
 
 ## Repository settings
 

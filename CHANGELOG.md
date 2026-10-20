@@ -15,7 +15,11 @@
   `--allowed-signers`, `--known-unsigned` and `--known-unsigned-file`, and
   checks every `v*` tag: each has a release within `--release-grace`, now 24
   hours by default to cover the wait for approval, and each release's
-  statement, attestation and log entry verify. The releases before
+  statement, attestation and log entry verify. It also checks the approval
+  of the run that built each release after `v0.1.0-rc17`, as GitHub records
+  it: in the right environment and, for a full release, by someone other
+  than whoever pushed the tag or started the run. A tag dated in the future
+  with no release is an alarm. The releases before
   `release register` existed (`v0.1.0-rc1` to `v0.1.0-rc4`) need no
   statement. Its result names the checked tags as `tags`, not
   `intended_tags`. A monitor's operator removes those flags from its

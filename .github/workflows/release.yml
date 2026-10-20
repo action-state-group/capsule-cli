@@ -41,6 +41,18 @@ jobs:
       id-token: write # OIDC token for the build provenance attestation
       attestations: write
     steps:
+      - name: Refuse a full release re-run by someone else
+        # Prevent self-review stops whoever started a run from approving it,
+        # and a re-run is started by whoever re-ran it. The tag's pusher could
+        # then approve their own full release, so that run stops here, before
+        # anything is built (docs/RELEASING.md).
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        run: |
+          test "$ACTOR" = "$TRIGGERING_ACTOR" \
+            || { echo "$GITHUB_REF_NAME was pushed by $ACTOR but this run was started by $TRIGGERING_ACTOR: cut the next version"; exit 1; }
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

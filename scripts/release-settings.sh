@@ -18,7 +18,9 @@
 #      delete one.
 #
 # Re-running it is safe: environments are replaced, rulesets are updated in
-# place by name, and tag patterns already present are kept.
+# place by name, and any deployment branch or tag policy other than the one
+# named here is removed. After applying, it reads the settings back and fails
+# if GitHub holds anything else.
 set -euo pipefail
 
 REPO="${REPO:-action-state-group/capsule-cli}"
@@ -49,9 +51,11 @@ if [ "$mode" = --show ]; then
   exit 0
 fi
 
-reviewers_json="$(for login in $REVIEWERS; do
-  gh api "users/$login" --jq '{type: "User", id: .id}'
-done | jq -s .)"
+reviewers_json='[]'
+for login in $REVIEWERS; do
+  id="$(gh api "users/$login" --jq .id)" || { echo "cannot resolve reviewer $login" >&2; exit 1; }
+  reviewers_json="$(jq -c --argjson id "$id" '. + [{type: "User", id: $id}]' <<<"$reviewers_json")"
+done
 
 # environment NAME PREVENT_SELF_REVIEW TAG_PATTERN
 environment() {
@@ -69,10 +73,40 @@ environment() {
     return
   fi
   gh api -X PUT "repos/$REPO/environments/$1" --input - <<<"$body" >/dev/null
-  if ! gh api "repos/$REPO/environments/$1/deployment-branch-policies" \
-    --jq '.branch_policies[] | select(.type == "tag") | .name' | grep -Fqx "$3"; then
+  local policies id
+  policies="$(gh api "repos/$REPO/environments/$1/deployment-branch-policies" --jq '.branch_policies')"
+  # Any other pattern could let a tag of the wrong kind into this environment.
+  for id in $(jq -r --arg want "$3" '.[] | select(.type != "tag" or .name != $want) | .id' <<<"$policies"); do
+    gh api -X DELETE "repos/$REPO/environments/$1/deployment-branch-policies/$id" >/dev/null
+  done
+  if ! jq -e --arg want "$3" 'any(.[]; .type == "tag" and .name == $want)' <<<"$policies" >/dev/null; then
     gh api -X POST "repos/$REPO/environments/$1/deployment-branch-policies" \
       -f name="$3" -f type=tag >/dev/null
+  fi
+}
+
+# environment_holds PREVENT_SELF_REVIEW TAG_PATTERN ENVIRONMENT_JSON POLICIES_JSON
+# succeeds when GitHub's answers for an environment are what environment set.
+environment_holds() {
+  jq -e --argjson prevent "$1" --argjson reviewers "$reviewers_json" '
+    .can_admins_bypass == false
+    and .deployment_branch_policy == {protected_branches: false, custom_branch_policies: true}
+    and any(.protection_rules[]; .type == "required_reviewers"
+      and .prevent_self_review == $prevent
+      and ([.reviewers[] | {type, id: .reviewer.id}] | sort) == ($reviewers | sort))' <<<"$3" >/dev/null \
+    && jq -e --arg want "$2" '[.branch_policies[] | {name, type}] == [{name: $want, type: "tag"}]' <<<"$4" >/dev/null
+}
+
+# check_environment NAME PREVENT_SELF_REVIEW TAG_PATTERN: fail unless GitHub
+# holds exactly what environment set.
+check_environment() {
+  local got policies
+  got="$(gh api "repos/$REPO/environments/$1")"
+  policies="$(gh api "repos/$REPO/environments/$1/deployment-branch-policies")"
+  if ! environment_holds "$2" "$3" "$got" "$policies"; then
+    echo "environment $1 does not hold the settings (see --show). If can_admins_bypass is" >&2
+    echo "not false, clear \"Allow administrators to bypass\" in its settings page." >&2
+    return 1
   fi
 }
 
@@ -111,4 +145,7 @@ ruleset "release tags: immutable" \
 
 if [ "$mode" = --apply ]; then
   show
+  check_environment release true 'v*'
+  check_environment release-candidate false 'v*-*'
+  echo "applied and checked"
 fi
