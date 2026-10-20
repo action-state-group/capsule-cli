@@ -41,6 +41,9 @@ type headlessChrome struct {
 	// page maps each auto-attached child session (an iframe's or a
 	// worker's) to the page session it belongs to.
 	page map[string]string
+	// childErrors are failures to watch a child target, which would let
+	// its requests go unseen.
+	childErrors []string
 }
 
 type cdpMessage struct {
@@ -209,13 +212,23 @@ func (c *headlessChrome) record(session, url string) {
 
 // watchChild records an auto-attached iframe's or worker's requests, and
 // those of its own children, then lets it run: it was paused on start, so
-// none of its requests is missed. A target that has no Network or Target
-// domain still runs.
+// none of its requests is missed. A failure is kept for the page's check,
+// unless the target is already gone (nothing of it is left to watch).
 func (c *headlessChrome) watchChild(session string) {
-	_ = c.call(session, "Network.enable", map[string]any{}, nil)
-	_ = c.call(session, "Target.setAutoAttach", map[string]any{
-		"autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true}, nil)
-	_ = c.call(session, "Runtime.runIfWaitingForDebugger", map[string]any{}, nil)
+	for _, step := range []struct {
+		method string
+		params map[string]any
+	}{
+		{"Network.enable", map[string]any{}},
+		{"Target.setAutoAttach", map[string]any{"autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true}},
+		{"Runtime.runIfWaitingForDebugger", map[string]any{}},
+	} {
+		if err := c.call(session, step.method, step.params, nil); err != nil && !strings.Contains(err.Error(), "ession with given id not found") {
+			c.mu.Lock()
+			c.childErrors = append(c.childErrors, err.Error())
+			c.mu.Unlock()
+		}
+	}
 }
 
 // call sends one command (to a page session when session is set) and waits
@@ -303,6 +316,7 @@ func (c *headlessChrome) open(t *testing.T, url string, view pageView) openedPag
 	p.eval(t, `window.__renderErrors || ["the error hook did not run"]`, &errs)
 	require.Empty(t, errs, "console errors, uncaught errors or unhandled rejections (%s)", view.name)
 	require.Empty(t, c.externalRequests(p.session), "the page asked for something outside itself (%s)", view.name)
+	require.Empty(t, c.watchErrors(), "an iframe or worker could not be watched (%s)", view.name)
 	return p
 }
 
@@ -391,6 +405,7 @@ func TestPresentationChromeSeesExternalRequests(t *testing.T) {
 	// subresources on loopback may be (local network access).
 	c.load(t, ip+"/navigated", presentationViews[1])
 	assert.Zero(t, connections.Load(), "no connection reached an IP literal")
+	assert.Empty(t, c.watchErrors(), "every worker was watched")
 }
 
 func isSubset(have, want []string) bool {
@@ -400,6 +415,13 @@ func isSubset(have, want []string) bool {
 		}
 	}
 	return true
+}
+
+// watchErrors is every failure to watch a child target so far.
+func (c *headlessChrome) watchErrors() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.childErrors)
 }
 
 // externalRequests is every URL a page session (or a service or shared
