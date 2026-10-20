@@ -354,24 +354,42 @@ func wrappedHeaderValues(w *dealWrapped) []string {
 // wrappedTexts are a held object's private texts for the share gate: the
 // object, when it is text, and its header values. The gate mines them for
 // identifiers as it mines a sealed email's text; capsule-cli does not read
-// the object's fields. A number in the object equal to an amount the deal's
-// copies show anyway (shown, in minor units) is not mined: a held checkout
-// states the deal's own total, and that alone must not refuse every copy.
+// the object's fields. A JSON number value in the object equal to an amount
+// the deal's copies show anyway (shown, in minor units) is not mined: a held
+// checkout states the deal's own total, and that alone must not refuse every
+// copy. Digits inside a string (an id such as "ref-5400-abc") are always
+// mined.
 func wrappedTexts(w *dealWrapped, shown map[int64]bool) []string {
 	var out []string
 	if w.Object != nil && utf8.Valid(w.Object) {
-		out = append(out, wholeNumber.ReplaceAllStringFunc(string(w.Object), func(n string) string {
-			if v, err := strconv.ParseInt(n, 10, 64); err == nil && shown[v] {
-				return strings.Repeat(" ", len(n))
-			}
-			return n
-		}))
+		out = append(out, string(blankShownNumbers(w.Object, shown)))
 	}
 	return append(out, headerValues(w)...)
 }
 
-// wholeNumber is a run of digits that is not part of a longer token.
-var wholeNumber = regexp.MustCompile(`\b[0-9]+\b`)
+// blankShownNumbers blanks the JSON number values of object that are shown
+// amounts. An object that is not JSON is returned unchanged.
+func blankShownNumbers(object []byte, shown map[int64]bool) []byte {
+	out := bytes.Clone(object)
+	dec := jsontext.NewDecoder(bytes.NewReader(object), jsontext.AllowDuplicateNames(true), jsontext.AllowInvalidUTF8(true))
+	for {
+		tok, err := dec.ReadToken()
+		if err != nil {
+			if err != io.EOF {
+				return object
+			}
+			return out
+		}
+		if tok.Kind() != '0' {
+			continue
+		}
+		raw := tok.String()
+		if v, err := strconv.ParseInt(raw, 10, 64); err == nil && shown[v] {
+			end := int(dec.InputOffset())
+			copy(out[end-len(raw):end], strings.Repeat(" ", len(raw)))
+		}
+	}
+}
 
 // wrappedShownAmounts are the minor-unit amounts a deal's copies show in the
 // clear: what was asked, approved and paid, and a received close's price.

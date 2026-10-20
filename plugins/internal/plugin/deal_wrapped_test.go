@@ -373,21 +373,34 @@ func TestWrappedObjectJCSRefusesAnOverflowingNumber(t *testing.T) {
 
 // A held checkout states the deal's own total in minor units. Once the deal
 // closes as received, the counterparty's copy shows that amount (its field
-// openings), and the held object's number must not refuse the copy; a
-// number the copies never show stays private.
+// openings), and the held object's JSON number must not refuse the copy; a
+// number the copies never show stays private. Digits inside a string are
+// never exempt: an id that holds the shown amount keeps it as a needle, so
+// such a deal's copies are refused (fail closed) rather than let the id
+// through.
 func TestWrappedObjectStatingTheDealsTotalStillShares(t *testing.T) {
-	dealFixture(t)
-	open := `{"type":"purchase","channel":"web","intent":{"verbatim":"buy two widgets","allowed":["pay"]},"who":{"name":"Example Merchant","domain":"merchant.example"},"terms":{"item":"Widget","quantity":2,"price_minor":5400,"currency":"USD"},"recourse":{"rail":"card","refundable":true}}`
-	dealID := dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
-	dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received","delivered":{"item":"Widget","quantity":2,"price_minor":5400,"currency":"USD"}}`))
-	object := writeFile(t, "o.json", []byte(`{"totals":[{"type":"total","amount":5400}],"buyer_phone":"5550104477"}`))
-	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--object", object, "--object-type", "x-example.order")
+	closedDeal := func(object string) string {
+		dealFixture(t)
+		open := `{"type":"purchase","channel":"web","intent":{"verbatim":"buy two widgets","allowed":["pay"]},"who":{"name":"Example Merchant","domain":"merchant.example"},"terms":{"item":"Widget","quantity":2,"price_minor":5400,"currency":"USD"},"recourse":{"rail":"card","refundable":true}}`
+		dealID := dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
+		dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received","delivered":{"item":"Widget","quantity":2,"price_minor":5400,"currency":"USD"}}`))
+		dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--object", writeFile(t, "o.json", []byte(object)), "--object-type", "x-example.order")
+		return dealID
+	}
+
+	dealID := closedDeal(`{"totals":[{"type":"total","amount":5400}],"buyer_phone":"5550104477"}`)
 	for _, audience := range []string{cli.DealAudienceCounterparty, cli.DealAudienceAdjudicator} {
 		_, raw := sharedCopy(t, dealID, audience, "x")
 		assert.NotContains(t, raw, "5550104477", audience)
 	}
 	err := dealShareGate([]byte("<p>call 5550104477</p>"), chainSteps(t, dealID), cli.DealAudienceAdjudicator)
 	require.Error(t, err, "a number only the held object states stays private")
+
+	dealID = closedDeal(`{"totals":[{"type":"total","amount":5400}],"reference":"ref-5400-abc"}`)
+	err = dealShareGate([]byte("<p>reference ref-5/4/0/0-abc</p>"), chainSteps(t, dealID), cli.DealAudienceAdjudicator)
+	require.Error(t, err, "digits inside a string are never exempt")
+	_, err = invoke(t, "", "--profile", "deal", "disclose", "--deal", dealID, "--share", cli.DealAudienceCounterparty, "--to", "x", "--out", filepath.Join(t.TempDir(), "c.json"))
+	require.Error(t, err, "the copy showing 5400 is refused rather than let the id through")
 }
 
 // A wrapper step whose type label would carry a private value is withheld
