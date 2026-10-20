@@ -58,24 +58,48 @@ var (
 // for a path under it, by name or once resolved, userRootAncestryProblems
 // also checks every directory from $HOME down.
 func VerifyTrustedPath(path string) error {
-	return verifyTrustedPathUnder(path, trustedPluginRoots())
+	_, err := CheckedTrustedPath(path)
+	return err
+}
+
+// CheckedTrustedPath is VerifyTrustedPath returning the resolved path the
+// checks judged. A caller opens or executes that path, never path itself:
+// a symlink on path swapped after the check then reaches nothing it runs.
+func CheckedTrustedPath(path string) (string, error) {
+	return checkedTrustedPathUnder(path, trustedPluginRoots())
 }
 
 // verifyTrustedPathUnder is verifyTrustedPath against the given roots: the
 // path must resolve inside one of them, and the walk stops at that root.
 func verifyTrustedPathUnder(path string, roots []string) error {
-	resolved, err := filepath.EvalSymlinks(path)
+	_, err := checkedTrustedPathUnder(path, roots)
+	return err
+}
+
+// checkedTrustedPathUnder is CheckedTrustedPath against the given roots.
+func checkedTrustedPathUnder(path string, roots []string) (string, error) {
+	// Absolute from the start, so a relative path or root (a relative
+	// CAPSULECTL_PLUGIN_ROOTS entry) compares like for like below.
+	abs, err := filepath.Abs(path)
 	if err != nil {
-		return fmt.Errorf("cannot resolve %s: %w", path, err)
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve %s: %w", path, err)
 	}
 	if info, err := os.Lstat(resolved); err != nil {
-		return err
+		return "", err
 	} else if !info.Mode().IsRegular() {
-		return fmt.Errorf("%s is %w", resolved, errNotRegularFile)
+		return "", fmt.Errorf("%s is %w", resolved, errNotRegularFile)
 	}
 	realRoot := ""
 	for _, root := range roots {
-		rr, err := filepath.EvalSymlinks(root)
+		absRoot, err := filepath.Abs(root)
+		if err != nil {
+			continue
+		}
+		rr, err := filepath.EvalSymlinks(absRoot)
 		if err != nil {
 			continue
 		}
@@ -85,7 +109,7 @@ func verifyTrustedPathUnder(path string, roots []string) error {
 		}
 	}
 	if realRoot == "" {
-		return fmt.Errorf("%s resolves to %s, %w", path, resolved, errOutsideRoots)
+		return "", fmt.Errorf("%s resolves to %s, %w", path, resolved, errOutsideRoots)
 	}
 	// Walk from the launcher up to and including the trusted root: any directory
 	// BETWEEN the root and the launcher (or the launcher itself) that is
@@ -96,7 +120,7 @@ func verifyTrustedPathUnder(path string, roots []string) error {
 	uid := os.Getuid()
 	for p := resolved; ; {
 		if err := checkTrustedComponent(p, uid, false); err != nil {
-			return err
+			return "", err
 		}
 		if p == realRoot {
 			break
@@ -107,12 +131,83 @@ func verifyTrustedPathUnder(path string, roots []string) error {
 		}
 		p = parent
 	}
+	if problems := launcherHopProblems(path, resolved, realRoot, roots); len(problems) > 0 {
+		return "", newAncestryError("the launcher "+path, problems)
+	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" && underUserRoot(path, resolved, userPluginRoot(home)) {
 		if problems := userRootAncestryProblems(home); len(problems) > 0 {
-			return newAncestryError(userPluginRoot(home), problems)
+			return "", newAncestryError("the plugin root "+userPluginRoot(home), problems)
 		}
 	}
-	return nil
+	return resolved, nil
+}
+
+// launcherHopProblems checks the symlink hops on path below the root it is
+// found under. The walk above judges only the resolved path, so a directory
+// that holds a hop but is not on it (R/capsulectl-x -> R/a/link -> R/b/x
+// leaves R/a off it) is checked here: path is resolved again one name at a
+// time from that root (lookupDirs), every directory a name is looked up in
+// must pass checkTrustedComponent (strictly inside the root it was found
+// under or resolves into; outside them a root-owned sticky directory is
+// accepted, as for the per-user ancestry),
+// and every link followed must be owned by the user or root. The lookup
+// must also arrive at resolved. A directory above the root (an absolute
+// link target passes through them) is left to the root's own rule: the
+// system root's parents are trusted, and the per-user root's are judged by
+// userRootAncestryProblems. A path under no root by name has no hops below
+// one; its caller runs the resolved path all the same.
+func launcherHopProblems(path, resolved, realRoot string, roots []string) []unsafePathProblem {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return []unsafePathProblem{{path: path, unresolved: true, err: err}}
+	}
+	under := func(p, dir string) bool { return strings.HasPrefix(p, dir+string(os.PathSeparator)) }
+	start, rel := "", ""
+	for _, root := range roots {
+		lexical, err := filepath.Abs(root)
+		if err != nil || !under(abs, lexical) {
+			continue
+		}
+		if start, err = filepath.EvalSymlinks(lexical); err != nil {
+			return []unsafePathProblem{{path: root, unresolved: true, err: fmt.Errorf("cannot resolve %s: %w", root, err)}}
+		}
+		rel, _ = filepath.Rel(lexical, abs)
+		break
+	}
+	if start == "" {
+		if !under(abs, realRoot) {
+			return nil
+		}
+		start, _ = filepath.Rel(realRoot, abs)
+		start, rel = realRoot, start
+	}
+	hops := 0
+	var links []string
+	got, dirs, err := lookupDirs(start, rel, &hops, &links)
+	if err != nil {
+		return []unsafePathProblem{{path: path, unresolved: true, err: fmt.Errorf("cannot resolve %s: %w", path, err)}}
+	}
+	if got != resolved {
+		return []unsafePathProblem{{path: path, unresolved: true, err: fmt.Errorf("%s resolved to %s, then to %s: it changed during the check", path, resolved, got)}}
+	}
+	uid := os.Getuid()
+	problems := linkOwnerProblems(links, uid)
+	seen := map[string]bool{}
+	for _, dir := range dirs {
+		if seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		if under(realRoot, dir) || under(start, dir) {
+			continue
+		}
+		inside := dir == realRoot || under(dir, realRoot) || dir == start || under(dir, start)
+		if err := checkTrustedComponent(dir, uid, !inside); err != nil {
+			problems = append(problems, unsafePathProblem{path: dir, owner: errors.Is(err, errNotTrustedOwner), err: err})
+		}
+	}
+	sort.Slice(problems, func(i, j int) bool { return problems[i].path < problems[j].path })
+	return problems
 }
 
 // underUserRoot reports whether a launcher looked up as path, resolving to
@@ -258,7 +353,7 @@ type ancestryError struct {
 func (e *ancestryError) Error() string { return e.message }
 func (e *ancestryError) Unwrap() error { return e.sentinel }
 
-func newAncestryError(root string, problems []unsafePathProblem) error {
+func newAncestryError(what string, problems []unsafePathProblem) error {
 	// A refusal only for paths that do not resolve is a resolution
 	// failure, not a permission one.
 	sentinel := errOutsideRoots
@@ -270,7 +365,7 @@ func newAncestryError(root string, problems []unsafePathProblem) error {
 			sentinel = errWritable
 		}
 	}
-	return &ancestryError{message: unsafePathMessage("the plugin root "+root, problems), sentinel: sentinel}
+	return &ancestryError{message: unsafePathMessage(what, problems), sentinel: sentinel}
 }
 
 // checkTrustedComponent is the trust rule for one path component: owned by
@@ -313,6 +408,9 @@ type pluginInfo struct {
 	// (plugin_presentations.go). An older capsulectl ignores the member.
 	Presentations []pluginPresentation `json:"presentations,omitempty"`
 	path          string
+	// checked is the resolved path the handshake ran, which the trust walk
+	// judged; presentations load beside it.
+	checked string
 	// presentations are the checked modules, or refusal why there are none.
 	presentations []presentationModule
 	refusal       *presentationRefusal
@@ -325,7 +423,14 @@ type pluginInfo struct {
 // lets discovery dedupe on the filename while dispatch uses the metadata name:
 // for every accepted launcher the two are the same string.
 func pluginMetadata(path, name string) (pluginInfo, error) {
-	info, err := readPluginMetadata(path, name)
+	return pluginMetadataAs(path, path, name)
+}
+
+// pluginMetadataAs is pluginMetadata running execPath, the path the trust
+// walk checked, with argv[0] and the plugin's recorded path set to argv0,
+// the name discovery found it by.
+func pluginMetadataAs(execPath, argv0, name string) (pluginInfo, error) {
+	info, err := readPluginMetadataAs(execPath, argv0, name)
 	if err != nil {
 		return pluginInfo{}, err
 	}
@@ -339,10 +444,16 @@ func pluginMetadata(path, name string) (pluginInfo, error) {
 // name: install reads the name from a launcher whose filename carries none.
 // label names the launcher in errors.
 func readPluginMetadata(path, label string) (pluginInfo, error) {
+	return readPluginMetadataAs(path, path, label)
+}
+
+// readPluginMetadataAs is readPluginMetadata running execPath with argv[0]
+// set to argv0, which is also the path recorded on the result.
+func readPluginMetadataAs(execPath, argv0, label string) (pluginInfo, error) {
 	name := label
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, path, "cli-plugin-metadata")
+	cmd := launcherCommand(ctx, execPath, argv0, "cli-plugin-metadata")
 	// WaitDelay bounds the wait even if a forked descendant keeps the stdout pipe
 	// open after the timeout kills the direct process, so a misbehaving launcher
 	// cannot hang discovery indefinitely.
@@ -358,8 +469,17 @@ func readPluginMetadata(path, label string) (pluginInfo, error) {
 	if info.PluginAPI != PluginAPI {
 		return pluginInfo{}, fmt.Errorf("%s: plugin_api %q does not match %q", name, info.PluginAPI, PluginAPI)
 	}
-	info.path = path
+	info.path, info.checked = argv0, execPath
 	return info, nil
+}
+
+// launcherCommand runs checked, the path the trust walk judged, with argv[0]
+// set to name, the path the launcher was found by, so a launcher that reads
+// its own argv[0] sees what it did before.
+func launcherCommand(ctx context.Context, checked, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, checked, args...)
+	cmd.Args[0] = name
+	return cmd
 }
 
 // refusedPlugin is a capsulectl-<name> launcher discovery found on a trusted root
@@ -400,11 +520,12 @@ func discoverPluginsAndRefusals() ([]pluginInfo, []refusedPlugin) {
 				continue
 			}
 			path := filepath.Join(root, base)
-			if err := VerifyTrustedPath(path); err != nil {
+			checked, err := CheckedTrustedPath(path)
+			if err != nil {
 				refused = append(refused, refusedPlugin{Path: path, Reason: err.Error()})
 				continue
 			}
-			info, err := pluginMetadata(path, name)
+			info, err := pluginMetadataAs(checked, path, name)
 			if err != nil {
 				refused = append(refused, refusedPlugin{Path: path, Reason: err.Error()})
 				continue
@@ -421,18 +542,25 @@ func discoverPluginsAndRefusals() ([]pluginInfo, []refusedPlugin) {
 	return plugins, refused
 }
 
+// pluginBeforeExec runs between dispatch's trust check and its exec (tests).
+var pluginBeforeExec = func() {}
+
 // execPlugin re-verifies the launcher's trusted path at dispatch time (closing
-// the discovery->dispatch window; under the "current user or root" trust
-// model the residual verify->exec window would need an O_PATH fd to close),
-// then execs it with the given args passed straight through.
+// the discovery->dispatch window), then execs the resolved path the check
+// judged, never the name it was found by, with the given args passed straight
+// through. A symlink on that name swapped after the check reaches nothing
+// that runs; what remains is the resolved path's own chain, which the walk
+// holds to the user or root (closing that would need an O_PATH fd).
 func execPlugin(c *cobra.Command, info pluginInfo, args []string) error {
-	if err := VerifyTrustedPath(info.path); err != nil {
+	checked, err := CheckedTrustedPath(info.path)
+	if err != nil {
 		return InputError("refusing to run plugin from an untrusted path")
 	}
+	pluginBeforeExec()
 	if warning := driftWarning(info); warning != "" {
 		fmt.Fprintln(c.ErrOrStderr(), warning)
 	}
-	cmd := exec.CommandContext(c.Context(), info.path, args...)
+	cmd := launcherCommand(c.Context(), checked, info.path, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.InOrStdin(), c.OutOrStdout(), c.ErrOrStderr()
 	// The profile a plugin inherits is only the one this run selected
 	// (profileInArgs): a CAPSULECTL_PROFILE exported in the operator's shell

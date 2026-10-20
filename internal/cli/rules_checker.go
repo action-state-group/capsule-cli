@@ -118,10 +118,13 @@ func RulesTimeout(value string) (time.Duration, error) {
 // trustedExecutableDigest is the SHA-256 of an executable under a trusted
 // plugin root, refused anywhere else (verifyTrustedPath).
 func trustedExecutableDigest(path string) (string, error) {
-	if err := VerifyTrustedPath(path); err != nil {
+	checked, err := CheckedTrustedPath(path)
+	if err != nil {
 		return "", InputError("the rules checker must live under a trusted plugin root (" + strings.Join(trustedPluginRoots(), ", ") + "): " + err.Error())
 	}
-	f, err := os.Open(path)
+	// Read the checked path, not path: a link swapped after the check
+	// reaches nothing hashed.
+	f, err := os.Open(checked)
 	if err != nil {
 		return "", InputError("the rules checker cannot be read: " + err.Error())
 	}

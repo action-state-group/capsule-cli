@@ -209,10 +209,13 @@ func runRulesChecker(ctx context.Context, p cli.Profile, input []byte, history *
 // it.
 func privateExecutableCopy(path string) (copied, sum string, cleanup func(), err error) {
 	cleanup = func() {}
-	if err = cli.VerifyTrustedPath(path); err != nil {
+	checked, err := cli.CheckedTrustedPath(path)
+	if err != nil {
 		return "", "", cleanup, err
 	}
-	f, err := os.Open(path)
+	// Read the checked path, not path: a link swapped after the check
+	// reaches nothing copied.
+	f, err := os.Open(checked)
 	if err != nil {
 		return "", "", cleanup, err
 	}
