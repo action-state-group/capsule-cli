@@ -59,9 +59,12 @@ Details, for developers. Three changes make the upgrade one-way:
 - **Changed (build):** agent-action-capsule/go is pinned at `go/v0.11.0`
   (from main 81e804a) and capsule-viewer/go at `go/v0.1.1` (from main
   42ee2e5), in both modules. Each tag is a fast-forward of the commit pinned
-  before. agent-action-capsule adds its bundle producer and a cross-language
-  check command. capsule-viewer's only change is in its Python package. The
-  vendored presentation manifest schema is unchanged.
+  before. agent-action-capsule adds its bundle producer, with
+  `bundle-produce` and `bundle-verify` modes in its cross-language check
+  command; `bundle.DecodeFragment` now says "trailing data after the JSON
+  value" when it refuses a fragment for that reason, and accepts and refuses
+  the same inputs as before. capsule-viewer's only change is in its Python
+  package. The vendored presentation manifest schema is unchanged.
 
 ### A deal's shared copy is checked with capsulectl alone (capsule-cli#243)
 

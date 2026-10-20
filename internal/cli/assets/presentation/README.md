@@ -14,7 +14,7 @@ aac Go module does not carry the repository's `schemas/` directory.
 
 The digest is pinned again in `plugin_presentations_test.go`
 (`TestThePresentationSchemaIsPinned`). Refresh the file and both digests
-together, from the commit `go.mod` pins, as a change of its own: a new schema
+together, from the release `go.mod` pins, as a change of its own: a new schema
 changes which plugin manifests are accepted.
 
 ## Built-in page manifests
