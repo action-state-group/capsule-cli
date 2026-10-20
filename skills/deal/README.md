@@ -698,8 +698,9 @@ Someone you gave the object to checks it against the `wrapped` digest and
 capsulectl deal verify-object --object FILE --digest HEX --octets as-transmitted
 ```
 
-The seal shows that the user held these exact bytes no later than the seal
-time; it says nothing about later. It does not show who issued them: an
+The seal shows that the user held these exact bytes when the step was sealed.
+The seal time is the device's own clock; a witnessed checkpoint after it gives
+a latest time others can check. It does not show who issued the bytes: an
 object's own signature, if it has one, is its own protocol's to check.
 
 ## Closing a deal, and records that arrive later

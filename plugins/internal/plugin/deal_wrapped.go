@@ -483,7 +483,7 @@ func dealVerifyObjectCommand() *cobra.Command {
 					return err
 				}
 			}
-			if err := cli.Output(c, map[string]any{"deal_id": dealID, "scope": wrappedScopeLine, "verified": ok, "objects": results}); err != nil {
+			if err := cli.Output(c, map[string]any{"deal_id": dealID, "scope": wrappedScopeLine, "matches": ok, "objects": results}); err != nil {
 				return err
 			}
 			if !ok {
@@ -567,7 +567,7 @@ func verifyObjectAlone(c *cobra.Command, object []byte, digest, rule string) err
 	} else {
 		r["object_digest"], r["code"] = verifyFail, "wrapped_digest_mismatch"
 	}
-	r["verified"] = ok
+	r["matches"] = ok
 	if err := cli.Output(c, r); err != nil {
 		return err
 	}

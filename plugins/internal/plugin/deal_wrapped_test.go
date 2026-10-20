@@ -181,7 +181,7 @@ func TestWrappedObjectVectors(t *testing.T) {
 
 			res, err := verifyObject(t, "--deal", dealID)
 			require.NoError(t, err)
-			assert.Equal(t, true, res["verified"])
+			assert.Equal(t, true, res["matches"])
 			obj := res["objects"].([]any)[0].(map[string]any)
 			assert.Equal(t, c.Expect.ObjectDigest, obj["object_digest"])
 			assert.Equal(t, c.Expect.CarrierHeaders, obj["carrier_headers"])
@@ -200,7 +200,7 @@ func TestWrappedObjectVectors(t *testing.T) {
 				}
 				if slices.Contains([]string{v.Expect["object_digest"], v.Expect["carrier_headers"]}, verifyFail) {
 					require.ErrorIs(t, err, cli.ErrObjectUnverified)
-					assert.Equal(t, false, res["verified"])
+					assert.Equal(t, false, res["matches"])
 				} else {
 					require.NoError(t, err)
 				}
