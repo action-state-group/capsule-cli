@@ -140,6 +140,7 @@ type dealLocal struct{ ids, places, texts, names []string }
 
 func dealLocalData(events []sealedEvent) dealLocal {
 	var l dealLocal
+	shown := wrappedShownAmounts(events)
 	who := func(w *dealWho) {
 		if w == nil {
 			return
@@ -191,7 +192,7 @@ func dealLocalData(events []sealedEvent) dealLocal {
 			if w := e.Evidence.Wrapped; w != nil {
 				// A held object, sealed by digest: its text and its carrier
 				// headers' values are all private.
-				text(wrappedTexts(w)...)
+				text(wrappedTexts(w, shown)...)
 				l.ids = append(l.ids, wrappedHeaderValues(w)...)
 			}
 		case e.Change != nil:

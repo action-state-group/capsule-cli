@@ -337,6 +337,7 @@ var gateStreetWords = map[string]bool{
 // gateSecrets are the gate's own needles, read from the deal's local steps.
 func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 	var places, ids, texts, names []string
+	shown := wrappedShownAmounts(events)
 	whoValues := func(w *dealWho) {
 		if w != nil {
 			ids = append(ids, w.Name, w.Domain, w.Phone, w.Email, w.Payee, w.RelayAddress, w.ProfileID)
@@ -403,7 +404,7 @@ func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 			}
 			if w := e.Evidence.Wrapped; w != nil {
 				// A held object: its text and its carrier headers' values.
-				texts = append(texts, wrappedTexts(w)...)
+				texts = append(texts, wrappedTexts(w, shown)...)
 				ids = append(ids, wrappedHeaderValues(w)...)
 			}
 		}

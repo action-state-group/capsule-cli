@@ -10,10 +10,12 @@ import (
 	"encoding/json/jsontext"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -146,12 +148,29 @@ func wrappedDigest(object []byte, rule string) (string, error) {
 
 // jcsForm is the RFC 8785 form of an object read as I-JSON (RFC 7493):
 // invalid UTF-8, a lone surrogate escape, a duplicate member or trailing
-// data makes it unreadable. The form is the standard library's
-// (jsontext.Value.Canonicalize, RFC 8785 with ECMAScript number output),
-// since a foreign object's numbers need not be integers.
+// data makes it unreadable, and so does a number outside binary64's range,
+// which RFC 8785 cannot write (Canonicalize would clamp it to the largest
+// finite value, giving two objects one form). The form is the standard
+// library's (jsontext.Value.Canonicalize, RFC 8785 with ECMAScript number
+// output), since a foreign object's numbers need not be integers.
 func jcsForm(object []byte) ([]byte, error) {
 	if err := canonical.CheckJSONText(object); err != nil {
 		return nil, errors.New("it is not I-JSON: " + err.Error())
+	}
+	dec := jsontext.NewDecoder(bytes.NewReader(object))
+	for {
+		tok, err := dec.ReadToken()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, errors.New("it is not I-JSON (a syntax error, a duplicate member or trailing data)")
+		}
+		if tok.Kind() == '0' {
+			if _, err := strconv.ParseFloat(tok.String(), 64); err != nil {
+				return nil, errors.New("it is not I-JSON: the number " + tok.String() + " is outside binary64's range")
+			}
+		}
 	}
 	form := jsontext.Value(bytes.Clone(object))
 	if err := form.Canonicalize(); err != nil {
@@ -313,34 +332,58 @@ func checkWrappedNote(s *dealSession, events []sealedEvent) error {
 	return nil
 }
 
-// wrappedHeaderValues are the values of a held object's header lines, as
-// exact private values for the share gate (a token or a request id need not
-// look like one). The start line has none.
-func wrappedHeaderValues(w *dealWrapped) []string {
+// headerValues are the values of a held object's header lines, trimmed and
+// valid UTF-8. The start line has none.
+func headerValues(w *dealWrapped) []string {
 	var out []string
 	for _, line := range strings.Split(strings.ReplaceAll(string(w.Headers), "\r\n", "\n"), "\n") {
-		if _, value, ok := strings.Cut(line, ":"); ok && utf8.ValidString(value) && len(strings.TrimSpace(value)) >= 8 {
+		if _, value, ok := strings.Cut(line, ":"); ok && utf8.ValidString(value) && strings.TrimSpace(value) != "" {
 			out = append(out, strings.TrimSpace(value))
 		}
 	}
 	return out
 }
 
+// wrappedHeaderValues are the header values of eight bytes or more, as exact
+// private values for the share gate (a token or a request id need not look
+// like one).
+func wrappedHeaderValues(w *dealWrapped) []string {
+	return slices.DeleteFunc(headerValues(w), func(v string) bool { return len(v) < 8 })
+}
+
 // wrappedTexts are a held object's private texts for the share gate: the
-// object, when it is text, and each header line's value. The gate mines them
-// for identifiers as it mines a sealed email's text; capsule-cli does not
-// read the object's fields.
-func wrappedTexts(w *dealWrapped) []string {
+// object, when it is text, and its header values. The gate mines them for
+// identifiers as it mines a sealed email's text; capsule-cli does not read
+// the object's fields. A number in the object equal to an amount the deal's
+// copies show anyway (shown, in minor units) is not mined: a held checkout
+// states the deal's own total, and that alone must not refuse every copy.
+func wrappedTexts(w *dealWrapped, shown map[int64]bool) []string {
 	var out []string
 	if w.Object != nil && utf8.Valid(w.Object) {
-		out = append(out, string(w.Object))
+		out = append(out, wholeNumber.ReplaceAllStringFunc(string(w.Object), func(n string) string {
+			if v, err := strconv.ParseInt(n, 10, 64); err == nil && shown[v] {
+				return strings.Repeat(" ", len(n))
+			}
+			return n
+		}))
 	}
-	for _, line := range strings.Split(strings.ReplaceAll(string(w.Headers), "\r\n", "\n"), "\n") {
-		if _, value, ok := strings.Cut(line, ":"); ok && utf8.ValidString(value) {
-			out = append(out, strings.TrimSpace(value))
+	return append(out, headerValues(w)...)
+}
+
+// wholeNumber is a run of digits that is not part of a longer token.
+var wholeNumber = regexp.MustCompile(`\b[0-9]+\b`)
+
+// wrappedShownAmounts are the minor-unit amounts a deal's copies show in the
+// clear: what was asked, approved and paid, and a received close's price.
+// Never the user's limit or floor, which the ceiling gate keeps.
+func wrappedShownAmounts(events []sealedEvent) map[int64]bool {
+	shown := dealShownAmounts(events)
+	for _, se := range events {
+		if c := se.Event.Close; c != nil && c.Delivered != nil && c.Delivered.PriceMinor != nil {
+			shown[*c.Delivered.PriceMinor] = true
 		}
 	}
-	return slices.DeleteFunc(out, func(s string) bool { return s == "" })
+	return shown
 }
 
 // wrappedOutput is what a sealed held object reports.
@@ -382,8 +425,8 @@ func dealVerifyObjectCommand() *cobra.Command {
 			}
 			return verifyObjectAlone(c, object, flag("digest"), flag("octets"))
 		}
-		if flag("digest") != "" {
-			return cli.InputError("--digest is for checking an object without a deal; with --deal the digest is the sealed one")
+		if flag("digest") != "" || c.Flags().Changed("octets") {
+			return cli.InputError("--digest and --octets are for checking an object without a deal; with --deal they are the sealed ones")
 		}
 		step, _ := c.Flags().GetInt64("step")
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
@@ -405,6 +448,9 @@ func dealVerifyObjectCommand() *cobra.Command {
 			}
 			if len(results) == 0 {
 				return cli.InputError("no held object in this deal (or at that step)")
+			}
+			if len(results) > 1 && (object != nil || headers != nil) {
+				return cli.InputError("--object and --headers are a copy of one held object: name its step with --step")
 			}
 			if dir := flag("out"); dir != "" {
 				if len(held) != 1 {
@@ -467,19 +513,9 @@ func verifyWrapped(se sealedEvent, w *dealWrapped, object, headers []byte) (map[
 			r["headers_given"] = "not checked: this step sealed no carrier headers"
 		}
 	default:
-		check := w.Headers
-		if headers != nil {
-			check = headers
-		}
-		want, err := cli.CommitText(se.Event.Nonces["carrier_headers"], headersText(w.Headers))
-		if err != nil {
-			return nil, false, err
-		}
-		got, err := cli.CommitText(se.Event.Nonces["carrier_headers"], headersText(check))
-		if err != nil {
-			return nil, false, err
-		}
-		if got == want {
+		// The load re-derived the record, so the held headers open its
+		// commitment; a copy is checked against them byte for byte.
+		if headers == nil || bytes.Equal(headers, w.Headers) {
 			r["carrier_headers"] = verifyPass
 		} else {
 			r["carrier_headers"] = verifyFail
@@ -527,17 +563,28 @@ func writeHeld(dir string, w *dealWrapped) error {
 	if w.Object == nil {
 		return cli.InputError("this step holds only a digest: there is no object to write")
 	}
-	files := map[string][]byte{"object": w.Object}
-	if w.Headers != nil {
-		files["headers"] = w.Headers
+	type file struct {
+		name string
+		data []byte
 	}
-	for name, data := range files {
-		f, err := os.OpenFile(filepath.Join(dir, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err != nil {
-			return cli.InputError("--out: cannot create " + filepath.Join(dir, name) + " (it must not exist yet)")
+	files := []file{{"object", w.Object}}
+	if w.Headers != nil {
+		files = append(files, file{"headers", w.Headers})
+	}
+	// Both names are checked before either is written, so a refusal leaves
+	// nothing behind.
+	for _, f := range files {
+		if _, err := os.Lstat(filepath.Join(dir, f.name)); !errors.Is(err, os.ErrNotExist) {
+			return cli.InputError("--out: " + filepath.Join(dir, f.name) + " already exists")
 		}
-		_, err = f.Write(data)
-		if err = errors.Join(err, f.Close()); err != nil {
+	}
+	for _, f := range files {
+		out, err := os.OpenFile(filepath.Join(dir, f.name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return cli.InputError("--out: cannot create " + filepath.Join(dir, f.name))
+		}
+		_, err = out.Write(f.data)
+		if err = errors.Join(err, out.Close()); err != nil {
 			return err
 		}
 	}

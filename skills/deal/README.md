@@ -649,7 +649,6 @@ merchant-agnostic heuristics and may be misread; the report labels them as
 read from the email. The merchant's signature covers the bytes, not this
 reading of them.
 
-
 ## A held object
 
 Some evidence is an object the other side sent: a checkout response, a
@@ -694,9 +693,10 @@ Someone you gave the object to checks it against the `wrapped` digest and
 capsulectl deal verify-object --object FILE --digest HEX --octets as-transmitted
 ```
 
-The seal shows that the user held these bytes from that time on. It does not
-show who issued them: an object's own signature, if it has one, is its own
-protocol's to check.
+The seal shows that the user held these exact bytes no later than the seal
+time; it says nothing about later. It does not show who issued them: an
+object's own signature, if it has one, is its own protocol's to check.
+
 ## Closing a deal, and records that arrive later
 
 A deal is closed when it reaches its point of resolution (a parcel at

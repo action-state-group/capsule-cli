@@ -731,7 +731,8 @@ Only its SHA-256 is sealed; the bytes stay on this device and no copy carries
 them. `TYPE` is a registered wrapped type (`delivery.proof`, `x402.receipt`, ...)
 or a label you choose; when the output says `type_registered: false`, never
 call it registered. Tell the user what the seal shows, in these words: "you
-held these exact bytes from this time on". It does not show who issued them.
+can prove you held these exact bytes no later than the seal time". It says
+nothing about who issued them, which only the object's own signature can show.
 `deal verify-object --deal ID` checks them later.
 
 **5. Close** when the deal is over, or check back later:

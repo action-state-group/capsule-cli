@@ -235,6 +235,59 @@
       ]
     },
     {
+      "name": "digest-only-x402-jcs",
+      "what": "Only the digest of an x402 receipt, stated as over the RFC 8785 form: with no octets the form cannot be read, so either rule is accepted and wrapped_held says digest.",
+      "seal": {
+        "type": "x402.receipt",
+        "octets": "jcs",
+        "object": null,
+        "object_digest": "705777938730347f9b40f1588a9770b7c6da44af0c818c8ead2721844ea41727",
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "705777938730347f9b40f1588a9770b7c6da44af0c818c8ead2721844ea41727",
+        "type_registered": true,
+        "wrapped_held": "digest",
+        "object_digest": "NOT_PRESENT",
+        "carrier_headers": "NOT_PRESENT"
+      }
+    },
+    {
+      "name": "digest-only-x402-as-transmitted",
+      "what": "Only the digest of an x402 offer, stated as over the octets as delivered: accepted for the same reason.",
+      "seal": {
+        "type": "x402.offer",
+        "octets": "as-transmitted",
+        "object": null,
+        "object_digest": "75d921f7b22cf6985b81072664a59d7fbde65c3bc0f86d1c2b05c3f306c77dee",
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "75d921f7b22cf6985b81072664a59d7fbde65c3bc0f86d1c2b05c3f306c77dee",
+        "type_registered": true,
+        "wrapped_held": "digest",
+        "object_digest": "NOT_PRESENT",
+        "carrier_headers": "NOT_PRESENT"
+      }
+    },
+    {
+      "name": "digest-only-registered-wrong-rule",
+      "what": "Only a digest, for a registered type with one rule, stated under the other: refused.",
+      "seal": {
+        "type": "delivery.proof",
+        "octets": "jcs",
+        "object": null,
+        "object_digest": "74ad1b1dcb4abec5e0acaac2e7c186cd56f86a165c766809f529f5685e7436fb",
+        "headers": null
+      },
+      "expect": {
+        "sealed": false,
+        "error": "as delivered"
+      }
+    },
+    {
       "name": "jcs-decimal-numbers",
       "what": "jcs over an object with non-integer and exponent numbers; the expected form is written out by hand from RFC 8785.",
       "seal": {

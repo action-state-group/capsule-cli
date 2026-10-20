@@ -268,6 +268,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["source", "verified"],
       "dependentRequired": { "wrapped": ["wrapped_octets", "wrapped_held"], "wrapped_octets": ["wrapped"], "wrapped_held": ["wrapped"], "carrier_headers_commitment": ["wrapped"] },
+      "if": { "required": ["wrapped"] }, "then": { "properties": { "source": { "const": "wrapped_object" } } },
       "properties": {
         "source": { "$ref": "#/$defs/ns_token" },
         "verified": { "type": "boolean" },
@@ -291,7 +292,7 @@
         },
         "wrapped_octets": { "description": "What the wrapped digest is over: the octets as delivered, or their RFC 8785 form.", "enum": ["as-transmitted", "jcs"] },
         "wrapped_held": { "description": "octets when the sealer held the object; digest when it was given only the digest, which claims no possession.", "enum": ["octets", "digest"] },
-        "carrier_headers_commitment": { "description": "A salted commitment to the header block the object arrived with, base64url-encoded.", "$ref": "#/$defs/hex64" },
+        "carrier_headers_commitment": { "description": "A salted commitment to the base64url form (no padding) of the header block the object arrived with.", "$ref": "#/$defs/hex64" },
         "received_to": {
           "description": "On evidence of a payment the user received (a settlement leg's step): the account it was received to, as its per-deal fingerprint. The user's own account, never a counterparty identifier.",
           "type": "object", "additionalProperties": false,

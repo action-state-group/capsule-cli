@@ -55,6 +55,8 @@ a digest with no deal.
 | `x402-jws-trailing-newline` | refused, naming the trailing whitespace |
 | `x402-flattened-jws` | a JSON-serialized JWS is neither form the type defines: refused |
 | `digest-only` | `wrapped_held` digest, `object_digest` `NOT_PRESENT`; given the object, `PASS` |
+| `digest-only-x402-jcs` / `digest-only-x402-as-transmitted` | an x402 offer or receipt given only by digest: either rule is accepted (there is no form to read), `wrapped_held` digest |
+| `digest-only-registered-wrong-rule` | a one-rule registered type given only by digest under the other rule: refused |
 | `jcs-decimal-numbers` | non-integer and exponent numbers under `jcs`: the expected RFC 8785 form is written out by hand in `generate.py` (ECMAScript number output), not computed |
 | `jcs-duplicate-member` | not I-JSON: refused |
 

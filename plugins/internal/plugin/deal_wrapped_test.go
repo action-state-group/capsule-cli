@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -242,6 +243,13 @@ func TestWrappedObjectWritesTheHeldBytesBack(t *testing.T) {
 	assert.Equal(t, mustRead(t, vectorPath("ucp-checkout-response.headers")), mustRead(t, filepath.Join(dir, "headers")))
 	_, err = verifyObject(t, "--deal", dealID, "--out", dir)
 	require.ErrorIs(t, err, cli.ErrInput, "never over a file already there")
+	// With only one of the two names taken, nothing is written.
+	partial := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(partial, "headers"), nil, 0o600))
+	_, err = verifyObject(t, "--deal", dealID, "--out", partial)
+	require.ErrorIs(t, err, cli.ErrInput)
+	_, statErr := os.Stat(filepath.Join(partial, "object"))
+	assert.True(t, os.IsNotExist(statErr), "a refused --out leaves nothing behind")
 }
 
 // Header bytes that are not UTF-8 seal and verify: their commitment is over
@@ -337,6 +345,71 @@ func TestWrappedObjectAboutAndDigestOnly(t *testing.T) {
 	assert.Equal(t, verifyPass, objects[1].(map[string]any)["object_digest"])
 	_, err = verifyObject(t, "--deal", dealID, "--out", t.TempDir())
 	require.ErrorIs(t, err, cli.ErrInput, "--out needs --step with two held objects")
+	_, err = verifyObject(t, "--deal", dealID, "--object", vectorPath("delivery-proof.txt"))
+	require.ErrorIs(t, err, cli.ErrInput, "a copy is of one held object: --step names it")
+	_, err = verifyObject(t, "--deal", dealID, "--octets", "jcs")
+	require.ErrorIs(t, err, cli.ErrInput, "with --deal the rule is the sealed one")
+}
+
+// A number outside binary64's range has no RFC 8785 form: sealing it under
+// jcs is refused, and it never verifies against the form of the largest
+// finite number, which Canonicalize alone would clamp it to.
+func TestWrappedObjectJCSRefusesAnOverflowingNumber(t *testing.T) {
+	dealFixture(t)
+	dealID := retailDeal(t)
+	for _, n := range []string{"1e999", "-1e999"} {
+		over := writeFile(t, "o.json", []byte(`{"n":`+n+`}`))
+		err := dealRunErr(t, "note", "--deal", dealID, "--kind", "evidence", "--object", over, "--object-type", "x-example.object", "--octets", "jcs")
+		require.ErrorIs(t, err, cli.ErrInput, n)
+		assert.Contains(t, err.Error(), "outside binary64", n)
+		largest := sha256Hex([]byte(`{"n":` + strings.TrimSuffix(n, "1e999") + `1.7976931348623157e+308}`))
+		res, err := verifyObject(t, "--object", over, "--digest", largest, "--octets", "jcs")
+		require.ErrorIs(t, err, cli.ErrObjectUnverified, n)
+		assert.Equal(t, verifyFail, res["object_digest"], n)
+	}
+	// The largest finite number itself seals.
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--object", writeFile(t, "o.json", []byte(`{"n":1.7976931348623157e308}`)), "--object-type", "x-example.object", "--octets", "jcs")
+}
+
+// A held checkout states the deal's own total in minor units. Once the deal
+// closes as received, the counterparty's copy shows that amount (its field
+// openings), and the held object's number must not refuse the copy; a
+// number the copies never show stays private.
+func TestWrappedObjectStatingTheDealsTotalStillShares(t *testing.T) {
+	dealFixture(t)
+	open := `{"type":"purchase","channel":"web","intent":{"verbatim":"buy two widgets","allowed":["pay"]},"who":{"name":"Example Merchant","domain":"merchant.example"},"terms":{"item":"Widget","quantity":2,"price_minor":5400,"currency":"USD"},"recourse":{"rail":"card","refundable":true}}`
+	dealID := dealRun(t, "open", "--input", writeJSON(t, open))["deal_id"].(string)
+	dealRun(t, "close", "--deal", dealID, "--input", writeJSON(t, `{"status":"received","delivered":{"item":"Widget","quantity":2,"price_minor":5400,"currency":"USD"}}`))
+	object := writeFile(t, "o.json", []byte(`{"totals":[{"type":"total","amount":5400}],"buyer_phone":"5550104477"}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--object", object, "--object-type", "x-example.order")
+	for _, audience := range []string{cli.DealAudienceCounterparty, cli.DealAudienceAdjudicator} {
+		_, raw := sharedCopy(t, dealID, audience, "x")
+		assert.NotContains(t, raw, "5550104477", audience)
+	}
+	err := dealShareGate([]byte("<p>call 5550104477</p>"), chainSteps(t, dealID), cli.DealAudienceAdjudicator)
+	require.Error(t, err, "a number only the held object states stays private")
+}
+
+// A wrapper step whose type label would carry a private value is withheld
+// whole from a copy: the copy shows its place in the log, never its type.
+func TestWrappedObjectWithheldStepCarriesNoType(t *testing.T) {
+	dealFixture(t)
+	dealID := retailDeal(t)
+	object := writeFile(t, "o.json", []byte(`{"order": "ZQ7341-PL"}`))
+	note := dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--object", object, "--object-type", "x-zq7341-pl")
+	path := filepath.Join(t.TempDir(), "shared.json")
+	_, err := invoke(t, "", "--profile", "deal", "disclose", "--deal", dealID, "--share", cli.DealAudienceCounterparty, "--to", "x", "--out", path)
+	require.NoError(t, err)
+	raw := string(mustRead(t, path))
+	assert.NotContains(t, strings.ToLower(raw), "zq7341")
+	assert.NotContains(t, raw, sha256Hex(mustRead(t, object)), "the withheld record's body is not in the copy")
+	var shared map[string]any
+	require.NoError(t, json.Unmarshal([]byte(raw), &shared))
+	assert.NotContains(t, shared["disclosures"], note["capsule_id"], "withheld, not disclosed")
+	assert.Contains(t, raw, note["capsule_id"], "its place in the log is still proven")
+	result, err := verifyWithDirectory(t, path, "")
+	require.NoError(t, err)
+	assert.Equal(t, "VALID", result["verdict"])
 }
 
 // --input that gives only detail keeps the default about, for an object and
@@ -472,6 +545,27 @@ func TestWrappedObjectStoreTamperFailsTheLoad(t *testing.T) {
 	_, err = verifyObject(t, "--deal", dealID)
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, cli.ErrObjectUnverified, "a store integrity failure, not a wrapper mismatch")
+}
+
+// A changed sealed record (its payload, which carries the wrapped digest)
+// fails the deal's load, never reads as another digest.
+func TestWrappedObjectRecordTamperFailsTheLoad(t *testing.T) {
+	dealFixture(t)
+	dealID := retailDeal(t)
+	note := dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--object", vectorPath("delivery-proof.txt"), "--object-type", "delivery.proof")
+	db, _, err := cli.SqliteConnection(dealProfile(t))
+	require.NoError(t, err)
+	var content []byte
+	require.NoError(t, db.QueryRow(`SELECT content_bytes FROM capsule_store_artifacts WHERE capsule_id = ? AND name = 'payload'`, note["capsule_id"]).Scan(&content))
+	digest := note["wrapped"].(map[string]any)["digest"].(string)
+	changed := bytes.Replace(content, []byte(digest), []byte(strings.Repeat("0", 64)), 1)
+	require.NotEqual(t, content, changed)
+	_, err = db.Exec(`UPDATE capsule_store_artifacts SET content_bytes = ? WHERE capsule_id = ? AND name = 'payload'`, changed, note["capsule_id"])
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	_, err = verifyObject(t, "--deal", dealID)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, cli.ErrObjectUnverified)
 }
 
 // The held bytes are enough to run the objects' own checks later: what --out
