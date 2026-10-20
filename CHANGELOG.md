@@ -49,15 +49,17 @@
   `intent.min_total_minor` and their openings) stay out of every counterparty
   copy, and the floor stays out of every shared copy. A final close's amount
   and currency openings travel whenever the close commits money terms, also
-  when the amount equals a bound. A merchant charge in the deal's currency,
-  or naming none, counts as an amount paid, so a receipt charging exactly the
-  limit is shared. Free text (notes, page and report text, merchant prose) is still
-  matched by value.
+  when the amount equals a bound. A merchant charge in the deal's currency, or
+  naming none, counts as an amount paid, so a receipt charging exactly the
+  limit is shared. Free text (notes, page and report text, merchant prose) is
+  still matched by value.
 - **Fixed:** the share gate reads a page's markup outside every `<script>`
   and `<style>`, its bundle and its page data, never script or style code.
-  A currency string in the vendored verifier no longer refuses a share. A
-  copy is read as a page only when it starts with an HTML doctype, and a
-  page whose bundle or data it cannot place is read whole.
+  A currency string in the vendored verifier no longer refuses a share. It
+  fails closed: a copy that does not start with an HTML doctype, or a page
+  with no bundle script, is read whole, less the two vendored scripts where
+  they match byte for byte; a data script whose value does not decode is
+  read whole.
 
 ### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
 
@@ -172,10 +174,10 @@
   profile or store: `--check RESULT --copy FILE --copy FILE --party-key
   SIGNER:CHECKPOINT --party-key SIGNER:CHECKPOINT`.
 - **Changed (disclose):** `disclose --deal ID --share counterparty --to WHO`,
-  and `--share adjudicator --to WHO`, carry the openings of the party's own final
-  close when it commits money terms, and the output says whether the file
-  carries them and, if not, why. Respond copies, report pages, the user's own
-  bundle and History carry none.
+  and `--share adjudicator --to WHO`, carry the openings of the party's own
+  final close when it commits money terms, and the output says whether the
+  file carries them and, if not, why. Respond copies, report pages, the user's
+  own bundle and History carry none.
 - **Changed:** `result build` refuses a claim under `ec:deal-reconcile@1`,
   and `result open` lists such claims as not recomputed.
 - **Changed (privacy):** a Result names the counterparty's long-lived key.
@@ -201,15 +203,16 @@
   and witnessed.
 - **Added (deal):** a deal opened from now on is a book on the shelf. Each
   step is a record the deal profile seals, carrying `evidence_record_header`
-  (`record_type` `deal_step`; `committed_at` the step's own time). Its
-  reports are sealed off its log (see capsule-cli#294 above). A step's local event, and a received
-  final close's amount and currency, are salted field commitments whose
-  openings stay in the artifact store. A new sale and each new thread are
-  books too. A deal opened before keeps its log and reads as before.
+  (`record_type` `deal_step`; `committed_at` the step's own time). Its reports
+  are sealed off its log (see capsule-cli#294 above). A step's local event,
+  and a received final close's amount and currency, are salted field
+  commitments whose openings stay in the artifact store. A new sale and each
+  new thread are books too. A deal opened before keeps its log and reads as
+  before.
 - **Changed:** only `capsulectl deal` writes a deal profile. Core `publish`,
-  `cll append`, `cll checkpoint create|publish`, `store init` and generic `disclose`
-  are refused on a deal profile, and on any store moved onto a shelf; reads
-  are unchanged.
+  `cll append`, `cll checkpoint create|publish`, `store init` and generic
+  `disclose` are refused on a deal profile, and on any store moved onto a
+  shelf; reads are unchanged.
 - **Changed:** every deal command refuses a deal profile without its
   checkpoint key, naming `profile update --checkpoint-signing-key-file` and
   `--checkpoint-trusted-key`. `deal tick` retries every pending witness
@@ -219,15 +222,15 @@
   artifact with that name on every profile.
 - **Changed (build):** the deal plugin pins evidencebook v0.6.0.
 - **Compatibility:** the first deal command that writes moves a store a
-  released build wrote onto its shelf, once. Prepared steps are recovered,
-  and the cadence continues from the released build's ticks and due time. A
+  released build wrote onto its shelf, once. Prepared steps are recovered, and
+  the cadence continues from the released build's ticks and due time. A
   read-only command (`deal list`, `deal checkpoint status`) never moves a
   store, and on one not yet moved it says to run a deal command first. A
-  released build can still run on a moved store, and the next command takes
-  in what it wrote, but its ticks show how many book deals the store holds:
-  do not run an older build on a store after it moves. A store whose
-  mutation counter row is missing is refused, with "restore from a backup". A request with an artifact named `opening.*`
-  must rename it. Verify a new deal's
+  released build can still run on a moved store, and the next command takes in
+  what it wrote, but its ticks show how many book deals the store holds: do
+  not run an older build on a store after it moves. A store whose mutation
+  counter row is missing is refused, with "restore from a backup". A request
+  with an artifact named `opening.*` must rename it. Verify a new deal's
   copies with this version or later (see capsule-cli#294 above).
 
 ### The core builds without evidencebook; the book and the deals are plugins (capsule-cli#236)
@@ -309,11 +312,12 @@
 - **Added:** `--profile` given before a plugin's name also reaches the
   plugin as `CAPSULECTL_PROFILE`, which a core command the plugin runs back
   uses when it names no `--profile` of its own.
-- **Fixed (capsule-cli#234):** a plugin gets `CAPSULECTL_BIN`, the path of
-  the capsulectl that ran it (symlinks resolved), unless the caller's
-  environment already sets it. A plugin that calls the core back no longer
-  fails with `capsulectl-unavailable` when capsulectl was run by its full
-  path and its folder is not on PATH. docs/PLUGINS.md documents it.
+- **Fixed (capsule-cli#234):** a plugin gets `CAPSULECTL_BIN`, the path of the
+  capsulectl that ran it (symlinks resolved where they can be), unless the
+  caller's environment already sets it to a value. A plugin that calls the
+  core back no longer fails with `capsulectl-unavailable` when capsulectl was
+  run by its full path and its folder is not on PATH. docs/PLUGINS.md
+  documents it.
 
 ### The deal profile checker's record types come from its schema
 
