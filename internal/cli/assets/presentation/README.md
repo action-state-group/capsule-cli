@@ -9,12 +9,12 @@ aac Go module does not carry the repository's `schemas/` directory.
 
 | | |
 |---|---|
-| source | agent-action-capsule main @ `81e804acee77dcba9754c8d846da4806d477db4e`, the commit `go.mod` pins (presentation contract revision 1, agent-action-capsule#215) |
+| source | agent-action-capsule main @ `81e804acee77dcba9754c8d846da4806d477db4e`, unchanged at `go/v0.11.0`, the tag `go.mod` pins (presentation contract revision 1, agent-action-capsule#215) |
 | sha256 | `0dd26b529332eaefeffde39fd474da1707b46d686cb4199b771b45c37b18a6be` |
 
 The digest is pinned again in `plugin_presentations_test.go`
 (`TestThePresentationSchemaIsPinned`). Refresh the file and both digests
-together, from the commit `go.mod` pins, as a change of its own: a new schema
+together, from the release `go.mod` pins, as a change of its own: a new schema
 changes which plugin manifests are accepted.
 
 ## Built-in page manifests
@@ -29,7 +29,7 @@ Their digests are pinned in `presentation_build_test.go`
 (`TestThePresentationRuntimeDeclarationIsTheVendoredOne`), which also checks
 that the vendored runtime carries each id and declares the runtime
 (`aac.presentation-api/v0`, version `0.1.0`) capsulectl checks modules
-against. Refresh them with the runtime, from the commit `go.mod` pins.
+against. Refresh them with the runtime, from the release `go.mod` pins.
 
 `internal/cli/testdata/presentation-manifests/` holds the same directory's
 example and negative manifests, as test vectors only.
