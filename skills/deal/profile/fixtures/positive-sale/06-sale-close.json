@@ -1,0 +1,27 @@
+{
+  "fixture": "06-sale-close.json",
+  "expect": "valid",
+  "story": "The sale ends: no buyer's thread opens on it after this. It names no buyer; a thread already open goes on and closes on its own.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "sale-3c9e1a7b5d2f8064",
+      "record_type": "sale_close",
+      "seq": 6,
+      "at": "2026-10-06T08:00:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "419667936c508d1e8e74c70493485633fa41119375faaa6902cb3290e5273bfb"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+      }
+    },
+    "body": {}
+  },
+  "expected_digest": "60a83108eff4c141bcf3ff5f09666f705133f9148e344550d177348c9d522e36"
+}

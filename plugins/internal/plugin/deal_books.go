@@ -766,9 +766,8 @@ func (s *dealSession) books() shelfDealIndex {
 // and so cannot read the shelf itself. It runs before a receipt is reported.
 // Only the live set is read: a witnessed tick holds live logs only, and a log
 // outside the live set has nothing for Ended to take it out of, so the work
-// is per live deal, never per deal the profile ever kept (note §2.5). A sale
-// never ends (ended), so it stays live and is never read here: only deals
-// and threads are.
+// is per live deal, never per deal the profile ever kept (note §2.5). A live
+// book sale is read too: it ends at its sale_close (capsule-cli#271).
 func (s *dealSession) settleEnded(ctx context.Context, c *evidencebook.Cadence) error {
 	x := s.books()
 	live, err := c.Live(ctx)
@@ -784,7 +783,7 @@ func (s *dealSession) settleEnded(ctx context.Context, c *evidencebook.Cadence) 
 		if !ok {
 			id, ok = dealOfResultsBook(logID)
 		}
-		if _, done := ended[id]; !ok || done || !cli.DealIDPattern.MatchString(id) {
+		if _, done := ended[id]; !ok || done || !(cli.DealIDPattern.MatchString(id) || cli.SaleIDPattern.MatchString(id)) {
 			continue
 		}
 		if legacy, err := x.isLegacy(ctx, id); err != nil || legacy {

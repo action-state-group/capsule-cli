@@ -47,7 +47,21 @@ func finalClose(events []sealedEvent) int {
 	return -1
 }
 
-func dealFinallyClosed(events []sealedEvent) bool { return finalClose(events) >= 0 }
+// dealFinallyClosed is whether a log has ended: a deal's final close, or a
+// sale's sale_close (capsule-cli#271).
+func dealFinallyClosed(events []sealedEvent) bool {
+	return finalClose(events) >= 0 || saleClosed(events)
+}
+
+// saleClosed is whether a sale's log holds its sale_close.
+func saleClosed(events []sealedEvent) bool {
+	for _, se := range events {
+		if se.Event.Kind == "sale_close" {
+			return true
+		}
+	}
+	return false
+}
 
 // expectCloseDays is how long after opening a deal is expected to close,
 // when the opening did not say: a parcel arrives, a ticket is issued, a

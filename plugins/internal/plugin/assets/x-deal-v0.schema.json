@@ -22,6 +22,8 @@
       "then": { "properties": { "body": { "$ref": "#/$defs/body_thread_opened" }, "x-deal-v0": { "required": ["refs"], "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" }, "refs": { "minItems": 1, "maxItems": 1, "items": { "properties": { "rel": { "const": "registration" } } } } }, "not": { "required": ["counterparty"] } } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "sale_cut" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_sale_cut" }, "x-deal-v0": { "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" } }, "not": { "anyOf": [ { "required": ["counterparty"] }, { "required": ["refs"] } ] } } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "sale_close" } } } } },
+      "then": { "properties": { "body": { "$ref": "#/$defs/body_sale_close" }, "x-deal-v0": { "properties": { "deal_id": { "pattern": "^sale-[0-9a-f]{16}$" } }, "not": { "anyOf": [ { "required": ["counterparty"] }, { "required": ["refs"] } ] } } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "intent" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_intent" } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "message" } } } } },
@@ -62,7 +64,7 @@
     },
     "short_text": { "type": "string", "minLength": 1, "maxLength": 200 },
     "record_type": {
-      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread", "thread_opened", "sale_cut"]
+      "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread", "thread_opened", "sale_cut", "sale_close"]
     },
     "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer"] },
     "outcome_value": { "description": "completed, mismatch or open; or not_selected: the other side was not chosen, and nothing was done on the deal (no action is on record). Every value but open is final at a close.", "enum": ["completed", "mismatch", "open", "not_selected"] },
@@ -579,6 +581,10 @@
           "type": "object", "additionalProperties": false, "required": ["registration", "head_commitment"],
           "properties": { "registration": { "$ref": "#/$defs/digest_ref" }, "head_commitment": { "$ref": "#/$defs/hex64" } } } }
       }
+    },
+    "body_sale_close": {
+      "description": "On a sale's own log: the end of the sale. It names no buyer and carries nothing: which buyer bought, if any, is in that thread's own close. After it, only sale_cut records follow, so every later bundle still cuts the threads' heads.",
+      "type": "object", "additionalProperties": false, "maxProperties": 0
     },
     "body_outcome": {
       "type": "object", "additionalProperties": false,

@@ -699,6 +699,10 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			heads[i] = map[string]interface{}{"registration": digestRef(h.Registration), "head_commitment": c}
 		}
 		body["thread_heads"] = heads
+	case "sale_close":
+		// The end of a sale, on its own log: nothing but its place in the
+		// chain. Which buyer bought, if any, is in that thread's close.
+		rtype = "sale_close"
 	case "open":
 		o := ev.Open
 		rtype = "baseline"
