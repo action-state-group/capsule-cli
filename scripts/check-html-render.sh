@@ -78,13 +78,14 @@ differs() { ! cmp -s "$1" "$2"; }
 # data-render-errors on <html>, which the DOM dump carries; it marks itself
 # installed (data-render-hook), so a hook that never ran fails the check. Headless Chrome
 # uses its own throwaway profile (a --user-data-dir keeps it from exiting on
-# macOS); the alarm bounds a run that hangs anyway, which then fails for want
-# of a DOM.
+# macOS) and keeps nothing in the OS keychain (--use-mock-keychain,
+# --password-store=basic), so a local macOS run never asks for it; the alarm
+# bounds a run that hangs anyway, which then fails for want of a DOM.
 hook='<script>(function(){document.documentElement.setAttribute("data-render-hook","installed");var seen=[];function note(kind,detail){seen.push(kind+": "+String(detail));document.documentElement.setAttribute("data-render-errors",JSON.stringify(seen));}var error=console.error;console.error=function(){note("console.error",Array.prototype.join.call(arguments," "));return error.apply(console,arguments);};window.addEventListener("error",function(e){note("uncaught",e.message);});window.addEventListener("unhandledrejection",function(e){note("unhandled rejection",e.reason?e.reason.message||e.reason:e.reason);});})();</script>'
 render() {
   awk -v hook="$hook" '!done && (i = index($0, "<head>")) {$0 = substr($0, 1, i + 5) hook substr($0, i + 6); done = 1} {print}' "$1" >"$1.probe.html"
   perl -e 'alarm 60; exec @ARGV' "$chrome" --headless --no-sandbox --disable-gpu --no-first-run \
-    --virtual-time-budget=10000 --dump-dom "file://$work/$1.probe.html" >"$1.dom" 2>/dev/null || true
+    --use-mock-keychain --password-store=basic --virtual-time-budget=10000 --dump-dom "file://$work/$1.probe.html" >"$1.dom" 2>/dev/null || true
 }
 no_render_errors() {
   if contains "$1" 'data-render-errors='; then
