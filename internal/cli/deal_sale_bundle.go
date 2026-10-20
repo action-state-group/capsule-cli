@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"sort"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/disclosure"
 	"github.com/action-state-group/agent-action-capsule/go/witness"
 )
@@ -382,4 +384,19 @@ func JCSDigest(v any) string {
 	}
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
+}
+
+// JCSOf is the RFC 8785 bytes of v, by way of its JSON form.
+func JCSOf(v any) ([]byte, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var generic any
+	if err := dec.Decode(&generic); err != nil {
+		return nil, err
+	}
+	return canonical.JCS(generic)
 }

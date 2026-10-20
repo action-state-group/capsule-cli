@@ -16,6 +16,8 @@
 #   2. Two tag rulesets on refs/tags/v*: only the maintain and admin roles may
 #      create a release tag, and nobody, admins included, may move, update or
 #      delete one.
+#   3. Immutable releases: once a release is published, its assets cannot be
+#      replaced or removed, so what an install pinned stays what it pinned.
 #
 # Re-running it is safe: environments are replaced, rulesets are updated in
 # place by name, and any deployment branch or tag policy other than the one
@@ -39,6 +41,8 @@ show() {
     gh api "repos/$REPO/environments/$env/deployment-branch-policies" \
       --jq '[.branch_policies[] | {name, type}]' || true
   done
+  echo "== immutable releases"
+  gh api "repos/$REPO/immutable-releases" || true
   echo "== tag rulesets"
   for id in $(gh api "repos/$REPO/rulesets?targets=tag" --jq '.[].id'); do
     gh api "repos/$REPO/rulesets/$id" \
@@ -144,8 +148,18 @@ ruleset "release tags: immutable" \
   '[{"type": "update"}, {"type": "deletion"}, {"type": "non_fast_forward"}]' '[]'
 
 if [ "$mode" = --apply ]; then
+  gh api -X PUT "repos/$REPO/immutable-releases" >/dev/null
+else
+  printf 'PUT repos/%s/immutable-releases\n' "$REPO"
+fi
+
+if [ "$mode" = --apply ]; then
   show
   check_environment release true 'v*'
   check_environment release-candidate false 'v*-*'
+  if [ "$(gh api "repos/$REPO/immutable-releases" --jq .enabled)" != true ]; then
+    echo "immutable releases are not enabled (see --show)" >&2
+    exit 1
+  fi
   echo "applied and checked"
 fi

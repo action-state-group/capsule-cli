@@ -71,11 +71,8 @@ checked: attestation verified; checksum matched" or "provenance not checked:
 gh not signed in; checksum matched".
 
 Provenance proves a binary was built by the release workflow, not that the
-project meant to release it. From `v0.1.0-rc5` on, each release is also
-registered in a public transparency log, and `capsulectl release watch`, run
-off the release infrastructure, compares that log with the maintainer-signed
-tags. What each check covers, and what none of them does (telling you this is
-the right repository), is in
+project meant to release it. What does limit that, and what none of these
+checks does (telling you this is the right repository), is in
 [docs/RELEASE-TRANSPARENCY.md](docs/RELEASE-TRANSPARENCY.md).
 
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
@@ -334,8 +331,6 @@ capsulectl settlement status --leg LEG.json [--leg ...] [--object OCTETS ...] [-
 capsulectl backfill run|status --profile NAME [...]
 capsulectl canary run --profile NAME [--skill FILE] [--expect-version TAG] [--expect-skill-sha256 HEX]
 capsulectl canary watch --log-id ID --expect-every DURATION [--witness URL] [--state FILE]
-capsulectl release register --dir DIR --tag TAG --commit SHA [--witness URL --witness-key HEX]
-capsulectl release watch [--repo OWNER/NAME] [--release-grace DURATION] [--trusted-root FILE]
 ```
 
 `capsulectl <command> --help` gives every flag; this list is the shape of each
@@ -376,13 +371,6 @@ it up as `capsulectl <name>`, `plugin ls` lists what was found and what was
 refused and why, and no core verb is ever replaced by one. The plugin
 contract (`cli-plugin/v1`: discovery roots, handshake, and what a plugin can
 never change) is all in [docs/PLUGINS.md](docs/PLUGINS.md).
-
-`release register` records a built release in the witness's transparency log;
-the release workflow runs it. `release watch` checks every `v*` tag's
-release against its statement, its attestation and that log, and is meant to
-run off the release infrastructure.
-What each covers, and what it does not, is in
-[docs/RELEASE-TRANSPARENCY.md](docs/RELEASE-TRANSPARENCY.md).
 
 `--html PAGE.html` on `bundle` and `disclose` also writes the bundle as one
 self-contained page: the bundle embedded and agent-action-capsule's own

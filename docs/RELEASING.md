@@ -32,7 +32,7 @@ when the install page moves to the new triple (step 7).
 
 | Part | Where it comes from | What is verified |
 | --- | --- | --- |
-| Binaries (linux/amd64, linux/arm64, darwin/arm64), `SHA256SUMS`, the attestation bundle, the release statement files | the release workflow, on the tag | `SHA256SUMS`, the build attestation, the version each binary reports |
+| Binaries (linux/amd64, linux/arm64, darwin/arm64), `SHA256SUMS`, the attestation bundle | the release workflow, on the tag | `SHA256SUMS`, the build attestation, the version each binary reports |
 | The deal skill | the tag's source archive (`archive/refs/tags/<tag>.tar.gz`), `skills/deal/SKILL.md` inside it | the archive is stable (downloaded twice, same SHA-256), and its `SKILL.md` equals the tagged commit's |
 | The companion plugin and skill, if you serve them | their own release, built separately | their own published SHA-256 files, served byte for byte |
 
@@ -82,8 +82,7 @@ never asks for credentials or a token with which it could.
 ## The cut
 
 1. **Tag** (reviewer decision). On a fresh `main`, fetch, fast-forward, and tag the merge commit
-   that carries the CHANGELOG cut (step C). Use an annotated tag: the release monitor measures its
-   grace window from the tagger time.
+   that carries the CHANGELOG cut (step C).
 
    ```sh
    git fetch origin && git checkout main && git pull --ff-only
@@ -98,8 +97,7 @@ never asks for credentials or a token with which it could.
    check that its tag and commit are the ones recorded in step 1, and approve it under "Review
    deployments". For a full release, the reviewer who did not push the tag approves.
 3. **Release CI is green.** It builds, checks the version each binary reports, attests the
-   binaries, registers the release statement in the transparency log, and publishes the
-   release (a pre-release for a tag with a hyphen).
+   binaries, and publishes the release (a pre-release for a tag with a hyphen).
 4. **Verify from the downloaded assets, not from the build.** In an empty directory, with a clone
    of this repository at `$CLONE` (for the tagged commit's `SKILL.md`):
 
@@ -154,18 +152,15 @@ in an older layout, confirm such a profile does not block the install.
 - **A change to `skills/deal/` merged after the tag.** The install page's skill value no longer
   matches the tag. Do not edit the published values: cut the next rc.
 - **Release CI failed after the tag was pushed, or a run was rejected.** Fix it on `main` and cut
-  the next version (the next rc, or the next patch for a full release). A pushed tag cannot be moved or deleted, and a tag with no release raises the
-  release monitor's alarm once its grace window passes (RELEASE-TRANSPARENCY.md, section 5).
-  Expect that alarm and confirm it is this tag.
-- **A release workflow was re-run.** Each run registers a new release statement under a new key,
-  and the monitor names it. Expect that alarm and confirm it is the re-run. A full release
-  re-run by anyone other than whoever pushed its tag stops before it builds: whoever re-runs a
-  run counts as starting it, so the tag's pusher could otherwise approve it. Cut the next
-  version instead.
+  the next version (the next rc, or the next patch for a full release). A pushed tag cannot be
+  moved or deleted.
+- **A release workflow was re-run.** A full release re-run by anyone other than whoever pushed
+  its tag stops before it builds: whoever re-runs a run counts as starting it, so the tag's pusher
+  could otherwise approve it. Cut the next version instead.
 
 ## Repository settings
 
-The approval rule and the tag protection are repository settings. A repository admin applies them
+The approval rule, the tag protection and immutable releases are repository settings. A repository admin applies them
 with [`scripts/release-settings.sh`](../scripts/release-settings.sh): run it with no argument to
 print what it would set, `--apply` to set it, and `--show` to print what GitHub holds. It sets:
 
@@ -178,8 +173,10 @@ print what it would set, `--apply` to set it, and `--show` to print what GitHub 
   - "release tags: maintainers create": only the maintain and admin roles may create a release tag;
   - "release tags: immutable": nobody may update, force-move or delete a release tag. It has no
     bypass actors, so admins are bound too.
+- **Immutable releases:** once a release is published, nobody can replace or remove its assets.
+  `capsulectl plugin install` relies on this: it trusts the `SHA256SUMS` of the release it fetches
+  from (RELEASE-TRANSPARENCY.md, section 3). It covers releases published after it is turned on. Enforce it
+  for the organisation too, so that turning it off takes an organisation owner, not a repository
+  admin.
 
 Every Action in `release.yml` is pinned by full commit SHA; keep it so when you bump one.
-
-The release monitor that checks every release from outside GitHub is described in
-[RELEASE-TRANSPARENCY.md](RELEASE-TRANSPARENCY.md), section 5.

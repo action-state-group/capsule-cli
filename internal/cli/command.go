@@ -333,7 +333,6 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	root.AddCommand(contractCommands())
 	root.AddCommand(judgeCommands())
 	root.AddCommand(calibrationCommands())
-	root.AddCommand(releaseCommands())
 	root.AddCommand(canaryCommands())
 	root.AddCommand(transitionalAliases()...)
 	root.AddCommand(settlementCommands())
