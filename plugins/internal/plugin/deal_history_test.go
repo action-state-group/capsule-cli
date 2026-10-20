@@ -50,6 +50,14 @@ type storeTemplate struct {
 func (s *storeTemplate) use(t *testing.T, build func(t *testing.T, dir string)) string {
 	t.Helper()
 	s.once.Do(func() {
+		// The template is built in the default mode whichever test builds
+		// it first: a caller under inLogReports would otherwise give every
+		// later test deals made as a build before capsule-cli#294 made them
+		// (steps after the last checkpoint, no report), which History
+		// rightly refuses until they are covered.
+		saved := dealReportsOffLog
+		dealReportsOffLog = true
+		defer func() { dealReportsOffLog = saved }()
 		var err error
 		s.dir, err = os.MkdirTemp("", "capsule-history-store-")
 		require.NoError(t, err)

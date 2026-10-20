@@ -360,6 +360,26 @@ func TestCountersignRefusesAnEditedStandaloneReport(t *testing.T) {
 	assert.Contains(t, err.Error(), "its report does not verify")
 }
 
+// A copy stripped of its standalone report, with edited text put inline in
+// its deal section, is refused by countersign too, not only by verify.
+func TestCountersignRefusesAStrippedCopy(t *testing.T) {
+	dealFixture(t)
+	id := retailDeal(t)
+	path := filepath.Join(t.TempDir(), "own.json")
+	dealRun(t, "report", "--deal", id, "--bundle", path)
+	b, err := cli.DecodeBundleJSON(mustRead(t, path))
+	require.NoError(t, err)
+	exts := b["extensions"].(map[string]any)
+	report := exts[cli.DealReportExtension].(map[string]any)["agent_input"].(map[string]any)["report"].(map[string]any)
+	report["scope"] = "edited"
+	exts[cli.DealProfile] = report
+	delete(exts, cli.DealReportExtension)
+	stripped := writeBundle(t, b)
+	out, err := invoke(t, "", "--profile", "deal", "deal", "report", "--deal", id, "--from-bundle", stripped)
+	require.ErrorIs(t, err, cli.ErrInput, out)
+	assert.Contains(t, err.Error(), "its report does not verify")
+}
+
 // An email made from an earlier bundle shows that report's own lifecycle,
 // as of its checkpoint, not one rebuilt from the deal's later steps: where
 // the deal stands now is the composed note's.
@@ -416,4 +436,64 @@ func TestRespondRefusesWhatAStandaloneReportCannotMeet(t *testing.T) {
 	party(t, buyer.config)
 	buyer.signer = rotateSigningKey(t)
 	assert.Equal(t, "refusal", askFor(t, seller, buyer, id, map[string]any{"min_freshness": map[string]any{"size": 1}}).outcome, "the last step is under the earlier key")
+}
+
+// A deal an earlier capsulectl made, with steps after its last checkpoint
+// and no report on its log, is off its log once upgraded: History refuses it
+// until a command covers it, and deal tick does, at its last step's time.
+func TestAnUpgradedDealIsCoveredBeforeHistoryShowsIt(t *testing.T) {
+	inLogReports(t)
+	dealFixture(t)
+	id := retailDeal(t)
+	before := dealRun(t, "checkpoint", "status", "--deal", id)
+	require.Less(t, before["checkpoint"].(map[string]any)["entries"].(float64), before["log_entries"].(float64), "an earlier build left steps after the checkpoint")
+	dealReportsOffLog = true
+	_, err := invoke(t, "", "--profile", "deal", "deal", "history", "--deal", id, "--to", "a friend", "--out", filepath.Join(t.TempDir(), "h.json"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "a step an earlier capsulectl made")
+	dealRun(t, "tick")
+	after := dealRun(t, "checkpoint", "status", "--deal", id)
+	assert.Equal(t, after["log_entries"], after["checkpoint"].(map[string]any)["entries"], "deal tick covers every step")
+	_, err = invoke(t, "", "--profile", "deal", "deal", "history", "--deal", id, "--to", "a friend", "--out", filepath.Join(t.TempDir(), "h.json"))
+	require.NoError(t, err)
+}
+
+// The producer checks the copy it wrote as a reader would, and writes none
+// that fails: a checkpoint at a time the report's whole-second as_of cannot
+// state (cut here directly on the book) gives a report check 7 refuses.
+func TestTheProducerWritesNoCopyItsReaderRefuses(t *testing.T) {
+	dealFixture(t)
+	id := retailDeal(t)
+	crashBeforeTheCut(t, id)
+	withSession(t, func(s *dealSession) {
+		book, err := s.shelf.Open(t.Context(), cli.DealLogID(id))
+		require.NoError(t, err)
+		_, err = book.CheckpointAt(t.Context(), time.Date(2026, 9, 27, 18, 0, 0, 500_000_000, time.UTC))
+		require.NoError(t, err)
+	})
+	path := filepath.Join(t.TempDir(), "own.json")
+	out, err := invoke(t, "", "--profile", "deal", "deal", "report", "--deal", id, "--bundle", path)
+	require.Error(t, err, out)
+	assert.Contains(t, err.Error(), "no copy is written")
+	assert.NoFileExists(t, path)
+	history := filepath.Join(t.TempDir(), "h.json")
+	out, err = invoke(t, "", "--profile", "deal", "deal", "history", "--deal", id, "--audience", "keep", "--out", history)
+	require.Error(t, err, out)
+	assert.Contains(t, err.Error(), "no copy is written")
+	assert.NoFileExists(t, history)
+}
+
+// Check 6: a copy whose report is standalone holds no deal_report record as
+// well; one that holds both is refused, whichever report a reader would
+// take.
+func TestAStandaloneCopyHoldsNoReportRecord(t *testing.T) {
+	dealFixture(t)
+	id := retailDeal(t)
+	path := filepath.Join(t.TempDir(), "own.json")
+	dealRun(t, "report", "--deal", id, "--bundle", path)
+	b, err := cli.DecodeBundleJSON(mustRead(t, path))
+	require.NoError(t, err)
+	require.NoError(t, cli.CheckDealStandaloneReport(b), "the copy as written")
+	b["records"] = append(b["records"].([]any), map[string]any{"capsule_id": strings.Repeat("e", 64), "action_id": cli.DealReportActionID})
+	assert.ErrorIs(t, cli.CheckDealStandaloneReport(b), cli.ErrBundleInvalid)
 }

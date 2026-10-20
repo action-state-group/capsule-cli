@@ -186,6 +186,12 @@ func (s *dealSession) dealStandaloneReport(dealID, audience string, ext, b map[s
 // its JSON form, as a reader decodes it: a copy that would not verify is
 // refused, never written.
 func checkProducedReport(b map[string]interface{}) error {
+	// Only the standalone report the producer sealed: a bundle with none
+	// (the terminal-assurance bundle carries its text inline, and is never
+	// a copy) has nothing here to check.
+	if exts, _ := b["extensions"].(map[string]interface{}); exts[cli.DealReportExtension] == nil {
+		return nil
+	}
 	raw, err := json.Marshal(b)
 	if err != nil {
 		return err

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 
 	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
@@ -444,15 +445,18 @@ func nonNilStrings(values []string) []string {
 //
 // CheckDealStandaloneReport runs a copy's standalone report checks
 // (capsule-cli#294) as verify --bundle does, for a producer or a reader that
-// admits a copy without the full verify: nil when the copy carries none or
-// it passes.
+// admits a copy without the full verify: a standalone report must pass, and
+// a copy that carries report text instead of naming the sealed report it
+// should (sealed_report_not_named, the report stripped and text put inline)
+// fails. An in-log report's disclosure is checked by the full verify only.
 func CheckDealStandaloneReport(value map[string]interface{}) error {
 	exts, _ := value["extensions"].(map[string]interface{})
-	if _, ok := exts[DealReportExtension]; !ok {
-		return nil
-	}
-	if entry := DealReportEntry(value, aacbundle.VerificationResult{}); entry["status"] != "pass" {
+	entry := DealReportEntry(value, aacbundle.VerificationResult{})
+	if _, ok := exts[DealReportExtension]; ok && entry["status"] != "pass" {
 		return errors.Join(ErrBundleInvalid, errors.New("the copy's standalone report does not verify (sealed_report_unverified)"))
+	}
+	if findings, _ := entry["findings"].([]string); slices.Contains(findings, "sealed_report_not_named") {
+		return errors.Join(ErrBundleInvalid, errors.New("the copy carries report text instead of naming its sealed report (sealed_report_not_named)"))
 	}
 	return nil
 }

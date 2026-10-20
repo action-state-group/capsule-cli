@@ -38,6 +38,9 @@
 - **Compatibility:** verify new copies with this version or later: an older
   capsulectl reports them as INVALID. Do not run an older build on a store
   with such deals: a copy it makes puts the deal's reports back in its log.
+  A deal an earlier build made with no report on its log, and steps after its
+  last checkpoint, is covered at its last step's time by its next command or
+  `deal tick`; until then `deal history` refuses it.
 
 ### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
 

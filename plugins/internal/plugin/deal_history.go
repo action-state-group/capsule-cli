@@ -285,7 +285,7 @@ func (s *dealSession) dealHistoryMember(ctx context.Context, dealID, audience, v
 	if offLog, err := s.reportsOffLog(ctx, dealID); err != nil {
 		return nil, 0, 0, err
 	} else if offLog && len(covered) < len(events) {
-		return nil, 0, 0, cli.InputError("deal " + dealID + " has a step its checkpoint does not cover yet (an interrupted write, which the deal's next command, such as `deal note`, finishes): pick it again after that")
+		return nil, 0, 0, cli.InputError("deal " + dealID + " has a step its checkpoint does not cover yet (an interrupted write, or a step an earlier capsulectl made), which the deal's next command, such as `deal tick`, covers: pick it again after that")
 	}
 	if len(covered) == 0 {
 		return nil, 0, 0, cli.InputError("deal " + dealID + " has no step under its latest checkpoint")
