@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -249,8 +250,18 @@ type headlessChrome struct {
 	reply  map[int]chan cdpMessage
 	events chan cdpMessage
 	done   chan struct{}
-	// requests holds, per page session, every URL the page asked for.
+	// requests holds, per page session, every URL the page, its iframes or
+	// its workers asked for, WebSockets included. Under "" are the requests
+	// of service and shared workers, which belong to no one page.
 	requests map[string][]string
+	// page maps each auto-attached child session (an iframe's or a
+	// worker's) to the page session it belongs to.
+	page map[string]string
+	// childErrors are failures to watch a child target, which would let
+	// its requests go unseen; watching counts the child targets still
+	// being set up.
+	childErrors []string
+	watching    int
 }
 
 type cdpMessage struct {
@@ -275,8 +286,11 @@ func startHeadlessChrome(t *testing.T, binary string) *headlessChrome {
 	// after the browser process is gone).
 	profile, err := os.MkdirTemp("", "capsulectl-chrome-")
 	require.NoError(t, err)
-	// No page may reach the network: every host name resolves to nothing,
-	// and each page's requests are checked as well (see open).
+	// No page may reach the network: every host, IP literals and loopback
+	// included, resolves to nothing, which also stops connections no request
+	// event reports, such as a preconnect
+	// (TestPresentationChromeSeesExternalRequests checks both). Each page's
+	// requests are checked as well (see open).
 	cmd := exec.Command(binary, "--headless=new", "--remote-debugging-pipe", "--no-sandbox",
 		"--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
 		"--host-resolver-rules=MAP * ~NOTFOUND", "--disable-background-networking",
@@ -288,9 +302,14 @@ func startHeadlessChrome(t *testing.T, binary string) *headlessChrome {
 	require.NoError(t, toChrome.Close())
 	require.NoError(t, fromChrome.Close())
 	c := &headlessChrome{cmd: cmd, in: commands, reply: map[int]chan cdpMessage{},
-		events: make(chan cdpMessage, 1024), done: make(chan struct{}), requests: map[string][]string{}}
+		events: make(chan cdpMessage, 1024), done: make(chan struct{}), requests: map[string][]string{},
+		page: map[string]string{}}
 	go c.read(replies)
 	t.Cleanup(func() { stopHeadlessChrome(t, cmd, commands, profile) })
+	// Service and shared workers are targets of the browser, not of a page.
+	require.NoError(t, c.call("", "Target.setAutoAttach", map[string]any{
+		"autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true,
+		"filter": []map[string]any{{"type": "service_worker"}, {"type": "shared_worker"}}}, nil))
 	return c
 }
 
@@ -337,16 +356,41 @@ func (c *headlessChrome) read(replies *os.File) {
 			continue
 		}
 		if m.ID == 0 {
-			if m.Method == "Network.requestWillBeSent" {
+			switch m.Method {
+			case "Network.requestWillBeSent":
 				var sent struct {
 					Request struct {
 						URL string `json:"url"`
 					} `json:"request"`
 				}
 				if json.Unmarshal(m.Params, &sent) == nil {
+					c.record(m.SessionID, sent.Request.URL)
+				}
+			case "Network.webSocketCreated":
+				var created struct {
+					URL string `json:"url"`
+				}
+				if json.Unmarshal(m.Params, &created) == nil {
+					c.record(m.SessionID, created.URL)
+				}
+			case "Target.attachedToTarget":
+				var attached struct {
+					SessionID  string `json:"sessionId"`
+					TargetInfo struct {
+						Type string `json:"type"`
+					} `json:"targetInfo"`
+				}
+				// At the browser level only service and shared workers are
+				// watched: the pages that load attaches to are reported
+				// there too.
+				if json.Unmarshal(m.Params, &attached) == nil && (m.SessionID != "" ||
+					attached.TargetInfo.Type == "service_worker" || attached.TargetInfo.Type == "shared_worker") {
 					c.mu.Lock()
-					c.requests[m.SessionID] = append(c.requests[m.SessionID], sent.Request.URL)
+					c.page[attached.SessionID] = c.pageOf(m.SessionID)
+					c.watching++
 					c.mu.Unlock()
+					// The reader cannot wait for replies itself.
+					go c.watchChild(attached.SessionID)
 				}
 			}
 			select {
@@ -361,6 +405,52 @@ func (c *headlessChrome) read(replies *os.File) {
 		c.mu.Unlock()
 		if ch != nil {
 			ch <- m
+		}
+	}
+}
+
+// pageOf is the page session a session belongs to: itself for a page, ""
+// for a browser-level worker. The caller holds mu.
+func (c *headlessChrome) pageOf(session string) string {
+	for {
+		parent, ok := c.page[session]
+		if !ok {
+			return session
+		}
+		session = parent
+	}
+}
+
+// record files url under the page session that asked for it.
+func (c *headlessChrome) record(session, url string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	page := c.pageOf(session)
+	c.requests[page] = append(c.requests[page], url)
+}
+
+// watchChild records an auto-attached iframe's or worker's requests, and
+// those of its own children, then lets it run: it was paused on start, so
+// none of its requests is missed. A failure is kept for the page's check,
+// unless the target is already gone (nothing of it is left to watch).
+func (c *headlessChrome) watchChild(session string) {
+	defer func() {
+		c.mu.Lock()
+		c.watching--
+		c.mu.Unlock()
+	}()
+	for _, step := range []struct {
+		method string
+		params map[string]any
+	}{
+		{"Network.enable", map[string]any{}},
+		{"Target.setAutoAttach", map[string]any{"autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true}},
+		{"Runtime.runIfWaitingForDebugger", map[string]any{}},
+	} {
+		if err := c.call(session, step.method, step.params, nil); err != nil && !targetGone(err) {
+			c.mu.Lock()
+			c.childErrors = append(c.childErrors, err.Error())
+			c.mu.Unlock()
 		}
 	}
 }
@@ -449,6 +539,8 @@ func (c *headlessChrome) open(t *testing.T, url string, view pageView) openedPag
 	var errs []string
 	p.eval(t, `window.__renderErrors || ["the error hook did not run"]`, &errs)
 	require.Empty(t, errs, "console errors, uncaught errors or unhandled rejections (%s)", view.name)
+	// Waits for every iframe and worker to be set up, so none is unwatched.
+	require.Empty(t, c.watchErrors(), "an iframe or worker could not be watched (%s)", view.name)
 	require.Empty(t, c.externalRequests(p.session), "the page asked for something outside itself (%s)", view.name)
 	return p
 }
@@ -469,6 +561,10 @@ func (c *headlessChrome) load(t *testing.T, url string, view pageView) openedPag
 	t.Cleanup(func() { _ = c.call("", "Target.closeTarget", map[string]any{"targetId": target.TargetID}, nil) })
 	require.NoError(t, c.call(s, "Page.enable", map[string]any{}, nil))
 	require.NoError(t, c.call(s, "Network.enable", map[string]any{}, nil))
+	// Iframes in another process and dedicated workers are targets of their
+	// own; their requests are the page's.
+	require.NoError(t, c.call(s, "Target.setAutoAttach", map[string]any{
+		"autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true}, nil))
 	require.NoError(t, c.call(s, "Page.addScriptToEvaluateOnNewDocument", map[string]any{"source": errorHook}, nil))
 	require.NoError(t, c.call(s, "Emulation.setDeviceMetricsOverride", map[string]any{
 		"width": view.width, "height": view.height, "deviceScaleFactor": 1, "mobile": view.mobile}, nil))
@@ -481,15 +577,41 @@ func (c *headlessChrome) load(t *testing.T, url string, view pageView) openedPag
 	return p
 }
 
-// externalRequests is every URL a page session asked for that is not the
-// page itself or data it carries.
+// targetGone reports whether a command failed because its target had
+// already closed or navigated away.
+func targetGone(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "ession with given id not found") ||
+		strings.Contains(msg, "Inspected target navigated or closed") ||
+		strings.Contains(msg, "Target closed")
+}
+
+// watchErrors is every failure to watch a child target, once every child
+// attached so far is set up (each command gives up within call's 60s).
+func (c *headlessChrome) watchErrors() []string {
+	for {
+		c.mu.Lock()
+		if c.watching == 0 {
+			defer c.mu.Unlock()
+			return slices.Clone(c.childErrors)
+		}
+		c.mu.Unlock()
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// externalRequests is every URL a page session (or a service or shared
+// worker) asked for that is not the page itself or data it carries.
 func (c *headlessChrome) externalRequests(session string) []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var out []string
-	for _, u := range c.requests[session] {
+	for _, u := range append(slices.Clone(c.requests[session]), c.requests[""]...) {
+		// chrome-extension: is the browser's own component extensions (such
+		// as text-to-speech) loading their files, not a page's request.
 		if !strings.HasPrefix(u, "file:") && !strings.HasPrefix(u, "data:") &&
-			!strings.HasPrefix(u, "blob:") && !strings.HasPrefix(u, "about:") {
+			!strings.HasPrefix(u, "blob:") && !strings.HasPrefix(u, "about:") &&
+			!strings.HasPrefix(u, "chrome-extension:") {
 			out = append(out, u)
 		}
 	}
