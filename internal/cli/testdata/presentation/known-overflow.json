@@ -6,9 +6,5 @@
     "runner": "ubuntu-24.04"
   },
   "tolerance_px": 4,
-  "views": {
-    "4-monthly-outcome": {
-      "390": 421
-    }
-  }
+  "views": {}
 }

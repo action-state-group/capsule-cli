@@ -9,12 +9,13 @@ aac Go module does not carry the repository's `schemas/` directory.
 
 | | |
 |---|---|
-| source | agent-action-capsule main @ `6f5b48f3fe0eb7eefd2114344f2a5c03e1ce4436`, the commit `go.mod` pins |
+| source | agent-action-capsule main @ `6f5b48f3fe0eb7eefd2114344f2a5c03e1ce4436`; `go.mod` has moved on and this copy has not been refreshed since (agent-action-capsule#215 changed the schema) |
 | sha256 | `077a69fd0dc670bdff6f9fe9793540ffb241873fb5687000cc519241e69ef5a1` |
 
 The digest is pinned again in `plugin_presentations_test.go`
 (`TestThePresentationSchemaIsPinned`). Refresh the file and both digests
-together, from the commit `go.mod` pins.
+together, from the commit `go.mod` pins, as a change of its own: a new schema
+changes which plugin manifests are accepted.
 
 ## Built-in page manifests
 
