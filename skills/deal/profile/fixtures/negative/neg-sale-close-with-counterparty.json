@@ -1,0 +1,42 @@
+{
+  "fixture": "neg-sale-close-with-counterparty",
+  "expect": "invalid",
+  "description": "A sale_close that names a buyer.",
+  "expected_stage": "schema",
+  "expected_error_contains": "x-deal-v0",
+  "chain_dir": "positive-sale",
+  "chain_prefix": [
+    "01-sale.json",
+    "02-task-authority.json",
+    "03-thread.json",
+    "04-thread-opened.json",
+    "05-sale-cut.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "sale-3c9e1a7b5d2f8064",
+      "record_type": "sale_close",
+      "seq": 6,
+      "at": "2026-10-06T08:00:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "419667936c508d1e8e74c70493485633fa41119375faaa6902cb3290e5273bfb"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+      },
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "domain": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      }
+    },
+    "body": {}
+  }
+}

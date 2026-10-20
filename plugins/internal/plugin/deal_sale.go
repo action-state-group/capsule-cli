@@ -16,7 +16,7 @@ import (
 
 func dealSaleCommands() *cobra.Command {
 	sale := &cobra.Command{Use: "sale", Short: "A sale to one of several buyers: one item, one task authority, a thread per buyer"}
-	sale.AddCommand(dealSaleNewCommand(), dealSaleExportCommand(), dealSaleBundleCommand())
+	sale.AddCommand(dealSaleNewCommand(), dealSaleExportCommand(), dealSaleBundleCommand(), dealSaleCloseCommand())
 	return sale
 }
 
@@ -87,6 +87,82 @@ func dealSaleNewCommand() *cobra.Command {
 	}}
 	cmd.Flags().String("input", "", "Sale JSON: type, intent (the seller's request and limits), terms (item, asking price, currency), recourse")
 	return cmd
+}
+
+func dealSaleCloseCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "close", Short: "End a sale: no buyer's thread opens on it after this; a thread already open goes on", Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+		saleID, _ := c.Flags().GetString("sale")
+		if !cli.SaleIDPattern.MatchString(saleID) {
+			return cli.InputError("--sale (a sale id as printed by `deal sale new`) is required")
+		}
+		return runDeal(c, false, func(ctx context.Context, s *dealSession, _ string, _ []sealedEvent) error {
+			se, cp, err := s.closeSale(ctx, saleID)
+			if err != nil {
+				return err
+			}
+			return cli.Output(c, map[string]any{"sale_id": saleID, "capsule_id": se.CapsuleID, "checkpoint": cp,
+				"next": "deal sale bundle --sale " + saleID + " still writes the sale's copy; its threads close on their own"})
+		})
+	}}
+	cmd.Flags().String("sale", "", "Sale ID from `deal sale new`")
+	return cmd
+}
+
+// closeSale seals a sale's sale_close and cuts its checkpoint
+// (capsule-cli#271), so the cadence takes the sale's log out of its live
+// set once a witnessed tick covers it. Every opened thread's opening is
+// sealed first (a crash may have come between a thread's task authority
+// and it), so a sale_cut is the only record that ever follows the close.
+// It leaves the session on the sale's log.
+func (s *dealSession) closeSale(ctx context.Context, saleID string) (sealedEvent, interface{}, error) {
+	if _, _, err := s.saleOf(ctx, saleID); err != nil {
+		return sealedEvent{}, nil, err
+	}
+	if err := s.useDeal(ctx, saleID, false); err != nil {
+		return sealedEvent{}, nil, err
+	}
+	events, err := s.load(ctx, saleID)
+	if err != nil {
+		return sealedEvent{}, nil, err
+	}
+	if saleClosed(events) {
+		return sealedEvent{}, nil, cli.InputError("the sale " + saleID + " is already closed")
+	}
+	type registration struct{ digest, thread string }
+	var registrations []registration
+	for _, se := range events {
+		if th := se.Event.Thread; th != nil {
+			registrations = append(registrations, registration{se.Digest, th.ThreadID})
+		}
+	}
+	for _, r := range registrations {
+		_, opened, err := s.threadSteps(ctx, r.thread)
+		if err != nil {
+			return sealedEvent{}, nil, err
+		}
+		if !opened {
+			continue
+		}
+		authority, err := s.threadAuthority(ctx, r.thread)
+		if err != nil {
+			return sealedEvent{}, nil, err
+		}
+		if err := s.sealThreadOpened(ctx, saleID, r.digest, authority); err != nil {
+			return sealedEvent{}, nil, err
+		}
+	}
+	if events, err = s.load(ctx, saleID); err != nil {
+		return sealedEvent{}, nil, err
+	}
+	se, err := s.seal(ctx, saleID, events, dealEvent{Kind: "sale_close"})
+	if err != nil {
+		return sealedEvent{}, nil, err
+	}
+	cp, err := s.milestone(ctx)
+	if err != nil {
+		return sealedEvent{}, nil, err
+	}
+	return se, cp, nil
 }
 
 func dealSaleExportCommand() *cobra.Command {
@@ -233,7 +309,8 @@ const dealThreadRegistrationVersion = "1"
 
 // dealRegistersThreads is whether `deal open --sale` registers the thread
 // on the sale's log; tests turn it off to seal a thread as an earlier
-// release did.
+// release did. Off, registerThread is skipped, and with it the refusal to
+// open a thread on a closed sale.
 var dealRegistersThreads = true
 
 // dealSealsSaleEvidence is whether a sale's log records each thread's
@@ -264,6 +341,12 @@ func (s *dealSession) registerThread(ctx context.Context, saleID, threadID strin
 	events, err := s.load(ctx, saleID)
 	if err != nil {
 		return "", "", err
+	}
+	// Here, under the store's lock and before a registration is reused,
+	// not in saleOf, which every step of an open thread reads: a thread
+	// already open goes on after its sale closes.
+	if saleClosed(events) {
+		return "", "", cli.InputError("the sale " + saleID + " is closed: no buyer's thread opens on it")
 	}
 	for _, se := range events {
 		th := se.Event.Thread

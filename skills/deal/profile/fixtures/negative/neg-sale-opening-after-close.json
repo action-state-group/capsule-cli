@@ -1,0 +1,47 @@
+{
+  "fixture": "neg-sale-opening-after-close",
+  "expect": "invalid",
+  "description": "A thread's opening sealed after the sale closed: the close seals every missing opening first.",
+  "expected_stage": "chain",
+  "expected_error_contains": "only cuts",
+  "chain_dir": "positive-sale",
+  "chain_prefix": [
+    "01-sale.json",
+    "02-task-authority.json",
+    "03-thread.json",
+    "04-thread-opened.json",
+    "05-sale-cut.json",
+    "06-sale-close.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "sale-3c9e1a7b5d2f8064",
+      "record_type": "thread_opened",
+      "seq": 7,
+      "at": "2026-10-06T08:00:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "60a83108eff4c141bcf3ff5f09666f705133f9148e344550d177348c9d522e36"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+      },
+      "refs": [
+        {
+          "rel": "registration",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "3e300e584e357fd329f6ca9cf0e6751ab6e672805d291ae9b9cd99ebb1bab593"
+        }
+      ]
+    },
+    "body": {
+      "task_authority_commitment": "ca6a6eea99c0d6c05bab62f9e304f7138394b7d4f1ff02359d97610d479f4056"
+    }
+  }
+}

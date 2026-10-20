@@ -47,7 +47,21 @@ func finalClose(events []sealedEvent) int {
 	return -1
 }
 
-func dealFinallyClosed(events []sealedEvent) bool { return finalClose(events) >= 0 }
+// dealFinallyClosed is whether a log has ended: a deal's final close, or a
+// sale's sale_close (capsule-cli#271).
+func dealFinallyClosed(events []sealedEvent) bool {
+	return finalClose(events) >= 0 || saleClosed(events)
+}
+
+// saleClosed is whether a sale's log holds its sale_close.
+func saleClosed(events []sealedEvent) bool {
+	for _, se := range events {
+		if se.Event.Kind == "sale_close" {
+			return true
+		}
+	}
+	return false
+}
 
 // expectCloseDays is how long after opening a deal is expected to close,
 // when the opening did not say: a parcel arrives, a ticket is issued, a
@@ -180,6 +194,12 @@ func buildDealLifecycle(events []sealedEvent, now time.Time) dealLifecycle {
 	i := finalClose(events)
 	if i < 0 {
 		l.Open = openDealListing(events, now)
+		if l.Open == nil {
+			// A closed sale has ended with no deal close; nothing reads a
+			// sale's lifecycle today, so this only keeps it from failing.
+			l.State = "closed"
+			return l
+		}
 		l.State, l.Text = "open", l.Open.Text
 		// An authorized cancel ends the deal's business before any close is
 		// sealed: the deal is cancelled, not open.

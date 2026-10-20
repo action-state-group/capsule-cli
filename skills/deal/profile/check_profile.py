@@ -51,7 +51,7 @@ FIX = HERE / "fixtures"
 RECORD_TYPES = json.loads(SCHEMA_PATH.read_text())["$defs"]["record_type"]["enum"]
 # Record types the positive fixtures do not carry yet; capsulectl's tests run this
 # checker on deals that do. Any other type the schema adds must get a fixture.
-UNFIXTURED_TYPES = {"counterparty_profile", "thread", "thread_opened", "sale_cut"}
+UNFIXTURED_TYPES = {"counterparty_profile"}
 # The point of no return whose check covers a disclosed field of each class.
 DISCLOSURE_ACTION = {c: "share_contact" for c in ("name", "phone", "email", "home_address", "address",
                                                   "pickup_location", "other_contact")}
@@ -539,7 +539,8 @@ def _ref(d):
 
 def check_sale_chain(records):
     """A sale's own log (section 6, rule 10): its root, its one task authority, then
-    one thread record per registered thread, nothing else. Raises StageError('chain')."""
+    its thread registrations, their openings and its cuts, and at most one sale_close,
+    after which only cuts follow. Raises StageError('chain')."""
     def fail(i, msg):
         raise StageError("chain", f"seq position {i + 1}: {msg}")
 
@@ -564,12 +565,15 @@ def check_sale_chain(records):
     if root["body"]["intent"].get("bounds_commitment") is not None and "bounds_commitment" not in ta["body"]:
         fail(1, "the sale's task authority carries the floor its root states")
     prev, at = record_digest(ta), ta["at"]
-    registrations, opened = set(), set()
+    registrations, opened, closed = set(), set(), False
     for i in range(2, len(records)):
         r = records[i]
         t = None if is_typed(r) else r["x-deal-v0"]["record_type"]
-        if t not in ("thread", "thread_opened", "sale_cut"):
-            fail(i, "after its task authority, a sale's log holds only thread registrations, their openings and cuts")
+        if t not in ("thread", "thread_opened", "sale_cut", "sale_close"):
+            fail(i, "after its task authority, a sale's log holds only thread registrations, their openings, cuts and its close")
+        if closed and t != "sale_cut":
+            fail(i, "after a sale's close, its log holds only cuts")
+        closed = closed or t == "sale_close"
         b = r["x-deal-v0"]
         if b["seq"] != i + 1 or b["deal_id"] != blk["deal_id"] or b.get("prev") != _ref(prev) \
                 or b.get("baseline_ref") != _ref(d0) or b["at"] < at:
@@ -1184,8 +1188,9 @@ def run_fixtures() -> int:
                 if d != f["expected_digest"]:
                     raise StageError("digest", f"recomputed {d} != expected {f['expected_digest']}")
                 chain.append(rec)
-                # A sale's log is checked whole: its root alone is not yet one.
-                if chain_dir != "positive-sale" or len(chain) == 2:
+                # A sale's log is checked as a chain from its task authority on,
+                # every prefix: its root alone is not yet one.
+                if chain_dir != "positive-sale" or len(chain) >= 2:
                     check_chain(chain)
                 print(f"ok   {chain_dir}/{p.name:<34} {record_type_of(rec):<20} jcs-sha256 {d}")
             except StageError as e:
@@ -1577,13 +1582,40 @@ def regen():
                       "body": {"verbatim_commitment": commitment(nonce("sale-ta-verbatim"), sale_verbatim),
                                "bounds_commitment": commitment(nonce("sale-ta-bounds"), sale_bounds),
                                "allowed": ["offer", "commit"]}}
+    def sale_step(seq, record_type, prev, body, refs=None):
+        blk = {"profile": "x-deal-v0", "canonicalization": "jcs", "deal_id": sale_id, "record_type": record_type,
+               "seq": seq, "at": "2026-10-06T08:00:00Z", "prev": _ref(record_digest(prev)),
+               "baseline_ref": _ref(record_digest(sale_root))}
+        if refs:
+            blk["refs"] = refs
+        return {"x-deal-v0": blk, "body": body}
+    sale_thread = sale_step(3, "thread", sale_authority,
+                            {"thread_ref_commitment": commitment(nonce("sale-thread-ref"), "deal-5a1e7c3b9d0f2486")})
+    registration = record_digest(sale_thread)
+    sale_opened = sale_step(4, "thread_opened", sale_thread,
+                            {"task_authority_commitment": commitment(nonce("sale-thread-ta"), nonce("sale-thread-ta-digest"))},
+                            refs=[{"rel": "registration", **_ref(registration)}])
+    sale_cut = sale_step(5, "sale_cut", sale_opened, {"thread_heads": [
+        {"registration": _ref(registration), "head_commitment": commitment(nonce("sale-head-1"), nonce("sale-head-1-digest"))}]})
+    sale_close = sale_step(6, "sale_close", sale_cut, {})
+    sale_late_cut = sale_step(7, "sale_cut", sale_close, {"thread_heads": [
+        {"registration": _ref(registration), "head_commitment": commitment(nonce("sale-head-2"), nonce("sale-head-2-digest"))}]})
     sale_stories = {"sale": "Where the user sells one item to one of several buyers: the sale's own log opens with what is "
                             "for sale and the seller's request, before any buyer, the item reference only as a commitment.",
-                    "task-authority/v0": "The sale's one task authority: every buyer's thread names it by digest."}
+                    "task-authority/v0": "The sale's one task authority: every buyer's thread names it by digest.",
+                    "thread": "A buyer's thread registered on the sale's log before it opens: its deal id as a commitment.",
+                    "thread_opened": "The registered thread opened: its registration, and its task authority as a commitment.",
+                    "sale_cut": "A sale bundle's cut: each opened thread's last record then, as a commitment. A cut follows "
+                                "the close too, since every bundle moves the threads' heads.",
+                    "sale_close": "The sale ends: no buyer's thread opens on it after this. It names no buyer; a thread "
+                                  "already open goes on and closes on its own."}
     (FIX / "positive-sale").mkdir(parents=True, exist_ok=True)
     for old in (FIX / "positive-sale").glob("*.json"):
         old.unlink()
-    for n, r in (("01-sale.json", sale_root), ("02-task-authority.json", sale_authority)):
+    sale_files = (("01-sale.json", sale_root), ("02-task-authority.json", sale_authority), ("03-thread.json", sale_thread),
+                  ("04-thread-opened.json", sale_opened), ("05-sale-cut.json", sale_cut), ("06-sale-close.json", sale_close),
+                  ("07-sale-cut.json", sale_late_cut))
+    for n, r in sale_files:
         d = record_digest(r)
         digests.append((f"positive-sale/{n}", d))
         dump(FIX / "positive-sale" / n, {"fixture": n, "expect": "valid", "story": sale_stories[record_type_of(r)],
@@ -1809,6 +1841,37 @@ def regen():
     r = copy.deepcopy(records[1]); r["x-deal-v0"]["counterparty"] = {"fp_alg": "hmac-sha256-deal-key", "ids": {"phone": "+15550102044"}}
     neg("neg-unfingerprinted-id", "personal_data", "raw phone", r, 1,
         "A counterparty id carried as the raw E.164 value instead of a fingerprint.")
+
+    # --- negatives on a sale's log (section 6, rule 10) -----------------------------
+    def negs(name, stage, contains, record, prefix_upto, desc):
+        dump(FIX / "negative" / f"{name}.json", {
+            "fixture": name, "expect": "invalid", "description": desc, "expected_stage": stage,
+            "expected_error_contains": contains, "chain_dir": "positive-sale",
+            "chain_prefix": [n for n, _ in sale_files[:prefix_upto]], "record": record})
+
+    def after_close(record_type, body, refs=None):
+        return sale_step(7, record_type, sale_close, body, refs)
+
+    negs("neg-sale-closed-twice", "chain", "only cuts", after_close("sale_close", {}), 6,
+         "A second sale_close: after a sale's close, only cuts follow.")
+    negs("neg-sale-thread-after-close", "chain", "only cuts",
+         after_close("thread", {"thread_ref_commitment": commitment(nonce("sale-late-thread"), "deal-7b2d4f6a8c1e3509")}), 6,
+         "A thread registered after the sale closed.")
+    negs("neg-sale-opening-after-close", "chain", "only cuts",
+         after_close("thread_opened", {"task_authority_commitment": commitment(nonce("sale-late-ta"), nonce("sale-late-ta-digest"))},
+                     refs=[{"rel": "registration", **_ref(registration)}]), 6,
+         "A thread's opening sealed after the sale closed: the close seals every missing opening first.")
+    for name, edit, contains, desc in (
+            ("refs", lambda r: r["x-deal-v0"].update(refs=[{"rel": "about", **_ref(registration)}]), "x-deal-v0",
+             "A sale_close that names a record: it carries nothing."),
+            ("counterparty", lambda r: r["x-deal-v0"].update(
+                counterparty={"fp_alg": "hmac-sha256-deal-key", "ids": {"domain": "0" * 64}}), "x-deal-v0",
+             "A sale_close that names a buyer."),
+            ("body", lambda r: r["body"].update(winner=_ref(registration)), "winner",
+             "A sale_close with a body: which buyer bought is in that thread's own close.")):
+        r = copy.deepcopy(sale_close)
+        edit(r)
+        negs(f"neg-sale-close-with-{name}", "schema", contains, r, 5, desc)
 
     # --- negatives on the typed chain (section 9) ------------------------------------
     def negt(name, stage, contains, record, prefix_upto, desc, **extra_fields):

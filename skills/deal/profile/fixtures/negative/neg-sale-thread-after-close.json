@@ -1,0 +1,39 @@
+{
+  "fixture": "neg-sale-thread-after-close",
+  "expect": "invalid",
+  "description": "A thread registered after the sale closed.",
+  "expected_stage": "chain",
+  "expected_error_contains": "only cuts",
+  "chain_dir": "positive-sale",
+  "chain_prefix": [
+    "01-sale.json",
+    "02-task-authority.json",
+    "03-thread.json",
+    "04-thread-opened.json",
+    "05-sale-cut.json",
+    "06-sale-close.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "sale-3c9e1a7b5d2f8064",
+      "record_type": "thread",
+      "seq": 7,
+      "at": "2026-10-06T08:00:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "60a83108eff4c141bcf3ff5f09666f705133f9148e344550d177348c9d522e36"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+      }
+    },
+    "body": {
+      "thread_ref_commitment": "5dcf513dffc43c3e892ca26cde59cc5018d5a7d8814b3084d0920897443d3e10"
+    }
+  }
+}

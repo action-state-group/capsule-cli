@@ -1,0 +1,37 @@
+{
+  "fixture": "04-thread-opened.json",
+  "expect": "valid",
+  "story": "The registered thread opened: its registration, and its task authority as a commitment.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "sale-3c9e1a7b5d2f8064",
+      "record_type": "thread_opened",
+      "seq": 4,
+      "at": "2026-10-06T08:00:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "3e300e584e357fd329f6ca9cf0e6751ab6e672805d291ae9b9cd99ebb1bab593"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+      },
+      "refs": [
+        {
+          "rel": "registration",
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "3e300e584e357fd329f6ca9cf0e6751ab6e672805d291ae9b9cd99ebb1bab593"
+        }
+      ]
+    },
+    "body": {
+      "task_authority_commitment": "a2e04c8f833eed3419fb99fe0a2c5394680a6d1af860052dcd73a53c492991a7"
+    }
+  },
+  "expected_digest": "9c63755fa0701e344536779f748659e5f01a3f96eb6832d4cdfdebeeff61cf0b"
+}

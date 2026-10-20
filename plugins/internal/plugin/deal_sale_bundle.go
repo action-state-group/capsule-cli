@@ -159,6 +159,9 @@ func (s *dealSession) dealSaleBundle(ctx context.Context, saleID, verify string)
 	if predate {
 		summary["threads_predate_registration"] = true
 	}
+	if saleClosed(events) {
+		summary["closed"] = true
+	}
 	return b, summary, nil
 }
 

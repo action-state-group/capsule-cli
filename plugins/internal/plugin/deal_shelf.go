@@ -125,8 +125,8 @@ func (s *dealSession) cadenceOf(ctx context.Context) (*evidencebook.Cadence, cli
 
 // ended is the cadence's Ended predicate for the profile's logs: a deal has
 // ended once its final close is indexed (finalClose: a close whose outcome
-// is not open; a pending close leaves it open, note §2.4). A sale has no
-// close, so it never ends. The cadence calls it under the shelf's lock, so it
+// is not open; a pending close leaves it open, note §2.4), and a sale once
+// its sale_close is (capsule-cli#271). The cadence calls it under the shelf's lock, so it
 // never reads the shelf: a legacy deal is answered from the SQLite index, a
 // book deal from bookEnded, read before a receipt is reported (settleEnded).
 func (s *dealSession) ended(ctx context.Context, logID string) (bool, error) {
@@ -136,7 +136,7 @@ func (s *dealSession) ended(ctx context.Context, logID string) (bool, error) {
 		return s.bookEnded[dealID], nil
 	}
 	dealID, ok := strings.CutPrefix(logID, "deal/")
-	if !ok || !cli.DealIDPattern.MatchString(dealID) {
+	if !ok || !(cli.DealIDPattern.MatchString(dealID) || cli.SaleIDPattern.MatchString(dealID)) {
 		return false, nil
 	}
 	legacy := sqliteDealIndex{s.db}

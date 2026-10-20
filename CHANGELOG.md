@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### A sale can close, and then leaves the cadence (capsule-cli#271)
+
+- **Added:** `deal sale close --sale ID` ends a sale: it seals a
+  `sale_close` record on the sale's log (a new x-deal-v0 record type), after
+  first sealing any thread opening a crash left out. No buyer's thread opens
+  on the sale afterwards; a thread already open goes on and closes on its
+  own. A closed sale leaves the cadence's live set once a witnessed tick
+  holds its last checkpoint, so ticks stop re-checkpointing it; a later
+  `deal sale bundle` cut brings it back until the next one. `deal list` and
+  the sale bundle's summary show the sale closed.
+- **Compatibility:** existing sale bundles verify unchanged, and an older
+  `capsulectl verify --bundle` skips the new record. An older profile
+  checker refuses it. An older capsulectl cannot load a closed sale's log:
+  its `deal open --sale`, `deal sale bundle` and `deal sale export` on that
+  sale fail with the store's conflict error, and if this version crashed
+  after indexing a record on a closed sale but before appending it, an
+  older build refuses to open the whole store. Do not run an older build on
+  a store that holds a closed sale.
+
 ### Dispatch checks the per-user plugin root's parents (capsule-cli#270)
 
 - **Changed (security):** the trust walk now checks the per-user root's
