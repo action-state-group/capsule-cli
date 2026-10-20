@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -55,5 +54,10 @@ func TestTheShareGateReadsAnUnplacedPageWhole(t *testing.T) {
 	assert.NoError(t, dealShareGate([]byte(`<!doctype html><script>window.__BUNDLE__ = {"line":"ok"};</script>`+code), events, cli.DealAudienceCounterparty))
 	assert.Error(t, dealShareGate([]byte(`<!doctype html><script>window.data = {"line":"ok"};</script>`+code), events, cli.DealAudienceCounterparty), "no bundle script: read whole")
 	assert.Error(t, dealShareGate([]byte(`<!doctype html><script>window.__BUNDLE__ = {"line":"my limit is $8.00"</script>`), events, cli.DealAudienceCounterparty), "a bundle that does not decode is read whole")
-	assert.True(t, strings.Contains(string(dealGateText([]byte(`<p>side</p>`))), "side"), "a copy that is not a page is read whole")
+	assert.Error(t, dealShareGate([]byte(`<!doctype html><script>window.__BUNDLE__ = {"line":"ok"};</script><script>globalThis.capsulectlDealPage = Object.freeze({"note":"my limit is $8.00"</script>`), events, cli.DealAudienceCounterparty), "page data that does not decode is read whole")
+	// A bundle's JSON whose text holds script-like markup is not a page: its
+	// "script" is read like the rest of it.
+	json := []byte(`{"line":"<script>window.__BUNDLE__ = null;</script><script>my limit is $8.00</script>"}`)
+	assert.Error(t, dealShareGate(json, events, cli.DealAudienceCounterparty), "JSON is read whole")
+	assert.Error(t, dealShareGate(append([]byte(" \n"), json...), events, cli.DealAudienceCounterparty), "after whitespace too")
 }

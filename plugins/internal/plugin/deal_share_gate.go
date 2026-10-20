@@ -87,8 +87,13 @@ var gateDataPrefixes = []string{"window.__BUNDLE__ =", "globalThis.capsulectlDea
 // pinned copy, cannot trip a value check with its own strings ("$8.00").
 // A data script whose value does not decode is read whole. A page with no
 // bundle script, and any copy that is not a page, is read whole, less the
-// two vendored scripts where they are found byte for byte.
+// two vendored scripts where they are found byte for byte. A copy is a page
+// only when it starts as the emitter's shell does, with an HTML doctype: a
+// bundle's JSON whose text holds script-like markup is not one.
 func dealGateText(page []byte) []byte {
+	if !bytes.HasPrefix(bytes.ToLower(bytes.TrimSpace(page[:min(len(page), 64)])), []byte("<!doctype html")) {
+		return dealWithoutVendored(page)
+	}
 	var out []byte
 	last, bundle := 0, false
 	for _, m := range gateElement.FindAllSubmatchIndex(page, -1) {
@@ -121,10 +126,16 @@ func dealGateText(page []byte) []byte {
 		}
 	}
 	if !bundle {
-		data := bytes.Replace(page, cli.EvidenceGraphIIFE, nil, 1)
-		return bytes.Replace(data, []byte(cli.DealViewJS), nil, 1)
+		return dealWithoutVendored(page)
 	}
 	return append(out, page[last:]...)
+}
+
+// dealWithoutVendored is a copy read whole, less the two vendored scripts
+// where they are found byte for byte: fixed code, pinned by digest.
+func dealWithoutVendored(page []byte) []byte {
+	data := bytes.Replace(page, cli.EvidenceGraphIIFE, nil, 1)
+	return bytes.Replace(data, []byte(cli.DealViewJS), nil, 1)
 }
 
 // removeWholeToken replaces each occurrence of value in data that stands as a whole
