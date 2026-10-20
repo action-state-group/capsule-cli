@@ -418,7 +418,12 @@ JSON- and HTML-escaped. It also looks for any Luhn-valid card number and any
 code word (code, OTP, PIN, passcode) followed by a number. A short value is
 skipped only inside a digest or signature (a run of 64 or more hex or base64
 characters). In an order reference or a URL path it counts. A hit refuses the
-copy: nothing is written and nothing goes on record.
+copy: nothing is written and nothing goes on record. On a page, the gate reads
+what a reader can be shown: the markup outside its scripts and stylesheets,
+the bundle, and the page's own data. It never reads the code of the verifier,
+the deal view or a stylesheet, so a refreshed verifier whose strings hold an
+amount does not refuse the copy. A page whose bundle it cannot find is read
+whole.
 
 **A merchant's own email** (sealed with `deal note --kind evidence --email`)
 is private material too. Its order number, the names and addresses in its

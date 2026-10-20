@@ -206,5 +206,5 @@ func dealShareGate(data []byte, events []sealedEvent, audience string) error {
 	if err := dealPageGate(data, events, allowed...); err != nil {
 		return err
 	}
-	return dealCeilingGate(data, events, audience)
+	return dealCeilingGate(dealGateText(data), events, audience)
 }
