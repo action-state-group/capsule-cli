@@ -141,7 +141,7 @@ func (s *dealSession) ownDealHalf(ctx context.Context, dealID string) (*dealHalf
 	if half.book != hex.EncodeToString(s.key.Public().(ed25519.PublicKey)) {
 		return nil, nil, cli.Hint(cli.ErrConflict, "the deal's final close is not signed under this profile's signing key")
 	}
-	if half.header.RecordType != dealStepRecordType || half.header.BookID != cli.DealLogID(dealID) {
+	if !stepOfDeal(half.header, dealID) {
 		return nil, nil, cli.ErrConflict
 	}
 	openings := map[string]evidencebook.Opening{}
@@ -224,7 +224,7 @@ func admitPeerHalf(dealID string, peer dealPeerCopy, digest string, openings map
 		return dealHalf{}, cli.InputError("record " + half.recordID + " is not signed under the responder key pinned for the response")
 	}
 	// 2. A step of this deal's book.
-	if half.header.RecordType != dealStepRecordType || half.header.BookID != cli.DealLogID(dealID) {
+	if !stepOfDeal(half.header, dealID) {
 		return dealHalf{}, cli.InputError("record " + half.recordID + " is not a step of deal " + dealID)
 	}
 	// 3. Under the copy's verified checkpoint, at the position the copy's
@@ -248,7 +248,7 @@ func admitPeerHalf(dealID string, peer dealPeerCopy, digest string, openings map
 
 // lastStep is check 4, read from the Capsules and their inline headers,
 // which every copy carries whether or not a payload is withheld: the
-// candidate chains follows, and every later deal_step under the checkpoint
+// candidate chains follows, and every later step under the checkpoint
 // chains confirms to it. A finally closed deal takes later evidence only,
 // linked to the close (deal.go, `deal note`), so the final close is its
 // last step chained follows. Sealed reports carry no link and are passed
@@ -276,9 +276,12 @@ func lastStep(bundle map[string]interface{}, half dealHalf, leaves uint64) error
 			continue
 		}
 		held[header.Seq] = true
-		switch header.RecordType {
-		case dealReportRecordType:
-		case dealStepRecordType:
+		switch {
+		case header.RecordType == dealReportRecordType:
+		case isDealStep(header.RecordType):
+			if dealOf, _ := dealOfBook(half.header.BookID); !stepOfDeal(header, dealOf) {
+				return refuse
+			}
 			if relation, parent := chainOf(m); relation != "confirms" || parent != half.recordID {
 				return refuse
 			}

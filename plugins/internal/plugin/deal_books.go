@@ -29,6 +29,12 @@ import (
 const (
 	dealStepRecordType   = "deal_step"
 	dealReportRecordType = "deal_report"
+	// dealStepCompleted and dealStepFailed are the Personal-Agent History
+	// Profile's record kinds (capsule-cli#264). A later writer seals steps
+	// with them, mapped at seal time; every reader takes them as steps now,
+	// so a counterparty on this build admits that writer's halves.
+	dealStepCompleted = "step_completed"
+	dealStepFailed    = "step_failed"
 	// dealLocalField commits a step's local event (its raw values and the
 	// nonces of its x-deal-v0 commitments); its opening never leaves the
 	// device.
@@ -354,6 +360,34 @@ func (x shelfDealIndex) records(ctx context.Context, dealID string) ([]evidenceb
 	return records, nil
 }
 
+// isDealStep is whether a book record's header type is a step's: the
+// constant this build writes, or a History profile kind a later build
+// writes (capsule-cli#264).
+func isDealStep(recordType string) bool {
+	switch recordType {
+	case dealStepRecordType, dealStepCompleted, dealStepFailed:
+		return true
+	}
+	return false
+}
+
+// stepOfDeal is whether a step's header belongs to the deal: its book is the
+// deal's, and a correlation identifier it carries, if any, is the deal id
+// (capsule-cli#264: a later build sets correlation.exchange_id on steps).
+func stepOfDeal(h evidencebook.Header, dealID string) bool {
+	if !isDealStep(h.RecordType) || h.BookID != cli.DealLogID(dealID) {
+		return false
+	}
+	return h.Correlation == nil || h.Correlation.ExchangeID == "" || h.Correlation.ExchangeID == dealID
+}
+
+// dealStepHeader is the record type and correlation a step is sealed with.
+// This build seals the constant type and no correlation; tests replace it
+// to seal steps as the History profile's later writer will.
+var dealStepHeader = func(dealID string, ev dealEvent) (string, evidencebook.Correlation) {
+	return dealStepRecordType, evidencebook.Correlation{}
+}
+
 // bookSteps are one deal's steps on its book, or every book deal's when
 // dealID is empty, each read back from its deal_local opening.
 func (x shelfDealIndex) bookSteps(ctx context.Context, dealID string) ([]indexedStep, error) {
@@ -363,7 +397,7 @@ func (x shelfDealIndex) bookSteps(ctx context.Context, dealID string) ([]indexed
 	}
 	var out []indexedStep
 	for _, r := range records {
-		if r.Header.RecordType != dealStepRecordType {
+		if !isDealStep(r.Header.RecordType) {
 			continue
 		}
 		st, err := x.bookStep(ctx, r)
@@ -380,6 +414,10 @@ func (x shelfDealIndex) bookSteps(ctx context.Context, dealID string) ([]indexed
 // step it names checked against the record's book and position.
 func (x shelfDealIndex) bookStep(ctx context.Context, r evidencebook.ShelfRecord) (indexedStep, error) {
 	dealID, _ := dealOfBook(r.BookID)
+	if !stepOfDeal(r.Header, dealID) {
+		// A step correlated to another deal is no step of this one.
+		return indexedStep{}, fmt.Errorf("%w: step record %s of %s is correlated to another deal", cli.ErrConflict, r.RecordID, dealID)
+	}
 	if r.Retention == evidencebook.Withheld || r.Retention == evidencebook.Deleted {
 		// No deal verb sets a retention in #242 (note §2.8).
 		return indexedStep{}, fmt.Errorf("%w: step record %s of %s is %s", cli.ErrConflict, r.RecordID, dealID, r.Retention)
@@ -530,8 +568,13 @@ func (x shelfDealIndex) bookEntries(ctx context.Context, dealID string, steps bo
 	}
 	out := make([]cll.Entry, 0, len(records))
 	for _, r := range records {
-		if steps && r.Header.RecordType != dealStepRecordType {
+		if steps && !isDealStep(r.Header.RecordType) {
 			continue
+		}
+		// A backstop: every CLI path reads the deal's steps through
+		// bookStep first, which refuses such a step already.
+		if dealOf, _ := dealOfBook(r.BookID); steps && !stepOfDeal(r.Header, dealOf) {
+			return nil, fmt.Errorf("%w: step record %s of %s is correlated to another deal", cli.ErrConflict, r.RecordID, dealOf)
 		}
 		value, err := hex.DecodeString(r.RecordID)
 		if err != nil {
@@ -601,8 +644,9 @@ func (s *dealSession) sealBookStep(ctx context.Context, dealID string, events []
 	if parent := request.Capsule.Chain; parent != nil {
 		links = []evidencebook.Link{{Type: evidencebook.Cites, Target: parent.ParentCapsuleID}}
 	}
+	recordType, correlation := dealStepHeader(dealID, ev)
 	record, err := s.appendBook(ctx, at, request, evidencebook.Entry{
-		RecordType: dealStepRecordType, EpistemicType: evidencebook.ProducerClaim,
+		RecordType: recordType, EpistemicType: evidencebook.ProducerClaim, Correlation: correlation,
 		SubjectRef: request.Capsule.ActionID, Links: links,
 		Fields: map[string]string{dealLocalField: string(local), dealAmountField: amount, dealCurrencyField: currency},
 	})
