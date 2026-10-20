@@ -618,11 +618,11 @@ func TestCaptureEmailSealsTheSameKeysFromParallelLookups(t *testing.T) {
 func TestOurSealIsBoundedToTheSealTime(t *testing.T) {
 	for name, text := range map[string]string{"email": dealEmailMerchantNote, "deal view": cli.DealViewJS} {
 		assert.Contains(t, text, "held these exact bytes no later than the seal time", name)
-		assert.Contains(t, text, "checked by the sender", name)
+		assert.Contains(t, text, "checked by that DKIM signature", name)
 		assert.NotContains(t, text, "from that time on", name)
 		// DKIM's signer is the sending domain, which may be the merchant's
 		// mail provider, not the merchant.
-		assert.Contains(t, text, "what the sending domain signed", name)
+		assert.Contains(t, text, "what that domain signed", name)
 		assert.NotContains(t, text, "what the merchant sent", name)
 	}
 }

@@ -37,8 +37,9 @@ import (
 // being relayed by an agent nobody trusts. Two attestations, never one:
 //
 //   - our seal says what OUR side saw: these exact bytes, at this time;
-//   - the DKIM signature says what the MERCHANT sent. Only this one is
-//     independent of the agent and of this device.
+//   - the DKIM signature says what the SIGNING DOMAIN signed (the
+//     merchant's, or its mail provider's). Only this one is independent of
+//     the agent and of this device.
 //
 // DKIM keys rotate and are revoked, so a signature that verifies today may be
 // uncheckable next month. The key record is therefore captured from DNS when

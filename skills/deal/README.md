@@ -583,7 +583,7 @@ merges them:
 
 | | Who stands behind it | What it shows |
 |---|---|---|
-| **The merchant's signature** | The merchant's domain (DKIM) | The merchant sent this email, and it has not changed since. Independent of the agent and of this device. |
+| **The DKIM signature** | The signing domain: the merchant's, or its mail provider's | That domain signed this email, and it has not changed since. Independent of the agent and of this device. |
 | **Our seal** | This device's signing key | This device held these exact bytes at this time. Our own record. |
 
 Only a passing signature that is DMARC-aligned with the sender's domain (the

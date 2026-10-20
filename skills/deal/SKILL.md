@@ -701,9 +701,9 @@ words, and never as one combined badge:
 
 - `merchant_says`: "merchant-confirmed: …" when the merchant's own signature
   checks out, or "not confirmed: …" with the reason and the domain's DMARC
-  policy. This one is independent: it shows what the sending domain signed,
-  whatever the agent says. Repeat it as written. A message that is not confirmed is
-  still sealed; never drop it or soften the words.
+  policy. This one is independent: it shows what the signing domain signed,
+  whatever the agent says. Repeat it as written. A message that is not
+  confirmed is still sealed; never drop it or soften the words.
 - `we_say`: what our own seal shows (this device held these exact bytes no
   later than the seal time). It is our own record, not the merchant's.
 
