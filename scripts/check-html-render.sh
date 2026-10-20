@@ -20,14 +20,9 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 export XDG_CONFIG_HOME="$work/config"
-
-chrome="${CHROME:-}"
-if [[ -z "$chrome" ]]; then
-  for c in google-chrome google-chrome-stable chromium chromium-browser "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; do
-    if command -v "$c" >/dev/null 2>&1 || [[ -x "$c" ]]; then chrome="$c"; break; fi
-  done
-fi
-[[ -n "$chrome" ]] || { echo "check-html-render: no Chrome or Chromium found (set CHROME)" >&2; exit 2; }
+# shellcheck source=lib/page-checks.sh
+source "$root/scripts/lib/page-checks.sh"
+find_chrome || { echo "check-html-render: no Chrome or Chromium found (set CHROME)" >&2; exit 2; }
 
 mkdir -p "$work/bin"
 if [[ -n "${CAPSULECTL:-}" ]]; then
@@ -62,37 +57,6 @@ if ! (cd example && bash -e -o pipefail ../example.sh >../example.log 2>&1); the
 fi
 echo "ok   the README's example runs as written"
 cp example/bundle.json example/report.html .
-
-fail=0
-check() { # description, then a command that must succeed
-  local what="$1"; shift
-  if "$@"; then echo "ok   $what"; else echo "FAIL $what" >&2; fail=1; fi
-}
-contains() { grep -q -F -- "$2" "$1"; }
-lacks() { ! contains "$@"; }
-differs() { ! cmp -s "$1" "$2"; }
-
-# render PAGE: the DOM after the page's own scripts ran. A copy of the page
-# gets one script first in its head that records, by kind, every
-# console.error, uncaught error and unhandled rejection into
-# data-render-errors on <html>, which the DOM dump carries; it marks itself
-# installed (data-render-hook), so a hook that never ran fails the check. Headless Chrome
-# uses its own throwaway profile (a --user-data-dir keeps it from exiting on
-# macOS); the alarm bounds a run that hangs anyway, which then fails for want
-# of a DOM.
-hook='<script>(function(){document.documentElement.setAttribute("data-render-hook","installed");var seen=[];function note(kind,detail){seen.push(kind+": "+String(detail));document.documentElement.setAttribute("data-render-errors",JSON.stringify(seen));}var error=console.error;console.error=function(){note("console.error",Array.prototype.join.call(arguments," "));return error.apply(console,arguments);};window.addEventListener("error",function(e){note("uncaught",e.message);});window.addEventListener("unhandledrejection",function(e){note("unhandled rejection",e.reason?e.reason.message||e.reason:e.reason);});})();</script>'
-render() {
-  awk -v hook="$hook" '!done && (i = index($0, "<head>")) {$0 = substr($0, 1, i + 5) hook substr($0, i + 6); done = 1} {print}' "$1" >"$1.probe.html"
-  perl -e 'alarm 60; exec @ARGV' "$chrome" --headless --no-sandbox --disable-gpu --no-first-run \
-    --virtual-time-budget=10000 --dump-dom "file://$work/$1.probe.html" >"$1.dom" 2>/dev/null || true
-}
-no_render_errors() {
-  if contains "$1" 'data-render-errors='; then
-    grep -o 'data-render-errors="[^"]*"' "$1" | sed 's/^/     /' >&2
-    return 1
-  fi
-  contains "$1" 'data-render-hook="installed"'
-}
 
 render report.html
 check "the error hook ran in the page" contains report.html.dom 'data-render-hook="installed"'
@@ -164,29 +128,12 @@ check "legacy-jsonl-profile: no page is written" refused legacy-jsonl-profile "a
 variant zero-rows -e 's#references: \[cite\(\$permissions\)\]#references: [cite("0000000000000000000000000000000000000000000000000000000000000000")]#'
 check "zero-rows: no page is written for a report that would show 1 of 2 rows" refused zero-rows "would show 1 of 2 rows"
 
-# rehash_bundle_csp ORIGINAL EDITED: the page's CSP pins the SHA-256 of every
-# inline script, the bundle's included, so a page whose bundle text was edited
-# does not run it at all. Whoever edits the file can edit the policy too: this
-# puts the edited bundle script's hash where the original's was, so the checks
-# below test what the page itself says about an edited bundle.
-rehash_bundle_csp() {
-  perl -MDigest::SHA=sha256_base64 -e '
-    sub h { my $b = sha256_base64($_[0]); $b .= "=" while length($b) % 4; return "sha256-$b" }
-    local $/; open my $o, "<", $ARGV[0] or die; my $orig = <$o>; close $o;
-    open my $e, "<", $ARGV[1] or die; my $page = <$e>; close $e;
-    my ($old) = $orig =~ /<script>(window\.__BUNDLE__ = .*?;)<\/script>/s or die "no bundle script";
-    my ($new) = $page =~ /<script>(window\.__BUNDLE__ = .*?;)<\/script>/s or die "no bundle script";
-    my ($ho, $hn) = (h($old), h($new));
-    $page =~ s/\Q$ho\E/$hn/ or die "the bundle script is not pinned in the CSP";
-    open my $w, ">", $ARGV[1] or die; print $w $page; close $w;' "$1" "$2"
-}
-
 # incomplete-bundle: the README page with its records' producer signatures
 # removed is INCOMPLETE by `verify --bundle`; its page must never say the
 # bundle passed. capsulectl writes no such page; this checks the vendored
 # viewer itself, once it states a verdict (data-verdict).
 jq -c '.records |= map(del(.signature, .key_id))' bundle.json >incomplete.json
-perl -0pe 'BEGIN{open my $f,"<","incomplete.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' report.html >incomplete.html
+replace_bundle report.html incomplete.json >incomplete.html
 rehash_bundle_csp report.html incomplete.html
 check "incomplete-bundle: the page carries the changed bundle" differs report.html incomplete.html
 capsulectl verify --bundle incomplete.html >incomplete-verify.json 2>/dev/null && verdict=0 || verdict=$?
@@ -227,7 +174,7 @@ check "deal-receipt: the deal view inserted its own stylesheet" contains receipt
 check "deal-receipt: the page says its text is sealed and checked" contains receipt.html.dom 'data-sealed="x-deal-v0"'
 capsulectl verify --bundle receipt.html >receipt-verify.json && verdict=0 || verdict=$?
 check "deal-receipt: verify --bundle: VALID, exit 0" test "$verdict" -eq 0
-perl -0ne 'print $1 if /window\.__BUNDLE__ = (.*?);<\/script>/s' receipt.html >receipt.json
+page_bundle receipt.html >receipt.json
 did_line=$(jq -r '.extensions["x-deal-report/v0"].agent_input.report.did_line' receipt.json)
 check "deal-receipt: the page renders its sealed summary line" contains receipt.html.dom "<p class=\"deal-note\">$did_line</p>"
 
@@ -235,13 +182,13 @@ check "deal-receipt: the page renders its sealed summary line" contains receipt.
 # records still verify, so the page's runtime runs the deal view, which
 # refuses: the report's signature no longer verifies.
 jq -c '.extensions["x-deal-report/v0"].agent_input.report.did_line = "A line nobody sealed."' receipt.json >receipt-edited.json
-perl -0pe 'BEGIN{open my $f,"<","receipt-edited.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-edited.html
+replace_bundle receipt.html receipt-edited.json >receipt-edited.html
 rehash_bundle_csp receipt.html receipt-edited.html
 check "deal-receipt-edited: the page carries the edited line" contains receipt-edited.html 'A line nobody sealed.'
 # The same edit without touching the policy: the edited bundle script is not
 # the one the CSP pins, so the browser does not run it and the page shows no
 # deal text at all.
-perl -0pe 'BEGIN{open my $f,"<","receipt-edited.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-unpinned.html
+replace_bundle receipt.html receipt-edited.json >receipt-unpinned.html
 render receipt-unpinned.html
 check "deal-receipt-unpinned: an edited bundle the CSP does not pin shows no deal text" lacks receipt-unpinned.html.dom '<p class="deal-note">A line nobody sealed.</p>'
 check "deal-receipt-unpinned: and no deal section" lacks receipt-unpinned.html.dom '<h1>Deal report</h1>'
@@ -258,7 +205,7 @@ check "deal-receipt-edited: verify --bundle: INVALID, exit 1" test "$verdict" -e
 # verify --bundle calls it INVALID: the copy names no sealed report.
 jq -c '.extensions["x-deal-report/v0"].agent_input.report as $text
   | .extensions["x-deal-v0"] = ($text | .did_line = "A line nobody sealed.") | del(.extensions["x-deal-report/v0"])' receipt.json >receipt-downgraded.json
-perl -0pe 'BEGIN{open my $f,"<","receipt-downgraded.json" or die; local $/; $j=<$f>; chomp $j; $j=~s/</\\u003c/g} s/(window\.__BUNDLE__ = ).*?(;<\/script>)/$1$j$2/s' receipt.html >receipt-downgraded.html
+replace_bundle receipt.html receipt-downgraded.json >receipt-downgraded.html
 rehash_bundle_csp receipt.html receipt-downgraded.html
 check "deal-receipt-downgraded: the page carries the inline line" contains receipt-downgraded.html 'A line nobody sealed.'
 render receipt-downgraded.html
