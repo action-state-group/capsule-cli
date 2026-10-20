@@ -295,10 +295,10 @@ func TestAnOlderHostIgnoresPresentations(t *testing.T) {
 	assert.Equal(t, olderInfo{Name: "view", PluginAPI: PluginAPI, Subcommands: []string{"decide"}}, older)
 }
 
-// The vendored manifest schema is agent-action-capsule's, unmodified, at the
-// commit go.mod pins (assets/presentation/README.md).
+// The vendored manifest schema is agent-action-capsule's, unmodified, as of
+// the release go.mod pins (assets/presentation/README.md).
 func TestThePresentationSchemaIsPinned(t *testing.T) {
-	assert.Equal(t, "0dd26b529332eaefeffde39fd474da1707b46d686cb4199b771b45c37b18a6be", hexSHA256(presentationManifestSchema), "refresh from agent-action-capsule at the pinned commit; never hand-edit")
+	assert.Equal(t, "0dd26b529332eaefeffde39fd474da1707b46d686cb4199b771b45c37b18a6be", hexSHA256(presentationManifestSchema), "refresh from agent-action-capsule at the pinned release; never hand-edit")
 }
 
 // inDotD moves a fixture's files under <launcher>.d/presentations/<module>/,

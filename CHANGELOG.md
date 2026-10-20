@@ -54,6 +54,15 @@ Details, for developers. Three changes make the upgrade one-way:
   sale's log, and if this version crashed at the wrong moment, an older build
   refuses to open the whole store.
 
+### Dependencies pinned at release tags
+
+- **Changed (build):** agent-action-capsule/go is pinned at `go/v0.11.0`
+  (from main 81e804a) and capsule-viewer/go at `go/v0.1.1` (from main
+  42ee2e5), in both modules. Each tag is a fast-forward of the commit pinned
+  before. agent-action-capsule adds its bundle producer and a cross-language
+  check command. capsule-viewer's only change is in its Python package. The
+  vendored presentation manifest schema is unchanged.
+
 ### A deal's shared copy is checked with capsulectl alone (capsule-cli#243)
 
 - **Added (tests, CI):** a `portability` job runs a deal on a shelf book with
