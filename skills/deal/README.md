@@ -659,7 +659,7 @@ limit, else the agreed price) and what the agent reported paying. It flags:
 The order number, tracking number, total, cancel-by date and items are read by
 merchant-agnostic heuristics and may be misread; the report labels them as
 read from the email. The DKIM signature covers the headers it names and the
-body, not this reading of them.
+body (or the part of it the signature names), not this reading of them.
 
 ## A held object
 

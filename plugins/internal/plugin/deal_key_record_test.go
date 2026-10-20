@@ -117,7 +117,7 @@ func TestAnEmailThatIsNotRFC822IsRefusedNotDeferred(t *testing.T) {
 
 // A record supplied with --key-record (a test, or a machine with no resolver)
 // seals the email marked supplied, which the report and the emailed receipt
-// both say: it was not read from the merchant's DNS by this tool, so it is
+// both say: it was not read from the signing domain's DNS by this tool, so it is
 // weaker evidence than a resolved one.
 func TestAMerchantEmailSealsWithASuppliedKeyRecord(t *testing.T) {
 	dealFixture(t)

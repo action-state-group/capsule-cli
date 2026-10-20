@@ -37,7 +37,8 @@ import (
 // its mail provider's), and that signature survives
 // being relayed by an agent nobody trusts. Two attestations, never one:
 //
-//   - our seal says what OUR side saw: these exact bytes, at this time;
+//   - our seal says what OUR side saw: these exact bytes, no later than
+//     this time;
 //   - the DKIM signature says what the SIGNING DOMAIN signed (the
 //     merchant's, or its mail provider's). Only this one is independent of
 //     the agent and of this device.
@@ -366,7 +367,7 @@ type dmarcPolicy struct {
 }
 
 // dmarcSupplied marks DMARC as not captured: a hand-supplied key comes with
-// no DMARC record from the merchant's DNS.
+// no DMARC record from the signing domain's DNS.
 var dmarcSupplied = &dmarcCapture{Source: "not_captured", Records: []dkimKeyRecord{}}
 
 // dmarcPolicyOf reads the published policy from the sealed DMARC records:
@@ -964,7 +965,7 @@ type dealMerchantRow struct {
 	CancelBy      string   `json:"cancel_by,omitempty"`
 	Items         []string `json:"items,omitempty"`
 	KeySource     string   `json:"key_source"`
-	// KeySize is the merchant key the verdict rests on ("RSA 2048-bit",
+	// KeySize is the signing domain's key the verdict rests on ("RSA 2048-bit",
 	// "Ed25519"); SigningDomain is the domain whose signature passed, and
 	// MerchantApex the sender's organizational domain. Domains says how the
 	// two compare, in words.

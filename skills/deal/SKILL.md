@@ -673,18 +673,18 @@ and it shows as an anomaly in the report. One approval covers one action.
 **4b. Seal the merchant's own email** as soon as it arrives (an order
 confirmation, a receipt, a booking or a cancellation). Save the message as a
 raw `.eml` file, headers intact, exactly as received. Never paste, summarize
-or forward it: a summary is your words again and loses the merchant's
+or forward it: a summary is your words again and loses the email's DKIM
 signature.
 
 ```sh
 capsulectl --profile deal deal note --deal ID --kind evidence --email confirmation.eml
 ```
 
-This seals the raw message on this device, reads the merchant's DKIM key
-from DNS **now**, seals that key with it, and checkpoints at once (unless the
-key cannot be read now: see below). Do it
-promptly: merchants rotate and revoke their keys, and a signature can only
-be checked later against a key that was sealed while it was still published.
+This seals the raw message on this device, reads the signing domain's DKIM
+key from DNS **now**, seals that key with it, and checkpoints at once (unless
+the key cannot be read now: see below). Do it promptly: DKIM keys are
+rotated and revoked, and a signature can only be checked later against a key
+that was sealed while it was still published.
 Prompt sealing is the whole protection.
 
 **If the signing domain's key cannot be read now.** When this device cannot
@@ -699,7 +699,7 @@ email is not checked: never describe it as confirmed or as sealed.
 The result has two separate statements. Report them separately, in their own
 words, and never as one combined badge:
 
-- `merchant_says`: "merchant-confirmed: …" when the email's DKIM signature
+- `merchant_says`: "merchant-confirmed: …" when a DKIM signature on the email
   checks out and its signing domain is the merchant's own (aligned with the
   sender's domain), or "not confirmed: …" with the reason and the domain's
   DMARC policy. This one is independent: it shows what the signing domain

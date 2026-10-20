@@ -288,8 +288,12 @@ func TestDealMerchantEmailSealVerifyAndMismatch(t *testing.T) {
 			"You approved (the amount checked against what you already allowed)", "$48.00",
 			"The merchant's email says (read from the email)", "$64.00", "2026-10-10",
 			"signed by shop.example, the merchant's own domain (apex shop.example)", "RSA 2048-bit, sealed when the email was sealed",
+			"Signing domain's key",
 		} {
 			assert.Contains(t, body, want)
+		}
+		for _, old := range []string{"Merchant's signature", "Merchant's key"} {
+			assert.NotContains(t, body, old, "the signature and key are the signing domain's (capsule-cli#306)")
 		}
 		assert.NotContains(t, strings.ToLower(body), "bilateral")
 	}
