@@ -413,6 +413,8 @@ func TestPresentationChromeSeesExternalRequests(t *testing.T) {
 	// A top-level navigation is not held back the way a file page's
 	// subresources on loopback may be (local network access).
 	c.load(t, ip+"/navigated", presentationViews[1])
+	// A connection accepted just before the read could be counted after it.
+	time.Sleep(200 * time.Millisecond)
 	assert.Zero(t, connections.Load(), "no connection reached an IP literal")
 	assert.Empty(t, c.watchErrors(), "every worker was watched")
 }
