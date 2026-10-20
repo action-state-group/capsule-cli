@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build-evidence-graph-iife.sh -- rebuild the vendored browser verifier that
 # `capsulectl deal report --html` embeds, from the agent-action-capsule commit
-# this module already pins in go.mod, and check it byte-for-byte.
+# evidenceGraphIIFESource records, and check it byte-for-byte.
 #
 #   scripts/build-evidence-graph-iife.sh           # rebuild and compare
 #   scripts/build-evidence-graph-iife.sh --write   # rebuild and replace
@@ -13,7 +13,11 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 asset="$root/internal/cli/assets/evidence-graph.iife.js"
-aac_commit=$(cd "$root" && go list -m -f '{{.Version}}' github.com/action-state-group/agent-action-capsule/go | sed 's/.*-//')
+# The agent-action-capsule commit the vendored IIFE was built from, as
+# evidenceGraphIIFESource records it. It is pinned apart from go.mod, so the
+# Go module can move to a release tag without the browser verifier moving.
+aac_commit=$(sed -n 's/.*evidenceGraphIIFESource *= *"agent-action-capsule [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' "$root/internal/cli/evidence_graph_assets.go")
+[[ -n "$aac_commit" ]] || { echo "build-evidence-graph-iife: no source commit in evidenceGraphIIFESource" >&2; exit 2; }
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 : >"$work/npmrc"

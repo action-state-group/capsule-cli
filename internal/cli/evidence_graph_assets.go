@@ -39,16 +39,18 @@ var (
 // keeps the two in step. The file and its digest are the same ones `deal
 // report` and `presentation build` embed (EvidenceGraphIIFE,
 // EvidenceGraphIIFESHA256, below);
-// scripts/build-evidence-graph-iife.sh rebuilds it from the aac commit go.mod
-// pins, and scripts/iife-sync.sh from any aac checkout. The report is only as
+// scripts/build-evidence-graph-iife.sh rebuilds it from the aac commit
+// evidenceGraphIIFESource records, and scripts/iife-sync.sh from any aac
+// checkout. The report is only as
 // current as that file.
 
 const (
 	// evidenceGraphIIFEDigest is the SHA-256 of assets/evidence-graph.iife.js.
 	EvidenceGraphIIFEDigest = "25679a22b837562fa5179f2540307514a87488b4c6c088b60206efe5b48626da"
 	// evidenceGraphIIFESource names the aac commit and build the vendored
-	// IIFE came from: the merged aac commit go.mod pins, using released
-	// CLL 0.2.1 from the registry lock.
+	// IIFE came from, using released CLL 0.2.1 from the registry lock. It is
+	// pinned apart from the go.mod version: the Go module may move to a
+	// release tag while the browser verifier stays at this build.
 	evidenceGraphIIFESource = "agent-action-capsule main@6ffe7c1139d3c18adeb26645bc73a4b279f24fe0 ts: npm run emitter:iife (esbuild 0.28.2)"
 
 	// cardExtension records which card the report was built for. There is
