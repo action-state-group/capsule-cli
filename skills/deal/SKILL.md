@@ -704,8 +704,8 @@ words, and never as one combined badge:
   policy. This one is independent: it shows what the merchant sent, whatever
   the agent says. Repeat it as written. A message that is not confirmed is
   still sealed; never drop it or soften the words.
-- `we_say`: what our own seal shows (this device kept these exact bytes from
-  this time on). It is our own record, not the merchant's.
+- `we_say`: what our own seal shows (this device held these exact bytes no
+  later than the seal time). It is our own record, not the merchant's.
 
 `parsed` holds the order number, tracking number, total, cancel-by date and items read from
 the email. They are best-effort readings; the report labels them as read from

@@ -722,7 +722,7 @@ const dealViewRender = (model, regions) => {
         "p",
         "Two different things stand behind each email. The merchant's signature is checked against the merchant's published key, " +
           "saved when the email was sealed; it shows what the merchant sent, and it does not depend on the agent. " +
-          "Our seal shows this device kept these exact bytes from that time on; it is our own record. " +
+          "Our seal shows this device held these exact bytes no later than the seal time; who sent them is checked by the sender's DKIM signature, not by our seal. " +
           "Amounts, dates and order numbers below are read from the email by capsulectl and may be misread.",
         "deal-note",
       ),

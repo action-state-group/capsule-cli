@@ -611,3 +611,14 @@ func TestCaptureEmailSealsTheSameKeysFromParallelLookups(t *testing.T) {
 		assert.Equal(t, digest, d, "capture %d", i)
 	}
 }
+
+// Our seal shows only that this device held an email's bytes no later than
+// the seal time, never that it kept them afterwards (capsule-cli#289): the
+// email's note and the deal view say so, and leave the sender to DKIM.
+func TestOurSealIsBoundedToTheSealTime(t *testing.T) {
+	for name, text := range map[string]string{"email": dealEmailMerchantNote, "deal view": cli.DealViewJS} {
+		assert.Contains(t, text, "held these exact bytes no later than the seal time", name)
+		assert.Contains(t, text, "checked by the sender", name)
+		assert.NotContains(t, text, "from that time on", name)
+	}
+}
