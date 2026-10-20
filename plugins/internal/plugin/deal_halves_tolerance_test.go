@@ -155,3 +155,40 @@ func TestStepHeaderPredicates(t *testing.T) {
 		assert.Equal(t, c.want, stepOfDeal(c.h, "deal-a"), name)
 	}
 }
+
+// Check 4 reads the counterparty's copy: a later step of the History
+// profile's kind that confirms the close is passed over, and the same step
+// correlated to another deal refuses, however the rest of the copy reads.
+func TestCheck4RefusesALaterStepCorrelatedToAnotherDeal(t *testing.T) {
+	pair, _, _ := mixedPair(t, "", func(id string) {
+		dealRun(t, "note", "--deal", id, "--kind", "evidence", "--input", writeJSON(t, `{"about": "the parcel arrived", "source": "agent"}`))
+	})
+	openings, err := dealOpeningsFile(mustRead(t, pair.sellerFile))
+	require.NoError(t, err)
+	digest, err := soleDigest(openings)
+	require.NoError(t, err)
+	withSession(t, func(s *dealSession) {
+		peer, err := s.peerCopy(t.Context(), pair.id, pair.response)
+		require.NoError(t, err)
+		half := copyHalves(peer.bundle)[digest]
+		checkpoint := peer.bundle["checkpoint"].(map[string]interface{})
+		size, err := cli.JSONUint(checkpoint["mmr_size"])
+		require.NoError(t, err)
+		leaves := mmrLeafCount(size)
+		require.NoError(t, lastStep(peer.bundle, half, leaves), "the later evidence of the new kind confirms the close")
+
+		edited := 0
+		for _, r := range peer.bundle["records"].([]interface{}) {
+			m := r.(map[string]interface{})
+			h, err := inlineHeader(m)
+			require.NoError(t, err)
+			if h.Seq > half.header.Seq && isDealStep(h.RecordType) {
+				header := m[evidencebook.RecordHeaderMember].(map[string]interface{})
+				header["correlation"] = map[string]interface{}{"exchange_id": "deal-feedfacecafebeef"}
+				edited++
+			}
+		}
+		require.Equal(t, 1, edited, "one later step")
+		require.ErrorIs(t, lastStep(peer.bundle, half, leaves), cli.ErrInput)
+	})
+}

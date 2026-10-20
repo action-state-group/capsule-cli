@@ -571,6 +571,8 @@ func (x shelfDealIndex) bookEntries(ctx context.Context, dealID string, steps bo
 		if steps && !isDealStep(r.Header.RecordType) {
 			continue
 		}
+		// A backstop: every CLI path reads the deal's steps through
+		// bookStep first, which refuses such a step already.
 		if dealOf, _ := dealOfBook(r.BookID); steps && !stepOfDeal(r.Header, dealOf) {
 			return nil, fmt.Errorf("%w: step record %s of %s is correlated to another deal", cli.ErrConflict, r.RecordID, dealOf)
 		}
