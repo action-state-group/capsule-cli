@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,8 +53,10 @@ var (
 // it and the matched trusted root (inclusive), is group-writable, other-writable,
 // or owned by neither the current user nor root; and rejects any launcher whose
 // resolved path escapes the trusted roots (so a symlink cannot redirect discovery
-// to an untrusted target) or is not a regular file. The root's own parents are
-// system directories, trusted by definition, so the walk stops at the root.
+// to an untrusted target) or is not a regular file. The system root's parents
+// are system directories, trusted by definition. The per-user root's are not:
+// for a path under it, by name or once resolved, userRootAncestryProblems
+// also checks every directory from $HOME down.
 func VerifyTrustedPath(path string) error {
 	return verifyTrustedPathUnder(path, trustedPluginRoots())
 }
@@ -84,10 +87,12 @@ func verifyTrustedPathUnder(path string, roots []string) error {
 	if realRoot == "" {
 		return fmt.Errorf("%s resolves to %s, %w", path, resolved, errOutsideRoots)
 	}
-	// Walk from the launcher up to and including the trusted root: the root's own
-	// parents are system directories trusted by definition, but any directory
+	// Walk from the launcher up to and including the trusted root: any directory
 	// BETWEEN the root and the launcher (or the launcher itself) that is
-	// group/other-writable or owned by neither the user nor root defeats the trust.
+	// group/other-writable or owned by neither the user nor root defeats the
+	// trust. The per-user root's ancestry is checked after, for a path under
+	// it by name or once resolved: a per-user root linked into the system
+	// root is still the per-user root.
 	uid := os.Getuid()
 	for p := resolved; ; {
 		if err := checkTrustedComponent(p, uid, false); err != nil {
@@ -102,15 +107,178 @@ func verifyTrustedPathUnder(path string, roots []string) error {
 		}
 		p = parent
 	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" && underUserRoot(path, resolved, userPluginRoot(home)) {
+		if problems := userRootAncestryProblems(home); len(problems) > 0 {
+			return newAncestryError(userPluginRoot(home), problems)
+		}
+	}
 	return nil
+}
+
+// underUserRoot reports whether a launcher looked up as path, resolving to
+// resolved, belongs to the per-user root userRoot: path names it under
+// userRoot, or resolved lies under userRoot's own resolution.
+func underUserRoot(path, resolved, userRoot string) bool {
+	under := func(p, dir string) bool { return p == dir || strings.HasPrefix(p, dir+string(os.PathSeparator)) }
+	if abs, err := filepath.Abs(path); err == nil && under(abs, userRoot) {
+		return true
+	}
+	real, err := filepath.EvalSymlinks(userRoot)
+	return err == nil && under(resolved, real)
+}
+
+// userRootAncestryProblems checks the directories another user could use to
+// swap the per-user root: every directory a name is looked up in while
+// $HOME/.local/lib/capsulectl/plugins resolves from $HOME, including those
+// inside each symlink's target (so the holder of every hop of a symlink
+// chain is seen), the resolved root itself, and the parents of each of
+// these up to $HOME, or up to / for one outside $HOME. Each must pass
+// checkTrustedComponent, with a root-owned sticky directory (such as /tmp)
+// accepted, as install's full-path check accepts it. Every symlink followed
+// must be owned by the user or root: in a sticky directory, which only
+// stops others from replacing entries they do not own, a link another user
+// owns is still theirs to repoint. No group is exempt: a
+// group's name or gid proves nothing about who else is in it, so a stock
+// Ubuntu (umask 002) ~/.local is refused until chmod g-w. A missing
+// component ends the lookup (with no root there is nothing to run); the
+// directories looked up in so far are still checked.
+func userRootAncestryProblems(home string) []unsafePathProblem {
+	if !filepath.IsAbs(home) {
+		return []unsafePathProblem{{path: home, unresolved: true, err: fmt.Errorf("HOME=%s is not an absolute path", home)}}
+	}
+	realHome, err := filepath.EvalSymlinks(home)
+	if err != nil {
+		return []unsafePathProblem{{path: home, unresolved: true, err: fmt.Errorf("cannot resolve %s: %w", home, err)}}
+	}
+	var problems []unsafePathProblem
+	hops := 0
+	var links []string
+	root, dirs, err := lookupDirs(realHome, filepath.Join(".local", "lib", "capsulectl", "plugins"), &hops, &links)
+	if err == nil {
+		dirs = append(dirs, root)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		problems = append(problems, unsafePathProblem{path: userPluginRoot(home), unresolved: true, err: fmt.Errorf("cannot resolve %s: %w", userPluginRoot(home), err)})
+	}
+	uid := os.Getuid()
+	problems = append(problems, linkOwnerProblems(links, uid)...)
+	seen := map[string]bool{}
+	for _, dir := range dirs {
+		for p := dir; !seen[p]; {
+			seen[p] = true
+			if err := checkTrustedComponent(p, uid, true); err != nil {
+				problems = append(problems, unsafePathProblem{path: p, owner: errors.Is(err, errNotTrustedOwner), err: err})
+			}
+			parent := filepath.Dir(p)
+			if p == realHome || parent == p {
+				break
+			}
+			p = parent
+		}
+	}
+	sort.Slice(problems, func(i, j int) bool { return problems[i].path < problems[j].path })
+	return problems
+}
+
+// linkOwnerProblems is every link owned by neither uid nor root.
+func linkOwnerProblems(links []string, uid int) []unsafePathProblem {
+	var problems []unsafePathProblem
+	for _, link := range links {
+		info, err := os.Lstat(link)
+		if err != nil {
+			problems = append(problems, unsafePathProblem{path: link, unresolved: true, err: err})
+			continue
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok {
+			problems = append(problems, unsafePathProblem{path: link, owner: true, err: fmt.Errorf("cannot read ownership of %s", link)})
+		} else if int(stat.Uid) != uid && stat.Uid != 0 {
+			problems = append(problems, unsafePathProblem{path: link, owner: true, err: fmt.Errorf("%s is a symlink %w", link, errNotTrustedOwner)})
+		}
+	}
+	return problems
+}
+
+// lookupDirs resolves the relative path rel from dir, a resolved directory,
+// one name at a time as the kernel does, following each symlink through its
+// target. It returns the resolved path and every directory a name was
+// looked up in, in order, and appends each symlink followed to links. hops
+// bounds the symlinks followed.
+func lookupDirs(dir, rel string, hops *int, links *[]string) (string, []string, error) {
+	cur := dir
+	var dirs []string
+	for _, name := range strings.Split(rel, string(os.PathSeparator)) {
+		switch name {
+		case "", ".":
+			continue
+		case "..":
+			dirs = append(dirs, cur)
+			cur = filepath.Dir(cur)
+			continue
+		}
+		dirs = append(dirs, cur)
+		next := filepath.Join(cur, name)
+		info, err := os.Lstat(next)
+		if err != nil {
+			return "", dirs, err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			cur = next
+			continue
+		}
+		*links = append(*links, next)
+		if *hops++; *hops > 40 {
+			return "", dirs, fmt.Errorf("%s: too many levels of symbolic links", next)
+		}
+		target, err := os.Readlink(next)
+		if err != nil {
+			return "", dirs, err
+		}
+		base := cur
+		if filepath.IsAbs(target) {
+			base = string(os.PathSeparator)
+		}
+		resolved, sub, err := lookupDirs(base, target, hops, links)
+		dirs = append(dirs, sub...)
+		if err != nil {
+			return "", dirs, err
+		}
+		cur = resolved
+	}
+	return cur, dirs, nil
+}
+
+// ancestryError is the walk's refusal for an unsafe per-user root ancestry:
+// install's message and fix, unwrapping to the sentinel the presentation
+// loader classifies by.
+type ancestryError struct {
+	message  string
+	sentinel error
+}
+
+func (e *ancestryError) Error() string { return e.message }
+func (e *ancestryError) Unwrap() error { return e.sentinel }
+
+func newAncestryError(root string, problems []unsafePathProblem) error {
+	// A refusal only for paths that do not resolve is a resolution
+	// failure, not a permission one.
+	sentinel := errOutsideRoots
+	for _, p := range problems {
+		switch {
+		case p.owner:
+			sentinel = errNotTrustedOwner
+		case !p.unresolved && sentinel != errNotTrustedOwner:
+			sentinel = errWritable
+		}
+	}
+	return &ancestryError{message: unsafePathMessage("the plugin root "+root, problems), sentinel: sentinel}
 }
 
 // checkTrustedComponent is the trust rule for one path component: owned by
 // uid or root, and neither group- nor other-writable. allowSticky also
 // accepts a root-owned directory with the sticky bit set (such as /tmp),
-// where other users cannot rename or remove entries they do not own; only
-// install's full-path check passes it, so the walk dispatch runs keeps the
-// strict rule.
+// where other users cannot rename or remove entries they do not own. Only
+// install's full-path check and the per-user root's ancestry check pass it;
+// the walk from a launcher up to its root keeps the strict rule.
 func checkTrustedComponent(p string, uid int, allowSticky bool) error {
 	info, err := os.Lstat(p)
 	if err != nil {

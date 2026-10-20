@@ -49,12 +49,22 @@ discovery model is the reference):
   - owned by the current user or by root, and
   - not group-writable and not other-writable.
 
-  The root's own parents are not walked -- they are treated as system
-  directories -- but everything from the root down to the launcher is. That
-  is not always true of the per-user root's parents (`~/.local` can be
-  group-writable, or a symlink into a shared directory); hardening dispatch
-  for them is [capsule-cli#270](https://github.com/action-state-group/capsule-cli/issues/270).
-  `plugin install` is stricter meanwhile (below).
+  The system root's parents are not walked: they are system directories.
+  The per-user root's are, because `~/.local` can be group-writable or a
+  symlink into a shared directory. Every directory a name is looked up in
+  while `$HOME/.local/lib/capsulectl/plugins` resolves from `$HOME` is
+  checked with the same rule, including those inside each symlink's target
+  (every hop of a chain), along with the resolved root and the parents of
+  each up to `$HOME` (up to `/` for one outside `$HOME`; a root-owned sticky
+  directory such as `/tmp` is accepted there). Each symlink followed must
+  be owned by the user or root, since in a sticky directory a link stays its
+  owner's to repoint. `$HOME` itself is checked; its parents, and the
+  directories a symlinked `$HOME` passes through, are not: they are the
+  account's, as the system root's parents are the system's. No group
+  is exempt, not even the user's own: a group's name or id says nothing
+  about who else belongs to it. On stock Ubuntu (umask 002) that means a
+  one-time `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`; the
+  refusal names each directory and the `chmod` that fixes it.
 
 A launcher that fails any of these checks is skipped during discovery: it is
 never wired up as a command, and `capsulectl plugin ls` lists it under
@@ -139,17 +149,17 @@ is fine. For these two commands `capsulectl` skips plugin discovery, so no
 installed plugin runs before their checks. With `CAPSULECTL_PLUGIN_ROOTS`
 set, the list must contain the per-user root.
 
-**The path check.** Until capsule-cli#270 hardens dispatch, install is
-stricter than the trust walk. Before it writes or runs anything, it resolves
+**The path check.** Install also runs the trust walk's per-user root
+check above, and checks more. Before it writes or runs anything, it resolves
 the path once and checks every component of the resolved path from `/`
 down: each must be owned by the user or root and neither group- nor
 other-writable. The only exception is a root-owned directory with the
-sticky bit set (`/tmp`), and only in this check. A symlinked `~/.local` is
+sticky bit set (`/tmp`), as in the per-user root check, never for the walk
+from a launcher up to its root. A symlinked `~/.local` is
 judged by where it leads. One refusal lists every failing component and the
 fix (on stock Ubuntu, `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`).
 From then on install and remove use only that checked canonical path: to
 open the root, to run the handshake, and to inspect other roots' launchers.
-Dispatch is unchanged.
 
 **Install from a file.**
 
