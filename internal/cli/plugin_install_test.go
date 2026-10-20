@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -1234,4 +1235,44 @@ func TestRefusedLaunchersAddOneCommandPerName(t *testing.T) {
 	_, err = invoke(t, "", "deal", "list")
 	require.ErrorIs(t, err, ErrInput)
 	assert.Equal(t, 1, runs(), "the tree's discovery only: the error runs no handshake again")
+}
+
+// The printed fix is one command a shell runs as is: with a $HOME holding a
+// space, `plugin ls` and dispatch print the same quoted chmod, and running it
+// lets the plugin run again.
+func TestThePrintedFixRunsAsPastedWithASpaceInHome(t *testing.T) {
+	home := filepath.Join(safeTempDir(t), "my home")
+	require.NoError(t, os.Mkdir(home, 0o755))
+	t.Setenv("HOME", home)
+	t.Setenv("SUDO_UID", "")
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", userPluginRoot(home))
+	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+	require.NoError(t, err)
+	require.NoError(t, os.Chmod(filepath.Join(home, ".local"), 0o775))
+	realLocal, err := filepath.EvalSymlinks(filepath.Join(home, ".local"))
+	require.NoError(t, err)
+	want := "chmod go-w '" + realLocal + "'"
+
+	out, err := invoke(t, "", "plugin", "ls")
+	require.NoError(t, err)
+	var listed struct {
+		Refused []struct{ Reason string } `json:"refused"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &listed), out)
+	require.Len(t, listed.Refused, 1)
+	assert.Contains(t, listed.Refused[0].Reason, want)
+	_, err = invoke(t, "", "acme")
+	require.ErrorIs(t, err, ErrInput)
+	msg := SafeError(err)
+	assert.Contains(t, msg, want, "dispatch prints the same fix")
+
+	fix := msg[strings.Index(msg, "fix: ")+len("fix: "):]
+	require.NoError(t, exec.Command("/bin/sh", "-c", fix).Run(), fix)
+	out, err = invoke(t, "", "acme", "again")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "ran acme: again")
+
+	assert.Equal(t, "/plain/path-1.x", shellQuote("/plain/path-1.x"))
+	assert.Equal(t, `'/it'\''s here'`, shellQuote("/it's here"))
+	assert.Equal(t, "''", shellQuote(""))
 }
