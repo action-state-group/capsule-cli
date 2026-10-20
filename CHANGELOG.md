@@ -121,7 +121,7 @@ Details, for developers. Three changes make the upgrade one-way:
   they match byte for byte; a data script whose value does not decode is
   read whole.
 
-### A merchant email's seal claims only the seal time (capsule-cli#289)
+### A merchant email's seal claims only the seal time (capsule-cli#289, #306)
 
 - **Fixed (copy):** the receipt email's note and the deal page said our seal
   shows this device "kept these exact bytes from that time on", and the skill
@@ -130,6 +130,13 @@ Details, for developers. Three changes make the upgrade one-way:
   signed them is checked by the signing domain's DKIM signature, not by our
   seal; the DKIM signature is described as the signing domain's (the
   merchant's, or its mail provider's), showing what that domain signed.
+- **Fixed (copy):** the labels around it say the same. The receipt email and
+  the deal page label the signature "DKIM signature:" and its key "Signing
+  domain's key", where both said the merchant's. An email whose key can't be
+  read yet says "the email's signature will be checked later". The skill and
+  README name the signing domain's key, and our seal's words in `we_say` say
+  "no later than this time". An email is still called merchant-confirmed only
+  when a passing DKIM signature's domain is aligned with the sender's.
 
 ### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
 
