@@ -297,9 +297,9 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 <p style="margin:0 0 8px;color:#444;">{{.MerchantNote}}</p>
 {{range .Merchant}}<div style="border:1px solid #d9d9e0;border-radius:6px;padding:8px 12px;margin:8px 0;">
 <p style="margin:0 0 4px;font-weight:600;">{{if .OrderID}}Order {{.OrderID}}{{else}}Merchant email{{end}}</p>
-<p style="margin:0 0 4px;{{if .Verified}}color:#1d6b35;{{else}}color:#9a3b00;{{end}}">Merchant's signature: {{.MerchantSays}}</p>
+<p style="margin:0 0 4px;{{if .Verified}}color:#1d6b35;{{else}}color:#9a3b00;{{end}}">DKIM signature: {{.MerchantSays}}</p>
 <p style="margin:0 0 4px;color:#444;">Our seal: {{.WeSay}}</p>
-{{if eq .KeySource "supplied"}}<p style="margin:0 0 4px;color:#9a3b00;">The merchant's key was supplied by hand, not read from the merchant's DNS.</p>{{end}}
+{{if eq .KeySource "supplied"}}<p style="margin:0 0 4px;color:#9a3b00;">The signing domain's key was supplied by hand, not read from its DNS.</p>{{end}}
 <table style="border-collapse:collapse;width:100%;font-size:14px;">
 {{if .Approved}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">You approved{{if .ApprovedBasis}} ({{.ApprovedBasis}}){{end}}</th><td>{{.Approved}}</td></tr>{{end}}
 {{if .AgentReported}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">The agent reported paying</th><td>{{.AgentReported}}</td></tr>{{end}}
@@ -307,7 +307,7 @@ var dealEmailHTML = template.Must(template.New("email").Parse(`<!DOCTYPE html>
 {{if .ChargedOn}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">Charged on (the email's date)</th><td>{{.ChargedOn}}</td></tr>{{end}}
 {{if .CancelBy}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">Cancel by (read from the email)</th><td>{{.CancelBy}}</td></tr>{{end}}
 {{if .Domains}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">Signing domain</th><td>{{.Domains}}</td></tr>{{end}}
-{{if .KeySize}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">Merchant's key</th><td>{{.KeySize}}, sealed when the email was sealed</td></tr>{{end}}
+{{if .KeySize}}<tr><th style="text-align:left;padding:2px 8px 2px 0;color:#444;font-weight:600;">Signing domain's key</th><td>{{.KeySize}}, sealed when the email was sealed</td></tr>{{end}}
 </table></div>{{end}}{{end}}
 <h2 style="font-size:16px;margin:16px 0 4px;">Check it yourself</h2>
 <p style="margin:0;">{{.CheckedNote}}</p>
@@ -412,9 +412,9 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 			if m.OrderID != "" {
 				title = "Order " + m.OrderID
 			}
-			fmt.Fprintf(&tb, "\n%s\n- Merchant's signature: %s\n- Our seal: %s\n", title, m.MerchantSays, m.WeSay)
+			fmt.Fprintf(&tb, "\n%s\n- DKIM signature: %s\n- Our seal: %s\n", title, m.MerchantSays, m.WeSay)
 			if m.KeySource == "supplied" {
-				tb.WriteString("- The merchant's key was supplied by hand, not read from the merchant's DNS.\n")
+				tb.WriteString("- The signing domain's key was supplied by hand, not read from its DNS.\n")
 			}
 			approved, key := "You approved", ""
 			if m.ApprovedBasis != "" {
@@ -430,7 +430,7 @@ func dealEmail(view dealEmailView, page, bundle []byte, at time.Time) (eml []byt
 				{"Charged on (the email's date)", m.ChargedOn},
 				{"Cancel by (read from the email)", m.CancelBy},
 				{"Signing domain", m.Domains},
-				{"Merchant's key", key},
+				{"Signing domain's key", key},
 			} {
 				if f.value != "" {
 					fmt.Fprintf(&tb, "- %s: %s\n", f.label, f.value)

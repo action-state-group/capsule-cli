@@ -103,7 +103,7 @@ func statementSigningInput(statement map[string]interface{}) ([]byte, error) {
 // merchant-aligned one when there is one).
 func issueVerifierStatement(e *merchantEmail, key ed25519.PrivateKey, now time.Time) (map[string]interface{}, error) {
 	if e.KeySource != "dns" {
-		return nil, cli.InputError("no statement: this email's key record was supplied by hand, not read from the merchant's DNS, so a statement would present it as the merchant's key")
+		return nil, cli.InputError("no statement: this email's key record was supplied by hand, not read from the signing domain's DNS, so a statement would present it as that domain's published key")
 	}
 	v, err := e.recheck(e.Raw)
 	if err != nil {

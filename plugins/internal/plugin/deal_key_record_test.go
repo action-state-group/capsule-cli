@@ -34,7 +34,7 @@ func blockDNS(t *testing.T) {
 
 // When DNS cannot be reached, sealing a merchant's email is neither refused
 // nor faked: nothing is sealed, the email waits on the device, and the result
-// says only that the merchant's signature will be checked later. A tick that
+// says only that the email's signature will be checked later. A tick that
 // still cannot reach DNS leaves it waiting; the first tick that can reads the
 // key records, seals the email as `deal note` would have, and it then verifies
 // offline against the key sealed with it.
@@ -51,7 +51,7 @@ func TestAMerchantEmailIsDeferredToTheNextTickWhenDNSIsUnreachable(t *testing.T)
 	deferred := dealRun(t, "note", "--deal", id, "--kind", "evidence", "--email", email)
 	assert.Equal(t, "deferred", deferred["state"])
 	assert.Equal(t, false, deferred["sealed"])
-	assert.Equal(t, "the merchant's signature will be checked later", deferred["say"])
+	assert.Equal(t, "the email's signature will be checked later", deferred["say"])
 	assert.NotContains(t, deferred, "step", "nothing is sealed while the key cannot be read")
 	assert.NotContains(t, deferred, "dkim", "no verdict without a key")
 	_, err := invoke(t, "", "--profile", "deal", "deal", "verify-email", "--deal", id)
@@ -141,7 +141,7 @@ func TestAMerchantEmailSealsWithASuppliedKeyRecord(t *testing.T) {
 	assert.Equal(t, "supplied", row["key_source"])
 	raw, err := os.ReadFile(receipt)
 	require.NoError(t, err)
-	assert.Contains(t, string(raw), "supplied by hand, not read from the merchant's DNS")
+	assert.Contains(t, string(raw), "supplied by hand, not read from its DNS")
 }
 
 // The deal skill never asks the user to do DNS: when the key cannot be read
@@ -150,12 +150,14 @@ func TestTheDealSkillNeverAsksTheUserToDoDNS(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "skills", "deal", "SKILL.md"))
 	require.NoError(t, err)
 	skill := string(raw)
+	// Compared with its line breaks as spaces, so a rewrap changes nothing.
+	flat := strings.Join(strings.Fields(skill), " ")
 	for _, part := range []string{
 		`"state": "deferred"`,
-		`"the merchant's signature will be checked later"`,
-		"Never ask\nthe user to look anything up",
+		`"the email's signature will be checked later"`,
+		"Never ask the user to look anything up",
 	} {
-		assert.Contains(t, skill, part)
+		assert.Contains(t, flat, part)
 	}
 	for _, instruction := range []string{"TXT record", "_domainkey", "_dmarc", "dig ", "nslookup", "--key-record", "--dmarc-record", "look up the merchant", "host -t", "resolver"} {
 		assert.False(t, strings.Contains(skill, instruction), "the skill names %q", instruction)

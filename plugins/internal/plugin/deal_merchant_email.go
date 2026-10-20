@@ -32,8 +32,9 @@ import (
 )
 
 // A merchant's own confirmation email is the one piece of deal evidence that
-// does not reduce to "the agent says so": the merchant's mail server signs it
-// with a DKIM key published in the merchant's DNS, and that signature survives
+// does not reduce to "the agent says so": the sending mail server signs it
+// with a DKIM key published in the signing domain's DNS (the merchant's, or
+// its mail provider's), and that signature survives
 // being relayed by an agent nobody trusts. Two attestations, never one:
 //
 //   - our seal says what OUR side saw: these exact bytes, at this time;
@@ -821,7 +822,7 @@ func dmarcPolicyWords(policy string) string {
 
 // ourSealWords is what our own seal on a merchant email does and does not
 // show, said once, next to the merchant's attestation and never merged with it.
-const ourSealWords = "our seal shows this device held these exact bytes at this time; it is our own record, not the merchant's"
+const ourSealWords = "our seal shows this device held these exact bytes no later than this time; it is our own record, not the merchant's"
 
 // An email result states its own scope on its face, as a receipt does
 // (dealScopeLine).
