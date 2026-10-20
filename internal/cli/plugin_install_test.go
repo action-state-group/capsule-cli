@@ -305,7 +305,7 @@ func TestDispatchChecksThePerUserRootsAncestry(t *testing.T) {
 			dir, rerr := filepath.EvalSymlinks(tc.dir(home))
 			require.NoError(t, rerr)
 			assert.Contains(t, err.Error(), dir+" "+tc.want)
-			assert.Contains(t, err.Error(), "chmod go-w "+dir, "the refusal names the fix")
+			assert.Contains(t, err.Error(), "chmod go-w "+shellQuote(dir), "the refusal names the fix")
 			assert.Empty(t, discoverPlugins(), "discovery refuses it")
 		})
 	}
@@ -1069,7 +1069,7 @@ func TestARefusedUserRootNamesItsFixInLsAndAtDispatch(t *testing.T) {
 	require.NoError(t, os.Chmod(local, 0o775))
 	realLocal, err := filepath.EvalSymlinks(local)
 	require.NoError(t, err)
-	fix := "chmod go-w " + realLocal
+	fix := "chmod go-w " + shellQuote(realLocal)
 
 	out, err := invoke(t, "", "plugin", "ls")
 	require.NoError(t, err, out)
@@ -1100,7 +1100,7 @@ func TestARefusedFirstPartyPluginIsNotCalledMissing(t *testing.T) {
 	_, err = invoke(t, "", "deal", "list")
 	require.ErrorIs(t, err, ErrInput)
 	msg := SafeError(err)
-	assert.Contains(t, msg, "chmod go-w "+realLocal)
+	assert.Contains(t, msg, "chmod go-w "+shellQuote(realLocal))
 	assert.NotContains(t, msg, "not installed")
 }
 
