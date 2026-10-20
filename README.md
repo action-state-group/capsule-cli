@@ -62,7 +62,7 @@ Which check applies (`gh auth status` tells signed in from not):
 
 | `gh` | What to run |
 |---|---|
-| not installed | The SHA-256 against `SHA256SUMS` is the only check. |
+| not installed | Compare your binary with `SHA256SUMS`. For linux/amd64, also compare it with the SHA-256 the install page publishes; for the other platforms, `SHA256SUMS` is the only check. |
 | installed, not signed in | Never sign in for this. Use `--bundle` (`v0.1.0-rc4` and later); for `v0.1.0-rc3`, the SHA-256 is the only check. |
 | installed and signed in | `--bundle` (preferred, same as above), or without it: `gh attestation verify capsulectl-$V-$OS-$ARCH --repo action-state-group/capsule-cli --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml` |
 
@@ -97,6 +97,7 @@ base=https://github.com/action-state-group/capsule-cli/releases/download/$V
 curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/capsulectl-$V.sigstore.json" -O "$base/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
 sha256sum "capsulectl-$V.sigstore.json"     # compare with the bundle's SHA-256 on the install page (macOS: shasum -a 256)
+sha256sum "capsulectl-$V-$OS-$ARCH"         # linux/amd64 without gh: compare with the binary's SHA-256 on the install page
 # provenance, with no GitHub account (skip if gh is not installed; see the table above):
 gh attestation verify "capsulectl-$V-$OS-$ARCH" --bundle "capsulectl-$V.sigstore.json" \
   --repo action-state-group/capsule-cli \
