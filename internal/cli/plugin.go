@@ -143,6 +143,9 @@ func underUserRoot(path, resolved, userRoot string) bool {
 // component ends the lookup (with no root there is nothing to run); the
 // directories looked up in so far are still checked.
 func userRootAncestryProblems(home string) []unsafePathProblem {
+	if !filepath.IsAbs(home) {
+		return []unsafePathProblem{{path: home, unresolved: true, err: fmt.Errorf("HOME=%s is not an absolute path", home)}}
+	}
 	realHome, err := filepath.EvalSymlinks(home)
 	if err != nil {
 		return []unsafePathProblem{{path: home, unresolved: true, err: fmt.Errorf("cannot resolve %s: %w", home, err)}}
@@ -256,10 +259,15 @@ func (e *ancestryError) Error() string { return e.message }
 func (e *ancestryError) Unwrap() error { return e.sentinel }
 
 func newAncestryError(root string, problems []unsafePathProblem) error {
-	sentinel := errWritable
+	// A refusal only for paths that do not resolve is a resolution
+	// failure, not a permission one.
+	sentinel := errOutsideRoots
 	for _, p := range problems {
-		if p.owner {
+		switch {
+		case p.owner:
 			sentinel = errNotTrustedOwner
+		case !p.unresolved && sentinel != errNotTrustedOwner:
+			sentinel = errWritable
 		}
 	}
 	return &ancestryError{message: unsafePathMessage("the plugin root "+root, problems), sentinel: sentinel}

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -475,6 +476,45 @@ func TestAncestryNamesAnUnresolvablePathWithoutAChmod(t *testing.T) {
 	assert.Contains(t, msg, "too many levels of symbolic links")
 	assert.Contains(t, msg, "repair or remove the links on")
 	assert.NotContains(t, msg, "chmod")
+}
+
+func TestAncestryFollowsDotDotAndASymlinkedHome(t *testing.T) {
+	// ~/.local -> sub/../local resolves through sub's parent, which is
+	// then checked too.
+	home, _ := installHome(t)
+	base := filepath.Join(safeTempDir(t), "base")
+	require.NoError(t, os.MkdirAll(filepath.Join(base, "sub"), 0o755))
+	require.NoError(t, os.Mkdir(filepath.Join(base, "local"), 0o755))
+	// Not filepath.Join, which would clean the "..".
+	require.NoError(t, os.Symlink(base+"/sub/../local", filepath.Join(home, ".local")))
+	launcher := handInstalled(t, home)
+	require.NoError(t, VerifyTrustedPath(launcher))
+	require.NoError(t, os.Chmod(filepath.Join(base, "sub"), 0o775))
+	err := VerifyTrustedPath(launcher)
+	require.ErrorIs(t, err, errWritable)
+	assert.Contains(t, err.Error(), filepath.Join("base", "sub")+" is group-writable")
+
+	// A symlinked HOME is judged from its target: its ~/.local is checked.
+	real := safeTempDir(t)
+	linked := filepath.Join(safeTempDir(t), "home")
+	require.NoError(t, os.Symlink(real, linked))
+	t.Setenv("HOME", linked)
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", userPluginRoot(linked))
+	launcher = handInstalled(t, linked)
+	require.NoError(t, VerifyTrustedPath(launcher))
+	require.NoError(t, os.Chmod(filepath.Join(real, ".local"), 0o775))
+	assert.ErrorIs(t, VerifyTrustedPath(launcher), errWritable)
+}
+
+func TestAncestryErrorClasses(t *testing.T) {
+	gone := unsafePathProblem{path: "/a", unresolved: true, err: errors.New("loop")}
+	writable := unsafePathProblem{path: "/b", err: errors.New("group-writable")}
+	owned := unsafePathProblem{path: "/c", owner: true, err: errors.New("owned")}
+	assert.ErrorIs(t, newAncestryError("r", []unsafePathProblem{gone}), errOutsideRoots, "only unresolved")
+	assert.ErrorIs(t, newAncestryError("r", []unsafePathProblem{gone, writable}), errWritable)
+	assert.ErrorIs(t, newAncestryError("r", []unsafePathProblem{owned, writable}), errNotTrustedOwner)
+	assert.ErrorIs(t, newAncestryError("r", []unsafePathProblem{writable, owned, gone}), errNotTrustedOwner)
+	assert.Equal(t, []unsafePathProblem{{path: "rel", unresolved: true, err: errors.New("HOME=rel is not an absolute path")}}, userRootAncestryProblems("rel"))
 }
 
 func TestDispatchLeavesOtherRootsAncestryAlone(t *testing.T) {
