@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"encoding/json"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -54,6 +53,17 @@ func TestASaleCloses(t *testing.T) {
 	assert.Equal(t, "closed", states[a])
 }
 
+// A closed sale has ended with no deal close: its lifecycle reads it closed
+// with nothing open, rather than failing.
+func TestAClosedSalesLifecycleIsClosed(t *testing.T) {
+	dealFixture(t)
+	saleID, _ := newSale(t)
+	dealRun(t, "sale", "close", "--sale", saleID)
+	l := buildDealLifecycle(chainSteps(t, saleID), time.Now())
+	assert.Equal(t, "closed", l.State)
+	assert.Nil(t, l.Open)
+}
+
 // The close first seals the opening a crash left out, so nothing but a cut
 // ever follows it: interrupted open, the thread closed, then sale close,
 // then a bundle; the log passes the profile checker.
@@ -62,7 +72,7 @@ func TestASaleCloseSealsAnOpeningACrashLeftOut(t *testing.T) {
 	saleID, _ := newSale(t)
 	openThreadStoppingAt(t, saleID, "authority")
 	require.Equal(t, []string{"sale", cli.TypeTaskAuthority, "thread"}, saleRecordTypes(exportedSale(t, saleID)))
-	dealRun(t, "close", "--deal", registeredThreads(t, saleID)[0], "--input", writeJSON(t, received))
+	dealRun(t, "close", "--deal", chainSteps(t, saleID)[2].Event.Thread.ThreadID, "--input", writeJSON(t, received))
 	dealRun(t, "sale", "close", "--sale", saleID)
 	assert.Equal(t, []string{"sale", cli.TypeTaskAuthority, "thread", "thread_opened", "sale_close"}, saleRecordTypes(exportedSale(t, saleID)))
 	_, res := saleBundle(t, saleID)
@@ -94,40 +104,19 @@ func TestAClosedSaleRefusesToReuseARegistration(t *testing.T) {
 	assert.Equal(t, cli.SaleThreadNeverOpened, entries[0].(map[string]any)["member"])
 }
 
-// registeredThreads are the thread ids a sale registered, from this
-// device's store.
-func registeredThreads(t *testing.T, saleID string) []string {
-	t.Helper()
-	var ids []string
-	withSession(t, func(s *dealSession) {
-		steps, err := s.index.steps(t.Context(), stepFilter{DealID: saleID, Kinds: []string{"thread"}})
-		require.NoError(t, err)
-		for _, st := range steps {
-			var ev dealEvent
-			require.NoError(t, json.Unmarshal([]byte(st.Local), &ev))
-			ids = append(ids, ev.Thread.ThreadID)
-		}
-	})
-	require.NotEmpty(t, ids)
-	return ids
-}
-
 // checkSaleProfile runs the profile checker on a sale's exported log.
 func checkSaleProfile(t *testing.T, saleID string) {
 	t.Helper()
 	_, exported := exportSale(t, saleID)
-	if python := profilePython(t); python != "" {
-		out, err := exec.Command(python, dealProfileDir+"/check_profile.py", exported).CombinedOutput()
-		require.NoError(t, err, "the profile checker takes the sale's log: %s", out)
-	}
+	checkProfile(t, exported)
 }
 
 // A closed sale leaves the tick once a witnessed tick covers its log; an
 // open one never does. A receipt for a tick that held the sale before a
 // later append does not take it out, and a bundle after it has left, which
 // seals a late report on its closed thread and a cut on the sale, brings
-// both back until the next witnessed tick. Each receipt is reported in a fresh session
-// (deliver), so settleEnded settles the sale.
+// both back until the next witnessed tick. Each receipt is reported in a
+// fresh session (deliver), so settleEnded settles the sale.
 func TestAClosedSaleLeavesTheTick(t *testing.T) {
 	for _, legacy := range []bool{false, true} {
 		t.Run(map[bool]string{false: "book", true: "legacy"}[legacy], func(t *testing.T) {
@@ -157,8 +146,7 @@ func TestAClosedSaleLeavesTheTick(t *testing.T) {
 			beforeClose := tick()
 			dealRun(t, "sale", "close", "--sale", saleID)
 			deliver(t, p, beforeClose, witnessKey)
-			assert.Contains(t, liveLogs(t, p), log, "a receipt for a tick cut before the close")
-			assert.Contains(t, liveLogs(t, p), log, "closed, not yet witnessed")
+			assert.Contains(t, liveLogs(t, p), log, "closed, and a receipt for a tick cut before the close")
 			pending := tick()
 			assert.Contains(t, liveLogs(t, p), log, "a pending tick keeps it")
 
