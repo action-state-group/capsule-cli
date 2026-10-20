@@ -30,8 +30,10 @@ const DealReportPointer = "sealed_report"
 const DealReportExtension = "x-deal-report/v0"
 
 // dealStepRecordTypes are the evidence record header types of a deal's
-// steps on its book.
-var dealStepRecordTypes = map[string]bool{"deal_step": true}
+// steps on its book: deal_step, and the Personal-Agent History Profile's
+// step_completed and step_failed (capsule-cli#264), which the plugin's
+// readers take as steps too.
+var dealStepRecordTypes = map[string]bool{"deal_step": true, "step_completed": true, "step_failed": true}
 
 // DealSealedReport is a copy's report text and how the copy carries it:
 // "in_log" (a deal_report record of the bundle, disclosed), "standalone"

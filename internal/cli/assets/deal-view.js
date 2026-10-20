@@ -65,6 +65,8 @@ const dealViewVerified = (context) => {
 // is this deal's report for a copy audience; that it binds this bundle's
 // checkpoint and states that checkpoint's time; and that the bundle holds
 // no report record. Anything less is refused, never shown as checked.
+// The evidence record header types of a deal's steps on its book.
+const dealStepTypes = ["deal_step", "step_completed", "step_failed"];
 const dealHexBytes = (hex) => {
   if (typeof hex !== "string" || hex.length % 2 !== 0 || !/^[0-9a-f]*$/u.test(hex)) return undefined;
   const out = new Uint8Array(hex.length / 2);
@@ -96,7 +98,7 @@ const dealStandaloneReport = async (context, bundle, x, sealedId) => {
   let lastSeq = -1;
   for (const r of context.records) {
     const header = r && r.evidence_record_header;
-    if (!header || header.record_type !== "deal_step") continue;
+    if (!header || !dealStepTypes.includes(header.record_type)) continue;
     const key = await dealVerifiedKey(r);
     if (!key) return refused;
     const seq = Number((((memberships[r.capsule_id] || {}).log_coordinates) || {}).seq);
@@ -157,7 +159,7 @@ const dealViewModel = async (context) => {
   const standalone = (bundle.extensions || {})["x-deal-report/v0"];
   // A copy of a deal on a book whose log holds no report record names a
   // standalone one: inline text there is a stripped copy, refused.
-  const bookSteps = context.records.some((r) => r && r.evidence_record_header && r.evidence_record_header.record_type === "deal_step");
+  const bookSteps = context.records.some((r) => r && r.evidence_record_header && dealStepTypes.includes(r.evidence_record_header.record_type));
   if (standalone !== undefined) {
     if (sealedId === undefined || Object.keys(dealExt).length !== 1) {
       return { refusal: "⚠️ The deal's text could not be checked against its sealed report. Do not rely on it." };

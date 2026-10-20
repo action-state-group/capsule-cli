@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-JWeaIrg3Vi+lF58lQDB1FKh0iLTGwIi2Agbv5bSGJto=' 'sha256-9fQQjMBARScM3W2oCNZG7Vbu+5pFgR0J/ChFeumKwVs=' 'sha256-eApYtpWzjL0YwRGFhFyYTSUF8XUEYhDm1VnJe5ocFjo='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-JWeaIrg3Vi+lF58lQDB1FKh0iLTGwIi2Agbv5bSGJto=' 'sha256-5ILXTlJLotJBKUKNfRkLRgev8bfOTGLP9p+MJCBZM3M=' 'sha256-eApYtpWzjL0YwRGFhFyYTSUF8XUEYhDm1VnJe5ocFjo='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: “Order the cat sticker in my cart at Example Stickers”</title>
     <style>
@@ -13436,6 +13436,8 @@ const dealViewVerified = (context) => {
 // is this deal's report for a copy audience; that it binds this bundle's
 // checkpoint and states that checkpoint's time; and that the bundle holds
 // no report record. Anything less is refused, never shown as checked.
+// The evidence record header types of a deal's steps on its book.
+const dealStepTypes = ["deal_step", "step_completed", "step_failed"];
 const dealHexBytes = (hex) => {
   if (typeof hex !== "string" || hex.length % 2 !== 0 || !/^[0-9a-f]*$/u.test(hex)) return undefined;
   const out = new Uint8Array(hex.length / 2);
@@ -13467,7 +13469,7 @@ const dealStandaloneReport = async (context, bundle, x, sealedId) => {
   let lastSeq = -1;
   for (const r of context.records) {
     const header = r && r.evidence_record_header;
-    if (!header || header.record_type !== "deal_step") continue;
+    if (!header || !dealStepTypes.includes(header.record_type)) continue;
     const key = await dealVerifiedKey(r);
     if (!key) return refused;
     const seq = Number((((memberships[r.capsule_id] || {}).log_coordinates) || {}).seq);
@@ -13528,7 +13530,7 @@ const dealViewModel = async (context) => {
   const standalone = (bundle.extensions || {})["x-deal-report/v0"];
   // A copy of a deal on a book whose log holds no report record names a
   // standalone one: inline text there is a stripped copy, refused.
-  const bookSteps = context.records.some((r) => r && r.evidence_record_header && r.evidence_record_header.record_type === "deal_step");
+  const bookSteps = context.records.some((r) => r && r.evidence_record_header && dealStepTypes.includes(r.evidence_record_header.record_type));
   if (standalone !== undefined) {
     if (sealedId === undefined || Object.keys(dealExt).length !== 1) {
       return { refusal: "⚠️ The deal's text could not be checked against its sealed report. Do not rely on it." };
