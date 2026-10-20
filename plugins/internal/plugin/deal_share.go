@@ -83,6 +83,9 @@ var dealShareKeys = map[string]bool{
 	"cancel_by": true, "due_by": true, "sent_at": true,
 	// When the deal is expected to close: a date.
 	"expect_close_by": true,
+	// A held object's record: what its digest is over, and whether the
+	// octets were held (closed sets).
+	"wrapped_octets": true, "wrapped_held": true,
 }
 
 // The adjudicator's copy adds claim text and sources.
@@ -137,6 +140,7 @@ type dealLocal struct{ ids, places, texts, names []string }
 
 func dealLocalData(events []sealedEvent) dealLocal {
 	var l dealLocal
+	shown := wrappedShownAmounts(events)
 	who := func(w *dealWho) {
 		if w == nil {
 			return
@@ -184,6 +188,12 @@ func dealLocalData(events []sealedEvent) dealLocal {
 				l.ids = append(l.ids, m.Parsed.OrderID, m.Parsed.Tracking)
 				l.names = append(l.names, recipientNames(m)...)
 				text(merchantEmailTexts(m)...)
+			}
+			if w := e.Evidence.Wrapped; w != nil {
+				// A held object, sealed by digest: its text and its carrier
+				// headers' values are all private.
+				text(wrappedTexts(w, shown)...)
+				l.ids = append(l.ids, wrappedHeaderValues(w)...)
 			}
 		case e.Change != nil:
 			who(e.Change.Who)
@@ -876,7 +886,7 @@ func dealRecordShareable(v interface{}, key string, audience string, p dealPriva
 			p.seller && (dealTypedShareKeys[key] || key == "item" ||
 				strings.HasSuffix(key, "_basis") && len(x) == 64 && cli.IsLowerHex(x)) ||
 			(audience == cli.DealAudienceAdjudicator && dealAdjudicatorKeys[key]) ||
-			key == "source" && x == "merchant_email" || // a fixed token, not a claim's source
+			key == "source" && (x == "merchant_email" || x == wrappedSource) || // a fixed token, not a claim's source
 			key == "class" && dealClaimClasses[x] // a claim's kind of representation
 		return allowed && p.clean(x)
 	default:

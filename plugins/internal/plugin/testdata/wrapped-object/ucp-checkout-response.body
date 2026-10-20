@@ -1,0 +1,39 @@
+{
+  "ucp": {
+    "version": "2026-08-25",
+    "capabilities": {
+      "dev.ucp.shopping.checkout": [{"version": "2026-08-25"}],
+      "dev.ucp.common.payment.ap2_mandate": [{"version": "2026-08-25", "extends": "dev.ucp.shopping.checkout"}]
+    },
+    "payment_handlers": {}
+  },
+  "id": "chk_abc123",
+  "status": "completed",
+  "currency": "USD",
+  "line_items": [
+    {
+      "id": "li_1",
+      "item": {"id": "item_123", "title": "Widget", "price": 2500},
+      "quantity": 2,
+      "totals": [
+        {"type": "subtotal", "amount": 5000},
+        {"type": "total", "amount": 5000}
+      ]
+    }
+  ],
+  "totals": [
+    {"type": "subtotal", "amount": 5000},
+    {"type": "tax", "amount": 400},
+    {"type": "total", "amount": 5400}
+  ],
+  "links": [
+    {"type": "terms_of_service", "url": "https://merchant.example/terms", "title": "Terms \u00e9 \u20ac"}
+  ],
+  "order": {
+    "id": "order_abc123",
+    "permalink_url": "https://merchant.example/orders/order_abc123"
+  },
+  "ap2": {
+    "merchant_authorization": "eyJhbGciOiJFUzI1NiIsImtpZCI6InJmYzc1MTUtYXBwZW5kaXgtYTMifQ..glutdbkL6RutojG9FX5KcgzHwLUXnmZQ7wbyCl8T34YxJspBnTiiMaCOKgYwId8bopEi9TSDF_VdlxU4HPJOrw"
+  }
+}

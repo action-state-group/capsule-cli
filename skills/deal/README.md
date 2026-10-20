@@ -46,6 +46,8 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal note --kind evidence --input FILE` with `obligation` | Seals a cancel-by date (a trial that becomes paid, a renewal, the end of free cancellation, a payment on a date) with its source: the merchant's email (with `--email`) or a page snapshot. Cuts a checkpoint. |
 | `deal deadlines [--deal ID] [--ics FILE] [--remind-days N] [--all]` | Lists open cancel-by dates (on an open deal, or CARRIED AT CLOSE on a closed one) and open deals against their expected close date, for one deal or every deal in the profile, as JSON; `--all` adds resolved, cancel-sealed and passed dates; `--ics` also writes the open ones as a calendar file with reminders for the host's scheduler. Records, never enforces. |
 | `deal close --carry-open-obligations` | Closes a deal whose cancel-by date is still open: the close seals the open dates, and they stay open after it. |
+| `deal note --kind evidence --object FILE --object-type TYPE [--octets as-transmitted\|jcs] [--headers FILE]` | On a buyer's deal kept on a book: seals an object the user holds (one the other side sent) by its SHA-256 only, in the settlement-records wrapped-object shape, with the carrier headers it arrived with as a salted commitment. The octets and headers stay on this device. `--object-digest HEX` seals a digest the user was given, without the object. See [A held object](#a-held-object). |
+| `deal verify-object [--step N] [--object FILE] [--headers FILE] [--out DIR]` | Checks a held object, and its headers, against what its step sealed; `--object` and `--headers` check other copies. `--out` writes the held bytes back out exactly. Without `--deal`, `--object FILE --digest HEX [--octets jcs]` checks an object against the digest in a record you were given. Exit 1 when it does not match. |
 | `deal verify-email [--step N] [--email FILE]` | Re-checks a sealed merchant email offline, against the key records sealed with it. `--email` checks another copy, which must match the sealed bytes. Exit 1 when it does not verify. |
 | `deal verifier-statement --deal ID [--step N] --out FILE` | Re-checks a sealed merchant email's DKIM signature, over the full sealed message and against the key records sealed with it, and only when it passes writes a statement signed by the profile's own key: the signing domain, the message date when the signature covers it, the digest the deal record already seals, the key records' digest and when it was checked. No email, header value or selector is in it. Refused when the check fails, when there is no signature, and when the key record was supplied by hand. The statement is checked by the holder's own tool, so it is no more independent than the holder's own seal; what it adds is a smaller disclosure. |
 | `deal verify-statement FILE [--key HEX]` | Checks a verifier statement's signature offline and prints what it states as V's statement. It cannot re-check DKIM (the statement carries no email) and says so. The statement names its own key: only `--key` (the holder's public key) checks that it is the holder's, and without it the result says the key is not matched to any holder. Exit 1 when it does not verify. |
@@ -654,6 +656,55 @@ The order number, tracking number, total, cancel-by date and items are read by
 merchant-agnostic heuristics and may be misread; the report labels them as
 read from the email. The merchant's signature covers the bytes, not this
 reading of them.
+
+## A held object
+
+Some evidence is an object the other side sent: a checkout response, a
+receipt, a proof of delivery. Restating what it says proves nothing. What the
+deal can seal is that the user holds these exact bytes:
+
+```sh
+capsulectl --profile deal deal note --deal ID --kind evidence \
+  --object receipt.jws --object-type x402.receipt [--headers headers.txt]
+```
+
+- The record carries one entry in the settlement-records wrapped-object shape:
+  the type, `SHA-256` and the digest. It never carries the object. Nothing is
+  read from the object: no amount, id or name.
+- `--object-type` is a registered wrapped type (for example `delivery.proof`,
+  `iso20022.message`) or a label of your own. The output's `type_registered`
+  says which; a label is never presented as a registered type.
+- `--octets` says what the digest is over: `as-transmitted` (the bytes as
+  delivered, the default) or `jcs` (their RFC 8785 form, for a type that
+  defines its octets that way). A registered type is held to its own rule.
+  Seal the bytes exactly as received: a newline added when saving changes them.
+- `--headers` is the start line and header fields the object arrived with,
+  as received. They are sealed as a salted commitment, since header values can
+  identify someone.
+- `--object-digest HEX` seals a digest you were given without the object; the
+  record says `wrapped_held: digest`, which claims no possession.
+- The bytes stay on this device, in the step's local record in the artifact
+  store, at most 4 MiB. No copy carries them, and the share gate refuses a copy
+  that quotes them. Only a buyer's deal kept on a book takes one.
+
+To check later, or to hand the bytes to a tool that checks the object's own
+signature:
+
+```sh
+capsulectl --profile deal deal verify-object --deal ID [--out DIR]
+```
+
+Someone you gave the object to checks it against the `wrapped` digest and
+`wrapped_octets` in their copy's record, with no deal:
+
+```sh
+capsulectl deal verify-object --object FILE --digest HEX --octets as-transmitted
+```
+
+The seal shows that the user held these exact bytes when the step was sealed.
+The seal time is the device's own clock; a witnessed checkpoint after it gives
+a latest time others can check. It does not show who issued the bytes: an
+object's own signature, if it has one, is its own protocol's to check.
 
 ## Closing a deal, and records that arrive later
 

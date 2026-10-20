@@ -717,6 +717,26 @@ capsulectl --profile deal deal verify-email --deal ID
 
 The mailbox stays on this machine: no credentials, no forwarding, no upload.
 
+**4c. Seal an object the other side sent** (a checkout response, a receipt,
+a proof of delivery) when it is the evidence and its words prove nothing
+restated. Pass the bytes exactly as received, and the header block they came
+with when you have it:
+
+```sh
+capsulectl --profile deal deal note --deal ID --kind evidence \
+  --object FILE --object-type TYPE [--octets as-transmitted|jcs] [--headers FILE]
+```
+
+Only its SHA-256 is sealed; the bytes stay on this device and no copy carries
+them. `TYPE` is a registered wrapped type (`delivery.proof`, `x402.receipt`, ...)
+or a label you choose; when the output says `type_registered: false`, never
+call it registered. Tell the user what the seal shows, in these words: "you
+can show you held these exact bytes when this step was sealed. The seal time
+is your device's clock; a witnessed checkpoint after it gives a latest time
+others can check." It says nothing about who issued them, which only the
+object's own signature can show.
+`deal verify-object --deal ID` checks them later.
+
 **5. Close** when the deal is over, or check back later:
 
 ```sh

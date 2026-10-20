@@ -1,0 +1,348 @@
+{
+  "vectors": "capsule-cli held object (#250)",
+  "cases": [
+    {
+      "name": "acp-checkout-as-transmitted",
+      "what": "An ACP completed checkout with its order, held as delivered. Its type is the name acp-v0 open point A-3 proposes, not registered.",
+      "seal": {
+        "type": "acp.checkout-session",
+        "octets": "as-transmitted",
+        "object": "acp-checkout-session-with-order.json",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "1da1d9205d2677bcd8553bd81a61fac367cd4564f22330aca4e6bdf3f17356b0",
+        "type_registered": false,
+        "wrapped_held": "octets",
+        "object_digest": "PASS",
+        "carrier_headers": "NOT_PRESENT"
+      },
+      "verify": [
+        {
+          "object": "acp-checkout-session-with-order.changed.json",
+          "expect": {
+            "object_digest": "FAIL",
+            "code": "wrapped_digest_mismatch"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ucp-checkout-jcs",
+      "what": "A UCP checkout with ap2.merchant_authorization (agent-action-capsule's UCP adapter vector 'positive'). ucp-v0 section 6 proposes ucp.checkout over the RFC 8785 form.",
+      "seal": {
+        "type": "ucp.checkout",
+        "octets": "jcs",
+        "object": "ucp-checkout.json",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "e041ddb24d1aa623d5bf017e384b4a958ca91f20bc747056e5e80ad4f1fd3a23",
+        "type_registered": false,
+        "wrapped_held": "octets",
+        "object_digest": "PASS",
+        "carrier_headers": "NOT_PRESENT"
+      }
+    },
+    {
+      "name": "ucp-checkout-response-with-headers",
+      "what": "A signed UCP checkout response held whole: the raw body as the object, its status line and fields as the carrier headers. The raw body is stored, so its Content-Digest and signature can be checked again.",
+      "seal": {
+        "type": "ucp.checkout",
+        "octets": "jcs",
+        "object": "ucp-checkout-response.body",
+        "object_digest": null,
+        "headers": "ucp-checkout-response.headers"
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "1fdc8768410f2fe2467fa50c5836fef2465a4922048aa5b0277091cb9c6fdcad",
+        "type_registered": false,
+        "wrapped_held": "octets",
+        "object_digest": "PASS",
+        "carrier_headers": "PASS"
+      },
+      "verify": [
+        {
+          "headers": "ucp-checkout-response.changed.headers",
+          "expect": {
+            "carrier_headers": "FAIL"
+          }
+        }
+      ]
+    },
+    {
+      "name": "registered-as-transmitted",
+      "what": "A registered type whose octets are as delivered.",
+      "seal": {
+        "type": "delivery.proof",
+        "octets": "as-transmitted",
+        "object": "delivery-proof.txt",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "74ad1b1dcb4abec5e0acaac2e7c186cd56f86a165c766809f529f5685e7436fb",
+        "type_registered": true,
+        "wrapped_held": "octets",
+        "object_digest": "PASS",
+        "carrier_headers": "NOT_PRESENT"
+      }
+    },
+    {
+      "name": "registered-wrong-rule",
+      "what": "A registered type sealed under a rule its definition does not give.",
+      "seal": {
+        "type": "delivery.proof",
+        "octets": "jcs",
+        "object": "delivery-proof.txt",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": false,
+        "error": "as delivered"
+      }
+    },
+    {
+      "name": "x402-eip712-jcs",
+      "what": "An x402 receipt in EIP-712 form: the RFC 8785 form of the envelope.",
+      "seal": {
+        "type": "x402.receipt",
+        "octets": "jcs",
+        "object": "x402-receipt-eip712.json",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "705777938730347f9b40f1588a9770b7c6da44af0c818c8ead2721844ea41727",
+        "type_registered": true,
+        "wrapped_held": "octets",
+        "object_digest": "PASS",
+        "carrier_headers": "NOT_PRESENT"
+      }
+    },
+    {
+      "name": "x402-eip712-as-transmitted",
+      "what": "The same envelope sealed as delivered.",
+      "seal": {
+        "type": "x402.receipt",
+        "octets": "as-transmitted",
+        "object": "x402-receipt-eip712.json",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": false,
+        "error": "its form takes jcs"
+      }
+    },
+    {
+      "name": "x402-jws-as-transmitted",
+      "what": "An x402 offer as a JWS compact serialization: its ASCII octets.",
+      "seal": {
+        "type": "x402.offer",
+        "octets": "as-transmitted",
+        "object": "x402-offer.jws",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "75d921f7b22cf6985b81072664a59d7fbde65c3bc0f86d1c2b05c3f306c77dee",
+        "type_registered": true,
+        "wrapped_held": "octets",
+        "object_digest": "PASS",
+        "carrier_headers": "NOT_PRESENT"
+      }
+    },
+    {
+      "name": "x402-jws-jcs",
+      "what": "The same JWS sealed under jcs.",
+      "seal": {
+        "type": "x402.offer",
+        "octets": "jcs",
+        "object": "x402-offer.jws",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": false,
+        "error": "its form takes as-transmitted"
+      }
+    },
+    {
+      "name": "x402-jws-trailing-newline",
+      "what": "The JWS saved with a trailing newline: not the octets as received.",
+      "seal": {
+        "type": "x402.offer",
+        "octets": "as-transmitted",
+        "object": "x402-offer-jws-newline.txt",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": false,
+        "error": "trailing whitespace"
+      }
+    },
+    {
+      "name": "x402-flattened-jws",
+      "what": "A JWS in flattened JSON serialization: a JSON object, but not a form the type defines.",
+      "seal": {
+        "type": "x402.receipt",
+        "octets": "jcs",
+        "object": "x402-receipt-flattened-jws.json",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": false,
+        "error": "neither a JWS compact serialization nor an EIP-712 envelope"
+      }
+    },
+    {
+      "name": "digest-only",
+      "what": "Only the digest of the ACP checkout: no octets held, no possession claimed.",
+      "seal": {
+        "type": "acp.checkout-session",
+        "octets": "as-transmitted",
+        "object": null,
+        "object_digest": "1da1d9205d2677bcd8553bd81a61fac367cd4564f22330aca4e6bdf3f17356b0",
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "1da1d9205d2677bcd8553bd81a61fac367cd4564f22330aca4e6bdf3f17356b0",
+        "type_registered": false,
+        "wrapped_held": "digest",
+        "object_digest": "NOT_PRESENT",
+        "carrier_headers": "NOT_PRESENT"
+      },
+      "verify": [
+        {
+          "object": "acp-checkout-session-with-order.json",
+          "expect": {
+            "object_digest": "PASS"
+          }
+        }
+      ]
+    },
+    {
+      "name": "digest-only-x402-jcs",
+      "what": "Only the digest of an x402 receipt, stated as over the RFC 8785 form: with no octets the form cannot be read, so either rule is accepted and wrapped_held says digest.",
+      "seal": {
+        "type": "x402.receipt",
+        "octets": "jcs",
+        "object": null,
+        "object_digest": "705777938730347f9b40f1588a9770b7c6da44af0c818c8ead2721844ea41727",
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "705777938730347f9b40f1588a9770b7c6da44af0c818c8ead2721844ea41727",
+        "type_registered": true,
+        "wrapped_held": "digest",
+        "object_digest": "NOT_PRESENT",
+        "carrier_headers": "NOT_PRESENT"
+      }
+    },
+    {
+      "name": "digest-only-x402-as-transmitted",
+      "what": "Only the digest of an x402 offer, stated as over the octets as delivered: accepted for the same reason.",
+      "seal": {
+        "type": "x402.offer",
+        "octets": "as-transmitted",
+        "object": null,
+        "object_digest": "75d921f7b22cf6985b81072664a59d7fbde65c3bc0f86d1c2b05c3f306c77dee",
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "75d921f7b22cf6985b81072664a59d7fbde65c3bc0f86d1c2b05c3f306c77dee",
+        "type_registered": true,
+        "wrapped_held": "digest",
+        "object_digest": "NOT_PRESENT",
+        "carrier_headers": "NOT_PRESENT"
+      }
+    },
+    {
+      "name": "digest-only-registered-wrong-rule",
+      "what": "Only a digest, for a registered type with one rule, stated under the other: refused.",
+      "seal": {
+        "type": "delivery.proof",
+        "octets": "jcs",
+        "object": null,
+        "object_digest": "74ad1b1dcb4abec5e0acaac2e7c186cd56f86a165c766809f529f5685e7436fb",
+        "headers": null
+      },
+      "expect": {
+        "sealed": false,
+        "error": "as delivered"
+      }
+    },
+    {
+      "name": "jcs-decimal-numbers",
+      "what": "jcs over an object with non-integer and exponent numbers; the expected form is written out by hand from RFC 8785.",
+      "seal": {
+        "type": "x-example.object",
+        "octets": "jcs",
+        "object": "decimal-numbers.json",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "baa739ef111cea07e2545eccd11b3d3ef39572924f68e7d79ac6467db4433747",
+        "type_registered": false,
+        "wrapped_held": "octets",
+        "object_digest": "PASS",
+        "carrier_headers": "NOT_PRESENT"
+      }
+    },
+    {
+      "name": "jcs-duplicate-member",
+      "what": "jcs over an object with a duplicate member: not I-JSON.",
+      "seal": {
+        "type": "x-example.object",
+        "octets": "jcs",
+        "object": "duplicate-member.json",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": false,
+        "error": "not I-JSON"
+      }
+    }
+  ],
+  "recipient": [
+    {
+      "name": "recipient-pass",
+      "what": "A recipient checks the object against the digest and wrapped_octets of the record in its copy.",
+      "object": "ucp-checkout-response.body",
+      "digest": "1fdc8768410f2fe2467fa50c5836fef2465a4922048aa5b0277091cb9c6fdcad",
+      "octets": "jcs",
+      "expect": {
+        "object_digest": "PASS"
+      }
+    },
+    {
+      "name": "recipient-changed-byte",
+      "what": "The same check with one byte changed.",
+      "object": "acp-checkout-session-with-order.changed.json",
+      "digest": "1da1d9205d2677bcd8553bd81a61fac367cd4564f22330aca4e6bdf3f17356b0",
+      "octets": "as-transmitted",
+      "expect": {
+        "object_digest": "FAIL",
+        "code": "wrapped_digest_mismatch"
+      }
+    }
+  ]
+}

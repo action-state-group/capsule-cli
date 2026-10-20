@@ -1,0 +1,5 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Digest: sha-256=:27EmcF9pJBTZ7cce1LSpMXw1sYu/krN+aXseuA+nGU8=:
+Signature-Input: sig1=("@status" "content-digest" "content-type");created=1760702400;keyid="rfc7515-appendix-a3"
+Signature: sig1=:jO4M1mUxMmdn08DPuLu79LHFbNzW5DIgwqcAkWNZf0Mmb5ro3wqhxxmIxK8zBlmwFoJReBuFSjXOfyYuS07vHA==:

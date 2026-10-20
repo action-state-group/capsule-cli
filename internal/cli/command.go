@@ -257,6 +257,8 @@ func SafeError(err error) string {
 		return ErrHistoryNotAccepted.Error()
 	case errors.Is(err, ErrEmailUnverified):
 		return ErrEmailUnverified.Error()
+	case errors.Is(err, ErrObjectUnverified):
+		return ErrObjectUnverified.Error()
 	case errors.Is(err, ErrStatementInvalid):
 		return ErrStatementInvalid.Error()
 	case errors.Is(err, ErrPaused):

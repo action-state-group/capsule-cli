@@ -1,0 +1,75 @@
+{
+  "ucp": {
+    "version": "2026-08-25",
+    "status": "success",
+    "capabilities": {
+      "dev.ucp.shopping.checkout": [
+        {
+          "version": "2026-08-25",
+          "spec": "https://ucp.dev/2026-08-25/specification/shopping/checkout",
+          "schema": "https://ucp.dev/2026-08-25/schemas/shopping/checkout.json"
+        }
+      ],
+      "dev.ucp.common.payment.ap2_mandate": [
+        {
+          "version": "2026-08-25",
+          "spec": "https://ucp.dev/2026-08-25/specification/payment/extensions/ap2-mandates",
+          "schema": "https://ucp.dev/2026-08-25/schemas/common/payment_ap2_mandate.json",
+          "extends": "dev.ucp.shopping.checkout"
+        }
+      ]
+    },
+    "payment_handlers": {}
+  },
+  "id": "chk_abc123",
+  "status": "completed",
+  "currency": "USD",
+  "line_items": [
+    {
+      "id": "li_1",
+      "item": {
+        "id": "item_123",
+        "title": "Widget",
+        "price": 2500
+      },
+      "quantity": 2,
+      "totals": [
+        {
+          "type": "subtotal",
+          "amount": 5000
+        },
+        {
+          "type": "total",
+          "amount": 5000
+        }
+      ]
+    }
+  ],
+  "totals": [
+    {
+      "type": "subtotal",
+      "amount": 5000
+    },
+    {
+      "type": "tax",
+      "amount": 400
+    },
+    {
+      "type": "total",
+      "amount": 5400
+    }
+  ],
+  "links": [
+    {
+      "type": "terms_of_service",
+      "url": "https://merchant.example/terms"
+    }
+  ],
+  "order": {
+    "id": "ord_456",
+    "permalink_url": "https://merchant.example/orders/ord_456"
+  },
+  "ap2": {
+    "merchant_authorization": "eyJhbGciOiJFUzI1NiIsImtpZCI6InJmYzc1MTUtYXBwZW5kaXgtYTMifQ..vt0ZgQQe9YHokmCEiX1Jtz9ekr54jKTuItQ1bItpV7RDlesp4C3DXaNPXC3kNtTe9HPh6vbBvZvb0NrgHsm_mA"
+  }
+}
