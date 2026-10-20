@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -23,11 +24,6 @@ var historyNotEstablished = []string{
 	"that anything happened at a claimed event time",
 	"who holds the holder key",
 }
-
-// historyDisplayOrder is PH §6.3's order, by this report's members: a
-// JSON object has no order of its own, so a page built from the report
-// shows its members in this one.
-var historyDisplayOrder = []string{"not_established", "coverage", "completeness", "selected_deals", "deal_states", "deals", "history_properties", "exchanges", "not_run", "limits"}
 
 // historyNotRun are the checks a Basic level verifier cannot run (PH §2,
 // §6.1, §6.3 item 4).
@@ -79,7 +75,6 @@ type historyExchangeView struct {
 // each deal's records, then the checks run and not run, then the limits.
 type historyReport struct {
 	Kind           string                `json:"kind"`
-	DisplayOrder   []string              `json:"display_order"`
 	Verdict        string                `json:"verdict"`
 	NotEstablished []string              `json:"not_established"`
 	Coverage       string                `json:"coverage"`
@@ -87,16 +82,28 @@ type historyReport struct {
 	SelectedDeals  *int                  `json:"selected_deals,omitempty"`
 	DealStates     map[string]int        `json:"deal_states,omitempty"`
 	Deals          []historyDealView     `json:"deals"`
-	Recipient      any                   `json:"recipient,omitempty"`
-	HolderKeys     []string              `json:"holder_keys"`
-	Mode           string                `json:"mode"`
-	ModeNote       string                `json:"mode_note"`
 	HistoryChecks  map[string]string     `json:"history_properties"`
 	Exchanges      []historyExchangeView `json:"exchanges"`
+	Findings       []string              `json:"findings"`
 	NotRun         []string              `json:"not_run"`
 	TrustNote      string                `json:"trust_note,omitempty"`
+	HolderKeys     []string              `json:"signing_keys"`
+	Recipient      any                   `json:"recipient,omitempty"`
+	Mode           string                `json:"mode"`
+	ModeNote       string                `json:"mode_note"`
 	Limits         []string              `json:"limits"`
-	Findings       []string              `json:"findings"`
+}
+
+// outputInOrder writes value as Output does, with its members in their
+// declared order rather than sorted: a History's report is read in PH
+// §6.3's order (what is not established first, the limits last).
+func outputInOrder(c *cobra.Command, value historyReport) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(c.OutOrStdout(), "{\"spec_version\":\"capsule-cli-result/v1\",%s\n", data[1:])
+	return err
 }
 
 // verifyHistoryFile is `verify --history`: a one-file History at the Basic
@@ -125,13 +132,14 @@ func verifyHistoryFile(c *cobra.Command, path string, holderKeys []string) error
 	if err != nil {
 		return err
 	}
-	if err := Output(c, report); err != nil {
+	if err := outputInOrder(c, report); err != nil {
 		return err
 	}
 	switch {
 	case report.Verdict == "ACCEPTED":
 		return nil
-	case len(report.Findings) == 0:
+	case len(holderKeys) == 0 && len(report.Findings) == 0:
+		// Nothing failed; only the key is left to pin.
 		return ErrPartial
 	}
 	return ErrHistoryNotAccepted
@@ -147,6 +155,12 @@ func HistoryVerdict(file personalhistory.File, holderKeys []string) (historyRepo
 	if err != nil || len(holderKeys) > 0 {
 		return r, err
 	}
+	if len(r.HolderKeys) == 0 {
+		// No reply names a key to try: no History can be accepted under
+		// any key, so that is a finding, not a key left to pin.
+		r.Findings = append(r.Findings, "no reply is an envelope naming a holder key")
+		return r, nil
+	}
 	asIfPinned, err := historyEvaluate(file, r.HolderKeys)
 	if err != nil {
 		return r, err
@@ -161,7 +175,7 @@ func HistoryVerdict(file personalhistory.File, holderKeys []string) (historyRepo
 		asIfPinned.Deals[i].State = ""
 	}
 	asIfPinned.TrustNote = "no --holder-key was given, so responder_trust cannot pass and no envelope is accepted (IP §7.2). " +
-		"The other checks were run as if the keys in holder_keys were trusted. Obtain the holder's key by another channel, pin it with --holder-key, and run again"
+		"The other checks were run as if the keys in signing_keys were trusted. Obtain the holder's key by another channel, pin it with --holder-key, and run again"
 	return asIfPinned, nil
 }
 
@@ -176,7 +190,7 @@ func historyEvaluate(file personalhistory.File, holderKeys []string) (historyRep
 		return historyReport{}, err
 	}
 	r := historyReport{
-		Kind: personalhistory.Name, DisplayOrder: historyDisplayOrder, NotEstablished: historyNotEstablished, Coverage: "holder_selected",
+		Kind: personalhistory.Name, NotEstablished: historyNotEstablished, Coverage: "holder_selected",
 		Completeness: "not_asserted", Deals: []historyDealView{}, HolderKeys: []string{}, Mode: "handed_over",
 		ModeNote:      "the holder formed the requests (PH §8.2): request_binding shows only that each answer matches the request octets in the file, not that the recipient asked",
 		HistoryChecks: res.Properties, NotRun: historyNotRun, Limits: historyLimits, Findings: []string{},
@@ -201,6 +215,12 @@ func historyEvaluate(file personalhistory.File, holderKeys []string) (historyRep
 			if p.Status == evidencerequest.StatusFail && (p.Property != "responder_trust" || len(holderKeys) > 0) {
 				r.Findings = append(r.Findings, fmt.Sprintf("exchange %d: %s FAIL", i, p.Property))
 			}
+		}
+		if len(holderKeys) > 0 && x.Reply.MessageType == "envelope" && !x.Accepted {
+			// Not accepted under PH §6.1 without a FAIL: a property NOT_PRESENT
+			// or NOT_CHECKED where PASS is required, a verification member, or
+			// anchor_inclusion other than NOT_CHECKED.
+			r.Findings = append(r.Findings, fmt.Sprintf("exchange %d: not accepted (PH §6.1)", i))
 		}
 		if x.Reply.MessageType != "envelope" {
 			r.Findings = append(r.Findings, fmt.Sprintf("exchange %d: the reply is a %s, not an envelope", i, x.Reply.MessageType))

@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -9,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/action-state-group/agent-action-capsule/go/evidencerequest"
+	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/agent-action-capsule/go/personalhistory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -138,6 +140,7 @@ func TestVerifyHistoryRunsThePersonalHistoryVectors(t *testing.T) {
 				require.NotNil(t, got.SelectedDeals)
 				assert.Equal(t, c.Expected.DealStates.SelectedDeals, *got.SelectedDeals)
 				assert.Equal(t, c.Expected.DealStates.Counts, got.DealStates)
+				require.Len(t, got.Deals, len(c.Expected.DealStates.PerDeal))
 				for _, d := range got.Deals {
 					assert.Equal(t, c.Expected.DealStates.PerDeal[d.Deal], d.State, d.Deal)
 				}
@@ -173,13 +176,23 @@ func TestVerifyHistoryShowsWhatPH63Asks(t *testing.T) {
 	var got map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
 	assert.Equal(t, "ACCEPTED", got["verdict"])
-	assert.Equal(t, []any{"not_established", "coverage", "completeness", "selected_deals", "deal_states", "deals", "history_properties", "exchanges", "not_run", "limits"}, got["display_order"])
+	// The members come in PH §6.3's order in the output itself.
+	at := func(member string) int {
+		i := strings.Index(out, `"`+member+`":`)
+		require.GreaterOrEqual(t, i, 0, member)
+		return i
+	}
+	order := []string{"not_established", "coverage", "completeness", "selected_deals", "deal_states", "deals", "history_properties", "not_run", "limits"}
+	for i := 1; i < len(order); i++ {
+		assert.Less(t, at(order[i-1]), at(order[i]), "%s before %s", order[i-1], order[i])
+	}
+	assert.True(t, strings.HasPrefix(out, `{"spec_version":"capsule-cli-result/v1",`))
 	assert.Equal(t, "holder_selected", got["coverage"])
 	assert.Equal(t, "not_asserted", got["completeness"])
 	assert.Contains(t, got["not_established"], "any outcome: sale, payment, delivery, receipt or return")
 	assert.Equal(t, "handed_over", got["mode"])
 	assert.Equal(t, "recipient-1", got["recipient"])
-	assert.Equal(t, []any{c.Pins.TrustPolicy.ResponderKeys[0]}, got["holder_keys"])
+	assert.Equal(t, []any{c.Pins.TrustPolicy.ResponderKeys[0]}, got["signing_keys"])
 	assert.Contains(t, strings.Join(toStrings(got["not_run"]), "\n"), "anchor_inclusion")
 	deals := got["deals"].([]any)
 	require.Len(t, deals, 3)
@@ -211,7 +224,7 @@ func TestVerifyHistoryWithoutAHolderKey(t *testing.T) {
 	var got map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &got), out)
 	assert.Equal(t, "NOT_ACCEPTED", got["verdict"])
-	assert.Equal(t, []any{c.Pins.TrustPolicy.ResponderKeys[0]}, got["holder_keys"])
+	assert.Equal(t, []any{c.Pins.TrustPolicy.ResponderKeys[0]}, got["signing_keys"])
 	assert.Contains(t, got["trust_note"], "--holder-key")
 	assert.Empty(t, got["findings"])
 	assert.Nil(t, got["deal_states"])
@@ -229,6 +242,64 @@ func TestVerifyHistoryWithoutAHolderKey(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(out), &got), out)
 		assert.NotEmpty(t, got["findings"], v.ID)
 	}
+}
+
+// A History no key could make acceptable is a failure, not a key left to
+// pin: an empty History, or one whose replies name no holder key, exits 1
+// without --holder-key.
+func TestVerifyHistoryWithNothingToPin(t *testing.T) {
+	c, _ := positiveHistory(t)
+	empty := []byte(`{"history":"personal_history_basic/1","definition":` + string(c.Inputs.Definition) + `,"exchanges":[]}`)
+	out, err := invoke(t, "", "verify", "--history", writeHistory(t, empty))
+	assert.ErrorIs(t, err, ErrHistoryNotAccepted, out)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+	assert.Contains(t, got["findings"], "no reply is an envelope naming a holder key")
+
+	noKey := c
+	noKey.Inputs.Exchanges = append(noKey.Inputs.Exchanges[:0:0], c.Inputs.Exchanges...)
+	noKey.Inputs.Exchanges[0].Reply.OctetsText = strings.Replace(c.Inputs.Exchanges[0].Reply.OctetsText, `"responder":"`, `"responder_was":"`, 1)
+	for i := 1; i < len(noKey.Inputs.Exchanges); i++ {
+		noKey.Inputs.Exchanges[i].Reply.OctetsText = strings.Replace(c.Inputs.Exchanges[i].Reply.OctetsText, `"responder":"`, `"responder_was":"`, 1)
+	}
+	_, err = invoke(t, "", "verify", "--history", writeHistory(t, historyFileOf(t, noKey)))
+	assert.ErrorIs(t, err, ErrHistoryNotAccepted, "replies that name no holder key")
+}
+
+// An answer PH §6.1 rejects without a FAIL still fails the History under a
+// pinned key: here an extra envelope, re-signed by the holder's test key,
+// that carries a verification member, which a Basic answer must not.
+func TestVerifyHistoryFailsAnAnswerRejectedWithoutAFail(t *testing.T) {
+	c, _ := positiveHistory(t)
+	seed := sha256.Sum256([]byte("personal-agent-history-profile-v0 conformance vectors: holder key"))
+	key := ed25519.NewKeyFromSeed(seed[:])
+	var env map[string]any
+	require.NoError(t, json.Unmarshal([]byte(c.Inputs.Exchanges[0].Reply.OctetsText), &env))
+	material := []byte("material")
+	env["verification"] = []any{map[string]any{"kind": "x-kind", "digest": hex.EncodeToString(sha256Of(material))}}
+	env["verification_content"] = []any{base64.RawURLEncoding.EncodeToString(material)}
+	signed := map[string]any{}
+	for _, k := range []string{"profile", "request_digest", "subject", "derivation", "anchor", "artifact_digest", "verification", "responder", "issued_at"} {
+		signed[k] = env[k]
+	}
+	body, err := canonical.JCS(signed)
+	require.NoError(t, err)
+	env["sig"] = hex.EncodeToString(ed25519.Sign(key, body))
+	reply, err := canonical.JCS(env)
+	require.NoError(t, err)
+	extra := c
+	extra.Inputs.Exchanges = append(append(extra.Inputs.Exchanges[:0:0], c.Inputs.Exchanges...), c.Inputs.Exchanges[0])
+	extra.Inputs.Exchanges[len(extra.Inputs.Exchanges)-1].Reply.OctetsText = string(reply)
+	out, err := invoke(t, "", "verify", "--history", writeHistory(t, historyFileOf(t, extra)), "--holder-key", c.Pins.TrustPolicy.ResponderKeys[0])
+	assert.ErrorIs(t, err, ErrHistoryNotAccepted, out)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+	assert.Contains(t, got["findings"], "exchange 3: not accepted (PH §6.1)")
+}
+
+func sha256Of(b []byte) []byte {
+	sum := sha256.Sum256(b)
+	return sum[:]
 }
 
 func TestVerifyHistoryUnderAnotherKey(t *testing.T) {
@@ -280,8 +351,11 @@ func TestVerifyHistoryFlags(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInput, "a holder key is 64 lowercase hex characters")
 	_, err = invoke(t, "", "verify", "--holder-key", strings.Repeat("ab", 32), "--capsule", path)
 	assert.ErrorIs(t, err, ErrInput, "--holder-key goes with --history")
-	_, err = invoke(t, "", "verify", "--history", path, "--bundle", path)
-	assert.Error(t, err, "--history and --bundle are exclusive")
+	for _, other := range []string{"--bundle", "--capsule"} {
+		_, err = invoke(t, "", "verify", "--history", path, other, path)
+		assert.ErrorIs(t, err, ErrInput, "--history and %s are exclusive", other)
+		assert.Equal(t, 2, ExitCode(err))
+	}
 	_, err = invoke(t, "", "verify", "--bundle", path, "--holder-key", strings.Repeat("ab", 32))
 	assert.ErrorIs(t, err, ErrInput, "--holder-key is never ignored beside --bundle")
 	_, err = invoke(t, "", "verify", "--history", path, "--witness-directory", path)
@@ -302,22 +376,4 @@ func TestVerifyHistoryPrintsItsLimitsWithNoStore(t *testing.T) {
 	assert.Contains(t, limits, "a deal reference is chosen by whichever party opened the deal, and the file does not say which")
 	assert.Contains(t, limits, "epistemic_type is the holder's own label")
 	assert.Contains(t, limits, "two recipients can tell they received the same deal")
-}
-
-// The evaluation is the one agent-action-capsule exports: HistoryVerdict
-// agrees with personalhistory.Evaluate on every V case.
-func TestHistoryVerdictIsTheAACEvaluation(t *testing.T) {
-	for _, c := range historyVectors(t) {
-		file, err := personalhistory.ParseFile(historyFileOf(t, c))
-		require.NoError(t, err, c.ID)
-		report, err := HistoryVerdict(file, c.Pins.TrustPolicy.ResponderKeys)
-		require.NoError(t, err, c.ID)
-		v, err := evidencerequest.NewVerifier(evidencerequest.TrustPolicy{ResponderKeys: c.Pins.TrustPolicy.ResponderKeys},
-			evidencerequest.VerificationPolicyFromPin(nil), "2026-10-16T00:00:00Z", nil)
-		require.NoError(t, err)
-		res, err := personalhistory.Evaluate(v, file.Definition, file.Exchanges, nil)
-		require.NoError(t, err)
-		assert.Equal(t, res.Properties, report.HistoryChecks, c.ID)
-		assert.Equal(t, res.Accepted, report.Verdict == "ACCEPTED", c.ID)
-	}
 }

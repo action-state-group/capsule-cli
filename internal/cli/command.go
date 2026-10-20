@@ -406,10 +406,19 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	get.Flags().Bool("raw", false, "Preserve SDK byte fields as base64 for exact-byte export and verify; field openings (opening.* originals, which the capsule does not bind) are left out of either view")
 	get.Flags().String("output", "", "Write readable JSON to a file; use --raw for a verifiable artifact.Record")
 	root.AddCommand(get)
-	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts, or an Evidence Bundle offline", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
+	verify := &cobra.Command{Use: "verify", Short: "Verify a Capsule's identity, signature, trust and bound artifacts, or check an Evidence Bundle or a History offline", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		holderKeys, _ := c.Flags().GetStringArray("holder-key")
 		historyPath, _ := c.Flags().GetString("history")
+		given := 0
+		for _, name := range []string{"capsule", "bundle", "history"} {
+			if v, _ := c.Flags().GetString(name); v != "" {
+				given++
+			}
+		}
 		switch {
+		case given > 1:
+			// An input error (exit 2), never a failed check.
+			return InputError("give one of --capsule, --bundle and --history")
 		case len(holderKeys) > 0 && historyPath == "":
 			return InputError("--holder-key goes with --history")
 		case historyPath != "" && c.Flags().Changed("witness-directory"):
@@ -475,9 +484,8 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	verify.Flags().String("capsule", "", "A capsule file: an artifact.Record (as `seal --output` and `get --raw` write) or a bare Agent Action Capsule with an inline signature and key_id (as capsule-emit seals); its shape is read from its members and named in the output")
 	verify.Flags().String("bundle", "", "Evidence Bundle (evidence-bundle/v2) JSON file, verified offline from the file alone")
 	verify.Flags().String("witness-directory", "", "With --bundle: a witness directory (witnesses.json format) naming the witnesses and keys whose receipts to check; without it no receipt is checked")
-	verify.Flags().String("history", "", "A one-file History (personal_history_basic/1, as `deal history` writes it), verified offline from the file alone with agent-action-capsule's evidence-interop/0 verifier")
-	verify.Flags().StringArray("holder-key", nil, "With --history: a holder key you accept, as 64 hex characters, obtained from the holder by another channel (repeat for each); without one no History is accepted")
-	verify.MarkFlagsMutuallyExclusive("capsule", "bundle", "history")
+	verify.Flags().String("history", "", "A one-file History (personal_history_basic/1, the profile's §8.2 form): its envelopes and History properties are checked offline, from the file alone, with agent-action-capsule's evidence-interop/0 verifier")
+	verify.Flags().StringArray("holder-key", nil, "With --history: a holder key you accept, as 64 lowercase hex characters, obtained from the holder by another channel (repeat for each); without one no History is accepted")
 	root.AddCommand(verify)
 	publish := &cobra.Command{Use: "publish", Short: "Seal, persist artifacts, and append to CLL", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := Selected(c)

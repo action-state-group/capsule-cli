@@ -1017,14 +1017,17 @@ evidence-interop/0 verifier and History evaluator:
 another channel; repeat it for each. Without one, no envelope passes
 `responder_trust`, so no History is accepted. The output then names the key the
 History is signed by, runs the other checks as if that key were trusted, and
-exits 3.
+exits 3. A History whose replies name no key at all exits 1. The output's members
+come in the profile's display order.
 
 The output starts with what a Basic History never establishes: any outcome,
 that the selection is complete, that anything happened at a claimed time, and
 who holds the key. It lists the checks that cannot run at this level: record
 inclusion against the anchor, and whether the anchor is a witnessed tick. It
 ends with the History's limits. The exit is 0 when the History is accepted, 3
-when nothing failed but no holder key was given, and 1 when a check failed. A
+when nothing failed but no holder key was given, 1 when a check failed or an
+answer was not accepted, and 2 when the file is not a one-file History or the
+flags conflict. A
 released `x-history-selection/v0` file still verifies with `verify --bundle`.
 
 ### Example: publish a checkpoint to the witness and confirm it landed
