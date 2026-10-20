@@ -403,6 +403,17 @@ func TestWrappedObjectStatingTheDealsTotalStillShares(t *testing.T) {
 	require.Error(t, err, "the copy showing 5400 is refused rather than let the id through")
 }
 
+// Only exactly one JSON value has number values to exempt: a stream of
+// several, or any other text, is mined whole.
+func TestBlankShownNumbersNeedsOneJSONValue(t *testing.T) {
+	shown := map[int64]bool{5400: true}
+	assert.Equal(t, `{"amount":    }`, string(blankShownNumbers([]byte(`{"amount":5400}`), shown)))
+	assert.Equal(t, `{"id":"ref-5400"}`, string(blankShownNumbers([]byte(`{"id":"ref-5400"}`), shown)))
+	for _, text := range []string{"5400 5400", `{"a":5400} {"b":5400}`, "total 5400", "5400,"} {
+		assert.Equal(t, text, string(blankShownNumbers([]byte(text), shown)), text)
+	}
+}
+
 // A wrapper step whose type label would carry a private value is withheld
 // whole from a copy: the copy shows its place in the log, never its type.
 func TestWrappedObjectWithheldStepCarriesNoType(t *testing.T) {

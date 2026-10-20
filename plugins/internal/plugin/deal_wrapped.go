@@ -368,10 +368,15 @@ func wrappedTexts(w *dealWrapped, shown map[int64]bool) []string {
 }
 
 // blankShownNumbers blanks the JSON number values of object that are shown
-// amounts. An object that is not JSON is returned unchanged.
+// amounts. An object that is not exactly one JSON value (a decoder alone
+// would take a stream of several) is returned unchanged.
 func blankShownNumbers(object []byte, shown map[int64]bool) []byte {
+	opts := []jsontext.Options{jsontext.AllowDuplicateNames(true), jsontext.AllowInvalidUTF8(true)}
+	if !jsontext.Value(object).IsValid(opts...) {
+		return object
+	}
 	out := bytes.Clone(object)
-	dec := jsontext.NewDecoder(bytes.NewReader(object), jsontext.AllowDuplicateNames(true), jsontext.AllowInvalidUTF8(true))
+	dec := jsontext.NewDecoder(bytes.NewReader(object), opts...)
 	for {
 		tok, err := dec.ReadToken()
 		if err != nil {
