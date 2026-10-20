@@ -29,7 +29,7 @@ record, and runs `deal verify-object` in a new process on the reopened store.
 | `ucp-checkout-response.headers`, `ucp-checkout-response.body` | evidencebook v0.6.0 `adapter/ucp/testdata/checkout-response-signed.http`, split at the empty line (CRLF): the status line and fields, and the raw body. |
 | `ucp-trust-policy.json` | evidencebook v0.6.0 `adapter/ucp/testdata/trust-policy.json`: the example key set the response signature checks against (used only by the adapter cross-check test). |
 | `x402-offer.jws` | agent-action-capsule settlement-records vectors, case `pos-x402-two-sided-agreed`, the wrapped `x402.offer` (a JWS compact serialization). |
-| `x402-offer-jws-newline.txt`, `x402-receipt-flattened-jws.json`, `x402-receipt-eip712.json`, `delivery-proof.txt`, `duplicate-member.json`, `*.changed.*` | Written by `generate.py`. The EIP-712 envelope and the proof of delivery are illustrative placeholders: their signatures are not valid. |
+| `x402-offer-jws-newline.txt`, `x402-receipt-flattened-jws.json`, `x402-receipt-eip712.json`, `delivery-proof.txt`, `duplicate-member.json`, `decimal-numbers.json`, `*.changed.*` | Written by `generate.py`. The EIP-712 envelope and the proof of delivery are illustrative placeholders: their signatures are not valid. |
 | `cases.json` | The cases, below. |
 | `SHA256SUMS` | SHA-256 of every file here but itself. |
 
@@ -55,6 +55,7 @@ a digest with no deal.
 | `x402-jws-trailing-newline` | refused, naming the trailing whitespace |
 | `x402-flattened-jws` | a JSON-serialized JWS is neither form the type defines: refused |
 | `digest-only` | `wrapped_held` digest, `object_digest` `NOT_PRESENT`; given the object, `PASS` |
+| `jcs-decimal-numbers` | non-integer and exponent numbers under `jcs`: the expected RFC 8785 form is written out by hand in `generate.py` (ECMAScript number output), not computed |
 | `jcs-duplicate-member` | not I-JSON: refused |
 
 ## Conventions
@@ -66,4 +67,6 @@ a digest with no deal.
   as labels, `type_registered: false`.
 - `generate.py`'s RFC 8785 form is `json.dumps` with sorted keys, no
   whitespace and `ensure_ascii` off, which equals RFC 8785 for these fixtures
-  (ASCII member names, integer numbers); it refuses any other input.
+  (ASCII member names, integer numbers); it refuses any other input. The one
+  case with other numbers, `jcs-decimal-numbers`, has its expected form
+  written out by hand.

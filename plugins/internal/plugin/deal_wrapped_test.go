@@ -339,6 +339,42 @@ func TestWrappedObjectAboutAndDigestOnly(t *testing.T) {
 	require.ErrorIs(t, err, cli.ErrInput, "--out needs --step with two held objects")
 }
 
+// --input that gives only detail keeps the default about, for an object and
+// for a digest alike.
+func TestWrappedObjectDetailOnlyKeepsTheDefaultAbout(t *testing.T) {
+	dealFixture(t)
+	dealID := retailDeal(t)
+	detail := writeJSON(t, `{"detail":"received from the courier"}`)
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--object", vectorPath("delivery-proof.txt"), "--object-type", "delivery.proof", "--input", detail)
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--object-digest", strings.Repeat("ef", 32), "--object-type", "delivery.proof", "--input", detail)
+	var abouts []string
+	for _, se := range chainSteps(t, dealID) {
+		if e := se.Event.Evidence; e != nil && e.Wrapped != nil {
+			abouts = append(abouts, e.About)
+			assert.Equal(t, "received from the courier", e.Detail)
+		}
+	}
+	assert.Equal(t, []string{"held object", "held digest"}, abouts)
+}
+
+// verify-object without --deal takes no step, headers or output directory;
+// headers given for a step that sealed none are reported as not checked.
+func TestWrappedObjectVerifyFlagScope(t *testing.T) {
+	dealFixture(t)
+	object, digest := vectorPath("delivery-proof.txt"), sha256Hex(mustRead(t, vectorPath("delivery-proof.txt")))
+	for _, extra := range [][]string{{"--step", "2"}, {"--headers", vectorPath("ucp-checkout-response.headers")}, {"--out", t.TempDir()}} {
+		_, err := verifyObject(t, append([]string{"--object", object, "--digest", digest}, extra...)...)
+		require.ErrorIs(t, err, cli.ErrInput, extra[0])
+	}
+	dealID := retailDeal(t)
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--object", object, "--object-type", "delivery.proof")
+	res, err := verifyObject(t, "--deal", dealID, "--headers", vectorPath("ucp-checkout-response.headers"))
+	require.NoError(t, err)
+	got := res["objects"].([]any)[0].(map[string]any)
+	assert.Equal(t, verifyNotPresent, got["carrier_headers"])
+	assert.Contains(t, got["headers_given"], "sealed no carrier headers")
+}
+
 // A held object is sealed on a buyer's deal kept on a book: an older deal
 // takes no new kind of step, and a seller's deal has its own legs.
 func TestWrappedObjectOnlyOnABuyersBookDeal(t *testing.T) {
@@ -366,8 +402,8 @@ func TestWrappedObjectOnlyOnABuyersBookDeal(t *testing.T) {
 // not refuse without the held object.
 func TestWrappedObjectInCopies(t *testing.T) {
 	object := writeFile(t, "o.json", []byte(`{"order": "ZQ7341-PL", "note": "kept"}`))
-	headers := writeFile(t, "h", []byte("HTTP/1.1 200 OK\r\nRequest-Id: req-88412-xk"))
-	leaks := []string{"the order reference is ZQ7341-PL", "request req-88412-xk"}
+	headers := writeFile(t, "h", []byte("HTTP/1.1 200 OK\r\nRequest-Id: req-88412-xk\r\nX-Token: orchidwillow"))
+	leaks := []string{"the order reference is ZQ7341-PL", "request req-88412-xk", "token orchidwillow"}
 
 	dealFixture(t)
 	dealID := retailDeal(t)
@@ -376,6 +412,7 @@ func TestWrappedObjectInCopies(t *testing.T) {
 		_, raw := sharedCopy(t, dealID, audience, "x")
 		assert.NotContains(t, raw, "ZQ7341", audience)
 		assert.NotContains(t, raw, "req-88412", audience)
+		assert.NotContains(t, raw, "orchidwillow", audience)
 		assert.Contains(t, raw, sha256Hex([]byte(`{"order": "ZQ7341-PL", "note": "kept"}`)), audience+": the wrapper record is disclosed whole")
 		assert.Contains(t, raw, `"x-example.order"`, audience)
 		for _, leak := range leaks {

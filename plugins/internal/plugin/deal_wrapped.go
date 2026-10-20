@@ -10,7 +10,6 @@ import (
 	"encoding/json/jsontext"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -107,6 +106,15 @@ type dealWrapped struct {
 	Headers []byte `json:"headers,omitempty"`
 }
 
+// wrappedAbout is a held object note's default about: a digest given
+// without the object claims no possession.
+func wrappedAbout(w *dealWrapped) string {
+	if w.Object == nil {
+		return "held digest"
+	}
+	return "held object"
+}
+
 func (w *dealWrapped) held() string {
 	if w.Object != nil {
 		return wrappedHeldOctets
@@ -137,28 +145,17 @@ func wrappedDigest(object []byte, rule string) (string, error) {
 }
 
 // jcsForm is the RFC 8785 form of an object read as I-JSON (RFC 7493):
-// invalid UTF-8, a lone surrogate escape or a duplicate member makes it
-// unreadable, as does trailing data.
+// invalid UTF-8, a lone surrogate escape, a duplicate member or trailing
+// data makes it unreadable. The form is the standard library's
+// (jsontext.Value.Canonicalize, RFC 8785 with ECMAScript number output),
+// since a foreign object's numbers need not be integers.
 func jcsForm(object []byte) ([]byte, error) {
 	if err := canonical.CheckJSONText(object); err != nil {
 		return nil, errors.New("it is not I-JSON: " + err.Error())
 	}
-	dec := jsontext.NewDecoder(bytes.NewReader(object))
-	if _, err := dec.ReadValue(); err != nil {
-		return nil, errors.New("it is not I-JSON (a syntax error or a duplicate member)")
-	}
-	if _, err := dec.ReadToken(); err != io.EOF {
-		return nil, errors.New("it is not I-JSON: trailing data after the value")
-	}
-	decoder := json.NewDecoder(bytes.NewReader(object))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, errors.New("it is not JSON")
-	}
-	form, err := canonical.JCS(value)
-	if err != nil {
-		return nil, errors.New("its RFC 8785 form cannot be computed here: " + err.Error())
+	form := jsontext.Value(bytes.Clone(object))
+	if err := form.Canonicalize(); err != nil {
+		return nil, errors.New("it is not I-JSON (a syntax error, a duplicate member or trailing data)")
 	}
 	return form, nil
 }
@@ -316,8 +313,23 @@ func checkWrappedNote(s *dealSession, events []sealedEvent) error {
 	return nil
 }
 
+// wrappedHeaderValues are the values of a held object's header lines, as
+// exact private values for the share gate (a token or a request id need not
+// look like one). The start line has none.
+func wrappedHeaderValues(w *dealWrapped) []string {
+	var out []string
+	for _, line := range strings.Split(strings.ReplaceAll(string(w.Headers), "\r\n", "\n"), "\n") {
+		if _, value, ok := strings.Cut(line, ":"); ok && utf8.ValidString(value) && len(strings.TrimSpace(value)) >= 8 {
+			out = append(out, strings.TrimSpace(value))
+		}
+	}
+	return out
+}
+
 // wrappedTexts are a held object's private texts for the share gate: the
-// object, when it is text, and each header line's value.
+// object, when it is text, and each header line's value. The gate mines them
+// for identifiers as it mines a sealed email's text; capsule-cli does not
+// read the object's fields.
 func wrappedTexts(w *dealWrapped) []string {
 	var out []string
 	if w.Object != nil && utf8.Valid(w.Object) {
@@ -365,6 +377,9 @@ func dealVerifyObjectCommand() *cobra.Command {
 			return err
 		}
 		if flag("deal") == "" {
+			if headers != nil || flag("out") != "" || c.Flags().Changed("step") {
+				return cli.InputError("--step, --headers and --out go with --deal: without it, verify-object checks --object against --digest")
+			}
 			return verifyObjectAlone(c, object, flag("digest"), flag("octets"))
 		}
 		if flag("digest") != "" {
@@ -448,6 +463,9 @@ func verifyWrapped(se sealedEvent, w *dealWrapped, object, headers []byte) (map[
 	switch {
 	case w.Headers == nil:
 		r["carrier_headers"] = verifyNotPresent
+		if headers != nil {
+			r["headers_given"] = "not checked: this step sealed no carrier headers"
+		}
 	default:
 		check := w.Headers
 		if headers != nil {

@@ -235,6 +235,25 @@
       ]
     },
     {
+      "name": "jcs-decimal-numbers",
+      "what": "jcs over an object with non-integer and exponent numbers; the expected form is written out by hand from RFC 8785.",
+      "seal": {
+        "type": "x-example.object",
+        "octets": "jcs",
+        "object": "decimal-numbers.json",
+        "object_digest": null,
+        "headers": null
+      },
+      "expect": {
+        "sealed": true,
+        "digest": "baa739ef111cea07e2545eccd11b3d3ef39572924f68e7d79ac6467db4433747",
+        "type_registered": false,
+        "wrapped_held": "octets",
+        "object_digest": "PASS",
+        "carrier_headers": "NOT_PRESENT"
+      }
+    },
+    {
       "name": "jcs-duplicate-member",
       "what": "jcs over an object with a duplicate member: not I-JSON.",
       "seal": {

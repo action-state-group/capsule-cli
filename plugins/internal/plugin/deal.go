@@ -1267,10 +1267,7 @@ func dealNoteCommand() *cobra.Command {
 		case kind == "evidence" && emailPath != "" && path == "":
 			ev.Evidence = &dealEvidence{About: "merchant confirmation email", Source: "merchant_email"}
 		case kind == "evidence" && wrapped != nil && path == "":
-			ev.Evidence = &dealEvidence{About: "held object", Source: wrappedSource}
-			if wrapped.Object == nil {
-				ev.Evidence.About = "held digest"
-			}
+			ev.Evidence = &dealEvidence{About: wrappedAbout(wrapped), Source: wrappedSource}
 		case slices.Contains([]string{"message", "claim", "evidence", "change", "intent", "act", "disclosure"}, kind):
 			raw, err := cli.ReadInput(path)
 			if err != nil {
@@ -1315,6 +1312,9 @@ func dealNoteCommand() *cobra.Command {
 					return cli.InputError("a held object's source is " + wrappedSource + ": leave source out of --input")
 				}
 				ev.Evidence.Source = wrappedSource
+				if ev.Evidence.About == "" {
+					ev.Evidence.About = wrappedAbout(wrapped)
+				}
 			}
 		case kind == "approval":
 			check, _ := c.Flags().GetString("check")

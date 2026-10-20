@@ -89,6 +89,12 @@ write("x402-receipt-eip712.json", json.dumps({
 }, indent=2).encode() + b"\n")
 write("delivery-proof.txt", b"Proof of delivery (illustrative placeholder)\nParcel delivered 2026-10-19 to the front desk.\n")
 write("duplicate-member.json", b'{"id": "a", "id": "b"}\n')
+write("decimal-numbers.json", b'{"b": 1.50, "a": 1E21, "c": 0.0000010, "d": -0, "e": 1E-7}\n')
+# Its RFC 8785 form, written out by hand from RFC 8785 section 3.2.2.3
+# (ECMAScript Number serialization), not computed: members in code-unit
+# order; 1.50 -> 1.5; 1E21 -> 1e+21 (exponent from 10^21 up); 0.0000010 ->
+# 0.000001 (plain down to 10^-6); -0 -> 0; 1E-7 -> 1e-7.
+DECIMAL_JCS = b'{"a":1e+21,"b":1.5,"c":0.000001,"d":0,"e":1e-7}'
 write("acp-checkout-session-with-order.changed.json", one_byte_changed(read("acp-checkout-session-with-order.json")))
 headers = read("ucp-checkout-response.headers")
 write("ucp-checkout-response.changed.headers", headers.replace(b"200 OK", b"201 OK", 1))
@@ -149,6 +155,10 @@ cases = [
          {"sealed": True, "digest": digest(acp, "as-transmitted"), "type_registered": False, "wrapped_held": "digest", "object_digest": "NOT_PRESENT", "carrier_headers": "NOT_PRESENT"},
          object_digest=digest(acp, "as-transmitted"),
          verify=[{"object": "acp-checkout-session-with-order.json", "expect": {"object_digest": "PASS"}}]),
+    case("jcs-decimal-numbers", "jcs over an object with non-integer and exponent numbers; the expected form is written out by hand from RFC 8785.",
+         {"type": "x-example.object", "octets": "jcs"},
+         {"sealed": True, "digest": sha256(DECIMAL_JCS), "type_registered": False, "wrapped_held": "octets", "object_digest": "PASS", "carrier_headers": "NOT_PRESENT"},
+         object="decimal-numbers.json"),
     case("jcs-duplicate-member", "jcs over an object with a duplicate member: not I-JSON.",
          {"type": "x-example.object", "octets": "jcs"}, {"sealed": False, "error": "not I-JSON"}, object="duplicate-member.json"),
 ]

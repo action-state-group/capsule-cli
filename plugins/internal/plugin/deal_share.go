@@ -192,6 +192,7 @@ func dealLocalData(events []sealedEvent) dealLocal {
 				// A held object, sealed by digest: its text and its carrier
 				// headers' values are all private.
 				text(wrappedTexts(w)...)
+				l.ids = append(l.ids, wrappedHeaderValues(w)...)
 			}
 		case e.Change != nil:
 			who(e.Change.Who)
