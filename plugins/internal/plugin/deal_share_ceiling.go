@@ -27,9 +27,12 @@ import (
 //     fields are never in a counterparty copy (a record that carries one is
 //     withheld), and the floor and its openings are in no shared copy.
 //     Every other amount field (the close's amount and its opening, price
-//     and deposit terms, snapshot and act amounts) is shared as its field's
-//     rules say, even when its value equals a bound: a bare number never
-//     says that it is one.
+//     and deposit terms, snapshot and act amounts, the merchant's charged
+//     total) is shared as its field's rules say, even when its value equals
+//     a bound: a bare number never says that it is one. The gate still reads
+//     a whole copy, so this holds because such a field is either written
+//     in minor units, which the money reader does not take as a bound
+//     ("200000"), or is an amount the copy shows anyway (dealShownAmounts).
 //   - Free text keeps value matching, since it can label a number ("my max
 //     is 250"): notes, rendered page and report text, and merchant section
 //     prose. The gate refuses a copy whose text states either bound as
@@ -87,7 +90,8 @@ func dealCeilings(events []sealedEvent) []dealCeiling {
 }
 
 // dealShownAmounts are the amounts a counterparty copy may carry: what the
-// seller asked and what was paid, which the seller knows already.
+// seller asked and what was paid, which the seller knows already, among them
+// the total the merchant's own email says it charged.
 func dealShownAmounts(events []sealedEvent) map[int64]bool {
 	shown := map[int64]bool{}
 	terms := func(t *dealTerms) {
@@ -116,6 +120,9 @@ func dealShownAmounts(events []sealedEvent) map[int64]bool {
 		}
 		if e.Act != nil && e.Act.AmountMinor != nil {
 			shown[*e.Act.AmountMinor] = true
+		}
+		if e.Evidence != nil && e.Evidence.Email != nil && e.Evidence.Email.Parsed.TotalMinor != nil {
+			shown[*e.Evidence.Email.Parsed.TotalMinor] = true
 		}
 	}
 	return shown

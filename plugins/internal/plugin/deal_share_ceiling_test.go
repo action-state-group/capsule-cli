@@ -122,3 +122,22 @@ func TestDealSharedMerchantEmailIsDigestAndVerdict(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, own, "DKIM-Signature", "the raw email is in no bundle")
 }
+
+// The merchant's charged total is a structured amount, shared even when it
+// equals the user's limit: a buyer whose receipt shows a charge at the limit,
+// above what the agent paid, can still hand the seller a copy carrying it
+// (capsule-cli#278).
+func TestAChargeAtTheLimitIsShared(t *testing.T) {
+	dealFixture(t)
+	stubDNS(t, map[string]string{merchantSelector + "._domainkey.shop.example": merchantKeyTXT(t), dmarcName: merchantDMARC(t)})
+	dealID := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+		"intent":{"verbatim":"Buy the sticker pack","max_total_minor":6400,"allowed":["pay"]},
+		"who":{"name":"Shop Example","domain":"shop.example"},
+		"terms":{"item":"sticker pack","quantity":1,"price_minor":4800,"currency":"USD"},
+		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":4800,"authorized_max_minor":4800}`))
+	dealRun(t, "note", "--deal", dealID, "--kind", "evidence", "--email", filepath.Join(merchantFixture, "confirmation.eml"))
+	_, raw := sharedCopy(t, dealID, cli.DealAudienceCounterparty, "x")
+	assert.Contains(t, raw, `"charged":"$64.00"`, "the merchant's total at the limit travels")
+	assert.NotContains(t, raw, "max_total_minor")
+}
