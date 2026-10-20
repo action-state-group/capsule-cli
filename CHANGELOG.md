@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc17
+
 ### Before you upgrade: there is no going back to an older version
 
 After this version opens your deals, keep using this version or a newer one.
