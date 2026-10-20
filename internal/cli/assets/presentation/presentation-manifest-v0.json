@@ -143,7 +143,14 @@
       "required": ["level", "source", "kind", "label_key"],
       "properties": {
         "level": { "enum": ["L0", "L1"] },
-        "source": { "$ref": "#/$defs/JsonPointer" },
+        "member": {
+          "description": "The root record's payload the field reads (spec section 5.2): agent_input when absent, or agent_output. The member must be disclosed in the context for the field to resolve. Columns of a rows field carry no member: their sources are relative to the row.",
+          "enum": ["agent_input", "agent_output"]
+        },
+        "source": {
+          "description": "RFC 6901 JSON Pointer into the verified payload of the field's member.",
+          "$ref": "#/$defs/JsonPointer"
+        },
         "kind": { "enum": ["enum", "count", "digest", "identifier", "rows"] },
         "label_key": { "$ref": "#/$defs/WordingKey" },
         "value_key_prefix": { "$ref": "#/$defs/WordingKey" },
@@ -258,8 +265,13 @@
           "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"
         },
         "entries": {
+          "description": "Wording key to string. Two keys are reserved with one meaning in every pack (spec section 7.4): page.title, the text of the page's <title>, read by the builder; module.title, the presentation's own human-readable name for list and choice UIs. Every other key is the module's own.",
           "type": "object",
           "minProperties": 1,
+          "properties": {
+            "page.title": { "description": "Reserved: the page's <title> (TITLE_SLOT).", "type": "string", "minLength": 1 },
+            "module.title": { "description": "Reserved: the presentation's own name, for list and choice UIs. Distinct from page.title.", "type": "string", "minLength": 1 }
+          },
           "propertyNames": { "$ref": "#/$defs/WordingKey" },
           "additionalProperties": { "type": "string", "minLength": 1 }
         }

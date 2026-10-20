@@ -3,6 +3,8 @@
   "id": "org.example.rules-table.wording/v0",
   "locale": "en",
   "entries": {
+    "module.title": "Rules table",
+    "page.title": "Rules comparison",
     "heading.l0": "What the comparison found",
     "heading.l1": "Each rule, and why",
     "column.rule": "Rule",
