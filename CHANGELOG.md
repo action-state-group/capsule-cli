@@ -9,19 +9,32 @@ An older capsulectl may refuse to open your deals, and copies it makes can
 show when a deal was shared.
 
 - **Want the option to go back?** Make a backup of your capsulectl data
-  before you upgrade, while no capsulectl command is running. Your data is
-  two things: the folder you gave `deal init --dir` (the deal skill uses
+  before you upgrade. First pause anything that runs `deal tick` on a
+  schedule (cron, launchd), and make sure no capsulectl command is running.
+  For a deal profile set up the usual way, your data is two things: the
+  folder you gave `deal init --dir` (the deal skill uses
   `~/.local/share/capsule-deal`), and your profile file,
-  `~/.config/capsule/profiles/deal.yaml` (under `$XDG_CONFIG_HOME/capsule/`
-  if you set it). For example:
+  `~/.config/capsule/profiles/deal.yaml` (named after your profile, under
+  `$XDG_CONFIG_HOME/capsule/` if you set it). If your profile points at files
+  outside that folder, such as a rules file given to `--materiality` or keys
+  moved with `profile update`, back those up too. For example:
 
   ```
   mkdir ~/capsulectl-backup
   cp -Rp ~/.local/share/capsule-deal ~/.config/capsule/profiles/deal.yaml ~/capsulectl-backup/
   ```
 
-  To go back, copy both back to where they were, then run the older version.
-  Anything you recorded after the backup is lost.
+  To go back, with nothing running, move the upgraded folder aside rather
+  than copying over it, then copy the backup in:
+
+  ```
+  mv ~/.local/share/capsule-deal ~/.local/share/capsule-deal.after-upgrade
+  cp -Rp ~/capsulectl-backup/capsule-deal ~/.local/share/
+  cp -p ~/capsulectl-backup/deal.yaml ~/.config/capsule/profiles/deal.yaml
+  ```
+
+  Then run the older version. Anything recorded after the backup is not in
+  the restored copy; it stays in the folder you moved aside.
 - **Sending receipts or deal copies?** Ask the people you send them to to
   update too. An older capsulectl shows copies made by this version as
   INVALID, even though they are valid.

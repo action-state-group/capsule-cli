@@ -102,7 +102,9 @@ and says to run a deal command on the writable profile first. The move:
   build's ticks and due time.
 - Every existing deal stays as it is.
 - A released build can still run on the moved store. The next command finds
-  what it wrote and takes it in.
+  what it wrote and takes it in. Other changes in this release make going
+  back unsafe, though: back up first, and see "Before you upgrade" in the
+  CHANGELOG.
 - A deal profile needs its checkpoint key. Without one, every deal command
   refuses and names `profile update --checkpoint-signing-key-file` and
   `--checkpoint-trusted-key`.
