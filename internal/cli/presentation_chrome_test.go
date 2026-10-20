@@ -417,6 +417,22 @@ func TestPresentationChromeSeesExternalRequests(t *testing.T) {
 	assert.Empty(t, c.watchErrors(), "every worker was watched")
 }
 
+// watchErrors waits for a child still being set up, and returns the
+// failure that setup ends in.
+func TestWatchErrorsWaitsForAChildBeingSetUp(t *testing.T) {
+	c := &headlessChrome{watching: 1}
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		c.mu.Lock()
+		c.childErrors = append(c.childErrors, "Network.enable: failed")
+		c.watching--
+		c.mu.Unlock()
+	}()
+	start := time.Now()
+	assert.Equal(t, []string{"Network.enable: failed"}, c.watchErrors())
+	assert.GreaterOrEqual(t, time.Since(start), 200*time.Millisecond)
+}
+
 func isSubset(have, want []string) bool {
 	for _, w := range want {
 		if !slices.Contains(have, w) {
