@@ -33,9 +33,10 @@ import (
 //  2. Generic patterns: a Luhn-valid card number, and a code word (code,
 //     OTP, PIN, passcode) followed by a number.
 //
-// The two vendored scripts are taken out first: they are fixed code, pinned
-// by digest, not data (if they are not found byte for byte, the whole page
-// is checked). A needle shorter than eight characters is not counted inside a
+// The gate reads a page's text and data, never its code (dealGateText): the
+// markup outside <script> and <style>, the bundle, and the page's data, but
+// not the runtime, the presentation module or a stylesheet, whatever their
+// bytes. A needle shorter than eight characters is not counted inside a
 // digest or a signature: a run of 64 or more hex or base64 characters, where
 // a six-digit code occurs by chance. Anywhere else (G739142,
 // ?order_ref=G739142, track/ABCDEFGHIJ739142) it counts.
@@ -46,8 +47,7 @@ import (
 // JSON-escaped, before any check, so it neither trips the checks nor hides
 // anything else.
 func dealPageGate(page []byte, events []sealedEvent, allowed ...string) error {
-	data := bytes.Replace(page, cli.EvidenceGraphIIFE, nil, 1)
-	data = bytes.Replace(data, []byte(cli.DealViewJS), nil, 1)
+	data := dealGateText(page)
 	// Fold first, as the scan does, so the allowed values are taken out of the
 	// same text the scan reads: a zero-width space, a soft hyphen or a
 	// fullwidth or Arabic-Indic digit after an allowed id is then a digit or
@@ -67,6 +67,75 @@ func dealPageGate(page []byte, events []sealedEvent, allowed ...string) error {
 	}
 	secrets, words, placeWords := gateSecrets(events)
 	return gateCheck(data, secrets, words, placeWords, 0)
+}
+
+// gateElement is one <script> or <style> element of a page, with its body.
+// The emitter refuses inline code that holds its closing tag, so the first
+// closing tag ends the element.
+var gateElement = regexp.MustCompile(`(?is)<script\b[^>]*>(.*?)</script\s*>|<style\b[^>]*>(.*?)</style\s*>`)
+
+// gateDataPrefixes start the page's two data scripts: the emitter's bundle,
+// and the deal page's bootstrap data (dealReportHTML). Each is followed by
+// one JSON value.
+var gateDataPrefixes = []string{"window.__BUNDLE__ =", "globalThis.capsulectlDealPage = Object.freeze("}
+
+// dealGateText is what the gates read of a shared copy (capsule-cli#247).
+// For a page, that is what a reader can be shown: the markup outside every
+// <script> and <style>, which holds the title, and the JSON values of the
+// bundle and the deal page's data. A script's code and a stylesheet are not
+// read, so a refreshed runtime or module, whose bytes no longer match a
+// pinned copy, cannot trip a value check with its own strings ("$8.00").
+// A data script whose value does not decode is read whole. A page with no
+// bundle script, and any copy that is not a page, is read whole, less the
+// two vendored scripts where they are found byte for byte. A copy is a page
+// only when it starts as the emitter's shell does, with an HTML doctype: a
+// bundle's JSON whose text holds script-like markup is not one.
+func dealGateText(page []byte) []byte {
+	if !bytes.HasPrefix(bytes.ToLower(bytes.TrimSpace(page[:min(len(page), 64)])), []byte("<!doctype html")) {
+		return dealWithoutVendored(page)
+	}
+	var out []byte
+	last, bundle := 0, false
+	for _, m := range gateElement.FindAllSubmatchIndex(page, -1) {
+		out = append(append(out, page[last:m[0]]...), ' ')
+		last = m[1]
+		if m[2] < 0 {
+			continue // a stylesheet
+		}
+		body := bytes.TrimSpace(page[m[2]:m[3]])
+		for i, prefix := range gateDataPrefixes {
+			rest, ok := bytes.CutPrefix(body, []byte(prefix))
+			if !ok {
+				continue
+			}
+			bundle = bundle || i == 0
+			dec := json.NewDecoder(bytes.NewReader(rest))
+			var value json.RawMessage
+			if dec.Decode(&value) != nil {
+				out = append(append(out, body...), ' ')
+				break
+			}
+			value = rest[:dec.InputOffset()]
+			if i == 0 {
+				// As the page writes it, so gateUnits finds the bundle and
+				// reads a place's words in its values only.
+				value = slices.Concat([]byte("<script>window.__BUNDLE__ = "), bytes.TrimSpace(value), []byte(";</script>"))
+			}
+			out = append(append(out, value...), ' ')
+			break
+		}
+	}
+	if !bundle {
+		return dealWithoutVendored(page)
+	}
+	return append(out, page[last:]...)
+}
+
+// dealWithoutVendored is a copy read whole, less the two vendored scripts
+// where they are found byte for byte: fixed code, pinned by digest.
+func dealWithoutVendored(page []byte) []byte {
+	data := bytes.Replace(page, cli.EvidenceGraphIIFE, nil, 1)
+	return bytes.Replace(data, []byte(cli.DealViewJS), nil, 1)
 }
 
 // removeWholeToken replaces each occurrence of value in data that stands as a whole

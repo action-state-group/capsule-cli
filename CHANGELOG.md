@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Dispatch checks the per-user plugin root's parents (capsule-cli#270)
+
+- **Changed (security):** the trust walk now checks the per-user root's
+  ancestry, from `$HOME` down to `~/.local/lib/capsulectl/plugins`, where it
+  used to trust the root's parents. Every directory a name is looked up in
+  while the path resolves, through every symlink hop, the resolved root,
+  and the parents of each up to `$HOME` (up to `/` outside `$HOME`) must be
+  owned by the user or root and neither group- nor other-writable. The
+  user's own group is not exempt.
+- **Existing installs:** a plugin installed by hand under a group-writable
+  `~/.local` (stock Ubuntu, umask 002) no longer runs; `capsulectl plugin ls`
+  lists it as refused, with the fix:
+  `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`. The same
+  holds for presentations and the rules checker, which use the walk, and for
+  a `~/.local` symlinked into a directory another user can write.
+
 ### A held object on a buyer's deal (capsule-cli#250)
 
 - **Added (deal):** `deal note --kind evidence --object FILE --object-type TYPE

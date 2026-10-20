@@ -918,11 +918,15 @@ reconcile:
   it must be a close whose outcome is not `open`, and a verified opening must not contradict the
   outcome record it refs.
 
-**Openings (DR §5).** A `disclose --deal ID --share counterparty --to WHO` file carries
-`field_openings` for the final close only, keyed by its half digest, when the close commits
-non-empty terms and the amount written as money passes the counterparty share gate. No other copy
-carries openings: not a `deal respond` answer (its requester is not checked), an adjudicator's
-copy, a report page, or the user's own bundle. `deal_local` is never opened.
+**Openings (DR §5).** A `disclose --deal ID --share counterparty --to WHO` file, and a
+`disclose --deal ID --share adjudicator --to WHO` file for an adjudicator the user names, carries
+`field_openings` for the party's own final close only, keyed by its half digest. It does so when
+the close commits non-empty terms and the amount written as money passes the share gate for that
+audience. The gate keeps the user's floor from every share, and the spending limit from the
+counterparty's only, so an adjudicator does receive an amount that equals the limit. Each release
+is on record on the deal's disclosures log, and each party releases only its own openings. No
+other copy carries openings: not a `deal respond` answer (its requester is not checked), a report
+page, the user's own bundle, or a History. `deal_local` is never opened.
 
 **The claim (DR §7).** The Result has one claim per requirement, `tier` `recomputed`, citing no
 Close, with the counterparty's signing key as `peer`. That key is long-lived, so Results about
@@ -958,6 +962,18 @@ producer's halves are provable. Two inputs are not recorded in the Result:
   `A_ONLY` into `INSUFFICIENT`, and a check cannot tell which the producer used. The verb gives
   none, so its own Results never hold `A_ONLY` or `B_ONLY`.
 
-An adjudicator receives no openings, so it cannot recompute a deal reconcile: its check is
-"cannot reproduce". A path that releases openings to a named adjudicator would be a later
-design.
+**An adjudicator's check** (capsule-cli#278) needs no deal store. It takes each party's own
+adjudicator file and the signing and checkpoint keys it holds for each party, never read from the
+files: `deal terms-result --check RESULT --copy FILE --copy FILE --party-key SIGNER:CHECKPOINT
+--party-key SIGNER:CHECKPOINT`.
+- **Admission.** Each file must verify as a bundle whose checkpoint is signed by one party's pinned
+  checkpoint key. Its half is the one record its own openings name, admitted as above under that
+  party's signing key.
+- **The two files** must be of one deal and from two parties. The Result's peer must be one of
+  them.
+- **Recompute.** Each party's openings come from its own file, and the outcomes are those of any
+  `--check`.
+- **One file** (a party that declines to disclose) is "cannot reproduce": one side cannot be
+  checked alone.
+- **A Result made without the other party's openings** names one half where the files give two,
+  and "differs" on its evidence. That is never a finding that a claim is false.
