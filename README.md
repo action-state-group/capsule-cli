@@ -27,9 +27,11 @@ darwin/arm64 on the repository's GitHub Releases page, with a `SHA256SUMS` file.
 Every release so far is a pre-release (`v0.1.0-rcNN`); there is no final
 `v0.1.0` yet, so GitHub's "latest release" link does not resolve. The install
 page, [actionstate.ai/install](https://actionstate.ai/install), names the
-current release; otherwise take the newest `v0.1.0-rc` tag on the Releases
-page. Read its CHANGELOG section before upgrading: some releases cannot be
-undone on an existing store.
+current release and publishes the SHA-256 of each of its files. If you cannot
+reach it, take the newest pre-release on the Releases page; for a while after
+each tag, that one can be ahead of the install page while it is still being
+verified. Read the release's section of [CHANGELOG.md](CHANGELOG.md) before
+upgrading: some releases cannot be undone on an existing store.
 Releases after `v0.1.0-rc2` also carry a GitHub build provenance attestation
 for each binary (Sigstore, keyless: there is no release key to hold or
 leak). It shows the file was built by this repository's release workflow
@@ -78,10 +80,14 @@ the right repository), is in
 The binaries are static (`CGO_ENABLED=0`; SQLite is the pure-Go
 `modernc.org/sqlite`), so they need no system libraries.
 
-Set `V` to the current release, then download, check and install it:
+Set `V` to the current release, then download, check and install it. Compare
+each file's SHA-256 with the value the install page publishes as well as with
+`SHA256SUMS`: `SHA256SUMS` comes with the release itself, so on its own it
+catches a damaged download, not a replaced one.
 
 ```bash
-V=v0.1.0-rcNN; OS=linux; ARCH=amd64   # the release https://actionstate.ai/install names; or linux/arm64, darwin/arm64
+# V: the release https://actionstate.ai/install names. OS/ARCH: linux/amd64, linux/arm64 or darwin/arm64.
+V=v0.1.0-rcNN; OS=linux; ARCH=amd64
 base=https://github.com/action-state-group/capsule-cli/releases/download/$V
 curl -fsSL -O "$base/capsulectl-$V-$OS-$ARCH" -O "$base/capsulectl-$V.sigstore.json" -O "$base/SHA256SUMS"
 sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
@@ -90,7 +96,7 @@ gh attestation verify "capsulectl-$V-$OS-$ARCH" --bundle "capsulectl-$V.sigstore
   --repo action-state-group/capsule-cli \
   --signer-workflow action-state-group/capsule-cli/.github/workflows/release.yml
 sudo install -m 0755 "capsulectl-$V-$OS-$ARCH" /usr/local/bin/capsulectl
-capsulectl --version                        # capsulectl $V (commit <the tagged commit>)
+capsulectl --version                        # capsulectl v0.1.0-rcNN (commit <40-hex commit>)
 ```
 
 Writing to `/usr/local/bin` needs `sudo`. Without it, install into a directory
@@ -134,7 +140,7 @@ tag as your binary, so that every verb it lists exists in that binary
 (`capsulectl <verb> --help` confirms one).
 
 ```bash
-V=v0.1.0-rcNN   # the same tag as the binary you installed (capsulectl --version)
+V=$(capsulectl --version | cut -d' ' -f2)   # the same tag as the binary you installed
 git clone --depth 1 --branch "$V" https://github.com/action-state-group/capsule-cli.git
 
 # Claude Code: a personal skill (or .claude/skills/ inside one project)
@@ -169,8 +175,8 @@ this repository, and you do not need it to use the skill.
 ## Quickstart (no database server)
 
 A SQLite profile keeps everything in one local file. These are the exact
-commands (and outputs, with keys and IDs elided) from the v0.1.0 release check
-of the linux/amd64 binary on a clean `debian:stable-slim` container:
+commands (and outputs, with keys and IDs elided) from a release check of the
+linux/amd64 binary on a clean `debian:stable-slim` container:
 
 ```console
 $ capsulectl key generate --output producer.seed
