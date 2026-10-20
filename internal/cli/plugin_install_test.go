@@ -226,18 +226,153 @@ func TestPluginInstallRefusesAnUnsafePath(t *testing.T) {
 	_, statErr = os.Stat(root)
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "nothing was created")
 
-	// Dispatch is unchanged: a plugin placed by hand under the same 0775
-	// ~/.local still runs.
+	// Dispatch refuses a plugin placed by hand under the same 0775 ~/.local
+	// (capsule-cli#270).
 	require.NoError(t, os.MkdirAll(root, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-acme"), []byte(launcherScript("acme", "1", "")), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-acme"), []byte(launcherScript("acme", "1", marker)), 0o755))
+	_, err = invoke(t, "", "acme", "x")
+	require.Error(t, err)
+	_, statErr = os.Stat(marker)
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "dispatch ran nothing on an unsafe path")
+
+	// After the printed fix, dispatch runs it and install succeeds.
+	require.NoError(t, os.Chmod(local, 0o755))
 	out, err := invoke(t, "", "acme", "x")
 	require.NoError(t, err, out)
 	assert.Contains(t, out, "ran acme: x")
-
-	// After the printed fix, install succeeds.
-	require.NoError(t, os.Chmod(local, 0o755))
 	out, err = invoke(t, "", "plugin", "install", launcherFile(t, "acme", "2", ""))
 	require.NoError(t, err, out)
+}
+
+// handInstalled places a launcher named acme in the per-user root under
+// HOME, as a user installing by hand does, creating the root's missing
+// directories 0755. It returns the launcher's path.
+func handInstalled(t *testing.T, home string) string {
+	t.Helper()
+	root := userPluginRoot(home)
+	require.NoError(t, os.MkdirAll(root, 0o755))
+	path := filepath.Join(root, "capsulectl-acme")
+	require.NoError(t, os.WriteFile(path, []byte(launcherScript("acme", "1", "")), 0o755))
+	require.NoError(t, os.Chmod(path, 0o755))
+	return path
+}
+
+func TestDispatchChecksThePerUserRootsAncestry(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, home string) // makes the ancestry unsafe
+		dir   func(home string) string        // the directory the refusal names
+		want  string
+	}{
+		{
+			// Stock Ubuntu: umask 002 makes ~/.local 0775, owned by the
+			// user's own group. That group may have other members, and no
+			// name or gid proves it does not, so it is not exempt.
+			name: "ubuntu 0775 ~/.local in the user's own group",
+			setup: func(t *testing.T, home string) {
+				local := filepath.Join(home, ".local")
+				require.NoError(t, os.Chown(local, -1, os.Getgid()))
+				require.NoError(t, os.Chmod(local, 0o775))
+			},
+			dir:  func(home string) string { return filepath.Join(home, ".local") },
+			want: "is group-writable",
+		},
+		{
+			name: "other-writable ~/.local/lib",
+			setup: func(t *testing.T, home string) {
+				require.NoError(t, os.Chmod(filepath.Join(home, ".local", "lib"), 0o757))
+			},
+			dir:  func(home string) string { return filepath.Join(home, ".local", "lib") },
+			want: "is other-writable",
+		},
+		{
+			name:  "group-writable HOME",
+			setup: func(t *testing.T, home string) { require.NoError(t, os.Chmod(home, 0o775)) },
+			dir:   func(home string) string { return home },
+			want:  "is group-writable",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			home, _ := installHome(t)
+			launcher := handInstalled(t, home)
+			require.NoError(t, VerifyTrustedPath(launcher), "a safe ancestry is accepted")
+			tc.setup(t, home)
+			err := VerifyTrustedPath(launcher)
+			require.ErrorIs(t, err, errWritable)
+			dir, rerr := filepath.EvalSymlinks(tc.dir(home))
+			require.NoError(t, rerr)
+			assert.Contains(t, err.Error(), dir+" "+tc.want)
+			assert.Contains(t, err.Error(), "chmod go-w "+dir, "the refusal names the fix")
+			assert.Empty(t, discoverPlugins(), "discovery refuses it")
+		})
+	}
+}
+
+func TestDispatchJudgesASymlinkedLocalByItsTarget(t *testing.T) {
+	// ~/.local symlinked into a safe directory is accepted.
+	home, _ := installHome(t)
+	safe := filepath.Join(safeTempDir(t), "local")
+	require.NoError(t, os.Mkdir(safe, 0o755))
+	require.NoError(t, os.Symlink(safe, filepath.Join(home, ".local")))
+	require.NoError(t, VerifyTrustedPath(handInstalled(t, home)))
+
+	// Into a shared directory another user can write: the walk resolves the
+	// root into it, so the target's parent is checked, though it is outside
+	// HOME.
+	home, _ = installHome(t)
+	shared := filepath.Join(safeTempDir(t), "shared")
+	require.NoError(t, os.Mkdir(shared, 0o755))
+	target := filepath.Join(shared, "local")
+	require.NoError(t, os.Mkdir(target, 0o755))
+	require.NoError(t, os.Symlink(target, filepath.Join(home, ".local")))
+	launcher := handInstalled(t, home)
+	require.NoError(t, os.Chmod(shared, 0o777))
+	err := VerifyTrustedPath(launcher)
+	require.ErrorIs(t, err, errWritable)
+	assert.Contains(t, err.Error(), filepath.Base(shared)+" is group-writable")
+}
+
+func TestDispatchChecksTheDirectoryHoldingEachSymlink(t *testing.T) {
+	// ~/.local leads into a writable directory, and ~/.local/lib leads on
+	// into a safe one. The resolved root's ancestry never passes the
+	// writable directory, but whoever can write it can replace the lib
+	// symlink, so the root is refused at dispatch and at install.
+	home, _ := installHome(t)
+	writable := filepath.Join(safeTempDir(t), "writable")
+	require.NoError(t, os.MkdirAll(filepath.Join(writable, "local"), 0o755))
+	safeLib := filepath.Join(safeTempDir(t), "lib")
+	require.NoError(t, os.Mkdir(safeLib, 0o755))
+	require.NoError(t, os.Symlink(safeLib, filepath.Join(writable, "local", "lib")))
+	require.NoError(t, os.Symlink(filepath.Join(writable, "local"), filepath.Join(home, ".local")))
+	launcher := handInstalled(t, home)
+	require.NoError(t, VerifyTrustedPath(launcher))
+	require.NoError(t, os.Chmod(writable, 0o775))
+
+	err := VerifyTrustedPath(launcher)
+	require.ErrorIs(t, err, errWritable)
+	assert.Contains(t, err.Error(), filepath.Base(writable)+" is group-writable")
+	_, err = invoke(t, "", "plugin", "install", launcherFile(t, "acme", "2", ""))
+	require.ErrorIs(t, err, ErrInput)
+	assert.Contains(t, SafeError(err), filepath.Base(writable)+" is group-writable")
+}
+
+func TestDispatchLeavesOtherRootsAncestryAlone(t *testing.T) {
+	// The ancestry check is the per-user root's: a root
+	// CAPSULECTL_PLUGIN_ROOTS names elsewhere keeps the walk's rule, which
+	// stops at the root, even when HOME's own ancestry is unsafe.
+	home, _ := installHome(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".local"), 0o755))
+	require.NoError(t, os.Chmod(filepath.Join(home, ".local"), 0o777))
+	parent := filepath.Join(safeTempDir(t), "parent")
+	other := filepath.Join(parent, "plugins")
+	require.NoError(t, os.MkdirAll(other, 0o755))
+	launcher := filepath.Join(other, "capsulectl-acme")
+	require.NoError(t, os.WriteFile(launcher, []byte(launcherScript("acme", "1", "")), 0o755))
+	require.NoError(t, os.Chmod(launcher, 0o755))
+	require.NoError(t, os.Chmod(parent, 0o777))
+	t.Setenv("CAPSULECTL_PLUGIN_ROOTS", other)
+	assert.NoError(t, VerifyTrustedPath(launcher))
 }
 
 func TestPluginInstallJudgesASymlinkedLocalByItsTarget(t *testing.T) {

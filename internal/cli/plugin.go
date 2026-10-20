@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,8 +53,9 @@ var (
 // it and the matched trusted root (inclusive), is group-writable, other-writable,
 // or owned by neither the current user nor root; and rejects any launcher whose
 // resolved path escapes the trusted roots (so a symlink cannot redirect discovery
-// to an untrusted target) or is not a regular file. The root's own parents are
-// system directories, trusted by definition, so the walk stops at the root.
+// to an untrusted target) or is not a regular file. The system root's parents
+// are system directories, trusted by definition. The per-user root's are not:
+// for it, userRootAncestryProblems also checks every directory from $HOME down.
 func VerifyTrustedPath(path string) error {
 	return verifyTrustedPathUnder(path, trustedPluginRoots())
 }
@@ -84,10 +86,10 @@ func verifyTrustedPathUnder(path string, roots []string) error {
 	if realRoot == "" {
 		return fmt.Errorf("%s resolves to %s, %w", path, resolved, errOutsideRoots)
 	}
-	// Walk from the launcher up to and including the trusted root: the root's own
-	// parents are system directories trusted by definition, but any directory
+	// Walk from the launcher up to and including the trusted root: any directory
 	// BETWEEN the root and the launcher (or the launcher itself) that is
-	// group/other-writable or owned by neither the user nor root defeats the trust.
+	// group/other-writable or owned by neither the user nor root defeats the
+	// trust. The per-user root's parents are checked after.
 	uid := os.Getuid()
 	for p := resolved; ; {
 		if err := checkTrustedComponent(p, uid, false); err != nil {
@@ -102,7 +104,83 @@ func verifyTrustedPathUnder(path string, roots []string) error {
 		}
 		p = parent
 	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		if ur, err := filepath.EvalSymlinks(userPluginRoot(home)); err == nil && ur == realRoot {
+			if problems := userRootAncestryProblems(home); len(problems) > 0 {
+				return newAncestryError(userPluginRoot(home), problems)
+			}
+		}
+	}
 	return nil
+}
+
+// userRootAncestryProblems checks the directories another user could use to
+// swap the per-user root: every directory that holds an entry on the lookup
+// path $HOME/.local/lib/capsulectl/plugins, from $HOME down, resolved, and
+// each resolved directory's ancestors up to $HOME. A component that leads
+// outside $HOME through a symlink is checked up to /, so a writable parent of
+// the target is caught. Each must pass checkTrustedComponent, with a
+// root-owned sticky directory (such as /tmp) accepted, as install's
+// full-path check accepts it. No group is exempt: a group's name or gid proves
+// nothing about who else is in it, so a stock Ubuntu (umask 002) ~/.local is
+// refused until chmod g-w. Missing components end the check; with no root
+// there is nothing to run.
+func userRootAncestryProblems(home string) []unsafePathProblem {
+	realHome, err := filepath.EvalSymlinks(home)
+	if err != nil {
+		return []unsafePathProblem{{path: home, err: fmt.Errorf("cannot resolve %s: %w", home, err)}}
+	}
+	uid := os.Getuid()
+	seen := map[string]bool{}
+	var problems []unsafePathProblem
+	lookup := home
+	for _, name := range []string{".local", "lib", "capsulectl", ""} {
+		resolved, err := filepath.EvalSymlinks(lookup)
+		if errors.Is(err, fs.ErrNotExist) {
+			break
+		} else if err != nil {
+			problems = append(problems, unsafePathProblem{path: lookup, err: fmt.Errorf("cannot resolve %s: %w", lookup, err)})
+			break
+		}
+		for p := resolved; !seen[p]; {
+			seen[p] = true
+			if err := checkTrustedComponent(p, uid, true); err != nil {
+				problems = append(problems, unsafePathProblem{path: p, owner: errors.Is(err, errNotTrustedOwner), err: err})
+			}
+			parent := filepath.Dir(p)
+			if p == realHome || parent == p {
+				break
+			}
+			p = parent
+		}
+		if name == "" {
+			break
+		}
+		lookup = filepath.Join(lookup, name)
+	}
+	slices.Reverse(problems)
+	return problems
+}
+
+// ancestryError is the walk's refusal for an unsafe per-user root ancestry:
+// install's message and fix, unwrapping to the sentinel the presentation
+// loader classifies by.
+type ancestryError struct {
+	message  string
+	sentinel error
+}
+
+func (e *ancestryError) Error() string { return e.message }
+func (e *ancestryError) Unwrap() error { return e.sentinel }
+
+func newAncestryError(root string, problems []unsafePathProblem) error {
+	sentinel := errWritable
+	for _, p := range problems {
+		if p.owner {
+			sentinel = errNotTrustedOwner
+		}
+	}
+	return &ancestryError{message: unsafePathMessage("the plugin root "+root, problems), sentinel: sentinel}
 }
 
 // checkTrustedComponent is the trust rule for one path component: owned by

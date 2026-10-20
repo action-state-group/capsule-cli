@@ -49,12 +49,17 @@ discovery model is the reference):
   - owned by the current user or by root, and
   - not group-writable and not other-writable.
 
-  The root's own parents are not walked -- they are treated as system
-  directories -- but everything from the root down to the launcher is. That
-  is not always true of the per-user root's parents (`~/.local` can be
-  group-writable, or a symlink into a shared directory); hardening dispatch
-  for them is [capsule-cli#270](https://github.com/action-state-group/capsule-cli/issues/270).
-  `plugin install` is stricter meanwhile (below).
+  The system root's parents are not walked: they are system directories.
+  The per-user root's are, because `~/.local` can be group-writable or a
+  symlink into a shared directory. Every directory holding an entry on the
+  path `$HOME/.local/lib/capsulectl/plugins`, from `$HOME` down, is resolved
+  and checked with the same rule, along with each resolved directory's
+  parents up to `$HOME` (up to `/` where a symlink leads outside `$HOME`; a
+  root-owned sticky directory such as `/tmp` is accepted there). No group
+  is exempt, not even the user's own: a group's name or id says nothing
+  about who else belongs to it. On stock Ubuntu (umask 002) that means a
+  one-time `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`; the
+  refusal names each directory and the `chmod` that fixes it.
 
 A launcher that fails any of these checks is skipped during discovery: it is
 never wired up as a command, and `capsulectl plugin ls` lists it under
@@ -139,8 +144,8 @@ is fine. For these two commands `capsulectl` skips plugin discovery, so no
 installed plugin runs before their checks. With `CAPSULECTL_PLUGIN_ROOTS`
 set, the list must contain the per-user root.
 
-**The path check.** Until capsule-cli#270 hardens dispatch, install is
-stricter than the trust walk. Before it writes or runs anything, it resolves
+**The path check.** Install also runs the trust walk's per-user root
+check above, and checks more. Before it writes or runs anything, it resolves
 the path once and checks every component of the resolved path from `/`
 down: each must be owned by the user or root and neither group- nor
 other-writable. The only exception is a root-owned directory with the
@@ -149,7 +154,6 @@ judged by where it leads. One refusal lists every failing component and the
 fix (on stock Ubuntu, `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`).
 From then on install and remove use only that checked canonical path: to
 open the root, to run the handshake, and to inspect other roots' launchers.
-Dispatch is unchanged.
 
 **Install from a file.**
 

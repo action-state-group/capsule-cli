@@ -28,10 +28,10 @@ import (
 
 // `plugin install` and `plugin remove` place first-party and third-party
 // launchers on the per-user plugin root (docs/PLUGINS.md, "Installing
-// plugins"). Dispatch keeps the trust walk unchanged; install is stricter
-// until capsule-cli#270 hardens the walk: before it writes or executes
-// anything it resolves the path once, checks every component of the
-// resolved path from / down, and from then on uses only that canonical path.
+// plugins"). Install runs the trust walk's per-user root ancestry check
+// and is stricter still: before it writes or executes anything it resolves
+// the path once, checks every component of the resolved path from / down,
+// and from then on uses only that canonical path.
 
 // releaseTagPolicy is the shape of a release tag, enforced in release.yml
 // too: a core whose CLIVersion matches it is a release build.
@@ -177,6 +177,10 @@ func fullPathCheck(canonical string) []unsafePathProblem {
 // unsafePathError is one refusal listing every failing component and one
 // combined fix.
 func unsafePathError(what string, problems []unsafePathProblem) error {
+	return InputError(unsafePathMessage(what, problems))
+}
+
+func unsafePathMessage(what string, problems []unsafePathProblem) string {
 	var writable, owned, reasons []string
 	for _, p := range problems {
 		reasons = append(reasons, p.err.Error())
@@ -193,7 +197,7 @@ func unsafePathError(what string, problems []unsafePathProblem) error {
 	if len(owned) > 0 {
 		fixes = append(fixes, "make "+strings.Join(owned, " ")+" yours (chown) or move the plugin root off it")
 	}
-	return InputError(fmt.Sprintf("%s is on a path another user could change (%s); fix: %s", what, strings.Join(reasons, "; "), strings.Join(fixes, "; then ")))
+	return fmt.Sprintf("%s is on a path another user could change (%s); fix: %s", what, strings.Join(reasons, "; "), strings.Join(fixes, "; then "))
 }
 
 // installRoot returns the canonical per-user plugin root, creating missing
@@ -243,6 +247,11 @@ func installRoot(home string, create bool) (string, error) {
 		parent = filepath.Join(parent, name)
 	}
 	if problems := fullPathCheck(canonical); len(problems) > 0 {
+		return "", unsafePathError("the plugin root "+target, problems)
+	}
+	// Dispatch's ancestry rule also covers the directories holding each
+	// symlink on the lookup path, which the canonical path skips.
+	if problems := userRootAncestryProblems(home); len(problems) > 0 {
 		return "", unsafePathError("the plugin root "+target, problems)
 	}
 	// The root itself also meets the walk's strict rule, which dispatch runs.
