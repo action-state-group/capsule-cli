@@ -367,7 +367,7 @@ type dmarcPolicy struct {
 }
 
 // dmarcSupplied marks DMARC as not captured: a hand-supplied key comes with
-// no DMARC record from the signing domain's DNS.
+// no DMARC record (DMARC is looked up for the From domain).
 var dmarcSupplied = &dmarcCapture{Source: "not_captured", Records: []dkimKeyRecord{}}
 
 // dmarcPolicyOf reads the published policy from the sealed DMARC records:
