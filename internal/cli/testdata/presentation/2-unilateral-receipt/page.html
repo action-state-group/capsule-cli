@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-rAQiobQN/EK9f6XYPhN4EYmArqWVvq10Tvrr9E59kr8=' 'sha256-JWeaIrg3Vi+lF58lQDB1FKh0iLTGwIi2Agbv5bSGJto=' 'sha256-pVhxWo76qngSlsIj6IO9GghHCWmyuWkv6JoN/UxQHnk=' 'sha256-eApYtpWzjL0YwRGFhFyYTSUF8XUEYhDm1VnJe5ocFjo='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-rAQiobQN/EK9f6XYPhN4EYmArqWVvq10Tvrr9E59kr8=' 'sha256-JWeaIrg3Vi+lF58lQDB1FKh0iLTGwIi2Agbv5bSGJto=' 'sha256-YmWLO7NuIs9PTkrIuWFegeLGl2bnsadqJ8fx+fVmkWM=' 'sha256-eApYtpWzjL0YwRGFhFyYTSUF8XUEYhDm1VnJe5ocFjo='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: “Order the cat sticker in my cart at Example Stickers”</title>
     <style>
@@ -14091,9 +14091,9 @@ const dealViewRender = (model, regions) => {
     host.append(
       el(
         "p",
-        "Two different things stand behind each email. The merchant's signature is checked against the merchant's published key, " +
-          "saved when the email was sealed; it shows what the merchant sent, and it does not depend on the agent. " +
-          "Our seal shows this device kept these exact bytes from that time on; it is our own record. " +
+        "Two different things stand behind each email. The signing domain's DKIM signature is checked against its published key, " +
+          "saved when the email was sealed; it shows what that domain signed, and it does not depend on the agent. " +
+          "Our seal shows this device held these exact bytes no later than the seal time; who signed them is checked by that DKIM signature, not by our seal. " +
           "Amounts, dates and order numbers below are read from the email by capsulectl and may be misread.",
         "deal-note",
       ),
