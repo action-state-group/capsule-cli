@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Pages say what they checked; the outcome report counts its criteria (capsule-cli#147, #150)
+
+- **Changed (pages):** the browser viewer every page embeds is rebuilt from
+  agent-action-capsule main 6ffe7c1 (it was 6f5b48f). Every page's
+  verification section now lists what it "Checked on this page" and what it
+  did "Not checked on this page" (the checkpoint signature and producer
+  signatures), and points to "a full verifier" rather than "the CLI".
+- **Fixed (outcome report):** a resolved conversation reads "all four
+  criteria met" for a pack that judges four, not always "nine"; the page fits
+  a 390px viewport.
+- **Changed (build):** capsule-viewer/go moves to main 42ee2e5, whose
+  Content-Security-Policy lists the outcome report's new stylesheet.
+
 ### A sale can close, and then leaves the cadence (capsule-cli#271)
 
 - **Added:** `deal sale close --sale ID` ends a sale: it seals a

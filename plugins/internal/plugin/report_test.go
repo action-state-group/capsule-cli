@@ -3,10 +3,12 @@ package plugin
 import (
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/capsule-cli/internal/cli"
 	emit "github.com/action-state-group/capsule-emit/go"
+	"github.com/action-state-group/capsule-viewer/go/emitter"
 	"github.com/action-state-group/evidencebook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,6 +34,37 @@ func TestIIFEIsPinned(t *testing.T) {
 	assert.Contains(t, text, "globalThis.renderEvidenceGraph", "the IIFE exports the entry point the shell calls")
 	assert.NotContains(t, text, "http://")
 	assert.NotContains(t, text, "https://")
+}
+
+// Every stylesheet the vendored runtime inserts at render time is hashed in
+// the page's Content-Security-Policy. The runtime comes from
+// agent-action-capsule and the hash list from capsule-viewer's emitter
+// (go/emitter/runtime-style-hashes.txt), so a stylesheet change in one repo
+// without the other blocks that stylesheet in every page; this catches it
+// without a browser.
+func TestEveryRuntimeStylesheetIsInThePageCSP(t *testing.T) {
+	text := string(cli.EvidenceGraphIIFE)
+	page, err := emitter.EmitEvidenceGraphHTML(map[string]interface{}{"bundle_kind": "example"}, cli.EvidenceGraphIIFE)
+	require.NoError(t, err)
+	policy := regexp.MustCompile(`style-src ([^;"]*)`).FindStringSubmatch(page)
+	require.NotNil(t, policy, "the page carries a style-src")
+	inserted := regexp.MustCompile(`\.textContent = ([A-Z_]+_CSS);`).FindAllStringSubmatch(text, -1)
+	require.NotEmpty(t, inserted, "the runtime inserts its stylesheets as textContent = <NAME>_CSS")
+	for _, m := range inserted {
+		name := m[1]
+		start := strings.Index(text, "var "+name+" = `")
+		require.GreaterOrEqual(t, start, 0, "%s is defined as a template literal", name)
+		start += len("var " + name + " = `")
+		end := strings.Index(text[start:], "`;")
+		require.GreaterOrEqual(t, end, 0)
+		css := text[start : start+end]
+		// With no escape or substitution, the literal's text is its value.
+		require.NotContains(t, css, `\`, "%s has an escape: decode it before hashing", name)
+		require.NotContains(t, css, "${", "%s has a substitution", name)
+		sum := sha256.Sum256([]byte(css))
+		source := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+		assert.Contains(t, strings.Fields(policy[1]), source, "%s is not in the page's style-src: update capsule-viewer's runtime-style-hashes.txt and pin it", name)
+	}
 }
 
 // The card set is the contract schema's own profile set, nothing invented.

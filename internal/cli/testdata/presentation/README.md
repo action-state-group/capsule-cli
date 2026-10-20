@@ -1,8 +1,8 @@
 # Presentation goldens
 
 Eight synthetic bundles and what capsulectl's pages show a reader for them, taken with
-the viewer vendored at agent-action-capsule `5d80d40` (`evidence-graph.iife.js`
-sha256 `008d4c2c…090cdd`). `TestPresentationGoldens`
+the viewer first vendored at agent-action-capsule `5d80d40`; the pages and snapshots
+are now those of the viewer `internal/cli/assets/README.md` pins. `TestPresentationGoldens`
 (`internal/cli/presentation_golden_test.go`) holds every later viewer to them:
 
 - **Without Chrome:** it re-emits each page from its `bundle.json` the way capsulectl
@@ -53,12 +53,14 @@ through the real CLI. Run it only to change a fixture on purpose.
   writes no page for them.
 - **Fixture 6-unknown-extension renders exactly as fixture 6** except for the bundle
   digest on the verification page: the viewer ignores an extension it does not know.
-- **Four pages overflow a 390px viewport** in CI's pinned environment
-  (`known-overflow.json`): the compliance page is 793px wide, the fallback page 686px
-  (fixtures 6 and 6-unknown-extension), the rules comparison 682px and the outcome
-  report 421px. Nothing overflows at 1280px or in print.
-- **The outcome card says "all nine criteria met"** for a pack with four criteria.
-  The snapshot records the text as the viewer prints it today.
+- **No page overflows** a 390px viewport, 1280px or print in CI's pinned environment
+  (`known-overflow.json` lists none). Four did when the fixtures were taken: the
+  compliance page (793px), the fallback page (686px, fixtures 6 and 6-unknown-extension),
+  the rules comparison (682px) and the outcome report (421px, fixed in
+  agent-action-capsule#323; capsule-cli#150).
+- **The outcome card counts its criteria**: a pack with four criteria reads "all four
+  criteria met or not applicable". It said "all nine" whatever the count until
+  agent-action-capsule#323 (capsule-cli#147).
 
 ## The presentation pass
 

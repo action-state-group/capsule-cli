@@ -127,7 +127,7 @@
     "The ten checks",
     "Required fields",
     ": passed with no errors found",
-    "Capsule identity",
+    "Capsule ID matches contents",
     ": passed with no errors found",
     "Effect consistency",
     ": passed with no errors found",
@@ -155,6 +155,18 @@
     "x-deal-v0",
     "covered",
     "Integrity verified; meaning not interpreted by this viewer",
-    "verify independently at verify.agentactioncapsule.org or with the CLI"
+    "Checked on this page",
+    "Each record's contents against the capsule ID it was sealed with.",
+    "Each record's required fields, effects, verdict, chain parent and assurance claims.",
+    "That every record the root cites, to the stated depth, is in this file or listed as missing.",
+    "That no record is missing from the stretch of the log this file covers.",
+    "That each record bound to a log position sits at that position.",
+    "Each disclosed value against the digest its record committed to.",
+    "Not checked on this page",
+    "The signature on the log's checkpoint. This page could not check it, and shows the bundle as passing without it.",
+    "The producer signature on every record.",
+    "To run these checks, verify the bundle with a full verifier.",
+    "None of these checks says who produced the records, or that this file is the most recent copy.",
+    "verify independently at verify.agentactioncapsule.org or with a full verifier"
   ]
 }
