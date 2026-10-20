@@ -29,7 +29,7 @@ Their digests are pinned in `presentation_build_test.go`
 (`TestThePresentationRuntimeDeclarationIsTheVendoredOne`), which also checks
 that the vendored runtime carries each id and declares the runtime
 (`aac.presentation-api/v0`, version `0.1.0`) capsulectl checks modules
-against. Refresh them with the runtime, from the commit `go.mod` pins.
+against. Refresh them with the runtime, from the release `go.mod` pins.
 
 `internal/cli/testdata/presentation-manifests/` holds the same directory's
 example and negative manifests, as test vectors only.
