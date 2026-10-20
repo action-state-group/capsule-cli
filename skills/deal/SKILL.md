@@ -673,36 +673,37 @@ and it shows as an anomaly in the report. One approval covers one action.
 **4b. Seal the merchant's own email** as soon as it arrives (an order
 confirmation, a receipt, a booking or a cancellation). Save the message as a
 raw `.eml` file, headers intact, exactly as received. Never paste, summarize
-or forward it: a summary is your words again and loses the merchant's
+or forward it: a summary is your words again and loses the email's DKIM
 signature.
 
 ```sh
 capsulectl --profile deal deal note --deal ID --kind evidence --email confirmation.eml
 ```
 
-This seals the raw message on this device, reads the merchant's DKIM key
-from DNS **now**, seals that key with it, and checkpoints at once (unless the
-key cannot be read now: see below). Do it
-promptly: merchants rotate and revoke their keys, and a signature can only
-be checked later against a key that was sealed while it was still published.
+This seals the raw message on this device, reads the signing domain's DKIM
+key from DNS **now**, seals that key with it, and checkpoints at once (unless
+the key cannot be read now: see below). Do it promptly: DKIM keys are
+rotated and revoked, and a signature can only be checked later against a key
+that was sealed while it was still published.
 Prompt sealing is the whole protection.
 
-**If the merchant's key cannot be read now.** When this device cannot reach
-DNS, the result is `"state": "deferred"`: nothing is sealed yet, the email is
-kept on this device, and the next `deal tick` reads the merchant's key and
-seals it (its result lists it under `merchant_emails`). Tell the user only
-this, plainly: "the merchant's signature will be checked later". Never ask
-the user to look anything up, run a command, or find a record: checking the
-merchant's key is this tool's job, not theirs. Until the tick seals it, the
+**If the signing domain's key cannot be read now.** When this device cannot
+reach DNS, the result is `"state": "deferred"`: nothing is sealed yet, the
+email is kept on this device, and the next `deal tick` reads the signing
+domain's key and seals it (its result lists it under `merchant_emails`). Tell
+the user only this, plainly: "the email's signature will be checked later".
+Never ask the user to look anything up, run a command, or find a record:
+checking the key is this tool's job, not theirs. Until the tick seals it, the
 email is not checked: never describe it as confirmed or as sealed.
 
 The result has two separate statements. Report them separately, in their own
 words, and never as one combined badge:
 
-- `merchant_says`: "merchant-confirmed: …" when the merchant's own signature
-  checks out, or "not confirmed: …" with the reason and the domain's DMARC
-  policy. This one is independent: it shows what the signing domain signed,
-  whatever the agent says. Repeat it as written. A message that is not
+- `merchant_says`: "merchant-confirmed: …" when a DKIM signature on the email
+  checks out and its signing domain is the merchant's own (aligned with the
+  sender's domain), or "not confirmed: …" with the reason and the domain's
+  DMARC policy. This one is independent: it shows what the signing domain
+  signed, whatever the agent says. Repeat it as written. A message that is not
   confirmed is still sealed; never drop it or soften the words.
 - `we_say`: what our own seal shows (this device held these exact bytes no
   later than the seal time). It is our own record, not the merchant's.

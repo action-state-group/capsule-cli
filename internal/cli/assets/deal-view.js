@@ -732,10 +732,10 @@ const dealViewRender = (model, regions) => {
       const d = el("details", undefined, m.verified ? undefined : "deal-flag");
       d.open = true;
       d.append(el("summary", m.order_id ? `Order ${m.order_id}` : "Merchant email"));
-      d.append(el("p", `Merchant's signature: ${m.merchant_says}`, m.verified ? "deal-ok" : "deal-bad"));
+      d.append(el("p", `DKIM signature: ${m.merchant_says}`, m.verified ? "deal-ok" : "deal-bad"));
       d.append(el("p", `Our seal: ${m.we_say}`, "deal-note"));
       if (m.key_source === "supplied") {
-        d.append(el("p", "The merchant's key was supplied by hand, not read from the merchant's DNS.", "deal-bad"));
+        d.append(el("p", "The signing domain's key was supplied by hand, not read from its DNS.", "deal-bad"));
       }
       const table = el("table", undefined, "deal-merchant");
       const row = (label, value) => {
@@ -751,7 +751,7 @@ const dealViewRender = (model, regions) => {
       row("Cancel by (read from the email)", m.cancel_by);
       row("Items (read from the email)", (m.items || []).join(" · "));
       row("Signing domain", m.domains);
-      row("Merchant's key", m.key_size ? `${m.key_size}, sealed when the email was sealed` : "");
+      row("Signing domain's key", m.key_size ? `${m.key_size}, sealed when the email was sealed` : "");
       d.append(table, steps(m.steps || []));
       host.append(d);
     });

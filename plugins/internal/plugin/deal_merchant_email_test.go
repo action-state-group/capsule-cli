@@ -284,12 +284,16 @@ func TestDealMerchantEmailSealVerifyAndMismatch(t *testing.T) {
 		body = strings.ReplaceAll(body, "&#39;", "'")
 		for _, want := range []string{
 			dealScopeLine, emailScopeLine, "The merchant's own email",
-			"Merchant's signature: " + row["merchant_says"].(string), "Our seal: " + ourSealWords,
+			"DKIM signature: " + row["merchant_says"].(string), "Our seal: " + ourSealWords,
 			"You approved (the amount checked against what you already allowed)", "$48.00",
 			"The merchant's email says (read from the email)", "$64.00", "2026-10-10",
 			"signed by shop.example, the merchant's own domain (apex shop.example)", "RSA 2048-bit, sealed when the email was sealed",
+			"Signing domain's key",
 		} {
 			assert.Contains(t, body, want)
+		}
+		for _, old := range []string{"Merchant's signature", "Merchant's key"} {
+			assert.NotContains(t, body, old, "the signature and key are the signing domain's (capsule-cli#306)")
 		}
 		assert.NotContains(t, strings.ToLower(body), "bilateral")
 	}
@@ -310,7 +314,7 @@ func TestDealMerchantEmailSealVerifyAndMismatch(t *testing.T) {
 	assert.Contains(t, report["did_line"], "with an independent source attached: the merchant's own email, its signature checked against the merchant's key sealed at ")
 	html, err := os.ReadFile(page)
 	require.NoError(t, err)
-	assert.Contains(t, string(html), "Merchant's signature: ")
+	assert.Contains(t, string(html), "DKIM signature: ")
 	assert.Contains(t, string(html), "Our seal: ")
 	b := embeddedBundle(t, string(html))
 	deal := dealReportOf(b)

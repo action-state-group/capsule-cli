@@ -19,7 +19,7 @@ import (
 // presented as a checked one, and its bytes are never deleted unsealed.
 
 // emailDeferredWords is what the agent tells the user while a capture waits.
-const emailDeferredWords = "the merchant's signature will be checked later"
+const emailDeferredWords = "the email's signature will be checked later"
 
 // deal_deferred_emails is local only, like deal_steps.local: the raw email
 // and the evidence note it came with, until a tick seals them. Ids are never
@@ -111,7 +111,7 @@ func (s *dealSession) deferEmail(ctx context.Context, c *cobra.Command, dealID s
 		"deal_id": dealID, "state": "deferred", "sealed": false,
 		"message_digest": emailDigest(raw),
 		"say":            emailDeferredWords,
-		"next":           "nothing to do now: the merchant's key could not be read from this device, so the email is kept here unsealed and the next `deal tick` reads the key and seals it; tell the user only that " + emailDeferredWords,
+		"next":           "nothing to do now: the signing domain's key could not be read from this device, so the email is kept here unsealed and the next `deal tick` reads the key and seals it; tell the user only that " + emailDeferredWords,
 	}
 	// Read from the email alone, no key needed: still only a proposal.
 	if hint := obligationHint(parseMerchantEmail(raw)); hint != nil && ev.Obligation == nil {

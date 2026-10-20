@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-rAQiobQN/EK9f6XYPhN4EYmArqWVvq10Tvrr9E59kr8=' 'sha256-JWeaIrg3Vi+lF58lQDB1FKh0iLTGwIi2Agbv5bSGJto=' 'sha256-YmWLO7NuIs9PTkrIuWFegeLGl2bnsadqJ8fx+fVmkWM=' 'sha256-eApYtpWzjL0YwRGFhFyYTSUF8XUEYhDm1VnJe5ocFjo='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-rAQiobQN/EK9f6XYPhN4EYmArqWVvq10Tvrr9E59kr8=' 'sha256-JWeaIrg3Vi+lF58lQDB1FKh0iLTGwIi2Agbv5bSGJto=' 'sha256-gtKXRn5yTfsIv41xPfM+PWkzeT6cjg3CjkH1F7QLzuM=' 'sha256-eApYtpWzjL0YwRGFhFyYTSUF8XUEYhDm1VnJe5ocFjo='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: “Order the cat sticker in my cart at Example Stickers”</title>
     <style>
@@ -14103,10 +14103,10 @@ const dealViewRender = (model, regions) => {
       const d = el("details", undefined, m.verified ? undefined : "deal-flag");
       d.open = true;
       d.append(el("summary", m.order_id ? `Order ${m.order_id}` : "Merchant email"));
-      d.append(el("p", `Merchant's signature: ${m.merchant_says}`, m.verified ? "deal-ok" : "deal-bad"));
+      d.append(el("p", `DKIM signature: ${m.merchant_says}`, m.verified ? "deal-ok" : "deal-bad"));
       d.append(el("p", `Our seal: ${m.we_say}`, "deal-note"));
       if (m.key_source === "supplied") {
-        d.append(el("p", "The merchant's key was supplied by hand, not read from the merchant's DNS.", "deal-bad"));
+        d.append(el("p", "The signing domain's key was supplied by hand, not read from its DNS.", "deal-bad"));
       }
       const table = el("table", undefined, "deal-merchant");
       const row = (label, value) => {
@@ -14122,7 +14122,7 @@ const dealViewRender = (model, regions) => {
       row("Cancel by (read from the email)", m.cancel_by);
       row("Items (read from the email)", (m.items || []).join(" · "));
       row("Signing domain", m.domains);
-      row("Merchant's key", m.key_size ? `${m.key_size}, sealed when the email was sealed` : "");
+      row("Signing domain's key", m.key_size ? `${m.key_size}, sealed when the email was sealed` : "");
       d.append(table, steps(m.steps || []));
       host.append(d);
     });

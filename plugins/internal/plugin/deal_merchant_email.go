@@ -32,11 +32,13 @@ import (
 )
 
 // A merchant's own confirmation email is the one piece of deal evidence that
-// does not reduce to "the agent says so": the merchant's mail server signs it
-// with a DKIM key published in the merchant's DNS, and that signature survives
+// does not reduce to "the agent says so": the sending mail server signs it
+// with a DKIM key published in the signing domain's DNS (the merchant's, or
+// its mail provider's), and that signature survives
 // being relayed by an agent nobody trusts. Two attestations, never one:
 //
-//   - our seal says what OUR side saw: these exact bytes, at this time;
+//   - our seal says what OUR side saw: these exact bytes, no later than
+//     this time;
 //   - the DKIM signature says what the SIGNING DOMAIN signed (the
 //     merchant's, or its mail provider's). Only this one is independent of
 //     the agent and of this device.
@@ -365,7 +367,7 @@ type dmarcPolicy struct {
 }
 
 // dmarcSupplied marks DMARC as not captured: a hand-supplied key comes with
-// no DMARC record from the merchant's DNS.
+// no DMARC record (DMARC is looked up for the From domain).
 var dmarcSupplied = &dmarcCapture{Source: "not_captured", Records: []dkimKeyRecord{}}
 
 // dmarcPolicyOf reads the published policy from the sealed DMARC records:
@@ -821,7 +823,7 @@ func dmarcPolicyWords(policy string) string {
 
 // ourSealWords is what our own seal on a merchant email does and does not
 // show, said once, next to the merchant's attestation and never merged with it.
-const ourSealWords = "our seal shows this device held these exact bytes at this time; it is our own record, not the merchant's"
+const ourSealWords = "our seal shows this device held these exact bytes no later than this time; it is our own record, not the merchant's"
 
 // An email result states its own scope on its face, as a receipt does
 // (dealScopeLine).
@@ -963,7 +965,7 @@ type dealMerchantRow struct {
 	CancelBy      string   `json:"cancel_by,omitempty"`
 	Items         []string `json:"items,omitempty"`
 	KeySource     string   `json:"key_source"`
-	// KeySize is the merchant key the verdict rests on ("RSA 2048-bit",
+	// KeySize is the signing domain's key the verdict rests on ("RSA 2048-bit",
 	// "Ed25519"); SigningDomain is the domain whose signature passed, and
 	// MerchantApex the sender's organizational domain. Domains says how the
 	// two compare, in words.

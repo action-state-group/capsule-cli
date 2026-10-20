@@ -574,9 +574,10 @@ is not registered anywhere.
 What the user asked, what was proposed and what the user approved are rightly
 recorded by the user's own agent: nobody else saw them. What was *done* is
 different, and needs a source outside the agent. A merchant's
-confirmation email is different: the merchant's mail server signs it with a
-DKIM key published in the merchant's DNS, and that signature survives being
-passed along by an agent nobody has to trust.
+confirmation email is different: the sending mail server signs it with a
+DKIM key published in the signing domain's DNS (the merchant's, or its mail
+provider's), and that signature survives being passed along by an agent
+nobody has to trust.
 
 So a sealed merchant email carries two statements, and the report never
 merges them:
@@ -584,7 +585,7 @@ merges them:
 | | Who stands behind it | What it shows |
 |---|---|---|
 | **The DKIM signature** | The signing domain: the merchant's, or its mail provider's | That domain signed this email, and it has not changed since. Independent of the agent and of this device. |
-| **Our seal** | This device's signing key | This device held these exact bytes at this time. Our own record. |
+| **Our seal** | This device's signing key | This device held these exact bytes no later than this time. Our own record. |
 
 Only a passing signature that is DMARC-aligned with the sender's domain (the
 same organizational domain, or the exact domain when the domain sets
@@ -617,7 +618,7 @@ the email on the device, and the next `deal tick` reads the key records and
 seals the email then (listed under `merchant_emails` in its result).
 `--key-record` (and optionally `--dmarc-record`) supplies records by hand (for tests, or a machine with no
 resolver); the record says `key_source: supplied`, and the report says the key
-was not read from the merchant's DNS.
+was not read from the signing domain's DNS.
 
 DKIM verification is [`github.com/emersion/go-msgauth/dkim`](https://github.com/emersion/go-msgauth)
 (MIT), with the key lookup answered from the sealed records. capsulectl
@@ -657,8 +658,8 @@ limit, else the agreed price) and what the agent reported paying. It flags:
 
 The order number, tracking number, total, cancel-by date and items are read by
 merchant-agnostic heuristics and may be misread; the report labels them as
-read from the email. The merchant's signature covers the bytes, not this
-reading of them.
+read from the email. The DKIM signature covers the headers it names and the
+body, not this reading of them.
 
 ## A held object
 
