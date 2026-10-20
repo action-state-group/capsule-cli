@@ -104,6 +104,10 @@ func dealShownAmounts(events []sealedEvent) map[int64]bool {
 			}
 		}
 	}
+	currency := ""
+	if len(events) > 0 && events[0].Event.Open != nil {
+		currency = events[0].Event.Open.Terms.Currency
+	}
 	for _, se := range events {
 		e := se.Event
 		if e.Open != nil {
@@ -121,8 +125,12 @@ func dealShownAmounts(events []sealedEvent) map[int64]bool {
 		if e.Act != nil && e.Act.AmountMinor != nil {
 			shown[*e.Act.AmountMinor] = true
 		}
+		// A charge in another currency shows a different amount, whatever
+		// its minor units: ¥6,400 is not $64.00.
 		if e.Evidence != nil && e.Evidence.Email != nil && e.Evidence.Email.Parsed.TotalMinor != nil {
-			shown[*e.Evidence.Email.Parsed.TotalMinor] = true
+			if p := e.Evidence.Email.Parsed; p.Currency == "" || currency == "" || strings.EqualFold(p.Currency, currency) {
+				shown[*p.TotalMinor] = true
+			}
 		}
 	}
 	return shown

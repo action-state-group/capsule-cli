@@ -907,6 +907,7 @@ func TestTheBoundsAreKeptByFieldAndInFreeText(t *testing.T) {
 	assert.NotContains(t, raw, "max_total_minor")
 	page := filepath.Join(t.TempDir(), "shared.html")
 	dealRun(t, "report", "--deal", id, "--html", page, "--share", "counterparty", "--to", "the seller")
+	assert.NotContains(t, string(mustRead(t, page)), "max_total_minor", "the shared page carries no bound field")
 	events := chainSteps(t, id)
 	for _, prose := range []string{"my max is $2,000.00", "budget tops out at USD 2000"} {
 		assert.ErrorContains(t, dealCeilingGate([]byte(raw+" "+prose), events, cli.DealAudienceCounterparty), "your spending limit", prose)

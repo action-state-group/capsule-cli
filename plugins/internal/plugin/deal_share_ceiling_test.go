@@ -141,3 +141,17 @@ func TestAChargeAtTheLimitIsShared(t *testing.T) {
 	assert.Contains(t, raw, `"charged":"$64.00"`, "the merchant's total at the limit travels")
 	assert.NotContains(t, raw, "max_total_minor")
 }
+
+// A merchant's charge in another currency is not an amount the copy shows in
+// the deal's: its minor units equal to the limit exempt nothing.
+func TestAChargeInAnotherCurrencyExemptsNothing(t *testing.T) {
+	limit, total := int64(6400), int64(6400)
+	open := sealedEvent{Event: dealEvent{Kind: "open", Open: &dealOpen{Intent: dealIntent{MaxTotalMinor: &limit}, Terms: dealTerms{Currency: "USD"}}}}
+	charge := func(currency string) sealedEvent {
+		return sealedEvent{Event: dealEvent{Kind: "evidence", Evidence: &dealEvidence{Email: &merchantEmail{Parsed: merchantEmailParsed{TotalMinor: &total, Currency: currency}}}}}
+	}
+	assert.True(t, dealShownAmounts([]sealedEvent{open, charge("USD")})[6400])
+	assert.True(t, dealShownAmounts([]sealedEvent{open, charge("")})[6400], "an email that names no currency is read in the deal's")
+	assert.False(t, dealShownAmounts([]sealedEvent{open, charge("JPY")})[6400])
+	assert.ErrorContains(t, dealCeilingGate([]byte("my max is $64.00"), []sealedEvent{open, charge("JPY")}, cli.DealAudienceCounterparty), "your spending limit")
+}
