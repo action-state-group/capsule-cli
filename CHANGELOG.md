@@ -54,6 +54,14 @@ Details, for developers. Three changes make the upgrade one-way:
   sale's log, and if this version crashed at the wrong moment, an older build
   refuses to open the whole store.
 
+### Presentation manifests follow presentation contract revision 1 (capsule-cli#293)
+
+- **Fixed:** capsulectl checks plugin presentation manifests against
+  presentation contract revision 1 (agent-action-capsule 81e804a): a
+  declarative field may name the `member` it reads (`agent_input` or
+  `agent_output`), and wording packs document the reserved `page.title` and
+  `module.title` keys. This only widens what is accepted.
+
 ### Dispatch runs the launcher it checked (capsule-cli#296)
 
 - **Fixed (security):** the trust walk judged a launcher's resolved path,
