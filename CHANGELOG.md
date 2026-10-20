@@ -56,8 +56,8 @@ Details, for developers. Three changes make the upgrade one-way:
 
 ### A deal's shared copy is checked with capsulectl alone (capsule-cli#243)
 
-- **Added (CI):** a `portability` job runs a deal on a shelf book with typed
-  records, shares it with its counterparty and exports its records, then
+- **Added (tests, CI):** a `portability` job runs a deal on a shelf book with
+  typed records, shares it with its counterparty and exports its records, then
   deletes the session (home, profile and keys, deal store, plugin root). With
   capsulectl alone, it opens the shared page offline in headless Chrome, runs
   `verify --bundle`, and checks that each exported typed record is the exact
