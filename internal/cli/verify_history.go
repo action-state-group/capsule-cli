@@ -13,7 +13,8 @@ import (
 )
 
 // ErrHistoryNotAccepted is the exit of `verify --history` when a History
-// fails a check: an envelope property or a History property is FAIL.
+// fails: an envelope or History property is FAIL, an answer is not
+// accepted under PH §6.1, or no reply names a holder key.
 var ErrHistoryNotAccepted = errors.New("history not accepted")
 
 // historyNotEstablished is what a History at the Basic level never
@@ -113,7 +114,8 @@ func outputInOrder(c *cobra.Command, value historyReport) error {
 // keys the relying party accepts; with none, responder_trust cannot pass
 // and the History is not accepted. Exit 0 when the History is accepted,
 // 3 (ErrPartial) when nothing failed but the holder key was not pinned,
-// 1 (ErrHistoryNotAccepted) when a check failed.
+// 1 (ErrHistoryNotAccepted) when it failed (see ErrHistoryNotAccepted), 2
+// when a request it holds is not a request map.
 func verifyHistoryFile(c *cobra.Command, path string, holderKeys []string) error {
 	for _, k := range holderKeys {
 		if !evidencerequest.IsDigest(k) {
@@ -186,6 +188,11 @@ func historyEvaluate(file personalhistory.File, holderKeys []string) (historyRep
 		return historyReport{}, err
 	}
 	res, err := personalhistory.Evaluate(v, file.Definition, file.Exchanges, nil)
+	if errors.Is(err, evidencerequest.ErrInvalid) {
+		// A request in the file is not a request map: the file is malformed,
+		// an input error, not a failed check.
+		return historyReport{}, InputError("--history holds a request that is not an evidence request map")
+	}
 	if err != nil {
 		return historyReport{}, err
 	}
@@ -210,13 +217,15 @@ func historyEvaluate(file personalhistory.File, holderKeys []string) (historyRep
 	}
 	for i, x := range res.Exchanges {
 		view := historyExchangeView{Subject: x.Subject, Accepted: x.Accepted, Message: x.Reply.MessageType, Properties: map[string]string{}}
+		failed := false
 		for _, p := range x.Reply.Properties {
 			view.Properties[p.Property] = p.Status
 			if p.Status == evidencerequest.StatusFail && (p.Property != "responder_trust" || len(holderKeys) > 0) {
 				r.Findings = append(r.Findings, fmt.Sprintf("exchange %d: %s FAIL", i, p.Property))
+				failed = true
 			}
 		}
-		if len(holderKeys) > 0 && x.Reply.MessageType == "envelope" && !x.Accepted {
+		if len(holderKeys) > 0 && x.Reply.MessageType == "envelope" && !x.Accepted && !failed {
 			// Not accepted under PH §6.1 without a FAIL: a property NOT_PRESENT
 			// or NOT_CHECKED where PASS is required, a verification member, or
 			// anchor_inclusion other than NOT_CHECKED.

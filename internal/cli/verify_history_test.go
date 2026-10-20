@@ -258,12 +258,13 @@ func TestVerifyHistoryWithNothingToPin(t *testing.T) {
 
 	noKey := c
 	noKey.Inputs.Exchanges = append(noKey.Inputs.Exchanges[:0:0], c.Inputs.Exchanges...)
-	noKey.Inputs.Exchanges[0].Reply.OctetsText = strings.Replace(c.Inputs.Exchanges[0].Reply.OctetsText, `"responder":"`, `"responder_was":"`, 1)
-	for i := 1; i < len(noKey.Inputs.Exchanges); i++ {
+	for i := 0; i < len(noKey.Inputs.Exchanges); i++ {
 		noKey.Inputs.Exchanges[i].Reply.OctetsText = strings.Replace(c.Inputs.Exchanges[i].Reply.OctetsText, `"responder":"`, `"responder_was":"`, 1)
 	}
-	_, err = invoke(t, "", "verify", "--history", writeHistory(t, historyFileOf(t, noKey)))
+	out, err = invoke(t, "", "verify", "--history", writeHistory(t, historyFileOf(t, noKey)))
 	assert.ErrorIs(t, err, ErrHistoryNotAccepted, "replies that name no holder key")
+	require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+	assert.Contains(t, got["findings"], "no reply is an envelope naming a holder key")
 }
 
 // An answer PH §6.1 rejects without a FAIL still fails the History under a
@@ -294,7 +295,24 @@ func TestVerifyHistoryFailsAnAnswerRejectedWithoutAFail(t *testing.T) {
 	assert.ErrorIs(t, err, ErrHistoryNotAccepted, out)
 	var got map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &got), out)
-	assert.Contains(t, got["findings"], "exchange 3: not accepted (PH §6.1)")
+	assert.Equal(t, []any{"exchange 3: not accepted (PH §6.1)"}, got["findings"], "the only finding: no property FAILs")
+	for _, s := range got["history_properties"].(map[string]any) {
+		assert.Equal(t, "PASS", s)
+	}
+	for _, s := range got["exchanges"].([]any)[3].(map[string]any)["properties"].(map[string]any) {
+		assert.NotEqual(t, "FAIL", s)
+	}
+}
+
+// A request in the file that is not a request map is an input error.
+func TestVerifyHistoryRefusesARequestThatIsNotAMap(t *testing.T) {
+	c, _ := positiveHistory(t)
+	bad := c
+	bad.Inputs.Exchanges = append(bad.Inputs.Exchanges[:0:0], c.Inputs.Exchanges...)
+	bad.Inputs.Exchanges[0].Request.OctetsText = "[]"
+	_, err := invoke(t, "", "verify", "--history", writeHistory(t, historyFileOf(t, bad)), "--holder-key", c.Pins.TrustPolicy.ResponderKeys[0])
+	assert.ErrorIs(t, err, ErrInput)
+	assert.Equal(t, 2, ExitCode(err))
 }
 
 func sha256Of(b []byte) []byte {
