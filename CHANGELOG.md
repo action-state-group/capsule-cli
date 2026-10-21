@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### The deal page's as-of line (Steven's ruling 31c5af3a)
+
+- **Changed:** the deal page's as-of line is "This report states the deal
+  as of its checkpoint at <time> (the producer's time)." The clause naming
+  where a witness is checked is cut; the full witness display is deferred
+  (capsule-cli#356).
+
 ### One deal per errand: journey records (capsule-cli#340)
 
 - **Added:** the deal opens at the user's first ask, with no merchant (`who`
