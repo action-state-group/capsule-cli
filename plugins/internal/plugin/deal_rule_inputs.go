@@ -14,8 +14,9 @@ import (
 // absent when it is not known, never a fabricated zero or empty string.
 //
 //   - recipient_role: who receives a share, by role (the counterparty:
-//     fulfilling_merchant for a buyer, buyer for a seller; or third_party;
-//     self is in the set and never derived here).
+//     fulfilling_merchant for a buyer, buyer for a seller; platform, for a
+//     marketplace, booking site or mail relay; or third_party; self is in
+//     the set and never derived here).
 //   - channel, first_contact_channel: the channel kind in use at this check
 //     and the one the relationship started on (x-deal-v0's channel set).
 //   - upfront_amount_minor: the deposit the check's own terms state.
@@ -164,6 +165,8 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 			if dealRole(events) == dealRoleSeller {
 				body["recipient_role"] = "buyer"
 			}
+		case "platform":
+			body["recipient_role"] = "platform"
 		case "other":
 			body["recipient_role"] = "third_party"
 		}

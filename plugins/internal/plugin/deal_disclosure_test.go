@@ -208,7 +208,7 @@ func TestDealDisclosureInputIsRefusedWhenIncomplete(t *testing.T) {
 		`{"fields":[{"class":"phone","value":" "}]}`:                                           "needs the value",
 		`{"fields":[{"class":"phone","value":"1"},{"class":"credential","value":"hunter22"}]}`: "separate disclosures",
 		`{"to":"other","fields":[{"class":"phone","value":"` + userPhone + `"}]}`:              "needs who",
-		`{"to":"courier","fields":[{"class":"phone","value":"` + userPhone + `"}]}`:            "counterparty or other",
+		`{"to":"courier","fields":[{"class":"phone","value":"` + userPhone + `"}]}`:            "counterparty, platform or other",
 	} {
 		out, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t, body))
 		require.Error(t, err, body)

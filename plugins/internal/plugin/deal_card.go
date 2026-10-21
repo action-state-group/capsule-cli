@@ -164,7 +164,7 @@ func cardWho(state dealState, snap dealSnapshot) (payee, where string) {
 			who.Payee = snap.Who.Payee
 		}
 	}
-	if snap.DisclosingTo == "other" && snap.Recipient != nil {
+	if namedRecipient(snap.DisclosingTo) && snap.Recipient != nil {
 		who = *snap.Recipient
 	}
 	payee = who.Payee

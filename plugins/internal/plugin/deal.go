@@ -1622,7 +1622,7 @@ func dealNoteCommand() *cobra.Command {
 				keys := disclosureRecipientKeys(*d, *open)
 				if first := firstTellings(events, d.AuthorizedBy, d.Fields, memory, keys); len(first) > 0 {
 					name := recipientName(open.Who)
-					if d.Who != nil && d.To == "other" {
+					if d.Who != nil && namedRecipient(d.To) {
 						name = recipientName(*d.Who)
 					}
 					words := make([]string, len(first))
@@ -1951,17 +1951,17 @@ func dealCheckCommand() *cobra.Command {
 			if strings.HasPrefix(snap.Action, "share_") {
 				switch snap.DisclosingTo {
 				case "":
-					return cli.InputError(`a share check needs "disclosing_to": "counterparty" (the deal's counterparty) or "other" (with a recipient)`)
+					return cli.InputError(`a share check needs "disclosing_to": "counterparty" (the deal's counterparty), "platform" (a marketplace, booking site or mail relay, with a recipient) or "other" (with a recipient)`)
 				case "counterparty":
 					if snap.Recipient != nil {
-						return cli.InputError(`recipient goes with "disclosing_to": "other"; a telling to the counterparty is about the deal's own counterparty`)
+						return cli.InputError(`recipient goes with "disclosing_to": "platform" or "other"; a telling to the counterparty is about the deal's own counterparty`)
 					}
-				case "other":
-					if snap.Recipient == nil || len(counterpartyKeys(*snap.Recipient, "")) == 0 {
-						return cli.InputError(`"disclosing_to": "other" needs a recipient with a phone, email, profile id, reply address or website, so the approval names who it is for`)
+				case "platform", "other":
+					if snap.Recipient == nil || len(recipientKeys(snap.DisclosingTo, *snap.Recipient, "")) == 0 {
+						return cli.InputError(`"disclosing_to": "` + snap.DisclosingTo + `" needs a recipient with a phone, email, profile id, reply address or website, so the approval names who it is for`)
 					}
 				default:
-					return cli.InputError(`disclosing_to must be counterparty or other`)
+					return cli.InputError(`disclosing_to must be counterparty, platform or other`)
 				}
 			} else if snap.DisclosingTo != "" || snap.Recipient != nil {
 				return cli.InputError(`disclosing_to and recipient go with a share check`)

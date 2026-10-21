@@ -236,9 +236,11 @@ type dealSnapshot struct {
 	// be given (phone, address, ...): the check pauses on the first time a
 	// class goes to this counterparty, never on a repeat.
 	Disclosing []string `json:"disclosing,omitempty"`
-	// DisclosingTo is who receives it: "counterparty" (the default) or
-	// "other", named by Recipient (a courier, a platform, a third person).
-	// An approval covers a telling only to the party its check was about.
+	// DisclosingTo is who receives it: "counterparty" (the default),
+	// "platform" (a marketplace, booking site or mail relay acting between
+	// the user and the counterparty) or "other" (a courier, a third person),
+	// the last two named by Recipient. An approval covers a telling only to
+	// the party its check was about.
 	DisclosingTo string   `json:"disclosing_to,omitempty"`
 	Recipient    *dealWho `json:"recipient,omitempty"`
 	// FeeMinor is, on a cancel only, a fee the cancellation costs, recorded
@@ -1362,10 +1364,13 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	// them is a pause, naming them and the class; a repeat is a note.
 	if s.memory != nil {
 		receiver := who
-		if snap.DisclosingTo == "other" && snap.Recipient != nil {
+		if namedRecipient(snap.DisclosingTo) && snap.Recipient != nil {
 			receiver = *snap.Recipient
 		}
 		keys := counterpartyKeys(receiver, s.open.Channel)
+		if snap.DisclosingTo == "platform" && snap.Recipient != nil {
+			keys = platformKeys(receiver)
+		}
 		r.Recipient = &dealRecipient{Name: recipientName(receiver), FirstTime: s.memory.firstTime(keys)}
 		r.Recipient.NewProfile = s.memory.newProfile() && !s.memory.newProfileNoted
 		for _, class := range sortedClasses(snap.Disclosing) {
@@ -1373,6 +1378,15 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 				r.Recipient.Repeat = append(r.Recipient.Repeat, class)
 				continue
 			}
+			r.Recipient.First = append(r.Recipient.First, class)
+			add("who", "first_disclosure", class, fmt.Sprintf("First time telling %s your %s", r.Recipient.Name, classWord(class)))
+		}
+	} else if snap.DisclosingTo == "platform" && snap.Recipient != nil {
+		// A platform's rule packs allow its email and count nothing: this
+		// pause is the only ask. With no memory to say it was told before,
+		// every class is a first telling, never a silent pass.
+		r.Recipient = &dealRecipient{Name: recipientName(*snap.Recipient), FirstTime: true}
+		for _, class := range sortedClasses(snap.Disclosing) {
 			r.Recipient.First = append(r.Recipient.First, class)
 			add("who", "first_disclosure", class, fmt.Sprintf("First time telling %s your %s", r.Recipient.Name, classWord(class)))
 		}
@@ -2363,8 +2377,9 @@ func changesDetails(e dealEvent) bool {
 // The sealed record carries the classes and a commitment to each value,
 // never a value: a ledger of disclosures must never itself be one.
 type dealDisclosure struct {
-	// To is "counterparty" (the deal's other side, the default) or "other"
-	// (anyone else: a courier, a platform, a third person).
+	// To is "counterparty" (the deal's other side, the default), "platform"
+	// (a marketplace, booking site or mail relay between the user and the
+	// counterparty) or "other" (anyone else: a courier, a third person).
 	To      string                `json:"to"`
 	Who     *dealWho              `json:"who,omitempty"`
 	Channel string                `json:"channel,omitempty"`
@@ -2388,7 +2403,8 @@ type dealDisclosureField struct {
 type dealToldItem struct {
 	At string `json:"at"`
 	To string `json:"to"`
-	// ToKind is counterparty or other, all a shared copy may say of whom.
+	// ToKind is counterparty, platform or other, all a shared copy may say
+	// of whom.
 	ToKind    string                `json:"to_kind"`
 	Fields    []dealDisclosureField `json:"fields"`
 	Authority string                `json:"authority"` // approval | none
@@ -2444,10 +2460,20 @@ func (d dealDisclosure) classList() string {
 }
 
 func (d dealDisclosure) recipientWord() string {
-	if d.To == "other" {
+	switch d.To {
+	case "platform":
+		return "a platform"
+	case "other":
 		return "someone other than the counterparty"
 	}
 	return "the counterparty"
+}
+
+// namedRecipient reports whether a share or disclosure goes to a party it
+// names itself (a platform, or anyone else) rather than to the deal's
+// counterparty.
+func namedRecipient(to string) bool {
+	return to == "platform" || to == "other"
 }
 
 // recipient names who was told, as the local store knows them.
@@ -2470,11 +2496,11 @@ func (d dealDisclosure) recipient(first dealWho) string {
 }
 
 func (d dealDisclosure) validate() error {
-	if d.To != "counterparty" && d.To != "other" {
-		return cli.InputError("disclosure.to must be counterparty or other")
+	if d.To != "counterparty" && !namedRecipient(d.To) {
+		return cli.InputError("disclosure.to must be counterparty, platform or other")
 	}
-	if d.To == "other" && (d.Who == nil || *d.Who == (dealWho{})) {
-		return cli.InputError("a disclosure to someone other than the counterparty needs who (who they are)")
+	if namedRecipient(d.To) && (d.Who == nil || *d.Who == (dealWho{})) {
+		return cli.InputError("a disclosure to a platform or to someone other than the counterparty needs who (who they are)")
 	}
 	if len(d.Fields) == 0 {
 		return cli.InputError("disclosure.fields needs at least one {class, value}")

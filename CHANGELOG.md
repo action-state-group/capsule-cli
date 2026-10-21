@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### A platform is a recipient of its own (capsule-cli#348)
+
+- **Added:** a share check may say `"disclosing_to": "platform"` with a
+  `recipient`, for a marketplace, booking site or mail relay between the user
+  and the counterparty; a `disclosure` note says `"to": "platform"` with
+  `who`. The check seals `recipient_role: "platform"`, which everyday 0.3.7
+  and seller 0.1.4 allow for the user's email only (capsule-engine#173). A
+  platform is known by its registrable domain, a marketplace's included, so
+  its approval and its first telling are its own: the first email to a
+  platform pauses, a repeat to it passes, and another platform pauses again,
+  with or without the counterparty memory. A shared copy says "Told a
+  platform", and `deal list` counts a platform under `to_others`, once per
+  platform.
+- **Fixed:** in typed records, a disclosure covered by a passing check's own
+  evaluation (no approval needed) is matched to that check's recipient, so a
+  repeat telling to the same recipient is no longer sealed as
+  `approval_for_another_party`.
+- **Changed:** `platform` joins the `disclosing_to`, disclosure `to` and
+  `recipient_role` enums of `x-deal-v0` and the typed records. `other`
+  still seals `third_party`.
+
 ### Merchant email keys over DNS-over-HTTPS (capsule-cli#343)
 
 - **Added: a DNS-over-HTTPS fallback for DKIM and DMARC records.** `deal

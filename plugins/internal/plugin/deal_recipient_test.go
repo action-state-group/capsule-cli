@@ -295,9 +295,9 @@ func TestDealApprovalForOnePartyDoesNotCoverAnother(t *testing.T) {
 	// A check about someone else must say who, by an identity, not a name.
 	for body, want := range map[string]string{
 		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"other","recipient":{"name":"Quick Couriers"}}`:          "needs a recipient with",
-		`{"action":"share_contact","disclosing_to":"counterparty","disclosing":["address"],"recipient":{"phone":"+1 555 010 7777"}}`: `recipient goes with "disclosing_to": "other"`,
+		`{"action":"share_contact","disclosing_to":"counterparty","disclosing":["address"],"recipient":{"phone":"+1 555 010 7777"}}`: `recipient goes with "disclosing_to": "platform" or "other"`,
 		`{"action":"share_contact","disclosing":["address"],"recipient":{"phone":"+1 555 010 7777"}}`:                                `needs "disclosing_to"`,
-		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"courier"}`:                                              "disclosing_to must be counterparty or other",
+		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"courier"}`:                                              "disclosing_to must be counterparty, platform or other",
 	} {
 		out, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", dealID, "--input", writeJSON(t, body))
 		require.ErrorIs(t, err, cli.ErrInput, body)

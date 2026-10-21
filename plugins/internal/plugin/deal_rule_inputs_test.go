@@ -143,6 +143,7 @@ func TestAShareCarriesTheRecipientRole(t *testing.T) {
 	for check, role := range map[string]string{
 		`{"action":"share_contact","disclosing_to":"counterparty","disclosing":["phone"]}`:                                                            "fulfilling_merchant",
 		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"other","recipient":{"name":"Quick Couriers","phone":"+1 555 010 7777"}}`: "third_party",
+		`{"action":"share_contact","disclosing":["email"],"disclosing_to":"platform","recipient":{"name":"Quick Couriers","domain":"ebay.com"}}`:      "platform",
 	} {
 		t.Run(role, func(t *testing.T) {
 			dealFixture(t)

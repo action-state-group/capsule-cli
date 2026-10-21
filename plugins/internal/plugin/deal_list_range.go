@@ -313,7 +313,7 @@ func newDealToldTally() *dealToldTally {
 func (t *dealToldTally) add(dealID string, d dealDisclosure, open dealOpen, role string) {
 	to := dealToldTo{keys: disclosureRecipientKeys(d, open), deal: dealID, role: dealRoleSeller}
 	switch {
-	case d.To == "other":
+	case namedRecipient(d.To):
 		to.deal, to.role = "", "other"
 	case role == dealRoleSeller:
 		to.role = dealRoleBuyer
