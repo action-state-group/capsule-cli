@@ -2,10 +2,12 @@
 
 ## Unreleased
 
-### The deal page's as-of line (Steven's ruling 31c5af3a)
+## v0.1.0-rc19
 
-- **Changed:** the deal page's as-of line is "This report states the deal
-  as of its checkpoint at <time> (the producer's time)." The clause naming
+### The deal page's as-of line (capsule-cli#362)
+
+- **Changed:** the deal page's as-of line is `This report states the deal
+  as of its checkpoint at <time> (the producer's time).` The clause naming
   where a witness is checked is cut; the full witness display is deferred
   (capsule-cli#356).
 
@@ -22,7 +24,9 @@
   `picked`) is derived by capsulectl and sealed; the agent never states it.
   An intent that names another merchant (`who`) starts a new leg of the same
   deal: the ask and limits carry over, no approval from the earlier leg
-  covers a step in it, and a payee or contact change is compared with that
+  covers a step in it (nor does an approval given before a new pick: an
+  intent naming an item, or the agent's `chose`, in capsulectl and the
+  profile checker), and a payee or contact change is compared with that
   leg's first contact, so the user's switch never reads as one while a
   seller's change within the leg still does. Counterparty memory, deal list,
   shared copies, the audit and merchant-email checks read the leg in force.
@@ -31,18 +35,25 @@
   pause as its pick; adding a delegation later is a proposal.
 - **Added:** close status `called_off` (actor `user`, reason `called_off`),
   never "nothing delivered".
-- **Changed:** an intent note that changes nothing is refused (the user's
-  words go in a message). A note's `asked` adds to the ask in force, field
-  by field.
-- **Changed:** the limit binds on the larger of the price and the amount
-  charged (tax included); quantity 1 and free shipping are not the agent's
-  picks; a postal code or region added to the place asked for is not a
-  difference. Rule inputs version 2 counts `material_fields_changed` against
-  the leg's agreement (a check sealed under version 1 keeps its count).
+- **Changed (breaking):** an intent note that changes nothing is refused
+  (the user's words go in a message). A note's `asked` adds to the ask in
+  force, field by field.
+- **Changed:** the limit binds on the largest of the price, the amount
+  charged (tax included) and the authorized maximum; quantity 1 and a free
+  shipping or delivery option are not the agent's picks, while "free
+  shipping" in any other field still is; a postal code or region added to
+  the place asked for is not a difference. Rule inputs version 2 counts
+  `material_fields_changed` against the leg's agreement (a check sealed
+  under version 1 keeps its count).
 - **Changed:** the deal skill opens the deal at the first ask, keeps one
   deal per errand, seals a switch as the user's intent, puts tax in the
   amount, starts a sell with `deal sale new`, never offers to change the
   user's rules after a deny, and finds deals with `deal list`.
+- **Changed:** `x-deal-v0` adds the `agent_move` record type, an intent's
+  `move`, `proposed`, `delegated` (with `delegated_commitment`) and
+  `why_commitment`, and `called_off` to the close status, reason and
+  outcome enums. A baseline may omit `counterparty` and `recourse` when the
+  deal opened before a merchant was in play.
 
 ### A platform is a recipient of its own (capsule-cli#348)
 
@@ -53,10 +64,11 @@
   and seller 0.1.4 allow for the user's email only (capsule-engine#173). A
   platform is known by its registrable domain, a marketplace's included, so
   its approval and its first telling are its own: the first email to a
-  platform pauses, a repeat to it passes, and another platform pauses again,
-  with or without the counterparty memory. A shared copy says "Told a
-  platform", and `deal list` counts a platform under `to_others`, once per
-  platform.
+  platform pauses, and another platform pauses again. With the counterparty
+  memory, a repeat to the same platform does not pause as a first telling;
+  without it, every email to a platform pauses as one. A shared copy says
+  "Told a platform", and `deal list` counts a platform under `to_others`,
+  once per platform.
 - **Fixed:** in typed records, a disclosure covered by a passing check's own
   evaluation (no approval needed) is matched to that check's recipient, so a
   repeat telling to the same recipient is no longer sealed as
@@ -74,9 +86,11 @@
   proxied resolver is asked last, and counts only when it finds every key.
   The default endpoints are Cloudflare and Google, by name and then by
   address. This sends the looked-up names (`selector._domainkey.<signing
-  domain>`, `_dmarc.<From domain>`) to the DoH provider, which learns which
-  merchants email the user, so DoH is a fallback only. `CAPSULECTL_DOH` sets
-  the endpoints or turns DoH off.
+  domain>`, `_dmarc.<From domain>`) to the DoH provider, which also sees
+  the IP address the query comes from (the device's, or its proxy's or
+  VPN's), so it learns which merchants email the user and can tie them to
+  that address. DoH is a fallback only. `CAPSULECTL_DOH` sets the
+  endpoints, and `CAPSULECTL_DOH=off` turns DoH off.
 - **Added: `key_resolver` and `key_dnssec` on `merchant_email`.** A new
   record says whether its records came from the system resolver or over DoH
   (`system` | `doh`), and whether the DoH resolver reported that it validated
@@ -107,8 +121,8 @@
   ("Pay $1.90"); "anyway" is only over a limit or floor the user set, never
   for a rule that asks; a deny says what will not happen, with one "OK"
   button. A pay that a share card promised to ask about pauses for it
-  (built-in rule `promised_ask`, so `ruleset_digest` changes), and the
-  answer is sealed (#344).
+  (built-in rule `promised_ask`, so `ruleset_digest` changes; checks
+  sealed before keep the old digest), and the answer is sealed (#344).
 - **Added:** `external-check-result/v0` findings may carry `disposition`
   (`ask` or `deny`), sealed with the finding; each failing rule's words follow
   it, so a rule that only asks never reads "Not allowed" under a deny (#341).
@@ -140,14 +154,16 @@
 - **Changed:** `book result build` and `deal terms-result` check and
   canonicalize a Result with the core's code, so all three write the same
   bytes for the same document. Their output does not change.
-- **Changed:** the vendored `evidence-result-v0` schema is the one from
-  agent-action-capsule#353: every claim cites at least one record
-  (`minItems: 1` on a claim's `evidence`). `result build` refuses a claim
-  whose `evidence` is empty, including a story claim about a recorded
-  absence, which cites the absence record instead. The same schema adds the
-  optional (PROPOSED) aggregate member `coverage_declaration`
-  (agent-action-capsule#312), which `result build` now accepts, and
-  description-only edits to the claim types of its §4.1.
+- **Changed (breaking):** the vendored `evidence-result-v0` schema is the
+  one from agent-action-capsule#354 (for agent-action-capsule#353): every
+  claim cites at least one record (`minItems: 1` on a claim's `evidence`).
+  `result build` refuses a claim whose `evidence` is empty, including a
+  story claim about a recorded absence, which cites the absence record
+  instead. This breaks a caller of `result build` whose Result has a
+  claim that cites no record; `book result build` already refused one.
+  The same schema adds the optional (PROPOSED) aggregate member
+  `coverage_declaration` (agent-action-capsule#312), which `result build`
+  now accepts, and description-only edits to the claim types of its §4.1.
 
 ### `deal list --since/--until`: a period's deals, totals and who was told what (capsule-cli#342)
 
@@ -169,9 +185,8 @@
 
 ### A seller's representations carry their authority (capsule-cli#269)
 
-Seller PRD §3.5 and §9 step 2. A seller's deal, or a sale and its threads,
-opened from this version follows these rules. Deals and sales opened before
-keep the old ones.
+A seller's deal, or a sale and its threads, opened from this version
+follows these rules. Deals and sales opened before keep the old ones.
 
 - **Added: `ordered_representations`.** The intent and task authority gain
   this field: the representation classes the user's words order the agent to
@@ -209,8 +224,8 @@ keep the old ones.
 
 ### The checkpoint cadence heals a home a host made group-writable again (capsule-cli#336)
 
-- **Fixed:** a Muse VM replacement recreates `/home/hatch` as `2770`. The
-  trust walk then refused the deal plugin, and the scheduled checkpoint
+- **Fixed:** a host may recreate the home directory as `2770`. The trust
+  walk then refused the deal plugin, and the scheduled checkpoint
   cadence stopped with nothing in its log. `cll checkpoint cadence` and
   `doctor` now put back the `chmod go-w` that plugin install required, but
   only on directories the process's user owns under `$HOME` whose only
@@ -231,8 +246,7 @@ keep the old ones.
   the carrier's delivery scan, checked, which resolves the carried due date,
   and the buyer's refund request, a claim and so unverified. It is the deal
   plugin's `testdata/deal/seller-later-evidence` and presentation golden
-  `9-seller-later-evidence`; its bundle verifies VALID (Seller PRD §5.4,
-  exit criterion 9).
+  `9-seller-later-evidence`; its bundle verifies VALID.
 - **Fixed:** in "Where this deal stands", a record linked to the close read
   "confirms the close: after the close (confirms it): …". It now says the
   relation once: "confirms the close: evidence (buyer_refund_request), unverified: …".
