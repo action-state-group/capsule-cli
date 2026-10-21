@@ -268,7 +268,9 @@ func transitionalAliases() []*cobra.Command {
 		aliasCommand("request", aliasShort("book request (a deal profile: capsulectl deal request)"), byProfile("request")),
 		aliasCommand("respond", aliasShort("book respond (a deal profile: capsulectl deal respond)"), byProfile("respond")),
 		aliasCommand("compose", aliasShort("deal compose"), fixed(DealPluginName, "compose")),
-		aliasCommand("result", aliasShort("book result"), fixed(BookPluginName, "result")),
+		// `result build` is the core's now (capsule-cli#324); only `result
+		// open` still forwards.
+		resultCommand(),
 		aliasCommand("report", aliasShort("book report"), fixed(BookPluginName, "report")),
 		aliasCommand("backfill", aliasShort("book backfill"), fixed(BookPluginName, "backfill")),
 	}

@@ -302,7 +302,8 @@ capsulectl cll checkpoint status --profile NAME --checkpoint MMR_SIZE
 capsulectl doctor [--profile NAME] [--check-witness]
 capsulectl doctor --install-check --profile NAME --expect-version TAG --expect-commit SHA --skills-dir DIR [--expect-skill-sha256 HEX] [--evidence-out FILE]
 capsulectl result open FILE [--format text|json]
-capsulectl result build --profile NAME --result RESULT.json --out SEALED.json [--contract REF] [--capsule-out RECORD.json]
+capsulectl result build --profile NAME --result RESULT.json [--out CANONICAL.json] [--contract REF] [--capsule-out RECORD.json]
+capsulectl book result build --profile NAME --result RESULT.json --out SEALED.json [--contract REF] [--capsule-out RECORD.json]
 capsulectl report build --bundle BUNDLE.json --card CARD --out report.html [--presentation P.json] [--permalink] [--base-url URL] [--dry-run]
 capsulectl <plugin> [args passed to the plugin]   # a discovered capsulectl-<plugin> launcher
 capsulectl plugin ls
@@ -345,11 +346,19 @@ checkpoint endpoint. `result open` validates and prints a Result v0
 document's aggregate/coverage statement as text (or `--format json`); the
 Result v0 schema is still DRAFT, so this is a structural check, not schema
 validation, and it stands in for the `capsule-viewer` build. `result build`
-seals a caller-supplied Result v0 into a jsonl profile's evidence book as an
-`evidence_result` record whose statement is the document and whose `cites`
-links name every book record the claims cite: it validates against the
-vendored `evidence-result-v0` schema (`plugins/internal/plugin/schema/`, digest pinned
-in code), refuses headline values that do not recompute from the claims, a
+needs no plugin: it seals a caller-supplied Result v0 into the profile's log
+as one Capsule whose payload is the document and whose `references` cite,
+`acted_on`, every record the claims cite. It validates against the vendored
+`evidence-result-v0` schema (`internal/cli/schemas/`, digest pinned in code),
+refuses headline values that do not recompute from the claims and a citation
+the profile's log and artifact store do not hold, and sealing the same
+document again appends nothing. Then `cll checkpoint create`,
+`disclose --root <capsule_id>` and `presentation build --bundle` write the
+Result page. On a book profile it forwards to `book result build` until
+v0.2.0. `book result build` runs the same document checks and writes the
+same `--out` bytes, then seals the document into a jsonl profile's evidence
+book as an `evidence_result` record whose statement is the document and
+whose `cites` links name every book record the claims cite. It also refuses a
 citation the book does not hold, or a close/reconcile claim whose state or
 tallies differ from what the cited Close's links and statement read, and
 then checkpoints so `disclose --root <record id>` can build a bundle on it.

@@ -1013,7 +1013,7 @@ page, the user's own bundle, or a History. `deal_local` is never opened.
 **The claim (DR §7).** The Result has one claim per requirement, `tier` `recomputed`, citing no
 Close, with the counterparty's signing key as `peer`. That key is long-lived, so Results about
 different deals with one counterparty can be linked by anyone who holds them. DR §7.5's per-deal
-state is not shown. `result build` refuses a claim under exactly `ec:deal-reconcile@1`, because its
+state is not shown. `book result build` refuses a claim under exactly `ec:deal-reconcile@1`, because its
 evidence is not in any book.
 
 **Sealing.** `deal terms-result` seals each Result it writes as an `evidence_result` record on the
@@ -1024,7 +1024,7 @@ the JCS of `{"type": "deal_terms_result", "profile": "x-deal-v0", "deal_id", "no
 the Result under a fresh 256-bit nonce, as a sealed report's text is. A share withholds the other
 Results' payloads, but keeps their Capsules, so the nonce stops anyone from confirming a guessed
 earlier Result against a payload digest. The Result is never in the record's header, which every
-bundle of the book carries. It is sealed through the same path as `result build`, and its only resolver
+bundle of the book carries. It is sealed through the same path as `book result build`, and its only resolver
 is the run's own halves. A run equal to the newest sealed Result in every member but
 `generated_at` returns that record. Any other run seals a new one, and the book keeps every Result.
 A sealed Result proves what the producer reported, and when by its own clock; a witnessed tick

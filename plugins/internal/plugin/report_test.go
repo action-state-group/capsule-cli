@@ -498,7 +498,7 @@ func TestReportBuildRefusesAnExistingOut(t *testing.T) {
 // subject_ref, so a bundle holding that capsule supports the claim.
 func TestUnsupportedClaimsReadsAnOwnCapsulesSubject(t *testing.T) {
 	plain, own := strings.Repeat("a", 64), strings.Repeat("b", 64)
-	claims := resultDocument{claims: []resultClaim{{evidence: []string{plain}}}}
+	claims := resultDocument{claims: []resultClaim{{Evidence: []string{plain}}}}
 	bare := map[string]interface{}{"records": []interface{}{map[string]interface{}{"capsule_id": own}}}
 	assert.Equal(t, 1, unsupportedClaims(bare, claims), "a capsule that names nothing does not hold another id")
 	headed := map[string]interface{}{"records": []interface{}{map[string]interface{}{
@@ -506,7 +506,7 @@ func TestUnsupportedClaimsReadsAnOwnCapsulesSubject(t *testing.T) {
 		evidencebook.RecordHeaderMember: map[string]interface{}{"record_type": recordTypeOwn, "subject_ref": plain},
 	}}}
 	assert.Equal(t, 1, unsupportedClaims(headed, claims), "a claim cites an own capsule by its record id, not the sealed id")
-	assert.Equal(t, 0, unsupportedClaims(headed, resultDocument{claims: []resultClaim{{evidence: []string{own}}}}))
+	assert.Equal(t, 0, unsupportedClaims(headed, resultDocument{claims: []resultClaim{{Evidence: []string{own}}}}))
 	wrapper := map[string]interface{}{"records": []interface{}{map[string]interface{}{
 		"capsule_id":                    own,
 		evidencebook.RecordHeaderMember: map[string]interface{}{"record_type": "close", "subject_ref": plain},

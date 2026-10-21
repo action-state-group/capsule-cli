@@ -1,10 +1,7 @@
 package plugin
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 
@@ -22,23 +19,6 @@ import (
 // validation") -- and nothing more. It also stands in for a result viewer,
 // which does not exist yet, by printing the aggregate and coverage as text.
 const resultShapeNote = "Result v0 schema is still DRAFT; this is a best-effort structural check, not schema validation"
-
-func decodeResultDocument(raw []byte) (map[string]interface{}, error) {
-	if len(raw) > cli.MaxInput {
-		return nil, cli.InputError("the input exceeds the 12 MiB size limit")
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var doc map[string]interface{}
-	if err := decoder.Decode(&doc); err != nil || doc == nil {
-		return nil, cli.InputError("Result v0 document must be a JSON object")
-	}
-	var extra any
-	if decoder.Decode(&extra) != io.EOF {
-		return nil, cli.InputError("the input must hold exactly one JSON value")
-	}
-	return doc, nil
-}
 
 // validateResultDocument enforces only the one requirement the DRAFT Result
 // v0 item already states plainly: an aggregate carrying a coverage statement.
