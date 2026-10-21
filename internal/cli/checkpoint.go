@@ -312,7 +312,7 @@ func addCheckpointCommands(logs *cobra.Command) {
 		cadence.Use = "cadence"
 	} else {
 		cadence = &cobra.Command{Use: "cadence", Short: "A deal profile's checkpoint cadence: `capsulectl deal tick` (plugin capsulectl-deal)", DisableFlagParsing: true, RunE: func(c *cobra.Command, args []string) error {
-			return ForwardToPlugin(c, DealPluginName, append([]string{"tick"}, args...))
+			return forwardCadence(c, args)
 		}}
 	}
 	group.AddCommand(cadence)
