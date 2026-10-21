@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc18
+
 ### Releases are approved in GitHub, not signed on a laptop
 
 - **Changed (release procedure).** Release tags are no longer SSH-signed. A
