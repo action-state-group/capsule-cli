@@ -78,7 +78,7 @@ func approvalNarration(w cli.Wording, a dealApproval, events []sealedEvent, stat
 	case "confirm_limits":
 		limit := ""
 		if a.Limits != nil && a.Limits.New.MaxTotalMinor != nil {
-			limit = formatMoney(*a.Limits.New.MaxTotalMinor, state.terms.Currency)
+			limit = spokenMoney(*a.Limits.New.MaxTotalMinor, state.terms.Currency)
 		}
 		if limit == "" {
 			return line(w.Line("say.approval.confirm_limits.other", nil))
@@ -90,7 +90,7 @@ func approvalNarration(w cli.Wording, a dealApproval, events []sealedEvent, stat
 			action = check.Event.Check.Action
 			for _, se := range events {
 				if se.CapsuleID == check.Event.Check.Snapshot && se.Event.Snapshot != nil && se.Event.Snapshot.AmountMinor != nil {
-					amount = formatMoney(*se.Event.Snapshot.AmountMinor, state.terms.Currency)
+					amount = spokenMoney(*se.Event.Snapshot.AmountMinor, state.terms.Currency)
 				}
 			}
 		}
@@ -116,10 +116,10 @@ func intentAsk(w cli.Wording, inForce, proposed dealLimitSet, currency string) c
 	// them all.
 	var changes []string
 	if p, f := proposed.MaxTotalMinor, inForce.MaxTotalMinor; p != nil && f != nil && *p > *f {
-		changes = append(changes, w.Line("card.change.limit", cli.V{"from": formatMoney(*f, currency), "to": formatMoney(*p, currency)}))
+		changes = append(changes, w.Line("card.change.limit", cli.V{"from": spokenMoney(*f, currency), "to": spokenMoney(*p, currency)}))
 	}
 	if p, f := proposed.MinTotalMinor, inForce.MinTotalMinor; p != nil && f != nil && *p < *f {
-		changes = append(changes, w.Line("card.change.floor", cli.V{"from": formatMoney(*f, currency), "to": formatMoney(*p, currency)}))
+		changes = append(changes, w.Line("card.change.floor", cli.V{"from": spokenMoney(*f, currency), "to": spokenMoney(*p, currency)}))
 	}
 	var actions []string
 	for _, a := range proposed.Allowed {
@@ -190,12 +190,12 @@ func receiptLines(w cli.Wording, events []sealedEvent) []string {
 	// deal's currency. An act in another currency is never added to it, and
 	// then the limit, set in the deal's currency, is not compared.
 	if m := buildDealMoney(events, state.terms.Currency); m != nil && m.PaidMinor > 0 {
-		amount := formatMoney(m.NetMinor, m.Currency)
+		amount := spokenMoney(m.NetMinor, m.Currency)
 		limit := state.intent.MaxTotalMinor
 		sameCurrency := m.Other == 0 && strings.EqualFold(m.Currency, state.terms.Currency)
 		switch {
 		case item != "" && limit != nil && sameCurrency && m.NetMinor <= *limit:
-			lines = append(lines, w.Line("say.receipt.done.within", cli.V{"item": item, "amount": amount, "limit": formatMoney(*limit, m.Currency)}))
+			lines = append(lines, w.Line("say.receipt.done.within", cli.V{"item": item, "amount": amount, "limit": spokenMoney(*limit, m.Currency)}))
 		case item != "":
 			lines = append(lines, w.Line("say.receipt.done", cli.V{"item": item, "amount": amount}))
 		default:
@@ -215,7 +215,7 @@ func receiptLines(w cli.Wording, events []sealedEvent) []string {
 				key = "say.receipt.what.pay"
 				for _, se := range events {
 					if snap := se.Event.Snapshot; se.CapsuleID == check.Event.Check.Snapshot && snap != nil && snap.AmountMinor != nil {
-						amount = formatMoney(*snap.AmountMinor, state.terms.Currency)
+						amount = spokenMoney(*snap.AmountMinor, state.terms.Currency)
 					}
 				}
 				if amount == "" {
@@ -427,7 +427,7 @@ func saleLine(w cli.Wording, terms dealTerms) cli.Narration {
 	if terms.PriceMinor == nil {
 		return line(w.Line("say.sale.new.no_price", cli.V{"item": shortTitle(terms.Item)}))
 	}
-	return line(w.Line("say.sale.new", cli.V{"item": shortTitle(terms.Item), "price": formatMoney(*terms.PriceMinor, terms.Currency)}))
+	return line(w.Line("say.sale.new", cli.V{"item": shortTitle(terms.Item), "price": spokenMoney(*terms.PriceMinor, terms.Currency)}))
 }
 
 // verifyEmailLine is a merchant email's recheck: whose email (the deal's
@@ -440,4 +440,36 @@ func verifyEmailLine(w cli.Wording, sender, fromDomain string, ok bool, signedBy
 		return line(w.Line("say.verify_email.ok", cli.V{"sender": sender, "domain": signedBy}))
 	}
 	return line(w.Line("say.verify_email.failed", cli.V{"sender": sender}))
+}
+
+// spokenMoney is an amount as a person hears it: thousands separated and
+// no cents on a whole amount ("$1,700", "$1.90"). Sealed text keeps
+// formatMoney's form.
+func spokenMoney(minor int64, currency string) string {
+	cur := strings.ToUpper(currency)
+	sign := ""
+	if minor < 0 {
+		sign, minor = "-", -minor
+	}
+	whole, cents := minor/100, minor%100
+	if cur == "JPY" {
+		whole, cents = minor, 0
+	}
+	digits := fmt.Sprint(whole)
+	for i := len(digits) - 3; i > 0; i -= 3 {
+		digits = digits[:i] + "," + digits[i:]
+	}
+	if cents != 0 {
+		digits += fmt.Sprintf(".%02d", cents)
+	}
+	if cur == "JPY" {
+		return sign + "¥" + digits
+	}
+	if sym, ok := currencySymbols[cur]; ok {
+		return sign + sym + digits
+	}
+	if cur == "" {
+		return sign + digits
+	}
+	return sign + digits + " " + cur
 }

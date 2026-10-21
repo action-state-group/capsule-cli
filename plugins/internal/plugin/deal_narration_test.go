@@ -156,12 +156,12 @@ func TestEveryDealCommandSpeaks(t *testing.T) {
 	assert.Equal(t, cli.VoiceAsk, raise["voice"])
 	ask := raise["ask"].(map[string]any)
 	assert.Equal(t, words("card.tag.ask"), ask["tag"])
-	assert.Equal(t, "Raise your limit from $2.00 to $5.00?", ask["question"])
+	assert.Equal(t, "Raise your limit from $2 to $5?", ask["question"])
 	assert.Equal(t, "words", ask["reply"])
 	assert.Equal(t, []any{map[string]any{"label": "Hold", "choice": "hold"}}, ask["options"])
-	assert.Equal(t, words("card.tag.ask")+"\nRaise your limit from $2.00 to $5.00?\n"+words("card.reply.words"), raise["say"])
+	assert.Equal(t, words("card.tag.ask")+"\nRaise your limit from $2 to $5?\n"+words("card.reply.words"), raise["say"])
 	limits := dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", raise["capsule_id"].(string), "--choice", "confirm_limits", "--said", "yes up to five")
-	assert.Equal(t, "Got it: your limit is now $5.00.", limits["say"])
+	assert.Equal(t, "Got it: your limit is now $5.", limits["say"])
 	within := dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"keep it at $5","max_total_minor":500,"allowed":["pay","share_contact"]}`))
 	assert.Equal(t, cli.VoiceSilent, within["voice"])
 
@@ -178,7 +178,7 @@ func TestEveryDealCommandSpeaks(t *testing.T) {
 	assert.Equal(t, cli.VoiceReport, act["voice"])
 	assert.NotContains(t, act, "attach", "no page without --html")
 	assert.NotContains(t, act["say"], words("report.view_details"))
-	assert.True(t, strings.HasPrefix(act["say"].(string), "Done: Fawn Sticker, $1.90, within your $5.00 limit."), act["say"])
+	assert.True(t, strings.HasPrefix(act["say"].(string), "Done: Fawn Sticker, $1.90, within your $5 limit."), act["say"])
 	plainSay(t, "act", act)
 
 	// A report with a page says View details and attaches it.
@@ -247,7 +247,7 @@ func TestASaleListingSaysWhatIsListed(t *testing.T) {
 	dealFixture(t)
 	out := dealRun(t, "sale", "new", "--input", repFile("sale.json"))
 	assert.Equal(t, cli.VoiceLine, out["voice"])
-	assert.Equal(t, "Listed: example bicycle at $1900.00; I'll keep each buyer in their own thread.", out["say"])
+	assert.Equal(t, "Listed: example bicycle at $1,900; I'll keep each buyer in their own thread.", out["say"])
 }
 
 func TestPaymentAndDeliveryNotesSayOneLine(t *testing.T) {
@@ -318,7 +318,7 @@ func TestALimitRaiseCardNamesEveryChange(t *testing.T) {
 	id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
 	raise := dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"up to $5, and you can give them my login","max_total_minor":500,"allowed":["pay","share_contact","share_credentials"]}`))
 	ask := raise["ask"].(map[string]any)
-	assert.Equal(t, "Raise your limit from $2.00 to $5.00 and let me also share a login or code on this errand?", ask["question"])
+	assert.Equal(t, "Raise your limit from $2 to $5 and let me also share a login or code on this errand?", ask["question"])
 	assert.Equal(t, words("say.approval.limit_hold"), ask["hold_say"])
 }
 
@@ -347,7 +347,7 @@ func TestNoLineIsSpokenHalfFilled(t *testing.T) {
 	assert.Equal(t, words("say.approval.proceed.other"), approvalNarration(w, dealApproval{Choice: "proceed"}, nil, dealState{}).Say)
 	assert.Equal(t, "Listed: bike; I'll keep each buyer in their own thread.", saleLine(w, dealTerms{Item: "bike"}).Say)
 	price := int64(55000)
-	assert.Equal(t, "Listed: bike at $550.00; I'll keep each buyer in their own thread.", saleLine(w, dealTerms{Item: "bike", PriceMinor: &price, Currency: "USD"}).Say)
+	assert.Equal(t, "Listed: bike at $550; I'll keep each buyer in their own thread.", saleLine(w, dealTerms{Item: "bike", PriceMinor: &price, Currency: "USD"}).Say)
 	assert.Equal(t, "Countersigned.", countersignLine(w, dealCountersignView{Rung: "countersigned"}).Say)
 	assert.Equal(t, "The countersignature did not check out.", countersignLine(w, dealCountersignView{Finding: "unverified"}).Say)
 	named := dealCountersignView{Entries: []cli.CountersignatureReport{{SignerName: "Example Countersigner"}}}
@@ -405,5 +405,14 @@ func TestALimitCardSaysWhatTheBuyerIsNoLongerTold(t *testing.T) {
 	cond := []string{"condition"}
 	none := []string{}
 	n := intentAsk(w, dealLimitSet{MinTotalMinor: &floor, OrderedRepresentations: &cond}, dealLimitSet{MinTotalMinor: &lower, OrderedRepresentations: &none}, "USD")
-	assert.Equal(t, "Lower the lowest price you'll take from $1700.00 to $1600.00 and stop telling the buyer about the condition?", n.Ask.Question)
+	assert.Equal(t, "Lower the lowest price you'll take from $1,700 to $1,600 and stop telling them about the condition?", n.Ask.Question)
+}
+
+func TestAmountsAreSaidAsPeopleSayThem(t *testing.T) {
+	assert.Equal(t, "$1,700", spokenMoney(170000, "USD"))
+	assert.Equal(t, "$1.90", spokenMoney(190, "USD"))
+	assert.Equal(t, "$1,234,567.05", spokenMoney(123456705, "usd"))
+	assert.Equal(t, "-$5", spokenMoney(-500, "USD"))
+	assert.Equal(t, "¥1,500", spokenMoney(1500, "JPY"))
+	assert.Equal(t, "12.50 CHF", spokenMoney(1250, "CHF"))
 }
