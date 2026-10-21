@@ -24,7 +24,9 @@
   `picked`) is derived by capsulectl and sealed; the agent never states it.
   An intent that names another merchant (`who`) starts a new leg of the same
   deal: the ask and limits carry over, no approval from the earlier leg
-  covers a step in it, and a payee or contact change is compared with that
+  covers a step in it (nor does an approval given before a new pick: an
+  intent naming an item, or the agent's `chose`, in capsulectl and the
+  profile checker), and a payee or contact change is compared with that
   leg's first contact, so the user's switch never reads as one while a
   seller's change within the leg still does. Counterparty memory, deal list,
   shared copies, the audit and merchant-email checks read the leg in force.
@@ -36,15 +38,22 @@
 - **Changed (breaking):** an intent note that changes nothing is refused
   (the user's words go in a message). A note's `asked` adds to the ask in
   force, field by field.
-- **Changed:** the limit binds on the larger of the price and the amount
-  charged (tax included); quantity 1 and free shipping are not the agent's
-  picks; a postal code or region added to the place asked for is not a
-  difference. Rule inputs version 2 counts `material_fields_changed` against
-  the leg's agreement (a check sealed under version 1 keeps its count).
+- **Changed:** the limit binds on the largest of the price, the amount
+  charged (tax included) and the authorized maximum; quantity 1 and a free
+  shipping or delivery option are not the agent's picks, while "free
+  shipping" in any other field still is; a postal code or region added to
+  the place asked for is not a difference. Rule inputs version 2 counts
+  `material_fields_changed` against the leg's agreement (a check sealed
+  under version 1 keeps its count).
 - **Changed:** the deal skill opens the deal at the first ask, keeps one
   deal per errand, seals a switch as the user's intent, puts tax in the
   amount, starts a sell with `deal sale new`, never offers to change the
   user's rules after a deny, and finds deals with `deal list`.
+- **Changed:** `x-deal-v0` adds the `agent_move` record type, an intent's
+  `move`, `proposed`, `delegated` (with `delegated_commitment`) and
+  `why_commitment`, and `called_off` to the close status, reason and
+  outcome enums. A baseline may omit `counterparty` and `recourse` when the
+  deal opened before a merchant was in play.
 
 ### A platform is a recipient of its own (capsule-cli#348)
 
@@ -55,10 +64,11 @@
   and seller 0.1.4 allow for the user's email only (capsule-engine#173). A
   platform is known by its registrable domain, a marketplace's included, so
   its approval and its first telling are its own: the first email to a
-  platform pauses, a repeat to it passes, and another platform pauses again,
-  with or without the counterparty memory. A shared copy says "Told a
-  platform", and `deal list` counts a platform under `to_others`, once per
-  platform.
+  platform pauses, and another platform pauses again. With the counterparty
+  memory, a repeat to the same platform does not pause as a first telling;
+  without it, every email to a platform pauses as one. A shared copy says
+  "Told a platform", and `deal list` counts a platform under `to_others`,
+  once per platform.
 - **Fixed:** in typed records, a disclosure covered by a passing check's own
   evaluation (no approval needed) is matched to that check's recipient, so a
   repeat telling to the same recipient is no longer sealed as
