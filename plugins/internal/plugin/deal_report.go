@@ -537,6 +537,10 @@ func dealStepLine(e dealEvent, showText bool) string {
 		}
 		return "Message from " + e.Message.From + " (text kept on the device)"
 	case "snapshot":
+		if rp := e.Snapshot.Representing; rp != nil {
+			// The class only: the words are a commitment in the record.
+			return "About to tell the buyer about the " + classWord(rp.Class)
+		}
 		line := "About to " + e.Snapshot.Action
 		if e.Snapshot.Description != "" {
 			line += ": " + e.Snapshot.Description

@@ -77,6 +77,14 @@
           },
           "uniqueItems": true
         },
+        "ordered_representations": {
+          "description": "Where the user sells: the representation classes the user's words order the agent to state. A claim of one is authorized by this record alone; no offer, commit, sign, pay or share goes ahead before one is stated. Present (empty when nothing is ordered) on a seller's deal opened since it was recorded; a later version changes it only on the user's confirmation.",
+          "type": "array",
+          "items": {
+            "$ref": "record-common-v0.schema.json#/$defs/representation_class"
+          },
+          "uniqueItems": true
+        },
         "outcome_id": {
           "description": "The plan's outcome, a fixed id per deal type (part of the plan's own digest, so never changed). Present with allowed_actions.",
           "enum": [

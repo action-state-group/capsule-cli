@@ -537,7 +537,7 @@ a step that would carry one is refused. Keep the returned `deal_id`.
 
 ```sh
 capsulectl --profile deal deal note --deal ID --kind message  --input m.json   # {"from":"counterparty","channel":"...","text":"..."}
-capsulectl --profile deal deal note --deal ID --kind claim    --input c.json   # {"text":"...","source_kind":"merchant","source":"..."}; selling: {"text":"...","source_kind":"agent","class":"condition"}
+capsulectl --profile deal deal note --deal ID --kind claim    --input c.json   # {"text":"...","source_kind":"merchant","source":"..."}; selling: {"text":"...","source_kind":"agent","class":"condition"} with --check CHECK_ID (a represent check)
 capsulectl --profile deal deal note --deal ID --kind evidence --input e.json   # {"about":"...","source":"...","verified":true}
 capsulectl --profile deal deal note --deal ID --kind change   --input d.json   # {"source":"...","who":{...},"terms":{...},"recourse":{...}}
 capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   # {"verbatim":"the user's new words","allowed":["pay","share_contact"]}: a new action is only proposed
@@ -548,7 +548,36 @@ When you sell, label each thing you tell the buyer with its `class`: one of
 `price`, `condition`, `features`, `authenticity`, `availability`,
 `delivery_date`, `service_scope`, `warranty`, `refund_terms`,
 `payment_methods`, `pickup`, `deadline`, `address` or `other`. Any other
-class is refused.
+class is refused, and so is a claim of yours with no class.
+
+When you sell, check before you tell the buyer anything about the sale. If
+`deal check` answers that the deal opened before representations were
+checked, note your claims as before, with no `--check`.
+
+1. Run `deal check` with `{"action": "represent", "representing": {"class":
+   "condition", "text": "<the exact words you will say>"}}`.
+2. If it asks, show the user its card and seal their answer, in their own
+   words.
+3. Only once it passes, or the user approves, say those words.
+4. Note them with `deal note --kind claim --check CHECK_ID`, word for word.
+
+A class the user told you to state passes. That is the deal's
+`ordered_representations`: "tell them about the scratch" is `condition`.
+Every other class asks the user for these exact words.
+
+State each ordered class before any offer, commit, sign, payment or share in
+this deal. On a sale, state it in every buyer's thread. Until you do, those
+checks ask with no way to proceed. The only ways on are to state it, or, on
+a deal that is not a sale, for the user to change what they asked: an intent
+note with new `ordered_representations`, which applies only on their
+`confirm_limits`.
+
+On a sale, what the user ordered is fixed for all its threads. If they no
+longer want it said, tell them that no thread can go ahead without it, and do
+not offer, commit or share.
+
+Words you say without such a check are still sealed, marked as said without
+the user's authority. Never do that on purpose.
 
 Seal an `intent` whenever the user changes what they asked (for example,
 "go ahead and share my number"), and whenever the user picks from options

@@ -64,6 +64,20 @@ publish() { capsulectl publish --profile example --request "$1" | jq -r .capsule
 # meta DIR JSON: what the golden test needs to re-emit the page.
 meta() { jq -S . <<<"$2" >"$out/$1/meta.json"; }
 
+# represent DEAL FILE [WORDS]: a seller's represent check of FILE; with WORDS,
+# the user's approval of it in those words, on the card it showed. Prints the
+# check id a claim is then noted against.
+represent() {
+  local out
+  out=$(capsulectl --profile deal deal check --deal "$1" --input "$2")
+  if [[ -n "${3:-}" ]]; then
+    jq -r .card <<<"$out" >card.txt
+    capsulectl --profile deal deal note --deal "$1" --kind approval --check "$(jq -r .check_id <<<"$out")" \
+      --choice proceed --said "$3" --shown-card card.txt >/dev/null
+  fi
+  jq -r .check_id <<<"$out"
+}
+
 # verdict BUNDLE: what `verify --bundle` calls it.
 verdict() {
   capsulectl verify --bundle "$1" >"$work/verify.json" 2>/dev/null || true
@@ -144,17 +158,20 @@ meta 7-receipt-declared-rules "$(jq -n --arg v "$(verdict bundle.json)" '{kind: 
 export CAPSULECTL_PLUGIN_ROOTS="$work/plugins"
 
 # --- 8. a seller's deal, the buyer's copy: what the seller's agent said ----
-# The user sells an example bicycle. Their agent states the item's condition
-# and the refund terms (its own claims, each with a class), offers, records
-# the buyer's acceptance of that exact offer, and commits. The buyer's copy
-# opens those statements, labelled, and none of the user's own. Synthetic.
+# The user sells an example bicycle and asks the agent to tell the buyer about
+# the scratch. Their agent states the item's condition (ordered: checked, DO)
+# and the refund terms (approved in the user's words), each a claim with a
+# class, offers, records the buyer's acceptance of that exact offer, and
+# commits. The buyer's copy opens those statements, labelled, and none of the
+# user's own. Synthetic.
 fixture 8-seller-buyer-copy
 export CAPSULE_DEAL_CHECK_URL=
 capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
 cat >open.json <<'JSON'
 {"type": "purchase", "demo": true, "channel": "marketplace",
- "intent": {"verbatim": "Sell my example bicycle; ask 1900", "party_role": "seller",
-            "asked": {"item": "example bicycle", "quantity": 1}, "allowed": ["offer", "commit"]},
+ "intent": {"verbatim": "Sell my example bicycle; ask 1900. Tell them about the scratch.", "party_role": "seller",
+            "asked": {"item": "example bicycle", "quantity": 1}, "allowed": ["offer", "commit"],
+            "ordered_representations": ["condition"]},
  "who": {"name": "Example Buyer", "domain": "buyer.example"},
  "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000, "currency": "USD"},
  "recourse": {"rail": "card", "refundable": false}}
@@ -164,8 +181,10 @@ note() { capsulectl --profile deal deal note --deal "$id" "$@" >/dev/null; }
 echo '{"text": "The frame has one small scratch by the seat", "source_kind": "agent", "class": "condition"}' >claim-1.json
 echo '{"text": "Returns accepted within 7 days if unridden", "source_kind": "agent", "class": "refund_terms"}' >claim-2.json
 echo '{"text": "I bought it new two years ago", "source_kind": "user"}' >claim-3.json
-note --kind claim --input claim-1.json
-note --kind claim --input claim-2.json
+jq '{action: "represent", representing: {class, text}}' claim-1.json >represent-1.json
+jq '{action: "represent", representing: {class, text}}' claim-2.json >represent-2.json
+note --kind claim --check "$(represent "$id" represent-1.json)" --input claim-1.json
+note --kind claim --check "$(represent "$id" represent-2.json "yes, offer the 7-day returns")" --input claim-2.json
 note --kind claim --input claim-3.json
 echo '{"action": "offer", "amount_minor": 190000, "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000}}' >offer.json
 offer=$(capsulectl --profile deal deal check --deal "$id" --input offer.json | jq -r .check_id)
@@ -185,9 +204,10 @@ meta 8-seller-buyer-copy "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "sell
 # --- 9. a seller's Receipt with later evidence under the close -------------
 # Seller PRD §5.4 and exit criterion 9, from the deal plugin's fixture
 # (plugins/internal/plugin/testdata/deal/seller-later-evidence). The user
-# sells the example bicycle; the agent states its condition and refund terms,
-# offers, the buyer accepts, the agent commits, and the delivery is due. The
-# sale closes with that due date carried. Later the carrier's scan
+# sells the example bicycle; the agent states its condition (ordered) and its
+# refund terms (approved in the user's words), offers, the buyer accepts, the
+# agent commits, and the delivery is due. The sale closes with that due date
+# carried. Later the carrier's scan
 # (checked) resolves it, and the buyer's refund request (a claim, so
 # unverified) is about the refund terms; both chain `confirms` to the close.
 fixture 9-seller-later-evidence
@@ -196,8 +216,8 @@ src="$root/plugins/internal/plugin/testdata/deal/seller-later-evidence"
 capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
 id=$(capsulectl --profile deal deal open --records typed --input "$src/open.json" | jq -r .deal_id)
 note() { capsulectl --profile deal deal note --deal "$id" "$@"; }
-note --kind claim --input "$src/claim-condition.json" >/dev/null
-note --kind claim --input "$src/claim-refund-terms.json" >/dev/null
+note --kind claim --check "$(represent "$id" "$src/represent-condition.json")" --input "$src/claim-condition.json" >/dev/null
+note --kind claim --check "$(represent "$id" "$src/represent-refund-terms.json" "yes, offer the 7-day returns")" --input "$src/claim-refund-terms.json" >/dev/null
 offer=$(capsulectl --profile deal deal check --deal "$id" --input "$src/check-offer.json" | jq -r .check_id)
 note --kind act --input "$src/act-offer.json" >/dev/null
 note --kind acceptance --check "$offer" --words "Deal, 1900 works for me" --channel marketplace >/dev/null

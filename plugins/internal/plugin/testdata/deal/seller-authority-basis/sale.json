@@ -1,0 +1,6 @@
+{"type": "purchase", "demo": true,
+ "intent": {"verbatim": "Sell my example bicycle; ask 1900, not under 1700. Tell them about the scratch.", "min_total_minor": 170000,
+            "asked": {"item": "example bicycle", "quantity": 1}, "allowed": ["offer", "commit", "share_contact"],
+            "ordered_representations": ["condition"]},
+ "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000, "currency": "USD"},
+ "recourse": {"rail": "card", "refundable": false}}

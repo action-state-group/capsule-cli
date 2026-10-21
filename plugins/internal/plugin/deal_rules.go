@@ -71,6 +71,17 @@ type dealClaim struct {
 	// Class is what kind of representation an agent's claim is (dealClaimClasses),
 	// so a page can label it; optional, and sealed in the clear.
 	Class string `json:"class,omitempty"`
+	// Check is, on a seller's agent claim, the represent check it is noted
+	// against (`deal note --kind claim --check`), set from the flag and never
+	// from the input file. AuthorizedBy is what authorized the claim under
+	// that check: the evaluation of a DO, or the user's approval of an ASK.
+	// Unchecked is a claim nothing authorized, sealed anyway with Reason and
+	// Rule saying why (deal_representations.go).
+	Check        string `json:"check,omitempty"`
+	AuthorizedBy string `json:"authorized_by,omitempty"`
+	Unchecked    bool   `json:"unchecked,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	Rule         string `json:"rule,omitempty"`
 }
 
 type dealRecourse struct {
@@ -99,6 +110,16 @@ type dealIntent struct {
 	// Allowed absent (nil) means no restriction; present and empty means
 	// nothing is allowed yet ("show me options, don't book").
 	Allowed []string `json:"allowed"`
+	// OrderedRepresentations are, where the user sells, the representation
+	// classes the user's own words order the agent to state ("tell them
+	// about the scratch": condition): a claim of one needs no approval, and
+	// no offer, commit or share goes ahead before one is stated
+	// (deal_representations.go). A seller's deal or sale opened since this
+	// was recorded always carries it, empty when nothing is ordered; absent
+	// on one opened before, which keeps its old rules. On a note, absent
+	// keeps the list in force; any change applies only on the user's
+	// confirm_limits.
+	OrderedRepresentations *[]string `json:"ordered_representations,omitempty"`
 }
 
 type dealOpen struct {
@@ -229,6 +250,10 @@ type dealSnapshot struct {
 	// with a buffer for tax settled later): what a limit binds. AmountMinor
 	// stays the expected charge.
 	AuthorizedMaxMinor *int64 `json:"authorized_max_minor,omitempty"`
+	// Representing is, on a represent check, what the seller's agent is
+	// about to tell the buyer: its class and its exact words (sealed as
+	// commitments), so the approval covers those words only.
+	Representing *dealRepresenting `json:"representing,omitempty"`
 }
 
 type dealDifference struct {
@@ -394,6 +419,8 @@ type dealLimitSet struct {
 	MinTotalMinor    *int64   `json:"min_total_minor,omitempty"`
 	BoundsCommitment string   `json:"bounds_commitment,omitempty"`
 	Allowed          []string `json:"allowed"`
+	// OrderedRepresentations is the intent's list, as in dealIntent.
+	OrderedRepresentations *[]string `json:"ordered_representations,omitempty"`
 }
 
 // String is a version of the limits in plain words, for the trail.
@@ -415,7 +442,7 @@ func (l dealLimitSet) String() string {
 }
 
 func (i dealIntent) limits() dealLimitSet {
-	return dealLimitSet{MaxTotalMinor: i.MaxTotalMinor, MinTotalMinor: i.MinTotalMinor, BoundsCommitment: i.boundsCommit, Allowed: i.Allowed}
+	return dealLimitSet{MaxTotalMinor: i.MaxTotalMinor, MinTotalMinor: i.MinTotalMinor, BoundsCommitment: i.boundsCommit, Allowed: i.Allowed, OrderedRepresentations: i.OrderedRepresentations}
 }
 
 // proposedLimits is what an intent note asks for beyond the limits in force,
@@ -446,6 +473,14 @@ func proposedLimits(cur dealLimitSet, note dealIntent) (dealLimitSet, bool) {
 			}
 		}
 		out.Allowed = slices.Clone(note.Allowed)
+	}
+	// The ordered representations are both a permission and an obligation:
+	// adding one widens what the agent may say, and dropping one waives a
+	// statement the user asked for. Either is a proposal.
+	if note.OrderedRepresentations != nil && cur.OrderedRepresentations != nil && !slices.Equal(*note.OrderedRepresentations, *cur.OrderedRepresentations) {
+		more = true
+		list := slices.Clone(*note.OrderedRepresentations)
+		out.OrderedRepresentations = &list
 	}
 	return out, more
 }
@@ -909,12 +944,15 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 					s.intent.MinTotalMinor = e.Approval.Limits.New.MinTotalMinor
 					s.intent.boundsCommit = e.Approval.Limits.New.BoundsCommitment
 					s.intent.Allowed = slices.Clone(e.Approval.Limits.New.Allowed)
+					s.intent.OrderedRepresentations = e.Approval.Limits.New.OrderedRepresentations
 				}
 				continue
 			}
 			// An approved proceed adopts the checked terms as the new agreement.
 			// Who is never adopted: it is always compared with first contact.
-			if e.Approval.Proceed && e.Approval.Reason == "" && lastSnapshot != nil {
+			// Approving what the agent may tell the buyer approves those words
+			// only, never a change of terms (a represent check judges none).
+			if e.Approval.Proceed && e.Approval.Reason == "" && lastSnapshot != nil && lastSnapshot.Action != representAction {
 				if lastSnapshot.Terms != nil {
 					s.agreed = overlayTerms(s.agreed, *lastSnapshot.Terms)
 				}
@@ -973,6 +1011,9 @@ func laterIntent(cur, next dealIntent) dealIntent {
 			}
 		}
 	}
+	// The ordered representations change only on the user's confirmation
+	// (proposedLimits): a note never moves them.
+	out.OrderedRepresentations = cur.OrderedRepresentations
 	return out
 }
 
@@ -1177,7 +1218,7 @@ const recentDomainDays = 90
 
 var proceedPlainLabels = map[string]string{
 	"pay": "Pay", "commit": "Confirm", "sign": "Sign", "cancel": "Cancel",
-	"share_contact": "Share", "share_credentials": "Share",
+	"share_contact": "Share", "share_credentials": "Share", representAction: "Say it",
 }
 
 // violationRules are the difference rules that break something the user set:
@@ -1188,13 +1229,13 @@ var violationRules = map[string]bool{"rules_escalate": true, "over_limit": true,
 
 var proceedLabels = map[string]string{
 	"pay": "Pay anyway", "commit": "Confirm anyway", "sign": "Sign anyway", "cancel": "Cancel anyway",
-	"share_contact": "Share anyway", "share_credentials": "Share anyway",
+	"share_contact": "Share anyway", "share_credentials": "Share anyway", representAction: "Say it anyway",
 }
 
 var actionNames = map[string]string{
 	"pay": "paying", "commit": "confirming a commitment", "sign": "signing", "cancel": "cancelling",
 	"share_contact": "sharing your contact details", "share_credentials": "sharing a login or code",
-	"offer": "making an offer",
+	"offer": "making an offer", representAction: "telling the buyer something about the sale",
 }
 
 // evaluateDeal answers the four questions for snap against the sealed state:
@@ -1218,6 +1259,19 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	rail := normRail(recourse.Rail)
 	add := func(q, rule, field, text string) {
 		r.Differences = append(r.Differences, dealDifference{Question: q, Rule: rule, Field: field, Text: text})
+	}
+	// A representation is judged against what the user ordered, and by
+	// nothing that judges a payment (deal_representations.go).
+	if snap.Action == representAction {
+		evaluateRepresentation(&r, s, snap, add)
+		settleCheck(&r, s)
+		return r
+	}
+	// 0. What the user asked the agent to tell the buyer, told first.
+	if representationGated[snap.Action] {
+		for _, c := range s.missingRepresentations() {
+			add("asked", ruleRepresentationMissing, "representation", "You asked me to tell the buyer about the "+classWord(c)+", and I haven't yet. Tell them first, or change what you asked")
+		}
 	}
 
 	// 1. Asked?
@@ -1428,6 +1482,12 @@ func settleCheck(r *dealCheckResult, s dealState) {
 		return
 	}
 	r.Verdict = "pause"
+	// A representation the user ordered and the agent has not made is no
+	// news to approve past: the only ways on are to make it, or for the
+	// user to change what they ordered (PRD seller §3.5). No proceed.
+	if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == ruleRepresentationMissing }) {
+		return
+	}
 	if s.open.Who.Phone != "" && slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Question == "who" }) {
 		r.Options = append(r.Options, dealOption{ID: "verify_contact", Label: "Call the number I found (" + s.open.Who.Phone + ")"})
 	}
@@ -1440,6 +1500,25 @@ func settleCheck(r *dealCheckResult, s dealState) {
 		label = proceedLabels[r.Action]
 	}
 	r.Options = append(r.Options, dealOption{ID: "proceed", Label: label})
+}
+
+// usedAuthorizations are the approvals (and, typed, DO evaluations) a sealed
+// step already relied on: one covers at most one step, an action, a
+// disclosure or a seller's representation.
+func usedAuthorizations(events []sealedEvent) map[string]bool {
+	used := map[string]bool{}
+	for _, se := range events {
+		if se.Event.Kind == "act" && !se.Event.Act.Unchecked {
+			used[se.Event.Act.AuthorizedBy] = true
+		}
+		if d := se.Event.Disclosure; d != nil && d.AuthorizedBy != "" {
+			used[d.AuthorizedBy] = true
+		}
+		if c := se.Event.Claim; c != nil && c.AuthorizedBy != "" {
+			used[c.AuthorizedBy] = true
+		}
+	}
+	return used
 }
 
 // authorizeAct finds the sealed approval that authorizes an action: the
@@ -1472,17 +1551,7 @@ func authorizeAct(events []sealedEvent, act dealAct, now time.Time) (approval, r
 			}
 		}
 	}
-	// One approval (or, typed, one DO evaluation) covers at most one step:
-	// an action or a disclosure.
-	used := map[string]bool{}
-	for _, se := range events {
-		if se.Event.Kind == "act" && !se.Event.Act.Unchecked {
-			used[se.Event.Act.AuthorizedBy] = true
-		}
-		if d := se.Event.Disclosure; d != nil && d.AuthorizedBy != "" {
-			used[d.AuthorizedBy] = true
-		}
-	}
+	used := usedAuthorizations(events)
 	for i := len(events) - 1; i >= 0; i-- {
 		e := events[i].Event
 		if changesDetails(e) {
@@ -2073,7 +2142,10 @@ func buildDealReport(events []sealedEvent) dealReport {
 			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: text, Steps: []string{e.Check.Snapshot, se.CapsuleID}, Shared: shared, At: e.At})
 			var asked []string
 			for _, d := range e.Check.Differences {
-				if d.Question == "asked" && d.Rule != "agent_picked" && !(d.Rule == "not_asked" && d.Field == "action" && userApproved[se.CapsuleID]) {
+				// The user's own yes answered it: a "you didn't ask for this" on
+				// the action, or on what the agent tells the buyer.
+				answered := userApproved[se.CapsuleID] && (d.Rule == "not_asked" && d.Field == "action" || d.Rule == ruleRepresentationOutside)
+				if d.Question == "asked" && d.Rule != "agent_picked" && !answered {
 					asked = append(asked, d.Text)
 				}
 			}

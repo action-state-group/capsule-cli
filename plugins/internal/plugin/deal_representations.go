@@ -1,0 +1,301 @@
+package plugin
+
+import (
+	"slices"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/action-state-group/capsule-cli/internal/cli"
+)
+
+// A seller's representations (Seller PRD §3.1, §3.5; capsule-cli#269). What
+// the agent of a user who sells tells the buyer is an agent claim with a
+// class. From the deal (or sale) that opens with ordered_representations in
+// its intent, every such claim is noted against a represent check:
+//
+//   - a class the user's task authority orders ("tell them about the
+//     scratch") passes the check (DO) and the claim is authorized by the
+//     task authority alone: no approval is sealed;
+//   - any other class asks (ASK), and only the user's own approval, in
+//     their words, of those exact words authorizes the claim;
+//   - a claim nothing authorized is still sealed, since the words may
+//     already have been said, as unchecked, with the rule saying why.
+//
+// And no offer, commit, sign, pay or share goes ahead while an ordered class
+// has no authorized claim in this deal: the check asks, with no way to
+// proceed past it, until the agent states it or the user changes what they
+// ordered (confirm_limits). On a sale every thread is its own deal, so each
+// thread states it to its own buyer.
+
+// representAction is the check a seller's agent runs before it tells the
+// buyer something. It is a check action only: never an act, never in
+// intent.allowed.
+const representAction = "represent"
+
+// ruleRepresentationMissing is the finding of a check held because an
+// ordered representation has not been made; ruleRepresentationOutside is a
+// represent check of a class the task authority does not order.
+const (
+	ruleRepresentationMissing = "required_representation_missing"
+	ruleRepresentationOutside = "representation_outside_authority"
+)
+
+// representationGated are the acts an ordered representation must come
+// before: every act that moves toward or carries out a commitment, and every
+// share. A cancel is never held: the seller can always walk away.
+var representationGated = map[string]bool{
+	"offer": true, "commit": true, "sign": true, "pay": true, "share_contact": true, "share_credentials": true,
+}
+
+// dealRepresenting is what a represent check is about: the class of the
+// statement and its exact words, and where they will be said when given.
+type dealRepresenting struct {
+	Class  string `json:"class"`
+	Text   string `json:"text"`
+	Source string `json:"source,omitempty"`
+}
+
+// representationRules is whether a deal follows the representation rules:
+// a deal where the user sells whose opening intent records the ordered
+// representations (empty or not). A deal opened before keeps its old rules,
+// and a sale's thread follows its sale: it carries the sale's intent.
+func representationRules(events []sealedEvent) bool {
+	if len(events) == 0 || events[0].Event.Open == nil || dealRole(events) != dealRoleSeller {
+		return false
+	}
+	return events[0].Event.Open.Intent.OrderedRepresentations != nil
+}
+
+// normalizeOrdered makes an ordered list the profile's classes, unique and
+// sorted, or refuses it.
+func normalizeOrdered(list *[]string) error {
+	if list == nil {
+		return nil
+	}
+	out := []string{}
+	for _, c := range *list {
+		c = strings.ToLower(strings.TrimSpace(c))
+		if c == "delivery_promise" {
+			c = "delivery_date"
+		}
+		if !slices.Contains(dealClaimClassList, c) {
+			return cli.InputError("ordered_representations names a class that is not a representation class: " + c + " (one of " + strings.Join(dealClaimClassList, ", ") + ")")
+		}
+		if !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	sort.Strings(out)
+	*list = out
+	return nil
+}
+
+// ordered is the ordered representations in force, nil on a deal that has
+// none.
+func (s dealState) ordered() []string {
+	if s.intent.OrderedRepresentations == nil {
+		return nil
+	}
+	return *s.intent.OrderedRepresentations
+}
+
+// missingRepresentations are the ordered classes no authorized agent claim
+// of this deal has stated yet.
+func (s dealState) missingRepresentations() []string {
+	var out []string
+	for _, c := range s.ordered() {
+		if !slices.ContainsFunc(s.claims, func(cl dealClaim) bool {
+			return cl.SourceKind == "agent" && cl.Class == c && cl.AuthorizedBy != "" && !cl.Unchecked
+		}) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// evaluateRepresentation is the built-in rule for a represent check: an
+// ordered class passes (DO), any other asks for the user's word on those
+// words. An external checker may deny either (promise_never).
+func evaluateRepresentation(r *dealCheckResult, s dealState, snap dealSnapshot, add func(q, rule, field, text string)) {
+	c := snap.Representing.Class
+	if !slices.Contains(s.ordered(), c) {
+		add("asked", ruleRepresentationOutside, "representation", "You didn't ask me to tell the buyer about the "+classWord(c)+". I need your OK on these exact words")
+	}
+}
+
+// checkRepresenting validates a represent check's snapshot on this deal.
+func checkRepresenting(events []sealedEvent, snap *dealSnapshot) error {
+	if snap.Action != representAction {
+		if snap.Representing != nil {
+			return cli.InputError(`representing goes with a represent check`)
+		}
+		return nil
+	}
+	switch {
+	case dealRole(events) != dealRoleSeller:
+		return cli.InputError("a represent check is made on a deal where the user sells (intent.party_role seller)")
+	case !representationRules(events):
+		return cli.InputError("this deal opened before representations were checked: note the agent's claims as before")
+	case snap.Representing == nil:
+		return cli.InputError(`a represent check needs "representing": {"class": ..., "text": "<the exact words>"}`)
+	}
+	rp := snap.Representing
+	claim := dealClaim{Text: rp.Text, Source: rp.Source, SourceKind: "agent", Class: rp.Class}
+	if err := normalizeClaim(&claim); err != nil {
+		return err
+	}
+	if claim.Class == "" {
+		return cli.InputError(`a represent check names the class of what is about to be said: one of ` + strings.Join(dealClaimClassList, ", "))
+	}
+	if field := statesBound(claim.Text, events, true); field != "" {
+		return cli.InputError("refusing to check: the words would tell the buyer " + field + "; leave the user's bounds out of what the agent says")
+	}
+	if snap.AmountMinor != nil || snap.Terms != nil || snap.Recourse != nil || snap.Who != nil || len(snap.Disclosing) > 0 {
+		return cli.InputError("a represent check is about the words only: leave amounts, terms, recourse, who and disclosing out")
+	}
+	*rp = dealRepresenting{Class: claim.Class, Text: claim.Text, Source: claim.Source}
+	return nil
+}
+
+// checkSellerClaim holds a claim noted on a deal under the representation
+// rules to them, before anything is authorized: the agent's own claims name
+// their class, and a claim said to be someone else's that names no source
+// cannot be told from the agent's own.
+func checkSellerClaim(events []sealedEvent, c *dealClaim) error {
+	if !representationRules(events) {
+		if c.Check != "" {
+			return cli.InputError("--check goes with an agent's claim on a deal where the user sells, opened with ordered_representations")
+		}
+		return nil
+	}
+	switch {
+	case c.SourceKind == "agent" && c.Class == "":
+		return cli.InputError(`a claim the agent makes to the buyer names its class: one of ` + strings.Join(dealClaimClassList, ", ") + ` ("other" for anything else)`)
+	case (c.SourceKind == "external" || c.SourceKind == "merchant" || c.SourceKind == "platform") && c.Source == "":
+		return cli.InputError(`a claim that is not the agent's or the user's names where it was read (source): without it, it cannot be told from the agent's own`)
+	case c.SourceKind != "agent" && c.Check != "":
+		return cli.InputError("--check goes with the agent's own claim (source_kind agent)")
+	}
+	return nil
+}
+
+// authorizeClaim finds what authorizes an agent's claim under the represent
+// check it names: the check's evaluation when it passed (DO), or the user's
+// own proceed approval of it (ASK). The check must be of exactly these
+// words, of this deal, unused, still current, and under the task authority
+// in force. Anything else leaves the claim unchecked, with the rule why.
+func authorizeClaim(events []sealedEvent, c dealClaim, now time.Time) (authorizedBy, reason, rule string) {
+	if c.Check == "" {
+		return "", "no represent check was named for it", "no_check"
+	}
+	at := -1
+	for i, se := range events {
+		if se.CapsuleID == c.Check && se.Event.Kind == "check" {
+			at = i
+		}
+	}
+	if at < 0 {
+		return "", "--check names no check of this deal", "no_check"
+	}
+	ck := events[at].Event.Check
+	var snap *dealSnapshot
+	for _, se := range events[:at] {
+		if se.CapsuleID == ck.Snapshot {
+			snap = se.Event.Snapshot
+		}
+	}
+	if ck.Action != representAction || snap == nil || snap.Representing == nil {
+		return "", "that check is not a represent check", "no_check"
+	}
+	if rp := snap.Representing; rp.Class != c.Class || rp.Text != c.Text || rp.Source != c.Source {
+		return "", "the claim is not the words that were checked: check these words", "differs_from_check"
+	}
+	if ck.Verdict == "deny" {
+		return "", "the check denied it", "denied"
+	}
+	for _, later := range events[at+1:] {
+		if changesDetails(later.Event) {
+			return "", "details changed after the check: check again", "changed_after_check"
+		}
+	}
+	if ck.ValidUntil != "" {
+		if until, err := time.Parse(time.RFC3339, ck.ValidUntil); err == nil && now.After(until) {
+			return "", "the check went stale at " + ck.ValidUntil + ": check again before saying it", "check_expired"
+		}
+	}
+	if taskAuthorityAt(events[:at], "") != taskAuthorityAt(events, "") {
+		return "", "what you asked the agent to say changed after the check: check again", "authority_changed"
+	}
+	used := usedAuthorizations(events)
+	if ck.Verdict == "pass" {
+		if used[c.Check] {
+			return "", "that check already covered an earlier claim", "approval_used"
+		}
+		return c.Check, "", ""
+	}
+	for _, later := range events[at+1:] {
+		a := later.Event.Approval
+		if later.Event.Kind != "approval" || a == nil || a.Check != c.Check {
+			continue
+		}
+		switch {
+		case !a.Proceed:
+			return "", "the check asked and the answer was " + a.Choice, "not_approved"
+		case a.Approver != "user":
+			return "", "the check asked, and only your own approval, in your words, covers what the agent says for you", "not_approved"
+		case used[later.CapsuleID]:
+			return "", "that approval already covered an earlier claim", "approval_used"
+		}
+		return later.CapsuleID, "", ""
+	}
+	return "", "the check asked and there is no sealed approval", "not_approved"
+}
+
+// shareCheckedNonces seals an authorized representation's words under the
+// nonces its represent check sealed them with, so its text_commitment (and
+// source_ref_commitment) equals the check's: a verifier sees that the words
+// said are the words checked, without the words.
+func shareCheckedNonces(events []sealedEvent, ev *dealEvent) {
+	c := ev.Claim
+	if c == nil || c.AuthorizedBy == "" || c.Check == "" {
+		return
+	}
+	var snapshot string
+	for _, se := range events {
+		if se.CapsuleID == c.Check && se.Event.Check != nil {
+			snapshot = se.Event.Check.Snapshot
+		}
+	}
+	for _, se := range events {
+		if se.CapsuleID != snapshot || se.Event.Snapshot == nil || se.Event.Snapshot.Representing == nil {
+			continue
+		}
+		ev.Nonces["claim_text"] = se.Event.Nonces["representing_text"]
+		if c.Source != "" {
+			ev.Nonces["claim_source"] = se.Event.Nonces["representing_source"]
+		}
+	}
+}
+
+// representationHold is, for an act or a disclosure about to be noted, why
+// the representation gate holds it now (re-read when it is noted, since the
+// user may have ordered more after the check): "" when nothing is missing.
+func representationHold(events []sealedEvent, action string) (reason string) {
+	if !representationGated[action] || !representationRules(events) {
+		return ""
+	}
+	state, err := foldDeal(events)
+	if err != nil {
+		return ""
+	}
+	missing := state.missingRepresentations()
+	if len(missing) == 0 {
+		return ""
+	}
+	words := make([]string, len(missing))
+	for i, c := range missing {
+		words[i] = classWord(c)
+	}
+	return "you asked the agent to tell the buyer about the " + strings.Join(words, ", ") + " first"
+}

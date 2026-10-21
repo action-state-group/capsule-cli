@@ -30,8 +30,13 @@ func sellerLaterDeal(t *testing.T) (dealID, closeID string, dueStep int64) {
 	note := func(args ...string) map[string]any {
 		return dealRun(t, append([]string{"note", "--deal", dealID}, args...)...)
 	}
-	note("--kind", "claim", "--input", sellerLaterFile("claim-condition.json"))
-	note("--kind", "claim", "--input", sellerLaterFile("claim-refund-terms.json"))
+	// The condition the user ordered stated (DO), and the refund terms they
+	// approved in their words (ASK).
+	condition := dealRun(t, "check", "--deal", dealID, "--input", sellerLaterFile("represent-condition.json"))
+	require.Equal(t, "pass", condition["verdict"])
+	note("--kind", "claim", "--check", condition["check_id"].(string), "--input", sellerLaterFile("claim-condition.json"))
+	refund := approved(t, dealID, dealRun(t, "check", "--deal", dealID, "--input", sellerLaterFile("represent-refund-terms.json")))
+	note("--kind", "claim", "--check", refund, "--input", sellerLaterFile("claim-refund-terms.json"))
 	offer := approved(t, dealID, dealRun(t, "check", "--deal", dealID, "--input", sellerLaterFile("check-offer.json")))
 	require.Equal(t, false, note("--kind", "act", "--input", sellerLaterFile("act-offer.json"))["unchecked"])
 	note("--kind", "acceptance", "--check", offer, "--words", "Deal, 1900 works for me", "--channel", "marketplace")
@@ -137,6 +142,11 @@ func TestASellersLaterEvidenceChainsToTheCloseAndRenders(t *testing.T) {
 	all := dealRun(t, "deadlines", "--all")["deadlines"].([]any)
 	require.Len(t, all, 1)
 	assert.Equal(t, "resolved", all[0].(map[string]any)["status"])
+
+	// The refund terms the user approved are no anomaly of the agent's.
+	for _, a := range report["anomalies"].([]any) {
+		assert.NotEqual(t, "agent", a.(map[string]any)["side"], "an approved statement is not an anomaly: %v", a)
+	}
 
 	// The seller's Receipt lists both under the close, in order, each with
 	// its tier.

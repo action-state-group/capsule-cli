@@ -256,6 +256,11 @@ func taskAuthorityRecord(ev dealEvent, events []sealedEvent, commit func(string)
 			body["preconditions"] = []interface{}{}
 		}
 	}
+	// What the user orders the agent to tell the buyer: a claim of one of
+	// these classes is authorized by this record alone.
+	if ta.OrderedRepresentations != nil {
+		body["ordered_representations"] = *ta.OrderedRepresentations
+	}
 	// A sale's thread is under the sale's one task authority: it names its
 	// digest, salted under this step's own nonce, so the threads of one sale
 	// carry no equal value.
@@ -311,6 +316,9 @@ func confirmedAuthorityBody(ev dealEvent, events []sealedEvent, body map[string]
 				allowed[i] = x
 			}
 			out["allowed"] = allowed
+		}
+		if l.New.OrderedRepresentations != nil {
+			out["ordered_representations"] = *l.New.OrderedRepresentations
 		}
 	}
 	return out, nil

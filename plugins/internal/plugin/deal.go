@@ -794,6 +794,7 @@ func (s *dealSession) fixStep(dealID string, events []sealedEvent, ev dealEvent)
 		}
 		ev.Nonces[name] = hex.EncodeToString(nonce)
 	}
+	shareCheckedNonces(events, &ev)
 	return ev, nil
 }
 
@@ -1099,6 +1100,13 @@ func dealOpenCommand() *cobra.Command {
 		if err = normalizeOpen(&o); err != nil {
 			return err
 		}
+		if o.Intent.OrderedRepresentations != nil {
+			for _, cl := range o.Claims {
+				if cl.SourceKind == "agent" {
+					return cli.InputError("the agent's claims to the buyer are noted after the deal opens, each against a represent check (deal check, then deal note --kind claim --check): leave them out of the open input")
+				}
+			}
+		}
 		o.Skill = nil
 		// The record set is fixed for the deal here, never taken from the
 		// input file.
@@ -1308,6 +1316,13 @@ func dealNoteCommand() *cobra.Command {
 			if err = cli.DecodeJSONAs("--input", raw, target); err != nil {
 				return err
 			}
+			if ev.Claim != nil {
+				// What authorizes a claim is found when it is noted, never
+				// taken from the input file; the check it is noted against is
+				// the --check flag.
+				check, _ := c.Flags().GetString("check")
+				*ev.Claim = dealClaim{Text: ev.Claim.Text, Source: ev.Claim.Source, SourceKind: ev.Claim.SourceKind, Class: ev.Claim.Class, Check: check}
+			}
 			if err = refuseSettlementInput(ev.Evidence); err != nil {
 				return err
 			}
@@ -1474,6 +1489,17 @@ func dealNoteCommand() *cobra.Command {
 						return cli.InputError("refusing to seal: the agent's claim, shown to the buyer, would state " + field + "; leave the user's bounds out of what the agent writes")
 					}
 				}
+				if err := checkSellerClaim(events, ev.Claim); err != nil {
+					return err
+				}
+				// A representation is sealed whether or not anything
+				// authorized it: the words may already be said, and the record
+				// of them is the evidence (deal_representations.go).
+				if ev.Claim.SourceKind == "agent" && representationRules(events) {
+					cl := ev.Claim
+					cl.AuthorizedBy, cl.Reason, cl.Rule = authorizeClaim(events, *cl, cli.DealClock().UTC())
+					cl.Unchecked = cl.AuthorizedBy == ""
+				}
 			case "intent":
 				if open.Sale != "" {
 					return cli.InputError("a sale's thread is under the sale's one task authority: its request and limits do not change per buyer")
@@ -1482,6 +1508,12 @@ func dealNoteCommand() *cobra.Command {
 					if !slices.Contains(dealPointsOfNoReturn[open.Type], a) {
 						return cli.InputError("intent.allowed names an action that is not a point of no return for this deal type: " + a)
 					}
+				}
+				if ev.Intent.OrderedRepresentations != nil && !representationRules(events) {
+					return cli.InputError("ordered_representations go with a deal where the user sells, opened with them")
+				}
+				if err := normalizeOrdered(ev.Intent.OrderedRepresentations); err != nil {
+					return err
 				}
 			case "approval":
 				if err := judgeApproval(events, ev.Approval); err != nil {
@@ -1524,6 +1556,11 @@ func dealNoteCommand() *cobra.Command {
 				}
 				ev.Act = &dealAct{Action: act.Action, Description: act.Description, AmountMinor: act.AmountMinor, Currency: act.Currency, Payee: act.Payee, Rail: act.Rail, Reference: act.Reference, FeeMinor: act.FeeMinor}
 				ev.Act.AuthorizedBy, ev.Act.Reason, ev.Act.Rule = authorizeAct(events, *ev.Act, cli.DealClock().UTC())
+				// An ordered representation still unmade holds the act, even
+				// one checked before the user ordered it.
+				if hold := representationHold(events, ev.Act.Action); ev.Act.AuthorizedBy != "" && hold != "" {
+					ev.Act.AuthorizedBy, ev.Act.Reason, ev.Act.Rule = "", hold, ruleRepresentationMissing
+				}
 				ev.Act.Unchecked = ev.Act.AuthorizedBy == ""
 				if !ev.Act.Unchecked && ev.Act.Action == "commit" && dealRole(events) == dealRoleSeller {
 					ev.Act.Accepted, _, _ = offerAccepted(events)
@@ -1538,6 +1575,11 @@ func dealNoteCommand() *cobra.Command {
 					return cli.InputError("this deal type has no " + d.action() + " point of no return")
 				}
 				d.AuthorizedBy, d.Reason, d.Rule = authorizeAct(events, dealAct{Action: d.action()}, cli.DealClock().UTC())
+				// The representation gate, before first tellings: a telling it
+				// holds is authorized by nothing.
+				if hold := representationHold(events, d.action()); d.AuthorizedBy != "" && hold != "" {
+					d.AuthorizedBy, d.Reason, d.Rule = "", hold, ruleRepresentationMissing
+				}
 				// A seller gives out where the item is only for an offer the
 				// other party accepted, as a commit is.
 				if d.AuthorizedBy != "" && d.addressed() && dealRole(events) == dealRoleSeller && dealRecordSet(dealEvent{}, events) == recordsTyped {
@@ -1628,6 +1670,16 @@ func dealNoteCommand() *cobra.Command {
 				out["authorized_by"] = ev.Act.AuthorizedBy
 				out["reason"] = ev.Act.Reason
 				out["rule"] = ev.Act.Rule
+			case "claim":
+				if cl := ev.Claim; cl.SourceKind == "agent" && representationRules(events) {
+					out["authorized_by"] = cl.AuthorizedBy
+					out["unchecked"] = cl.Unchecked
+					if cl.Unchecked {
+						out["reason"] = cl.Reason
+						out["rule"] = cl.Rule
+						out["next"] = "this was sealed as said without your authority; before the agent tells the buyer anything, run deal check with {\"action\": \"represent\", \"representing\": {\"class\": ..., \"text\": ...}} and note the claim with --check"
+					}
+				}
 			case "disclosure":
 				d := ev.Disclosure
 				out["approved"] = d.AuthorizedBy != ""
@@ -1668,7 +1720,7 @@ func dealNoteCommand() *cobra.Command {
 	cmd.Flags().String("object-type", "", "evidence, with --object or --object-digest: the wrapped type, e.g. delivery.proof (a settlement-records registered type) or your own label")
 	cmd.Flags().String("octets", wrappedAsTransmitted, "evidence, with --object or --object-digest: what the digest is over: as-transmitted (the octets as delivered) or jcs (their RFC 8785 form)")
 	cmd.Flags().String("headers", "", "evidence, with --object or --object-digest: the carrier headers it arrived with (start line and fields, as received); sealed as a salted commitment")
-	cmd.Flags().String("check", "", "approval: the check_id being answered, or the capsule_id of an intent note whose proposed limits the user confirms")
+	cmd.Flags().String("check", "", "approval: the check_id being answered, or the capsule_id of an intent note whose proposed limits the user confirms; claim, where the user sells: the represent check the agent's claim was checked with")
 	cmd.Flags().String("choice", "", "approval: the option id the user chose, or confirm_limits for an intent note")
 	cmd.Flags().String("said", "", "approval: the user's own words")
 	cmd.Flags().String("shown-card", "", "approval: a file holding the exact card text the answer was given on, as `deal check` returned it")
@@ -1789,7 +1841,12 @@ func dealCheckCommand() *cobra.Command {
 				return err
 			}
 			open := events[0].Event.Open
-			if !slices.Contains(dealPointsOfNoReturn[open.Type], snap.Action) {
+			// represent is a check, never an act: admitted beside the points
+			// of no return, on a deal where the user sells.
+			if err := checkRepresenting(events, &snap); err != nil {
+				return err
+			}
+			if snap.Action != representAction && !slices.Contains(dealPointsOfNoReturn[open.Type], snap.Action) {
 				return cli.InputError("action is not a point of no return for a " + open.Type + " deal; use one of " + strings.Join(dealPointsOfNoReturn[open.Type], ", "))
 			}
 			if snap.Action == offerAction && dealRole(events) != dealRoleSeller {

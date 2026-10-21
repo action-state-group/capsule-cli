@@ -26,7 +26,7 @@
     },
     "task_authority_record": {
       "type": "object",
-      "description": "Optional, in a deal sealed as typed records: the whole sealed task-authority record the checked step's task_authority_ref names, exactly as sealed. SHA-256 over its JCS bytes equals that ref's digest; a checker recomputes it and reads the plan (outcome_id, allowed_actions, preconditions) at body only when it matches. Absent when the task authority in force is not a task-authority record, or the deal has none.",
+      "description": "Optional, in a deal sealed as typed records: the whole sealed task-authority record the checked step's task_authority_ref names, exactly as sealed. SHA-256 over its JCS bytes equals that ref's digest; a checker recomputes it and reads the plan (outcome_id, allowed_actions, preconditions) at body only when it matches. It is the opening task authority, or the later version the user confirmed (confirm_limits). Absent when the task authority in force is not a task-authority record (an x-deal-v0 deal), or the deal has none.",
       "required": [
         "type",
         "body"
@@ -174,8 +174,21 @@
               "class": { "type": "string" },
               "source_kind": { "const": "agent" },
               "at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
-              "text_commitment": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
-            }
+              "text_commitment": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "authority_basis": { "description": "On a deal under the representation rules (opened with ordered_representations): the claim record's own authority_basis, exactly as sealed: [task_authority] when the task authority orders its class, then user_approval when the user approved these words. A seller ruleset reads it to tell a representation the user ordered or approved from one they did not.", "type": "array", "minItems": 1, "items": { "type": "object" } },
+              "unchecked": { "description": "On a deal under the representation rules: true when nothing authorized the claim (sealed anyway, with its rule). Never together with authority_basis.", "const": true }
+            },
+            "not": { "required": ["authority_basis", "unchecked"] }
+          }
+        },
+        "representing_opening": {
+          "description": "Optional, supplied by capsulectl beside the sealed capsule (never part of it), on the checked record only: on a represent check, the opening of its representing.text_commitment, the nonce and the exact words the agent is about to tell the buyer, so a seller ruleset can judge the words (a promise it never allows). A checker verifies it against the commitment before reading it. Absent on any other check and on history entries.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["nonce", "text"],
+          "properties": {
+            "nonce": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "text": { "type": "string", "minLength": 1 }
           }
         },
         "proposal_at": {
