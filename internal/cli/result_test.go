@@ -252,7 +252,6 @@ func TestResultBuildRefusesWhatItCannotSeal(t *testing.T) {
 		"not in the log":           {resultTestDoc(resultTestClaim("claim-1", "met", notInLog)), nil, "cites " + notInLog + ", which is not a record in this profile's log"},
 		"not in the store":         {resultTestDoc(resultTestClaim("claim-1", "met", logOnly)), nil, "whose Capsule its artifact store does not hold"},
 		"close_ref not in the log": {resultTestDoc(closeClaim), nil, "cites " + notInLog + ", which is not a record in this profile's log"},
-		"no evidence":              {resultTestDoc(resultTestClaim("claim-1", "met")), nil, `claim "claim-1" (claims[0]) cites no evidence`},
 		"not one object":           {[]any{1}, nil, "must be a JSON object"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -266,6 +265,20 @@ func TestResultBuildRefusesWhatItCannotSeal(t *testing.T) {
 	_, err = invoke(t, "", "result", "build", "--profile", "rep")
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "--result is required")
+}
+
+// A claim may cite no record (a story carrier for a recorded absence):
+// the schema allows it, so the core seals it; only cited records are
+// checked and referenced.
+func TestResultBuildSealsAClaimThatCitesNoRecord(t *testing.T) {
+	d := newDisclosureProfile(t)
+	day1 := d.publish("day-1", `{"report":"day one"}`)
+	absent := resultTestClaim("claim-2", "not_evaluable")
+	absent["presentation"] = map[string]any{"kind": "story", "status": "INSUFFICIENT", "narrative": "nothing was ever produced"}
+	built, stdout, err := d.buildResult(resultTestDoc(resultTestClaim("claim-1", "met", day1), absent))
+	require.NoError(t, err, stdout)
+	assert.Equal(t, []string{day1}, built.Cites)
+	assert.Equal(t, 2, built.Claims)
 }
 
 // A file already at --out that holds other bytes is refused after the seal,

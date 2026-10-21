@@ -519,8 +519,7 @@ a check fails.
 
 Checked: the vendored evidence-result-v0 schema; every headline count
 recomputes from the claims (counts must be integer literals: 7, not 7.0 or
-7e0); every claim cites at least one record, and every record a claim cites
-is in the profile's log. Everything else a
+7e0); every record a claim cites is in the profile's log. Everything else a
 claim states is sealed as stated.
 
 The Capsule cites every record the Result cites (acted_on), so a bundle rooted
@@ -575,13 +574,9 @@ func resultBuildCommand() *cobra.Command {
 		if e != nil {
 			return Hint(ErrInput, "the Result cannot be put in canonical (JCS) form: "+e.Error())
 		}
-		// A claim traces to at least one record, as the book requires; the
-		// schema allows an empty evidence[].
-		for _, claim := range checked.Claims {
-			if len(claim.Evidence) == 0 {
-				return Hint(ErrInput, fmt.Sprintf("%s cites no evidence; every claim must trace to at least one record in this profile's log", claim.Label()))
-			}
-		}
+		// A claim may cite no record (a story carrier for a recorded
+		// absence, Result v0 section 2): the core enforces the schema, which
+		// allows an empty evidence[]. The book adds its own rule.
 		cites := resultCites(checked)
 		request, e := resultRequest(p, doc, encoded, cites)
 		if e != nil {

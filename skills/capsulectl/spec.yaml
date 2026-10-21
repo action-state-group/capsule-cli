@@ -322,8 +322,8 @@ verbs:
       Seal a caller-supplied, schema-valid Evidence Result v0 into the
       profile's log as the Capsule a Result page is rooted on, citing every
       record its claims name. Refuses a document whose headline values do
-      not recompute from its claims, that has a claim citing no record, or
-      that cites a record the profile's log and artifact store do not hold. A repeat of the same document
+      not recompute from its claims, or that cites a record the profile's
+      log and artifact store do not hold. A repeat of the same document
       seals nothing new. On a book profile it is `book result build`, which
       seals into the book, needs --out, and also refuses a close_state or
       tallies that differ from what the cited Close's links and statement
