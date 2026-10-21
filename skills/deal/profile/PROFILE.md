@@ -293,7 +293,11 @@ Field details:
 - **merchant_email** (on `evidence`, optional): a merchant's DKIM-signed email, kept raw on the
   device. `message_digest` (SHA-256 of the exact RFC 822 bytes), `key_records_digest` (SHA-256
   of the JCS array of `{"name","txt"}` key records captured when the email was sealed),
-  `key_source` (`dns` | `supplied`), `dkim` (`pass` | `fail` | `none`), `merchant_signed` (a
+  `key_source` (`dns` | `supplied`), optional `key_resolver` + `key_dnssec` on a `dns` key (how
+  the key and DMARC records were read: `system`, this device's resolver, or `doh`,
+  DNS-over-HTTPS; `resolver_validated` when the DoH resolver set the AD bit on every answer, else
+  `not_validated`. This is the resolver's word that it checked DNSSEC; capsulectl does not check
+  the chain itself), `dkim` (`pass` | `fail` | `none`), `merchant_signed` (a
   passing signature is DMARC-aligned with the From domain: the same organizational domain, or
   the exact domain under `adkim=s`), `dmarc_policy` (`reject` | `quarantine` | `none` |
   `absent` | `not_captured`; shown, never a reason to refuse sealing), optional

@@ -71,6 +71,15 @@ func evidenceOutput(out map[string]any, e dealEvidence, events []sealedEvent) {
 		out["dkim"] = m.DKIM.Result
 		out["merchant_signed"] = m.DKIM.Merchant
 		out["key_source"] = m.KeySource
+		if m.Resolver != "" {
+			out["key_resolver"], out["key_dnssec"] = m.Resolver, m.DNSSEC
+			if m.ResolverEndpoint != "" {
+				out["key_resolver_endpoint"] = m.ResolverEndpoint
+			}
+			if m.keyCheck != "" {
+				out["key_check"] = m.keyCheck
+			}
+		}
 		out["dmarc_policy"] = m.DKIM.Policy
 		out["scope"] = emailScopeLine
 		out["merchant_says"] = emailVerdictWords(m.DKIM)
@@ -94,7 +103,8 @@ func evidenceOutput(out map[string]any, e dealEvidence, events []sealedEvent) {
 }
 
 // deferEmail queues an email whose key records could not be read, and says so.
-func (s *dealSession) deferEmail(ctx context.Context, c *cobra.Command, dealID string, ev dealEvidence, raw []byte) error {
+func (s *dealSession) deferEmail(ctx context.Context, c *cobra.Command, dealID string, ev dealEvidence, deferred *keysUnreachableError) error {
+	raw := deferred.raw
 	ev.Email, ev.Verified = nil, false
 	note, err := json.Marshal(ev)
 	if err != nil {
@@ -107,6 +117,7 @@ func (s *dealSession) deferEmail(ctx context.Context, c *cobra.Command, dealID s
 	out := map[string]any{
 		"deal_id": dealID, "state": "deferred", "sealed": false,
 		"message_digest": emailDigest(raw),
+		"reason":         deferred.Error(),
 		"next":           "nothing to do now: the signing domain's key could not be read from this device, so the email is kept here unsealed and the next `deal tick` reads the key and seals it; on the next turn about this deal, run deal report --html and send the updated receipt if the email is sealed by then",
 	}
 	if s.htmlDeferred {
@@ -178,7 +189,9 @@ func sealDeferredEmails(c *cobra.Command) (map[string]any, error) {
 		m, err := captureEmail(d.raw, nil)
 		var unreachable *keysUnreachableError
 		if errors.As(err, &unreachable) {
-			waiting = append(waiting, d.about())
+			w := d.about()
+			w["reason"] = unreachable.Error()
+			waiting = append(waiting, w)
 			continue
 		}
 		d.email, d.err = m, err

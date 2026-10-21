@@ -1646,7 +1646,7 @@ func dealNoteCommand() *cobra.Command {
 				// Nothing is sealed yet, so the receipt has not changed: the
 				// page waits for the tick that seals the email.
 				s.htmlDeferred = htmlPath != ""
-				return s.deferEmail(ctx, c, dealID, *ev.Evidence, deferred.raw)
+				return s.deferEmail(ctx, c, dealID, *ev.Evidence, deferred)
 			}
 			se, err := s.seal(ctx, dealID, events, ev)
 			if err != nil {

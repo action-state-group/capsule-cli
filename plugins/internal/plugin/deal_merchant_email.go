@@ -67,6 +67,18 @@ type merchantEmail struct {
 	// machine with no resolver); a supplied key is not evidence of what the
 	// merchant published.
 	KeySource string `json:"key_source"`
+	// Resolver is how a "dns" capture read its key and DMARC records:
+	// "system" (this device's resolver) or "doh" (DNS-over-HTTPS through
+	// ResolverEndpoint). DNSSEC is "resolver_validated" when the resolver vouched for
+	// every answer (the AD bit), else "not_validated"; the system resolver
+	// never vouches. All three are empty on a capture made before they were
+	// kept, and on a supplied key.
+	Resolver         string `json:"resolver,omitempty"`
+	ResolverEndpoint string `json:"resolver_endpoint,omitempty"`
+	DNSSEC           string `json:"dnssec,omitempty"`
+	// keyCheck says, for the call that captured it only, why an absent key
+	// stands unchecked over DoH.
+	keyCheck string
 	// DMARC holds the sender domain's DMARC records as they stood at seal
 	// time (_dmarc.<From domain>, then its organizational domain), with the
 	// same source rule as the keys. Nil when they were not captured.
@@ -180,7 +192,12 @@ var dkimLookup = func(name string) ([]string, error) {
 
 // captureEmail verifies raw against DNS as it stands now (or against supplied
 // key records) and records every key record it read, so the same verdict can
-// be reached later with no network.
+// be reached later with no network. The records are read through the first
+// resolver that can be reached (keyResolvers): one that cannot is never
+// mistaken for a domain that publishes no record. A system resolver that
+// finds no DKIM key may be a proxy answering NXDOMAIN for what it will not
+// resolve, so that capture is checked over DoH, whose answer is sealed when
+// an endpoint is reached; the system's stands only when none is.
 func captureEmail(raw []byte, supplied []dkimKeyRecord) (*merchantEmail, error) {
 	if len(raw) == 0 || len(raw) > maxEmail {
 		return nil, cli.InputError("the email must be a raw RFC 822 message (.eml) of at most 10 MB")
@@ -190,22 +207,71 @@ func captureEmail(raw []byte, supplied []dkimKeyRecord) (*merchantEmail, error) 
 		// it stays in the chain, never in the shown reason.
 		return nil, errors.Join(cli.InputError("the email is not a raw RFC 822 message with its headers intact (a header line is malformed, or the header block does not end with a blank line)"), err)
 	}
-	e := &merchantEmail{Raw: raw, KeySource: "dns"}
+	if supplied != nil {
+		e := &merchantEmail{Raw: raw, KeySource: "supplied", Keys: supplied, DMARC: dmarcSupplied}
+		verdict, err := verifyDKIM(raw, sealedLookup(supplied), e.DMARC)
+		if err != nil {
+			return nil, err
+		}
+		e.DKIM, e.Parsed = verdict, parseMerchantEmail(raw)
+		return e, nil
+	}
+	resolvers, why := keyResolvers(fromDomain(raw))
+	var keyAbsent *merchantEmail
+	for _, r := range resolvers {
+		e, absent, err := captureWith(raw, r)
+		var unreachable *keysUnreachableError
+		switch {
+		case errors.As(err, &unreachable):
+			why = errors.Join(why, unreachable.err)
+		case err != nil:
+			return nil, err
+		case absent && r.proxied:
+			why = errors.Join(why, errors.New("the proxied system resolver found no DKIM key record, which proves nothing"))
+		case absent && r.via == resolverSystem:
+			keyAbsent = e
+		default:
+			return e, nil
+		}
+	}
+	if keyAbsent != nil {
+		keyAbsent.keyCheck = "the system resolver found no DKIM key record, and DNS-over-HTTPS could not be reached to check it: " +
+			strings.ReplaceAll(why.Error(), "\n", "; ")
+		return keyAbsent, nil
+	}
+	return nil, &keysUnreachableError{raw: raw, err: why}
+}
+
+// captureWith reads every key and DMARC record of one capture through r, and
+// says whether any DKIM key record was absent.
+func captureWith(raw []byte, r keyResolver) (*merchantEmail, bool, error) {
+	e := &merchantEmail{Raw: raw, KeySource: "dns", Resolver: r.via, ResolverEndpoint: r.endpoint, DNSSEC: dnssecValid}
 	var fetchErr error
+	absent := false
 	fetch := func(name, what string) ([]string, error) {
-		txt, err := dkimLookup(name)
+		if fetchErr != nil {
+			// This resolver already failed once: the capture moves on
+			// without waiting out another timeout.
+			return nil, fetchErr
+		}
+		txt, validated, err := r.lookup(name)
 		var dnsErr *net.DNSError
 		if err != nil && !(errors.As(err, &dnsErr) && dnsErr.IsNotFound) {
 			// Not sealed: a record we could not read is not a record that is
-			// absent. The capture is deferred instead (keysUnreachableError).
-			fetchErr = errors.Join(fetchErr, errors.New("could not reach DNS for the "+what+" "+name+" ("+err.Error()+")"))
+			// absent. The next resolver is tried, and the capture is
+			// deferred when none answers (keysUnreachableError).
+			fetchErr = errors.Join(fetchErr, errors.New("could not read the "+what+" "+name+" through "+r.String()+" ("+err.Error()+")"))
 			return nil, err
+		}
+		if !validated {
+			e.DNSSEC = dnssecNotValid
 		}
 		return txt, nil
 	}
 	// The DKIM library verifies the signatures in parallel, so lookup is
 	// called from several goroutines at once: mu guards e.Keys and, through
-	// fetch, fetchErr. The DMARC fetches below run before verification starts.
+	// fetch, fetchErr and e.DNSSEC. The DMARC fetches below run before
+	// verification starts.
 	var mu sync.Mutex
 	lookup := func(name string) ([]string, error) {
 		mu.Lock()
@@ -220,15 +286,11 @@ func captureEmail(raw []byte, supplied []dkimKeyRecord) (*merchantEmail, error) 
 		if err != nil {
 			return nil, err
 		}
+		absent = absent || len(txt) == 0
 		e.Keys = append(e.Keys, dkimKeyRecord{Name: name, TXT: txt})
 		return txt, nil
 	}
-	if supplied != nil {
-		e.KeySource = "supplied"
-		e.Keys = supplied
-		lookup = sealedLookup(supplied)
-		e.DMARC = dmarcSupplied
-	} else if from := fromDomain(raw); from != "" {
+	if from := fromDomain(raw); from != "" {
 		e.DMARC = &dmarcCapture{Source: "dns", Records: []dkimKeyRecord{}}
 		for _, name := range dmarcNames(from) {
 			txt, err := fetch(name, "DMARC record")
@@ -240,20 +302,21 @@ func captureEmail(raw []byte, supplied []dkimKeyRecord) (*merchantEmail, error) 
 	}
 	verdict, err := verifyDKIM(raw, lookup, e.DMARC)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if supplied == nil {
-		// The lookups finish in whatever order the parallel verification runs
-		// them: sorted, the same email seals the same key records, and the
-		// same key_records_digest, every time.
-		slices.SortFunc(e.Keys, func(a, b dkimKeyRecord) int { return strings.Compare(a.Name, b.Name) })
-	}
+	// The lookups finish in whatever order the parallel verification runs
+	// them: sorted, the same email seals the same key records, and the same
+	// key_records_digest, every time.
+	slices.SortFunc(e.Keys, func(a, b dkimKeyRecord) int { return strings.Compare(a.Name, b.Name) })
 	if fetchErr != nil {
-		return nil, &keysUnreachableError{raw: raw, err: fetchErr}
+		return nil, false, &keysUnreachableError{raw: raw, err: fetchErr}
+	}
+	if r.via == resolverSystem {
+		e.DNSSEC = dnssecNotValid
 	}
 	e.DKIM = verdict
 	e.Parsed = parseMerchantEmail(raw)
-	return e, nil
+	return e, absent, nil
 }
 
 // keysUnreachableError is a capture that could not read a key or DMARC
@@ -265,7 +328,7 @@ type keysUnreachableError struct {
 	err error
 }
 
-func (e *keysUnreachableError) Error() string { return e.err.Error() }
+func (e *keysUnreachableError) Error() string { return strings.ReplaceAll(e.err.Error(), "\n", "; ") }
 func (e *keysUnreachableError) Unwrap() error { return e.err }
 
 // sealedLookup answers key queries from sealed records only. A name that was

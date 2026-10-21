@@ -684,12 +684,40 @@ within one cadence interval plus its jitter; until the witness is reached the
 receipt reads pending.
 `deal verify-email` then checks against the sealed key only, never against
 live DNS. **Sealing promptly is the whole protection**: an email sealed after
-its key was withdrawn cannot be verified. The key is read from ordinary DNS,
-which is not itself signed; the checkpoint fixes when it was read.
-When this device cannot reach DNS, nothing is sealed and the user is never
-asked to look anything up: `deal note` answers `"state": "deferred"`, keeps
-the email on the device, and the next `deal tick` reads the key records and
-seals the email then (listed under `merchant_emails` in its result).
+its key was withdrawn cannot be verified. The checkpoint fixes when the key
+was read.
+
+The key and DMARC records are read through this device's resolver. When that
+resolver is a proxy that hands out placeholder addresses (198.18.0.0/15, or
+IPv6 unique local addresses), cannot be reached, or finds no key, they are
+read over DNS-over-HTTPS in the same call instead: by default from
+`cloudflare-dns.com`, then `dns.google`, then the same two by address.
+`CAPSULECTL_DOH` sets the endpoints (a comma-separated list of `https://`
+URLs) or turns DoH off (`off`). A proxied resolver is asked last, when no DoH
+endpoint answers, and counts only when it finds every key. When this device's
+resolver finds no key and no DoH endpoint can be reached to check, the absent
+key is sealed and `deal note` says so in `key_check`.
+
+**DoH tells a third party who emailed the user.** It sends the names looked
+up (`selector._domainkey.<signing domain>` and `_dmarc.<From domain>`) to the
+DoH provider, Cloudflare or Google by default. That is acceptable only as a
+fallback, so DoH is used only in the cases above. On a host whose resolver is
+proxied, the names go to the DoH provider first, even when the proxy could
+have answered.
+
+The record says how the records were read: `key_resolver` (`system` or
+`doh`) and `key_dnssec`, which is `resolver_validated` only when the DoH
+resolver reported that it checked DNSSEC for every answer. That is the
+resolver's word: capsulectl does not check the DNSSEC chain itself. The
+system resolver never reports this, so its records are `not_validated`. The
+DoH endpoint is kept on the device and shown in `deal note`'s result as
+`key_resolver_endpoint`, never in the record.
+
+When neither DNS nor DNS-over-HTTPS can be reached, nothing is sealed and the
+user is never asked to look anything up: `deal note` answers `"state":
+"deferred"` with a `reason`, keeps the email on the device, and the next
+`deal tick` reads the key records and seals the email then (listed under
+`merchant_emails` in its result, each one still waiting with its reason).
 `--key-record` (and optionally `--dmarc-record`) supplies records by hand (for tests, or a machine with no
 resolver); the record says `key_source: supplied`, and the report says the key
 was not read from the signing domain's DNS.
