@@ -122,6 +122,30 @@ func counterpartyKeys(w dealWho, channel string) []string {
 	return keys
 }
 
+// platformKeys are a platform's identities. A platform is known by its
+// registrable domain whenever it has one, alone, so every telling to it
+// (its site, its mail relay) is one party; unlike a seller on it, a
+// marketplace host's domain names the platform itself. With no domain, its
+// other identities.
+func platformKeys(w dealWho) []string {
+	if n, err := normalizeID("domain", w.Domain); err == nil && strings.TrimSpace(w.Domain) != "" {
+		if apex, err := publicsuffix.EffectiveTLDPlusOne(n); err == nil {
+			n = apex
+		}
+		return []string{"domain:" + n}
+	}
+	return counterpartyKeys(w, "")
+}
+
+// recipientKeys are the identities of a share's recipient: a platform's
+// own (platformKeys), else a party's on the deal's channel.
+func recipientKeys(to string, w dealWho, channel string) []string {
+	if to == "platform" {
+		return platformKeys(w)
+	}
+	return counterpartyKeys(w, channel)
+}
+
 // counterpartyMemory reads the memory from every deal in the local store.
 // dealID is the deal being checked: its own opening is not an earlier
 // dealing, but its own earlier disclosures are earlier tellings.
@@ -159,13 +183,15 @@ func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ 
 }
 
 // disclosureRecipientKeys are the identities of whoever a disclosure went
-// to: the named recipient, else the deal's counterparty.
+// to: the named recipient (a platform, or anyone else), else the deal's
+// counterparty. A platform is keyed on itself, never on the counterparty
+// it stands between, so its first telling and its approval are its own.
 func disclosureRecipientKeys(d dealDisclosure, open dealOpen) []string {
 	var keys []string
 	if d.Who != nil {
-		keys = counterpartyKeys(*d.Who, open.Channel)
+		keys = recipientKeys(d.To, *d.Who, open.Channel)
 	}
-	if d.To == "other" {
+	if namedRecipient(d.To) {
 		return keys
 	}
 	return append(keys, counterpartyKeys(open.Who, open.Channel)...)
@@ -291,19 +317,20 @@ func approvingSnapshot(events []sealedEvent, approval string) *dealSnapshot {
 
 // sameRecipient reports whether the check behind approval was about the same
 // party as disclosure d. A telling to the deal's counterparty matches a check
-// about the counterparty (whatever identifiers the deal has); a telling to
-// anyone else matches only a check naming that same party.
+// about the counterparty (whatever identifiers the deal has); a telling to a
+// platform, or to anyone else, matches only a check naming that same party
+// in the same role.
 func sameRecipient(events []sealedEvent, approval string, d dealDisclosure, open dealOpen) bool {
 	snap := approvingSnapshot(events, approval)
 	if snap == nil {
 		return false
 	}
-	checkOther := snap.DisclosingTo == "other" && snap.Recipient != nil
-	if d.To != "other" {
-		return !checkOther
+	checkNamed := namedRecipient(snap.DisclosingTo) && snap.Recipient != nil
+	if !namedRecipient(d.To) {
+		return !checkNamed
 	}
-	if !checkOther || d.Who == nil {
+	if !checkNamed || d.Who == nil || snap.DisclosingTo != d.To {
 		return false
 	}
-	return sameParty(counterpartyKeys(*d.Who, open.Channel), counterpartyKeys(*snap.Recipient, open.Channel))
+	return sameParty(recipientKeys(d.To, *d.Who, open.Channel), recipientKeys(snap.DisclosingTo, *snap.Recipient, open.Channel))
 }

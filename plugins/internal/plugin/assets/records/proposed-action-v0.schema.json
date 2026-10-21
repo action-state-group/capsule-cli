@@ -117,6 +117,7 @@
         "disclosing_to": {
           "enum": [
             "counterparty",
+            "platform",
             "other"
           ]
         },
@@ -134,10 +135,11 @@
           "enum": [
             "fulfilling_merchant",
             "buyer",
+            "platform",
             "third_party",
             "self"
           ],
-          "description": "Who receives a share, by role: the deal's counterparty, which is fulfilling_merchant when the user buys (or the deal states no party_role) and buyer when the user sells; third_party (anyone else); or self. A role, never a name. Absent when not a share or not known."
+          "description": "Who receives a share, by role: the deal's counterparty, which is fulfilling_merchant when the user buys (or the deal states no party_role) and buyer when the user sells; platform (a marketplace, booking site or mail relay, disclosing_to platform); third_party (anyone else); or self. A role, never a name. Absent when not a share or not known."
         },
         "channel": {
           "description": "The channel kind in use at this check (x-deal-v0's channel set): the latest sealed message's, else first contact's. A kind, never an address.",

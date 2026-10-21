@@ -333,6 +333,7 @@
         "to": {
           "enum": [
             "counterparty",
+            "platform",
             "other"
           ]
         },
