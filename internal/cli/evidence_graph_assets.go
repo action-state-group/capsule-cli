@@ -51,7 +51,7 @@ var (
 
 const (
 	// evidenceGraphIIFEDigest is the SHA-256 of assets/evidence-graph.iife.js.
-	EvidenceGraphIIFEDigest = "c1293ada5d305ece12810e11f9326fe0c744b11f0b8067fce1365624c99675cf"
+	EvidenceGraphIIFEDigest = "3a9361682dc0fd5be489f5fedcbf1bc4fac254177cd4c1ab04a7b10737c2e6cb"
 	// evidenceGraphIIFESource names the commits and build the vendored IIFE
 	// came from: capsule-viewer's page code, and agent-action-capsule's
 	// verifier using released CLL 0.2.1 from its registry lock. Both must be

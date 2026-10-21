@@ -93,7 +93,18 @@ keep the old ones.
   (`make iife-check CV=… AAC=…`), and CI rebuilds from both pinned commits
   and refuses either if it is not on its repository's main. The rendered
   text of every golden is unchanged; only the runtime's script hash in each
-  page's CSP moves.
+  page's CSP moves. The runtime still opens with `"use strict";`, as on
+  main: both repositories build and test it under `"strict": true`, and the
+  build refuses an output without it.
+- **Known gap until the next capsule-viewer bump.** agent-action-capsule#317's
+  transcript display does not reach the pages yet. When a bundle withholds
+  every judge report, the model at `4593d42` can mark a conversation's
+  transcript `cited`, and the outcome card at capsule-viewer `1d39351`
+  knows only `verified`: it shows "Not shown: …" with the reason and no
+  turns, where main showed "Not in this bundle …". It never shows such a
+  transcript as verified. No golden withholds every report, so the goldens
+  do not cover this text. The capsule-viewer release that carries #317's
+  view brings the display.
 - **Changed.** `report build`, `presentation build`, `presentation list` and
   `verify --bundle` read a bundle of up to 256 MiB (`MaxBundleInput`), not
   12 MiB: a book's bundle carries its transcripts, and a week-per-book

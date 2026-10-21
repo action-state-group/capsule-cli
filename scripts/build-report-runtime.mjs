@@ -99,6 +99,12 @@ const out = await build({
   ...common,
   format: "iife",
   globalName: "EvidenceGraph",
+  // The runtime runs in strict mode, as the verifier and the views are
+  // written and tested: aac and capsule-viewer both build under
+  // `"strict": true`. A stdin entry has no tsconfig, so esbuild would not
+  // emit the directive on its own; without it a write to a frozen object is
+  // silently dropped and an unbound `this` is globalThis.
+  banner: { js: '"use strict";' },
   footer: { js: "globalThis.renderEvidenceGraph = EvidenceGraph.renderEvidenceGraph;" },
   // Paths in the output are written relative to the outfile's directory:
   // it sits in the scratch directory too, and the bytes are copied out.
@@ -107,4 +113,8 @@ const out = await build({
   logLevel: "warning",
   plugins: [aacSource],
 });
-writeFileSync(outFile, out.outputFiles[0].contents);
+const bytes = out.outputFiles[0].contents;
+if (Buffer.from(bytes.subarray(0, 14)).toString("utf8") !== '"use strict";\n') {
+  throw new Error('the runtime does not start with "use strict";');
+}
+writeFileSync(outFile, bytes);
