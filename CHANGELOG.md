@@ -77,6 +77,14 @@
 - **Changed:** `book result build` and `deal terms-result` check and
   canonicalize a Result with the core's code, so all three write the same
   bytes for the same document. Their output does not change.
+- **Changed:** the vendored `evidence-result-v0` schema is the one from
+  agent-action-capsule#353: every claim cites at least one record
+  (`minItems: 1` on a claim's `evidence`). `result build` refuses a claim
+  whose `evidence` is empty, including a story claim about a recorded
+  absence, which cites the absence record instead. The same schema adds the
+  optional (PROPOSED) aggregate member `coverage_declaration`
+  (agent-action-capsule#312), which `result build` now accepts, and
+  description-only edits to the claim types of its §4.1.
 
 ### `deal list --since/--until`: a period's deals, totals and who was told what (capsule-cli#342)
 

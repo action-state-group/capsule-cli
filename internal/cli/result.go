@@ -41,7 +41,9 @@ import (
 // the one carrying the optional claim `type` (requirement / reconcile /
 // close) of the 2026-09-25 ruling, the `x-` extension members on the
 // document and on a claim (spec section 8a, aac #297) and the optional
-// document member coverage_report (aac #157); the pinned aac Go module does
+// document member coverage_report (aac #157), the PROPOSED aggregate member
+// coverage_declaration (aac #312), and a claim's evidence[]
+// holding at least one record (aac #353); the pinned aac Go module does
 // not ship the schema (it lives outside the module's go/ directory), which
 // is why a copy is here at all. Refresh it by replacing the file, the digest
 // and the source together, with the vectors in the book plugin's
@@ -55,9 +57,9 @@ const (
 	ResultVersion  = "evidence-result-v0"
 	resultSchemaID = "https://agentactioncapsule.org/schemas/evidence-result-v0.json"
 	// ResultSchemaDigest is the SHA-256 of schemas/evidence-result-v0.json.
-	ResultSchemaDigest = "cf46d273e0220a6a6e9cfa4e41b331b6a6a155d053ca81cc33f3c004dfa734a9"
+	ResultSchemaDigest = "288d17a659ee416670819d5517c7f6824d1638c6eaf75dcc76a37c868fa8b85f"
 	// ResultSchemaSource names where the vendored copy came from.
-	ResultSchemaSource = "agent-action-capsule main@627dd8c16f7eb0dd00169f199ba6b938fb179913 schemas/evidence-result-v0.json"
+	ResultSchemaSource = "agent-action-capsule main@4b24505b67f406cb7109c4fb7a2ebdc99137b500 schemas/evidence-result-v0.json"
 
 	ClaimTypeRequirement = "requirement"
 	ClaimTypeReconcile   = "reconcile"
@@ -517,7 +519,9 @@ const resultBuildLong = `Seal a caller-supplied Evidence Result v0 into the prof
 Capsule whose payload is the Result, after checking it. Nothing is sealed when
 a check fails.
 
-Checked: the vendored evidence-result-v0 schema; every headline count
+Checked: the vendored evidence-result-v0 schema, under which every claim
+cites at least one record (a claim about a recorded absence cites the
+absence record); every headline count
 recomputes from the claims (counts must be integer literals: 7, not 7.0 or
 7e0); every record a claim cites is in the profile's log. Everything else a
 claim states is sealed as stated.
@@ -574,9 +578,6 @@ func resultBuildCommand() *cobra.Command {
 		if e != nil {
 			return Hint(ErrInput, "the Result cannot be put in canonical (JCS) form: "+e.Error())
 		}
-		// A claim may cite no record (a story carrier for a recorded
-		// absence, Result v0 section 2): the core enforces the schema, which
-		// allows an empty evidence[]. The book adds its own rule.
 		cites := resultCites(checked)
 		request, e := resultRequest(p, doc, encoded, cites)
 		if e != nil {

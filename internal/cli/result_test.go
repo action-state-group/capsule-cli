@@ -267,17 +267,28 @@ func TestResultBuildRefusesWhatItCannotSeal(t *testing.T) {
 	assert.Contains(t, SafeError(err), "--result is required")
 }
 
-// A claim may cite no record (a story carrier for a recorded absence):
-// the schema allows it, so the core seals it; only cited records are
-// checked and referenced.
-func TestResultBuildSealsAClaimThatCitesNoRecord(t *testing.T) {
+// Every claim cites at least one record (Result v0 section 1, aac #353): a
+// story claim that cites nothing is refused and nothing is sealed. The same
+// claim citing the recorded absence it narrates is sealed, and the Capsule
+// references that record.
+func TestResultBuildRefusesAClaimThatCitesNoRecord(t *testing.T) {
 	d := newDisclosureProfile(t)
 	day1 := d.publish("day-1", `{"report":"day one"}`)
-	absent := resultTestClaim("claim-2", "not_evaluable")
-	absent["presentation"] = map[string]any{"kind": "story", "status": "INSUFFICIENT", "narrative": "nothing was ever produced"}
-	built, stdout, err := d.buildResult(resultTestDoc(resultTestClaim("claim-1", "met", day1), absent))
+	before := d.logIDs()
+	story := map[string]any{"kind": "story", "status": "NOT_FOUND", "narrative": "a request was made and nothing arrived in its window"}
+	uncited := resultTestClaim("claim-2", "not_evaluable")
+	uncited["presentation"] = story
+	_, stdout, err := d.buildResult(resultTestDoc(resultTestClaim("claim-1", "met", day1), uncited))
+	require.ErrorIs(t, err, ErrInput, stdout)
+	assert.Contains(t, SafeError(err), "does not satisfy evidence-result-v0")
+	assert.Equal(t, before, d.logIDs(), "nothing is sealed when a claim cites no record")
+
+	absence := d.publish("absence", `{"outcome":"recorded_absence","request_digest":"`+strings.Repeat("ab", 32)+`","window":{"opened":"2026-10-12T00:00:05Z","closed":"2026-10-12T00:01:05Z"},"recorded_at":"2026-10-12T00:01:05Z"}`)
+	cited := resultTestClaim("claim-2", "not_evaluable", absence)
+	cited["presentation"] = story
+	built, stdout, err := d.buildResult(resultTestDoc(resultTestClaim("claim-1", "met", day1), cited))
 	require.NoError(t, err, stdout)
-	assert.Equal(t, []string{day1}, built.Cites)
+	assert.Equal(t, []string{day1, absence}, built.Cites)
 	assert.Equal(t, 2, built.Claims)
 }
 

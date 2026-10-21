@@ -553,8 +553,13 @@ func TestResultBuildRefusesACitationTheBookDoesNotHold(t *testing.T) {
 	require.ErrorIs(t, err, cli.ErrInput)
 	assert.Contains(t, cli.SafeError(err), "as presentation evidence, which is not in this book")
 
-	// A claim citing nothing cannot be traced to evidence.
+	// A claim citing nothing cannot be traced to evidence: the schema the
+	// core gate enforces refuses it first (Result v0 section 1, aac #353).
 	_, _, err = runResultBuild(t, b.profile, resultDoc(testClaim("claim-1", "met")))
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, cli.SafeError(err), "does not satisfy evidence-result-v0: at claims/0/evidence")
+	// The book's own rule still refuses one, should the gate ever let it by.
+	_, err = resolveResultCitations(context.Background(), nil, nil, resultDocument{claims: []resultClaim{{ID: "claim-1"}}})
 	require.ErrorIs(t, err, cli.ErrInput)
 	assert.Contains(t, cli.SafeError(err), "cites no evidence")
 
