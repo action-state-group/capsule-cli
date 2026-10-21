@@ -483,13 +483,14 @@ func TestDoctorRechecksAfterAConcurrentHeal(t *testing.T) {
 // tests that run `go build` would otherwise fill the test HOME with a fresh,
 // read-only module cache and lose the user's `go env -w` settings.
 func keepGoCaches() {
-	out, err := exec.Command("go", "env", "GOENV", "GOPATH", "GOCACHE", "GOMODCACHE").Output()
-	if err != nil {
+	out, err := exec.Command("go", "env", "-json", "GOENV", "GOPATH", "GOCACHE", "GOMODCACHE").Output()
+	var env map[string]string
+	if err != nil || json.Unmarshal(out, &env) != nil {
 		return // no go to run: nothing under test builds with it
 	}
-	for i, name := range []string{"GOENV", "GOPATH", "GOCACHE", "GOMODCACHE"} {
-		if lines := strings.Split(strings.TrimSpace(string(out)), "\n"); i < len(lines) && os.Getenv(name) == "" {
-			os.Setenv(name, lines[i])
+	for name, value := range env {
+		if value != "" && os.Getenv(name) == "" {
+			os.Setenv(name, value)
 		}
 	}
 }
