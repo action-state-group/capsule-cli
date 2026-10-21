@@ -148,6 +148,11 @@ func CommandLine(c *cobra.Command, args []string) []string {
 // not installed and where to install it.
 func ForwardToPlugin(c *cobra.Command, name string, args []string) error {
 	plugins, refused := discoverPluginsAndRefusals()
+	return forwardDiscovered(c, name, args, plugins, refused)
+}
+
+// forwardDiscovered is ForwardToPlugin over one discovery's result.
+func forwardDiscovered(c *cobra.Command, name string, args []string, plugins []pluginInfo, refused []refusedPlugin) error {
 	for _, info := range plugins {
 		if info.Name == name {
 			return execPlugin(c, info, args)

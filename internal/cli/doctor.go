@@ -81,6 +81,8 @@ func doctorCommand() *cobra.Command {
 			if install, _ := c.Flags().GetBool("install-check"); install {
 				return installCheck(c)
 			}
+			// Heal first, so the plugins listed are the ones that now load.
+			userRoot := doctorUserRoot()
 			plugins := discoverPlugins()
 			pluginRows := make([]map[string]any, 0, len(plugins))
 			for _, p := range plugins {
@@ -92,6 +94,7 @@ func doctorCommand() *cobra.Command {
 				"plugins": map[string]any{
 					"roots":      trustedPluginRoots(),
 					"discovered": pluginRows,
+					"user_root":  userRoot,
 				},
 			}
 

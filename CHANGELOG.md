@@ -42,6 +42,21 @@ keep the old ones.
   `represent` checks. Golden 8 now carries `x-deal-seller/v0`, so the
   viewer's seller receipt is selected for it.
 
+### The checkpoint cadence heals a home a host made group-writable again (capsule-cli#336)
+
+- **Fixed:** a Muse VM replacement recreates `/home/hatch` as `2770`. The
+  trust walk then refused the deal plugin, and the scheduled checkpoint
+  cadence stopped with nothing in its log. `cll checkpoint cadence` and
+  `doctor` now put back the `chmod go-w` that plugin install required, but
+  only on directories the process's user owns under `$HOME` whose only
+  fault is group or other write. Anything else stays refused. The trust
+  walk is unchanged. `docs/PLUGINS.md` lists the exact conditions.
+- **Added (output):** the cadence writes `plugin_root_healed` (each
+  directory, with its mode before and after) or `plugin_root_heal_failed`
+  to its log. When the deal plugin does not run at all, it writes
+  `plugin_unavailable` or `plugin_stopped` with the error that stderr
+  shows, so a stopped cadence is no longer silent. `doctor` adds
+  `plugins.user_root`, and `doctor --install-check` adds `user_root`.
 
 ### A seller's later evidence chains to the close and shows under it (capsule-cli#266)
 

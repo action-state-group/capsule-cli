@@ -40,6 +40,10 @@ func installCheck(c *cobra.Command) error {
 	}
 	var issues []string
 	report := map[string]any{"binary_version": CLIVersion, "binary_commit": CLICommit, "expected_version": wantVersion, "expected_commit": wantCommit}
+	// Before the plugin check, so it sees the root as healed. A refusal adds
+	// no issue of its own: the plugin check fails when the profile's plugin
+	// is the one refused.
+	report["user_root"] = doctorUserRoot()
 	if CLIVersion != wantVersion {
 		issues = append(issues, "binary is "+CLIVersion+", expected "+wantVersion)
 	}
