@@ -173,6 +173,38 @@
         "offer"
       ]
     },
+    "check_action": {
+      "description": "What a check (a proposed action) is of: an action, or represent, where the user sells: what the agent is about to tell the buyer. represent is never an action record's action and never in allowed.",
+      "enum": [
+        "pay",
+        "sign",
+        "commit",
+        "cancel",
+        "share_contact",
+        "share_credentials",
+        "offer",
+        "represent"
+      ]
+    },
+    "representation_class": {
+      "description": "A seller's representation classes (x-deal-v0's claim classes).",
+      "enum": [
+        "price",
+        "condition",
+        "features",
+        "authenticity",
+        "availability",
+        "delivery_date",
+        "service_scope",
+        "warranty",
+        "refund_terms",
+        "payment_methods",
+        "pickup",
+        "deadline",
+        "address",
+        "other"
+      ]
+    },
     "finding": {
       "type": "object",
       "additionalProperties": false,

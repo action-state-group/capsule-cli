@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+### A seller's representations carry their authority (capsule-cli#269)
+
+Seller PRD §3.5 and §9 step 2. A seller's deal, or a sale and its threads,
+opened from this version follows these rules. Deals and sales opened before
+keep the old ones.
+
+- **Added: `ordered_representations`.** The intent and task authority gain
+  this field: the representation classes the user's words order the agent to
+  state ("tell them about the scratch" is `condition`). It is empty when
+  nothing is ordered. Adding or dropping a class is a proposal that applies
+  only on the user's `confirm_limits`.
+- **Added: the `represent` check.** It runs before the agent tells the buyer
+  anything: `deal check {"action": "represent", "representing": {"class",
+  "text"}}`. An ordered class passes, and its claim is sealed with
+  `authority_basis` `[task_authority]` and no approval. Any other class asks,
+  and only the user's approval of those exact words authorizes the claim. The
+  claim is noted with `deal note --kind claim --check CHECK_ID`.
+- **Added: unchecked claims.** An agent claim that nothing authorized is
+  still sealed, with `unchecked: true` and the rule why.
+- **Added: ordered statements come first.** While an ordered class is
+  unstated in a deal (on a sale, in each thread), an offer, commit, sign, pay
+  or share check asks with no way to proceed. A cancel is never held.
+- **Added: the rules checker sees the basis.** Its `deal_claims` entries carry
+  each claim's `authority_basis` or `unchecked`. A `represent` check gets
+  `representing_opening`, the exact words. After a `confirm_limits` it gets
+  the confirmed `task_authority_record`.
+- **Breaking:** where these rules apply, these are refused:
+  - an agent claim with no class;
+  - an `external` claim with no `source`;
+  - agent claims in a seller's `deal open` input. Note them after open,
+    each against a `represent` check.
+- **Changed (fixtures):** presentation goldens 8 and 9 are rebuilt with
+  `represent` checks. Golden 8 now carries `x-deal-seller/v0`, so the
+  viewer's seller receipt is selected for it.
+
+
 ### A seller's later evidence chains to the close and shows under it (capsule-cli#266)
 
 - **Added (fixture):** a seller's sale that closes with its delivery still

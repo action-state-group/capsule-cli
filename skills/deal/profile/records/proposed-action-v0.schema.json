@@ -69,7 +69,7 @@
       },
       "properties": {
         "action": {
-          "$ref": "record-common-v0.schema.json#/$defs/action"
+          "$ref": "record-common-v0.schema.json#/$defs/check_action"
         },
         "action_class": {
           "$ref": "record-common-v0.schema.json#/$defs/action_class"
@@ -224,6 +224,45 @@
         "item_ref_commitment": {
           "description": "On a check of a sale's thread: the sale's item reference, committed under this check's own nonce, so it is equal across the sale's threads only to a holder of the openings.",
           "$ref": "record-common-v0.schema.json#/$defs/hex64"
+        },
+        "representing": {
+          "description": "On a represent check: what the seller's agent is about to tell the buyer. Its class in the clear; its exact words, and where they will be said when given, as salted commitments. An approval covers a claim of exactly these words.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "class",
+            "text_commitment"
+          ],
+          "properties": {
+            "class": {
+              "$ref": "record-common-v0.schema.json#/$defs/representation_class"
+            },
+            "text_commitment": {
+              "$ref": "record-common-v0.schema.json#/$defs/hex64"
+            },
+            "source_ref_commitment": {
+              "$ref": "record-common-v0.schema.json#/$defs/hex64"
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "action": {
+            "const": "represent"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "representing"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "representing"
+          ]
         }
       }
     }

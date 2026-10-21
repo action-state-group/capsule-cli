@@ -78,7 +78,9 @@ func TestAClaimSealedAsADeliveryPromiseStillVerifies(t *testing.T) {
 	events, err := s.load(t.Context(), id)
 	require.NoError(t, err)
 	_, err = s.seal(t.Context(), id, events, dealEvent{Kind: "claim", Claim: &dealClaim{
-		Text: "Ships within two days", SourceKind: "agent", Class: "delivery_promise",
+		// A deal this build opens is under the representation rules, so a
+		// claim with no represent check is sealed unchecked.
+		Text: "Ships within two days", SourceKind: "agent", Class: "delivery_promise", Unchecked: true, Rule: "no_check",
 	}})
 	require.NoError(t, err)
 	require.NoError(t, s.close())

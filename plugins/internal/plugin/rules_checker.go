@@ -494,9 +494,11 @@ func findingField(id string) string {
 // In a typed deal it also carries task_authority_record: the whole sealed
 // task-authority record the check's task_authority_ref names, exactly as
 // sealed (SHA-256 of its JCS bytes is the ref's digest; its plan is at
-// body), so a checker recomputes the binding before it reads the plan. It
-// is absent when the task authority in force is not a task-authority record
-// (limits confirmed later in an approval), and in a deal with none.
+// body), so a checker recomputes the binding before it reads the plan: the
+// opening one, or the version the user confirmed later (a confirm_limits
+// approval, sealed as a task-authority record in typed records). It is
+// absent when the task authority in force is not a task-authority record
+// (an x-deal-v0 deal), and in a deal with none.
 func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events []sealedEvent) ([]byte, *dealRulesHistory, error) {
 	record, err := s.capsuleWithInput(ctx, capsuleID)
 	if err != nil {
@@ -535,6 +537,14 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 	if len(claims) > 0 {
 		record["deal_claims"] = claims
 	}
+	// representing_opening: on a represent check, the words the agent is
+	// about to tell the buyer, with their nonce, so a seller ruleset judges
+	// the words themselves; the sealed record keeps only their commitment.
+	for _, se := range events {
+		if sn := se.Event.Snapshot; se.CapsuleID == capsuleID && sn != nil && sn.Representing != nil {
+			record["representing_opening"] = map[string]interface{}{"nonce": se.Event.Nonces["representing_text"], "text": sn.Representing.Text}
+		}
+	}
 	// party_role: the side of the deal the user is on, as its opening intent
 	// sealed it (buyer when it names none), sent on every check, always
 	// explicit, so a checker selects its rules without inferring the side.
@@ -542,12 +552,12 @@ func (s *dealSession) rulesInput(ctx context.Context, capsuleID string, events [
 		"history_scope": map[string]interface{}{"days": scope.Days, "max_records": rulesHistoryMax, "complete": scope.Complete}}
 	if task := taskAuthorityAt(events, ""); task != "" {
 		for _, se := range events {
-			if se.Digest == task && se.Event.Kind == "task_authority" {
+			if se.Digest == task && (se.Event.Kind == "task_authority" || se.Event.Approval != nil) {
 				ta, err := s.capsuleWithInput(ctx, se.CapsuleID)
 				if err != nil {
 					return nil, nil, err
 				}
-				if record, ok := ta["agent_input"]; ok {
+				if record, ok := ta["agent_input"].(map[string]interface{}); ok && record["type"] == cli.TypeTaskAuthority {
 					input["task_authority_record"] = record
 				}
 			}
@@ -615,7 +625,7 @@ func (s *dealSession) acceptedProposalAt(ctx context.Context, checked string, ev
 // dealClaimsInput are, where the user sells, the deal's agent claims sealed
 // before the checked step, in seal order: each as its sealed claim record
 // states it (capsule id, record digest, class, source_kind, at,
-// text_commitment). A claim with no class, or sealed with its text in the
+// text_commitment, and its authority_basis or unchecked). A claim with no class, or sealed with its text in the
 // clear (before claims were committed), is left out. None on a buyer's deal.
 func (s *dealSession) dealClaimsInput(ctx context.Context, checked string, events []sealedEvent) ([]interface{}, error) {
 	if dealRole(events) != dealRoleSeller {
@@ -644,10 +654,19 @@ func (s *dealSession) dealClaimsInput(ctx context.Context, checked string, event
 		if block == nil || commitment == "" {
 			continue
 		}
-		out = append(out, map[string]interface{}{
+		entry := map[string]interface{}{
 			"capsule_id": se.CapsuleID, "record_digest": se.Digest, "class": body["class"],
 			"source_kind": body["source_kind"], "at": block["at"], "text_commitment": commitment,
-		})
+		}
+		// Under the representation rules: what authorized it, as sealed, or
+		// that nothing did.
+		if basis, ok := body["authority_basis"]; ok {
+			entry["authority_basis"] = basis
+		}
+		if body["unchecked"] == true {
+			entry["unchecked"] = true
+		}
+		out = append(out, entry)
 	}
 	return out, nil
 }

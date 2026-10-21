@@ -1077,6 +1077,10 @@ func dealShareStepLine(e dealEvent, audience string, p dealPrivate, currency str
 		}
 		return "Counterparty changed details"
 	case "snapshot":
+		if rp := e.Snapshot.Representing; rp != nil {
+			// The class only: the words are a commitment in the record.
+			return "About to tell the buyer about the " + classWord(rp.Class)
+		}
 		line := "About to " + e.Snapshot.Action
 		if e.Snapshot.AmountMinor != nil {
 			line += " " + formatMoney(*e.Snapshot.AmountMinor, currency)

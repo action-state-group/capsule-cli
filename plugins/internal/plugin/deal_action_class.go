@@ -23,7 +23,7 @@ import (
 // Version 3 adds approver_role account_holder to money.purchase,
 // money.subscription, booking.create and booking.modify; version 4 adds it to
 // booking.cancel, data.delete, communication.publish and disclosure.personal;
-// version 5 adds it to communication.send, a class no deal record carries;
+// version 5 adds it to communication.send, which a seller's represent check carries;
 // version 6 adds it to agreement.accept (which a seller's commit, and a
 // rental's or service's commit or sign, carries), marketplace.offer (which a
 // seller's offer carries, from dealOfferClassVersion; an offer sealed before
@@ -44,6 +44,7 @@ const (
 	classDisclosureSecret    = "disclosure.secret"
 	classExternalCommitOther = "external_commitment.other"
 	classMarketplaceOffer    = "marketplace.offer"
+	classCommunicationSend   = "communication.send"
 )
 
 // dealOfferClassVersion marks a step whose seller's offer is classed
@@ -111,6 +112,12 @@ func dealRoleActionClass(role, dealType, action, direction string) string {
 	if role == dealRoleSeller && action == "commit" {
 		return classAgreementAccept
 	}
+	// A seller's agent telling the buyer something: the taxonomy has no
+	// representation class yet (capsule-engine#171), so it is the agent
+	// communicating with the counterparty.
+	if action == representAction {
+		return classCommunicationSend
+	}
 	return dealActionClass(dealType, action, direction)
 }
 
@@ -134,7 +141,7 @@ func dealRoleSpendMinor(role, action, direction string, amount *int64) (int64, b
 // cancel, there is none.
 func dealSpendMinor(action, direction string, amount *int64) (int64, bool) {
 	switch {
-	case action == "cancel", action == offerAction:
+	case action == "cancel", action == offerAction, action == representAction:
 		return 0, true
 	case amount == nil || direction == "in":
 		return 0, false

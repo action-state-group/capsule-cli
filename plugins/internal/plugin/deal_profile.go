@@ -93,12 +93,18 @@ func dealTexts(ev dealEvent) map[string]string {
 		if w := ev.Evidence.Wrapped; w != nil && w.Headers != nil {
 			t["carrier_headers"] = headersText(w.Headers)
 		}
-	case ev.Snapshot != nil && (ev.Snapshot.Description != "" || ev.Snapshot.ItemRef != ""):
+	case ev.Snapshot != nil && (ev.Snapshot.Description != "" || ev.Snapshot.ItemRef != "" || ev.Snapshot.Representing != nil):
 		if ev.Snapshot.Description != "" {
 			t["description"] = ev.Snapshot.Description
 		}
 		if ev.Snapshot.ItemRef != "" {
 			t["item_ref"] = ev.Snapshot.ItemRef
+		}
+		if rp := ev.Snapshot.Representing; rp != nil {
+			t["representing_text"] = rp.Text
+			if rp.Source != "" {
+				t["representing_source"] = rp.Source
+			}
 		}
 	case ev.Check != nil && ev.Check.Card != "":
 		t["card"] = ev.Check.Card
@@ -400,6 +406,9 @@ func limitSetBody(l dealLimitSet) map[string]interface{} {
 	if l.Allowed != nil {
 		m["allowed"] = l.Allowed
 	}
+	if l.OrderedRepresentations != nil {
+		m["ordered_representations"] = *l.OrderedRepresentations
+	}
 	return m
 }
 
@@ -506,6 +515,9 @@ func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]i
 	}
 	if i.Allowed != nil { // present and empty: nothing is allowed yet
 		m["allowed"] = i.Allowed
+	}
+	if i.OrderedRepresentations != nil { // present and empty: nothing ordered
+		m["ordered_representations"] = *i.OrderedRepresentations
 	}
 	return m, nil
 }
@@ -777,6 +789,18 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		} else if body, err = claimBody(*ev.Claim, "claim_text", "claim_source", commit); err != nil {
 			return nil, err
 		}
+		// A seller's representation under the representation rules carries
+		// what authorized it, in the check contract's shape (the evaluation
+		// and every authority layer), or that nothing did.
+		if cl := ev.Claim; cl.AuthorizedBy != "" {
+			if err = addAuthority(body, events, cl.AuthorizedBy, nil); err != nil {
+				return nil, err
+			}
+			block["refs"] = []interface{}{relRef("authorized_by", digestOf(cl.AuthorizedBy))}
+		} else if cl.Unchecked {
+			body["unchecked"] = true
+			body["rule"] = cl.Rule
+		}
 	case "evidence":
 		rtype = "evidence"
 		about := events[0].Digest
@@ -961,6 +985,20 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		}
 		if sn.DisclosingTo != "" {
 			body["disclosing_to"] = sn.DisclosingTo
+		}
+		// What the agent is about to tell the buyer: its class in the clear,
+		// its words (and where they will be said) by commitment.
+		if rp := sn.Representing; rp != nil {
+			r := map[string]interface{}{"class": rp.Class}
+			if r["text_commitment"], err = commit("representing_text"); err != nil {
+				return nil, err
+			}
+			if rp.Source != "" {
+				if r["source_ref_commitment"], err = commit("representing_source"); err != nil {
+					return nil, err
+				}
+			}
+			body["representing"] = r
 		}
 		if sn.Terms != nil {
 			if t := termsBody(*sn.Terms); len(t) > 0 {
@@ -1319,9 +1357,26 @@ func normalizeOpen(o *dealOpen) error {
 		o.Channel = "other"
 	}
 	for i := range o.Claims {
+		// What authorizes a claim is found when it is noted, never read
+		// from an input file.
+		c := o.Claims[i]
+		o.Claims[i] = dealClaim{Text: c.Text, Source: c.Source, SourceKind: c.SourceKind, Verified: c.Verified, Class: c.Class}
 		if err := normalizeClaim(&o.Claims[i]); err != nil {
 			return err
 		}
+	}
+	// A seller's deal or sale opened from here on records what the user
+	// orders the agent to tell the buyer, empty when nothing: that is what
+	// puts it under the representation rules (deal_representations.go). A
+	// sale's thread carries its sale's intent as it is.
+	if o.Intent.PartyRole == dealRoleSeller && o.Sale == "" && o.Intent.OrderedRepresentations == nil {
+		o.Intent.OrderedRepresentations = &[]string{}
+	}
+	if o.Intent.OrderedRepresentations != nil && o.Intent.PartyRole != dealRoleSeller {
+		return cli.InputError("ordered_representations go with a deal where the user sells (intent.party_role seller)")
+	}
+	if err := normalizeOrdered(o.Intent.OrderedRepresentations); err != nil {
+		return err
 	}
 	o.Recourse.Rail = normRail(o.Recourse.Rail)
 	if err := normalizeTerms(&o.Terms); err != nil {

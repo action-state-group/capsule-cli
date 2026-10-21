@@ -1,6 +1,7 @@
 {"type": "purchase", "demo": true, "channel": "marketplace",
- "intent": {"verbatim": "Sell my example bicycle; ask 1900", "party_role": "seller",
-            "asked": {"item": "example bicycle", "quantity": 1}, "allowed": ["offer", "commit"]},
+ "intent": {"verbatim": "Sell my example bicycle; ask 1900. Tell them about the scratch.", "party_role": "seller",
+            "asked": {"item": "example bicycle", "quantity": 1}, "allowed": ["offer", "commit"],
+            "ordered_representations": ["condition"]},
  "who": {"name": "Example Buyer", "domain": "buyer.example"},
  "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000, "currency": "USD"},
  "recourse": {"rail": "card", "refundable": false}}

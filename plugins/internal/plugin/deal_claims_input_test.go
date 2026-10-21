@@ -57,7 +57,9 @@ func TestASellersEarlierAgentClaimReachesTheChecker(t *testing.T) {
 	claim := noteClaim(t, id, `{"text":"`+conditionWords+`","source_kind":"agent","source":"listing_message","class":"condition"}`)
 	// The buyer's own claim carries a class too: only the source keeps it out.
 	noteClaim(t, id, `{"text":"The buyer says the frame looks scratched","source_kind":"merchant","source":"buyer_message","class":"condition"}`)
-	noteClaim(t, id, `{"text":"The agent's own note with no class","source_kind":"agent","source":"listing_message"}`)
+	// An agent's claim to the buyer names its class (capsule-cli#269).
+	require.ErrorIs(t, dealRunErr(t, "note", "--deal", id, "--kind", "claim", "--input",
+		writeJSON(t, `{"text":"The agent's own note with no class","source_kind":"agent","source":"listing_message"}`)), cli.ErrInput)
 	dealRun(t, "check", "--deal", id, "--input", writeJSON(t, sellerOffer))
 
 	raw := rawCheckerInput(t, checker)
@@ -66,7 +68,7 @@ func TestASellersEarlierAgentClaimReachesTheChecker(t *testing.T) {
 	var input map[string]any
 	require.NoError(t, json.Unmarshal([]byte(raw), &input))
 	claims := input["record"].(map[string]any)["deal_claims"].([]any)
-	require.Len(t, claims, 1, "only the agent's classed claim: not the buyer's, not one with no class")
+	require.Len(t, claims, 1, "only the agent's claim: not the buyer's")
 
 	records, _ := exportRecords(t, id)
 	var sealed map[string]any
@@ -86,6 +88,7 @@ func TestASellersEarlierAgentClaimReachesTheChecker(t *testing.T) {
 	assert.Equal(t, map[string]any{
 		"capsule_id": claim["capsule_id"], "record_digest": digest, "class": "condition", "source_kind": "agent",
 		"at": sealed["x-deal-v0"].(map[string]any)["at"], "text_commitment": body["text_commitment"],
+		"unchecked": true, // noted with no represent check
 	}, claims[0], "exactly the sealed claim record's values")
 	for _, h := range input["history"].([]any) {
 		assert.NotContains(t, h, "deal_claims", "never on history entries")

@@ -162,16 +162,17 @@ func assertNotListed(t *testing.T, l listOutput, id string) {
 }
 
 // With capsule-viewer's three receipt modules and its history module
-// installed, a buyer's copy resolves to the unilateral receipt, whichever
-// side the user was on, and the deal view, which they displace, is not a
-// candidate: no ambiguity. (testdata has no VALID seller copy or composed
-// bundle, so the seller and bilateral receipts are shown registering, not
-// selected.)
+// installed, a buyer's copy resolves to the unilateral receipt, a seller's
+// copy (golden 8, which carries x-deal-seller/v0) to the seller receipt, and
+// the deal view, which they displace, is not a candidate: no ambiguity.
+// (testdata has no composed bundle, so the bilateral receipt is shown
+// registering, not selected.)
 func TestPresentationListTheReceiptModulesDisplaceTheDealView(t *testing.T) {
-	for name, bundle := range map[string]string{
-		"user buys":  presentationBuildBundle,
-		"user sells": "testdata/presentation/8-seller-buyer-copy/bundle.json",
+	for name, tc := range map[string]struct{ bundle, selected string }{
+		"user buys":  {presentationBuildBundle, "capsuleviewer.receipt.unilateral/v0"},
+		"user sells": {"testdata/presentation/8-seller-buyer-copy/bundle.json", "capsuleviewer.receipt.seller/v0"},
 	} {
+		bundle := tc.bundle
 		t.Run(name, func(t *testing.T) {
 			installViewerModules(t, viewerModules...)
 			stdout, err := invoke(t, "", "presentation", "list", "--bundle", bundle, "--audience", "keep")
@@ -180,7 +181,7 @@ func TestPresentationListTheReceiptModulesDisplaceTheDealView(t *testing.T) {
 			assert.Equal(t, "module", l.Resolution)
 			assert.Nil(t, l.Ambiguity)
 			require.NotNil(t, l.Selected)
-			assert.Equal(t, "capsuleviewer.receipt.unilateral/v0", l.Selected["id"])
+			assert.Equal(t, tc.selected, l.Selected["id"])
 			assert.Equal(t, "plugin", l.Selected["source"])
 			assertNotListed(t, l, "capsulectl.deal-view/v0")
 			for _, id := range viewerModules {

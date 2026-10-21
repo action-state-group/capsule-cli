@@ -61,6 +61,9 @@ DISCLOSURE_ACTION.update({c: "share_credentials" for c in ("credential", "verifi
 OFFER_TERMS = ("amount_minor", "currency", "terms", "recourse")
 # The classes that give a place: a seller gives one out only for an accepted offer.
 ADDRESS_CLASSES = {"home_address", "address", "pickup_location"}
+# The actions an ordered representation must come before (section 6): every
+# action that moves toward or carries out a commitment, and every share.
+REPRESENTATION_GATED = {"offer", "commit", "sign", "pay", "share_contact", "share_credentials"}
 IDENTIFIER_KINDS = ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id"]
 SAFE_INT = 2**53 - 1
 
@@ -613,7 +616,7 @@ def check_chain(records):
         fail(0, "the first record of a deal must be the baseline")
     allowed_rels = {"evidence": {"about", "confirms"}, "detail_change": {"source"}, "verdict": {"checks"},
                     "approval": {"approves"}, "action": {"authorized_by", "reverses", "source"}, "outcome": {"observes"},
-                    "close": {"outcome"}, "disclosure": {"authorized_by"},
+                    "close": {"outcome"}, "disclosure": {"authorized_by"}, "claim": {"authorized_by"},
                     "task_authority": {"source", "approves", "registration"}, "platform_approval": set(), "policy_change": set(),
                     "check": {"supersedes"}, "counterparty_acceptance": set(),
                     "counterparty_profile": {"about"}}
@@ -632,6 +635,14 @@ def check_chain(records):
     # only if it is higher, which this checker cannot see: the floor in force is then unknown
     # (bounds_known False) until a confirmation states it again.
     bounds, bounds_known = records[0]["body"]["intent"].get("bounds_commitment"), True
+    # A seller's representations (section 6): a deal that opens with
+    # ordered_representations follows the representation rules. Every agent
+    # claim carries what authorized it, or unchecked; an ordered class needs no
+    # approval; and no gated action goes ahead while an ordered class has no
+    # authorized claim. A deal opened before carries none and keeps its rules.
+    ordered = records[0]["body"]["intent"].get("ordered_representations") if party_role == "seller" else None
+    rep_rules = ordered is not None
+    stated = set()  # classes an authorized agent claim has stated
 
     def limits_in_force():
         out = {k: v for k, v in (("max_total_minor", max_total), ("allowed", allowed)) if v is not None}
@@ -779,7 +790,7 @@ def check_chain(records):
                 chk = records[jc]
                 if chk["body"]["action"] != action:
                     fail(i, f"the {what} differs from the one checked")
-                if allowed is not None and action not in allowed:
+                if allowed is not None and action not in allowed and action != "represent":
                     fail(i, "the task authority does not allow this action")
                 for k in range(jc + 1, i):
                     kb = records[k]["x-deal-v0"]
@@ -844,7 +855,7 @@ def check_chain(records):
                 if i != 1:
                     fail(i, "the opening task authority directly follows the baseline")
                 intent0 = records[0]["body"]["intent"]
-                for k in ("max_total_minor", "allowed"):
+                for k in ("max_total_minor", "allowed", "ordered_representations"):
                     if body.get(k) != intent0.get(k):
                         fail(i, f"the task authority's {k} is not the one asked at the baseline")
                 if ("bounds_commitment" in body) != ("bounds_commitment" in intent0):
@@ -856,23 +867,28 @@ def check_chain(records):
                     fail(i, "a proposal replaced by a later intent, or already confirmed, gives no new task authority")
                 if body["previous_ref"]["digest"] != digests[task_idx]:
                     fail(i, "previous_ref is not the task authority in force")
-                in_force = {k: v for k, v in (("max_total_minor", max_total), ("allowed", allowed)) if v is not None}
+                in_force = {k: v for k, v in (("max_total_minor", max_total), ("allowed", allowed),
+                                              ("ordered_representations", ordered)) if v is not None}
                 new = dict(in_force)
-                for k in ("max_total_minor", "allowed"):
-                    if prop.get(k) is not None:
+                for k in ("max_total_minor", "allowed", "ordered_representations"):
+                    if prop.get(k) is not None and (k != "ordered_representations" or ordered is not None):
                         new[k] = prop[k]
-                if {k: body[k] for k in ("max_total_minor", "allowed") if k in body} != new:
+                if {k: body[k] for k in ("max_total_minor", "allowed", "ordered_representations") if k in body} != new:
                     fail(i, "the new task authority is not what the proposal asked for")
                 if "bounds_commitment" in prop and body.get("bounds_commitment") != prop["bounds_commitment"]:
                     fail(i, "the new task authority's floor is not the one the proposal stated")
                 more = (prop.get("max_total_minor") is not None and max_total is not None
                         and prop["max_total_minor"] > max_total) or \
                        (prop.get("allowed") is not None and allowed is not None
-                        and any(a not in allowed for a in prop["allowed"]))
+                        and any(a not in allowed for a in prop["allowed"])) or \
+                       (prop.get("ordered_representations") is not None and ordered is not None
+                        and prop["ordered_representations"] != ordered)
                 if not more:
                     fail(i, "the proposal asks for no higher limit and no new action: nothing to confirm")
                 confirmed_intents.add(j)
                 max_total, allowed = new.get("max_total_minor"), new.get("allowed")
+                if ordered is not None:
+                    ordered = new.get("ordered_representations")
             task_idx = i
         elif t == "platform_approval":
             # An observation of another platform's approval interaction for a proposed
@@ -897,6 +913,8 @@ def check_chain(records):
         elif t == "check":
             if "supersedes" in by_rel:
                 fail(i, "only an offer supersedes an earlier offer")
+            if body.get("action") == "represent" and not rep_rules:
+                fail(i, "a represent check is made on a deal where the user sells, opened with ordered_representations")
         elif t == "counterparty_acceptance":
             # An observation that the counterparty accepted one exact offer. It
             # authorizes nothing by itself; a seller's commit rests on it.
@@ -943,6 +961,28 @@ def check_chain(records):
                 j = by_digest.get(body["resolves_obligation"]["digest"])
                 if j is None or j >= i or "obligation" not in records[j]["body"]:
                     fail(i, "resolves_obligation must name an earlier record holding an obligation")
+        elif t == "claim":
+            if rep_rules and body.get("source_kind") == "agent" and "text_commitment" in body:
+                if "class" not in body:
+                    fail(i, "a seller's representation names its class")
+                if ("authority_basis" in body) == (body.get("unchecked") is True):
+                    fail(i, "a seller's representation carries exactly one of authority_basis or unchecked")
+                if body.get("unchecked") is True:
+                    if "authorized_by" in by_rel:
+                        fail(i, "an unchecked representation names nothing that authorized it")
+                else:
+                    jt = one("authorized_by", ("approval", "verdict"))
+                    jv, ja, chk = authorize_typed(jt, "represent", "representation")
+                    verify_basis(jv, ja, None)
+                    if chk["body"].get("representing", {}).get("class") != body["class"]:
+                        fail(i, "the representation's class differs from the one checked")
+                    if task_at_verdict.get(jv) != task_idx:
+                        fail(i, "the task authority changed after the check: the representation needs a new check")
+                    if ja is None and body["class"] not in (records[task_idx]["body"].get("ordered_representations") or []):
+                        fail(i, "a representation the task authority does not order needs the user's own approval")
+                    stated.add(body["class"])
+            elif "authority_basis" in body or "unchecked" in body or "authorized_by" in by_rel:
+                fail(i, "only a seller's representation under the representation rules carries an authority")
         elif t == "detail_change":
             one("source", ("message", "evidence"), required=False)
             kinds = set(b.get("counterparty", {}).get("ids", {}))
@@ -1042,6 +1082,11 @@ def check_chain(records):
             if b.get("typed"):
                 jv, ja, chk = authorize_typed(one("authorized_by", ("approval", "verdict")), body["action"], "action")
                 verify_basis(jv, ja, body.get("amount_minor"))
+                if rep_rules and body["action"] in REPRESENTATION_GATED:
+                    missing = [c for c in ordered if c not in stated]
+                    if missing:
+                        fail(i, f"the user ordered the agent to tell the buyer about {', '.join(missing)} first: "
+                                "no offer, commit, sign, pay or share goes ahead before it")
                 if "disclosed" in body:
                     actions = {DISCLOSURE_ACTION[f["class"]] for f in body["disclosed"]["fields"]}
                     if actions != {body["action"]}:

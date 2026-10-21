@@ -67,6 +67,17 @@
       "enum": ["intent", "baseline", "message", "claim", "evidence", "detail_change", "check", "verdict", "approval", "action", "outcome", "close", "disclosure", "sale", "counterparty_profile", "thread", "thread_opened", "sale_cut", "sale_close"]
     },
     "point_of_no_return": { "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer"] },
+    "check_action": { "description": "What a check is of: a point of no return, or represent (where the user sells: what the agent is about to tell the buyer). represent is a check only: never an act, never in allowed.", "enum": ["pay", "sign", "commit", "cancel", "share_contact", "share_credentials", "offer", "represent"] },
+    "representation_class": { "description": "A seller's representation classes.", "enum": ["price", "condition", "features", "authenticity", "availability", "delivery_date", "service_scope", "warranty", "refund_terms", "payment_methods", "pickup", "deadline", "address", "other"] },
+    "authority_entry": {
+      "description": "One authority layer a seller's representation relied on, in the shape a typed record's authority_basis takes: task_authority -> the task-authority/v0 in force at its check; user_approval, platform_approval -> an action-approval/v0 of that check.",
+      "type": "object", "additionalProperties": false, "required": ["type", "ref"],
+      "properties": {
+        "type": { "enum": ["task_authority", "user_approval", "platform_approval"] },
+        "ref": { "$ref": "#/$defs/record_ref" },
+        "scope": { "const": "mismatch" }
+      }
+    },
     "outcome_value": { "description": "completed, mismatch or open; or not_selected: the other side was not chosen, and nothing was done on the deal (no action is on record). Every value but open is final at a close.", "enum": ["completed", "mismatch", "open", "not_selected"] },
     "identifier_kind": { "enum": ["payee", "name", "domain", "phone", "email", "relay_address", "profile_id"] },
     "channel": {
@@ -185,7 +196,7 @@
       "type": "object", "additionalProperties": false, "minProperties": 1,
       "properties": { "domain_age_days": { "$ref": "#/$defs/safe_uint" } }
     },
-    "claim": {"description": "A claim: in the clear as {text, source} on a step sealed before claims were committed; from then on its words (text_commitment) and its source note (source_ref_commitment, when given) are salted commitments, and only whose it is (source_kind) and, optionally, what kind of representation it is (class) are in the clear.", "oneOf": [{"type": "object", "additionalProperties": false, "required": ["text", "source"], "properties": {"text": {"$ref": "#/$defs/short_text"}, "source": {"$ref": "#/$defs/ns_token"}}}, {"type": "object", "additionalProperties": false, "required": ["text_commitment", "source_kind"], "properties": {"text_commitment": {"$ref": "#/$defs/hex64"}, "source_kind": {"enum": ["merchant", "agent", "platform", "user", "external"]}, "source_ref_commitment": {"$ref": "#/$defs/hex64"}, "class": {"description": "What kind of representation the claim is, so a page can label it: a seller's representation classes. delivery_promise is valid only on a claim sealed before delivery_date replaced it.", "enum": ["price", "condition", "features", "authenticity", "availability", "delivery_date", "service_scope", "warranty", "refund_terms", "payment_methods", "pickup", "deadline", "address", "other", "delivery_promise"]}}}]},
+    "claim": {"description": "A claim: in the clear as {text, source} on a step sealed before claims were committed; from then on its words (text_commitment) and its source note (source_ref_commitment, when given) are salted commitments, and only whose it is (source_kind) and, optionally, what kind of representation it is (class) are in the clear.", "oneOf": [{"type": "object", "additionalProperties": false, "required": ["text", "source"], "properties": {"text": {"$ref": "#/$defs/short_text"}, "source": {"$ref": "#/$defs/ns_token"}}}, {"type": "object", "additionalProperties": false, "required": ["text_commitment", "source_kind"], "properties": {"text_commitment": {"$ref": "#/$defs/hex64"}, "source_kind": {"enum": ["merchant", "agent", "platform", "user", "external"]}, "source_ref_commitment": {"$ref": "#/$defs/hex64"}, "class": {"description": "What kind of representation the claim is, so a page can label it: a seller's representation classes. delivery_promise is valid only on a claim sealed before delivery_date replaced it.", "enum": ["price", "condition", "features", "authenticity", "availability", "delivery_date", "service_scope", "warranty", "refund_terms", "payment_methods", "pickup", "deadline", "address", "other", "delivery_promise"]}, "authority_basis": {"description": "On a seller's representation under the representation rules (its deal opened with ordered_representations): every authority layer it relied on, in order. [task_authority] alone when the task authority orders its class (a represent check passed, DO); then user_approval when the user approved the represent check of these words (ASK). refs carries authorized_by -> that evaluation or approval.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/authority_entry"}}, "evaluation_ref": {"description": "The action-evaluation/v0 of the represent check the representation relied on.", "$ref": "#/$defs/record_ref"}, "unchecked": {"description": "A representation under the representation rules that nothing authorized, sealed anyway: the words may already have been said. rule says why.", "const": true}, "rule": {"$ref": "#/$defs/token"}}, "dependentRequired": {"authority_basis": ["evaluation_ref"], "evaluation_ref": ["authority_basis"], "unchecked": ["rule"], "rule": ["unchecked"]}, "not": {"required": ["authority_basis", "unchecked"]}}]},
     "difference": {
       "type": "object", "additionalProperties": false, "required": ["question", "rule"],
       "properties": {
@@ -254,7 +265,8 @@
         "asked": { "$ref": "#/$defs/terms" },
         "max_total_minor": { "$ref": "#/$defs/safe_uint" },
         "bounds_commitment": { "description": "The salted commitment (commit_alg) to the commercial-bounds/v0 document holding the lowest total the user will take (min_total_minor). The floor itself is never in a record; the user's own copy carries its opening.", "$ref": "#/$defs/hex64" },
-        "allowed": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/point_of_no_return" } }
+        "allowed": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/point_of_no_return" } },
+        "ordered_representations": { "description": "Where the user sells: the representation classes the user's words order the agent to state. A claim of one needs no approval; no offer, commit, sign, pay or share goes ahead before one is stated. Present (empty when nothing is ordered) on a seller's deal opened since it was recorded.", "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/representation_class" } }
       }
     },
     "body_message": {
@@ -390,8 +402,14 @@
       "type": "object", "additionalProperties": false,
       "required": ["action"],
       "dependentRequired": { "action_class": ["taxonomy_version"], "taxonomy_version": ["action_class"], "spend_authorized_minor": ["authorized_max_minor", "spend_minor"], "reverses_ref": ["direction", "amount_minor"] },
+      "if": { "properties": { "action": { "const": "represent" } } }, "then": { "required": ["representing"] }, "else": { "not": { "required": ["representing"] } },
       "properties": {
-        "action": { "$ref": "#/$defs/point_of_no_return" },
+        "action": { "$ref": "#/$defs/check_action" },
+        "representing": {
+          "description": "On a represent check: what the agent is about to tell the buyer. Its class in the clear; its exact words, and where they will be said when given, as salted commitments. An approval covers a claim of exactly these words.",
+          "type": "object", "additionalProperties": false, "required": ["class", "text_commitment"],
+          "properties": { "class": { "$ref": "#/$defs/representation_class" }, "text_commitment": { "$ref": "#/$defs/hex64" }, "source_ref_commitment": { "$ref": "#/$defs/hex64" } }
+        },
         "item_ref_commitment": { "description": "On a check of a sale's thread: the sale's item reference, committed under this check's own nonce, so it is equal across the sale's threads only to a holder of the openings.", "$ref": "#/$defs/hex64" },
         "action_class": { "$ref": "#/$defs/action_class" },
         "taxonomy_version": { "$ref": "#/$defs/taxonomy_version" },
@@ -506,7 +524,8 @@
       "properties": {
         "max_total_minor": { "type": "integer", "minimum": 0 },
         "bounds_commitment": { "description": "The floor in this version, as the bounds_commitment the intent that stated it sealed.", "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "allowed": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+        "allowed": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "ordered_representations": { "type": "array", "items": { "$ref": "#/$defs/representation_class" }, "uniqueItems": true }
       }
     },
     "body_approval": {

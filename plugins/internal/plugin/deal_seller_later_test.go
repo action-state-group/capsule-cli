@@ -30,8 +30,13 @@ func sellerLaterDeal(t *testing.T) (dealID, closeID string, dueStep int64) {
 	note := func(args ...string) map[string]any {
 		return dealRun(t, append([]string{"note", "--deal", dealID}, args...)...)
 	}
-	note("--kind", "claim", "--input", sellerLaterFile("claim-condition.json"))
-	note("--kind", "claim", "--input", sellerLaterFile("claim-refund-terms.json"))
+	// The condition the user ordered stated (DO), and the refund terms they
+	// approved in their words (ASK).
+	condition := dealRun(t, "check", "--deal", dealID, "--input", sellerLaterFile("represent-condition.json"))
+	require.Equal(t, "pass", condition["verdict"])
+	note("--kind", "claim", "--check", condition["check_id"].(string), "--input", sellerLaterFile("claim-condition.json"))
+	refund := approved(t, dealID, dealRun(t, "check", "--deal", dealID, "--input", sellerLaterFile("represent-refund-terms.json")))
+	note("--kind", "claim", "--check", refund, "--input", sellerLaterFile("claim-refund-terms.json"))
 	offer := approved(t, dealID, dealRun(t, "check", "--deal", dealID, "--input", sellerLaterFile("check-offer.json")))
 	require.Equal(t, false, note("--kind", "act", "--input", sellerLaterFile("act-offer.json"))["unchecked"])
 	note("--kind", "acceptance", "--check", offer, "--words", "Deal, 1900 works for me", "--channel", "marketplace")
