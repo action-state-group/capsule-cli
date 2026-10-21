@@ -124,9 +124,18 @@ portable_checks() {
   check "the page shows what the proposed action says ($line)" contains page.html.dom "<span>$line</span>"
   line=$(record_line records.json action-evaluation/v0 'if .disposition == "DO" and .findings == [] then "Check: no differences" else "(evaluated \(.disposition))" end')
   check "the page shows what the evaluation says ($line)" contains page.html.dom "<span>$line</span>"
-  line=$(record_line records.json action-record/v0 '"Did: \(.action) \(money) by \(.rail)"')
-  check "the page shows what the action record says was done ($line)" contains page.html.dom "<span>$line</span>"
+  # An act is its own item: the page says it once, as the item's line
+  # (capsule-cli#341), and that line says what the action record says.
+  local did
+  did=$(grep -o '<details data-self="[0-9a-f]*"><summary>[^<]*</summary>' page.html.dom | sed 's/.*<summary>//; s/<\/summary>//')
+  line=$(record_line records.json action-record/v0 '"Did: \(.action) \(money)"')
+  check "the page's line for the act starts with what the action record says ($line)" contains_text "$did" "$line "
+  line=$(record_line records.json action-record/v0 '" by \(.rail)"')
+  check "and says how it was paid ($line)" contains_text "$did" "$line"
 }
+
+# contains_text TEXT PART: TEXT holds PART.
+contains_text() { [[ -n "$1" && "$1" == *"$2"* ]]; }
 
 # record_line RECORDS TYPE FILTER: FILTER (jq) on the body of the one record
 # of TYPE, with money its amount as the page writes it ($6.27); a stand-in
@@ -249,6 +258,6 @@ jq -c '(.[] | select(.type == "action-record/v0") | .body.amount_minor) |= 6270'
 check "broken-records: the records differ" differs records.json broken-records.json
 broken broken-records recipient.html broken-records.json \
   "the exported records are the payloads the bundle's records commit to, in order" \
-  "the page shows what the action record says was done (Did: pay \$62.70 by card)"
+  "the page's line for the act starts with what the action record says (Did: pay \$62.70)"
 
 exit "$fail"

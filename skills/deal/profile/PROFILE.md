@@ -834,7 +834,8 @@ At every check, after the `check` record is sealed:
   - `deny` adds `rules_deny` differences, and the verdict is `deny` with no way to proceed.
   - Each difference's words follow its own finding's `disposition`: under a `deny`, a rule
     that only asks reads "Your rules ask for approval", and one with no disposition reads
-    "Flagged by your rules", never "Not allowed".
+    "Flagged by your rules", unless it is the only failing rule under the deny, which reads
+    "Not allowed". Under an `escalate` nothing reads "Not allowed".
   - A checker that is configured but changed since it was pinned, refused the input, timed
     out, printed anything else, or reported a `definition_digest` that is not pinned
     adds a `rules_not_checked` difference naming why, and the check pauses.

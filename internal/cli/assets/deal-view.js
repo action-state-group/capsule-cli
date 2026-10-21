@@ -129,7 +129,7 @@ const dealStandaloneReport = async (context, bundle, x, sealedId) => {
 const dealViewModel = async (context) => {
   const page = globalThis.capsulectlDealPage || {};
   // The context's own frozen copy of the bundle, read only for what no
-  // record seals: the extension blocks and the checkpoint's witnesses.
+  // record seals: the extension blocks.
   const bundle = context.bundle;
   const payload = (id) => EvidenceGraph.verifiedPayload(context, id, "agent_input");
   // In the verifier's disclosure order, as the context resolved each one.
@@ -242,7 +242,6 @@ const DEAL_VIEW_CSS = `#deal { --deal-warn: #9a3b00; --deal-ok: #1d6b35; line-he
 #deal .deal-rung { font-weight: 600; margin: 0.2rem 0; }
 #deal .deal-scope { font-weight: 600; margin: 0.2rem 0 0.6rem; }
 #deal .deal-claims { border: none; padding: 0; }
-#deal .deal-verify { background: transparent; border: 1px solid var(--aac-line); border-radius: 4px; padding: 6px 8px; overflow-x: auto; font-size: 0.85rem; user-select: all; }
 `;
 
 const dealViewRender = (model, regions) => {
@@ -270,9 +269,9 @@ const dealViewRender = (model, regions) => {
   const recorded = new Set(model.recorded);
   const byId = new Map((report.steps || []).map((s) => [s.capsule_id, s]));
 
-  // The header, on the face of every copy: the scope, the assurance rung read
-  // from what the file itself carries, what the "did" part rests on, what
-  // the receipt does not claim, and the command that checks it.
+  // The header, on the face of every copy: the scope, the countersign line,
+  // what the "did" part rests on and what the receipt does not claim. What
+  // was verified is the core's to say, in its section below (capsule-cli#341).
   const header = el("section", undefined, "deal-assurance");
   // What the deal's text rests on, said first, on every copy: sealed with
   // the page and checked unchanged, or (a bundle written before reports were
@@ -331,20 +330,29 @@ const dealViewRender = (model, regions) => {
   }
 
   const recordOk = (id) => recorded.has(id);
+  // Today as the reader's own calendar has it (YYYY-MM-DD, to compare with
+  // the report's dates).
+  const localDay = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
   // Times as the reader's own clock shows them (capsule-cli#341); a value
   // that is not a time is shown as written.
   const local = (at) => {
     const t = Date.parse(at);
     return Number.isNaN(t) ? at : new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
   };
-  // Each step is listed once, under the first item read from it: an
-  // approval is the check's, not again the act's (capsule-cli#341).
-  const listed = new Set();
+  // In "What the agent did", each step is listed once, under the first item
+  // read from it: an approval is the check's, not again the act's
+  // (capsule-cli#341). The other sections keep every step they cite.
+  let listed;
   const steps = (ids) => {
     const list = el("ol", undefined, "deal-steps");
     ids.forEach((id) => {
-      if (listed.has(id)) return;
-      listed.add(id);
+      if (listed) {
+        if (listed.has(id)) return;
+        listed.add(id);
+      }
       const step = byId.get(id);
       const li = el("li");
       if (step && matched.has(id)) {
@@ -365,8 +373,12 @@ const dealViewRender = (model, regions) => {
   const item = (text, ids, cls, self) => {
     const d = el("details", undefined, cls);
     if (typeof self === "string" && self) {
-      if (!matched.has(self)) text += " · step not verified in this report";
-      listed.add(self);
+      const step = byId.get(self);
+      const withheld = shared && step && step.withheld && recordOk(self);
+      if (!matched.has(self) && !withheld) text += " · step not verified in this report";
+      else if (withheld) text += " · contents withheld";
+      if (listed) listed.add(self);
+      d.dataset.self = self;
     }
     d.append(el("summary", text), steps(ids));
     return d;
@@ -426,7 +438,9 @@ const dealViewRender = (model, regions) => {
   host.append(el("h2", "What the agent did"));
   const did = report.did || [];
   if (did.length === 0) host.append(el("p", "Nothing yet.", "deal-note"));
+  listed = new Set();
   did.forEach((i) => host.append(item(typeof i.at === "string" && i.at ? `${local(i.at)} · ${i.text}` : i.text, i.steps, undefined, i.self)));
+  listed = undefined;
   // What the sealed acts moved, by direction: a pay and its reversal net to zero.
   if (report.money && typeof report.money.text === "string") host.append(el("p", report.money.text));
 
@@ -529,7 +543,7 @@ const dealViewRender = (model, regions) => {
       // A report off the deal's log is as of its checkpoint: a date that has
       // passed since, the page says so when opened, apart from the report.
       const date = d.cancel_by || d.due_by || "";
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDay();
       if (model.standalone && live && date !== "" && date < today) {
         li.append(el("span", ` Not part of the report, worked out by this page when you opened it: this date has passed as of today, ${today}.`, "deal-note"));
       }
@@ -622,7 +636,7 @@ const dealViewRender = (model, regions) => {
 };
 
 EvidenceGraph.registerPresentation({
-  manifest: {"spec_version": "aac.presentation-manifest/v0", "id": "capsulectl.deal-view/v0", "presentation_api": "aac.presentation-api/v0", "runtime_min": "0.1.0", "trust_class": "trusted-executable", "requires": {"bundle_kind": "evidence-bundle/v2", "extensions": {"required": ["x-deal-v0"]}}, "forbids": {"extensions": ["x-history-selection/v0"], "profiles": ["spec_version:report/v1", "result_version:evidence-result-v0", "spec_version:evaluation-summary/v1"]}, "audiences": ["*"], "formats": ["html"], "fallback": false, "priority": 1, "executable": {"carrier": "module-slot", "script_sha256": "0000000000000000000000000000000000000000000000000000000000000000", "style_sha256": ["033433c0f3b97d682e7b81a8309dd868a96b0ea91f18997b33e097686e7e74da"]}},
+  manifest: {"spec_version": "aac.presentation-manifest/v0", "id": "capsulectl.deal-view/v0", "presentation_api": "aac.presentation-api/v0", "runtime_min": "0.1.0", "trust_class": "trusted-executable", "requires": {"bundle_kind": "evidence-bundle/v2", "extensions": {"required": ["x-deal-v0"]}}, "forbids": {"extensions": ["x-history-selection/v0"], "profiles": ["spec_version:report/v1", "result_version:evidence-result-v0", "spec_version:evaluation-summary/v1"]}, "audiences": ["*"], "formats": ["html"], "fallback": false, "priority": 1, "executable": {"carrier": "module-slot", "script_sha256": "0000000000000000000000000000000000000000000000000000000000000000", "style_sha256": ["a3c7fcada4ac7c37b2c4816960602cd45af2c0afa18e9a50f036fa636d8ddb98"]}},
   canRender: dealViewVerified,
   buildModel: dealViewModel,
   render: dealViewRender,

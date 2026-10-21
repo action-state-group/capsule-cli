@@ -572,3 +572,28 @@ func TestTheTierAndGradeAreRecordedAndShown(t *testing.T) {
 		assert.Error(t, err, name)
 	}
 }
+
+// A checker's disposition is sealed with its finding; an older checker
+// that does not state one seals none (capsule-cli#341).
+func TestADispositionIsSealedWithItsFinding(t *testing.T) {
+	for name, finding := range map[string]string{
+		"stated":     `{"id":"per-purchase","check":"caps/1","verdict":"fail","disposition":"ask","reason":"over","limit":2500,"value":55880}`,
+		"not stated": denyFinding,
+	} {
+		t.Run(name, func(t *testing.T) {
+			id := stickerDeal(t, "card", false)
+			pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules", checkerPrints("escalate", finding))}})
+			check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
+			require.Equal(t, "pause", check["verdict"])
+			path := filepath.Join(t.TempDir(), "export.json")
+			dealRun(t, "export", "--deal", id, "--output", path)
+			raw, err := os.ReadFile(path)
+			require.NoError(t, err)
+			if name == "stated" {
+				assert.Contains(t, string(raw), `"disposition":"ask"`)
+			} else {
+				assert.NotContains(t, string(raw), `"disposition"`)
+			}
+		})
+	}
+}

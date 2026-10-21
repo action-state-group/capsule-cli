@@ -2168,6 +2168,15 @@ func buildDealReport(events []sealedEvent) dealReport {
 				if d.Question == "asked" && d.Rule != "agent_picked" || d.Text == "" {
 					continue
 				}
+				// What the user approved on this check, in their own answer,
+				// is no anomaly of the agent's (capsule-cli#341). A signal
+				// from the other side (a changed payee, a code asked for)
+				// stays one even when the user went ahead. An answer that was
+				// not applied (stale, already answered) or a hold changes
+				// nothing.
+				if side, _ := pauseCauseKind(d.Rule); userApproved[se.CapsuleID] && side == "agent" {
+					continue
+				}
 				var steps []string
 				key := d.Rule + "/" + d.Field
 				for _, i := range pending[key] {
@@ -2175,13 +2184,6 @@ func buildDealReport(events []sealedEvent) dealReport {
 					folded[i] = true
 				}
 				delete(pending, key)
-				// What the user approved on this check, in their own answer,
-				// is no anomaly: it is the check's line, approved
-				// (capsule-cli#341). An answer that was not applied (stale,
-				// already answered) or a hold leaves it one.
-				if userApproved[se.CapsuleID] {
-					continue
-				}
 				steps = append(steps, e.Check.Snapshot, se.CapsuleID)
 				if i, ok := causes[d.Text]; ok {
 					r.Anomalies[i].Steps = appendNew(r.Anomalies[i].Steps, steps...)

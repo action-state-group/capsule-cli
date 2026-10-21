@@ -45,6 +45,9 @@ func TestPresentationDealStatesNoVerificationOfItsOwn(t *testing.T) {
 			for _, own := range []string{"Witnessed through", "Not witnessed", "Sealed by my agent", "Checked only by capsulectl verify", "signature on every record"} {
 				assert.NotContains(t, got.Text, own, name)
 			}
+			// A withheld step on a shared copy is verified, never "not
+			// verified".
+			assert.NotContains(t, got.Text, "step not verified", name)
 			// One line per event: an act's own step is not said again under
 			// it, and an approval is listed once, under its check.
 			assert.NotContains(t, got.Text, "done, as checked", name)

@@ -447,3 +447,17 @@ func TestApprovedItemsAreNotAnomalies(t *testing.T) {
 	}
 	assert.Equal(t, act["capsule_id"], self, "an act names its own step")
 }
+
+// A signal from the other side stays an anomaly even when the user went
+// ahead: approving a check clears the agent's causes only.
+func TestACounterpartySignalOutlivesTheApproval(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"who":{"payee":"sticker-payouts-2"},"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
+	require.Equal(t, "pause", pay["verdict"])
+	_, err := answer(t, id, pay["check_id"].(string), "yes, the new payee is fine", shownCard(t, pay["card"].(string)))
+	require.NoError(t, err)
+	raw, err := json.Marshal(dealRun(t, "report", "--deal", id)["anomalies"])
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "changed_identifier", "a changed payee stays on the receipt after the user said yes")
+}

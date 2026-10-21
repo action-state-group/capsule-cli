@@ -377,7 +377,7 @@ func rulesDifferences(r *dealRules) []dealDifference {
 	}
 	failing := 0
 	for _, f := range r.Findings {
-		if !isDeclaredRule(f) && (f.Verdict == "fail" || f.Verdict == "not_evaluable") {
+		if !isDeclaredRule(f) && f.Verdict == "fail" {
 			failing++
 		}
 	}
@@ -404,7 +404,7 @@ func rulesDifferences(r *dealRules) []dealDifference {
 			rule, text = "rules_not_evaluable", "Your rules were not fully checked: "+text
 		case f.Verdict == "not_evaluable":
 			text = "Your rules were not fully checked: " + text
-		case f.Disposition == "deny", r.Verdict == "deny" && f.Disposition == "" && failing == 1:
+		case r.Verdict == "deny" && (f.Disposition == "deny" || f.Disposition == "" && failing == 1):
 			// One failing rule under a deny is the rule that denies.
 			text = "Not allowed by your rules: " + text
 		case f.Disposition == "ask", r.Verdict == "escalate":

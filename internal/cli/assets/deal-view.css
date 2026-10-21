@@ -21,4 +21,3 @@
 #deal .deal-rung { font-weight: 600; margin: 0.2rem 0; }
 #deal .deal-scope { font-weight: 600; margin: 0.2rem 0 0.6rem; }
 #deal .deal-claims { border: none; padding: 0; }
-#deal .deal-verify { background: transparent; border: 1px solid var(--aac-line); border-radius: 4px; padding: 6px 8px; overflow-x: auto; font-size: 0.85rem; user-select: all; }

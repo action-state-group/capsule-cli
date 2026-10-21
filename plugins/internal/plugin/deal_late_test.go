@@ -192,7 +192,7 @@ func TestDealPurchaseLifecycleReadsHonestly(t *testing.T) {
 
 	at0 := lifecycle()
 	assert.Equal(t, "open", at0["state"])
-	assert.Equal(t, "Open: waiting for the merchant's receipt. It is expected to close by 2026-10-17.", at0["text"])
+	assert.Equal(t, "Open: waiting for the merchant's receipt. It is expected to close by Oct 17, 2026.", at0["text"])
 	assert.Len(t, openDeals(), 1)
 
 	setDealClock(t, "2026-10-03T22:00:00Z")
@@ -215,7 +215,7 @@ func TestDealPurchaseLifecycleReadsHonestly(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(cal), "SUMMARY:Close deal "+dealID+"? (open\\, expected to close by 2026-10-17)")
 	late := lifecycle()
-	assert.Equal(t, "Open: the merchant's email is sealed; no close is sealed on this deal yet. It was expected to close by 2026-10-17, which has passed (as of 2026-10-24T09:00:00Z).", late["text"])
+	assert.Equal(t, "Open: the merchant's email is sealed; no close is sealed on this deal yet. It was expected to close by Oct 17, 2026, which has passed (as of Oct 24, 2026).", late["text"])
 	assertStatesHoldingsOnly(t, late["text"].(string))
 
 	// Closed at delivery, the deal leaves the listing.
