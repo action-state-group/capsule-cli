@@ -142,6 +142,9 @@ func TestAnOrderedRepresentationNeedsNoApproval(t *testing.T) {
 		assert.Equal(t, digestOfType(t, thread, cli.TypeActionEvaluation), r["body"].(map[string]any)["evaluation_ref"].(map[string]any)["digest"])
 		assert.Equal(t, digestOfType(t, thread, cli.TypeActionEvaluation), relDigest(r, "authorized_by"))
 		assert.NotContains(t, r["body"], "unchecked")
+		checked := recordsOfType(t, thread, cli.TypeProposedAction)
+		representing := checked[len(checked)-1]["body"].(map[string]any)["representing"].(map[string]any)
+		assert.Equal(t, representing["text_commitment"], r["body"].(map[string]any)["text_commitment"], "sealed under the check's nonce: the words said are the words checked")
 		_, export := exportRecords(t, thread)
 		checkProfile(t, export)
 	}
@@ -156,7 +159,7 @@ func TestARepresentationOutsideTheAuthorityNeedsTheUsersApproval(t *testing.T) {
 	require.Equal(t, "pause", ck["verdict"])
 	assert.True(t, ruleOf(t, ck, ruleRepresentationOutside))
 	assert.Contains(t, optionIDs(ck), "proceed")
-	assert.Contains(t, ck["card"], `about the warranty: "I will cover the gears for 30 days"`)
+	assert.Contains(t, ck["card"], `Tell Example Buyer A (buyer-a.example) about the warranty: "I will cover the gears for 30 days"`)
 	_, err := answerCheck(t, a, ck["check_id"].(string), "yes, offer the 30 days on the gears", ck["card"].(string))
 	require.NoError(t, err)
 	claim := claimWith(t, a, ck["check_id"].(string), repFile("claim-warranty.json"))
@@ -435,6 +438,8 @@ func TestRepresentationInputsAreRefused(t *testing.T) {
 	for name, args := range map[string][]string{
 		"an unclassed agent claim":              {"note", "--deal", id, "--kind", "claim", "--input", writeJSON(t, `{"text":"Lovely bike","source_kind":"agent"}`)},
 		"an outside claim with no source":       {"note", "--deal", id, "--kind", "claim", "--input", writeJSON(t, `{"text":"Bikes like this sell fast","source_kind":"external"}`)},
+		"a buyer's claim with no source":        {"note", "--deal", id, "--kind", "claim", "--input", writeJSON(t, `{"text":"The gears are covered","source_kind":"merchant"}`)},
+		"a platform claim with no source":       {"note", "--deal", id, "--kind", "claim", "--input", writeJSON(t, `{"text":"The gears are covered","source_kind":"platform"}`)},
 		"--check on someone else's claim":       {"note", "--deal", id, "--kind", "claim", "--check", "x", "--input", writeJSON(t, `{"text":"I want it","source_kind":"merchant","source":"buyer_message"}`)},
 		"represent on a buyer's deal":           {"check", "--deal", buyer, "--input", repFile("represent-condition.json")},
 		"represent with an amount":              {"check", "--deal", id, "--input", writeJSON(t, `{"action":"represent","amount_minor":5,"representing":{"class":"price","text":"It is 1900"}}`)},
@@ -552,6 +557,9 @@ func TestTheProfileCheckerHoldsTheRepresentationRules(t *testing.T) {
 	checkProfileRejects(t, last(func(body, block map[string]any) {
 		delete(block, "refs")
 	}), "exactly one 'authorized_by' ref")
+	checkProfileRejects(t, last(func(body, _ map[string]any) {
+		body["text_commitment"] = strings.Repeat("ab", 32)
+	}), "the representation's words differ from the ones checked")
 
 	// An unchecked representation names nothing that authorized it.
 	claimWith(t, a, "", repFile("claim-warranty.json"))
@@ -560,4 +568,41 @@ func TestTheProfileCheckerHoldsTheRepresentationRules(t *testing.T) {
 	checkProfileRejects(t, last(func(_, block map[string]any) {
 		block["refs"] = []any{map[string]any{"rel": "authorized_by", "type": "deal-record", "digest_alg": "SHA-256", "digest": recordDigest(t, records[len(records)-2])}}
 	}), "names nothing that authorized it")
+}
+
+// A change of details after a represent check leaves the claim unchecked, on
+// a DO and on an approved ASK alike, and the chain still verifies.
+func TestAChangeAfterARepresentCheckLeavesTheClaimUnchecked(t *testing.T) {
+	for name, input := range map[string]string{"ordered": "represent-condition.json", "approved": "represent-warranty.json"} {
+		t.Run(name, func(t *testing.T) {
+			dealFixture(t)
+			_, a, _ := repSale(t)
+			ck := represent(t, a, repFile(input))
+			if ck["verdict"] != "pass" {
+				_, err := answerCheck(t, a, ck["check_id"].(string), "yes, say that", ck["card"].(string))
+				require.NoError(t, err)
+			}
+			dealRun(t, "note", "--deal", a, "--kind", "change", "--input", writeJSON(t, `{"source":"buyer_message","who":{"name":"Another Buyer"}}`))
+			claim := "claim-condition.json"
+			if name == "approved" {
+				claim = "claim-warranty.json"
+			}
+			out := claimWith(t, a, ck["check_id"].(string), repFile(claim))
+			assert.Equal(t, true, out["unchecked"])
+			assert.Equal(t, "changed_after_check", out["rule"])
+			_, export := exportRecords(t, a)
+			checkProfile(t, export)
+		})
+	}
+}
+
+// Approving what the agent tells the buyer approves those words only: a
+// change of price before it is still a change at the next offer.
+func TestApprovingARepresentationAcceptsNoChangeOfTerms(t *testing.T) {
+	dealFixture(t)
+	id := sellerRepOpen(t, `[]`)
+	dealRun(t, "note", "--deal", id, "--kind", "change", "--input", writeJSON(t, `{"source":"buyer_message","terms":{"price_minor":150000}}`))
+	approvedWarranty(t, id)
+	offer := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"offer","amount_minor":150000,"terms":{"item":"example bicycle","quantity":1,"price_minor":150000}}`))
+	assert.True(t, ruleOf(t, offer, "terms_changed") || ruleOf(t, offer, "price_changed"), "the price change still needs its own answer: %v", offer["differences"])
 }

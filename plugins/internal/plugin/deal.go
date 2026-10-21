@@ -794,6 +794,7 @@ func (s *dealSession) fixStep(dealID string, events []sealedEvent, ev dealEvent)
 		}
 		ev.Nonces[name] = hex.EncodeToString(nonce)
 	}
+	shareCheckedNonces(events, &ev)
 	return ev, nil
 }
 

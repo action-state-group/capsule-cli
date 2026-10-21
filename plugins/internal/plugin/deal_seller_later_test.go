@@ -143,6 +143,11 @@ func TestASellersLaterEvidenceChainsToTheCloseAndRenders(t *testing.T) {
 	require.Len(t, all, 1)
 	assert.Equal(t, "resolved", all[0].(map[string]any)["status"])
 
+	// The refund terms the user approved are no anomaly of the agent's.
+	for _, a := range report["anomalies"].([]any) {
+		assert.NotEqual(t, "agent", a.(map[string]any)["side"], "an approved statement is not an anomaly: %v", a)
+	}
+
 	// The seller's Receipt lists both under the close, in order, each with
 	// its tier.
 	life := report["lifecycle"].(map[string]any)

@@ -120,7 +120,7 @@ func (s dealState) missingRepresentations() []string {
 func evaluateRepresentation(r *dealCheckResult, s dealState, snap dealSnapshot, add func(q, rule, field, text string)) {
 	c := snap.Representing.Class
 	if !slices.Contains(s.ordered(), c) {
-		add("asked", ruleRepresentationOutside, "representation", "You didn't ask me to tell the buyer about the "+classWord(c)+": I need your OK on these exact words")
+		add("asked", ruleRepresentationOutside, "representation", "You didn't ask me to tell the buyer about the "+classWord(c)+". I need your OK on these exact words")
 	}
 }
 
@@ -172,8 +172,8 @@ func checkSellerClaim(events []sealedEvent, c *dealClaim) error {
 	switch {
 	case c.SourceKind == "agent" && c.Class == "":
 		return cli.InputError(`a claim the agent makes to the buyer names its class: one of ` + strings.Join(dealClaimClassList, ", ") + ` ("other" for anything else)`)
-	case c.SourceKind == "external" && c.Source == "":
-		return cli.InputError(`a claim from someone outside the deal names where it was read (source): without it, it cannot be told from the agent's own`)
+	case (c.SourceKind == "external" || c.SourceKind == "merchant" || c.SourceKind == "platform") && c.Source == "":
+		return cli.InputError(`a claim that is not the agent's or the user's names where it was read (source): without it, it cannot be told from the agent's own`)
 	case c.SourceKind != "agent" && c.Check != "":
 		return cli.InputError("--check goes with the agent's own claim (source_kind agent)")
 	}
@@ -214,6 +214,11 @@ func authorizeClaim(events []sealedEvent, c dealClaim, now time.Time) (authorize
 	if ck.Verdict == "deny" {
 		return "", "the check denied it", "denied"
 	}
+	for _, later := range events[at+1:] {
+		if changesDetails(later.Event) {
+			return "", "details changed after the check: check again", "changed_after_check"
+		}
+	}
 	if ck.ValidUntil != "" {
 		if until, err := time.Parse(time.RFC3339, ck.ValidUntil); err == nil && now.After(until) {
 			return "", "the check went stale at " + ck.ValidUntil + ": check again before saying it", "check_expired"
@@ -245,6 +250,32 @@ func authorizeClaim(events []sealedEvent, c dealClaim, now time.Time) (authorize
 		return later.CapsuleID, "", ""
 	}
 	return "", "the check asked and there is no sealed approval", "not_approved"
+}
+
+// shareCheckedNonces seals an authorized representation's words under the
+// nonces its represent check sealed them with, so its text_commitment (and
+// source_ref_commitment) equals the check's: a verifier sees that the words
+// said are the words checked, without the words.
+func shareCheckedNonces(events []sealedEvent, ev *dealEvent) {
+	c := ev.Claim
+	if c == nil || c.AuthorizedBy == "" || c.Check == "" {
+		return
+	}
+	var snapshot string
+	for _, se := range events {
+		if se.CapsuleID == c.Check && se.Event.Check != nil {
+			snapshot = se.Event.Check.Snapshot
+		}
+	}
+	for _, se := range events {
+		if se.CapsuleID != snapshot || se.Event.Snapshot == nil || se.Event.Snapshot.Representing == nil {
+			continue
+		}
+		ev.Nonces["claim_text"] = se.Event.Nonces["representing_text"]
+		if c.Source != "" {
+			ev.Nonces["claim_source"] = se.Event.Nonces["representing_source"]
+		}
+	}
 }
 
 // representationHold is, for an act or a disclosure about to be noted, why

@@ -12,7 +12,8 @@ keep the old ones.
   this field: the representation classes the user's words order the agent to
   state ("tell them about the scratch" is `condition`). It is empty when
   nothing is ordered. Adding or dropping a class is a proposal that applies
-  only on the user's `confirm_limits`.
+  only on the user's `confirm_limits`. On a sale, the order is fixed for all
+  its threads.
 - **Added: the `represent` check.** It runs before the agent tells the buyer
   anything: `deal check {"action": "represent", "representing": {"class",
   "text"}}`. An ordered class passes, and its claim is sealed with
@@ -20,7 +21,11 @@ keep the old ones.
   and only the user's approval of those exact words authorizes the claim. The
   claim is noted with `deal note --kind claim --check CHECK_ID`.
 - **Added: unchecked claims.** An agent claim that nothing authorized is
-  still sealed, with `unchecked: true` and the rule why.
+  still sealed, with `unchecked: true` and the rule why. A change of details
+  after the check leaves it unchecked too (`changed_after_check`).
+- **Added: the words are bound.** An authorized claim is sealed under its
+  check's nonces, so its commitments equal the checked ones. Approving the
+  words approves no change of terms.
 - **Added: ordered statements come first.** While an ordered class is
   unstated in a deal (on a sale, in each thread), an offer, commit, sign, pay
   or share check asks with no way to proceed. A cancel is never held.
@@ -30,7 +35,7 @@ keep the old ones.
   the confirmed `task_authority_record`.
 - **Breaking:** where these rules apply, these are refused:
   - an agent claim with no class;
-  - an `external` claim with no `source`;
+  - a `merchant`, `platform` or `external` claim with no `source`;
   - agent claims in a seller's `deal open` input. Note them after open,
     each against a `represent` check.
 - **Changed (fixtures):** presentation goldens 8 and 9 are rebuilt with

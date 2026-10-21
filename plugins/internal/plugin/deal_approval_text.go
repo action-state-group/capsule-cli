@@ -95,7 +95,11 @@ func approvalHeadline(state dealState, snap dealSnapshot) string {
 	// A representation: the exact words, and to whom, are what the user
 	// approves.
 	if rp := snap.Representing; snap.Action == representAction && rp != nil {
-		line := "Tell " + strings.TrimSpace(to) + ", about the " + classWord(rp.Class) + ": \"" + rp.Text + "\""
+		buyer := strings.TrimSpace(to)
+		if buyer == "" {
+			buyer = "the buyer"
+		}
+		line := "Tell " + buyer + " about the " + classWord(rp.Class) + ": \"" + rp.Text + "\""
 		if state.open.Demo {
 			line = "DEMO · " + line
 		}

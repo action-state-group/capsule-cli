@@ -550,7 +550,9 @@ When you sell, label each thing you tell the buyer with its `class`: one of
 `payment_methods`, `pickup`, `deadline`, `address` or `other`. Any other
 class is refused, and so is a claim of yours with no class.
 
-When you sell, check before you tell the buyer anything about the sale:
+When you sell, check before you tell the buyer anything about the sale. If
+`deal check` answers that the deal opened before representations were
+checked, note your claims as before, with no `--check`.
 
 1. Run `deal check` with `{"action": "represent", "representing": {"class":
    "condition", "text": "<the exact words you will say>"}}`.
@@ -565,9 +567,14 @@ Every other class asks the user for these exact words.
 
 State each ordered class before any offer, commit, sign, payment or share in
 this deal. On a sale, state it in every buyer's thread. Until you do, those
-checks ask with no way to proceed. The only ways on are to state it, or for
-the user to change what they asked: an intent note with new
-`ordered_representations`, which applies only on their `confirm_limits`.
+checks ask with no way to proceed. The only ways on are to state it, or, on
+a deal that is not a sale, for the user to change what they asked: an intent
+note with new `ordered_representations`, which applies only on their
+`confirm_limits`.
+
+On a sale, what the user ordered is fixed for all its threads. If they no
+longer want it said, tell them that no thread can go ahead without it, and do
+not offer, commit or share.
 
 Words you say without such a check are still sealed, marked as said without
 the user's authority. Never do that on purpose.

@@ -974,8 +974,14 @@ def check_chain(records):
                     jt = one("authorized_by", ("approval", "verdict"))
                     jv, ja, chk = authorize_typed(jt, "represent", "representation")
                     verify_basis(jv, ja, None)
-                    if chk["body"].get("representing", {}).get("class") != body["class"]:
+                    rep = chk["body"].get("representing", {})
+                    if rep.get("class") != body["class"]:
                         fail(i, "the representation's class differs from the one checked")
+                    # Sealed under the check's own nonces: equal commitments
+                    # mean the words said are the words checked.
+                    if rep.get("text_commitment") != body["text_commitment"] or \
+                            rep.get("source_ref_commitment") != body.get("source_ref_commitment"):
+                        fail(i, "the representation's words differ from the ones checked")
                     if task_at_verdict.get(jv) != task_idx:
                         fail(i, "the task authority changed after the check: the representation needs a new check")
                     if ja is None and body["class"] not in (records[task_idx]["body"].get("ordered_representations") or []):

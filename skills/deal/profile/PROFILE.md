@@ -655,14 +655,18 @@ A verifier holding one deal's records in `seq` order checks:
       authorizes the claim (`[task_authority, user_approval]`, then any platform approvals, as on
       an action).
     - Authorization holds only when all of these are true:
-      - the claim's class equals the checked one, and its words are the checked words;
+      - the claim's class equals the checked one, and its words are the checked words. The claim
+        is sealed under the check's own nonces, so its `text_commitment` (and
+        `source_ref_commitment`) equals the check's `representing` ones;
+      - no `detail_change`, and no `message` or `evidence` carrying `counterparty` identifiers or
+        `counterparty_facts`, is sealed between the check and the claim;
       - the check is unused (one check or approval covers one claim, action or disclosure);
       - the check is still within its `valid_until`;
       - the task authority in force is the one the evaluation names.
     - A claim nothing authorized is still sealed, since the words may already have been said,
       with `unchecked: true` and its rule:
       - `no_check`, `not_approved`, `denied` or `approval_used`;
-      - `differs_from_check`, `authority_changed` or `check_expired`.
+      - `differs_from_check`, `changed_after_check`, `authority_changed` or `check_expired`.
     - `represent` is never an `action` and never in `allowed`.
     - The list changes only by the user's `confirm_limits` of an `intent` that proposes another
       one. Adding a class and dropping one are both proposals.
@@ -671,8 +675,11 @@ A verifier holding one deal's records in `seq` order checks:
       finding `required_representation_missing` and no `proceed` option. No transaction approval
       waives it. That holds whenever the step is noted too: such an action sealed since the user
       ordered more is unchecked. A `cancel` is never held.
-    - **Known limit.** `source_kind` is the agent's own label. On these deals an `external` claim
-      must name its `source`, but a statement the agent labels `user` is not held to this rule.
+    - Approving a `represent` check approves those words only. It never adopts a change of
+      terms or recourse as agreed.
+    - **Known limit.** `source_kind` is the agent's own label. On these deals a `merchant`,
+      `platform` or `external` claim must name its `source`, but a statement the agent labels
+      `user` is not held to this rule.
 
 ## 7. Outcome conventions: `completed | mismatch | open`
 

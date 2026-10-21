@@ -950,7 +950,9 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 			}
 			// An approved proceed adopts the checked terms as the new agreement.
 			// Who is never adopted: it is always compared with first contact.
-			if e.Approval.Proceed && e.Approval.Reason == "" && lastSnapshot != nil {
+			// Approving what the agent may tell the buyer approves those words
+			// only, never a change of terms (a represent check judges none).
+			if e.Approval.Proceed && e.Approval.Reason == "" && lastSnapshot != nil && lastSnapshot.Action != representAction {
 				if lastSnapshot.Terms != nil {
 					s.agreed = overlayTerms(s.agreed, *lastSnapshot.Terms)
 				}
@@ -2140,7 +2142,10 @@ func buildDealReport(events []sealedEvent) dealReport {
 			r.Did = append(r.Did, dealReportItem{Kind: "check", Text: text, Steps: []string{e.Check.Snapshot, se.CapsuleID}, Shared: shared, At: e.At})
 			var asked []string
 			for _, d := range e.Check.Differences {
-				if d.Question == "asked" && d.Rule != "agent_picked" && !(d.Rule == "not_asked" && d.Field == "action" && userApproved[se.CapsuleID]) {
+				// The user's own yes answered it: a "you didn't ask for this" on
+				// the action, or on what the agent tells the buyer.
+				answered := userApproved[se.CapsuleID] && (d.Rule == "not_asked" && d.Field == "action" || d.Rule == ruleRepresentationOutside)
+				if d.Question == "asked" && d.Rule != "agent_picked" && !answered {
 					asked = append(asked, d.Text)
 				}
 			}
