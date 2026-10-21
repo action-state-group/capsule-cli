@@ -53,6 +53,7 @@ host runs `deal check` from a pre-action hook. Without one:
 | `deal verify-statement FILE [--key HEX]` | Checks a verifier statement's signature offline and prints what it states as V's statement. It cannot re-check DKIM (the statement carries no email) and says so. The statement names its own key: only `--key` (the holder's public key) checks that it is the holder's, and without it the result says the key is not matched to any holder. Exit 1 when it does not verify. |
 | `deal checkpoint status --deal ID` | Read-only: the deal log's latest checkpoint (`id`, the SHA-256 of its signed statement; `at`; the `mmr_size`, `entries` and `root` of the log head it covers), the log's `log_entries`, and the checkpoint's witness state as stored (`not_configured`, `scheduled`, `pending` or `witnessed`). It never seals, cuts a checkpoint or contacts the witness, and works on a `read_only` profile. A deal with no checkpoint yet has `checkpoint` and `witness` `null`. |
 | `bundle --deal ID [--out FILE]` | The deal's Evidence Bundle, your own copy: the same file as `deal report --bundle` (the whole deal from its own log, `deal/<deal_id>`, with its cadence chain and any witness receipt held). Nothing withheld, nothing on record. |
+| `deal list [--json] [--since DATE] [--until DATE]` | Read-only: one line per deal in the store (a sale and its buyer threads included). `--json` adds each deal's plain summary and its `result`. `--since`/`--until` pick the deals with a step in the range, each as it stood at the range's end; with `--json` they add the range's totals and who was told what ([A period](#a-period-deal-list---since---until)). |
 | `deal history --deal ID [--deal ID ...] --out FILE --to WHO [--audience history\|keep]` | One file, a History, holding the deals you pick (ids from `deal list`) for someone who was in none of them; `--to` names who it is for and is sealed as the selection's `recipient` (keep takes no `--to`). Each deal is its history copy: every record's payload withheld, so each record shows only its time and, for an act, its effect's status. A deal's outcome and its acts' action classes sit in payloads beside the other party's details and are not proven: `verify --bundle` says `"not_proven": ["outcome", "action_class"]` on a VALID History. The pick is sealed, signed by your key, on a log of the History's own (`deal-history/<nonce>`), so it carries nothing of any other History; no deal's log is written, and each deal stops at its latest checkpoint, its selection entry sealing how many steps came after (`steps_after_checkpoint`). `recipient` and `steps_after_checkpoint` are your own word: verify lists them as `holder_stated`. A share's copy of one deal, for someone in it (`deal report --share`), is refused for a History; `--audience keep` is your own copy, never one to send. A History shows that the holder of one key picked these copies; it does not prove that key's holder made the deals. |
 | `disclose --deal ID --share counterparty --to WHO --out FILE` | A bundle file for someone else: a share, exactly as `deal report --share` (see [Sharing a copy](#sharing-a-copy)). The copy withholds what that reader may not see, the final bytes pass the share gate, and the share is on record on `deal/<deal_id>/disclosures` before the file is written. A deal is not shared as a link: `permalink --deal` refuses and names the report file to hand over instead. When the deal closed as received, this copy for the counterparty also carries `field_openings`: the openings of the final close's amount and currency, so the other party can run `deal terms-result`. The command's output says whether the copy carries them and, when it does not, why. Neither a report page, the user's own bundle, nor a `deal respond` answer carries them; a `deal respond` requester is checked by nothing. |
 | `deal export --output FILE` | Writes the sealed x-deal-v0 records (no raw values) as one JSON array. |
@@ -275,6 +276,77 @@ proof, the cadence checkpoint (signed by the same key as the deal
 checkpoint) and the witness receipt, plus, witnessed in part, the earlier
 checkpoint and its consistency proof. `capsulectl verify --bundle FILE
 --witness-directory DIRECTORY.json` checks every link.
+
+## A period: `deal list --since --until`
+
+`deal list --since 2026-10-01 --until 2026-11-01 --json` reads a period from
+the receipts already sealed. It seals nothing, writes nothing and adds no
+evidence. A Statement for the period is this list, the owner's copy of the
+deals in it (`deal history --audience keep --deal ID ...`, each `deal` it
+lists; a sale has its own copy), and a page over both. The copy is the
+user's own and is never sent by default.
+
+- **The range.** `--since` is inclusive and `--until` exclusive. Each takes a
+  date, which is the start of that UTC day, or an RFC 3339 time with its
+  offset, for a period in the user's own zone
+  (`2026-10-01T00:00:00-07:00`). Either may be left out. An unreadable
+  date, or an `--until` not after `--since`, is refused.
+- **Which deals.** Every deal or buyer thread with a step sealed in the
+  range, and every sale with a step in it or a buyer thread listed. Each is
+  read as it stood at the range's end, from its steps before `--until`: a
+  deal received after the range is `open` in it.
+- **Money.** Per currency, never converted, and only from steps sealed in
+  the range: what acts paid out, a cancellation's fee included; what acts
+  returned (a cancel reversing a pay); and, for each buyer thread of a sale
+  closed as received in the range, the price its close sealed (the
+  delivered price, else the agreed one, as `deal terms-result` reads it).
+  That price is what was agreed, not money observed arriving.
+- **Who was told what.** For each disclosure class, the number of distinct
+  recipients told it in the range, and how many of them were a seller the
+  user bought from, a buyer the user sold to, or someone else. A recipient
+  is known as the counterparty memory knows one: an email, a phone, a
+  profile id, a relay address or a merchant's own domain. One known only by
+  name is a different recipient in each deal; someone else with no identity
+  is a different recipient in each telling. Recipients linked by a shared
+  identity are one, and a deal's counterparty is one recipient within that
+  deal. One told in more than one role counts once in each, so no role's
+  count exceeds `recipients`. It counts `disclosure` steps; a copy handed
+  over with `deal report --share` is not counted. It carries classes and
+  counts only, never a value or a recipient's name, and lists every class,
+  so `0` says no one was told it in the range.
+- **Whose view.** The output is the user's own, like `deal list --json`:
+  each row's `summary` names the counterparty and repeats the user's words.
+  `totals` and `disclosures` carry no name or value.
+
+With `--json` and a range, the output is one object (without a range it is
+the array it always was):
+
+```json
+{
+  "since": "2026-10-01T00:00:00Z",
+  "until": "2026-11-01T00:00:00Z",
+  "deals": [ { "deal_id": "deal-…", "kind": "deal", "state": "closed", "result": "bought", "summary": { "…": "…" } } ],
+  "totals": {
+    "deals": 5,
+    "sales": 1,
+    "outcomes": { "bought": 2, "sold": 1, "called_off": 1, "not_chosen": 0, "open": 1 },
+    "money": [ { "currency": "USD", "spent_out_minor": 627, "refunded_in_minor": 0, "sold_for_minor": 190000 } ]
+  },
+  "disclosures": [ { "class": "address", "recipients": 4, "to_sellers": 3, "to_buyers": 1, "to_others": 0 } ]
+}
+```
+
+- `since`, `until`: the bounds in UTC (RFC 3339, with any fraction of a
+  second given), `null` when not given.
+- `deals`: the rows `deal list --json` gives, in deal id order. A deal's
+  `result` is `bought` or `sold` (closed as received, by the user's side),
+  `called_off` (closed with nothing received), `not_chosen` (the other side
+  was not chosen) or `open`; a sale has none, since its threads carry theirs.
+- `totals.deals` and `totals.outcomes` count deals and buyer threads;
+  `totals.sales` counts sales. `money` has one entry per currency, in order
+  (`""` for amounts sealed with no currency);
+  `sold_unpriced`, when present, counts sold threads with no price sealed.
+- `disclosures`: one entry per class, in class order.
 
 ## Report
 
