@@ -11,9 +11,10 @@
   An unreadable date or an empty range is refused.
 - **Added:** with `--json` and a range, the output is one object: the
   range, its deals, `totals` (deals by result, sales, and per currency what
-  was paid out, returned and sold for) and `disclosures` (for each class,
-  how many distinct recipients were told it, as sellers, buyers or others;
-  classes and counts only). It is read from the sealed steps and adds no
+  was paid out, fees included, what was returned, and what sale threads
+  closed for) and `disclosures` (for each class, how many distinct
+  recipients were told it, as sellers, buyers or others; classes and counts
+  only). It is read from the sealed steps and adds no
   evidence. Without a range the output is the array it was. The shape is in
   the deal skill's README, under "A period".
 - **Added:** each `deal list --json` row of a deal carries `result`:

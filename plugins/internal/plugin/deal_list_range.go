@@ -47,12 +47,13 @@ type dealListOutcomes struct {
 }
 
 // dealListMoneyIn is one currency's money in the range. SpentOutMinor is
-// what sealed acts paid out in the range, RefundedInMinor what sealed acts
-// returned (a cancel reversing a pay). SoldForMinor is, for each sale
-// thread closed as received in the range, the price agreed: its latest
-// sealed offer or commit amount, else its opening price. It is the price
-// sealed, not money observed arriving. SoldUnpriced counts such threads
-// with no price sealed.
+// what sealed acts paid out in the range, a cancellation's fee among it;
+// RefundedInMinor what sealed acts returned (a cancel reversing a pay).
+// SoldForMinor is, for each sale thread closed as received in the range,
+// the money terms its close commits (closedTerms): the delivered price,
+// else the agreed one. It is the price sealed, not money observed
+// arriving. SoldUnpriced counts such threads with no price or currency
+// sealed.
 type dealListMoneyIn struct {
 	Currency        string `json:"currency"`
 	SpentOutMinor   int64  `json:"spent_out_minor"`
@@ -155,15 +156,17 @@ func stepTime(ev dealEvent) (time.Time, error) {
 }
 
 // dealListInRange lists the deals with a step in the range, each as it
-// stood at the range's end, with the range's totals and disclosures.
+// stood at the range's end, with the range's totals and disclosures. A sale
+// is listed when it, or a buyer thread opened under it, has a step in the
+// range.
 func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
 	r := dealListRange{Deals: []dealListing{}, Totals: dealListTotals{Money: []dealListMoneyIn{}}}
 	if !b.since.IsZero() {
-		s := b.since.Format(time.RFC3339)
+		s := b.since.Format(time.RFC3339Nano)
 		r.Since = &s
 	}
 	if !b.until.IsZero() {
-		u := b.until.Format(time.RFC3339)
+		u := b.until.Format(time.RFC3339Nano)
 		r.Until = &u
 	}
 	money := map[string]*dealListMoneyIn{}
@@ -174,11 +177,15 @@ func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
 		}
 		return money[cur]
 	}
-	told := newDealToldTally()
-	for _, l := range logs {
-		var asOf []sealedEvent
-		var at []time.Time
-		active := false
+	type read struct {
+		asOf   []sealedEvent
+		at     []time.Time
+		active bool
+	}
+	reads := make([]read, len(logs))
+	activeSales := map[string]bool{}
+	for i, l := range logs {
+		rd := &reads[i]
 		for _, se := range l.events {
 			t, err := stepTime(se.Event)
 			if err != nil {
@@ -187,10 +194,17 @@ func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
 			if !b.until.IsZero() && !t.Before(b.until) {
 				break
 			}
-			asOf, at = append(asOf, se), append(at, t)
-			active = active || b.contains(t)
+			rd.asOf, rd.at = append(rd.asOf, se), append(rd.at, t)
+			rd.active = rd.active || b.contains(t)
 		}
-		if !active {
+		if open := l.events[0].Event.Open; rd.active && open != nil && open.Sale != "" {
+			activeSales[open.Sale] = true
+		}
+	}
+	told := newDealToldTally()
+	for i, l := range logs {
+		asOf, at := reads[i].asOf, reads[i].at
+		if !reads[i].active && !(activeSales[l.id] && len(asOf) > 0) {
 			continue
 		}
 		listing := dealListingOf(l.id, asOf)
@@ -223,27 +237,37 @@ func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
 				continue
 			}
 			ev := se.Event
-			if a := ev.Act; a != nil && a.AmountMinor != nil {
+			if a := ev.Act; a != nil {
 				cur := a.Currency
 				if cur == "" {
 					cur = currency
 				}
-				switch {
-				case actOut(*a):
-					moneyIn(cur).SpentOutMinor += *a.AmountMinor
-				case a.Direction == "in":
-					moneyIn(cur).RefundedInMinor += *a.AmountMinor
+				if a.AmountMinor != nil {
+					switch {
+					case actOut(*a):
+						moneyIn(cur).SpentOutMinor += *a.AmountMinor
+					case a.Direction == "in":
+						moneyIn(cur).RefundedInMinor += *a.AmountMinor
+					}
+				}
+				// A cancellation's fee is its own amount, paid out.
+				if a.FeeMinor != nil {
+					moneyIn(cur).SpentOutMinor += *a.FeeMinor
 				}
 			}
 			if d := ev.Disclosure; ev.Kind == "disclosure" && d != nil && open != nil {
-				told.add(l.id, ev.N, *d, *open, role)
+				told.add(l.id, *d, *open, role)
 			}
 		}
 		if fc := finalClose(asOf); listing.Result == dealResultSold && b.contains(at[fc]) {
-			if price, cur, ok := soldPrice(asOf[:fc], currency); ok {
-				moneyIn(cur).SoldForMinor += price
+			amount, cur, err := closedTerms(asOf[:fc], asOf[fc].Event)
+			if err != nil {
+				return r, err
+			}
+			if minor, perr := strconv.ParseInt(amount, 10, 64); amount != "" && perr == nil {
+				moneyIn(cur).SoldForMinor += minor
 			} else {
-				moneyIn(cur).SoldUnpriced++
+				moneyIn(currency).SoldUnpriced++
 			}
 		}
 	}
@@ -259,35 +283,20 @@ func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
 	return r, nil
 }
 
-// soldPrice is the price a sale thread sealed before its close: its latest
-// offer or commit amount, else its opening price.
-func soldPrice(events []sealedEvent, currency string) (int64, string, bool) {
-	for i := len(events) - 1; i >= 0; i-- {
-		if a := events[i].Event.Act; a != nil && a.AmountMinor != nil && (a.Action == "commit" || a.Action == offerAction) {
-			cur := a.Currency
-			if cur == "" {
-				cur = currency
-			}
-			return *a.AmountMinor, cur, true
-		}
-	}
-	if open := events[0].Event.Open; open != nil && open.Terms.PriceMinor != nil {
-		return *open.Terms.PriceMinor, currency, true
-	}
-	return 0, currency, false
-}
-
 // dealToldTally counts, per class, the distinct recipients told it. A
 // recipient is known by the counterparty memory's identities
-// (disclosureRecipientKeys, read as one party by sameParty); one with none
-// is the deal's own counterparty, or, for someone else, each telling its
-// own recipient, so a recipient is never merged with another on a name.
+// (disclosureRecipientKeys, read as one party by sameParty), and a deal's
+// counterparty is one recipient within that deal. Recipients that share an
+// identity are one, however they are linked; one with no identity is never
+// merged with another on a name.
 type dealToldTally struct {
 	byClass map[string][]dealToldTo
 }
 
 type dealToldTo struct {
 	keys []string
+	// deal is the deal id of a telling to the deal's counterparty, else "".
+	deal string
 	role string // seller, buyer or other
 }
 
@@ -299,46 +308,53 @@ func newDealToldTally() *dealToldTally {
 	return t
 }
 
-func (t *dealToldTally) add(dealID string, n int64, d dealDisclosure, open dealOpen, role string) {
-	keys := disclosureRecipientKeys(d, open)
-	to := dealRoleSeller
+func (t *dealToldTally) add(dealID string, d dealDisclosure, open dealOpen, role string) {
+	to := dealToldTo{keys: disclosureRecipientKeys(d, open), deal: dealID, role: dealRoleSeller}
 	switch {
 	case d.To == "other":
-		to = "other"
-		if len(keys) == 0 {
-			keys = []string{"telling:" + dealID + "/" + strconv.FormatInt(n, 10)}
-		}
+		to.deal, to.role = "", "other"
 	case role == dealRoleSeller:
-		to = dealRoleBuyer
-	}
-	if len(keys) == 0 {
-		keys = []string{"deal:" + dealID}
+		to.role = dealRoleBuyer
 	}
 	for _, f := range d.Fields {
-		t.byClass[f.Class] = append(t.byClass[f.Class], dealToldTo{keys: keys, role: to})
+		t.byClass[f.Class] = append(t.byClass[f.Class], to)
 	}
 }
 
-// distinctParties counts the parties among recipients, each read as the
-// first earlier one it is the same party as.
+// distinctParties counts the parties among the recipients in role (all
+// roles when ""): recipients are joined when they are the same party or
+// the same deal's counterparty, and joined transitively, so the count does
+// not depend on the order they were told in.
 func distinctParties(recipients []dealToldTo, role string) int {
-	var seen [][]string
+	var rs []dealToldTo
 	for _, r := range recipients {
-		if role != "" && r.role != role {
-			continue
-		}
-		known := false
-		for _, k := range seen {
-			if sameParty(k, r.keys) {
-				known = true
-				break
-			}
-		}
-		if !known {
-			seen = append(seen, r.keys)
+		if role == "" || r.role == role {
+			rs = append(rs, r)
 		}
 	}
-	return len(seen)
+	parent := make([]int, len(rs))
+	for i := range parent {
+		parent[i] = i
+	}
+	var find func(int) int
+	find = func(i int) int {
+		if parent[i] != i {
+			parent[i] = find(parent[i])
+		}
+		return parent[i]
+	}
+	n := len(rs)
+	for i := range rs {
+		for j := 0; j < i; j++ {
+			same := rs[i].deal != "" && rs[i].deal == rs[j].deal ||
+				len(rs[i].keys) > 0 && len(rs[j].keys) > 0 && sameParty(rs[i].keys, rs[j].keys)
+			if a, b := find(i), find(j); same && a != b {
+				parent[a] = b
+				n--
+			}
+		}
+	}
+	return n
 }
 
 func (t *dealToldTally) rows() []dealListTold {

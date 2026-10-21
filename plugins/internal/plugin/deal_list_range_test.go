@@ -3,6 +3,7 @@ package plugin
 import (
 	"encoding/json"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -18,10 +19,13 @@ import (
 //   - bought: a sticker paid and received in October;
 //   - calledOff: the marketplace bike, where the agent told the seller the
 //     user's phone (twice) and the pickup spot, then the user called it off;
-//   - sale and its thread: the bicycle, sold to a buyer in October;
+//   - refunded: a sticker paid, then cancelled for a refund and a fee;
+//   - sale and its two buyer threads, opened in September (the sale's own
+//     log has no step after): the bicycle, sold in October to one buyer at
+//     a price below the opening one, and the other buyer not chosen;
 //   - late: opened in October, received in November;
 //   - november: opened in November.
-type statementDeals struct{ spans, bought, calledOff, sale, thread, late, november string }
+type statementDeals struct{ spans, bought, calledOff, refunded, sale, thread, notChosen, late, november string }
 
 func statementStore(t *testing.T) statementDeals {
 	t.Helper()
@@ -35,6 +39,10 @@ func statementStore(t *testing.T) statementDeals {
 	var d statementDeals
 
 	d.spans = retailDeal(t)
+	on(9, 28)
+	d.sale, _ = newSale(t)
+	d.thread = buyerThread(t, d.sale, "buyer.example")
+	d.notChosen = buyerThread(t, d.sale, "other-buyer.example")
 	on(10, 3)
 	dealRun(t, "close", "--deal", d.spans, "--input", received)
 	on(10, 5)
@@ -44,12 +52,14 @@ func statementStore(t *testing.T) statementDeals {
 	d.calledOff, _, _ = openDisclosureDeal(t)
 	on(10, 12)
 	dealRun(t, "close", "--deal", d.calledOff, "--input", writeJSON(t, `{"status":"not_received","reason":"user_closed"}`))
+	on(10, 14)
+	d.refunded = retailDeal(t)
+	dealRun(t, "note", "--deal", d.refunded, "--kind", "act", "--input", writeJSON(t, `{"action":"cancel","amount_minor":627,"currency":"USD","fee_minor":100}`))
 	on(10, 15)
-	d.sale, _ = newSale(t)
-	d.thread = buyerThread(t, d.sale, "buyer.example")
 	dealRun(t, "check", "--deal", d.thread, "--input", writeJSON(t, offerInput))
 	on(10, 20)
-	dealRun(t, "close", "--deal", d.thread, "--input", writeJSON(t, `{"status":"received","delivered":{"item":"example bicycle","quantity":1}}`))
+	dealRun(t, "close", "--deal", d.thread, "--input", writeJSON(t, `{"status":"received","delivered":{"item":"example bicycle","quantity":1,"price_minor":185000,"currency":"USD"}}`))
+	dealRun(t, "close", "--deal", d.notChosen, "--input", writeJSON(t, `{"status":"not_selected"}`))
 	on(10, 28)
 	d.late = dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))["deal_id"].(string)
 	on(11, 3)
@@ -94,11 +104,12 @@ func TestDealListRangeStatement(t *testing.T) {
 	assert.Equal(t, "2026-10-01T00:00:00Z", *r.Since)
 	assert.Equal(t, "2026-11-01T00:00:00Z", *r.Until)
 	got := listedByID(r)
-	assert.Len(t, got, 6)
+	assert.Len(t, got, 8)
 	assert.NotContains(t, got, d.november, "no step in October")
+	assert.Contains(t, got, d.sale, "its log ends in September; its threads ran in October")
 	for id, want := range map[string]struct{ state, result string }{
 		d.spans: {"closed", "bought"}, d.bought: {"closed", "bought"}, d.calledOff: {"closed", "called_off"},
-		d.thread: {"closed", "sold"}, d.late: {"open", "open"},
+		d.refunded: {"open", "open"}, d.thread: {"closed", "sold"}, d.notChosen: {"closed", "not_chosen"}, d.late: {"open", "open"},
 	} {
 		assert.Equal(t, want.state, got[id].State, id)
 		assert.Equal(t, want.result, got[id].Result, id)
@@ -108,11 +119,12 @@ func TestDealListRangeStatement(t *testing.T) {
 	assert.Equal(t, "2026-10-28T10:00:00Z", got[d.late].LastRecordAt, "read as it stood at the range's end: November's close is not in it")
 	assert.Equal(t, "open", got[d.late].Summary.Outcome)
 
-	assert.Equal(t, dealListTotals{Deals: 5, Sales: 1,
-		Outcomes: dealListOutcomes{Bought: 2, Sold: 1, CalledOff: 1, Open: 1},
-		// The September payment is September's; the bicycle is sold at
-		// its sealed offer.
-		Money: []dealListMoneyIn{{Currency: "USD", SpentOutMinor: 627, SoldForMinor: 190000}},
+	assert.Equal(t, dealListTotals{Deals: 7, Sales: 1,
+		Outcomes: dealListOutcomes{Bought: 2, Sold: 1, CalledOff: 1, NotChosen: 1, Open: 2},
+		// The September payment is September's. Paid out: two stickers
+		// and the cancellation's fee; the refund is its own figure. The
+		// bicycle is sold at the price its close sealed.
+		Money: []dealListMoneyIn{{Currency: "USD", SpentOutMinor: 627 + 627 + 100, RefundedInMinor: 627, SoldForMinor: 185000}},
 	}, r.Totals)
 
 	told := toldByClass(r)
@@ -139,7 +151,7 @@ func TestDealListRangeStatement(t *testing.T) {
 		}
 	}
 	history := dealRun(t, args...)
-	assert.Len(t, history["deals"], 5)
+	assert.Len(t, history["deals"], 7)
 }
 
 // A deal open across the range's start is in both months: September has
@@ -147,18 +159,36 @@ func TestDealListRangeStatement(t *testing.T) {
 func TestDealListRangeSpansTheBoundary(t *testing.T) {
 	d := statementStore(t)
 	r, _ := listRange(t, "--since", "2026-09-01", "--until", "2026-10-01")
-	require.Len(t, r.Deals, 1)
-	assert.Equal(t, d.spans, r.Deals[0].DealID)
-	assert.Equal(t, "open", r.Deals[0].State)
-	assert.Equal(t, "open", r.Deals[0].Result)
-	assert.Equal(t, dealListTotals{Deals: 1, Outcomes: dealListOutcomes{Open: 1},
+	got := listedByID(r)
+	require.Len(t, got, 4)
+	assert.Equal(t, "open", got[d.spans].State)
+	assert.Equal(t, "open", got[d.spans].Result)
+	assert.Equal(t, "sale", got[d.sale].Kind)
+	assert.Equal(t, "open", got[d.thread].Result, "sold in October")
+	assert.Equal(t, dealListTotals{Deals: 3, Sales: 1, Outcomes: dealListOutcomes{Open: 3},
 		Money: []dealListMoneyIn{{Currency: "USD", SpentOutMinor: 627}}}, r.Totals)
+
+	// A bound is exact: a step at --since is in the range, one at --until
+	// is not. The spanning deal's close was sealed at 2026-10-03T10:00:00Z.
+	r, _ = listRange(t, "--since", "2026-10-01", "--until", "2026-10-03T10:00:00Z")
+	assert.Empty(t, r.Deals, "the close at --until is after the range")
+	r, _ = listRange(t, "--since", "2026-10-03T10:00:00Z", "--until", "2026-10-03T10:00:01Z")
+	require.Len(t, r.Deals, 1)
+	assert.Equal(t, "bought", r.Deals[0].Result)
+	// The same instant with an offset reads the same; an hour later does not.
+	r, _ = listRange(t, "--since", "2026-10-03T03:00:00-07:00", "--until", "2026-10-03T04:00:00-07:00")
+	assert.Len(t, r.Deals, 1)
+	r, _ = listRange(t, "--since", "2026-10-03T03:00:00-08:00", "--until", "2026-10-03T04:00:00-08:00")
+	assert.Empty(t, r.Deals)
+	// A fraction of a second is kept in the bound echoed.
+	r, _ = listRange(t, "--since", "2026-10-03T10:00:00.5Z")
+	assert.Equal(t, "2026-10-03T10:00:00.5Z", *r.Since)
 
 	// Open-ended: from November on, the late deal's close and the
 	// November deal, each as it stands now.
 	r, _ = listRange(t, "--since", "2026-11-01")
 	assert.Nil(t, r.Until)
-	got := listedByID(r)
+	got = listedByID(r)
 	assert.Len(t, got, 2)
 	assert.Equal(t, "bought", got[d.late].Result)
 	assert.Equal(t, "open", got[d.november].Result)
@@ -221,19 +251,18 @@ func TestDealListToldCountsDistinctParties(t *testing.T) {
 	shop := dealOpen{Who: dealWho{Name: "Example Lamps", Domain: "lamps.example"}}
 	stranger := dealOpen{Channel: "marketplace", Who: dealWho{Name: "Sam"}}
 	address := []dealDisclosureField{{Class: "address", Value: "1 Example St"}}
-	tally.add("deal-a", 3, dealDisclosure{To: "counterparty", Fields: address}, shop, dealRoleBuyer)
-	tally.add("deal-b", 4, dealDisclosure{To: "counterparty", Fields: address}, shop, dealRoleBuyer)
-	tally.add("deal-c", 5, dealDisclosure{To: "counterparty", Fields: address}, stranger, dealRoleBuyer)
-	tally.add("deal-c", 6, dealDisclosure{To: "counterparty", Fields: address}, stranger, dealRoleBuyer)
-	tally.add("deal-d", 7, dealDisclosure{To: "counterparty", Fields: address}, stranger, dealRoleBuyer)
-	tally.add("deal-e", 8, dealDisclosure{To: "counterparty", Fields: address}, stranger, dealRoleSeller)
-	tally.add("deal-e", 9, dealDisclosure{To: "other", Who: &dealWho{Name: "a courier"}, Fields: address}, stranger, dealRoleSeller)
-	tally.add("deal-e", 10, dealDisclosure{To: "other", Who: &dealWho{Name: "a courier"}, Fields: address}, stranger, dealRoleSeller)
-	tally.add("deal-f", 11, dealDisclosure{To: "other", Who: &dealWho{Phone: "+1 555 010 7777"}, Fields: address}, shop, dealRoleBuyer)
-	tally.add("deal-g", 12, dealDisclosure{To: "other", Who: &dealWho{Phone: "+1 555 010 7777"}, Fields: address}, shop, dealRoleBuyer)
-	rows := tally.rows()
+	tally.add("deal-a", dealDisclosure{To: "counterparty", Fields: address}, shop, dealRoleBuyer)
+	tally.add("deal-b", dealDisclosure{To: "counterparty", Fields: address}, shop, dealRoleBuyer)
+	tally.add("deal-c", dealDisclosure{To: "counterparty", Fields: address}, stranger, dealRoleBuyer)
+	tally.add("deal-c", dealDisclosure{To: "counterparty", Fields: address}, stranger, dealRoleBuyer)
+	tally.add("deal-d", dealDisclosure{To: "counterparty", Fields: address}, stranger, dealRoleBuyer)
+	tally.add("deal-e", dealDisclosure{To: "counterparty", Fields: address}, stranger, dealRoleSeller)
+	tally.add("deal-e", dealDisclosure{To: "other", Who: &dealWho{Name: "a courier"}, Fields: address}, stranger, dealRoleSeller)
+	tally.add("deal-e", dealDisclosure{To: "other", Who: &dealWho{Name: "a courier"}, Fields: address}, stranger, dealRoleSeller)
+	tally.add("deal-f", dealDisclosure{To: "other", Who: &dealWho{Phone: "+1 555 010 7777"}, Fields: address}, shop, dealRoleBuyer)
+	tally.add("deal-g", dealDisclosure{To: "other", Who: &dealWho{Phone: "+1 555 010 7777"}, Fields: address}, shop, dealRoleBuyer)
 	byClass := map[string]dealListTold{}
-	for _, r := range rows {
+	for _, r := range tally.rows() {
 		byClass[r.Class] = r
 	}
 	// lamps.example once; Sam in deal-c and deal-d; the buyer in deal-e;
@@ -242,29 +271,29 @@ func TestDealListToldCountsDistinctParties(t *testing.T) {
 	assert.Equal(t, dealListTold{Class: "phone"}, byClass["phone"])
 }
 
-// A sale thread is sold at its latest sealed offer or commit, else at its
-// opening price; one with neither is counted unpriced.
-func TestDealListSoldPrice(t *testing.T) {
-	price := func(v int64) *int64 { return &v }
-	opening := sealedEvent{Event: dealEvent{Kind: "open", Open: &dealOpen{Terms: dealTerms{PriceMinor: price(190000)}}}}
-	act := func(action string, amount int64, currency string) sealedEvent {
-		return sealedEvent{Event: dealEvent{Kind: "act", Act: &dealAct{Action: action, AmountMinor: price(amount), Currency: currency}}}
+// Recipients linked through a shared identity are one, in whatever order
+// they were told; a deal's counterparty, named only later by an identity,
+// is still one.
+func TestDealListToldJoinsLinkedIdentities(t *testing.T) {
+	phone := []dealDisclosureField{{Class: "phone", Value: "+1 555 010 4477"}}
+	byEmail := &dealWho{Email: "a@example.com"}
+	byBoth := &dealWho{Email: "a@example.com", Phone: "+1 555 010 1234"}
+	byPhone := &dealWho{Phone: "+1 555 010 1234"}
+	for _, order := range [][]*dealWho{{byEmail, byPhone, byBoth}, {byBoth, byEmail, byPhone}, {byPhone, byEmail, byBoth}} {
+		tally := newDealToldTally()
+		for i, w := range order {
+			tally.add("deal-"+string(rune('a'+i)), dealDisclosure{To: "other", Who: w, Fields: phone}, dealOpen{}, dealRoleBuyer)
+		}
+		assert.Equal(t, 1, tally.rows()[slices.IndexFunc(tally.rows(), func(r dealListTold) bool { return r.Class == "phone" })].Recipients)
 	}
-	for name, c := range map[string]struct {
-		events []sealedEvent
-		minor  int64
-		cur    string
-		ok     bool
-	}{
-		"opening price":     {[]sealedEvent{opening}, 190000, "USD", true},
-		"latest offer":      {[]sealedEvent{opening, act("offer", 185000, ""), act("offer", 180000, "")}, 180000, "USD", true},
-		"commit after":      {[]sealedEvent{opening, act("offer", 185000, ""), act("commit", 175000, "eur")}, 175000, "eur", true},
-		"a pay is no price": {[]sealedEvent{opening, act("pay", 100, "")}, 190000, "USD", true},
-		"no price":          {[]sealedEvent{{Event: dealEvent{Kind: "open", Open: &dealOpen{}}}}, 0, "USD", false},
-	} {
-		minor, cur, ok := soldPrice(c.events, "USD")
-		assert.Equal(t, c.minor, minor, name)
-		assert.Equal(t, c.cur, cur, name)
-		assert.Equal(t, c.ok, ok, name)
+	tally := newDealToldTally()
+	stranger := dealOpen{Channel: "marketplace", Who: dealWho{Name: "Sam"}}
+	tally.add("deal-a", dealDisclosure{To: "counterparty", Fields: phone}, stranger, dealRoleBuyer)
+	tally.add("deal-a", dealDisclosure{To: "counterparty", Who: &dealWho{Email: "sam@example.com"}, Fields: phone}, stranger, dealRoleBuyer)
+	tally.add("deal-b", dealDisclosure{To: "counterparty", Who: &dealWho{Email: "sam@example.com"}, Fields: phone}, stranger, dealRoleBuyer)
+	for _, r := range tally.rows() {
+		if r.Class == "phone" {
+			assert.Equal(t, dealListTold{Class: "phone", Recipients: 1, ToSellers: 1}, r)
+		}
 	}
 }

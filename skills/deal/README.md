@@ -291,24 +291,31 @@ user's own and is never sent by default.
   offset, for a period in the user's own zone
   (`2026-10-01T00:00:00-07:00`). Either may be left out. An unreadable
   date, or an `--until` not after `--since`, is refused.
-- **Which deals.** Every deal, sale or buyer thread with a step sealed in
-  the range. Each is read as it stood at the range's end, from its steps
-  before `--until`: a deal received after the range is `open` in it.
+- **Which deals.** Every deal or buyer thread with a step sealed in the
+  range, and every sale with a step in it or a buyer thread listed. Each is
+  read as it stood at the range's end, from its steps before `--until`: a
+  deal received after the range is `open` in it.
 - **Money.** Per currency, never converted, and only from steps sealed in
-  the range: what acts paid out, what acts returned (a cancel reversing a
-  pay), and, for each buyer thread of a sale closed as received in the
-  range, the price sealed for it (its latest offer or commit, else its
-  opening price). That price is what was agreed, not money observed
-  arriving.
+  the range: what acts paid out, a cancellation's fee included; what acts
+  returned (a cancel reversing a pay); and, for each buyer thread of a sale
+  closed as received in the range, the price its close sealed (the
+  delivered price, else the agreed one, as `deal terms-result` reads it).
+  That price is what was agreed, not money observed arriving.
 - **Who was told what.** For each disclosure class, the number of distinct
   recipients told it in the range, and how many of them were a seller the
   user bought from, a buyer the user sold to, or someone else. A recipient
   is known as the counterparty memory knows one: an email, a phone, a
   profile id, a relay address or a merchant's own domain. One known only by
   name is a different recipient in each deal; someone else with no identity
-  is a different recipient in each telling. It carries classes and counts
-  only, never a value or a recipient's name, and lists every class, so `0`
-  says no one was told it in the range.
+  is a different recipient in each telling. Recipients linked by a shared
+  identity are one, and a deal's counterparty is one recipient within that
+  deal. It counts `disclosure` steps; a copy handed over with `deal report
+  --share` is not counted. It carries classes and counts only, never a
+  value or a recipient's name, and lists every class, so `0` says no one
+  was told it in the range.
+- **Whose view.** The output is the user's own, like `deal list --json`:
+  each row's `summary` names the counterparty and repeats the user's words.
+  `totals` and `disclosures` carry no name or value.
 
 With `--json` and a range, the output is one object (without a range it is
 the array it always was):
@@ -328,7 +335,8 @@ the array it always was):
 }
 ```
 
-- `since`, `until`: the bounds in UTC, `null` when not given.
+- `since`, `until`: the bounds in UTC (RFC 3339, with any fraction of a
+  second given), `null` when not given.
 - `deals`: the rows `deal list --json` gives, in deal id order. A deal's
   `result` is `bought` or `sold` (closed as received, by the user's side),
   `called_off` (closed with nothing received), `not_chosen` (the other side
