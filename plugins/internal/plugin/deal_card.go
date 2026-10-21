@@ -302,7 +302,7 @@ func cardFactsLine(w cli.Wording, state dealState, snap dealSnapshot, r dealChec
 		// Said only when it is not the limit itself, said next.
 		parts[0] = w.Line("card.facts.up_to", cli.V{"amount": parts[0], "max": money(*m)})
 	}
-	recourse := state.recourse
+	recourse := state.wayToPay()
 	if snap.Recourse != nil {
 		recourse = overlayRecourse(recourse, *snap.Recourse)
 	}

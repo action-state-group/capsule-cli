@@ -1035,11 +1035,6 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 				s.agreedRecourse = overlayRecourse(s.agreedRecourse, s.recourse)
 				if lastSnapshot.Recourse != nil {
 					s.agreedRecourse = overlayRecourse(s.agreedRecourse, *lastSnapshot.Recourse)
-					// A leg that started with no way to pay takes the one
-					// the user approved as its own (deal_journey.go).
-					if s.legStarted || s.open.Recourse.Rail == "" {
-						s.recourse = overlayRecourse(s.recourse, *lastSnapshot.Recourse)
-					}
 				}
 			}
 		}
@@ -1323,7 +1318,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	if snap.Terms != nil {
 		proposed = overlayTerms(proposed, *snap.Terms)
 	}
-	recourse := s.recourse
+	recourse := s.wayToPay()
 	if snap.Recourse != nil {
 		recourse = overlayRecourse(recourse, *snap.Recourse)
 	}

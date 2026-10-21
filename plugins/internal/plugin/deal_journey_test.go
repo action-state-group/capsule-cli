@@ -552,3 +552,94 @@ func TestStepsSealedBeforeJourneyReDeriveAsTheyWere(t *testing.T) {
 		}
 	}
 }
+
+// A pick named by its merchant is the user's pick of that option's item:
+// under a predicate that holds the item material, it is not the agent's.
+func TestAPickByMerchantIsTheUsersItem(t *testing.T) {
+	materialityFixture(t)
+	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"items","version":"1","material":[{"field":"item"}]}`))
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "options", fawnOptions)
+	note(t, id, "intent", `{"verbatim":"the eBay one","who":{"name":"eBay","domain":"ebay.com"}}`)
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
+	assert.NotContains(t, rules(c), "agent_picked")
+	other := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn vinyl decal","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
+	assert.Contains(t, rules(other), "not_asked", "another item than the one picked")
+}
+
+// In typed records, a pay approved with the way to pay a leg started
+// without is covered by that approval: the approval does not move the
+// check's own scope.
+func TestATypedApprovalOfALegsWayToPayCoversThePay(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+		"intent":{"verbatim":"get me a fawn sticker under $2","max_total_minor":200,"allowed":["pay"]},
+		"who":{},"terms":{"currency":"USD"},"recourse":{}}`))["deal_id"].(string)
+	note(t, id, "intent", `{"verbatim":"the eBay one","asked":{"item":"Fawn Sticker"},"who":{"name":"eBay","domain":"ebay.com"}}`)
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
+	if c["verdict"] == "pause" {
+		_, err := answer(t, id, c["check_id"].(string), "yes", shownCard(t, c["card"].(string)))
+		require.NoError(t, err)
+	}
+	act := note(t, id, "act", `{"action":"pay","amount_minor":190,"payee":"eBay","rail":"card"}`)
+	assert.Equal(t, false, act["unchecked"], act["reason"])
+}
+
+// An intent naming another item after a check voids its approval, as the
+// agent's new choice does; the profile checker holds the same.
+func TestANewPickVoidsAnEarlierApproval(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "intent", `{"verbatim":"use eBay","who":{"name":"eBay","domain":"ebay.com"}}`)
+	note(t, id, "chose", `{"item":"Fawn Sticker","price_minor":175}`)
+	pay := `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, pay))
+	require.Equal(t, "pass", c["verdict"], c["card"])
+	note(t, id, "intent", `{"verbatim":"actually the decal","asked":{"item":"Fawn vinyl decal"}}`)
+	act := note(t, id, "act", `{"action":"pay","amount_minor":190,"payee":"eBay","rail":"card"}`)
+	assert.Equal(t, true, act["unchecked"])
+	assert.Equal(t, "changed_after_check", act["rule"])
+
+	// The checker: a chose after the approval, with the act claiming it.
+	dealFixture(t)
+	id = dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "intent", `{"verbatim":"use eBay","who":{"name":"eBay","domain":"ebay.com","email":"orders@ebay.com"}}`)
+	note(t, id, "chose", `{"item":"Fawn Sticker","price_minor":175}`)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name"]}`))
+	_, err := answer(t, id, share["check_id"].(string), "yes", shownCard(t, share["card"].(string)))
+	require.NoError(t, err)
+	note(t, id, "chose", `{"item":"Fawn vinyl decal","price_minor":175}`)
+	held := heldNote(t, id, `{"fields":[{"class":"name","value":"`+homeName+`"}]}`)
+	assert.Equal(t, []any{"name"}, held["held"], "the approval no longer names the class")
+}
+
+// The profile checker holds an approval to the pick it was given on: a
+// disclosure after the agent's new choice that claims it is rejected.
+func TestTheProfileCheckerVoidsApprovalsAcrossPicks(t *testing.T) {
+	dealFixture(t)
+	earlier := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web","intent":{"verbatim":"a sticker","allowed":["pay","share_contact"]},
+		"who":{"name":"eBay","domain":"ebay.com","email":"orders@ebay.com"},"terms":{"currency":"USD"},"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	tellAddress(t, earlier)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "chose", `{"item":"Fawn Sticker","price_minor":175,"who":{"name":"eBay","domain":"ebay.com","email":"orders@ebay.com"}}`)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["address"]}`))
+	require.Equal(t, "pass", share["verdict"], "told before")
+	note(t, id, "chose", `{"item":"Fawn vinyl decal","price_minor":175}`)
+	told := note(t, id, "disclosure", `{"fields":[{"class":"address","value":"`+homeStreet+`"}]}`)
+	assert.Equal(t, false, told["approved"])
+	records, export := exportRecords(t, id)
+	checkProfile(t, export)
+	var approval string
+	for _, r := range records {
+		if b := r["x-deal-v0"].(map[string]any); b["record_type"] == "approval" {
+			approval = recordDigest(t, r)
+		}
+	}
+	require.NotEmpty(t, approval, "a pass is answered by standing intent")
+	last := records[len(records)-1]
+	body := last["body"].(map[string]any)
+	body["authority"] = "approval"
+	delete(body, "rule")
+	last["x-deal-v0"].(map[string]any)["refs"] = []any{map[string]any{"rel": "authorized_by", "type": "deal-record", "digest_alg": "SHA-256", "digest": approval}}
+	checkProfileRejects(t, records, "details changed after the check")
+}

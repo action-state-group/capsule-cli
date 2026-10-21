@@ -129,7 +129,7 @@ func dealRemoteCheck(ctx context.Context, s dealState, snap dealSnapshot, local 
 	if snap.Terms != nil {
 		terms = overlayTerms(terms, *snap.Terms)
 	}
-	recourse := s.recourse
+	recourse := s.wayToPay()
 	if snap.Recourse != nil {
 		recourse = overlayRecourse(recourse, *snap.Recourse)
 	}

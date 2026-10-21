@@ -1984,14 +1984,14 @@ func dealCheckCommand() *cobra.Command {
 			if !legState.leg && snap.Action != representAction {
 				return cli.InputError("no merchant is in play on this errand yet: seal the user's pick or switch (deal note --kind intent with who) or your choice under their delegation (deal note --kind chose with who) before checking")
 			}
-			rail := legState.recourse.Rail
+			rail := legState.wayToPay().Rail
 			if snap.Recourse != nil && snap.Recourse.Rail != "" {
 				rail = snap.Recourse.Rail
 			}
 			if snap.Action == "pay" && rail == "" {
 				return cli.InputError(`a pay check needs the way it is paid: "recourse": {"rail": ..., "refundable": ...}`)
 			}
-			if err := checkAuthorizedMax(snap, legState.recourse.Rail); err != nil {
+			if err := checkAuthorizedMax(snap, legState.wayToPay().Rail); err != nil {
 				return err
 			}
 			if err := normalizeTerms(snap.Terms); err != nil {

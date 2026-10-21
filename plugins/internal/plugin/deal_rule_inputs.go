@@ -194,7 +194,7 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 	}
 	// The proposal as the check evaluates it: the deal as it stands, with
 	// what the check states on top.
-	who, terms, recourse := state.who, state.terms, state.recourse
+	who, terms, recourse := state.who, state.terms, state.wayToPay()
 	if sn.Who != nil {
 		who = overlayWho(who, *sn.Who)
 	}

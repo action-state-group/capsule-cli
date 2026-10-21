@@ -349,6 +349,11 @@ func (s *dealState) foldIntentJourney(note dealIntent) {
 		}
 	}
 	s.intent = journeyIntent(s.intent, note)
+	// A pick named by its merchant is the user's pick of that option's
+	// item: theirs in the ask, not the agent's.
+	if item != "" && note.Asked.Item == "" && m.Move == movePicked {
+		s.intent.Asked.Item = item
+	}
 	if item != "" {
 		s.intent.Delegated = slices.DeleteFunc(s.intent.Delegated, func(d string) bool { return d == "item" })
 		s.chose = ""
@@ -689,4 +694,16 @@ func legFirstContact(w dealWho) dealWho {
 		w.Payee = w.Name
 	}
 	return w
+}
+
+// wayToPay is the way to pay a check is about: the one in force, or, for a
+// leg that started with none (opened at the first ask, or after a switch),
+// the one the user approved with it, under any change since. It is read,
+// never folded into the recourse in force, so a check's scope is unchanged
+// by the approval that answered it.
+func (s dealState) wayToPay() dealRecourse {
+	if s.legStarted || s.open.Recourse.Rail == "" {
+		return overlayRecourse(s.agreedRecourse, s.recourse)
+	}
+	return s.recourse
 }
