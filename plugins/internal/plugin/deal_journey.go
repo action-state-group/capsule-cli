@@ -232,8 +232,11 @@ func intentMove(s dealState, note dealIntent) (dealIntentMove, error) {
 	var m dealIntentMove
 	_, m.Proposed = proposedLimits(s.intent.limits(), note)
 	if note.Who != nil {
-		if s.leg && sameWho(*note.Who, s.legFirst) {
-			return m, cli.InputError("intent.who names the merchant already in play: leave who out, or name the one the user switched to")
+		// The merchant in play, as it first appeared or as it has changed
+		// its details since: a change of its own is its record (a change
+		// note), never the user's switch.
+		if s.leg && (sameWho(*note.Who, s.legFirst) || sameWho(*note.Who, s.who) || sharesKey(perParty(counterpartyKeys(*note.Who, "")), perParty(counterpartyKeys(s.who, "")))) {
+			return m, cli.InputError("intent.who names the merchant already in play (as it first appeared, or with details it changed since): leave who out, or name the one the user switched to")
 		}
 		m.LegStart = true
 	}
@@ -314,6 +317,7 @@ func (s *dealState) startLeg(who dealWho, item string, price *int64) {
 	s.recourse, s.agreedRecourse = dealRecourse{}, dealRecourse{}
 	s.claims, s.messages = nil, nil
 	s.route, s.routeSet, s.routeCouldnt = who, true, false
+	s.chose, s.legStarted = "", true
 }
 
 // adoptPick records an item picked or chosen within the leg in force: it is
@@ -333,17 +337,28 @@ func (s *dealState) adoptPick(item string, price *int64) {
 func (s *dealState) foldIntentJourney(note dealIntent) {
 	m, err := intentMove(*s, note)
 	opt, onList := s.shortlisted(note.Asked.Item, note.Who)
-	price := note.Asked.PriceMinor
-	if onList && price == nil {
-		price = opt.PriceMinor
+	item, price := note.Asked.Item, note.Asked.PriceMinor
+	if onList && m.Move == movePicked {
+		// The user picked an option: its item and price are what they
+		// picked, and the item is theirs, no longer the agent's to choose.
+		if item == "" {
+			item = opt.Item
+		}
+		if price == nil {
+			price = opt.PriceMinor
+		}
 	}
 	s.intent = journeyIntent(s.intent, note)
+	if item != "" {
+		s.intent.Delegated = slices.DeleteFunc(s.intent.Delegated, func(d string) bool { return d == "item" })
+		s.chose = ""
+	}
 	if err == nil && m.LegStart {
-		s.startLeg(*note.Who, note.Asked.Item, price)
+		s.startLeg(*note.Who, item, price)
 		return
 	}
 	if err == nil && (m.Move == movePicked || m.Move == moveSwitched) {
-		s.adoptPick(note.Asked.Item, price)
+		s.adoptPick(item, price)
 	}
 }
 
@@ -366,9 +381,10 @@ func (s *dealState) foldAgentMove(m dealAgentMove) {
 	case moveChose:
 		if m.Who != nil && !s.leg {
 			s.startLeg(*m.Who, m.Item, m.PriceMinor)
-			return
+		} else {
+			s.adoptPick(m.Item, m.PriceMinor)
 		}
-		s.adoptPick(m.Item, m.PriceMinor)
+		s.chose = m.Item
 	}
 }
 
@@ -657,4 +673,20 @@ func agentMoveLine(m dealAgentMove) string {
 		return "the agent couldn't go on: " + strings.ReplaceAll(m.Reason, "_", " ")
 	}
 	return "agent move"
+}
+
+// changesPick reports whether a step changes what the errand is buying
+// within a leg: the agent's choice, or a journey-era intent naming an item.
+func changesPick(e dealEvent) bool {
+	return (e.AgentMove != nil && e.AgentMove.Move == moveChose) ||
+		(e.Kind == "intent" && e.Journey != "" && e.Intent != nil && e.Intent.Asked.Item != "")
+}
+
+// legFirstContact is a leg's first contact as its record names it: as the
+// baseline names the opening's, its payee is its name when none is given.
+func legFirstContact(w dealWho) dealWho {
+	if w.Payee == "" {
+		w.Payee = w.Name
+	}
+	return w
 }

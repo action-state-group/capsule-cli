@@ -945,6 +945,11 @@ type dealState struct {
 	routeSet     bool
 	routeCouldnt bool
 	options      []dealOptionShown
+	// chose is the item the agent chose in this leg under the user's
+	// delegation, and legStarted whether a journey record started a leg
+	// (the way to pay is then the leg's own, adopted on approval).
+	chose      string
+	legStarted bool
 }
 
 func foldDeal(events []sealedEvent) (dealState, error) {
@@ -1030,6 +1035,11 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 				s.agreedRecourse = overlayRecourse(s.agreedRecourse, s.recourse)
 				if lastSnapshot.Recourse != nil {
 					s.agreedRecourse = overlayRecourse(s.agreedRecourse, *lastSnapshot.Recourse)
+					// A leg that started with no way to pay takes the one
+					// the user approved as its own (deal_journey.go).
+					if s.legStarted || s.open.Recourse.Rail == "" {
+						s.recourse = overlayRecourse(s.recourse, *lastSnapshot.Recourse)
+					}
 				}
 			}
 		}
@@ -1353,7 +1363,13 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	// the check, so "proceed" is never true on an empty card. Which picks are
 	// material is the materiality predicate's to say, not this code's; with
 	// none configured, every pick is (fail safe).
-	for _, a := range r.Picked {
+	for i, a := range r.Picked {
+		// The item the user handed the agent to choose, as it chose it:
+		// its pick under their words, said on the card, never a pause.
+		if a.Field == "item" && s.chose != "" && slices.Contains(intent.Delegated, "item") && strings.EqualFold(strings.TrimSpace(a.Value), strings.TrimSpace(s.chose)) {
+			r.Picked[i].Delegated = true
+			continue
+		}
 		if s.materiality.IsMaterial(a) {
 			add("asked", "agent_picked", a.Field, fmt.Sprintf("I picked %s %s; you didn't choose it", a.Label, a.Value))
 		}
@@ -2450,9 +2466,9 @@ func channelHop(first, now string) bool {
 // identifiers or facts (a new payee in a message is still a new payee). A
 // check sealed before such a step no longer covers an action.
 func changesDetails(e dealEvent) bool {
-	// A new leg is a new counterparty: nothing checked with the one before
-	// covers a step with it.
-	if legStartOf(e) {
+	// A new leg is a new counterparty, and a new pick a new item: nothing
+	// checked before covers a step after it.
+	if legStartOf(e) || changesPick(e) {
 		return true
 	}
 	switch e.Kind {

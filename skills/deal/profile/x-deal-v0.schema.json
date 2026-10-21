@@ -275,7 +275,9 @@
         "proposed": { "description": "On a later intent: it asks for more than the limits in force (a higher limit, a lower floor, a new action, a new delegation), applied only on the user's confirm_limits approval.", "const": true },
         "why_commitment": { "description": "On a switched or raised intent: the salted commitment to the user's own reason.", "$ref": "#/$defs/hex64" }
       },
-      "dependentRequired": { "delegated": ["delegated_commitment"], "delegated_commitment": ["delegated"] }
+      "dependentRequired": { "delegated": ["delegated_commitment"], "delegated_commitment": ["delegated"] },
+      "if": { "required": ["why_commitment"] },
+      "then": { "anyOf": [ { "required": ["move"], "properties": { "move": { "enum": ["switched", "raised"] } } }, { "required": ["proposed"] } ] }
     },
     "body_agent_move": {
       "description": "One of the agent's moves on the errand, its label fixed by move: searched (where, as a commitment, and how many results), options (the shortlist shown: each item as a commitment, with its price; found, how many were found), recommended (the option, from 1, and the stated reason as a commitment), chose (the item the agent chose under the user's delegation, as a commitment, with its price; with a counterparty block when it starts the first leg), couldnt (why the agent could not go on, a closed reason; other has a detail commitment). Texts are never in the clear.",

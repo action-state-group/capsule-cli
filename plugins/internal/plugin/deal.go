@@ -1125,6 +1125,11 @@ func dealOpenCommand() *cobra.Command {
 		default:
 			return cli.InputError("--records must be typed or x-deal-v0")
 		}
+		// The typed task authority carries no delegation yet: a choice the
+		// user hands the agent is recorded on an x-deal-v0 deal.
+		if o.Records == recordsTyped && len(o.Intent.Delegated) > 0 {
+			return cli.InputError("delegated goes on a deal in the x-deal-v0 records: open it without --records typed")
+		}
 		// A deal where the user sells has no untyped path: its offers, the
 		// buyer's acceptance and the commit that rests on it are typed records.
 		if o.Intent.PartyRole == dealRoleSeller && o.Records != recordsTyped {
@@ -1543,6 +1548,9 @@ func dealNoteCommand() *cobra.Command {
 				}
 				if err := ev.Intent.validDelegation(); err != nil {
 					return err
+				}
+				if len(ev.Intent.Delegated) > 0 && dealRecordSet(dealEvent{}, events) == recordsTyped {
+					return cli.InputError("delegated goes on a deal in the x-deal-v0 records: the typed task authority carries no delegation")
 				}
 				if w := ev.Intent.Who; w != nil && *w == (dealWho{}) {
 					return cli.InputError("intent.who needs at least one identifying field")

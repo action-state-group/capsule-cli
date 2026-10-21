@@ -365,11 +365,18 @@ func cardGoodToKnow(w cli.Wording, r dealCheckResult) string {
 	return ""
 }
 
-// isDefaultPick is a pick nobody would call a choice: one of the item, or
-// free shipping.
+// isDefaultPick is a pick nobody would call a choice: one of the item, or a
+// free shipping or delivery option. Only those fields: "free shipping" in
+// any other value (a size, an item) is still a pick.
 func isDefaultPick(a cli.DealAttribute) bool {
 	v := strings.ToLower(strings.TrimSpace(a.Value))
-	return (a.Field == "quantity" && v == "1") || strings.Contains(v, "free shipping") || (a.Field == "shipping" && strings.HasPrefix(v, "free"))
+	switch a.Field {
+	case "quantity":
+		return v == "1"
+	case "shipping", "conditions.shipping", "conditions.delivery":
+		return strings.HasPrefix(v, "free")
+	}
+	return false
 }
 
 // labelOptions gives the check's options their button labels from the

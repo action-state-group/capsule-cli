@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"maps"
 	"strings"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -230,7 +231,9 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 // same place (a postal code or region added) is no change; the way to pay
 // counts only once something was agreed about it with this leg. Every other
 // key counts as changedFields does, a key added included.
-func materialChanges2(agreed, proposed map[string]interface{}, agreedRecourse dealRecourse) int {
+func materialChanges2(agreedIn, proposedIn map[string]interface{}, agreedRecourse dealRecourse) int {
+	// Copies: the caller's maps are read again (offer_fields_changed).
+	agreed, proposed := maps.Clone(agreedIn), maps.Clone(proposedIn)
 	for _, side := range []map[string]interface{}{agreed, proposed} {
 		if _, ok := side["terms.quantity"]; !ok {
 			side["terms.quantity"] = int64(1)

@@ -382,3 +382,173 @@ func TestTheLimitBindsOnTheAmountCharged(t *testing.T) {
 	assert.Contains(t, rules(c), "over_limit")
 	assert.Contains(t, differenceTexts(c), "You asked for this $1.90 purchase specifically", "tax on top of the price the user named")
 }
+
+// The item the agent chose under the user's delegation never pauses as its
+// pick, whatever the materiality predicate (none: every pick is material);
+// another item it put in the cart still does.
+func TestADelegatedChoiceIsNoPauseUnderAnyPredicate(t *testing.T) {
+	materialityFixture(t) // no predicate: every pick pauses
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "intent", `{"verbatim":"use eBay","who":{"name":"eBay","domain":"ebay.com"}}`)
+	note(t, id, "chose", `{"item":"Fawn Sticker","price_minor":175}`)
+	pay := func(item string) map[string]any {
+		return dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"`+item+`","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
+	}
+	chosen := pay("Fawn Sticker")
+	assert.NotContains(t, rules(chosen), "agent_picked")
+	picked := chosen["picked_by_agent"].([]any)
+	require.Len(t, picked, 1)
+	assert.Equal(t, true, picked[0].(map[string]any)["delegated"])
+	other := pay("Fawn vinyl decal")
+	assert.Contains(t, rules(other), "agent_picked", "an item the agent did not choose is its pick")
+}
+
+// A new choice is a new item: an approval given before it covers nothing
+// after it.
+func TestANewChoiceVoidsAnEarlierApproval(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "intent", `{"verbatim":"use eBay","who":{"name":"eBay","domain":"ebay.com"}}`)
+	note(t, id, "chose", `{"item":"Fawn Sticker","price_minor":175}`)
+	pay := `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, pay))
+	if c["verdict"] == "pause" {
+		_, err := answer(t, id, c["check_id"].(string), "ok", shownCard(t, c["card"].(string)))
+		require.NoError(t, err)
+	}
+	note(t, id, "chose", `{"item":"Fawn vinyl decal","price_minor":175}`)
+	act := note(t, id, "act", `{"action":"pay","amount_minor":190,"payee":"eBay","rail":"card"}`)
+	assert.Equal(t, true, act["unchecked"])
+	assert.Equal(t, "changed_after_check", act["rule"])
+}
+
+// A pick named by its merchant alone is the option's item and price: no
+// material change at the check, and the item is the user's now.
+func TestAPickByMerchantIsTheOptionsItem(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "options", fawnOptions)
+	assert.Equal(t, "picked", note(t, id, "intent", `{"verbatim":"the eBay one","who":{"name":"eBay","domain":"ebay.com"}}`)["move"])
+	noteRefused(t, id, "chose", `{"item":"Fawn vinyl decal"}`, "must delegate the item")
+	dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
+	assert.Equal(t, float64(0), checkBodies(t, id)[0]["material_fields_changed"])
+}
+
+// The seller's own change of details is never relabelled the user's switch.
+func TestASellerChangeCannotBecomeASwitch(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "intent", `{"verbatim":"use eBay","who":{"name":"eBay","domain":"ebay.com","phone":"+1 555 010 4000"}}`)
+	note(t, id, "change", `{"source":"seller message","who":{"phone":"+1 555 010 9999"}}`)
+	noteRefused(t, id, "intent", `{"verbatim":"pay the new number","who":{"name":"Fawn Shop","phone":"+1 555 010 9999"}}`, "names the merchant already in play")
+}
+
+// A leg that started with no way to pay takes the one the user approved.
+func TestALegTakesTheApprovedWayToPay(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "intent", `{"verbatim":"use eBay","who":{"name":"eBay","domain":"ebay.com"}}`)
+	note(t, id, "chose", `{"item":"Fawn Sticker","price_minor":175}`)
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name"],"recourse":{"rail":"card","refundable":true}}`))
+	_, err := answer(t, id, c["check_id"].(string), "yes", shownCard(t, c["card"].(string)))
+	require.NoError(t, err)
+	pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190}`))
+	assert.NotEmpty(t, pay["check_id"], "the approved rail is the leg's")
+}
+
+// A typed deal carries no delegation yet.
+func TestATypedDealRefusesADelegation(t *testing.T) {
+	dealFixture(t)
+	out, err := invoke(t, "", "--profile", "deal", "deal", "open", "--records", "typed", "--input", writeJSON(t, fawnErrand))
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, out+err.Error(), "delegated goes on a deal in the x-deal-v0 records")
+}
+
+// "free shipping" is a default only as a shipping or delivery option: in a
+// size it is still the agent's pick.
+func TestOnlyAShippingOptionIsADefault(t *testing.T) {
+	for a, want := range map[cli.DealAttribute]bool{
+		{Field: "quantity", Value: "1"}:                        true,
+		{Field: "quantity", Value: "2"}:                        false,
+		{Field: "conditions.shipping", Value: "Free shipping"}: true,
+		{Field: "conditions.size", Value: "XL, free shipping"}: false,
+		{Field: "item", Value: "sticker with free shipping"}:   false,
+	} {
+		assert.Equal(t, want, isDefaultPick(a), "%+v", a)
+	}
+}
+
+// The profile checker holds an approval to its leg: a disclosure after a
+// switch that claims the earlier leg's approval is rejected.
+func TestTheProfileCheckerVoidsApprovalsAcrossLegs(t *testing.T) {
+	dealFixture(t)
+	// eBay was told the address in an earlier deal: a later telling to it
+	// is a repeat, sealed even with no approval covering it.
+	earlier := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web","intent":{"verbatim":"a sticker","allowed":["pay","share_contact"]},
+		"who":{"name":"eBay","domain":"ebay.com","email":"orders@ebay.com"},"terms":{"currency":"USD"},"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	tellAddress(t, earlier)
+	id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web","intent":{"verbatim":"a fawn sticker","allowed":["pay","share_contact"]},
+		"who":{"name":"AliExpress","domain":"aliexpress.com"},"terms":{"currency":"USD"},"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["address"]}`))
+	_, err := answer(t, id, share["check_id"].(string), "yes", shownCard(t, share["card"].(string)))
+	require.NoError(t, err)
+	note(t, id, "intent", `{"verbatim":"lets change to ebay","who":{"name":"eBay","domain":"ebay.com","email":"orders@ebay.com"}}`)
+	told := note(t, id, "disclosure", `{"fields":[{"class":"address","value":"`+homeStreet+`"}]}`)
+	assert.Equal(t, false, told["approved"])
+	assert.Equal(t, "details changed after the last check", told["reason"])
+	records, export := exportRecords(t, id)
+	checkProfile(t, export)
+	var approval string
+	for _, r := range records {
+		if b := r["x-deal-v0"].(map[string]any); b["record_type"] == "approval" {
+			approval = recordDigest(t, r)
+		}
+	}
+	last := records[len(records)-1]
+	body := last["body"].(map[string]any)
+	body["authority"] = "approval"
+	delete(body, "rule")
+	last["x-deal-v0"].(map[string]any)["refs"] = []any{map[string]any{"rel": "authorized_by", "type": "deal-record", "digest_alg": "SHA-256", "digest": approval}}
+	checkProfileRejects(t, records, "details changed after the check")
+}
+
+// A step sealed before journey records or rule inputs "2" re-derives as it
+// was: an intent with no move and its asked terms whole, a check with the
+// version 1 count (a ZIP added to the place counted, as it was).
+func TestStepsSealedBeforeJourneyReDeriveAsTheyWere(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"service","channel":"web",
+		"intent":{"verbatim":"a cleaner in San Francisco","asked":{"place":"San Francisco"},"max_total_minor":9000,"allowed":["commit"]},
+		"who":{"name":"Clean Co","domain":"clean.example"},"terms":{"item":"cleaning","place":"San Francisco","currency":"USD"},
+		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	note(t, id, "intent", `{"verbatim":"under $80","max_total_minor":8000}`)
+	dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"commit","terms":{"place":"San Francisco, CA 94131"}}`))
+	p, err := cli.LoadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	require.NoError(t, s.useDeal(t.Context(), id, false))
+	events, err := s.load(t.Context(), id)
+	require.NoError(t, err)
+	for i, se := range events {
+		ev := se.Event
+		switch ev.Kind {
+		case "intent":
+			rec, err := buildDealRecord(ev, events[:i], s.dkey)
+			require.NoError(t, err)
+			assert.Equal(t, "narrowed", rec["body"].(map[string]interface{})["move"])
+			ev.Journey = ""
+			rec, err = buildDealRecord(ev, events[:i], s.dkey)
+			require.NoError(t, err)
+			assert.NotContains(t, rec["body"], "move", "an intent sealed before journey records has none")
+		case "snapshot":
+			rec, err := buildDealRecord(ev, events[:i], s.dkey)
+			require.NoError(t, err)
+			assert.EqualValues(t, 0, rec["body"].(map[string]interface{})["material_fields_changed"])
+			ev.RuleInputs = "1"
+			rec, err = buildDealRecord(ev, events[:i], s.dkey)
+			require.NoError(t, err)
+			assert.EqualValues(t, 1, rec["body"].(map[string]interface{})["material_fields_changed"], "version 1 counted the refined place")
+		}
+	}
+}

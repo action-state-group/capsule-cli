@@ -815,7 +815,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 				return nil, err
 			}
 			if ev.Intent.Who != nil {
-				setIDs(counterpartyIDs(key, *ev.Intent.Who))
+				setIDs(counterpartyIDs(key, legFirstContact(*ev.Intent.Who)))
 			}
 		}
 	case "agent_move":
@@ -824,7 +824,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			return nil, err
 		}
 		if m := ev.AgentMove; m.Move == moveChose && m.Who != nil {
-			setIDs(counterpartyIDs(key, *m.Who))
+			setIDs(counterpartyIDs(key, legFirstContact(*m.Who)))
 		}
 	case "message":
 		rtype = "message"

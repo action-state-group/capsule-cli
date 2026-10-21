@@ -745,13 +745,24 @@ def check_chain(records):
             if accepted is None:
                 fail(i, f"the latest offer has no recorded acceptance: the {what} needs one")
             for k in range(accepted + 1, i):
-                kb = records[k]["x-deal-v0"]
-                identity = kb["record_type"] in ("message", "evidence") and (
-                    "counterparty" in kb or "counterparty_facts" in records[k]["body"])
-                if kb["record_type"] == "detail_change" or identity:
+                if changes_details(k):
                     fail(i, f"details changed after the other party accepted; the {what} needs the offer made and accepted again")
             if by_rel.get("source") != [accepted]:
                 fail(i, f"a seller's {what} cites the acceptance it rests on (source)")
+
+        def changes_details(k):
+            """A record after which no earlier check covers a step: the
+            counterparty's change of details, a message or evidence naming
+            an identity, a new leg (an intent naming another counterparty),
+            or a new pick (an intent naming an item, or the agent's chose)
+            (section 6, rules 5 and 13)."""
+            kb, kbody = records[k]["x-deal-v0"], records[k]["body"]
+            t_k = kb["record_type"]
+            identity = t_k in ("message", "evidence") and ("counterparty" in kb or "counterparty_facts" in kbody)
+            leg = t_k == "intent" and "counterparty" in kb
+            pick = (t_k == "intent" and "move" in kbody and "item" in kbody.get("asked", {})) or \
+                (t_k == "agent_move" and kbody.get("move") == "chose")
+            return t_k == "detail_change" or identity or leg or pick
 
         def authorized_check(ja, action, what):
             """Section 6, rule 5: the approval proceeds, is unused, is the
@@ -773,10 +784,7 @@ def check_chain(records):
             if chk["body"]["action"] != action:
                 fail(i, f"the {what} differs from the one checked")
             for k in range(jc + 1, i):
-                kb = records[k]["x-deal-v0"]
-                identity = kb["record_type"] in ("message", "evidence") and (
-                    "counterparty" in kb or "counterparty_facts" in records[k]["body"])
-                if kb["record_type"] == "detail_change" or identity:
+                if changes_details(k):
                     fail(i, f"details changed after the check; the {what} needs a new check")
             return chk
 
@@ -798,10 +806,7 @@ def check_chain(records):
                 if allowed is not None and action not in allowed and action != "represent":
                     fail(i, "the task authority does not allow this action")
                 for k in range(jc + 1, i):
-                    kb = records[k]["x-deal-v0"]
-                    identity = kb["record_type"] in ("message", "evidence") and (
-                        "counterparty" in kb or "counterparty_facts" in records[k]["body"])
-                    if kb["record_type"] == "detail_change" or identity:
+                    if changes_details(k):
                         fail(i, f"details changed after the check; the {what} needs a new check")
                 return jt, None, chk
             if records[jt]["body"].get("approver") != "user":
@@ -950,8 +955,9 @@ def check_chain(records):
                 bounds_known = False
             if body.get("allowed") is not None:
                 allowed = [a for a in body["allowed"] if allowed is None or a in allowed]
-            # Naming the item takes it back from the agent's delegation.
-            if body.get("asked", {}).get("item") is not None:
+            # Naming the item, or picking an option, takes the item back
+            # from the agent's delegation.
+            if body.get("asked", {}).get("item") is not None or body.get("move") == "picked":
                 delegated = [d for d in delegated if d != "item"]
         elif t == "agent_move":
             # The agent chooses an item only where the user's words handed
