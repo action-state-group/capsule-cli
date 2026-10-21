@@ -648,7 +648,10 @@ func toldItems(told []dealToldItem, withValues bool) []interface{} {
 		text := "Told " + t.To + ": " + strings.Join(classes, ", ")
 		if !withValues {
 			who := "the other party"
-			if namedRecipient(t.ToKind) {
+			switch t.ToKind {
+			case "platform":
+				who = "a platform"
+			case "other":
 				who = "someone other than the other party"
 			}
 			text = "Told " + who + ": " + strings.Join(classes, ", ")

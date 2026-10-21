@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -126,4 +128,56 @@ func TestPlatformKeysKeepTheMarketplaceDomain(t *testing.T) {
 	assert.Equal(t, counterpartyKeys(dealWho{RelayAddress: "reply-1@relay.example"}, ""), platformKeys(dealWho{RelayAddress: "reply-1@relay.example"}))
 	assert.Equal(t, platformKeys(dealWho{Domain: "ebay.com"}), recipientKeys("platform", dealWho{Domain: "ebay.com"}, "marketplace"))
 	assert.Empty(t, recipientKeys("other", dealWho{Domain: "ebay.com"}, "marketplace"))
+}
+
+// In typed records a share that passes is covered by its own evaluation,
+// not by an approval: a repeat email to the same platform stays covered,
+// and an approval of the counterparty never covers a platform.
+func TestDealTypedRepeatToAPlatformIsCovered(t *testing.T) {
+	dealFixture(t)
+	open := func() string {
+		return dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, `{"type":"purchase","channel":"marketplace",
+		"intent":{"verbatim":"buy the bike","allowed":["pay","share_contact"]},
+		"who":{"name":"Garage Sale Gary","profile_id":"mkt:seller:4411"},
+		"terms":{"item":"bike","price_minor":12000,"currency":"USD"},
+		"recourse":{"rail":"cash","refundable":false}}`))["deal_id"].(string)
+	}
+	dealID := open()
+	first := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, ebayEmail))
+	require.Equal(t, "pause", first["verdict"])
+	card := filepath.Join(t.TempDir(), "card.txt")
+	require.NoError(t, os.WriteFile(card, []byte(first["card"].(string)), 0o600))
+	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", first["check_id"].(string), "--choice", "proceed", "--said", "ok, eBay", "--shown-card", card)
+	require.Equal(t, true, dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t, platformEmailNote("ebay.com")))["approved"])
+
+	again := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, ebayEmail))
+	require.Equal(t, "pass", again["verdict"], again["card"])
+	repeat := dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t, platformEmailNote("ebay.com")))
+	assert.Equal(t, true, repeat["approved"], repeat["reason"])
+
+	// The counterparty's approval does not cover a platform.
+	other := open()
+	check := dealRun(t, "check", "--deal", other, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["phone"]}`))
+	require.NoError(t, os.WriteFile(card, []byte(check["card"].(string)), 0o600))
+	dealRun(t, "note", "--deal", other, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok", "--shown-card", card)
+	held := heldNote(t, other, `{"to":"platform","who":{"domain":"craigslist.org"},"fields":[{"class":"phone","value":"+1 555 010 4477"}]}`)
+	assert.Equal(t, []any{"phone"}, held["held"])
+}
+
+// A shared copy says a platform was told, never who or what value; deal
+// list counts a platform among "others", once per platform, by its domain.
+func TestDealPlatformTellingInTheSharedCopyAndTheList(t *testing.T) {
+	email := []dealDisclosureField{{Class: "email", Value: homeEmail}}
+	items := toldItems([]dealToldItem{{To: "eBay", ToKind: "platform", Fields: email, Authority: "approval"}}, false)
+	text := items[0].(map[string]interface{})["text"].(string)
+	assert.Equal(t, "Told a platform: email", text)
+
+	tally := newDealToldTally()
+	tally.add("deal-a", dealDisclosure{To: "platform", Who: &dealWho{Domain: "ebay.com"}, Fields: email}, dealOpen{Channel: "marketplace"}, dealRoleSeller)
+	tally.add("deal-b", dealDisclosure{To: "platform", Who: &dealWho{Domain: "www.ebay.com"}, Fields: email}, dealOpen{Channel: "marketplace"}, dealRoleBuyer)
+	for _, r := range tally.rows() {
+		if r.Class == "email" {
+			assert.Equal(t, dealListTold{Class: "email", Recipients: 1, ToOthers: 1}, r)
+		}
+	}
 }

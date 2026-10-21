@@ -298,21 +298,17 @@ func firstTellings(events []sealedEvent, approval string, fields []dealDisclosur
 	return out
 }
 
-// approvingSnapshot is the snapshot of the check an approval answered.
+// approvingSnapshot is the snapshot of the check behind an authorization:
+// the check an approval answered or, in typed records, the passing check
+// whose evaluation authorized the step itself (actSnapshot).
 func approvingSnapshot(events []sealedEvent, approval string) *dealSnapshot {
-	byID := map[string]dealEvent{}
-	for _, se := range events {
-		byID[se.CapsuleID] = se.Event
-	}
-	a := byID[approval].Approval
-	if a == nil {
+	if approval == "" {
 		return nil
 	}
-	ck := byID[a.Check].Check
-	if ck == nil {
-		return nil
+	if se, ok := actSnapshot(events, approval); ok {
+		return se.Event.Snapshot
 	}
-	return byID[ck.Snapshot].Snapshot
+	return nil
 }
 
 // sameRecipient reports whether the check behind approval was about the same

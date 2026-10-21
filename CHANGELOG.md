@@ -12,7 +12,13 @@
   platform is known by its registrable domain, a marketplace's included, so
   its approval and its first telling are its own: the first email to a
   platform pauses, a repeat to it passes, and another platform pauses again,
-  with or without the counterparty memory.
+  with or without the counterparty memory. A shared copy says "Told a
+  platform", and `deal list` counts a platform under `to_others`, once per
+  platform.
+- **Fixed:** in typed records, a disclosure covered by a passing check's own
+  evaluation (no approval needed) is matched to that check's recipient, so a
+  repeat telling to the same recipient is no longer sealed as
+  `approval_for_another_party`.
 - **Changed:** `platform` joins the `disclosing_to`, disclosure `to` and
   `recipient_role` enums of `x-deal-v0` and the typed records. `other`
   still seals `third_party`.
