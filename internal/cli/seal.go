@@ -201,7 +201,23 @@ func (e *InputFileError) Error() string {
 	return "cannot read input file: " + e.Path
 }
 
-func ReadInput(path string) ([]byte, error) {
+// MaxBundleInput bounds an Evidence Bundle file read whole by the commands
+// that verify or render one (verify --bundle, presentation build and list,
+// book report build). It is larger than MaxInput because a book's bundle
+// carries its transcripts: measured on the tau2 launch books (2026-10-16),
+// one week is 3-20 MB and one month 41-88 MB, against MaxInput's 12 MiB.
+// 128 MiB holds the largest month measured with half again to spare, and a
+// week several times over. The bound is also a memory bound: `report build`
+// peaked at 11-14 times the file in resident memory (88 MB: about 1 GB), so
+// a 128 MiB bundle stays under about 2 GB, inside a 3 GiB job cap.
+const MaxBundleInput = 128 << 20
+
+func ReadInput(path string) ([]byte, error) { return readInputCapped(path, MaxInput) }
+
+// ReadBundleInput reads an Evidence Bundle file, at most MaxBundleInput bytes.
+func ReadBundleInput(path string) ([]byte, error) { return readInputCapped(path, MaxBundleInput) }
+
+func readInputCapped(path string, limit int) ([]byte, error) {
 	if path == "" {
 		return nil, InputError("an input file is required: pass the command's file flag (see --help)")
 	}
@@ -209,7 +225,7 @@ func ReadInput(path string) ([]byte, error) {
 	if e != nil {
 		return nil, errors.Join(ErrInput, &InputFileError{Path: path, NotFound: errors.Is(e, fs.ErrNotExist)})
 	}
-	b, e := io.ReadAll(io.LimitReader(f, MaxInput+1))
+	b, e := io.ReadAll(io.LimitReader(f, int64(limit)+1))
 	e = errors.Join(e, f.Close())
 	if e != nil {
 		// A read/close failure on the caller-supplied file (e.g. it is a
@@ -217,8 +233,8 @@ func ReadInput(path string) ([]byte, error) {
 		// and name the path, not the generic operational catch-all.
 		return nil, errors.Join(ErrInput, &InputFileError{Path: path})
 	}
-	if len(b) > MaxInput {
-		return nil, InputError("the input exceeds the 12 MiB size limit")
+	if len(b) > limit {
+		return nil, InputError(fmt.Sprintf("the input exceeds the %d MiB size limit", limit>>20))
 	}
 	return b, nil
 }

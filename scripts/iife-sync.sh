@@ -1,41 +1,54 @@
 #!/usr/bin/env bash
-# Rebuild the browser runtime `report build` embeds from an agent-action-capsule
-# checkout and compare it with the vendored copy.
+# Rebuild the browser runtime `report build` embeds from a capsule-viewer
+# checkout (the page code) and an agent-action-capsule checkout (the
+# verifier), and compare it with the vendored copy.
 #
-#   scripts/iife-sync.sh <aac-checkout> [--check]
+#   scripts/iife-sync.sh <capsule-viewer checkout> <agent-action-capsule checkout> [--check]
 #
+# The two checkouts should sit at the commits evidenceGraphIIFESource in
+# internal/cli/evidence_graph_assets.go names (scripts/build-evidence-graph-iife.sh
+# fetches them itself). scripts/build-report-runtime.mjs does the bundling.
 # Without --check the rebuilt file replaces internal/cli/assets/evidence-graph.iife.js
 # and its digest is printed, to be pinned in internal/cli/evidence_graph_assets.go
-# (evidenceGraphIIFEDigest / evidenceGraphIIFESource) and in assets/README.md
-# together. With --check the vendored copy must already equal the rebuild
-# (exit 1 otherwise) -- the drift guard for a vendored build artifact.
+# (EvidenceGraphIIFEDigest / evidenceGraphIIFESource), evidence-graph.iife.js.sha256
+# and assets/README.md together. With --check the vendored copy must already
+# equal the rebuild (exit 1 otherwise) -- the drift guard for a vendored
+# build artifact.
 #
 # Node is needed here, at build time of this repository, never at render
 # time: `capsulectl report build` embeds the bytes this script vendored.
 set -euo pipefail
 
-aac="${1:-}"
-mode="${2:-}"
-if [[ -z "$aac" || ! -d "$aac/ts" ]]; then
-  echo "usage: $0 <agent-action-capsule checkout> [--check]" >&2
+cv="${1:-}"
+aac="${2:-}"
+mode="${3:-}"
+if [[ -z "$cv" || ! -d "$cv/ts" || -z "$aac" || ! -d "$aac/ts" ]]; then
+  echo "usage: $0 <capsule-viewer checkout> <agent-action-capsule checkout> [--check]" >&2
   exit 2
 fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 vendored="$repo_root/internal/cli/assets/evidence-graph.iife.js"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
 
-(cd "$aac/ts" && npm ci --silent && npm run --silent emitter:iife) >/dev/null
-built="$aac/ts/dist/evidence-graph.iife.js"
-commit="$(git -C "$aac" rev-parse HEAD)"
+# Install scripts stay off: both lockfiles resolve to registry packages.
+for d in "$cv/ts" "$aac/ts"; do
+  (cd "$d" && npm ci --silent --ignore-scripts --no-audit --no-fund) >/dev/null
+done
+built="$work/evidence-graph.iife.js"
+node "$repo_root/scripts/build-report-runtime.mjs" "$cv" "$aac" "$built"
+commits="capsule-viewer $(git -C "$cv" rev-parse HEAD), agent-action-capsule $(git -C "$aac" rev-parse HEAD)"
 digest="$(shasum -a 256 "$built" | cut -d' ' -f1)"
 
 if [[ "$mode" == "--check" ]]; then
   if cmp -s "$built" "$vendored"; then
-    echo "vendored IIFE matches the rebuild at $commit ($digest)"
+    echo "vendored IIFE matches the rebuild at $commits ($digest)"
     exit 0
   fi
-  echo "vendored IIFE differs from the rebuild at $commit ($digest); run $0 $aac to refresh, then pin the digest" >&2
+  echo "vendored IIFE differs from the rebuild at $commits ($digest); run $0 $cv $aac to refresh, then pin the digest" >&2
   exit 1
 fi
 cp "$built" "$vendored"
-echo "vendored $vendored from $commit"
+echo "$digest" >"$vendored.sha256"
+echo "vendored $vendored from $commits"
 echo "sha256: $digest -- pin it in internal/cli/evidence_graph_assets.go and internal/cli/assets/README.md"

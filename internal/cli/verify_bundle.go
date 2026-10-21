@@ -173,7 +173,7 @@ func verifyBundleFile(c *cobra.Command, path string) error {
 		}
 		directory = &rows
 	}
-	raw, err := ReadInput(path)
+	raw, err := ReadBundleInput(path)
 	if err != nil {
 		return err
 	}

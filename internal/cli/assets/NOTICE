@@ -1,8 +1,10 @@
-evidence-graph.iife.js is built from agent-action-capsule (ts/src/browser.ts) and
-cll-ts by scripts/build-evidence-graph-iife.sh, at the commits that script prints.
-It is vendored unmodified; evidence-graph.iife.js.sha256 records its digest.
+evidence-graph.iife.js is built from capsule-viewer (ts/src/browser.ts, the page
+code), agent-action-capsule (ts/src, the verifier) and cll-ts by
+scripts/build-evidence-graph-iife.sh, at the commits that script prints.
+It is vendored as built; evidence-graph.iife.js.sha256 records its digest.
 
-agent-action-capsule license:
+agent-action-capsule license (also the license of the files capsule-viewer
+moved from it; capsule-viewer's own code is Apache-2.0):
 
 BSD 3-Clause License
 

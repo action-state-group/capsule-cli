@@ -329,7 +329,7 @@ func reportCommands() *cobra.Command {
 				return err
 			}
 		}
-		raw, err := cli.ReadInput(bundlePath)
+		raw, err := cli.ReadBundleInput(bundlePath)
 		if err != nil {
 			return err
 		}

@@ -315,8 +315,8 @@ as one local, self-contained page, built on this machine: nothing is hosted
 and no link is minted. The page embeds an AAC Evidence Bundle of the deal's
 own log (every step, its membership proof, the chain back to the opening
 step, the signed checkpoint) in capsule-viewer's emitter shell, with
-agent-action-capsule's own browser verifier, vendored unmodified in
-`internal/cli/assets/` (rebuild and compare with
+agent-action-capsule's own browser verifier, bundled with capsule-viewer's
+page code in `internal/cli/assets/` (rebuild and compare with
 `scripts/build-evidence-graph-iife.sh`). Each item expands to
 its steps, and a step's line is shown only if the verifier matched its record
 against the step's seal; the words shown come from this device's local

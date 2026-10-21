@@ -440,7 +440,7 @@ func presentationCommands() *cobra.Command {
 			}
 			return err
 		}
-		raw, err := ReadInput(bundlePath)
+		raw, err := ReadBundleInput(bundlePath)
 		if err != nil {
 			return err
 		}

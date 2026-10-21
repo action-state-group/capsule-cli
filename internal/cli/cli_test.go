@@ -261,6 +261,26 @@ func TestInputBoundsAndUnknownFields(t *testing.T) {
 	_, e := ParseRequest([]byte(`{"spec_version":"old"}`))
 	require.Error(t, e)
 }
+
+// A bundle file has its own, larger bound: a book's bundle carries its
+// transcripts. Every other input file keeps MaxInput.
+func TestBundleInputBound(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, size int) string {
+		path := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(path, bytes.Repeat([]byte(" "), size), 0o600))
+		return path
+	}
+	week := write("week.json", MaxInput+1)
+	_, e := ReadInput(week)
+	require.ErrorContains(t, e, "the input exceeds the 12 MiB size limit")
+	raw, e := ReadBundleInput(week)
+	require.NoError(t, e, "a bundle over MaxInput reads as a bundle")
+	assert.Len(t, raw, MaxInput+1)
+	_, e = ReadBundleInput(write("runaway.json", MaxBundleInput+1))
+	require.ErrorContains(t, e, "the input exceeds the 128 MiB size limit")
+	assert.True(t, errors.Is(e, ErrInput))
+}
 func TestReadOnlyFailsBeforeConnection(t *testing.T) {
 	p, _ := profileFixture(t)
 	p.ReadOnly = true
