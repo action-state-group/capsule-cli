@@ -22,6 +22,7 @@
 - **Changed:** `platform` joins the `disclosing_to`, disclosure `to` and
   `recipient_role` enums of `x-deal-v0` and the typed records. `other`
   still seals `third_party`.
+
 ### Merchant email keys over DNS-over-HTTPS (capsule-cli#343)
 
 - **Added: a DNS-over-HTTPS fallback for DKIM and DMARC records.** `deal
