@@ -112,6 +112,11 @@ func cardWhy(w cli.Wording, r dealCheckResult, snap dealSnapshot, f cardFacts) [
 		if !applies || (row.key == "card.why.rules_ask" && len(why) > 0) {
 			continue
 		}
+		// A first dealing is said only beside the rules' own reason, never
+		// in its place.
+		if row.key == "card.why.first_dealing" && !slices.Contains(why, w.Line("card.why.rules_ask", nil)) {
+			continue
+		}
 		what := f.picked
 		if row.key == "card.why.first_disclosure.some" {
 			what = f.told
@@ -408,6 +413,17 @@ func labelOptions(w cli.Wording, r *dealCheckResult, snap dealSnapshot, state de
 func promisedPay(events []sealedEvent, state dealState, snap dealSnapshot) bool {
 	if snap.Action != "pay" || paid(events) || !slices.Contains(state.intent.Allowed, "pay") {
 		return false
+	}
+	// A promise is kept once the user answered its pause with a yes; a Hold
+	// leaves it standing.
+	promisedChecks := map[string]bool{}
+	for _, se := range events {
+		if c := se.Event.Check; se.Event.Kind == "check" && c != nil && hasRule(*c, "promised_ask") {
+			promisedChecks[se.CapsuleID] = true
+		}
+		if a := se.Event.Approval; a != nil && promisedChecks[a.Check] && a.Proceed && a.Reason == "" {
+			return false
+		}
 	}
 	// The promise is the one a share card made: paused (a deny makes none),
 	// in a deal that then allowed paying.

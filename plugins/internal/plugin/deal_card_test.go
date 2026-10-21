@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,6 +44,7 @@ func TestTheCardCollapsesReasons(t *testing.T) {
 		{"a deny says the rules don't allow it", dealCheckResult{Differences: diffs("rules_deny", "rules_deny", "first_disclosure")}, share, []string{"your rules don't allow this", "first time they get your details"}},
 		{"a rules escalation alone speaks", dealCheckResult{Differences: diffs("rules_escalate")}, pay, []string{"your rules ask for your OK on this"}},
 		{"rules not checked", dealCheckResult{Differences: diffs("rules_not_checked")}, pay, []string{"I couldn't check this against your rules"}},
+		{"a first dealing never stands in for the rules", dealCheckResult{Differences: diffs("terms_changed", "rules_escalate"), Recipient: firstTime}, pay, []string{"the terms changed since you agreed"}},
 		{"at most two", dealCheckResult{Differences: diffs("payee_or_contact_changed", "pay_before_seeing", "over_limit", "not_asked")}, pay, []string{"the payee or contact changed since you first talked", "you haven't seen the item yet"}},
 		{"a changed way back", dealCheckResult{Differences: diffs("recourse_changed")}, pay, []string{"the way to get your money back changed"}},
 		{"a rail with no way back, as agreed", dealCheckResult{Differences: diffs("irreversible_rail")}, pay, []string{"money paid this way can't be pulled back"}},
@@ -197,8 +199,15 @@ func TestAPromisedPaymentIsAskedAndSealed(t *testing.T) {
 	assertPlainCard(t, pay)
 	_, err = answer(t, id, pay["check_id"].(string), "ok pay", shownCard(t, pay["card"].(string)))
 	require.NoError(t, err)
+	// A re-check before paying (a check gone stale) does not ask again: the
+	// promise was kept by the yes.
+	recheck := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
+	assert.Equal(t, "pass", recheck["verdict"])
 	act := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"rail":"card"}`))
 	assert.Contains(t, act["say"], "You OK'd 2 things on the way: sharing your details and paying $1.90.")
+	raw, err := json.Marshal(dealRun(t, "report", "--deal", id)["anomalies"])
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "asked_vs_did", "a promise kept is no anomaly")
 	again := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
 	assert.Equal(t, "pass", again["verdict"], "once paid, the promise is kept")
 	assert.Equal(t, cli.VoiceSilent, again["voice"])
@@ -341,4 +350,24 @@ func TestTheDealSkillPresentsTheCardAsRuled(t *testing.T) {
 	for _, product := range []string{"Muse", "Buzz", "Action State", "Checkup"} {
 		assert.NotContains(t, text, product, "a public skill names no product")
 	}
+}
+
+// A Hold on the promised pay is sealed like any answer, and the next pay
+// check still asks: the promise stands until the user pays.
+func TestAHoldOnThePromisedPayIsSealedAndAskedAgain(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnShare))
+	_, err := answer(t, id, share["check_id"].(string), "yes", shownCard(t, share["card"].(string)))
+	require.NoError(t, err)
+	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-allow", checkerPrints("allow", passFinding))}})
+	pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
+	require.Equal(t, "pause", pay["verdict"])
+	held := dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", pay["check_id"].(string), "--choice", "hold", "--said", "not yet", "--shown-card", shownCard(t, pay["card"].(string)))
+	assert.Equal(t, false, held["proceed"])
+	assert.NotEmpty(t, held["capsule_id"], "the hold is sealed")
+	assert.Equal(t, words("say.approval.hold"), held["say"])
+	again := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
+	assert.Equal(t, "pause", again["verdict"], "the promise stands until the user pays")
+	assert.Contains(t, again["card"], "I said I'd check with you before paying")
 }
