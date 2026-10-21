@@ -36,7 +36,7 @@ func firstTelling(t *testing.T, check map[string]any, name, what string) {
 	assert.Equal(t, name, recipient["name"])
 	assert.Equal(t, true, recipient["first_time"])
 	assert.Contains(t, differenceTexts(check), "First time telling "+name+" your "+what)
-	assert.Contains(t, check["card"], "Why I'm asking: first time this seller gets your details.")
+	assert.Contains(t, check["card"], "Why I'm asking: first time they get your details.")
 }
 
 func shareCheck(t *testing.T, dealID, classes string) map[string]any {
@@ -82,7 +82,7 @@ func TestDealPausesOnTheRecipientNotTheField(t *testing.T) {
 	pay := dealRun(t, "check", "--deal", again, "--input", writeJSON(t, `{"action":"pay","amount_minor":1200,"authorized_max_minor":1200,"terms":{"price_minor":1200}}`))
 	require.Equal(t, "pause", pay["verdict"])
 	assert.Equal(t, false, pay["recipient"].(map[string]any)["first_time"])
-	assert.NotContains(t, pay["card"], "first payment to this seller")
+	assert.NotContains(t, pay["card"], "first time dealing with this seller")
 
 	// A stranger on a marketplace: the same address pauses, naming them.
 	stranger := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"marketplace",
@@ -192,7 +192,7 @@ func TestDealSharedPlatformIsNotOneCounterparty(t *testing.T) {
 		assert.Equal(t, "pause", check["verdict"], "%s is not seller A", who)
 		assert.Equal(t, true, check["recipient"].(map[string]any)["first_time"], who)
 		assert.Contains(t, differenceTexts(check), "your street address", who)
-		assert.Contains(t, check["card"], "first time this seller gets your details", who)
+		assert.Contains(t, check["card"], "first time they get your details", who)
 	}
 
 	// Seller A again, by profile id: a note.

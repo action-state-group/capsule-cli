@@ -33,17 +33,19 @@ func TestTheCardCollapsesReasons(t *testing.T) {
 		snap dealSnapshot
 		want []string
 	}{
-		{"first payment: r02 and r06 are one reason", dealCheckResult{Differences: diffs("rules_escalate", "rules_escalate"), Recipient: firstTime}, pay, []string{"first payment to this seller"}},
-		{"first time this seller gets your details: every first telling is one reason", dealCheckResult{Differences: diffs("first_disclosure", "first_disclosure", "first_disclosure", "first_disclosure", "rules_escalate", "rules_escalate")}, share, []string{"first time this seller gets your details"}},
+		{"r02 and r06 to someone first dealt with are one reason", dealCheckResult{Differences: diffs("rules_escalate", "rules_escalate"), Recipient: firstTime}, pay, []string{"first time dealing with this seller"}},
+		{"a first dealing alone is no reason", dealCheckResult{Differences: diffs("terms_changed"), Recipient: firstTime}, pay, []string{"the terms changed since you agreed"}},
+		{"every first telling is one reason", dealCheckResult{Differences: diffs("first_disclosure", "first_disclosure", "first_disclosure", "first_disclosure", "rules_escalate", "rules_escalate"), Recipient: firstTime}, share, []string{"first time they get your details"}},
 		{"over the limit", dealCheckResult{Differences: diffs("over_limit")}, pay, []string{"it's over your $2 limit"}},
 		{"payee changed comes first", dealCheckResult{Differences: diffs("first_disclosure", "payee_or_contact_changed", "over_limit")}, pay, []string{"the payee or contact changed since you first talked", "it's over your $2 limit"}},
 		{"a login and a code are one reason", dealCheckResult{Differences: diffs("verification_code_request", "credentials_requested")}, share, []string{"they asked for a login or a code"}},
 		{"what you asked vs this", dealCheckResult{Differences: diffs("not_asked", "not_asked")}, pay, []string{"it's not what you asked for"}},
-		{"a deny says the rules don't allow it", dealCheckResult{Differences: diffs("rules_deny", "rules_deny", "first_disclosure")}, share, []string{"your rules don't allow this", "first time this seller gets your details"}},
+		{"a deny says the rules don't allow it", dealCheckResult{Differences: diffs("rules_deny", "rules_deny", "first_disclosure")}, share, []string{"your rules don't allow this", "first time they get your details"}},
 		{"a rules escalation alone speaks", dealCheckResult{Differences: diffs("rules_escalate")}, pay, []string{"your rules ask for your OK on this"}},
 		{"rules not checked", dealCheckResult{Differences: diffs("rules_not_checked")}, pay, []string{"I couldn't check this against your rules"}},
 		{"at most two", dealCheckResult{Differences: diffs("payee_or_contact_changed", "pay_before_seeing", "over_limit", "not_asked")}, pay, []string{"the payee or contact changed since you first talked", "you haven't seen the item yet"}},
-		{"no way back", dealCheckResult{Differences: diffs("irreversible_rail", "recourse_changed")}, pay, []string{"the way to get your money back changed"}},
+		{"a changed way back", dealCheckResult{Differences: diffs("recourse_changed")}, pay, []string{"the way to get your money back changed"}},
+		{"a rail with no way back, as agreed", dealCheckResult{Differences: diffs("irreversible_rail")}, pay, []string{"money paid this way can't be pulled back"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, cardWhy(w, tc.r, tc.snap, cardFacts{limit: "$2"}))
@@ -82,6 +84,9 @@ func TestDefaultsAreNotPicks(t *testing.T) {
 // cardOf is a check's card as the user reads it, then its buttons.
 func cardOf(check map[string]any) string {
 	var labels []string
+	if check["verdict"] != "pass" && check["card"] != check["approval_text"] {
+		panic("the card sealed is not the card shown")
+	}
 	for _, o := range check["options"].([]any) {
 		labels = append(labels, "<"+o.(map[string]any)["label"].(string)+">")
 	}
@@ -148,8 +153,17 @@ func TestTheCardGoldens(t *testing.T) {
 		cards["payee-changed"] = text
 	})
 
+	t.Run("demo stop", func(t *testing.T) {
+		id := open(t, strings.Replace(strings.Replace(fawnOpen, `"type":"purchase",`, `"type":"purchase","demo":true,`, 1), `"who":{"name":"sticker_shop_example","domain":"marketplace.example"}`,
+			`"who":{"name":"sticker_shop_example","domain":"marketplace.example","phone":"+1 555 0100"}`, 1))
+		check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"who":{"payee":"sticker-payouts-2"},"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
+		require.Equal(t, "pause", check["verdict"])
+		assert.True(t, strings.HasPrefix(check["card"].(string), "DEMO · STOP: CHECK THIS\n"))
+		cards["demo-stop"] = cardOf(check)
+	})
+
 	var got strings.Builder
-	for _, name := range []string{"share", "pay", "deny", "over-limit", "payee-changed"} {
+	for _, name := range []string{"share", "pay", "deny", "over-limit", "payee-changed", "demo-stop"} {
 		got.WriteString("== " + name + "\n" + cards[name] + "\n")
 		for _, never := range []string{"r02", "r03", "r06", "r11", "r12", "selector", "digest", "not measured", "quantity 1", "deal-", "UTC"} {
 			assert.NotContains(t, cards[name], never, name)
@@ -186,4 +200,127 @@ func TestAPromisedPaymentIsAskedEvenWhenItPasses(t *testing.T) {
 	dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"rail":"card"}`))
 	again := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
 	assert.Equal(t, cli.VoiceSilent, again["voice"], "once paid, the promise is kept")
+}
+
+// Every card, as the user reads it, against what a card never holds.
+func assertPlainCard(t *testing.T, check map[string]any) {
+	t.Helper()
+	if check["verdict"] == "pass" {
+		assert.Equal(t, "", check["card"], "a pass seals no card")
+		return
+	}
+	assert.Equal(t, check["approval_text"], check["card"], "the card sealed is the card shown")
+	assert.Equal(t, check["card"], check["say"], "the card is what is said")
+	for _, never := range []string{"[Hold]", "Hold", "--", "profile update", "digest", "selector", "not measured", "UTC", "deal-", "•"} {
+		assert.NotContains(t, check["card"], never)
+	}
+	assert.NotRegexp(t, `\b[rR][0-9]{2}\b`, check["card"], "no rule ids")
+}
+
+// The facts line says over exactly when the check found it over.
+func TestTheFactsAndTheReasonAgreeOnTheLimit(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	// The price is over the limit though the charge is not: the check
+	// binds the price.
+	over := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":250},"recourse":{"rail":"card","refundable":true}}`))
+	require.Equal(t, "pause", over["verdict"])
+	assert.Contains(t, over["card"], "over your $2")
+	assert.Contains(t, over["card"], "it's over your $2 limit")
+	assert.NotContains(t, over["card"], "within your")
+	assertPlainCard(t, over)
+}
+
+// A purchase the user named, at its price, over the limit, is an exception
+// on the card exactly when the check sealed it as one.
+func TestTheExceptionFollowsTheCheck(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+		"intent":{"verbatim":"buy the Otterly Chaos poster for $60","asked":{"item":"Otterly Chaos poster","price_minor":6000},"max_total_minor":2500,"allowed":["pay"]},
+		"who":{"name":"Sticker Marketplace","domain":"stickers.example"},
+		"terms":{"item":"Otterly Chaos poster","price_minor":6000,"currency":"USD"},
+		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+	asked := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":6000,"authorized_max_minor":6000,"recourse":{"rail":"card","refundable":true}}`))
+	assert.Contains(t, asked["card"], "you asked for this one, but it's over your $25 limit")
+	// A larger authorized maximum is not the price the user named: plain
+	// over the limit, as the sealed difference says.
+	held := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":6000,"authorized_max_minor":7000,"recourse":{"rail":"card","refundable":true}}`))
+	assert.Contains(t, held["card"], "it's over your $25 limit")
+	assert.NotContains(t, held["card"], "you asked for this one")
+}
+
+// A recipient already dealt with is told what they get for the first time,
+// never that it is their first time.
+func TestAKnownRecipientIsToldWhatIsNew(t *testing.T) {
+	dealFixture(t)
+	first := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	share := dealRun(t, "check", "--deal", first, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["email"]}`))
+	_, err := answer(t, first, share["check_id"].(string), "yes", shownCard(t, share["card"].(string)))
+	require.NoError(t, err)
+	dealRun(t, "note", "--deal", first, "--kind", "disclosure", "--input", writeJSON(t, `{"channel":"web","fields":[{"class":"email","value":"buyer@example.com"}]}`))
+	second := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	again := dealRun(t, "check", "--deal", second, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["email","address"]}`))
+	require.Equal(t, "pause", again["verdict"])
+	assert.Contains(t, again["card"], "Why I'm asking: first time they get your address.")
+	assertPlainCard(t, again)
+}
+
+// No promise was made by a denied share, or by one in a deal that could
+// not pay then: the pay check that passes stays silent.
+func TestOnlyAPromiseMadeIsKept(t *testing.T) {
+	t.Run("a denied share", func(t *testing.T) {
+		dealFixture(t)
+		id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+		pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-deny", checkerPrints("deny", `{"id":"r03","check":"personal-data/1","verdict":"fail"}`))}})
+		denied := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnShare))
+		require.Equal(t, "deny", denied["verdict"])
+		assert.NotContains(t, denied["card"], "Next:")
+		assertPlainCard(t, denied)
+		pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-allow", checkerPrints("allow", passFinding))}})
+		pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
+		require.Equal(t, "pass", pay["verdict"])
+		assert.Equal(t, cli.VoiceSilent, pay["voice"])
+	})
+	t.Run("pay allowed only later", func(t *testing.T) {
+		dealFixture(t)
+		id := dealRun(t, "open", "--input", writeJSON(t, strings.Replace(fawnOpen, `"allowed":["pay","share_contact"]`, `"allowed":["share_contact"]`, 1)))["deal_id"].(string)
+		share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnShare))
+		require.Equal(t, "pause", share["verdict"])
+		assert.NotContains(t, share["card"], "Next:")
+		raise := dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"you can pay now","max_total_minor":200,"allowed":["pay","share_contact"]}`))
+		dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", raise["capsule_id"].(string), "--choice", "confirm_limits", "--said", "yes you can pay")
+		pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-allow", checkerPrints("allow", passFinding))}})
+		pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
+		require.Equal(t, "pass", pay["verdict"])
+		assert.Equal(t, cli.VoiceSilent, pay["voice"])
+	})
+	t.Run("a promised pay with no amount", func(t *testing.T) {
+		w := cli.BuiltinWording()
+		assert.Equal(t, "Pay", promisedOptions(w, dealSnapshot{Action: "pay"}, dealState{})[1].Label, "never \"Pay \"")
+		amount := int64(190)
+		assert.Equal(t, "Pay $1.90", promisedOptions(w, dealSnapshot{Action: "pay", AmountMinor: &amount}, dealState{terms: dealTerms{Currency: "USD"}})[1].Label)
+	})
+}
+
+// The skill's card rules (Steven's rulings, 2026-10-11, kept for the new
+// card): the card shown as returned, once; one lead-in sentence of the
+// agent's own; options as buttons, never text; "Next" is a promise. The
+// skill is public and names no product.
+func TestTheDealSkillPresentsTheCardAsRuled(t *testing.T) {
+	raw, err := os.ReadFile("../../../skills/deal/SKILL.md")
+	require.NoError(t, err)
+	text := strings.Join(strings.Fields(string(raw)), " ")
+	for _, rule := range []string{
+		"show it exactly as returned, once",
+		"You may put one sentence of your own before it, as a lead-in. Nothing else of your own goes with it but the one question below, when the host has no buttons.",
+		"Never print an option label as text",
+		"Offer the check's `options` as real buttons where your agent host supports them; where it does not, end with one plain question in your own words",
+		"ask the user before you pay, even when the pay check passes",
+	} {
+		assert.Contains(t, text, rule)
+	}
+	assert.Equal(t, 1, strings.Count(text, "exactly as returned"), "one show-it-verbatim rule")
+	for _, product := range []string{"Muse", "Buzz", "Action State", "Checkup"} {
+		assert.NotContains(t, text, product, "a public skill names no product")
+	}
 }

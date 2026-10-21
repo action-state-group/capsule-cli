@@ -3,7 +3,7 @@ I'll keep our receipt for this, from your ask to the end.
 [check share: ask]
 PAUSED FOR YOU
 Share your name, email, phone and address with sticker_shop_example (marketplace.example) for the Fawn Sticker?
-Why I'm asking: first time this seller gets your details.
+Why I'm asking: first time they get your details.
 Next: I'll ask you again before paying.
 <Hold> <Share>
 [approval: line]
@@ -12,7 +12,7 @@ Got it, you OK'd sharing your contact details. Going ahead now.
 [check pay: ask]
 PAUSED FOR YOU
 Pay $1.90 to sticker_shop_example (marketplace.example) for the Fawn Sticker?
-$1.75 + $0.15 tax and fees, up to $2 · by card · refundable · within your $2
+$1.75 + $0.15, up to $2 · by card · refundable · within your $2
 Why I'm asking: you asked me to check with you before paying.
 <Hold> <Pay $1.90>
 [act: report]

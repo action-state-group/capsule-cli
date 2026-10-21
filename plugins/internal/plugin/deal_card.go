@@ -32,13 +32,14 @@ type cardReason struct {
 	questions []string
 	// when, if set, also decides whether the row applies.
 	when func(dealCheckResult, dealSnapshot, cardFacts) bool
-	// unless, if set, keeps the row out when it holds.
-	unless func(cardFacts) bool
 }
 
 // cardFacts are the values the reasons are said with.
 type cardFacts struct {
 	limit, floor, picked string
+	// told are the details given for the first time, as a sentence lists
+	// them.
+	told string
 	// askedOver is an over-limit purchase the user named themselves, item
 	// and price: the rule still asks, as an exception.
 	askedOver bool
@@ -55,19 +56,34 @@ var cardReasons = []cardReason{
 	{key: "card.why.credentials_requested", rules: []string{"credentials_requested", "verification_code_request"}},
 	{key: "card.why.pay_before_seeing", rules: []string{"pay_before_seeing"}},
 	{key: "card.why.rules_deny", rules: []string{"rules_deny"}},
-	{key: "card.why.over_limit_asked", rules: []string{"over_limit"}, unless: func(f cardFacts) bool { return !f.askedOver }},
-	{key: "card.why.over_limit", rules: []string{"over_limit"}, unless: func(f cardFacts) bool { return f.askedOver }},
+	{key: "card.why.over_limit_asked", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return f.askedOver && hasRule(r, "over_limit")
+	}},
+	{key: "card.why.over_limit", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return !f.askedOver && hasRule(r, "over_limit")
+	}},
 	{key: "card.why.under_floor", rules: []string{"under_floor"}},
 	{key: "card.why.representation_missing", rules: []string{ruleRepresentationMissing}},
 	{key: "card.why.representation_outside", rules: []string{ruleRepresentationOutside}},
-	{key: "card.why.first_payment", when: func(r dealCheckResult, snap dealSnapshot, _ cardFacts) bool {
-		return snap.Action == "pay" && r.Recipient != nil && r.Recipient.FirstTime
+	// A rules escalation on a pay to someone first dealt with (r02, r06 in
+	// the everyday pack) is said as a first dealing: the counterparty memory
+	// knows dealings, not payments, and with no escalation a first dealing
+	// is no cause of a pause.
+	{key: "card.why.first_dealing", when: func(r dealCheckResult, snap dealSnapshot, _ cardFacts) bool {
+		return snap.Action == "pay" && r.Recipient != nil && r.Recipient.FirstTime && hasRule(r, "rules_escalate")
 	}},
-	{key: "card.why.first_disclosure", rules: []string{"first_disclosure"}},
+	// To someone dealt with before, only what is new to them.
+	{key: "card.why.first_disclosure", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return hasRule(r, "first_disclosure") && (r.Recipient == nil || r.Recipient.FirstTime || f.told == "")
+	}},
+	{key: "card.why.first_disclosure.some", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return hasRule(r, "first_disclosure") && r.Recipient != nil && !r.Recipient.FirstTime && f.told != ""
+	}},
 	{key: "card.why.not_asked", rules: []string{"not_asked"}},
 	{key: "card.why.agent_picked", rules: []string{"agent_picked"}},
 	{key: "card.why.terms_changed", rules: []string{"terms_changed"}},
-	{key: "card.why.no_way_back", rules: []string{"recourse_changed", "irreversible_rail"}},
+	{key: "card.why.no_way_back", rules: []string{"recourse_changed"}},
+	{key: "card.why.no_protection", rules: []string{"irreversible_rail"}},
 	{key: "card.why.off_platform", rules: []string{"off_platform_early"}},
 	{key: "card.why.new_site", rules: []string{"domain_recent"}},
 	{key: "card.why.materiality_changed", rules: []string{"materiality_changed"}},
@@ -93,13 +109,14 @@ func cardWhy(w cli.Wording, r dealCheckResult, snap dealSnapshot, f cardFacts) [
 		for _, q := range row.questions {
 			applies = applies || questions[q]
 		}
-		if row.unless != nil && row.unless(f) {
-			applies = false
-		}
 		if !applies || (row.key == "card.why.rules_ask" && len(why) > 0) {
 			continue
 		}
-		text := w.Line(row.key, cli.V{"limit": f.limit, "floor": f.floor, "what": f.picked})
+		what := f.picked
+		if row.key == "card.why.first_disclosure.some" {
+			what = f.told
+		}
+		text := w.Line(row.key, cli.V{"limit": f.limit, "floor": f.floor, "what": what})
 		if text != "" && !slices.Contains(why, text) {
 			why = append(why, text)
 		}
@@ -183,11 +200,16 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	ask := cli.Ask{Tag: cardTag(w, r, state.open.Demo)}
 	ask.Question = cardQuestion(w, snap, cli.V{"amount": amount, "payee": payee, "where": where, "item": item,
 		"what": disclosureWords(w, snap.Disclosing), "description": snap.Description})
-	ask.Facts = cardFactsLine(w, state, snap, terms, money)
-	asked := state.intent.Asked
-	askedOver := asked.Item != "" && asked.PriceMinor != nil && strings.EqualFold(strings.TrimSpace(asked.Item), strings.TrimSpace(terms.Item)) &&
-		(terms.PriceMinor != nil && *terms.PriceMinor == *asked.PriceMinor)
-	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), askedOver: askedOver})
+	ask.Facts = cardFactsLine(w, state, snap, r, terms, money)
+	askedOver := false
+	if total, _ := limitBound(terms, snap); total != nil {
+		askedOver = askedException(state.intent.Asked, terms, *total)
+	}
+	var told []string
+	if r.Recipient != nil {
+		told = r.Recipient.First
+	}
+	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), askedOver: askedOver})
 	ask.GoodToKnow = cardGoodToKnow(w, r)
 	// A share before a payment is the first of two stops; the charge is not
 	// known yet, so the line names none.
@@ -247,9 +269,9 @@ func disclosureWords(w cli.Wording, classes []string) string {
 	return listWords(words, "and")
 }
 
-// cardFacts is the money line: the amount (with what it adds to the price),
+// cardFactsLine is the money line: the amount (with what it adds to the price),
 // the rail, whether it comes back, and whether it is within the limit.
-func cardFactsLine(w cli.Wording, state dealState, snap dealSnapshot, terms dealTerms, money func(int64) string) string {
+func cardFactsLine(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckResult, terms dealTerms, money func(int64) string) string {
 	amount := snap.AmountMinor
 	if amount == nil && (snap.Action == "commit" || snap.Action == "pay") {
 		// A commitment says its price.
@@ -283,12 +305,10 @@ func cardFactsLine(w cli.Wording, state dealState, snap dealSnapshot, terms deal
 		parts = append(parts, w.Line(key, nil))
 	}
 	if m := state.intent.MaxTotalMinor; m != nil {
-		bound := *amount
-		if a := snap.AuthorizedMaxMinor; a != nil && *a > bound {
-			bound = *a
-		}
+		// Over exactly when the check found it over (its over_limit
+		// difference), so the facts and the reason never disagree.
 		key := "card.facts.within"
-		if bound > *m {
+		if hasRule(r, "over_limit") {
 			key = "card.facts.over"
 		}
 		parts = append(parts, w.Line(key, cli.V{"limit": money(*m)}))
@@ -297,12 +317,22 @@ func cardFactsLine(w cli.Wording, state dealState, snap dealSnapshot, terms deal
 }
 
 // pickedWords are the agent's paused picks, as one phrase.
+// A default (quantity 1, free shipping) is named only when it is the one
+// pick the check paused on.
 func pickedWords(r dealCheckResult) string {
-	var said []string
+	var said, defaults []string
 	for _, a := range r.Picked {
-		if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == "agent_picked" && d.Field == a.Field }) {
+		if !slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == "agent_picked" && d.Field == a.Field }) {
+			continue
+		}
+		if isDefaultPick(a) {
+			defaults = append(defaults, a.Label+" "+a.Value)
+		} else {
 			said = append(said, a.Label+" "+a.Value)
 		}
+	}
+	if len(said) == 0 {
+		said = defaults
 	}
 	return listWords(said, "and")
 }
@@ -330,22 +360,11 @@ func isDefaultPick(a cli.DealAttribute) bool {
 	return (a.Field == "quantity" && v == "1") || strings.Contains(v, "free shipping") || (a.Field == "shipping" && strings.HasPrefix(v, "free"))
 }
 
-// cardText is the card as the user reads it, and as an answer is sealed
-// against.
-func cardText(w cli.Wording, a cli.Ask) string { return cli.AskText(w, a) }
-
 // labelOptions gives the check's options their button labels from the
 // pack, before the check is sealed: verb and amount, "anyway" only when a
 // limit or rule the user set is broken, and Hold.
 func labelOptions(w cli.Wording, r *dealCheckResult, snap dealSnapshot, state dealState) {
-	amount := ""
-	if snap.AmountMinor != nil {
-		currency := state.terms.Currency
-		if snap.Terms != nil && snap.Terms.Currency != "" {
-			currency = snap.Terms.Currency
-		}
-		amount = spokenMoney(*snap.AmountMinor, currency)
-	}
+	amount := cardAmount(snap, state)
 	violation := slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return violationRules[d.Rule] })
 	for i, o := range r.Options {
 		var label string
@@ -379,10 +398,28 @@ func promisedPay(events []sealedEvent, state dealState, snap dealSnapshot) bool 
 	if snap.Action != "pay" || paid(events) || !slices.Contains(state.intent.Allowed, "pay") {
 		return false
 	}
-	return slices.ContainsFunc(events, func(se sealedEvent) bool {
+	// The promise is the one a share card made: paused (a deny makes none),
+	// in a deal that then allowed paying.
+	for i, se := range events {
 		c := se.Event.Check
-		return se.Event.Kind == "check" && c != nil && isShare(c.Action) && c.Verdict != "pass"
-	})
+		if se.Event.Kind != "check" || c == nil || !isShare(c.Action) || c.Verdict != "pause" {
+			continue
+		}
+		if then, err := foldDeal(events[:i+1]); err == nil && slices.Contains(then.intent.Allowed, "pay") {
+			return true
+		}
+	}
+	return false
+}
+
+// promisedOptions are the buttons of a pay asked because an earlier card
+// promised it: Hold, and the pay with its amount when it has one.
+func promisedOptions(w cli.Wording, snap dealSnapshot, state dealState) []cli.AskOption {
+	pay := w.Line("card.button.pay.no_amount", nil)
+	if amount := cardAmount(snap, state); amount != "" {
+		pay = w.Line("card.button.pay", cli.V{"amount": amount})
+	}
+	return []cli.AskOption{{Label: w.Line("card.button.hold", nil), Choice: "hold"}, {Label: pay, Choice: "proceed"}}
 }
 
 // cardAmount is the amount a check is about, in the deal's currency.
@@ -414,4 +451,8 @@ func classRank(c string) int {
 		return i
 	}
 	return len(spokenClassOrder)
+}
+
+func hasRule(r dealCheckResult, rule string) bool {
+	return slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == rule })
 }

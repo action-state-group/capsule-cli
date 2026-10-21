@@ -104,7 +104,7 @@ func TestThePredicateDecidesWhichPicksPause(t *testing.T) {
 	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[{"field":"when"}]}`))
 	check := flightCheck(t)
 	assert.Equal(t, []string{"when"}, pausedOn(check))
-	assert.Contains(t, check["card"], "Why I'm asking: first payment to this seller; I picked dates Oct 21 to Oct 24, not you.")
+	assert.Contains(t, check["card"], "Why I'm asking: I picked dates Oct 21 to Oct 24, not you.")
 	assert.Contains(t, check["card"], "Good to know: I chose item WN 1234 for you.")
 
 	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing","version":"1","material":[]}`))

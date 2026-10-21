@@ -613,7 +613,7 @@ func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 		assert.Equal(t, "pause", check["verdict"])
 		assert.Contains(t, differenceTexts(check), "Not what you asked: item funny otter sticker → "+item)
 		assert.Contains(t, differenceTexts(check), pickedSize)
-		assert.Contains(t, check["card"], "Why I'm asking: first payment to this seller; it's not what you asked for.")
+		assert.Contains(t, check["card"], "Why I'm asking: it's not what you asked for; I picked size small 3.8in x 2.4in, not you.")
 		assert.Contains(t, check["unverified"], "Sticker listed on sale at $3.00 (list $3.50)")
 		assert.Empty(t, attrs(check["asked_attributes"]), "the item differs from the ask, so it is not the user's")
 	})
@@ -627,7 +627,7 @@ func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 		assert.Contains(t, check["unverified"], "Sticker listed on sale at $3.00 (list $3.50)", "an unverifiable reference price stays a claim")
 		assert.Equal(t, []string{"item " + item}, attrs(check["asked_attributes"]))
 		assert.Equal(t, []string{"size small 3.8in x 2.4in"}, attrs(check["picked_by_agent"]))
-		assert.Contains(t, check["approval_text"], "Why I'm asking: first payment to this seller; I picked size small 3.8in x 2.4in, not you.", "the pick the check paused on is the agent's, never the user's")
+		assert.Contains(t, check["approval_text"], "Why I'm asking: I picked size small 3.8in x 2.4in, not you.", "the pick the check paused on is the agent's, never the user's")
 		// The receipt keeps them apart too: the report's check item, and
 		// the page and email it renders.
 		dealID := check["deal_id"].(string)

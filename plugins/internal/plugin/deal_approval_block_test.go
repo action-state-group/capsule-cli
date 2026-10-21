@@ -79,7 +79,7 @@ func TestTheSharePauseIsOneQuestionAndItsReasons(t *testing.T) {
 	assert.Equal(t, check["approval_text"], check["card"], "the card sealed is the card shown")
 	assert.Equal(t, "PAUSED FOR YOU\n"+
 		"Share your name, email, phone and address with Defender Marine (defender.com) for the Wichard shackle?\n"+
-		"Why I'm asking: first time this seller gets your details; I couldn't check this against your rules.\n"+
+		"Why I'm asking: first time they get your details; I couldn't check this against your rules.\n"+
 		"Good to know: I chose item Wichard shackle for you.\n"+
 		"Next: I'll ask you again before paying.", check["card"])
 	rules := check["rules"].(map[string]any)
@@ -93,7 +93,7 @@ func TestThePayPauseSaysTheFactsAndTheReasons(t *testing.T) {
 	assert.Equal(t, "PAUSED FOR YOU\n"+
 		"Pay $3 to Sticker Marketplace (stickers.example) for the Otterly Chaos - Unsupervised and Thriving Funny Otter…?\n"+
 		"$3 · by card · refundable · within your $8\n"+
-		"Why I'm asking: first payment to this seller; I picked size small 3.8in x 2.4in, not you.\n"+
+		"Why I'm asking: I picked size small 3.8in x 2.4in, not you.\n"+
 		"Good to know: Sticker listed on sale at $3.00 (list $3.50) (not checked).", check["card"])
 	assert.Equal(t, []string{"Hold", "Pay $3"}, optionLabels(check))
 }

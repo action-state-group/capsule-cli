@@ -1297,16 +1297,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 		add("asked", "not_asked", d.key, fmt.Sprintf("Not what you asked: %s %s → %s", strings.ToLower(d.label), d.a, d.b))
 	}
 	if intent.MaxTotalMinor != nil {
-		total := proposed.PriceMinor
-		if total == nil {
-			total = snap.AmountMinor
-		}
-		// A limit binds the most that may be taken: the authorized maximum,
-		// when it is more than the price or the expected charge.
-		field := "price"
-		if m := snap.AuthorizedMaxMinor; m != nil && (total == nil || *m > *total) {
-			total, field = m, "authorized_max_minor"
-		}
+		total, field := limitBound(proposed, snap)
 		if total != nil && *total > *intent.MaxTotalMinor {
 			limit, amount := formatMoney(*intent.MaxTotalMinor, proposed.Currency), formatMoney(*total, proposed.Currency)
 			text := fmt.Sprintf("Over your limit of %s (%s)", limit, amount)
@@ -1320,8 +1311,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 			// The user's own words named this very purchase, the item and its
 			// price: the rule still asks, and says why this is an exception to
 			// it rather than skipping the ask.
-			if a := intent.Asked; a.Item != "" && a.PriceMinor != nil && *a.PriceMinor == *total &&
-				strings.EqualFold(strings.TrimSpace(a.Item), strings.TrimSpace(proposed.Item)) {
+			if askedException(intent.Asked, proposed, *total) {
 				text = fmt.Sprintf("Your rules normally ask above %s. You asked for this %s purchase specifically. Approve this exception?", limit, amount)
 			}
 			add("asked", "over_limit", field, text)
@@ -1456,6 +1446,27 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	}
 	settleCheck(&r, s)
 	return r
+}
+
+// limitBound is what a limit binds on a proposed action: the price, else the
+// amount, or the authorized maximum when it is more (the most that may be
+// taken), and which field that is.
+func limitBound(proposed dealTerms, snap dealSnapshot) (*int64, string) {
+	total, field := proposed.PriceMinor, "price"
+	if total == nil {
+		total = snap.AmountMinor
+	}
+	if m := snap.AuthorizedMaxMinor; m != nil && (total == nil || *m > *total) {
+		total, field = m, "authorized_max_minor"
+	}
+	return total, field
+}
+
+// askedException is a purchase over the limit that the user's own words
+// named, the item and its price: the rule still asks, as an exception.
+func askedException(asked, proposed dealTerms, total int64) bool {
+	return asked.Item != "" && asked.PriceMinor != nil && *asked.PriceMinor == total &&
+		strings.EqualFold(strings.TrimSpace(asked.Item), strings.TrimSpace(proposed.Item))
 }
 
 // settleCheck sets the verdict and the one-tap options from the differences.

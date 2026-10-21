@@ -2057,12 +2057,12 @@ func dealCheckCommand() *cobra.Command {
 			switch {
 			case promised:
 				card.Why = []string{words.Line("card.why.promised", nil)}
-				card.Options = []cli.AskOption{{Label: words.Line("card.button.hold", nil), Choice: "hold"}, {Label: words.Line("card.button.pay", cli.V{"amount": cardAmount(snap, state)}), Choice: "proceed"}}
+				card.Options = promisedOptions(words, snap, state)
 			case result.Verdict == "pass":
 				// A pass asks nothing: its text is the question and the facts.
 				card.Tag, card.Why, card.GoodToKnow, card.Next = "", nil, "", ""
 			}
-			approvalText := cardText(words, card)
+			approvalText := cli.AskText(words, card)
 			if result.Verdict != "pass" {
 				result.Card = approvalText
 			}
