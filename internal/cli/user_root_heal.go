@@ -140,22 +140,23 @@ func healUserRoot(home string) userRootHeal {
 			h.fail(t.path, err.Error())
 			continue
 		}
+		// The chmod happened: it is reported whatever the check after says.
+		h.ChmodGoW = append(h.ChmodGoW, t.path)
 		var st unix.Stat_t
 		if err := unix.Fstat(t.fd, &st); err != nil {
-			h.fail(t.path, err.Error())
+			h.Modes[t.path] = [2]string{fmt.Sprintf("%o", t.mode), "unverified"}
+			h.fail(t.path, "chmod done, mode not verified: "+err.Error())
 			continue
 		}
 		got := uint32(st.Mode) & 0o7777
+		h.Modes[t.path] = [2]string{fmt.Sprintf("%o", t.mode), fmt.Sprintf("%o", got)}
 		switch got {
 		case t.want:
 		case t.want &^ unix.S_ISGID:
 			h.SetgidDropped = append(h.SetgidDropped, t.path)
 		default:
 			h.fail(t.path, fmt.Sprintf("mode is %o after chmod, want %o", got, t.want))
-			continue
 		}
-		h.ChmodGoW = append(h.ChmodGoW, t.path)
-		h.Modes[t.path] = [2]string{fmt.Sprintf("%o", t.mode), fmt.Sprintf("%o", got)}
 	}
 	if len(h.ChmodGoW) == 0 {
 		if len(h.Failed) == 0 {
@@ -187,7 +188,15 @@ func doctorUserRoot() userRootHeal {
 	if err != nil || home == "" {
 		return userRootHeal{State: "absent", Reason: "HOME is not set"}
 	}
-	return healUserRoot(home)
+	h := healUserRoot(home)
+	if h.State == "healed" {
+		// Doctor reports what the walk now says, not only what it changed.
+		if problems := userRootAncestryProblems(home); len(problems) > 0 {
+			h.State = "refused"
+			h.Error = newAncestryError("the plugin root "+userPluginRoot(home), problems).Error()
+		}
+	}
+	return h
 }
 
 // openNoFollow opens dir/rel as a directory, following no symlink in dir's
@@ -235,16 +244,22 @@ func userRootIsTrusted(home string) bool {
 // ForwardToPlugin leaves them.
 func forwardCadence(c *cobra.Command, args []string) error {
 	plugins, refused := discoverPluginsAndRefusals()
-	if home, err := os.UserHomeDir(); err == nil && home != "" && cadenceNeedsHeal(home, plugins, refused) {
-		if h := healUserRoot(home); len(h.ChmodGoW)+len(h.Failed) > 0 {
+	if home, err := os.UserHomeDir(); err == nil && home != "" && userDealRefused(home, plugins, refused) {
+		h := healUserRoot(home)
+		if len(h.ChmodGoW)+len(h.Failed) > 0 {
 			// The cadence log's states name what they are about.
-			h.State = "plugin_root_healed"
+			line := h
+			line.State = "plugin_root_healed"
 			if len(h.ChmodGoW) == 0 {
-				h.State = "plugin_root_heal_failed"
+				line.State = "plugin_root_heal_failed"
 			}
-			if err := Output(c, h); err != nil {
+			if err := Output(c, line); err != nil {
 				return err
 			}
+		}
+		// Discover again unless nothing could have changed: a concurrent
+		// run may have healed the chain since (healUserRoot says ok).
+		if h.State != "absent" && !(h.State == "refused" && len(h.ChmodGoW) == 0) {
 			plugins, refused = discoverPluginsAndRefusals()
 		}
 	}
@@ -266,10 +281,9 @@ func forwardCadence(c *cobra.Command, args []string) error {
 	return err
 }
 
-// cadenceNeedsHeal: no deal plugin was accepted, the per-user root's deal
-// launcher was refused, and that root's ancestry has a problem. A valid deal
-// plugin in another root needs no heal.
-func cadenceNeedsHeal(home string, plugins []pluginInfo, refused []refusedPlugin) bool {
+// userDealRefused: no deal plugin was accepted, and the per-user root's deal
+// launcher was refused. A valid deal plugin in another root needs no heal.
+func userDealRefused(home string, plugins []pluginInfo, refused []refusedPlugin) bool {
 	for _, p := range plugins {
 		if p.Name == DealPluginName {
 			return false
@@ -284,7 +298,7 @@ func cadenceNeedsHeal(home string, plugins []pluginInfo, refused []refusedPlugin
 			continue
 		}
 		if dir, _, _, err := canonicalPath(filepath.Dir(r.Path)); err == nil && dir == userRoot {
-			return len(userRootAncestryProblems(home)) > 0
+			return true
 		}
 	}
 	return false

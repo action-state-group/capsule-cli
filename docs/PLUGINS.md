@@ -183,17 +183,22 @@ plugin to run because the per-user one is refused, and `doctor`. They act
 only when every refused component is a directory owned by the process's
 user, at or under `$HOME`, not sticky, whose only fault is group or other
 write; when the per-user root resolves and is a plugin root; and, as root,
-when `$HOME` is at least two levels below `/`. They open each directory
-without following a link at any level and recheck it before changing it,
-and remove only the write bits. Anything else stays refused as before. The
-walk itself is unchanged and still judges every plugin run.
+when `$HOME` is at least two levels below `/`. A setgid directory heals
+only when the process is root or in the directory's group, since otherwise
+the kernel drops setgid on chmod. They open each directory without
+following a link at any level and recheck it before changing it, and
+remove only the write bits. If the kernel still drops setgid (a root
+without `CAP_FSETID`), the line lists that directory under
+`setgid_dropped`: files created in it then take the creator's group, not
+the directory's. Anything else stays refused as before. The walk itself is
+unchanged and still judges every plugin run.
 
 The cadence writes one JSON line to its log before it runs the tick:
 `plugin_root_healed` names each directory with its mode before and after,
-or `plugin_root_heal_failed`. When the deal plugin does not run at all, it
-also writes `plugin_unavailable` (not found, or refused), or
-`plugin_stopped` (killed, or could not be started), with the same message
-it prints on stderr. `doctor` reports the outcome as `plugins.user_root`,
+or `plugin_root_heal_failed`. When the deal plugin was not run, it writes
+`plugin_unavailable` (not found, or refused). When it was started and then
+killed, or could not be started, it writes `plugin_stopped`, and that tick
+may have done part of its work. Each carries the message stderr shows. `doctor` reports the outcome as `plugins.user_root`,
 and `doctor --install-check` as `user_root`: `ok`, `absent`, `healed` or
 `refused`. A refusal there adds no issue of its own; the plugin check
 fails when the profile's plugin is the one refused.

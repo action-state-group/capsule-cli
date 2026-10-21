@@ -53,9 +53,10 @@ keep the old ones.
   walk is unchanged. `docs/PLUGINS.md` lists the exact conditions.
 - **Added (output):** the cadence writes `plugin_root_healed` (each
   directory, with its mode before and after) or `plugin_root_heal_failed`
-  to its log. When the deal plugin does not run at all, it writes
-  `plugin_unavailable` or `plugin_stopped` with the error that stderr
-  shows, so a stopped cadence is no longer silent. `doctor` adds
+  to its log. When the deal plugin was not run it writes
+  `plugin_unavailable`, and when it was killed or could not be started it
+  writes `plugin_stopped`, each with the error that stderr shows, so a
+  stopped cadence is no longer silent. `doctor` adds
   `plugins.user_root`, and `doctor --install-check` adds `user_root`.
 
 ### A seller's later evidence chains to the close and shows under it (capsule-cli#266)

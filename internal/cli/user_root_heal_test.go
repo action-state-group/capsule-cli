@@ -220,6 +220,12 @@ func TestHealUserRootJudgesWhatItOpens(t *testing.T) {
 			require.NoError(t, os.Rename(local, local+".orig"))
 			require.NoError(t, unix.Mkfifo(local, 0o600))
 		},
+		"~/.local/lib swapped for a setgid directory of a group this process is not in": func(t *testing.T, home, _ string) {
+			lib := filepath.Join(home, ".local", "lib")
+			require.NoError(t, os.Rename(lib, lib+".orig"))
+			require.NoError(t, os.Mkdir(lib, 0o755))
+			chmodOwnGroup(t, lib, 0o2775)
+		},
 		"~/.local/lib swapped for a sticky directory": func(t *testing.T, home, _ string) {
 			lib := filepath.Join(home, ".local", "lib")
 			require.NoError(t, os.Rename(lib, lib+".orig"))
@@ -235,6 +241,10 @@ func TestHealUserRootJudgesWhatItOpens(t *testing.T) {
 			outside := filepath.Join(safeTempDir(t), "local")
 			require.NoError(t, os.MkdirAll(filepath.Join(outside, "lib", "capsulectl", "plugins"), 0o755))
 			require.NoError(t, os.Chmod(filepath.Join(outside, "lib"), 0o775))
+			// The process is in no group, so a setgid directory swapped in fails
+			// the group rule; the other swaps fail before it applies.
+			uid := os.Getuid()
+			seam(t, &healProcess, func() (int, int, []int) { return uid, -1, nil })
 			seam(t, &healBeforePreflight, func() { swap(t, home, outside) })
 
 			h := healUserRoot(home)
@@ -417,19 +427,37 @@ func TestDoctorReportsAndHealsTheUserRoot(t *testing.T) {
 	assert.Equal(t, "absent", ur["state"])
 }
 
-func TestInstallCheckReportsTheUserRoot(t *testing.T) {
+func TestCadenceRunsAfterAConcurrentHeal(t *testing.T) {
+	home, _, marker := dealHome(t, "")
+	require.NoError(t, os.Chmod(home, 0o775))
+	// Another run tightens the home between this run's discovery and heal.
+	seam(t, &healBeforePreflight, func() { require.NoError(t, os.Chmod(home, 0o755)) })
+	lines, rest, err := cadenceLines(t)
+	require.NoError(t, err, rest)
+	assert.Empty(t, lines, rest)
+	assert.True(t, ran(marker), "the tick runs on the healed chain")
+}
+
+func TestHealUserRootReportsAChmodItCouldNotVerify(t *testing.T) {
 	home, _, _ := dealHome(t, "")
 	require.NoError(t, os.Chmod(home, 0o775))
-	report, ur := doctorUserRootState(t, "--install-check", "--expect-version", "x", "--expect-commit", "y", "--skills-dir", t.TempDir(), "--profile", "none")
-	assert.Equal(t, "healed", ur["state"])
-	assert.Equal(t, uint32(0o755), modeOf(t, home))
+	seam(t, &healChmod, func(fd int, mode uint32) error { return unix.Fchmod(fd, mode|0o002) })
+	h := healUserRoot(home)
+	assert.Equal(t, "healed", h.State)
+	assert.Equal(t, []string{home}, h.ChmodGoW, "the chmod happened, so it is reported")
+	assert.Equal(t, [2]string{"775", "757"}, h.Modes[home])
+	assert.Contains(t, h.Failed[home], "want 755")
+}
 
-	// A refused user root adds no issue of its own.
-	seam(t, &healOwner, func(*unix.Stat_t) int { return -1 })
+func TestDoctorReportsWhatTheWalkSaysAfterHealing(t *testing.T) {
+	home, _, _ := dealHome(t, "")
 	require.NoError(t, os.Chmod(home, 0o775))
-	report, ur = doctorUserRootState(t, "--install-check", "--expect-version", "x", "--expect-commit", "y", "--skills-dir", t.TempDir(), "--profile", "none")
+	local := filepath.Join(home, ".local")
+	// A new problem appears on the chain after the check.
+	seam(t, &healBeforePreflight, func() { require.NoError(t, os.Chmod(local, 0o775)) })
+	_, ur := doctorUserRootState(t)
 	assert.Equal(t, "refused", ur["state"])
-	for _, issue := range report["issues"].([]any) {
-		assert.NotContains(t, issue, "another user could change")
-	}
+	assert.Equal(t, []any{home}, ur["chmod_go_w"], "what it changed is still reported")
+	assert.Contains(t, ur["error"], local)
+	assert.Equal(t, uint32(0o755), modeOf(t, home))
 }
