@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,11 +18,9 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	cli.SetBookBackend(plugin.BookBackend{})
-	if err := cli.NewPluginCommand(plugin.BookMetadata, append(plugin.BookCommands(), plugin.BookAliases()...)...).ExecuteContext(ctx); err != nil {
-		// Empty when a plugin this ran has already said why.
-		if msg := cli.SafeError(err); msg != "" {
-			fmt.Fprintln(os.Stderr, "capsulectl-book: "+msg)
-		}
-		os.Exit(cli.ExitCode(err))
-	}
+	// The error line on stderr, and an error object on stdout when the
+	// command printed nothing (capsule-cli#345).
+	code := cli.Run(ctx, cli.NewPluginCommand(plugin.BookMetadata, append(plugin.BookCommands(), plugin.BookAliases()...)...), "capsulectl-book")
+	cancel()
+	os.Exit(code)
 }

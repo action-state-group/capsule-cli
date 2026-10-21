@@ -100,7 +100,11 @@ func WriteSettlementResult(c *cobra.Command, result settlement.Result) error {
 	for _, s := range result.Settlements {
 		readings = append(readings, map[string]any{"terms": s.Terms, "payment": paymentReading(s), "delivery": deliveryReading(s)})
 	}
-	if err := Output(c, map[string]any{"settlement": result, "readings": readings}); err != nil {
+	out := map[string]any{"settlement": result, "readings": readings}
+	Narrate(out, NarrateWith(c, func(w Wording) Narration {
+		return Narration{Voice: VoiceReport, Say: w.Line(settlementKey(result), nil)}
+	}))
+	if err := Output(c, out); err != nil {
 		return err
 	}
 	if !result.Conforming {
@@ -210,4 +214,26 @@ func DecodeLegCapsule(path string, raw []byte) (map[string]any, error) {
 		return nil, InputError("--leg " + path + ": the capsule is not a JSON object")
 	}
 	return capsule, nil
+}
+
+// settlementKey is the line for a settlement's payments: the worst state
+// any of them is in, so a conflict is never said as a missing report.
+func settlementKey(result settlement.Result) string {
+	rank := map[string]int{
+		settlement.PaymentAgreed: 0, settlement.PaymentTermsOnly: 1, settlement.PaymentPayerStated: 2,
+		settlement.PaymentPayeeStated: 2, settlement.PaymentUnjoined: 3, settlement.PaymentMismatch: 4,
+	}
+	keys := []string{"say.settlement.agreed", "say.settlement.terms_only", "say.settlement.one_side", "say.settlement.unjoined", "say.settlement.mismatch"}
+	worst := 1
+	if len(result.Settlements) > 0 {
+		worst = 0
+	}
+	for _, s := range result.Settlements {
+		r, ok := rank[s.PaymentState]
+		if !ok {
+			r = 3
+		}
+		worst = max(worst, r)
+	}
+	return keys[worst]
 }

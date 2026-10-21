@@ -151,7 +151,10 @@ func TestInstallCheckWritesTheEvidenceThatSealsIt(t *testing.T) {
 	assert.Equal(t, "capsulectl doctor --install-check", body["source"])
 	var printed map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &printed))
+	// The detail is the result, not what the agent says about it.
 	delete(printed, "spec_version")
+	delete(printed, "voice")
+	delete(printed, "say")
 	want, err := json.Marshal(printed)
 	require.NoError(t, err)
 	assert.JSONEq(t, string(want), body["detail"], "the detail is the printed result")

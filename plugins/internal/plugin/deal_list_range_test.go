@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -98,6 +99,8 @@ func toldByClass(r dealListRange) map[string]dealListTold {
 func TestDealListRangeStatement(t *testing.T) {
 	d := statementStore(t)
 	r, raw := listRange(t, "--since", "2026-10-01", "--until", "2026-11-01")
+	assert.Equal(t, "report", r.Voice, "the range is \"Your receipts\" (capsule-cli#345)")
+	assert.Equal(t, "Your receipts: "+strconv.Itoa(r.Totals.Deals)+" errands in this period.", r.Say)
 
 	require.NotNil(t, r.Since)
 	require.NotNil(t, r.Until)

@@ -184,24 +184,24 @@ linux/amd64 binary on a clean `debian:stable-slim` container:
 
 ```console
 $ capsulectl key generate --output producer.seed
-{"public_key":"<producer-public-key-hex>","signing_key_file":"producer.seed","spec_version":"capsule-cli-result/v1"}
+{"public_key":"<producer-public-key-hex>","signing_key_file":"producer.seed","spec_version":"capsule-cli-result/v1","voice":"silent"}
 $ capsulectl key generate --output checkpoint.seed
-{"public_key":"<checkpoint-public-key-hex>","signing_key_file":"checkpoint.seed","spec_version":"capsule-cli-result/v1"}
+{"public_key":"<checkpoint-public-key-hex>","signing_key_file":"checkpoint.seed","spec_version":"capsule-cli-result/v1","voice":"silent"}
 $ capsulectl profile create --name demo --type sqlite --sqlite-path /work/capsules.db \
     --namespace demo --log-id demo-log \
     --signing-key-file /work/producer.seed --trusted-key <producer-public-key-hex> \
     --checkpoint-signing-key-file /work/checkpoint.seed --checkpoint-trusted-key <checkpoint-public-key-hex>
-{"profile":"demo","spec_version":"capsule-cli-result/v1","status":"saved"}
+{"profile":"demo","spec_version":"capsule-cli-result/v1","status":"saved","voice":"silent"}
 $ capsulectl store init --profile demo
-{"log_id":"demo-log","spec_version":"capsule-cli-result/v1","status":"initialized"}
+{"log_id":"demo-log","spec_version":"capsule-cli-result/v1","status":"initialized","voice":"silent"}
 $ cat request.json
 {"spec_version":"capsule-seal-request/v1","capsule":{"ActionID":"demo-1","ActionType":"fyi","Operator":"example-operator","Developer":"example-developer","Timestamp":"2026-09-27T12:00:00Z"},"payload":{"case":1}}
 $ capsulectl seal --profile demo --request request.json --output artifact.json
-{"artifact":"artifact.json","capsule_id":"<capsule-id>","spec_version":"capsule-cli-result/v1"}
+{"artifact":"artifact.json","capsule_id":"<capsule-id>","spec_version":"capsule-cli-result/v1","voice":"silent"}
 $ capsulectl cll append --profile demo --capsule artifact.json
-{"capsule_id":"<capsule-id>","log_id":"demo-log","sequence":1,"spec_version":"capsule-cli-result/v1"}
+{"capsule_id":"<capsule-id>","log_id":"demo-log","sequence":1,"spec_version":"capsule-cli-result/v1","voice":"silent"}
 $ capsulectl cll checkpoint create --profile demo
-{"checkpoint":1,"indexed_sequence":1,"log_id":"demo-log","spec_version":"capsule-cli-result/v1","statement":"<base64 checkpoint>"}
+{"checkpoint":1,"indexed_sequence":1,"log_id":"demo-log","spec_version":"capsule-cli-result/v1","statement":"<base64 checkpoint>","voice":"silent"}
 ```
 
 `key generate` prints the public key for each seed; pass it to `--trusted-key` /
@@ -219,17 +219,17 @@ $ capsulectl profile create --name demo --type jsonl --jsonl-path /work/store \
     --namespace demo --log-id demo-log --operator example-operator \
     --signing-key-file /work/producer.seed --trusted-key <producer-public-key-hex> \
     --checkpoint-signing-key-file /work/checkpoint.seed --checkpoint-trusted-key <checkpoint-public-key-hex>
-{"profile":"demo","spec_version":"capsule-cli-result/v1","status":"saved"}
+{"profile":"demo","spec_version":"capsule-cli-result/v1","status":"saved","voice":"silent"}
 $ capsulectl store init --profile demo
-{"log_id":"demo-log","spec_version":"capsule-cli-result/v1","status":"initialized"}
+{"log_id":"demo-log","spec_version":"capsule-cli-result/v1","status":"initialized","voice":"silent"}
 $ capsulectl seal --profile demo --request request.json --output artifact.json
-{"artifact":"artifact.json","capsule_id":"<capsule-id>","spec_version":"capsule-cli-result/v1"}
+{"artifact":"artifact.json","capsule_id":"<capsule-id>","spec_version":"capsule-cli-result/v1","voice":"silent"}
 $ capsulectl cll append --profile demo --capsule artifact.json
-{"capsule_id":"<capsule-id>","log_id":"demo-log","sequence":1,"spec_version":"capsule-cli-result/v1"}
+{"capsule_id":"<capsule-id>","log_id":"demo-log","sequence":1,"spec_version":"capsule-cli-result/v1","voice":"silent"}
 $ capsulectl cll list --profile demo
-{"entries":[{"sequence":1,"capsule_id":"<capsule-id>","appended_at":"<time>","record_type":"published_capsule","record_id":"<book-record-id>","capsule_carried":true}],"log_id":"demo-log","next_after":1,"spec_version":"capsule-cli-result/v1"}
+{"entries":[{"appended_at":"<time>","capsule_carried":true,"capsule_id":"<capsule-id>","record_id":"<book-record-id>","record_type":"published_capsule","sequence":1}],"log_id":"demo-log","next_after":1,"spec_version":"capsule-cli-result/v1","voice":"silent"}
 $ capsulectl cll checkpoint create --profile demo
-{"checkpoint":4,"indexed_sequence":3,"log_id":"demo-log","spec_version":"capsule-cli-result/v1","statement":"<base64 checkpoint>"}
+{"checkpoint":4,"indexed_sequence":3,"log_id":"demo-log","spec_version":"capsule-cli-result/v1","statement":"<base64 checkpoint>","voice":"silent"}
 $ ls /work/store /work/store/book
 /work/store:
 artifacts.jsonl  book
@@ -252,7 +252,7 @@ release):
 ```console
 $ capsulectl profile update --profile demo --operator example-operator
 $ capsulectl store migrate --profile demo --log-id <new-log-id>
-{"backfilled":1,"log_id":"<new-log-id>","migration_record_id":"<record-id>","retired_log_id":"demo-log","spec_version":"capsule-cli-result/v1"}
+{"backfilled":1,"log_id":"<new-log-id>","migration_record_id":"<record-id>","retired_log_id":"demo-log","spec_version":"capsule-cli-result/v1","voice":"silent"}
 ```
 
 ## Build from source

@@ -531,10 +531,20 @@ func dealAuditHostCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		gaps := len(result["unrecorded"].([]map[string]any))
+		speakFor(c, result, func(w cli.Wording) cli.Narration {
+			switch gaps {
+			case 0:
+				return cli.Narration{Voice: cli.VoiceReport, Say: w.Line("say.audit.none", nil)}
+			case 1:
+				return cli.Narration{Voice: cli.VoiceReport, Say: w.Line("say.audit.gaps.one", nil)}
+			}
+			return cli.Narration{Voice: cli.VoiceReport, Say: w.Line("say.audit.gaps.other", cli.V{"count": fmt.Sprint(gaps)})}
+		})
 		if err = cli.Output(c, result); err != nil {
 			return err
 		}
-		if len(result["unrecorded"].([]map[string]any)) > 0 {
+		if gaps > 0 {
 			return cli.ErrPartial
 		}
 		return nil

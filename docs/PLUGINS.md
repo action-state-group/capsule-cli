@@ -135,6 +135,30 @@ The launcher's exit code is propagated as `capsulectl`'s own exit code, and
 `capsulectl` prints nothing of its own after a launcher that failed: the
 launcher has said why on stderr.
 
+### What a command tells the user: `voice` and `say`
+
+Every result object a command prints carries, beside its own fields, what
+an agent says about it (capsule-cli#345). A plugin's commands declare it
+the same way, in their own output; `capsulectl` passes a plugin's stdout
+through and adds nothing to it.
+
+- `voice`: `silent` (on the record, say nothing), `line` (say `say`), `ask`
+  (a card: `ask` holds its tag, question, facts, reasons and options; `say`
+  is the same card as text), `report` (say `say`; `attach` names the page to
+  send after it) or `error` (say `say` and stop; `hold` is `true`).
+- `say`: one string, lines joined by `\n`, spoken verbatim. It never holds
+  an id, a digest, a rule id, a flag or a UTC time.
+- Words come from a wording pack in the published `aac.wording-pack/v0`
+  format: the built-in neutral pack, or the complete pack a profile pins
+  with `profile update --wording FILE`. A pinned pack that is missing,
+  changed or incomplete is not used: the whole built-in pack speaks, the
+  result carries `"wording": "built-in"` and `doctor` names the problem.
+- A failed command that printed nothing gets one error object on stdout
+  from the binary that ran it, after the usual stderr line, with the same
+  exit code. `capsulectl` never writes one for a launcher that ran. A
+  result object with no `voice` comes from a plugin that predates this
+  contract.
+
 `--profile` reaches a launcher wherever it is written. Given after the
 plugin's name, it is one of the launcher's own arguments. Given before it
 (`capsulectl --profile a deal list`), it is passed through too, ahead of the

@@ -447,6 +447,7 @@ func dealDeadlinesCommand() *cobra.Command {
 		}
 		now := cli.DealClock()
 		list := []dealDeadline{}
+		items := map[string]string{}
 		deals := []dealOpenListing{}
 		for _, id := range ids {
 			if cli.SaleIDPattern.MatchString(id) {
@@ -460,6 +461,9 @@ func dealDeadlinesCommand() *cobra.Command {
 				if all || d.Status == "open" || d.Status == "carried_at_close" {
 					list = append(list, d)
 				}
+			}
+			if st, err := foldDeal(events); err == nil {
+				items[id] = shortTitle(st.terms.Item)
 			}
 			if l := openDealListing(events, now); l != nil {
 				deals = append(deals, *l)
@@ -478,7 +482,16 @@ func dealDeadlinesCommand() *cobra.Command {
 			}
 			out["ics"] = icsPath
 		}
-		return cli.Output(c, out)
+		return cli.Output(c, speakFor(c, out, func(w cli.Wording) cli.Narration {
+			if len(list) == 0 {
+				return cli.Narration{Voice: cli.VoiceReport, Say: w.Line("say.deadlines.none", nil)}
+			}
+			what := items[list[0].DealID]
+			if what == "" {
+				what = w.Line("say.deadlines.this_errand", nil)
+			}
+			return cli.Narration{Voice: cli.VoiceReport, Say: w.Line("say.deadlines.item", cli.V{"what": what, "date": localDate(list[0].date())})}
+		}))
 	}}
 	cmd.Flags().String("deal", "", "Only this deal (default: every deal in the profile)")
 	cmd.Flags().String("ics", "", "Also write the open dates (and open deals' expected close dates) to this new iCalendar file, each with a reminder")

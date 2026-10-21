@@ -41,7 +41,10 @@ var ErrAlarm = errors.New("canary alarm")
 var ErrWitnessUnread = errors.New("witness not readable")
 
 func canaryCommands() *cobra.Command {
-	canary := &cobra.Command{Use: "canary", Short: "A scheduled DEMO deal, and a watcher that alarms from the public witness when it stops"}
+	canary := &cobra.Command{Use: "canary", Short: "A scheduled DEMO deal, and a watcher that alarms from the public witness when it stops",
+		// An operator's monitor, never run by an agent: a failure keeps
+		// its one plain line and gets no error object.
+		Annotations: map[string]string{NarrationExempt: "true"}}
 	canary.AddCommand(canaryRunCommand(), canaryWatchCommand())
 	return canary
 }

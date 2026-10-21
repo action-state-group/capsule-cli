@@ -342,6 +342,42 @@ The final review asks four questions:
 4. **Checked claims, and a way back?** Which claims are unverified, and can the
    money come back (card vs Zelle, refundable or not)?
 
+## What you say: `voice` and `say`
+
+Every command's result says whether to speak and exactly what. Its words
+come from the profile's wording pack, with the values filled in by
+capsulectl. Follow them; never make up your own narration of a step.
+
+- **`say` is spoken verbatim.** Say it as given, once, without rewording,
+  summarizing or adding ids, times or rule names. It never holds a deal id,
+  a digest, a rule id or UTC.
+- **`voice` says how:**
+  - `silent`: the step is on the record; say nothing about it.
+  - `line`: say `say`, one short message.
+  - `ask`: the card. Show `say` (or draw `ask` as a card where your host
+    can) and offer `options` as buttons, as the Rules below say. When
+    `ask.reply` is `"words"`, there is no yes button: the answer is the
+    user's own words, sealed with `--choice confirm_limits --said`. If
+    they hold, run nothing and say `ask.hold_say`.
+  - `report`: say `say`; when the result has `attach`, send that file next,
+    in its own message, after the "View details" line.
+  - `error`: say `say`, then stop. Nothing is paid or shared after it. When
+    the failed step was one that already happened (an act, a payment, a
+    delivery, a close, evidence), never run it again: run `deal report` and
+    check what is on the record first. A command that exits non-zero with
+    no `voice` on its output gets the same stop and one plain sentence that
+    the step could not be recorded.
+- **One card or one report per turn.** Pass `--html FILE` on `deal note
+  --kind act` and `deal close`, so the step and its receipt are one
+  message. Run `deal report --html FILE` and send the updated receipt in
+  the same turn after a merchant email, a payment received, a delivery or a
+  refund is noted; and on the next turn about a deal whose email came back
+  `"state": "deferred"`, once a tick has sealed it.
+- **Fields for you, not the user.** `next`, `note` and `reason` tell you
+  what to do; never read them out.
+- **Times are the host's.** Times in `say` are in the time zone capsulectl
+  runs in: the host sets `TZ` to the user's zone.
+
 ## Rules (never break these)
 
 - **Fixed order:** snapshot → seal → diff → show → approval → seal approval →

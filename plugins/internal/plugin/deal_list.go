@@ -93,6 +93,13 @@ func dealListCommand() *cobra.Command {
 				return err
 			}
 			if asJSON {
+				key, vals := "say.list.other", cli.V{"count": fmt.Sprint(r.Totals.Deals)}
+				if r.Totals.Deals == 1 {
+					key = "say.list.one"
+				}
+				r.Narration = cli.NarrateWith(c, func(w cli.Wording) cli.Narration {
+					return cli.Narration{Voice: cli.VoiceReport, Say: w.Line(key, vals)}
+				})
 				return json.NewEncoder(c.OutOrStdout()).Encode(r)
 			}
 			list = r.Deals

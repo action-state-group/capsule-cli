@@ -44,6 +44,17 @@ var knownAssetScales = map[string]int{
 	"eip155:84532/erc20:0x036cbd53842c5426634e7929541ec2318f3dcf7e": 6, // USDC on Base Sepolia
 }
 
+// knownAssetNames are the names a person reads for the assets in
+// knownAssetScales.
+var knownAssetNames = map[string]string{
+	"eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913":  "USDC",
+	"eip155:84532/erc20:0x036cbd53842c5426634e7929541ec2318f3dcf7e": "USDC",
+}
+
+// AssetName is the name a person reads for a CAIP-19 asset type, or "" for
+// an asset it does not know.
+func AssetName(assetType string) string { return knownAssetNames[assetType] }
+
 // X402Receipt is what the payee's own system holds for one x402 payment: the
 // facilitator's settlement response (the body as the facilitator returned
 // it), the payee's own payment requirements for the request, and optionally

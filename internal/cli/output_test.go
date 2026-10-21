@@ -21,7 +21,7 @@ func TestOutputFlatObject(t *testing.T) {
 		cmd := &cobra.Command{}
 		cmd.SetOut(&buf)
 		require.NoError(t, Output(cmd, value))
-		assert.JSONEq(t, `{"spec_version":"capsule-cli-result/v1","sequence":9007199254740993}`, buf.String())
+		assert.JSONEq(t, `{"spec_version":"capsule-cli-result/v1","voice":"silent","sequence":9007199254740993}`, buf.String())
 		var fields map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(buf.Bytes(), &fields))
 		assert.NotContains(t, fields, "result")

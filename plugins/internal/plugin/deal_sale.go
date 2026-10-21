@@ -82,8 +82,9 @@ func dealSaleNewCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return cli.Output(c, map[string]any{"sale_id": saleID, "task_authority_digest": authority.Digest, "checkpoint": cp,
-				"next": "open each buyer's thread with deal open --sale " + saleID + " (its input names the buyer and the terms with them)"})
+			out := map[string]any{"sale_id": saleID, "task_authority_digest": authority.Digest, "checkpoint": cp,
+				"next": "open each buyer's thread with deal open --sale " + saleID + " (its input names the buyer and the terms with them)"}
+			return cli.Output(c, cli.Speak(out, s.p, func(w cli.Wording) cli.Narration { return saleLine(w, o.Terms) }))
 		})
 	}}
 	cmd.Flags().String("input", "", "Sale JSON: type, intent (the seller's request and limits), terms (item, asking price, currency), recourse")

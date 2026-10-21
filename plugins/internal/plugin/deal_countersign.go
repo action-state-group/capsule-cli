@@ -258,6 +258,7 @@ func dealCountersignCommand() *cobra.Command {
 				}
 				out["attached"] = true
 			}
+			cli.Speak(out, s.p, func(w cli.Wording) cli.Narration { return countersignLine(w, view) })
 			return cli.Output(c, out)
 		})
 	}}
