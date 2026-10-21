@@ -121,6 +121,7 @@
     "journey.agent.act.offer": "Made an offer",
     "journey.agent.act.other": "Done",
     "journey.agent.act.pay": "Paid {amount}",
+    "journey.agent.act.pay.no_amount": "Paid",
     "journey.agent.act.pay.within": "Paid {amount} within your {limit} limit",
     "journey.agent.act.sign": "Signed",
     "journey.agent.asked_seller": "Asked the seller",

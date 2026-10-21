@@ -519,7 +519,11 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 			for j, f := range d.Fields {
 				classes[j] = f.Class
 			}
-			add("agent", "told", "", se, cli.V{"who": d.recipient(legWho(events[:i])), "classes": disclosureWords(w, classes)})
+			who := recipientName(legWho(events[:i]))
+			if d.Who != nil && namedRecipient(d.To) {
+				who = recipientName(*d.Who)
+			}
+			add("agent", "told", "", se, cli.V{"who": who, "classes": disclosureWords(w, classes)})
 		case e.Kind == "act" && e.Act != nil:
 			a := e.Act
 			move := "act." + a.Action
@@ -538,6 +542,10 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 					key, vals["limit"] = "journey.agent.act.pay.within", spokenMoney(*state.intent.MaxTotalMinor, cur)
 				}
 				add("agent", move, key, se, vals)
+				continue
+			}
+			if a.Action == "pay" {
+				add("agent", move, "journey.agent.act.pay.no_amount", se, nil)
 				continue
 			}
 			add("agent", move, "", se, nil)

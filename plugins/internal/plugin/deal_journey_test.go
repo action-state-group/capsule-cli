@@ -667,3 +667,17 @@ func TestDealListCountsEachLegsMerchant(t *testing.T) {
 		}
 	}
 }
+
+// A pay noted with no amount still reads Paid; a telling names its
+// recipient as the other labels do, by name.
+func TestJourneyLabelsWithoutAnAmountAndByName(t *testing.T) {
+	events := []sealedEvent{
+		{CapsuleID: "c1", Event: dealEvent{Kind: "open", Open: &dealOpen{Who: dealWho{Name: "AliExpress", Payee: "PAYPAL *ALIEXPRESS"}, Terms: dealTerms{Currency: "USD"}}}},
+		{CapsuleID: "c2", Event: dealEvent{Kind: "disclosure", Disclosure: &dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "email", Value: homeEmail}}}}},
+		{CapsuleID: "c3", Event: dealEvent{Kind: "act", Act: &dealAct{Action: "pay"}}},
+	}
+	steps := dealJourney(events, cli.BuiltinWording())
+	require.Len(t, steps, 3)
+	assert.Equal(t, "Told AliExpress your email", steps[1].Label)
+	assert.Equal(t, "Paid", steps[2].Label)
+}
