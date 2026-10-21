@@ -59,7 +59,7 @@ const (
 	// ResultSchemaDigest is the SHA-256 of schemas/evidence-result-v0.json.
 	ResultSchemaDigest = "288d17a659ee416670819d5517c7f6824d1638c6eaf75dcc76a37c868fa8b85f"
 	// ResultSchemaSource names where the vendored copy came from.
-	ResultSchemaSource = "agent-action-capsule main@0e51292f52e201d896a9660c667251e776b9fa03 schemas/evidence-result-v0.json"
+	ResultSchemaSource = "agent-action-capsule main@4b24505b67f406cb7109c4fb7a2ebdc99137b500 schemas/evidence-result-v0.json"
 
 	ClaimTypeRequirement = "requirement"
 	ClaimTypeReconcile   = "reconcile"
