@@ -19,6 +19,7 @@ import (
 // per-user plugin root's ancestry, and a test that sets no HOME of its own
 // must never chmod the developer's real one.
 func TestMain(m *testing.M) {
+	keepGoCaches()
 	home, err := os.MkdirTemp("", "capsulectl-home-")
 	if err == nil {
 		err = os.Chmod(home, 0o755)
@@ -460,4 +461,34 @@ func TestDoctorReportsWhatTheWalkSaysAfterHealing(t *testing.T) {
 	assert.Equal(t, []any{home}, ur["chmod_go_w"], "what it changed is still reported")
 	assert.Contains(t, ur["error"], local)
 	assert.Equal(t, uint32(0o755), modeOf(t, home))
+}
+
+func TestDoctorRechecksAfterAConcurrentHeal(t *testing.T) {
+	home, _, _ := dealHome(t, "")
+	require.NoError(t, os.Chmod(home, 0o775))
+	local := filepath.Join(home, ".local")
+	// Another run heals HOME first, and a new problem appears on the chain.
+	seam(t, &healBeforePreflight, func() {
+		require.NoError(t, os.Chmod(home, 0o755))
+		require.NoError(t, os.Chmod(local, 0o775))
+	})
+	_, ur := doctorUserRootState(t)
+	assert.Equal(t, "refused", ur["state"])
+	assert.Contains(t, ur["error"], local)
+}
+
+// keepGoCaches pins the Go build and module caches to where they are under
+// the real HOME before a test HOME replaces it: the tests that run `go build`
+// would otherwise fill the test HOME with a fresh, read-only module cache.
+func keepGoCaches() {
+	if os.Getenv("GOPATH") == "" {
+		if real, err := os.UserHomeDir(); err == nil {
+			os.Setenv("GOPATH", filepath.Join(real, "go"))
+		}
+	}
+	if os.Getenv("GOCACHE") == "" {
+		if cache, err := os.UserCacheDir(); err == nil {
+			os.Setenv("GOCACHE", filepath.Join(cache, "go-build"))
+		}
+	}
 }

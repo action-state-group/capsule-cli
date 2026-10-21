@@ -198,7 +198,8 @@ The cadence writes one JSON line to its log before it runs the tick:
 or `plugin_root_heal_failed`. When the deal plugin was not run, it writes
 `plugin_unavailable` (not found, or refused). When it was started and then
 killed, or could not be started, it writes `plugin_stopped`, and that tick
-may have done part of its work. Each carries the message stderr shows. `doctor` reports the outcome as `plugins.user_root`,
+may have done part of its work. Each carries the message stderr shows.
+`doctor` reports the outcome as `plugins.user_root`,
 and `doctor --install-check` as `user_root`: `ok`, `absent`, `healed` or
 `refused`. A refusal there adds no issue of its own; the plugin check
 fails when the profile's plugin is the one refused.

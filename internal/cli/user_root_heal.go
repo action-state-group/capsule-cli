@@ -189,7 +189,8 @@ func doctorUserRoot() userRootHeal {
 		return userRootHeal{State: "absent", Reason: "HOME is not set"}
 	}
 	h := healUserRoot(home)
-	if h.State == "healed" {
+	// ok also covers a concurrent run that healed the chain first.
+	if h.State == "healed" || h.State == "ok" {
 		// Doctor reports what the walk now says, not only what it changed.
 		if problems := userRootAncestryProblems(home); len(problems) > 0 {
 			h.State = "refused"
