@@ -205,6 +205,7 @@ var passFixtures = []passFixture{
 	{dir: "6-generic-fallback-unknown-extension", list: passNoAggregate, view: "no-aggregate"},
 	{dir: "7-receipt-declared-rules", list: passDealView, listOther: passNoAggregate, view: "no-aggregate", differs: passDealDiffers},
 	{dir: "8-seller-buyer-copy", list: passDealView, listOther: passNoAggregate, view: "no-aggregate", differs: passDealDiffers},
+	{dir: "9-seller-later-evidence", list: passDealView, listOther: passNoAggregate, view: "no-aggregate", differs: passDealDiffers},
 }
 
 var passAudiences = []string{"*", "counterparty"}

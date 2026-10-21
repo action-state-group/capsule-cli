@@ -33,6 +33,11 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 (cd "$root" && go build -o "$work/capsulectl" ./cmd/capsulectl)
+# The deal commands are the capsulectl-deal plugin's, found on a plugin root
+# of this run's own.
+mkdir -p "$work/plugins"
+(cd "$root/plugins" && go build -o "$work/plugins/capsulectl-deal" ./cmd/capsulectl-deal)
+export CAPSULECTL_PLUGIN_ROOTS="$work/plugins"
 capsulectl() { "$work/capsulectl" "$@"; }
 
 # fixture DIR: a fresh directory for one fixture, with its own config.
@@ -126,7 +131,7 @@ cat >/dev/null
 printf '%s' '{"schema":"external-check-result/v0","ruleset_id":"example-rules/1.0.0","definition_digest":"abababababababababababababababababababababababababababababababab","verdict":"allow","tier":"recomputed","findings":[{"id":"r05-per-purchase","check":"caps/1","verdict":"pass","limit":2500,"value":627},{"id":"r14-commits-the-user","verdict":"not_evaluable","reason":"declared, not measured"},{"id":"r24-outside-instructions","verdict":"not_evaluable","reason":"declared, not measured"},{"id":"r25-no-bypassing","verdict":"not_evaluable","reason":"declared, not measured"}]}'
 STUB
 chmod 0755 "$plugins/example-rules"
-export CAPSULECTL_PLUGIN_ROOTS="$plugins"
+export CAPSULECTL_PLUGIN_ROOTS="$plugins:$work/plugins"
 capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
 jq -n --arg c "$plugins/example-rules" '{command: [$c]}' >pin.json
 capsulectl --profile deal profile update --rules-checker pin.json >/dev/null
@@ -136,7 +141,7 @@ capsulectl --profile deal deal note --deal "$id" --kind act --input "$demo/act-p
 capsulectl --profile deal deal report --deal "$id" --html page.html --bundle bundle.json >/dev/null
 cp bundle.json page.html "$out/7-receipt-declared-rules/"
 meta 7-receipt-declared-rules "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "receipt-declared-rules", emitted_by: "capsulectl deal report --deal ID --html page.html --bundle bundle.json (share keep), with a pinned stub rules checker", rerender: "deal-report", page: "written", verify: $v}')"
-unset CAPSULECTL_PLUGIN_ROOTS
+export CAPSULECTL_PLUGIN_ROOTS="$work/plugins"
 
 # --- 8. a seller's deal, the buyer's copy: what the seller's agent said ----
 # The user sells an example bicycle. Their agent states the item's condition
@@ -176,6 +181,39 @@ capsulectl --profile deal deal report --deal "$id" --share counterparty --to "th
 perl -ne 'print "$1\n" if /^\s*<script>window\.__BUNDLE__ = (.*);<\/script>$/' page.html | jq . >bundle.json
 cp bundle.json page.html "$out/8-seller-buyer-copy/"
 meta 8-seller-buyer-copy "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "seller-buyer-copy", emitted_by: "capsulectl deal report --deal ID --share counterparty --to \"the buyer\" --html page.html (bundle.json is the bundle the page carries)", rerender: "deal-report", page: "written", verify: $v}')"
+
+# --- 9. a seller's Receipt with later evidence under the close -------------
+# Seller PRD §5.4 and exit criterion 9, from the deal plugin's fixture
+# (plugins/internal/plugin/testdata/deal/seller-later-evidence). The user
+# sells the example bicycle; the agent states its condition and refund terms,
+# offers, the buyer accepts, the agent commits, and the delivery is due. The
+# sale closes with that due date carried. Later the carrier's scan
+# (checked) resolves it, and the buyer's refund request (a claim, so
+# unverified) is about the refund terms; both chain `confirms` to the close.
+fixture 9-seller-later-evidence
+export CAPSULE_DEAL_CHECK_URL=
+src="$root/plugins/internal/plugin/testdata/deal/seller-later-evidence"
+capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
+id=$(capsulectl --profile deal deal open --records typed --input "$src/open.json" | jq -r .deal_id)
+note() { capsulectl --profile deal deal note --deal "$id" "$@"; }
+note --kind claim --input "$src/claim-condition.json" >/dev/null
+note --kind claim --input "$src/claim-refund-terms.json" >/dev/null
+offer=$(capsulectl --profile deal deal check --deal "$id" --input "$src/check-offer.json" | jq -r .check_id)
+note --kind act --input "$src/act-offer.json" >/dev/null
+note --kind acceptance --check "$offer" --words "Deal, 1900 works for me" --channel marketplace >/dev/null
+capsulectl --profile deal deal check --deal "$id" --input "$src/check-commit.json" >/dev/null
+note --kind act --input "$src/act-commit.json" >/dev/null
+# The clock is real, so the due date is set a few days ahead.
+jq --arg due "$(python3 -c 'import datetime; print((datetime.date.today() + datetime.timedelta(days=5)).isoformat())')" \
+  '.obligation.due_by = $due' "$src/deliver-by.json" >deliver-by.json
+due=$(note --kind evidence --input deliver-by.json | jq -r .step)
+capsulectl --profile deal deal close --deal "$id" --carry-open-obligations --input "$src/close.json" >/dev/null
+jq --argjson step "$due" '.resolves_step = $step' "$src/later-delivered.json" >later-delivered.json
+note --kind evidence --input later-delivered.json >/dev/null
+note --kind evidence --input "$src/later-refund-claim.json" >/dev/null
+capsulectl --profile deal deal report --deal "$id" --html page.html --bundle bundle.json >/dev/null
+cp bundle.json page.html "$out/9-seller-later-evidence/"
+meta 9-seller-later-evidence "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "seller-later-evidence", emitted_by: "capsulectl deal report --deal ID --html page.html --bundle bundle.json (share keep), after a close and two later evidence records that confirm it", rerender: "deal-report", page: "written", verify: $v}')"
 
 # --- 3. bilateral receipt: composed/v1 joined, two members, one mismatch ---
 fixture 3-bilateral-composed
