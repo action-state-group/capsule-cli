@@ -297,3 +297,21 @@ func TestDealListToldJoinsLinkedIdentities(t *testing.T) {
 		}
 	}
 }
+
+// A party linked only through a telling in another role is one party in
+// each role it had, so a role's count never exceeds the whole; and one
+// telling of two values of a class tells its recipient once.
+func TestDealListToldCountsLinksAcrossRoles(t *testing.T) {
+	phone := []dealDisclosureField{{Class: "phone", Value: "+1 555 010 4477"}}
+	tally := newDealToldTally()
+	tally.add("deal-a", dealDisclosure{To: "counterparty", Fields: phone}, dealOpen{Who: dealWho{Email: "x@example.com"}}, dealRoleBuyer)
+	tally.add("deal-b", dealDisclosure{To: "counterparty", Fields: phone}, dealOpen{Who: dealWho{Phone: "+1 555 010 1234"}}, dealRoleBuyer)
+	tally.add("deal-c", dealDisclosure{To: "other", Who: &dealWho{Email: "x@example.com", Phone: "+1 555 010 1234"}, Fields: phone}, dealOpen{}, dealRoleBuyer)
+	tally.add("deal-d", dealDisclosure{To: "other", Who: &dealWho{Name: "a courier"},
+		Fields: []dealDisclosureField{{Class: "phone", Value: "+1 555 010 4477"}, {Class: "phone", Value: "+1 555 010 4478"}}}, dealOpen{}, dealRoleBuyer)
+	for _, r := range tally.rows() {
+		if r.Class == "phone" {
+			assert.Equal(t, dealListTold{Class: "phone", Recipients: 2, ToSellers: 1, ToOthers: 2}, r)
+		}
+	}
+}

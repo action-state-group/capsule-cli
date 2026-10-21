@@ -316,22 +316,22 @@ func (t *dealToldTally) add(dealID string, d dealDisclosure, open dealOpen, role
 	case role == dealRoleSeller:
 		to.role = dealRoleBuyer
 	}
+	// One telling of two values of a class tells that recipient once.
+	seen := map[string]bool{}
 	for _, f := range d.Fields {
-		t.byClass[f.Class] = append(t.byClass[f.Class], to)
+		if !seen[f.Class] {
+			seen[f.Class] = true
+			t.byClass[f.Class] = append(t.byClass[f.Class], to)
+		}
 	}
 }
 
-// distinctParties counts the parties among the recipients in role (all
-// roles when ""): recipients are joined when they are the same party or
-// the same deal's counterparty, and joined transitively, so the count does
-// not depend on the order they were told in.
-func distinctParties(recipients []dealToldTo, role string) int {
-	var rs []dealToldTo
-	for _, r := range recipients {
-		if role == "" || r.role == role {
-			rs = append(rs, r)
-		}
-	}
+// dealToldCount counts the parties among recipients: recipients are joined
+// when they are the same party or the same deal's counterparty, and joined
+// transitively, so the count does not depend on the order they were told
+// in. A party is counted once in each role any of its tellings had, so no
+// role's count exceeds the whole.
+func dealToldCount(class string, rs []dealToldTo) dealListTold {
 	parent := make([]int, len(rs))
 	for i := range parent {
 		parent[i] = i
@@ -343,25 +343,41 @@ func distinctParties(recipients []dealToldTo, role string) int {
 		}
 		return parent[i]
 	}
-	n := len(rs)
 	for i := range rs {
 		for j := 0; j < i; j++ {
-			same := rs[i].deal != "" && rs[i].deal == rs[j].deal ||
-				len(rs[i].keys) > 0 && len(rs[j].keys) > 0 && sameParty(rs[i].keys, rs[j].keys)
-			if a, b := find(i), find(j); same && a != b {
-				parent[a] = b
-				n--
+			if rs[i].deal != "" && rs[i].deal == rs[j].deal ||
+				len(rs[i].keys) > 0 && len(rs[j].keys) > 0 && sameParty(rs[i].keys, rs[j].keys) {
+				parent[find(i)] = find(j)
 			}
 		}
 	}
-	return n
+	roles := map[int]map[string]bool{}
+	for i, r := range rs {
+		root := find(i)
+		if roles[root] == nil {
+			roles[root] = map[string]bool{}
+		}
+		roles[root][r.role] = true
+	}
+	row := dealListTold{Class: class, Recipients: len(roles)}
+	for _, has := range roles {
+		if has[dealRoleSeller] {
+			row.ToSellers++
+		}
+		if has[dealRoleBuyer] {
+			row.ToBuyers++
+		}
+		if has["other"] {
+			row.ToOthers++
+		}
+	}
+	return row
 }
 
 func (t *dealToldTally) rows() []dealListTold {
 	rows := make([]dealListTold, 0, len(t.byClass))
 	for c, rs := range t.byClass {
-		rows = append(rows, dealListTold{Class: c, Recipients: distinctParties(rs, ""),
-			ToSellers: distinctParties(rs, dealRoleSeller), ToBuyers: distinctParties(rs, dealRoleBuyer), ToOthers: distinctParties(rs, "other")})
+		rows = append(rows, dealToldCount(c, rs))
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Class < rows[j].Class })
 	return rows

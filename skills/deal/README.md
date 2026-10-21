@@ -309,7 +309,8 @@ user's own and is never sent by default.
   name is a different recipient in each deal; someone else with no identity
   is a different recipient in each telling. Recipients linked by a shared
   identity are one, and a deal's counterparty is one recipient within that
-  deal. It counts `disclosure` steps; a copy handed over with `deal report
+  deal. One told in more than one role counts once in each, so no role's
+  count exceeds `recipients`. It counts `disclosure` steps; a copy handed over with `deal report
   --share` is not counted. It carries classes and counts only, never a
   value or a recipient's name, and lists every class, so `0` says no one
   was told it in the range.
@@ -342,7 +343,8 @@ the array it always was):
   `called_off` (closed with nothing received), `not_chosen` (the other side
   was not chosen) or `open`; a sale has none, since its threads carry theirs.
 - `totals.deals` and `totals.outcomes` count deals and buyer threads;
-  `totals.sales` counts sales. `money` has one entry per currency, in order;
+  `totals.sales` counts sales. `money` has one entry per currency, in order
+  (`""` for amounts sealed with no currency);
   `sold_unpriced`, when present, counts sold threads with no price sealed.
 - `disclosures`: one entry per class, in class order.
 
