@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -93,7 +94,11 @@ func TestDealListMatchesTheStore(t *testing.T) {
 	require.Len(t, list, len(want), "one entry per deal id in the store")
 	for i, d := range want {
 		l := list[i]
-		assert.Equal(t, []string{"deal_id", "kind", "state", "opened_at", "last_record_at", "counterparty_fingerprint", "log_id", "summary"}, keys[i], "stable key order")
+		wantKeys := []string{"deal_id", "kind", "state", "opened_at", "last_record_at", "counterparty_fingerprint", "log_id", "result", "summary"}
+		if l["kind"] == "sale" {
+			wantKeys = slices.Delete(wantKeys, 7, 8) // a sale's threads carry its results
+		}
+		assert.Equal(t, wantKeys, keys[i], "stable key order")
 		assert.Equal(t, d.id, l["deal_id"])
 		assert.Equal(t, d.first, l["opened_at"])
 		assert.Equal(t, d.last, l["last_record_at"])
@@ -117,6 +122,9 @@ func TestDealListMatchesTheStore(t *testing.T) {
 	assert.Equal(t, "deal", byID[thread]["kind"], "a sale's buyer thread is a deal")
 	assert.Regexp(t, `^[0-9a-f]{64}$`, byID[closed]["counterparty_fingerprint"], "the closed deal's check sealed a counterparty_profile")
 	assert.Nil(t, byID[open]["counterparty_fingerprint"], "the open deal has no check")
+	assert.Equal(t, "bought", byID[closed]["result"])
+	assert.Equal(t, "open", byID[open]["result"])
+	assert.Equal(t, "open", byID[thread]["result"])
 
 	for _, id := range []string{closed, open} {
 		path := filepath.Join(t.TempDir(), "records.json")

@@ -25,6 +25,9 @@ type dealListing struct {
 	// counterparty_profile step (profileKeyFor), or null when it has none.
 	CounterpartyFingerprint *string `json:"counterparty_fingerprint"`
 	LogID                   string  `json:"log_id"`
+	// Result is a deal's result (dealResult): bought, sold, called_off,
+	// not_chosen or open. A sale has none: its threads carry theirs.
+	Result string `json:"result,omitempty"`
 	// Summary is the deal in plain words, read from the steps the list
 	// reads. It is the user's own view: what they asked, the counterparty's
 	// name and the amount are private, and no shared copy carries them.
@@ -62,7 +65,13 @@ type dealSummaryAmount struct {
 const dealNotRecorded = "not recorded"
 
 func dealListCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "list", Short: "One line per deal in the profile's store: deal id, kind, state, opened and last-record times, counterparty fingerprint, log id; --json adds a plain summary (what, with whom, amount, outcome); read-only", Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+	cmd := &cobra.Command{Use: "list", Short: "One line per deal in the profile's store: deal id, kind, state, opened and last-record times, counterparty fingerprint, log id; --json adds a plain summary (what, with whom, amount, outcome); --since/--until pick the deals active in a range, and with --json add its totals and who was told what; read-only", Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
+		since, _ := c.Flags().GetString("since")
+		until, _ := c.Flags().GetString("until")
+		bounds, ranged, err := listBounds(since, until)
+		if err != nil {
+			return err
+		}
 		p, err := cli.Selected(c)
 		if err != nil {
 			return err
@@ -72,12 +81,29 @@ func dealListCommand() *cobra.Command {
 			return err
 		}
 		defer func() { err = errors.Join(err, s.close()) }()
-		list, err := s.dealListings(c.Context())
+		logs, err := s.dealLogs(c.Context())
 		if err != nil {
 			return err
 		}
-		if asJSON, _ := c.Flags().GetBool("json"); asJSON {
-			return json.NewEncoder(c.OutOrStdout()).Encode(list)
+		asJSON, _ := c.Flags().GetBool("json")
+		var list []dealListing
+		if ranged {
+			r, err := dealListInRange(logs, bounds)
+			if err != nil {
+				return err
+			}
+			if asJSON {
+				return json.NewEncoder(c.OutOrStdout()).Encode(r)
+			}
+			list = r.Deals
+		} else {
+			list = make([]dealListing, 0, len(logs))
+			for _, l := range logs {
+				list = append(list, dealListingOf(l.id, l.events))
+			}
+			if asJSON {
+				return json.NewEncoder(c.OutOrStdout()).Encode(list)
+			}
 		}
 		for _, l := range list {
 			fp := "-"
@@ -90,7 +116,9 @@ func dealListCommand() *cobra.Command {
 		}
 		return nil
 	}}
-	cmd.Flags().Bool("json", false, "Emit the deals as one JSON array, each with a plain summary, instead of tab-separated lines")
+	cmd.Flags().Bool("json", false, "Emit the deals as one JSON array, each with a plain summary, instead of tab-separated lines; with --since or --until, one object: the range, its deals, totals and disclosures")
+	cmd.Flags().String("since", "", "List only deals with a step at or after this date (2026-10-01, UTC) or time (2026-10-01T00:00:00-07:00)")
+	cmd.Flags().String("until", "", "List only deals with a step before this date or time (exclusive), each as it stood then")
 	return cmd
 }
 
@@ -137,19 +165,38 @@ func dealSummaryOf(events []sealedEvent) dealSummary {
 	return sum
 }
 
-// dealListings reads every deal's steps from the store's index, in deal id
+// dealListings lists every deal in the store (dealLogs), in deal id order.
+func (s *dealSession) dealListings(ctx context.Context) ([]dealListing, error) {
+	logs, err := s.dealLogs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	list := make([]dealListing, 0, len(logs))
+	for _, l := range logs {
+		list = append(list, dealListingOf(l.id, l.events))
+	}
+	return list, nil
+}
+
+// dealLog is one deal's steps, as dealLogs reads them.
+type dealLog struct {
+	id     string
+	events []sealedEvent
+}
+
+// dealLogs reads every deal's steps from the store's index, in deal id
 // order, and checks each row the way `load` does (one strict record whose
 // deal, step number and kind are the row's, chained to the step before by
 // its digest), without re-verifying the steps against the deal's log
 // (`deal export` does). A last step indexed but not yet in the log (a crash
-// between the two writes, which the next write command recovers) is listed.
-// A store with no deal yet lists none.
-func (s *dealSession) dealListings(ctx context.Context) (_ []dealListing, err error) {
-	list := []dealListing{}
+// between the two writes, which the next write command recovers) is read.
+// A store with no deal yet holds none.
+func (s *dealSession) dealLogs(ctx context.Context) (_ []dealLog, err error) {
+	logs := []dealLog{}
 	steps, err := s.index.steps(ctx, stepFilter{})
 	if err != nil {
 		if strings.Contains(err.Error(), "no such table") {
-			return list, nil
+			return logs, nil
 		}
 		return nil, err
 	}
@@ -157,7 +204,7 @@ func (s *dealSession) dealListings(ctx context.Context) (_ []dealListing, err er
 	var events []sealedEvent
 	flush := func() {
 		if len(events) > 0 {
-			list = append(list, dealListingOf(id, events))
+			logs = append(logs, dealLog{id: id, events: events})
 		}
 	}
 	for _, st := range steps {
@@ -177,7 +224,7 @@ func (s *dealSession) dealListings(ctx context.Context) (_ []dealListing, err er
 		prev = digest
 	}
 	flush()
-	return list, nil
+	return logs, nil
 }
 
 func dealListingOf(dealID string, events []sealedEvent) dealListing {
@@ -188,6 +235,8 @@ func dealListingOf(dealID string, events []sealedEvent) dealListing {
 	}
 	if cli.SaleIDPattern.MatchString(dealID) {
 		l.Kind = "sale"
+	} else {
+		l.Result = dealResult(events)
 	}
 	if dealFinallyClosed(events) {
 		l.State = "closed"
