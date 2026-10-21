@@ -116,8 +116,8 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 			check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(retailDemo, "check-pay.json"))
 			assert.Equal(t, "pass", check["verdict"], "a known merchant at the agreed price passes quietly")
 			assert.Equal(t, "", check["card"])
-			assert.Equal(t, "DEMO · Pay: Place order: 1 cat sticker, $6.27 total, saved card · $6.27 · to Example Stickers (stickers.example) · by card · refundable\n"+
-				"• Your rules were not checked: no rules checker configured.", check["approval_text"])
+			assert.Equal(t, "Pay $6.27 to Example Stickers (stickers.example) for the cat sticker?\n"+
+				"$6.27 · by card · refundable", check["approval_text"])
 			assert.Equal(t, "2026-09-27T18:00:00Z", check["checked_at"])
 			proceed = check["proceed"] == true
 		case strings.Contains(step, "place the order"):
@@ -168,21 +168,19 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 	assert.Equal(t, map[string]any{"id": "a1", "at": "2026-09-27T18:00:00Z", "decision": "approved"}, result["recorded"].([]any)[0].(map[string]any)["host_approval"])
 }
 
-// The approval text leads with whether the rules were checked, then the
-// action and the finding. When the check goes stale is in the check's output
-// and its sealed record, not in the prompt.
+// The approval text is the card: the tag, the question, the facts and the
+// reasons. When the check goes stale is in the check's output and its sealed
+// record, not in the prompt.
 func TestDealCheckApprovalTextCarriesTheFindingAndWhenItGoesStale(t *testing.T) {
 	dealFixture(t)
 	dealID := openJetSki(t)
 	check := dealRun(t, "check", "--deal", dealID, "--stale-after", "5m", "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
-	assert.Equal(t, "DEMO · Pay: $200 deposit to hold 2 jet skis on Saturday · $200.00 · to M. Torres (coastal-jet-rentals.example) · by Zelle · not refundable\n"+
-		"• Your rules were not checked: no rules checker configured.\n"+
-		"• First time dealing with Coastal Jet Rentals LLC ("+newProfileNote+")\n"+
-		"• Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle)\n"+
-		"• Payment changed since it was agreed (card → Zelle, not refundable)\n"+
-		"• Zelle = no card protection\n"+
-		"• Site registered 3 weeks ago\n"+
-		"• Unverified: they have 2 jet skis for Saturday", check["approval_text"])
+	assert.Equal(t, "DEMO · STOP: CHECK THIS\n"+
+		"Pay $200 to M. Torres (coastal-jet-rentals.example) for the jet ski rental?\n"+
+		"$200 · by Zelle · not refundable\n"+
+		"Why I'm asking: the payee or contact changed since you first talked; first payment to this seller.\n"+
+		"Good to know: they have 2 jet skis for Saturday (not checked).", check["approval_text"])
+	assert.NotContains(t, check["approval_text"], "5m", "when the check goes stale is not in the prompt")
 	assert.Equal(t, check["approval_text"], check["card"], "one block: the card sealed is the text shown")
 	assert.Equal(t, float64(5), check["stale_after_minutes"])
 	assert.Equal(t, "2026-09-27T18:00:00Z", check["checked_at"])

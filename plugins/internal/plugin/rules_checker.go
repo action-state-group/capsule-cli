@@ -359,55 +359,6 @@ var numberedRule = regexp.MustCompile(`^[a-z]{0,3}[0-9]{1,4}$`)
 // rePinHint ends a sealed not-checked reason that a re-pin fixes.
 const rePinHint = "; re-pin it with profile update --rules-checker FILE"
 
-// rulesStatusLine is the approval block's rules line, said once.
-func rulesStatusLine(r *dealRules) string {
-	if r == nil {
-		return ""
-	}
-	switch r.Status {
-	case "evaluated":
-		short := r.DefinitionDigest
-		if len(short) > 8 {
-			short = short[:8]
-		}
-		words := map[string]string{"allow": "allowed", "deny": "not allowed", "escalate": "needs your approval", "not_evaluable": "not fully checked"}[r.Verdict]
-		line := fmt.Sprintf("Your rules (%s, digest %s): %s, %s.", r.RulesetID, short, words, rulesProvenance(r.Tier, r.Grade))
-		if declared := declaredRules(r); len(declared) > 0 {
-			line += " " + declaredRulesLine(declared)
-		}
-		if h := r.History; h != nil && !h.Complete {
-			line += fmt.Sprintf(" They were given only %d of your earlier payments from the last %d days.", h.Acts, h.Days)
-		}
-		return line
-	case "not_configured":
-		return "Your rules were not checked: no rules checker configured."
-	default:
-		// The sealed reason names the command that re-pins; the user is
-		// told what is needed, not the command.
-		reason := r.Reason
-		if cut, ok := strings.CutSuffix(reason, rePinHint); ok {
-			reason = cut + ", so it needs re-pinning"
-		}
-		return "Your rules were not checked: " + reason + "."
-	}
-}
-
-// rulesProvenance says how the checker reached its verdict, and the grade of
-// the evidence behind it, as it said.
-func rulesProvenance(tier, grade string) string {
-	words := "judged (not stated)"
-	switch tier {
-	case "recomputed":
-		words = "computed by your rules"
-	case "judged":
-		words = "judged"
-	}
-	if grade != "" {
-		words += ", " + grade
-	}
-	return words
-}
-
 // rulesDifferences are the differences the rules add to a check: a deny, an
 // escalation, a rule left unevaluated, or a checker that could not answer.
 // An allow adds none; a profile with no checker adds none.

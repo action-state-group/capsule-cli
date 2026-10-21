@@ -71,8 +71,9 @@ func TestNoMaterialityPredicateFailsSafe(t *testing.T) {
 	check := flightCheck(t)
 	assert.Equal(t, "pause", check["verdict"])
 	assert.ElementsMatch(t, []string{"item", "when", "place", "conditions.fare"}, pausedOn(check))
-	assert.Contains(t, check["card"], "I picked dates Oct 21 to Oct 24; you didn't choose it")
-	assert.NotContains(t, check["card"], "The agent picked, not you", "no pick is set aside as minor")
+	assert.Contains(t, differenceTexts(check), "I picked dates Oct 21 to Oct 24; you didn't choose it")
+	assert.Contains(t, check["card"], "I picked item WN 1234, dates Oct 21 to Oct 24, place HOU/SJC and fare Basic, not you.")
+	assert.NotContains(t, check["card"], "Good to know", "no pick is set aside as minor")
 
 	materialityFixture(t, "--materiality", neutralMateriality)
 	check = flightCheck(t)
@@ -92,7 +93,8 @@ func TestADigitInADateStillPausesWithNoPredicate(t *testing.T) {
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":9000,"authorized_max_minor":9000,"terms":{"item":"show ticket","quantity":2,"when":"Oct 2","price_minor":9000},"recourse":{"rail":"card","refundable":true}}`))
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Contains(t, pausedOn(check), "quantity")
-	assert.Contains(t, check["card"], "I picked quantity 2")
+	assert.Contains(t, differenceTexts(check), "I picked quantity 2")
+	assert.Contains(t, check["card"], "quantity 2")
 }
 
 // The predicate decides: one that names the dates pauses on the dates alone;
@@ -102,7 +104,8 @@ func TestThePredicateDecidesWhichPicksPause(t *testing.T) {
 	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"dates only","version":"1","material":[{"field":"when"}]}`))
 	check := flightCheck(t)
 	assert.Equal(t, []string{"when"}, pausedOn(check))
-	assert.Contains(t, check["card"], "The agent picked, not you: item WN 1234")
+	assert.Contains(t, check["card"], "Why I'm asking: first payment to this seller; I picked dates Oct 21 to Oct 24, not you.")
+	assert.Contains(t, check["card"], "Good to know: I chose item WN 1234 for you.")
 
 	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing","version":"1","material":[]}`))
 	check = flightCheck(t)
@@ -321,7 +324,7 @@ func TestARepinMidDealIsFlagged(t *testing.T) {
 	changed := dealRun(t, "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
 	assert.Equal(t, "pause", changed["verdict"])
 	assert.Contains(t, rules(changed), "materiality_changed")
-	assert.Contains(t, changed["card"], "The rule for which of the agent's picks need your answer changed since this deal opened ("+p.Name+" "+p.Version+" → nothing 2)")
+	assert.Contains(t, differenceTexts(changed), "The rule for which of the agent's picks need your answer changed since this deal opened ("+p.Name+" "+p.Version+" → nothing 2)")
 	assert.Empty(t, pausedOn(changed), "the new predicate itself pauses on nothing: only the change is flagged")
 	_, export := exportRecords(t, id)
 	checkProfile(t, export)
@@ -437,7 +440,7 @@ func TestARepinMidDealIsNamedOnlyInTheUsersOwnCopy(t *testing.T) {
 	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
 	pin(t, writePredicate(t, `{"type":"materiality-predicate/v0","name":"nothing at all","version":"2.7","material":[]}`))
 	check := dealRun(t, "check", "--deal", id, "--input", filepath.Join(otterFixture, "check-pay.json"))
-	require.Contains(t, check["card"], "nothing at all 2.7")
+	require.Contains(t, differenceTexts(check), "nothing at all 2.7")
 
 	for _, audience := range []string{cli.DealAudienceAdjudicator, cli.DealAudienceCounterparty} {
 		b, sharedRaw := sharedCopy(t, id, audience, "x")

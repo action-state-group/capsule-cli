@@ -269,12 +269,15 @@ func TestOverLimitExceptionWording(t *testing.T) {
 	check := `{"action":"pay","amount_minor":6000,"authorized_max_minor":6000,"terms":{"item":"Otterly Chaos poster","price_minor":6000}}`
 	c := dealRun(t, "check", "--deal", open(`{"item":"Otterly Chaos poster","price_minor":6000}`), "--input", writeJSON(t, check))
 	require.Equal(t, "pause", c["verdict"], "the rule still asks")
-	assert.Contains(t, c["card"], "Your rules normally ask above $25.00. You asked for this $60.00 purchase specifically. Approve this exception?")
-	assert.NotContains(t, c["card"], "Over your limit")
+	assert.Contains(t, c["card"], "Why I'm asking: you asked for this one, but it's over your $25 limit")
+	assert.Contains(t, differenceTexts(c), "Your rules normally ask above $25.00. You asked for this $60.00 purchase specifically. Approve this exception?")
+	assert.NotContains(t, differenceTexts(c), "Over your limit")
 
 	c = dealRun(t, "check", "--deal", open(`{"item":"Otterly Chaos poster"}`), "--input", writeJSON(t, check))
-	assert.Contains(t, c["card"], "Over your limit of $25.00 ($60.00)")
-	assert.NotContains(t, c["card"], "exception")
+	assert.Contains(t, c["card"], "Why I'm asking: it's over your $25 limit.")
+	assert.NotContains(t, c["card"], "you asked for this one")
+	assert.Contains(t, differenceTexts(c), "Over your limit of $25.00 ($60.00)")
+	assert.NotContains(t, differenceTexts(c), "exception")
 }
 
 // The emailed receipt carries the same block, in both bodies.

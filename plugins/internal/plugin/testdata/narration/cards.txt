@@ -1,0 +1,29 @@
+== share
+PAUSED FOR YOU
+Share your name, email, phone and address with sticker_shop_example (marketplace.example) for the Fawn Sticker?
+Why I'm asking: first time this seller gets your details.
+Next: I'll ask you again before paying.
+<Hold> <Share>
+== pay
+PAUSED FOR YOU
+Pay $1.90 to sticker_shop_example (marketplace.example) for the Fawn Sticker?
+$1.75 + $0.15 tax and fees, up to $2 · by card · refundable · within your $2
+Why I'm asking: first payment to this seller.
+<Hold> <Pay $1.90>
+== deny
+NOT ALLOWED BY YOUR RULES
+Share your address with Classifieds Example (classifieds.example) for the Fawn Sticker?
+Why I'm asking: your rules don't allow this; first time this seller gets your details.
+<Hold>
+== over-limit
+PAUSED FOR YOU
+Pay $2.50 to sticker_shop_example (marketplace.example) for the Fawn Sticker?
+$1.75 + $0.75 tax and fees · by card · refundable · over your $2
+Why I'm asking: it's over your $2 limit; first payment to this seller.
+<Hold> <Pay $2.50 anyway>
+== payee-changed
+STOP: CHECK THIS
+Pay $1.90 to sticker-payouts-2 (marketplace.example) for the Fawn Sticker?
+$1.75 + $0.15 tax and fees · by card · refundable · within your $2
+Why I'm asking: the payee or contact changed since you first talked; first payment to this seller.
+<Hold> <Call +1 555 0100 first> <Pay $1.90>

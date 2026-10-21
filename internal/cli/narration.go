@@ -520,8 +520,8 @@ func NarrateWith(c *cobra.Command, build func(Wording) Narration) Narration {
 // Button labels are not part of it.
 func AskText(w Wording, a Ask) string {
 	lines := []string{a.Tag, a.Question, a.Facts}
-	for _, why := range a.Why {
-		lines = append(lines, w.Line("card.why.label", V{"why": why}))
+	if len(a.Why) > 0 {
+		lines = append(lines, w.Line("card.why.label", V{"why": strings.Join(a.Why, "; ")}))
 	}
 	if a.GoodToKnow != "" {
 		lines = append(lines, w.Line("card.good_to_know.label", V{"text": a.GoodToKnow}))

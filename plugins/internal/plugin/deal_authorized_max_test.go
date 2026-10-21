@@ -54,9 +54,9 @@ func TestALimitBindsTheAuthorisedMaximumNotTheExpectedCharge(t *testing.T) {
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 954)))
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Equal(t, "authorized_max_minor", differenceFields(check)["over_limit"], "the evidence names the field evaluated")
-	assert.Contains(t, check["card"], "Over your limit of $5.00")
-	assert.Contains(t, check["card"], "up to $9.54 may be taken")
-	assert.Contains(t, check["card"], "$4.54")
+	assert.Contains(t, differenceTexts(check), "Over your limit of $5.00")
+	assert.Contains(t, differenceTexts(check), "up to $9.54 may be taken")
+	assert.Contains(t, check["card"], "\n$4.54, up to $9.54 · by card · refundable · over your $5\n", "the card judges the limit on the authorised maximum, and shows it")
 }
 
 // Within the limit, the authorised maximum passes, and the sealed check

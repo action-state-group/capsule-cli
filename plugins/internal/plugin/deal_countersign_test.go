@@ -242,7 +242,7 @@ func TestDealRemoteCheckerOnlyAddsAndFallsBack(t *testing.T) {
 	paused := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit.json"))
 	assert.Equal(t, "used", paused["remote"])
 	assert.Equal(t, "pause", paused["verdict"], "a remote pass never clears a local pause")
-	assert.Contains(t, paused["card"], "Over your limit of $400.00")
+	assert.Contains(t, differenceTexts(paused), "Over your limit of $400.00")
 
 	release := make(chan struct{})
 	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

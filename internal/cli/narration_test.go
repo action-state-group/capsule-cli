@@ -307,7 +307,7 @@ func TestACardRendersAsItsLines(t *testing.T) {
 	w := BuiltinWording()
 	text := AskText(w, Ask{Tag: "PAUSED FOR YOU", Question: "Raise your limit?", Why: []string{"first payment"},
 		Reply: "words", Options: []AskOption{{Label: "Hold", Choice: "hold"}}})
-	assert.Equal(t, "PAUSED FOR YOU\nRaise your limit?\nWhy I'm asking: first payment\n"+w.Entries["card.reply.words"], text)
+	assert.Equal(t, "PAUSED FOR YOU\nRaise your limit?\nWhy I'm asking: first payment.\n"+w.Entries["card.reply.words"], text)
 	assert.NotContains(t, text, "Hold")
 }
 

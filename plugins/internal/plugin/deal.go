@@ -2045,9 +2045,24 @@ func dealCheckCommand() *cobra.Command {
 			result.Differences = append(result.Differences, rulesDifferences(&rules)...)
 			settleCheck(&result, state)
 			result.Snapshot = snapped.CapsuleID
-			// One block: the approval text, and on a pause the card the
-			// answer is sealed against. A passing check has no card.
-			approvalText := dealApprovalText(state, snap, result, events)
+			// The card, in the profile's words (capsule-cli#344): one tag,
+			// one question, the facts, at most two reasons and the buttons.
+			// On a pause or a deny its text is the card the answer is sealed
+			// against. A passing check has no card, unless an earlier card
+			// promised to ask again before paying: then it asks, unsealed.
+			words, _ := cli.ActiveWording(s.p)
+			labelOptions(words, &result, snap, state)
+			card := checkCard(words, state, snap, result, events)
+			promised := result.Verdict == "pass" && promisedPay(events, state, snap)
+			switch {
+			case promised:
+				card.Why = []string{words.Line("card.why.promised", nil)}
+				card.Options = []cli.AskOption{{Label: words.Line("card.button.hold", nil), Choice: "hold"}, {Label: words.Line("card.button.pay", cli.V{"amount": cardAmount(snap, state)}), Choice: "proceed"}}
+			case result.Verdict == "pass":
+				// A pass asks nothing: its text is the question and the facts.
+				card.Tag, card.Why, card.GoodToKnow, card.Next = "", nil, "", ""
+			}
+			approvalText := cardText(words, card)
 			if result.Verdict != "pass" {
 				result.Card = approvalText
 			}
@@ -2116,10 +2131,10 @@ func dealCheckCommand() *cobra.Command {
 			// A pause or a deny asks the user with the card; a pass goes
 			// ahead and says nothing.
 			cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
-				if result.Verdict == "pass" {
+				if result.Verdict == "pass" && !promised {
 					return silent(w)
 				}
-				return cli.Narration{Voice: cli.VoiceAsk, Say: result.Card}
+				return cli.Narration{Voice: cli.VoiceAsk, Say: approvalText, Ask: &card}
 			})
 			return cli.Output(c, out)
 		})

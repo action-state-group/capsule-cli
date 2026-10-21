@@ -42,12 +42,12 @@ func TestDealLaterIntentCannotRaiseTheLimit(t *testing.T) {
 		}
 		return dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, body+`}`))
 	}
-	paused := func(t *testing.T, c map[string]any, card string) {
+	paused := func(t *testing.T, c map[string]any, difference string) {
 		t.Helper()
 		assert.Equal(t, "pause", c["verdict"])
 		assert.Equal(t, false, c["proceed"])
 		assert.Nil(t, c["approval_id"], "no standing approval for a paused check")
-		assert.Contains(t, c["card"], card)
+		assert.Contains(t, differenceTexts(c), difference)
 	}
 
 	t.Run("a higher limit in a later note does not raise it", func(t *testing.T) {

@@ -87,7 +87,7 @@ func TestDealCancelByDateAndCancellationProof(t *testing.T) {
 	// writes cannot widen that on its own, so the cancel pauses for the
 	// user's own answer, which covers this one step.
 	require.Equal(t, "pause", cancel["verdict"], cancel["card"])
-	assert.Contains(t, cancel["card"], "You didn't ask for this: cancelling")
+	assert.Contains(t, differenceTexts(cancel), "You didn't ask for this: cancelling")
 	yes := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", cancel["check_id"].(string), "--choice", "proceed", "--said", "yes, cancel it")
 	act := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"cancel","description":"cancelled Plus in the account settings"}`))
 	require.Equal(t, false, act["unchecked"])

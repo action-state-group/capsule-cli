@@ -1216,21 +1216,12 @@ func ageText(days int64) string {
 
 const recentDomainDays = 90
 
-var proceedPlainLabels = map[string]string{
-	"pay": "Pay", "commit": "Confirm", "sign": "Sign", "cancel": "Cancel",
-	"share_contact": "Share", "share_credentials": "Share", representAction: "Say it",
-}
-
 // violationRules are the difference rules that break something the user set:
-// a failing rule of theirs that asks for approval, or a limit they gave. Only
-// these make the proceed option an override ("Pay anyway"). A deny offers no
-// proceed at all.
-var violationRules = map[string]bool{"rules_escalate": true, "over_limit": true, "under_floor": true}
-
-var proceedLabels = map[string]string{
-	"pay": "Pay anyway", "commit": "Confirm anyway", "sign": "Sign anyway", "cancel": "Cancel anyway",
-	"share_contact": "Share anyway", "share_credentials": "Share anyway", representAction: "Say it anyway",
-}
+// a limit or a floor they gave. Only these make the proceed option an
+// override ("Pay $60 anyway"). A rule of theirs that asks for approval is
+// not broken, it asks (#344: a first payment is "Pay $1.90", not "anyway");
+// a deny offers no proceed at all.
+var violationRules = map[string]bool{"over_limit": true, "under_floor": true}
 
 var actionNames = map[string]string{
 	"pay": "paying", "commit": "confirming a commitment", "sign": "signing", "cancel": "cancelling",
@@ -1475,7 +1466,8 @@ func settleCheck(r *dealCheckResult, s dealState) {
 		r.Options = []dealOption{}
 		return
 	}
-	r.Options = []dealOption{{ID: "hold", Label: "Hold"}}
+	// Labels are the wording pack's, given at seal time (labelOptions).
+	r.Options = []dealOption{{ID: "hold"}}
 	// A deny from the user's rules is a deny: no way to proceed.
 	if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == "rules_deny" }) {
 		r.Verdict = "deny"
@@ -1488,18 +1480,14 @@ func settleCheck(r *dealCheckResult, s dealState) {
 	if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == ruleRepresentationMissing }) {
 		return
 	}
-	if s.open.Who.Phone != "" && slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Question == "who" }) {
-		r.Options = append(r.Options, dealOption{ID: "verify_contact", Label: "Call the number I found (" + s.open.Who.Phone + ")"})
+	// Calling back is for a payee or contact that changed since first
+	// contact (a STOP card), on the number from first contact.
+	if s.open.Who.Phone != "" && slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == "payee_or_contact_changed" }) {
+		r.Options = append(r.Options, dealOption{ID: "verify_contact"})
 	}
-	// "Pay anyway" overrides a violation: a rule of the user's that failed
-	// and asks for approval, or a limit the user set. Anything else the
-	// check flags (rules not checked, a changed payee, a first telling) is
-	// news to decide on, not a rule to override: "Pay".
-	label := proceedPlainLabels[r.Action]
-	if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return violationRules[d.Rule] }) {
-		label = proceedLabels[r.Action]
-	}
-	r.Options = append(r.Options, dealOption{ID: "proceed", Label: label})
+	// "Pay anyway" overrides a violation (violationRules): labelOptions
+	// says so on the button.
+	r.Options = append(r.Options, dealOption{ID: "proceed"})
 }
 
 // usedAuthorizations are the approvals (and, typed, DO evaluations) a sealed
