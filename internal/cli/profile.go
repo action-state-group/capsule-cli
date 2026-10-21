@@ -154,6 +154,10 @@ type Profile struct {
 	// deal check (rules_checker.go): the user's policy (profile update
 	// --rules-checker), pinned by its executable's SHA-256.
 	RulesChecker ProfileRulesChecker `yaml:"rules_checker,omitempty" mapstructure:"rules_checker"`
+	// Wording is the wording pack this profile speaks with (narration.go):
+	// a complete aac.wording-pack/v0, pinned by its SHA-256 (profile update
+	// --wording). None: the built-in neutral pack.
+	Wording ProfileWording `yaml:"wording,omitempty" mapstructure:"wording" json:",omitzero"`
 }
 
 // ProfileRulesChecker is a pinned external rules checker.
@@ -483,6 +487,7 @@ func profileCommands() *cobra.Command {
 		f.StringSlice("trusted-key", nil, "Trusted producer public key hex (repeatable)")
 		f.StringSlice("checkpoint-trusted-key", nil, "Trusted checkpoint signer public key hex (repeatable)")
 		f.String("materiality", "", "A deal profile's materiality predicate (a materiality-predicate/v0 JSON file, or builtin:neutral), pinned by its digest; empty to remove it (every agent pick then pauses). Policy: the user's to set, never the agent's")
+		f.String("wording", "", "The wording pack this profile speaks with: a complete aac.wording-pack/v0 JSON file holding every key of the built-in pack, pinned by its SHA-256; empty to go back to the built-in neutral pack")
 		f.String("rules-checker", "", "A deal profile's external rules checker: a JSON file {\"command\": [\"/absolute/path\", \"arg\", ...], \"timeout\": \"10s\", \"definition_digest\": \"...\"} (or \"definition_digests\": [\"...\", ...], a set of rulesets any of which it may report), its executable under a trusted plugin root and pinned by its SHA-256; empty to remove it. Policy: the user's to set, never the agent's")
 		secrets := map[string]string{"mysql-password": "credentials.password", "signing-key": "signing", "checkpoint-signing-key": "checkpoint.signing", "checkpoint-token": "checkpoint.token", "token": "credentials.token"}
 		for flag := range secrets {
@@ -611,6 +616,12 @@ func profileCommands() *cobra.Command {
 			if c.Flags().Changed("rules-checker") {
 				path, _ := c.Flags().GetString("rules-checker")
 				if e := pinRulesChecker(&p, path); e != nil {
+					return e
+				}
+			}
+			if c.Flags().Changed("wording") {
+				path, _ := c.Flags().GetString("wording")
+				if e := pinWording(&p, path); e != nil {
 					return e
 				}
 			}

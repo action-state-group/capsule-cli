@@ -75,7 +75,12 @@ func dealHistoryCommand() *cobra.Command {
 		if recipient != "" {
 			result["recipient"] = recipient
 		}
-		return cli.Output(c, result)
+		return cli.Output(c, speakFor(c, result, func(w cli.Wording) cli.Narration {
+			if len(ids) == 1 {
+				return cli.Narration{Voice: cli.VoiceReport, Say: w.Line("say.history.one", nil)}
+			}
+			return cli.Narration{Voice: cli.VoiceReport, Say: w.Line("say.history.other", cli.V{"count": fmt.Sprint(len(ids))})}
+		}))
 	}}
 	cmd.Flags().StringArray("deal", nil, "A picked deal id from `deal list` (repeat for each deal)")
 	cmd.Flags().String("out", "", "New file for the History")

@@ -25,6 +25,8 @@ type dealListRange struct {
 	Deals  []dealListing  `json:"deals"`
 	Totals dealListTotals `json:"totals"`
 	Told   []dealListTold `json:"disclosures"`
+	// What the agent says about it: "Your receipts" (capsule-cli#345).
+	cli.Narration
 }
 
 // dealListTotals are the range's totals. Outcomes count the deals listed

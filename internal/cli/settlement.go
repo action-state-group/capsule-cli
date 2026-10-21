@@ -100,7 +100,25 @@ func WriteSettlementResult(c *cobra.Command, result settlement.Result) error {
 	for _, s := range result.Settlements {
 		readings = append(readings, map[string]any{"terms": s.Terms, "payment": paymentReading(s), "delivery": deliveryReading(s)})
 	}
-	if err := Output(c, map[string]any{"settlement": result, "readings": readings}); err != nil {
+	out := map[string]any{"settlement": result, "readings": readings}
+	w := CommandWording(c)
+	key := "say.settlement.agreed"
+	for _, s := range result.Settlements {
+		switch s.PaymentState {
+		case settlement.PaymentAgreed:
+		case settlement.PaymentTermsOnly:
+			key = "say.settlement.terms_only"
+		default:
+			if key == "say.settlement.agreed" {
+				key = "say.settlement.one_side"
+			}
+		}
+	}
+	if len(result.Settlements) == 0 {
+		key = "say.settlement.terms_only"
+	}
+	Narrate(out, Narration{Voice: VoiceReport, Say: w.Line(key, nil)})
+	if err := Output(c, out); err != nil {
 		return err
 	}
 	if !result.Conforming {

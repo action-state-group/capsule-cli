@@ -124,6 +124,8 @@ func TestDealCountersignAttachesAndRendersTheSigner(t *testing.T) {
 	view := asView(t, attached["countersign"])
 	assert.Equal(t, "countersigned", view.Rung)
 	assert.Contains(t, view.Text, "Countersigned by Example Countersigner, a signer listed in the directory you chose: it signed this exact bundle, with its own results (range membership: established)")
+	assert.Equal(t, "line", attached["voice"])
+	assert.Equal(t, "Countersigned by Example Countersigner.", attached["say"])
 	stored := readBundleFile(t, bundlePath)
 	require.Len(t, stored["countersignatures"], 1)
 	again, err := aacbundle.BundleDigest(stored)

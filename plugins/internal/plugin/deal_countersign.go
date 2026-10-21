@@ -258,6 +258,13 @@ func dealCountersignCommand() *cobra.Command {
 				}
 				out["attached"] = true
 			}
+			cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
+				who := countersignerName(view)
+				if view.Rung == "countersigned" {
+					return line(w.Line("say.countersign.ok", cli.V{"who": who}))
+				}
+				return line(w.Line("say.countersign.failed", cli.V{"who": who}))
+			})
 			return cli.Output(c, out)
 		})
 	}}

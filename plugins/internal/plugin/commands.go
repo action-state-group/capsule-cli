@@ -164,4 +164,5 @@ func InstallDealHooks() {
 	cli.DealBundleRun = dealBundleRun
 	cli.DealTickCommand = dealTickCommand
 	cli.DealCommandGroup = DealGroup
+	cli.ErrorPhase = dealErrorPhase
 }

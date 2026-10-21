@@ -1179,6 +1179,12 @@ func dealOpenCommand() *cobra.Command {
 					return cli.InputError("this profile already holds deal " + dealID + ": --deal-id opens this side of a deal the other party opened, once")
 				}
 			}
+			// The first deal this profile holds gets one line about the
+			// receipt; later ones say nothing.
+			var heldDeals int
+			if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deal_keys`).Scan(&heldDeals); err != nil {
+				return err
+			}
 			if err := s.useDeal(ctx, dealID, true); err != nil {
 				return err
 			}
@@ -1224,7 +1230,12 @@ func dealOpenCommand() *cobra.Command {
 			if o.Skill != nil {
 				out["skill"] = map[string]any{"skill_md_digest": o.Skill.Digest, "other_copies": o.Skill.OtherCopies, "others": o.Skill.Others}
 			}
-			return cli.Output(c, out)
+			return cli.Output(c, cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
+				if heldDeals > 0 {
+					return silent(w)
+				}
+				return line(w.Line("say.open.first", nil))
+			}))
 		})
 	}}
 	cmd.Flags().String("input", "", "Baseline JSON: type, intent, who, terms, claims, recourse")
@@ -1255,6 +1266,10 @@ func dealNoteCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "note", Short: "Seal a message, claim, evidence, detail change, the user's answer to a check, an action taken, or something the agent told someone (disclosure)", Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		kind, _ := c.Flags().GetString("kind")
 		emailPath, _ := c.Flags().GetString("email")
+		htmlPath, _ := c.Flags().GetString("html")
+		if htmlPath != "" && kind != "act" && !(kind == "evidence" && emailPath != "") {
+			return cli.InputError("--html writes the updated receipt page; it goes with --kind act or --kind evidence --email")
+		}
 		keyPath, _ := c.Flags().GetString("key-record")
 		dmarcPath, _ := c.Flags().GetString("dmarc-record")
 		ev := dealEvent{Kind: kind}
@@ -1642,6 +1657,9 @@ func dealNoteCommand() *cobra.Command {
 					return err
 				}
 				if proposed, more := proposedLimits(state.intent.limits(), withBoundsCommit(*ev.Intent, se.Event.Nonces)); more {
+					cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
+						return intentAsk(w, state.intent.limits(), proposed, state.terms.Currency)
+					})
 					out["proposed"] = proposed
 					out["in_force"] = state.intent.limits()
 					out["next"] = "this note asks for a higher limit or a new action: it is recorded as a proposal and not applied. " +
@@ -1657,6 +1675,11 @@ func dealNoteCommand() *cobra.Command {
 			case "approval":
 				out["proceed"] = ev.Approval.Proceed && ev.Approval.Reason == ""
 				out["reason"] = ev.Approval.Reason
+				if state, err := foldDeal(append(events, se)); err == nil {
+					cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
+						return approvalNarration(w, *ev.Approval, append(events, se), state)
+					})
+				}
 				if ev.Approval.Limits != nil {
 					out["limits"] = ev.Approval.Limits
 				}
@@ -1670,6 +1693,8 @@ func dealNoteCommand() *cobra.Command {
 				out["authorized_by"] = ev.Act.AuthorizedBy
 				out["reason"] = ev.Act.Reason
 				out["rule"] = ev.Act.Rule
+				all := append(events, se)
+				s.stepReport(ctx, out, all, htmlPath, func(w cli.Wording) []string { return receiptLines(w, all) })
 			case "claim":
 				if cl := ev.Claim; cl.SourceKind == "agent" && representationRules(events) {
 					out["authorized_by"] = cl.AuthorizedBy
@@ -1702,12 +1727,28 @@ func dealNoteCommand() *cobra.Command {
 					out["checkpoint"] = cp
 				}
 				evidenceOutput(out, *ev.Evidence, events)
+				all := append(events, se)
+				switch {
+				case settlementKind == noteKindPaymentReceived:
+					cli.Speak(out, s.p, func(w cli.Wording) cli.Narration { return line(w.Line("say.payment_received", nil)) })
+				case settlementKind == noteKindDelivered:
+					cli.Speak(out, s.p, func(w cli.Wording) cli.Narration { return line(w.Line("say.delivered", nil)) })
+				case ev.Evidence.Email != nil:
+					if state, err := foldDeal(all); err == nil {
+						s.stepReport(ctx, out, all, htmlPath, func(w cli.Wording) []string { return emailLines(w, ev.Evidence.Email, state) })
+						out["voice"] = cli.VoiceLine
+					}
+				}
+			}
+			if _, spoken := out["voice"]; !spoken {
+				cli.Narrate(out, cli.Narration{Voice: cli.VoiceSilent})
 			}
 			return cli.Output(c, out)
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("kind", "", "message, claim, evidence, change, intent, approval, act, disclosure, platform_approval, acceptance, payment_received or delivered")
+	cmd.Flags().String("html", "", "With --kind act or --kind evidence --email: also write the updated receipt page (your own copy) to this new file, as `deal report --html` does")
 	addSettlementNoteFlags(cmd)
 	cmd.Flags().String("words", "", "acceptance: the counterparty's words accepting the offer, exactly as given (committed, never stored)")
 	cmd.Flags().String("channel", "", "acceptance: the channel the counterparty accepted on (x-deal-v0's channel set)")
@@ -1770,9 +1811,9 @@ func judgeApproval(events []sealedEvent, a *dealApproval) error {
 		}
 		switch {
 		case answered:
-			a.Reason = "this check was already answered; check again"
+			a.Reason = approvalAnswered
 		case changed:
-			a.Reason = "details changed after this check; check again"
+			a.Reason = approvalChanged
 		}
 		// The record says what the user chose. A stale answer cannot authorize
 		// anything: the action rule requires no change after the check.
@@ -1781,6 +1822,15 @@ func judgeApproval(events []sealedEvent, a *dealApproval) error {
 	}
 	return cli.InputError("--check does not name a step of this deal")
 }
+
+// The reasons an answer is sealed but not applied (the user is told which:
+// approvalReasonKeys).
+const (
+	approvalAnswered  = "this check was already answered; check again"
+	approvalChanged   = "details changed after this check; check again"
+	proposalReplaced  = "a later intent note replaced this proposal; confirm that one"
+	proposalConfirmed = "this proposal was already confirmed"
+)
 
 // judgeLimitsConfirmation judges the user's answer to an intent note
 // (events[i]) that proposed a higher limit or more actions. Only
@@ -1800,9 +1850,9 @@ func judgeLimitsConfirmation(events []sealedEvent, i int, a *dealApproval) error
 	for _, later := range events[i+1:] {
 		switch {
 		case later.Event.Kind == "intent":
-			a.Reason = "a later intent note replaced this proposal; confirm that one"
+			a.Reason = proposalReplaced
 		case later.Event.Approval != nil && later.Event.Approval.Check == a.Check && later.Event.Approval.Limits != nil:
-			a.Reason = "this proposal was already confirmed"
+			a.Reason = proposalConfirmed
 		}
 	}
 	if a.Reason == "" && !more {
@@ -2053,6 +2103,14 @@ func dealCheckCommand() *cobra.Command {
 			out["checked_at"] = checked.Event.At
 			out["stale_after_minutes"] = int(staleAfter / time.Minute)
 			out["approval_text"] = approvalText
+			// A pause or a deny asks the user with the card; a pass goes
+			// ahead and says nothing.
+			cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
+				if result.Verdict == "pass" {
+					return silent(w)
+				}
+				return cli.Narration{Voice: cli.VoiceAsk, Say: result.Card}
+			})
 			return cli.Output(c, out)
 		})
 	}}
@@ -2065,6 +2123,7 @@ func dealCheckCommand() *cobra.Command {
 func dealCloseCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "close", Short: "Compare what was delivered with what was agreed: completed, mismatch or open", Args: cli.NoArgs, RunE: func(c *cobra.Command, _ []string) error {
 		path, _ := c.Flags().GetString("input")
+		htmlPath, _ := c.Flags().GetString("html")
 		raw, err := cli.ReadInput(path)
 		if err != nil {
 			return err
@@ -2138,12 +2197,19 @@ func dealCloseCommand() *cobra.Command {
 				out["carried_open_obligations"] = result.Carried
 				out["note"] = "The deal is closed; the carried cancel-by dates stay open, and `deal deadlines` lists them as CARRIED AT CLOSE until a later record resolves them or the date passes."
 			}
+			all := append(events, se)
+			if key, final := closeKeys[result.Outcome]; final {
+				s.stepReport(ctx, out, all, htmlPath, func(w cli.Wording) []string { return []string{w.Line(key, nil)} })
+			} else {
+				cli.Speak(out, s.p, func(w cli.Wording) cli.Narration { return line(w.Line("say.close.open", nil)) })
+			}
 			return cli.Output(c, out)
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
 	cmd.Flags().String("input", "", "Close JSON: status and what was delivered")
 	cmd.Flags().Bool("carry-open-obligations", false, "Close although a cancel-by date is open: the close seals it, and it stays open after the close")
+	cmd.Flags().String("html", "", "Also write the final receipt page (your own copy) to this new file, as `deal report --html` does")
 	return cmd
 }
 
@@ -2212,14 +2278,14 @@ func dealReportCommand() *cobra.Command {
 				// page and the email would carry.
 				if s.dp.Checkpoint.Signing == (cli.Secret{}) {
 					out["assurance"] = dealAssurance(map[string]interface{}{})
-					return cli.Output(c, out)
+					return cli.Output(c, reportSay(out, s.p, events, ""))
 				}
 				b, err := s.dealReportBundle(ctx, events, report, cli.DealAudienceKeep, "", false)
 				if err != nil {
 					return err
 				}
 				out["assurance"] = dealAssurance(b)
-				return cli.Output(c, out)
+				return cli.Output(c, reportSay(out, s.p, events, ""))
 			}
 			// --from-bundle renders the receipt from a bundle file this deal
 			// wrote earlier (and someone may have countersigned since), so a
@@ -2261,7 +2327,8 @@ func dealReportCommand() *cobra.Command {
 				if err = cli.AtomicFile(htmlPath, []byte(page), false); err != nil {
 					return err
 				}
-				return cli.Output(c, map[string]any{"deal_id": dealID, "scope": dealScopeLine, "html": htmlPath, "assurance": assurance, "countersign": countersign, "share": share})
+				// A copy for someone else is sent by the user, not narrated.
+				return cli.Output(c, cli.Narrate(map[string]any{"deal_id": dealID, "scope": dealScopeLine, "html": htmlPath, "assurance": assurance, "countersign": countersign, "share": share}, cli.Narration{Voice: cli.VoiceSilent}))
 			}
 			bundle, err := json.Marshal(b)
 			if err != nil {
@@ -2317,7 +2384,7 @@ func dealReportCommand() *cobra.Command {
 				}
 				out["email"] = map[string]any{"eml": emailPath, "subject": subject, "text": text, "html": htmlBody, "attachments": []string{"receipt.html", "bundle.json"}}
 			}
-			return cli.Output(c, out)
+			return cli.Output(c, reportSay(out, s.p, events, htmlPath))
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")
@@ -2355,7 +2422,7 @@ func dealExportCommand() *cobra.Command {
 			if err = cli.AtomicFile(path, b, false); err != nil {
 				return err
 			}
-			return cli.Output(c, map[string]any{"deal_id": dealID, "records": len(records), "output": path})
+			return cli.Output(c, cli.Narrate(map[string]any{"deal_id": dealID, "records": len(records), "output": path}, cli.Narration{Voice: cli.VoiceSilent}))
 		})
 	}}
 	cmd.Flags().String("deal", "", "Deal ID from `deal open`")

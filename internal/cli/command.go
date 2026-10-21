@@ -213,6 +213,11 @@ func Output(c *cobra.Command, value any) error {
 		return errors.New("command output uses reserved spec_version field")
 	}
 	fields["spec_version"] = json.RawMessage(`"capsule-cli-result/v1"`)
+	// A command that sets no voice is silent (capsule-cli#345), unless its
+	// voice follows its outcome and is added after it ran.
+	if _, exists := fields["voice"]; !exists && !byOutcome(c) {
+		fields["voice"] = json.RawMessage(`"silent"`)
+	}
 	return json.NewEncoder(c.OutOrStdout()).Encode(fields)
 }
 
@@ -487,7 +492,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	verify.Flags().String("witness-directory", "", "With --bundle: a witness directory (witnesses.json format) naming the witnesses and keys whose receipts to check; without it no receipt is checked")
 	verify.Flags().String("history", "", "A one-file History (personal_history_basic/1, the profile's §8.2 form): its envelopes and History properties are checked offline, from the file alone, with agent-action-capsule's evidence-interop/0 verifier")
 	verify.Flags().StringArray("holder-key", nil, "With --history: a holder key you accept, as 64 lowercase hex characters, obtained from the holder by another channel (repeat for each); without one no History is accepted")
-	root.AddCommand(verify)
+	root.AddCommand(NarrateByOutcome(verify, verifyNarration))
 	publish := &cobra.Command{Use: "publish", Short: "Seal, persist artifacts, and append to CLL", Args: NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
 		p, e := Selected(c)
 		if e != nil {
@@ -655,7 +660,7 @@ func newCommand(discover bool, extra []*cobra.Command) *cobra.Command {
 	addCheckpointCommands(logs)
 	root.AddCommand(discoverCommand())
 	root.AddCommand(mapCommand())
-	root.AddCommand(doctorCommand())
+	root.AddCommand(NarrateByOutcome(doctorCommand(), doctorNarration))
 	root.AddCommand(pluginGroup())
 	if discover && !isPluginManagement(root, os.Args[1:]) {
 		addPluginCommands(root)

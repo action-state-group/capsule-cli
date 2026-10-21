@@ -900,6 +900,7 @@ func dealVerifyEmailCommand() *cobra.Command {
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			var results []map[string]any
+			signedBy := ""
 			ok := true
 			for _, se := range events {
 				m := se.Event.Evidence
@@ -927,12 +928,23 @@ func dealVerifyEmailCommand() *cobra.Command {
 				r["we_say"] = ourSealWords
 				r["network"] = "not used: checked against the key record sealed at " + se.Event.At
 				ok = ok && v.Result == "pass" && v.Merchant
+				if signedBy == "" && v.Result == "pass" && v.Merchant {
+					signedBy = v.signer()
+				}
 				results = append(results, r)
 			}
 			if len(results) == 0 {
 				return cli.InputError("no sealed merchant email in this deal (or at that step)")
 			}
-			if err := cli.Output(c, map[string]any{"deal_id": dealID, "scope": emailScopeLine, "verified": ok, "emails": results}); err != nil {
+			out := map[string]any{"deal_id": dealID, "scope": emailScopeLine, "verified": ok, "emails": results}
+			sender, domain := recipientName(events[0].Event.Open.Who), signedBy
+			cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
+				if ok && domain != "" {
+					return line(w.Line("say.verify_email.ok", cli.V{"sender": sender, "domain": domain}))
+				}
+				return line(w.Line("say.verify_email.failed", cli.V{"sender": sender}))
+			})
+			if err := cli.Output(c, out); err != nil {
 				return err
 			}
 			if !ok {
