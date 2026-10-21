@@ -117,7 +117,7 @@
     "Oct 21, 2026, 4:53 AM ·",
     "After the close (confirms it): evidence (buyer_refund_request), unverified: Returns accepted within 7 days if unridden",
     "Records can be linked to this deal after this receipt was made (a merchant's confirmation, a shipping notice, a refund). This receipt shows those sealed when it was made; to see later ones, make a new report with `capsulectl deal report`. (as of Oct 21, 2026, 4:53 AM)",
-    "This report states the deal as of its checkpoint at Oct 21, 2026, 4:53 AM (the producer's time); whether a witness saw that checkpoint is checked by capsulectl verify, not here.",
+    "This report states the deal as of its checkpoint at Oct 21, 2026, 4:53 AM (the producer's time).",
     "Not part of the report, worked out by this page when you opened it: today is Oct 21, 2026.",
     "The text on this page was written by capsulectl when the page was made and sealed as a record in this file: this page checked that it has not changed since. It is capsulectl's summary of the steps, not the steps themselves.",
     "This receipt covers this one deal. It is not a record of everything the agent did.",

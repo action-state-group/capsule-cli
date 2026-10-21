@@ -484,7 +484,7 @@ const dealViewRender = (model, regions) => {
       const today = localDay();
       const due = life.open && typeof life.open.expect_close_by === "string" ? life.open.expect_close_by : "";
       const passed = life.state === "open" && due !== "" && due < today ? ` The expected close, ${readDay(due)}, has passed as of today.` : "";
-      host.append(el("p", `This report states the deal as of its checkpoint at ${local(life.as_of)} (the producer's time); whether a witness saw that checkpoint is checked by capsulectl verify, not here.`, "deal-note"));
+      host.append(el("p", `This report states the deal as of its checkpoint at ${local(life.as_of)} (the producer's time).`, "deal-note"));
       host.append(el("p", `Not part of the report, worked out by this page when you opened it: today is ${readDay(today)}.${passed}`, "deal-note"));
     }
   }
