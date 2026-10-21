@@ -82,19 +82,20 @@ func TestAnOpenDealIsWaitingForTheMerchantsReceipt(t *testing.T) {
 	assert.NotContains(t, life["text"], "matched", "only a completed close reads matched")
 }
 
-// The receipt names the option the user chose as they saw it: "Pay anyway"
+// The receipt names the option the user chose as they saw it: "Pay $4.54
+// anyway"
 // over a finding (the approval of a paused check is the override, on
 // record), and "Hold".
 func TestTheReceiptNamesTheChoiceAsShown(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 954)))
 	require.Equal(t, "pause", check["verdict"], check["card"])
-	require.Contains(t, optionLabels(check), "Pay anyway")
+	require.Contains(t, optionLabels(check), "Pay $4.54 anyway")
 	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "yes, pay it")
 	report := dealRun(t, "report", "--deal", id)
 	raw, err := json.Marshal(report["did"])
 	require.NoError(t, err)
-	assert.Contains(t, string(raw), "; you chose Pay anyway")
+	assert.Contains(t, string(raw), "; you chose Pay $4.54 anyway")
 }
 
 // The trap: "receipt" is consumer wording only. No deal schema, typed record

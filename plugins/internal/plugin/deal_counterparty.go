@@ -203,11 +203,6 @@ type dealRecipient struct {
 	NewProfile bool `json:"new_profile,omitempty"`
 }
 
-// newProfileNote is said once, on the first pause from a profile with no
-// counterparty history, beside the first dealing it explains: the pause
-// stands, and the user knows why every counterparty reads as first-time.
-const newProfileNote = "this profile has no record of earlier counterparties yet, so everyone is first-time until your first deals"
-
 // recipientName is how the card names them: their name, else their first
 // identifier.
 func recipientName(w dealWho) string {

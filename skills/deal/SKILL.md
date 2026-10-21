@@ -94,9 +94,9 @@ pick, if the deal is already open) and **before** `deal check`:
   limit or drop an action without a confirmation.
 - What you picked yourself (a size, a colour or a delivery option the user
   never mentioned) stays out of `asked` and in the cart's `terms`. The check
-  then lists it as yours: `picked_by_agent` in its output, and "The agent
-  picked, not you" in `approval_text`. A choice you made is never shown as
-  the user's.
+  then lists it as yours: `picked_by_agent` in its output, and on the card
+  "I picked …, not you" or "Good to know: I chose … for you". A choice you
+  made is never shown as the user's.
 
 Some picks change what is bought or what it costs: a size, a variant, a
 quantity other than one, a shipping or delivery option. If you picked one of
@@ -402,17 +402,19 @@ capsulectl. Follow them; never make up your own narration of a step.
   sealed all the same and shows on the report as an agent-side anomaly;
   leaving it out only makes the record wrong.
 - **Never hold silently.** A `pause` always goes to the user with the check's text.
-- **Show the check's own text, once.** Every `deal check` returns
-  `approval_text`: one block. Its first line says what, how much, to whom
-  and how it is paid; on a share before a payment, the next line says it is
-  step 1 of 2; then short bullets, one fact per bullet. Whenever you ask the
-  user to go ahead, and always on a `pause`, show `approval_text` exactly as
-  returned, once, in your own message or ahead of your agent host's approval
-  card: the same lines and bullets, every string as the check gives it. Do
+- **Show the check's own card, once.** A paused or denied check returns
+  the card (`approval_text`, the same text as its `say`, and its parts in
+  `ask`): a tag (PAUSED FOR YOU, NOT ALLOWED BY YOUR RULES, or STOP: CHECK
+  THIS), one question, the money facts, "Why I'm asking:" with at most two
+  reasons, at most one "Good to know:", and "Next:" when another stop
+  follows. Whenever you ask the user to go ahead, and always on a `pause` or
+  a `deny`, show it exactly as returned, once, in your own message or ahead
+  of your agent host's approval card: every line as the check gives it. Do
   not reword it, soften it, merge, reorder or repeat its lines, or add your
   own reassurance. You may put one sentence of your own before it, as a
   lead-in. Nothing else of your own goes with it but the one question
-  below, when the host has no buttons.
+  below, when the host has no buttons. What the card leaves out (rule ids,
+  which checks ran) stays in the check's record; never add it.
 - **Options are buttons, never text.** Never print an option label as text
   (no "[Hold]", no "Share anyway"). Offer the check's `options` as real
   buttons where your agent host supports them; where it does not, end with
@@ -426,13 +428,15 @@ capsulectl. Follow them; never make up your own narration of a step.
   show both. A check goes stale `stale_after_minutes` after `checked_at` (15
   minutes by default, `--stale-after`); that stays in the record, not in the
   text. If the action happens after it, check again first.
-- **Step 1 of 2 is a promise.** When a share's text says "Step 1 of 2: I
-  will ask again before paying …", ask the user before you pay, even when
-  the pay check passes: show that check's `approval_text` and wait for their
-  answer.
-- **Never say the rules ran when they did not.** When `approval_text` says
-  "Your rules were not checked: …", say exactly that. Say the user's rules
-  were checked only when it names them.
+- **"Next" is a promise, and it is kept.** When a share's card says "Next:
+  I'll ask you again before paying.", ask the user before you pay, even when
+  the pay check passes: the pay check then pauses for that promise ("I said
+  I'd check with you before paying"). Show its card, wait, and seal the
+  answer as for any pause.
+- **Never say the rules ran when they did not.** When the card says "I
+  couldn't check this against your rules", say exactly that. Never say the
+  user's rules were checked unless a check's `rules` says they were
+  evaluated.
 - **This upgrades your host's own confirmation; it never replaces it or
   bypasses it.**
 - Use plain words with the user: "checked", "changed", "unverified",

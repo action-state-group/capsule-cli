@@ -27,6 +27,18 @@ func openMerchant(t *testing.T, domain string) string {
 		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
 }
 
+// firstTelling asserts a share check paused on a first dealing with name,
+// who never had the user's what: the check's recipient and difference say
+// so, and the card gives the one reason.
+func firstTelling(t *testing.T, check map[string]any, name, what string) {
+	t.Helper()
+	recipient := check["recipient"].(map[string]any)
+	assert.Equal(t, name, recipient["name"])
+	assert.Equal(t, true, recipient["first_time"])
+	assert.Contains(t, differenceTexts(check), "First time telling "+name+" your "+what)
+	assert.Contains(t, check["card"], "Why I'm asking: first time they get your details.")
+}
+
 func shareCheck(t *testing.T, dealID, classes string) map[string]any {
 	t.Helper()
 	return dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":[`+classes+`]}`))
@@ -40,7 +52,7 @@ func noteDelivery(t *testing.T, dealID string) map[string]any {
 
 // The address entered at a merchant already told it: a note, no pause. The
 // same address to a counterparty never dealt with: a pause naming them and
-// "street address", with the first-time line on the card.
+// "street address", with the first time said on the card.
 func TestDealPausesOnTheRecipientNotTheField(t *testing.T) {
 	dealFixture(t)
 
@@ -49,9 +61,8 @@ func TestDealPausesOnTheRecipientNotTheField(t *testing.T) {
 	check := shareCheck(t, first, `"name","email","address"`)
 	require.Equal(t, "pause", check["verdict"])
 	card := check["card"].(string)
-	assert.Contains(t, card, "First time dealing with Redbubble")
-	assert.Contains(t, card, "First time dealing with Redbubble, and they have never had your street address")
-	assert.NotContains(t, card, "You didn't ask for this", "a share that names what it gives is judged by its recipient")
+	firstTelling(t, check, "Redbubble", "street address")
+	assert.NotContains(t, differenceTexts(check), "You didn't ask for this", "a share that names what it gives is judged by its recipient")
 	dealRun(t, "note", "--deal", first, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "yes, ship it to me")
 	assert.Equal(t, true, noteDelivery(t, first)["approved"])
 
@@ -70,7 +81,8 @@ func TestDealPausesOnTheRecipientNotTheField(t *testing.T) {
 	// A known merchant's card, when something else pauses, has no first-time line.
 	pay := dealRun(t, "check", "--deal", again, "--input", writeJSON(t, `{"action":"pay","amount_minor":1200,"authorized_max_minor":1200,"terms":{"price_minor":1200}}`))
 	require.Equal(t, "pause", pay["verdict"])
-	assert.NotContains(t, pay["card"], "First time dealing")
+	assert.Equal(t, false, pay["recipient"].(map[string]any)["first_time"])
+	assert.NotContains(t, pay["card"], "first time dealing with this seller")
 
 	// A stranger on a marketplace: the same address pauses, naming them.
 	stranger := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"marketplace",
@@ -81,8 +93,7 @@ func TestDealPausesOnTheRecipientNotTheField(t *testing.T) {
 	check = shareCheck(t, stranger, `"address"`)
 	require.Equal(t, "pause", check["verdict"], "allowed share_contact does not stand in for the first telling")
 	card = check["card"].(string)
-	assert.Contains(t, card, "First time dealing with Garage Sale Gary")
-	assert.Contains(t, card, "First time dealing with Garage Sale Gary, and they have never had your street address")
+	firstTelling(t, check, "Garage Sale Gary", "street address")
 	assert.Contains(t, check["differences"], map[string]any{"question": "who", "rule": "first_disclosure", "field": "address", "text": "First time telling Garage Sale Gary your street address"})
 	assert.NotContains(t, card, homeStreet, "the card names the class, never the value")
 
@@ -179,8 +190,9 @@ func TestDealSharedPlatformIsNotOneCounterparty(t *testing.T) {
 	} {
 		check := shareCheck(t, openSeller(t, who), `"address"`)
 		assert.Equal(t, "pause", check["verdict"], "%s is not seller A", who)
-		assert.Contains(t, check["card"], "they have never had your street address", who)
-		assert.Contains(t, check["card"], "First time dealing with", who)
+		assert.Equal(t, true, check["recipient"].(map[string]any)["first_time"], who)
+		assert.Contains(t, differenceTexts(check), "your street address", who)
+		assert.Contains(t, check["card"], "first time they get your details", who)
 	}
 
 	// Seller A again, by profile id: a note.
@@ -239,21 +251,21 @@ func TestDealMarketplaceDomainIsNotAnIdentity(t *testing.T) {
 }
 
 // A profile with no counterparty history (a first install, or a reinstall)
-// makes everyone first-time: its first pause says so once, and keeps the
-// pause.
+// makes everyone first-time: its first pause says so once (in the check's
+// recipient; the card no longer carries it), and keeps the pause.
 func TestDealNewProfileSaysSoOnItsFirstPause(t *testing.T) {
 	dealFixture(t)
 	first := shareCheck(t, openMerchant(t, "redbubble.com"), `"address"`)
 	require.Equal(t, "pause", first["verdict"])
-	assert.Contains(t, first["card"], newProfileNote)
+	assert.Equal(t, true, first["recipient"].(map[string]any)["new_profile"])
 	second := shareCheck(t, openMerchant(t, "society6.com"), `"address"`)
 	require.Equal(t, "pause", second["verdict"])
-	assert.NotContains(t, second["card"], newProfileNote, "said once")
+	assert.NotContains(t, second["recipient"], "new_profile", "said once")
 
 	// A reinstall: a fresh profile says it again.
 	dealFixture(t)
 	again := shareCheck(t, openMerchant(t, "redbubble.com"), `"address"`)
-	assert.Contains(t, again["card"], newProfileNote)
+	assert.Equal(t, true, again["recipient"].(map[string]any)["new_profile"])
 }
 
 // An approval covers a telling only to the party its check was about.
@@ -271,7 +283,8 @@ func TestDealApprovalForOnePartyDoesNotCoverAnother(t *testing.T) {
 	courier := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t,
 		`{"action":"share_contact","disclosing":["address"],"disclosing_to":"other","recipient":{"name":"Quick Couriers","phone":"+1 555 010 7777"}}`))
 	require.Equal(t, "pause", courier["verdict"])
-	assert.Contains(t, courier["card"], "First time dealing with Quick Couriers, and they have never had your street address")
+	firstTelling(t, courier, "Quick Couriers", "street address")
+	assert.Contains(t, courier["card"], "with Quick Couriers")
 	dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", courier["check_id"].(string), "--choice", "proceed", "--said", "ok, the courier")
 	held = heldNote(t, dealID, `{"to":"other","who":{"phone":"+1 555 010 8888"},"fields":[{"class":"address","value":"`+homeStreet+`"}]}`)
 	assert.Equal(t, []any{"address"}, held["held"], "another courier is another party")

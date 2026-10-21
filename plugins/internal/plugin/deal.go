@@ -2022,6 +2022,9 @@ func dealCheckCommand() *cobra.Command {
 				return err
 			}
 			state.materiality = predicate
+			// An earlier card promised to ask again before paying: the pay
+			// pauses for it, so the user's answer is sealed (capsule-cli#344).
+			state.promisedAsk = promisedPay(events, state, snap)
 			result := evaluateDeal(state, snap)
 			result.Materiality = predicate.Ref()
 			if result.Remote, err = dealRemoteCheck(ctx, state, snap, result); err != nil {
@@ -2045,9 +2048,18 @@ func dealCheckCommand() *cobra.Command {
 			result.Differences = append(result.Differences, rulesDifferences(&rules)...)
 			settleCheck(&result, state)
 			result.Snapshot = snapped.CapsuleID
-			// One block: the approval text, and on a pause the card the
-			// answer is sealed against. A passing check has no card.
-			approvalText := dealApprovalText(state, snap, result, events)
+			// The card, in the profile's words (capsule-cli#344): one tag,
+			// one question, the facts, at most two reasons and the buttons.
+			// On a pause or a deny its text is the card the answer is sealed
+			// against. A passing check has no card.
+			words, _ := cli.ActiveWording(s.p)
+			labelOptions(words, &result, snap, state)
+			card := checkCard(words, state, snap, result, events)
+			if result.Verdict == "pass" {
+				// A pass asks nothing: its text is the question and the facts.
+				card.Tag, card.Why, card.GoodToKnow, card.Next = "", nil, "", ""
+			}
+			approvalText := cli.AskText(words, card)
 			if result.Verdict != "pass" {
 				result.Card = approvalText
 			}
@@ -2119,7 +2131,7 @@ func dealCheckCommand() *cobra.Command {
 				if result.Verdict == "pass" {
 					return silent(w)
 				}
-				return cli.Narration{Voice: cli.VoiceAsk, Say: result.Card}
+				return cli.Narration{Voice: cli.VoiceAsk, Say: approvalText, Ask: &card}
 			})
 			return cli.Output(c, out)
 		})

@@ -50,8 +50,9 @@ func TestAnUnsealableCheckerAnswerPauses(t *testing.T) {
 			rules := check["rules"].(map[string]any)
 			assert.Equal(t, "not_evaluated", rules["status"])
 			assert.Equal(t, "unreadable", rules["cause"])
-			assert.Contains(t, approvalText(check), "Your rules were not checked: the rules checker's answer could not be sealed (")
-			assert.NotContains(t, check["card"], "anyway", "no rule found anything: Pay, not Pay anyway")
+			assert.Contains(t, differenceTexts(check), "Your rules were not checked: the rules checker's answer could not be sealed (")
+			assert.Contains(t, approvalText(check), "I couldn't check this against your rules")
+			assert.Equal(t, []string{"Hold", "Pay $4.54"}, optionLabels(check), "no rule found anything: Pay, not Pay anyway")
 			records, export := exportRecords(t, id)
 			for _, r := range records {
 				if r["x-deal-v0"].(map[string]any)["record_type"] == "verdict" {

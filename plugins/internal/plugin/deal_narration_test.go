@@ -165,11 +165,12 @@ func TestEveryDealCommandSpeaks(t *testing.T) {
 	within := dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"keep it at $5","max_total_minor":500,"allowed":["pay","share_contact"]}`))
 	assert.Equal(t, cli.VoiceSilent, within["voice"])
 
-	// A pass goes ahead silently; the act is the receipt.
+	// A pass the share's card promised to ask about still asks
+	// (TestAPromisedPaymentIsAskedEvenWhenItPasses); the act is the receipt.
 	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-allow", checkerPrints("allow", passFinding))}})
 	pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
 	if pay["verdict"] == "pass" {
-		assert.Equal(t, cli.VoiceSilent, pay["voice"])
+		assert.Equal(t, cli.VoiceAsk, pay["voice"], "the share's card said it would ask before paying")
 	} else {
 		_, err = answer(t, id, pay["check_id"].(string), "ok", shownCard(t, pay["card"].(string)))
 		require.NoError(t, err)

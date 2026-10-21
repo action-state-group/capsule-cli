@@ -1,8 +1,5 @@
-DEMO · Pay: $200 deposit to hold 2 jet skis on Saturday · $200.00 · to M. Torres (coastal-jet-rentals.example) · by Zelle · not refundable
-• Your rules were not checked: no rules checker configured.
-• First time dealing with Coastal Jet Rentals LLC (this profile has no record of earlier counterparties yet, so everyone is first-time until your first deals)
-• Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle)
-• Payment changed since it was agreed (card → Zelle, not refundable)
-• Zelle = no card protection
-• Site registered 3 weeks ago
-• Unverified: they have 2 jet skis for Saturday
+DEMO · STOP: CHECK THIS
+Pay $200 to M. Torres (coastal-jet-rentals.example) for the jet ski rental?
+$200 · by Zelle · not refundable
+Why I'm asking: the payee or contact changed since you first talked; the way to get your money back changed.
+Good to know: they have 2 jet skis for Saturday (not checked).

@@ -31,8 +31,8 @@ func pausedOnNotEvaluable(t *testing.T, findings string) (string, map[string]any
 	id := dealRun(t, "open", "--input", writeJSON(t, stickerOpen))["deal_id"].(string)
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	require.Equal(t, "pause", check["verdict"])
-	require.Contains(t, check["card"], "Your rules were not fully checked")
-	require.Equal(t, []string{"Hold", "Pay"}, optionLabels(check), "no rule failed: not an override")
+	require.Contains(t, differenceTexts(check), "Your rules were not fully checked")
+	require.Equal(t, []string{"Hold", "Pay $4.54"}, optionLabels(check), "no rule failed: not an override")
 	var rules []string
 	for _, d := range check["differences"].([]any) {
 		rules = append(rules, d.(map[string]any)["rule"].(string))

@@ -378,7 +378,8 @@ func TestGradeStringsNameOnlyLadderRungs(t *testing.T) {
 }
 
 // assertEveryPauseCauseListed checks that each difference a paused check
-// showed on its card is an anomaly in the report, in the card's own words.
+// sealed is an anomaly in the report, in the difference's own words. The
+// card says at most two reasons (capsule-cli#344); the report lists them all.
 func assertEveryPauseCauseListed(t *testing.T, report map[string]any, checks ...map[string]any) {
 	t.Helper()
 	anomalies := strings.Join(reportTexts(t, report, "anomalies"), "\n")
@@ -386,7 +387,6 @@ func assertEveryPauseCauseListed(t *testing.T, report map[string]any, checks ...
 		require.Equal(t, "pause", check["verdict"])
 		for _, raw := range check["differences"].([]any) {
 			text := raw.(map[string]any)["text"].(string)
-			assert.Contains(t, check["card"], text)
 			assert.Contains(t, anomalies, text, "a cause of the pause is missing from the report's anomalies")
 		}
 	}

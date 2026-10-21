@@ -890,6 +890,9 @@ type dealState struct {
 	messages       []dealMessage
 	// memory is the cross-deal counterparty memory, when the check has one.
 	memory *dealCounterpartyMemory
+	// promisedAsk is, on a pay, that an earlier card promised the user to
+	// ask again before paying (promisedPay).
+	promisedAsk bool
 }
 
 func foldDeal(events []sealedEvent) (dealState, error) {
@@ -1216,21 +1219,12 @@ func ageText(days int64) string {
 
 const recentDomainDays = 90
 
-var proceedPlainLabels = map[string]string{
-	"pay": "Pay", "commit": "Confirm", "sign": "Sign", "cancel": "Cancel",
-	"share_contact": "Share", "share_credentials": "Share", representAction: "Say it",
-}
-
 // violationRules are the difference rules that break something the user set:
-// a failing rule of theirs that asks for approval, or a limit they gave. Only
-// these make the proceed option an override ("Pay anyway"). A deny offers no
-// proceed at all.
-var violationRules = map[string]bool{"rules_escalate": true, "over_limit": true, "under_floor": true}
-
-var proceedLabels = map[string]string{
-	"pay": "Pay anyway", "commit": "Confirm anyway", "sign": "Sign anyway", "cancel": "Cancel anyway",
-	"share_contact": "Share anyway", "share_credentials": "Share anyway", representAction: "Say it anyway",
-}
+// a limit or a floor they gave. Only these make the proceed option an
+// override ("Pay $60 anyway"). A rule of theirs that asks for approval is
+// not broken, it asks (#344: a first payment is "Pay $1.90", not "anyway");
+// a deny offers no proceed at all.
+var violationRules = map[string]bool{"over_limit": true, "under_floor": true}
 
 var actionNames = map[string]string{
 	"pay": "paying", "commit": "confirming a commitment", "sign": "signing", "cancel": "cancelling",
@@ -1266,6 +1260,11 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 		evaluateRepresentation(&r, s, snap, add)
 		settleCheck(&r, s)
 		return r
+	}
+	// A promise to ask before paying, made on an earlier card, is kept by a
+	// pause like any other: the user's answer is then sealed.
+	if s.promisedAsk && snap.Action == "pay" {
+		add("asked", "promised_ask", "", "I said I would ask you before paying")
 	}
 	// 0. What the user asked the agent to tell the buyer, told first.
 	if representationGated[snap.Action] {
@@ -1306,16 +1305,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 		add("asked", "not_asked", d.key, fmt.Sprintf("Not what you asked: %s %s → %s", strings.ToLower(d.label), d.a, d.b))
 	}
 	if intent.MaxTotalMinor != nil {
-		total := proposed.PriceMinor
-		if total == nil {
-			total = snap.AmountMinor
-		}
-		// A limit binds the most that may be taken: the authorized maximum,
-		// when it is more than the price or the expected charge.
-		field := "price"
-		if m := snap.AuthorizedMaxMinor; m != nil && (total == nil || *m > *total) {
-			total, field = m, "authorized_max_minor"
-		}
+		total, field := limitBound(proposed, snap)
 		if total != nil && *total > *intent.MaxTotalMinor {
 			limit, amount := formatMoney(*intent.MaxTotalMinor, proposed.Currency), formatMoney(*total, proposed.Currency)
 			text := fmt.Sprintf("Over your limit of %s (%s)", limit, amount)
@@ -1329,8 +1319,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 			// The user's own words named this very purchase, the item and its
 			// price: the rule still asks, and says why this is an exception to
 			// it rather than skipping the ask.
-			if a := intent.Asked; a.Item != "" && a.PriceMinor != nil && *a.PriceMinor == *total &&
-				strings.EqualFold(strings.TrimSpace(a.Item), strings.TrimSpace(proposed.Item)) {
+			if askedException(intent.Asked, proposed, *total) {
 				text = fmt.Sprintf("Your rules normally ask above %s. You asked for this %s purchase specifically. Approve this exception?", limit, amount)
 			}
 			add("asked", "over_limit", field, text)
@@ -1467,6 +1456,27 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	return r
 }
 
+// limitBound is what a limit binds on a proposed action: the price, else the
+// amount, or the authorized maximum when it is more (the most that may be
+// taken), and which field that is.
+func limitBound(proposed dealTerms, snap dealSnapshot) (*int64, string) {
+	total, field := proposed.PriceMinor, "price"
+	if total == nil {
+		total = snap.AmountMinor
+	}
+	if m := snap.AuthorizedMaxMinor; m != nil && (total == nil || *m > *total) {
+		total, field = m, "authorized_max_minor"
+	}
+	return total, field
+}
+
+// askedException is a purchase over the limit that the user's own words
+// named, the item and its price: the rule still asks, as an exception.
+func askedException(asked, proposed dealTerms, total int64) bool {
+	return asked.Item != "" && asked.PriceMinor != nil && *asked.PriceMinor == total &&
+		strings.EqualFold(strings.TrimSpace(asked.Item), strings.TrimSpace(proposed.Item))
+}
+
 // settleCheck sets the verdict and the one-tap options from the differences.
 // It is re-run after a remote checker adds differences.
 func settleCheck(r *dealCheckResult, s dealState) {
@@ -1475,7 +1485,8 @@ func settleCheck(r *dealCheckResult, s dealState) {
 		r.Options = []dealOption{}
 		return
 	}
-	r.Options = []dealOption{{ID: "hold", Label: "Hold"}}
+	// Labels are the wording pack's, given at seal time (labelOptions).
+	r.Options = []dealOption{{ID: "hold"}}
 	// A deny from the user's rules is a deny: no way to proceed.
 	if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == "rules_deny" }) {
 		r.Verdict = "deny"
@@ -1488,18 +1499,14 @@ func settleCheck(r *dealCheckResult, s dealState) {
 	if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == ruleRepresentationMissing }) {
 		return
 	}
-	if s.open.Who.Phone != "" && slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Question == "who" }) {
-		r.Options = append(r.Options, dealOption{ID: "verify_contact", Label: "Call the number I found (" + s.open.Who.Phone + ")"})
+	// Calling back is for a payee or contact that changed since first
+	// contact (a STOP card), on the number from first contact.
+	if s.open.Who.Phone != "" && slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == "payee_or_contact_changed" }) {
+		r.Options = append(r.Options, dealOption{ID: "verify_contact"})
 	}
-	// "Pay anyway" overrides a violation: a rule of the user's that failed
-	// and asks for approval, or a limit the user set. Anything else the
-	// check flags (rules not checked, a changed payee, a first telling) is
-	// news to decide on, not a rule to override: "Pay".
-	label := proceedPlainLabels[r.Action]
-	if slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return violationRules[d.Rule] }) {
-		label = proceedLabels[r.Action]
-	}
-	r.Options = append(r.Options, dealOption{ID: "proceed", Label: label})
+	// "Pay anyway" overrides a violation (violationRules): labelOptions
+	// says so on the button.
+	r.Options = append(r.Options, dealOption{ID: "proceed"})
 }
 
 // usedAuthorizations are the approvals (and, typed, DO evaluations) a sealed
@@ -2145,7 +2152,8 @@ func buildDealReport(events []sealedEvent) dealReport {
 				// The user's own yes answered it: a "you didn't ask for this" on
 				// the action, or on what the agent tells the buyer.
 				answered := userApproved[se.CapsuleID] && (d.Rule == "not_asked" && d.Field == "action" || d.Rule == ruleRepresentationOutside)
-				if d.Question == "asked" && d.Rule != "agent_picked" && !answered {
+				// Keeping a promise to ask is not trying something else.
+				if d.Question == "asked" && d.Rule != "agent_picked" && d.Rule != "promised_ask" && !answered {
 					asked = append(asked, d.Text)
 				}
 			}
@@ -2522,7 +2530,7 @@ var dealBuiltinRules = []struct {
 	Question string
 	Rules    []string
 }{
-	{"asked", []string{"agent_picked", "not_asked", "over_limit", "under_floor"}},
+	{"asked", []string{"promised_ask", "agent_picked", "not_asked", "over_limit", "under_floor"}},
 	{"who", []string{"payee_or_contact_changed", "first_disclosure"}},
 	{"terms", []string{"terms_changed"}},
 	{"recourse", []string{"recourse_changed", "irreversible_rail"}},

@@ -63,11 +63,20 @@ func approvalText(check map[string]any) string {
 	return s
 }
 
-// A pinned checker that allows: the check passes, and the prompt leads with
-// the ruleset it ran (id and digest) and says a weekly limit was checked
-// against this action alone. The checker was given one capsule with its
-// disclosed record; the verdict seals the ruleset as data, and the exported
-// record carries it.
+// differenceTexts are the check's differences as they read, one per line:
+// the findings the card no longer spells out (capsule-cli#344).
+func differenceTexts(check map[string]any) string {
+	var out []string
+	for _, d := range check["differences"].([]any) {
+		out = append(out, d.(map[string]any)["text"].(string))
+	}
+	return strings.Join(out, "\n")
+}
+
+// A pinned checker that allows: the check passes, the check names the
+// ruleset it ran (id and digest), and the prompt names neither it nor a
+// window. The checker was given one capsule with its disclosed record; the
+// verdict seals the ruleset as data, and the exported record carries it.
 func TestADealCheckRunsThePinnedRulesChecker(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	checker := stubChecker(t, "rules-allow", checkerPrints("allow", passFinding))
@@ -82,8 +91,9 @@ func TestADealCheckRunsThePinnedRulesChecker(t *testing.T) {
 	assert.Equal(t, "allow", rules["verdict"])
 	assert.Equal(t, map[string]any{"days": float64(31), "acts": float64(0), "complete": true}, rules["history"])
 	text := approvalText(check)
-	assert.Contains(t, text, "\n• Your rules (example-rules/1.0.0, digest abababab): allowed, judged (not stated).", text)
-	assert.NotContains(t, text, "Before you go ahead", "a pass is the headline and the rules")
+	assert.Equal(t, "Pay $4.54 to Sticker Marketplace (stickers.example) for the otter sticker?\n$4.54, up to $4.80 · by card · refundable · within your $5 limit", text, "a pass is the question and the facts")
+	assert.NotContains(t, text, "example-rules", "the ruleset stays in the check, off the prompt")
+	assert.NotContains(t, text, "Before you go ahead", "a pass is the question and the facts")
 	assert.NotContains(t, text, "Deal check")
 	assert.NotContains(t, text, "Stale after", "the stale line stays in the record, out of the prompt")
 
@@ -140,8 +150,13 @@ func TestADenyFromTheRulesOffersNoWayToProceed(t *testing.T) {
 		options = append(options, o.(map[string]any)["id"].(string))
 	}
 	assert.Equal(t, []string{"hold"}, options, "no proceed option")
-	assert.Contains(t, check["card"], `Not allowed by your rules: per-purchase: over the per-purchase limit (limit 2500; value 55880)`)
-	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not allowed, judged (not stated).")
+	assert.Contains(t, differenceTexts(check), `Not allowed by your rules: per-purchase: over the per-purchase limit (limit 2500; value 55880)`)
+	assert.True(t, strings.HasPrefix(check["card"].(string), "NOT ALLOWED BY YOUR RULES\n"), check["card"])
+	assert.Contains(t, check["card"], "\nI won't pay $4.54 to Sticker Marketplace (stickers.example).\n", "a deny says what will not happen, never a question")
+	assert.Contains(t, check["card"], "Why I stopped: your rules don't allow this")
+	rules := check["rules"].(map[string]any)
+	assert.Equal(t, "example-rules/1.0.0", rules["ruleset_id"])
+	assert.Equal(t, "deny", rules["verdict"])
 	_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "go ahead")
 	require.ErrorIs(t, err, cli.ErrInput, "a denied check cannot be approved past")
 	report := dealRun(t, "report", "--deal", id)
@@ -173,14 +188,15 @@ func TestATypedDenyIsDENYAndNamesTheRuleset(t *testing.T) {
 	checkProfile(t, export)
 }
 
-// An escalation pauses, and proceeding over it is an override: "Pay anyway".
-func TestAnEscalationPausesWithPayAnyway(t *testing.T) {
+// An escalation pauses and asks: a rule that asks is not broken, so the
+// button is "Pay $4.54", never "anyway" (#344).
+func TestAnEscalationPausesAndAsks(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-escalate", checkerPrints("escalate", denyFinding))}})
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	assert.Equal(t, "pause", check["verdict"])
-	assert.Contains(t, check["card"], "Your rules ask for approval: per-purchase")
-	assert.Contains(t, optionLabels(check), "Pay anyway")
+	assert.Contains(t, differenceTexts(check), "Your rules ask for approval: per-purchase")
+	assert.Equal(t, []string{"Hold", "Pay $4.54"}, optionLabels(check))
 }
 
 // The checker's own not_evaluable pauses, naming the rule it could not
@@ -191,9 +207,10 @@ func TestANotEvaluableFromTheRulesPauses(t *testing.T) {
 	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-unevaluable", checkerPrints("not_evaluable", passFinding+","+finding))}})
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	assert.Equal(t, "pause", check["verdict"])
-	assert.Contains(t, check["card"], "Your rules were not fully checked: weekly: the record carries no week of history")
-	assert.Equal(t, []string{"Hold", "Pay"}, optionLabels(check))
-	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): not fully checked, judged (not stated).")
+	assert.Contains(t, differenceTexts(check), "Your rules were not fully checked: weekly: the record carries no week of history")
+	assert.Contains(t, check["card"], "I couldn't check this against your rules")
+	assert.Equal(t, []string{"Hold", "Pay $4.54"}, optionLabels(check))
+	assert.Equal(t, "not_evaluable", check["rules"].(map[string]any)["verdict"])
 	var rules []string
 	for _, d := range check["differences"].([]any) {
 		rules = append(rules, d.(map[string]any)["rule"].(string))
@@ -235,7 +252,8 @@ func TestTheHashedCheckerIsTheOneThatRuns(t *testing.T) {
 }
 
 // A configured checker that cannot answer pauses the check, saying why, and
-// proceeding over it is "Pay", not "Pay anyway": no rule found anything.
+// proceeding over it is "Pay $4.54", not "Pay $4.54 anyway": no rule found
+// anything.
 func TestARulesCheckerThatCannotAnswerPauses(t *testing.T) {
 	cases := map[string]struct {
 		body string
@@ -259,10 +277,10 @@ func TestARulesCheckerThatCannotAnswerPauses(t *testing.T) {
 			check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 			assert.Equal(t, "pause", check["verdict"])
 			assert.Equal(t, "not_evaluated", check["rules"].(map[string]any)["status"])
-			assert.Contains(t, check["card"], "Your rules were not checked: "+tc.want)
-			assert.Contains(t, approvalText(check), "Your rules were not checked: "+tc.want)
-			assert.Contains(t, optionLabels(check), "Pay", "no rule found anything: not an override")
-			assert.NotContains(t, optionLabels(check), "Pay anyway")
+			assert.Contains(t, differenceTexts(check), "Your rules were not checked: "+tc.want)
+			assert.Contains(t, approvalText(check), "I couldn't check this against your rules")
+			assert.Contains(t, optionLabels(check), "Pay $4.54", "no rule found anything: not an override")
+			assert.NotContains(t, optionLabels(check), "Pay $4.54 anyway")
 		})
 	}
 }
@@ -275,19 +293,20 @@ func TestASwappedRulesCheckerIsNotRun(t *testing.T) {
 	require.NoError(t, os.WriteFile(checker, []byte("#!/bin/sh\n"+checkerPrints("allow", passFinding)+"\n# swapped\n"), 0o700))
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	assert.Equal(t, "pause", check["verdict"])
-	assert.Contains(t, check["card"], "Your rules were not checked: the rules checker changed since it was pinned")
+	assert.Contains(t, differenceTexts(check), "Your rules were not checked: the rules checker changed since it was pinned")
 	_, err := os.Stat(checker + ".input")
 	assert.True(t, os.IsNotExist(err), "the swapped checker never ran")
 }
 
-// No checker configured: the check does not pause for it, but the prompt
-// and the sealed verdict say the rules were not checked.
+// No checker configured: the check does not pause for it, but the check and
+// the sealed verdict say the rules were not checked. A passing prompt is the
+// question and the facts, so it does not (capsule-cli#344).
 func TestNoRulesCheckerIsSaidAndSealed(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	assert.Equal(t, "pass", check["verdict"])
 	assert.Equal(t, map[string]any{"status": "not_configured"}, check["rules"])
-	assert.Contains(t, approvalText(check), "\n• Your rules were not checked: no rules checker configured.", approvalText(check))
+	assert.NotContains(t, approvalText(check), "rules", approvalText(check))
 	records, export := exportRecords(t, id)
 	for _, r := range records {
 		if r["x-deal-v0"].(map[string]any)["record_type"] == "verdict" {
@@ -345,7 +364,7 @@ func TestTheStubCheckerAllowsAndDenies(t *testing.T) {
 			assert.Equal(t, want, check["verdict"])
 			assert.Equal(t, "stub-rules/0.1.0", check["rules"].(map[string]any)["ruleset_id"])
 			if want == "deny" {
-				assert.Contains(t, check["card"], `Not allowed by your rules: per-action: over the per-action limit (limit 100; value 480)`)
+				assert.Contains(t, differenceTexts(check), `Not allowed by your rules: per-action: over the per-action limit (limit 100; value 480)`)
 			}
 		})
 	}
@@ -371,12 +390,12 @@ func TestARollingLimitIsCheckedOverTheHistory(t *testing.T) {
 	check = dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	assert.Equal(t, "deny", check["verdict"])
 	assert.Equal(t, map[string]any{"days": float64(31), "acts": float64(1), "complete": true}, check["rules"].(map[string]any)["history"])
-	assert.Contains(t, check["card"], "Not allowed by your rules: weekly: over the 7-day limit (limit 10000; value 10280)")
+	assert.Contains(t, differenceTexts(check), "Not allowed by your rules: weekly: over the 7-day limit (limit 10000; value 10280)")
 }
 
 // A checker given no history, or history it is told is not complete,
 // reports the window not_evaluable, and the check pauses saying the rules
-// were not fully checked. The prompt says how much history was given.
+// were not fully checked. The check says how much history was given.
 func TestARollingLimitWithTooLittleHistoryIsNotFullyChecked(t *testing.T) {
 	stub, err := filepath.Abs("testdata/rules-checker/stub-checker.py")
 	require.NoError(t, err)
@@ -398,8 +417,11 @@ func TestARollingLimitWithTooLittleHistoryIsNotFullyChecked(t *testing.T) {
 	}
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 	assert.Equal(t, "pause", check["verdict"])
-	assert.Contains(t, check["card"], "Your rules were not fully checked: weekly: the 7-day total needs every earlier payment of the week")
-	assert.Contains(t, approvalText(check), "Your rules (stub-rules/0.1.0, digest 00000000): not fully checked, computed by your rules, self-attested. They were given only 1 of your earlier payments from the last 31 days.")
+	assert.Contains(t, differenceTexts(check), "Your rules were not fully checked: weekly: the 7-day total needs every earlier payment of the week")
+	rules := check["rules"].(map[string]any)
+	assert.Equal(t, "stub-rules/0.1.0", rules["ruleset_id"])
+	assert.Equal(t, "not_evaluable", rules["verdict"])
+	assert.Equal(t, map[string]any{"days": float64(31), "acts": float64(1), "complete": false}, rules["history"], "given only 1 of the earlier payments")
 	_, export := exportRecords(t, id)
 	checkProfile(t, export)
 }
@@ -440,13 +462,13 @@ func TestASharedCopyCarriesNoneOfTheUsersRules(t *testing.T) {
 	assert.Contains(t, string(raw), "example-rules/1.0.0")
 }
 
-// The checker's own words reach the prompt, never the record in the clear:
+// The checker's own words reach the check, never the record in the clear:
 // a refusal seals its cause as a token, and a finding its data.
 func TestNoCheckerWordsAreSealedInTheClear(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules", "echo 'risk score too high for shoe_size' >&2; exit 1")}})
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
-	assert.Contains(t, check["card"], "shoe_size")
+	assert.Contains(t, differenceTexts(check), "shoe_size")
 	records, export := exportRecords(t, id)
 	for _, r := range records {
 		if r["x-deal-v0"].(map[string]any)["record_type"] == "verdict" {
@@ -459,19 +481,19 @@ func TestNoCheckerWordsAreSealedInTheClear(t *testing.T) {
 	checkProfile(t, export)
 }
 
-// The tier and grade are recorded as the checker reported them and named in
-// the approval text; an absent tier reads as judged, an absent grade is
-// omitted. They change nothing: a deny is a deny whatever its tier.
+// The tier and grade are recorded as the checker reported them and shown in
+// the check's rules; an absent tier is sealed as not stated, an absent grade
+// is omitted. They change nothing: a deny is a deny whatever its tier.
 func TestTheTierAndGradeAreRecordedAndShown(t *testing.T) {
 	for name, tc := range map[string]struct {
-		members, tier, grade, words string
+		members, tier, grade string
 	}{
-		"recomputed":        {`"tier":"recomputed",`, "recomputed", "", "computed by your rules"},
-		"judged":            {`"tier":"judged",`, "judged", "", "judged"},
-		"absent":            {``, "not_stated", "", "judged (not stated)"},
-		"with a grade":      {`"tier":"recomputed","grade":"self-attested",`, "recomputed", "self-attested", "computed by your rules, self-attested"},
-		"a grade, no tier":  {`"grade":"countersigned",`, "not_stated", "countersigned", "judged (not stated), countersigned"},
-		"a witnessed grade": {`"tier":"judged","grade":"witnessed",`, "judged", "witnessed", "judged, witnessed"},
+		"recomputed":        {`"tier":"recomputed",`, "recomputed", ""},
+		"judged":            {`"tier":"judged",`, "judged", ""},
+		"absent":            {``, "not_stated", ""},
+		"with a grade":      {`"tier":"recomputed","grade":"self-attested",`, "recomputed", "self-attested"},
+		"a grade, no tier":  {`"grade":"countersigned",`, "not_stated", "countersigned"},
+		"a witnessed grade": {`"tier":"judged","grade":"witnessed",`, "judged", "witnessed"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			id := stickerDeal(t, "card", false)
@@ -479,7 +501,19 @@ func TestTheTierAndGradeAreRecordedAndShown(t *testing.T) {
 			pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules", out)}})
 			check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 480)))
 			assert.Equal(t, "deny", check["verdict"], "the tier and grade change nothing")
-			assert.Contains(t, approvalText(check), "not allowed, "+tc.words+".")
+			// The check shows them as reported (an absent one absent); the
+			// card does not (capsule-cli#344).
+			rules := check["rules"].(map[string]any)
+			if tc.tier == "not_stated" {
+				assert.NotContains(t, rules, "tier")
+			} else {
+				assert.Equal(t, tc.tier, rules["tier"])
+			}
+			if tc.grade == "" {
+				assert.NotContains(t, rules, "grade")
+			} else {
+				assert.Equal(t, tc.grade, rules["grade"])
+			}
 			records, export := exportRecords(t, id)
 			for _, r := range records {
 				if r["x-deal-v0"].(map[string]any)["record_type"] == "verdict" {

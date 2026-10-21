@@ -57,6 +57,17 @@ func dealRun(t *testing.T, args ...string) map[string]any {
 	return m
 }
 
+// attributeWords are a check's attributes (asked_attributes or
+// picked_by_agent) as "label value", joined by " · ".
+func attributeWords(check map[string]any, key string) string {
+	var out []string
+	for _, a := range check[key].([]any) {
+		m := a.(map[string]any)
+		out = append(out, m["label"].(string)+" "+m["value"].(string))
+	}
+	return strings.Join(out, " · ")
+}
+
 func writeJSON(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "in.json")
@@ -106,6 +117,14 @@ func TestDealJetSkiPayeeSwitch(t *testing.T) {
 		ids = append(ids, o.(map[string]any)["id"].(string))
 	}
 	assert.Equal(t, []string{"hold", "verify_contact", "proceed"}, ids)
+	assert.Equal(t, []string{"Hold", "Call +1 555 0100 first", "Pay $200"}, optionLabels(check))
+	// What the card collapses to two reasons, the check still says in full.
+	assert.Equal(t, "Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle)\n"+
+		"Payment changed since it was agreed (card → Zelle, not refundable)\n\n"+
+		"Zelle = no card protection\n"+
+		"Site registered 3 weeks ago", differenceTexts(check))
+	assert.Equal(t, []any{"they have 2 jet skis for Saturday"}, check["unverified"])
+	assert.Equal(t, map[string]any{"name": "Coastal Jet Rentals LLC", "first_time": true, "new_profile": true}, check["recipient"])
 
 	// The user holds; the answer is sealed and does not authorize paying.
 	checkID := check["check_id"].(string)
@@ -134,23 +153,29 @@ func TestDealAskedVsDidBooking(t *testing.T) {
 	dealID := opened["deal_id"].(string)
 
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit.json"))
-	assert.Equal(t, "Confirm: confirm the booking · to Example Hotel Shinjuku (hotel.example) · by card · refundable\n"+
-		"• Your rules were not checked: no rules checker configured.\n"+
-		"• First time dealing with Example Hotel Shinjuku ("+newProfileNote+")\n"+
-		"• You asked for: dates 2026-10-03 · place Tokyo\n"+
-		"• The agent picked, not you: item double room, 2 nights\n"+
-		"• Not what you asked: check_out 2026-10-05 → 2026-10-07\n"+
-		"• Over your limit of $400.00 ($760.00)\n"+
-		"• Unverified: free cancellation until October 1", check["card"])
+	assert.Equal(t, "PAUSED FOR YOU\n"+
+		"Confirm the double room, 2 nights with Example Hotel Shinjuku (hotel.example)?\n"+
+		"$760 · by card · refundable · over your $400 limit\n"+
+		"Why I'm asking: it's over your $400 limit; it's not what you asked for.\n"+
+		"Good to know: I chose item double room, 2 nights for you.", check["card"])
+	assert.Equal(t, "Not what you asked: check_out 2026-10-05 → 2026-10-07\n"+
+		"Over your limit of $400.00 ($760.00)", differenceTexts(check))
+	assert.Equal(t, "dates 2026-10-03 · place Tokyo", attributeWords(check, "asked_attributes"))
+	assert.Equal(t, "item double room, 2 nights", attributeWords(check, "picked_by_agent"))
+	assert.Equal(t, []any{"free cancellation until October 1"}, check["unverified"])
+	assert.Equal(t, map[string]any{"name": "Example Hotel Shinjuku", "first_time": true, "new_profile": true}, check["recipient"])
+	assert.Equal(t, []string{"Hold", "Confirm anyway"}, optionLabels(check))
 
 	cancel := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-cancel.json"))
-	assert.Equal(t, "Cancel: cancel the existing flight booking to free the dates · to Example Hotel Shinjuku (hotel.example) · by card · refundable\n"+
-		"• Your rules were not checked: no rules checker configured.\n"+
-		"• First time dealing with Example Hotel Shinjuku\n"+
-		"• You asked for: dates 2026-10-03 · place Tokyo · check out 2026-10-05\n"+
-		"• The agent picked, not you: item double room, 2 nights\n"+
-		"• You didn't ask for this: cancelling\n"+
-		"• Unverified: free cancellation until October 1", cancel["card"])
+	assert.Equal(t, "PAUSED FOR YOU\n"+
+		"Cancel the double room, 2 nights with Example Hotel Shinjuku (hotel.example)?\n"+
+		"Why I'm asking: it's not what you asked for.\n"+
+		"Good to know: I chose item double room, 2 nights for you.", cancel["card"])
+	assert.Equal(t, "You didn't ask for this: cancelling", differenceTexts(cancel))
+	assert.Equal(t, "dates 2026-10-03 · place Tokyo · check out 2026-10-05", attributeWords(cancel, "asked_attributes"))
+	assert.Equal(t, "item double room, 2 nights", attributeWords(cancel, "picked_by_agent"))
+	assert.Equal(t, map[string]any{"name": "Example Hotel Shinjuku", "first_time": true}, cancel["recipient"], "the new profile is said once")
+	assert.Equal(t, []string{"Hold", "Cancel"}, optionLabels(cancel))
 
 	// What was asked passes quietly and authorizes the act.
 	ok := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit-asked.json"))
@@ -193,7 +218,7 @@ func TestDealApprovalGoesStaleAfterChange(t *testing.T) {
 
 	// A current proceed authorizes the act; paying a different payee does not.
 	again := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(jetSkiDemo, "06-check-pay.json"))
-	assert.Contains(t, again["card"], "Deposit changed since it was agreed ($200.00 → $300.00)")
+	assert.Contains(t, differenceTexts(again), "Deposit changed since it was agreed ($200.00 → $300.00)")
 	yes := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", again["check_id"].(string), "--choice", "proceed", "--said", "pay it")
 	assert.Equal(t, true, yes["proceed"])
 	wrong := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","payee":"Someone Else"}`))
@@ -262,7 +287,8 @@ func TestDealRemoteChecker(t *testing.T) {
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit-asked.json"))
 	assert.Equal(t, "used", check["remote"])
 	assert.Equal(t, "pause", check["verdict"], "a remote pause is added to a local pass")
-	assert.Contains(t, check["card"], "Second reader: deposit is unusually high")
+	assert.Contains(t, differenceTexts(check), "Second reader: deposit is unusually high")
+	assert.Contains(t, check["card"], "Why I'm asking: an outside check asked to pause.")
 	require.Len(t, bodies, 2)
 	assert.Contains(t, bodies[1], `"action":"commit"`)
 	for _, private := range []string{"Tokyo", "Example Hotel", "free cancellation", "Book me"} {
@@ -322,8 +348,9 @@ func TestDealOptionsOnlyIntentPausesABooking(t *testing.T) {
 	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"commit","recourse":{"refundable":false}}`))
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Equal(t, false, check["proceed"])
-	assert.Contains(t, check["card"], "You didn't ask for this: confirming a commitment")
-	assert.Contains(t, check["card"], "No longer refundable")
+	assert.Contains(t, differenceTexts(check), "You didn't ask for this: confirming a commitment")
+	assert.Contains(t, differenceTexts(check), "No longer refundable")
+	assert.Contains(t, check["card"], "Why I'm asking: it's not what you asked for; the way to get your money back changed.")
 	assert.Nil(t, check["approval_id"], "nothing is approved by standing intent")
 }
 
@@ -333,13 +360,14 @@ func TestDealRefundabilityChangePauses(t *testing.T) {
 	dealID := dealRun(t, "open", "--input", filepath.Join(bookingFixture, "open.json"))["deal_id"].(string)
 	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"commit","terms":{"when":"2026-10-03","conditions":{"check_out":"2026-10-05"},"price_minor":38000},"recourse":{"refundable":false}}`))
 	assert.Equal(t, "pause", check["verdict"])
-	assert.Equal(t, "Confirm: double room, 2 nights · to Example Hotel Shinjuku (hotel.example) · by card · not refundable\n"+
-		"• Your rules were not checked: no rules checker configured.\n"+
-		"• First time dealing with Example Hotel Shinjuku ("+newProfileNote+")\n"+
-		"• You asked for: dates 2026-10-03 · place Tokyo · check out 2026-10-05\n"+
-		"• The agent picked, not you: item double room, 2 nights\n"+
-		"• No longer refundable (agreed as refundable)\n"+
-		"• Unverified: free cancellation until October 1", check["card"])
+	assert.Equal(t, "PAUSED FOR YOU\n"+
+		"Confirm the double room, 2 nights with Example Hotel Shinjuku (hotel.example)?\n"+
+		"$380 · by card · not refundable · within your $400 limit\n"+
+		"Why I'm asking: the way to get your money back changed.\n"+
+		"Good to know: I chose item double room, 2 nights for you.", check["card"])
+	assert.Equal(t, "No longer refundable (agreed as refundable)", differenceTexts(check))
+	assert.Equal(t, "dates 2026-10-03 · place Tokyo · check out 2026-10-05", attributeWords(check, "asked_attributes"))
+	assert.Equal(t, "item double room, 2 nights", attributeWords(check, "picked_by_agent"))
 }
 
 // B2: a payee change carried in a counterparty message, after the check,
@@ -350,7 +378,7 @@ func TestDealPayeeChangeInAMessageMakesTheApprovalStale(t *testing.T) {
 	dealID := dealRun(t, "open", "--input", filepath.Join(jetSkiDemo, "01-open.json"))["deal_id"].(string)
 	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"authorized_max_minor":20000,"recourse":{"rail":"zelle"}}`))
 	require.Equal(t, "pause", check["verdict"])
-	require.NotContains(t, check["card"], "Payee changed")
+	require.NotContains(t, differenceTexts(check), "Payee changed")
 	dealRun(t, "note", "--deal", dealID, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","text":"send it to M. Torres","who":{"payee":"M. Torres"}}`))
 	answer := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok pay")
 	assert.Equal(t, false, answer["proceed"], "the answer is to a check that no longer shows who is being paid")
@@ -358,7 +386,8 @@ func TestDealPayeeChangeInAMessageMakesTheApprovalStale(t *testing.T) {
 	assert.Equal(t, true, act["unchecked"])
 	assert.Equal(t, "details changed after the last check", act["reason"])
 	again := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":20000,"authorized_max_minor":20000,"recourse":{"rail":"zelle"}}`))
-	assert.Contains(t, again["card"], "Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle)")
+	assert.Contains(t, differenceTexts(again), "Payee changed since first contact (Coastal Jet Rentals LLC → M. Torres, Zelle)")
+	assert.Contains(t, again["card"], "STOP: CHECK THIS")
 }
 
 // B2: the same after a passing check approved by standing intent, and for
@@ -457,7 +486,8 @@ func TestDealPayAnywayThenTermsChangeAgain(t *testing.T) {
 
 	recheck := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"pay","amount_minor":30000,"authorized_max_minor":30000,"who":{"payee":"M. Torres"},"recourse":{"rail":"zelle","refundable":false}}`))
 	assert.Equal(t, "pause", recheck["verdict"])
-	assert.Contains(t, recheck["card"], "Deposit changed since it was agreed ($200.00 → $300.00)")
+	assert.Contains(t, differenceTexts(recheck), "Deposit changed since it was agreed ($200.00 → $300.00)")
+	assert.Contains(t, recheck["card"], "Pay $300 to M. Torres")
 	ok := dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", recheck["check_id"].(string), "--choice", "proceed", "--said", "pay the new deposit")
 	require.Equal(t, true, ok["proceed"])
 	paid := dealRun(t, "note", "--deal", dealID, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":30000,"payee":"M. Torres","rail":"zelle"}`))
@@ -500,7 +530,7 @@ func TestDealDemoScriptIgnoresTrailingWhitespace(t *testing.T) {
 	assert.Contains(t, got, strings.TrimSpace(string(want)))
 
 	// A card that differs in anything but trailing whitespace still fails.
-	other := strings.Replace(padded, "3 weeks ago", "4 weeks ago", 1)
+	other := strings.Replace(padded, "for Saturday", "for Sunday", 1)
 	require.NoError(t, os.WriteFile(filepath.Join(skill, "demo/jet-ski/expected-card.txt"), []byte(other), 0o600))
 	got, err = demo()
 	require.Error(t, err, got)
@@ -581,22 +611,23 @@ func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 	t.Run("without the intent note it still flags", func(t *testing.T) {
 		check := run(t, "", "check-pay.json")
 		assert.Equal(t, "pause", check["verdict"])
-		assert.Contains(t, check["card"], "Not what you asked: item funny otter sticker → "+item)
-		assert.Contains(t, check["card"], pickedSize)
+		assert.Contains(t, differenceTexts(check), "Not what you asked: item funny otter sticker → "+item)
+		assert.Contains(t, differenceTexts(check), pickedSize)
+		assert.Contains(t, check["card"], "Why I'm asking: it's not what you asked for; I picked size small 3.8in x 2.4in, not you.")
 		assert.Contains(t, check["unverified"], "Sticker listed on sale at $3.00 (list $3.50)")
 		assert.Empty(t, attrs(check["asked_attributes"]), "the item differs from the ask, so it is not the user's")
 	})
 	t.Run("with the intent note the item is the user's and the size still needs a nod", func(t *testing.T) {
 		check := run(t, "intent-picked.json", "check-pay.json")
-		assert.NotContains(t, check["card"], "Not what you asked")
+		assert.NotContains(t, differenceTexts(check), "Not what you asked")
 		assert.Equal(t, []string{"agent_picked"}, rules(check), "only the agent's own pick pauses")
 		assert.Equal(t, "pause", check["verdict"])
 		assert.Equal(t, false, check["proceed"], "never proceed on an empty card when the agent picked a size")
-		assert.Contains(t, check["card"], pickedSize)
+		assert.Contains(t, differenceTexts(check), pickedSize)
 		assert.Contains(t, check["unverified"], "Sticker listed on sale at $3.00 (list $3.50)", "an unverifiable reference price stays a claim")
 		assert.Equal(t, []string{"item " + item}, attrs(check["asked_attributes"]))
 		assert.Equal(t, []string{"size small 3.8in x 2.4in"}, attrs(check["picked_by_agent"]))
-		assert.Contains(t, check["approval_text"], "• You asked for: item "+item+"\n• "+pickedSize, "the pick the check paused on is its own line, never the user's")
+		assert.Contains(t, check["approval_text"], "Why I'm asking: I picked size small 3.8in x 2.4in, not you.", "the pick the check paused on is the agent's, never the user's")
 		// The receipt keeps them apart too: the report's check item, and
 		// the page and email it renders.
 		dealID := check["deal_id"].(string)
@@ -633,14 +664,16 @@ func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 	t.Run("after the intent note a different item still pauses", func(t *testing.T) {
 		check := run(t, "intent-picked-with-size.json", "check-other-item.json")
 		assert.Equal(t, "pause", check["verdict"])
-		assert.Contains(t, check["card"], "Not what you asked: item "+item+" → Otter Nonsense - Funny Otter Sticker")
-		assert.NotContains(t, check["approval_text"], "You asked for: item Otter Nonsense", "the agent's item is never called the user's")
+		assert.Contains(t, differenceTexts(check), "Not what you asked: item "+item+" → Otter Nonsense - Funny Otter Sticker")
+		assert.Contains(t, check["card"], "it's not what you asked for")
 		assert.NotContains(t, attrs(check["asked_attributes"]), "item Otter Nonsense - Funny Otter Sticker")
 	})
 	t.Run("after the intent note a price over the limit still pauses", func(t *testing.T) {
 		check := run(t, "intent-picked-with-size.json", "check-over-limit.json")
 		assert.Equal(t, "pause", check["verdict"])
-		assert.Contains(t, check["card"], "Over your limit of $8.00 ($9.00)")
+		assert.Contains(t, differenceTexts(check), "Over your limit of $8.00 ($9.00)")
+		assert.Contains(t, check["card"], "$9 · by card · refundable · over your $8 limit")
+		assert.Contains(t, check["card"], "it's over your $8 limit")
 	})
 }
 

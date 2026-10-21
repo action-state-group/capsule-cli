@@ -25,6 +25,16 @@ func checkWithRules(t *testing.T, verdict, findings string) (string, map[string]
 	return id, dealRun(t, "check", "--deal", id, "--input", writeJSON(t, payCheck("card", 454, 454)))
 }
 
+// checkRules is the check's rules as the check result types them.
+func checkRules(t *testing.T, check map[string]any) *dealRules {
+	t.Helper()
+	raw, err := json.Marshal(check["rules"])
+	require.NoError(t, err)
+	var r dealRules
+	require.NoError(t, json.Unmarshal(raw, &r))
+	return &r
+}
+
 func differenceRules(check map[string]any) []string {
 	var out []string
 	for _, d := range check["differences"].([]any) {
@@ -33,28 +43,32 @@ func differenceRules(check map[string]any) []string {
 	return out
 }
 
-// An allowed purchase with declared rules passes quietly: the prompt names
-// the declared rules beside the passing verdict; no card, no difference.
+// An allowed purchase with declared rules passes quietly: the check's rules
+// carry the declared rules beside the passing verdict; no card, no
+// difference, and the prompt does not name them (capsule-cli#344).
 func TestDeclaredRulesBesideAPassingVerdictAreQuiet(t *testing.T) {
 	_, check := checkWithRules(t, "allow", passFinding+","+declaredFindings)
 	assert.Equal(t, "pass", check["verdict"], "the verdict is unaffected")
 	assert.Equal(t, "", check["card"])
 	assert.Empty(t, differenceRules(check))
-	assert.Contains(t, approvalText(check), "Your rules (example-rules/1.0.0, digest abababab): allowed, computed by your rules. "+declaredLine)
+	assert.Equal(t, []string{"r14-commits-the-user", "r24-outside-instructions", "r25-no-bypassing"}, declaredRules(checkRules(t, check)))
+	assert.Equal(t, declaredLine, declaredRulesLine(declaredRules(checkRules(t, check))), "as the receipt says them")
+	assert.NotContains(t, approvalText(check), "declared")
 	assert.NotContains(t, approvalText(check), "not checked")
 	assert.NotContains(t, approvalText(check), "not fully checked")
 }
 
 // An escalation names only what escalated: the declared rules are not
-// differences on its card, and the prompt still says them quietly.
+// differences, and the check's rules still carry them quietly.
 func TestDeclaredRulesAreNotDifferencesOnAnEscalation(t *testing.T) {
 	_, check := checkWithRules(t, "escalate", denyFinding+","+declaredFindings)
 	assert.Equal(t, "pause", check["verdict"])
-	card := check["card"].(string)
-	assert.Contains(t, card, "Your rules ask for approval: per-purchase")
-	assert.NotContains(t, card, "declared, not measured")
-	assert.NotContains(t, card, "r14-commits-the-user")
-	assert.Contains(t, approvalText(check), declaredLine)
+	texts := differenceTexts(check)
+	assert.Contains(t, texts, "Your rules ask for approval: per-purchase")
+	assert.NotContains(t, texts, "declared, not measured")
+	assert.NotContains(t, texts, "r14-commits-the-user")
+	assert.NotContains(t, check["card"], "r14")
+	assert.Len(t, declaredRules(checkRules(t, check)), 3)
 }
 
 // A genuine not_evaluable (the checker could not evaluate a rule on this
@@ -68,7 +82,7 @@ func TestAGenuineNotEvaluableStaysLoud(t *testing.T) {
 		t.Run(verdict, func(t *testing.T) {
 			_, check := checkWithRules(t, verdict, missing+","+declaredFindings)
 			assert.Equal(t, "pause", check["verdict"])
-			assert.Contains(t, check["card"], words)
+			assert.Contains(t, differenceTexts(check), words)
 			assert.Len(t, differenceRules(check), 1, "the genuine one only")
 		})
 	}

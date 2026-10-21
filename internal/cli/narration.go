@@ -65,6 +65,9 @@ type Ask struct {
 	// HoldSay is what to say when the user holds and no command runs (a
 	// card no answer is sealed for).
 	HoldSay string `json:"hold_say,omitempty"`
+	// WhyKey is the pack key that says the reasons, when not the default
+	// "Why I'm asking" (a deny says why it stopped).
+	WhyKey string `json:"-"`
 }
 
 // AskOption is one button: its label and the choice `deal note --kind
@@ -520,8 +523,12 @@ func NarrateWith(c *cobra.Command, build func(Wording) Narration) Narration {
 // Button labels are not part of it.
 func AskText(w Wording, a Ask) string {
 	lines := []string{a.Tag, a.Question, a.Facts}
-	for _, why := range a.Why {
-		lines = append(lines, w.Line("card.why.label", V{"why": why}))
+	if len(a.Why) > 0 {
+		key := a.WhyKey
+		if key == "" {
+			key = "card.why.label"
+		}
+		lines = append(lines, w.Line(key, V{"why": strings.Join(a.Why, "; ")}))
 	}
 	if a.GoodToKnow != "" {
 		lines = append(lines, w.Line("card.good_to_know.label", V{"text": a.GoodToKnow}))

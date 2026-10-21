@@ -1,18 +1,25 @@
 [open: line]
 I'll keep our receipt for this, from your ask to the end.
 [check share: ask]
-Share your contact details: your details to ship the sticker · to sticker_shop_example (marketplace.example) · by card · refundable
-Step 1 of 2: I will ask again before paying $1.75.
-• Your rules were not checked: no rules checker configured.
-• First time dealing with sticker_shop_example, and they have never had your street address, email, name or phone (this profile has no record of earlier counterparties yet, so everyone is first-time until your first deals)
+PAUSED FOR YOU
+Share your name, email, phone and address with sticker_shop_example (marketplace.example) for the Fawn Sticker?
+Why I'm asking: first time they get your details.
+Next: I'll ask you again before paying.
 <Hold> <Share>
 [approval: line]
 Got it, you OK'd sharing your contact details. Going ahead now.
 [disclosure: silent]
-[check pay: silent]
+[check pay: ask]
+PAUSED FOR YOU
+Pay $1.90 to sticker_shop_example (marketplace.example) for the Fawn Sticker?
+$1.75 + $0.15 tax and fees · by card · refundable · within your $2 limit
+Why I'm asking: I said I'd check with you before paying.
+<Hold> <Pay $1.90>
+[approval: line]
+Got it, you OK'd paying $1.90. Paying now.
 [act: report]
 Done: Fawn Sticker, $1.90, within your $2 limit.
-You OK'd 1 thing on the way: sharing your details.
+You OK'd 2 things on the way: sharing your details and paying $1.90.
 Our receipt for this is saved: what you asked, what you OK'd and what I did, locked.
 View details
 (attached: text/html)
