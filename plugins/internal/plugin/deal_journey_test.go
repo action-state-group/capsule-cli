@@ -675,9 +675,11 @@ func TestJourneyLabelsWithoutAnAmountAndByName(t *testing.T) {
 		{CapsuleID: "c1", Event: dealEvent{Kind: "open", Open: &dealOpen{Who: dealWho{Name: "AliExpress", Payee: "PAYPAL *ALIEXPRESS"}, Terms: dealTerms{Currency: "USD"}}}},
 		{CapsuleID: "c2", Event: dealEvent{Kind: "disclosure", Disclosure: &dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "email", Value: homeEmail}}}}},
 		{CapsuleID: "c3", Event: dealEvent{Kind: "act", Act: &dealAct{Action: "pay"}}},
+		{CapsuleID: "c4", Event: dealEvent{Kind: "disclosure", Disclosure: &dealDisclosure{To: "platform", Who: &dealWho{Name: "Craigslist", Payee: "CL RELAY LLC", Domain: "craigslist.org"}, Fields: []dealDisclosureField{{Class: "email", Value: homeEmail}}}}},
 	}
 	steps := dealJourney(events, cli.BuiltinWording())
-	require.Len(t, steps, 3)
+	require.Len(t, steps, 4)
 	assert.Equal(t, "Told AliExpress your email", steps[1].Label)
 	assert.Equal(t, "Paid", steps[2].Label)
+	assert.Equal(t, "Told Craigslist your email", steps[3].Label, "a named recipient by its own name")
 }
