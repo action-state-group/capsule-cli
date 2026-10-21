@@ -117,6 +117,7 @@
     "class.pickup_location": "pickup location",
     "class.verification_code": "verification code",
     "report.attach_failed": "I couldn't make the receipt page this time; the record itself is saved.",
+    "report.title": "Deal report",
     "report.view_details": "View details",
     "say.approval.confirm_limits": "Got it: your limit is now {limit}.",
     "say.approval.confirm_limits.other": "Got it: your limits are updated.",

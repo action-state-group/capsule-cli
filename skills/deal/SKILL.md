@@ -849,10 +849,10 @@ text is left out unless an anomaly points at that message.
 A merchant email result carries its own `scope` line (it covers one email
 from the merchant about this deal). Pass it on as written.
 
-Every page opens with its scope (this one deal, not a record of everything the agent did), then the rung it can prove (*sealed by my agent* unless the
-file carries a witness receipt or countersignature), what it does not claim,
-and one command anyone can run on the file: `capsulectl verify --bundle
-deal-report.html`.
+Every page opens with its scope (this one deal, not a record of everything the agent did), whether it is countersigned, and what it does not claim. What
+was verified, the witness receipt included, is the page's own verification
+section, said once; anyone can also run `capsulectl verify --bundle
+deal-report.html` on the file.
 
 That page is the user's own copy, with nothing withheld. When the user wants
 to send it to someone, make a shared copy instead. Never send the user's own
@@ -884,15 +884,13 @@ reads on a phone with nothing to download, and `receipt.html` plus
 `bundle.json` attached. The output also carries `subject`, `text` and
 `html` for an email tool that takes fields instead of a file. Send it with
 the agent host's own email tool to the user's own address. Never send it
-through any other service, and never paste its contents anywhere else. The
-assurance line says "Sealed by my agent" unless a configured witness signed
-a receipt for the deal's checkpoint, and then "Witnessed". A new deal is not
-witnessed at once: until the next tick of the profile's checkpoint cadence
-(the receipt says how long at most, for example "within about 7m (every 5m,
-give or take 2m)") its receipt says
-"Sealed, witness pending". Steps added after a tick read "Witnessed in part"
-(steps 1 to k of n witnessed, the rest pending). Say it that way to the
-user; never say a deal was witnessed when it happened. The receipt
+through any other service, and never paste its contents anywhere else.
+Neither the email nor the page states a witness of its own: the page's
+verification section is the one verdict. A new deal is not witnessed at
+once: its checkpoint goes to the witness at the next tick of the profile's
+checkpoint cadence (the report's `assurance` says when). In chat, say only
+the report's `say`, which names no witness state until the receipt page can
+show the same one; never say a deal was witnessed when it happened. The receipt
 rides in `bundle.json`, where `capsulectl verify --bundle bundle.json
 --witness-directory DIRECTORY.json` checks it against a witness directory
 the reader chooses. The email copy cannot check itself; the attached page and

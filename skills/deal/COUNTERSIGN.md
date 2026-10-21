@@ -5,7 +5,7 @@ the report JSON and the page each carry a `countersign` field. With no
 countersignature it says:
 
 > Not countersigned: no other party has signed this record. It stands on the
-> agent's own seal and any witness receipt above.
+> agent's own seal and any witness receipt this file carries.
 
 That is the honest value for every receipt today.
 

@@ -89,6 +89,12 @@ func dealDidLineOf(b map[string]interface{}) string {
 	return dealDidLine(nil)
 }
 
+// dealEmailVerifyLine is what the email says about checking the receipt.
+// It names no witness state of its own: the attached page's verification
+// section is the one verdict, and the email does not give a second
+// (capsule-cli#341; the report's JSON keeps the rung for the agent).
+const dealEmailVerifyLine = "The attached page checks itself when it is opened. To check every seal and signature, run capsulectl verify --bundle bundle.json; to check the witness receipt too, add --witness-directory with a witness directory you trust."
+
 // dealAssurance names the rung the report stands on, from the bundle itself,
 // and says the witness state truthfully. "witnessed" needs a receipt in the
 // bundle: on the deal's own checkpoint, or (the default) on the cadence

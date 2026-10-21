@@ -83,7 +83,8 @@ func TestDealReceiptEmailIsReadableWithoutADownloadAndCheckable(t *testing.T) {
 	text, page := bodies["text/plain"], bodies["text/html"]
 	for _, body := range []string{text, page} {
 		assert.Contains(t, body, "Order the cat sticker in my cart at Example Stickers")
-		assert.Contains(t, body, "Sealed by my agent")
+		assert.NotContains(t, body, "Sealed by my agent", "the email states no witness of its own (capsule-cli#341)")
+		assert.Contains(t, body, "The attached page checks itself when it is opened.")
 		assert.Contains(t, body, "capsulectl verify --bundle bundle.json")
 		assert.Contains(t, body, "This copy cannot check itself")
 		assert.NotContains(t, strings.ToLower(body), "verified", "never claim a check the message cannot make")

@@ -77,7 +77,8 @@ func TestAGenuineNotEvaluableStaysLoud(t *testing.T) {
 	missing := `{"id":"r09-terms","verdict":"not_evaluable","reason":"the record states no terms"}`
 	for verdict, words := range map[string]string{
 		"not_evaluable": "Your rules were not fully checked: r09-terms: the record states no terms",
-		"escalate":      "Your rules ask for approval: r09-terms: the record states no terms",
+		// Its own state, whatever the verdict (capsule-cli#341).
+		"escalate": "Your rules were not fully checked: r09-terms: the record states no terms",
 	} {
 		t.Run(verdict, func(t *testing.T) {
 			_, check := checkWithRules(t, verdict, missing+","+declaredFindings)

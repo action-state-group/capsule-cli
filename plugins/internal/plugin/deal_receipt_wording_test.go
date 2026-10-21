@@ -56,7 +56,7 @@ func TestTheReceiptSaysWhetherTheMerchantsReceiptMatches(t *testing.T) {
 			var b map[string]any
 			require.NoError(t, json.Unmarshal(raw, &b))
 			life := dealReportOf(b)["lifecycle"].(map[string]any)
-			assert.Equal(t, "Closed at 2026-10-03T21:00:00Z: matched, nothing left to match. 1 record sealed after the close is linked to it (it confirms the close).", life["text"])
+			assert.Equal(t, "Closed on Oct 3, 2026: matched, nothing left to match. 1 record sealed after the close is linked to it (it confirms the close).", life["text"])
 			assert.Equal(t, tc.line, life["later"].([]any)[0].(map[string]any)["text"])
 
 			email, err := os.ReadFile(eml)

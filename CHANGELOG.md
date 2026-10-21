@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+### Every command says what to tell the user; the check card; one verdict on the receipt (capsule-cli#345, #344, #341)
+
+- **Added:** every result object carries `voice` (`silent`, `ask`, `line`,
+  `report` or `error`) and, when it speaks, `say`: the words to tell the
+  user, verbatim, with values filled from the sealed steps (#349). Words come
+  from an `aac.wording-pack/v0` pack: the built-in neutral pack, or a
+  complete pack the profile pins with `profile update --wording FILE`. A
+  pinned pack that cannot be used falls back to the whole built-in pack and
+  says so (`"wording": "built-in"`, and in `doctor`).
+- **Added:** a command that fails with nothing printed writes one object
+  with `voice: "error"`, `hold: true` and `say`; the stderr line and the exit
+  code are unchanged. `--html` on `deal note --kind act`, `deal close` and
+  `deal note --kind evidence --email` writes the updated receipt in the same
+  step.
+- **Changed (breaking):** the check card (`approval_text`, `card`) is one tag,
+  one question, the money facts, at most two reasons, at most one "Good to
+  know" and "Next": no bullets, rule ids or ruleset. Buttons carry the amount
+  ("Pay $1.90"); "anyway" is only over a limit or floor the user set, never
+  for a rule that asks; a deny says what will not happen, with one "OK"
+  button. A pay that a share card promised to ask about pauses for it
+  (built-in rule `promised_ask`, so `ruleset_digest` changes), and the
+  answer is sealed (#344).
+- **Added:** `external-check-result/v0` findings may carry `disposition`
+  (`ask` or `deny`), sealed with the finding; each failing rule's words follow
+  it, so a rule that only asks never reads "Not allowed" under a deny (#341).
+- **Changed:** the deal page states no verification of its own: no witness
+  line, no list of checks and no signature line. The core's verification
+  section is the one verdict (agent-action-capsule#346, #347 track the core's
+  words and its reading of the cadence witness). Times are the reader's
+  local time; a step is listed once, and an act's or a close's own step is
+  not said again under it; what the user approved on a check is no anomaly
+  of the agent's, while a signal from the other side (a changed payee, a
+  code asked for) stays one (#341).
+
 ### `result build` in the core: a Result page with no plugin (capsule-cli#324)
 
 - **Added:** `capsulectl result build --profile NAME --result FILE` seals an

@@ -102,11 +102,24 @@ func openDealListing(events []sealedEvent, now time.Time) *dealOpenListing {
 		l.Text += " No close date was expected."
 	case now.UTC().Format("2006-01-02") > o.ExpectCloseBy:
 		l.PastExpected = true
-		l.Text += fmt.Sprintf(" It was expected to close by %s, which has passed (as of %s).", o.ExpectCloseBy, asOf)
+		l.Text += fmt.Sprintf(" It was expected to close by %s, which has passed (as of %s).", readDate(o.ExpectCloseBy), readDate(asOf))
 	default:
-		l.Text += fmt.Sprintf(" It is expected to close by %s.", o.ExpectCloseBy)
+		l.Text += fmt.Sprintf(" It is expected to close by %s.", readDate(o.ExpectCloseBy))
 	}
 	return l
+}
+
+// readDate is a date as a reader says it ("Oct 17, 2026"), from a
+// YYYY-MM-DD date or an RFC 3339 time (its UTC day); anything else as
+// written (capsule-cli#341: no ISO dates beside the page's local times).
+func readDate(v string) string {
+	if t, err := time.Parse("2006-01-02", v); err == nil {
+		return t.Format("Jan 2, 2006")
+	}
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		return t.UTC().Format("Jan 2, 2006")
+	}
+	return v
 }
 
 func hasMerchantEmail(events []sealedEvent) bool {
@@ -233,13 +246,13 @@ func buildDealLifecycle(events []sealedEvent, now time.Time) dealLifecycle {
 			l.Carried = append(l.Carried, d)
 		}
 	}
-	l.Text = fmt.Sprintf("Closed at %s (%s).", c.Event.At, c.Event.Close.Outcome)
+	l.Text = fmt.Sprintf("Closed on %s (%s).", readDate(c.Event.At), c.Event.Close.Outcome)
 	switch c.Event.Close.Outcome {
 	case "completed":
 		// What was delivered matched what was agreed, with nothing open.
-		l.Text = fmt.Sprintf("Closed at %s: matched, nothing left to match.", c.Event.At)
+		l.Text = fmt.Sprintf("Closed on %s: matched, nothing left to match.", readDate(c.Event.At))
 	case "not_selected":
-		l.Text = fmt.Sprintf("Closed at %s: not selected; nothing was taken or delivered.", c.Event.At)
+		l.Text = fmt.Sprintf("Closed on %s: not selected; nothing was taken or delivered.", readDate(c.Event.At))
 	}
 	switch n := len(l.Later); n {
 	case 0:

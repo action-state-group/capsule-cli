@@ -1195,6 +1195,9 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 				text = words
 			}
 			m := map[string]interface{}{"kind": item.Kind, "text": p.scrub(text), "steps": ids}
+			if item.Self != "" {
+				m["self"] = item.Self
+			}
 			if item.Side != "" {
 				m["side"] = item.Side
 			}

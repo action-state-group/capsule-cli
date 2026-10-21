@@ -176,7 +176,9 @@ func TestDealWitnessStatesAreShownAsTheyAre(t *testing.T) {
 	assert.Equal(t, "witnessed", assurance["rung"])
 	assert.NotContains(t, strings.ToLower(assurance["text"].(string)), "verified")
 	page := string(mustRead(t, filepath.Join(dir, "up.html")))
-	assert.Contains(t, page, "x-deal-cadence-v0")
+	// The page states no witness of its own: the core's lists and verdict
+	// stand alone (Steven's banner ruling on capsule-cli#341).
+	assert.NotContains(t, page, "Witnessed through")
 
 	bundlePath := filepath.Join(dir, "up.json")
 	result, err := verifyWithDirectory(t, bundlePath, writeDirectory(t, rawKeyRow(endpoint, public)))
@@ -414,7 +416,7 @@ func TestDealIsWitnessPendingUntilATick(t *testing.T) {
 	assert.Contains(t, a["text"], "Witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's checkpoint cadence, within about 7m (every 5m, give or take 2m)")
 	assert.NotContains(t, a["text"], "an hour by default", "the profile's own cadence, not the default")
 	html := string(mustRead(t, page))
-	assert.Contains(t, html, "Sealed by my agent, witness pending.")
+	assert.NotContains(t, html, "Sealed by my agent, witness pending.", "the page states no witness of its own (capsule-cli#341)")
 	for _, text := range []string{a["text"].(string), html} {
 		assert.NotContains(t, text, "witnessed at the time")
 		assert.NotContains(t, text, "Witnessed when")

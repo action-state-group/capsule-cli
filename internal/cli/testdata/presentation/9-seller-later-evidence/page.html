@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Ju0HPLKvoqQ340yooP7+PMbNJhrPc4ZPnSP4NSpziyw=' 'sha256-OpNhaC3A/VvkifX+3L8bxPrCVBd81MGrBKexBzfC5ss=' 'sha256-gtKXRn5yTfsIv41xPfM+PWkzeT6cjg3CjkH1F7QLzuM=' 'sha256-5ztV0zLixIEtIiYJBwtErDeoDE/f9v8gUXUztQnG7Ss='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-AzQzwPO5fWgue4GoMJ3YaKlrDqkfGJl7M+CXaG5+dNo='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Ju0HPLKvoqQ340yooP7+PMbNJhrPc4ZPnSP4NSpziyw=' 'sha256-OpNhaC3A/VvkifX+3L8bxPrCVBd81MGrBKexBzfC5ss=' 'sha256-GJfJJ8d7Z/P9uYvVnc3DLaIHH0IbghW5Kz/Jz34nzMA=' 'sha256-VeMcqcbDHRVQOt1vXae+MLvvuBgOgk3FgvJpaMPEp4g='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-o8f8raSsfDeyxIFpYGAs1FrywK+hjppQ8Db6Y22N25g='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: “Sell my example bicycle; ask 1900. Tell them about the scratch.”</title>
     <style>
@@ -14311,7 +14311,7 @@ const dealStandaloneReport = async (context, bundle, x, sealedId) => {
 const dealViewModel = async (context) => {
   const page = globalThis.capsulectlDealPage || {};
   // The context's own frozen copy of the bundle, read only for what no
-  // record seals: the extension blocks and the checkpoint's witnesses.
+  // record seals: the extension blocks.
   const bundle = context.bundle;
   const payload = (id) => EvidenceGraph.verifiedPayload(context, id, "agent_input");
   // In the verifier's disclosure order, as the context resolved each one.
@@ -14364,46 +14364,6 @@ const dealViewModel = async (context) => {
     return { refusal: "⚠️ The deal's opening step is not in this report." };
   }
 
-  // A witness receipt rides in checkpoint.witnesses, or (the default) in the
-  // cadence chain, x-cadence-witness/v0 (earlier bundles: cadence-witness/v0
-  // or x-deal-cadence-v0), that anchors this deal's checkpoint in the
-  // profile's cadence log. Any other witness state is shown as it is.
-  const exts = bundle.extensions || {};
-  const cadence = exts["x-cadence-witness/v0"] || exts["cadence-witness/v0"] || exts["x-deal-cadence-v0"] || {};
-  const anchored = cadence.state === "witnessed" ? (cadence.cadence || {}).witnesses || [] : [];
-  const witnesses = ((bundle.checkpoint || {}).witnesses || []).concat(anchored).filter((w) => w && typeof w.ts_url === "string");
-  let witness = { kind: "none" };
-  if (witnesses.length > 0) {
-    let host = witnesses[0].ts_url;
-    try {
-      host = new URL(host).host || host;
-    } catch (e) {
-      // not a URL: show it as written
-    }
-    // An earlier checkpoint that already held every step (only sealed
-    // reports after it) witnesses them all.
-    const k = Number(cadence.steps_witnessed);
-    const n = Number(cadence.steps);
-    // What those steps hold, in the user's terms, as capsulectl named them.
-    const wc = report.witness_coverage || {};
-    witness = {
-      kind: "witnessed",
-      at: typeof cadence.checkpoint_at === "string" ? cadence.checkpoint_at : "",
-      witness: host,
-      cut: typeof cadence.checkpoint_at === "string" && cadence.checkpoint_at ? `cut at ${cadence.checkpoint_at} ` : "",
-      part: cadence.state === "witnessed" && cadence.extent === "part" && k < n,
-      k,
-      n,
-      coverage:
-        (typeof wc.witnessed_acts === "string" && wc.witnessed_acts ? `Witnessed, steps 1 to ${k}: ${wc.witnessed_acts}. ` : "") +
-        (typeof wc.pending_acts === "string" && wc.pending_acts ? `Witness pending, steps ${k + 1} to ${n}: ${wc.pending_acts}. ` : ""),
-    };
-  } else if (cadence.state === "scheduled") {
-    witness = { kind: "scheduled", every: typeof cadence.cadence === "string" && cadence.cadence ? ` (${cadence.cadence})` : "" };
-  } else if (cadence.state === "pending") {
-    witness = { kind: "pending", consent: cadence.reason === "network_consent_needed" && typeof cadence.text === "string" ? cadence.text : undefined };
-  }
-
   // Which build sealed the steps, read from the records this page verified
   // (not from the summary), compared with the build that made this page.
   // Both are already in this file: nothing is fetched to do it.
@@ -14415,47 +14375,6 @@ const dealViewModel = async (context) => {
     const name = p && typeof p.version === "string" ? `${p.name || "capsulectl"} ${p.version} (${p.commit || "unknown"})` : "an earlier capsulectl that did not record its version";
     if (!builds.some((b) => b.name === name)) builds.push({ name, version: p && p.version });
   });
-
-  // Which checks this page ran and which it left to `capsulectl verify`,
-  // read from what the page's verification recorded and what the file
-  // carries; never assumed. The page recomputes each record's digest, its
-  // membership and the range proof, matches opened words against their
-  // sealed digests, checks a countersignature's signature under the key it
-  // names, and checks the agent's signature only on the records it cites as
-  // signers (a Close and the records that acknowledge or rebut it), and, for a
-  // standalone report (capsule-cli#294), every step's. Otherwise it has no
-  // verifier for the records' own signatures in general, a witness receipt or
-  // a consistency proof, and it passes a bundle whose checkpoint signature it
-  // could not check, recording checkpoint_unverified. A viewer with no
-  // Ed25519 (no WebCrypto outside a secure context) checks no signature, so
-  // the countersignatures and the cited signers are then left to
-  // `capsulectl verify` too.
-  const v = context.verification;
-  const checks = { page: [], cli: [] };
-  const signatures = EvidenceGraph.ed25519Available() ? checks.page : checks.cli;
-  if (Object.keys(v.capsuleResults).length > 0) checks.page.push("digests");
-  if (v.perRecordMembership.status === "pass") checks.page.push("membership");
-  if (v.intervalCoverage.status === "pass") checks.page.push("range");
-  if (v.disclosures.some((d) => d.status === "disclosure_match")) checks.page.push("disclosures");
-  if (v.countersignatures.length > 0) signatures.push("countersignatures");
-  const citesSigners = context.records.some((r) => {
-    const header = r && payload(r.capsule_id);
-    return (
-      header && Array.isArray(header.links) && header.links.some((l) => l && (l.type === "acknowledges" || l.type === "rebuts"))
-    );
-  });
-  if (citesSigners) signatures.push("cited-signers");
-  const checkpoint = bundle.checkpoint || {};
-  if (typeof checkpoint.cose === "string" && checkpoint.cose) {
-    const unchecked = [v.perRecordMembership, v.intervalCoverage].some((c) => (c.findings || []).includes("checkpoint_unverified"));
-    (unchecked ? checks.cli : checks.page).push("checkpoint-signature");
-  }
-  // A standalone report's checks verified every step's envelope here
-  // (dealStandaloneReport), so the steps' signatures were checked by this page.
-  if (standalone !== undefined) checks.page.push("producer-signatures");
-  else if (context.records.some((r) => r && typeof r.signature === "string" && r.signature)) checks.cli.push("producer-signatures");
-  if (witnesses.length > 0) checks.cli.push("witness-receipt");
-  if (cadence.earlier && typeof cadence.earlier === "object") checks.cli.push("consistency");
 
   // Each statement's class, as sealed with it (undefined when its sealed step
   // holds no such claim).
@@ -14475,8 +14394,6 @@ const dealViewModel = async (context) => {
     demo: !!(base && base.body && base.body.demo),
     matched,
     recorded: [...context.recordIndex.keys()],
-    witness,
-    checks,
     builds,
     claimClasses,
   };
@@ -14507,7 +14424,6 @@ const DEAL_VIEW_CSS = `#deal { --deal-warn: #9a3b00; --deal-ok: #1d6b35; line-he
 #deal .deal-rung { font-weight: 600; margin: 0.2rem 0; }
 #deal .deal-scope { font-weight: 600; margin: 0.2rem 0 0.6rem; }
 #deal .deal-claims { border: none; padding: 0; }
-#deal .deal-verify { background: transparent; border: 1px solid var(--aac-line); border-radius: 4px; padding: 6px 8px; overflow-x: auto; font-size: 0.85rem; user-select: all; }
 `;
 
 const dealViewRender = (model, regions) => {
@@ -14535,9 +14451,9 @@ const dealViewRender = (model, regions) => {
   const recorded = new Set(model.recorded);
   const byId = new Map((report.steps || []).map((s) => [s.capsule_id, s]));
 
-  // The header, on the face of every copy: the scope, the assurance rung read
-  // from what the file itself carries, what the "did" part rests on, what
-  // the receipt does not claim, and the command that checks it.
+  // The header, on the face of every copy: the scope, the countersign line,
+  // what the "did" part rests on and what the receipt does not claim. What
+  // was verified is the core's to say, in its section below (capsule-cli#341).
   const header = el("section", undefined, "deal-assurance");
   // What the deal's text rests on, said first, on every copy: sealed with
   // the page and checked unchanged, or (a bundle written before reports were
@@ -14565,34 +14481,6 @@ const dealViewRender = (model, regions) => {
     header.append(unchecked);
   }
   header.append(el("p", report.scope || "This receipt covers this one deal. It is not a record of everything the agent did.", "deal-scope"));
-  // The witness state, as buildModel read it: this page does not check a
-  // receipt (capsulectl verify does, against a witness directory the reader
-  // chooses), and says so.
-  const w = model.witness;
-  if (w.kind === "witnessed") {
-    header.append(
-      el(
-        "p",
-        w.part
-          ? `Witnessed in part: ${w.witness}, an independent log, signed a receipt for this deal's checkpoint, ${w.cut}at a cadence tick, covering steps 1 to ${w.k} of ${w.n}: those existed, unchanged, by then. Steps ${w.k + 1} to ${w.n} are sealed by my agent on this device only, witness pending. ${w.coverage}It does not confirm what the agent did.`
-          : `Witnessed: ${w.witness}, an independent log, signed a receipt for this deal's checkpoint, ${w.cut}at a cadence tick after the deal's steps: the record existed, unchanged, by then. It does not confirm what the agent did.`,
-        "deal-rung",
-      ),
-      el(
-        "p",
-        "The receipt is in this file; this page does not check it. Check it with " +
-          "capsulectl verify --bundle FILE --witness-directory DIRECTORY.json, using a witness directory you trust.",
-        "deal-note",
-      ),
-    );
-  } else if (w.kind === "scheduled") {
-    header.append(el("p", `Sealed by my agent, witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's cadence${w.every}, and only then can it be witnessed. Until then it is sealed on this device only.`, "deal-rung"));
-  } else if (w.kind === "pending") {
-    header.append(el("p", "Sealed by my agent, witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet; it is retried at every tick.", "deal-rung"));
-    if (typeof w.consent === "string") header.append(el("p", `Witness ${w.consent}`, "deal-note"));
-  } else {
-    header.append(el("p", "Sealed by my agent: no witness receipt is in this report.", "deal-rung"));
-  }
   // The countersign rung, as capsulectl checked it when it wrote this page
   // (a page cannot resolve a signer against a directory): "Not
   // countersigned" unless the bundle carried a countersignature that
@@ -14618,77 +14506,48 @@ const dealViewRender = (model, regions) => {
   ].forEach((t) => claims.append(el("li", t)));
   notClaimed.append(claims);
   header.append(notClaimed);
-  // A second opinion without trusting this page or installing anything: a
-  // verifier that checks a dropped file in the reader's own browser.
-  // Which checks ran here and which only `capsulectl verify` runs, as
-  // buildModel read them: a check this page did not run is never called
-  // checked here.
-  const words = {
-    digests: "Each record's contents match the fingerprint it was sealed with.",
-    membership: "Each record sits at its place in this deal's log.",
-    range: "The log's range proof holds: no record is missing from the stretch this file covers.",
-    disclosures: "Each opened step's words match what was sealed.",
-    countersignatures: {
-      page: "Each countersignature is a valid signature by the key it names (the details below show whose key, if known).",
-      cli: "Each countersignature's signature. This viewer cannot check signatures, so it is not checked here.",
-    },
-    "cited-signers": {
-      page: "The agent's signature on the records the details below cite as signers, each marked there as verified or not. Not the signature on every record.",
-      cli: "The agent's signature on the records the details below cite as signers. This viewer cannot check signatures, so it is not checked here.",
-    },
-    "checkpoint-signature": {
-      page: "The signature on the log's checkpoint.",
-      cli: "The signature on the log's checkpoint. This page cannot check it, and it shows the bundle as passing without it.",
-    },
-    "producer-signatures": "The agent's signature on every record.",
-    "witness-receipt": "The witness's receipt.",
-    consistency: "That the log only grew, and nothing in it changed, since its earlier checkpoint.",
-  };
-  const checkList = (ids, which) => {
-    const list = el("ul", undefined, "deal-checks");
-    list.dataset.checks = which;
-    ids.forEach((id) => {
-      const li = el("li", typeof words[id] === "string" ? words[id] : words[id][which]);
-      li.dataset.check = id;
-      list.append(li);
-    });
-    return list;
-  };
-  header.append(el("h3", "Checked on this page"), checkList(model.checks.page, "page"));
-  if (model.checks.cli.length > 0) {
-    header.append(el("h3", "Checked only by capsulectl verify"), checkList(model.checks.cli, "cli"));
-  }
-  header.append(el("p", "Run, with only this file and capsulectl:", "deal-note"));
-  const command = (report.verify_command || "capsulectl verify --bundle receipt.html") + (model.checks.cli.includes("witness-receipt") ? " --witness-directory DIRECTORY.json" : "");
-  header.append(el("pre", command, "deal-verify"));
-  if (model.checks.cli.includes("witness-receipt")) {
-    header.append(el("p", "DIRECTORY.json is a witness directory you trust: the command checks the receipt against it.", "deal-note"));
-  }
-  header.append(
-    el(
-      "p",
-      "None of these checks says who the agent or its user is, or that this file is the latest copy of the deal. " +
-        "If you would rather not take this page's word for the first list, open verify.agentactioncapsule.org and drop this file in.",
-      "deal-note",
-    ),
-  );
   if (shared) {
     const who = report.audience === "counterparty" ? "the other party" : "an adjudicator";
     header.append(el("p", `A shared copy for ${who}. Left out of this copy: ${(report.withheld || []).join(", ")}.`, "deal-note"));
   }
 
   const recordOk = (id) => recorded.has(id);
+  // Today as the reader's own calendar has it (YYYY-MM-DD, to compare with
+  // the report's dates).
+  const localDay = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  // A YYYY-MM-DD date as a reader says it ("Oct 22, 2026").
+  const readDay = (ymd) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString(undefined, { dateStyle: "medium" }) : ymd;
+  };
+  // Times as the reader's own clock shows them (capsule-cli#341); a value
+  // that is not a time is shown as written.
+  const local = (at) => {
+    const t = Date.parse(at);
+    return Number.isNaN(t) ? at : new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  };
+  // In "What the agent did", each step is listed once, under the first item
+  // read from it: an approval is the check's, not again the act's
+  // (capsule-cli#341). The other sections keep every step they cite.
+  let listed;
   const steps = (ids) => {
     const list = el("ol", undefined, "deal-steps");
     ids.forEach((id) => {
+      if (listed) {
+        if (listed.has(id)) return;
+        listed.add(id);
+      }
       const step = byId.get(id);
       const li = el("li");
       if (step && matched.has(id)) {
-        li.append(el("span", `${step.at} · `, "deal-at"), el("span", step.line));
+        li.append(el("span", `${local(step.at)} · `, "deal-at"), el("span", step.line));
       } else if (shared && step && step.withheld && recordOk(id)) {
         // A withheld step: its record and its place in the log verified;
         // its contents are not in this copy.
-        li.append(el("span", `${step.at} · `, "deal-at"), el("span", step.line), el("span", " · contents withheld", "deal-at"));
+        li.append(el("span", `${local(step.at)} · `, "deal-at"), el("span", step.line), el("span", " · contents withheld", "deal-at"));
       } else {
         li.append(el("span", "step not verified in this report "), el("code", id));
       }
@@ -14696,30 +14555,27 @@ const dealViewRender = (model, regions) => {
     });
     return list;
   };
-  const item = (text, ids, cls) => {
+  // An item's own step (an act, a close) is the item: its line would say
+  // the same thing again, so it is checked but not listed.
+  const item = (text, ids, cls, self) => {
     const d = el("details", undefined, cls);
+    if (typeof self === "string" && self) {
+      const step = byId.get(self);
+      const withheld = shared && step && step.withheld && recordOk(self);
+      if (!matched.has(self) && !withheld) text += " · step not verified in this report";
+      else if (withheld) text += " · contents withheld";
+      if (listed) listed.add(self);
+      d.dataset.self = self;
+    }
     d.append(el("summary", text), steps(ids));
     return d;
   };
 
   if (model.demo) host.append(el("span", "DEMO", "deal-demo"));
-  host.append(el("h1", "Deal report"));
-  // What the witness covers, first, in one line: from the witness block
-  // only, never more than it covers. The receipt and what it does not prove
-  // are in the header below.
-  const w0 = model.witness;
-  const at = w0.at ? ` at ${w0.at}` : "";
-  const witnessed =
-    w0.kind !== "witnessed"
-      ? w0.kind === "scheduled" || w0.kind === "pending"
-        ? "Not witnessed yet: witness receipt pending the next tick."
-        : "Not witnessed."
-      : w0.part
-        ? `Witnessed through step ${w0.k} of ${w0.n}${at} (receipt attached); later steps: witness receipt pending the next tick.`
-        : `Witnessed through the last step this copy holds${at} (receipt attached).`;
-  const line = el("p", witnessed, "deal-rung");
-  line.dataset.witness = w0.kind === "witnessed" ? (w0.part ? "part" : "all") : w0.kind;
-  host.append(line);
+  // The page's words come from the wording pack chat speaks with, when the
+  // page carries one (capsulectlDealPage.words).
+  const words = (page && page.words) || {};
+  host.append(el("h1", typeof words["report.title"] === "string" ? words["report.title"] : "Deal report"));
 
   // Which build sealed the steps, read from the records this page verified
   // (not from the summary), compared with the build that made this page.
@@ -14769,7 +14625,9 @@ const dealViewRender = (model, regions) => {
   host.append(el("h2", "What the agent did"));
   const did = report.did || [];
   if (did.length === 0) host.append(el("p", "Nothing yet.", "deal-note"));
-  did.forEach((i) => host.append(item(typeof i.at === "string" && i.at ? `${i.at} · ${i.text}` : i.text, i.steps)));
+  listed = new Set();
+  did.forEach((i) => host.append(item(typeof i.at === "string" && i.at ? `${local(i.at)} · ${i.text}` : i.text, i.steps, undefined, i.self)));
+  listed = undefined;
   // What the sealed acts moved, by direction: a pay and its reversal net to zero.
   if (report.money && typeof report.money.text === "string") host.append(el("p", report.money.text));
 
@@ -14783,7 +14641,7 @@ const dealViewRender = (model, regions) => {
     authority.forEach((b) => {
       host.append(el("h3", `${b.covered ? "" : "⚠️ "}${b.action}`));
       (b.layers || []).forEach((l) => {
-        const line = item(`${l.at} · ${l.text}`, [l.step], b.covered || l.layer !== "action" ? undefined : "deal-flag");
+        const line = item(`${local(l.at)} · ${l.text}`, [l.step], b.covered || l.layer !== "action" ? undefined : "deal-flag");
         if (typeof l.note === "string" && l.note) line.append(el("p", l.note, "deal-note"));
         host.append(line);
       });
@@ -14798,18 +14656,18 @@ const dealViewRender = (model, regions) => {
   const life = report.lifecycle;
   if (life && typeof life.text === "string") {
     host.append(el("h2", "Where this deal stands"), el("p", life.text));
-    (life.later || []).forEach((l) => host.append(item(`${l.at} · confirms the close: ${l.text}`, [l.capsule_id])));
-    host.append(el("p", `${life.may_change} (as of ${life.as_of})`, "deal-note"));
+    (life.later || []).forEach((l) => host.append(item(`${local(l.at)} · confirms the close: ${l.text}`, [l.capsule_id])));
+    host.append(el("p", `${life.may_change} (as of ${local(life.as_of)})`, "deal-note"));
     // A report off the deal's log (capsule-cli#294) states the deal as of
     // its checkpoint, the deal's last step. Where it stands today, the page
     // works out from the viewer's clock, apart, and says so: it is not part
     // of the report.
     if (model.standalone) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDay();
       const due = life.open && typeof life.open.expect_close_by === "string" ? life.open.expect_close_by : "";
-      const passed = life.state === "open" && due !== "" && due < today ? ` The expected close, ${due}, has passed as of today.` : "";
-      host.append(el("p", `This report states the deal as of its checkpoint at ${life.as_of} (the producer's time); whether a witness saw that checkpoint is checked by capsulectl verify, not here.`, "deal-note"));
-      host.append(el("p", `Not part of the report, worked out by this page when you opened it: today is ${today}.${passed}`, "deal-note"));
+      const passed = life.state === "open" && due !== "" && due < today ? ` The expected close, ${readDay(due)}, has passed as of today.` : "";
+      host.append(el("p", `This report states the deal as of its checkpoint at ${local(life.as_of)} (the producer's time); whether a witness saw that checkpoint is checked by capsulectl verify, not here.`, "deal-note"));
+      host.append(el("p", `Not part of the report, worked out by this page when you opened it: today is ${readDay(today)}.${passed}`, "deal-note"));
     }
   }
 
@@ -14825,7 +14683,7 @@ const dealViewRender = (model, regions) => {
   told.forEach((t) => {
     const flagged = t.authority === "none";
     const fields = (t.fields || []).map((f) => (typeof f.value === "string" ? `${f.label}: ${f.value}` : f.label)).join("; ");
-    host.append(item(`${flagged ? "⚠️ " : ""}${t.text} · ${t.at} · ${t.authority_text}${shared ? "" : ` (${fields})`}`, t.steps, flagged ? "deal-flag" : undefined));
+    host.append(item(`${flagged ? "⚠️ " : ""}${t.text} · ${local(t.at)} · ${t.authority_text}${shared ? "" : ` (${fields})`}`, t.steps, flagged ? "deal-flag" : undefined));
   });
   host.append(el("p", "Only what the agent sealed as shared is listed here; something it told without sealing it is not.", "deal-note"));
 
@@ -14872,9 +14730,9 @@ const dealViewRender = (model, regions) => {
       // A report off the deal's log is as of its checkpoint: a date that has
       // passed since, the page says so when opened, apart from the report.
       const date = d.cancel_by || d.due_by || "";
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDay();
       if (model.standalone && live && date !== "" && date < today) {
-        li.append(el("span", ` Not part of the report, worked out by this page when you opened it: this date has passed as of today, ${today}.`, "deal-note"));
+        li.append(el("span", ` Not part of the report, worked out by this page when you opened it: this date has passed as of today, ${readDay(today)}.`, "deal-note"));
       }
       list.append(li);
     });
@@ -14954,7 +14812,7 @@ const dealViewRender = (model, regions) => {
   host.append(
     el(
       "p",
-      "This page checked each step's sealed record and its place in this deal's log; the lists above say what it did not check. " +
+      "This page checked each step's sealed record and its place in this deal's log; the verification below says what was and was not checked. " +
         "The records carry fingerprints, not names or numbers; the words shown come from this device. " +
         (shared ? "Steps marked contents withheld are proven present and unchanged; what they say is not in this copy. " : "") +
         "The seal key is on the agent's machine, so this shows the record was not changed after it was made, not who made it. " +
@@ -14965,14 +14823,14 @@ const dealViewRender = (model, regions) => {
 };
 
 EvidenceGraph.registerPresentation({
-  manifest: {"spec_version": "aac.presentation-manifest/v0", "id": "capsulectl.deal-view/v0", "presentation_api": "aac.presentation-api/v0", "runtime_min": "0.1.0", "trust_class": "trusted-executable", "requires": {"bundle_kind": "evidence-bundle/v2", "extensions": {"required": ["x-deal-v0"]}}, "forbids": {"extensions": ["x-history-selection/v0"], "profiles": ["spec_version:report/v1", "result_version:evidence-result-v0", "spec_version:evaluation-summary/v1"]}, "audiences": ["*"], "formats": ["html"], "fallback": false, "priority": 1, "executable": {"carrier": "module-slot", "script_sha256": "0000000000000000000000000000000000000000000000000000000000000000", "style_sha256": ["033433c0f3b97d682e7b81a8309dd868a96b0ea91f18997b33e097686e7e74da"]}},
+  manifest: {"spec_version": "aac.presentation-manifest/v0", "id": "capsulectl.deal-view/v0", "presentation_api": "aac.presentation-api/v0", "runtime_min": "0.1.0", "trust_class": "trusted-executable", "requires": {"bundle_kind": "evidence-bundle/v2", "extensions": {"required": ["x-deal-v0"]}}, "forbids": {"extensions": ["x-history-selection/v0"], "profiles": ["spec_version:report/v1", "result_version:evidence-result-v0", "spec_version:evaluation-summary/v1"]}, "audiences": ["*"], "formats": ["html"], "fallback": false, "priority": 1, "executable": {"carrier": "module-slot", "script_sha256": "0000000000000000000000000000000000000000000000000000000000000000", "style_sha256": ["a3c7fcada4ac7c37b2c4816960602cd45af2c0afa18e9a50f036fa636d8ddb98"]}},
   canRender: dealViewVerified,
   buildModel: dealViewModel,
   render: dealViewRender,
 });
 </script>
     <!-- prettier-ignore -->
-    <script>globalThis.capsulectlDealPage = Object.freeze({"countersign":{"finding":"not_countersigned","text":"Not countersigned: no other party has signed this record. It stands on the agent's own seal and any witness receipt above."},"openings":{"asked":true,"representations":[true,true]},"verify_command":"capsulectl verify --bundle receipt.html"});
+    <script>globalThis.capsulectlDealPage = Object.freeze({"countersign":{"finding":"not_countersigned","text":"Not countersigned: no other party has signed this record. It stands on the agent's own seal and any witness receipt this file carries."},"openings":{"asked":true,"representations":[true,true]},"verify_command":"capsulectl verify --bundle receipt.html","words":{"report.title":"Deal report"}});
 (async () => {
   const app = document.getElementById("app");
   if (EvidenceGraph.digestCapability() === "none") {

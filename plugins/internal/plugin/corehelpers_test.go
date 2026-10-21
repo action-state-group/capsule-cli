@@ -291,7 +291,7 @@ func startHeadlessChrome(t *testing.T, binary string) *headlessChrome {
 	// event reports, such as a preconnect
 	// (TestPresentationChromeSeesExternalRequests checks both). Each page's
 	// requests are checked as well (see open).
-	cmd := exec.Command(binary, "--headless=new", "--remote-debugging-pipe", "--no-sandbox",
+	cmd := exec.Command(binary, "--headless=new", "--remote-debugging-pipe", "--no-sandbox", "--lang=en-US",
 		"--disable-gpu", "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
 		"--host-resolver-rules=MAP * ~NOTFOUND", "--disable-background-networking",
 		"--disable-component-update", "--disable-sync",
@@ -301,6 +301,9 @@ func startHeadlessChrome(t *testing.T, binary string) *headlessChrome {
 		"--use-mock-keychain", "--password-store=basic",
 		"--user-data-dir="+profile, "about:blank")
 	cmd.ExtraFiles = []*os.File{toChrome, fromChrome}
+	// The deal page shows local times: the goldens are taken in UTC, in
+	// en-US, wherever the test runs.
+	cmd.Env = append(os.Environ(), "TZ=UTC", "LANG=en_US.UTF-8")
 	chromeProcessGroup(cmd)
 	require.NoError(t, cmd.Start())
 	require.NoError(t, toChrome.Close())

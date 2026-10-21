@@ -113,7 +113,7 @@ func TestReceiptPutsFactsFirst(t *testing.T) {
 	raw, err := os.ReadFile(email)
 	require.NoError(t, err)
 	text := string(raw)
-	did, sealed := strings.Index(text, "What the agent did:"), strings.Index(text, "Sealed by my agent")
+	did, sealed := strings.Index(text, "What the agent did:"), strings.Index(text, "The attached page checks itself")
 	require.Greater(t, did, 0)
 	require.Greater(t, sealed, 0)
 	assert.Less(t, did, sealed, "what the agent did comes before the assurance")

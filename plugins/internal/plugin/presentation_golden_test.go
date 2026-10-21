@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -239,7 +240,7 @@ func rerenderPresentationPage(t *testing.T, dir string, meta presentationMeta, b
 		}
 		return emitter.EmitEvidenceGraphHTML(bundle, cli.EvidenceGraphIIFE)
 	case "deal-report":
-		return dealReportHTML(bundle, dealNotCountersigned(), dealVerifyCommand(""))
+		return dealReportHTML(bundle, dealNotCountersigned(), dealVerifyCommand(""), cli.BuiltinWording())
 	case "report-build":
 		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 		out := filepath.Join(t.TempDir(), "page.html")
@@ -314,10 +315,17 @@ func sameViewer(page []byte) bool {
 	return strings.Contains(string(page), string(cli.EvidenceGraphIIFE)) && hex.EncodeToString(sum[:]) == cli.EvidenceGraphIIFEDigest
 }
 
+// openedToday is what a page works out from the clock it is opened on
+// ("Not part of the report, …: today is …"): it changes every day, so the
+// goldens compare it as a placeholder.
+var openedToday = regexp.MustCompile(`(worked out by this page when you opened it: )[^.]*\.( The expected close, [^,]+, [^,]+, has passed as of today\.)?|(this date has passed as of today, )[^.]*\.`)
+
 func assertSameWords(t *testing.T, want, got []string) {
 	t.Helper()
-	w := strings.Fields(strings.Join(want, " "))
-	g := strings.Fields(strings.Join(got, " "))
+	norm := func(text []string) []string {
+		return strings.Fields(openedToday.ReplaceAllString(strings.Join(text, " "), "${1}${3}[today]."))
+	}
+	w, g := norm(want), norm(got)
 	for i := 0; i < len(w) && i < len(g); i++ {
 		if w[i] != g[i] {
 			lo := max(0, i-12)
@@ -343,4 +351,12 @@ func writeSnapshotFile(t *testing.T, path string, value any) {
 	raw, err := json.MarshalIndent(value, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, append(raw, '\n'), 0o644))
+}
+
+// What a page works out from the day it is opened compares equal on any
+// day, so a golden taken today still holds tomorrow.
+func TestTheGoldensIgnoreTheDayAPageIsOpened(t *testing.T) {
+	a := []string{"Not part of the report, worked out by this page when you opened it: today is Oct 21, 2026. The expected close, Oct 20, 2026, has passed as of today.", "x this date has passed as of today, Oct 21, 2026. y"}
+	b := []string{"Not part of the report, worked out by this page when you opened it: today is Nov 3, 2026.", "x this date has passed as of today, Nov 3, 2026. y"}
+	assertSameWords(t, a, b)
 }
