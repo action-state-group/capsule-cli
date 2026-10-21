@@ -76,7 +76,7 @@ keep the old ones.
   own, so the deal fixtures build again since the deal commands moved into
   the plugin.
 
-### Report pages take their runtime from capsule-viewer; a bundle may be up to 128 MiB
+### Report pages take their runtime from capsule-viewer; a bundle may be up to 256 MiB
 
 - **Changed (build).** The browser runtime every `report build`, `deal
   report --html` and `presentation build` page embeds
@@ -95,11 +95,11 @@ keep the old ones.
   text of every golden is unchanged; only the runtime's script hash in each
   page's CSP moves.
 - **Changed.** `report build`, `presentation build`, `presentation list` and
-  `verify --bundle` read a bundle of up to 128 MiB (`MaxBundleInput`), not
+  `verify --bundle` read a bundle of up to 256 MiB (`MaxBundleInput`), not
   12 MiB: a book's bundle carries its transcripts, and a week-per-book
-  bundle with them is 15-20 MB, a month 68-88 MB. The bound also caps
-  memory: a run peaks at 11-14 times the file. Every other input keeps the
-  12 MiB limit.
+  bundle with them is 15-20 MB, a month 106-142 MB. The bound also caps
+  memory: rendering the 142 MB month peaked at about 0.9 GB resident.
+  Every other input keeps the 12 MiB limit.
 
 ## v0.1.0-rc18
 

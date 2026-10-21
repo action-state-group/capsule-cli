@@ -278,7 +278,7 @@ func TestBundleInputBound(t *testing.T) {
 	require.NoError(t, e, "a bundle over MaxInput reads as a bundle")
 	assert.Len(t, raw, MaxInput+1)
 	_, e = ReadBundleInput(write("runaway.json", MaxBundleInput+1))
-	require.ErrorContains(t, e, "the input exceeds the 128 MiB size limit")
+	require.ErrorContains(t, e, "the input exceeds the 256 MiB size limit")
 	assert.True(t, errors.Is(e, ErrInput))
 }
 func TestReadOnlyFailsBeforeConnection(t *testing.T) {

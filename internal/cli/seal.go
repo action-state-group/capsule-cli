@@ -204,13 +204,14 @@ func (e *InputFileError) Error() string {
 // MaxBundleInput bounds an Evidence Bundle file read whole by the commands
 // that verify or render one (verify --bundle, presentation build and list,
 // book report build). It is larger than MaxInput because a book's bundle
-// carries its transcripts: measured on the tau2 launch books (2026-10-16),
-// one week is 3-20 MB and one month 41-88 MB, against MaxInput's 12 MiB.
-// 128 MiB holds the largest month measured with half again to spare, and a
-// week several times over. The bound is also a memory bound: `report build`
-// peaked at 11-14 times the file in resident memory (88 MB: about 1 GB), so
-// a 128 MiB bundle stays under about 2 GB, inside a 3 GiB job cap.
-const MaxBundleInput = 128 << 20
+// carries its transcripts: measured on the tau2 books, one week is 3-20 MB
+// and one month 106-142 MB (the September run, 2026-10-20: outcomes
+// 106,397,276 bytes, EU 141,641,817), against MaxInput's 12 MiB. 256 MiB
+// holds the largest month measured nearly twice over. The bound is also a
+// memory bound: rendering the 142 MB EU month with `report build` peaked at
+// about 0.9 GB resident (about 6.5 times the file), so a 256 MiB bundle
+// stays under about 2 GB, inside a 3 GiB job cap.
+const MaxBundleInput = 256 << 20
 
 func ReadInput(path string) ([]byte, error) { return readInputCapped(path, MaxInput) }
 
