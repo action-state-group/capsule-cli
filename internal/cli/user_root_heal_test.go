@@ -477,10 +477,16 @@ func TestDoctorRechecksAfterAConcurrentHeal(t *testing.T) {
 	assert.Contains(t, ur["error"], local)
 }
 
-// keepGoCaches pins the Go build and module caches to where they are under
-// the real HOME before a test HOME replaces it: the tests that run `go build`
-// would otherwise fill the test HOME with a fresh, read-only module cache.
+// keepGoCaches pins the Go build and module caches, and the go env file
+// (which may set GOMODCACHE or GOPROXY), to where they are under the real
+// HOME before a test HOME replaces it: the tests that run `go build` would
+// otherwise fill the test HOME with a fresh, read-only module cache.
 func keepGoCaches() {
+	if os.Getenv("GOENV") == "" {
+		if config, err := os.UserConfigDir(); err == nil {
+			os.Setenv("GOENV", filepath.Join(config, "go", "env"))
+		}
+	}
 	if os.Getenv("GOPATH") == "" {
 		if real, err := os.UserHomeDir(); err == nil {
 			os.Setenv("GOPATH", filepath.Join(real, "go"))
