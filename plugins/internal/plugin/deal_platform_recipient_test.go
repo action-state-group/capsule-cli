@@ -181,3 +181,32 @@ func TestDealPlatformTellingInTheSharedCopyAndTheList(t *testing.T) {
 		}
 	}
 }
+
+// In typed records a passing check covers a repeat telling to the deal's
+// counterparty too, and only the classes it named.
+func TestDealTypedPassingShareCoversTheCounterpartyAndItsClassesOnly(t *testing.T) {
+	dealFixture(t)
+	dealID := dealRun(t, "open", "--records", "typed", "--input", writeJSON(t, `{"type":"purchase","channel":"marketplace",
+		"intent":{"verbatim":"buy the bike","allowed":["pay","share_contact"]},
+		"who":{"name":"Garage Sale Gary","profile_id":"mkt:seller:4411"},
+		"terms":{"item":"bike","price_minor":12000,"currency":"USD"},
+		"recourse":{"rail":"cash","refundable":false}}`))["deal_id"].(string)
+	tell := func(classes, fields string) {
+		check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":[`+classes+`]}`))
+		if check["verdict"] == "pause" {
+			card := filepath.Join(t.TempDir(), "card.txt")
+			require.NoError(t, os.WriteFile(card, []byte(check["card"].(string)), 0o600))
+			dealRun(t, "note", "--deal", dealID, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok", "--shown-card", card)
+		}
+		require.Equal(t, true, dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t, `{"fields":[`+fields+`]}`))["approved"])
+	}
+	tell(`"email","phone"`, `{"class":"email","value":"`+homeEmail+`"},{"class":"phone","value":"+1 555 010 4477"}`)
+	// A repeat passes, and its own evaluation covers it.
+	tell(`"email"`, `{"class":"email","value":"`+homeEmail+`"}`)
+	// A class the passing check did not name is not covered by it.
+	check := dealRun(t, "check", "--deal", dealID, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["email"]}`))
+	require.Equal(t, "pass", check["verdict"])
+	sent := dealRun(t, "note", "--deal", dealID, "--kind", "disclosure", "--input", writeJSON(t, `{"fields":[{"class":"email","value":"`+homeEmail+`"},{"class":"phone","value":"+1 555 010 4477"}]}`))
+	assert.Equal(t, false, sent["approved"])
+	assert.Contains(t, sent["reason"], "the check did not name your phone")
+}
