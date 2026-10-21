@@ -167,13 +167,25 @@ func dealLocalData(events []sealedEvent) dealLocal {
 			who(&e.Open.Who)
 			terms(&e.Open.Terms)
 			terms(&e.Open.Intent.Asked)
-			text(e.Open.Intent.Verbatim)
+			text(e.Open.Intent.Verbatim, e.Open.Intent.DelegatedSaid)
 			for _, c := range e.Open.Claims {
 				text(c.Text)
 			}
 		case e.Intent != nil:
 			terms(&e.Intent.Asked)
-			text(e.Intent.Verbatim)
+			text(e.Intent.Verbatim, e.Intent.DelegatedSaid, e.Intent.Why)
+			who(e.Intent.Who)
+		case e.AgentMove != nil:
+			m := e.AgentMove
+			who(m.Who)
+			text(m.Where, m.Detail, m.Item)
+			if m.Move == moveRecommended { // a couldnt reason is a closed token, sealed in the clear
+				text(m.Reason)
+			}
+			for _, o := range m.Options {
+				who(o.Who)
+				text(o.Item)
+			}
 		case e.Message != nil:
 			who(e.Message.Who)
 			text(e.Message.Text)
@@ -969,9 +981,11 @@ func dealShareableIDs(events []sealedEvent, audience string) []string {
 	if audience != cli.DealAudienceCounterparty || len(events) == 0 || events[0].Event.Open == nil {
 		return nil
 	}
-	first := events[0].Event.Open.Who
+	// Only the leg the copy's counterparty is in: an earlier merchant's
+	// order ids are not this one's to see.
+	first, from := legWho(events), currentLegStart(events)
 	var out []string
-	for _, se := range events {
+	for _, se := range events[from:] {
 		if ev := se.Event.Evidence; ev != nil {
 			for _, id := range []string{ev.Email.shareableOrderID(first), ev.Email.shareableTracking(first)} {
 				if id != "" {
@@ -1213,7 +1227,11 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 	// amounts and dates, the order id and tracking number only where
 	// shareableOrderID and shareableTracking allow them
 	// (the counterparty's copy), and the items only for an adjudicator.
-	first := events[0].Event.Open.Who
+	first, from := legWho(events), currentLegStart(events)
+	inLeg := map[string]bool{}
+	for _, se := range events[from:] {
+		inLeg[se.CapsuleID] = true
+	}
 	var paid *dealAct
 	for _, se := range events {
 		if a := se.Event.Act; a != nil && a.Action == "pay" && a.AmountMinor != nil {
@@ -1244,7 +1262,7 @@ func dealShareExtension(events []sealedEvent, report dealReport, audience string
 		if paid != nil {
 			m["agent_reported"] = dealShareAct(*paid, currency)
 		}
-		if audience == cli.DealAudienceCounterparty && len(row.Steps) > 0 {
+		if audience == cli.DealAudienceCounterparty && len(row.Steps) > 0 && inLeg[row.Steps[0]] {
 			if e, ok := byID[row.Steps[0]]; ok && e.Evidence != nil {
 				if id := e.Evidence.Email.shareableOrderID(first); id != "" {
 					m["order_id"] = id

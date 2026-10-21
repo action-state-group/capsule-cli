@@ -162,7 +162,7 @@ func TestEveryDealCommandSpeaks(t *testing.T) {
 	assert.Equal(t, words("card.tag.ask")+"\nRaise your limit from $2 to $5?\n"+words("card.reply.words"), raise["say"])
 	limits := dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", raise["capsule_id"].(string), "--choice", "confirm_limits", "--said", "yes up to five")
 	assert.Equal(t, "Got it: your limit is now $5.", limits["say"])
-	within := dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"keep it at $5","max_total_minor":500,"allowed":["pay","share_contact"]}`))
+	within := dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"no more sharing, just pay","max_total_minor":500,"allowed":["pay"]}`))
 	assert.Equal(t, cli.VoiceSilent, within["voice"])
 
 	// A pass the share's card promised to ask about still asks

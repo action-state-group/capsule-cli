@@ -789,6 +789,7 @@ func (s *dealSession) fixStep(dealID string, events []sealedEvent, ev dealEvent)
 	ev.ActCounterparty = dealActCounterpartyVersion
 	ev.ThreadCounterparty = dealThreadCounterpartyVersion
 	ev.OfferClass = dealOfferClassVersion
+	ev.Journey = dealJourneyVersion
 	ev.Nonces = map[string]string{}
 	for name := range dealTexts(ev) {
 		nonce := make([]byte, 32)
@@ -1292,6 +1293,8 @@ func dealNoteCommand() *cobra.Command {
 		}
 		path, _ := c.Flags().GetString("input")
 		settlementKind := ""
+		// The intent note's derived move, once it is checked against the deal.
+		var journeyMove *dealIntentMove
 		switch {
 		case kind == noteKindPaymentReceived || kind == noteKindDelivered:
 			built, err := settlementNoteEvent(c, kind)
@@ -1303,6 +1306,22 @@ func dealNoteCommand() *cobra.Command {
 			ev.Evidence = &dealEvidence{About: "merchant confirmation email", Source: "merchant_email"}
 		case kind == "evidence" && wrapped != nil && path == "":
 			ev.Evidence = &dealEvidence{About: wrappedAbout(wrapped), Source: wrappedSource}
+		case slices.Contains(agentMoveKinds, kind):
+			raw, err := cli.ReadInput(path)
+			if err != nil {
+				return err
+			}
+			ev.AgentMove = &dealAgentMove{}
+			if err = cli.DecodeJSONAs("--input", raw, ev.AgentMove); err != nil {
+				return err
+			}
+			if ev.AgentMove.Move != "" {
+				return cli.InputError("the move is the note kind (--kind " + kind + "): leave move out of --input")
+			}
+			ev.AgentMove.Move, ev.Kind = kind, "agent_move"
+			if err = ev.AgentMove.validate(); err != nil {
+				return err
+			}
 		case slices.Contains([]string{"message", "claim", "evidence", "change", "intent", "act", "disclosure"}, kind):
 			raw, err := cli.ReadInput(path)
 			if err != nil {
@@ -1432,7 +1451,7 @@ func dealNoteCommand() *cobra.Command {
 			}
 			ev.Acceptance = a
 		default:
-			return cli.InputError("--kind must be message, claim, evidence, change, intent, approval, act, disclosure, platform_approval, acceptance, payment_received or delivered")
+			return cli.InputError("--kind must be message, claim, evidence, change, intent, approval, act, disclosure, platform_approval, acceptance, payment_received, delivered, searched, options, recommended, chose or couldnt")
 		}
 		if wrapped != nil {
 			ev.Evidence.Wrapped = wrapped
@@ -1522,6 +1541,24 @@ func dealNoteCommand() *cobra.Command {
 				if open.Sale != "" {
 					return cli.InputError("a sale's thread is under the sale's one task authority: its request and limits do not change per buyer")
 				}
+				if err := ev.Intent.validDelegation(); err != nil {
+					return err
+				}
+				if w := ev.Intent.Who; w != nil && *w == (dealWho{}) {
+					return cli.InputError("intent.who needs at least one identifying field")
+				}
+				state, err := foldDeal(events)
+				if err != nil {
+					return err
+				}
+				move, err := intentMove(state, *ev.Intent)
+				if err != nil {
+					return err
+				}
+				if ev.Intent.Why != "" && move.Move != moveSwitched && move.Move != moveRaised && !move.Proposed {
+					return cli.InputError("why is kept only on a switch or a raise, in the user's own words: this note is " + move.Move)
+				}
+				journeyMove = &move
 				for _, a := range ev.Intent.Allowed {
 					if !slices.Contains(dealPointsOfNoReturn[open.Type], a) {
 						return cli.InputError("intent.allowed names an action that is not a point of no return for this deal type: " + a)
@@ -1545,6 +1582,10 @@ func dealNoteCommand() *cobra.Command {
 				if verdict, _, ok := checkedCard(events, ev.Approval.Check); ok && dealRecordSet(dealEvent{}, events) == recordsTyped &&
 					ev.Approval.Approver == "user" && verdict.Event.Check.Verdict != "pass" && ev.Approval.ShownCard == "" {
 					return cli.InputError("in a typed deal the user's answer to a paused check is bound to the card it was given on: pass that card with --shown-card")
+				}
+			case "searched", "options", "recommended", "chose", "couldnt":
+				if err := checkAgentMove(events, ev.AgentMove); err != nil {
+					return err
 				}
 			case "acceptance":
 				if dealRecordSet(dealEvent{}, events) != recordsTyped {
@@ -1619,9 +1660,10 @@ func dealNoteCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				keys := disclosureRecipientKeys(*d, *open)
+				leg := legWho(events)
+				keys := disclosureRecipientKeys(*d, leg, open.Channel)
 				if first := firstTellings(events, d.AuthorizedBy, d.Fields, memory, keys); len(first) > 0 {
-					name := recipientName(open.Who)
+					name := recipientName(leg)
 					if d.Who != nil && namedRecipient(d.To) {
 						name = recipientName(*d.Who)
 					}
@@ -1655,6 +1697,10 @@ func dealNoteCommand() *cobra.Command {
 			out := stepOutput(dealID, se)
 			switch kind {
 			case "intent":
+				if journeyMove != nil {
+					out["move"] = journeyMove.Move
+					out["starts_leg"] = journeyMove.LegStart
+				}
 				// A note that asks for more than the limits in force is a
 				// proposal: sealed as written, applied only on the user's
 				// confirmation.
@@ -1921,7 +1967,23 @@ func dealCheckCommand() *cobra.Command {
 			if err := checkFee(snap.Action, snap.FeeMinor); err != nil {
 				return err
 			}
-			if err := checkAuthorizedMax(snap, open.Recourse.Rail); err != nil {
+			// One deal per errand: a check is about the leg in force, so it
+			// needs a counterparty, and a pay needs the way it is paid.
+			legState, err := foldDeal(events)
+			if err != nil {
+				return err
+			}
+			if !legState.leg && snap.Action != representAction {
+				return cli.InputError("no merchant is in play on this errand yet: seal the user's pick or switch (deal note --kind intent with who) or your choice under their delegation (deal note --kind chose with who) before checking")
+			}
+			rail := legState.recourse.Rail
+			if snap.Recourse != nil && snap.Recourse.Rail != "" {
+				rail = snap.Recourse.Rail
+			}
+			if snap.Action == "pay" && rail == "" {
+				return cli.InputError(`a pay check needs the way it is paid: "recourse": {"rail": ..., "refundable": ...}`)
+			}
+			if err := checkAuthorizedMax(snap, legState.recourse.Rail); err != nil {
 				return err
 			}
 			if err := normalizeTerms(snap.Terms); err != nil {
@@ -2154,8 +2216,8 @@ func dealCloseCommand() *cobra.Command {
 		if err = cli.DecodeJSONAs("--input", raw, &in); err != nil {
 			return err
 		}
-		if !slices.Contains([]string{"received", "pending", "not_received", "not_selected"}, in.Status) {
-			return cli.InputError("status must be received, pending, not_received or not_selected")
+		if !slices.Contains([]string{"received", "pending", "not_received", "not_selected", "called_off"}, in.Status) {
+			return cli.InputError("status must be received, pending, not_received, not_selected or called_off")
 		}
 		if err = normalizeTerms(in.Delivered); err != nil {
 			return err
@@ -2168,10 +2230,10 @@ func dealCloseCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if in.Status == "not_selected" {
+			if in.Status == "not_selected" || in.Status == "called_off" {
 				for _, se := range events {
 					if se.Event.Kind == "act" {
-						return cli.InputError("not_selected closes a deal where nothing was done, and this deal has an action on record: close it received or not_received")
+						return cli.InputError(in.Status + " closes a deal where nothing was done, and this deal has an action on record: close it received or not_received")
 					}
 				}
 			}
@@ -2289,6 +2351,10 @@ func dealReportCommand() *cobra.Command {
 				"deadlines":    dealDeadlines(events, cli.DealClock(), 2), "cancellations": dealCancellations(events), "lifecycle": buildDealLifecycle(events, cli.DealClock()), "trail": strings.Join(lines, "\n"),
 				"countersign": dealNotCountersigned(),
 			}
+			// The errand's moves in its fixed vocabulary, labelled from the
+			// profile's wording pack (capsule-cli#340).
+			pack, _ := cli.ActiveWording(s.p)
+			out["journey"] = dealJourney(events, pack)
 			if report.Money != nil {
 				out["money"] = report.Money
 			}

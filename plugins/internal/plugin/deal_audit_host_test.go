@@ -55,12 +55,16 @@ func auditHostRun(t *testing.T, args ...string) (map[string]any, error) {
 func TestDealProceduresEndInTheFinalReview(t *testing.T) {
 	for _, name := range []string{"Purchase", "Booking", "Signature", "Disclosure"} {
 		steps := procedureSteps(t, name)
-		review, act := -1, -1
+		review, act, open := -1, -1, -1
 		for i, step := range steps {
+			// One deal per errand (capsule-cli#340): the deal opens at the
+			// user's first ask, before the final review checks against it.
+			if strings.Contains(step, "`deal open`") && open == -1 {
+				open = i
+			}
 			if strings.HasPrefix(step, "**Final review:**") {
 				assert.Equal(t, -1, review, "%s has one final review", name)
 				review = i
-				assert.Contains(t, step, "`deal open`", name)
 				assert.Contains(t, step, "`deal check`", name)
 			}
 			if strings.Contains(step, "On `\"proceed\": true`") {
@@ -69,6 +73,8 @@ func TestDealProceduresEndInTheFinalReview(t *testing.T) {
 			}
 		}
 		require.NotEqual(t, -1, review, "%s has a final review step", name)
+		require.NotEqual(t, -1, open, "%s opens the deal", name)
+		assert.Less(t, open, review, "%s opens the deal before the final review", name)
 		require.NotEqual(t, -1, act, "%s has an acting step", name)
 		assert.Less(t, review, act, "%s reviews before it acts", name)
 	}
@@ -108,10 +114,11 @@ func TestDealRetailCheckoutFollowsTheProcedure(t *testing.T) {
 		switch {
 		case strings.HasPrefix(step, "Fill"):
 			host("c2", "t-browser", "fill_form", "other", "")
-		case strings.HasPrefix(step, "**Final review:**"):
-			require.Contains(t, step, "`deal open`")
+		case strings.Contains(step, "`deal open`") && dealID == "":
 			opened := dealRun(t, "open", "--input", filepath.Join(retailDemo, "open.json"))
 			dealID = opened["deal_id"].(string)
+		case strings.HasPrefix(step, "**Final review:**"):
+			require.NotEmpty(t, dealID, "the deal opened at the first ask")
 			require.Contains(t, step, "`deal check`")
 			check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(retailDemo, "check-pay.json"))
 			assert.Equal(t, "pass", check["verdict"], "a known merchant at the agreed price passes quietly")

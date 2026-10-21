@@ -43,6 +43,8 @@ func derivedCloseReason(status, outcome string) string {
 		return "awaiting_delivery"
 	case "not_selected":
 		return "not_selected"
+	case "called_off":
+		return "called_off"
 	}
 	return ""
 }
@@ -73,7 +75,7 @@ func settleCloseActorReason(in *dealCloseInput, outcome string) error {
 	}
 	if in.Actor == "" {
 		in.Actor = closeActorAgent
-		if in.Reason == "user_closed" {
+		if in.Reason == "user_closed" || in.Reason == "called_off" {
 			in.Actor = closeActorUser
 		}
 	}
@@ -82,6 +84,8 @@ func settleCloseActorReason(in *dealCloseInput, outcome string) error {
 		return cli.InputError("user_closed is the user's own close: its actor is user")
 	case in.Reason == "agent_could_not_complete" && in.Actor != closeActorAgent:
 		return cli.InputError("agent_could_not_complete is the agent's: its actor is agent")
+	case in.Reason == "called_off" && in.Actor != closeActorUser:
+		return cli.InputError("called_off is the user dropping the errand: its actor is user")
 	}
 	return nil
 }
@@ -98,6 +102,8 @@ func closeLine(c dealCloseResult) string {
 		return "You closed this deal"
 	case "agent_could_not_complete":
 		return "The agent could not complete this deal"
+	case "called_off":
+		return "You called off this errand"
 	}
 	why := map[string]string{
 		"completed":           "completed as agreed",

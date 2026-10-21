@@ -1004,7 +1004,7 @@ func dealVerifyEmailCommand() *cobra.Command {
 			}
 			out := map[string]any{"deal_id": dealID, "scope": emailScopeLine, "verified": ok, "emails": results}
 			cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
-				return verifyEmailLine(w, recipientName(events[0].Event.Open.Who), fromDomain, ok, signedBy)
+				return verifyEmailLine(w, recipientName(legWho(events)), fromDomain, ok, signedBy)
 			})
 			if err := cli.Output(c, out); err != nil {
 				return err

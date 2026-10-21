@@ -427,14 +427,26 @@ func gateSecrets(events []sealedEvent) (secrets, words, placeWords []string) {
 			whoValues(&e.Open.Who)
 			termValues(&e.Open.Terms)
 			termValues(&e.Open.Intent.Asked)
-			texts = append(texts, e.Open.Intent.Verbatim)
+			texts = append(texts, e.Open.Intent.Verbatim, e.Open.Intent.DelegatedSaid)
 			for _, c := range e.Open.Claims {
 				texts = append(texts, c.Text)
 			}
 		}
 		if e.Intent != nil {
 			termValues(&e.Intent.Asked)
-			texts = append(texts, e.Intent.Verbatim)
+			texts = append(texts, e.Intent.Verbatim, e.Intent.DelegatedSaid, e.Intent.Why)
+			whoValues(e.Intent.Who)
+		}
+		if m := e.AgentMove; m != nil {
+			whoValues(m.Who)
+			texts = append(texts, m.Where, m.Detail, m.Item)
+			if m.Move == moveRecommended { // a couldnt reason is a closed token, sealed in the clear
+				texts = append(texts, m.Reason)
+			}
+			for _, o := range m.Options {
+				whoValues(o.Who)
+				texts = append(texts, o.Item)
+			}
 		}
 		if e.Message != nil {
 			whoValues(e.Message.Who)

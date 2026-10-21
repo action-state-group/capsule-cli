@@ -10,22 +10,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/action-state-group/capsule-cli/internal/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// The same words again are not a change of what was asked; different words
-// are.
+// The same words again are not a change of what was asked. Since journey
+// records (capsule-cli#340) a note that changes nothing is refused: the
+// user's words go in a message. An intent sealed before them, said again,
+// still reads as said again.
 func TestRestatedIntentIsNotAChange(t *testing.T) {
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", filepath.Join(otterFixture, "open.json"))["deal_id"].(string)
 	opening := "buy me a sticker for less than 8 bucks about otters that is funny"
-	dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"`+opening+`"}`))
-	dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"the Otterly Chaos one"}`))
+	out, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"`+opening+`"}`))
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, out+err.Error(), "changes nothing the user asked")
+	dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"the Otterly Chaos one","asked":{"item":"Otterly Chaos"}}`))
 	trail := dealRun(t, "report", "--deal", id)["trail"].(string)
-	assert.Contains(t, trail, `you said again what you asked, unchanged: "`+opening+`"`)
 	assert.Contains(t, trail, `you changed what you asked: "the Otterly Chaos one"`)
 	assert.Equal(t, 1, strings.Count(trail, "you changed what you asked"))
+
+	legacy := []sealedEvent{
+		{CapsuleID: "c1", Event: dealEvent{Kind: "open", Open: &dealOpen{Intent: dealIntent{Verbatim: opening}}}},
+		{CapsuleID: "c2", Event: dealEvent{Kind: "intent", Intent: &dealIntent{Verbatim: opening}}},
+		{CapsuleID: "c3", Event: dealEvent{Kind: "intent", Intent: &dealIntent{Verbatim: "the Otterly Chaos one"}}},
+	}
+	assert.Equal(t, map[string]bool{"c2": true, "c3": false}, restatedIntents(legacy))
+	assert.Equal(t, `you said again what you asked, unchanged: "`+opening+`"`, trailLineIn(legacy, restatedIntents(legacy), 1))
 }
 
 // Two standing-intent cycles in the same words are told apart by when they

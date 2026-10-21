@@ -258,7 +258,7 @@ func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
 				}
 			}
 			if d := ev.Disclosure; ev.Kind == "disclosure" && d != nil && open != nil {
-				told.add(l.id, *d, *open, role)
+				told.addAt(l.id, *d, legWho(asOf[:i+1]), open.Channel, role)
 			}
 		}
 		if fc := finalClose(asOf); listing.Result == dealResultSold && b.contains(at[fc]) {
@@ -310,8 +310,15 @@ func newDealToldTally() *dealToldTally {
 	return t
 }
 
+// add tallies a disclosure made in a deal whose counterparty is the
+// opening's.
 func (t *dealToldTally) add(dealID string, d dealDisclosure, open dealOpen, role string) {
-	to := dealToldTo{keys: disclosureRecipientKeys(d, open), deal: dealID, role: dealRoleSeller}
+	t.addAt(dealID, d, open.Who, open.Channel, role)
+}
+
+// addAt tallies a disclosure made in the leg with the counterparty leg.
+func (t *dealToldTally) addAt(dealID string, d dealDisclosure, leg dealWho, channel, role string) {
+	to := dealToldTo{keys: disclosureRecipientKeys(d, leg, channel), deal: dealID, role: dealRoleSeller}
 	switch {
 	case namedRecipient(d.To):
 		to.deal, to.role = "", "other"

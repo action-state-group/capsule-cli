@@ -49,6 +49,12 @@ func dealSaleNewCommand() *cobra.Command {
 			return err
 		}
 		o.Who = dealWho{}
+		if o.Recourse.Rail == "" {
+			return cli.InputError("recourse needs the payment rail and whether it is refundable")
+		}
+		if len(o.Intent.Delegated) > 0 {
+			return cli.InputError("a sale delegates no choice: delegated goes on a buyer's errand")
+		}
 		if err = normalizeOpen(&o); err != nil {
 			return err
 		}

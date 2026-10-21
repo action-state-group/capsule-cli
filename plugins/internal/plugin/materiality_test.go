@@ -511,10 +511,12 @@ func shackleCheck(t *testing.T, quantity int, conditions string) map[string]any 
 
 // The install pins the built-in neutral predicate by name: a quantity of 1
 // the agent filled in does not pause the check, while a quantity of 2 or a
-// size it picked still does. With no predicate every pick pauses.
+// size it picked still does. With no predicate every pick pauses, but a
+// default (one of the item) is no pick at all (capsule-cli#340).
 func TestTheBuiltinNeutralPredicateLetsADefaultPickThrough(t *testing.T) {
 	materialityFixture(t)
-	assert.Equal(t, []string{"quantity"}, pausedOn(shackleCheck(t, 1, `{}`)), "no predicate: every pick pauses")
+	assert.Equal(t, []string{"quantity"}, pausedOn(shackleCheck(t, 2, `{}`)), "no predicate: every pick pauses")
+	assert.Empty(t, pausedOn(shackleCheck(t, 1, `{}`)), "a default is no pick")
 
 	materialityFixture(t, "--materiality", "builtin:neutral")
 	p, err := cli.LoadProfile("deal")

@@ -120,6 +120,19 @@ type dealIntent struct {
 	// keeps the list in force; any change applies only on the user's
 	// confirm_limits.
 	OrderedRepresentations *[]string `json:"ordered_representations,omitempty"`
+	// Delegated is what the user's own words hand the agent to choose
+	// (delegable: the item), with those words in DelegatedSaid, sealed as a
+	// commitment. A delegated item is never in asked.item; the agent's
+	// choice of it is an agent move (chose), not a pause. A note never
+	// widens it: adding to it is a proposal (confirm_limits); naming an
+	// item takes the item back.
+	Delegated     []string `json:"delegated,omitempty"`
+	DelegatedSaid string   `json:"delegated_said,omitempty"`
+	// Who is, on an intent note, the counterparty the user picked or
+	// switched to: it starts a leg (deal_journey.go). Why is the user's own
+	// reason, kept only on a switch or a raise. Neither is on the opening.
+	Who *dealWho `json:"who,omitempty"`
+	Why string   `json:"why,omitempty"`
 }
 
 type dealOpen struct {
@@ -324,9 +337,12 @@ func attributeProvenance(asked, proposed dealTerms) (yours, agents []cli.DealAtt
 		}
 		a := cli.DealAttribute{Field: field, Label: label, Value: value}
 		switch {
+		case strings.TrimSpace(mine) == "" && isDefaultPick(a):
+			// A default (isDefaultPick) is nobody's choice:
+			// not the agent's pick, and never a pause.
 		case strings.TrimSpace(mine) == "":
 			agents = append(agents, a)
-		case strings.EqualFold(strings.TrimSpace(mine), strings.TrimSpace(value)):
+		case strings.EqualFold(strings.TrimSpace(mine), strings.TrimSpace(value)), field == "place" && samePlace(mine, value):
 			yours = append(yours, a)
 		}
 	}
@@ -423,6 +439,8 @@ type dealLimitSet struct {
 	Allowed          []string `json:"allowed"`
 	// OrderedRepresentations is the intent's list, as in dealIntent.
 	OrderedRepresentations *[]string `json:"ordered_representations,omitempty"`
+	// Delegated is the intent's, as in dealIntent; absent when nothing is.
+	Delegated []string `json:"delegated,omitempty"`
 }
 
 // String is a version of the limits in plain words, for the trail.
@@ -444,7 +462,7 @@ func (l dealLimitSet) String() string {
 }
 
 func (i dealIntent) limits() dealLimitSet {
-	return dealLimitSet{MaxTotalMinor: i.MaxTotalMinor, MinTotalMinor: i.MinTotalMinor, BoundsCommitment: i.boundsCommit, Allowed: i.Allowed, OrderedRepresentations: i.OrderedRepresentations}
+	return dealLimitSet{MaxTotalMinor: i.MaxTotalMinor, MinTotalMinor: i.MinTotalMinor, BoundsCommitment: i.boundsCommit, Allowed: i.Allowed, OrderedRepresentations: i.OrderedRepresentations, Delegated: i.Delegated}
 }
 
 // proposedLimits is what an intent note asks for beyond the limits in force,
@@ -483,6 +501,13 @@ func proposedLimits(cur dealLimitSet, note dealIntent) (dealLimitSet, bool) {
 		more = true
 		list := slices.Clone(*note.OrderedRepresentations)
 		out.OrderedRepresentations = &list
+	}
+	// Handing the agent a choice the user has not handed it is more.
+	for _, d := range note.Delegated {
+		if !slices.Contains(out.Delegated, d) {
+			more = true
+			out.Delegated = append(slices.Clone(out.Delegated), d)
+		}
 	}
 	return out, more
 }
@@ -604,6 +629,12 @@ type dealEvent struct {
 	Close    *dealCloseResult `json:"close,omitempty"`
 	// Disclosure is something the agent told someone about the user.
 	Disclosure *dealDisclosure `json:"disclosure,omitempty"`
+	// AgentMove is one of the agent's moves on the errand (deal_journey.go).
+	AgentMove *dealAgentMove `json:"agent_move,omitempty"`
+	// Journey (dealJourneyVersion) marks a step sealed with the journey
+	// records, kept with the step like Producer: an intent sealed before it
+	// carries no move and folds as it did.
+	Journey string `json:"journey,omitempty"`
 	// TaskAuthority is the user's task authority as opened (typed records):
 	// sealed as its own task-authority/v0 step right after the baseline.
 	TaskAuthority *dealIntent `json:"task_authority,omitempty"`
@@ -792,8 +823,13 @@ func (o dealOpen) validate() error {
 	if err := o.Intent.validBounds(); err != nil {
 		return err
 	}
-	if o.Who == (dealWho{}) {
-		return cli.InputError("who needs at least one identifying field")
+	// At the first ask there may be no counterparty yet: the errand's first
+	// leg starts with the user's pick, the agent's choice, or a switch.
+	if err := o.Intent.validDelegation(); err != nil {
+		return err
+	}
+	if o.Intent.Who != nil || o.Intent.Why != "" {
+		return cli.InputError("intent.who and intent.why go on a later intent note, not the opening: the opening's counterparty is who")
 	}
 	for _, a := range o.Intent.Allowed {
 		if !slices.Contains(dealPointsOfNoReturn[o.Type], a) {
@@ -805,8 +841,10 @@ func (o dealOpen) validate() error {
 			return err
 		}
 	}
-	if o.Recourse.Rail == "" || o.Recourse.Refundable == nil {
-		return cli.InputError("recourse needs the payment rail and whether it is refundable")
+	// Opened at the first ask, the way to pay may not be known yet: both or
+	// neither.
+	if (o.Recourse.Rail == "") != (o.Recourse.Refundable == nil) {
+		return cli.InputError("recourse needs the payment rail and whether it is refundable (or, at the first ask, neither)")
 	}
 	return nil
 }
@@ -895,6 +933,18 @@ type dealState struct {
 	// promisedAsk is, on a pay, that an earlier card promised the user to
 	// ask again before paying (promisedPay).
 	promisedAsk bool
+	// leg is whether the errand has a counterparty yet, and legFirst that
+	// leg's first contact: the opening's counterparty, or the one a leg
+	// start named (deal_journey.go). route is the merchant in play for
+	// labelling the user's moves (the leg's, or the latest recommended or
+	// couldnt one), routeCouldnt whether the agent last could not go on
+	// with it, and options the latest shortlist shown.
+	leg          bool
+	legFirst     dealWho
+	route        dealWho
+	routeSet     bool
+	routeCouldnt bool
+	options      []dealOptionShown
 }
 
 func foldDeal(events []sealedEvent) (dealState, error) {
@@ -904,12 +954,21 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 	o := *events[0].Event.Open
 	o.Intent = withBoundsCommit(o.Intent, events[0].Event.Nonces)
 	s := dealState{open: o, intent: o.Intent, agreed: o.Terms, who: o.Who, terms: o.Terms, recourse: o.Recourse, agreedRecourse: o.Recourse, claims: slices.Clone(o.Claims), whoSource: map[string]string{}}
+	if o.Who != (dealWho{}) {
+		s.leg, s.legFirst, s.route, s.routeSet = true, o.Who, o.Who, true
+	}
 	var lastSnapshot *dealSnapshot
 	for _, se := range events[1:] {
 		e := se.Event
 		switch e.Kind {
 		case "intent":
+			if e.Journey != "" {
+				s.foldIntentJourney(withBoundsCommit(*e.Intent, se.Event.Nonces))
+				continue
+			}
 			s.intent = laterIntent(s.intent, withBoundsCommit(*e.Intent, se.Event.Nonces))
+		case "agent_move":
+			s.foldAgentMove(*e.AgentMove)
 		case "message":
 			s.messages = append(s.messages, *e.Message)
 			if e.Message.Who != nil && e.Message.From == "counterparty" {
@@ -950,6 +1009,12 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 					s.intent.boundsCommit = e.Approval.Limits.New.BoundsCommitment
 					s.intent.Allowed = slices.Clone(e.Approval.Limits.New.Allowed)
 					s.intent.OrderedRepresentations = e.Approval.Limits.New.OrderedRepresentations
+					if added := e.Approval.Limits.New.Delegated; len(added) > len(s.intent.Delegated) {
+						s.intent.Delegated = slices.Clone(added)
+						if note := proposingIntent(events, e.Approval.Check); note != nil {
+							s.intent.DelegatedSaid = note.DelegatedSaid
+						}
+					}
 				}
 				continue
 			}
@@ -1122,7 +1187,7 @@ func termFieldDiffs(ref, got dealTerms) []termField {
 	}
 	var out []termField
 	add := func(key, label, a, b string) {
-		if a != "" && b != "" && !strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b)) {
+		if a != "" && b != "" && !strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b)) && !(key == "place" && samePlace(a, b)) {
 			out = append(out, termField{key, label, a, b})
 		}
 	}
@@ -1321,7 +1386,7 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 			// The user's own words named this very purchase, the item and its
 			// price: the rule still asks, and says why this is an exception to
 			// it rather than skipping the ask.
-			if askedException(intent.Asked, proposed, *total) {
+			if askedException(intent.Asked, proposed, *total, field) {
 				text = fmt.Sprintf("Your rules normally ask above %s. You asked for this %s purchase specifically. Approve this exception?", limit, amount)
 			}
 			add("asked", "over_limit", field, text)
@@ -1342,8 +1407,10 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 		}
 	}
 
-	// 2. Same who? Always against first contact, never against a later change.
-	first := s.open.Who
+	// 2. Same who? Always against the leg's first contact, never against a
+	// later change: the user's switch starts a leg, the seller's change
+	// within it is compared.
+	first := s.legFirst
 	if first.Payee == "" {
 		first.Payee = first.Name
 	}
@@ -1475,8 +1542,10 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 // taken), and which field that is.
 func limitBound(proposed dealTerms, snap dealSnapshot) (*int64, string) {
 	total, field := proposed.PriceMinor, "price"
-	if total == nil {
-		total = snap.AmountMinor
+	// The amount charged binds when it is more than the price: tax and
+	// fees are in the amount, never hidden behind a lower price.
+	if a := snap.AmountMinor; a != nil && (total == nil || *a > *total) {
+		total, field = a, "amount_minor"
 	}
 	if m := snap.AuthorizedMaxMinor; m != nil && (total == nil || *m > *total) {
 		total, field = m, "authorized_max_minor"
@@ -1486,7 +1555,12 @@ func limitBound(proposed dealTerms, snap dealSnapshot) (*int64, string) {
 
 // askedException is a purchase over the limit that the user's own words
 // named, the item and its price: the rule still asks, as an exception.
-func askedException(asked, proposed dealTerms, total int64) bool {
+func askedException(asked, proposed dealTerms, total int64, field string) bool {
+	// The user named the price; tax charged on top of it (the amount) is
+	// still the purchase they named. A larger authorized maximum is not.
+	if field == "amount_minor" && proposed.PriceMinor != nil {
+		total = *proposed.PriceMinor
+	}
 	return asked.Item != "" && asked.PriceMinor != nil && *asked.PriceMinor == total &&
 		strings.EqualFold(strings.TrimSpace(asked.Item), strings.TrimSpace(proposed.Item))
 }
@@ -1515,7 +1589,7 @@ func settleCheck(r *dealCheckResult, s dealState) {
 	}
 	// Calling back is for a payee or contact that changed since first
 	// contact (a STOP card), on the number from first contact.
-	if s.open.Who.Phone != "" && slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == "payee_or_contact_changed" }) {
+	if s.legFirst.Phone != "" && slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == "payee_or_contact_changed" }) {
 		r.Options = append(r.Options, dealOption{ID: "verify_contact"})
 	}
 	// "Pay anyway" overrides a violation (violationRules): labelOptions
@@ -1756,6 +1830,11 @@ func closeDeal(s dealState, in dealCloseInput) dealCloseResult {
 		// deal ends with nothing taken or delivered. Final, like completed.
 		r.Outcome = "not_selected"
 		return r
+	case "called_off":
+		// The user dropped the errand, with nothing done: final, and never
+		// read as nothing delivered.
+		r.Outcome = "called_off"
+		return r
 	}
 	if in.Delivered != nil {
 		for _, d := range termFieldDiffs(s.agreed, *in.Delivered) {
@@ -1835,6 +1914,8 @@ func trailLine(e dealEvent) string {
 		return line
 	case "intent":
 		return fmt.Sprintf("you changed what you asked: %q", e.Intent.Verbatim)
+	case "agent_move":
+		return agentMoveLine(*e.AgentMove)
 	case "message":
 		return "message from " + e.Message.From
 	case "claim":
@@ -2075,6 +2156,9 @@ func buildDealReport(events []sealedEvent) dealReport {
 	if first.Payee == "" {
 		first.Payee = first.Name
 	}
+	// A change is against the first contact of the leg it is in: the
+	// user's switch starts a new leg, never a change (deal_journey.go).
+	legID := openID
 	young := false
 	changedWho := func(w dealWho, step string) {
 		if !young && w.DomainAgeDays != nil && *w.DomainAgeDays < recentDomainDays {
@@ -2085,7 +2169,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 		now := whoFields(w)
 		for i, f := range whoFields(first) {
 			if f.value != "" && now[i].value != "" && !strings.EqualFold(strings.TrimSpace(f.value), strings.TrimSpace(now[i].value)) {
-				counterparty("changed_identifier", fmt.Sprintf("%s changed: %s → %s", f.label, f.value, now[i].value), openID, step)
+				counterparty("changed_identifier", fmt.Sprintf("%s changed: %s → %s", f.label, f.value, now[i].value), legID, step)
 				watch("payee_or_contact_changed", f.key)
 			}
 		}
@@ -2097,6 +2181,12 @@ func buildDealReport(events []sealedEvent) dealReport {
 		e := se.Event
 		if e.Intent != nil {
 			userWords += " " + e.Intent.Verbatim
+		}
+		if legStartOf(e) {
+			first, legID = legWho([]sealedEvent{se}), se.CapsuleID
+			if first.Payee == "" {
+				first.Payee = first.Name
+			}
 		}
 		switch e.Kind {
 		case "message":
@@ -2261,7 +2351,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: closeLine(*e.Close), Steps: []string{se.CapsuleID}, At: e.At, Self: se.CapsuleID})
 		case "disclosure":
 			d := e.Disclosure
-			item := dealToldItem{At: e.At, To: d.recipient(open.Who), ToKind: d.To, Fields: d.Fields, Authority: "approval", Steps: []string{se.CapsuleID}}
+			item := dealToldItem{At: e.At, To: d.recipient(first), ToKind: d.To, Fields: d.Fields, Authority: "approval", Steps: []string{se.CapsuleID}}
 			if d.AuthorizedBy != "" {
 				item.Steps = []string{d.AuthorizedBy, se.CapsuleID}
 			} else {
@@ -2360,6 +2450,11 @@ func channelHop(first, now string) bool {
 // identifiers or facts (a new payee in a message is still a new payee). A
 // check sealed before such a step no longer covers an action.
 func changesDetails(e dealEvent) bool {
+	// A new leg is a new counterparty: nothing checked with the one before
+	// covers a step with it.
+	if legStartOf(e) {
+		return true
+	}
 	switch e.Kind {
 	case "change":
 		return true

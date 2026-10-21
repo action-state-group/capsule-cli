@@ -213,8 +213,8 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	}
 	ask.Facts = cardFactsLine(w, state, snap, r, terms, money)
 	askedOver := false
-	if total, _ := limitBound(terms, snap); total != nil {
-		askedOver = askedException(state.intent.Asked, terms, *total)
+	if total, field := limitBound(terms, snap); total != nil {
+		askedOver = askedException(state.intent.Asked, terms, *total, field)
 	}
 	var told []string
 	if r.Recipient != nil {
@@ -388,8 +388,8 @@ func labelOptions(w cli.Wording, r *dealCheckResult, snap dealSnapshot, state de
 				label = w.Line("card.button.ok", nil)
 			}
 		case "verify_contact":
-			// The number from first contact, never the changed one.
-			label = w.Line("card.button.verify_contact", cli.V{"phone": state.open.Who.Phone})
+			// The number from the leg's first contact, never the changed one.
+			label = w.Line("card.button.verify_contact", cli.V{"phone": state.legFirst.Phone})
 		case "proceed":
 			key := "card.button." + snap.Action
 			if snap.Action == "pay" && amount == "" {

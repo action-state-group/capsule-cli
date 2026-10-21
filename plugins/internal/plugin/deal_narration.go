@@ -307,7 +307,7 @@ func (s *dealSession) stepReport(ctx context.Context, out map[string]any, events
 
 // closeKeys name a close's final-receipt line by its outcome; an open
 // outcome (pending) has none: the deal goes on.
-var closeKeys = map[string]string{"completed": "say.close.received", "not_selected": "say.close.called_off", "mismatch": "say.close.mismatch"}
+var closeKeys = map[string]string{"completed": "say.close.received", "not_selected": "say.close.called_off", "called_off": "say.close.called_off", "mismatch": "say.close.mismatch"}
 
 // emailLines are the lines for a merchant email added to the receipt:
 // whose email it is, and whether its signature checks out.

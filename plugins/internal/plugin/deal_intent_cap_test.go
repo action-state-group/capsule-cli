@@ -68,7 +68,7 @@ func TestDealLaterIntentCannotRaiseTheLimit(t *testing.T) {
 	})
 	t.Run("a note without a limit keeps the user's", func(t *testing.T) {
 		id := open(t)
-		intent(t, id, `,"allowed":["pay"]`)
+		dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"the Otterly Chaos one, one of them",`+asked[:len(asked)-1]+`,"quantity":1},"allowed":["pay"]}`))
 		paused(t, check(t, id, "pay", 3000), "Over your limit of $8.00")
 	})
 	t.Run("more actions in a later note do not widen what was allowed", func(t *testing.T) {
@@ -78,7 +78,7 @@ func TestDealLaterIntentCannotRaiseTheLimit(t *testing.T) {
 	})
 	t.Run("a note without a list keeps the user's", func(t *testing.T) {
 		id := open(t)
-		intent(t, id, `,"max_total_minor":800`)
+		dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"the Otterly Chaos one, one of them",`+asked[:len(asked)-1]+`,"quantity":1},"max_total_minor":800}`))
 		paused(t, check(t, id, "commit", 300), "You didn't ask for this: confirming a commitment")
 	})
 	t.Run("a lower limit and fewer actions do apply", func(t *testing.T) {

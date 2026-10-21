@@ -30,8 +30,8 @@ func TestASellerDealSealsItsRole(t *testing.T) {
 	assert.Contains(t, dealOwnBundle(t, id), `"party_role":"seller"`)
 
 	// A later intent note keeps the deal's role, with or without naming it.
-	dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim": "Ask 1850 now", "allowed": ["commit"]}`))
-	dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim": "Still selling", "party_role": "seller", "allowed": ["commit"]}`))
+	dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim": "Ask 1850 now", "asked": {"price_minor": 185000}, "allowed": ["commit"]}`))
+	dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim": "Ask 1800 now", "party_role": "seller", "asked": {"price_minor": 180000}, "allowed": ["commit"]}`))
 
 	// A note cannot turn the deal around.
 	out, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "intent",

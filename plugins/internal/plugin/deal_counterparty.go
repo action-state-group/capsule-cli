@@ -150,12 +150,22 @@ func recipientKeys(to string, w dealWho, channel string) []string {
 // dealID is the deal being checked: its own opening is not an earlier
 // dealing, but its own earlier disclosures are earlier tellings.
 func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ *dealCounterpartyMemory, err error) {
-	steps, err := s.index.steps(ctx, stepFilter{Kinds: []string{"open", "disclosure", "check"}})
+	steps, err := s.index.steps(ctx, stepFilter{Kinds: []string{"open", "disclosure", "check", "intent", "agent_move"}})
 	if err != nil {
 		return nil, err
 	}
 	m := &dealCounterpartyMemory{}
 	opened := map[string]*dealOpen{}
+	// Each deal's leg in force as its steps are read: a telling to the
+	// counterparty is to that leg's, and every leg of another deal is a
+	// dealing with its counterparty (deal_journey.go).
+	leg := map[string]dealWho{}
+	dealtWith := func(id string, w dealWho) {
+		leg[id] = w
+		if id != dealID && w != (dealWho{}) {
+			m.dealt = append(m.dealt, dealPartyDeal{keys: counterpartyKeys(w, opened[id].Channel), deal: id})
+		}
+	}
 	for _, st := range steps {
 		id, kind := st.DealID, st.Kind
 		var ev dealEvent
@@ -165,15 +175,19 @@ func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ 
 		switch {
 		case kind == "open" && ev.Open != nil:
 			opened[id] = ev.Open
-			if id != dealID {
-				m.dealt = append(m.dealt, dealPartyDeal{keys: counterpartyKeys(ev.Open.Who, ev.Open.Channel), deal: id})
+			dealtWith(id, ev.Open.Who)
+		case opened[id] != nil && legStartOf(ev):
+			if ev.Intent != nil && ev.Intent.Who != nil {
+				dealtWith(id, *ev.Intent.Who)
+			} else {
+				dealtWith(id, *ev.AgentMove.Who)
 			}
 		case kind == "check" && ev.Check != nil:
 			if rc := ev.Check.Recipient; rc != nil && rc.NewProfile && ev.Check.Verdict == "pause" {
 				m.newProfileNoted = true
 			}
 		case kind == "disclosure" && ev.Disclosure != nil && opened[id] != nil:
-			keys := disclosureRecipientKeys(*ev.Disclosure, *opened[id])
+			keys := disclosureRecipientKeys(*ev.Disclosure, leg[id], opened[id].Channel)
 			for _, f := range ev.Disclosure.Fields {
 				m.told = append(m.told, dealPartyTold{keys: keys, class: f.Class, at: ev.At})
 			}
@@ -183,18 +197,19 @@ func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ 
 }
 
 // disclosureRecipientKeys are the identities of whoever a disclosure went
-// to: the named recipient (a platform, or anyone else), else the deal's
-// counterparty. A platform is keyed on itself, never on the counterparty
-// it stands between, so its first telling and its approval are its own.
-func disclosureRecipientKeys(d dealDisclosure, open dealOpen) []string {
+// to: the named recipient (a platform, or anyone else), else the
+// counterparty of the leg it was made in. A platform is keyed on itself,
+// never on the counterparty it stands between, so its first telling and its
+// approval are its own.
+func disclosureRecipientKeys(d dealDisclosure, leg dealWho, channel string) []string {
 	var keys []string
 	if d.Who != nil {
-		keys = recipientKeys(d.To, *d.Who, open.Channel)
+		keys = recipientKeys(d.To, *d.Who, channel)
 	}
 	if namedRecipient(d.To) {
 		return keys
 	}
-	return append(keys, counterpartyKeys(open.Who, open.Channel)...)
+	return append(keys, counterpartyKeys(leg, channel)...)
 }
 
 // firstTime reports whether no other deal was opened with this party.

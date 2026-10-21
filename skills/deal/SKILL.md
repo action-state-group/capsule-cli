@@ -1,15 +1,16 @@
 ---
 name: deal
-description: The final-review step of every checkout, payment, order, booking, signature, cancellation, or sharing of the user's contact details or credentials that an agent does for the user, including a retail checkout from a known merchant at a fixed price. Seals what was asked, proposed, approved and done with `capsulectl deal`, and shows the user any difference.
+description: The record and final review of every errand that ends in a checkout, payment, order, booking, signature, cancellation, or sharing of the user's contact details or credentials that an agent does for the user, including a retail checkout from a known merchant at a fixed price. Opens at the user's first ask, seals what was asked, shown, chosen, approved and done with `capsulectl deal`, and shows the user any difference.
 ---
 
 # deal
 
 Every deal has one shape: a commitment to someone, on certain terms, based on
-certain claims, at a point you can't easily undo. This skill is the final
-review of the procedures that reach that point: it seals the deal when the
-review starts, checks the step against it, and seals the answer, using
-`capsulectl deal`. It is silent unless something differs.
+certain claims, at a point you can't easily undo. This skill records the
+errand from the user's first ask and is the final review of the procedures
+that reach that point: it opens the deal when the user first asks, seals each
+step of the errand, checks the step against what was asked, and seals the
+answer, using `capsulectl deal`. It is silent unless something differs.
 
 ## Invocation is advisory
 
@@ -41,8 +42,9 @@ still made.
 
 ## Procedures
 
-Each procedure below is the whole flow. Its final-review step is `deal open`
-plus `deal check`; this replaces "show the user the totals". Skipping it
+Each procedure below is the whole flow. It starts with `deal open` at the
+user's first ask (see "One errand, one deal" below), and its final-review
+step is `deal check`; this replaces "show the user the totals". Skipping it
 skips a step of the flow you are already running. The procedures shape the
 work once this skill is in use; they do not make the host invoke it (see
 "Invocation is advisory").
@@ -52,9 +54,9 @@ work once this skill is in use; they do not make the host invoke it (see
 Any checkout: a retail order from a known merchant, a marketplace buy, a
 subscription, an in-app purchase.
 
-1. Find what the user asked for, and keep their exact words.
-2. Fill the cart. Before you type any of the user's own details into the checkout (name, email, delivery address, phone), follow "Disclosure" below for them, on this deal (`deal open` it first): a delivery form is a disclosure to the merchant. Then fill the checkout up to the last screen before the order is placed. Do not press the final button.
-3. **Final review:** `deal open` (once per deal: the merchant as `who`, the cart as `terms`, `"allowed": ["pay"]` when the user asked you to buy). **If the user picked from options you showed** (an item, a size, a price, a date), seal the pick next with `deal note --kind intent`, before the check (see "The user picked from options" below). Then `deal check` with `"action": "pay"` and the exact total about to be charged.
+1. At the user's first ask, `deal open` with their exact words (see "One errand, one deal"). Then find what they asked for, sealing what you search, show and recommend as you go.
+2. Fill the cart. Before you type any of the user's own details into the checkout (name, email, delivery address, phone), follow "Disclosure" below for them, on this deal: a delivery form is a disclosure to the merchant. Then fill the checkout up to the last screen before the order is placed. Do not press the final button.
+3. **Final review:** **if the user picked from options you showed** (an item, a size, a price, a merchant), seal the pick with `deal note --kind intent` first, or your choice with `deal note --kind chose` when they handed it to you (see "The user picked from options" below): the merchant must be in play. Then `deal check` with `"action": "pay"`, the cart's item and price as `terms`, and the exact total about to be charged, tax and shipping included, as `amount_minor`.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, place the order. On `pause`, show it, seal the user's answer, and place the order only if that returns `"proceed": true`.
 5. Right after placing it: `deal note --kind act` with the amount, payee, rail and order reference.
 6. If the checkout or the confirmation shows a trial, a renewal or a last day to cancel, follow "Cancel-by date" below.
@@ -68,35 +70,51 @@ you seal the pick, the check compares the specific item with the broad words
 and reports the user's own choice as "Not what you asked". That is a false
 pause.
 
-So when the user picks a specific item, option or price from a set you
-offered, seal an `intent` note right after `deal open` (or as soon as they
-pick, if the deal is already open) and **before** `deal check`:
+So when the user picks a specific item, option or merchant from the options
+you showed, seal an `intent` note as soon as they pick, **before** `deal
+check`. Name the merchant (`who`) when the pick is at a merchant not yet in
+play:
 
 ```json
 {"verbatim": "the Otterly Chaos one",
  "asked": {"item": "Otterly Chaos - Unsupervised and Thriving Funny Otter Design Sticker"},
- "max_total_minor": 800, "allowed": ["pay"]}
+ "who": {"name": "Redbubble", "domain": "redbubble.com"}}
 ```
 
 - `verbatim` is the user's own words for the pick.
 - `asked` holds only what the user chose, written exactly as the cart's
-  `terms` write it.
-- `allowed` and `max_total_minor` carry forward UNCHANGED: copy the user's
-  values into the note. An intent may PROPOSE a change; it never applies one.
-  A proposed change needs the user's explicit confirmation and produces
-  either (a) a one-shot override bound to this exact proposed action, used
-  once: the check pauses, and the user's sealed answer to that check covers
-  that one step; or (b) a new sealed version of the user's limits: the
-  user's `deal note --kind approval --check <the intent's capsule_id>
-  --choice confirm_limits --said "<their words>"`, which records the
-  previous limits and the new ones. The agent may not activate either: seal
-  either answer only when the user has said it. An intent may lower the
-  limit or drop an action without a confirmation.
+  `terms` write it. It adds to the ask in force, field by field: what the
+  user asked before still stands.
+- capsulectl labels the note itself (`move` in its output): `picked`,
+  `switched`, `narrowed` or `raised`. You never choose the label.
+- Leave `allowed` and `max_total_minor` out to keep the user's. An intent
+  may PROPOSE a change; it never applies one. A proposed change needs the
+  user's explicit confirmation and produces either (a) a one-shot override
+  bound to this exact proposed action, used once: the check pauses, and the
+  user's sealed answer to that check covers that one step; or (b) a new
+  sealed version of the user's limits: the user's `deal note --kind approval
+  --check <the intent's capsule_id> --choice confirm_limits --said "<their
+  words>"`, which records the previous limits and the new ones. The agent
+  may not activate either: seal either answer only when the user has said
+  it. An intent may lower the limit or drop an action without a
+  confirmation.
+- A note that changes nothing is refused. The user's words that change
+  nothing, such as an answer or a choice of route ("I'll sign in myself"),
+  are a `message` from the user.
 - What you picked yourself (a size, a colour or a delivery option the user
   never mentioned) stays out of `asked` and in the cart's `terms`. The check
   then lists it as yours: `picked_by_agent` in its output, and on the card
   "I picked …, not you" or "Good to know: I chose … for you". A choice you
-  made is never shown as the user's.
+  made is never shown as the user's. A default (one of the item, free
+  shipping) is nobody's pick: leave it out of `conditions`.
+
+**When the user hands you the choice** ("any of them, the cheapest with
+shipping"), say so at the opening: `"delegated": ["item"]`, with their words
+for it in `"delegated_said"`, and no `asked.item`. Then seal your choice as
+`deal note --kind chose`, never as their intent: the card reads "I chose …
+for you" and the item does not pause as your pick. Every other pick of
+yours still does, and the limits still bind. If the user later picks the
+item themselves, that is their intent, and the choice is theirs again.
 
 Some picks change what is bought or what it costs: a size, a variant, a
 quantity other than one, a shipping or delivery option. If you picked one of
@@ -109,13 +127,62 @@ claim (a "sale" price you could not confirm) stays unverified. An item
 different from the user's pick, or a price over their limit, still pauses
 after the pick is sealed.
 
+### One errand, one deal
+
+Open the deal when the user first asks for something that may end at a
+point of no return (a buy, a booking, a sale, a signature, a cancellation),
+not at the final review. Keep it for the whole errand: one deal per errand.
+
+1. **Open at the first ask.** `deal open` with the user's exact words, their
+   limit, and `allowed` for what they asked you to do: `"allowed": []` when
+   they only asked for options, the actions when they asked you to act. No
+   merchant may be in play yet: then `who` is `{}`, `recourse` is `{}`, and
+   `terms` holds only the `currency`. When they hand you a choice, add
+   `delegated` (see "The user picked from options").
+2. **Seal the journey as it happens.** Each is a note; capsulectl labels it,
+   and the receipt shows the errand in that order:
+
+   ```sh
+   capsulectl --profile deal deal note --deal ID --kind searched    --input s.json  # {"where":"ebay, etsy","results":37}
+   capsulectl --profile deal deal note --deal ID --kind options     --input o.json  # {"options":[{"item":"...","who":{...},"price_minor":175}, ...],"found":37}: the shortlist you showed, once
+   capsulectl --profile deal deal note --deal ID --kind recommended --input r.json  # {"option":1,"reason":"cheapest delivered"}: your suggestion, when the user decides
+   capsulectl --profile deal deal note --deal ID --kind chose       --input c.json  # {"item":"...","price_minor":175,"who":{...}}: your choice, only when the user handed it to you
+   capsulectl --profile deal deal note --deal ID --kind couldnt     --input x.json  # {"reason":"sign_in_required","who":{...}}: what stopped you
+   ```
+
+   `couldnt` reasons: `sign_in_required`, `out_of_stock`,
+   `cannot_ship_here`, `blocked` (a captcha, a bot wall, an identity check
+   that is not a sign-in), `payment_declined`, `site_error`, or `other` with
+   a few words in `"detail"`. A question to the seller is a `message` from
+   you; a claim you checked is `evidence` with `"verified": true`.
+3. **A switch is the user's move, on the same deal.** When the user moves to
+   another merchant or route ("let's change to eBay"), seal their `intent`
+   with the new merchant as `who` and their words. That starts a new stretch
+   of the deal with that merchant, under the same ask and limits. Never
+   record it as a `change`: a `change` is the counterparty changing its own
+   details, which is still checked against how that merchant first
+   appeared. Never open a second deal for a switch. Open a new deal only for
+   a new errand (another thing, budget or purpose), or after a point of no
+   return.
+4. **The merchant comes before the check.** `deal check` needs a merchant
+   in play: from the opening, the user's pick or switch, or your `chose`.
+5. **Tax and total go in the amount.** The check's `amount_minor` is
+   everything to be charged; `price_minor` is the item's price. Never put
+   tax, totals or notes in `conditions`: `conditions` hold only choices
+   (a size, a colour, a delivery option).
+6. **A sale starts with `deal sale new`.** When the user sells, never open a
+   buy-shaped deal with the marketplace as the counterparty.
+7. **Called off.** When the user drops the errand before anything is done,
+   close it with `{"status": "called_off"}`.
+8. **Find deals with `deal list`**, never from memory.
+
 ### Booking
 
 A hotel, flight, table, appointment, rental or ticket.
 
-1. Find options that match what the user asked for, and keep their exact words.
+1. At the user's first ask, `deal open` with their exact words. Then find options that match, sealing what you show and recommend.
 2. Fill the booking form up to the last screen before it is confirmed. Do not press the final button.
-3. **Final review:** `deal open` (once per deal, type `booking` or `rental`), then `deal check` with `"action": "commit"`, or `"pay"` when the confirmation charges a card.
+3. **Final review:** `deal check` with `"action": "commit"`, or `"pay"` when the confirmation charges a card.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, confirm. On `pause`, show it, seal the user's answer, and confirm only if that returns `"proceed": true`.
 5. Right after confirming: `deal note --kind act` with the amount and the confirmation reference.
 6. `deal close` after the stay, trip or appointment.
@@ -124,9 +191,9 @@ A hotel, flight, table, appointment, rental or ticket.
 
 A contract, a lease, a rental agreement, a service order, any e-signature.
 
-1. Read the document, and keep the user's exact words about what they want signed.
+1. At the user's first ask, `deal open` with their exact words about what they want signed. Then read the document.
 2. Fill it up to the signature, without signing.
-3. **Final review:** `deal open` (once per deal, type `service` or `rental`, the document's terms as `terms`), then `deal check` with `"action": "sign"`.
+3. **Final review:** `deal check` with `"action": "sign"` and the document's terms as `terms`.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, sign. On `pause`, show it, seal the user's answer, and sign only if that returns `"proceed": true`.
 5. Right after signing: `deal note --kind act` with the document's reference.
 6. `deal close` when the agreement is done.
@@ -135,9 +202,9 @@ A contract, a lease, a rental agreement, a service order, any e-signature.
 
 Giving anyone the user's name, phone, email, address, a pickup spot, a login or a code: typed into a page (a checkout's delivery form included) or sent in a message.
 
-1. Note who is asking and what for, and keep the user's exact words about it.
+1. Note who is asking and what for. Use the deal of the errand it belongs to; when it is an errand of its own, `deal open` one at the user's ask, with their exact words.
 2. Fill the form or message up to the point of sending, without sending.
-3. **Final review:** `deal open` (once per deal, with the deal type the disclosure belongs to, or `service`), then `deal check` with `"action": "share_contact"` (or `"share_credentials"`), `"disclosing_to"` and `"disclosing"`: who receives it, and the class of every field you are about to give, for example `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name","email","address"]}`. `"disclosing_to"` is required on every share check: `"counterparty"` for the deal's counterparty, `"platform"` for a platform, `"other"` for anyone else. The check pauses the first time a class goes to this recipient, naming them and the class, and passes with a `note` when you have told them before. A **platform** is a marketplace, booking site or mail relay that sits between the user and the counterparty, as the recipient of what the site itself receives: the user's account, or a listing's contact address its confirmation goes to. Contact details written to the other side through a relay (the user's email or phone in a message to the buyer) go to the counterparty, not the platform: `"disclosing_to": "counterparty"`, with its own first telling. Name a platform by its website: `"disclosing_to": "platform", "recipient": {"name": "Craigslist", "domain": "craigslist.org"}`. A platform may be given the user's email; the user's rules refuse their phone or address to a platform. The first email to a platform pauses; later ones to the same platform pass. When it goes to anyone else (a courier, a third person): `"disclosing_to": "other", "recipient": {"name": "...", "phone": "..."}` with a phone, email, profile id, reply address or website. An approval covers a telling only to the party its check named.
+3. **Final review:** `deal check` with `"action": "share_contact"` (or `"share_credentials"`), `"disclosing_to"` and `"disclosing"`: who receives it, and the class of every field you are about to give, for example `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name","email","address"]}`. `"disclosing_to"` is required on every share check: `"counterparty"` for the deal's counterparty, `"platform"` for a platform, `"other"` for anyone else. The check pauses the first time a class goes to this recipient, naming them and the class, and passes with a `note` when you have told them before. A **platform** is a marketplace, booking site or mail relay that sits between the user and the counterparty, as the recipient of what the site itself receives: the user's account, or a listing's contact address its confirmation goes to. Contact details written to the other side through a relay (the user's email or phone in a message to the buyer) go to the counterparty, not the platform: `"disclosing_to": "counterparty"`, with its own first telling. Name a platform by its website: `"disclosing_to": "platform", "recipient": {"name": "Craigslist", "domain": "craigslist.org"}`. A platform may be given the user's email; the user's rules refuse their phone or address to a platform. The first email to a platform pauses; later ones to the same platform pass. When it goes to anyone else (a courier, a third person): `"disclosing_to": "other", "recipient": {"name": "...", "phone": "..."}` with a phone, email, profile id, reply address or website. An approval covers a telling only to the party its check named.
 4. Any request to the user to go ahead uses the check's `approval_text`, as it is. On `"proceed": true`, note it (step 5) and then send. On `pause`, show it, seal the user's answer, and go on only if that returns `"proceed": true`.
 5. With the form filled and **not yet sent**: `deal note --kind disclosure` naming what you are giving, by class, with the value (it stays on this device; the sealed record keeps only the class and a commitment). One disclosure per send, contact details and credentials separately:
 
@@ -516,7 +583,7 @@ witness.
 
 All commands take `--profile deal` and print one JSON object.
 
-**1. Open** at the final review, or earlier when you first contact a seller:
+**1. Open** at the user's first ask (see "One errand, one deal"):
 
 ```sh
 capsulectl --profile deal deal open --skill <path of this SKILL.md> --input open.json
@@ -580,7 +647,8 @@ capsulectl --profile deal deal note --deal ID --kind message  --input m.json   #
 capsulectl --profile deal deal note --deal ID --kind claim    --input c.json   # {"text":"...","source_kind":"merchant","source":"..."}; selling: {"text":"...","source_kind":"agent","class":"condition"} with --check CHECK_ID (a represent check)
 capsulectl --profile deal deal note --deal ID --kind evidence --input e.json   # {"about":"...","source":"...","verified":true}
 capsulectl --profile deal deal note --deal ID --kind change   --input d.json   # {"source":"...","who":{...},"terms":{...},"recourse":{...}}
-capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   # {"verbatim":"the user's new words","allowed":["pay","share_contact"]}: a new action is only proposed
+capsulectl --profile deal deal note --deal ID --kind intent   --input i.json   # {"verbatim":"the user's new words","asked":{...},"who":{...}}: capsulectl labels it; a higher limit or a new action is only proposed
+capsulectl --profile deal deal note --deal ID --kind searched|options|recommended|chose|couldnt --input j.json  # your moves on the errand: see "One errand, one deal"
 capsulectl --profile deal deal note --deal ID --kind disclosure --input d.json # {"fields":[{"class":"phone","value":"..."}]}
 ```
 
@@ -620,9 +688,10 @@ Words you say without such a check are still sealed, marked as said without
 the user's authority. Never do that on purpose.
 
 Seal an `intent` whenever the user changes what they asked (for example,
-"go ahead and share my number"), and whenever the user picks from options
-you offered (see "The user picked from options"). It replaces `verbatim` and
-`asked` from then on. `allowed` and `max_total_minor` carry forward
+"go ahead and share my number"), picks from options you offered (see "The
+user picked from options"), or switches merchant. Its `asked` adds to the
+ask in force, field by field; `why`, the user's own reason, goes only on a
+switch or a raise. `allowed` and `max_total_minor` carry forward
 unchanged: a higher limit or a new action in the note is only a proposal,
 and the note's output says so (`proposed`, `in_force`). It applies only
 when the user confirms it, as above: their answer to the paused check for
@@ -631,7 +700,9 @@ their limits. Never seal either without the user's own words.
 
 Record a `change` whenever the counterparty changes **any** detail: a new
 payee, a new payment method, a new phone, a new price. A change is never
-accepted by being recorded; the payee is always compared with first contact.
+accepted by being recorded; the payee is always compared with how that
+merchant first appeared. A merchant the user switched to is their `intent`,
+never a `change`.
 
 **3. Check** at the final review of every point of no return:
 
@@ -690,6 +761,8 @@ labels as they are, as buttons.
 - `"verdict": "deny"`: the user's rules do not allow this. The text names
   the rule, its limit and the value, and the options offer only "Hold". Do
   not act, and do not look for a way around it: show the user that text.
+  Never offer to change, loosen or unpin the user's rules, or to switch the
+  rules checker off: they are the user's own, set outside the errand.
 
 **Your rules.** A deal profile may pin a rules checker (the user's policy,
 set with `profile update --rules-checker FILE`; never yours to change). Every
@@ -813,16 +886,18 @@ object's own signature can show.
 capsulectl --profile deal deal close --deal ID --input close.json   # {"status":"received","delivered":{...}}
 ```
 
-`status` is `received`, `pending` (outcome stays `open`) or `not_received`.
-The outcome is `completed`, `mismatch` or `open`.
+`status` is `received`, `pending` (outcome stays `open`), `not_received`, or
+`called_off` (the user dropped the errand before anything was done). The
+outcome is `completed`, `mismatch`, `open` or `called_off`.
 
 The close also seals who ended the deal (`actor`) and why (`reason`), from
 fixed lists, never your own words:
 - `actor` is `user` when the user ended the deal or told you to, `agent`
   when you stop on your own, or `platform` when another platform ended it.
-  Leave it out and it is `agent`, unless the reason is `user_closed`.
-- With `received`, `pending` or `not_selected`, the reason follows from the
-  status: leave it out.
+  Leave it out and it is `agent`, unless the reason is `user_closed` or
+  `called_off`.
+- With `received`, `pending`, `not_selected` or `called_off`, the reason
+  follows from the status: leave it out.
 - With `not_received`, say why: `user_closed` (the user ended it),
   `agent_could_not_complete` (you could not finish it), `merchant_rejected`,
   `payment_failed`, `cancelled_in_window`, `not_delivered` or `other`.
