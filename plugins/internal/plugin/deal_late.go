@@ -216,7 +216,11 @@ func buildDealLifecycle(events []sealedEvent, now time.Time) dealLifecycle {
 		if se.Event.Confirms == "" {
 			continue
 		}
-		text := trailLine(se.Event)
+		// The line says what the record is; the relation is said beside it
+		// ("confirms the close"), so trailLine's own prefix is left off.
+		ev := se.Event
+		ev.Confirms = ""
+		text := trailLine(ev)
 		if e := se.Event.Evidence; e != nil && e.Email != nil {
 			if line := lateReceiptLine(events, j); line != "" {
 				text = line

@@ -1,0 +1,7 @@
+{
+  "emitted_by": "capsulectl deal report --deal ID --html page.html --bundle bundle.json (share keep), after a close and two later evidence records that confirm it",
+  "kind": "seller-later-evidence",
+  "page": "written",
+  "rerender": "deal-report",
+  "verify": "VALID"
+}

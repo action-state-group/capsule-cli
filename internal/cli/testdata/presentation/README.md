@@ -1,6 +1,6 @@
 # Presentation goldens
 
-Eight synthetic bundles and what capsulectl's pages show a reader for them, taken with
+Nine synthetic bundles and what capsulectl's pages show a reader for them, taken with
 the viewer first vendored at agent-action-capsule `5d80d40`; the pages and snapshots
 are now those of the viewer `internal/cli/assets/README.md` pins. `TestPresentationGoldens`
 (`internal/cli/presentation_golden_test.go`) holds every later viewer to them:
@@ -39,6 +39,7 @@ through the real CLI. Run it only to change a fixture on purpose.
 | `6-generic-fallback-unknown-extension` | fixture 6's bundle with an extension no reader knows (`x-example-unknown/v1`) | the same gate and viewer, in the test | written |
 | `7-receipt-declared-rules` | fixture 2's deal receipt with a pinned stub rules checker that allows the purchase and reports three rules its ruleset declares but does not measure (`declared, not measured`); the check line says them quietly beside "no differences" | `deal report --html` | written |
 | `8-seller-buyer-copy` | a deal where the user sells (`party_role: seller`, typed records): the agent's statements of condition and refund terms, an offer, the buyer's recorded acceptance and the commit; the buyer's shared copy opens the agent's statements, labelled by class and checked against their sealed commitments, and none of the user's own | `deal report --share counterparty --html` (its `bundle.json` is the bundle the page carries) | written |
+| `9-seller-later-evidence` | a seller's own Receipt (`x-deal-v0`, typed records, audience `keep`) after the close, from the deal plugin's `testdata/deal/seller-later-evidence`: the sale closes with the delivery's due date carried, then two later `evidence` records chain `confirms` to the close. The carrier's scan is checked and resolves the due date (`resolves_obligation`); the buyer's refund request is a claim, so unverified, about the agent's refund-terms statement. Each shows under the close with its tier (Seller PRD §5.4, exit criterion 9) | `deal report --html` | written |
 
 ## What these fixtures found
 
@@ -103,6 +104,7 @@ What `presentation build` shows, against these goldens (built through other comm
 | `6-generic-fallback-unknown-extension` | yes | The extension row reads "Integrity verified; meaning not interpreted by this viewer", which the test asserts. |
 | `7-receipt-declared-rules` | no: `build-snapshot.json` | As fixture 2. |
 | `8-seller-buyer-copy` | no: `build-snapshot.json` | As fixture 2. |
+| `9-seller-later-evidence` | no: `build-snapshot.json` | As fixture 2. |
 
 Two gaps are pinned so they fail once they close:
 

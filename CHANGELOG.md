@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### A seller's later evidence chains to the close and shows under it (capsule-cli#266)
+
+- **Added (fixture):** a seller's sale that closes with its delivery still
+  due, then takes two later records, each chained `confirms` to the close:
+  the carrier's delivery scan, checked, which resolves the carried due date,
+  and the buyer's refund request, a claim and so unverified. It is the deal
+  plugin's `testdata/deal/seller-later-evidence` and presentation golden
+  `9-seller-later-evidence`; its bundle verifies VALID (Seller PRD §5.4,
+  exit criterion 9).
+- **Fixed:** in "Where this deal stands", a record linked to the close read
+  "confirms the close: after the close (confirms it): …". It now says the
+  relation once: "confirms the close: evidence (buyer), unverified: …".
+- **Changed (scripts):** `scripts/presentation-goldens/build-fixtures.sh`
+  builds the capsulectl-deal plugin and runs it from a plugin root of its
+  own, so the deal fixtures build again since the deal commands moved into
+  the plugin.
+
 ## v0.1.0-rc18
 
 ### Releases are approved in GitHub, not signed on a laptop
