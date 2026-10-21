@@ -138,8 +138,9 @@ func dealSummaryOf(events []sealedEvent) dealSummary {
 		if strings.TrimSpace(open.Intent.Verbatim) != "" {
 			sum.What = open.Intent.Verbatim
 		}
-		if strings.TrimSpace(open.Who.Name) != "" {
-			sum.Counterparty = open.Who.Name
+		// The errand's counterparty is the last leg's.
+		if leg := legWho(events); strings.TrimSpace(leg.Name) != "" {
+			sum.Counterparty = leg.Name
 		}
 		currency = open.Terms.Currency
 		if open.Terms.PriceMinor != nil {

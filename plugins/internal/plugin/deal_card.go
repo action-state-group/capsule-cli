@@ -213,8 +213,8 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	}
 	ask.Facts = cardFactsLine(w, state, snap, r, terms, money)
 	askedOver := false
-	if total, _ := limitBound(terms, snap); total != nil {
-		askedOver = askedException(state.intent.Asked, terms, *total)
+	if total, field := limitBound(terms, snap); total != nil {
+		askedOver = askedException(state.intent.Asked, terms, *total, field)
 	}
 	var told []string
 	if r.Recipient != nil {
@@ -302,7 +302,7 @@ func cardFactsLine(w cli.Wording, state dealState, snap dealSnapshot, r dealChec
 		// Said only when it is not the limit itself, said next.
 		parts[0] = w.Line("card.facts.up_to", cli.V{"amount": parts[0], "max": money(*m)})
 	}
-	recourse := state.recourse
+	recourse := state.wayToPay()
 	if snap.Recourse != nil {
 		recourse = overlayRecourse(recourse, *snap.Recourse)
 	}
@@ -365,11 +365,18 @@ func cardGoodToKnow(w cli.Wording, r dealCheckResult) string {
 	return ""
 }
 
-// isDefaultPick is a pick nobody would call a choice: one of the item, or
-// free shipping.
+// isDefaultPick is a pick nobody would call a choice: one of the item, or a
+// free shipping or delivery option. Only those fields: "free shipping" in
+// any other value (a size, an item) is still a pick.
 func isDefaultPick(a cli.DealAttribute) bool {
 	v := strings.ToLower(strings.TrimSpace(a.Value))
-	return (a.Field == "quantity" && v == "1") || strings.Contains(v, "free shipping") || (a.Field == "shipping" && strings.HasPrefix(v, "free"))
+	switch a.Field {
+	case "quantity":
+		return v == "1"
+	case "shipping", "conditions.shipping", "conditions.delivery":
+		return strings.HasPrefix(v, "free")
+	}
+	return false
 }
 
 // labelOptions gives the check's options their button labels from the
@@ -388,8 +395,8 @@ func labelOptions(w cli.Wording, r *dealCheckResult, snap dealSnapshot, state de
 				label = w.Line("card.button.ok", nil)
 			}
 		case "verify_contact":
-			// The number from first contact, never the changed one.
-			label = w.Line("card.button.verify_contact", cli.V{"phone": state.open.Who.Phone})
+			// The number from the leg's first contact, never the changed one.
+			label = w.Line("card.button.verify_contact", cli.V{"phone": state.legFirst.Phone})
 		case "proceed":
 			key := "card.button." + snap.Action
 			if snap.Action == "pay" && amount == "" {

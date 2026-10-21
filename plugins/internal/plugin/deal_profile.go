@@ -61,6 +61,7 @@ func dealTexts(ev dealEvent) map[string]string {
 	case ev.Open != nil:
 		t["verbatim"] = ev.Open.Intent.Verbatim
 		boundsText(t, ev.Open.Intent)
+		intentTexts(t, ev.Open.Intent)
 		if ev.Kind == "sale" {
 			t["item_ref"] = ev.Open.ItemRef
 		}
@@ -78,6 +79,9 @@ func dealTexts(ev dealEvent) map[string]string {
 	case ev.Intent != nil:
 		t["verbatim"] = ev.Intent.Verbatim
 		boundsText(t, *ev.Intent)
+		intentTexts(t, *ev.Intent)
+	case ev.AgentMove != nil:
+		agentMoveTexts(t, *ev.AgentMove)
 	case ev.Message != nil:
 		t["content"] = ev.Message.Text
 	case ev.Evidence != nil:
@@ -183,6 +187,17 @@ func dealLocalValues(events []sealedEvent, ev dealEvent) []string {
 			whos = append(whos, *e.Snapshot.Who)
 		case e.Act != nil && e.Act.Payee != "":
 			whos = append(whos, dealWho{Payee: e.Act.Payee})
+		case e.Intent != nil && e.Intent.Who != nil:
+			whos = append(whos, *e.Intent.Who)
+		case e.AgentMove != nil:
+			if e.AgentMove.Who != nil {
+				whos = append(whos, *e.AgentMove.Who)
+			}
+			for _, o := range e.AgentMove.Options {
+				if o.Who != nil {
+					whos = append(whos, *o.Who)
+				}
+			}
 		case e.Disclosure != nil:
 			if e.Disclosure.Who != nil {
 				whos = append(whos, *e.Disclosure.Who)
@@ -409,6 +424,9 @@ func limitSetBody(l dealLimitSet) map[string]interface{} {
 	if l.OrderedRepresentations != nil {
 		m["ordered_representations"] = *l.OrderedRepresentations
 	}
+	if len(l.Delegated) > 0 {
+		m["delegated"] = l.Delegated
+	}
 	return m
 }
 
@@ -521,6 +539,12 @@ func intentBody(i dealIntent, commit func(string) (string, error)) (map[string]i
 	}
 	if i.OrderedRepresentations != nil { // present and empty: nothing ordered
 		m["ordered_representations"] = *i.OrderedRepresentations
+	}
+	if len(i.Delegated) > 0 {
+		m["delegated"] = i.Delegated
+		if m["delegated_commitment"], err = commit("delegated"); err != nil {
+			return nil, err
+		}
 	}
 	return m, nil
 }
@@ -729,15 +753,19 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		o := ev.Open
 		rtype = "baseline"
 		block["channel"] = o.Channel
-		first := o.Who
-		if first.Payee == "" {
-			first.Payee = first.Name
+		// Opened at the first ask, the errand may have no counterparty yet:
+		// its first leg starts later (deal_journey.go).
+		if o.Who != (dealWho{}) {
+			first := o.Who
+			if first.Payee == "" {
+				first.Payee = first.Name
+			}
+			ids := counterpartyIDs(key, first)
+			if len(ids) == 0 {
+				return nil, cli.InputError("who has no identifier that can be recorded (check the phone, email, domain or name)")
+			}
+			setIDs(ids)
 		}
-		ids := counterpartyIDs(key, first)
-		if len(ids) == 0 {
-			return nil, cli.InputError("who has no identifier that can be recorded (check the phone, email, domain or name)")
-		}
-		setIDs(ids)
 		body["deal_type"] = o.Type
 		if o.Materiality.Digest != "" {
 			if body["materiality"], err = materialityBody(o.Materiality, ev.Nonces, commit); err != nil {
@@ -751,7 +779,10 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			return nil, err
 		}
 		body["terms"] = termsBody(o.Terms)
-		body["recourse"] = recourseBody(o.Recourse)
+		// Opened at the first ask, the way to pay may not be known yet.
+		if r := recourseBody(o.Recourse); len(r) > 0 || ev.Journey == "" {
+			body["recourse"] = r
+		}
 		if o.Skill != nil {
 			body["skill"] = map[string]interface{}{"skill_md_digest": o.Skill.Digest, "other_copies": o.Skill.OtherCopies}
 		}
@@ -778,6 +809,22 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 		rtype = "intent"
 		if body, err = intentBody(*ev.Intent, commit); err != nil {
 			return nil, err
+		}
+		if ev.Journey != "" {
+			if err = journeyIntentBody(body, events, *ev.Intent, commit); err != nil {
+				return nil, err
+			}
+			if ev.Intent.Who != nil {
+				setIDs(counterpartyIDs(key, legFirstContact(*ev.Intent.Who)))
+			}
+		}
+	case "agent_move":
+		rtype = "agent_move"
+		if body, err = agentMoveBody(*ev.AgentMove, commit); err != nil {
+			return nil, err
+		}
+		if m := ev.AgentMove; m.Move == moveChose && m.Who != nil {
+			setIDs(counterpartyIDs(key, legFirstContact(*m.Who)))
 		}
 	case "message":
 		rtype = "message"
@@ -834,7 +881,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			}
 		}
 		if m := ev.Evidence.Email; m != nil {
-			if body["merchant_email"], err = merchantEmailBody(m, events[0].Event.Open.Who, commit); err != nil {
+			if body["merchant_email"], err = merchantEmailBody(m, legWho(events), commit); err != nil {
 				return nil, err
 			}
 		}
@@ -1023,7 +1070,7 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 			}
 		}
 		if ev.RuleInputs != "" {
-			sealRuleInputs(body, events, sn)
+			sealRuleInputs(body, events, sn, ev.RuleInputs)
 		}
 	case "counterparty_profile":
 		// A companion of the check it is about: only the payee's

@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### One deal per errand: journey records (capsule-cli#340)
+
+- **Added:** the deal opens at the user's first ask, with no merchant (`who`
+  `{}`) or way to pay (`recourse` `{}`) yet. Agent moves are notes, one kind
+  per label: `searched`, `options` (Showed you N options), `recommended`,
+  `chose` (Chose for you) and `couldnt` (Couldn't), sealed as `agent_move`
+  records with every text as a commitment. `deal report` lists the errand's
+  `journey`, each move labelled from the wording pack (new `journey.*` keys:
+  a pinned pack needs them, or the built-in pack is used).
+- **Added:** an intent note's `move` (`narrowed`, `switched`, `raised`,
+  `picked`) is derived by capsulectl and sealed; the agent never states it.
+  An intent that names another merchant (`who`) starts a new leg of the same
+  deal: the ask and limits carry over, no approval from the earlier leg
+  covers a step in it, and a payee or contact change is compared with that
+  leg's first contact, so the user's switch never reads as one while a
+  seller's change within the leg still does. Counterparty memory, deal list,
+  shared copies, the audit and merchant-email checks read the leg in force.
+- **Added:** `delegated: ["item"]` with the user's words (`delegated_said`):
+  the agent's `chose` of the item reads "I chose … for you" and does not
+  pause as its pick; adding a delegation later is a proposal.
+- **Added:** close status `called_off` (actor `user`, reason `called_off`),
+  never "nothing delivered".
+- **Changed:** an intent note that changes nothing is refused (the user's
+  words go in a message). A note's `asked` adds to the ask in force, field
+  by field.
+- **Changed:** the limit binds on the larger of the price and the amount
+  charged (tax included); quantity 1 and free shipping are not the agent's
+  picks; a postal code or region added to the place asked for is not a
+  difference. Rule inputs version 2 counts `material_fields_changed` against
+  the leg's agreement (a check sealed under version 1 keeps its count).
+- **Changed:** the deal skill opens the deal at the first ask, keeps one
+  deal per errand, seals a switch as the user's intent, puts tax in the
+  amount, starts a sell with `deal sale new`, never offers to change the
+  user's rules after a deny, and finds deals with `deal list`.
+
 ### A platform is a recipient of its own (capsule-cli#348)
 
 - **Added:** a share check may say `"disclosing_to": "platform"` with a

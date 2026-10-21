@@ -303,13 +303,15 @@ func dealCoverSteps(dealID string, events []sealedEvent) []*dealCoverStep {
 	open := events[0].Event.Open
 	snapshots := map[string]*dealSnapshot{}
 	var out []*dealCoverStep
-	for _, se := range events {
+	for i, se := range events {
 		e := se.Event
 		at, err := time.Parse(time.RFC3339, e.At)
 		if err != nil {
 			continue
 		}
-		step := &dealCoverStep{dealID: dealID, kind: e.Kind, currency: open.Terms.Currency, domain: open.Who.Domain, capsuleID: se.CapsuleID, n: e.N, at: at.UTC()}
+		// The merchant of the leg the step was taken in.
+		domain := legWho(events[:i+1]).Domain
+		step := &dealCoverStep{dealID: dealID, kind: e.Kind, currency: open.Terms.Currency, domain: domain, capsuleID: se.CapsuleID, n: e.N, at: at.UTC()}
 		switch e.Kind {
 		case "snapshot":
 			snapshots[se.CapsuleID] = e.Snapshot

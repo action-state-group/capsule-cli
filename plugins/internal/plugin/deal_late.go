@@ -253,6 +253,8 @@ func buildDealLifecycle(events []sealedEvent, now time.Time) dealLifecycle {
 		l.Text = fmt.Sprintf("Closed on %s: matched, nothing left to match.", readDate(c.Event.At))
 	case "not_selected":
 		l.Text = fmt.Sprintf("Closed on %s: not selected; nothing was taken or delivered.", readDate(c.Event.At))
+	case "called_off":
+		l.Text = fmt.Sprintf("Closed on %s: you called off this errand; nothing was taken or delivered.", readDate(c.Event.At))
 	}
 	switch n := len(l.Later); n {
 	case 0:

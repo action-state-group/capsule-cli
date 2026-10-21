@@ -1,15 +1,15 @@
 {
-  "fixture": "17-outcome.json",
+  "fixture": "17-agent-move-couldnt.json",
   "expect": "valid",
-  "story": "Saturday passes; nothing was delivered as agreed.",
+  "story": "Saturday morning the agent cannot reach the marina office: a Couldn't (an agent move whose label the record type fixes), its reason a closed token and its detail a commitment.",
   "record": {
     "x-deal-v0": {
       "profile": "x-deal-v0",
       "canonicalization": "jcs",
       "deal_id": "deal-3f9c2a7be4d15068",
-      "record_type": "outcome",
+      "record_type": "agent_move",
       "seq": 17,
-      "at": "2026-10-04T09:00:00Z",
+      "at": "2026-10-03T08:30:00Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
@@ -22,15 +22,10 @@
       }
     },
     "body": {
-      "status": "not_received",
-      "outcome": "mismatch",
-      "differences": [
-        {
-          "question": "delivered",
-          "rule": "not_delivered"
-        }
-      ]
+      "move": "couldnt",
+      "reason": "other",
+      "detail_commitment": "2c610e689b81af8172a6932e5a88c952686b1704af14036f4554e651ab8875da"
     }
   },
-  "expected_digest": "e83c565961ecb0af7b78e6ce70aa7f0e6c476b89dcf87c5d1c47814cf65776db"
+  "expected_digest": "157656083eb822231ccd65bec74ee1593666b891a38aa3aece4f1c6d7ece19b5"
 }

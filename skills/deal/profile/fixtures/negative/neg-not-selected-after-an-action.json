@@ -20,7 +20,8 @@
     "13-check-pay.json",
     "14-verdict-pause.json",
     "15-approval-hold.json",
-    "16-disclosure.json"
+    "16-disclosure.json",
+    "17-agent-move-couldnt.json"
   ],
   "record": {
     "x-deal-v0": {
@@ -28,12 +29,12 @@
       "canonicalization": "jcs",
       "deal_id": "deal-3f9c2a7be4d15068",
       "record_type": "outcome",
-      "seq": 17,
+      "seq": 18,
       "at": "2026-10-04T09:00:00Z",
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "218a7793f6dda65189ebba1a6c135f04891d234500ccb3eea20c5f1aa9b8bab8"
+        "digest": "157656083eb822231ccd65bec74ee1593666b891a38aa3aece4f1c6d7ece19b5"
       },
       "baseline_ref": {
         "type": "deal-record",

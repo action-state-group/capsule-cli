@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"maps"
 	"strings"
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
@@ -29,8 +30,10 @@ import (
 //   - task_authority_ref (typed records): the task authority in force.
 //
 // A step sealed before records carried them has no RuleInputs and
-// re-derives without any.
-const dealRuleInputsVersion = "1"
+// re-derives without any. Version "2" (capsule-cli#340) counts
+// material_fields_changed against the leg in force (materialChanges2);
+// a step sealed under "1" re-derives with the count it had.
+const dealRuleInputsVersion = "2"
 
 // The field lists the two counts read, in this order, keyed as the check
 // body names them. terms.conditions counts as one key, so a count is never
@@ -147,7 +150,7 @@ func payeeOf(w dealWho) string {
 
 // sealRuleInputs adds the rule inputs to a check body, from the steps sealed
 // before it and the check's own snapshot.
-func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealSnapshot) {
+func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealSnapshot, version string) {
 	if len(events) == 0 || events[0].Event.Open == nil {
 		return
 	}
@@ -191,7 +194,7 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 	}
 	// The proposal as the check evaluates it: the deal as it stands, with
 	// what the check states on top.
-	who, terms, recourse := state.who, state.terms, state.recourse
+	who, terms, recourse := state.who, state.terms, state.wayToPay()
 	if sn.Who != nil {
 		who = overlayWho(who, *sn.Who)
 	}
@@ -203,8 +206,13 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 	}
 	proposed := dealFieldValues(terms, &recourse, payeeOf(who))
 	agreedRecourse := state.agreedRecourse
-	agreed := dealFieldValues(state.agreed, &agreedRecourse, payeeOf(open.Who))
-	body["material_fields_changed"] = changedFields(materialFields, agreed, proposed)
+	if version == "1" {
+		agreed := dealFieldValues(state.agreed, &agreedRecourse, payeeOf(open.Who))
+		body["material_fields_changed"] = changedFields(materialFields, agreed, proposed)
+	} else {
+		agreed := dealFieldValues(state.agreed, &agreedRecourse, payeeOf(state.legFirst))
+		body["material_fields_changed"] = materialChanges2(agreed, proposed, agreedRecourse)
+	}
 	body["material_fields_basis"] = materialFieldsBasis
 	// Against the user's own words (intent.asked), only over the offer keys
 	// those words state: a key they never state (refundability, which they
@@ -215,6 +223,49 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 		body["offer_fields_changed"] = n
 		body["offer_fields_basis"] = offerFieldsBasis
 	}
+}
+
+// materialChanges2 is material_fields_changed under rule inputs "2", over
+// the same list, against the leg in force: a quantity either side leaves
+// out is 1; a place counts only when both state it, and a refinement of the
+// same place (a postal code or region added) is no change; the way to pay
+// counts only once something was agreed about it with this leg. Every other
+// key counts as changedFields does, a key added included.
+func materialChanges2(agreedIn, proposedIn map[string]interface{}, agreedRecourse dealRecourse) int {
+	// Copies: the caller's maps are read again (offer_fields_changed).
+	agreed, proposed := maps.Clone(agreedIn), maps.Clone(proposedIn)
+	for _, side := range []map[string]interface{}{agreed, proposed} {
+		if _, ok := side["terms.quantity"]; !ok {
+			side["terms.quantity"] = int64(1)
+		}
+	}
+	n := 0
+	for _, k := range materialFields {
+		x, inA := agreed[k]
+		y, inB := proposed[k]
+		switch k {
+		case "terms.place":
+			if inA && inB && !samePlace(x.(string), y.(string)) {
+				n++
+			}
+			continue
+		case "recourse.rail":
+			if agreedRecourse.Rail == "" {
+				continue
+			}
+		case "recourse.refundable":
+			if agreedRecourse.Refundable == nil {
+				continue
+			}
+		}
+		switch {
+		case inA != inB:
+			n++
+		case inA && !jcsEqual(x, y):
+			n++
+		}
+	}
+	return n
 }
 
 // statedChanges counts the keys of list that stated states and proposed

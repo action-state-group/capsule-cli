@@ -626,6 +626,9 @@ def check_chain(records):
     # in force (section 6).
     allowed = records[0]["body"]["intent"].get("allowed")
     max_total = records[0]["body"]["intent"].get("max_total_minor")
+    # What the user's own words hand the agent to choose: a later intent
+    # never widens it; a confirmation adds to it (capsule-cli#340).
+    delegated = records[0]["body"]["intent"].get("delegated") or []
     # The side of the deal the user is on: set when it opens (absent = buyer), never changed.
     party_role = records[0]["body"]["intent"].get("party_role", "buyer")
     if party_role == "seller" and not typed_chain:
@@ -646,6 +649,8 @@ def check_chain(records):
 
     def limits_in_force():
         out = {k: v for k, v in (("max_total_minor", max_total), ("allowed", allowed)) if v is not None}
+        if delegated:
+            out["delegated"] = delegated
         if bounds_known and bounds is not None:
             out["bounds_commitment"] = bounds
         return out
@@ -680,7 +685,7 @@ def check_chain(records):
             # Close is terminal: after it, only later evidence that confirms
             # that close (and commits to its digest) may follow.
             if t != "evidence" or len(confirms) != 1 or confirms[0]["digest"] != digests[closed_final]:
-                fail(i, "record after a close whose outcome is final (completed, mismatch or not_selected; close is terminal): "
+                fail(i, "record after a close whose outcome is final (completed, mismatch, not_selected or called_off; close is terminal): "
                         "only an evidence record that confirms that close may follow")
         elif confirms:
             fail(i, "a confirms ref names the deal's final close; this deal is not closed")
@@ -740,13 +745,24 @@ def check_chain(records):
             if accepted is None:
                 fail(i, f"the latest offer has no recorded acceptance: the {what} needs one")
             for k in range(accepted + 1, i):
-                kb = records[k]["x-deal-v0"]
-                identity = kb["record_type"] in ("message", "evidence") and (
-                    "counterparty" in kb or "counterparty_facts" in records[k]["body"])
-                if kb["record_type"] == "detail_change" or identity:
+                if changes_details(k):
                     fail(i, f"details changed after the other party accepted; the {what} needs the offer made and accepted again")
             if by_rel.get("source") != [accepted]:
                 fail(i, f"a seller's {what} cites the acceptance it rests on (source)")
+
+        def changes_details(k):
+            """A record after which no earlier check covers a step: the
+            counterparty's change of details, a message or evidence naming
+            an identity, a new leg (an intent naming another counterparty),
+            or a new pick (an intent naming an item, or the agent's chose)
+            (section 6, rules 5 and 13)."""
+            kb, kbody = records[k]["x-deal-v0"], records[k]["body"]
+            t_k = kb["record_type"]
+            identity = t_k in ("message", "evidence") and ("counterparty" in kb or "counterparty_facts" in kbody)
+            leg = t_k == "intent" and "counterparty" in kb
+            pick = (t_k == "intent" and "move" in kbody and "item" in kbody.get("asked", {})) or \
+                (t_k == "agent_move" and kbody.get("move") == "chose")
+            return t_k == "detail_change" or identity or leg or pick
 
         def authorized_check(ja, action, what):
             """Section 6, rule 5: the approval proceeds, is unused, is the
@@ -768,10 +784,7 @@ def check_chain(records):
             if chk["body"]["action"] != action:
                 fail(i, f"the {what} differs from the one checked")
             for k in range(jc + 1, i):
-                kb = records[k]["x-deal-v0"]
-                identity = kb["record_type"] in ("message", "evidence") and (
-                    "counterparty" in kb or "counterparty_facts" in records[k]["body"])
-                if kb["record_type"] == "detail_change" or identity:
+                if changes_details(k):
                     fail(i, f"details changed after the check; the {what} needs a new check")
             return chk
 
@@ -793,10 +806,7 @@ def check_chain(records):
                 if allowed is not None and action not in allowed and action != "represent":
                     fail(i, "the task authority does not allow this action")
                 for k in range(jc + 1, i):
-                    kb = records[k]["x-deal-v0"]
-                    identity = kb["record_type"] in ("message", "evidence") and (
-                        "counterparty" in kb or "counterparty_facts" in records[k]["body"])
-                    if kb["record_type"] == "detail_change" or identity:
+                    if changes_details(k):
                         fail(i, f"details changed after the check; the {what} needs a new check")
                 return jt, None, chk
             if records[jt]["body"].get("approver") != "user":
@@ -945,6 +955,15 @@ def check_chain(records):
                 bounds_known = False
             if body.get("allowed") is not None:
                 allowed = [a for a in body["allowed"] if allowed is None or a in allowed]
+            # Naming the item, or picking an option, takes the item back
+            # from the agent's delegation.
+            if body.get("asked", {}).get("item") is not None or body.get("move") == "picked":
+                delegated = [d for d in delegated if d != "item"]
+        elif t == "agent_move":
+            # The agent chooses an item only where the user's words handed
+            # it the choice.
+            if body["move"] == "chose" and "item" not in delegated:
+                fail(i, "an agent's chose needs the user's delegation of the item in force")
         elif t == "counterparty_profile":
             # The payee keyed per profile, sealed right after the check it is
             # about: one per check.
@@ -1033,6 +1052,9 @@ def check_chain(records):
             for k in ("max_total_minor", "allowed", "bounds_commitment"):
                 if prop.get(k) is not None:
                     new[k] = prop[k]
+            added = [d for d in prop.get("delegated", []) if d not in delegated]
+            if added:
+                new["delegated"] = delegated + added
             got = body["limits"]["new"] if "bounds_commitment" in prop else without_unknown_bounds(body["limits"]["new"])
             if got != new:
                 fail(i, "limits.new is not what the intent proposed")
@@ -1042,11 +1064,13 @@ def check_chain(records):
                     and prop["max_total_minor"] > max_total) or \
                    (prop.get("allowed") is not None and allowed is not None
                     and any(a not in allowed for a in prop["allowed"])) or \
-                   (prop.get("bounds_commitment") is not None and prop["bounds_commitment"] != bounds)
+                   (prop.get("bounds_commitment") is not None and prop["bounds_commitment"] != bounds) or \
+                   bool(added)
             if not more:
                 fail(i, "the intent asks for no higher limit and no new action: nothing to confirm")
             confirmed_intents.add(j)
             max_total, allowed = new.get("max_total_minor"), new.get("allowed")
+            delegated = new.get("delegated", [])
             bounds, bounds_known = body["limits"]["new"].get("bounds_commitment"), True
         elif t == "approval":
             j = one("approves", ("verdict",))
@@ -1147,10 +1171,10 @@ def check_chain(records):
             one("observes", ("action",), required=False)
             if body["status"] == "unchecked_action":
                 unchecked += 1
-            if body["outcome"] == "not_selected" and any(
+            if body["outcome"] in ("not_selected", "called_off") and any(
                     records[k]["type"] == "action-record/v0" if is_typed(records[k])
                     else records[k]["x-deal-v0"]["record_type"] == "action" for k in range(i)):
-                fail(i, "not_selected means nothing was done on the deal, and an action is on record")
+                fail(i, body["outcome"] + " means nothing was done on the deal, and an action is on record")
             last_outcome = i
         elif t == "close":
             if last_outcome is None:
@@ -1360,6 +1384,7 @@ def regen():
         # What the agent told the new number, kept on the device only.
         "disclosed-phone": "(555) 010-2077",
         "disclosed-pickup": "lakeside marina, slip 14, by the fuel dock",
+        "couldnt-detail": "the marina office line rings out; no one answers",
     }
     com = {k: commitment(nonce(k), v) for k, v in texts.items()}
 
@@ -1368,8 +1393,8 @@ def regen():
                   "2026-10-01T16:05:00Z", "2026-10-01T16:06:00Z", "2026-10-01T16:20:00Z", "2026-10-01T16:20:05Z",
                   "2026-10-01T16:20:06Z", "2026-10-01T16:20:06Z", "2026-10-01T16:20:30Z",
                   "2026-10-01T18:41:00Z", "2026-10-01T18:41:20Z", "2026-10-01T18:43:00Z",
-                  "2026-10-01T18:43:01Z", "2026-10-01T18:44:30Z", "2026-10-01T18:52:00Z", "2026-10-04T09:00:00Z",
-                  "2026-10-04T09:00:05Z"])
+                  "2026-10-01T18:43:01Z", "2026-10-01T18:44:30Z", "2026-10-01T18:52:00Z", "2026-10-03T08:30:00Z",
+                  "2026-10-04T09:00:00Z", "2026-10-04T09:00:05Z"])
 
     def cp(*keys):
         return {"fp_alg": "hmac-sha256-deal-key", "ids": {k[0]: fps[k] for k in keys}}
@@ -1443,6 +1468,10 @@ def regen():
                                      "fields": [{"class": "phone", "value_commitment": com["disclosed-phone"]},
                                                 {"class": "pickup_location", "value_commitment": com["disclosed-pickup"]}]},
         channel="sms", counterparty=cp(("phone", "second")))
+    # Saturday morning the agent cannot reach the marina: a Couldn't, its
+    # reason a closed token and its detail a commitment.
+    add("agent-move-couldnt", "agent_move", {"move": "couldnt", "reason": "other",
+                                             "detail_commitment": com["couldnt-detail"]})
     o = add("outcome", "outcome", {"status": "not_received", "outcome": "mismatch",
                                    "differences": [{"question": "delivered", "rule": "not_delivered"}]})
     add("close", "close", {"outcome": "mismatch", "unchecked_actions": 0,
@@ -1473,6 +1502,8 @@ def regen():
         "detail_change": "The counterparty switches payee, phone and rail after first contact (fingerprints only).",
         "outcome": "Saturday passes; nothing was delivered as agreed.",
         "close": "The deal closes on mismatch, citing the outcome.",
+        "agent_move": "Saturday morning the agent cannot reach the marina office: a Couldn't (an agent move whose "
+                      "label the record type fixes), its reason a closed token and its detail a commitment.",
         "disclosure": "After the Hold, the agent texts the user's phone and the pickup spot to the new number with no "
                       "approval covering it: the record names the classes, the recipient and authority none, "
                       "and commits to the values without carrying them.",
@@ -1721,8 +1752,8 @@ def regen():
     r = copy.deepcopy(records[2]); r["x-deal-v0"]["seq"] = 5
     neg("neg-seq-gap", "chain", "seq gap", r, 2, "seq jumps from 2 to 5.")
 
-    r = copy.deepcopy(records[16]); r["body"] = {"status": "not_selected", "outcome": "not_selected", "differences": []}
-    neg("neg-not-selected-after-an-action", "chain", "nothing was done on the deal", r, 16,
+    r = copy.deepcopy(records[17]); r["body"] = {"status": "not_selected", "outcome": "not_selected", "differences": []}
+    neg("neg-not-selected-after-an-action", "chain", "nothing was done on the deal", r, 17,
         "An outcome that says the other side was not chosen, on a deal where an action was taken.")
 
     r = copy.deepcopy(records[4]); r["body"]["party_role"] = "seller"

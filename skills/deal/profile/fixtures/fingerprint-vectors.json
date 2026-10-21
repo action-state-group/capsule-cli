@@ -157,6 +157,12 @@
       "commitment": "bb4e6d271a14e6afc4fa3a8fbe603db6558f4f3e27a88b4bc1151d35a463dcd2"
     },
     {
+      "label": "couldnt-detail",
+      "nonce": "c9c0b32461882a0ab30d52b3da9a5ac59dfe2883de8bef34c52a5b72be442b71",
+      "text": "the marina office line rings out; no one answers",
+      "commitment": "2c610e689b81af8172a6932e5a88c952686b1704af14036f4554e651ab8875da"
+    },
+    {
       "label": "flight-intent",
       "nonce": "1f8b900764ee75aeefd2ac8177f987b5d7f0c440e727132718465b49de4283f0",
       "text": "book the SJC to HOU flight under $600",
