@@ -15,6 +15,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/spf13/cobra"
@@ -44,6 +45,9 @@ type Narration struct {
 	// Hold is true with voice error only: the agent stops, and goes on with
 	// nothing that pays or shares.
 	Hold bool `json:"hold,omitempty"`
+	// Wording is "built-in" when the profile's pinned pack could not be
+	// used and the built-in pack spoke instead.
+	Wording string `json:"wording,omitempty"`
 }
 
 // Ask is a card the agent shows the user (voice ask). On a check it is the
@@ -58,6 +62,9 @@ type Ask struct {
 	Next       string      `json:"next,omitempty"`
 	Options    []AskOption `json:"options"`
 	Reply      string      `json:"reply,omitempty"`
+	// HoldSay is what to say when the user holds and no command runs (a
+	// card no answer is sealed for).
+	HoldSay string `json:"hold_say,omitempty"`
 }
 
 // AskOption is one button: its label and the choice `deal note --kind
@@ -89,6 +96,9 @@ func Narrate(out map[string]any, n Narration) map[string]any {
 	if n.Hold {
 		out["hold"] = true
 	}
+	if n.Wording != "" {
+		out["wording"] = n.Wording
+	}
 	return out
 }
 
@@ -113,7 +123,9 @@ type Wording struct {
 }
 
 // BuiltinWording is the neutral pack that ships with this binary.
-func BuiltinWording() Wording {
+func BuiltinWording() Wording { return builtinWording() }
+
+var builtinWording = sync.OnceValue(func() Wording {
 	w, err := parseWording(builtinWordingBytes)
 	if err != nil {
 		// The pack is embedded and tested: a broken one is a build defect.
@@ -121,7 +133,7 @@ func BuiltinWording() Wording {
 	}
 	w.Source = "built-in"
 	return w
-}
+})
 
 // BuiltinWordingBytes is the built-in pack as distributed.
 func BuiltinWordingBytes() []byte { return slices.Clone(builtinWordingBytes) }
@@ -321,16 +333,17 @@ func errorObject(cmd *cobra.Command, err error) map[string]any {
 			return nil
 		}
 	}
-	w := BuiltinWording()
 	phase := "other"
+	build := func(w Wording) Narration {
+		return Narration{Voice: VoiceError, Hold: true, Say: Lines(w.Line("say.error."+phase, nil), w.Line("say.error.cause."+errorCause(err), nil))}
+	}
+	n := speakWith(Profile{}, false, build)
 	if cmd != nil {
-		if p, e := Selected(cmd); e == nil {
-			w, _ = ActiveWording(p)
-		}
 		phase = ErrorPhase(cmd)
+		n = NarrateWith(cmd, build)
 	}
 	out := map[string]any{"spec_version": "capsule-cli-result/v1", "error": SafeError(err)}
-	return Narrate(out, Narration{Voice: VoiceError, Hold: true, Say: Lines(w.Line("say.error."+phase, nil), w.Line("say.error.cause."+errorCause(err), nil))})
+	return Narrate(out, n)
 }
 
 // errorCause is the cause key for an error's class.
@@ -357,12 +370,19 @@ func errorCause(err error) string {
 // the exit code, writing the error line and, when nothing was printed, the
 // error object.
 func Run(ctx context.Context, root *cobra.Command, name string) int {
-	root.SetOut(Stdout{File: os.Stdout})
+	return runTo(ctx, root, name, os.Stdout, os.Stderr)
+}
+
+func runTo(ctx context.Context, root *cobra.Command, name string, stdout *os.File, stderr io.Writer) int {
+	outputWritten.Store(0)
+	out := Stdout{File: stdout}
+	root.SetOut(out)
+	root.SetErr(stderr)
 	cmd, err := root.ExecuteContextC(ctx)
 	if err == nil {
 		return 0
 	}
-	return Exit(cmd, err, name)
+	return exitTo(out, stderr, cmd, err, name)
 }
 
 // narratedByOutcome marks a command whose voice follows its outcome (the
@@ -412,21 +432,10 @@ func NarrateByOutcome(cmd *cobra.Command, narrate func(c *cobra.Command, result 
 	return cmd
 }
 
-// CommandWording is the pack the selected profile speaks with, or the
-// built-in one when no profile is selected or it does not load.
-func CommandWording(c *cobra.Command) Wording {
-	if p, err := Selected(c); err == nil {
-		w, _ := ActiveWording(p)
-		return w
-	}
-	return BuiltinWording()
-}
-
 // verifyNarration is verify's report line: unchanged when every check
 // passed, unable when something could not be checked here (exit 3), and
 // changed when a check failed.
 func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
-	w := CommandWording(c)
 	key := "say.verify.unchanged"
 	switch {
 	case err == nil:
@@ -435,7 +444,7 @@ func verifyNarration(c *cobra.Command, _ map[string]any, err error) Narration {
 	default:
 		key = "say.verify.changed"
 	}
-	return Narration{Voice: VoiceReport, Say: w.Line(key, nil)}
+	return NarrateWith(c, func(w Wording) Narration { return Narration{Voice: VoiceReport, Say: w.Line(key, nil)} })
 }
 
 // doctorNarration is silent when nothing needs fixing, and one line with
@@ -445,11 +454,12 @@ func doctorNarration(c *cobra.Command, result map[string]any, _ error) Narration
 	if n == 0 {
 		return Narration{Voice: VoiceSilent}
 	}
-	w := CommandWording(c)
-	if n == 1 {
-		return Narration{Voice: VoiceLine, Say: w.Line("say.doctor.issues.one", nil)}
-	}
-	return Narration{Voice: VoiceLine, Say: w.Line("say.doctor.issues.other", V{"count": fmt.Sprint(n)})}
+	return NarrateWith(c, func(w Wording) Narration {
+		if n == 1 {
+			return Narration{Voice: VoiceLine, Say: w.Line("say.doctor.issues.one", nil)}
+		}
+		return Narration{Voice: VoiceLine, Say: w.Line("say.doctor.issues.other", V{"count": fmt.Sprint(n)})}
+	})
 }
 
 // countIssues counts the "issue" members anywhere in a doctor report.
@@ -481,11 +491,28 @@ func countIssues(v any) int {
 // Speak adds the narration build makes with p's wording to out. When the
 // pinned pack cannot be used, the result says so ("wording": "built-in").
 func Speak(out map[string]any, p Profile, build func(Wording) Narration) map[string]any {
-	w, problem := ActiveWording(p)
-	if problem != "" {
-		out["wording"] = w.Source
+	return Narrate(out, speakWith(p, true, build))
+}
+
+// speakWith builds a narration with p's wording (or the built-in pack when
+// there is no profile), marked when a pinned pack could not be used.
+func speakWith(p Profile, hasProfile bool, build func(Wording) Narration) Narration {
+	w, problem := BuiltinWording(), ""
+	if hasProfile {
+		w, problem = ActiveWording(p)
 	}
-	return Narrate(out, build(w))
+	n := build(w)
+	if problem != "" {
+		n.Wording = w.Source
+	}
+	return n
+}
+
+// NarrateWith builds a narration with the selected profile's wording, or
+// the built-in pack when no profile is selected.
+func NarrateWith(c *cobra.Command, build func(Wording) Narration) Narration {
+	p, err := Selected(c)
+	return speakWith(p, err == nil, build)
 }
 
 // AskText is a card as the lines the user reads: the tag, the question,

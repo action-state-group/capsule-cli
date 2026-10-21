@@ -2,11 +2,14 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/action-state-group/capsule-cli/internal/settlement"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +23,11 @@ import (
 // noted before it is sent), after it (it happened outside: act, payment,
 // delivery, close, evidence), or neither.
 func dealErrorPhase(c *cobra.Command) string {
+	if c.Parent() == nil || c.Parent().Name() != "deal" {
+		// A sale's commands, and anything below them, record no step of
+		// the user's own.
+		return "other"
+	}
 	switch c.Name() {
 	case "check", "open":
 		return "before"
@@ -85,6 +93,9 @@ func approvalNarration(w cli.Wording, a dealApproval, events []sealedEvent, stat
 				}
 			}
 		}
+		if action == "pay" && amount == "" {
+			action = "other"
+		}
 		if text := w.Line("say.approval.proceed."+action, cli.V{"amount": amount}); text != "" {
 			return line(text)
 		}
@@ -100,26 +111,35 @@ func approvalNarration(w cli.Wording, a dealApproval, events []sealedEvent, stat
 // limits in force: no check stands behind it and no button says yes, as
 // confirm_limits takes the user's own words.
 func intentAsk(w cli.Wording, inForce, proposed dealLimitSet, currency string) cli.Narration {
-	var question string
-	switch {
-	case proposed.MaxTotalMinor != nil && inForce.MaxTotalMinor != nil && *proposed.MaxTotalMinor > *inForce.MaxTotalMinor:
-		question = w.Line("card.question.limit", cli.V{"from": formatMoney(*inForce.MaxTotalMinor, currency), "to": formatMoney(*proposed.MaxTotalMinor, currency)})
-	case proposed.MinTotalMinor != nil && inForce.MinTotalMinor != nil && *proposed.MinTotalMinor < *inForce.MinTotalMinor:
-		question = w.Line("card.question.floor", cli.V{"from": formatMoney(*inForce.MinTotalMinor, currency), "to": formatMoney(*proposed.MinTotalMinor, currency)})
-	default:
-		var actions []string
-		for _, a := range proposed.Allowed {
-			if inForce.Allowed != nil && !containsString(inForce.Allowed, a) {
-				if word := w.Line("action."+a, nil); word != "" {
-					actions = append(actions, word)
-				} else {
-					actions = append(actions, strings.ReplaceAll(a, "_", " "))
-				}
+	// Every change the note asks for is on the card: confirming it applies
+	// them all.
+	var changes []string
+	if p, f := proposed.MaxTotalMinor, inForce.MaxTotalMinor; p != nil && f != nil && *p > *f {
+		changes = append(changes, w.Line("card.change.limit", cli.V{"from": formatMoney(*f, currency), "to": formatMoney(*p, currency)}))
+	}
+	if p, f := proposed.MinTotalMinor, inForce.MinTotalMinor; p != nil && f != nil && *p < *f {
+		changes = append(changes, w.Line("card.change.floor", cli.V{"from": formatMoney(*f, currency), "to": formatMoney(*p, currency)}))
+	}
+	var actions []string
+	for _, a := range proposed.Allowed {
+		if inForce.Allowed != nil && !containsString(inForce.Allowed, a) {
+			if word := w.Line("action."+a, nil); word != "" {
+				actions = append(actions, word)
+			} else {
+				actions = append(actions, strings.ReplaceAll(a, "_", " "))
 			}
 		}
-		question = w.Line("card.question.permission", cli.V{"action": listWords(actions, "and")})
 	}
-	ask := cli.Ask{Tag: w.Line("card.tag.ask", nil), Question: question, Reply: "words",
+	if len(actions) > 0 {
+		changes = append(changes, w.Line("card.change.permission", cli.V{"action": listWords(actions, "and")}))
+	}
+	if len(changes) == 0 {
+		// More than the limits in force, in no way named above (what the
+		// buyer is told, say).
+		changes = append(changes, w.Line("card.change.other", nil))
+	}
+	question := w.Line("card.question.changes", cli.V{"changes": capitalize(listWords(changes, "and"))})
+	ask := cli.Ask{Tag: w.Line("card.tag.ask", nil), Question: question, Reply: "words", HoldSay: w.Line("say.approval.limit_hold", nil),
 		Options: []cli.AskOption{{Label: w.Line("card.button.hold", nil), Choice: "hold"}}}
 	return cli.Narration{Voice: cli.VoiceAsk, Ask: &ask, Say: cli.AskText(w, ask)}
 }
@@ -142,27 +162,18 @@ func receiptLines(w cli.Wording, events []sealedEvent) []string {
 	if err != nil {
 		return nil
 	}
-	currency := state.terms.Currency
-	var paid *int64
-	for _, se := range events {
-		if a := se.Event.Act; se.Event.Kind == "act" && a != nil && a.Action == "pay" && a.AmountMinor != nil && a.Direction != "in" {
-			total := *a.AmountMinor
-			if paid != nil {
-				total += *paid
-			}
-			paid = &total
-			if a.Currency != "" {
-				currency = a.Currency
-			}
-		}
-	}
 	var lines []string
 	item := shortTitle(state.terms.Item)
-	if paid != nil {
-		amount := formatMoney(*paid, currency)
-		switch limit := state.intent.MaxTotalMinor; {
-		case item != "" && limit != nil && *paid <= *limit:
-			lines = append(lines, w.Line("say.receipt.done.within", cli.V{"item": item, "amount": amount, "limit": formatMoney(*limit, currency)}))
+	// Money as the receipt states it (buildDealMoney): the net paid in the
+	// deal's currency. An act in another currency is never added to it, and
+	// then the limit, set in the deal's currency, is not compared.
+	if m := buildDealMoney(events, state.terms.Currency); m != nil && m.PaidMinor > 0 {
+		amount := formatMoney(m.NetMinor, m.Currency)
+		limit := state.intent.MaxTotalMinor
+		sameCurrency := m.Other == 0 && strings.EqualFold(m.Currency, state.terms.Currency)
+		switch {
+		case item != "" && limit != nil && sameCurrency && m.NetMinor <= *limit:
+			lines = append(lines, w.Line("say.receipt.done.within", cli.V{"item": item, "amount": amount, "limit": formatMoney(*limit, m.Currency)}))
 		case item != "":
 			lines = append(lines, w.Line("say.receipt.done", cli.V{"item": item, "amount": amount}))
 		default:
@@ -175,16 +186,24 @@ func receiptLines(w cli.Wording, events []sealedEvent) []string {
 		if se.Event.Kind != "approval" || a == nil || !a.Proceed || a.Reason != "" || a.Approver == "standing_intent" {
 			continue
 		}
-		key := "say.receipt.what.other"
+		key, amount := "say.receipt.what.other", ""
 		if check, _, ok := checkedCard(events, a.Check); ok {
 			switch check.Event.Check.Action {
 			case "pay":
 				key = "say.receipt.what.pay"
+				for _, se := range events {
+					if snap := se.Event.Snapshot; se.CapsuleID == check.Event.Check.Snapshot && snap != nil && snap.AmountMinor != nil {
+						amount = formatMoney(*snap.AmountMinor, state.terms.Currency)
+					}
+				}
+				if amount == "" {
+					key = "say.receipt.what.pay.no_amount"
+				}
 			case "share_contact", "share_credentials":
 				key = "say.receipt.what.share"
 			}
 		}
-		if text := w.Line(key, nil); !containsString(what, text) || key == "say.receipt.what.pay" {
+		if text := w.Line(key, cli.V{"amount": amount}); text != "" && (!containsString(what, text) || key != "say.receipt.what.share") {
 			what = append(what, text)
 		}
 	}
@@ -238,10 +257,10 @@ func (s *dealSession) writeReceiptPage(ctx context.Context, events []sealedEvent
 	return cli.AtomicFile(htmlPath, []byte(page), false)
 }
 
-// stepReport is a step's report, with its receipt page when htmlPath is
+// stepReport is a step's narration (voice: a report, or a line), with its receipt page when htmlPath is
 // given. The step is already sealed: a page that fails is said in
 // attach_error, never as a failed step.
-func (s *dealSession) stepReport(ctx context.Context, out map[string]any, events []sealedEvent, htmlPath string, lines func(cli.Wording) []string) map[string]any {
+func (s *dealSession) stepReport(ctx context.Context, out map[string]any, events []sealedEvent, htmlPath, voice string, lines func(cli.Wording) []string) map[string]any {
 	written := ""
 	if htmlPath != "" {
 		if err := s.writeReceiptPage(ctx, events, htmlPath); err != nil {
@@ -255,7 +274,9 @@ func (s *dealSession) stepReport(ctx context.Context, out map[string]any, events
 		if _, failed := out["attach_error"]; failed {
 			said = append(said, w.Line("report.attach_failed", nil))
 		}
-		return report(w, said, written)
+		n := report(w, said, written)
+		n.Voice = voice
+		return n
 	})
 }
 
@@ -296,11 +317,7 @@ func reportSay(out map[string]any, p cli.Profile, events []sealedEvent, htmlPath
 // speakFor narrates out with the selected profile's wording, or the
 // built-in pack when no profile is selected.
 func speakFor(c *cobra.Command, out map[string]any, build func(cli.Wording) cli.Narration) map[string]any {
-	p, err := cli.Selected(c)
-	if err != nil {
-		return cli.Narrate(out, build(cli.BuiltinWording()))
-	}
-	return cli.Speak(out, p, build)
+	return cli.Narrate(out, cli.NarrateWith(c, build))
 }
 
 // localDate is a YYYY-MM-DD date as a chat line says it: "Nov 2".
@@ -323,4 +340,44 @@ func countersignerName(v dealCountersignView) string {
 		}
 	}
 	return ""
+}
+
+// receivedAmount is what a payee's observed leg says arrived, in the asset's
+// own units ("450.00 USDC"), or "" when the leg does not say.
+func receivedAmount(leg json.RawMessage) string {
+	var m struct {
+		Received struct {
+			Value      string      `json:"value"`
+			AssetCode  string      `json:"assetCode"`
+			AssetScale json.Number `json:"assetScale"`
+		} `json:"received"`
+	}
+	var name string
+	if json.Unmarshal(leg, &m) != nil || m.Received.Value == "" {
+		return ""
+	}
+	if name = settlement.AssetName(m.Received.AssetCode); name == "" {
+		// An asset id is not something to read out.
+		return ""
+	}
+	value, ok := new(big.Int).SetString(m.Received.Value, 10)
+	scale, err := m.Received.AssetScale.Int64()
+	if !ok || err != nil || scale < 0 || scale > 30 {
+		return ""
+	}
+	amount := new(big.Rat).SetFrac(value, new(big.Int).Exp(big.NewInt(10), big.NewInt(scale), nil))
+	places := int(scale)
+	if places > 2 {
+		places = 2
+	}
+	return amount.FloatString(places) + " " + name
+}
+
+// capitalize starts a sentence with a capital letter.
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	return strings.ToUpper(string(r[0])) + string(r[1:])
 }

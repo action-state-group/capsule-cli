@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/action-state-group/capsule-cli/internal/settlement"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,10 @@ func TestTheBuiltInWordingPackIsValidAndPlain(t *testing.T) {
 	assert.Equal(t, "built-in", w.Source)
 	for key, text := range w.Entries {
 		AssertPlainWords(t, key, text)
+		// The neutral pack names no product, price or registry.
+		for _, product := range []string{"Muse", "Buzz", "Action State", "Checkup", "registry", "pricing"} {
+			assert.NotContains(t, text, product, key)
+		}
 	}
 }
 
@@ -355,4 +360,83 @@ func TestDoctorNamesAPinnedPackItCannotUse(t *testing.T) {
 	p, e = LoadProfile("one")
 	require.NoError(t, e)
 	assert.Equal(t, ProfileWording{}, p.Wording)
+}
+
+// The whole path a main takes: what the command printed is counted, and a
+// failure gets an error object only when nothing was printed.
+func TestRunWritesOneObjectAtMost(t *testing.T) {
+	run := func(t *testing.T, body func(c *cobra.Command) error) (string, string, int) {
+		t.Helper()
+		root := &cobra.Command{Use: "capsulectl", SilenceErrors: true, SilenceUsage: true}
+		root.PersistentFlags().String("profile", "", "")
+		root.AddCommand(&cobra.Command{Use: "x", RunE: func(c *cobra.Command, _ []string) error { return body(c) }})
+		root.SetArgs([]string{"x"})
+		stdout, err := os.CreateTemp(t.TempDir(), "stdout")
+		require.NoError(t, err)
+		var stderr bytes.Buffer
+		code := runTo(t.Context(), root, "capsulectl", stdout, &stderr)
+		raw, err := os.ReadFile(stdout.Name())
+		require.NoError(t, err)
+		return string(raw), stderr.String(), code
+	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	out, errLine, code := run(t, func(*cobra.Command) error { return InputError("--deal is required") })
+	assert.Equal(t, 2, code)
+	assert.Equal(t, "capsulectl: invalid input or profile configuration: --deal is required\n", errLine)
+	var obj map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &obj), out)
+	assert.Equal(t, "error", obj["voice"])
+
+	out, _, code = run(t, func(c *cobra.Command) error {
+		require.NoError(t, Output(c, map[string]any{"verified": false}))
+		return ErrPartial
+	})
+	assert.Equal(t, 3, code)
+	assert.Equal(t, 1, strings.Count(out, "\n"), "the result alone: %s", out)
+	assert.NotContains(t, out, `"voice":"error"`)
+
+	out, _, _ = run(t, func(c *cobra.Command) error {
+		_, err := c.OutOrStdout().Write([]byte("a text report\n"))
+		require.NoError(t, err)
+		return ErrSchemaInvalid
+	})
+	assert.Equal(t, "a text report\n", out)
+
+	out, _, code = run(t, func(*cobra.Command) error { return &PluginExit{Code: 5} })
+	assert.Equal(t, 5, code)
+	assert.Empty(t, out, "a plugin that ran spoke for itself")
+}
+
+// When the pinned pack cannot be used, every result the built-in pack
+// speaks says so, an error and a verify report among them.
+func TestEveryFallbackIsMarked(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	_, e := invoke(t, "", "profile", "create", "--name", "one", "--type", "mysql", "--mysql-host", "localhost", "--mysql-database", "local", "--mysql-tls", "false", "--log-id", "log-a")
+	require.NoError(t, e)
+	pack := writePack(t, func(map[string]string) {})
+	_, e = invoke(t, "", "profile", "update", "--profile", "one", "--wording", pack)
+	require.NoError(t, e)
+	require.NoError(t, os.Remove(pack))
+
+	cmd := &cobra.Command{Use: "check"}
+	cmd.Flags().String("profile", "one", "")
+	assert.Equal(t, "built-in", errorObject(cmd, InputError("x"))["wording"])
+	assert.Equal(t, "built-in", verifyNarration(cmd, nil, nil).Wording)
+	assert.Equal(t, "", verifyNarration(&cobra.Command{Use: "verify"}, nil, nil).Wording, "no profile: the built-in pack is the one in use")
+}
+
+func TestASettlementSaysItsWorstState(t *testing.T) {
+	of := func(states ...string) settlement.Result {
+		var r settlement.Result
+		for _, s := range states {
+			r.Settlements = append(r.Settlements, settlement.Settlement{PaymentState: s})
+		}
+		return r
+	}
+	assert.Equal(t, "say.settlement.terms_only", settlementKey(of()))
+	assert.Equal(t, "say.settlement.agreed", settlementKey(of(settlement.PaymentAgreed)))
+	assert.Equal(t, "say.settlement.one_side", settlementKey(of(settlement.PaymentAgreed, settlement.PaymentPayeeStated)))
+	assert.Equal(t, "say.settlement.unjoined", settlementKey(of(settlement.PaymentPayerStated, settlement.PaymentUnjoined)))
+	assert.Equal(t, "say.settlement.mismatch", settlementKey(of(settlement.PaymentUnjoined, settlement.PaymentMismatch, settlement.PaymentAgreed)))
 }

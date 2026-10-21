@@ -178,7 +178,7 @@ func TestEveryDealCommandSpeaks(t *testing.T) {
 	assert.Equal(t, cli.VoiceReport, act["voice"])
 	assert.NotContains(t, act, "attach", "no page without --html")
 	assert.NotContains(t, act["say"], words("report.view_details"))
-	assert.True(t, strings.HasPrefix(act["say"].(string), "Done: Fawn Sticker, $1.90, within your $5.00."), act["say"])
+	assert.True(t, strings.HasPrefix(act["say"].(string), "Done: Fawn Sticker, $1.90, within your $5.00 limit."), act["say"])
 	plainSay(t, "act", act)
 
 	// A report with a page says View details and attaches it.
@@ -203,9 +203,18 @@ func TestEveryDealCommandSpeaks(t *testing.T) {
 	for _, args := range [][]string{
 		{"export", "--deal", id, "--output", filepath.Join(t.TempDir(), "export.json")},
 		{"checkpoint", "status", "--deal", id},
+		{"tick"},
 	} {
 		out := dealRun(t, args...)
 		assert.Equal(t, cli.VoiceSilent, out["voice"], args[0])
+		assert.NotContains(t, out, "say", args[0])
+	}
+	for _, args := range [][]string{{"--profile", "deal", "profile", "show", "deal"}, {"plugin", "ls"}} {
+		out, err := invoke(t, "", args...)
+		require.NoError(t, err, out)
+		var m map[string]any
+		require.NoError(t, json.Unmarshal([]byte(out), &m), out)
+		assert.Equal(t, cli.VoiceSilent, m["voice"], args)
 	}
 
 	// Reports across deals.
@@ -247,7 +256,9 @@ func TestPaymentAndDeliveryNotesSayOneLine(t *testing.T) {
 	terms, _ := buyer.terms()
 	paid := notePaymentReceived(t, id, terms, x402Settle(true))
 	assert.Equal(t, cli.VoiceLine, paid["voice"])
-	assert.Equal(t, words("say.payment_received"), paid["say"])
+	assert.Equal(t, "Payment received: 1.50 USDC.", paid["say"], "the amount, with the asset's name, never its id")
+	assert.Equal(t, "", receivedAmount([]byte(`{"received":{"value":"150","assetCode":"eip155:1/erc20:0xabc","assetScale":2}}`)), "an unknown asset is not read out")
+	assert.Equal(t, "", receivedAmount([]byte(`{}`)))
 	delivered := dealRun(t, "note", "--deal", id, "--kind", "delivered", "--terms", terms,
 		"--content", writeFile(t, "content.bin", deliveredContent), "--resolves", dueStep)
 	assert.Equal(t, cli.VoiceLine, delivered["voice"])
@@ -262,17 +273,29 @@ func TestPaymentAndDeliveryNotesSayOneLine(t *testing.T) {
 }
 
 func TestAFailedDealStepSaysWhetherItHappened(t *testing.T) {
+	deal := &cobra.Command{Use: "deal"}
 	note := func(kind string) *cobra.Command {
 		c := &cobra.Command{Use: "note"}
 		c.Flags().String("kind", kind, "")
+		deal.AddCommand(c)
 		return c
 	}
+	under := func(name string) *cobra.Command {
+		c := &cobra.Command{Use: name}
+		deal.AddCommand(c)
+		return c
+	}
+	sale := &cobra.Command{Use: "sale"}
+	saleClose := &cobra.Command{Use: "close"}
+	sale.AddCommand(saleClose)
+	deal.AddCommand(sale)
+	assert.Equal(t, "other", dealErrorPhase(saleClose), "a sale's close records no step of the user's own")
 	for _, tc := range []struct {
 		cmd   *cobra.Command
 		phase string
 	}{
-		{&cobra.Command{Use: "check"}, "before"},
-		{&cobra.Command{Use: "open"}, "before"},
+		{under("check"), "before"},
+		{under("open"), "before"},
 		{note("approval"), "before"},
 		{note("intent"), "before"},
 		{note("disclosure"), "before"},
@@ -280,10 +303,60 @@ func TestAFailedDealStepSaysWhetherItHappened(t *testing.T) {
 		{note("evidence"), "after"},
 		{note(noteKindPaymentReceived), "after"},
 		{note(noteKindDelivered), "after"},
-		{&cobra.Command{Use: "close"}, "after"},
+		{under("close"), "after"},
 		{note("message"), "other"},
-		{&cobra.Command{Use: "report"}, "other"},
+		{under("report"), "other"},
 	} {
 		assert.Equal(t, tc.phase, dealErrorPhase(tc.cmd), tc.cmd.Name())
 	}
+}
+
+// A note asking for several changes names them all: confirming it applies
+// them all.
+func TestALimitRaiseCardNamesEveryChange(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	raise := dealRun(t, "note", "--deal", id, "--kind", "intent", "--input", writeJSON(t, `{"verbatim":"up to $5, and you can give them my login","max_total_minor":500,"allowed":["pay","share_contact","share_credentials"]}`))
+	ask := raise["ask"].(map[string]any)
+	assert.Equal(t, "Raise your limit from $2.00 to $5.00 and let me also share a login or code on this errand?", ask["question"])
+	assert.Equal(t, words("say.approval.limit_hold"), ask["hold_say"])
+}
+
+// The receipt says what each OK'd payment was, and never adds money of two
+// currencies.
+func TestTheReceiptSaysWhatWasOKd(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":250,"authorized_max_minor":250,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
+	require.Equal(t, "pause", pay["verdict"])
+	_, err := answer(t, id, pay["check_id"].(string), "ok pay it", shownCard(t, pay["card"].(string)))
+	require.NoError(t, err)
+	act := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":250,"rail":"card"}`))
+	lines := strings.Split(act["say"].(string), "\n")
+	assert.Equal(t, "Done: Fawn Sticker, $2.50.", lines[0], "over the limit: not said to be within it")
+	assert.Equal(t, "You OK'd 1 thing on the way: paying $2.50.", lines[1])
+
+	other := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":100,"currency":"EUR","rail":"card"}`))
+	assert.True(t, strings.HasPrefix(other["say"].(string), "Done: Fawn Sticker, $2.50."), "the euro payment is not added to the dollars: %s", other["say"])
+}
+
+// No value is spoken empty: a missing amount, price or name picks the line
+// that does without it.
+func TestNoLineIsSpokenHalfFilled(t *testing.T) {
+	w := cli.BuiltinWording()
+	assert.Equal(t, words("say.approval.proceed.other"), approvalNarration(w, dealApproval{Choice: "proceed"}, nil, dealState{}).Say)
+	assert.Equal(t, "Listed: bike; I'll keep each buyer in their own thread.", w.Line("say.sale.new.no_price", cli.V{"item": "bike"}))
+	assert.Equal(t, words("say.countersign.ok.unnamed"), "Countersigned.")
+}
+
+// --html never goes unsaid: on a deferred email the result says why there
+// is no page, and a pending close still writes it.
+func TestHTMLIsNeverDroppedSilently(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	page := filepath.Join(t.TempDir(), "pending.html")
+	pending := dealRun(t, "close", "--deal", id, "--html", page, "--input", writeJSON(t, `{"status":"pending"}`))
+	assert.Equal(t, cli.VoiceLine, pending["voice"])
+	assert.Equal(t, page, pending["attach"].(map[string]any)["path"])
+	require.FileExists(t, page)
 }

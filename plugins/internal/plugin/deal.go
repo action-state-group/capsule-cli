@@ -64,7 +64,10 @@ type dealSession struct {
 	dkey   []byte // the current deal's key
 	unlock func() error
 	shared bool // a read under the shared lock (openDealStoreRead)
-	closed bool
+	// htmlDeferred is a --html given with an email that is deferred: no
+	// page is written until the email is sealed, and the result says so.
+	htmlDeferred bool
+	closed       bool
 	// shelf is the deal store's one writer (deal_shelf.go), open from
 	// openDealSession until close; legacy is the current deal's log on it,
 	// and cadence the profile's cadence once opened.
@@ -1640,6 +1643,9 @@ func dealNoteCommand() *cobra.Command {
 				}
 			}
 			if deferred != nil {
+				// Nothing is sealed yet, so the receipt has not changed: the
+				// page waits for the tick that seals the email.
+				s.htmlDeferred = htmlPath != ""
 				return s.deferEmail(ctx, c, dealID, *ev.Evidence, deferred.raw)
 			}
 			se, err := s.seal(ctx, dealID, events, ev)
@@ -1694,7 +1700,7 @@ func dealNoteCommand() *cobra.Command {
 				out["reason"] = ev.Act.Reason
 				out["rule"] = ev.Act.Rule
 				all := append(events, se)
-				s.stepReport(ctx, out, all, htmlPath, func(w cli.Wording) []string { return receiptLines(w, all) })
+				s.stepReport(ctx, out, all, htmlPath, cli.VoiceReport, func(w cli.Wording) []string { return receiptLines(w, all) })
 			case "claim":
 				if cl := ev.Claim; cl.SourceKind == "agent" && representationRules(events) {
 					out["authorized_by"] = cl.AuthorizedBy
@@ -1730,13 +1736,17 @@ func dealNoteCommand() *cobra.Command {
 				all := append(events, se)
 				switch {
 				case settlementKind == noteKindPaymentReceived:
-					cli.Speak(out, s.p, func(w cli.Wording) cli.Narration { return line(w.Line("say.payment_received", nil)) })
+					cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
+						if amount := receivedAmount(ev.Evidence.Settlement); amount != "" {
+							return line(w.Line("say.payment_received.amount", cli.V{"amount": amount}))
+						}
+						return line(w.Line("say.payment_received", nil))
+					})
 				case settlementKind == noteKindDelivered:
 					cli.Speak(out, s.p, func(w cli.Wording) cli.Narration { return line(w.Line("say.delivered", nil)) })
 				case ev.Evidence.Email != nil:
 					if state, err := foldDeal(all); err == nil {
-						s.stepReport(ctx, out, all, htmlPath, func(w cli.Wording) []string { return emailLines(w, ev.Evidence.Email, state) })
-						out["voice"] = cli.VoiceLine
+						s.stepReport(ctx, out, all, htmlPath, cli.VoiceLine, func(w cli.Wording) []string { return emailLines(w, ev.Evidence.Email, state) })
 					}
 				}
 			}
@@ -2199,9 +2209,9 @@ func dealCloseCommand() *cobra.Command {
 			}
 			all := append(events, se)
 			if key, final := closeKeys[result.Outcome]; final {
-				s.stepReport(ctx, out, all, htmlPath, func(w cli.Wording) []string { return []string{w.Line(key, nil)} })
+				s.stepReport(ctx, out, all, htmlPath, cli.VoiceReport, func(w cli.Wording) []string { return []string{w.Line(key, nil)} })
 			} else {
-				cli.Speak(out, s.p, func(w cli.Wording) cli.Narration { return line(w.Line("say.close.open", nil)) })
+				s.stepReport(ctx, out, all, htmlPath, cli.VoiceLine, func(w cli.Wording) []string { return []string{w.Line("say.close.open", nil)} })
 			}
 			return cli.Output(c, out)
 		})

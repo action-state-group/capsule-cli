@@ -85,11 +85,10 @@ func dealSaleNewCommand() *cobra.Command {
 			out := map[string]any{"sale_id": saleID, "task_authority_digest": authority.Digest, "checkpoint": cp,
 				"next": "open each buyer's thread with deal open --sale " + saleID + " (its input names the buyer and the terms with them)"}
 			return cli.Output(c, cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
-				price := ""
-				if o.Terms.PriceMinor != nil {
-					price = formatMoney(*o.Terms.PriceMinor, o.Terms.Currency)
+				if o.Terms.PriceMinor == nil {
+					return line(w.Line("say.sale.new.no_price", cli.V{"item": shortTitle(o.Terms.Item)}))
 				}
-				return line(w.Line("say.sale.new", cli.V{"item": shortTitle(o.Terms.Item), "price": price}))
+				return line(w.Line("say.sale.new", cli.V{"item": shortTitle(o.Terms.Item), "price": formatMoney(*o.Terms.PriceMinor, o.Terms.Currency)}))
 			}))
 		})
 	}}

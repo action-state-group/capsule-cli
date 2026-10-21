@@ -7,7 +7,11 @@ execution host. No database credentials belong in prompts or skill output.
 
 All successful stdout is a flat JSON object with `spec_version=capsule-cli-result/v1`.
 There is no result wrapper. Check process exit status before parsing; a JSON
-report does not imply success. Errors: 1 operational, 2 input, 3 partial
+report does not imply success. Every result object carries `voice` (`silent`,
+`ask`, `line`, `report` or `error`) and, when it speaks, `say`: the words to
+tell the user, verbatim. A command that fails without printing a result
+prints one object with `voice: "error"`, `hold: true`, `say` and the reason in
+`error`, after the usual stderr line and with the same exit status. Errors: 1 operational, 2 input, 3 partial
 verification, 4 publication pending, 5 conflict. Never suppress errors with an
 empty-list fallback.
 

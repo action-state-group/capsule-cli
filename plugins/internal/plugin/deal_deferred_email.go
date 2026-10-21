@@ -109,6 +109,9 @@ func (s *dealSession) deferEmail(ctx context.Context, c *cobra.Command, dealID s
 		"message_digest": emailDigest(raw),
 		"next":           "nothing to do now: the signing domain's key could not be read from this device, so the email is kept here unsealed and the next `deal tick` reads the key and seals it; on the next turn about this deal, run deal report --html and send the updated receipt if the email is sealed by then",
 	}
+	if s.htmlDeferred {
+		out["attach_error"] = "no receipt page yet: the email is not sealed, so the receipt has not changed"
+	}
 	cli.Speak(out, s.p, func(w cli.Wording) cli.Narration { return line(w.Line("say.email.deferred", nil)) })
 	// Read from the email alone, no key needed: still only a proposal.
 	if hint := obligationHint(parseMerchantEmail(raw)); hint != nil && ev.Obligation == nil {

@@ -900,7 +900,7 @@ func dealVerifyEmailCommand() *cobra.Command {
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
 			var results []map[string]any
-			signedBy := ""
+			signedBy, fromDomain := "", ""
 			ok := true
 			for _, se := range events {
 				m := se.Event.Evidence
@@ -931,6 +931,9 @@ func dealVerifyEmailCommand() *cobra.Command {
 				if signedBy == "" && v.Result == "pass" && v.Merchant {
 					signedBy = v.signer()
 				}
+				if fromDomain == "" {
+					fromDomain = v.FromDomain
+				}
 				results = append(results, r)
 			}
 			if len(results) == 0 {
@@ -938,6 +941,9 @@ func dealVerifyEmailCommand() *cobra.Command {
 			}
 			out := map[string]any{"deal_id": dealID, "scope": emailScopeLine, "verified": ok, "emails": results}
 			sender, domain := recipientName(events[0].Event.Open.Who), signedBy
+			if sender == "" {
+				sender = fromDomain
+			}
 			cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
 				if ok && domain != "" {
 					return line(w.Line("say.verify_email.ok", cli.V{"sender": sender, "domain": domain}))

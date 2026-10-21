@@ -260,10 +260,15 @@ func dealCountersignCommand() *cobra.Command {
 			}
 			cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
 				who := countersignerName(view)
-				if view.Rung == "countersigned" {
+				switch {
+				case view.Rung == "countersigned" && who != "":
 					return line(w.Line("say.countersign.ok", cli.V{"who": who}))
+				case view.Rung == "countersigned":
+					return line(w.Line("say.countersign.ok.unnamed", nil))
+				case who != "":
+					return line(w.Line("say.countersign.failed", cli.V{"who": who}))
 				}
-				return line(w.Line("say.countersign.failed", cli.V{"who": who}))
+				return line(w.Line("say.countersign.failed.unnamed", nil))
 			})
 			return cli.Output(c, out)
 		})

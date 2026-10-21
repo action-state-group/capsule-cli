@@ -358,7 +358,7 @@ capsulectl. Follow them; never make up your own narration of a step.
     can) and offer `options` as buttons, as the Rules below say. When
     `ask.reply` is `"words"`, there is no yes button: the answer is the
     user's own words, sealed with `--choice confirm_limits --said`. If
-    they hold, run nothing and say nothing more.
+    they hold, run nothing and say `ask.hold_say`.
   - `report`: say `say`; when the result has `attach`, send that file next,
     in its own message, after the "View details" line.
   - `error`: say `say`, then stop. Nothing is paid or shared after it. When
