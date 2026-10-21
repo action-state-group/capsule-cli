@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Merchant email keys over DNS-over-HTTPS (capsule-cli#343)
+
+- **Added: a DNS-over-HTTPS fallback for DKIM and DMARC records.** `deal
+  note --email` and `deal tick` read them over DoH (RFC 8484) in the same call
+  when the system resolver hands out placeholder addresses (198.18.0.0/15 or
+  IPv6 unique local addresses), cannot be reached, or finds no DKIM key. A
+  proxied resolver is asked last, and counts only when it finds every key.
+  The default endpoints are Cloudflare and Google, by name and then by
+  address. This sends the looked-up names (`selector._domainkey.<signing
+  domain>`, `_dmarc.<From domain>`) to the DoH provider, which learns which
+  merchants email the user, so DoH is a fallback only. `CAPSULECTL_DOH` sets
+  the endpoints or turns DoH off.
+- **Added: `key_resolver` and `key_dnssec` on `merchant_email`.** A new
+  record says whether its records came from the system resolver or over DoH
+  (`system` | `doh`), and whether the DoH resolver reported that it validated
+  DNSSEC (`resolver_validated` | `not_validated`; capsulectl does not check
+  the chain itself). Records sealed before keep their bytes and have neither
+  field. The DoH endpoint stays on the device.
+- **Changed: a deferred email states its reason.** `deal note` and each
+  `waiting` entry of `deal tick` give the `reason` the records could not be
+  read.
+
 ### Every command says what to tell the user; the check card; one verdict on the receipt (capsule-cli#345, #344, #341)
 
 - **Added:** every result object carries `voice` (`silent`, `ask`, `line`,

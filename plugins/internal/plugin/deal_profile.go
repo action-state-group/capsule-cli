@@ -538,6 +538,10 @@ func merchantEmailBody(m *merchantEmail, first dealWho, commit func(string) (str
 		"message_digest": emailDigest(m.Raw), "key_records_digest": keys, "key_source": m.KeySource,
 		"dkim": m.DKIM.Result, "merchant_signed": m.DKIM.Merchant, "dmarc_policy": m.DKIM.Policy,
 	}
+	if m.Resolver != "" {
+		// How the records were read; the endpoint URL stays on the device.
+		out["key_resolver"], out["key_dnssec"] = m.Resolver, m.DNSSEC
+	}
 	if d, err := m.DMARC.digest(); err != nil {
 		return nil, err
 	} else if d != "" {

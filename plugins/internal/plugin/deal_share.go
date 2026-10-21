@@ -79,7 +79,7 @@ var dealShareKeys = map[string]bool{
 	"commit_alg": true,
 	// A sealed merchant email's record: digests, the DKIM and DMARC verdicts,
 	// where the keys came from, and dates.
-	"key_source": true, "dkim": true, "dmarc_policy": true, "dmarc_source": true, "method": true,
+	"key_source": true, "key_resolver": true, "key_dnssec": true, "dkim": true, "dmarc_policy": true, "dmarc_source": true, "method": true,
 	"cancel_by": true, "due_by": true, "sent_at": true,
 	// When the deal is expected to close: a date.
 	"expect_close_by": true,

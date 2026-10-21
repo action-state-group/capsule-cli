@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"encoding/json"
+	"net"
 	"os"
 	"os/exec"
 	"testing"
@@ -24,6 +25,10 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	os.Setenv("HOME", home)
+	// No test reaches a real resolver: the DoH tests name their own
+	// endpoints, and the probe finds no proxy unless a test says so.
+	os.Setenv(dohEnv, "off")
+	systemProbe = func(string) ([]net.IP, error) { return nil, nil }
 	cli.SetBookBackend(BookBackend{})
 	InstallDealHooks()
 	code := m.Run()
