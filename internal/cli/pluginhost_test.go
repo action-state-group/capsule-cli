@@ -130,7 +130,7 @@ func TestTransitionalAliasesForwardAndSaySo(t *testing.T) {
 		{[]string{"respond", "--profile", "book"}, "capsulectl-book: respond --profile book", "use `capsulectl book respond"},
 		{[]string{"respond", "--profile", "deal"}, "capsulectl-deal: respond --profile deal", "use `capsulectl deal respond`"},
 		{[]string{"compose", "--deal", "d"}, "capsulectl-deal: compose --deal d", "use `capsulectl deal compose`"},
-		{[]string{"result", "build"}, "capsulectl-book: result build", "use `capsulectl book result`"},
+		{[]string{"result", "open", "r.json"}, "capsulectl-book: result open r.json", "use `capsulectl book result open`"},
 		{[]string{"report", "build"}, "capsulectl-book: report build", "use `capsulectl book report`"},
 		{[]string{"backfill", "run"}, "capsulectl-book: backfill run", "use `capsulectl book backfill`"},
 		{[]string{"store", "migrate", "--profile", "book", "--log-id", "b2"}, "capsulectl-book: migrate --profile book --log-id b2", "use `capsulectl book migrate"},
@@ -153,7 +153,7 @@ func TestTransitionalAliasesHelpSaysDeprecated(t *testing.T) {
 	require.NoError(t, err)
 	for _, alias := range []struct{ name, replacement string }{
 		{"close", "book close"}, {"reconcile", "book reconcile"}, {"request", "book request"},
-		{"respond", "book respond"}, {"compose", "deal compose"}, {"result", "book result"},
+		{"respond", "book respond"}, {"compose", "deal compose"},
 		{"report", "book report"}, {"backfill", "book backfill"},
 	} {
 		want := "Deprecated: use `capsulectl " + alias.replacement
@@ -166,6 +166,29 @@ func TestTransitionalAliasesHelpSaysDeprecated(t *testing.T) {
 	help, err := invoke(t, "", "store", "migrate", "--help")
 	require.NoError(t, err)
 	assert.Contains(t, help, "Deprecated: use `capsulectl book migrate`")
+	// `result build` is the core's (capsule-cli#324); only `result open`
+	// still forwards.
+	help, err = invoke(t, "", "result", "open", "--help")
+	require.NoError(t, err)
+	assert.Contains(t, help, "Deprecated: use `capsulectl book result open`")
+	assert.Contains(t, root, "Seal an Evidence Result v0")
+}
+
+// On a book profile, whose log is its evidence book, the core's `result
+// build` is still the old alias of `book result build`: it says so and
+// forwards with its flags, and the book seals book form.
+func TestResultBuildOnABookProfileForwardsToTheBook(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	firstPartyPlugins(t)
+	book, _ := profileFixture(t)
+	book.Name, book.Type = "book", "jsonl"
+	book.Connection.Database = t.TempDir()
+	require.NoError(t, SaveProfile(book, false))
+	out, err := invoke(t, "", "result", "build", "--profile", "book", "--result", "r.json", "--out", "o.json")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "ran capsulectl-book: result build --out=o.json --profile=book --result=r.json")
+	assert.Contains(t, out, "on a book profile `capsulectl result build` is `capsulectl book result build`")
+	assert.Contains(t, out, "removed in "+AliasRemovedIn)
 }
 
 // --profile reaches a plugin wherever it is written: before the plugin's

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### `result build` in the core: a Result page with no plugin (capsule-cli#324)
+
+- **Added:** `capsulectl result build --profile NAME --result FILE` seals an
+  Evidence Result v0 into the profile's log as one Capsule whose payload is
+  the Result and whose references cite, `acted_on`, every record its claims
+  cite. It checks the document against the vendored `evidence-result-v0`
+  schema, refuses headline values that do not recompute from the claims and
+  any cited record the profile's log or artifact store does not hold, and
+  seals nothing new for the same document. `--out` writes the canonical
+  Result and `--capsule-out` the sealed Capsule. Then `cll checkpoint create`,
+  `disclose --root` and `presentation build --bundle` write the Result page,
+  with only the core installed.
+- **Changed:** `capsulectl result` is no longer only an alias of
+  `book result`. On a book profile `result build` still forwards to
+  `book result build`, with a notice, until v0.2.0; `result open` still
+  forwards to `book result open`.
+- **Changed:** `book result build` and `deal terms-result` check and
+  canonicalize a Result with the core's code, so all three write the same
+  bytes for the same document. Their output does not change.
+
 ### `deal list --since/--until`: a period's deals, totals and who was told what (capsule-cli#342)
 
 - **Added:** `deal list --since DATE --until DATE` lists the deals with a

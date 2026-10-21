@@ -156,8 +156,8 @@ func decodeJSONNumber(t *testing.T, raw []byte) map[string]interface{} {
 }
 
 func TestResultSchemaIsPinned(t *testing.T) {
-	sum := sha256.Sum256(resultSchemaBytes)
-	assert.Equal(t, resultSchemaDigest, hex.EncodeToString(sum[:]), "schema/evidence-result-v0.json changed: update resultSchemaDigest and resultSchemaSource together")
+	sum := sha256.Sum256(cli.ResultSchemaBytes())
+	assert.Equal(t, cli.ResultSchemaDigest, hex.EncodeToString(sum[:]), "internal/cli/schemas/evidence-result-v0.json changed: update ResultSchemaDigest and ResultSchemaSource together")
 	// The schema and the vectors in testdata/result come from one aac
 	// commit, which testdata/result/UPSTREAM names.
 	upstream, err := os.ReadFile(filepath.Join("testdata", "result", "UPSTREAM"))
@@ -165,9 +165,7 @@ func TestResultSchemaIsPinned(t *testing.T) {
 	repo, vectors, ok := strings.Cut(strings.TrimSpace(string(upstream)), " ")
 	require.True(t, ok)
 	commit, _, _ := strings.Cut(vectors, " ")
-	assert.Equal(t, repo+" "+commit+" schemas/evidence-result-v0.json", resultSchemaSource, "resultSchemaSource must name the commit the vectors were vendored from")
-	_, _, err = resultSchema()
-	require.NoError(t, err)
+	assert.Equal(t, repo+" "+commit+" schemas/evidence-result-v0.json", cli.ResultSchemaSource, "ResultSchemaSource must name the commit the vectors were vendored from")
 }
 
 // walkNegatives are the upstream close vectors that SATISFY the schema by
@@ -293,7 +291,7 @@ func walkVector(t *testing.T, name string, doc resultDocument) error {
 	t.Helper()
 	var hasClose bool
 	for _, claim := range doc.claims {
-		hasClose = hasClose || claim.typ == claimTypeClose
+		hasClose = hasClose || claim.Type == claimTypeClose
 	}
 	if !hasClose {
 		return nil
@@ -313,11 +311,11 @@ func walkVector(t *testing.T, name string, doc resultDocument) error {
 		digests = append(digests, digest)
 	}
 	for _, claim := range doc.claims {
-		if claim.typ != claimTypeClose {
+		if claim.Type != claimTypeClose {
 			continue
 		}
-		closeRecord, ok := byDigest[claim.closeRef]
-		require.True(t, ok, "%s: close_ref resolves in the sidecar", claim.label())
+		closeRecord, ok := byDigest[claim.CloseRef]
+		require.True(t, ok, "%s: close_ref resolves in the sidecar", claim.Label())
 		recordType, _ := closeRecord["record_type"].(string)
 		if err := checkCloseRefs(claim, recordType); err != nil {
 			return err
@@ -329,14 +327,14 @@ func walkVector(t *testing.T, name string, doc resultDocument) error {
 			for _, l := range links {
 				link, _ := l.(map[string]interface{})
 				typ := evidencebook.LinkType(fmt.Sprint(link["type"]))
-				if link["target"] == claim.closeRef && (typ == evidencebook.Acknowledges || typ == evidencebook.Rebuts) {
+				if link["target"] == claim.CloseRef && (typ == evidencebook.Acknowledges || typ == evidencebook.Rebuts) {
 					linkers = append(linkers, closeLinkRecord{recordID: digest, link: typ, book: book, key: digest})
 				}
 			}
 		}
 		closeBook, _ := closeRecord["book_id"].(string)
-		state, linker, ignored := readCloseState(closeBook, claim.closeRef, claim.closePeer, linkers)
-		if err := checkCloseState(claim, claim.closeRef, state, linker, ignored); err != nil {
+		state, linker, ignored := readCloseState(closeBook, claim.CloseRef, claim.ClosePeer, linkers)
+		if err := checkCloseState(claim, claim.CloseRef, state, linker, ignored); err != nil {
 			return err
 		}
 	}
@@ -424,6 +422,13 @@ func TestResultBuildSealsAValidatedResult(t *testing.T) {
 		statement, err := canonical.JCS(decodeJSONNumber(t, sealed.Header.Statement))
 		require.NoError(t, err)
 		assert.Equal(t, string(written), string(statement))
+		// They are the core gate's canonical bytes (capsule-cli#324), which
+		// the core's own `result build --out` writes for this document too.
+		marshalled, err := json.Marshal(doc)
+		require.NoError(t, err)
+		core, _, err := cli.ResultStatement(decodeJSONNumber(t, marshalled))
+		require.NoError(t, err)
+		assert.Equal(t, string(core), string(written))
 		sum := sha256.Sum256(written)
 		assert.Equal(t, hex.EncodeToString(sum[:]), result.StatementDigest)
 		assert.Equal(t, resultVersion, decodeJSONNumber(t, sealed.Header.Statement)["result_version"])
@@ -1158,11 +1163,11 @@ func TestCheckCloseStateRefusesAPeerCloseRefThatDidNotDecide(t *testing.T) {
 	state, linker, ignored := readCloseState("book-a", keyA, "peer-b", linkers)
 	require.Equal(t, string(evidencebook.Agreed), state)
 	require.Equal(t, "peer-ack", linker)
-	claim := resultClaim{index: 0, id: "close-1", closeState: "AGREED", closePeerRef: "some-other-record"}
+	claim := resultClaim{Index: 0, ID: "close-1", CloseState: "AGREED", ClosePeerRef: "some-other-record"}
 	err := checkCloseState(claim, "close-a", state, linker, ignored)
 	require.ErrorIs(t, err, cli.ErrInput)
 	assert.Contains(t, cli.SafeError(err), "cites peer_close_ref some-other-record, but the record whose link makes Close close-a AGREED is peer-ack")
-	claim.closePeerRef = "peer-ack"
+	claim.ClosePeerRef = "peer-ack"
 	assert.NoError(t, checkCloseState(claim, "close-a", state, linker, ignored))
 }
 

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -223,7 +222,7 @@ func containsDigest(digests []string, digest string) bool {
 // refuses: a close or reconcile claim reports exactly one Close.
 func citedClose(claim resultClaim, resolved map[string]evidencebook.Record) (evidencebook.Record, error) {
 	var closes []evidencebook.Record
-	for _, digest := range claim.evidence {
+	for _, digest := range claim.Evidence {
 		if record, ok := resolved[digest]; ok && record.Header.RecordType == evidencebook.RecordTypeClose {
 			closes = append(closes, record)
 		}
@@ -232,9 +231,9 @@ func citedClose(claim resultClaim, resolved map[string]evidencebook.Record) (evi
 	case 1:
 		return closes[0], nil
 	case 0:
-		return evidencebook.Record{}, cli.Hint(cli.ErrInput, fmt.Sprintf("%s is a %s claim but cites no Close record in this book; its evidence must name the Close it reports", claim.label(), claim.typ))
+		return evidencebook.Record{}, cli.Hint(cli.ErrInput, fmt.Sprintf("%s is a %s claim but cites no Close record in this book; its evidence must name the Close it reports", claim.Label(), claim.Type))
 	default:
-		return evidencebook.Record{}, cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites %d Close records; a %s claim reports exactly one Close", claim.label(), len(closes), claim.typ))
+		return evidencebook.Record{}, cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites %d Close records; a %s claim reports exactly one Close", claim.Label(), len(closes), claim.Type))
 	}
 }
 
@@ -252,13 +251,13 @@ func resolveResultCitations(ctx context.Context, book *evidencebook.Book, store 
 		record, ok, err := resolveRecord(ctx, book, digest)
 		var sealed *sealedIDError
 		if errors.As(err, &sealed) {
-			return evidencebook.Record{}, cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites %s as %s, the sealed id of a capsule this book published as record %s; cite %s (the capsule_id publish reported)", claim.label(), digest, role, sealed.record, sealed.record))
+			return evidencebook.Record{}, cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites %s as %s, the sealed id of a capsule this book published as record %s; cite %s (the capsule_id publish reported)", claim.Label(), digest, role, sealed.record, sealed.record))
 		}
 		if err != nil {
 			return evidencebook.Record{}, err
 		}
 		if !ok {
-			return evidencebook.Record{}, cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites %s as %s, which is not in this book (neither a published capsule nor a record id); a Result is sealed only over evidence the book holds", claim.label(), digest, role))
+			return evidencebook.Record{}, cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites %s as %s, which is not in this book (neither a published capsule nor a record id); a Result is sealed only over evidence the book holds", claim.Label(), digest, role))
 		}
 		resolved[digest] = record
 		if !linked[record.RecordID] {
@@ -268,25 +267,25 @@ func resolveResultCitations(ctx context.Context, book *evidencebook.Book, store 
 		return record, nil
 	}
 	for _, claim := range result.claims {
-		if len(claim.evidence) == 0 {
-			return nil, cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites no evidence; every claim must trace to at least one record in this book", claim.label()))
+		if len(claim.Evidence) == 0 {
+			return nil, cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites no evidence; every claim must trace to at least one record in this book", claim.Label()))
 		}
-		for _, digest := range claim.evidence {
+		for _, digest := range claim.Evidence {
 			if _, err := resolve(claim, digest, "evidence"); err != nil {
 				return nil, err
 			}
 		}
-		for _, digest := range claim.carrierEvidence {
+		for _, digest := range claim.CarrierEvidence {
 			if _, err := resolve(claim, digest, "presentation evidence"); err != nil {
 				return nil, err
 			}
 		}
-		if claim.closePeerRef != "" {
-			if _, err := resolve(claim, claim.closePeerRef, "close.peer_close_ref"); err != nil {
+		if claim.ClosePeerRef != "" {
+			if _, err := resolve(claim, claim.ClosePeerRef, "close.peer_close_ref"); err != nil {
 				return nil, err
 			}
 		}
-		switch claim.typ {
+		switch claim.Type {
 		case claimTypeClose:
 			if err := checkCloseClaim(ctx, book, store, claim, resolved); err != nil {
 				return nil, err
@@ -308,16 +307,16 @@ func resolveResultCitations(ctx context.Context, book *evidencebook.Book, store 
 // asserted; and when a counterparty record decided that state,
 // peer_close_ref names it.
 func checkCloseClaim(ctx context.Context, book *evidencebook.Book, store recordStore, claim resultClaim, resolved map[string]evidencebook.Record) error {
-	closeRecord := resolved[claim.closeRef]
+	closeRecord := resolved[claim.CloseRef]
 	if err := checkCloseRefs(claim, closeRecord.Header.RecordType); err != nil {
 		return err
 	}
-	if claim.closePeer != "" && closeRecord.Header.CounterpartyRef != claim.closePeer {
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s names peer %q, but Close %s was sealed against counterparty %q", claim.label(), claim.closePeer, closeRecord.RecordID, closeRecord.Header.CounterpartyRef))
+	if claim.ClosePeer != "" && closeRecord.Header.CounterpartyRef != claim.ClosePeer {
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s names peer %q, but Close %s was sealed against counterparty %q", claim.Label(), claim.ClosePeer, closeRecord.RecordID, closeRecord.Header.CounterpartyRef))
 	}
 	closeKey, err := verifiedKeyID(ctx, store, closeRecord.RecordID)
 	if errors.Is(err, errUnverifiedSigner) {
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s: Close %s's Producer Envelope does not verify under its key_id, so no signer can be shown to differ from its own", claim.label(), closeRecord.RecordID))
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s: Close %s's Producer Envelope does not verify under its key_id, so no signer can be shown to differ from its own", claim.Label(), closeRecord.RecordID))
 	}
 	if err != nil {
 		return err
@@ -329,7 +328,7 @@ func checkCloseClaim(ctx context.Context, book *evidencebook.Book, store recordS
 	if err := checkClaimPeriod(claim, "close", closeRecord.RecordID, statement); err != nil {
 		return err
 	}
-	state, linker, ignored, err := closeStateInBook(ctx, book, store, closeRecord, closeKey, claim.closePeer)
+	state, linker, ignored, err := closeStateInBook(ctx, book, store, closeRecord, closeKey, claim.ClosePeer)
 	if err != nil {
 		return err
 	}
@@ -387,10 +386,10 @@ func checkClaimPeriod(claim resultClaim, body, closeID string, statement evidenc
 	if !ok {
 		return nil
 	}
-	claimStart, errStart := time.Parse(time.RFC3339, claim.periodStart)
-	claimEnd, errEnd := time.Parse(time.RFC3339, claim.periodEnd)
+	claimStart, errStart := time.Parse(time.RFC3339, claim.PeriodStart)
+	claimEnd, errEnd := time.Parse(time.RFC3339, claim.PeriodEnd)
 	if errStart != nil || errEnd != nil || !claimStart.Equal(start) || !claimEnd.Equal(end) {
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s states %s.period %s to %s, but Close %s was sealed for %s to %s; a claim reports the period its Close sealed", claim.label(), body, claim.periodStart, claim.periodEnd, closeID, start.Format(time.RFC3339), end.Format(time.RFC3339)))
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s states %s.period %s to %s, but Close %s was sealed for %s to %s; a claim reports the period its Close sealed", claim.Label(), body, claim.PeriodStart, claim.PeriodEnd, closeID, start.Format(time.RFC3339), end.Format(time.RFC3339)))
 	}
 	return nil
 }
@@ -398,14 +397,14 @@ func checkClaimPeriod(claim resultClaim, body, closeID string, statement evidenc
 // checkCloseRefs: close_ref -- and peer_close_ref, when present -- is among
 // the claim's evidence[], and close_ref names a Close.
 func checkCloseRefs(claim resultClaim, closeRecordType string) error {
-	if !containsDigest(claim.evidence, claim.closeRef) {
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s: close.close_ref %s is not among its evidence[]; a claim reports only on a Close it puts in evidence", claim.label(), claim.closeRef))
+	if !containsDigest(claim.Evidence, claim.CloseRef) {
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s: close.close_ref %s is not among its evidence[]; a claim reports only on a Close it puts in evidence", claim.Label(), claim.CloseRef))
 	}
-	if claim.closePeerRef != "" && !containsDigest(claim.evidence, claim.closePeerRef) {
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s: close.peer_close_ref %s is not among its evidence[]; a claim cites only a state-making record it puts in evidence", claim.label(), claim.closePeerRef))
+	if claim.ClosePeerRef != "" && !containsDigest(claim.Evidence, claim.ClosePeerRef) {
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s: close.peer_close_ref %s is not among its evidence[]; a claim cites only a state-making record it puts in evidence", claim.Label(), claim.ClosePeerRef))
 	}
 	if closeRecordType != evidencebook.RecordTypeClose {
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s: close.close_ref %s is a %s record, not a Close; close_ref names the Close the claim reports", claim.label(), claim.closeRef, closeRecordType))
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s: close.close_ref %s is a %s record, not a Close; close_ref names the Close the claim reports", claim.Label(), claim.CloseRef, closeRecordType))
 	}
 	return nil
 }
@@ -413,7 +412,7 @@ func checkCloseRefs(claim resultClaim, closeRecordType string) error {
 // checkCloseState: the claim's close_state is the state the walk read, and
 // when a counterparty record decided it, peer_close_ref names that record.
 func checkCloseState(claim resultClaim, closeID, state, linker string, ignored []closeLinker) error {
-	if claim.closeState != state {
+	if claim.CloseState != state {
 		reason := "no counterparty record acknowledges or rebuts it"
 		switch state {
 		case string(evidencebook.Agreed):
@@ -424,10 +423,10 @@ func checkCloseState(claim resultClaim, closeID, state, linker string, ignored [
 		for _, l := range ignored {
 			reason += fmt.Sprintf("; record %s %s it but is ignored: %s", l.recordID, l.link, l.ignored)
 		}
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s states close_state %s, but the counterparty's links to Close %s read %s (%s); close_state is read from the named peer's links, never asserted", claim.label(), claim.closeState, closeID, state, reason))
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s states close_state %s, but the counterparty's links to Close %s read %s (%s); close_state is read from the named peer's links, never asserted", claim.Label(), claim.CloseState, closeID, state, reason))
 	}
-	if linker != "" && claim.closePeerRef != linker {
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites peer_close_ref %s, but the record whose link makes Close %s %s is %s", claim.label(), claim.closePeerRef, closeID, state, linker))
+	if linker != "" && claim.ClosePeerRef != linker {
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s cites peer_close_ref %s, but the record whose link makes Close %s %s is %s", claim.Label(), claim.ClosePeerRef, closeID, state, linker))
 	}
 	return nil
 }
@@ -448,8 +447,8 @@ func checkReconcileClaim(claim resultClaim, resolved map[string]evidencebook.Rec
 	if err != nil {
 		return err
 	}
-	if closeRecord.Header.CounterpartyRef != claim.reconcilePeer {
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s names peer %q, but Close %s was sealed against counterparty %q", claim.label(), claim.reconcilePeer, closeRecord.RecordID, closeRecord.Header.CounterpartyRef))
+	if closeRecord.Header.CounterpartyRef != claim.ReconcilePeer {
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s names peer %q, but Close %s was sealed against counterparty %q", claim.Label(), claim.ReconcilePeer, closeRecord.RecordID, closeRecord.Header.CounterpartyRef))
 	}
 	statement, err := closeStatementOf(closeRecord)
 	if err != nil {
@@ -467,8 +466,8 @@ func checkReconcileClaim(claim resultClaim, resolved map[string]evidencebook.Rec
 		return err
 	}
 	for _, key := range reconcileTallyKeys {
-		if claim.reconcileTallies[key.claim] != sealed[key.close] {
-			return cli.Hint(cli.ErrInput, fmt.Sprintf("%s tallies %s=%d, but Close %s recorded %s=%d; tallies are what the Close sealed, never restated", claim.label(), key.claim, claim.reconcileTallies[key.claim], closeRecord.RecordID, key.close, sealed[key.close]))
+		if claim.ReconcileTallies[key.claim] != sealed[key.close] {
+			return cli.Hint(cli.ErrInput, fmt.Sprintf("%s tallies %s=%d, but Close %s recorded %s=%d; tallies are what the Close sealed, never restated", claim.Label(), key.claim, claim.ReconcileTallies[key.claim], closeRecord.RecordID, key.close, sealed[key.close]))
 		}
 	}
 	// Sufficiency on a reconcile claim is derived from the two non-finding
@@ -481,21 +480,10 @@ func checkReconcileClaim(claim resultClaim, resolved map[string]evidencebook.Rec
 	case sealed["UNRESOLVED"] > 0:
 		want = "UNKNOWN"
 	}
-	if claim.sufficiency != want {
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s states sufficiency %s, but Close %s's tallies make it %s (INSUFFICIENT > 0 is GAP, else UNRESOLVED > 0 is UNKNOWN, else SATISFIED)", claim.label(), claim.sufficiency, closeRecord.RecordID, want))
+	if claim.Sufficiency != want {
+		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s states sufficiency %s, but Close %s's tallies make it %s (INSUFFICIENT > 0 is GAP, else UNRESOLVED > 0 is UNKNOWN, else SATISFIED)", claim.Label(), claim.Sufficiency, closeRecord.RecordID, want))
 	}
 	return nil
-}
-
-// statementDigest is SHA-256 over the JCS form of the document: the bytes
-// `--out` writes, and the bytes the header carries as its statement.
-func statementDigest(doc map[string]interface{}) ([]byte, string, error) {
-	encoded, err := canonical.JCS(doc)
-	if err != nil {
-		return nil, "", err
-	}
-	sum := sha256.Sum256(encoded)
-	return encoded, hex.EncodeToString(sum[:]), nil
 }
 
 // priorResult finds an evidence_result record whose statement is this same
@@ -693,37 +681,6 @@ func checkpointCovers(ctx context.Context, book *evidencebook.Book, seq uint64) 
 		return false, err
 	}
 	return checkpoints[len(checkpoints)-1].Covers(seq), nil
-}
-
-// writeOutput writes data at path as a new file, or leaves alone a regular
-// file already holding exactly these bytes, so a repeat of the verb with the
-// same output flags is the no-op it reports. Anything else at the path is
-// refused by name and nothing is overwritten: the record is sealed either
-// way (its record_id is in the output), so the caller passes another path,
-// or moves the file, and repeats.
-func writeOutput(flag, path string, data []byte) error {
-	info, err := os.Lstat(path)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		if err := cli.AtomicFile(path, data, false); errors.Is(err, os.ErrExist) {
-			return cli.Hint(cli.ErrInput, fmt.Sprintf("%s %s was created by another process while this one ran; nothing was overwritten (the record is sealed: see record_id); repeat to compare it, or pass another path", flag, path))
-		} else if err != nil {
-			return err
-		}
-		return nil
-	case err != nil:
-		return err
-	case !info.Mode().IsRegular():
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s %s exists and is not a regular file; nothing was written there (the record is sealed: see record_id); pass another path", flag, path))
-	}
-	existing, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(existing, data) {
-		return cli.Hint(cli.ErrInput, fmt.Sprintf("%s %s already exists and does not hold these bytes; nothing was overwritten (the record is sealed: see record_id); pass another path, or move that file, and repeat", flag, path))
-	}
-	return nil
 }
 
 func resultOutputs(c *cobra.Command, opened openedBook, p cli.Profile, result *resultBuildResult, sealed evidencebook.Record, encoded []byte, out string) error {

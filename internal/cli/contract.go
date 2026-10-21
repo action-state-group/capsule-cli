@@ -406,7 +406,7 @@ func schemaIsURL(loc string) bool {
 // through the compiler (which needs to resolve internal $refs). Never reads
 // from a path or URL other than the one the caller supplied in --schema (the
 // built-in schemas are loaded elsewhere: `contract diff`'s by
-// loadEmbeddedContractSchema, `result build`'s by the capsulectl-book plugin's resultschema.go).
+// loadEmbeddedContractSchema, `result build`'s by resultSchema in result.go).
 func loadSchema(loc string) (*jsonschema.Schema, any, error) {
 	raw, e := fetchSchemaBytes(loc)
 	if e != nil {

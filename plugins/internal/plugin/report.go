@@ -255,8 +255,8 @@ func unsupportedClaims(value map[string]interface{}, checked resultDocument) int
 	}
 	unsupported := 0
 	for _, claim := range checked.claims {
-		supported := len(claim.evidence) > 0
-		for _, digest := range claim.evidence {
+		supported := len(claim.Evidence) > 0
+		for _, digest := range claim.Evidence {
 			supported = supported && held[digest]
 		}
 		if !supported {

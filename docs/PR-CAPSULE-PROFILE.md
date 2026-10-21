@@ -150,7 +150,7 @@ cites both capsule ids in `evidence[]` (on a book profile, the ids `publish` rep
 }
 ```
 
-`capsulectl result build` resolves each cited id to the book record that carries that capsule; a
+`capsulectl book result build` resolves each cited id to the book record that carries that capsule; a
 `sealed_id` is refused with the record id to cite instead.
 `capsulectl report build --card process` then renders the claim and its evidence the same way it
 renders any other evidence; the PR profile needs no card of its own.

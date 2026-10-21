@@ -191,7 +191,7 @@ $ JEV_JUDGE_BACKEND=mock python3 scripts/rollup_day.py --profile tau2 \
     --judge-cmd "python3 scripts/judges/jev_judge.py" \
     --judge-model-id "jev-1.13.0 (mock backend, no model read the conversation)" \
     --generated-at "${DAY}T23:59:59Z" --out ./runs/rollup
-$ capsulectl result build --profile tau2 --result "./runs/rollup/result-v0-${DAY}.json" --out ./result-sealed.json | tee ./result-build.json
+$ capsulectl book result build --profile tau2 --result "./runs/rollup/result-v0-${DAY}.json" --out ./result-sealed.json | tee ./result-build.json
 $ RESULT_CAPSULE=$(jq -r '.record_id' ./result-build.json)
 $ capsulectl cll checkpoint create --profile tau2
 $ capsulectl disclose --profile tau2 --root "$RESULT_CAPSULE" --closure-depth 2 \
