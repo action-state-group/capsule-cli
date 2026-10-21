@@ -239,7 +239,7 @@ func rerenderPresentationPage(t *testing.T, dir string, meta presentationMeta, b
 		}
 		return emitter.EmitEvidenceGraphHTML(bundle, cli.EvidenceGraphIIFE)
 	case "deal-report":
-		return dealReportHTML(bundle, dealNotCountersigned(), dealVerifyCommand(""))
+		return dealReportHTML(bundle, dealNotCountersigned(), dealVerifyCommand(""), cli.BuiltinWording())
 	case "report-build":
 		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 		out := filepath.Join(t.TempDir(), "page.html")

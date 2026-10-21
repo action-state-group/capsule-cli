@@ -431,6 +431,9 @@ func rulesBody(r dealRules) (map[string]interface{}, error) {
 			if f.Check != "" {
 				fm["check"] = f.Check
 			}
+			if f.Disposition != "" {
+				fm["disposition"] = f.Disposition
+			}
 			for k, raw := range map[string]json.RawMessage{"limit": f.Limit, "value": f.Value} {
 				if len(raw) == 0 {
 					continue

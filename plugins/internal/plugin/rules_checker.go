@@ -33,12 +33,15 @@ var rulesBeforeExec = func() {}
 
 // dealRulesFinding is one rule's result, as the checker reported it.
 type dealRulesFinding struct {
-	ID      string          `json:"id"`
-	Check   string          `json:"check,omitempty"`
-	Verdict string          `json:"verdict"`
-	Reason  string          `json:"reason,omitempty"`
-	Limit   json.RawMessage `json:"limit,omitempty"`
-	Value   json.RawMessage `json:"value,omitempty"`
+	ID      string `json:"id"`
+	Check   string `json:"check,omitempty"`
+	Verdict string `json:"verdict"`
+	// Disposition is what the rule does on its own when it fails: "ask" or
+	// "deny" (capsule-cli#341). Absent when the checker does not say.
+	Disposition string          `json:"disposition,omitempty"`
+	Reason      string          `json:"reason,omitempty"`
+	Limit       json.RawMessage `json:"limit,omitempty"`
+	Value       json.RawMessage `json:"value,omitempty"`
 }
 
 // dealRules is what a check says about the profile's rules, sealed in its
@@ -372,6 +375,12 @@ func rulesDifferences(r *dealRules) []dealDifference {
 	if r.Status != "evaluated" || r.Verdict == "allow" {
 		return nil
 	}
+	failing := 0
+	for _, f := range r.Findings {
+		if !isDeclaredRule(f) && (f.Verdict == "fail" || f.Verdict == "not_evaluable") {
+			failing++
+		}
+	}
 	var out []dealDifference
 	for _, f := range r.Findings {
 		if isDeclaredRule(f) {
@@ -382,18 +391,28 @@ func rulesDifferences(r *dealRules) []dealDifference {
 		if f.Verdict != "fail" && f.Verdict != "not_evaluable" {
 			continue
 		}
+		// The Rule token is the overall verdict's (settleCheck reads it);
+		// the label is the finding's own: under a deny, a rule that only asks
+		// still reads as asking (capsule-cli#341).
 		rule := "rules_" + r.Verdict
 		text := fmt.Sprintf("%s: %s", f.ID, f.Reason)
 		if len(f.Limit) > 0 || len(f.Value) > 0 {
 			text += fmt.Sprintf(" (limit %s; value %s)", compactJSON(f.Limit), compactJSON(f.Value))
 		}
-		switch r.Verdict {
-		case "deny":
+		switch {
+		case r.Verdict != "deny" && r.Verdict != "escalate":
+			rule, text = "rules_not_evaluable", "Your rules were not fully checked: "+text
+		case f.Verdict == "not_evaluable":
+			text = "Your rules were not fully checked: " + text
+		case f.Disposition == "deny", r.Verdict == "deny" && f.Disposition == "" && failing == 1:
+			// One failing rule under a deny is the rule that denies.
 			text = "Not allowed by your rules: " + text
-		case "escalate":
+		case f.Disposition == "ask", r.Verdict == "escalate":
+			// An escalation has no rule that denies.
 			text = "Your rules ask for approval: " + text
 		default:
-			rule, text = "rules_not_evaluable", "Your rules were not fully checked: "+text
+			// A deny whose checker does not say which rule denies.
+			text = "Flagged by your rules: " + text
 		}
 		out = append(out, dealDifference{Question: "safety", Rule: rule, Field: findingField(f.ID), Text: text})
 	}

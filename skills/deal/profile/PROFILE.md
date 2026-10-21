@@ -818,7 +818,8 @@ At every check, after the `check` record is sealed:
   optional `grade` (`self-attested`\|`witnessed`\|`countersigned`, by reference to Result v0's
   Grade) and
   `findings[]` (`{id, check,
-  verdict: pass|fail|not_applicable|not_evaluable, reason, limit, value}`, passes included;
+  verdict: pass|fail|not_applicable|not_evaluable, disposition, reason, limit, value}`, passes
+  included; `disposition`, optional, is what a failing rule does on its own: `ask` or `deny`;
   `limit` and `value` are each a number, or a string of at most 64 characters with no line
   break).
   Members outside the schema are refused. Any other exit is a refusal of the input, with the
@@ -831,6 +832,9 @@ At every check, after the `check` record is sealed:
     ruleset declares and it does not measure) is never a difference: it never moves the verdict,
     and the approval text and the user's own receipt name it quietly beside it;
   - `deny` adds `rules_deny` differences, and the verdict is `deny` with no way to proceed.
+  - Each difference's words follow its own finding's `disposition`: under a `deny`, a rule
+    that only asks reads "Your rules ask for approval", and one with no disposition reads
+    "Flagged by your rules", never "Not allowed".
   - A checker that is configured but changed since it was pinned, refused the input, timed
     out, printed anything else, or reported a `definition_digest` that is not pinned
     adds a `rules_not_checked` difference naming why, and the check pauses.
@@ -838,7 +842,7 @@ At every check, after the `check` record is sealed:
 The verdict's `rules` seals the outcome as data:
 - `status: evaluated`, with `ruleset_id`, `definition_digest`, `checker_sha256`, `verdict`,
   `tier` (as reported, or `not_stated`), `grade` (as reported, or absent; both recorded and
-  shown in the approval text, changing nothing), `findings` (each `{id, check, verdict, limit, value}`), and `history` (`{days, acts, complete}`:
+  shown in the approval text, changing nothing), `findings` (each `{id, check, verdict, disposition, limit, value}`), and `history` (`{days, acts, complete}`:
   what the checker was given beside the record);
 - `status: not_evaluated`, with `cause` (`checker_unavailable`, `checker_changed`, `refused`,
   `timeout`, `unreadable` or `ruleset_changed`) and `checker_sha256`;

@@ -2329,7 +2329,8 @@ func dealReportCommand() *cobra.Command {
 				}
 			}
 			out["countersign"] = countersign
-			page, err := dealReportHTML(b, countersign, dealVerifyCommand(htmlPath))
+			words, _ := cli.ActiveWording(s.p)
+			page, err := dealReportHTML(b, countersign, dealVerifyCommand(htmlPath), words)
 			if err != nil {
 				return err
 			}

@@ -1921,6 +1921,10 @@ type dealReportItem struct {
 	// check's line without the user's and the agent's choices (the items go
 	// only to an adjudicator).
 	Shared string `json:"-"`
+	// Self is the step that is the item itself (an act, a close): the page
+	// checks it and does not list its line again under the item
+	// (capsule-cli#341).
+	Self string `json:"self,omitempty"`
 }
 
 // dealReport is the three-part report: what the user asked, what the agent
@@ -2171,6 +2175,13 @@ func buildDealReport(events []sealedEvent) dealReport {
 					folded[i] = true
 				}
 				delete(pending, key)
+				// What the user approved on this check, in their own answer,
+				// is no anomaly: it is the check's line, approved
+				// (capsule-cli#341). An answer that was not applied (stale,
+				// already answered) or a hold leaves it one.
+				if userApproved[se.CapsuleID] {
+					continue
+				}
 				steps = append(steps, e.Check.Snapshot, se.CapsuleID)
 				if i, ok := causes[d.Text]; ok {
 					r.Anomalies[i].Steps = appendNew(r.Anomalies[i].Steps, steps...)
@@ -2213,7 +2224,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 			} else if basis := typedActBasis(events, a.AuthorizedBy); basis != "" {
 				text += " (" + basis + ")"
 			}
-			r.Did = append(r.Did, dealReportItem{Kind: "act", Text: text, Steps: steps, At: e.At})
+			r.Did = append(r.Did, dealReportItem{Kind: "act", Text: text, Steps: steps, At: e.At, Self: se.CapsuleID})
 			if !a.Unchecked {
 				continue
 			}
@@ -2231,7 +2242,7 @@ func buildDealReport(events []sealedEvent) dealReport {
 				counterparty("delivered_differs", d.Text, openID, se.CapsuleID)
 			}
 		case "close":
-			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: closeLine(*e.Close), Steps: []string{se.CapsuleID}, At: e.At})
+			r.Did = append(r.Did, dealReportItem{Kind: "close", Text: closeLine(*e.Close), Steps: []string{se.CapsuleID}, At: e.At, Self: se.CapsuleID})
 		case "disclosure":
 			d := e.Disclosure
 			item := dealToldItem{At: e.At, To: d.recipient(open.Who), ToKind: d.To, Fields: d.Fields, Authority: "approval", Steps: []string{se.CapsuleID}}

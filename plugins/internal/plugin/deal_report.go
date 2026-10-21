@@ -253,6 +253,9 @@ func (s *dealSession) dealReportExtension(events []sealedEvent, report dealRepor
 			if item.Side != "" {
 				m["side"] = item.Side
 			}
+			if item.Self != "" {
+				m["self"] = item.Self
+			}
 			if item.At != "" {
 				m["at"] = item.At
 			}
@@ -390,7 +393,11 @@ func witnessCoverage(events []sealedEvent, cadence map[string]interface{}) map[s
 // runtime's plain SHA-256 switched off) cannot verify anything: the
 // bootstrap then shows the runtime's "unable to verify in this viewer"
 // state with verifyCommand, never a failed verification.
-func dealReportHTML(b map[string]interface{}, countersign dealCountersignView, verifyCommand string) (string, error) {
+// pageWords are the wording-pack entries the deal page reads, so the page
+// and the chat speak from one pack (capsule-cli#345).
+var pageWords = []string{"report.title"}
+
+func dealReportHTML(b map[string]interface{}, countersign dealCountersignView, verifyCommand string, w cli.Wording) (string, error) {
 	if err := cli.PageGate(b); err != nil {
 		return "", err
 	}
@@ -404,7 +411,13 @@ func dealReportHTML(b map[string]interface{}, countersign dealCountersignView, v
 	}
 	countersign = dealCountersignForPage(b, countersign)
 	// json.Marshal escapes <, > and &, so the data cannot close its element.
-	data, err := json.Marshal(map[string]interface{}{"countersign": countersign, "openings": openings, "verify_command": verifyCommand})
+	words := map[string]string{}
+	for _, k := range pageWords {
+		if v, ok := w.Entries[k]; ok {
+			words[k] = v
+		}
+	}
+	data, err := json.Marshal(map[string]interface{}{"countersign": countersign, "openings": openings, "verify_command": verifyCommand, "words": words})
 	if err != nil {
 		return "", err
 	}

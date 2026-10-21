@@ -891,8 +891,9 @@ witnessed at once: until the next tick of the profile's checkpoint cadence
 (the receipt says how long at most, for example "within about 7m (every 5m,
 give or take 2m)") its receipt says
 "Sealed, witness pending". Steps added after a tick read "Witnessed in part"
-(steps 1 to k of n witnessed, the rest pending). Say it that way to the
-user; never say a deal was witnessed when it happened. The receipt
+(steps 1 to k of n witnessed, the rest pending). In chat, say only the
+report's `say`, which names no witness state until the receipt page can
+show the same one; never say a deal was witnessed when it happened. The receipt
 rides in `bundle.json`, where `capsulectl verify --bundle bundle.json
 --witness-directory DIRECTORY.json` checks it against a witness directory
 the reader chooses. The email copy cannot check itself; the attached page and

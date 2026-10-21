@@ -432,14 +432,46 @@ func TestTheExternalCheckResultSchemaIsTheEmbeddedOne(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, string(shipped), string(externalCheckSchemaJSON))
 	for name, out := range map[string]string{
-		"an unknown member":  `{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"allow","findings":[],"pack":{}}`,
-		"an unknown verdict": `{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"maybe","findings":[]}`,
-		"two values":         `{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"allow","findings":[]} {}`,
-		"no findings":        `{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"allow"}`,
+		"an unknown member":      `{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"allow","findings":[],"pack":{}}`,
+		"an unknown verdict":     `{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"maybe","findings":[]}`,
+		"two values":             `{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"allow","findings":[]} {}`,
+		"no findings":            `{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"allow"}`,
+		"an unknown disposition": `{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"deny","findings":[{"id":"r03","verdict":"fail","disposition":"maybe"}]}`,
 	} {
 		_, err := parseExternalCheck([]byte(out))
 		assert.Error(t, err, name)
 	}
+	for _, disposition := range []string{"ask", "deny"} {
+		got, err := parseExternalCheck([]byte(`{"schema":"external-check-result/v0","ruleset_id":"r","definition_digest":"` + exampleRulesDigest + `","verdict":"deny","findings":[{"id":"r03","verdict":"fail","disposition":"` + disposition + `"}]}`))
+		require.NoError(t, err, disposition)
+		assert.Equal(t, disposition, got.Findings[0].Disposition)
+	}
+}
+
+// Under a deny, each failing rule is labelled by what it does on its own: a
+// rule that only asks never reads "Not allowed" (capsule-cli#341). The Rule
+// token stays the verdict's, which is what the check's verdict reads.
+func TestEachRuleIsLabelledByItsOwnDisposition(t *testing.T) {
+	r := &dealRules{Status: "evaluated", Verdict: "deny", Findings: []dealRulesFinding{
+		{ID: "r03", Verdict: "fail", Disposition: "deny", Reason: "personal data only to the merchant"},
+		{ID: "r11", Verdict: "fail", Disposition: "ask", Reason: "first time this party gets your details"},
+		{ID: "r12", Verdict: "fail", Reason: "first disclosure"},
+		{ID: "r01", Verdict: "pass"},
+	}}
+	var texts, rules []string
+	for _, d := range rulesDifferences(r) {
+		texts, rules = append(texts, d.Text), append(rules, d.Rule)
+	}
+	assert.Equal(t, []string{
+		"Not allowed by your rules: r03: personal data only to the merchant",
+		"Your rules ask for approval: r11: first time this party gets your details",
+		"Flagged by your rules: r12: first disclosure",
+	}, texts)
+	assert.Equal(t, []string{"rules_deny", "rules_deny", "rules_deny"}, rules)
+	alone := &dealRules{Status: "evaluated", Verdict: "deny", Findings: []dealRulesFinding{{ID: "r03", Verdict: "fail", Reason: "personal data"}}}
+	assert.Equal(t, "Not allowed by your rules: r03: personal data", rulesDifferences(alone)[0].Text, "the one failing rule under a deny is the one that denies")
+	escalate := &dealRules{Status: "evaluated", Verdict: "escalate", Findings: []dealRulesFinding{{ID: "r02", Verdict: "fail", Reason: "first payee"}}}
+	assert.Equal(t, "Your rules ask for approval: r02: first payee", rulesDifferences(escalate)[0].Text)
 }
 
 // The ruleset a user runs and its limits are the user's policy: a shared copy

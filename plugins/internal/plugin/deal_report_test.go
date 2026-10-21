@@ -111,7 +111,7 @@ func dealReportIsOneLocalVerifyingPage(t *testing.T, inLog bool) {
 	assert.NotRegexp(t, regexp.MustCompile(`(?i)<(script|link|img|iframe)[^>]+(src|href)=`), html)
 	assert.Regexp(t, `<title>Deal report: “[^<]+”</title>`, html, "the user's own copy is titled with the words they asked")
 	assert.Contains(t, html, string(cli.EvidenceGraphIIFE))
-	assert.Contains(t, html, "If you would rather not take this page's word for the first list, open verify.agentactioncapsule.org and drop this file in.")
+	assert.NotContains(t, html, "Checked only by capsulectl verify", "the deal view lists no checks of its own: the core's lists stand (capsule-cli#341)")
 
 	// Pull the embedded bundle back out and run the authoritative verifier.
 	b := embeddedBundle(t, html)
@@ -412,4 +412,38 @@ func TestDealReportListsEveryPauseCause(t *testing.T) {
 		report := dealRun(t, "report", "--deal", dealID)
 		assertEveryPauseCauseListed(t, report, commit, refund)
 	})
+}
+
+// What the user approved on a check is no anomaly; what they held, or what
+// went ahead without them, still is (capsule-cli#341). An act and a close
+// name their own step, so the page lists it once.
+func TestApprovedItemsAreNotAnomalies(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnShare))
+	require.Equal(t, "pause", share["verdict"])
+	held := dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", share["check_id"].(string), "--choice", "hold", "--said", "not yet", "--shown-card", shownCard(t, share["card"].(string)))
+	require.Equal(t, false, held["proceed"])
+	anomalies := func() string {
+		raw, err := json.Marshal(dealRun(t, "report", "--deal", id)["anomalies"])
+		require.NoError(t, err)
+		return string(raw)
+	}
+	assert.Contains(t, anomalies(), "First time telling", "held: still an anomaly")
+
+	again := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnShare))
+	_, err := answer(t, id, again["check_id"].(string), "yes", shownCard(t, again["card"].(string)))
+	require.NoError(t, err)
+	got := anomalies()
+	assert.Equal(t, 1, strings.Count(got, "First time telling "+"sticker_shop_example your name"), "the held check's line stays; the approved one adds none: %s", got)
+
+	act := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"rail":"card"}`))
+	report := dealRun(t, "report", "--deal", id)
+	var self string
+	for _, item := range report["did"].([]any) {
+		if m := item.(map[string]any); m["kind"] == "act" {
+			self, _ = m["self"].(string)
+		}
+	}
+	assert.Equal(t, act["capsule_id"], self, "an act names its own step")
 }

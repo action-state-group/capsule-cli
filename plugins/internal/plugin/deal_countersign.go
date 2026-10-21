@@ -46,7 +46,7 @@ type dealCountersignView struct {
 	Entries   []cli.CountersignatureReport `json:"entries,omitempty"`
 }
 
-const dealNotCountersignedText = "Not countersigned: no other party has signed this record. It stands on the agent's own seal and any witness receipt above."
+const dealNotCountersignedText = "Not countersigned: no other party has signed this record. It stands on the agent's own seal and any witness receipt this file carries."
 
 const dealCountersignCheckYourself = "Check it yourself with capsulectl countersign verify FILE --directory DIRECTORY, using a directory you trust."
 

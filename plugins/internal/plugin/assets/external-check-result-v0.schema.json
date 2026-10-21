@@ -82,6 +82,13 @@
               "not_evaluable"
             ]
           },
+          "disposition": {
+            "description": "What a failing rule does on its own: ask (it asks the user's approval) or deny (it refuses). The overall verdict is the strictest of them. Absent: not stated.",
+            "enum": [
+              "ask",
+              "deny"
+            ]
+          },
           "reason": {
             "description": "Why, in words a person reads: shown when the rule fails or cannot be evaluated.",
             "type": "string",
