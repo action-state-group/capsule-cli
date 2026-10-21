@@ -114,6 +114,42 @@ keep the old ones.
   own, so the deal fixtures build again since the deal commands moved into
   the plugin.
 
+### Report pages take their runtime from capsule-viewer; a bundle may be up to 256 MiB
+
+- **Changed (build).** The browser runtime every `report build`, `deal
+  report --html` and `presentation build` page embeds
+  (`internal/cli/assets/evidence-graph.iife.js`) is now built from
+  capsule-viewer's page code (main @ `1d39351`, the commit
+  `capsule-viewer/go v0.1.1` tags) with agent-action-capsule's verifier
+  (main @ `4593d42`, the commit `ts/v0.5.0` tags, which carries
+  agent-action-capsule#317; it was `6ffe7c1`), by the new
+  `scripts/build-report-runtime.mjs`. Until now it was aac's own copy of
+  the views, which no longer moves since the pages moved to capsule-viewer
+  (capsule-viewer#33). The page global keeps every name it had, so the deal
+  view's verifier calls still resolve. `scripts/iife-sync.sh` and `make
+  iife-check` take a capsule-viewer checkout before the aac one
+  (`make iife-check CV=… AAC=…`), and CI rebuilds from both pinned commits
+  and refuses either if it is not on its repository's main. The rendered
+  text of every golden is unchanged; only the runtime's script hash in each
+  page's CSP moves. The runtime still opens with `"use strict";`, as on
+  main: both repositories build and test it under `"strict": true`, and the
+  build refuses an output without it.
+- **Known gap until the next capsule-viewer bump.** agent-action-capsule#317's
+  transcript display does not reach the pages yet. When a bundle withholds
+  every judge report, the model at `4593d42` can mark a conversation's
+  transcript `cited`, and the outcome card at capsule-viewer `1d39351`
+  knows only `verified`: it shows "Not shown: …" with the reason and no
+  turns, where main showed "Not in this bundle …". It never shows such a
+  transcript as verified. No golden withholds every report, so the goldens
+  do not cover this text. The capsule-viewer release that carries #317's
+  view brings the display.
+- **Changed.** `report build`, `presentation build`, `presentation list` and
+  `verify --bundle` read a bundle of up to 256 MiB (`MaxBundleInput`), not
+  12 MiB: a book's bundle carries its transcripts, and a week-per-book
+  bundle with them is 15-20 MB, a month 106-142 MB. The bound also caps
+  memory: rendering the 142 MB month peaked at about 0.9 GB resident.
+  Every other input keeps the 12 MiB limit.
+
 ## v0.1.0-rc18
 
 ### Releases are approved in GitHub, not signed on a laptop

@@ -4,9 +4,10 @@ import (
 	_ "embed"
 )
 
-// The browser verifier is agent-action-capsule's own evidence-graph runtime,
-// vendored unmodified and rebuilt reproducibly by
-// scripts/build-evidence-graph-iife.sh. deal-view.js adds the deal section: a
+// The browser runtime is capsule-viewer's page code (the views, the
+// presentation mount, the outcome and EU report cards) bundled with
+// agent-action-capsule's verifier, vendored as built and rebuilt
+// reproducibly by scripts/build-evidence-graph-iife.sh. deal-view.js adds the deal section: a
 // presentation module (capsulectl.deal-view/v0, deal-view.manifest.json) the
 // page builder inlines in the emitter's module slot, pinned by its digest like
 // the runtime, with its stylesheet pinned by the manifest's style_sha256.
@@ -34,24 +35,30 @@ var (
 //
 // The page is capsule-viewer's go/emitter shell around the bundle and the browser
 // runtime (the IIFE). The pinned capsule-viewer Go module ships the shell but not the
-// IIFE (dist/ is gitignored upstream and no release carries it), so the
-// built IIFE is vendored here with its digest pinned in code; TestIIFEIsPinned
-// keeps the two in step. The file and its digest are the same ones `deal
+// IIFE (dist/ is gitignored upstream and no Go release carries it), so the
+// IIFE is built from capsule-viewer's ts/src, with agent-action-capsule's
+// ts/src as its verifier (scripts/build-report-runtime.mjs), and vendored
+// here with its digest pinned in code; TestIIFEIsPinned keeps the two in
+// step. The shell's style hashes (runtime-style-hashes.txt in the Go module)
+// cover the runtime's styles, so the Go module and the IIFE's
+// capsule-viewer commit move together. The file and its digest are the same ones `deal
 // report` and `presentation build` embed (EvidenceGraphIIFE,
 // EvidenceGraphIIFESHA256, below);
-// scripts/build-evidence-graph-iife.sh rebuilds it from the aac commit
-// evidenceGraphIIFESource records, and scripts/iife-sync.sh from any aac
-// checkout. The report is only as
+// scripts/build-evidence-graph-iife.sh rebuilds it from the two commits
+// evidenceGraphIIFESource records, and scripts/iife-sync.sh from any
+// capsule-viewer and aac checkouts. The report is only as
 // current as that file.
 
 const (
 	// evidenceGraphIIFEDigest is the SHA-256 of assets/evidence-graph.iife.js.
-	EvidenceGraphIIFEDigest = "25679a22b837562fa5179f2540307514a87488b4c6c088b60206efe5b48626da"
-	// evidenceGraphIIFESource names the aac commit and build the vendored
-	// IIFE came from, using released CLL 0.2.1 from the registry lock. It is
-	// pinned apart from the go.mod version: the Go module may move to a
-	// release tag while the browser verifier stays at this build.
-	evidenceGraphIIFESource = "agent-action-capsule main@6ffe7c1139d3c18adeb26645bc73a4b279f24fe0 ts: npm run emitter:iife (esbuild 0.28.2)"
+	EvidenceGraphIIFEDigest = "3a9361682dc0fd5be489f5fedcbf1bc4fac254177cd4c1ab04a7b10737c2e6cb"
+	// evidenceGraphIIFESource names the commits and build the vendored IIFE
+	// came from: capsule-viewer's page code, and agent-action-capsule's
+	// verifier using released CLL 0.2.1 from its registry lock. Both must be
+	// merged on their repository's main (CI checks). They are pinned apart
+	// from go.mod: the aac Go module may move to a release tag while the
+	// browser verifier stays at this build.
+	evidenceGraphIIFESource = "capsule-viewer main@1d393519a0a2980e7baaa81e687f2a8bd68a18c6 ts/src with verifier agent-action-capsule main@4593d42f300ab20df1a2c3c146f0d89aacf045a6 ts/src: scripts/build-report-runtime.mjs (esbuild 0.28.2)"
 
 	// cardExtension records which card the report was built for. There is
 	// no card registry yet: every card renders the one Result page today,

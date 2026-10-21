@@ -1,15 +1,24 @@
 # Third-party notices: evidence-graph.iife.js
 
-`evidence-graph.iife.js` is a build artifact vendored from
-agent-action-capsule (see README.md in this directory). esbuild bundles
-three components into it; each keeps its own license, reproduced below.
-Every `report.html` that `capsulectl report build` writes embeds the file.
+`evidence-graph.iife.js` is a build artifact bundled from capsule-viewer and
+agent-action-capsule (see README.md in this directory). esbuild bundles four
+components into it; each keeps its own license, reproduced below or
+referenced. Every `report.html` that `capsulectl report build` writes embeds
+the file.
 
 | Component | Version | License | Source |
 |---|---|---|---|
-| agent-action-capsule `ts/` (evidence-graph runtime) | the commit README.md names | BSD-3-Clause | github.com/action-state-group/agent-action-capsule |
+| capsule-viewer `ts/src` (the page code: views, presentation mount, report cards) | the commit README.md names | Apache-2.0 AND BSD-3-Clause | github.com/action-state-group/capsule-viewer |
+| agent-action-capsule `ts/src` (the verifier) | the commit README.md names | BSD-3-Clause | github.com/action-state-group/agent-action-capsule |
 | cborg | 6.1.2 | Apache-2.0 | github.com/rvagg/cborg |
-| @action-state-group/cll | 0.1.3 | Apache-2.0 | github.com/action-state-group/cll-ts |
+| @action-state-group/cll | 0.2.1 | Apache-2.0 | github.com/action-state-group/cll-ts |
+
+## capsule-viewer (Apache-2.0 AND BSD-3-Clause)
+
+capsule-viewer's `ts/` package is licensed Apache-2.0 (the full text is
+reproduced under @action-state-group/cll below), and the files it moved from
+agent-action-capsule keep their BSD-3-Clause license, the same text as
+agent-action-capsule's below (copyright 2026 Action State Group, Inc.).
 
 ## agent-action-capsule (BSD-3-Clause)
 

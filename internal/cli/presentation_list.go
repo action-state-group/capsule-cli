@@ -326,7 +326,7 @@ func presentationListCommand() *cobra.Command {
 		if !known {
 			return Hint(ErrInput, fmt.Sprintf("--format %s is not a presentation format (html, fragment, embedded)", format))
 		}
-		raw, err := ReadInput(bundlePath)
+		raw, err := ReadBundleInput(bundlePath)
 		if err != nil {
 			return err
 		}

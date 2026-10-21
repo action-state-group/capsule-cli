@@ -370,7 +370,8 @@ Result (either carrier: the document itself, or the book record header
 whose statement is the document), records `--card` and the optional
 `presentation/v1` header in the embedded copy, and renders an offline
 `report.html` through capsule-viewer's Go emitter with the vendored
-browser runtime (`internal/cli/assets/`, digest pinned; refresh with
+browser runtime (`internal/cli/assets/`: capsule-viewer's page code with
+agent-action-capsule's verifier, digest pinned; refresh with
 `scripts/iife-sync.sh`); `--permalink` mints the viewer fragment over the
 same bytes and `--dry-run` writes the page marked draft.
 
@@ -479,7 +480,7 @@ override is enabled.
 | `action.yml` | the `Seal PR Capsule` GitHub Action ([below](#github-action-seal-a-capsule-per-pull-request)); its profile is [docs/PR-CAPSULE-PROFILE.md](docs/PR-CAPSULE-PROFILE.md), and `scripts/pr-capsule-*.sh` are its steps |
 | `docs/` | plugins, release transparency, backfill, canary, the test-account harness, and the PR capsule profile |
 | `examples/` | workflow files to copy: adopting the PR-capsule action, a canary watch, a deal-harness watch |
-| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, the confusables tools, `build-evidence-graph-iife.sh`, which rebuilds the vendored verifier, `check-html-render.sh`, which opens the report example's page in headless Chrome, and `check-portability.sh`, which checks a deal's shared copy and exported records with capsulectl alone after the session is deleted (both share `lib/page-checks.sh`) |
+| `scripts/` | `test.sh` (`make test`), `release-build.sh` (the reproducible release build), the PR-capsule steps, the confusables tools, `build-evidence-graph-iife.sh` and `build-report-runtime.mjs`, which rebuild the vendored browser runtime (capsule-viewer's page code and agent-action-capsule's verifier), `check-html-render.sh`, which opens the report example's page in headless Chrome, and `check-portability.sh`, which checks a deal's shared copy and exported records with capsulectl alone after the session is deleted (both share `lib/page-checks.sh`) |
 | `third_party/unicode/` | Unicode's confusables data, vendored unmodified with its terms of use |
 
 ## Profile setup

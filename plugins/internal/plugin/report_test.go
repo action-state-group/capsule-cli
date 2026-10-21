@@ -6,6 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,9 +33,42 @@ func TestIIFEIsPinned(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(readme), cli.EvidenceGraphIIFEDigest, "assets/README.md records the same digest")
 	text := string(cli.EvidenceGraphIIFE)
+	assert.True(t, strings.HasPrefix(text, "\"use strict\";\n"), "the runtime runs in strict mode, as aac and capsule-viewer build and test it")
 	assert.Contains(t, text, "globalThis.renderEvidenceGraph", "the IIFE exports the entry point the shell calls")
 	assert.NotContains(t, text, "http://")
 	assert.NotContains(t, text, "https://")
+}
+
+// book report build (reportCommands) reads its bundle with
+// cli.ReadBundleInput, the MaxBundleInput bound; it is the plugin's only
+// caller, so every other plugin input keeps MaxInput.
+func TestReportBuildReadsABundle(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	require.NoError(t, err)
+	fset := token.NewFileSet()
+	calls := map[string]int{}
+	for _, file := range files {
+		if strings.HasSuffix(file, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, file, nil, 0)
+		require.NoError(t, err)
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			ast.Inspect(fn, func(n ast.Node) bool {
+				if sel, ok := n.(*ast.SelectorExpr); ok && sel.Sel.Name == "ReadBundleInput" {
+					if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "cli" {
+						calls[fn.Name.Name]++
+					}
+				}
+				return true
+			})
+		}
+	}
+	assert.Equal(t, map[string]int{"reportCommands": 1}, calls)
 }
 
 // Every stylesheet the vendored runtime inserts at render time is hashed in

@@ -308,18 +308,30 @@ jobs:
 
   iife:
     # The vendored evidence-graph IIFE (internal/cli/assets) must equal a
-    # fresh build from the agent-action-capsule commit evidence_graph_assets.go pins.
+    # fresh build from the capsule-viewer and agent-action-capsule commits
+    # evidence_graph_assets.go pins.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Read the pinned agent-action-capsule commit
+      - name: Read the pinned capsule-viewer and agent-action-capsule commits
         id: pin
         run: |
-          rev=$(sed -n 's/.*evidenceGraphIIFESource = "agent-action-capsule [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' internal/cli/evidence_graph_assets.go)
-          test -n "$rev"
-          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+          src=internal/cli/evidence_graph_assets.go
+          cv=$(sed -n 's/.*evidenceGraphIIFESource = "capsule-viewer [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' "$src")
+          aac=$(sed -n 's/.*evidenceGraphIIFESource = ".* agent-action-capsule [a-z]*@\([0-9a-f]\{40\}\) .*/\1/p' "$src")
+          test -n "$cv" && test -n "$aac"
+          echo "cv=$cv" >> "$GITHUB_OUTPUT"
+          echo "aac=$aac" >> "$GITHUB_OUTPUT"
+      - name: Check out capsule-viewer's main (ancestor check only, no build)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: action-state-group/capsule-viewer
+          ref: main
+          path: cv-main-check
+          fetch-depth: 0
+          persist-credentials: false
       - name: Check out agent-action-capsule's main (ancestor check only, no build)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -328,30 +340,41 @@ jobs:
           path: aac-main-check
           fetch-depth: 0
           persist-credentials: false
-      - name: Refuse a pin that is not on agent-action-capsule's main
-        # The pin must name a commit merged on agent-action-capsule's main,
-        # never an open PR's or a fork's head: the vendored IIFE ships in
-        # report.html, and the next step installs and runs that commit's
-        # package scripts. The sed above already limits the value to 40 hex.
-        working-directory: aac-main-check
+      - name: Refuse a pin that is not on its repository's main
+        # Each pin must name a commit merged on its repository's main, never
+        # an open PR's or a fork's head: the vendored IIFE ships in
+        # report.html, and the next steps install both commits' packages.
+        # The sed above already limits each value to 40 hex.
         env:
-          REV: ${{ steps.pin.outputs.rev }}
+          CV: ${{ steps.pin.outputs.cv }}
+          AAC: ${{ steps.pin.outputs.aac }}
         run: |
-          if ! git merge-base --is-ancestor "$REV" HEAD; then
-            echo "::error file=internal/cli/evidence_graph_assets.go::evidenceGraphIIFESource pins $REV, which is not on agent-action-capsule's main. Pin a merged commit."
+          if ! git -C cv-main-check merge-base --is-ancestor "$CV" HEAD; then
+            echo "::error file=internal/cli/evidence_graph_assets.go::evidenceGraphIIFESource pins capsule-viewer $CV, which is not on capsule-viewer's main. Pin a merged commit."
             exit 1
           fi
+          if ! git -C aac-main-check merge-base --is-ancestor "$AAC" HEAD; then
+            echo "::error file=internal/cli/evidence_graph_assets.go::evidenceGraphIIFESource pins agent-action-capsule $AAC, which is not on agent-action-capsule's main. Pin a merged commit."
+            exit 1
+          fi
+      - name: Check out capsule-viewer at the pinned commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: action-state-group/capsule-viewer
+          ref: ${{ steps.pin.outputs.cv }}
+          path: cv
+          persist-credentials: false
       - name: Check out agent-action-capsule at the pinned commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: action-state-group/agent-action-capsule
-          ref: ${{ steps.pin.outputs.rev }}
+          ref: ${{ steps.pin.outputs.aac }}
           path: aac
           persist-credentials: false
       - name: Rebuild the IIFE and compare with the vendored copy
         run: |
           node --version
-          make iife-check AAC="$GITHUB_WORKSPACE/aac"
+          make iife-check CV="$GITHUB_WORKSPACE/cv" AAC="$GITHUB_WORKSPACE/aac"
 
   seal-pr-capsule:
     # Same-repo PRs only: a fork PR's pull_request event carries no repository

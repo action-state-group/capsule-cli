@@ -7,6 +7,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -260,6 +263,70 @@ func TestInputBoundsAndUnknownFields(t *testing.T) {
 	require.Error(t, DecodeJSON(bytes.Repeat([]byte(" "), MaxInput+1), &r))
 	_, e := ParseRequest([]byte(`{"spec_version":"old"}`))
 	require.Error(t, e)
+}
+
+// A bundle file has its own, larger bound: a book's bundle carries its
+// transcripts. The bound is checked on readInputCapped with a small limit, so
+// the test never writes a bundle-sized file: exactly limit bytes read, one
+// more is refused with the limit in MiB.
+func TestBundleInputBound(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, size int) string {
+		path := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(path, bytes.Repeat([]byte(" "), size), 0o600))
+		return path
+	}
+	const limit = 1 << 20
+	raw, e := readInputCapped(write("at.json", limit), limit)
+	require.NoError(t, e, "a file of exactly the limit reads")
+	assert.Len(t, raw, limit)
+	_, e = readInputCapped(write("over.json", limit+1), limit)
+	require.ErrorContains(t, e, "the input exceeds the 1 MiB size limit")
+	assert.True(t, errors.Is(e, ErrInput))
+
+	assert.Equal(t, 12<<20, MaxInput)
+	assert.Equal(t, 256<<20, MaxBundleInput)
+}
+
+// Only the commands that verify or render a whole bundle read with
+// MaxBundleInput: verify --bundle (verifyBundleFile), presentation build
+// (presentationCommands) and presentation list (presentationListCommand).
+// book report build is the plugin's (TestReportBuildReadsABundle). Every
+// other input keeps MaxInput.
+func TestBundleInputCallers(t *testing.T) {
+	assert.Equal(t, map[string]int{"verifyBundleFile": 1, "presentationCommands": 1, "presentationListCommand": 1}, callersOf(t, "ReadBundleInput"))
+}
+
+// callersOf counts, per top-level function in this package's non-test
+// source, the calls to the named function.
+func callersOf(t *testing.T, name string) map[string]int {
+	t.Helper()
+	files, err := filepath.Glob("*.go")
+	require.NoError(t, err)
+	fset := token.NewFileSet()
+	calls := map[string]int{}
+	for _, file := range files {
+		if strings.HasSuffix(file, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, file, nil, 0)
+		require.NoError(t, err)
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			ast.Inspect(fn, func(n ast.Node) bool {
+				if call, ok := n.(*ast.CallExpr); ok {
+					if id, ok := call.Fun.(*ast.Ident); ok && id.Name == name {
+						calls[fn.Name.Name]++
+					}
+				}
+				return true
+			})
+		}
+	}
+	return calls
 }
 func TestReadOnlyFailsBeforeConnection(t *testing.T) {
 	p, _ := profileFixture(t)
