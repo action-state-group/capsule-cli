@@ -558,6 +558,10 @@ func TestResultBuildRefusesACitationTheBookDoesNotHold(t *testing.T) {
 	_, _, err = runResultBuild(t, b.profile, resultDoc(testClaim("claim-1", "met")))
 	require.ErrorIs(t, err, cli.ErrInput)
 	assert.Contains(t, cli.SafeError(err), "does not satisfy evidence-result-v0: at claims/0/evidence")
+	// The book's own rule still refuses one, should the gate ever let it by.
+	_, err = resolveResultCitations(context.Background(), nil, nil, resultDocument{claims: []resultClaim{{ID: "claim-1"}}})
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, cli.SafeError(err), "cites no evidence")
 
 	// A different document for the same contract is a new record, not a repeat.
 	_, _, err = runResultBuild(t, b.profile, resultDoc(testClaim("claim-1", "met", b.capsules[0])))

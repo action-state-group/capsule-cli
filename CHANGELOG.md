@@ -83,7 +83,8 @@
   whose `evidence` is empty, including a story claim about a recorded
   absence, which cites the absence record instead. The same schema adds the
   optional (PROPOSED) aggregate member `coverage_declaration`
-  (agent-action-capsule#312), which `result build` now accepts.
+  (agent-action-capsule#312), which `result build` now accepts, and
+  description-only edits to the claim types of its §4.1.
 
 ### `deal list --since/--until`: a period's deals, totals and who was told what (capsule-cli#342)
 

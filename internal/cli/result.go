@@ -41,7 +41,8 @@ import (
 // the one carrying the optional claim `type` (requirement / reconcile /
 // close) of the 2026-09-25 ruling, the `x-` extension members on the
 // document and on a claim (spec section 8a, aac #297) and the optional
-// document member coverage_report (aac #157), and a claim's evidence[]
+// document member coverage_report (aac #157), the PROPOSED aggregate member
+// coverage_declaration (aac #312), and a claim's evidence[]
 // holding at least one record (aac #353); the pinned aac Go module does
 // not ship the schema (it lives outside the module's go/ directory), which
 // is why a copy is here at all. Refresh it by replacing the file, the digest
