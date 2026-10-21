@@ -310,10 +310,10 @@ user's own and is never sent by default.
   is a different recipient in each telling. Recipients linked by a shared
   identity are one, and a deal's counterparty is one recipient within that
   deal. One told in more than one role counts once in each, so no role's
-  count exceeds `recipients`. It counts `disclosure` steps; a copy handed over with `deal report
-  --share` is not counted. It carries classes and counts only, never a
-  value or a recipient's name, and lists every class, so `0` says no one
-  was told it in the range.
+  count exceeds `recipients`. It counts `disclosure` steps; a copy handed
+  over with `deal report --share` is not counted. It carries classes and
+  counts only, never a value or a recipient's name, and lists every class,
+  so `0` says no one was told it in the range.
 - **Whose view.** The output is the user's own, like `deal list --json`:
   each row's `summary` names the counterparty and repeats the user's words.
   `totals` and `disclosures` carry no name or value.
