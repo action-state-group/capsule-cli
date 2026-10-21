@@ -940,15 +940,8 @@ func dealVerifyEmailCommand() *cobra.Command {
 				return cli.InputError("no sealed merchant email in this deal (or at that step)")
 			}
 			out := map[string]any{"deal_id": dealID, "scope": emailScopeLine, "verified": ok, "emails": results}
-			sender, domain := recipientName(events[0].Event.Open.Who), signedBy
-			if sender == "" {
-				sender = fromDomain
-			}
 			cli.Speak(out, s.p, func(w cli.Wording) cli.Narration {
-				if ok && domain != "" {
-					return line(w.Line("say.verify_email.ok", cli.V{"sender": sender, "domain": domain}))
-				}
-				return line(w.Line("say.verify_email.failed", cli.V{"sender": sender}))
+				return verifyEmailLine(w, recipientName(events[0].Event.Open.Who), fromDomain, ok, signedBy)
 			})
 			if err := cli.Output(c, out); err != nil {
 				return err

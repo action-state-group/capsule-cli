@@ -345,8 +345,28 @@ func TestTheReceiptSaysWhatWasOKd(t *testing.T) {
 func TestNoLineIsSpokenHalfFilled(t *testing.T) {
 	w := cli.BuiltinWording()
 	assert.Equal(t, words("say.approval.proceed.other"), approvalNarration(w, dealApproval{Choice: "proceed"}, nil, dealState{}).Say)
-	assert.Equal(t, "Listed: bike; I'll keep each buyer in their own thread.", w.Line("say.sale.new.no_price", cli.V{"item": "bike"}))
-	assert.Equal(t, words("say.countersign.ok.unnamed"), "Countersigned.")
+	assert.Equal(t, "Listed: bike; I'll keep each buyer in their own thread.", saleLine(w, dealTerms{Item: "bike"}).Say)
+	price := int64(55000)
+	assert.Equal(t, "Listed: bike at $550.00; I'll keep each buyer in their own thread.", saleLine(w, dealTerms{Item: "bike", PriceMinor: &price, Currency: "USD"}).Say)
+	assert.Equal(t, "Countersigned.", countersignLine(w, dealCountersignView{Rung: "countersigned"}).Say)
+	assert.Equal(t, "The countersignature did not check out.", countersignLine(w, dealCountersignView{Finding: "unverified"}).Say)
+	named := dealCountersignView{Entries: []cli.CountersignatureReport{{SignerName: "Example Countersigner"}}}
+	assert.Equal(t, "The countersignature from Example Countersigner did not check out.", countersignLine(w, named).Say)
+	assert.Equal(t, "shop.example's email checks out: signed by shop.example.", verifyEmailLine(w, "", "shop.example", true, "shop.example").Say)
+	assert.Equal(t, "Shop's email did not check out, so I'm not relying on it.", verifyEmailLine(w, "Shop", "shop.example", false, "").Say)
+}
+
+// Two answers that read the same are said once on the receipt.
+func TestTheReceiptSaysEachOKOnce(t *testing.T) {
+	approval := func(check string) sealedEvent {
+		return sealedEvent{Event: dealEvent{Kind: "approval", Approval: &dealApproval{Check: check, Choice: "proceed", Proceed: true, Approver: "user"}}}
+	}
+	check := func(id, action string) sealedEvent {
+		return sealedEvent{CapsuleID: id, Event: dealEvent{Kind: "check", Check: &dealCheckResult{Action: action}}}
+	}
+	open := sealedEvent{Event: dealEvent{Kind: "open", Open: &dealOpen{Terms: dealTerms{Item: "lease", Currency: "USD"}}}}
+	lines := receiptLines(cli.BuiltinWording(), []sealedEvent{open, check("c1", "sign"), approval("c1"), check("c2", "sign"), approval("c2")})
+	assert.Contains(t, lines, "You OK'd 1 thing on the way: going ahead.")
 }
 
 // --html never goes unsaid: on a deferred email the result says why there
@@ -359,4 +379,31 @@ func TestHTMLIsNeverDroppedSilently(t *testing.T) {
 	assert.Equal(t, cli.VoiceLine, pending["voice"])
 	assert.Equal(t, page, pending["attach"].(map[string]any)["path"])
 	require.FileExists(t, page)
+}
+
+// The phase is read on the tree the plugin really runs (capsulectl-deal),
+// not only under a parent named deal.
+func TestTheRealDealTreeKnowsWhetherAStepHappened(t *testing.T) {
+	root := cli.NewPluginCommand(DealMetadata, DealCommands()...)
+	find := func(args ...string) *cobra.Command {
+		c, _, err := root.Find(args)
+		require.NoError(t, err)
+		return c
+	}
+	note := find("note")
+	require.NoError(t, note.Flags().Set("kind", "act"))
+	assert.Equal(t, "after", dealErrorPhase(note))
+	assert.Equal(t, "after", dealErrorPhase(find("close")))
+	assert.Equal(t, "before", dealErrorPhase(find("check")))
+	assert.Equal(t, "other", dealErrorPhase(find("sale", "close")))
+}
+
+// Dropping what the buyer must be told is on the card beside the floor.
+func TestALimitCardSaysWhatTheBuyerIsNoLongerTold(t *testing.T) {
+	w := cli.BuiltinWording()
+	floor, lower := int64(170000), int64(160000)
+	cond := []string{"condition"}
+	none := []string{}
+	n := intentAsk(w, dealLimitSet{MinTotalMinor: &floor, OrderedRepresentations: &cond}, dealLimitSet{MinTotalMinor: &lower, OrderedRepresentations: &none}, "USD")
+	assert.Equal(t, "Lower the lowest price you'll take from $1700.00 to $1600.00 and stop telling the buyer about the condition?", n.Ask.Question)
 }

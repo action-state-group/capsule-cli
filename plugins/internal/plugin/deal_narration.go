@@ -23,10 +23,11 @@ import (
 // noted before it is sent), after it (it happened outside: act, payment,
 // delivery, close, evidence), or neither.
 func dealErrorPhase(c *cobra.Command) string {
-	if c.Parent() == nil || c.Parent().Name() != "deal" {
-		// A sale's commands, and anything below them, record no step of
-		// the user's own.
-		return "other"
+	for p := c.Parent(); p != nil; p = p.Parent() {
+		if p.Name() == "sale" {
+			// A sale's commands record no step of the user's own.
+			return "other"
+		}
 	}
 	switch c.Name() {
 	case "check", "open":
@@ -133,6 +134,27 @@ func intentAsk(w cli.Wording, inForce, proposed dealLimitSet, currency string) c
 	if len(actions) > 0 {
 		changes = append(changes, w.Line("card.change.permission", cli.V{"action": listWords(actions, "and")}))
 	}
+	// What the buyer must be told is a permission and an obligation: each
+	// one added or dropped is said (proposedLimits).
+	if p, f := proposed.OrderedRepresentations, inForce.OrderedRepresentations; p != nil && f != nil {
+		var added, dropped []string
+		for _, c := range *p {
+			if !containsString(*f, c) {
+				added = append(added, classWord(c))
+			}
+		}
+		for _, c := range *f {
+			if !containsString(*p, c) {
+				dropped = append(dropped, classWord(c))
+			}
+		}
+		if len(added) > 0 {
+			changes = append(changes, w.Line("card.change.tell_more", cli.V{"what": listWords(added, "and")}))
+		}
+		if len(dropped) > 0 {
+			changes = append(changes, w.Line("card.change.tell_less", cli.V{"what": listWords(dropped, "and")}))
+		}
+	}
 	if len(changes) == 0 {
 		// More than the limits in force, in no way named above (what the
 		// buyer is told, say).
@@ -203,7 +225,9 @@ func receiptLines(w cli.Wording, events []sealedEvent) []string {
 				key = "say.receipt.what.share"
 			}
 		}
-		if text := w.Line(key, cli.V{"amount": amount}); text != "" && (!containsString(what, text) || key != "say.receipt.what.share") {
+		// Each thing OK'd is said once: two answers that read the same are
+		// one phrase.
+		if text := w.Line(key, cli.V{"amount": amount}); text != "" && !containsString(what, text) {
 			what = append(what, text)
 		}
 	}
@@ -380,4 +404,40 @@ func capitalize(s string) string {
 	}
 	r := []rune(s)
 	return strings.ToUpper(string(r[0])) + string(r[1:])
+}
+
+// countersignLine is a countersignature's line: by whom, when the directory
+// names them.
+func countersignLine(w cli.Wording, view dealCountersignView) cli.Narration {
+	who := countersignerName(view)
+	switch {
+	case view.Rung == "countersigned" && who != "":
+		return line(w.Line("say.countersign.ok", cli.V{"who": who}))
+	case view.Rung == "countersigned":
+		return line(w.Line("say.countersign.ok.unnamed", nil))
+	case who != "":
+		return line(w.Line("say.countersign.failed", cli.V{"who": who}))
+	}
+	return line(w.Line("say.countersign.failed.unnamed", nil))
+}
+
+// saleLine is a new sale's line: what is listed, at its price when it has
+// one.
+func saleLine(w cli.Wording, terms dealTerms) cli.Narration {
+	if terms.PriceMinor == nil {
+		return line(w.Line("say.sale.new.no_price", cli.V{"item": shortTitle(terms.Item)}))
+	}
+	return line(w.Line("say.sale.new", cli.V{"item": shortTitle(terms.Item), "price": formatMoney(*terms.PriceMinor, terms.Currency)}))
+}
+
+// verifyEmailLine is a merchant email's recheck: whose email (the deal's
+// counterparty, else the email's From domain) and whether it checks out.
+func verifyEmailLine(w cli.Wording, sender, fromDomain string, ok bool, signedBy string) cli.Narration {
+	if sender == "" {
+		sender = fromDomain
+	}
+	if ok && signedBy != "" {
+		return line(w.Line("say.verify_email.ok", cli.V{"sender": sender, "domain": signedBy}))
+	}
+	return line(w.Line("say.verify_email.failed", cli.V{"sender": sender}))
 }
