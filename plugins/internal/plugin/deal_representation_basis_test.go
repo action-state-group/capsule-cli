@@ -160,7 +160,7 @@ func TestARepresentationOutsideTheAuthorityNeedsTheUsersApproval(t *testing.T) {
 	assert.True(t, ruleOf(t, ck, ruleRepresentationOutside))
 	assert.Contains(t, optionIDs(ck), "proceed")
 	assert.Contains(t, ck["card"], `Tell Example Buyer A about the warranty: "I will cover the gears for 30 days"?`)
-	assert.Contains(t, ck["card"], "Why I'm asking: it goes beyond what you asked me to tell the buyer.")
+	assert.Contains(t, ck["card"], "Why I'm asking: it goes beyond what you asked me to tell them.")
 	_, err := answerCheck(t, a, ck["check_id"].(string), "yes, offer the 30 days on the gears", ck["card"].(string))
 	require.NoError(t, err)
 	claim := claimWith(t, a, ck["check_id"].(string), repFile("claim-warranty.json"))

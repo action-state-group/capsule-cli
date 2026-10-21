@@ -12,12 +12,14 @@ Got it, you OK'd sharing your contact details. Going ahead now.
 [check pay: ask]
 PAUSED FOR YOU
 Pay $1.90 to sticker_shop_example (marketplace.example) for the Fawn Sticker?
-$1.75 + $0.15, up to $2 · by card · refundable · within your $2
-Why I'm asking: you asked me to check with you before paying.
+$1.75 + $0.15 tax and fees · by card · refundable · within your $2 limit
+Why I'm asking: I said I'd check with you before paying.
 <Hold> <Pay $1.90>
+[approval: line]
+Got it, you OK'd paying $1.90. Paying now.
 [act: report]
 Done: Fawn Sticker, $1.90, within your $2 limit.
-You OK'd 1 thing on the way: sharing your details.
+You OK'd 2 things on the way: sharing your details and paying $1.90.
 Our receipt for this is saved: what you asked, what you OK'd and what I did, locked.
 View details
 (attached: text/html)

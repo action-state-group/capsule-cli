@@ -11,7 +11,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "f8ca671c9d559715149b4c95a54225538a32f6ef6c81bbed331e4982d1c9c94b"
+      "digest": "8ddaca923c58dc41aeb90308c5afb9f5ed9f3a42d3ef67d4e9e1c6d2ae2cdd09"
     },
     "chain_root": {
       "type": "record",
@@ -23,7 +23,7 @@
         "rel": "authorized_by",
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "f8ca671c9d559715149b4c95a54225538a32f6ef6c81bbed331e4982d1c9c94b"
+        "digest": "8ddaca923c58dc41aeb90308c5afb9f5ed9f3a42d3ef67d4e9e1c6d2ae2cdd09"
       }
     ],
     "body": {
@@ -40,7 +40,7 @@
       "evaluation_ref": {
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "238212e62409bbe23a71a29d74defb220f780df27a133879882d4df310d1d50d"
+        "digest": "229f91be2fec505d0d86f8426df89e4955c7b48ae18122181205172614c62e89"
       },
       "authority_basis": [
         {
@@ -56,7 +56,7 @@
           "ref": {
             "type": "record",
             "digest_alg": "SHA-256",
-            "digest": "f8ca671c9d559715149b4c95a54225538a32f6ef6c81bbed331e4982d1c9c94b"
+            "digest": "8ddaca923c58dc41aeb90308c5afb9f5ed9f3a42d3ef67d4e9e1c6d2ae2cdd09"
           }
         },
         {
@@ -64,11 +64,11 @@
           "ref": {
             "type": "record",
             "digest_alg": "SHA-256",
-            "digest": "5d40bb76d51d369c69180df649c7897915b7c8c37041e92faac8ee261bce595d"
+            "digest": "fe777c4b213015675c2d34d8bb2ad4cc6922a0397044e7181762ce8039175cc9"
           }
         }
       ]
     }
   },
-  "expected_digest": "acf99d1a0c84447f64e5f8b8bb40ad6bd6f599185e88b6538c1f13f98cdc49a6"
+  "expected_digest": "4a73d2f4c45868fcfb7ce174e55a0885f3e8f3e3f2ee50c36a10e58f7bc999bc"
 }

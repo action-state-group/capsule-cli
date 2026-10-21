@@ -92,7 +92,7 @@ func TestThePayPauseSaysTheFactsAndTheReasons(t *testing.T) {
 	require.Equal(t, "pause", check["verdict"])
 	assert.Equal(t, "PAUSED FOR YOU\n"+
 		"Pay $3 to Sticker Marketplace (stickers.example) for the Otterly Chaos - Unsupervised and Thriving Funny Otter…?\n"+
-		"$3 · by card · refundable · within your $8\n"+
+		"$3 · by card · refundable · within your $8 limit\n"+
 		"Why I'm asking: I picked size small 3.8in x 2.4in, not you.\n"+
 		"Good to know: Sticker listed on sale at $3.00 (list $3.50) (not checked).", check["card"])
 	assert.Equal(t, []string{"Hold", "Pay $3"}, optionLabels(check))
@@ -102,7 +102,7 @@ func TestThePayPauseSaysTheFactsAndTheReasons(t *testing.T) {
 func TestAPassHasNoCard(t *testing.T) {
 	check := passCheck(t)
 	assert.Equal(t, "", check["card"])
-	assert.Equal(t, "Pay $4.54 to Sticker Marketplace (stickers.example) for the otter sticker?\n$4.54, up to $4.80 · by card · refundable · within your $5", check["approval_text"])
+	assert.Equal(t, "Pay $4.54 to Sticker Marketplace (stickers.example) for the otter sticker?\n$4.54, up to $4.80 · by card · refundable · within your $5 limit", check["approval_text"])
 	assert.Equal(t, cli.VoiceSilent, check["voice"])
 }
 
@@ -148,7 +148,7 @@ func TestProceedIsAnOverrideOnlyWhenARuleFailed(t *testing.T) {
 	t.Run("a rule denies", func(t *testing.T) {
 		check := pinned(t, "deny", denyFinding)
 		require.Equal(t, "deny", check["verdict"])
-		assert.Equal(t, []string{"Hold"}, optionLabels(check), "no way to proceed")
+		assert.Equal(t, []string{"OK"}, optionLabels(check), "no way to proceed: the one button acknowledges the deny")
 	})
 	t.Run("a limit the user gave", func(t *testing.T) {
 		id := stickerDeal(t, "card", false)

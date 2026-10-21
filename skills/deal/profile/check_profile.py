@@ -1507,7 +1507,7 @@ def regen():
     # regenerate these fixtures when it or the rule table changes (a Go test keeps them equal).
     materiality = record_digest(load(EXAMPLE_PREDICATE))
     rules = {"evaluator": "capsulectl deal check", "materiality_digest": materiality, "rules": [
-        {"question": "asked", "rules": ["agent_picked", "not_asked", "over_limit", "under_floor"]},
+        {"question": "asked", "rules": ["promised_ask", "agent_picked", "not_asked", "over_limit", "under_floor"]},
         {"question": "who", "rules": ["payee_or_contact_changed", "first_disclosure"]},
         {"question": "terms", "rules": ["terms_changed"]},
         {"question": "recourse", "rules": ["recourse_changed", "irreversible_rail"]},

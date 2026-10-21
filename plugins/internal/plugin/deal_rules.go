@@ -890,6 +890,9 @@ type dealState struct {
 	messages       []dealMessage
 	// memory is the cross-deal counterparty memory, when the check has one.
 	memory *dealCounterpartyMemory
+	// promisedAsk is, on a pay, that an earlier card promised the user to
+	// ask again before paying (promisedPay).
+	promisedAsk bool
 }
 
 func foldDeal(events []sealedEvent) (dealState, error) {
@@ -1257,6 +1260,11 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 		evaluateRepresentation(&r, s, snap, add)
 		settleCheck(&r, s)
 		return r
+	}
+	// A promise to ask before paying, made on an earlier card, is kept by a
+	// pause like any other: the user's answer is then sealed.
+	if s.promisedAsk && snap.Action == "pay" {
+		add("asked", "promised_ask", "", "I said I would ask you before paying")
 	}
 	// 0. What the user asked the agent to tell the buyer, told first.
 	if representationGated[snap.Action] {
@@ -2521,7 +2529,7 @@ var dealBuiltinRules = []struct {
 	Question string
 	Rules    []string
 }{
-	{"asked", []string{"agent_picked", "not_asked", "over_limit", "under_floor"}},
+	{"asked", []string{"promised_ask", "agent_picked", "not_asked", "over_limit", "under_floor"}},
 	{"who", []string{"payee_or_contact_changed", "first_disclosure"}},
 	{"terms", []string{"terms_changed"}},
 	{"recourse", []string{"recourse_changed", "irreversible_rail"}},

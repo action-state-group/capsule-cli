@@ -33,7 +33,7 @@ func TestTheCardCollapsesReasons(t *testing.T) {
 		snap dealSnapshot
 		want []string
 	}{
-		{"r02 and r06 to someone first dealt with are one reason", dealCheckResult{Differences: diffs("rules_escalate", "rules_escalate"), Recipient: firstTime}, pay, []string{"first time dealing with this seller"}},
+		{"r02 and r06 to someone first dealt with: the rules asked, beside the first dealing", dealCheckResult{Differences: diffs("rules_escalate", "rules_escalate"), Recipient: firstTime}, pay, []string{"your rules ask for your OK on this", "first time dealing with this seller"}},
 		{"a first dealing alone is no reason", dealCheckResult{Differences: diffs("terms_changed"), Recipient: firstTime}, pay, []string{"the terms changed since you agreed"}},
 		{"every first telling is one reason", dealCheckResult{Differences: diffs("first_disclosure", "first_disclosure", "first_disclosure", "first_disclosure", "rules_escalate", "rules_escalate"), Recipient: firstTime}, share, []string{"first time they get your details"}},
 		{"over the limit", dealCheckResult{Differences: diffs("over_limit")}, pay, []string{"it's over your $2 limit"}},
@@ -178,9 +178,10 @@ func TestTheCardGoldens(t *testing.T) {
 	assert.Equal(t, string(want), got.String())
 }
 
-// A pay check that passes after a share card promised to ask again before
-// paying still asks: the promise is kept, and nothing is sealed for it.
-func TestAPromisedPaymentIsAskedEvenWhenItPasses(t *testing.T) {
+// A pay after a share card that promised to ask again pauses for that
+// promise, and the user's answer is sealed: the receipt counts it
+// (Sherlock2's review of #351).
+func TestAPromisedPaymentIsAskedAndSealed(t *testing.T) {
 	dealFixture(t)
 	id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
 	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnShare))
@@ -190,16 +191,39 @@ func TestAPromisedPaymentIsAskedEvenWhenItPasses(t *testing.T) {
 	require.NoError(t, err)
 	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-allow", checkerPrints("allow", passFinding))}})
 	pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
-	require.Equal(t, "pass", pay["verdict"])
-	assert.Equal(t, "", pay["card"], "a pass seals no card")
-	assert.Equal(t, cli.VoiceAsk, pay["voice"])
-	ask := pay["ask"].(map[string]any)
-	assert.Equal(t, []any{"you asked me to check with you before paying"}, ask["why"])
-	assert.Equal(t, []any{map[string]any{"label": "Hold", "choice": "hold"}, map[string]any{"label": "Pay $1.90", "choice": "proceed"}}, ask["options"])
-
-	dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"rail":"card"}`))
+	require.Equal(t, "pause", pay["verdict"], "the promise is kept by a pause")
+	assert.Contains(t, pay["card"], "Why I'm asking: I said I'd check with you before paying.")
+	assert.Equal(t, []string{"Hold", "Pay $1.90"}, optionLabels(pay))
+	assertPlainCard(t, pay)
+	_, err = answer(t, id, pay["check_id"].(string), "ok pay", shownCard(t, pay["card"].(string)))
+	require.NoError(t, err)
+	act := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"rail":"card"}`))
+	assert.Contains(t, act["say"], "You OK'd 2 things on the way: sharing your details and paying $1.90.")
 	again := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
-	assert.Equal(t, cli.VoiceSilent, again["voice"], "once paid, the promise is kept")
+	assert.Equal(t, "pass", again["verdict"], "once paid, the promise is kept")
+	assert.Equal(t, cli.VoiceSilent, again["voice"])
+}
+
+// A rules escalation on a first-time pay says the rules asked, and the
+// first dealing beside it as a fact: capsulectl never says which rule asked.
+func TestAnEscalationOnAFirstPayKeepsItsCause(t *testing.T) {
+	w := cli.BuiltinWording()
+	r := dealCheckResult{Differences: []dealDifference{{Rule: "rules_escalate", Field: "per_purchase"}}, Recipient: &dealRecipient{FirstTime: true}}
+	assert.Equal(t, []string{"your rules ask for your OK on this", "first time dealing with this seller"}, cardWhy(w, r, dealSnapshot{Action: "pay"}, cardFacts{}))
+}
+
+// A deny says what will not happen and why it stopped; its one button
+// acknowledges it.
+func TestADenySaysItWillNotAndWhy(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	pinChecker(t, map[string]any{"command": []string{stubChecker(t, "rules-deny", checkerPrints("deny", `{"id":"r03","check":"personal-data/1","verdict":"fail"}`))}})
+	denied := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnShare))
+	require.Equal(t, "deny", denied["verdict"])
+	assert.Equal(t, "NOT ALLOWED BY YOUR RULES\n"+
+		"I won't share your name, email, phone and address with sticker_shop_example (marketplace.example).\n"+
+		"Why I stopped: your rules don't allow this; first time they get your details.", denied["card"])
+	assert.Equal(t, []string{"OK"}, optionLabels(denied))
 }
 
 // Every card, as the user reads it, against what a card never holds.
@@ -211,7 +235,7 @@ func assertPlainCard(t *testing.T, check map[string]any) {
 	}
 	assert.Equal(t, check["approval_text"], check["card"], "the card sealed is the card shown")
 	assert.Equal(t, check["card"], check["say"], "the card is what is said")
-	for _, never := range []string{"[Hold]", "Hold", "--", "profile update", "digest", "selector", "not measured", "UTC", "deal-", "•"} {
+	for _, never := range []string{"[Hold]", "--", "profile update", "digest", "selector", "not measured", "UTC", "deal-", "•"} {
 		assert.NotContains(t, check["card"], never)
 	}
 	assert.NotRegexp(t, `\b[rR][0-9]{2}\b`, check["card"], "no rule ids")
@@ -293,12 +317,6 @@ func TestOnlyAPromiseMadeIsKept(t *testing.T) {
 		pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, fawnPay))
 		require.Equal(t, "pass", pay["verdict"])
 		assert.Equal(t, cli.VoiceSilent, pay["voice"])
-	})
-	t.Run("a promised pay with no amount", func(t *testing.T) {
-		w := cli.BuiltinWording()
-		assert.Equal(t, "Pay", promisedOptions(w, dealSnapshot{Action: "pay"}, dealState{})[1].Label, "never \"Pay \"")
-		amount := int64(190)
-		assert.Equal(t, "Pay $1.90", promisedOptions(w, dealSnapshot{Action: "pay", AmountMinor: &amount}, dealState{terms: dealTerms{Currency: "USD"}})[1].Label)
 	})
 }
 

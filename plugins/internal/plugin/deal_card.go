@@ -65,13 +65,6 @@ var cardReasons = []cardReason{
 	{key: "card.why.under_floor", rules: []string{"under_floor"}},
 	{key: "card.why.representation_missing", rules: []string{ruleRepresentationMissing}},
 	{key: "card.why.representation_outside", rules: []string{ruleRepresentationOutside}},
-	// A rules escalation on a pay to someone first dealt with (r02, r06 in
-	// the everyday pack) is said as a first dealing: the counterparty memory
-	// knows dealings, not payments, and with no escalation a first dealing
-	// is no cause of a pause.
-	{key: "card.why.first_dealing", when: func(r dealCheckResult, snap dealSnapshot, _ cardFacts) bool {
-		return snap.Action == "pay" && r.Recipient != nil && r.Recipient.FirstTime && hasRule(r, "rules_escalate")
-	}},
 	// To someone dealt with before, only what is new to them.
 	{key: "card.why.first_disclosure", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
 		return hasRule(r, "first_disclosure") && (r.Recipient == nil || r.Recipient.FirstTime || f.told == "")
@@ -90,6 +83,13 @@ var cardReasons = []cardReason{
 	{key: "card.why.remote", rules: []string{"remote_pause"}, questions: []string{"remote"}},
 	{key: "card.why.rules_not_checked", rules: []string{"rules_not_checked", "rules_not_evaluable"}},
 	{key: "card.why.rules_ask", rules: []string{"rules_escalate"}},
+	// A first dealing is said beside a rules escalation on a pay, as a fact
+	// next to the cause: capsulectl reads no ruleset's rule ids, so it never
+	// says which rule asked (capsule-cli#344 review).
+	{key: "card.why.first_dealing", when: func(r dealCheckResult, snap dealSnapshot, _ cardFacts) bool {
+		return snap.Action == "pay" && r.Recipient != nil && r.Recipient.FirstTime && hasRule(r, "rules_escalate")
+	}},
+	{key: "card.why.promised", rules: []string{"promised_ask"}},
 }
 
 // cardWhy are the card's reasons: the first two rows of the collapse table
@@ -198,8 +198,14 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	}
 
 	ask := cli.Ask{Tag: cardTag(w, r, state.open.Demo)}
-	ask.Question = cardQuestion(w, snap, cli.V{"amount": amount, "payee": payee, "where": where, "item": item,
-		"what": disclosureWords(w, snap.Disclosing), "description": snap.Description})
+	vals := cli.V{"amount": amount, "payee": payee, "where": where, "item": item,
+		"what": disclosureWords(w, snap.Disclosing), "description": snap.Description}
+	ask.Question = cardQuestion(w, snap, vals)
+	if r.Verdict == "deny" {
+		// A deny takes no yes: it says what will not happen, and why it
+		// stopped (u245: "will not do it and will not ask").
+		ask.Question, ask.WhyKey = cardDenial(w, snap, vals), "card.why.label_stopped"
+	}
 	ask.Facts = cardFactsLine(w, state, snap, r, terms, money)
 	askedOver := false
 	if total, _ := limitBound(terms, snap); total != nil {
@@ -287,7 +293,8 @@ func cardFactsLine(w cli.Wording, state dealState, snap dealSnapshot, r dealChec
 		parts = append(parts, money(*amount))
 	}
 	// What may be taken, when more than the charge: it is what a limit binds.
-	if m := snap.AuthorizedMaxMinor; m != nil && *m > *amount {
+	if m := snap.AuthorizedMaxMinor; m != nil && *m > *amount && (state.intent.MaxTotalMinor == nil || *m != *state.intent.MaxTotalMinor) {
+		// Said only when it is not the limit itself, said next.
 		parts[0] = w.Line("card.facts.up_to", cli.V{"amount": parts[0], "max": money(*m)})
 	}
 	recourse := state.recourse
@@ -371,6 +378,10 @@ func labelOptions(w cli.Wording, r *dealCheckResult, snap dealSnapshot, state de
 		switch o.ID {
 		case "hold":
 			label = w.Line("card.button.hold", nil)
+			if r.Verdict == "deny" {
+				// The one button of a deny acknowledges it.
+				label = w.Line("card.button.ok", nil)
+			}
 		case "verify_contact":
 			// The number from first contact, never the changed one.
 			label = w.Line("card.button.verify_contact", cli.V{"phone": state.open.Who.Phone})
@@ -412,16 +423,6 @@ func promisedPay(events []sealedEvent, state dealState, snap dealSnapshot) bool 
 	return false
 }
 
-// promisedOptions are the buttons of a pay asked because an earlier card
-// promised it: Hold, and the pay with its amount when it has one.
-func promisedOptions(w cli.Wording, snap dealSnapshot, state dealState) []cli.AskOption {
-	pay := w.Line("card.button.pay.no_amount", nil)
-	if amount := cardAmount(snap, state); amount != "" {
-		pay = w.Line("card.button.pay", cli.V{"amount": amount})
-	}
-	return []cli.AskOption{{Label: w.Line("card.button.hold", nil), Choice: "hold"}, {Label: pay, Choice: "proceed"}}
-}
-
 // cardAmount is the amount a check is about, in the deal's currency.
 func cardAmount(snap dealSnapshot, state dealState) string {
 	if snap.AmountMinor == nil {
@@ -455,4 +456,25 @@ func classRank(c string) int {
 
 func hasRule(r dealCheckResult, rule string) bool {
 	return slices.ContainsFunc(r.Differences, func(d dealDifference) bool { return d.Rule == rule })
+}
+
+// cardDenial is what a deny says will not happen.
+func cardDenial(w cli.Wording, snap dealSnapshot, v cli.V) string {
+	if rp := snap.Representing; snap.Action == representAction && rp != nil {
+		return w.Line("card.deny.represent", cli.V{"buyer": strings.TrimSpace(v["payee"])})
+	}
+	base := "card.deny." + snap.Action
+	var keys []string
+	switch {
+	case snap.Action == "pay" && v["amount"] == "":
+		keys = append(keys, base+".no_amount")
+	case snap.Action == "share_contact" && v["what"] == "":
+		keys = append(keys, base+".details")
+	}
+	for _, key := range append(keys, base) {
+		if _, ok := w.Entries[key]; ok {
+			return w.Line(key, v)
+		}
+	}
+	return w.Line("card.deny.other", v)
 }

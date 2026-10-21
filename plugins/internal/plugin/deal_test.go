@@ -155,7 +155,7 @@ func TestDealAskedVsDidBooking(t *testing.T) {
 	check := dealRun(t, "check", "--deal", dealID, "--input", filepath.Join(bookingFixture, "check-commit.json"))
 	assert.Equal(t, "PAUSED FOR YOU\n"+
 		"Confirm the double room, 2 nights with Example Hotel Shinjuku (hotel.example)?\n"+
-		"$760 · by card · refundable · over your $400\n"+
+		"$760 · by card · refundable · over your $400 limit\n"+
 		"Why I'm asking: it's over your $400 limit; it's not what you asked for.\n"+
 		"Good to know: I chose item double room, 2 nights for you.", check["card"])
 	assert.Equal(t, "Not what you asked: check_out 2026-10-05 → 2026-10-07\n"+
@@ -362,7 +362,7 @@ func TestDealRefundabilityChangePauses(t *testing.T) {
 	assert.Equal(t, "pause", check["verdict"])
 	assert.Equal(t, "PAUSED FOR YOU\n"+
 		"Confirm the double room, 2 nights with Example Hotel Shinjuku (hotel.example)?\n"+
-		"$380 · by card · not refundable · within your $400\n"+
+		"$380 · by card · not refundable · within your $400 limit\n"+
 		"Why I'm asking: the way to get your money back changed.\n"+
 		"Good to know: I chose item double room, 2 nights for you.", check["card"])
 	assert.Equal(t, "No longer refundable (agreed as refundable)", differenceTexts(check))
@@ -672,7 +672,7 @@ func TestDealPickedItemIsNotAFalsePause(t *testing.T) {
 		check := run(t, "intent-picked-with-size.json", "check-over-limit.json")
 		assert.Equal(t, "pause", check["verdict"])
 		assert.Contains(t, differenceTexts(check), "Over your limit of $8.00 ($9.00)")
-		assert.Contains(t, check["card"], "$9 · by card · refundable · over your $8")
+		assert.Contains(t, check["card"], "$9 · by card · refundable · over your $8 limit")
 		assert.Contains(t, check["card"], "it's over your $8 limit")
 	})
 }

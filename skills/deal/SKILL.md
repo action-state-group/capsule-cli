@@ -428,11 +428,11 @@ capsulectl. Follow them; never make up your own narration of a step.
   show both. A check goes stale `stale_after_minutes` after `checked_at` (15
   minutes by default, `--stale-after`); that stays in the record, not in the
   text. If the action happens after it, check again first.
-- **"Next" is a promise.** When a share's card says "Next: I'll ask you
-  again before paying.", ask the user before you pay, even when the pay
-  check passes: that check then still returns `voice: "ask"` with a card.
-  Show it and wait. On its pay button go ahead; on Hold, stop. Nothing is
-  sealed for that answer: the pass already authorizes the payment.
+- **"Next" is a promise, and it is kept.** When a share's card says "Next:
+  I'll ask you again before paying.", ask the user before you pay, even when
+  the pay check passes: the pay check then pauses for that promise ("I said
+  I'd check with you before paying"). Show its card, wait, and seal the
+  answer as for any pause.
 - **Never say the rules ran when they did not.** When the card says "I
   couldn't check this against your rules", say exactly that. Never say the
   user's rules were checked unless a check's `rules` says they were
