@@ -13,7 +13,7 @@
   exit criterion 9).
 - **Fixed:** in "Where this deal stands", a record linked to the close read
   "confirms the close: after the close (confirms it): …". It now says the
-  relation once: "confirms the close: evidence (buyer), unverified: …".
+  relation once: "confirms the close: evidence (buyer_refund_request), unverified: …".
 - **Changed (scripts):** `scripts/presentation-goldens/build-fixtures.sh`
   builds the capsulectl-deal plugin and runs it from a plugin root of its
   own, so the deal fixtures build again since the deal commands moved into
