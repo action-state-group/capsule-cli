@@ -2,7 +2,8 @@ package plugin
 
 import (
 	"os"
-	"path/filepath"
+	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -36,24 +37,18 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// keepGoCaches pins the Go build and module caches, and the go env file
-// (which may set GOMODCACHE or GOPROXY), to where they are under the real
-// HOME before a test HOME replaces it: the tests that run `go build` would
-// otherwise fill the test HOME with a fresh, read-only module cache.
+// keepGoCaches pins the go env file and the Go build and module caches, as
+// go resolves them under the real HOME, before a test HOME replaces it: the
+// tests that run `go build` would otherwise fill the test HOME with a fresh,
+// read-only module cache and lose the user's `go env -w` settings.
 func keepGoCaches() {
-	if os.Getenv("GOENV") == "" {
-		if config, err := os.UserConfigDir(); err == nil {
-			os.Setenv("GOENV", filepath.Join(config, "go", "env"))
-		}
+	out, err := exec.Command("go", "env", "GOENV", "GOPATH", "GOCACHE", "GOMODCACHE").Output()
+	if err != nil {
+		return // no go to run: nothing under test builds with it
 	}
-	if os.Getenv("GOPATH") == "" {
-		if real, err := os.UserHomeDir(); err == nil {
-			os.Setenv("GOPATH", filepath.Join(real, "go"))
-		}
-	}
-	if os.Getenv("GOCACHE") == "" {
-		if cache, err := os.UserCacheDir(); err == nil {
-			os.Setenv("GOCACHE", filepath.Join(cache, "go-build"))
+	for i, name := range []string{"GOENV", "GOPATH", "GOCACHE", "GOMODCACHE"} {
+		if lines := strings.Split(strings.TrimSpace(string(out)), "\n"); i < len(lines) && os.Getenv(name) == "" {
+			os.Setenv(name, lines[i])
 		}
 	}
 }
