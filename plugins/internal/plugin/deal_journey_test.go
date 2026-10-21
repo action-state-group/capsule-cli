@@ -128,9 +128,9 @@ func TestTheFawnErrandIsOneDeal(t *testing.T) {
 	for _, s := range report["journey"].([]any) {
 		labels = append(labels, s.(map[string]any)["label"].(string))
 	}
-	assert.Contains(t, labels, "Showed you 4 options")
-	assert.Contains(t, labels, "Chose for you")
-	assert.Contains(t, labels, "Switched")
+	assert.Equal(t, []string{"Asked", "Searched", "Showed you 4 options", "Recommended", "Couldn't (AliExpress sign-in)",
+		"Switched to eBay", "Chose for you", "Paused for you", "Told eBay your name and address", "Paused for you",
+		"Paid $1.90 within your $2 limit"}, labels)
 }
 
 // The Raised path: an ask for options only allows nothing; picking one and
@@ -576,12 +576,12 @@ func TestATypedApprovalOfALegsWayToPayCoversThePay(t *testing.T) {
 		"intent":{"verbatim":"get me a fawn sticker under $2","max_total_minor":200,"allowed":["pay"]},
 		"who":{},"terms":{"currency":"USD"},"recourse":{}}`))["deal_id"].(string)
 	note(t, id, "intent", `{"verbatim":"the eBay one","asked":{"item":"Fawn Sticker"},"who":{"name":"eBay","domain":"ebay.com"}}`)
-	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
-	if c["verdict"] == "pause" {
-		_, err := answer(t, id, c["check_id"].(string), "yes", shownCard(t, c["card"].(string)))
-		require.NoError(t, err)
-	}
-	act := note(t, id, "act", `{"action":"pay","amount_minor":190,"payee":"eBay","rail":"card"}`)
+	// Over the limit, so it pauses and the user's approval is folded.
+	c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":250,"authorized_max_minor":250,"terms":{"item":"Fawn Sticker","price_minor":235},"recourse":{"rail":"card","refundable":true}}`))
+	require.Equal(t, "pause", c["verdict"], c["card"])
+	_, err := answer(t, id, c["check_id"].(string), "yes, this once", shownCard(t, c["card"].(string)))
+	require.NoError(t, err)
+	act := note(t, id, "act", `{"action":"pay","amount_minor":250,"payee":"eBay","rail":"card"}`)
 	assert.Equal(t, false, act["unchecked"], act["reason"])
 }
 
@@ -642,4 +642,28 @@ func TestTheProfileCheckerVoidsApprovalsAcrossPicks(t *testing.T) {
 	delete(body, "rule")
 	last["x-deal-v0"].(map[string]any)["refs"] = []any{map[string]any{"rel": "authorized_by", "type": "deal-record", "digest_alg": "SHA-256", "digest": approval}}
 	checkProfileRejects(t, records, "details changed after the check")
+}
+
+// deal list counts a class told to two merchants of one errand as told to
+// two recipients.
+func TestDealListCountsEachLegsMerchant(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	tellEmail := func() {
+		c := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["email"]}`))
+		_, err := answer(t, id, c["check_id"].(string), "yes", shownCard(t, c["card"].(string)))
+		require.NoError(t, err)
+		require.Equal(t, true, note(t, id, "disclosure", `{"fields":[{"class":"email","value":"`+homeEmail+`"}]}`)["approved"])
+	}
+	note(t, id, "intent", `{"verbatim":"try AliExpress","who":{"name":"AliExpress","email":"orders@aliexpress.example"}}`)
+	tellEmail()
+	note(t, id, "intent", `{"verbatim":"lets change to ebay","who":{"name":"eBay","email":"orders@ebay.example"}}`)
+	tellEmail()
+	r, _ := listRange(t, "--since", "2000-01-01")
+	for _, row := range r.Told {
+		if row.Class == "email" {
+			assert.Equal(t, 2, row.Recipients)
+			assert.Equal(t, 2, row.ToSellers)
+		}
+	}
 }

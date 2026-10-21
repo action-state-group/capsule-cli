@@ -419,35 +419,45 @@ func legStartOf(e dealEvent) bool {
 }
 
 // dealJourneyStep is one move of the errand, as the report lists it: who
-// moved, the move's token, and its label from the wording pack.
+// moved, the move's token, its label from the wording pack, and the values
+// the label was filled with (who, item, reason, classes, amount, limit,
+// count), so another renderer can word it from its own pack.
 type dealJourneyStep struct {
-	By    string `json:"by"`
-	Move  string `json:"move"`
-	Count int    `json:"count,omitempty"`
-	Found int64  `json:"found,omitempty"`
-	Label string `json:"label"`
-	Step  string `json:"step"`
+	By     string `json:"by"`
+	Move   string `json:"move"`
+	Count  int    `json:"count,omitempty"`
+	Found  int64  `json:"found,omitempty"`
+	Label  string `json:"label"`
+	Values cli.V  `json:"values,omitempty"`
+	Step   string `json:"step"`
 }
 
 // dealJourney is the errand's moves in order: the user's (asked, narrowed,
 // switched, raised, picked, called_off), the agent's (searched, options,
 // recommended, chose, asked_seller, checked, couldnt, paused, told, and
 // what it did) and the other side's (said, changed). An intent sealed
-// before journey records is "changed".
+// before journey records is "changed". The report is the user's own copy:
+// a label may name the merchant, the item and the classes told.
 func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 	out := []dealJourneyStep{}
-	add := func(by, move string, se sealedEvent, vals cli.V) {
-		key := "journey." + by + "." + move
-		out = append(out, dealJourneyStep{By: by, Move: move, Label: w.Line(key, vals), Step: se.CapsuleID})
+	add := func(by, move, key string, se sealedEvent, vals cli.V) {
+		if key == "" {
+			key = "journey." + by + "." + move
+		}
+		out = append(out, dealJourneyStep{By: by, Move: move, Label: w.Line(key, vals), Values: vals, Step: se.CapsuleID})
+	}
+	currency := ""
+	if len(events) > 0 && events[0].Event.Open != nil {
+		currency = events[0].Event.Open.Terms.Currency
 	}
 	for i, se := range events {
 		e := se.Event
 		switch {
 		case e.Kind == "open" && e.Open != nil:
-			add("user", moveAsked, se, nil)
+			add("user", moveAsked, "", se, nil)
 		case e.Kind == "intent" && e.Intent != nil:
 			if e.Journey == "" {
-				add("user", "changed", se, nil)
+				add("user", "changed", "", se, nil)
 				continue
 			}
 			state, err := foldDeal(events[:i])
@@ -458,41 +468,81 @@ func dealJourney(events []sealedEvent, w cli.Wording) []dealJourneyStep {
 			if err != nil {
 				continue
 			}
-			add("user", m.Move, se, nil)
+			switch {
+			case m.Move == moveSwitched && e.Intent.Who != nil:
+				add("user", m.Move, "", se, cli.V{"who": recipientName(*e.Intent.Who)})
+			case m.Move == moveSwitched:
+				add("user", m.Move, "journey.user.switched.item", se, cli.V{"item": e.Intent.Asked.Item})
+			default:
+				add("user", m.Move, "", se, nil)
+			}
 			if m.Proposed && m.Move != moveRaised {
-				add("user", moveRaised, se, nil)
+				add("user", moveRaised, "", se, nil)
 			}
 		case e.AgentMove != nil:
-			if e.AgentMove.Move == moveOptions {
-				n := len(e.AgentMove.Options)
-				out = append(out, dealJourneyStep{By: "agent", Move: moveOptions, Count: n, Found: *e.AgentMove.Found,
-					Label: w.Line("journey.agent.options", cli.V{"count": strconv.Itoa(n)}), Step: se.CapsuleID})
-				continue
+			am := e.AgentMove
+			switch am.Move {
+			case moveOptions:
+				n := len(am.Options)
+				vals := cli.V{"count": strconv.Itoa(n)}
+				out = append(out, dealJourneyStep{By: "agent", Move: moveOptions, Count: n, Found: *am.Found,
+					Label: w.Line("journey.agent.options", vals), Values: vals, Step: se.CapsuleID})
+			case moveCouldnt:
+				reason := am.Detail
+				if am.Reason != "other" {
+					reason = w.Line("journey.reason."+am.Reason, nil)
+				}
+				if am.Who != nil {
+					add("agent", am.Move, "journey.agent.couldnt.who", se, cli.V{"who": recipientName(*am.Who), "reason": reason})
+				} else {
+					add("agent", am.Move, "", se, cli.V{"reason": reason})
+				}
+			default:
+				add("agent", am.Move, "", se, nil)
 			}
-			add("agent", e.AgentMove.Move, se, nil)
 		case e.Kind == "message" && e.Message != nil:
 			switch e.Message.From {
 			case "agent":
-				add("agent", "asked_seller", se, nil)
+				add("agent", "asked_seller", "", se, nil)
 			case "counterparty":
-				add("other", "said", se, nil)
+				add("other", "said", "", se, nil)
 			}
 		case e.Kind == "change":
-			add("other", "changed", se, nil)
+			add("other", "changed", "", se, nil)
 		case e.Kind == "evidence" && e.Evidence != nil && e.Evidence.Verified:
-			add("agent", "checked", se, nil)
+			add("agent", "checked", "", se, nil)
 		case e.Kind == "check" && e.Check != nil && e.Check.Verdict != "pass":
-			add("agent", "paused", se, nil)
+			add("agent", "paused", "", se, nil)
 		case e.Kind == "disclosure" && e.Disclosure != nil:
-			add("agent", "told", se, nil)
+			d := e.Disclosure
+			classes := make([]string, len(d.Fields))
+			for j, f := range d.Fields {
+				classes[j] = f.Class
+			}
+			add("agent", "told", "", se, cli.V{"who": d.recipient(legWho(events[:i])), "classes": disclosureWords(w, classes)})
 		case e.Kind == "act" && e.Act != nil:
-			move := "act." + e.Act.Action
-			if !slices.Contains([]string{"pay", "commit", "sign", "cancel", "offer"}, e.Act.Action) {
+			a := e.Act
+			move := "act." + a.Action
+			if !slices.Contains([]string{"pay", "commit", "sign", "cancel", "offer"}, a.Action) {
 				move = "act.other"
 			}
-			add("agent", move, se, nil)
+			if a.Action == "pay" && a.AmountMinor != nil {
+				cur := a.Currency
+				if cur == "" {
+					cur = currency
+				}
+				vals := cli.V{"amount": spokenMoney(*a.AmountMinor, cur)}
+				key := "journey.agent.act.pay"
+				if state, err := foldDeal(events[:i]); err == nil && state.intent.MaxTotalMinor != nil &&
+					strings.EqualFold(cur, currency) && *a.AmountMinor <= *state.intent.MaxTotalMinor {
+					key, vals["limit"] = "journey.agent.act.pay.within", spokenMoney(*state.intent.MaxTotalMinor, cur)
+				}
+				add("agent", move, key, se, vals)
+				continue
+			}
+			add("agent", move, "", se, nil)
 		case e.Kind == "close" && e.Close != nil && e.Close.Status == "called_off":
-			add("user", "called_off", se, nil)
+			add("user", "called_off", "", se, nil)
 		}
 	}
 	return out

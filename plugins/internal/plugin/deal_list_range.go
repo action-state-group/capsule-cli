@@ -258,7 +258,14 @@ func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
 				}
 			}
 			if d := ev.Disclosure; ev.Kind == "disclosure" && d != nil && open != nil {
-				told.addAt(l.id, *d, legWho(asOf[:i+1]), open.Channel, role)
+				// Each leg's counterparty is its own: a telling is keyed to
+				// the leg it was made in, never merged with another
+				// merchant's in the same errand.
+				key := l.id
+				if from := currentLegStart(asOf[:i+1]); from > 0 {
+					key += "#" + strconv.Itoa(from)
+				}
+				told.addAt(key, *d, legWho(asOf[:i+1]), open.Channel, role)
 			}
 		}
 		if fc := finalClose(asOf); listing.Result == dealResultSold && b.contains(at[fc]) {

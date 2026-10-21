@@ -318,3 +318,17 @@ func TestDealListToldCountsLinksAcrossRoles(t *testing.T) {
 		}
 	}
 }
+
+// One errand, two merchants: a class told to each is told to two
+// recipients, never merged by the deal they share (capsule-cli#340).
+func TestDealListToldKeepsEachLegsMerchant(t *testing.T) {
+	email := []dealDisclosureField{{Class: "email", Value: "pat@mail.example"}}
+	tally := newDealToldTally()
+	tally.addAt("deal-a", dealDisclosure{To: "counterparty", Fields: email}, dealWho{Name: "AliExpress", Email: "orders@aliexpress.example"}, "web", dealRoleBuyer)
+	tally.addAt("deal-a#5", dealDisclosure{To: "counterparty", Fields: email}, dealWho{Name: "eBay", Email: "orders@ebay.example"}, "web", dealRoleBuyer)
+	for _, r := range tally.rows() {
+		if r.Class == "email" {
+			assert.Equal(t, dealListTold{Class: "email", Recipients: 2, ToSellers: 2}, r)
+		}
+	}
+}
