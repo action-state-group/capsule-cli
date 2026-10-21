@@ -8,8 +8,9 @@
   Evidence Result v0 into the profile's log as one Capsule whose payload is
   the Result and whose references cite, `acted_on`, every record its claims
   cite. It checks the document against the vendored `evidence-result-v0`
-  schema, refuses headline values that do not recompute from the claims and
-  any cited record the profile's log or artifact store does not hold, and
+  schema, refuses headline values that do not recompute from the claims, a
+  claim that cites no record, and any cited record the profile's log or
+  artifact store does not hold, and
   seals nothing new for the same document. `--out` writes the canonical
   Result and `--capsule-out` the sealed Capsule. Then `cll checkpoint create`,
   `disclose --root` and `presentation build --bundle` write the Result page,

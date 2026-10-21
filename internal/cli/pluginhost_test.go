@@ -187,7 +187,7 @@ func TestResultBuildOnABookProfileForwardsToTheBook(t *testing.T) {
 	out, err := invoke(t, "", "result", "build", "--profile", "book", "--result", "r.json", "--out", "o.json")
 	require.NoError(t, err, out)
 	assert.Contains(t, out, "ran capsulectl-book: result build --out=o.json --profile=book --result=r.json")
-	assert.Contains(t, out, "on a book profile `capsulectl result build` is `capsulectl book result build`")
+	assert.Contains(t, out, "on a book profile this runs `capsulectl book result build`, which needs --out")
 	assert.Contains(t, out, "removed in "+AliasRemovedIn)
 }
 

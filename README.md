@@ -350,8 +350,9 @@ needs no plugin: it seals a caller-supplied Result v0 into the profile's log
 as one Capsule whose payload is the document and whose `references` cite,
 `acted_on`, every record the claims cite. It validates against the vendored
 `evidence-result-v0` schema (`internal/cli/schemas/`, digest pinned in code),
-refuses headline values that do not recompute from the claims and a citation
-the profile's log and artifact store do not hold, and sealing the same
+refuses headline values that do not recompute from the claims, a claim that
+cites no record, and a citation the profile's log and artifact store do not
+hold, and sealing the same
 document again appends nothing. Then `cll checkpoint create`,
 `disclose --root <capsule_id>` and `presentation build --bundle` write the
 Result page. On a book profile it forwards to `book result build` until

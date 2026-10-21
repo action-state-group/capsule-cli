@@ -252,6 +252,7 @@ func TestResultBuildRefusesWhatItCannotSeal(t *testing.T) {
 		"not in the log":           {resultTestDoc(resultTestClaim("claim-1", "met", notInLog)), nil, "cites " + notInLog + ", which is not a record in this profile's log"},
 		"not in the store":         {resultTestDoc(resultTestClaim("claim-1", "met", logOnly)), nil, "whose Capsule its artifact store does not hold"},
 		"close_ref not in the log": {resultTestDoc(closeClaim), nil, "cites " + notInLog + ", which is not a record in this profile's log"},
+		"no evidence":              {resultTestDoc(resultTestClaim("claim-1", "met")), nil, `claim "claim-1" (claims[0]) cites no evidence`},
 		"not one object":           {[]any{1}, nil, "must be a JSON object"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -283,6 +284,16 @@ func TestResultBuildReportsTheCapsuleWhenAnOutputIsRefused(t *testing.T) {
 	kept, err := os.ReadFile(out)
 	require.NoError(t, err)
 	assert.Equal(t, "something else", string(kept))
+
+	// The same for --capsule-out, on a repeat: the Capsule is reported.
+	capsuleOut := filepath.Join(d.dir, "taken-record.json")
+	require.NoError(t, os.WriteFile(capsuleOut, []byte("something else"), 0o600))
+	again, stdout, err := d.buildResult(resultTestDoc(resultTestClaim("claim-1", "met", day1)), "--capsule-out", capsuleOut)
+	require.ErrorIs(t, err, ErrInput, stdout)
+	assert.Contains(t, SafeError(err), "--capsule-out "+capsuleOut+" already exists and does not hold these bytes")
+	assert.Equal(t, built.CapsuleID, again.CapsuleID)
+	assert.True(t, again.AlreadyBuilt)
+	assert.Equal(t, []string{day1, built.CapsuleID}, d.logIDs())
 }
 
 func TestResultBuildRefusesAReadOnlyProfile(t *testing.T) {

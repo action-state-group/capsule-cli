@@ -519,7 +519,8 @@ a check fails.
 
 Checked: the vendored evidence-result-v0 schema; every headline count
 recomputes from the claims (counts must be integer literals: 7, not 7.0 or
-7e0); every record a claim cites is in the profile's log. Everything else a
+7e0); every claim cites at least one record, and every record a claim cites
+is in the profile's log. Everything else a
 claim states is sealed as stated.
 
 The Capsule cites every record the Result cites (acted_on), so a bundle rooted
@@ -531,7 +532,8 @@ On a book profile this is book result build, which seals into the book.
 
 A repeat with the same document and key returns the Capsule already in the
 log. --out and --capsule-out are left alone when they already hold the same
-bytes, and refused when they hold anything else.`
+bytes, and refused when they hold anything else; the Result is still sealed
+and its Capsule reported.`
 
 func resultBuildCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "build", Short: "Seal a checked Evidence Result v0 into the profile's log as the Capsule a Result page is built on", Long: resultBuildLong, Args: NoArgs, RunE: func(c *cobra.Command, _ []string) (err error) {
@@ -542,7 +544,7 @@ func resultBuildCommand() *cobra.Command {
 		// A book profile's log is its evidence book: there this is still the
 		// old alias of `book result build`, which seals book form.
 		if p.IsBook() && bookBackend == nil {
-			fmt.Fprintf(c.ErrOrStderr(), "capsulectl: on a book profile `capsulectl result build` is `capsulectl book result build`; use that (this forward is removed in %s)\n", AliasRemovedIn)
+			fmt.Fprintf(c.ErrOrStderr(), "capsulectl: on a book profile this runs `capsulectl book result build`, which needs --out; run that directly (this forward will be removed in %s)\n", AliasRemovedIn)
 		}
 		if done, e := delegateBook(c, p, nil); done {
 			return e
@@ -572,6 +574,13 @@ func resultBuildCommand() *cobra.Command {
 		encoded, digest, e := ResultStatement(doc)
 		if e != nil {
 			return Hint(ErrInput, "the Result cannot be put in canonical (JCS) form: "+e.Error())
+		}
+		// A claim traces to at least one record, as the book requires; the
+		// schema allows an empty evidence[].
+		for _, claim := range checked.Claims {
+			if len(claim.Evidence) == 0 {
+				return Hint(ErrInput, fmt.Sprintf("%s cites no evidence; every claim must trace to at least one record in this profile's log", claim.Label()))
+			}
 		}
 		cites := resultCites(checked)
 		request, e := resultRequest(p, doc, encoded, cites)
@@ -657,7 +666,7 @@ func resultBuildCommand() *cobra.Command {
 	}}
 	cmd.Flags().String("result", "", "Evidence Result v0 document to seal (JSON)")
 	cmd.Flags().String("contract", "", "The <contract_id>@<version> every claim must name; default: the one contract the claims name, if they name one")
-	cmd.Flags().String("out", "", "Also write the Result in its canonical (JCS) form, the bytes the Capsule's payload digest covers")
+	cmd.Flags().String("out", "", "Also write the Result in its canonical (JCS) form, the bytes the Capsule's payload digest covers (required on a book profile)")
 	cmd.Flags().String("capsule-out", "", "Also write the sealed Capsule as an artifact.Record for `verify --capsule`")
 	return cmd
 }
