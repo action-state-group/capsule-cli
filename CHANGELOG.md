@@ -33,7 +33,8 @@
   words and its reading of the cadence witness). Times are the reader's
   local time; a step is listed once, and an act's or a close's own step is
   not said again under it; what the user approved on a check is no anomaly
-  (#341).
+  of the agent's, while a signal from the other side (a changed payee, a
+  code asked for) stays one (#341).
 
 ### `result build` in the core: a Result page with no plugin (capsule-cli#324)
 

@@ -336,6 +336,11 @@ const dealViewRender = (model, regions) => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
+  // A YYYY-MM-DD date as a reader says it ("Oct 22, 2026").
+  const readDay = (ymd) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString(undefined, { dateStyle: "medium" }) : ymd;
+  };
   // Times as the reader's own clock shows them (capsule-cli#341); a value
   // that is not a time is shown as written.
   const local = (at) => {
@@ -476,11 +481,11 @@ const dealViewRender = (model, regions) => {
     // works out from the viewer's clock, apart, and says so: it is not part
     // of the report.
     if (model.standalone) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDay();
       const due = life.open && typeof life.open.expect_close_by === "string" ? life.open.expect_close_by : "";
-      const passed = life.state === "open" && due !== "" && due < today ? ` The expected close, ${due}, has passed as of today.` : "";
+      const passed = life.state === "open" && due !== "" && due < today ? ` The expected close, ${readDay(due)}, has passed as of today.` : "";
       host.append(el("p", `This report states the deal as of its checkpoint at ${local(life.as_of)} (the producer's time); whether a witness saw that checkpoint is checked by capsulectl verify, not here.`, "deal-note"));
-      host.append(el("p", `Not part of the report, worked out by this page when you opened it: today is ${today}.${passed}`, "deal-note"));
+      host.append(el("p", `Not part of the report, worked out by this page when you opened it: today is ${readDay(today)}.${passed}`, "deal-note"));
     }
   }
 
@@ -545,7 +550,7 @@ const dealViewRender = (model, regions) => {
       const date = d.cancel_by || d.due_by || "";
       const today = localDay();
       if (model.standalone && live && date !== "" && date < today) {
-        li.append(el("span", ` Not part of the report, worked out by this page when you opened it: this date has passed as of today, ${today}.`, "deal-note"));
+        li.append(el("span", ` Not part of the report, worked out by this page when you opened it: this date has passed as of today, ${readDay(today)}.`, "deal-note"));
       }
       list.append(li);
     });

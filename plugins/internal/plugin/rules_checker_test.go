@@ -468,8 +468,9 @@ func TestEachRuleIsLabelledByItsOwnDisposition(t *testing.T) {
 		"Flagged by your rules: r12: first disclosure",
 	}, texts)
 	assert.Equal(t, []string{"rules_deny", "rules_deny", "rules_deny"}, rules)
-	alone := &dealRules{Status: "evaluated", Verdict: "deny", Findings: []dealRulesFinding{{ID: "r03", Verdict: "fail", Reason: "personal data"}}}
-	assert.Equal(t, "Not allowed by your rules: r03: personal data", rulesDifferences(alone)[0].Text, "the one failing rule under a deny is the one that denies")
+	alone := &dealRules{Status: "evaluated", Verdict: "deny", Findings: []dealRulesFinding{{ID: "r03", Verdict: "fail", Reason: "personal data"}, {ID: "r09", Verdict: "not_evaluable", Reason: "no terms"}}}
+	assert.Equal(t, "Not allowed by your rules: r03: personal data", rulesDifferences(alone)[0].Text, "the one failing rule under a deny is the one that denies; one not evaluated does not count")
+	assert.Equal(t, "Your rules were not fully checked: r09: no terms", rulesDifferences(alone)[1].Text)
 	escalate := &dealRules{Status: "evaluated", Verdict: "escalate", Findings: []dealRulesFinding{{ID: "r02", Verdict: "fail", Reason: "first payee"}}}
 	assert.Equal(t, "Your rules ask for approval: r02: first payee", rulesDifferences(escalate)[0].Text)
 }

@@ -129,7 +129,7 @@ portable_checks() {
   local did
   did=$(grep -o '<details data-self="[0-9a-f]*"><summary>[^<]*</summary>' page.html.dom | sed 's/.*<summary>//; s/<\/summary>//')
   line=$(record_line records.json action-record/v0 '"Did: \(.action) \(money)"')
-  check "the page's line for the act starts with what the action record says ($line)" contains_text "$did" "$line "
+  check "the page's line for the act says what the action record says ($line)" contains_text "$did" "$line "
   line=$(record_line records.json action-record/v0 '" by \(.rail)"')
   check "and says how it was paid ($line)" contains_text "$did" "$line"
 }
@@ -258,6 +258,6 @@ jq -c '(.[] | select(.type == "action-record/v0") | .body.amount_minor) |= 6270'
 check "broken-records: the records differ" differs records.json broken-records.json
 broken broken-records recipient.html broken-records.json \
   "the exported records are the payloads the bundle's records commit to, in order" \
-  "the page's line for the act starts with what the action record says (Did: pay \$62.70)"
+  "the page's line for the act says what the action record says (Did: pay \$62.70)"
 
 exit "$fail"
