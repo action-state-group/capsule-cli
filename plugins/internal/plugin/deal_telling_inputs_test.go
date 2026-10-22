@@ -44,7 +44,7 @@ func TestAShareCarriesWhatWasToldBefore(t *testing.T) {
 	// Email to M: never told anything.
 	sealed, given, _ := ruleInputs(t, m1, shareInput(`"email"`))
 	tellings(t, sealed, given, []any{}, false)
-	check := latestCheck(t, m1)
+	check := latestCheckID(t, m1)
 	dealRun(t, "note", "--deal", m1, "--kind", "approval", "--check", check, "--choice", "proceed", "--said", "ok")
 	require.Equal(t, true, dealRun(t, "note", "--deal", m1, "--kind", "disclosure", "--input", writeJSON(t,
 		`{"fields":[{"class":"email","value":"`+homeEmail+`"}]}`))["approved"])
@@ -119,7 +119,7 @@ func TestARefusedShareIsNotTold(t *testing.T) {
 	id := openShop(t, "redbubble.com")
 	sealed, given, _ := ruleInputs(t, id, shareInput(`"email"`))
 	tellings(t, sealed, given, []any{}, false)
-	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", latestCheck(t, id), "--choice", "hold", "--said", "no, don't")
+	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", latestCheckID(t, id), "--choice", "hold", "--said", "no, don't")
 	held := heldNote(t, id, `{"fields":[{"class":"email","value":"`+homeEmail+`"}]}`)
 	assert.Equal(t, []any{"email"}, held["held"], "nothing is given")
 
@@ -247,8 +247,8 @@ func TestSeveralLeakedOrNewClasses(t *testing.T) {
 	assert.Contains(t, check["card"], "Your name and email already went to Shop (society6.com) without your OK. This also shares your phone, which would be new to them. Share all of them?")
 }
 
-// latestCheck is the id of the deal's latest check record.
-func latestCheck(t *testing.T, dealID string) string {
+// latestCheckID is the id of the deal's latest check record.
+func latestCheckID(t *testing.T, dealID string) string {
 	t.Helper()
 	p, err := cli.LoadProfile("deal")
 	require.NoError(t, err)
@@ -405,4 +405,30 @@ func TestAHeldNoteSaysEachOtherClassAsWhatItIs(t *testing.T) {
 			assert.Equal(t, tc.reason, held["reason"])
 		})
 	}
+}
+
+// A held first telling names the other classes the telling gives too.
+func TestAHeldFirstTellingNamesTheOtherClasses(t *testing.T) {
+	approve := func(t *testing.T, id, class string) {
+		check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"`+class+`"`)))
+		require.Equal(t, "pause", check["verdict"])
+		dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
+	}
+	note := `{"fields":[{"class":"name","value":"` + homeName + `"},{"class":"phone","value":"+1 555 010 4477"}]}`
+
+	// Phone went out without OK, a check naming phone is approved, a new name beside it.
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	leakPhone(t, id)
+	approve(t, id, "phone")
+	held := heldNote(t, id, note)
+	assert.Equal(t, []any{"name"}, held["held"])
+	assert.Equal(t, "First time telling Shop your name, and no check the user approved named it. This also shares your phone, which they already have.", held["reason"])
+
+	// A plain first telling beside a class told with OK.
+	other := openShop(t, "society6.com")
+	tellWithOK(t, other, "phone", "+1 555 010 4477")
+	held = heldNote(t, other, note)
+	assert.Equal(t, []any{"name"}, held["held"])
+	assert.Equal(t, "First time telling Shop your name, and no check the user approved named it. This also shares your phone, which they already have.", held["reason"])
 }

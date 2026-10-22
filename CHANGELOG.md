@@ -179,7 +179,10 @@
   stays the reason. A held disclosure note naming such a class says `You
   haven't OK'd telling <recipient> your <class> before.`
   (`disclosure.held.unapproved`), then `This also shares …`
-  (`disclosure.held.also`) with the same clauses.
+  (`disclosure.held.also`) with the same clauses. A held first telling
+  names the other classes the same way: `First time telling <recipient>
+  your <class>, and no check the user approved named it. This also shares
+  your <told class>, which they already have.`
 
 ## v0.1.0-rc20
 

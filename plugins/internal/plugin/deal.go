@@ -1686,7 +1686,9 @@ func dealNoteCommand() *cobra.Command {
 						name = recipientName(*d.Who)
 					}
 					words := make([]string, len(first))
-					var leaked, fresh, told []string
+					// leaked and fresh are held; told and named (new, named by
+					// the approved check) are given beside them.
+					var leaked, fresh, told, named []string
 					for i, c := range first {
 						words[i] = classWord(c)
 						if memory.leakedBefore(keys, c) {
@@ -1700,25 +1702,31 @@ func dealNoteCommand() *cobra.Command {
 					// the user's OK) is "which they already have", any other
 					// "which would be new to them".
 					for _, f := range d.Fields {
-						if slices.Contains(first, f.Class) || slices.Contains(told, f.Class) || slices.Contains(fresh, f.Class) {
+						if slices.Contains(first, f.Class) || slices.Contains(told, f.Class) || slices.Contains(named, f.Class) {
 							continue
 						}
 						if memory.toldBefore(keys, f.Class) != "" || memory.leakedBefore(keys, f.Class) {
 							told = append(told, f.Class)
 						} else {
-							fresh = append(fresh, f.Class)
+							named = append(named, f.Class)
 						}
 					}
 					// Never "first time" for a class that went to them before
 					// without the user's OK; the note names every class the
 					// telling gives, as the card does.
+					// In every branch the note names each class the telling gives.
+					w, _ := cli.ActiveWording(s.p)
 					reason := "First time telling " + name + " your " + strings.Join(words, ", ") + ", and no check the user approved named it"
+					others := alsoShares(w, told, named)
+					if others != "" {
+						reason += "."
+					}
 					if len(leaked) > 0 {
-						w, _ := cli.ActiveWording(s.p)
 						reason = w.Line("disclosure.held.unapproved", cli.V{"name": name, "what": disclosureWords(w, leaked)})
-						if others := alsoShares(w, told, fresh); others != "" {
-							reason += " " + w.Line("disclosure.held.also", cli.V{"others": others})
-						}
+						others = alsoShares(w, told, append(slices.Clone(fresh), named...))
+					}
+					if others != "" {
+						reason += " " + w.Line("disclosure.held.also", cli.V{"others": others})
 					}
 					if err := cli.Output(c, map[string]any{
 						"deal_id": dealID, "proceed": false, "verdict": "pause", "held": first,
