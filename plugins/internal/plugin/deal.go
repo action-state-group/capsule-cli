@@ -2089,6 +2089,23 @@ func dealCheckCommand() *cobra.Command {
 					return err
 				}
 			}
+			// The telling memory, read before the check is sealed: a share
+			// carries what it says about the recipient to the rules checker
+			// (capsule-engine#188). The check itself tells no one, so reading
+			// it here or after sealing gives the same memory.
+			memory, err := s.counterpartyMemory(ctx, dealID)
+			if err != nil {
+				return err
+			}
+			snap.Telling = nil
+			if strings.HasPrefix(snap.Action, "share_") {
+				who := legState.who
+				if snap.Who != nil {
+					who = overlayWho(who, *snap.Who)
+				}
+				_, keys := checkRecipient(snap, who, open.Channel)
+				snap.Telling = memory.telling(keys, snap.Disclosing)
+			}
 			// snapshot -> seal
 			snapped, err := s.seal(ctx, dealID, events, dealEvent{Kind: "snapshot", Snapshot: &snap})
 			if err != nil {
@@ -2114,9 +2131,7 @@ func dealCheckCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if state.memory, err = s.counterpartyMemory(ctx, dealID); err != nil {
-				return err
-			}
+			state.memory = memory
 			state.materiality = predicate
 			// An earlier card promised to ask again before paying: the pay
 			// pauses for it, so the user's answer is sealed (capsule-cli#344).

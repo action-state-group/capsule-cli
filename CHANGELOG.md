@@ -144,6 +144,20 @@
   (`card.question.represent.attributed`, `card.why.attributed_claim`) and the
   deal skill follow.
 
+### A share check says what was told to its recipient before (capsule-engine#188)
+
+- **Added:** two rule inputs on a share check, from capsulectl's memory of
+  what it told whom: `repeat_disclosures`, the classes of `disclosing`
+  already told to this same recipient, in this deal or another, and
+  `recipient_told_before`, `true` when this recipient was told any class
+  before. Told means a sealed disclosure, never a dealing: a party the user
+  dealt with but told nothing was not told before. Both are absent when there
+  is no memory or the recipient has no identity to remember them by. They are
+  in the x-deal-v0 and typed `proposed-action-v0` schemas, the profile
+  (PROFILE.md section 8 and `check_profile.py`'s typed seller fixture) and the
+  rules checker's input, so the everyday rules (0.3.8) need not ask again
+  for a repeat. The input file cannot set them.
+
 ## v0.1.0-rc20
 
 ### The receipt moments of the Muse chat contract (capsule-cli#373)

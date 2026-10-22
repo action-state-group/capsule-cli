@@ -1822,7 +1822,8 @@ def regen():
     sta = add_typed2("task-authority", "task-authority/v0", {
         "verbatim_commitment": com2["seller-intent"], "allowed": ["offer", "commit", "share_contact"]}, refs=[("source", 0)])
     sk = add_typed2("proposed-action", "proposed-action/v0", {
-        "action": "share_contact", "disclosing": ["pickup_area"], "disclosing_to": "platform", "recipient_role": "platform"})
+        "action": "share_contact", "disclosing": ["pickup_area"], "disclosing_to": "platform", "recipient_role": "platform",
+        "repeat_disclosures": [], "recipient_told_before": False})
     sv = add_typed2("action-evaluation", "action-evaluation/v0", {
         "disposition": "ASK", "findings": [{"question": "who", "rule": "first_disclosure", "field": "pickup_area"}],
         "options": ["hold", "proceed"], "rendering_commitment": com2["seller-card"], "judge": {"kind": "rules"},

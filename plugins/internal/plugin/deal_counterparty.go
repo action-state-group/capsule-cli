@@ -212,6 +212,50 @@ func disclosureRecipientKeys(d dealDisclosure, leg dealWho, channel string) []st
 	return append(keys, counterpartyKeys(leg, channel)...)
 }
 
+// checkRecipient is who a check is about, and their identities: a share's
+// named recipient (a platform by its own keys), else the counterparty as the
+// check states it.
+func checkRecipient(snap dealSnapshot, who dealWho, channel string) (dealWho, []string) {
+	receiver := who
+	if namedRecipient(snap.DisclosingTo) && snap.Recipient != nil {
+		receiver = *snap.Recipient
+	}
+	keys := counterpartyKeys(receiver, channel)
+	if snap.DisclosingTo == "platform" && snap.Recipient != nil {
+		keys = platformKeys(receiver)
+	}
+	return receiver, keys
+}
+
+// dealTelling is what the telling memory says about a share's recipient, as
+// a rules checker reads it (capsule-engine#188): the classes of the share
+// already told to this party, and whether this party was told any class
+// before, in this deal or another. Set by `deal check` from the memory, never
+// from the input file; nil when there is no memory or the recipient has no
+// identity to remember them by.
+type dealTelling struct {
+	Repeat     []string `json:"repeat"`
+	ToldBefore bool     `json:"told_before"`
+}
+
+// telling reads the memory for a share check about this party. A repeat is
+// measured per class (toldBefore); told before is over every class the
+// memory holds, never whether the user dealt with them (firstTime counts
+// dealings, not tellings, and leaves out the deal being checked).
+func (m *dealCounterpartyMemory) telling(keys []string, disclosing []string) *dealTelling {
+	if m == nil || len(keys) == 0 {
+		return nil
+	}
+	t := &dealTelling{Repeat: []string{}}
+	for _, class := range sortedClasses(disclosing) {
+		if m.toldBefore(keys, class) != "" {
+			t.Repeat = append(t.Repeat, class)
+		}
+	}
+	t.ToldBefore = slices.ContainsFunc(m.told, func(told dealPartyTold) bool { return sameParty(keys, told.keys) })
+	return t
+}
+
 // firstTime reports whether no other deal was opened with this party.
 func (m *dealCounterpartyMemory) firstTime(keys []string) bool {
 	return len(keys) == 0 || !slices.ContainsFunc(m.dealt, func(d dealPartyDeal) bool { return sameParty(keys, d.keys) })

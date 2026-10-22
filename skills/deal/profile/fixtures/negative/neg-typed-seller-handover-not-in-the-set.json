@@ -32,6 +32,8 @@
       ],
       "disclosing_to": "platform",
       "recipient_role": "platform",
+      "repeat_disclosures": [],
+      "recipient_told_before": false,
       "terms": {
         "handover": "drone"
       }

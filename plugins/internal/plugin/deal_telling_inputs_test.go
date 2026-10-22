@@ -1,0 +1,131 @@
+package plugin
+
+import (
+	"testing"
+
+	"github.com/action-state-group/capsule-cli/internal/cli"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// A share check carries what the telling memory says about its recipient
+// (capsule-engine#188): the classes already told to this same party, and
+// whether this party was told anything before, in this deal or another.
+
+func shareInput(classes string) string {
+	return `{"action":"share_contact","disclosing_to":"counterparty","disclosing":[` + classes + `]}`
+}
+
+// tellings asserts what a share check sealed and gave the checker.
+func tellings(t *testing.T, sealed, given map[string]any, repeat []any, toldBefore bool) {
+	t.Helper()
+	for _, b := range []map[string]any{sealed, given} {
+		assert.Equal(t, repeat, b["repeat_disclosures"])
+		assert.Equal(t, toldBefore, b["recipient_told_before"])
+	}
+}
+
+// openShop opens a purchase from a merchant known by its website, where the
+// user allows sharing their contact details.
+func openShop(t *testing.T, domain string) string {
+	t.Helper()
+	return dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"web",
+		"intent":{"verbatim":"buy the otter sticker and give them what they need","allowed":["pay","share_contact"],"max_total_minor":1000},
+		"who":{"name":"Shop","domain":"`+domain+`"},
+		"terms":{"item":"otter sticker","price_minor":627,"currency":"USD"},
+		"recourse":{"rail":"card","refundable":true}}`))["deal_id"].(string)
+}
+
+func TestAShareCarriesWhatWasToldBefore(t *testing.T) {
+	dealFixture(t)
+	m1 := openShop(t, "redbubble.com")
+
+	// Email to M: never told anything.
+	sealed, given, _ := ruleInputs(t, m1, shareInput(`"email"`))
+	tellings(t, sealed, given, []any{}, false)
+	check := latestCheck(t, m1)
+	dealRun(t, "note", "--deal", m1, "--kind", "approval", "--check", check, "--choice", "proceed", "--said", "ok")
+	require.Equal(t, true, dealRun(t, "note", "--deal", m1, "--kind", "disclosure", "--input", writeJSON(t,
+		`{"fields":[{"class":"email","value":"`+homeEmail+`"}]}`))["approved"])
+
+	// Again, within the first deal with M: a repeat, told before.
+	sealed, given, _ = ruleInputs(t, m1, shareInput(`"email"`))
+	tellings(t, sealed, given, []any{"email"}, true)
+	// Phone to M: a new class, to a party told before.
+	sealed, given, _ = ruleInputs(t, m1, shareInput(`"phone"`))
+	tellings(t, sealed, given, []any{}, true)
+	// Both: only the class told before repeats.
+	sealed, given, _ = ruleInputs(t, m1, shareInput(`"phone","email"`))
+	tellings(t, sealed, given, []any{"email"}, true)
+
+	// Email to M in another deal: still a repeat.
+	m2 := openShop(t, "redbubble.com")
+	sealed, given, _ = ruleInputs(t, m2, shareInput(`"email"`))
+	tellings(t, sealed, given, []any{"email"}, true)
+
+	// Email to N: never told anything.
+	n1 := openShop(t, "society6.com")
+	sealed, given, _ = ruleInputs(t, n1, shareInput(`"email"`))
+	tellings(t, sealed, given, []any{}, false)
+
+	// An earlier deal with N that told N nothing: dealt with, never told.
+	n2 := openShop(t, "society6.com")
+	out := dealRun(t, "check", "--deal", n2, "--input", writeJSON(t, shareInput(`"email"`)))
+	assert.Equal(t, false, out["recipient"].(map[string]any)["first_time"], "the user dealt with N before")
+	sealed, given, _ = ruleInputs(t, n2, shareInput(`"email"`))
+	tellings(t, sealed, given, []any{}, false)
+
+	// A pay is not a share: neither is sealed.
+	sealed, given, _ = ruleInputs(t, m1, `{"action":"pay","amount_minor":627,"authorized_max_minor":627,"terms":{"item":"otter sticker","price_minor":627},"recourse":{"rail":"card","refundable":true}}`)
+	for _, b := range []map[string]any{sealed, given} {
+		assert.NotContains(t, b, "repeat_disclosures")
+		assert.NotContains(t, b, "recipient_told_before")
+	}
+}
+
+// The memory, never the input file, says what was told: an input that
+// claims a repeat is overwritten.
+func TestTheTellingInputsAreNotTheAgents(t *testing.T) {
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	sealed, given, _ := ruleInputs(t, id, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["email"],"telling":{"repeat":["email"],"told_before":true}}`)
+	tellings(t, sealed, given, []any{}, false)
+}
+
+// A typed share check seals both in its proposed action, and the export
+// validates against the typed schema.
+func TestATypedShareCarriesWhatWasToldBefore(t *testing.T) {
+	id := stickerDeal(t, "card", true)
+	sealed, given, _ := ruleInputs(t, id, shareInput(`"email"`))
+	tellings(t, sealed, given, []any{}, false)
+}
+
+// No memory, or a recipient with no identity to remember them by: both
+// absent, never a fabricated "not told".
+func TestNoMemoryNoTellingInputs(t *testing.T) {
+	var none *dealCounterpartyMemory
+	assert.Nil(t, none.telling([]string{"domain:redbubble.com"}, []string{"email"}))
+	m := &dealCounterpartyMemory{told: []dealPartyTold{{keys: []string{"domain:redbubble.com"}, class: "email", at: "2026-10-01T00:00:00Z"}}}
+	assert.Nil(t, m.telling(nil, []string{"email"}))
+	assert.Equal(t, &dealTelling{Repeat: []string{"email"}, ToldBefore: true}, m.telling([]string{"domain:redbubble.com"}, []string{"phone", "email"}))
+	assert.Equal(t, &dealTelling{Repeat: []string{}, ToldBefore: false}, m.telling([]string{"domain:society6.com"}, []string{"email"}))
+}
+
+// latestCheck is the id of the deal's latest check record.
+func latestCheck(t *testing.T, dealID string) string {
+	t.Helper()
+	p, err := cli.LoadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	require.NoError(t, s.useDeal(t.Context(), dealID, false))
+	events, err := s.load(t.Context(), dealID)
+	require.NoError(t, err)
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i].Event.Kind == "check" {
+			return events[i].CapsuleID
+		}
+	}
+	t.Fatal("no check")
+	return ""
+}

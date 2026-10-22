@@ -18,6 +18,10 @@ import (
 //     fulfilling_merchant for a buyer, buyer for a seller; platform, for a
 //     marketplace, booking site or mail relay; or third_party; self is in
 //     the set and never derived here).
+//   - repeat_disclosures, recipient_told_before: on a share, from the
+//     telling memory (dealTelling): the classes of disclosing already told
+//     to this recipient, and whether this recipient was told any class
+//     before, in this deal or another. Both absent with no memory.
 //   - channel, first_contact_channel: the channel kind in use at this check
 //     and the one the relationship started on (x-deal-v0's channel set).
 //   - upfront_amount_minor: the deposit the check's own terms state.
@@ -178,6 +182,16 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 			body["recipient_role"] = "platform"
 		case "other":
 			body["recipient_role"] = "third_party"
+		}
+		// What the telling memory said about this recipient: class names
+		// and a flag about the party the check names, never who they are.
+		if t := sn.Telling; t != nil {
+			repeat := make([]interface{}, len(t.Repeat))
+			for i, c := range t.Repeat {
+				repeat[i] = c
+			}
+			body["repeat_disclosures"] = repeat
+			body["recipient_told_before"] = t.ToldBefore
 		}
 	}
 	if open.Channel != "" {
