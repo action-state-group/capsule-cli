@@ -158,7 +158,7 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 			case ok && strings.HasPrefix(text, cli.WitnessNotDelivered):
 				sealed += "This checkpoint was sent at a cadence tick. Witness " + text + " "
 			case ok:
-				sealed += "Witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet. Witness " + text + " "
+				sealed += "This checkpoint was sent at a cadence tick, but no receipt has come back yet. Witness " + text + " "
 			default:
 				sealed += "Witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet; it is retried at every tick. "
 			}

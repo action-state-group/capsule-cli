@@ -169,7 +169,7 @@ func TestDealWitnessStatesAreShownAsTheyAre(t *testing.T) {
 	pending := report("down")
 	assert.Equal(t, "pending", pending["assurance"].(map[string]any)["witness_state"])
 	assert.Equal(t, "self_attested", pending["assurance"].(map[string]any)["rung"], "pending is never shown as witnessed")
-	assert.Contains(t, pending["assurance"].(map[string]any)["text"], "Witness pending. This checkpoint was sent at a cadence tick")
+	assert.Contains(t, pending["assurance"].(map[string]any)["text"], "This checkpoint was sent at a cadence tick, but no receipt has come back yet. Witness pending")
 
 	deliver(t, p, cadenceSize(t, p), key)
 	witnessed := report("up")
