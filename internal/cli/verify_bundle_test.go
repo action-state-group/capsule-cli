@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -8,7 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	aacbundle "github.com/action-state-group/agent-action-capsule/go/bundle"
+	"github.com/action-state-group/checkpointed-local-log/go/checkpoint"
+	"github.com/action-state-group/checkpointed-local-log/go/cll"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -382,4 +388,118 @@ func TestVerifyBundleFailsAnEditedOutputOrADisclosureForNoRecord(t *testing.T) {
 		assert.Contains(t, statuses, "disclosure_mismatch", "%s: failed for its disclosure", name)
 		assert.Equal(t, "pass", status(result, "graph_closure"), name)
 	}
+}
+
+// selectedRecords is a RecordSource over the test artifact store.
+type selectedRecords mapArtifactStore
+
+func (s selectedRecords) GetRecord(ctx context.Context, id string) ([]byte, []byte, error) {
+	record, err := mapArtifactStore(s).Get(ctx, id)
+	if err != nil {
+		return nil, nil, aacbundle.ErrRecordNotFound
+	}
+	return record.Capsule, record.ProducerEnvelope, nil
+}
+
+// selectedBundle is a producer-selected Evidence Bundle (completeness
+// selection "producer-selected", no range) over a checkpointed log, as AAC's
+// producer builds one for a scoped export: each record carries its own
+// inclusion proof under the signed checkpoint.
+func selectedBundle(t *testing.T, edit func(map[string]interface{})) map[string]interface{} {
+	t.Helper()
+	profile, key := profileFixture(t)
+	store, log, root := checkpointedStore(t, key, profile.LogID)
+	// Leaves after the record, checkpointed, so its inclusion proof has
+	// sibling hashes to tamper with.
+	for i := byte(1); i <= 3; i++ {
+		_, err := log.Append(t.Context(), cll.AppendInput{Value: bytes.Repeat([]byte{i}, 32), AppendedAt: time.Now().UTC()})
+		require.NoError(t, err)
+	}
+	signer, err := checkpoint.NewEd25519Signer(key)
+	require.NoError(t, err)
+	config := checkpoint.DefaultRunnerConfig(profile.LogID)
+	config.Cadence.CadenceEntries = 1
+	runner, err := checkpoint.NewRunner(config, log, signer)
+	require.NoError(t, err)
+	_, err = runner.RunOnce(t.Context(), time.Now().UTC())
+	require.NoError(t, err)
+	built, err := aacbundle.BuildEvidenceBundle(t.Context(), aacbundle.ProofSourceFromCLL(log, selectedRecords(store)), aacbundle.BuildOptions{Root: root, NoRange: true})
+	require.NoError(t, err)
+	encoded, err := json.Marshal(built)
+	require.NoError(t, err)
+	value, err := DecodeBundleJSON(encoded)
+	require.NoError(t, err)
+	require.Equal(t, aacbundle.SelectionProducerSelected, value["completeness"].(map[string]interface{})["selection"])
+	if edit != nil {
+		edit(value)
+	}
+	return value
+}
+
+// tamperInclusionProof flips one byte of the first sibling hash of the
+// selected bundle's one inclusion proof, keeping it lowercase hex.
+func tamperInclusionProof(t *testing.T, b map[string]interface{}) {
+	t.Helper()
+	memberships := b["completeness_certificate"].(map[string]interface{})["memberships"].(map[string]interface{})
+	require.Len(t, memberships, 1)
+	for _, membership := range memberships {
+		witness := membership.(map[string]interface{})["inclusion_proof"].(map[string]interface{})["witness"].([]interface{})
+		require.NotEmpty(t, witness)
+		hash, err := hex.DecodeString(witness[0].(string))
+		require.NoError(t, err)
+		hash[0] ^= 1
+		witness[0] = hex.EncodeToString(hash)
+	}
+}
+
+// A producer-selected bundle reads as AAC strict reads it (capsule-cli#301):
+// INCOMPLETE, its interval not checkable and each record's membership
+// checked, and INVALID once a record's inclusion proof is tampered with.
+func TestVerifyBundleReadsAProducerSelectedBundleAsIncomplete(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	value := selectedBundle(t, nil)
+	result, err := verifyBundleOutput(t, writeBundle(t, value))
+	assert.ErrorIs(t, err, ErrPartial)
+	assert.Equal(t, "INCOMPLETE", result["verdict"])
+	assert.Equal(t, map[string]interface{}{"status": "withheld", "findings": []interface{}{"selection_not_checkable"}}, result["interval_coverage"])
+	assert.Equal(t, "pass", status(result, "per_record_membership"))
+	assert.Equal(t, "pass", status(result, "checkpoint"))
+
+	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
+	assert.Equal(t, strict.Verdict, result["verdict"], "the same verdict as AAC strict")
+
+	tampered := selectedBundle(t, func(b map[string]interface{}) { tamperInclusionProof(t, b) })
+	result, err = verifyBundleOutput(t, writeBundle(t, tampered))
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, "fail", status(result, "per_record_membership"))
+	assert.Equal(t, aacbundle.VerdictInvalid, aacbundle.VerifyStrict(tampered, aacbundle.StrictOptions{Options: bundleOptions}).Verdict)
+}
+
+// AAC strict checks a producer-selected bundle's proofs only against a
+// checkpoint that carries its own log_id. One that states it only in the
+// certificate fails the checkpoint claim, as strict reads it, so a tampered
+// proof there cannot read INCOMPLETE.
+func TestVerifyBundleProducerSelectedNeedsTheCheckpointLogID(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	value := selectedBundle(t, func(b map[string]interface{}) {
+		delete(b["checkpoint"].(map[string]interface{}), "log_id")
+		tamperInclusionProof(t, b)
+	})
+	result, err := verifyBundleOutput(t, writeBundle(t, value))
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, "fail", status(result, "checkpoint"))
+	assert.Contains(t, result["checkpoint"].(map[string]interface{})["findings"], "checkpoint_field_missing:log_id")
+	assert.Equal(t, aacbundle.VerdictInvalid, aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions}).Verdict)
+}
+
+// Without the selection extension a certificate missing its range is
+// still malformed: the Bundle draft requires first_seq and last_seq.
+func TestVerifyBundleStillRejectsARangelessCertificateWithoutSelection(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	value := selectedBundle(t, func(b map[string]interface{}) {
+		delete(b["completeness"].(map[string]interface{}), "selection")
+	})
+	result, err := verifyBundleOutput(t, writeBundle(t, value))
+	assert.ErrorIs(t, err, ErrBundleInvalid)
+	assert.Equal(t, "fail", status(result, "interval_coverage"))
 }
