@@ -847,7 +847,7 @@ checker said (see "Your rules" below).
   `--said` (for example `--said "Pay anyway"`). When they type an answer,
   pass what they typed. Leave `--said` out only for a card nobody answered
   in words: the answer is then sealed as the card's (`agent_card`), not the
-  user's, and it satisfies no ask:
+  user's. It is not their approval, and in a typed deal it satisfies no ask:
 
 ```sh
 capsulectl --profile deal deal note --deal ID --kind approval --check CHECK_ID --choice hold --said "the user's words" --shown-card card.txt

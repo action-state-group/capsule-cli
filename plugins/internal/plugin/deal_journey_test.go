@@ -51,11 +51,17 @@ func journeyMoves(t *testing.T, id string) []string {
 // checkBodies are the deal's sealed check record bodies, in order.
 func checkBodies(t *testing.T, id string) []map[string]any {
 	t.Helper()
+	return recordBodies(t, id, "check")
+}
+
+// recordBodies are the bodies of the deal's sealed records of one type, in order.
+func recordBodies(t *testing.T, id, recordType string) []map[string]any {
+	t.Helper()
 	records, export := exportRecords(t, id)
 	checkProfile(t, export)
 	var out []map[string]any
 	for _, r := range records {
-		if b, ok := r["x-deal-v0"].(map[string]any); ok && b["record_type"] == "check" {
+		if b, ok := r["x-deal-v0"].(map[string]any); ok && b["record_type"] == recordType {
 			out = append(out, r["body"].(map[string]any))
 		}
 	}
@@ -768,46 +774,45 @@ func TestTheUsersAnswerToAnOfferNamesItsAmount(t *testing.T) {
 }
 
 // A tapped button's label is the user's answer (capsule-cli#416): passed as
-// --said, the approval is sealed as the user's, and it is their OK row. Left
-// out, the same tap is sealed as the card's and is no row.
+// --said, the approval is sealed as the user's, with their words committed,
+// and it is their OK row. Left out, the same answer is sealed as the card's
+// and is no row.
 func TestATappedLabelIsTheUsersAnswer(t *testing.T) {
 	dealFixture(t)
-	tap := func(said ...string) string {
-		id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	// tap answers the share card with its proceed option; said reports whether
+	// the agent passes the tapped label as --said.
+	tap := func(said bool) (id, label string) {
+		id = dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
 		note(t, id, "intent", `{"verbatim":"lets change to ebay","who":{"name":"eBay","domain":"ebay.com"}}`)
 		share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name","address"]}`))
 		require.Equal(t, "pause", share["verdict"], share["card"])
+		for _, o := range share["options"].([]any) {
+			if o := o.(map[string]any); o["id"] == "proceed" {
+				label = o["label"].(string)
+			}
+		}
+		require.NotEmpty(t, label, "the card offers a proceed button")
 		args := []string{"note", "--deal", id, "--kind", "approval", "--check", share["check_id"].(string),
 			"--choice", "proceed", "--shown-card", shownCard(t, share["card"].(string))}
-		dealRun(t, append(args, said...)...)
-		return id
-	}
-	approvers := func(id string) []any {
-		var out []any
-		for _, r := range checkApprovals(t, id) {
-			out = append(out, r["approver"])
+		if said {
+			args = append(args, "--said", label)
 		}
-		return out
+		dealRun(t, args...)
+		return id, label
 	}
 
-	id := tap("--said", "Share anyway")
-	assert.Equal(t, []any{"user"}, approvers(id), "a tapped label is the user's answer")
+	id, label := tap(true)
+	assert.Equal(t, "Share", label)
+	approvals := recordBodies(t, id, "approval")
+	require.Len(t, approvals, 1)
+	assert.Equal(t, "user", approvals[0]["approver"], "a tapped label is the user's answer")
+	assert.Regexp(t, `^[0-9a-f]{64}$`, approvals[0]["said_commitment"])
 	assert.Contains(t, journeyMoves(t, id), "user:approved")
 
-	id = tap()
-	assert.Equal(t, []any{"agent_card"}, approvers(id), "without --said the answer is the card's")
+	id, _ = tap(false)
+	approvals = recordBodies(t, id, "approval")
+	require.Len(t, approvals, 1)
+	assert.Equal(t, "agent_card", approvals[0]["approver"], "without --said the answer is the card's")
+	assert.NotContains(t, approvals[0], "said_commitment")
 	assert.NotContains(t, journeyMoves(t, id), "user:approved")
-}
-
-// checkApprovals are the deal's sealed approval record bodies, in order.
-func checkApprovals(t *testing.T, id string) []map[string]any {
-	t.Helper()
-	records, _ := exportRecords(t, id)
-	var out []map[string]any
-	for _, r := range records {
-		if b, ok := r["x-deal-v0"].(map[string]any); ok && b["record_type"] == "approval" {
-			out = append(out, r["body"].(map[string]any))
-		}
-	}
-	return out
 }
