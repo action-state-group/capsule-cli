@@ -57,6 +57,25 @@
   (`ask_needs_your_words`) is `unsealed_approval` in `deal report` too,
   where it read `skipped_check`; the check was made.
 
+### A 403 at witness delivery is retried (capsule-cli#335)
+
+- **Fixed:** an answered HTTP 403 at witness delivery is stored as
+  retryable, not permanent, so the delivery is tried again on the normal
+  backoff once the host lets the request through. Its pending reason is
+  `refused`: "pending: the request was refused (HTTP 403), by the witness or
+  by a network gate on this host; it is retried at every tick.", followed
+  by the text for granting the witness's site. 407 and transport errors
+  stay `network_consent_needed`.
+- **Fixed:** a delivery that an earlier version stored as permanent after a 403 is
+  made due again, once: `cll checkpoint publish` re-arms its own row, and
+  the deal cadence re-arms every such row on its log at the next tick.
+- **Changed:** a delivery that failed for good (a 409, a receipt that does
+  not verify) reads "not delivered: …; this delivery is not retried." and
+  is no longer said to be retried at every tick.
+- **Added:** `reason` (tick, cadence and terms-seal JSON) and the deal
+  receipt's `witness_reason` take the new value `refused`. The deal skill
+  and its README name the new pending text.
+
 ### Plugin install heals a group-writable home (capsule-cli#354)
 
 - **Changed:** `plugin install` puts back `chmod go-w`, as the checkpoint
