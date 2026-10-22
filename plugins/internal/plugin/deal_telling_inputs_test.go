@@ -281,6 +281,36 @@ func TestAMixedShareNamesEveryClassWhateverTheReasons(t *testing.T) {
 	assert.NotContains(t, strings.Join(card.Why, " "), "phone", "the reasons above took both slots")
 }
 
+// The same with a class they already have: every class is in the question.
+func TestARepeatBesideALeakIsNamedWhateverTheReasons(t *testing.T) {
+	w := cli.BuiltinWording()
+	state := dealState{who: dealWho{Name: "Shop", Domain: "redbubble.com"}, intent: dealIntent{Verbatim: "buy it"}}
+	snap := dealSnapshot{Action: "share_contact", Disclosing: []string{"email", "name", "phone"}, DisclosingTo: "counterparty"}
+	r := dealCheckResult{Verdict: "pause", Differences: diffs("payee_or_contact_changed", "over_limit", "first_disclosure", "first_disclosure"),
+		Recipient: &dealRecipient{Name: "Shop", Unapproved: []string{"email"}, Repeat: []string{"name"}, First: []string{"phone"}}}
+	card := checkCard(w, state, snap, r, nil)
+	assert.Equal(t, "Your email already went to Shop (redbubble.com) without your OK. This also shares your name, which they already have, and your phone, which would be new to them. Share all of them?", card.Question)
+	require.Len(t, card.Why, 2)
+	r.Recipient.First = nil
+	snap.Disclosing = []string{"email", "name"}
+	card = checkCard(w, state, snap, r, nil)
+	assert.Equal(t, "Your email already went to Shop (redbubble.com) without your OK. This also shares your name, which they already have. Share both?", card.Question)
+}
+
+// A held note says a new class the approved check named as new, never as
+// one they already have.
+func TestAHeldNoteSaysAnApprovedNewClassIsNew(t *testing.T) {
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	leakPhone(t, id)
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"name"`)))
+	require.Equal(t, "pause", check["verdict"])
+	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
+	held := heldNote(t, id, `{"fields":[{"class":"name","value":"`+homeName+`"},{"class":"phone","value":"+1 555 010 4477"}]}`)
+	assert.Equal(t, []any{"phone"}, held["held"])
+	assert.Equal(t, "You haven't OK'd telling Shop your phone before. This also shares your name, which would be new to them.", held["reason"])
+}
+
 // tellWithOK checks, approves and notes a class going to the deal's
 // counterparty, so it is told with authority.
 func tellWithOK(t *testing.T, id, class, value string) {
