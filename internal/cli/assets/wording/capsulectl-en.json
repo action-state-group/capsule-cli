@@ -165,7 +165,7 @@
     "journey.agent.couldnt": "Couldn't ({reason})",
     "journey.agent.couldnt.who": "Couldn't ({who} {reason})",
     "journey.agent.options": "Showed you {count} options",
-    "journey.agent.paused": "Paused for you",
+    "journey.agent.paused": "Waited for your OK",
     "journey.agent.recommended": "Recommended",
     "journey.agent.searched": "Searched",
     "journey.agent.told": "Told {who} your {classes}",

@@ -137,7 +137,7 @@ func TestTheFawnErrandIsOneDeal(t *testing.T) {
 		labels = append(labels, s.(map[string]any)["label"].(string))
 	}
 	assert.Equal(t, []string{"Asked", "Searched", "Showed you 4 options", "Recommended", "Couldn't (AliExpress sign-in)",
-		"Switched to eBay", "Chose for you", "Paused for you", "Told eBay your name and address", "Paused for you",
+		"Switched to eBay", "Chose for you", "Waited for your OK", "Told eBay your name and address", "Waited for your OK",
 		"Paid $1.90 within your $2 limit"}, labels)
 }
 
