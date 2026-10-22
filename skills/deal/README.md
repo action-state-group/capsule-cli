@@ -335,11 +335,12 @@ user's own and is never sent by default.
 - **Anomalies.** The steps sealed in the range that `deal report` lists as
   the agent's, one key per kind:
   - `skipped_check`: an act with no check in force: none, a stale one, one
-    made before the details changed, or a seller's commit with no accepted
-    offer.
-  - `unsealed_approval`: an act without the user's own go-ahead: the user
-    said not to proceed, gave no answer, gave one already used up, or the
-    only answer was the agent's own.
+    made before the details changed, one held back until a representation
+    the user ordered is made, or a seller's commit with no accepted offer or
+    on other terms than the one accepted.
+  - `unsealed_approval`: an act without a go-ahead in force: the user said
+    not to proceed or gave no answer, the go-ahead was already used up, or
+    the only answer was the agent's own.
   - `differs_from_check`: an act other than what was checked (`deal
     report`'s `asked_vs_did`).
   - `unapproved_disclosure`: a disclosure no approval covered.
