@@ -168,11 +168,16 @@ func TestAListingSaysWhatWasBoughtAndHowItEnded(t *testing.T) {
 	dealRun(t, "note", "--deal", lost, "--kind", "act", "--input", writeJSON(t, fawnPaid))
 	dealRun(t, "close", "--deal", lost, "--input", writeJSON(t, `{"status":"not_received","reason":"not_delivered"}`))
 
+	// Nothing paid: the opening's price is never said as paid.
+	unpaid := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	dealRun(t, "close", "--deal", unpaid, "--input", writeJSON(t, `{"status":"not_received","reason":"not_delivered"}`))
+
 	demo := dealRun(t, "open", "--input", writeJSON(t, strings.Replace(fawnOpen, `"type":"purchase",`, `"type":"purchase","demo":true,`, 1)))["deal_id"].(string)
 
 	byID := listings(t, "--json")
 	assert.Regexp(t, `^Fawn Sticker: bought for \$1\.90, `, byID[picked])
 	assert.Regexp(t, `^Fawn Sticker: paid \$1\.90, didn't arrive as agreed, `, byID[lost])
+	assert.Regexp(t, `^Fawn Sticker: didn't arrive as agreed, [A-Z][a-z]{2} \d{1,2}\.$`, byID[unpaid])
 	assert.Regexp(t, `^Fawn Sticker \(demo\): open since `, byID[demo])
 }
 
