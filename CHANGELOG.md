@@ -237,8 +237,8 @@
   `representing.attributed_to: "user"`: the words are the user's own claim,
   said by the agent as theirs and marked unverified. capsulectl accepts it
   only in one fixed template, one sentence: "The seller says … (unverified)",
-  e.g. "The seller says it's authentic (unverified)", with no `.`, `!` or
-  `?` before "(unverified)". Any other words, any other class and any other value
+  e.g. "The seller says it's authentic (unverified)", with no `.`, `!`,
+  `?`, line break or non-ASCII sentence end (`。！？…．`) before "(unverified)". Any other words, any other class and any other value
   are refused, and nothing is sealed. The attribution is sealed in the
   x-deal-v0 and typed `proposed-action/v0` check body, and the checker reads
   it there.

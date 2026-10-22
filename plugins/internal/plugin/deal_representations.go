@@ -59,18 +59,22 @@ const (
 	attributedPrefix   = "The seller says "
 	attributedSuffix   = " (unverified)"
 	attributedTemplate = `"The seller says … (unverified)"`
+	// attributedSentenceMarks end a sentence or start a line, ASCII and the
+	// common non-ASCII ones; the engine's promise_never/1.1.0 reads the same
+	// set (its attributed_template.sentence_marks).
+	attributedSentenceMarks = ".!?\n\r。！？…．"
 )
 
 // attributedWords is whether text follows the attribution template exactly:
-// the prefix, a claim that is not blank and holds no sentence-ending mark
-// (".", "!", "?"), so it stays one sentence, then the suffix.
+// the prefix, a claim that is not blank and holds no sentence mark
+// (attributedSentenceMarks), so it stays one sentence, then the suffix.
 func attributedWords(text string) bool {
 	if !strings.HasPrefix(text, attributedPrefix) || !strings.HasSuffix(text, attributedSuffix) ||
 		len(text) < len(attributedPrefix)+len(attributedSuffix) {
 		return false
 	}
 	claim := text[len(attributedPrefix) : len(text)-len(attributedSuffix)]
-	return strings.TrimSpace(claim) != "" && !strings.ContainsAny(claim, ".!?")
+	return strings.TrimSpace(claim) != "" && !strings.ContainsAny(claim, attributedSentenceMarks)
 }
 
 // representationGated are the acts an ordered representation must come

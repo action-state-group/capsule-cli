@@ -41,6 +41,13 @@ func TestAttributedWordsFollowTheTemplate(t *testing.T) {
 		"The seller says it's authentic (unverified).":                       false,
 		"The seller says  (unverified)":                                      false,
 		"The seller says (unverified)":                                       false,
+		"The seller says it's authentic\nI checked it myself (unverified)":   false,
+		"The seller says it's authentic\rI checked it myself (unverified)":   false,
+		"The seller says it's authentic。I checked it (unverified)":           false,
+		"The seller says it's authentic！ (unverified)":                       false,
+		"The seller says is it authentic？ (unverified)":                      false,
+		"The seller says it's authentic… really (unverified)":                false,
+		"The seller says it's authentic．I checked it (unverified)":           false,
 	} {
 		assert.Equal(t, ok, attributedWords(text), text)
 	}

@@ -686,7 +686,7 @@ A verifier holding one deal's records in `seq` order checks:
       `representing.attributed_to: "user"` (a closed set of one, on no other class): the words are
       the user's claim, said by the agent as theirs and marked unverified. capsulectl accepts it
       only in words that follow one fixed template, one sentence: they start "The seller says ",
-      end " (unverified)", and hold a claim between with no `.`, `!` or `?`, e.g. "The seller says
+      end " (unverified)", and hold a claim between with no `.`, `!`, `?`, line break (`\n`, `\r`) or `。`, `！`, `？`, `…`, `．`, e.g. "The seller says
       it's authentic (unverified)". Every such check is ASK, with finding `attributed_claim`,
       whatever the task authority orders: a class the user ordered says what may be said, not
       that the user made this claim. Only the user's own approval, in their words, authorizes
