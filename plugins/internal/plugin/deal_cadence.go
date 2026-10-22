@@ -124,6 +124,9 @@ func (s *dealSession) deliverCadence(ctx context.Context, c *evidencebook.Cadenc
 		return nil, nil, err
 	}
 	defer func() { err = errors.Join(err, t.Close()) }()
+	if err := cli.RearmRefusedLog(ctx, t.Log, service, now); err != nil {
+		return nil, nil, err
+	}
 	waiting, err := t.Log.PendingWitnesses(ctx, now.Add(24*time.Hour), cll.MaxWitnesses)
 	if err != nil {
 		return nil, nil, err

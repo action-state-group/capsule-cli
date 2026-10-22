@@ -151,8 +151,8 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 		case "pending":
 			out["witness_state"] = "pending"
 			sealed += "Witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet; it is retried at every tick. "
-			if text, ok := cadence["text"].(string); ok && cadence["reason"] == "network_consent_needed" {
-				out["witness_reason"] = "network_consent_needed"
+			if text, ok := cadence["text"].(string); ok && (cadence["reason"] == "network_consent_needed" || cadence["reason"] == "refused") {
+				out["witness_reason"] = cadence["reason"]
 				sealed += "Witness " + text + " "
 			}
 		}

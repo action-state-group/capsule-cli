@@ -248,6 +248,13 @@ cadence** (`cll checkpoint cadence`, scheduled) publishes on time alone:
   it covers agentactioncapsule.org and every subdomain of it. The message
   names the site for whichever witness the profile uses, and
   `capsulectl doctor --check-witness` says the same.
+- A delivery refused with HTTP 403 is reported as "pending: the request was
+  refused (HTTP 403), by the witness or by a network gate on this host",
+  with the same standing-grant text (reason `refused`): a host's network
+  gate can answer 403 in the witness's place, so this never says the
+  witness answered. It is retried at every tick, and a delivery an earlier
+  build stored as failed for good after a 403 is retried again by the next
+  tick.
 
 A deal is **not witnessed at the moment it happens**. Its receipt says
 "Sealed, witness pending" until the next tick of the checkpoint cadence has carried its
