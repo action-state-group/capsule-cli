@@ -231,7 +231,7 @@ func (h userRootHeal) explain(c *cobra.Command, err error) error {
 		notes = append(notes, "not healed: "+h.why)
 	}
 	for _, path := range slices.Sorted(maps.Keys(h.Failed)) {
-		notes = append(notes, "chmod go-w failed on "+path+": "+h.Failed[path])
+		notes = append(notes, "chmod go-w on "+path+": "+h.Failed[path])
 	}
 	if len(h.ChmodGoW) > 0 {
 		notes = append(notes, "install had already removed group and other write from "+strings.Join(h.ChmodGoW, " "))

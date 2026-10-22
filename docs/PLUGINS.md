@@ -202,8 +202,9 @@ cannot be healed, it changes none. Its output then carries
 `plugin_root_healed`, in `doctor`'s `user_root` shape, naming each directory
 with its mode before and after. Anything the heal leaves is refused: one
 refusal lists every failing component and the fix, why the heal did not
-apply, and which directories install had already tightened, since those
-stay so (as when install fails later for another reason).
+apply, each chmod that failed and why, and which directories install had
+already tightened, since those stay so (as when install fails later for
+another reason).
 From then on install and remove use only that checked canonical path: to
 open the root, to run the handshake, and to inspect other roots' launchers.
 
