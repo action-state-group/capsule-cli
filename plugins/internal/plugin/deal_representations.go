@@ -60,13 +60,31 @@ const (
 	attributedPrefix   = "The seller says "
 	attributedSuffix   = " (unverified)"
 	attributedTemplate = `"The seller says … (unverified)"`
-	// attributedSentenceMarks end a sentence or a line, in any script: . ! ?,
-	// every line terminator Python's str.splitlines uses, and the CJK,
-	// fullwidth, double, Arabic and Devanagari sentence ends. The engine's
-	// promise_never/1.1.0 reads the same set (attributed_template.sentence_marks).
-	attributedSentenceMarks = ".!?" +
-		"\n\r\v\f\x1c\x1d\x1e\u0085\u2028\u2029" +
-		"。！？…．｡" + "‼⁇⁈⁉" + "؟۔" + "।॥"
+	// attributedSentenceMarks end a sentence or a line, in any script: every
+	// Unicode 17.0 Sentence_Terminal code point, every line terminator
+	// Python's str.splitlines uses, and U+2026, as explicit code points so the
+	// set stays frozen whatever Go's unicode tables become. The engine's
+	// promise_never/1.1.0 reads the same list (attributed_template.sentence_marks);
+	// testdata/sentence-marks.txt holds it, byte-identical in both repositories.
+	attributedSentenceMarks = "" +
+		"\u000A\u000B\u000C\u000D\u001C\u001D\u001E\u0021\u002E\u003F\u0085\u0589\u061D" +
+		"\u061E\u061F\u06D4\u0700\u0701\u0702\u07F9\u0837\u0839\u083D\u083E\u0964\u0965" +
+		"\u104A\u104B\u1362\u1367\u1368\u166E\u1735\u1736\u17D4\u17D5\u1803\u1809\u1944" +
+		"\u1945\u1AA8\u1AA9\u1AAA\u1AAB\u1B4E\u1B4F\u1B5A\u1B5B\u1B5E\u1B5F\u1B7D\u1B7E" +
+		"\u1B7F\u1C3B\u1C3C\u1C7E\u1C7F\u2024\u2026\u2028\u2029\u203C\u203D\u2047\u2048" +
+		"\u2049\u2CF9\u2CFA\u2CFB\u2E2E\u2E3C\u2E53\u2E54\u3002\uA4FF\uA60E\uA60F\uA6F3" +
+		"\uA6F7\uA876\uA877\uA8CE\uA8CF\uA92F\uA9C8\uA9C9\uAA5D\uAA5E\uAA5F\uAAF0\uAAF1" +
+		"\uABEB\uFE12\uFE15\uFE16\uFE52\uFE56\uFE57\uFF01\uFF0E\uFF1F\uFF61\U00010A56" +
+		"\U00010A57\U00010F55\U00010F56\U00010F57\U00010F58\U00010F59\U00010F86\U00010F87" +
+		"\U00010F88\U00010F89\U00011047\U00011048\U000110BE\U000110BF\U000110C0\U000110C1" +
+		"\U00011141\U00011142\U00011143\U000111C5\U000111C6\U000111CD\U000111DE\U000111DF" +
+		"\U00011238\U00011239\U0001123B\U0001123C\U000112A9\U000113D4\U000113D5\U0001144B" +
+		"\U0001144C\U000115C2\U000115C3\U000115C9\U000115CA\U000115CB\U000115CC\U000115CD" +
+		"\U000115CE\U000115CF\U000115D0\U000115D1\U000115D2\U000115D3\U000115D4\U000115D5" +
+		"\U000115D6\U000115D7\U00011641\U00011642\U0001173C\U0001173D\U0001173E\U00011944" +
+		"\U00011946\U00011A42\U00011A43\U00011A9B\U00011A9C\U00011C41\U00011C42\U00011EF7" +
+		"\U00011EF8\U00011F43\U00011F44\U00016A6E\U00016A6F\U00016AF5\U00016B37\U00016B38" +
+		"\U00016B44\U00016D6E\U00016D6F\U00016E98\U0001BC9F\U0001DA88"
 )
 
 // attributedBlank is whether a claim is blank as Python's str.strip sees it,
