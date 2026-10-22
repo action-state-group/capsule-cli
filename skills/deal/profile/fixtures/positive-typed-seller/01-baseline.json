@@ -1,0 +1,47 @@
+{
+  "fixture": "01-baseline.json",
+  "expect": "valid",
+  "story": "First contact on a seller's deal: the user sells an example bicycle.",
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-5c2e8a1f3b7d9046",
+      "record_type": "baseline",
+      "seq": 1,
+      "at": "2026-10-07T10:00:00Z",
+      "channel": "web",
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "name": "b3ae5f985c5c6f33031bd81f7f4fecd16d1069449dd5158233e6bd386e156dff",
+          "domain": "912240c777930128d3b292332449e869918f0e47ff92db92a2fa78e8e0eff8d5"
+        }
+      }
+    },
+    "body": {
+      "deal_type": "purchase",
+      "demo": true,
+      "intent": {
+        "verbatim_commitment": "aa6a12e0b71bc45d2a18b2a408cd730ef8500c893004a6fe328a2153fbaa88e7",
+        "party_role": "seller",
+        "allowed": [
+          "offer",
+          "commit",
+          "share_contact"
+        ]
+      },
+      "terms": {
+        "item": "example bicycle",
+        "quantity": 1,
+        "price_minor": 190000,
+        "currency": "USD"
+      },
+      "recourse": {
+        "rail": "card",
+        "refundable": false
+      }
+    }
+  },
+  "expected_digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+}

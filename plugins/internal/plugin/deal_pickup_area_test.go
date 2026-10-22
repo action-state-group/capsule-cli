@@ -34,10 +34,14 @@ func TestPickupAreaIsAContactClassAndNotAnAddress(t *testing.T) {
 // that reads as a street address is refused as a pickup_area.
 func TestAPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
 	for _, v := range []string{
-		"12 Oak St", "12 Oak St.", "1600 Pennsylvania Ave", "4 Elm Dr., Austin", "Main Ave. 7", "12B Elm Dr.",
+		"12 Oak St", "12 Oak St.", "1600 Pennsylvania Ave", "4 Elm Dr., Austin", "12B Elm Dr.",
 		"12 Oak Street", "9 Sunset Blvd", "9 Sunset Boulevard", "3 Mill Rd", "3 Mill Road", "8 Penny Ln",
 		"8 Penny Lane", "100 Ocean Drive", "2 Kings Ct.", "2 Kings Court", "5 Abbey Way", "6 Hart Pl.",
-		"6 Grove Place", "Austin, TX 78701, 12 Oak St", "123456 Long Rd", "12 OAK ST",
+		"6 Grove Place", "Austin, TX 78701, 12 Oak St", "123456 Long Rd", "12 OAK ST", "12 Elm Hwy",
+		"12345 Oak St", "11501 Alterra Pkwy, Austin", "10250 Santa Monica Blvd", "１２ Oak St", "١٢ Oak St",
+		"１２ Ｏａｋ Ｓｔ", "12 Oak S\u200bt", "7 Old Mill Creek Rd", "3 Ash Cir", "3 Ash Ter.", "3 Ash Trl",
+		"3 Ash Sq", "3 Ash Loop", "3 Ash Plaza", "3 Ash Alley", "3 Ash Pike", "Apt 4", "Unit 12",
+		"#5, Hyde Park", "Suite 200", "Ste. 3, Austin", "Hyde Park, apt #4",
 	} {
 		assert.True(t, readsAsStreetAddress(v), v)
 		err := dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate()
@@ -48,8 +52,13 @@ func TestAPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
 	for _, v := range []string{
 		"78701", "78701-1234", "Austin", "Austin, TX", "Austin, TX 78701", "Brooklyn", "Brooklyn, NY 11201",
 		"Hyde Park", "Downtown Austin", "Capitol Hill, Seattle", "Bay Area", "St. Louis, MO 63101",
-		"Oak Lane neighborhood", "Park Place area", "Main St corridor", "near 5th Ave", "Midway, Utah 84049",
-		"District 9",
+		"St. Louis, Ward 3", "Main Ave. 7", "Oak Lane neighborhood", "Park Place area", "Main St corridor",
+		"near 5th Ave", "Midway, Utah 84049", "District 9", "Union Square", "Community Unit area",
+		"Ward 3, near Main St", "2 blocks from Main St", "Exit 12, Commerce Dr area", "Exit 12 Commerce Dr",
+		"Zone 2, Park Place", "10 min on the way to Dallas", "Hartford, CT, 2 miles from downtown",
+		// Stated limits: a street type after the number, none at all, or more
+		// than three name words between.
+		"Hauptstraße 7", "1600 Broadway", "7 Old Mill Creek Run Rd",
 	} {
 		assert.False(t, readsAsStreetAddress(v), v)
 		assert.NoError(t, dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate(), v)
@@ -116,8 +125,23 @@ func TestAPlatformsPickupLocationStillWaitsForAnAcceptance(t *testing.T) {
 	id := openTyped(t, sellerTyped)
 	approved(t, id, dealRun(t, "check", "--deal", id, "--input", writeJSON(t,
 		`{"action":"share_contact","disclosing_to":"platform","disclosing":["pickup_location"],"recipient":{"name":"Craigslist","domain":"craigslist.org"}}`)))
+	before := len(records(t, id))
+	held := heldNote(t, id, `{"channel":"web","to":"platform","who":{"name":"Craigslist","domain":"craigslist.org"},"fields":[{"class":"pickup_location","value":"12 Oak St"}]}`)
+	assert.Equal(t, []any{"pickup_location"}, held["held"])
+	assert.Len(t, records(t, id), before, "a held note seals nothing")
+}
+
+// The guard is on the disclosure note whatever the record set: an x-deal-v0
+// deal refuses a street address labelled pickup_area too, sealing nothing.
+func TestAnXDealPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, `{"type":"purchase","channel":"marketplace",
+		"intent":{"verbatim":"buy the bike and arrange pickup","allowed":["pay","share_contact"]},
+		"who":{"name":"Pat Seller"},"terms":{"item":"bike","price_minor":12000,"currency":"USD"},"recourse":{"rail":"cash","refundable":false}}`))["deal_id"].(string)
+	before := len(records(t, id))
 	_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", "disclosure", "--input", writeJSON(t,
-		`{"channel":"web","to":"platform","who":{"name":"Craigslist","domain":"craigslist.org"},"fields":[{"class":"pickup_location","value":"12 Oak St"}]}`))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "needs the user's approval")
+		`{"channel":"app_chat","fields":[{"class":"pickup_area","value":"12345 Oak St"}]}`))
+	require.ErrorIs(t, err, cli.ErrInput)
+	assert.Contains(t, err.Error(), "pickup_location")
+	assert.Len(t, records(t, id), before, "a refused note seals nothing")
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/action-state-group/agent-action-capsule/go/canonical"
 	"github.com/action-state-group/capsule-cli/internal/cli"
+	"golang.org/x/text/unicode/norm"
 )
 
 // This file is the deterministic half of `capsulectl deal`: the deal record
@@ -2622,7 +2623,7 @@ func (d dealDisclosure) validate() error {
 			return cli.InputError("every disclosed field needs the value that was given (kept on this device only)")
 		}
 		if f.Class == "pickup_area" && readsAsStreetAddress(f.Value) {
-			return cli.InputError("a pickup_area is a neighborhood, city, region or ZIP, and this value reads as a street address: give an exact spot as pickup_location, which waits for an accepted offer")
+			return cli.InputError("a pickup_area is a neighborhood, city, region or ZIP, and this value reads as a street address (a house number before a street type, or a numbered unit): give an exact spot as pickup_location, which waits for an accepted offer")
 		}
 		if action != "" && a != action {
 			return cli.InputError("seal contact details and credentials as separate disclosures: each is covered by its own check")
@@ -2632,25 +2633,74 @@ func (d dealDisclosure) validate() error {
 	return nil
 }
 
-// pickupAreaZIP is a US ZIP or ZIP+4, which is an area, not a house number.
-var pickupAreaZIP = regexp.MustCompile(`\b\d{5}(-\d{4})?\b`)
+// pickupAreaFormat is the invisible format characters (a zero-width space,
+// a soft hyphen) that would split a street type into two harmless words.
+var pickupAreaFormat = regexp.MustCompile(`\p{Cf}`)
 
-// pickupAreaHouseNumber is a house number: one to six digits, with an
-// optional letter ("12", "1600", "12B"), not an ordinal ("5th").
-var pickupAreaHouseNumber = regexp.MustCompile(`(?i)\b\d{1,6}[a-z]?\b`)
+// pickupAreaWord is a word of a pickup_area value, in any script; an
+// abbreviation's period and other punctuation fall between words.
+var pickupAreaWord = regexp.MustCompile(`[\p{L}\p{M}\p{Nd}]+`)
 
-// pickupAreaStreetWord is a street type as a whole word; an abbreviation's
-// period ("St.") falls outside the word.
-var pickupAreaStreetWord = regexp.MustCompile(`(?i)\b(st|street|ave|avenue|rd|road|blvd|boulevard|ln|lane|dr|drive|ct|court|way|pl|place)\b`)
+// pickupAreaNumber is a house number: decimal digits in any script, with an
+// optional letter ("12", "12345", "12B"), not an ordinal ("5th").
+var pickupAreaNumber = regexp.MustCompile(`^\p{Nd}+\p{L}?$`)
+
+// pickupAreaUnit is a numbered unit: "Apt 4", "Suite 200", "Ste. 3", "#5".
+var pickupAreaUnit = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:apt|unit|suite|ste)\.?\s*#?\s*\p{Nd}|#\s*\p{Nd}`)
+
+// pickupAreaStreetTypes are the street types a house number comes before.
+var pickupAreaStreetTypes = map[string]bool{
+	"st": true, "street": true, "ave": true, "avenue": true, "rd": true, "road": true,
+	"blvd": true, "boulevard": true, "ln": true, "lane": true, "dr": true, "drive": true,
+	"ct": true, "court": true, "way": true, "pl": true, "place": true, "hwy": true,
+	"highway": true, "pkwy": true, "parkway": true, "cir": true, "circle": true,
+	"ter": true, "terrace": true, "trl": true, "trail": true, "sq": true, "square": true,
+	"loop": true, "plaza": true, "alley": true, "pike": true,
+}
+
+// pickupAreaBreaks are words that say a number is a distance, a time or a
+// label rather than a house number: after the number they end the street
+// name ("2 blocks from Main St", "10 min on the way"), and before it they
+// make it a label ("Exit 12", "Ward 3", "Zone 2").
+var pickupAreaBreaks = map[string]bool{
+	"block": true, "blocks": true, "mile": true, "miles": true, "mi": true, "min": true,
+	"mins": true, "minute": true, "minutes": true, "km": true, "from": true, "near": true,
+	"of": true, "to": true, "off": true, "exit": true, "ward": true, "zone": true, "the": true,
+}
 
 // readsAsStreetAddress is whether a pickup_area value looks like a street
-// address rather than a public area: a house number and a street type. The
-// agent picks the class label, so an address labelled pickup_area would reach
-// everyone a public area may go to. A street named without a number ("Main
-// St corridor", "Oak Lane neighborhood") and a ZIP are areas.
+// address rather than a public area: a house number followed by a street
+// type with at most three name words between ("12 Oak St.", "11501 Alterra
+// Pkwy"), or a numbered unit ("Apt 4", "#5"). The agent picks the class
+// label, so an address labelled pickup_area would reach everyone a public
+// area may go to. The value is NFKC-normalized ("１２" is "12") with format
+// characters removed first. A ZIP, a street named without a number before it
+// ("Main St corridor", "St. Louis, Ward 3"), a number with no street type
+// ("1600 Broadway") and a number after the street ("Hauptstraße 7") pass: the
+// guard catches the common shape, not every address.
 func readsAsStreetAddress(v string) bool {
-	rest := pickupAreaZIP.ReplaceAllString(v, " ")
-	return pickupAreaHouseNumber.MatchString(rest) && pickupAreaStreetWord.MatchString(rest)
+	v = pickupAreaFormat.ReplaceAllString(norm.NFKC.String(v), "")
+	if pickupAreaUnit.MatchString(v) {
+		return true
+	}
+	// A comma or semicolon ends a street address's first line.
+	for _, part := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ';' }) {
+		words := pickupAreaWord.FindAllString(strings.ToLower(part), -1)
+		for i, w := range words {
+			if !pickupAreaNumber.MatchString(w) || (i > 0 && pickupAreaBreaks[words[i-1]]) {
+				continue
+			}
+			for _, next := range words[i+1 : min(i+5, len(words))] {
+				if pickupAreaBreaks[next] {
+					break
+				}
+				if pickupAreaStreetTypes[next] {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // recordsTyped is the record set of a deal sealed in the typed action

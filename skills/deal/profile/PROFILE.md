@@ -15,6 +15,7 @@ Files in this directory:
 | `records/` | JSON Schemas (Draft 2020-12) for the typed action records and the check request and response (section 9). |
 | `fixtures/positive/` | One deal, 19 records, covering most record types (not `sale`, which `positive-sale/` carries; the fixture run of `check_profile.py` names the types no positive fixture carries yet), with the expected JCS digest of each. |
 | `fixtures/positive-typed/` | One deal sealed in the typed action records beside x-deal-v0 evidence records (section 9). |
+| `fixtures/positive-typed-seller/` | A seller's typed deal that gives a listing platform the public pickup area (`pickup_area`) before any offer. |
 | `fixtures/negative/` | Records that MUST be rejected, each at one named stage. |
 | `fixtures/fingerprint-vectors.json` | Test-only local store: a public test secret, the raw values, their normalized forms, fingerprints and commitments. |
 | `fixtures/expected-digests.txt` | The positive digests as a manifest. |
