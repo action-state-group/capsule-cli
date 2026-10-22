@@ -1686,23 +1686,29 @@ func dealNoteCommand() *cobra.Command {
 						name = recipientName(*d.Who)
 					}
 					words := make([]string, len(first))
-					var leakedWords, newWords []string
+					var leaked, fresh, told []string
 					for i, c := range first {
 						words[i] = classWord(c)
 						if memory.leakedBefore(keys, c) {
-							leakedWords = append(leakedWords, words[i])
+							leaked = append(leaked, c)
 						} else {
-							newWords = append(newWords, words[i])
+							fresh = append(fresh, c)
+						}
+					}
+					for _, f := range d.Fields {
+						if !slices.Contains(first, f.Class) && !slices.Contains(told, f.Class) {
+							told = append(told, f.Class)
 						}
 					}
 					// Never "first time" for a class that went to them before
-					// without the user's OK; a new class beside it is said as new.
+					// without the user's OK; the note names every class the
+					// telling gives, as the card does.
 					reason := "First time telling " + name + " your " + strings.Join(words, ", ") + ", and no check the user approved named it"
-					if len(leakedWords) > 0 {
-						reason = "You haven't OK'd telling " + name + " your " + listWords(leakedWords, "and") + " before."
-						if len(newWords) > 0 {
-							reason = "You haven't OK'd telling " + name + " your " + listWords(leakedWords, "and") + " before, and your " +
-								listWords(newWords, "and") + " would be new to them."
+					if len(leaked) > 0 {
+						w, _ := cli.ActiveWording(s.p)
+						reason = w.Line("disclosure.held.unapproved", cli.V{"name": name, "what": disclosureWords(w, leaked)})
+						if others := alsoShares(w, told, fresh); others != "" {
+							reason += " " + w.Line("disclosure.held.also", cli.V{"others": others})
 						}
 					}
 					if err := cli.Output(c, map[string]any{

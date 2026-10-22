@@ -165,19 +165,21 @@
   OK is never called a first time. The check's difference reads `Your
   <class> already went to <recipient> without your OK`. The card asks `Your
   <class> already went to <recipient> without your OK. Share it again?`
-  (`card.question.share.unapproved_before`) with the reason `it went out
+  (`card.question.share.unapproved_before`; `… Share them again?`,
+  `.several`, for more than one such class), with the reason `it went out
   without your OK, so I can't count <recipient> as already told`
-  (`card.why.unapproved_before`). Beside a class new to them, the card asks
-  about everything a yes shares: `Your <class> already went to <recipient>
-  without your OK, and your <new class> would be new to them. Share both?`
-  (`card.question.share.unapproved_and_new`; `… Share all of them?`,
-  `card.question.share.unapproved_and_new.all`, when more than two classes),
-  and keeps `first time they get your <new class>`; that question names
-  every class whatever reasons the card keeps. A held disclosure note
-  naming such a class says `You haven't OK'd telling <recipient> your
-  <class> before.`, or, beside a new class, `You haven't OK'd telling
-  <recipient> your <class> before, and your <new class> would be new to
-  them.`
+  (`card.why.unapproved_before`). When the share gives other classes too,
+  the question names every one: `Your <class> already went to <recipient>
+  without your OK. This also shares your <told class>, which they already
+  have, and your <new class>, which would be new to them. Share both?`
+  (`card.question.share.unapproved_also`, `… Share all of them?` with
+  `.all` for more than two classes; the clauses `card.question.share.also_told`
+  and `card.question.share.also_new` appear only when they have a class),
+  whatever reasons the card keeps; `first time they get your <new class>`
+  stays the reason. A held disclosure note naming such a class says `You
+  haven't OK'd telling <recipient> your <class> before.`
+  (`disclosure.held.unapproved`), then `This also shares …`
+  (`disclosure.held.also`) with the same clauses.
 
 ## v0.1.0-rc20
 

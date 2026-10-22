@@ -204,7 +204,7 @@ func TestALeakedClassBesideANewOne(t *testing.T) {
 	assert.Contains(t, texts, "First time telling Shop your phone")
 	assert.NotContains(t, texts, "First time telling Shop your email")
 	card := check["card"].(string)
-	assert.Contains(t, card, "Your email already went to Shop (redbubble.com) without your OK, and your phone would be new to them. Share both?")
+	assert.Contains(t, card, "Your email already went to Shop (redbubble.com) without your OK. This also shares your phone, which would be new to them. Share both?")
 	assert.Contains(t, card, "Why I'm asking: first time they get your phone.")
 	assert.NotContains(t, card, "first time they get your details")
 	assert.NotContains(t, card, "first time they get your email")
@@ -212,7 +212,7 @@ func TestALeakedClassBesideANewOne(t *testing.T) {
 
 	// Held, the note says which class went before and which is new.
 	held := heldNote(t, id, `{"fields":[{"class":"email","value":"`+homeEmail+`"},{"class":"phone","value":"+1 555 010 4477"}]}`)
-	assert.Equal(t, "You haven't OK'd telling Shop your email before, and your phone would be new to them.", held["reason"])
+	assert.Equal(t, "You haven't OK'd telling Shop your email before. This also shares your phone, which would be new to them.", held["reason"])
 }
 
 // A deny still says what it will not do, and never "first time".
@@ -237,14 +237,14 @@ func TestSeveralLeakedOrNewClasses(t *testing.T) {
 	leakEmail(t, id)
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"email","phone","name"`)))
 	card := check["card"].(string)
-	assert.Contains(t, card, "Your email already went to Shop (redbubble.com) without your OK, and your name and phone would be new to them. Share all of them?")
+	assert.Contains(t, card, "Your email already went to Shop (redbubble.com) without your OK. This also shares your name and phone, which would be new to them. Share all of them?")
 
 	other := openShop(t, "society6.com")
 	leakClasses(t, other, "email", "name")
 	check = dealRun(t, "check", "--deal", other, "--input", writeJSON(t, shareInput(`"email","name"`)))
-	assert.Contains(t, check["card"], "Your name and email already went to Shop (society6.com) without your OK. Share it again?")
+	assert.Contains(t, check["card"], "Your name and email already went to Shop (society6.com) without your OK. Share them again?")
 	check = dealRun(t, "check", "--deal", other, "--input", writeJSON(t, shareInput(`"email","name","phone"`)))
-	assert.Contains(t, check["card"], "Your name and email already went to Shop (society6.com) without your OK, and your phone would be new to them. Share all of them?")
+	assert.Contains(t, check["card"], "Your name and email already went to Shop (society6.com) without your OK. This also shares your phone, which would be new to them. Share all of them?")
 }
 
 // latestCheck is the id of the deal's latest check record.
@@ -276,7 +276,53 @@ func TestAMixedShareNamesEveryClassWhateverTheReasons(t *testing.T) {
 	r := dealCheckResult{Verdict: "pause", Differences: diffs("payee_or_contact_changed", "over_limit", "first_disclosure", "first_disclosure"),
 		Recipient: &dealRecipient{Name: "Shop", Unapproved: []string{"email"}, First: []string{"phone"}}}
 	card := checkCard(w, state, snap, r, nil)
-	assert.Equal(t, "Your email already went to Shop (redbubble.com) without your OK, and your phone would be new to them. Share both?", card.Question)
+	assert.Equal(t, "Your email already went to Shop (redbubble.com) without your OK. This also shares your phone, which would be new to them. Share both?", card.Question)
 	require.Len(t, card.Why, 2)
 	assert.NotContains(t, strings.Join(card.Why, " "), "phone", "the reasons above took both slots")
+}
+
+// tellWithOK checks, approves and notes a class going to the deal's
+// counterparty, so it is told with authority.
+func tellWithOK(t *testing.T, id, class, value string) {
+	t.Helper()
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"`+class+`"`)))
+	if check["verdict"] == "pause" {
+		dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", check["check_id"].(string), "--choice", "proceed", "--said", "ok")
+	}
+	require.Equal(t, true, dealRun(t, "note", "--deal", id, "--kind", "disclosure", "--input", writeJSON(t,
+		`{"fields":[{"class":"`+class+`","value":"`+value+`"}]}`))["approved"])
+}
+
+// leakPhone seals a phone disclosure with no authority.
+func leakPhone(t *testing.T, id string) { t.Helper(); leakClasses(t, id, "phone") }
+
+// The card's question names every class in the share: those that went
+// without the user's OK, those they already have and those new to them.
+func TestALeakedShareNamesEveryClassItGives(t *testing.T) {
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	tellWithOK(t, id, "email", homeEmail)
+	leakPhone(t, id)
+
+	// Told and leaked.
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"email","phone"`)))
+	assert.Contains(t, check["card"], "Your phone already went to Shop (redbubble.com) without your OK. This also shares your email, which they already have. Share both?")
+
+	// Told, leaked and new.
+	check = dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"email","phone","name"`)))
+	assert.Contains(t, check["card"], "Your phone already went to Shop (redbubble.com) without your OK. This also shares your email, which they already have, and your name, which would be new to them. Share all of them?")
+
+	// Held, the note names them the same way.
+	held := heldNote(t, id, `{"fields":[{"class":"email","value":"`+homeEmail+`"},{"class":"phone","value":"+1 555 010 4477"},{"class":"name","value":"`+homeName+`"}]}`)
+	assert.Equal(t, "You haven't OK'd telling Shop your phone before. This also shares your email, which they already have, and your name, which would be new to them.", held["reason"])
+
+	// Two leaked classes only.
+	other := openShop(t, "society6.com")
+	leakClasses(t, other, "email", "phone")
+	check = dealRun(t, "check", "--deal", other, "--input", writeJSON(t, shareInput(`"email","phone"`)))
+	card := check["card"].(string)
+	assert.Contains(t, card, "Share them again?")
+	for _, class := range []string{"email", "phone"} {
+		assert.Contains(t, strings.SplitN(card, "\n", 3)[1], class, "the question names every class")
+	}
 }

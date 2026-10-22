@@ -263,19 +263,8 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	}
 	// A class that went to them before without the user's OK is said as
 	// that, never as a first time.
-	// A yes shares every class the check names, so with a new class beside
-	// it the question names that too.
-	if rc := r.Recipient; rc != nil && len(rc.Unapproved) > 0 && isShare(snap.Action) {
-		key := "card.question.share.unapproved_before"
-		if len(rc.First) > 0 {
-			key = "card.question.share.unapproved_and_new"
-			if len(rc.Unapproved)+len(rc.First) > 2 {
-				key += ".all"
-			}
-		}
-		if line := w.Line(key, cli.V{"what": disclosureWords(w, rc.Unapproved), "new": disclosureWords(w, rc.First), "payee": payee, "where": where}); line != "" {
-			ask.Question = line
-		}
+	if q := unapprovedQuestion(w, r, snap, payee, where); q != "" {
+		ask.Question = q
 	}
 	if r.Verdict == "deny" {
 		// A deny takes no yes: it says what will not happen, and why it
@@ -308,6 +297,44 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 		ask.Options = append(ask.Options, cli.AskOption{Label: o.Label, Choice: o.ID})
 	}
 	return ask
+}
+
+// unapprovedQuestion is a share's question when a class in it went to the
+// recipient before without the user's OK, or "". A yes shares every class
+// the check names, so it names them all: the leaked ones, then those they
+// already have and those new to them, each clause only when it has a class.
+func unapprovedQuestion(w cli.Wording, r dealCheckResult, snap dealSnapshot, payee, where string) string {
+	rc := r.Recipient
+	if rc == nil || len(rc.Unapproved) == 0 || !isShare(snap.Action) {
+		return ""
+	}
+	v := cli.V{"what": disclosureWords(w, rc.Unapproved), "payee": payee, "where": where}
+	key := "card.question.share.unapproved_before"
+	switch others := alsoShares(w, rc.Repeat, rc.First); {
+	case others != "":
+		key = "card.question.share.unapproved_also"
+		if len(rc.Unapproved)+len(rc.Repeat)+len(rc.First) > 2 {
+			key += ".all"
+		}
+		v["others"] = others
+	case len(rc.Unapproved) > 1:
+		key += ".several"
+	}
+	return w.Line(key, v)
+}
+
+// alsoShares names, beside classes that went without the user's OK, the
+// other classes a telling gives: those they already have, then those new to
+// them, each clause only when it has a class; "" when there are none.
+func alsoShares(w cli.Wording, told, fresh []string) string {
+	var others []string
+	if len(told) > 0 {
+		others = append(others, w.Line("card.question.share.also_told", cli.V{"told": disclosureWords(w, told)}))
+	}
+	if len(fresh) > 0 {
+		others = append(others, w.Line("card.question.share.also_new", cli.V{"new": disclosureWords(w, fresh)}))
+	}
+	return strings.Join(others, ", and ")
 }
 
 func isShare(action string) bool { return action == "share_contact" || action == "share_credentials" }
