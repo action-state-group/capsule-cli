@@ -231,6 +231,27 @@
   Pkwy, or a numbered unit such as Apt 4 or #5), naming `pickup_location`
   for an exact spot; nothing is sealed.
 
+### The user's own authenticity claim, said as theirs (capsule-engine#189)
+
+- **Added:** a `represent` check of class `authenticity` may carry
+  `representing.attributed_to: "user"`: the words are the user's own claim,
+  said by the agent as theirs and marked unverified. capsulectl accepts it
+  only in one fixed template, one sentence: "The seller says … (unverified)",
+  e.g. "The seller says it's authentic (unverified)", with no `.`, `!` or
+  `?` before "(unverified)". Any other words, any other class and any other value
+  are refused, and nothing is sealed. The attribution is sealed in the
+  x-deal-v0 and typed `proposed-action/v0` check body, and the checker reads
+  it there.
+- **Added:** every attributed check asks, with capsulectl's own finding
+  `attributed_claim`, even when the user ordered authenticity. Its card
+  quotes the exact words and says they go out as the user's claim. Only the
+  user's own approval, in their words, authorizes the claim: an answer on the
+  card with no words of theirs (`agent_card`) or a standing intent never
+  does, and their hold leaves it unchecked. The profile (PROFILE.md and
+  `check_profile.py`, with a new negative fixture), the wording pack
+  (`card.question.represent.attributed`, `card.why.attributed_claim`) and the
+  deal skill follow.
+
 ## v0.1.0-rc19
 
 ### The deal page's as-of line (capsule-cli#362)

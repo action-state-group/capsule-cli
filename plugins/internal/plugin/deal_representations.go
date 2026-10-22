@@ -39,7 +39,39 @@ const representAction = "represent"
 const (
 	ruleRepresentationMissing = "required_representation_missing"
 	ruleRepresentationOutside = "representation_outside_authority"
+	// ruleAttributedClaim is capsulectl's own ask on every represent check
+	// attributed to the user: whatever the task authority orders, only the
+	// user can say these words are their claim (capsule-engine#189).
+	ruleAttributedClaim = "attributed_claim"
 )
+
+// The user's own claim, said by the seller's agent (capsule-engine#189,
+// Steven's A7 ruling): a represent check may carry attributed_to "user", only
+// on an authenticity claim, and only in words that follow one fixed
+// template, one sentence that names the role, never the person, and ends
+// marked unverified: "The seller says it's authentic (unverified)". The
+// seller ruleset passes such a claim (promise_never/1.1.0) where it refuses
+// the agent's own authenticity claim, and checks the same template when it
+// can open the words.
+const (
+	attributedToUser   = "user"
+	attributedClass    = "authenticity"
+	attributedPrefix   = "The seller says "
+	attributedSuffix   = " (unverified)"
+	attributedTemplate = `"The seller says … (unverified)"`
+)
+
+// attributedWords is whether text follows the attribution template exactly:
+// the prefix, a claim that is not blank and holds no sentence-ending mark
+// (".", "!", "?"), so it stays one sentence, then the suffix.
+func attributedWords(text string) bool {
+	if !strings.HasPrefix(text, attributedPrefix) || !strings.HasSuffix(text, attributedSuffix) ||
+		len(text) < len(attributedPrefix)+len(attributedSuffix) {
+		return false
+	}
+	claim := text[len(attributedPrefix) : len(text)-len(attributedSuffix)]
+	return strings.TrimSpace(claim) != "" && !strings.ContainsAny(claim, ".!?")
+}
 
 // representationGated are the acts an ordered representation must come
 // before: every act that moves toward or carries out a commitment, and every
@@ -54,6 +86,10 @@ type dealRepresenting struct {
 	Class  string `json:"class"`
 	Text   string `json:"text"`
 	Source string `json:"source,omitempty"`
+	// AttributedTo is "user" when the words are the user's own claim, said
+	// as theirs and marked unverified (attributedWords); empty when they are
+	// the agent's.
+	AttributedTo string `json:"attributed_to,omitempty"`
 }
 
 // representationRules is whether a deal follows the representation rules:
@@ -119,6 +155,11 @@ func (s dealState) missingRepresentations() []string {
 // words. An external checker may deny either (promise_never).
 func evaluateRepresentation(r *dealCheckResult, s dealState, snap dealSnapshot, add func(q, rule, field, text string)) {
 	c := snap.Representing.Class
+	// An attributed claim always asks: a class the user ordered says what may
+	// be said, not that the user made this claim.
+	if snap.Representing.AttributedTo == attributedToUser {
+		add("asked", ruleAttributedClaim, "representation", "These words go out as your claim: \""+snap.Representing.Text+"\". Only you can say they're yours")
+	}
 	if !slices.Contains(s.ordered(), c) {
 		add("asked", ruleRepresentationOutside, "representation", "You didn't ask me to tell the buyer about the "+classWord(c)+". I need your OK on these exact words")
 	}
@@ -154,7 +195,26 @@ func checkRepresenting(events []sealedEvent, snap *dealSnapshot) error {
 	if snap.AmountMinor != nil || snap.Terms != nil || snap.Recourse != nil || snap.Who != nil || len(snap.Disclosing) > 0 {
 		return cli.InputError("a represent check is about the words only: leave amounts, terms, recourse, who and disclosing out")
 	}
-	*rp = dealRepresenting{Class: claim.Class, Text: claim.Text, Source: claim.Source}
+	if err := checkAttribution(rp.AttributedTo, claim.Class, claim.Text); err != nil {
+		return err
+	}
+	*rp = dealRepresenting{Class: claim.Class, Text: claim.Text, Source: claim.Source, AttributedTo: rp.AttributedTo}
+	return nil
+}
+
+// checkAttribution refuses an attribution outside its closed set, on any
+// class but authenticity, or in words that do not follow the template.
+func checkAttribution(to, class, text string) error {
+	switch {
+	case to == "":
+		return nil
+	case to != attributedToUser:
+		return cli.InputError(`representing.attributed_to is "user" (the user's own claim) or left out (the agent's)`)
+	case class != attributedClass:
+		return cli.InputError("only an authenticity claim can be attributed to the user: leave attributed_to out of a " + classWord(class) + " claim")
+	case !attributedWords(text):
+		return cli.InputError("refusing to check: the user's claim must read " + attributedTemplate + ", one sentence, with no full stop, ! or ? before \"(unverified)\", so the buyer sees whose claim it is and that it is unverified")
+	}
 	return nil
 }
 
@@ -211,6 +271,7 @@ func authorizeClaim(events []sealedEvent, c dealClaim, now time.Time) (authorize
 	if rp := snap.Representing; rp.Class != c.Class || rp.Text != c.Text || rp.Source != c.Source {
 		return "", "the claim is not the words that were checked: check these words", "differs_from_check"
 	}
+	attributed := snap.Representing.AttributedTo == attributedToUser
 	if ck.Verdict == "deny" {
 		return "", "the check denied it", "denied"
 	}
@@ -228,7 +289,9 @@ func authorizeClaim(events []sealedEvent, c dealClaim, now time.Time) (authorize
 		return "", "what you asked the agent to say changed after the check: check again", "authority_changed"
 	}
 	used := usedAuthorizations(events)
-	if ck.Verdict == "pass" {
+	// The user's own claim is authorized only by the user's own approval, in
+	// their words: never by a passing check alone.
+	if ck.Verdict == "pass" && !attributed {
 		if used[c.Check] {
 			return "", "that check already covered an earlier claim", "approval_used"
 		}
@@ -242,6 +305,8 @@ func authorizeClaim(events []sealedEvent, c dealClaim, now time.Time) (authorize
 		switch {
 		case !a.Proceed:
 			return "", "the check asked and the answer was " + a.Choice, "not_approved"
+		case a.Approver != "user" && attributed:
+			return "", "these words go out as your claim, and only your own approval, in your words, says they're yours", "not_approved"
 		case a.Approver != "user":
 			return "", "the check asked, and only your own approval, in your words, covers what the agent says for you", "not_approved"
 		case used[later.CapsuleID]:

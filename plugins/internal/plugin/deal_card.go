@@ -86,6 +86,7 @@ var cardReasons = []cardReason{
 	}},
 	{key: "card.why.under_floor", rules: []string{"under_floor"}},
 	{key: "card.why.representation_missing", rules: []string{ruleRepresentationMissing}},
+	{key: "card.why.attributed_claim", rules: []string{ruleAttributedClaim}},
 	{key: "card.why.representation_outside", rules: []string{ruleRepresentationOutside}},
 	// To someone dealt with before, only what is new to them.
 	{key: "card.why.first_disclosure", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
@@ -294,7 +295,11 @@ func paid(events []sealedEvent) bool {
 // cardQuestion is the headline as a question: verb, what, to whom, why.
 func cardQuestion(w cli.Wording, snap dealSnapshot, v cli.V) string {
 	if rp := snap.Representing; snap.Action == representAction && rp != nil {
-		return w.Line("card.question.represent", cli.V{"buyer": strings.TrimSpace(v["payee"]), "class": classWord(rp.Class), "text": rp.Text})
+		key := "card.question.represent"
+		if rp.AttributedTo == attributedToUser {
+			key = "card.question.represent.attributed"
+		}
+		return w.Line(key, cli.V{"buyer": strings.TrimSpace(v["payee"]), "class": classWord(rp.Class), "text": rp.Text})
 	}
 	base := "card.question." + snap.Action
 	var keys []string

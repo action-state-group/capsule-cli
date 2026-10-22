@@ -1062,6 +1062,9 @@ func buildDealRecord(ev dealEvent, events []sealedEvent, key []byte) (map[string
 					return nil, err
 				}
 			}
+			if rp.AttributedTo != "" {
+				r["attributed_to"] = rp.AttributedTo
+			}
 			body["representing"] = r
 		}
 		if sn.Terms != nil {

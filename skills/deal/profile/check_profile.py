@@ -1070,6 +1070,11 @@ def check_chain(records):
                         fail(i, "the task authority changed after the check: the representation needs a new check")
                     if ja is None and body["class"] not in (records[task_idx]["body"].get("ordered_representations") or []):
                         fail(i, "a representation the task authority does not order needs the user's own approval")
+                    # The user's own claim (capsule-engine#189): whatever the
+                    # task authority orders, only the user's own approval, in
+                    # their words, says the words are theirs.
+                    if rep.get("attributed_to") == "user" and ja is None:
+                        fail(i, "a representation attributed to the user needs the user's own approval")
                     stated.add(body["class"])
             elif "authority_basis" in body or "unchecked" in body or "authorized_by" in by_rel:
                 fail(i, "only a seller's representation under the representation rules carries an authority")
@@ -1084,6 +1089,10 @@ def check_chain(records):
             if j in verdict_for_check:
                 fail(i, "a check has at most one verdict")
             verdict_for_check.add(j)
+            # Every check of a claim attributed to the user asks.
+            if j is not None and records[j]["body"].get("representing", {}).get("attributed_to") == "user" \
+                    and body.get("result") == "pass":
+                fail(i, "a check of a claim attributed to the user asks; it never passes on its own")
             # pack_id is optional (records sealed before v0.1.0-rc7 carry it); when
             # either side names one, the two must agree.
             if body.get("pack_id") != records[j]["body"].get("pack_id"):
@@ -1978,6 +1987,16 @@ def regen():
         "description": "A seller's share check stating terms.handover: only an offer or a commit says how the item "
                        "reaches the buyer.",
         "expected_stage": "chain", "expected_error_contains": "nowhere else",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:sk], "record": r})
+    r = json.loads(json.dumps(records2[sk]))
+    r["body"] = {"action": "represent", "representing": {
+        "class": "condition", "attributed_to": "user",
+        "text_commitment": commitment(nonce("seller-attributed"), "The seller says it's like new (unverified)")}}
+    dump(FIX / "negative" / "neg-typed-seller-attributed-not-authenticity.json", {
+        "fixture": "neg-typed-seller-attributed-not-authenticity", "expect": "invalid",
+        "description": "A represent check attributing a condition claim to the user: only an authenticity claim "
+                       "can be attributed to the user (attributed_to).",
+        "expected_stage": "schema", "expected_error_contains": "authenticity",
         "chain_dir": "positive-typed-seller", "chain_prefix": names2[:sk], "record": r})
     (FIX / "expected-digests.txt").write_text(
         "# SHA-256 over the RFC 8785 (JCS) bytes of each positive record (the `record` member only)\n"
