@@ -23,7 +23,8 @@
   local date with the year when not this year's; demos marked; no id), with
   or without a range.
 - **Changed:** the page message's label is `report.private` ("PRIVATE: your
-  own copy."), not "View details". 20 new wording-pack keys
+  own copy."), not "View details"; the chat line still ends with "View
+  details". 20 new wording-pack keys
   (`say.receipt.first.*`, `say.close.nothing_done`, `say.close.nothing_paid`,
   `say.list.*`, `report.private`): a pinned pack needs them, or the built-in
   pack is used.
@@ -47,8 +48,10 @@
   `acted_against_answer`, `unsealed_approval`, `differs_from_check`,
   `unapproved_disclosure`, `unapproved_representation`). Every step sealed
   in the range counts, sales' own logs included. A known key with nothing
-  to count is zero (`rulesets` is `[]`); a word outside the known ones is
-  counted under its own key, never dropped.
+  to count is zero (`rulesets` is `[]`). In `checks`, a verdict or rules word
+  outside the known ones is counted under its own key, never dropped; an act
+  sealed without a valid check whose rule is none of these counts as
+  `skipped_check`, as `deal report` names it.
 - **Changed:** the agent answering an ask's card itself
   (`ask_needs_your_words`) is `unsealed_approval` in `deal report` too,
   where it read `skipped_check`; the check was made.
