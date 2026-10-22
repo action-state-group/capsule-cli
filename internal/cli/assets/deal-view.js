@@ -470,16 +470,20 @@ const dealViewRender = (model, regions) => {
 
   // How it went (capsule-cli#370): the errand's moves in order, read from
   // the sealed report and worded from the pack this page carries, as
-  // `deal report` words its journey. Each row says who moved, so a switch
-  // reads as the user's, and opens to its sealed step. A shared copy, or a
+  // `deal report` words its journey. Each row says who moved and opens to
+  // its sealed step. A shared copy, or a
   // report sealed before journeys, has none.
   const journey = Array.isArray(report.journey) ? report.journey.filter((m) => m && typeof m === "object") : [];
   if (!shared && journey.length > 0) {
     host.append(el("h2", "How it went"));
     const movers = { user: "You", agent: "Your agent", other: "The other side" };
+    // A time is said when it changes: moves a minute apart read as one run.
+    let said;
     journey.forEach((m) => {
       const step = byId.get(m.step);
-      const at = step && typeof step.at === "string" ? `${local(step.at)} · ` : "";
+      const when = step && typeof step.at === "string" ? local(step.at) : "";
+      const at = when && when !== said ? `${when} · ` : "";
+      said = when || said;
       const label = dealJourneyLabel(words, m) || String(m.move);
       const row = item(`${at}${movers[m.by] || "Someone"} · ${label}`, [m.step]);
       row.dataset.journey = label;

@@ -104,8 +104,9 @@ func TestTheDealPageShowsTheJourney(t *testing.T) {
 	assert.Equal(t, labels, got["labels"], "the page words the journey as the report does")
 	rows := got["rows"].([]any)
 	require.Len(t, rows, len(labels))
-	assert.Contains(t, rows[5], " · You · Switched to eBay", "the switch is the user's")
-	assert.Contains(t, rows[4], " · Your agent · Couldn't (AliExpress sign-in)")
+	assert.Regexp(t, `^\S.* · You · Asked$`, rows[0], "the first row says its time")
+	assert.Equal(t, "Your agent · Couldn't (AliExpress sign-in)", rows[4], "the same time is said once")
+	assert.Equal(t, "You · Switched to eBay", rows[5], "the switch is the user's")
 
 	shared := renderJourney(t, id, true)
 	require.Empty(t, shared["refusal"])

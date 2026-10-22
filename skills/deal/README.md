@@ -446,7 +446,7 @@ searched, showed options, recommended, couldn't, switched, chose, paused,
 told, paid, ...), who made it (`user`, `agent` or `other`), its label in the
 profile's wording pack, the pack `key` and the `values` it was filled with.
 The user's own page shows it as "How it went", one row per move saying who
-moved, so a switch reads as the user's. Its sealed report keeps each move's
+moved. Its sealed report keeps each move's
 key and facts only, never a pack's words, and the page words them from the
 same pack `deal report` used; a shared copy carries no journey.
 
