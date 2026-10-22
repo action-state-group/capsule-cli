@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
@@ -324,8 +325,32 @@ func TestPluginInstallSaysWhatItHealedWhenItFails(t *testing.T) {
 		_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
 		require.ErrorIs(t, err, ErrInput)
 		assert.Contains(t, SafeError(err), "install had already removed group and other write from "+resolved(t, home))
+		assert.Contains(t, SafeError(err), "chmod go-w failed on "+filepath.Join(resolved(t, home), ".local")+": injected")
 		assert.Equal(t, uint32(0o755), modeOf(t, home))
 		assert.NoDirExists(t, root)
+	})
+	t.Run("every chmod fails", func(t *testing.T) {
+		home, root := installHome(t)
+		require.NoError(t, os.Chmod(home, 0o775))
+		seam(t, &healChmod, func(int, uint32) error { return errors.New("injected") })
+		_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+		require.ErrorIs(t, err, ErrInput)
+		assert.Contains(t, SafeError(err), "chmod go-w failed on "+resolved(t, home)+": injected")
+		assert.NotContains(t, SafeError(err), "already removed")
+		assert.Equal(t, uint32(0o775), modeOf(t, home))
+		assert.NoDirExists(t, root)
+	})
+	t.Run("a hidden message", func(t *testing.T) {
+		// An error SafeError shows only by class keeps its message; the
+		// note goes to stderr.
+		var stderr strings.Builder
+		c := &cobra.Command{}
+		c.SetErr(&stderr)
+		plain := errors.New("disk full")
+		h := userRootHeal{ChmodGoW: []string{"/home/x"}}
+		assert.Same(t, plain, h.explain(c, plain))
+		assert.Equal(t, "capsulectl: install had already removed group and other write from /home/x\n", stderr.String())
+		assert.NoError(t, h.explain(c, nil))
 	})
 	t.Run("the launcher fails", func(t *testing.T) {
 		home, _ := installHome(t)
@@ -361,7 +386,8 @@ func TestPluginInstallRefusesWhatTheHealRefuses(t *testing.T) {
 	})
 	t.Run("outside HOME", func(t *testing.T) {
 		// ~/.local links into a writable directory outside HOME; a writable
-		// ~ alongside it is left as it is too, since the heal is all or none.
+		// ~ alongside it is left as it is too: if any part cannot be
+		// healed, the heal changes none.
 		home, root := installHome(t)
 		outside := filepath.Join(safeTempDir(t), "shared")
 		require.NoError(t, os.MkdirAll(filepath.Join(outside, "local"), 0o755))
@@ -371,6 +397,7 @@ func TestPluginInstallRefusesWhatTheHealRefuses(t *testing.T) {
 		_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
 		require.ErrorIs(t, err, ErrInput)
 		assert.Contains(t, SafeError(err), "writable")
+		assert.Contains(t, SafeError(err), "is outside HOME")
 		assert.Equal(t, uint32(0o777), modeOf(t, outside))
 		assert.Equal(t, uint32(0o775), modeOf(t, home))
 		assert.NoDirExists(t, root)

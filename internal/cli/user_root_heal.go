@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -219,12 +220,18 @@ func healInstallPath(home string) userRootHeal {
 }
 
 // explain adds to install's error what its heal did: why it healed nothing,
-// and which directories it tightened, since they stay so. A message
-// SafeError hides goes to stderr instead.
+// each chmod that failed, and which directories it tightened, since they
+// stay so. A message SafeError hides goes to stderr instead.
 func (h userRootHeal) explain(c *cobra.Command, err error) error {
+	if err == nil {
+		return nil
+	}
 	var notes []string
 	if h.why != "" {
 		notes = append(notes, "not healed: "+h.why)
+	}
+	for _, path := range slices.Sorted(maps.Keys(h.Failed)) {
+		notes = append(notes, "chmod go-w failed on "+path+": "+h.Failed[path])
 	}
 	if len(h.ChmodGoW) > 0 {
 		notes = append(notes, "install had already removed group and other write from "+strings.Join(h.ChmodGoW, " "))

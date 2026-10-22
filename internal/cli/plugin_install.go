@@ -630,7 +630,7 @@ func pluginInstallCommand() *cobra.Command {
 			if len(heal.ChmodGoW)+len(heal.Failed) > 0 {
 				result.RootHealed = &heal
 			}
-			return Output(c, result)
+			return heal.explain(c, Output(c, result))
 		},
 	}
 	cmd.Flags().Bool("allow-version-mismatch", false, "Install a first-party plugin whose version differs from this capsulectl's")
