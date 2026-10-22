@@ -558,7 +558,7 @@ func (s *dealSession) notePost(ctx context.Context, c *cobra.Command, saleID str
 
 // postNeedsUserWords is why a post is not authorized by anything but the
 // user's own approval on the card shown.
-const postNeedsUserWords = "only the user's own approval, in their words (--said), on the card shown, authorizes a post. A tap on a card button alone does not"
+const postNeedsUserWords = "only the user's own approval, in their words (--said: the label of the button they tapped, or what they typed), on the card shown, authorizes a post. An answer without --said does not"
 
 // postSuperseded is why an answer or act after a newer post proposal
 // authorizes nothing: the same words the profile checker says.

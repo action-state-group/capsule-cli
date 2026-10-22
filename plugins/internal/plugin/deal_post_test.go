@@ -102,7 +102,7 @@ func TestAPostAlwaysAsksAndOnlyTheUsersYesPostsIt(t *testing.T) {
 	require.NoError(t, err)
 	_, err = postAct(t, saleID, posting)
 	require.ErrorIs(t, err, cli.ErrInput)
-	assert.Contains(t, err.Error(), "refusing the post: only the user's own approval, in their words (--said), on the card shown, authorizes a post. A tap on a card button alone does not")
+	assert.Contains(t, err.Error(), "refusing the post: only the user's own approval, in their words (--said: the label of the button they tapped, or what they typed), on the card shown, authorizes a post. An answer without --said does not")
 
 	// Edited text is a new check, and asks again.
 	edited := postingJSON(listingText+" Pickup only.", "marketplace.example", "condition", "price")
