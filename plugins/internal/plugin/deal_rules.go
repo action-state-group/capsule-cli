@@ -60,6 +60,34 @@ type dealTerms struct {
 	When         string            `json:"when,omitempty"`
 	Place        string            `json:"place,omitempty"`
 	Conditions   map[string]string `json:"conditions,omitempty"`
+	// Handover is how a sold item reaches the buyer (dealHandovers): a
+	// seller's term, stated on a seller's offer and commit and on a sale,
+	// read by the seller rules' payment-rail rule (cash passes only in
+	// person). It is in neither count's field list (materialFields,
+	// offerFields), so it moves no basis.
+	Handover string `json:"handover,omitempty"`
+}
+
+// dealHandovers are the ways a sold item reaches the buyer (terms.handover):
+// handed over in person, at a pickup, or shipped.
+var dealHandovers = []string{"in_person", "shipped"}
+
+// sellersHandover refuses terms.handover where it is not a seller's term:
+// on a deal where the user buys (role), and on any terms but a check's or the
+// opening's (where is false).
+func sellersHandover(role string, where bool, terms ...*dealTerms) error {
+	for _, t := range terms {
+		if t == nil || t.Handover == "" {
+			continue
+		}
+		if role != dealRoleSeller {
+			return cli.InputError("terms.handover is how a sold item reaches the buyer: state it only where the user sells (intent.party_role seller)")
+		}
+		if !where {
+			return cli.InputError("terms.handover goes on a seller's offer or commit check, or in the opening terms of a seller's deal or sale, never on what the user asked, a change or a close")
+		}
+	}
+	return nil
 }
 
 type dealClaim struct {

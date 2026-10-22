@@ -1489,6 +1489,16 @@ func dealNoteCommand() *cobra.Command {
 			if ev.Intent != nil && ev.Intent.PartyRole != "" && ev.Intent.PartyRole != dealRole(events) {
 				return cli.InputError("this deal's party_role is " + dealRole(events) + ", set when it opened; a note cannot change it")
 			}
+			var noted []*dealTerms
+			if ev.Intent != nil {
+				noted = append(noted, &ev.Intent.Asked)
+			}
+			if ev.Change != nil {
+				noted = append(noted, ev.Change.Terms)
+			}
+			if err := sellersHandover(dealRole(events), false, noted...); err != nil {
+				return err
+			}
 			if finalClose(events) >= 0 && kind != "evidence" {
 				// A closed deal takes later evidence only, linked to the close
 				// (it confirms the close); every other step needs a new deal.
@@ -2004,6 +2014,9 @@ func dealCheckCommand() *cobra.Command {
 			if err := normalizeTerms(snap.Terms); err != nil {
 				return err
 			}
+			if err := sellersHandover(dealRole(events), true, snap.Terms); err != nil {
+				return err
+			}
 			if snap.Who != nil && snap.Who.DomainAgeDays != nil {
 				return cli.InputError("record the website's age as evidence, not in the check")
 			}
@@ -2242,6 +2255,9 @@ func dealCloseCommand() *cobra.Command {
 			return err
 		}
 		return runDeal(c, true, func(ctx context.Context, s *dealSession, dealID string, events []sealedEvent) error {
+			if err := sellersHandover(dealRole(events), false, in.Delivered); err != nil {
+				return err
+			}
 			if dealFinallyClosed(events) {
 				return cli.InputError("this deal is closed and takes no more steps; start a new one with `deal open`")
 			}

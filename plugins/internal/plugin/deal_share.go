@@ -66,6 +66,9 @@ var dealShareKeys = map[string]bool{
 	"profile": true, "canonicalization": true, "deal_id": true, "record_type": true, "at": true,
 	"type": true, "digest_alg": true, "digest": true, "rel": true, "fp_alg": true, "channel": true,
 	"deal_type": true, "action": true, "currency": true, "rail": true, "result": true, "pack_id": true,
+	// How a sold item reaches the buyer (terms.handover): in_person or
+	// shipped, a closed set.
+	"handover": true,
 	"question": true, "rule": true, "field": true, "options": true, "notes": true, "changed": true,
 	"choice": true, "approver": true, "status": true, "outcome": true, "from": true, "kind": true,
 	// Whose a claim is, from a closed set: its words and source note are
