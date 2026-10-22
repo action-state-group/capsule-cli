@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-vddwOfhN6YhVmV/+CoXEzdn+aErwVVF9Fc9+Rd+3jlo=' 'sha256-OpNhaC3A/VvkifX+3L8bxPrCVBd81MGrBKexBzfC5ss=' 'sha256-mX6oZ/VmK8yjOhcS6Px0AfJ/L794uETfYRhx8vGrHVg=' 'sha256-rHo6i1Cn9uJuxBDynn6TLC/NRvAdxKdJCGkITHgzUCg='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-o8f8raSsfDeyxIFpYGAs1FrywK+hjppQ8Db6Y22N25g='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-vddwOfhN6YhVmV/+CoXEzdn+aErwVVF9Fc9+Rd+3jlo=' 'sha256-OpNhaC3A/VvkifX+3L8bxPrCVBd81MGrBKexBzfC5ss=' 'sha256-fr+stuSlHZzgr2hzIp8QmgMjyzKF2V636HPzLx708wo=' 'sha256-rHo6i1Cn9uJuxBDynn6TLC/NRvAdxKdJCGkITHgzUCg='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-o8f8raSsfDeyxIFpYGAs1FrywK+hjppQ8Db6Y22N25g='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: “Order the cat sticker in my cart at Example Stickers”</title>
     <style>
@@ -14644,9 +14644,9 @@ const dealViewRender = (model, regions) => {
 
   // How it went (capsule-cli#370): the errand's moves in order, read from
   // the sealed report and worded from the pack this page carries, as
-  // `deal report` words its journey. Each row says who moved and opens to
-  // its sealed step. A shared copy, or a
-  // report sealed before journeys, has none.
+  // `deal report` words its journey. Each row says who moved, and whether
+  // its sealed step verified. A shared copy, or a report sealed before
+  // journeys, has none.
   const journey = Array.isArray(report.journey) ? report.journey.filter((m) => m && typeof m === "object") : [];
   if (!shared && journey.length > 0) {
     host.append(el("h2", "How it went"));
@@ -14660,7 +14660,9 @@ const dealViewRender = (model, regions) => {
       const at = when && when !== said ? `${when} · ` : "";
       said = when || said;
       const label = dealJourneyLabel(words, m);
-      const row = item(`${at}${(Object.hasOwn(movers, m.by) ? movers[m.by] : "Someone")}${label ? ` · ${label}` : ""}`, [m.step], undefined, m.step);
+      // The row is its step: it says whether that step verified, and lists
+      // no step line, which "What the agent did" already shows.
+      const row = item(`${at}${(Object.hasOwn(movers, m.by) ? movers[m.by] : "Someone")}${label ? ` · ${label}` : ""}`, [], undefined, m.step);
       row.dataset.journey = label;
       host.append(row);
     });

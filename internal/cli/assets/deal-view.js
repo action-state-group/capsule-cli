@@ -462,9 +462,9 @@ const dealViewRender = (model, regions) => {
 
   // How it went (capsule-cli#370): the errand's moves in order, read from
   // the sealed report and worded from the pack this page carries, as
-  // `deal report` words its journey. Each row says who moved and opens to
-  // its sealed step. A shared copy, or a
-  // report sealed before journeys, has none.
+  // `deal report` words its journey. Each row says who moved, and whether
+  // its sealed step verified. A shared copy, or a report sealed before
+  // journeys, has none.
   const journey = Array.isArray(report.journey) ? report.journey.filter((m) => m && typeof m === "object") : [];
   if (!shared && journey.length > 0) {
     host.append(el("h2", "How it went"));
@@ -478,7 +478,9 @@ const dealViewRender = (model, regions) => {
       const at = when && when !== said ? `${when} · ` : "";
       said = when || said;
       const label = dealJourneyLabel(words, m);
-      const row = item(`${at}${(Object.hasOwn(movers, m.by) ? movers[m.by] : "Someone")}${label ? ` · ${label}` : ""}`, [m.step], undefined, m.step);
+      // The row is its step: it says whether that step verified, and lists
+      // no step line, which "What the agent did" already shows.
+      const row = item(`${at}${(Object.hasOwn(movers, m.by) ? movers[m.by] : "Someone")}${label ? ` · ${label}` : ""}`, [], undefined, m.step);
       row.dataset.journey = label;
       host.append(row);
     });
