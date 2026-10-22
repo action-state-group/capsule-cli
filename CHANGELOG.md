@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0-rc21
+
 ### Every page has a margin, a "Contents checked" pill and a folded check section (capsule-viewer#60, from #408)
 
 - **Changed:** the pages capsulectl writes (`disclose --html`, `deal
@@ -34,6 +36,47 @@
   test now holds the two to one commit; the earlier check that hashed the
   runtime's stylesheets from the vendored file cannot, as the runtime now
   builds them from parts.
+
+### The deal page shows the errand's journey (capsule-cli#370)
+
+- **Added:** `deal report --html` shows the errand's journey under "How it
+  went", after "What you asked": one row per move, in order, `<local time> ·
+  You | Your agent | The other side · <label>`. A time shows only when it
+  changes, and each row opens to its sealed step. A shared copy carries no
+  journey, and a report sealed before this release shows no section.
+- **Added:** the owner copy's sealed report carries `journey`: for each move,
+  who made it, the move, its wording key, its step and its facts. It holds no
+  wording-pack words: a reason is its token (plus an "other" reason's own
+  detail) and the classes told are their tokens, in spoken order. This shape
+  is part of every owner report sealed from this release on. The JSON
+  `journey` gains each move's `key`, and skills/deal/README.md documents the
+  member.
+- **Changed:** the built-in `journey.agent.paused` reads "Waited for your OK".
+
+### The user's OK is their own journey move (capsule-cli#410)
+
+- **Added:** the user's answer to a pause is their own move, `approved` or
+  `declined`, at its own step: after the pause and before the act it allowed.
+  It is worded from the check it answered: "OK'd paying {amount}" / "Said no
+  to paying {amount}", "OK'd sharing your {classes}" / "Said no to sharing
+  your {classes}", or "OK'd it" / "Said no". A pause with no sealed answer, a
+  `confirm_limits` answer (still the `raised` move) and an answer sealed with
+  none of the user's words (`agent_card`) are not this move.
+- **Changed:** `chose` names the item when the move recorded one: "Chose
+  {item} for you".
+- **Added:** eleven `journey.*` wording keys for these moves. A pinned pack
+  needs them, or the built-in pack is used.
+
+### A tapped option's label is the user's answer (capsule-cli#416)
+
+- **Changed:** the deal skill says a tapped option's label is the user's
+  answer, passed verbatim as `--said`, and a typed answer is passed as typed.
+  `--said` is left out only for a card nobody answered in words: it is sealed
+  `agent_card`, is not the user's approval, authorizes no post, and in a typed
+  deal satisfies no ask. `deal note` already sealed it so; only the words
+  change. A post's refusal now names the tapped label as `--said`, and the
+  trail line for an `agent_card` answer no longer says "you approved this
+  card".
 
 ### A sale's listing post, and the classes its listings state (capsule-engine#187, #190)
 
@@ -255,6 +298,32 @@
   names the other classes the same way: `First time telling <recipient>
   your <class>, and no check the user approved named it. This also shares
   your <told class>, which they already have.`
+
+### An answer without your words is not what you approved (capsule-cli#421)
+
+- **Fixed:** a payment check answered with none of the user's words
+  (`agent_card`) no longer counts as what they approved in the
+  merchant-email comparison, so the deal page, the receipt email and the
+  report no longer say "You approved (the amount on the card that was
+  approved)". The row compares the charge with what the user did approve:
+  their latest approval in their own words, before or after the card, or a
+  passing check before it, otherwise their limit ("You approved (your
+  limit)"), otherwise the agreed price. After an `agent_card` answer, which
+  adopts its card's price, neither a later passing check on that price nor
+  the agreed price counts; with no limit, the row shows no "You approved"
+  line and the charge is not flagged `charged_differs`. A charge over the
+  limit is still flagged.
+
+### Tests
+
+- The composed presentation golden is built with the real `deal compose`
+  (a buyer gathers both halves of one deal over evidence requests) and
+  rendered with `presentation build` (capsule-cli#149).
+- CI splits the race pass across six jobs and the plain pass across two, as
+  the plugin tests outgrew go test's per-package timeouts (capsule-cli#403).
+  A History privacy test now reads the History as JSON, field by field,
+  skipping only cryptographic fields, so a random digest no longer reads as
+  another deal's amount.
 
 ## v0.1.0-rc20
 
