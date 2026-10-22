@@ -141,6 +141,18 @@
           ],
           "description": "Who receives a share, by role: the deal's counterparty, which is fulfilling_merchant when the user buys (or the deal states no party_role) and buyer when the user sells; platform (a marketplace, booking site or mail relay, disclosing_to platform); third_party (anyone else); or self. A role, never a name. Absent when not a share or not known."
         },
+        "repeat_disclosures": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          },
+          "description": "On a share: the classes of disclosing already told to this same recipient, in this deal or another, from capsulectl's telling memory. Class names only, never who was told. Absent when there is no memory."
+        },
+        "recipient_told_before": {
+          "type": "boolean",
+          "description": "On a share: true when this recipient was told any class of the user's data before, in this deal or another, from capsulectl's telling memory; never whether the user dealt with them. Absent when there is no memory."
+        },
         "channel": {
           "description": "The channel kind in use at this check (x-deal-v0's channel set): the latest sealed message's, else first contact's. A kind, never an address.",
           "anyOf": [

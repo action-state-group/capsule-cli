@@ -11,7 +11,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "012826a53400795094888aee26428550be2ddf36ba174375e74f84432dadedec"
+      "digest": "5c1a380a61be092d049d98b5a187ae1fd0e5f0b5d0ef5405cd87cf41aed1a774"
     },
     "chain_root": {
       "type": "record",
@@ -23,7 +23,7 @@
         "rel": "checks",
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "012826a53400795094888aee26428550be2ddf36ba174375e74f84432dadedec"
+        "digest": "5c1a380a61be092d049d98b5a187ae1fd0e5f0b5d0ef5405cd87cf41aed1a774"
       }
     ],
     "body": {
@@ -43,7 +43,7 @@
       "judge": {
         "kind": "rules"
       },
-      "proposed_action_digest": "012826a53400795094888aee26428550be2ddf36ba174375e74f84432dadedec",
+      "proposed_action_digest": "5c1a380a61be092d049d98b5a187ae1fd0e5f0b5d0ef5405cd87cf41aed1a774",
       "task_authority_ref": {
         "type": "record",
         "digest_alg": "SHA-256",
@@ -65,5 +65,5 @@
       ]
     }
   },
-  "expected_digest": "ef03752e0bf86b683d83bea52ec2c820c26a6f22191a2674d4567257fb1f9dce"
+  "expected_digest": "7398e41f846de4b5b44606d05966b76f7a7408460dfe80ce85c2bfbbd5fb9408"
 }

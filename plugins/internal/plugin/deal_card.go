@@ -41,6 +41,8 @@ type cardFacts struct {
 	// told are the details given for the first time, as a sentence lists
 	// them.
 	told string
+	// payee is who the card names, for a reason that says them.
+	payee string
 	// askedOver is an over-limit purchase the user named themselves, item
 	// and price: the rule still asks, as an exception.
 	askedOver bool
@@ -90,10 +92,18 @@ var cardReasons = []cardReason{
 	{key: "card.why.representation_outside", rules: []string{ruleRepresentationOutside}},
 	// To someone dealt with before, only what is new to them.
 	{key: "card.why.first_disclosure", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
-		return hasRule(r, "first_disclosure") && (r.Recipient == nil || r.Recipient.FirstTime || f.told == "")
+		// Never "first time" for a class that went before without the
+		// user's OK (Recipient.Unapproved): only a true first telling.
+		return hasRule(r, "first_disclosure") && (r.Recipient == nil ||
+			(len(r.Recipient.Unapproved) == 0 && (r.Recipient.FirstTime || f.told == "")))
 	}},
 	{key: "card.why.first_disclosure.some", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
-		return hasRule(r, "first_disclosure") && r.Recipient != nil && !r.Recipient.FirstTime && f.told != ""
+		return hasRule(r, "first_disclosure") && r.Recipient != nil && (!r.Recipient.FirstTime || len(r.Recipient.Unapproved) > 0) && f.told != ""
+	}},
+	// Only classes that went before without the user's OK: why it asks
+	// although it went out.
+	{key: "card.why.unapproved_before", when: func(r dealCheckResult, _ dealSnapshot, _ cardFacts) bool {
+		return hasRule(r, "first_disclosure") && r.Recipient != nil && len(r.Recipient.Unapproved) > 0 && len(r.Recipient.First) == 0
 	}},
 	{key: "card.why.not_asked", rules: []string{"not_asked"}},
 	{key: "card.why.agent_picked", rules: []string{"agent_picked"}},
@@ -144,7 +154,7 @@ func cardWhy(w cli.Wording, r dealCheckResult, snap dealSnapshot, f cardFacts) [
 		if row.key == "card.why.first_disclosure.some" {
 			what = f.told
 		}
-		text := w.Line(row.key, cli.V{"limit": f.limit, "floor": f.floor, "what": what, "days": strconv.Itoa(cli.RulesHistoryDays)})
+		text := w.Line(row.key, cli.V{"limit": f.limit, "floor": f.floor, "what": what, "days": strconv.Itoa(cli.RulesHistoryDays), "payee": f.payee})
 		if text != "" && !slices.Contains(why, text) {
 			why = append(why, text)
 		}
@@ -251,6 +261,11 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	if snap.Action == "cancel" && state.saleThread() && state.buyerAccepted && !state.calledOff {
 		ask.Question = w.Line("card.question.cancel.acceptance", vals)
 	}
+	// A class that went to them before without the user's OK is said as
+	// that, never as a first time.
+	if q := unapprovedQuestion(w, r, snap, payee, where); q != "" {
+		ask.Question = q
+	}
 	if r.Verdict == "deny" {
 		// A deny takes no yes: it says what will not happen, and why it
 		// stopped (u245: "will not do it and will not ask").
@@ -271,7 +286,7 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	// pickup area needs none).
 	acceptanceOld := isShare(snap.Action) && snap.DisclosingTo == "counterparty" && slices.ContainsFunc(snap.Disclosing, func(c string) bool { return c != "pickup_area" }) &&
 		state.saleThread() && state.acceptanceOutsideHistory(state.historySince) && acceptanceRuleVerdict(r.Rules) != ""
-	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), askedOver: askedOver, acceptanceOld: acceptanceOld, acceptanceRefused: acceptanceOld && acceptanceRuleVerdict(r.Rules) == "fail"})
+	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), payee: payee, askedOver: askedOver, acceptanceOld: acceptanceOld, acceptanceRefused: acceptanceOld && acceptanceRuleVerdict(r.Rules) == "fail"})
 	ask.GoodToKnow = cardGoodToKnow(w, r)
 	// A share before a payment is the first of two stops; the charge is not
 	// known yet, so the line names none.
@@ -282,6 +297,44 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 		ask.Options = append(ask.Options, cli.AskOption{Label: o.Label, Choice: o.ID})
 	}
 	return ask
+}
+
+// unapprovedQuestion is a share's question when a class in it went to the
+// recipient before without the user's OK, or "". A yes shares every class
+// the check names, so it names them all: the leaked ones, then those they
+// already have and those new to them, each clause only when it has a class.
+func unapprovedQuestion(w cli.Wording, r dealCheckResult, snap dealSnapshot, payee, where string) string {
+	rc := r.Recipient
+	if rc == nil || len(rc.Unapproved) == 0 || !isShare(snap.Action) {
+		return ""
+	}
+	v := cli.V{"what": disclosureWords(w, rc.Unapproved), "payee": payee, "where": where}
+	key := "card.question.share.unapproved_before"
+	switch others := alsoShares(w, rc.Repeat, rc.First); {
+	case others != "":
+		key = "card.question.share.unapproved_also"
+		if len(rc.Unapproved)+len(rc.Repeat)+len(rc.First) > 2 {
+			key += ".all"
+		}
+		v["others"] = others
+	case len(rc.Unapproved) > 1:
+		key += ".several"
+	}
+	return w.Line(key, v)
+}
+
+// alsoShares names, beside classes that went without the user's OK, the
+// other classes a telling gives: those they already have, then those new to
+// them, each clause only when it has a class; "" when there are none.
+func alsoShares(w cli.Wording, told, fresh []string) string {
+	var others []string
+	if len(told) > 0 {
+		others = append(others, w.Line("card.question.share.also_told", cli.V{"told": disclosureWords(w, told)}))
+	}
+	if len(fresh) > 0 {
+		others = append(others, w.Line("card.question.share.also_new", cli.V{"new": disclosureWords(w, fresh)}))
+	}
+	return strings.Join(others, ", and ")
 }
 
 func isShare(action string) bool { return action == "share_contact" || action == "share_credentials" }

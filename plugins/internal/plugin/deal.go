@@ -1686,12 +1686,51 @@ func dealNoteCommand() *cobra.Command {
 						name = recipientName(*d.Who)
 					}
 					words := make([]string, len(first))
+					// leaked and fresh are held; told and named (new, named by
+					// the approved check) are given beside them.
+					var leaked, fresh, told, named []string
 					for i, c := range first {
 						words[i] = classWord(c)
+						if memory.leakedBefore(keys, c) {
+							leaked = append(leaked, c)
+						} else {
+							fresh = append(fresh, c)
+						}
+					}
+					// A class outside first was named by the approved check or
+					// told already: one they have (told, or gone before without
+					// the user's OK) is "which they already have", any other
+					// "which would be new to them".
+					for _, f := range d.Fields {
+						if slices.Contains(first, f.Class) || slices.Contains(told, f.Class) || slices.Contains(named, f.Class) {
+							continue
+						}
+						if memory.toldBefore(keys, f.Class) != "" || memory.leakedBefore(keys, f.Class) {
+							told = append(told, f.Class)
+						} else {
+							named = append(named, f.Class)
+						}
+					}
+					// Never "first time" for a class that went to them before
+					// without the user's OK; the note names every class the
+					// telling gives, as the card does.
+					// In every branch the note names each class the telling gives.
+					w, _ := cli.ActiveWording(s.p)
+					reason := "First time telling " + name + " your " + strings.Join(words, ", ") + ", and no check the user approved named it"
+					others := alsoShares(w, told, named)
+					if others != "" {
+						reason += "."
+					}
+					if len(leaked) > 0 {
+						reason = w.Line("disclosure.held.unapproved", cli.V{"name": name, "what": disclosureWords(w, leaked)})
+						others = alsoShares(w, told, append(slices.Clone(fresh), named...))
+					}
+					if others != "" {
+						reason += " " + w.Line("disclosure.held.also", cli.V{"others": others})
 					}
 					if err := cli.Output(c, map[string]any{
 						"deal_id": dealID, "proceed": false, "verdict": "pause", "held": first,
-						"reason": "First time telling " + name + " your " + strings.Join(words, ", ") + ", and no check the user approved named it",
+						"reason": reason,
 						"next":   `do not send it; run deal check with "disclosing" naming ` + strings.Join(first, ", ") + `, show its card, and note this again only once the user approves`,
 					}); err != nil {
 						return err
@@ -2089,6 +2128,23 @@ func dealCheckCommand() *cobra.Command {
 					return err
 				}
 			}
+			// The telling memory, read before the check is sealed: a share
+			// carries what it says about the recipient to the rules checker
+			// (capsule-engine#188). The check itself tells no one, so reading
+			// it here or after sealing gives the same memory.
+			memory, err := s.counterpartyMemory(ctx, dealID)
+			if err != nil {
+				return err
+			}
+			snap.Telling = nil
+			if strings.HasPrefix(snap.Action, "share_") {
+				who := legState.who
+				if snap.Who != nil {
+					who = overlayWho(who, *snap.Who)
+				}
+				_, keys := checkRecipient(snap, who, open.Channel)
+				snap.Telling = memory.telling(keys, snap.Disclosing)
+			}
 			// snapshot -> seal
 			snapped, err := s.seal(ctx, dealID, events, dealEvent{Kind: "snapshot", Snapshot: &snap})
 			if err != nil {
@@ -2114,9 +2170,7 @@ func dealCheckCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if state.memory, err = s.counterpartyMemory(ctx, dealID); err != nil {
-				return err
-			}
+			state.memory = memory
 			state.materiality = predicate
 			// An earlier card promised to ask again before paying: the pay
 			// pauses for it, so the user's answer is sealed (capsule-cli#344).

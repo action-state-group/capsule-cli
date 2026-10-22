@@ -26,7 +26,7 @@
         "prev": {
           "type": "deal-record",
           "digest_alg": "SHA-256",
-          "digest": "4b8217aeef91331f12b3bb733a62e063e52aa527eca7f6b04f484cfd4ebcef59"
+          "digest": "5e33bb504f8f2f2603444485ff258bfc113b6cc6e193078b15a82f8ec0efb7ee"
         },
         "baseline_ref": {
           "type": "deal-record",
@@ -51,7 +51,7 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "f7804308595957c0ceda2e5c6376ca821b0bf1693096a23eec85e39faa8519c2"
+      "digest": "35f9a6814a63c1b674ebabe8ed4febb5f7e02d59893c9f1b65340ab1446b522a"
     },
     "chain_root": {
       "type": "record",
@@ -63,13 +63,13 @@
         "rel": "supersedes",
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "4b8217aeef91331f12b3bb733a62e063e52aa527eca7f6b04f484cfd4ebcef59"
+        "digest": "5e33bb504f8f2f2603444485ff258bfc113b6cc6e193078b15a82f8ec0efb7ee"
       },
       {
         "rel": "source",
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "f7804308595957c0ceda2e5c6376ca821b0bf1693096a23eec85e39faa8519c2"
+        "digest": "35f9a6814a63c1b674ebabe8ed4febb5f7e02d59893c9f1b65340ab1446b522a"
       }
     ],
     "body": {

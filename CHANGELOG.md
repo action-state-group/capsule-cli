@@ -144,6 +144,46 @@
   (`card.question.represent.attributed`, `card.why.attributed_claim`) and the
   deal skill follow.
 
+### A share check says what was told to its recipient before (capsule-engine#188)
+
+- **Added:** two rule inputs on a share check, from capsulectl's memory of
+  what it told whom: `repeat_disclosures`, the classes of `disclosing`
+  already told to this same recipient, in this deal or another, and
+  `recipient_told_before`, `true` when this recipient was told any class
+  before. Told means a sealed disclosure, never a dealing: a party the user
+  dealt with but told nothing was not told before. Both are absent when there
+  is no memory or the recipient has no identity to remember them by. They are
+  in the x-deal-v0 and typed `proposed-action-v0` schemas, the profile
+  (PROFILE.md section 8 and `check_profile.py`'s typed seller fixture) and the
+  rules checker's input, so the everyday rules (0.3.8) need not ask again
+  for a repeat. The input file cannot set them.
+- **Changed:** a share the user refused, or data given without authority (a
+  disclosure sealed `authority: none`), is not told: only what was given
+  with the user's rules or approval counts, for both rule inputs and for
+  capsulectl's own first-telling pause.
+- **Changed:** a class that went to a recipient before without the user's
+  OK is never called a first time. The check's difference reads `Your
+  <class> already went to <recipient> without your OK`. The card asks `Your
+  <class> already went to <recipient> without your OK. Share it again?`
+  (`card.question.share.unapproved_before`; `… Share them again?`,
+  `.several`, for more than one such class), with the reason `it went out
+  without your OK, so I can't count <recipient> as already told`
+  (`card.why.unapproved_before`). When the share gives other classes too,
+  the question names every one: `Your <class> already went to <recipient>
+  without your OK. This also shares your <told class>, which they already
+  have, and your <new class>, which would be new to them. Share both?`
+  (`card.question.share.unapproved_also`, `… Share all of them?` with
+  `.all` for more than two classes; the clauses `card.question.share.also_told`
+  and `card.question.share.also_new` appear only when they have a class),
+  whatever reasons the card keeps; `first time they get your <new class>`
+  stays the reason. A held disclosure note naming such a class says `You
+  haven't OK'd telling <recipient> your <class> before.`
+  (`disclosure.held.unapproved`), then `This also shares …`
+  (`disclosure.held.also`) with the same clauses. A held first telling
+  names the other classes the same way: `First time telling <recipient>
+  your <class>, and no check the user approved named it. This also shares
+  your <told class>, which they already have.`
+
 ## v0.1.0-rc20
 
 ### The receipt moments of the Muse chat contract (capsule-cli#373)

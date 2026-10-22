@@ -290,6 +290,11 @@ type dealSnapshot struct {
 	// the party its check was about.
 	DisclosingTo string   `json:"disclosing_to,omitempty"`
 	Recipient    *dealWho `json:"recipient,omitempty"`
+	// Telling is, on a share, what the telling memory said about its
+	// recipient when the check was made, sealed as the rule inputs
+	// repeat_disclosures and recipient_told_before. Set by `deal check`,
+	// never from the input file.
+	Telling *dealTelling `json:"telling,omitempty"`
 	// FeeMinor is, on a cancel only, a fee the cancellation costs, recorded
 	// as its own amount: never the amount a spend cap evaluates (spend_minor
 	// is 0 on every cancel).
@@ -1557,19 +1562,17 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 	// line on the card; the first time a class of the user's data goes to
 	// them is a pause, naming them and the class; a repeat is a note.
 	if s.memory != nil {
-		receiver := who
-		if namedRecipient(snap.DisclosingTo) && snap.Recipient != nil {
-			receiver = *snap.Recipient
-		}
-		keys := counterpartyKeys(receiver, s.open.Channel)
-		if snap.DisclosingTo == "platform" && snap.Recipient != nil {
-			keys = platformKeys(receiver)
-		}
+		receiver, keys := checkRecipient(snap, who, s.open.Channel)
 		r.Recipient = &dealRecipient{Name: recipientName(receiver), FirstTime: s.memory.firstTime(keys)}
 		r.Recipient.NewProfile = s.memory.newProfile() && !s.memory.newProfileNoted
 		for _, class := range sortedClasses(snap.Disclosing) {
 			if s.memory.toldBefore(keys, class) != "" {
 				r.Recipient.Repeat = append(r.Recipient.Repeat, class)
+				continue
+			}
+			if s.memory.leakedBefore(keys, class) {
+				r.Recipient.Unapproved = append(r.Recipient.Unapproved, class)
+				add("who", "first_disclosure", class, fmt.Sprintf("Your %s already went to %s without your OK", classWord(class), r.Recipient.Name))
 				continue
 			}
 			r.Recipient.First = append(r.Recipient.First, class)

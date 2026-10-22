@@ -37,6 +37,7 @@ func TestTheCardCollapsesReasons(t *testing.T) {
 		{"r02 and r06 to someone first dealt with: the rules asked, beside the first dealing", dealCheckResult{Differences: diffs("rules_escalate", "rules_escalate"), Recipient: firstTime}, pay, []string{"your rules ask for your OK on this", "first time dealing with this seller"}},
 		{"a first dealing alone is no reason", dealCheckResult{Differences: diffs("terms_changed"), Recipient: firstTime}, pay, []string{"the terms changed since you agreed"}},
 		{"every first telling is one reason", dealCheckResult{Differences: diffs("first_disclosure", "first_disclosure", "first_disclosure", "first_disclosure", "rules_escalate", "rules_escalate"), Recipient: firstTime}, share, []string{"first time they get your details"}},
+		{"a class that went out without the OK is never a first time", dealCheckResult{Differences: diffs("first_disclosure"), Recipient: &dealRecipient{Name: "shop", FirstTime: true, Unapproved: []string{"email"}}}, share, []string{"it went out without your OK, so I can't count shop as already told"}},
 		{"over the limit", dealCheckResult{Differences: diffs("over_limit")}, pay, []string{"it's over your $2 limit"}},
 		{"payee changed comes first", dealCheckResult{Differences: diffs("first_disclosure", "payee_or_contact_changed", "over_limit")}, pay, []string{"the payee or contact changed since you first talked", "it's over your $2 limit"}},
 		{"a login and a code are one reason", dealCheckResult{Differences: diffs("verification_code_request", "credentials_requested")}, share, []string{"they asked for a login or a code"}},
@@ -50,12 +51,12 @@ func TestTheCardCollapsesReasons(t *testing.T) {
 		{"a rail with no way back, as agreed", dealCheckResult{Differences: diffs("irreversible_rail")}, pay, []string{"money paid this way can't be pulled back"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, cardWhy(w, tc.r, tc.snap, cardFacts{limit: "$2"}))
+			assert.Equal(t, tc.want, cardWhy(w, tc.r, tc.snap, cardFacts{limit: "$2", payee: "shop"}))
 		})
 	}
 	// Every row says something in the built-in pack.
 	for _, row := range cardReasons {
-		assert.NotEmpty(t, w.Line(row.key, cli.V{"limit": "$2", "floor": "$1", "what": "size small", "days": "31"}), row.key)
+		assert.NotEmpty(t, w.Line(row.key, cli.V{"limit": "$2", "floor": "$1", "what": "size small", "days": "31", "payee": "shop"}), row.key)
 	}
 	// A purchase the user named, over their limit, is asked as an exception.
 	assert.Equal(t, []string{"you asked for this one, but it's over your $2 limit"}, cardWhy(w, dealCheckResult{Differences: diffs("over_limit")}, pay, cardFacts{limit: "$2", askedOver: true}))
