@@ -212,6 +212,7 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 		ask.Question, ask.WhyKey = cardDenial(w, snap, vals), "card.why.label_stopped"
 	}
 	ask.Facts = cardFactsLine(w, state, snap, r, terms, money)
+	ask.Terms = cardTermsLine(w, state, snap, r)
 	askedOver := false
 	if total, field := limitBound(terms, snap); total != nil {
 		askedOver = askedException(state.intent.Asked, terms, *total, field)

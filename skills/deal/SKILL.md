@@ -498,7 +498,8 @@ capsulectl. Follow them; never make up your own narration of a step.
 - **Show the check's own card, once.** A paused or denied check returns
   the card (`approval_text`, the same text as its `say`, and its parts in
   `ask`): a tag (PAUSED FOR YOU, NOT ALLOWED BY YOUR RULES, or STOP: CHECK
-  THIS), one question, the money facts, "Why I'm asking:" with at most two
+  THIS), one question, the money facts, "Saying yes also agrees to" when the
+  check changes what was agreed, "Why I'm asking:" with at most two
   reasons, at most one "Good to know:", and "Next:" when another stop
   follows. Whenever you ask the user to go ahead, and always on a `pause` or
   a `deny`, show it exactly as returned, once, in your own message or ahead

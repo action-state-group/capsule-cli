@@ -128,6 +128,21 @@ func TestAProfilePinsOnlyAValidCompletePack(t *testing.T) {
 	assert.ErrorContains(t, pinWording(&p, incomplete), "is not complete")
 	assert.Equal(t, complete, p.Wording.Path, "a refused pin leaves the pin as it was")
 
+	// The terms line is what an approval binds to: a pack can't hide it.
+	for key, text := range map[string]string{
+		"card.terms.label":          "Saying yes also agrees.",
+		"card.terms.price":          "a new price",
+		"card.terms.was":            "(was)",
+		"card.terms.not_refundable": " ",
+		"card.terms.condition":      "{name}: {value} {extra}",
+	} {
+		hiding := writePack(t, func(e map[string]string) { e[key] = text })
+		assert.ErrorContains(t, pinWording(&p, hiding), "could hide a term a yes agrees to: "+key, key)
+	}
+	extra := writePack(t, func(e map[string]string) { e["card.terms.label"] = "Saying yes also agrees to {terms}. {extra}" })
+	assert.ErrorContains(t, pinWording(&p, extra), "could hide a term a yes agrees to: card.terms.label")
+	assert.Equal(t, complete, p.Wording.Path, "a refused pin leaves the pin as it was")
+
 	invalid := filepath.Join(t.TempDir(), "bad.json")
 	require.NoError(t, os.WriteFile(invalid, []byte(`{"entries":{}}`), 0o600))
 	assert.ErrorContains(t, pinWording(&p, invalid), "not a valid aac.wording-pack/v0")
@@ -165,6 +180,16 @@ func TestAnUnusablePinnedPackFallsBackToTheWholeBuiltInPack(t *testing.T) {
 	assert.Equal(t, "built-in", w.Source)
 	assert.Contains(t, problem, "say.delivered")
 	assert.Equal(t, BuiltinWording().Entries["say.open.first"], w.Line("say.open.first", nil))
+
+	// A pack pinned before this release could word the terms line away:
+	// it is not used.
+	hiding := writePack(t, func(e map[string]string) { e["card.terms.label"] = "Saying yes also agrees to {terms}. {extra}" })
+	raw, err = os.ReadFile(hiding)
+	require.NoError(t, err)
+	w, problem = ActiveWording(Profile{Wording: ProfileWording{Path: hiding, SHA256: packDigest(raw)}})
+	assert.Equal(t, "built-in", w.Source)
+	assert.Contains(t, problem, "could hide a term a yes agrees to: card.terms.label")
+	assert.Equal(t, "Saying yes also agrees to x.", w.Line("card.terms.label", V{"terms": "x"}))
 
 	out := Speak(map[string]any{}, stale, func(w Wording) Narration { return Narration{Voice: VoiceLine, Say: w.Line("say.delivered", nil)} })
 	assert.Equal(t, "built-in", out["wording"], "the result says the built-in pack spoke")

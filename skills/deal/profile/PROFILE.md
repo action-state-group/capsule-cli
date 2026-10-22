@@ -706,6 +706,12 @@ A verifier holding one deal's records in `seq` order checks:
     of the latest `options`), `raised` (only more than the limits in force), `narrowed` (any
     other change). An intent that changes nothing and proposes nothing is refused. `proposed`
     marks an intent that asks for more, whatever its move; it applies only on `confirm_limits`.
+    An approval agrees only to the terms its card named: on a check that states
+    `rule_inputs_version` 3 (section 8), the card names each term the check changes from what was
+    agreed, and an approved proceed adopts a changed term, with the value the check proposed (a
+    dropped term included), only when the card it was given on named it, so a `standing_intent`
+    approval adopts none and the next check carrying that term still counts it. An approval of a
+    check without it adopts the checked terms whole, as before.
 
 ## 7. Outcome conventions: `completed | mismatch | open`
 
@@ -758,7 +764,8 @@ sealed before carries none and re-derives unchanged.
 | `recipient_role` | A share's recipient, by role: `fulfilling_merchant` (`disclosing_to: counterparty`, on a deal where the user buys or states no `party_role`), `buyer` (`disclosing_to: counterparty`, where the user sells), `platform` (`disclosing_to: platform`: a marketplace, booking site or mail relay between the user and the counterparty) or `third_party` (`disclosing_to: other`). `self` is in the set and never derived. Absent on other actions. |
 | `channel`, `first_contact_channel` | Channel kinds (the `channel` set above): the one in use at this check (the latest sealed message's, else first contact's) and the baseline's. |
 | `upfront_amount_minor` | The deposit the check's own terms state (`terms.deposit_minor`), in minor units. Never inferred. |
-| `material_fields_changed`, `material_fields_basis` | How many of `terms.item`, `terms.quantity`, `terms.price_minor`, `terms.deposit_minor`, `terms.currency`, `terms.when`, `terms.place`, `terms.conditions`, `recourse.rail`, `recourse.refundable`, `who.payee` the proposal (the deal as it stands with the check on top) changes from what was agreed (payee: the first contact's payee, else its name), and the hex SHA-256 of that list's JCS bytes. On a check sealed since rule inputs version 2, "what was agreed" is the leg's (section 6 rule 13): a quantity either side leaves out is 1, a place counts only when both state it and a refinement of the same place (a postal code or region added) is no change, and the way to pay counts only once something was agreed about it with that leg. |
+| `material_fields_changed`, `material_fields_basis` | How many of `terms.item`, `terms.quantity`, `terms.price_minor`, `terms.deposit_minor`, `terms.currency`, `terms.when`, `terms.place`, `terms.conditions`, `recourse.rail`, `recourse.refundable`, `who.payee` the proposal (the deal as it stands with the check on top) changes from what was agreed (payee: the first contact's payee, else its name), and the hex SHA-256 of that list's JCS bytes. On a check sealed since rule inputs version 2, "what was agreed" is the leg's (section 6 rule 13): a quantity either side leaves out is 1, a place counts only when both state it and a refinement of the same place (a postal code or region added) is no change, and the way to pay counts only once something was agreed about it with that leg. What was agreed is updated by each approval by the rule of the check it answers (`rule_inputs_version`). |
+| `rule_inputs_version` | `3` on a check sealed under the rule that an approval of it adopts only the terms its card named (section 6 rule 13); it then carries `material_fields_changed` and `material_fields_basis`. Absent on a check sealed before, which re-derives and verifies as before. In a deal that mixes versions, each approval adopts by its own check's rule. |
 | `offer_fields_changed`, `offer_fields_basis` | How many of the offer fields (`terms.item`, `terms.quantity`, `terms.price_minor`, `terms.deposit_minor`, `terms.conditions`, `recourse.refundable`) the user's own words state (`intent.asked`) that the proposal does not match, and the list's digest. Only the keys the user's words state are compared: a key they never state is not a change. Both are absent when the user's words state none of them. |
 | `task_authority_ref` | Typed records only: the task authority in force, as on the evaluation. |
 

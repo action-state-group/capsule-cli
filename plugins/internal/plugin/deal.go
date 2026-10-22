@@ -2134,7 +2134,8 @@ func dealCheckCommand() *cobra.Command {
 			card := checkCard(words, state, snap, result, events)
 			if result.Verdict == "pass" {
 				// A pass asks nothing: its text is the question and the facts.
-				card.Tag, card.Why, card.GoodToKnow, card.Next = "", nil, "", ""
+				// Nor does it agree to any term: nothing it carries is adopted.
+				card.Tag, card.Terms, card.Why, card.GoodToKnow, card.Next = "", "", nil, "", ""
 			}
 			approvalText := cli.AskText(words, card)
 			if result.Verdict != "pass" {

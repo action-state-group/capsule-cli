@@ -951,6 +951,10 @@ type dealState struct {
 	// (the way to pay is then the leg's own, adopted on approval).
 	chose      string
 	legStarted bool
+	// checked is, by check sealed under rule inputs "3" on, the proposal it
+	// evaluated and the terms its card named: what an approval of it may
+	// adopt (adoptChecked).
+	checked map[string]checkedTerms
 }
 
 func foldDeal(events []sealedEvent) (dealState, error) {
@@ -964,6 +968,9 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		s.leg, s.legFirst, s.route, s.routeSet = true, o.Who, o.Who, true
 	}
 	var lastSnapshot *dealSnapshot
+	// lastRuleInputs is the rule inputs version lastSnapshot was sealed
+	// under: an approval adopts by its own check's rule.
+	var lastRuleInputs string
 	for _, se := range events[1:] {
 		e := se.Event
 		switch e.Kind {
@@ -1004,7 +1011,14 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 				s.recourse = overlayRecourse(s.recourse, *e.Change.Recourse)
 			}
 		case "snapshot":
-			lastSnapshot = e.Snapshot
+			lastSnapshot, lastRuleInputs = e.Snapshot, e.RuleInputs
+		case "check":
+			if c, ok := s.checkedOn(se, lastSnapshot, lastRuleInputs); ok {
+				if s.checked == nil {
+					s.checked = map[string]checkedTerms{}
+				}
+				s.checked[se.CapsuleID] = c
+			}
 		case "approval":
 			// The user's confirmation of proposed limits is the new version of
 			// them; the note it answers stays sealed as the proposal.
@@ -1028,7 +1042,14 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 			// Who is never adopted: it is always compared with first contact.
 			// Approving what the agent may tell the buyer approves those words
 			// only, never a change of terms (a represent check judges none).
+			// On a check sealed under rule inputs "3" or later, it adopts a
+			// change only when the card it was given on named it
+			// (adoptsNamedTermsOnly).
 			if e.Approval.Proceed && e.Approval.Reason == "" && lastSnapshot != nil && lastSnapshot.Action != representAction {
+				if adoptsNamedTermsOnly(lastRuleInputs) {
+					s.adoptChecked(*e.Approval, lastSnapshot)
+					continue
+				}
 				if lastSnapshot.Terms != nil {
 					s.agreed = overlayTerms(s.agreed, *lastSnapshot.Terms)
 				}

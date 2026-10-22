@@ -185,6 +185,7 @@ func TestDealCheckApprovalTextCarriesTheFindingAndWhenItGoesStale(t *testing.T) 
 	assert.Equal(t, "DEMO · STOP: CHECK THIS\n"+
 		"Pay $200 to M. Torres (coastal-jet-rentals.example) for the jet ski rental?\n"+
 		"$200 · by Zelle · not refundable\n"+
+		"Saying yes also agrees to paying by Zelle (was card) and no refunds (was refunds allowed).\n"+
 		"Why I'm asking: the payee or contact changed since you first talked; the way to get your money back changed.\n"+
 		"Good to know: they have 2 jet skis for Saturday (not checked).", check["approval_text"])
 	assert.NotContains(t, check["approval_text"], "5m", "when the check goes stale is not in the prompt")

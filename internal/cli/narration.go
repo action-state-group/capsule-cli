@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -51,12 +52,14 @@ type Narration struct {
 }
 
 // Ask is a card the agent shows the user (voice ask). On a check it is the
-// sealed card's parts; Options are the check's sealed options. Reply
-// "words" says the answer is the user's own words rather than a button.
+// sealed card's parts; Options are the check's sealed options. Terms names
+// each term a yes agrees to beside the action itself. Reply "words" says
+// the answer is the user's own words rather than a button.
 type Ask struct {
 	Tag        string      `json:"tag"`
 	Question   string      `json:"question"`
 	Facts      string      `json:"facts,omitempty"`
+	Terms      string      `json:"terms,omitempty"`
 	Why        []string    `json:"why,omitempty"`
 	GoodToKnow string      `json:"good_to_know,omitempty"`
 	Next       string      `json:"next,omitempty"`
@@ -177,6 +180,28 @@ func (w Wording) missingKeys() []string {
 	return missing
 }
 
+// hidingTerms is the first card.terms entry of w that could hide a term
+// from the card's terms line, or "": an approval adopts exactly the terms
+// that line names (capsule-cli#380), so each entry must say something and
+// use exactly the built-in entry's placeholders. One missing drops a term;
+// one extra is never filled, and Line then says nothing at all.
+func (w Wording) hidingTerms() string {
+	builtin := BuiltinWording().Entries
+	placeholders := func(text string) []string {
+		return slices.Compact(slices.Sorted(slices.Values(placeholder.FindAllString(text, -1))))
+	}
+	for _, k := range slices.Sorted(maps.Keys(builtin)) {
+		if !strings.HasPrefix(k, "card.terms.") {
+			continue
+		}
+		got := w.Entries[k]
+		if strings.TrimSpace(got) == "" || !slices.Equal(placeholders(got), placeholders(builtin[k])) {
+			return k
+		}
+	}
+	return ""
+}
+
 func packDigest(raw []byte) string {
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
@@ -210,14 +235,18 @@ func pinWording(p *Profile, path string) error {
 	if missing := w.missingKeys(); len(missing) > 0 {
 		return InputError(fmt.Sprintf("--wording %s is not complete: it lacks %d of the built-in pack's keys, first %s", path, len(missing), missing[0]))
 	}
+	if k := w.hidingTerms(); k != "" {
+		return InputError(fmt.Sprintf("--wording %s could hide a term a yes agrees to: %s must say something and use exactly the built-in entry's placeholders", path, k))
+	}
 	p.Wording = ProfileWording{Path: abs, SHA256: packDigest(raw)}
 	return nil
 }
 
 // ActiveWording is the pack p speaks with, and why the pinned one is not
-// used when it is not: missing, changed since it was pinned, or lacking a
-// key a later release added. Then the whole built-in pack is used, never a
-// mix of the two.
+// used when it is not: missing, changed since it was pinned, lacking a key
+// a later release added, or wording the card's terms line so it could hide
+// a term a yes agrees to (hidingTerms). Then the whole built-in pack is
+// used, never a mix of the two.
 func ActiveWording(p Profile) (Wording, string) {
 	if p.Wording.Path == "" {
 		return BuiltinWording(), ""
@@ -235,6 +264,9 @@ func ActiveWording(p Profile) (Wording, string) {
 	}
 	if missing := w.missingKeys(); len(missing) > 0 {
 		return BuiltinWording(), "the pinned wording pack lacks keys this release uses: " + strings.Join(missing, ", ")
+	}
+	if k := w.hidingTerms(); k != "" {
+		return BuiltinWording(), "the pinned wording pack could hide a term a yes agrees to: " + k
 	}
 	w.Source = "pinned"
 	return w, ""
@@ -519,10 +551,11 @@ func NarrateWith(c *cobra.Command, build func(Wording) Narration) Narration {
 }
 
 // AskText is a card as the lines the user reads: the tag, the question,
-// the facts, why it is asked, what is good to know and what comes next.
+// the facts, the terms a yes agrees to, why it is asked, what is good to
+// know and what comes next.
 // Button labels are not part of it.
 func AskText(w Wording, a Ask) string {
-	lines := []string{a.Tag, a.Question, a.Facts}
+	lines := []string{a.Tag, a.Question, a.Facts, a.Terms}
 	if len(a.Why) > 0 {
 		key := a.WhyKey
 		if key == "" {

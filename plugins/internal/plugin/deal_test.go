@@ -156,6 +156,7 @@ func TestDealAskedVsDidBooking(t *testing.T) {
 	assert.Equal(t, "PAUSED FOR YOU\n"+
 		"Confirm the double room, 2 nights with Example Hotel Shinjuku (hotel.example)?\n"+
 		"$760 · by card · refundable · over your $400 limit\n"+
+		"Saying yes also agrees to a price of $760 (was $380) and check out: 2026-10-07 (was 2026-10-05).\n"+
 		"Why I'm asking: it's over your $400 limit; it's not what you asked for.\n"+
 		"Good to know: I chose item double room, 2 nights for you.", check["card"])
 	assert.Equal(t, "Not what you asked: check_out 2026-10-05 → 2026-10-07\n"+
@@ -363,6 +364,7 @@ func TestDealRefundabilityChangePauses(t *testing.T) {
 	assert.Equal(t, "PAUSED FOR YOU\n"+
 		"Confirm the double room, 2 nights with Example Hotel Shinjuku (hotel.example)?\n"+
 		"$380 · by card · not refundable · within your $400 limit\n"+
+		"Saying yes also agrees to no refunds (was refunds allowed).\n"+
 		"Why I'm asking: the way to get your money back changed.\n"+
 		"Good to know: I chose item double room, 2 nights for you.", check["card"])
 	assert.Equal(t, "No longer refundable (agreed as refundable)", differenceTexts(check))
