@@ -1101,16 +1101,19 @@ func domainWords(signer, apex string) string {
 // amount on the last check that went ahead, else the user's limit, else the
 // agreed price. limit is true when only a ceiling is known. An answer with no
 // words of the user's (agent_card) is not their approval (capsule-cli#421):
-// every renderer calls this amount "You approved", so it is skipped, and
-// after one the agreed price is not theirs either, since such an answer
-// adopts the terms its card named.
+// every renderer calls this amount "You approved", so it is skipped. Such an
+// answer adopts the terms its card named, so after one neither a passing
+// check (checked against those terms) nor the agreed price is theirs either.
 func approvedAmount(events []sealedEvent, state dealState) (amount *int64, currency, basis string, steps []string, limit bool) {
 	byID := map[string]sealedEvent{}
 	for _, se := range events {
 		byID[se.CapsuleID] = se
 	}
 	currency = state.agreed.Currency
-	cardAnswered := false
+	cardAt := slices.IndexFunc(events, func(se sealedEvent) bool {
+		a := se.Event.Approval
+		return a != nil && a.Proceed && a.Reason == "" && a.Approver == "agent_card"
+	})
 	for i := len(events) - 1; i >= 0; i-- {
 		a := events[i].Event.Approval
 		// In typed records a check that needed no approval authorizes the
@@ -1120,11 +1123,10 @@ func approvedAmount(events []sealedEvent, state dealState) (amount *int64, curre
 				a = &dealApproval{Check: act.AuthorizedBy, Proceed: true, Approver: "standing_intent"}
 			}
 		}
-		if a != nil && a.Proceed && a.Reason == "" && a.Approver == "agent_card" {
-			cardAnswered = true
+		if a == nil || !a.Proceed || a.Reason != "" || a.Approver == "agent_card" {
 			continue
 		}
-		if a == nil || !a.Proceed || a.Reason != "" {
+		if a.Approver == "standing_intent" && cardAt >= 0 && i > cardAt {
 			continue
 		}
 		check, ok := byID[a.Check]
@@ -1150,10 +1152,10 @@ func approvedAmount(events []sealedEvent, state dealState) (amount *int64, curre
 	if state.intent.MaxTotalMinor != nil {
 		return state.intent.MaxTotalMinor, currency, dealBasisYourLimit, []string{events[0].CapsuleID}, true
 	}
-	if state.agreed.PriceMinor != nil && !cardAnswered {
+	if state.agreed.PriceMinor != nil && cardAt < 0 {
 		return state.agreed.PriceMinor, currency, "the agreed price", []string{events[0].CapsuleID}, false
 	}
-	return nil, "", "", nil, false
+	return nil, currency, "", nil, false
 }
 
 // merchantReport sets every sealed merchant email beside what was approved,

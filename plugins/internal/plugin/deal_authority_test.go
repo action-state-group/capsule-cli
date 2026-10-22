@@ -289,6 +289,14 @@ func TestApprovedAmountSkipsAnAnswerWithoutWords(t *testing.T) {
 	assert.Equal(t, dealBasisYourLimit, basis)
 	assert.True(t, limit)
 
+	// A check that passes only against the terms that answer adopted is not
+	// what the user allowed either.
+	require.Equal(t, "pass", checkPay(t, id, 480)["verdict"])
+	amount, basis, _ = approved(id)
+	require.NotNil(t, amount)
+	assert.EqualValues(t, 500, *amount)
+	assert.Equal(t, dealBasisYourLimit, basis)
+
 	id = open(`,"max_total_minor":500`)
 	answer(id, 480, "Pay $4.80")
 	amount, basis, limit = approved(id)
@@ -311,6 +319,11 @@ func TestApprovedAmountSkipsAnAnswerWithoutWords(t *testing.T) {
 	answer(id, 480, "")
 	amount, _, _ = approved(id)
 	assert.Nil(t, amount)
+	events := chainSteps(t, id)
+	state, err := foldDeal(events)
+	require.NoError(t, err)
+	_, currency, _, _, _ := approvedAmount(events, state)
+	assert.Equal(t, "USD", currency, "the deal's currency still formats what the agent paid")
 }
 
 // The rule still asks when the user named this very purchase over their
