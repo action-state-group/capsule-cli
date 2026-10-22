@@ -38,6 +38,81 @@ type dealListTotals struct {
 	Sales    int               `json:"sales"`
 	Outcomes dealListOutcomes  `json:"outcomes"`
 	Money    []dealListMoneyIn `json:"money"`
+	// Checks and Anomalies are always present on a range, every key listed
+	// with its zero (capsule-cli#385): an absent member means a capsulectl
+	// that does not count them, never zero.
+	Checks    dealListChecks `json:"checks"`
+	Anomalies map[string]int `json:"anomalies"`
+}
+
+// dealListChecks counts the checks sealed in the range. Verdicts and Rules
+// each partition them: Verdicts by the verdict sealed, Rules by what the
+// profile's rules said (dealRulesAnswer). A word outside the known set is
+// counted under its own key, never dropped. Rulesets counts the checks whose
+// rules were evaluated, by the ruleset the checker reported.
+type dealListChecks struct {
+	Verdicts map[string]int    `json:"verdicts"`
+	Rules    map[string]int    `json:"rules"`
+	Rulesets []dealListRuleset `json:"rulesets"`
+}
+
+type dealListRuleset struct {
+	RulesetID        string `json:"ruleset_id"`
+	DefinitionDigest string `json:"definition_digest"`
+	Checks           int    `json:"checks"`
+}
+
+func newDealListChecks() dealListChecks {
+	return dealListChecks{
+		Verdicts: map[string]int{"pass": 0, "pause": 0, "deny": 0},
+		Rules:    map[string]int{"evaluated": 0, "partly_unanswered": 0, "not_evaluated": 0, "not_configured": 0, "unrecorded": 0},
+		Rulesets: []dealListRuleset{},
+	}
+}
+
+// newDealListAnomalies lists the act- and disclosure-level anomaly kinds of
+// `deal report`, each at zero. Counterparty-side kinds and the causes of a
+// check's pause are not counted: the verdicts count the pauses.
+func newDealListAnomalies() map[string]int {
+	return map[string]int{"skipped_check": 0, "unsealed_approval": 0, "differs_from_check": 0, "unapproved_disclosure": 0}
+}
+
+// dealRulesAnswer is what a check's sealed rules answered: unrecorded on a
+// check sealed before there was a rules member; the status when they were
+// not evaluated or not configured; when evaluated, partly_unanswered if the
+// overall verdict or a measured rule's finding is not_evaluable (a rule the
+// ruleset only declares never counts), else evaluated.
+func dealRulesAnswer(r *dealRules) string {
+	if r == nil {
+		return "unrecorded"
+	}
+	if r.Status != "evaluated" {
+		return r.Status
+	}
+	if r.Verdict == "not_evaluable" {
+		return "partly_unanswered"
+	}
+	for _, f := range r.Findings {
+		if f.Verdict == "not_evaluable" && !isDeclaredRule(f) {
+			return "partly_unanswered"
+		}
+	}
+	return "evaluated"
+}
+
+// actAnomalyKind is the anomaly an act sealed without a valid check is, as
+// `deal report` names it; "" for a checked act.
+func actAnomalyKind(a dealAct) string {
+	if !a.Unchecked {
+		return ""
+	}
+	switch a.Rule {
+	case "differs_from_check":
+		return "differs_from_check"
+	case "answer_was_not_proceed", "no_sealed_approval", "approval_already_used":
+		return "unsealed_approval"
+	}
+	return "skipped_check"
 }
 
 type dealListOutcomes struct {
@@ -162,7 +237,8 @@ func stepTime(ev dealEvent) (time.Time, error) {
 // is listed when it, or a buyer thread opened under it, has a step in the
 // range.
 func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
-	r := dealListRange{Deals: []dealListing{}, Totals: dealListTotals{Money: []dealListMoneyIn{}}}
+	r := dealListRange{Deals: []dealListing{}, Totals: dealListTotals{Money: []dealListMoneyIn{}, Checks: newDealListChecks(), Anomalies: newDealListAnomalies()}}
+	rulesets := map[dealListRuleset]int{}
 	if !b.since.IsZero() {
 		s := b.since.Format(time.RFC3339Nano)
 		r.Since = &s
@@ -197,7 +273,10 @@ func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
 				break
 			}
 			rd.asOf, rd.at = append(rd.asOf, se), append(rd.at, t)
-			rd.active = rd.active || b.contains(t)
+			if b.contains(t) {
+				rd.active = true
+				r.Totals.count(se.Event, rulesets)
+			}
 		}
 		if open := l.events[0].Event.Open; rd.active && open != nil && open.Sale != "" {
 			activeSales[open.Sale] = true
@@ -288,8 +367,37 @@ func dealListInRange(logs []dealLog, b dealListBounds) (dealListRange, error) {
 	for _, c := range curs {
 		r.Totals.Money = append(r.Totals.Money, *money[c])
 	}
+	for rs, n := range rulesets {
+		rs.Checks = n
+		r.Totals.Checks.Rulesets = append(r.Totals.Checks.Rulesets, rs)
+	}
+	sort.Slice(r.Totals.Checks.Rulesets, func(i, j int) bool {
+		a, b := r.Totals.Checks.Rulesets[i], r.Totals.Checks.Rulesets[j]
+		return a.RulesetID < b.RulesetID || a.RulesetID == b.RulesetID && a.DefinitionDigest < b.DefinitionDigest
+	})
 	r.Told = told.rows()
 	return r, nil
+}
+
+// count adds one step sealed in the range to the check and anomaly counts:
+// a check under its verdict and its rules' answer (and an evaluated one under
+// its ruleset, keyed with Checks zero), an act sealed without a valid check
+// under its kind, and a disclosure no approval covered.
+func (t *dealListTotals) count(ev dealEvent, rulesets map[dealListRuleset]int) {
+	switch {
+	case ev.Kind == "check" && ev.Check != nil:
+		t.Checks.Verdicts[ev.Check.Verdict]++
+		t.Checks.Rules[dealRulesAnswer(ev.Check.Rules)]++
+		if r := ev.Check.Rules; r != nil && r.Status == "evaluated" {
+			rulesets[dealListRuleset{RulesetID: r.RulesetID, DefinitionDigest: r.DefinitionDigest}]++
+		}
+	case ev.Kind == "act" && ev.Act != nil:
+		if kind := actAnomalyKind(*ev.Act); kind != "" {
+			t.Anomalies[kind]++
+		}
+	case ev.Kind == "disclosure" && ev.Disclosure != nil && ev.Disclosure.AuthorizedBy == "":
+		t.Anomalies["unapproved_disclosure"]++
+	}
 }
 
 // dealToldTally counts, per class, the distinct recipients told it. A

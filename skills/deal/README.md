@@ -314,6 +314,30 @@ user's own and is never sent by default.
   over with `deal report --share` is not counted. It carries classes and
   counts only, never a value or a recipient's name, and lists every class,
   so `0` says no one was told it in the range.
+- **Checks.** Every check sealed in the range, in any deal, sale or buyer
+  thread, counted twice over: once by its verdict (`pass`, `pause`,
+  `deny`), and once by what the profile's rules answered:
+  - `evaluated`: the rules checker answered every rule it measures (a rule
+    the ruleset only declares is not one);
+  - `partly_unanswered`: the rules ran, but a measured rule, or the overall
+    result, came back `not_evaluable`;
+  - `not_evaluated`: a checker is configured but gave no answer that could
+    be used (for example it failed, or reported another ruleset than the
+    one pinned);
+  - `not_configured`: the profile has no rules checker;
+  - `unrecorded`: a check sealed before checks recorded the rules.
+
+  Each set of counts adds up to the number of checks. `rulesets` counts the
+  `evaluated` and `partly_unanswered` checks by the ruleset the checker
+  reported, so a mid-period upgrade shows as two. A re-check is another
+  check.
+- **Anomalies.** The steps sealed in the range that `deal report` lists as
+  the agent's: an act sealed with no check (`skipped_check`), without a
+  sealed approval to go ahead (`unsealed_approval`), or other than what was
+  checked (`differs_from_check`, `deal report`'s `asked_vs_did` on an act),
+  and a telling no approval covered (`unapproved_disclosure`). Each act or
+  telling counts once, in the range it was sealed in. A check's pauses are
+  in its verdict, and the other side's signals are not counted.
 - **Whose view.** The output is the user's own, like `deal list --json`:
   each row's `summary` names the counterparty and repeats the user's words.
   `totals` and `disclosures` carry no name or value.
@@ -330,7 +354,13 @@ the array it always was):
     "deals": 5,
     "sales": 1,
     "outcomes": { "bought": 2, "sold": 1, "called_off": 1, "not_chosen": 0, "open": 1 },
-    "money": [ { "currency": "USD", "spent_out_minor": 627, "refunded_in_minor": 0, "sold_for_minor": 190000 } ]
+    "money": [ { "currency": "USD", "spent_out_minor": 627, "refunded_in_minor": 0, "sold_for_minor": 190000 } ],
+    "checks": {
+      "verdicts": { "deny": 0, "pass": 3, "pause": 1 },
+      "rules": { "evaluated": 3, "not_configured": 0, "not_evaluated": 0, "partly_unanswered": 0, "unrecorded": 1 },
+      "rulesets": [ { "ruleset_id": "asg/everyday/0.3.7", "definition_digest": "c1ce…", "checks": 3 } ]
+    },
+    "anomalies": { "differs_from_check": 0, "skipped_check": 1, "unapproved_disclosure": 0, "unsealed_approval": 0 }
   },
   "disclosures": [ { "class": "address", "recipients": 4, "to_sellers": 3, "to_buyers": 1, "to_others": 0 } ]
 }
@@ -346,6 +376,12 @@ the array it always was):
   `totals.sales` counts sales. `money` has one entry per currency, in order
   (`""` for amounts sealed with no currency);
   `sold_unpriced`, when present, counts sold threads with no price sealed.
+- `totals.checks` and `totals.anomalies` are always given on a range, with
+  every key and its `0` (`rulesets` is `[]` when none ran), so a missing
+  member means a capsulectl that does not count it, never zero. Keys are in
+  name order; `rulesets` is in `ruleset_id`, then `definition_digest`,
+  order. A verdict or rules answer this list does not name is counted under
+  its own word, never dropped.
 - `disclosures`: one entry per class, in class order.
 
 ## Report
