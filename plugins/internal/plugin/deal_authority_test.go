@@ -297,6 +297,15 @@ func TestApprovedAmountSkipsAnAnswerWithoutWords(t *testing.T) {
 	assert.EqualValues(t, 500, *amount)
 	assert.Equal(t, dealBasisYourLimit, basis)
 
+	// The user's own words after it are theirs again, and stand behind a
+	// re-check that passes on them.
+	answer(id, 490, "Pay $4.90")
+	require.Equal(t, "pass", checkPay(t, id, 490)["verdict"])
+	amount, basis, _ = approved(id)
+	require.NotNil(t, amount)
+	assert.EqualValues(t, 490, *amount)
+	assert.Equal(t, "the amount you approved at the check", basis)
+
 	id = open(`,"max_total_minor":500`)
 	answer(id, 480, "Pay $4.80")
 	amount, basis, limit = approved(id)
