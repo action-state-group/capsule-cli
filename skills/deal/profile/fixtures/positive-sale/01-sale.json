@@ -27,7 +27,8 @@
         "item": "example bicycle",
         "quantity": 1,
         "price_minor": 190000,
-        "currency": "USD"
+        "currency": "USD",
+        "handover": "in_person"
       },
       "recourse": {
         "rail": "card",
@@ -36,5 +37,5 @@
       "item_ref_commitment": "f6bd9aacf91735e696de0cab23142dfd5a1db5086deede44baaec14f83996df9"
     }
   },
-  "expected_digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+  "expected_digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
 }

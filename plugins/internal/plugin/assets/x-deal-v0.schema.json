@@ -184,7 +184,8 @@
         "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
         "when": { "type": "string", "minLength": 1, "maxLength": 64 },
         "place": { "type": "string", "minLength": 1, "maxLength": 80 },
-        "conditions": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 200 }, "propertyNames": { "$ref": "#/$defs/token" } }
+        "conditions": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 200 }, "propertyNames": { "$ref": "#/$defs/token" } },
+        "handover": { "description": "How a sold item reaches the buyer: handed over in person (at a pickup) or shipped. A seller's term, stated only on a seller's offer or commit check and in the opening terms of a seller's deal or a sale; never where the user buys. Not a material or offer field.", "enum": ["in_person", "shipped"] }
       }
     },
     "recourse": {

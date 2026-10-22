@@ -1,0 +1,38 @@
+{
+  "fixture": "neg-typed-seller-handover-in-an-intent",
+  "expect": "invalid",
+  "description": "A seller's later intent whose asked states terms.handover: what the user asked never states it.",
+  "expected_stage": "chain",
+  "expected_error_contains": "nowhere else",
+  "chain_dir": "positive-typed-seller",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-5c2e8a1f3b7d9046",
+      "record_type": "intent",
+      "seq": 3,
+      "at": "2026-10-07T10:05:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "3aad448872a1fa11371059d0cb4be9de7e57c73eb8f802aa7eacb98adc18c1f8"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+      }
+    },
+    "body": {
+      "verbatim_commitment": "359f2def1445971325836aa365887bbb48eeb15822d874eed16685b33539effc",
+      "asked": {
+        "handover": "in_person"
+      }
+    }
+  }
+}

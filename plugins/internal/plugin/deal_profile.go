@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -318,6 +319,7 @@ func termsBody(t dealTerms) map[string]interface{} {
 	set("currency", t.Currency)
 	set("when", t.When)
 	set("place", t.Place)
+	set("handover", t.Handover)
 	if t.Quantity != 0 {
 		m["quantity"] = t.Quantity
 	}
@@ -1397,6 +1399,10 @@ func normalizeTerms(t *dealTerms) error {
 		return nil
 	}
 	t.Currency = strings.ToUpper(strings.TrimSpace(t.Currency))
+	t.Handover = strings.ToLower(strings.TrimSpace(t.Handover))
+	if t.Handover != "" && !slices.Contains(dealHandovers, t.Handover) {
+		return cli.InputError("terms.handover must be in_person or shipped")
+	}
 	for k := range t.Conditions {
 		if !tokenPattern.MatchString(k) {
 			return cli.InputError("condition names must be lowercase words joined by _: " + k)
@@ -1436,7 +1442,15 @@ func normalizeOpen(o *dealOpen) error {
 	if err := normalizeTerms(&o.Terms); err != nil {
 		return err
 	}
-	return normalizeTerms(&o.Intent.Asked)
+	if err := normalizeTerms(&o.Intent.Asked); err != nil {
+		return err
+	}
+	// The opening's terms may state the handover where the user sells; what
+	// the user asked for never does.
+	if err := sellersHandover(o.Intent.PartyRole, true, &o.Terms); err != nil {
+		return err
+	}
+	return sellersHandover(o.Intent.PartyRole, false, &o.Intent.Asked)
 }
 
 func normalizeNote(ev *dealEvent) error {

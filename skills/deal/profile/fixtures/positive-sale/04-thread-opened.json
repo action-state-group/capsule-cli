@@ -13,19 +13,19 @@
       "prev": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "3e300e584e357fd329f6ca9cf0e6751ab6e672805d291ae9b9cd99ebb1bab593"
+        "digest": "da5a33fe208f7360791b8cba62b49e78daf7c52053274a07289246b48152c00f"
       },
       "baseline_ref": {
         "type": "deal-record",
         "digest_alg": "SHA-256",
-        "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+        "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
       },
       "refs": [
         {
           "rel": "registration",
           "type": "deal-record",
           "digest_alg": "SHA-256",
-          "digest": "3e300e584e357fd329f6ca9cf0e6751ab6e672805d291ae9b9cd99ebb1bab593"
+          "digest": "da5a33fe208f7360791b8cba62b49e78daf7c52053274a07289246b48152c00f"
         }
       ]
     },
@@ -33,5 +33,5 @@
       "task_authority_commitment": "a2e04c8f833eed3419fb99fe0a2c5394680a6d1af860052dcd73a53c492991a7"
     }
   },
-  "expected_digest": "9c63755fa0701e344536779f748659e5f01a3f96eb6832d4cdfdebeeff61cf0b"
+  "expected_digest": "89cc7e938f97efd2ad00521394577a30349b48809af061ee9369012fb44ebd15"
 }

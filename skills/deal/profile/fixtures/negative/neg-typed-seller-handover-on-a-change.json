@@ -1,0 +1,41 @@
+{
+  "fixture": "neg-typed-seller-handover-on-a-change",
+  "expect": "invalid",
+  "description": "The buyer's change stating terms.handover: the seller states it on a check or the opening.",
+  "expected_stage": "chain",
+  "expected_error_contains": "nowhere else",
+  "chain_dir": "positive-typed-seller",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-5c2e8a1f3b7d9046",
+      "record_type": "detail_change",
+      "seq": 3,
+      "at": "2026-10-07T10:05:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "3aad448872a1fa11371059d0cb4be9de7e57c73eb8f802aa7eacb98adc18c1f8"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+      }
+    },
+    "body": {
+      "source": "counterparty",
+      "changed": [
+        "place"
+      ],
+      "terms": {
+        "handover": "shipped"
+      }
+    }
+  }
+}

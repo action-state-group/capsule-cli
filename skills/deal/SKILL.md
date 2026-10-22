@@ -771,6 +771,16 @@ the checkout shows them. The user's rules read both; left out, the rule on a
 non-refundable payment cannot be checked. If the checkout asks for a deposit,
 put it in `terms` as `deposit_minor`.
 
+When the user sells, state on every offer and on the commit how the buyer
+pays and how the item reaches them: `recourse` with the `rail` (for example
+`card`, `cash`, `venmo` or `zelle`) and whether it is `refundable`, and
+`"handover"` in `terms`: `"in_person"` when the buyer collects it, `"shipped"`
+when it is sent. A commit seals exactly the accepted offer's terms, so the
+offer states them first. The user's rules ask at a commit that states no
+payment method, and pass cash only when `handover` is `in_person`; cash with
+no handover stated asks too.
+`handover` is the seller's term: never state it where the user buys.
+
 Every check also returns `approval_text` (the one block you show),
 `checked_at` and `stale_after_minutes`, and `rules`: what the profile's rules
 checker said (see "Your rules" below).

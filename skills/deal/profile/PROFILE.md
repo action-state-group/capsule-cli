@@ -270,8 +270,15 @@ Field details:
   `max_total_minor`) plus an ISO 4217 `currency`. There are no floats anywhere in a record, and
   integers stay within ±(2^53 − 1).
 - **terms**: `item`, `quantity`, `price_minor`, `deposit_minor`, `currency`, `when`, `place`,
-  `conditions` (token → string). `place` is a locality ("lakeside marina"), never a street
-  address.
+  `conditions` (token → string), `handover`. `place` is a locality ("lakeside marina"), never a
+  street address. `handover` is how a sold item reaches the buyer: `in_person` (handed over at a
+  pickup) or `shipped`. It is a seller's term, stated in the terms of a seller's `offer` or
+  `commit` check (the commit rests on the offer, rule 11) and of the opening of a seller's deal
+  or a sale, and never on another check, in what the user asked (`asked`), a `detail_change` or a close's `delivered`; a
+  deal where the user buys states none. The seller rules read it at the commit (cash passes
+  only in person). It is neither a material nor an offer field, so it moves neither count nor
+  its basis (section 8). A typed record's `terms` are an open object (section 9); the same
+  members and the same `handover` rules (section 6, rule 14) apply to them.
 - **expect_close_by** (on `baseline`, optional): the day the deal is expected to close
   (YYYY-MM-DD). capsulectl seals one on every deal (by default 14 days for a purchase, 1 for a
   booking, 7 for a rental, 30 for a service) so an open deal can be listed against it.
@@ -647,7 +654,8 @@ A verifier holding one deal's records in `seq` order checks:
     holds a sale to one accepted commitment; no record carries it.
 11. **A seller commits on the accepted terms.** A seller's `commit` rests on its check, which
     seals exactly the `amount_minor`, `currency`, `terms` and `recourse` of the offer the other
-    party accepted; a commit on other terms is refused (`changed_after_acceptance`).
+    party accepted; a commit on other terms is refused (`changed_after_acceptance`). So the rail
+    (`recourse.rail`) and the handover (`terms.handover`) the commit states are the offer's.
 12. **Representations (where the user sells).** A seller's deal, or a sale and its threads,
     opened since this rule carries `ordered_representations` in its opening intent and task
     authority. It lists the representation classes the user's words order the agent to state
@@ -715,6 +723,11 @@ A verifier holding one deal's records in `seq` order checks:
     dropped term included), only when the card it was given on named it, so a `standing_intent`
     approval adopts none and the next check carrying that term still counts it. An approval of a
     check without it adopts the checked terms whole, as before.
+14. **The handover is a seller's term.** `terms.handover` (section 3's `terms`) is `in_person`
+    or `shipped`, on a deal whose `party_role` is `seller` or on a sale, and only in the terms of
+    an `offer` or `commit` check, a baseline or a sale; on any other check, in what the user
+    asked (a baseline's `intent.asked` or a later `intent`'s `asked`), a `detail_change` or an
+    outcome's `delivered` it is refused, and so is any `handover` on a deal where the user buys.
 
 ## 7. Outcome conventions: `completed | mismatch | open`
 

@@ -11,19 +11,19 @@
     "prev": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+      "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
     },
     "chain_root": {
       "type": "record",
       "digest_alg": "SHA-256",
-      "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+      "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
     },
     "refs": [
       {
         "rel": "source",
         "type": "record",
         "digest_alg": "SHA-256",
-        "digest": "d28ae85980cdb4fc0f99c44fd96efe1166905811f714fb666913699afc342f0e"
+        "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
       }
     ],
     "body": {
@@ -35,5 +35,5 @@
       ]
     }
   },
-  "expected_digest": "a3384a8bb82f07c5a3e80eb91dd8e9ce61bd5a460c9ca4bb5f032c25e396e0fb"
+  "expected_digest": "0d3ddcce45dc09d9cd0441f391c5d112959a9048e8b3d9e5fff964256edfcede"
 }

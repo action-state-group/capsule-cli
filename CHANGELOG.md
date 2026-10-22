@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### A seller states how the item reaches the buyer (capsule-engine#192)
+
+- **Added:** `terms.handover`, `in_person` or `shipped`: how a sold item
+  reaches the buyer, a closed member of the x-deal-v0 `terms` (both schema
+  copies; a typed record's `terms` stay open and the profile documents the
+  same rule for them). A seller states it on an offer and the commit that
+  rests on it, and on a sale; the seller rules read it at the commit, where
+  cash passes only in person. It is not a material or offer field, so no
+  count or basis moves.
+- **Added:** capsulectl refuses `terms.handover` on a deal where the user
+  buys, and, where the user sells, anywhere but an offer or commit check or
+  the opening (another check such as a share, pay or represent, an intent's
+  `asked`, a change, a close's `delivered`); a value other than `in_person`
+  or `shipped` is refused. Nothing is sealed. The profile checker holds the
+  same rule (PROFILE section 6, rule 14), with six negative fixtures and the
+  sale fixture stating `in_person`.
+- **Changed:** the deal skill tells the agent to state the rail and the
+  handover on a seller's offer and commit.
+
 ### A buyer's acceptance releases a seller's details only while the deal is live (capsule-engine#179)
 
 - **Added:** on a sale's thread, after the seller cancels the buyer's
