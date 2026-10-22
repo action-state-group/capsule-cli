@@ -44,11 +44,7 @@ func TestPresentationPass(t *testing.T) {
 				for format, wantID := range map[string]string{"html": f.list, "fragment": listOther, "embedded": listOther} {
 					id, err := passList(t, bundlePath, audience, format)
 					assert.Equal(t, wantID, id, "presentation list --audience %s --format %s", audience, format)
-					if wantID == "" {
-						assert.ErrorContains(t, err, "no presentation", "list refuses a bundle that does not verify")
-					} else {
-						assert.NoError(t, err)
-					}
+					assert.NoError(t, err)
 				}
 				// Packagings this tool does not build are refusals, for every bundle.
 				for _, format := range []string{"fragment", "embedded"} {
@@ -59,14 +55,6 @@ func TestPresentationPass(t *testing.T) {
 				assert.ErrorContains(t, err, "--format static is unavailable (no-document)")
 
 				b, page, err := passBuild(t, bundlePath, "--audience", audience)
-				if f.list == "" {
-					// The golden records this bundle's page as refused, and so
-					// does build.
-					require.Equal(t, "refused", meta.Page)
-					require.ErrorContains(t, err, "no page written")
-					assert.Equal(t, "not written", b.Page)
-					continue
-				}
 				require.NoError(t, err)
 				require.Equal(t, "written", b.Page)
 				require.Empty(t, b.Modules, "no plugin is installed: the page holds the built-ins only")
@@ -175,7 +163,7 @@ func passWithoutCard(t *testing.T, dir string, value map[string]interface{}, met
 type passFixture struct {
 	dir string
 	// list is the module `presentation list` selects for html, fragment and
-	// embedded; "" when it refuses the bundle (it does not verify VALID).
+	// embedded.
 	list, listOther string
 	// view is the page's own mark of the module it rendered: a data-page
 	// or data-notice value.
@@ -402,9 +390,6 @@ func TestPresentationPassFlipsLeaveTheEvidence(t *testing.T) {
 		{"depth L2", "", []string{"--depth", "L2"}, "depth L1"},
 	}
 	for _, f := range passFixtures {
-		if f.list == "" {
-			continue
-		}
 		t.Run(f.dir, func(t *testing.T) {
 			bundle := filepath.Join(presentationDir, f.dir, "bundle.json")
 			pages := map[string]string{}

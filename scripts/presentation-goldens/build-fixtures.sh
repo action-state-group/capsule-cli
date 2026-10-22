@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-fixtures.sh -- (re)build the presentation goldens' fixtures: six
+# build-fixtures.sh -- (re)build the presentation goldens' fixtures: the
 # synthetic bundles and the pages capsulectl emits for them, written to
 # internal/cli/testdata/presentation/. Run it once, when a fixture is added
 # or changed on purpose; TestPresentationGoldens then holds every later
@@ -12,7 +12,7 @@
 # refusal instead. Keys and capsule ids are fresh on every run, so a rebuild
 # rewrites every fixture.
 #
-# Needs bash, jq and python3. Writes only the fixtures' directory and its own
+# Needs bash, go, jq, perl and python3. Writes only the fixtures' directory and its own
 # temp directory.
 set -euo pipefail
 
@@ -231,7 +231,7 @@ meta 9-seller-later-evidence "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "
 # The buyer asks itself and the seller for their copies over the
 # evidence-request carrier, records both answers under the pinned keys, and
 # composes them with `deal compose`: the container's root is the composition
-# record on the buyer's own log, under its checkpoint, and each member
+# record on the buyer's compositions log for the deal, under its checkpoint, and each member
 # carries its responder's checkpoint, so `verify --bundle` says VALID
 # (capsule-cli#149). The two copies join on the deal id and agree.
 fixture 3-bilateral-composed
@@ -239,8 +239,6 @@ export CAPSULE_DEAL_CHECK_URL=
 mkdir -p buyer seller
 # side PARTY: act as that party, in its own config and directory.
 side() { export XDG_CONFIG_HOME="$work/3-bilateral-composed/$1/config"; cd "$work/3-bilateral-composed/$1"; }
-# keys: the signing and checkpoint public keys another party pins for this one.
-keys() { capsulectl profile show deal | jq -r '.TrustedKeys[0] + " " + .Checkpoint.TrustedKeys[0]'; }
 side buyer
 capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
 cat >open.json <<'JSON'
@@ -251,7 +249,9 @@ cat >open.json <<'JSON'
  "recourse": {"rail": "card", "refundable": false}}
 JSON
 id=$(capsulectl --profile deal deal open --input open.json | jq -r .deal_id)
-read -r buyer_key buyer_checkpoint < <(keys)
+# The signing and checkpoint public keys the other party pins for this one.
+buyer_key=$(capsulectl profile show deal | jq -er '.TrustedKeys[0]')
+buyer_checkpoint=$(capsulectl profile show deal | jq -er '.Checkpoint.TrustedKeys[0]')
 side seller
 capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
 cat >open.json <<'JSON'
@@ -265,27 +265,33 @@ JSON
 capsulectl --profile deal deal open --records typed --deal-id "$id" --input open.json >/dev/null
 echo '{"action": "offer", "amount_minor": 190000, "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000}}' >offer.json
 capsulectl --profile deal deal check --deal "$id" --input offer.json >/dev/null
-read -r seller_key seller_checkpoint < <(keys)
+seller_key=$(capsulectl profile show deal | jq -er '.TrustedKeys[0]')
+seller_checkpoint=$(capsulectl profile show deal | jq -er '.Checkpoint.TrustedKeys[0]')
 # ask RESPONDER KEY CHECKPOINT: the buyer asks RESPONDER for its copy, the
-# responder answers, and the buyer records the answer. Prints the request
-# record id.
+# responder answers, and the buyer records the answer. Sets record to the
+# request record id. It runs in this shell, not in $(...), so set -e stops
+# the build at the step that fails.
 ask() {
-  local dir="$work/3-bilateral-composed" record
+  local dir="$work/3-bilateral-composed"
   side buyer
   jq -n --arg id "$id" '{subject: {kind: "correlation", value: $id}, coverage: {min_freshness: {size: 1}}}' >"ask-$1.json"
-  record=$(capsulectl --profile deal deal request --request "ask-$1.json" --responder "the $1" --output "$dir/request-$1.json" | jq -r .record_id)
+  record=$(capsulectl --profile deal deal request --request "ask-$1.json" --responder "the $1" --output "$dir/request-$1.json" | jq -er .record_id)
   side "$1"
   capsulectl --profile deal deal respond --request "$dir/request-$1.json" --requester "the buyer" --output "$dir/response-$1.json" >/dev/null
   side buyer
   capsulectl --profile deal deal request --response "$dir/response-$1.json" --for "$record" --responder-key "$2" --responder-checkpoint-key "$3" >/dev/null
-  echo "$record"
 }
-own=$(ask buyer "$buyer_key" "$buyer_checkpoint")
-theirs=$(ask seller "$seller_key" "$seller_checkpoint")
+ask buyer "$buyer_key" "$buyer_checkpoint"
+own=$record
+ask seller "$seller_key" "$seller_checkpoint"
+theirs=$record
 side buyer
 capsulectl --profile deal deal compose --deal "$id" --member "$own" --member "$theirs" --output bundle.json >/dev/null
 # The page as anyone renders it: no plugin installed, no profile.
-CAPSULECTL_PLUGIN_ROOTS= XDG_CONFIG_HOME="$work/3-bilateral-composed/none" capsulectl presentation build --bundle bundle.json --out page.html >/dev/null
+# An empty CAPSULECTL_PLUGIN_ROOTS would mean the default roots, so it names
+# an empty directory.
+mkdir -p "$work/3-bilateral-composed/no-plugins"
+CAPSULECTL_PLUGIN_ROOTS="$work/3-bilateral-composed/no-plugins" XDG_CONFIG_HOME="$work/3-bilateral-composed/none" capsulectl presentation build --bundle bundle.json --out page.html >/dev/null
 cp bundle.json page.html "$out/3-bilateral-composed/"
 meta 3-bilateral-composed "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "bilateral-composed", emitted_by: "capsulectl deal compose --deal ID --member BUYER_REQUEST --member SELLER_REQUEST --output bundle.json, then capsulectl presentation build --bundle bundle.json --out page.html", rerender: "presentation-build", page: "written", verify: $v}')"
 

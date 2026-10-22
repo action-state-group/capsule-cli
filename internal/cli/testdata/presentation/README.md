@@ -32,7 +32,7 @@ through the real CLI. Run it only to change a fixture on purpose.
 | --- | --- | --- | --- |
 | `1-rules-comparison` | a `report/v1` root, three rule rows (same / different / same) citing their sealed records; record type `example.rules_compare/v0`, a neutral stand-in | `disclose --root … --html` | written |
 | `2-unilateral-receipt` | a deal receipt (`x-deal-v0`), audience `keep`, from the synthetic retail-checkout demo | `deal report --html` | written |
-| `3-bilateral-composed` | `composed/v1` of a deal's two copies: the buyer asks itself and the seller for their copies over the evidence-request carrier and composes the recorded answers. The container's root is the composition record on the buyer's log, under its checkpoint, and each member carries its responder's checkpoint, so it verifies VALID. The copies join on the deal id (a pre-agreed identifier), declared and derived `agree` | `deal compose`, then `presentation build --bundle` | written |
+| `3-bilateral-composed` | `composed/v1` of a deal's two copies: the buyer asks itself and the seller for their copies over the evidence-request carrier and composes the recorded answers. The container's root is the composition record on the buyer's compositions log for the deal, under its checkpoint, and each member carries its responder's checkpoint, so it verifies VALID. The copies join on the deal id (a pre-agreed identifier), declared and derived `agree` | `deal compose`, then `presentation build --bundle` | written |
 | `4-monthly-outcome` | a month of judged support conversations: a Result v0 root citing 32 `evaluation-report/v1` records over 8 days, opted into the outcome card (calendar, drill-down) | `book report build --card outcome` | written |
 | `5-monthly-compliance` | a month of judged sessions against an example obligations pack, opted into the EU AI Act obligations card | `book report build --card obligation` | written |
 | `6-generic-fallback` | a plain record with no report and no aggregate: the viewer's fallback | `disclose --root … --html` | written |
@@ -50,9 +50,12 @@ through the real CLI. Run it only to change a fixture on purpose.
   `presentation build --bundle` (capsule-cli#183) and capsule-viewer's composed/v1
   section, the fixture is rebuilt with `deal compose`, whose container is checkpointed,
   and gets a page (capsule-cli#149). The page shows each member, the join (declared and
-  derived) and the agreement. A checkpointed composed/v1 vector in agent-action-capsule
-  is agent-action-capsule#374. The page's own composed/v1 check reads "withheld": the browser
-  verifier does not check the members' response signatures, which `verify --bundle` does.
+  derived) and the agreement. `deal compose` derives `agree`, `one_sided` or `unjoined`
+  and never `mismatch`, so the mismatch case has no golden until agent-action-capsule
+  publishes a checkpointed composed/v1 vector (agent-action-capsule#374). The page's own
+  composed/v1 check reads "withheld", and each member's interval coverage and membership
+  read `pass (checkpoint_unverified)`: the browser verifier checks neither the members'
+  response signatures nor their checkpoints, which `verify --bundle` does.
 - **Fixtures 4 and 5 seal their Result v0 as the payload of a SQLite record.**
   `result build` seals only into a jsonl evidence book, and when these fixtures were
   taken that book's bundles left out producer signatures, so `verify --bundle` called

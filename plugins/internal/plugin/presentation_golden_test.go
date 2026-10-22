@@ -154,11 +154,6 @@ func TestPresentationGoldens(t *testing.T) {
 			require.Equal(t, meta.Verify, verdict, "verify --bundle's verdict on the fixture")
 
 			page, err := rerenderPresentationPage(t, dir, meta, bundle)
-			if meta.Page == "refused" {
-				require.Error(t, err, "the page gate must refuse this fixture's page")
-				assert.Contains(t, err.Error(), "no page written")
-				return
-			}
 			require.NoError(t, err, "the page gate must let this fixture's page through")
 			// While the vendored viewer is the one the fixture's page was
 			// emitted with, re-emitting must give that page byte for byte:
@@ -250,7 +245,8 @@ func rerenderPresentationPage(t *testing.T, dir string, meta presentationMeta, b
 		page, err := os.ReadFile(out)
 		return string(page), err
 	case "presentation-build":
-		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		// The page as anyone renders it: no plugin, no profile.
+		passIsolate(t)
 		out := filepath.Join(t.TempDir(), "page.html")
 		if _, err := invoke(t, "", "presentation", "build", "--bundle", filepath.Join(dir, "bundle.json"), "--out", out); err != nil {
 			return "", err
