@@ -236,16 +236,17 @@ func pinWording(p *Profile, path string) error {
 		return InputError(fmt.Sprintf("--wording %s is not complete: it lacks %d of the built-in pack's keys, first %s", path, len(missing), missing[0]))
 	}
 	if k := w.hidingTerms(); k != "" {
-		return InputError(fmt.Sprintf("--wording %s could hide a term a yes agrees to: %s must say something and keep the built-in entry's placeholders", path, k))
+		return InputError(fmt.Sprintf("--wording %s could hide a term a yes agrees to: %s must say something and use exactly the built-in entry's placeholders", path, k))
 	}
 	p.Wording = ProfileWording{Path: abs, SHA256: packDigest(raw)}
 	return nil
 }
 
 // ActiveWording is the pack p speaks with, and why the pinned one is not
-// used when it is not: missing, changed since it was pinned, or lacking a
-// key a later release added. Then the whole built-in pack is used, never a
-// mix of the two.
+// used when it is not: missing, changed since it was pinned, lacking a key
+// a later release added, or wording the card's terms line so it could hide
+// a term a yes agrees to (hidingTerms). Then the whole built-in pack is
+// used, never a mix of the two.
 func ActiveWording(p Profile) (Wording, string) {
 	if p.Wording.Path == "" {
 		return BuiltinWording(), ""
