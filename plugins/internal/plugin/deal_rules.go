@@ -2774,13 +2774,19 @@ func (d dealDisclosure) validate() error {
 	return nil
 }
 
-// pickupAreaTag is an HTML tag, which reads as a space in one reading of a
-// pickup_area and as nothing in the other (readsAsStreetAddress).
-var pickupAreaTag = regexp.MustCompile(`<[^<>]*>`)
+// pickupAreaTag is an HTML comment (to its end, or to the end of the text
+// when it is not closed) or tag, whose quoted attribute values may hold a
+// ">" (readsAsStreetAddress reads it three ways).
+var pickupAreaTag = regexp.MustCompile(`<!--[\s\S]*?(?:-->|$)|<(?:[^<>"']|"[^"]*"|'[^']*')*>`)
 
-// pickupAreaEmphasis are the Markdown emphasis and code characters, which
-// the second reading drops too, so "S**t**" reads "St".
-const pickupAreaEmphasis = "*_~`"
+// pickupAreaBreak is a tag that a browser draws as a break between words: a
+// line break, or the start or end of a block.
+var pickupAreaBreak = regexp.MustCompile(`(?i)^</?\s*(?:br|p|div|li|ul|ol|dl|dt|dd|tr|td|th|table|h[1-6]|hr|pre|blockquote|section|article|header|footer)\b`)
+
+// pickupAreaMarkdown is what Markdown draws as nothing: emphasis and code
+// marks, a link's or image's brackets and its target, so "S**t**",
+// "S[t]()" and "S[](x)t" read "St".
+var pickupAreaMarkdown = regexp.MustCompile("[*_~`]|!?\\[|\\]\\([^()]*\\)|\\]")
 
 // pickupAreaWord is a word of a pickup_area value as read
 // (pickupAreaReading): letters and decimal digits; an abbreviation's period
@@ -2788,18 +2794,25 @@ const pickupAreaEmphasis = "*_~`"
 var pickupAreaWord = regexp.MustCompile(`[\p{L}\p{Nd}]+`)
 
 // pickupAreaNumber is a house number: decimal digits, with an optional
-// letter ("12", "12345", "12B"), not an ordinal ("5th").
-var pickupAreaNumber = regexp.MustCompile(`^\p{Nd}+\p{L}?$`)
+// letter ("12", "12345", "12B"), not an ordinal ("5th"). A lookalike read as
+// pickupAreaEither or pickupAreaO may stand for a 1 or a 0 ("ǀ2", "1ОО"),
+// beside at least one digit.
+var pickupAreaNumber = regexp.MustCompile(`^[\p{Nd}\x{131}\x{3bf}]*\p{Nd}[\p{Nd}\x{131}\x{3bf}]*\p{L}?$`)
 
 // pickupAreaUnit is a numbered unit: "Apt 4", "Suite 200", "Ste. 3", "#5",
 // matched on the reading (pickupAreaEither may stand for an i).
-var pickupAreaUnit = regexp.MustCompile(`(?:^|[^\p{L}\p{N}])(?:apt|un[iı]t|su[iı]te|ste)\.?\s*#?\s*\p{Nd}|#\s*\p{Nd}`)
+var pickupAreaUnit = regexp.MustCompile(`(?:^|[^\p{L}\p{N}])(?:apt|un[i\x{131}]t|su[i\x{131}]te|ste)\.?\s*#?\s*\p{Nd}|#\s*\p{Nd}`)
 
-// pickupAreaEither is how the reading writes a lookalike whose skeleton is i
-// or l: TR39 reads a Greek capital iota and a Cyrillic palochka as l, so
-// either letter may be meant, and the word lists take it as both
-// (pickupAreaIs). A plain ASCII i or l is only itself, so "in" is never "ln".
-const pickupAreaEither = 'ı'
+// pickupAreaEither is how the reading writes a lookalike from another script
+// whose skeleton is i or l: TR39 reads a Greek capital iota and a Cyrillic
+// palochka as l, so either letter may be meant (or a 1), and the word lists
+// take it as both (pickupAreaIs). A plain ASCII i or l is only itself, and
+// so is a compatibility form of one (fullwidth ｉ), so "in" is never "ln".
+// pickupAreaO is the same for a lookalike whose skeleton is o (or a 0).
+const (
+	pickupAreaEither = '\u0131' // ı, dotless i
+	pickupAreaO      = '\u03bf' // ο, Greek omicron
+)
 
 // pickupAreaKeys is a word list.
 func pickupAreaKeys(words ...string) map[string]bool {
@@ -2811,12 +2824,12 @@ func pickupAreaKeys(words ...string) map[string]bool {
 }
 
 // pickupAreaIs is whether a word of the reading is one of words: the same
-// letters, where pickupAreaEither stands for i or l.
+// letters, where pickupAreaEither stands for i or l and pickupAreaO for o.
 func pickupAreaIs(word string, words map[string]bool) bool {
 	if words[word] {
 		return true
 	}
-	if !strings.ContainsRune(word, pickupAreaEither) {
+	if !strings.ContainsAny(word, string([]rune{pickupAreaEither, pickupAreaO})) {
 		return false
 	}
 	for w := range words {
@@ -2831,7 +2844,7 @@ func eitherMatches(word, w string) bool {
 	i := 0
 	for _, r := range word {
 		c := rune(w[i])
-		if r != c && !(r == pickupAreaEither && (c == 'i' || c == 'l')) {
+		if r != c && !(r == pickupAreaEither && (c == 'i' || c == 'l')) && !(r == pickupAreaO && c == 'o') {
 			return false
 		}
 		i++
@@ -2864,9 +2877,11 @@ var pickupAreaDistances = pickupAreaKeys(
 // Pkwy"), or a numbered unit ("Apt 4", "#5"). The agent picks the class
 // label, so an address labelled pickup_area would reach everyone a public
 // area may go to. The value is read so that how it is written cannot hide
-// the shape (pickupAreaReading): escapes decoded, then read twice, with HTML
-// tags as spaces, and with tags and Markdown emphasis dropped; either
-// reading that looks like an address refuses it. A ZIP, a street named
+// the shape (pickupAreaReading): escapes decoded, then read three ways, with
+// every HTML tag as a space; as drawn, with a break tag as a space, any
+// other tag and what Markdown draws as nothing dropped; and with every tag
+// and that Markdown dropped. Any reading that looks like an address refuses
+// it. A ZIP, a street named
 // without a number before it ("Main St corridor", "St. Louis, Ward 3"), a
 // number with no street type ("1600 Broadway") and a number after the
 // street ("Hauptstraße 7") pass: the guard catches the common shape, not
@@ -2874,30 +2889,38 @@ var pickupAreaDistances = pickupAreaKeys(
 func readsAsStreetAddress(v string) bool {
 	v = decodeEscapes(v)
 	spaced := pickupAreaTag.ReplaceAllString(v, " ")
-	joined := strings.Map(func(r rune) rune {
-		if strings.ContainsRune(pickupAreaEmphasis, r) {
-			return -1
+	drawn := pickupAreaMarkdown.ReplaceAllString(pickupAreaTag.ReplaceAllStringFunc(v, func(tag string) string {
+		if pickupAreaBreak.MatchString(tag) {
+			return " "
 		}
-		return r
-	}, pickupAreaTag.ReplaceAllString(v, ""))
-	return streetAddressShape(pickupAreaReading(spaced)) || streetAddressShape(pickupAreaReading(joined))
+		return ""
+	}), "")
+	joined := pickupAreaMarkdown.ReplaceAllString(pickupAreaTag.ReplaceAllString(v, ""), "")
+	for _, reading := range []string{spaced, drawn, joined} {
+		if streetAddressShape(pickupAreaReading(reading)) {
+			return true
+		}
+	}
+	return false
 }
 
 // pickupAreaReading is v as the street-address guard reads it, so a street
 // type or a unit cannot slip past by how it is written: what draws nothing
-// (ignorable) and every mark (\p{M}: nonspacing, spacing and enclosing,
-// such as U+20DD) read as nothing; every separator (\p{Z}) and space as a
-// space; any script's decimal digit as its ASCII digit; a vertical stroke
-// (pipeLike) as pickupAreaEither; a letter outside ASCII as its TR39
-// confusable skeleton (confusableSkeleton) when that is plain letters and
-// digits, so a Cyrillic Ѕ reads s and a fullwidth Ｓ reads s, with an i or l
-// in it read as pickupAreaEither; everything else folded (foldDecoded:
-// compatibility forms). Then lower case.
+// (ignorable, and a control character other than a space) and every mark
+// (\p{M}: nonspacing, spacing and enclosing, such as U+20DD) read as
+// nothing; every separator (\p{Z}) and space as a space; any script's
+// decimal digit as its ASCII digit; a vertical stroke (pipeLike) as
+// pickupAreaEither. A letter outside ASCII reads as its compatibility fold
+// when that is plain ASCII (fullwidth Ｓ and ｍ, math 𝐒, an accented é),
+// and otherwise as its TR39 confusable skeleton (confusableSkeleton) when
+// that is plain letters and digits, so a Cyrillic Ѕ reads s, with an i or
+// l in it read as pickupAreaEither and an o as pickupAreaO. Everything else
+// is folded (foldDecoded). Then lower case.
 func pickupAreaReading(v string) string {
 	var b strings.Builder
 	for _, r := range v {
 		switch {
-		case unicode.Is(unicode.M, r) || ignorable(r):
+		case unicode.Is(unicode.M, r) || ignorable(r) || (unicode.Is(unicode.Cc, r) && !unicode.IsSpace(r)):
 		case unicode.Is(unicode.Z, r) || unicode.IsSpace(r):
 			b.WriteByte(' ')
 		case unicode.Is(unicode.Nd, r):
@@ -2906,10 +2929,19 @@ func pickupAreaReading(v string) string {
 		case pipeLike(r):
 			b.WriteRune(pickupAreaEither)
 		case r > 0x7f && unicode.IsLetter(r):
+			// A compatibility form of an ASCII letter is that letter; the
+			// skeleton would read a fullwidth ｍ as rn.
+			if f := foldDecoded(string(r)); f != "" && isASCIIAlnum(f) {
+				b.WriteString(f)
+				break
+			}
 			if sk := confusableSkeleton(r); sk != "" && isASCIIAlnum(sk) {
 				b.WriteString(strings.Map(func(c rune) rune {
-					if c == 'i' || c == 'l' {
+					switch unicode.ToLower(c) {
+					case 'i', 'l':
 						return pickupAreaEither
+					case 'o':
+						return pickupAreaO
 					}
 					return c
 				}, sk))
