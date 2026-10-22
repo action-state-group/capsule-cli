@@ -472,7 +472,8 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 
 // historyTexts is everything a History file says that a reader could take a
 // value from, so a check that a value is absent reads all of it except the
-// cryptographic fields, found by where they sit, not by their shape: a 64-hex
+// bundle's own cryptographic fields, outside every disclosed payload (an
+// entry of a disclosures map, read whole, whatever its field names): a 64-hex
 // digest under a field that holds one (historyDigestFields), a digest map key
 // under memberships or disclosures, and the nonce of a deal-history log_id. A
 // record's hex signature envelope is read decoded to its bytes; any other hex
@@ -489,8 +490,18 @@ func historyTexts(t *testing.T, raw []byte) []string {
 	digest := regexp.MustCompile(`^[0-9a-f]{64}$`)
 	hexBytes := regexp.MustCompile(`^(?:[0-9a-f]{2})+$`)
 	var out []string
-	readString := func(key, v string) {
+	// readString reads one key or value; inPayload is anywhere inside a
+	// disclosed payload (an entry of a disclosures map), where a field name
+	// is the producer's or the user's and nothing is skipped.
+	readString := func(key, v string, inPayload bool) {
 		switch {
+		case inPayload:
+			out = append(out, v)
+			if len(v) >= 16 && hexBytes.MatchString(v) {
+				b, err := hex.DecodeString(v)
+				require.NoError(t, err)
+				out = append(out, string(b))
+			}
 		case historyDigestFields[key] && digest.MatchString(v):
 			// a digest: no value to read
 		case key == "log_id" && historyLogIDOfDigest.MatchString(v):
@@ -509,29 +520,29 @@ func historyTexts(t *testing.T, raw []byte) []string {
 			out = append(out, v)
 		}
 	}
-	var walk func(key string, v any)
-	walk = func(key string, v any) {
+	var walk func(key string, v any, inPayload bool)
+	walk = func(key string, v any, inPayload bool) {
 		switch v := v.(type) {
 		case map[string]any:
 			for k, e := range v {
-				if !(digest.MatchString(k) && (key == "memberships" || key == "disclosures")) {
-					readString("", k)
+				if inPayload || !(digest.MatchString(k) && (key == "memberships" || key == "disclosures")) {
+					readString("", k, inPayload)
 				}
-				walk(k, e)
+				walk(k, e, inPayload || key == "disclosures")
 			}
 		case []any:
 			for _, e := range v {
-				walk(key, e)
+				walk(key, e, inPayload)
 			}
 		case string:
-			readString(key, v)
+			readString(key, v, inPayload)
 		case json.Number:
 			out = append(out, v.String())
 		default:
 			out = append(out, fmt.Sprint(v))
 		}
 	}
-	walk("", doc)
+	walk("", doc, false)
 	return out
 }
 
@@ -607,6 +618,19 @@ func TestHistoryTextsSkipOnlyDigests(t *testing.T) {
 	// recipient, text (decoded), the selection key (decoded), price_minor,
 	// log_id
 	assert.Equal(t, 5, hits, "%q", more)
+	// Inside a disclosed payload a reserved name is the user's: nothing is
+	// skipped there, while the same names outside one still are.
+	val := "170000" + strings.Repeat("a", 58)
+	inside := historyTexts(t, []byte(`{"disclosures":{"`+strings.Repeat("ab", 32)+`":{"agent_input":{"terms":{"conditions":{`+
+		`"amount":"`+val+`","capsule_id":"`+val+`","log_id":"deal-history/`+val+`","signature":"`+hex.EncodeToString([]byte("Avery 170000"))+`",`+
+		`"memberships":{"`+val+`":1}}}}}},"capsule_id":"`+val+`","memberships":{"`+val+`":1}}`))
+	got := 0
+	for _, s := range inside {
+		got += strings.Count(s, "170000")
+	}
+	// amount, capsule_id, log_id, the signature (raw hex has none; decoded:
+	// 1) and the memberships key inside the payload; none outside it.
+	assert.Equal(t, 5, got, "%q", inside)
 	sig := historyTexts(t, []byte(`{"signature":"`+hex.EncodeToString([]byte("Avery 170000"))+`"}`))
 	assert.Contains(t, sig, "Avery 170000", "a signature envelope is read decoded")
 	found := 0
