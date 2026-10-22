@@ -51,20 +51,24 @@ func TestTaxWithinTheLimitIsNoChange(t *testing.T) {
 	}
 }
 
-// A condition first carried on an approved non-pay check is counted at
-// that check, where r09 asks, before the approval adopts it into what was
-// agreed; the pay check carrying it again is then no change.
-func TestAConditionAdoptedByAnApprovedShareIsCountedAtTheShare(t *testing.T) {
+// A condition first carried on a non-pay check is counted at that check,
+// but r09 does not apply there: material_fields_changed/1.1.0 leaves
+// disclosure.personal out, and this share pauses only for its first
+// disclosure. Approving it adopts the condition into what was agreed, so
+// the pay check carrying it again counts no change and nothing asks about
+// it. This pins today's behaviour; capsule-cli#380 changes it (an approval
+// adopts only the terms its card named), and this test flips with it.
+func TestAConditionOnAnApprovedShareIsAdoptedWithoutAnAsk(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name"],"terms":{"conditions":{"shipping":"Free shipping"}}}`))
 	require.Equal(t, "pause", share["verdict"], share["card"])
 	_, err := answer(t, id, share["check_id"].(string), "yes", shownCard(t, share["card"].(string)))
 	require.NoError(t, err)
 	sealed, _, _ := ruleInputs(t, id, freeShippingPay)
-	assert.Equal(t, float64(0), sealed["material_fields_changed"], "adopted by the approval")
+	assert.Equal(t, float64(0), sealed["material_fields_changed"], "adopted by the share's approval (capsule-cli#380)")
 	bodies := checkBodies(t, id)
 	require.Len(t, bodies, 2)
-	assert.Equal(t, float64(1), bodies[0]["material_fields_changed"], "the share that first carries it is a change of terms")
+	assert.Equal(t, float64(1), bodies[0]["material_fields_changed"], "measured at the share, where r09 does not apply")
 }
 
 // Free shipping the seller's change brought in, not stated on the pay
