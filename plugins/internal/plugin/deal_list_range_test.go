@@ -128,6 +128,14 @@ func TestDealListRangeStatement(t *testing.T) {
 		// and the cancellation's fee; the refund is its own figure. The
 		// bicycle is sold at the price its close sealed.
 		Money: []dealListMoneyIn{{Currency: "USD", SpentOutMinor: 627 + 627 + 100, RefundedInMinor: 627, SoldForMinor: 185000}},
+		// Checked: both stickers' pays and the bicycle's offer, and the
+		// marketplace bike's telling, paused for the user's nod; no rules
+		// checker is configured. The cancellation was sealed with no
+		// check, and the second telling had no approval left to use.
+		Checks: dealListChecks{Verdicts: map[string]int{"pass": 3, "pause": 1, "deny": 0},
+			Rules:    map[string]int{"evaluated": 0, "partly_unanswered": 0, "not_evaluated": 0, "not_configured": 4, "unrecorded": 0},
+			Rulesets: []dealListRuleset{}},
+		Anomalies: map[string]int{"acted_against_answer": 0, "skipped_check": 1, "unsealed_approval": 0, "differs_from_check": 0, "unapproved_disclosure": 1, "unapproved_representation": 0},
 	}, r.Totals)
 
 	told := toldByClass(r)
@@ -169,7 +177,11 @@ func TestDealListRangeSpansTheBoundary(t *testing.T) {
 	assert.Equal(t, "sale", got[d.sale].Kind)
 	assert.Equal(t, "open", got[d.thread].Result, "sold in October")
 	assert.Equal(t, dealListTotals{Deals: 3, Sales: 1, Outcomes: dealListOutcomes{Open: 3},
-		Money: []dealListMoneyIn{{Currency: "USD", SpentOutMinor: 627}}}, r.Totals)
+		Money: []dealListMoneyIn{{Currency: "USD", SpentOutMinor: 627}},
+		Checks: dealListChecks{Verdicts: map[string]int{"pass": 1, "pause": 0, "deny": 0},
+			Rules:    map[string]int{"evaluated": 0, "partly_unanswered": 0, "not_evaluated": 0, "not_configured": 1, "unrecorded": 0},
+			Rulesets: []dealListRuleset{}},
+		Anomalies: newDealListAnomalies()}, r.Totals)
 
 	// A bound is exact: a step at --since is in the range, one at --until
 	// is not. The spanning deal's close was sealed at 2026-10-03T10:00:00Z.
@@ -208,9 +220,12 @@ func TestDealListRangeSpansTheBoundary(t *testing.T) {
 // class told to no one.
 func TestDealListRangeEmpty(t *testing.T) {
 	statementStore(t)
-	r, _ := listRange(t, "--since", "2026-01-01", "--until", "2026-02-01")
+	r, raw := listRange(t, "--since", "2026-01-01", "--until", "2026-02-01")
 	assert.Empty(t, r.Deals)
-	assert.Equal(t, dealListTotals{Money: []dealListMoneyIn{}}, r.Totals)
+	assert.Equal(t, dealListTotals{Money: []dealListMoneyIn{}, Checks: newDealListChecks(), Anomalies: newDealListAnomalies()}, r.Totals)
+	// Present with every key at zero, so an absent member means not counted.
+	assert.Contains(t, raw, `"checks":{"verdicts":{"deny":0,"pass":0,"pause":0},"rules":{"evaluated":0,"not_configured":0,"not_evaluated":0,"partly_unanswered":0,"unrecorded":0},"rulesets":[]}`)
+	assert.Contains(t, raw, `"anomalies":{"acted_against_answer":0,"differs_from_check":0,"skipped_check":0,"unapproved_disclosure":0,"unapproved_representation":0,"unsealed_approval":0}`)
 	require.Len(t, r.Told, len(disclosureClasses))
 	for _, row := range r.Told {
 		assert.Equal(t, dealListTold{Class: row.Class}, row)

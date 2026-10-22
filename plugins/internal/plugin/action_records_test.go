@@ -290,6 +290,17 @@ func TestTypedCardAnswerDoesNotAnswerAnAsk(t *testing.T) {
 	assert.Equal(t, "ask_needs_your_words", paid["rule"])
 	assert.Equal(t, "card_answer", bodyOf(chainRecords(t, id)[card["capsule_id"].(string)])["authority"])
 	checkerPasses(t, id)
+	// The check was made: the act went ahead with no approval of the
+	// user's, in the receipt and in a period's counts alike.
+	var kinds []string
+	for _, a := range dealRun(t, "report", "--deal", id)["anomalies"].([]any) {
+		kinds = append(kinds, a.(map[string]any)["kind"].(string))
+	}
+	assert.Contains(t, kinds, "unsealed_approval")
+	assert.NotContains(t, kinds, "skipped_check")
+	r, _ := listRange(t, "--since", "2000-01-01")
+	assert.Equal(t, 1, r.Totals.Anomalies["unsealed_approval"])
+	assert.Equal(t, 0, r.Totals.Anomalies["skipped_check"])
 }
 
 // The user's answer to an ask is bound to what they were shown.

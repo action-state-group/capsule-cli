@@ -230,6 +230,9 @@ func TestAnUnauthorizedRepresentationIsSealedUnchecked(t *testing.T) {
 			assert.NotContains(t, body, "authority_basis")
 			_, export := exportRecords(t, a)
 			checkProfile(t, export)
+			// A period counts it once, whatever the rule.
+			r, _ := listRange(t, "--since", "2000-01-01")
+			assert.Equal(t, 1, r.Totals.Anomalies["unapproved_representation"])
 		})
 	}
 }
