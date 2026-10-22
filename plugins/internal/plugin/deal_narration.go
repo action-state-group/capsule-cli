@@ -277,11 +277,11 @@ var idLike = regexp.MustCompile(`[_@/]|^[^\s]+\.[A-Za-z]{2,}$`)
 
 // isFirstReceipt is whether the step just sealed (the last of events) is the
 // profile's first receipt moment: the deal's only act or final close, and no
-// other deal has an act or a close. It is read from the sealed steps alone;
-// nothing records that a receipt was shown. Another deal's act or close
-// counts even when it is a seller's or left the deal open, so the lines are
-// never said twice. A seller's acts (an offer, accepting one) are not
-// receipt moments: a seller's first receipt is its thread's close.
+// other deal has a buyer's act or a close. It is read from the sealed steps
+// alone; nothing records that a receipt was shown. Another deal's close
+// counts even when it left the deal open, so the lines are never said twice.
+// A seller's acts (an offer, accepting one) are not receipt moments, here or
+// in another deal: a seller's first receipt is its thread's close.
 func (s *dealSession) isFirstReceipt(ctx context.Context, dealID string, events []sealedEvent) bool {
 	seller := dealRole(events) == dealRoleSeller
 	if seller && events[len(events)-1].Event.Kind == "act" {
@@ -301,8 +301,23 @@ func (s *dealSession) isFirstReceipt(ctx context.Context, dealID string, events 
 	if n != 1 {
 		return false
 	}
-	others, err := s.index.steps(ctx, stepFilter{Kinds: []string{"act", "close"}, ExceptDeal: dealID})
-	return err == nil && len(others) == 0
+	others, err := s.index.steps(ctx, stepFilter{Kinds: []string{"open", "act", "close"}, ExceptDeal: dealID})
+	if err != nil {
+		return false
+	}
+	sellers := map[string]bool{}
+	for _, st := range others {
+		var ev dealEvent
+		if st.Kind == "open" && json.Unmarshal([]byte(st.Local), &ev) == nil && ev.Open != nil && ev.Open.Intent.PartyRole == dealRoleSeller {
+			sellers[st.DealID] = true
+		}
+	}
+	for _, st := range others {
+		if st.Kind == "close" || st.Kind == "act" && !sellers[st.DealID] {
+			return false
+		}
+	}
+	return true
 }
 
 // nothingDoneLine is a called-off purchase's proof line: the receipt shows

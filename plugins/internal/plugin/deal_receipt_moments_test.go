@@ -213,3 +213,22 @@ func TestAnEndedSaleListsAsEnded(t *testing.T) {
 	dealRun(t, "sale", "close", "--sale", sale)
 	assert.Regexp(t, `^[^:]+: listing ended, [A-Z][a-z]{2} \d{1,2}\.$`, listings(t, "--json")[sale])
 }
+
+// A seller's open offer in one deal does not take the first receipt from a
+// purchase in another, and the purchase's then takes it from the sale.
+func TestASellersOfferLeavesTheFirstReceiptToAPurchase(t *testing.T) {
+	dealFixture(t)
+	sale := openTyped(t, sellerTyped)
+	check := offerAt(t, sale, "190000")
+	dealRun(t, "note", "--deal", sale, "--kind", "act", "--input", writeJSON(t, `{"action":"offer","amount_minor":190000}`))
+
+	bought := dealRun(t, "open", "--input", writeJSON(t, fawnOpen))["deal_id"].(string)
+	act := dealRun(t, "note", "--deal", bought, "--kind", "act", "--input", writeJSON(t, fawnPaid))
+	assert.True(t, strings.HasSuffix(act["say"].(string), "\n"+words("say.receipt.first.keep")), act["say"])
+
+	_, err := acceptOffer(t, sale, check)
+	require.NoError(t, err)
+	commitNow(t, sale, "190000")
+	closed := dealRun(t, "close", "--deal", sale, "--input", writeJSON(t, `{"status":"received"}`))
+	assert.NotContains(t, closed["say"], words("say.receipt.first.keep.sold"))
+}
