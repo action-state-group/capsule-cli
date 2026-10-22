@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,6 +66,10 @@ func TestAConditionOnAnApprovedShareIsAdoptedWithoutAnAsk(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name"],"terms":{"conditions":{"shipping":"Free shipping"}}}`))
 	require.Equal(t, "pause", share["verdict"], share["card"])
+	// It pauses for the first telling alone; no rule asks about the
+	// condition, and the card the user approves doesn't name it.
+	assert.Equal(t, []string{"first_disclosure"}, rules(share))
+	assert.NotContains(t, strings.ToLower(share["card"].(string)), "shipping")
 	_, err := answer(t, id, share["check_id"].(string), "yes", shownCard(t, share["card"].(string)))
 	require.NoError(t, err)
 	sealed, given, _ := ruleInputs(t, id, freeShippingPay)
