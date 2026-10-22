@@ -2014,7 +2014,9 @@ func dealCheckCommand() *cobra.Command {
 			if err := normalizeTerms(snap.Terms); err != nil {
 				return err
 			}
-			if err := sellersHandover(dealRole(events), true, snap.Terms); err != nil {
+			// Only what the buyer accepts and the commit that rests on it say
+			// how the item reaches them.
+			if err := sellersHandover(dealRole(events), snap.Action == offerAction || snap.Action == "commit", snap.Terms); err != nil {
 				return err
 			}
 			if snap.Who != nil && snap.Who.DomainAgeDays != nil {

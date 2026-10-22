@@ -73,8 +73,8 @@ type dealTerms struct {
 var dealHandovers = []string{"in_person", "shipped"}
 
 // sellersHandover refuses terms.handover where it is not a seller's term:
-// on a deal where the user buys (role), and on any terms but a check's or the
-// opening's (where is false).
+// on a deal where the user buys (role), and on any terms but an offer or
+// commit check's or the opening's (where is false).
 func sellersHandover(role string, where bool, terms ...*dealTerms) error {
 	for _, t := range terms {
 		if t == nil || t.Handover == "" {
@@ -84,7 +84,7 @@ func sellersHandover(role string, where bool, terms ...*dealTerms) error {
 			return cli.InputError("terms.handover is how a sold item reaches the buyer: state it only where the user sells (intent.party_role seller)")
 		}
 		if !where {
-			return cli.InputError("terms.handover goes on a seller's offer or commit check, or in the opening terms of a seller's deal or sale, never on what the user asked, a change or a close")
+			return cli.InputError("terms.handover goes on a seller's offer or commit check, or in the opening terms of a seller's deal or sale, and nowhere else: not on another check, what the user asked, a change or a close")
 		}
 	}
 	return nil

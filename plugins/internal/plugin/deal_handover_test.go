@@ -128,7 +128,7 @@ func TestASellerStatesTheHandoverOnlyOnACheckOrTheOpening(t *testing.T) {
 	} {
 		_, err := invoke(t, "", "--profile", "deal", "deal", "note", "--deal", id, "--kind", kind, "--input", writeJSON(t, input))
 		require.ErrorIs(t, err, cli.ErrInput, kind)
-		assert.Contains(t, err.Error(), "never on what the user asked, a change or a close", kind)
+		assert.Contains(t, err.Error(), "nowhere else", kind)
 	}
 	_, err := invoke(t, "", "--profile", "deal", "deal", "close", "--deal", id, "--input", writeJSON(t,
 		`{"status":"received","delivered":{"item":"example bicycle","handover":"in_person"}}`))
@@ -164,4 +164,28 @@ func TestASaleStatesItsHandover(t *testing.T) {
 	thread := buyerThread(t, sale, "buyer.example")
 	c := dealRun(t, "check", "--deal", thread, "--input", writeJSON(t, handoverOffer))
 	assert.NotEmpty(t, c["check_id"])
+}
+
+// A seller's check of any action but an offer or a commit states no
+// handover: a share, a payment or a representation says nothing of how the
+// item reaches the buyer.
+func TestOnlyAnOfferOrACommitCheckStatesTheHandover(t *testing.T) {
+	dealFixture(t)
+	id := openTyped(t, sellerTyped)
+	before := len(records(t, id))
+	for name, check := range map[string]string{
+		"share_contact": `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["phone"],"terms":{"handover":"in_person"}}`,
+		"pay":           `{"action":"pay","amount_minor":500,"authorized_max_minor":500,"terms":{"handover":"shipped"},"recourse":{"rail":"card","refundable":true}}`,
+		"represent":     `{"action":"represent","representing":{"class":"condition","text":"a scratch on the frame"},"terms":{"handover":"in_person"}}`,
+	} {
+		_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", writeJSON(t, check))
+		require.ErrorIs(t, err, cli.ErrInput, name)
+		if name != "represent" { // a represent check refuses any terms first
+			assert.Contains(t, err.Error(), "nowhere else", name)
+		}
+	}
+	_, err := invoke(t, "", "--profile", "deal", "deal", "check", "--deal", id, "--input", writeJSON(t,
+		`{"action":"share_contact","disclosing_to":"counterparty","disclosing":["phone"],"terms":{"handover":"in_person"}}`))
+	assert.Contains(t, err.Error(), "nowhere else")
+	assert.Len(t, records(t, id), before, "a refused check seals nothing")
 }

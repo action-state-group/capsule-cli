@@ -546,14 +546,20 @@ def _ref(d):
 
 
 def check_handover(rec, party_role):
-    """terms.handover (section 4) on one record, read as the section 6 rules read
-    it: a member of HANDOVERS (a typed record's terms are open, so this is where
-    it is checked), on a deal where the user sells, and only in the terms of a
-    check, a baseline or a sale. Returns the failure, or None."""
+    """terms.handover (section 6, rule 14) on one record, read as the section 6
+    rules read it: a member of HANDOVERS (a typed record's terms are open, so
+    this is where it is checked), on a deal where the user sells, and only in
+    the terms of an offer or commit check, a baseline or a sale; a later
+    intent's own asked and terms never. Returns the failure, or None."""
     t, body = rec["x-deal-v0"]["record_type"], rec["body"]
     intent = body.get("intent") if isinstance(body.get("intent"), dict) else {}
-    places = [(t in ("baseline", "check", "sale"), body.get("terms")), (False, intent.get("asked"))]
-    if t in ("detail_change", "outcome"):
+    # Only an offer or commit check, the baseline and a sale's root may state it.
+    stated_here = t in ("baseline", "sale") or (t == "check" and body.get("action") in ("offer", "commit"))
+    places = [(stated_here, body.get("terms")), (False, intent.get("asked"))]
+    if t == "intent":
+        # A later intent keeps what the user asked in its own body.
+        places = [(False, body.get("asked")), (False, body.get("terms"))]
+    elif t in ("detail_change", "outcome"):
         places = [(False, body.get("terms")), (False, body.get("delivered"))]
     for allowed_here, terms in places:
         if not isinstance(terms, dict) or "handover" not in terms:
@@ -563,7 +569,7 @@ def check_handover(rec, party_role):
         if party_role != "seller":
             return "terms.handover is a seller's term: a deal where the user buys states none"
         if not allowed_here:
-            return "terms.handover goes on a check or the opening, never on what the user asked, a change or a close"
+            return "terms.handover goes on an offer or commit check or the opening, and nowhere else"
     return None
 
 
@@ -1843,8 +1849,26 @@ def regen():
     dump(FIX / "negative" / "neg-typed-seller-handover-on-a-change.json", {
         "fixture": "neg-typed-seller-handover-on-a-change", "expect": "invalid",
         "description": "The buyer's change stating terms.handover: the seller states it on a check or the opening.",
-        "expected_stage": "chain", "expected_error_contains": "never on what the user asked, a change or a close",
+        "expected_stage": "chain", "expected_error_contains": "nowhere else",
         "chain_dir": "positive-typed-seller", "chain_prefix": names2[:sta + 1], "record": r})
+    r = {"x-deal-v0": {"profile": "x-deal-v0", "canonicalization": "jcs", "deal_id": chain_id2,
+                       "record_type": "intent", "seq": sta + 2, "at": "2026-10-07T10:05:00Z",
+                       "prev": _ref(record_digest(records2[sta])), "baseline_ref": _ref(record_digest(records2[0]))},
+         "body": {"verbatim_commitment": commitment(nonce("seller-intent-handover"), "hand it over in person"),
+                  "asked": {"handover": "in_person"}}}
+    dump(FIX / "negative" / "neg-typed-seller-handover-in-an-intent.json", {
+        "fixture": "neg-typed-seller-handover-in-an-intent", "expect": "invalid",
+        "description": "A seller's later intent whose asked states terms.handover: what the user asked never states it.",
+        "expected_stage": "chain", "expected_error_contains": "nowhere else",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:sta + 1], "record": r})
+    r = json.loads(json.dumps(records2[sk]))
+    r["body"]["terms"] = {"handover": "in_person"}
+    dump(FIX / "negative" / "neg-typed-seller-handover-on-a-share.json", {
+        "fixture": "neg-typed-seller-handover-on-a-share", "expect": "invalid",
+        "description": "A seller's share check stating terms.handover: only an offer or a commit says how the item "
+                       "reaches the buyer.",
+        "expected_stage": "chain", "expected_error_contains": "nowhere else",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:sk], "record": r})
     (FIX / "expected-digests.txt").write_text(
         "# SHA-256 over the RFC 8785 (JCS) bytes of each positive record (the `record` member only)\n"
         + "".join(f"{d}  {n if '/' in n else 'positive/' + n}\n" for n, d in digests), encoding="utf-8")
@@ -2080,6 +2104,10 @@ def regen():
     r = copy.deepcopy(records[12]); r["body"]["terms"] = {**r["body"].get("terms", {}), "handover": "shipped"}
     neg("neg-buyer-handover", "chain", "a seller's term", r, 12,
         "A buyer's check stating terms.handover: how a sold item reaches the buyer is the seller's term.")
+
+    r = copy.deepcopy(records[4]); r["body"]["asked"] = {"handover": "in_person"}
+    neg("neg-intent-asked-handover", "chain", "a seller's term", r, 4,
+        "A later intent whose asked states terms.handover: a deal where the user buys states none.")
 
     # --- negatives on a sale's log (section 6, rule 10) -----------------------------
     def negs(name, stage, contains, record, prefix_upto, desc):

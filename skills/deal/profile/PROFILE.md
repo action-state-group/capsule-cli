@@ -272,9 +272,9 @@ Field details:
 - **terms**: `item`, `quantity`, `price_minor`, `deposit_minor`, `currency`, `when`, `place`,
   `conditions` (token → string), `handover`. `place` is a locality ("lakeside marina"), never a
   street address. `handover` is how a sold item reaches the buyer: `in_person` (handed over at a
-  pickup) or `shipped`. It is a seller's term, stated in the terms of a seller's check (an offer
-  and the commit that rests on it, rule 11) and of the opening of a seller's deal or a sale, and
-  never in what the user asked (`intent.asked`), a `detail_change` or a close's `delivered`; a
+  pickup) or `shipped`. It is a seller's term, stated in the terms of a seller's `offer` or
+  `commit` check (the commit rests on the offer, rule 11) and of the opening of a seller's deal
+  or a sale, and never on another check, in what the user asked (`asked`), a `detail_change` or a close's `delivered`; a
   deal where the user buys states none. The seller rules read it at the commit (cash passes
   only in person). It is neither a material nor an offer field, so it moves neither count nor
   its basis (section 8). A typed record's `terms` are an open object (section 9); the same
@@ -725,8 +725,9 @@ A verifier holding one deal's records in `seq` order checks:
     check without it adopts the checked terms whole, as before.
 14. **The handover is a seller's term.** `terms.handover` (section 3's `terms`) is `in_person`
     or `shipped`, on a deal whose `party_role` is `seller` or on a sale, and only in the terms of
-    a check, a baseline or a sale; in `intent.asked`, a `detail_change` or an outcome's
-    `delivered` it is refused, and so is any `handover` on a deal where the user buys.
+    an `offer` or `commit` check, a baseline or a sale; on any other check, in what the user
+    asked (a baseline's `intent.asked` or a later `intent`'s `asked`), a `detail_change` or an
+    outcome's `delivered` it is refused, and so is any `handover` on a deal where the user buys.
 
 ## 7. Outcome conventions: `completed | mismatch | open`
 

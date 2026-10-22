@@ -12,11 +12,12 @@
   cash passes only in person. It is not a material or offer field, so no
   count or basis moves.
 - **Added:** capsulectl refuses `terms.handover` on a deal where the user
-  buys, and, where the user sells, anywhere but a check or the opening (an
-  intent's `asked`, a change, a close's `delivered`); a value other than
-  `in_person` or `shipped` is refused. Nothing is sealed. The profile
-  checker holds the same rule (PROFILE section 6, rule 14), with three
-  negative fixtures and the sale fixture stating `in_person`.
+  buys, and, where the user sells, anywhere but an offer or commit check or
+  the opening (another check such as a share, pay or represent, an intent's
+  `asked`, a change, a close's `delivered`); a value other than `in_person`
+  or `shipped` is refused. Nothing is sealed. The profile checker holds the
+  same rule (PROFILE section 6, rule 14), with six negative fixtures and the
+  sale fixture stating `in_person`.
 - **Changed:** the deal skill tells the agent to state the rail and the
   handover on a seller's offer and commit.
 
