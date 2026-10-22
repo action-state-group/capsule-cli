@@ -1686,20 +1686,28 @@ func dealNoteCommand() *cobra.Command {
 						name = recipientName(*d.Who)
 					}
 					words := make([]string, len(first))
-					leaked := false
+					var leakedWords, newWords []string
 					for i, c := range first {
 						words[i] = classWord(c)
-						leaked = leaked || memory.leakedBefore(keys, c)
+						if memory.leakedBefore(keys, c) {
+							leakedWords = append(leakedWords, words[i])
+						} else {
+							newWords = append(newWords, words[i])
+						}
 					}
 					// Never "first time" for a class that went to them before
-					// without the user's OK.
-					reason := "First time telling " + name + " your " + strings.Join(words, ", ")
-					if leaked {
-						reason = "You haven't OK'd telling " + name + " your " + strings.Join(words, ", ")
+					// without the user's OK; a new class beside it is said as new.
+					reason := "First time telling " + name + " your " + strings.Join(words, ", ") + ", and no check the user approved named it"
+					if len(leakedWords) > 0 {
+						reason = "You haven't OK'd telling " + name + " your " + listWords(leakedWords, "and") + " before."
+						if len(newWords) > 0 {
+							reason = "You haven't OK'd telling " + name + " your " + listWords(leakedWords, "and") + " before, and your " +
+								listWords(newWords, "and") + " would be new to them."
+						}
 					}
 					if err := cli.Output(c, map[string]any{
 						"deal_id": dealID, "proceed": false, "verdict": "pause", "held": first,
-						"reason": reason + ", and no check the user approved named it",
+						"reason": reason,
 						"next":   `do not send it; run deal check with "disclosing" naming ` + strings.Join(first, ", ") + `, show its card, and note this again only once the user approves`,
 					}); err != nil {
 						return err

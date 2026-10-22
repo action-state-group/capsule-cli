@@ -131,6 +131,16 @@ func TestARefusedShareIsNotTold(t *testing.T) {
 // authority (authority none), as a step the agent took without the user's OK.
 func leakEmail(t *testing.T, id string) {
 	t.Helper()
+	leakClasses(t, id, "email")
+}
+
+// leakClasses seals one disclosure of classes with no authority.
+func leakClasses(t *testing.T, id string, classes ...string) {
+	t.Helper()
+	var fields []dealDisclosureField
+	for _, c := range classes {
+		fields = append(fields, dealDisclosureField{Class: c, Value: map[string]string{"email": homeEmail, "name": homeName, "phone": "+1 555 010 4477"}[c]})
+	}
 	p, err := cli.LoadProfile("deal")
 	require.NoError(t, err)
 	s, err := openDealSession(t.Context(), p)
@@ -139,8 +149,7 @@ func leakEmail(t *testing.T, id string) {
 	events, err := s.load(t.Context(), id)
 	require.NoError(t, err)
 	_, err = s.seal(t.Context(), id, events, dealEvent{Kind: "disclosure", Disclosure: &dealDisclosure{
-		To: "counterparty", Fields: []dealDisclosureField{{Class: "email", Value: homeEmail}},
-		Reason: "no check covered it", Rule: "no_check"}})
+		To: "counterparty", Fields: fields, Reason: "no check covered it", Rule: "no_check"}})
 	require.NoError(t, err)
 	require.NoError(t, s.close())
 }
@@ -162,11 +171,12 @@ func TestADisclosureWithoutAuthorityIsNotTold(t *testing.T) {
 	assert.Equal(t, []any{"email"}, check["recipient"].(map[string]any)["unapproved_disclosures"])
 	card := check["card"].(string)
 	assert.Contains(t, card, "Your email already went to Shop (redbubble.com) without your OK. Share it again?")
+	assert.Contains(t, card, "Why I'm asking: it went out without your OK, so I can't count Shop as already told.")
 	assert.NotContains(t, strings.ToLower(card), "first time")
 
 	// Held, the note says so without "first time" either.
 	held := heldNote(t, id, `{"fields":[{"class":"email","value":"`+homeEmail+`"}]}`)
-	assert.Equal(t, "You haven't OK'd telling Shop your email, and no check the user approved named it", held["reason"])
+	assert.Equal(t, "You haven't OK'd telling Shop your email before.", held["reason"])
 }
 
 // A true first telling keeps its words.
@@ -194,10 +204,47 @@ func TestALeakedClassBesideANewOne(t *testing.T) {
 	assert.Contains(t, texts, "First time telling Shop your phone")
 	assert.NotContains(t, texts, "First time telling Shop your email")
 	card := check["card"].(string)
-	assert.Contains(t, card, "Your email already went to Shop (redbubble.com) without your OK. Share it again?")
-	assert.Contains(t, card, "first time they get your phone")
+	assert.Contains(t, card, "Your email already went to Shop (redbubble.com) without your OK, and your phone would be new to them. Share both?")
+	assert.Contains(t, card, "Why I'm asking: first time they get your phone.")
 	assert.NotContains(t, card, "first time they get your details")
 	assert.NotContains(t, card, "first time they get your email")
+	assert.NotContains(t, card, "can't count")
+
+	// Held, the note says which class went before and which is new.
+	held := heldNote(t, id, `{"fields":[{"class":"email","value":"`+homeEmail+`"},{"class":"phone","value":"+1 555 010 4477"}]}`)
+	assert.Equal(t, "You haven't OK'd telling Shop your email before, and your phone would be new to them.", held["reason"])
+}
+
+// A deny still says what it will not do, and never "first time".
+func TestADeniedShareAfterALeakNeverSaysFirstTime(t *testing.T) {
+	w := cli.BuiltinWording()
+	state := dealState{who: dealWho{Name: "Shop", Domain: "redbubble.com"}, intent: dealIntent{Verbatim: "buy it"}}
+	snap := dealSnapshot{Action: "share_contact", Disclosing: []string{"email"}, DisclosingTo: "counterparty"}
+	r := dealCheckResult{Verdict: "deny", Differences: diffs("rules_deny", "first_disclosure"),
+		Recipient: &dealRecipient{Name: "Shop", FirstTime: true, Unapproved: []string{"email"}}}
+	card := checkCard(w, state, snap, r, nil)
+	want := cardDenial(w, snap, cli.V{"payee": "Shop", "where": " (redbubble.com)", "what": "email", "item": "", "amount": "", "description": ""})
+	assert.Equal(t, want, card.Question, "the deny question wins")
+	assert.NotContains(t, card.Question, "already went")
+	assert.NotContains(t, strings.ToLower(strings.Join(append([]string{card.Question}, card.Why...), " ")), "first time")
+}
+
+// Several classes on either side: the lists are joined, and the question
+// asks about all of them.
+func TestSeveralLeakedOrNewClasses(t *testing.T) {
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	leakEmail(t, id)
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"email","phone","name"`)))
+	card := check["card"].(string)
+	assert.Contains(t, card, "Your email already went to Shop (redbubble.com) without your OK, and your name and phone would be new to them. Share all of them?")
+
+	other := openShop(t, "society6.com")
+	leakClasses(t, other, "email", "name")
+	check = dealRun(t, "check", "--deal", other, "--input", writeJSON(t, shareInput(`"email","name"`)))
+	assert.Contains(t, check["card"], "Your name and email already went to Shop (society6.com) without your OK. Share it again?")
+	check = dealRun(t, "check", "--deal", other, "--input", writeJSON(t, shareInput(`"email","name","phone"`)))
+	assert.Contains(t, check["card"], "Your name and email already went to Shop (society6.com) without your OK, and your phone would be new to them. Share all of them?")
 }
 
 // latestCheck is the id of the deal's latest check record.
@@ -217,4 +264,19 @@ func latestCheck(t *testing.T, dealID string) string {
 	}
 	t.Fatal("no check")
 	return ""
+}
+
+// The question names every class a yes shares, whatever reasons the card
+// keeps: with a changed payee and an over-limit reason taking both Why
+// slots, the new class is still on the card (Codex round 3).
+func TestAMixedShareNamesEveryClassWhateverTheReasons(t *testing.T) {
+	w := cli.BuiltinWording()
+	state := dealState{who: dealWho{Name: "Shop", Domain: "redbubble.com"}, intent: dealIntent{Verbatim: "buy it"}}
+	snap := dealSnapshot{Action: "share_contact", Disclosing: []string{"email", "phone"}, DisclosingTo: "counterparty"}
+	r := dealCheckResult{Verdict: "pause", Differences: diffs("payee_or_contact_changed", "over_limit", "first_disclosure", "first_disclosure"),
+		Recipient: &dealRecipient{Name: "Shop", Unapproved: []string{"email"}, First: []string{"phone"}}}
+	card := checkCard(w, state, snap, r, nil)
+	assert.Equal(t, "Your email already went to Shop (redbubble.com) without your OK, and your phone would be new to them. Share both?", card.Question)
+	require.Len(t, card.Why, 2)
+	assert.NotContains(t, strings.Join(card.Why, " "), "phone", "the reasons above took both slots")
 }

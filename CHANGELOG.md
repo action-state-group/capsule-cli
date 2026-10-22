@@ -163,12 +163,21 @@
   capsulectl's own first-telling pause.
 - **Changed:** a class that went to a recipient before without the user's
   OK is never called a first time. The check's difference reads `Your
-  <class> already went to <recipient> without your OK`, and the card asks
-  `Your <class> already went to <recipient> without your OK. Share it
-  again?` (new wording-pack key `card.question.share.unapproved_before`);
-  a class new to them beside it keeps `First time telling …` and the card's
-  `first time they get your <class>`. A held disclosure note naming such a
-  class says `You haven't OK'd telling <recipient> your <class>`.
+  <class> already went to <recipient> without your OK`. The card asks `Your
+  <class> already went to <recipient> without your OK. Share it again?`
+  (`card.question.share.unapproved_before`) with the reason `it went out
+  without your OK, so I can't count <recipient> as already told`
+  (`card.why.unapproved_before`). Beside a class new to them, the card asks
+  about everything a yes shares: `Your <class> already went to <recipient>
+  without your OK, and your <new class> would be new to them. Share both?`
+  (`card.question.share.unapproved_and_new`; `… Share all of them?`,
+  `card.question.share.unapproved_and_new.all`, when more than two classes),
+  and keeps `first time they get your <new class>`; that question names
+  every class whatever reasons the card keeps. A held disclosure note
+  naming such a class says `You haven't OK'd telling <recipient> your
+  <class> before.`, or, beside a new class, `You haven't OK'd telling
+  <recipient> your <class> before, and your <new class> would be new to
+  them.`
 
 ## v0.1.0-rc20
 
