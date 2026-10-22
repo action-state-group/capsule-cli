@@ -376,7 +376,7 @@ func TestDealPermanentDeliveryIsNotSaidToBeRetried(t *testing.T) {
 	assurance := withBundle["assurance"].(map[string]any)
 	assert.Equal(t, "pending", assurance["witness_state"])
 	assert.NotContains(t, assurance, "witness_reason")
-	assert.Contains(t, assurance["text"], "Witness pending: the witness answered with an error (HTTP 409) and this delivery is not retried.")
+	assert.Contains(t, assurance["text"], "This checkpoint was sent at a cadence tick. Witness not delivered: the witness answered with an error (HTTP 409); this delivery is not retried.")
 	assert.NotContains(t, assurance["text"], "retried at every tick")
 
 	// A refused delivery is said with its reason and the standing grant.
@@ -410,7 +410,7 @@ func TestWitnessPendingReasons(t *testing.T) {
 	// A conflict is failed for good, and not said to be retried.
 	reason, text = cli.WitnessPendingReason(cll.WitnessState{Attempts: 1, Permanent: true, LastError: "witness returned HTTP 400: " + cli.WitnessFailureBody(409)}, cli.DealDefaultWitness)
 	assert.Equal(t, "witness_error", reason)
-	assert.Equal(t, "pending: the witness answered with an error (HTTP 409) and this delivery is not retried.", text)
+	assert.Equal(t, "not delivered: the witness answered with an error (HTTP 409); this delivery is not retried.", text)
 	// A 403 may be a network gate on this host (capsule-cli#335): it is not
 	// said as the witness's answer, and it names the standing grant, whether
 	// stored now or by an earlier build.

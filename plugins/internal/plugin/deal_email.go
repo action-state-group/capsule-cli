@@ -150,13 +150,17 @@ func dealAssuranceRung(b map[string]interface{}) map[string]any {
 			sealed += "Witness pending. A deal is not witnessed at the moment it happens: its checkpoint goes to the witness at the next tick of this profile's checkpoint cadence" + cadencePhrase(cadence) + ", and only then can it be witnessed. Until then it is sealed on this device only. "
 		case "pending":
 			out["witness_state"] = "pending"
-			sealed += "Witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet. "
 			// The cadence's text says whether and why it is retried; a
-			// delivery failed for good is not (capsule-cli#335).
-			if text, ok := cadence["text"].(string); ok {
-				sealed += "Witness " + text + " "
-			} else {
-				sealed += "It is retried at every tick. "
+			// delivery failed for good is not, so it is not called pending
+			// (capsule-cli#335).
+			text, ok := cadence["text"].(string)
+			switch {
+			case ok && strings.HasPrefix(text, cli.WitnessNotDelivered):
+				sealed += "This checkpoint was sent at a cadence tick. Witness " + text + " "
+			case ok:
+				sealed += "Witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet. Witness " + text + " "
+			default:
+				sealed += "Witness pending. This checkpoint was sent at a cadence tick, but no receipt has come back yet; it is retried at every tick. "
 			}
 			if reason := cadence["reason"]; reason == "network_consent_needed" || reason == "refused" {
 				out["witness_reason"] = reason

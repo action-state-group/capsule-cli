@@ -206,7 +206,7 @@ func TestRearmRefusedDelivery(t *testing.T) {
 	assert.True(t, kept.Permanent)
 	reason, text := WitnessPendingReason(conflict, DealDefaultWitness)
 	assert.Equal(t, "witness_error", reason)
-	assert.Equal(t, "pending: the witness answered with an error (HTTP 409) and this delivery is not retried.", text)
+	assert.Equal(t, "not delivered: the witness answered with an error (HTTP 409); this delivery is not retried.", text)
 }
 
 // cll checkpoint publish (DeliverWitness) re-arms its own refused row

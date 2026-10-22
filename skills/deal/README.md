@@ -251,10 +251,10 @@ cadence** (`cll checkpoint cadence`, scheduled) publishes on time alone:
 - A delivery refused with HTTP 403 is reported as "pending: the request was
   refused (HTTP 403), by the witness or by a network gate on this host",
   with the same standing-grant text (reason `refused`): a host's network
-  gate can answer 403 in the witness's place, so this never says the
-  witness answered. It is retried at every tick, and a delivery an earlier
-  build stored as failed for good after a 403 is retried again by the next
-  tick.
+  gate can answer 403 in the witness's place, so the text never claims
+  the witness refused. It is retried at every tick, and a delivery an
+  earlier build stored as failed for good after a 403 is retried at the
+  next tick.
 
 A deal is **not witnessed at the moment it happens**. Its receipt says
 "Sealed, witness pending" until the next tick of the checkpoint cadence has carried its

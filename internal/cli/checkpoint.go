@@ -245,6 +245,10 @@ func WitnessConsentReached(endpoint string) string {
 	return "Reached from this command. " + WitnessGrantText(endpoint)
 }
 
+// WitnessNotDelivered starts the text of a delivery failed for good: it is
+// not pending, since it is never retried.
+const WitnessNotDelivered = "not delivered: "
+
 // witnessPendingReason classifies a pending delivery from its stored error.
 func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, string) {
 	if strings.Contains(state.LastError, WitnessNotReached) {
@@ -261,9 +265,9 @@ func WitnessPendingReason(state cll.WitnessState, endpoint string) (string, stri
 	}
 	if state.Permanent {
 		if status != "" {
-			return "witness_error", "pending: the witness answered with an error (HTTP " + status + ") and this delivery is not retried."
+			return "witness_error", WitnessNotDelivered + "the witness answered with an error (HTTP " + status + "); this delivery is not retried."
 		}
-		return "witness_error", "pending: the delivery failed and is not retried."
+		return "witness_error", WitnessNotDelivered + "the delivery failed; it is not retried."
 	}
 	if status != "" {
 		return "witness_error", "pending: the witness answered with an error (HTTP " + status + "); it is retried at every tick."
