@@ -769,8 +769,8 @@ A verifier holding one deal's records in `seq` order checks:
     - the post, an `action-record/v0` with `action: "post"`, whose one `authorized_by` ref is the
       user's own approval (`user_approval`, in their words, on the card shown, which quotes the
       exact words and names the classes), the first answer to the latest post check, unused,
-      within its `valid_until`, with `authority_basis` `[task_authority, user_approval]`. A card
-      answer never authorizes a post, and an unauthorized post is refused, never sealed.
+      within its `valid_until`, with `authority_basis` `[task_authority, user_approval]`. An answer
+      without the user's words never authorizes a post, and an unauthorized post is refused, never sealed.
       An evaluation evaluates the post proposal sealed right before it, and a newer post
       proposal (even one whose evaluation never sealed) supersedes every earlier post check:
       an answer or an act sealed after it rests on a superseded check and is refused.

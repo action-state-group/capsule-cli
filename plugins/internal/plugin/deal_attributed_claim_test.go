@@ -143,7 +143,7 @@ func TestAnAttributedClaimAsksAndOnlyTheUsersWordsAuthorizeIt(t *testing.T) {
 
 // An answer on the card with no words of the user's (agent_card) and the
 // user's hold leave the claim unchecked.
-func TestAnAttributedClaimIsNotAuthorizedByACardClickOrAHold(t *testing.T) {
+func TestAnAttributedClaimIsNotAuthorizedByAnAnswerWithoutWordsOrAHold(t *testing.T) {
 	for name, tc := range map[string]struct {
 		answer func(t *testing.T, id string, ck map[string]any)
 		reason string

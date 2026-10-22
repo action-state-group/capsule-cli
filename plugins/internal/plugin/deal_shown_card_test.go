@@ -62,7 +62,7 @@ func answer(t *testing.T, dealID, check, said, cardFile string) (map[string]any,
 // An answer given on the card the check rendered commits to it under the
 // check's own card nonce: its card_commitment equals the verdict's, so a
 // verifier recomputes that what was shown is what was checked, without the
-// text. The user's words and a card click can both carry it.
+// text. The user's words and an answer without them can both carry it.
 func TestDealApprovalCommitsToTheCardShown(t *testing.T) {
 	for _, said := range []string{"yes, 30 is fine", ""} {
 		dealFixture(t)

@@ -255,8 +255,8 @@ func dealApprovers(t *testing.T, dealID string) map[string]string {
 
 // Three authority values, and only one certifies the user's consent. approver
 // user is sealed only with the user's own words (said_commitment) on an
-// approval of the check, which pins the proposed action; a click on a card
-// the agent composed (no words) seals agent_card, and the act it authorizes
+// approval of the check, which pins the proposed action; an answer with no
+// words of theirs (no --said) seals agent_card, and the act it authorizes
 // stays fyi; a passing check seals standing_intent (policy).
 func TestDealApprovalAuthorityHasThreeValues(t *testing.T) {
 	for _, tc := range []struct {
@@ -264,8 +264,8 @@ func TestDealApprovalAuthorityHasThreeValues(t *testing.T) {
 		pass                             bool
 	}{
 		{name: "the user's words", said: "yes, 30 is fine for this one", approver: "user", actionType: "decide"},
-		{name: "a card click", said: "", approver: "agent_card", actionType: "fyi"},
-		{name: "a card click with blank words", said: "   ", approver: "agent_card", actionType: "fyi"},
+		{name: "no words", said: "", approver: "agent_card", actionType: "fyi"},
+		{name: "blank words", said: "   ", approver: "agent_card", actionType: "fyi"},
 		{name: "a passing check", pass: true, approver: "standing_intent", actionType: "decide"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -298,7 +298,7 @@ func TestDealApprovalAuthorityHasThreeValues(t *testing.T) {
 			case "standing_intent":
 				assert.Equal(t, "policy", capsule["disposition"].(map[string]any)["approver"])
 			case "agent_card":
-				assert.Nil(t, capsule["disposition"], "a card click certifies no one's consent")
+				assert.Nil(t, capsule["disposition"], "an answer without words certifies no one's consent")
 			}
 			// The exported records pass the profile's own checker.
 			if python := profilePython(t); python != "" {
@@ -312,7 +312,7 @@ func TestDealApprovalAuthorityHasThreeValues(t *testing.T) {
 	}
 }
 
-// Raising the user's limits takes their own words: a card click can't.
+// Raising the user's limits takes their own words: an answer without them can't.
 func TestDealConfirmLimitsNeedsTheUsersWords(t *testing.T) {
 	dealFixture(t)
 	id := openSticker(t, true)
@@ -366,7 +366,7 @@ func TestDealUserApprovalsCarrySaidCommitment(t *testing.T) {
 
 	k := records[card["capsule_id"].(string)]
 	assert.Equal(t, "agent_card", k["body"].(map[string]any)["approver"])
-	assert.NotContains(t, k["body"], "said_commitment", "a card click commits no words")
+	assert.NotContains(t, k["body"], "said_commitment", "an answer without --said commits no words")
 }
 
 // Where the user sells, the offer made and the commit to the accepted offer

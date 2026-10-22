@@ -677,7 +677,7 @@ def check_sale_chain(records):
             ab = typed_view(records[ja])["body"]
             jv = digests.index(records[ja]["refs"][0]["digest"])
             if ab.get("approver") != "user" or not ab.get("proceed"):
-                fail(i, "only the user's own approval, in their words, authorizes a post: a card answer does not")
+                fail(i, "only the user's own approval, in their words, authorizes a post: an answer without the user's words does not")
             if ja in stale or jv != latest_verdict:
                 fail(i, "a newer post check superseded the one this post rests on: show the user the newer card and post only after their yes")
             if first_answer.get(jv) != ja or ja in used:
@@ -2365,7 +2365,7 @@ def regen():
     neg("neg-approval-card-not-checked", "chain", "card shown is not the card checked", r, 14,
         "The Hold answer commits to a card text other than the one its verdict rendered.")
 
-    # agent_card: a click on a card the agent composed. It carries no words of the user's, so a
+    # agent_card: an answer to the card with no words of the user's. It carries none, so a
     # said_commitment on it is a schema error, and it can never confirm the user's limits.
     r = copy.deepcopy(records[14]); r["body"]["approver"] = "agent_card"
     neg("neg-agent-card-with-words", "schema", "said_commitment", r, 14,

@@ -2120,7 +2120,7 @@ func trailLine(e dealEvent) string {
 			return "went ahead on what you already allowed"
 		}
 		if e.Approval.Approver == "agent_card" {
-			return "the card was answered: " + e.Approval.Choice + " (you approved this card; no words of yours are on record)"
+			return "the card was answered: " + e.Approval.Choice + " (no words of yours are on record)"
 		}
 		if l := e.Approval.Limits; l != nil && e.Approval.Proceed {
 			return "you confirmed new limits: " + l.Previous.String() + " → " + l.New.String()

@@ -474,8 +474,8 @@ const (
 //     x-deal-v0 record, the approver is the one the approval records: a human
 //     only when the user approved it in their own words (committed as
 //     said_commitment), policy when a passing check approved it under the
-//     user's standing intent. An act approved by agent_card (a click on a
-//     card the agent composed) stays fyi;
+//     user's standing intent. An act approved by agent_card (an answer to
+//     the card with no words of the user's) stays fyi;
 //   - effect: dispatched, runtime_claimed: the agent's report that it acted,
 //     with no response in hand, so effect_mode is dispatched_unconfirmed;
 //     one_way_recoverable when the agreed recourse says refundable, otherwise
@@ -696,7 +696,7 @@ func dealDisposition(events []sealedEvent, id string) (emit.Disposition, bool) {
 		case "standing_intent":
 			d.Approver = emit.ApproverPolicy
 		default:
-			// agent_card: a click on a card the agent composed certifies no one's
+			// agent_card: an answer with no words of the user's certifies no one's
 			// consent, so the act stays fyi.
 			return emit.Disposition{}, false
 		}
@@ -1394,12 +1394,12 @@ func dealNoteCommand() *cobra.Command {
 			}
 			// approver "user" certifies the user's consent, so it is sealed only with their own
 			// words, committed as said_commitment beside the approval's ref to the check (which
-			// pins the proposed action). A click on a card the agent composed carries no words of
-			// theirs: it is sealed agent_card, never user.
+			// pins the proposed action). A tapped button's label is their words. An answer with no
+			// words of theirs is sealed agent_card, never user.
 			approver := "user"
 			if strings.TrimSpace(said) == "" {
 				if choice == "confirm_limits" {
-					return cli.InputError("confirm_limits needs --said with the user's own words: raising their limits takes their consent, not a card click")
+					return cli.InputError("confirm_limits needs --said with the user's own words: raising their limits takes their consent, not an answer without their words")
 				}
 				approver, said = "agent_card", ""
 			}

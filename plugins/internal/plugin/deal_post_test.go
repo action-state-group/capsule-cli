@@ -97,12 +97,12 @@ func TestAPostAlwaysAsksAndOnlyTheUsersYesPostsIt(t *testing.T) {
 	_, err = postAct(t, saleID, posting)
 	require.ErrorIs(t, err, cli.ErrInput)
 	assert.Contains(t, err.Error(), "no approval of the user's")
-	// A card click is no approval of a post.
+	// An answer without the user's words is no approval of a post.
 	_, err = answerCheck(t, saleID, ck["check_id"].(string), "", ck["card"].(string))
 	require.NoError(t, err)
 	_, err = postAct(t, saleID, posting)
 	require.ErrorIs(t, err, cli.ErrInput)
-	assert.Contains(t, err.Error(), "refusing the post: only the user's own approval, in their words (--said), on the card shown, authorizes a post. A tap on a card button alone does not")
+	assert.Contains(t, err.Error(), "refusing the post: only the user's own approval, in their words (--said: the label of the button they tapped, or what they typed), on the card shown, authorizes a post. An answer without --said does not")
 
 	// Edited text is a new check, and asks again.
 	edited := postingJSON(listingText+" Pickup only.", "marketplace.example", "condition", "price")
@@ -513,7 +513,7 @@ func TestTheProfileCheckerHoldsAPost(t *testing.T) {
 			b := r["body"].(map[string]any)
 			b["authority"] = "card_answer"
 			delete(b, "said_commitment")
-		}}, "a card answer does not"},
+		}}, "an answer without the user's words does not"},
 		"a post that did not ask": {map[int]func(map[string]any){at["action-evaluation/v0"]: func(r map[string]any) {
 			r["body"].(map[string]any)["disposition"] = "DO"
 		}}, "every post check asks"},
