@@ -60,14 +60,15 @@
 ### A 403 at witness delivery is retried (capsule-cli#335)
 
 - **Fixed:** an answered HTTP 403 at witness delivery is stored as
-  retryable, not permanent, so the delivery is tried again on the normal
-  backoff once the host lets the request through. Its pending reason is
+  retryable, not permanent, so the delivery is tried again on the delivery
+  backoff (up to an hour apart) and goes through once the host lets the
+  request out; if the witness itself keeps refusing, it stays pending. Its pending reason is
   `refused`: "pending: the request was refused (HTTP 403), by the witness or
   by a network gate on this host; it is retried at every tick.", followed
   by the text for granting the witness's site. 407 and transport errors
   stay `network_consent_needed`.
-- **Fixed:** a delivery that an earlier version stored as permanent after a 403 is
-  made due again, once: `cll checkpoint publish` re-arms its own row, and
+- **Fixed:** a delivery that an earlier version stored as permanent after a
+  403 is made due again, once: `cll checkpoint publish` re-arms its own row, and
   the deal cadence re-arms every such row on its log at the next tick.
 - **Changed:** a delivery that failed for good (a 409, a receipt that does
   not verify) reads "not delivered: …; this delivery is not retried." and
