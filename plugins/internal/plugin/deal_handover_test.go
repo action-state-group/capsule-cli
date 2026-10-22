@@ -3,6 +3,7 @@ package plugin
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -162,8 +163,35 @@ func TestASaleStatesItsHandover(t *testing.T) {
 	recs, _ := exportSale(t, sale)
 	assert.Equal(t, "in_person", recs[0]["body"].(map[string]any)["terms"].(map[string]any)["handover"])
 	thread := buyerThread(t, sale, "buyer.example")
-	c := dealRun(t, "check", "--deal", thread, "--input", writeJSON(t, handoverOffer))
-	assert.NotEmpty(t, c["check_id"])
+
+	// The thread's offer and the commit on it state the handover, and the
+	// profile checker passes the thread and the sale's own log.
+	offer := approved(t, thread, dealRun(t, "check", "--deal", thread, "--input", writeJSON(t, handoverOffer)))
+	require.Equal(t, false, dealRun(t, "note", "--deal", thread, "--kind", "act", "--input", writeJSON(t, `{"action":"offer","amount_minor":190000}`))["unchecked"])
+	_, err := acceptOffer(t, thread, offer)
+	require.NoError(t, err)
+	approved(t, thread, dealRun(t, "check", "--deal", thread, "--input", writeJSON(t, handoverCommit("in_person"))))
+	act := dealRun(t, "note", "--deal", thread, "--kind", "act", "--input", writeJSON(t, `{"action":"commit","amount_minor":190000}`))
+	assert.Equal(t, false, act["unchecked"], "the commit rests on the accepted offer, handover included")
+	var stated []string
+	for _, r := range records(t, thread) {
+		if b, ok := r["body"].(map[string]any); ok && r["type"] == "proposed-action/v0" {
+			if terms, ok := b["terms"].(map[string]any); ok {
+				stated = append(stated, b["action"].(string)+" "+terms["handover"].(string))
+			}
+		}
+	}
+	assert.Equal(t, []string{"offer in_person", "commit in_person"}, stated)
+
+	python := profilePython(t)
+	if python == "" {
+		t.Skip("no Python with jsonschema for the profile checker")
+	}
+	checkerPasses(t, thread)
+	_, salePath := exportSale(t, sale)
+	result, err := exec.Command(python, dealProfileDir+"/check_profile.py", salePath).CombinedOutput()
+	require.NoError(t, err, string(result))
+	assert.Contains(t, string(result), "ALL OK")
 }
 
 // A seller's check of any action but an offer or a commit states no
