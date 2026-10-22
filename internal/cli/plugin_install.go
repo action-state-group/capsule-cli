@@ -344,6 +344,9 @@ type pluginInstallResult struct {
 	ReplacedVersion string   `json:"replaced_version,omitempty"`
 	VersionCheck    string   `json:"version_check"`
 	Checks          []string `json:"checks"`
+	// RootHealed is what install's heal of the plugin root's path changed,
+	// when it changed anything.
+	RootHealed *userRootHeal `json:"plugin_root_healed,omitempty"`
 }
 
 // stageInRoot writes a new temporary file in the root through r and returns
@@ -619,8 +622,14 @@ func pluginInstallCommand() *cobra.Command {
 			} else if platform := runtime.GOOS + "/" + runtime.GOARCH; !slices.Contains(releasePlatforms, platform) {
 				return InputError("there is no release build of the plugins for " + platform + " (releases ship " + strings.Join(releasePlatforms, ", ") + "); build it and install the file")
 			}
+			heal := healInstallPath(home)
 			root, err := installRoot(home, true)
 			if err != nil {
+				// Say what the heal already changed, since it stays changed.
+				var hint *hintError
+				if len(heal.ChmodGoW) > 0 && errors.As(err, &hint) {
+					return Hint(hint.class, hint.message+"; install had already removed group and other write from "+strings.Join(heal.ChmodGoW, " "))
+				}
 				return err
 			}
 			r, err := os.OpenRoot(root)
@@ -659,6 +668,9 @@ func pluginInstallCommand() *cobra.Command {
 			}
 			if err != nil {
 				return err
+			}
+			if len(heal.ChmodGoW)+len(heal.Failed) > 0 {
+				result.RootHealed = &heal
 			}
 			return Output(c, result)
 		},

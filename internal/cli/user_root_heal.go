@@ -66,6 +66,12 @@ func healUserRoot(home string) userRootHeal {
 	if len(problems) == 0 {
 		return userRootHeal{State: "ok"}
 	}
+	return healProblems(home, problems, userRootHealedReason)
+}
+
+// healProblems is healUserRoot's repair of problems found on the plugin
+// root's path; reason is reported when it heals.
+func healProblems(home string, problems []unsafePathProblem, reason string) userRootHeal {
 	refuse := func(why string) userRootHeal {
 		return userRootHeal{State: "refused", Error: newAncestryError("the plugin root "+userPluginRoot(home), problems).Error() + "; not healed: " + why}
 	}
@@ -131,7 +137,7 @@ func healUserRoot(home string) userRootHeal {
 
 	// Apply. A directory already tightened stays so if a later one fails:
 	// undoing it would add write access back.
-	h := userRootHeal{State: "healed", Reason: userRootHealedReason, Modes: map[string][2]string{}}
+	h := userRootHeal{State: "healed", Reason: reason, Modes: map[string][2]string{}}
 	for _, t := range targets {
 		if t.mode == t.want {
 			continue // a concurrent run tightened it first
@@ -180,6 +186,36 @@ func (h *userRootHeal) fail(path, why string) {
 // odd HOME never tightens a tree shared on purpose.
 func homeDeepEnoughForRoot(realHome string) bool {
 	return len(strings.Split(strings.Trim(realHome, string(os.PathSeparator)), string(os.PathSeparator))) >= 2
+}
+
+const installPathHealedReason = "these directories on the plugin root's path were group- or other-writable and owned by this user; plugin install requires them not to be, so write access for group and others was removed"
+
+// healInstallPath is healUserRoot for plugin install, run before its own
+// checks: a host that makes HOME group-writable would otherwise stop every
+// fresh install (capsule-cli#354). The root may not exist yet, so it judges
+// the existing part of the path from / down as install does, plus the walk's
+// ancestry once the root exists. A problem above HOME refuses the whole heal,
+// and installRoot then refuses as before.
+func healInstallPath(home string) userRootHeal {
+	if !userRootIsTrusted(home) {
+		return userRootHeal{State: "absent", Reason: userPluginRoot(home) + " is not one of the plugin roots"}
+	}
+	_, existing, missing, err := canonicalPath(userPluginRoot(home))
+	if err != nil {
+		return userRootHeal{State: "absent", Reason: userPluginRoot(home) + " does not resolve"}
+	}
+	problems := fullPathCheck(existing)
+	if len(missing) == 0 {
+		for _, p := range userRootAncestryProblems(home) {
+			if !slices.ContainsFunc(problems, func(q unsafePathProblem) bool { return q.path == p.path }) {
+				problems = append(problems, p)
+			}
+		}
+	}
+	if len(problems) == 0 {
+		return userRootHeal{State: "ok"}
+	}
+	return healProblems(home, problems, installPathHealedReason)
 }
 
 // doctorUserRoot is healUserRoot for doctor, which the user ran.

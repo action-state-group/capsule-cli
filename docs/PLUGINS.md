@@ -63,8 +63,9 @@ discovery model is the reference):
   account's, as the system root's parents are the system's. No group
   is exempt, not even the user's own: a group's name or id says nothing
   about who else belongs to it. On stock Ubuntu (umask 002) that means a
-  one-time `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`; the
-  refusal names each directory and the `chmod` that fixes it.
+  one-time `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`, which
+  `plugin install` does itself (below); a refusal names each directory and
+  the `chmod` that fixes it.
 - The symlink hops on the launcher's own path below its root are checked
   the same way. The walk above follows only the resolved path, so a
   directory holding a hop off that path (`R/capsulectl-x` -> `R/a/link` ->
@@ -194,8 +195,13 @@ down: each must be owned by the user or root and neither group- nor
 other-writable. The only exception is a root-owned directory with the
 sticky bit set (`/tmp`), as in the per-user root check, never for the walk
 from a launcher up to its root. A symlinked `~/.local` is
-judged by where it leads. One refusal lists every failing component and the
-fix (on stock Ubuntu, `chmod go-w ~/.local ~/.local/lib ~/.local/lib/capsulectl`).
+judged by where it leads. Before checking, install heals the path as the
+cadence and `doctor` do (below), over the existing part of the path from `/`
+and, once the root exists, the walk's ancestry; it heals all of it or none.
+Its output then carries `plugin_root_healed`, in `doctor`'s `user_root`
+shape, naming each directory with its mode before and after. Anything the
+heal leaves is refused: one refusal lists every failing component and the
+fix, and says which directories install had already tightened.
 From then on install and remove use only that checked canonical path: to
 open the root, to run the handshake, and to inspect other roots' launchers.
 
@@ -203,10 +209,13 @@ open the root, to run the handshake, and to inspect other roots' launchers.
 a Muse VM replacement recreates the home as `2770`. The walk then refuses
 every plugin in the per-user root. Two commands put back the `chmod go-w`
 that install required: `cll checkpoint cadence`, when it finds no deal
-plugin to run because the per-user one is refused, and `doctor`. They act
+plugin to run because the per-user one is refused, and `doctor`. They (and
+`plugin install`, above) act
 only when every refused component is a directory owned by the process's
 user, at or under `$HOME`, not sticky, whose only fault is group or other
-write; when the per-user root resolves and is a plugin root; and, as root,
+write; when the per-user root resolves and is a plugin root (install,
+which creates the root, needs only the existing part of its path); and, as
+root,
 when `$HOME` is at least two levels below `/`. A setgid directory heals
 only when the process is root or in the directory's group, since otherwise
 the kernel drops setgid on chmod. They open each directory without

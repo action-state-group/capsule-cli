@@ -19,6 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 )
 
 // safeTempDir is a t.TempDir whose path passes install's full-path check
@@ -214,21 +215,24 @@ func TestPluginManagementSkipsDiscovery(t *testing.T) {
 }
 
 func TestPluginInstallRefusesAnUnsafePath(t *testing.T) {
+	// A sticky ~/.local is shared on purpose: install neither heals nor
+	// uses it (capsule-cli#354 heals only what #339 heals).
 	home, root := installHome(t)
 	local := filepath.Join(home, ".local")
 	require.NoError(t, os.MkdirAll(filepath.Join(local, "lib"), 0o755))
-	require.NoError(t, os.Chmod(local, 0o775))
+	require.NoError(t, unix.Chmod(local, 0o1775))
 	marker := filepath.Join(t.TempDir(), "ran")
 	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", marker))
 	require.ErrorIs(t, err, ErrInput)
 	assert.Contains(t, SafeError(err), "group-writable")
 	assert.Contains(t, SafeError(err), "chmod go-w")
+	assert.Equal(t, uint32(0o1775), modeOf(t, local), "install changed nothing")
 	_, statErr := os.Stat(marker)
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "nothing ran on an unsafe path")
 	_, statErr = os.Stat(root)
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "nothing was created")
 
-	// Dispatch refuses a plugin placed by hand under the same 0775 ~/.local
+	// Dispatch refuses a plugin placed by hand under the same ~/.local
 	// (capsule-cli#270).
 	require.NoError(t, os.MkdirAll(root, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "capsulectl-acme"), []byte(launcherScript("acme", "1", marker)), 0o755))
@@ -244,6 +248,87 @@ func TestPluginInstallRefusesAnUnsafePath(t *testing.T) {
 	assert.Contains(t, out, "ran acme: x")
 	out, err = invoke(t, "", "plugin", "install", launcherFile(t, "acme", "2", ""))
 	require.NoError(t, err, out)
+}
+
+func TestPluginInstallHealsAGroupWritableHome(t *testing.T) {
+	// A host made HOME and ~/.local group-writable before the first install
+	// (capsule-cli#354): install removes that write access, says so, and
+	// installs.
+	home, root := installHome(t)
+	local := filepath.Join(home, ".local")
+	require.NoError(t, os.Mkdir(local, 0o755))
+	chmodOwnGroup(t, home, 0o2770)
+	require.NoError(t, os.Chmod(local, 0o775))
+	real, err := filepath.EvalSymlinks(home)
+	require.NoError(t, err)
+	realLocal := filepath.Join(real, ".local")
+
+	out, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+	require.NoError(t, err, out)
+	r := installOut(t, out)
+	assert.Equal(t, "acme", r.Name)
+	require.NotNil(t, r.RootHealed, out)
+	assert.Equal(t, "healed", r.RootHealed.State)
+	assert.Equal(t, []string{real, realLocal}, r.RootHealed.ChmodGoW)
+	assert.Equal(t, map[string][2]string{real: {"2770", "2750"}, realLocal: {"775", "755"}}, r.RootHealed.Modes)
+	assert.Equal(t, installPathHealedReason, r.RootHealed.Reason)
+	assert.Equal(t, uint32(0o2750), modeOf(t, home))
+	assert.Equal(t, uint32(0o755), modeOf(t, local))
+	assert.FileExists(t, filepath.Join(root, "capsulectl-acme"))
+
+	// The installed root loosened later is healed by the next install.
+	require.NoError(t, os.Chmod(root, 0o775))
+	out, err = invoke(t, "", "plugin", "install", launcherFile(t, "acme", "2", ""))
+	require.NoError(t, err, out)
+	r = installOut(t, out)
+	require.NotNil(t, r.RootHealed, out)
+	assert.Equal(t, []string{filepath.Join(real, ".local", "lib", "capsulectl", "plugins")}, r.RootHealed.ChmodGoW)
+
+	// With nothing to heal, install reports no heal.
+	out, err = invoke(t, "", "plugin", "install", launcherFile(t, "acme", "3", ""))
+	require.NoError(t, err, out)
+	assert.NotContains(t, out, "plugin_root_healed")
+}
+
+func TestPluginInstallRefusesWhatTheHealRefuses(t *testing.T) {
+	t.Run("sticky home", func(t *testing.T) {
+		home, root := installHome(t)
+		require.NoError(t, unix.Chmod(home, 0o1775))
+		_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+		require.ErrorIs(t, err, ErrInput)
+		assert.Contains(t, SafeError(err), "group-writable")
+		assert.NotContains(t, SafeError(err), "already removed")
+		assert.Equal(t, uint32(0o1775), modeOf(t, home))
+		assert.NoDirExists(t, root)
+	})
+	t.Run("outside HOME", func(t *testing.T) {
+		// ~/.local links into a writable directory outside HOME; a writable
+		// ~ alongside it is left as it is too, since the heal is all or none.
+		home, root := installHome(t)
+		outside := filepath.Join(safeTempDir(t), "shared")
+		require.NoError(t, os.MkdirAll(filepath.Join(outside, "local"), 0o755))
+		require.NoError(t, os.Chmod(outside, 0o777))
+		require.NoError(t, os.Symlink(filepath.Join(outside, "local"), filepath.Join(home, ".local")))
+		require.NoError(t, os.Chmod(home, 0o775))
+		_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
+		require.ErrorIs(t, err, ErrInput)
+		assert.Contains(t, SafeError(err), "writable")
+		assert.Equal(t, uint32(0o777), modeOf(t, outside))
+		assert.Equal(t, uint32(0o775), modeOf(t, home))
+		assert.NoDirExists(t, root)
+	})
+	t.Run("as root, a shallow HOME", func(t *testing.T) {
+		home, _ := installHome(t)
+		require.NoError(t, os.Chmod(home, 0o775))
+		seam(t, &healProcess, func() (int, int, []int) { return 0, 0, nil })
+		real, err := filepath.EvalSymlinks(home)
+		require.NoError(t, err)
+		// /usr is one level below / on every platform the tests run on.
+		h := healProblems("/usr", fullPathCheck(real), installPathHealedReason)
+		assert.Equal(t, "refused", h.State)
+		assert.Contains(t, h.Error, "at least two levels below /")
+		assert.Equal(t, uint32(0o775), modeOf(t, home))
+	})
 }
 
 // handInstalled places a launcher named acme in the per-user root under
@@ -1010,12 +1095,14 @@ func TestPluginInstallListsEveryUnsafeComponent(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(local, "lib"), 0o755))
 	require.NoError(t, os.Chmod(filepath.Join(local, "lib"), 0o757))
 	require.NoError(t, os.Chmod(local, 0o775))
+	// A sticky HOME is not healed, so install heals none and lists them all.
+	require.NoError(t, unix.Chmod(home, 0o1775))
 	_, err := invoke(t, "", "plugin", "install", launcherFile(t, "acme", "1", ""))
 	require.ErrorIs(t, err, ErrInput)
 	msg := SafeError(err)
 	assert.Contains(t, msg, "is group-writable")
 	assert.Contains(t, msg, "is other-writable")
-	assert.Regexp(t, `chmod go-w \S+\.local \S+\.local/lib`, msg, "one combined fix")
+	assert.Regexp(t, `chmod go-w \S+ \S+\.local \S+\.local/lib`, msg, "one combined fix")
 }
 
 func TestPluginInstallByNameAssetMissingOrPlatform(t *testing.T) {
