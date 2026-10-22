@@ -241,6 +241,109 @@ func receiptLines(w cli.Wording, events []sealedEvent) []string {
 	return append(lines, w.Line("say.receipt.saved", nil))
 }
 
+// firstReceiptLines are what the first receipt adds, once: what our receipt
+// covers next to the merchant's (a paid purchase from a named merchant), and
+// why it is worth keeping (actionstate-muse#208).
+func firstReceiptLines(w cli.Wording, events []sealedEvent) []string {
+	state, err := foldDeal(events)
+	if err != nil {
+		return nil
+	}
+	var lines []string
+	if m := buildDealMoney(events, state.terms.Currency); m != nil && m.PaidMinor > 0 && state.open.Type == "purchase" && dealRole(events) != dealRoleSeller {
+		// Only a sealed name: a merchant is never named from an email or a
+		// website field.
+		if name := strings.TrimSpace(legWho(events).Name); name != "" {
+			lines = append(lines, w.Line("say.receipt.first.contrast", cli.V{"merchant": name}))
+		}
+	}
+	return append(lines, w.Line("say.receipt.first.keep", nil))
+}
+
+// isFirstReceipt is whether the step just sealed (the last of events) is the
+// profile's first receipt moment: the deal's only act or final close, and no
+// other deal has an act or a close. It is read from the sealed steps alone;
+// nothing records that a receipt was shown.
+func (s *dealSession) isFirstReceipt(ctx context.Context, dealID string, events []sealedEvent) bool {
+	n := 0
+	for _, se := range events {
+		if se.Event.Kind == "act" {
+			n++
+		}
+		if c := se.Event.Close; se.Event.Kind == "close" && c != nil {
+			if _, final := closeKeys[c.Outcome]; final {
+				n++
+			}
+		}
+	}
+	if n != 1 {
+		return false
+	}
+	others, err := s.index.steps(ctx, stepFilter{Kinds: []string{"act", "close"}, ExceptDeal: dealID})
+	return err == nil && len(others) == 0
+}
+
+// nothingDoneLine is a called-off receipt's proof line: nothing was paid
+// (or shared), and the receipt shows it. `deal close` refuses called_off and
+// not_selected on a deal with an act, so only a disclosure can have happened.
+func nothingDoneLine(w cli.Wording, events []sealedEvent) string {
+	for _, se := range events {
+		if se.Event.Kind == "disclosure" {
+			return w.Line("say.close.nothing_paid", nil)
+		}
+	}
+	return w.Line("say.close.nothing_done", nil)
+}
+
+// closeLines are a final close's receipt lines: the outcome, and, when the
+// deal was called off, that nothing was paid or shared.
+func closeLines(w cli.Wording, key string, events []sealedEvent) []string {
+	lines := []string{w.Line(key, nil)}
+	if key == "say.close.called_off" {
+		lines = append(lines, nothingDoneLine(w, events))
+	}
+	return lines
+}
+
+// listingKeys name a listing's chat line by the deal's result.
+var listingKeys = map[string]string{dealResultBought: "say.list.deal.bought", dealResultSold: "say.list.deal.sold", dealResultCalledOff: "say.list.deal.called_off", dealResultNotChosen: "say.list.deal.not_chosen", dealResultOpen: "say.list.deal.open"}
+
+// listingSay is a listing's line for "show my receipts": the item, the
+// result, the amount paid when the deal paid it in one currency, and the
+// local date it ended (or opened, while open). No deal id.
+func listingSay(w cli.Wording, l dealListing, events []sealedEvent) string {
+	item := ""
+	if open := events[0].Event.Open; open != nil {
+		item = shortTitle(open.Terms.Item)
+	}
+	if item == "" && l.Summary.What != dealNotRecorded {
+		item = shortTitle(l.Summary.What)
+	}
+	if item == "" {
+		item = w.Line("say.list.untitled", nil)
+	}
+	date := l.OpenedAt
+	if fc := finalClose(events); fc >= 0 {
+		date = events[fc].Event.At
+	}
+	vals := cli.V{"item": item, "date": localDate(date)}
+	if l.Kind == "sale" {
+		return w.Line("say.list.sale", vals)
+	}
+	key, ok := listingKeys[l.Result]
+	if !ok {
+		return ""
+	}
+	if l.Result == dealResultBought || l.Result == dealResultSold {
+		if a := l.Summary.Amount; a != nil && a.Basis == "paid" && a.OtherCurrencyActs == 0 && a.AmountMinor > 0 {
+			vals["amount"] = spokenMoney(a.AmountMinor, a.Currency)
+		} else {
+			key += ".no_amount"
+		}
+	}
+	return w.Line(key, vals)
+}
+
 // shortTitle shortens an item's title for a chat line: its first eight
 // words, and an ellipsis when it had more.
 func shortTitle(title string) string {
@@ -252,12 +355,14 @@ func shortTitle(title string) string {
 }
 
 // report is a report's narration: its lines, then, when a page was written,
-// "View details" and the page to send.
+// "View details" and the page to send in its own message, labelled as the
+// user's own copy. A narrated page is always that copy: a copy for someone
+// else is silent.
 func report(w cli.Wording, lines []string, htmlPath string) cli.Narration {
 	n := cli.Narration{Voice: cli.VoiceReport}
 	if htmlPath != "" {
 		lines = append(lines, w.Line("report.view_details", nil))
-		n.Attach = &cli.Attach{Path: htmlPath, MediaType: "text/html", Label: w.Line("report.view_details", nil)}
+		n.Attach = &cli.Attach{Path: htmlPath, MediaType: "text/html", Label: w.Line("report.private", nil)}
 	}
 	n.Say = cli.Lines(lines...)
 	return n
@@ -331,7 +436,7 @@ func reportSay(out map[string]any, p cli.Profile, events []sealedEvent, htmlPath
 		for _, se := range events {
 			if se.Event.Kind == "close" && se.Event.Close != nil {
 				if key, final := closeKeys[se.Event.Close.Outcome]; final {
-					lines = append([]string{w.Line(key, nil)}, lines...)
+					lines = append(closeLines(w, key, events), lines...)
 				}
 			}
 		}

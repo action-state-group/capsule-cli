@@ -94,7 +94,7 @@ func TestDealListMatchesTheStore(t *testing.T) {
 	require.Len(t, list, len(want), "one entry per deal id in the store")
 	for i, d := range want {
 		l := list[i]
-		wantKeys := []string{"deal_id", "kind", "state", "opened_at", "last_record_at", "counterparty_fingerprint", "log_id", "result", "summary"}
+		wantKeys := []string{"deal_id", "kind", "state", "opened_at", "last_record_at", "counterparty_fingerprint", "log_id", "result", "summary", "say"}
 		if l["kind"] == "sale" {
 			wantKeys = slices.Delete(wantKeys, 7, 8) // a sale's threads carry its results
 		}

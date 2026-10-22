@@ -186,7 +186,7 @@ func TestEveryDealCommandSpeaks(t *testing.T) {
 	page := filepath.Join(t.TempDir(), "receipt.html")
 	rep := dealRun(t, "report", "--deal", id, "--html", page)
 	assert.Equal(t, cli.VoiceReport, rep["voice"])
-	assert.Equal(t, map[string]any{"path": page, "media_type": "text/html", "label": words("report.view_details")}, rep["attach"])
+	assert.Equal(t, map[string]any{"path": page, "media_type": "text/html", "label": words("report.private")}, rep["attach"])
 	assert.True(t, strings.HasSuffix(rep["say"].(string), "\n"+words("report.view_details")))
 	plainSay(t, "report", rep)
 

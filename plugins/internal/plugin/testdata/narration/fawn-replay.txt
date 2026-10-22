@@ -21,6 +21,8 @@ Got it, you OK'd paying $1.90. Paying now.
 Done: Fawn Sticker, $1.90, within your $2 limit.
 You OK'd 2 things on the way: sharing your details and paying $1.90.
 Our receipt for this is saved: what you asked, what you OK'd and what I did, locked.
+sticker_shop_example's receipt covers what you bought. Ours covers how we bought it.
+It's worth keeping for a missing item, a wrong charge, a refund or dispute, an expense report, or checking I did only what you OK'd.
 View details
 (attached: text/html)
 [close: report]

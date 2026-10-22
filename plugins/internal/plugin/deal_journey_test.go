@@ -316,7 +316,8 @@ func TestCalledOffIsItsOwnClose(t *testing.T) {
 	assert.Equal(t, "called_off", closed["outcome"])
 	assert.Equal(t, "user", closed["actor"])
 	assert.Equal(t, "called_off", closed["reason"])
-	assert.Equal(t, words("say.close.called_off"), closed["say"])
+	// The profile's first receipt: it says why to keep it.
+	assert.Equal(t, cli.Lines(words("say.close.called_off"), words("say.close.nothing_done"), words("say.receipt.first.keep")), closed["say"])
 	moves := journeyMoves(t, id)
 	assert.Equal(t, "user:called_off", moves[len(moves)-1])
 	assert.Contains(t, dealRun(t, "report", "--deal", id)["trail"], "the agent showed you 4 options (of 37 found)")

@@ -32,6 +32,11 @@ type dealListing struct {
 	// reads. It is the user's own view: what they asked, the counterparty's
 	// name and the amount are private, and no shared copy carries them.
 	Summary dealSummary `json:"summary"`
+	// Say is the deal's line for "show my receipts", from the wording pack
+	// (listingSay); only `deal list --json` fills it.
+	Say string `json:"say,omitempty"`
+	// events are the steps the listing was read from.
+	events []sealedEvent
 }
 
 // dealSummary is a deal in plain words: what the user asked (the words
@@ -98,6 +103,7 @@ func dealListCommand() *cobra.Command {
 					key = "say.list.one"
 				}
 				r.Narration = cli.NarrateWith(c, func(w cli.Wording) cli.Narration {
+					sayListings(w, r.Deals)
 					return cli.Narration{Voice: cli.VoiceReport, Say: w.Line(key, vals)}
 				})
 				return json.NewEncoder(c.OutOrStdout()).Encode(r)
@@ -109,6 +115,10 @@ func dealListCommand() *cobra.Command {
 				list = append(list, dealListingOf(l.id, l.events))
 			}
 			if asJSON {
+				// A plain array carries no narration of its own: each
+				// listing has its line, with the words the profile pins.
+				w, _ := cli.ActiveWording(p)
+				sayListings(w, list)
 				return json.NewEncoder(c.OutOrStdout()).Encode(list)
 			}
 		}
@@ -127,6 +137,13 @@ func dealListCommand() *cobra.Command {
 	cmd.Flags().String("since", "", "List only deals with a step at or after this date (2026-10-01, UTC) or time (2026-10-01T00:00:00-07:00)")
 	cmd.Flags().String("until", "", "List only deals with a step before this date or time (exclusive), each as it stood then")
 	return cmd
+}
+
+// sayListings fills each listing's line.
+func sayListings(w cli.Wording, list []dealListing) {
+	for i := range list {
+		list[i].Say = listingSay(w, list[i], list[i].events)
+	}
 }
 
 // dealSummaryOf reads the summary from a deal's steps. Its outcome is the
@@ -239,7 +256,7 @@ func dealListingOf(dealID string, events []sealedEvent) dealListing {
 	l := dealListing{
 		DealID: dealID, Kind: "deal", State: "open",
 		OpenedAt: events[0].Event.At, LastRecordAt: events[len(events)-1].Event.At,
-		LogID: cli.DealLogID(dealID), Summary: dealSummaryOf(events),
+		LogID: cli.DealLogID(dealID), Summary: dealSummaryOf(events), events: events,
 	}
 	if cli.SaleIDPattern.MatchString(dealID) {
 		l.Kind = "sale"
