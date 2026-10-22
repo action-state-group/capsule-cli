@@ -476,7 +476,8 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 // entry of a disclosures map, or a deal report extension, read whole,
 // whatever its field names): a 64-hex
 // digest under a field that holds one (historyDigestFields), a digest map key
-// under memberships or disclosures, and the nonce of a deal-history log_id. A
+// under memberships or disclosures, and the nonce in the History's own
+// log_id (its checkpoint's). A
 // record's hex signature envelope is read decoded to its bytes; any other hex
 // string, and the COSE statements, both as written and decoded; numbers as
 // written. The file is read as JSON, field by field: a random digest no longer
@@ -490,6 +491,14 @@ func historyTexts(t *testing.T, raw []byte) []string {
 	require.NoError(t, dec.Decode(&doc))
 	digest := regexp.MustCompile(`^[0-9a-f]{64}$`)
 	hexBytes := regexp.MustCompile(`^(?:[0-9a-f]{2})+$`)
+	// ownLog is the History's own log id, the one log_id whose digest is
+	// skipped: any other log_id (a cadence log a profile configures) is read.
+	ownLog := ""
+	if top, ok := doc.(map[string]any); ok {
+		if cp, ok := top["checkpoint"].(map[string]any); ok {
+			ownLog, _ = cp["log_id"].(string)
+		}
+	}
 	var out []string
 	// readString reads one key or value; inPayload is anywhere inside a
 	// disclosed payload (an entry of a disclosures map), where a field name
@@ -505,7 +514,7 @@ func historyTexts(t *testing.T, raw []byte) []string {
 			}
 		case historyDigestFields[key] && digest.MatchString(v):
 			// a digest: no value to read
-		case key == "log_id" && historyLogIDOfDigest.MatchString(v):
+		case key == "log_id" && v == ownLog && historyLogIDOfDigest.MatchString(v):
 			out = append(out, v[:strings.IndexByte(v, '/')])
 		case len(v) >= 16 && hexBytes.MatchString(v):
 			b, err := hex.DecodeString(v)
@@ -600,7 +609,7 @@ func TestHistoryTextsSkipOnlyDigests(t *testing.T) {
 	doc := `{"a":"abcdef170000abcdef","b":"Avery` + strings.Repeat("x", 40) + `","c":"170000170000170000",` +
 		`"d":"` + hex.EncodeToString([]byte("private amount 170000 belongs to Avery")) + `",` +
 		`"cose":"` + enc("private amount 170000 belongs to Avery") + `",` +
-		`"price_minor":170000,"log_id":"deal-history/` + strings.Repeat("170000", 10) + `abcd",` +
+		`"price_minor":170000,"checkpoint":{"log_id":"deal-history/` + strings.Repeat("170000", 10) + `abcd"},` +
 		`"capsule_id":"` + strings.Repeat("170000", 10) + `abcd","memberships":{"` + strings.Repeat("170000", 10) + `abcd":1}}`
 	texts := historyTexts(t, []byte(doc))
 	n := 0
@@ -637,6 +646,17 @@ func TestHistoryTextsSkipOnlyDigests(t *testing.T) {
 	// amount, capsule_id, log_id, the signature (raw hex has none; decoded:
 	// 1) and the memberships key inside the payload; none outside it.
 	assert.Equal(t, 5, got, "%q", inside)
+	// A log_id other than the History's own checkpoint's is read, even in the
+	// History log's shape (a cadence log a profile configures).
+	own := "deal-history/" + strings.Repeat("ab", 32)
+	logs := historyTexts(t, []byte(`{"checkpoint":{"log_id":"`+own+`"},"deals":{"x":{"extensions":{"x-cadence-witness/v0":`+
+		`{"cadence":{"log_id":"deal-history/`+val+`"}}}}},"completeness_certificate":{"log_id":"`+own+`"}}`))
+	hit := 0
+	for _, s := range logs {
+		hit += strings.Count(s, "170000")
+	}
+	assert.Equal(t, 1, hit, "%q", logs)
+	assert.NotContains(t, logs, own, "the History's own log id is read as its kind only")
 	// So is a deal report, inline or standalone.
 	for _, ext := range []string{"x-deal-v0", "x-deal-report/v0"} {
 		report := historyTexts(t, []byte(`{"extensions":{"`+ext+`":{"agent_input":{"report":{"money":{"currency":"`+val+`"}}}}},`+
