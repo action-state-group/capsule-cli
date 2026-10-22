@@ -71,8 +71,8 @@
   403 is made due again, once: `cll checkpoint publish` re-arms its own row, and
   the deal cadence re-arms every such row on its log at the next tick.
 - **Changed:** a delivery that failed for good (a 409, a receipt that does
-  not verify) reads "not delivered: …; this delivery is not retried." and
-  is no longer said to be retried at every tick.
+  not verify) now starts "not delivered: " and says it is not retried; it
+  was said to be retried at every tick.
 - **Added:** `reason` (tick, cadence and terms-seal JSON) and the deal
   receipt's `witness_reason` take the new value `refused`. The deal skill
   and its README name the new pending text.
