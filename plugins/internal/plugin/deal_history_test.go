@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -445,9 +446,9 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 
 	path, _ := writeHistory(t, all, sentTo, picked...)
 	raw := string(mustRead(t, path))
-	readable := withoutRandomEncodings(raw)
+	texts := historyTexts(t, []byte(raw))
 	for _, v := range append(buyerA, private...) {
-		assert.NotContains(t, readable, v, "the History sent to buyer B, whole file")
+		assertNoneSays(t, texts, v, "the History sent to buyer B, whole file")
 	}
 	verdict, _, findings, err := verifyHistory(t, path)
 	require.NoError(t, err, "%v", findings)
@@ -469,31 +470,116 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 	assert.NotContains(t, entry, "not_proven", "a keep copy discloses every payload")
 }
 
-// randomEncoding is a run of 16 or more hex digits (digests, nonces, ids) or
-// of 40 or more base64 or base64url characters (signatures, COSE): bytes
-// that are random to the reader, where any short digit string turns up by
-// chance about once per sixteen million positions (capsule-cli#403's run
-// found a six-digit amount inside one).
-var randomEncoding = regexp.MustCompile(`[0-9a-f]{16,}|[A-Za-z0-9+/_=-]{40,}`)
-
-// withoutRandomEncodings is raw with every random encoding masked, so a
-// check that a value is absent reads only what a person could read: field
-// names, ids' prefixes, times and every disclosed value.
-func withoutRandomEncodings(raw string) string {
-	return randomEncoding.ReplaceAllString(raw, "#")
+// historyTexts is everything a History file says that a reader could take a
+// value from, so a check that a value is absent reads all of it except the
+// one shape that carries none: a 64-hex digest (a sha256 digest, capsule id,
+// key id or salted commitment), as a value, a map key or the tail of a
+// "<kind>/<digest>" id. A record's hex signature envelope is read decoded to
+// its bytes; any other hex string, and the COSE statements, both as written
+// and decoded; so text sealed inside them still counts. The file is read as JSON, field by field: a random digest no
+// longer matches a short digit string by chance (capsule-cli#403's run found
+// a six-digit amount that way), and nothing else is skipped.
+func historyTexts(t *testing.T, raw []byte) []string {
+	t.Helper()
+	var doc any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+	digest := regexp.MustCompile(`^[0-9a-f]{64}$`)
+	idOfDigest := regexp.MustCompile(`^[a-z][a-z-]*/[0-9a-f]{64}$`)
+	hexBytes := regexp.MustCompile(`^(?:[0-9a-f]{2})+$`)
+	var out []string
+	var walk func(key string, v any)
+	walk = func(key string, v any) {
+		switch v := v.(type) {
+		case map[string]any:
+			for k, e := range v {
+				if !digest.MatchString(k) {
+					out = append(out, k)
+				}
+				walk(k, e)
+			}
+		case []any:
+			for _, e := range v {
+				walk(key, e)
+			}
+		case string:
+			switch {
+			case digest.MatchString(v):
+				// a digest: no value to read
+			case idOfDigest.MatchString(v):
+				out = append(out, v[:strings.IndexByte(v, '/')])
+			case len(v) >= 16 && hexBytes.MatchString(v):
+				// a signature envelope or any other hex: read as written and
+				// decoded
+				b, err := hex.DecodeString(v)
+				require.NoError(t, err)
+				if key != "signature" {
+					// a signature's hex is random, like a digest's
+					out = append(out, v)
+				}
+				out = append(out, string(b))
+			case key == "cose" || key == "statement":
+				out = append(out, v, string(base64Bytes(t, v)))
+			default:
+				out = append(out, v)
+			}
+		default:
+			out = append(out, fmt.Sprint(v))
+		}
+	}
+	walk("", doc)
+	return out
 }
 
-// The mask hides only random bytes: a disclosed value, as a field or in a
-// sentence, still reads.
-func TestWithoutRandomEncodingsKeepsDisclosedValues(t *testing.T) {
-	in := `{"price_minor":170000,"text":"Avery here: 12 Juniper Court, 555 014 2233","digest":"` +
-		"a17000017000017000017000017000017000017000017000017000017000aaaa" + `","sig":"` +
-		"MTcwMDAwMTcwMDAwMTcwMDAwMTcwMDAwMTcwMDAwMTcwMDAwMTcwMDAw" + `"}`
-	out := withoutRandomEncodings(in)
-	for _, v := range []string{"170000", "Avery", "Juniper", "555 014 2233"} {
-		assert.Contains(t, out, v)
+// base64Bytes decodes a COSE statement, written in base64url or standard
+// base64, padded or not.
+func base64Bytes(t *testing.T, v string) []byte {
+	t.Helper()
+	for _, enc := range []*base64.Encoding{base64.RawURLEncoding, base64.RawStdEncoding} {
+		if b, err := enc.DecodeString(strings.TrimRight(v, "=")); err == nil {
+			return b
+		}
 	}
-	assert.Equal(t, 1, strings.Count(out, "170000"), "only the field's value, not the digest's or the signature's digits")
+	require.Failf(t, "not base64", "%.40s", v)
+	return nil
+}
+
+// assertNoneSays fails when any text names v.
+func assertNoneSays(t *testing.T, texts []string, v, msg string) {
+	t.Helper()
+	for _, s := range texts {
+		if strings.Contains(s, v) {
+			assert.Failf(t, msg, "%q is in %q", v, s)
+			return
+		}
+	}
+}
+
+// Only a digest is skipped: a value next to hex, in long plain text, or
+// encoded in a hex string or a COSE statement is still read.
+func TestHistoryTextsSkipOnlyDigests(t *testing.T) {
+	enc := func(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
+	doc := `{"a":"abcdef170000abcdef","b":"Avery` + strings.Repeat("x", 40) + `","c":"170000170000170000",` +
+		`"d":"` + hex.EncodeToString([]byte("private amount 170000 belongs to Avery")) + `",` +
+		`"cose":"` + enc("private amount 170000 belongs to Avery") + `",` +
+		`"price_minor":170000,"log_id":"deal-history/` + strings.Repeat("170000", 10) + `abcd",` +
+		`"digest":"` + strings.Repeat("170000", 10) + `abcd","` + strings.Repeat("170000", 10) + `abcd":1}`
+	texts := historyTexts(t, []byte(doc))
+	n := 0
+	for _, s := range texts {
+		n += strings.Count(s, "170000")
+	}
+	// a: 1, c: 3, d: 1, cose: 1, price_minor: 1; the digest value, the id's
+	// digest and the digest key: 0.
+	assert.Equal(t, 7, n)
+	sig := historyTexts(t, []byte(`{"signature":"`+hex.EncodeToString([]byte("Avery 170000"))+`"}`))
+	assert.Contains(t, sig, "Avery 170000", "a signature envelope is read decoded")
+	found := 0
+	for _, s := range texts {
+		if strings.Contains(s, "Avery") {
+			found++
+		}
+	}
+	assert.Equal(t, 3, found, "b, d and cose")
 }
 
 // A step sealed after the deal's latest checkpoint is not in the copy (no
