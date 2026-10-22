@@ -1,0 +1,59 @@
+{
+  "fixture": "neg-typed-seller-offer-answers-no-message",
+  "expect": "invalid",
+  "description": "An offer whose source names the task authority, not a message from the buyer.",
+  "expected_stage": "chain",
+  "expected_error_contains": "'source' must point at a message record",
+  "chain_dir": "positive-typed-seller",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json",
+    "03-proposed-action.json",
+    "04-action-evaluation.json",
+    "05-approval-on-the-card.json",
+    "06-action-record-share-pickup-area.json",
+    "07-proposed-action-offer-no-proposal.json",
+    "08-message-from-the-buyer.json"
+  ],
+  "record": {
+    "type": "proposed-action/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-5c2e8a1f3b7d9046",
+    "seq": 9,
+    "at": "2026-10-07T10:30:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "4151612e2591363e6380fa351ba1766a50bd2e897c0061821a0479ced3084a85"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+    },
+    "refs": [
+      {
+        "rel": "supersedes",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "4b8217aeef91331f12b3bb733a62e063e52aa527eca7f6b04f484cfd4ebcef59"
+      },
+      {
+        "rel": "source",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "3aad448872a1fa11371059d0cb4be9de7e57c73eb8f802aa7eacb98adc18c1f8"
+      }
+    ],
+    "body": {
+      "action": "offer",
+      "amount_minor": 185000,
+      "currency": "USD",
+      "terms": {
+        "item": "example bicycle",
+        "quantity": 1,
+        "price_minor": 185000
+      }
+    }
+  }
+}

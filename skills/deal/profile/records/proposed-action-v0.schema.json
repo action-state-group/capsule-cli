@@ -250,6 +250,10 @@
               "$ref": "record-common-v0.schema.json#/$defs/hex64"
             }
           }
+        },
+        "no_proposal": {
+          "description": "On an offer only: no message from the counterparty was sealed in this chain before the check, so the offer answers no proposal and there is none to go stale. Decided by the producer from its whole log. Never beside a source ref (the message an offer answers).",
+          "const": true
         }
       },
       "if": {
@@ -272,5 +276,66 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "refs"
+        ],
+        "properties": {
+          "refs": {
+            "contains": {
+              "properties": {
+                "rel": {
+                  "const": "source"
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "properties": {
+              "action": {
+                "const": "offer"
+              }
+            },
+            "not": {
+              "required": [
+                "no_proposal"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "required": [
+              "no_proposal"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "properties": {
+              "action": {
+                "const": "offer"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

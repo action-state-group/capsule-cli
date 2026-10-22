@@ -192,7 +192,7 @@
           }
         },
         "proposal_at": {
-          "description": "Optional, supplied by capsulectl beside the sealed capsule (never part of it), on the checked record only: on the check of a seller's commit that rests on an accepted offer (the latest offer, with a recorded acceptance and no change of details since), the offer's proposed-action record's sealed `at`, byte for byte. Absent on a buyer's deal, on any other action, with no acceptance in force, and on history entries. Never null.",
+          "description": "Optional, supplied by capsulectl beside the sealed capsule (never part of it), on the checked record only: on the check of a seller's commit that rests on an accepted offer (the latest offer, with a recorded acceptance and no change of details since), the offer's proposed-action record's sealed `at`, byte for byte; on the check of a seller's offer that answers a message from the counterparty (its `source` ref), when that message was sent: the message record's sealed `sent_at` when it has one, else its sealed `at` (when it was noted). Absent on a buyer's deal, on an offer that answers no message (one carrying `no_proposal`, or one naming none), on any other action, with no acceptance in force, and on history entries. Never null.",
           "type": "string",
           "format": "date-time",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"

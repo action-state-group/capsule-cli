@@ -22,6 +22,7 @@ that is malformed in other ways)
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import hmac
 import json
@@ -653,7 +654,7 @@ def check_chain(records):
                     "approval": {"approves"}, "action": {"authorized_by", "reverses", "source"}, "outcome": {"observes"},
                     "close": {"outcome"}, "disclosure": {"authorized_by"}, "claim": {"authorized_by"},
                     "task_authority": {"source", "approves", "registration"}, "platform_approval": set(), "policy_change": set(),
-                    "check": {"supersedes"}, "counterparty_acceptance": set(),
+                    "check": {"supersedes", "source"}, "counterparty_acceptance": set(),
                     "counterparty_profile": {"about"}}
     # The user's limits in force. Absent allowed = no restriction; present and
     # empty = nothing allowed. An intent may narrow them; only the user's
@@ -761,6 +762,16 @@ def check_chain(records):
             if j is None or j >= i:
                 fail(i, f"ref {r['rel']} does not name an earlier record of this deal")
             by_rel.setdefault(r["rel"], []).append(j)
+
+        if t == "message" and "sent_at" in body:
+            # The platform's own time for the message: a real UTC time, never
+            # later than when the message was noted.
+            try:
+                sent = datetime.datetime.strptime(body["sent_at"], "%Y-%m-%dT%H:%M:%SZ")
+            except (TypeError, ValueError):
+                fail(i, "a message's sent_at is not a valid UTC time")
+            if sent > datetime.datetime.strptime(b["at"], "%Y-%m-%dT%H:%M:%SZ"):
+                fail(i, "a message's sent_at is later than when it was noted (at)")
 
         def one(rel, types, required=True):
             js = by_rel.get(rel, [])
@@ -960,10 +971,23 @@ def check_chain(records):
             j = one("supersedes", ("check",), required=latest_offer is not None)
             if j != latest_offer:
                 fail(i, "an offer supersedes exactly the latest earlier offer")
+            # The proposal it answers: one message the counterparty sent, or,
+            # when the counterparty sent none before it, no_proposal; never both.
+            j = one("source", ("message",), required=False)
+            if j is not None and records[j]["body"]["from"] != "counterparty":
+                fail(i, "an offer answers a message from the counterparty (source)")
+            if body.get("no_proposal") is True:
+                if j is not None:
+                    fail(i, "an offer carrying no_proposal answers no message: it has no source ref")
+                if any(records[k]["x-deal-v0"]["record_type"] == "message"
+                       and records[k]["body"]["from"] == "counterparty" for k in range(i)):
+                    fail(i, "no_proposal on an offer after a message from the counterparty")
             latest_offer, accepted = i, None
         elif t == "check":
             if "supersedes" in by_rel:
                 fail(i, "only an offer supersedes an earlier offer")
+            if "source" in by_rel or "no_proposal" in body:
+                fail(i, "only an offer answers a message (source) or carries no_proposal")
             if body.get("action") == "represent" and not rep_rules:
                 fail(i, "a represent check is made on a deal where the user sells, opened with ordered_representations")
         elif t == "counterparty_acceptance":
@@ -1761,7 +1785,7 @@ def regen():
               "seller-area": "Hyde Park, Austin"}
     com2 = {k: commitment(nonce(k), v) for k, v in texts2.items()}
     records2, names2 = [], []
-    clock2 = iter([f"2026-10-07T10:{m:02d}:00Z" for m in (0, 0, 5, 5, 6, 7)])
+    clock2 = iter([f"2026-10-07T10:{m:02d}:00Z" for m in (0, 0, 5, 5, 6, 7, 8, 9, 30)])
 
     def tref2(j):
         return {"type": "record", "digest_alg": "SHA-256", "digest": record_digest(records2[j])}
@@ -1807,6 +1831,33 @@ def regen():
         "evaluation_ref": tref2(sv),
         "authority_basis": [{"type": "task_authority", "ref": tref2(sta)}, {"type": "user_approval", "ref": tref2(sa)}]},
         refs=[("authorized_by", sa)])
+    share_at = len(records2) - 1
+    # --- the proposal a seller's offer answers (capsule-cli#364, capsule-engine#193) -----
+    # A first offer before any buyer message answers no proposal (no_proposal). The buyer
+    # then writes; the platform shows when (sent_at). The next offer answers that message
+    # by its source ref, and supersedes the first.
+    offer_terms = {"item": "example bicycle", "quantity": 1, "price_minor": 190000}
+    o1 = add_typed2("proposed-action-offer-no-proposal", "proposed-action/v0", {
+        "action": "offer", "amount_minor": 190000, "currency": "USD", "terms": offer_terms, "no_proposal": True})
+    msg = {"x-deal-v0": {"profile": "x-deal-v0", "canonicalization": "jcs", "deal_id": chain_id2, "record_type": "message",
+                         "seq": len(records2) + 1, "at": next(clock2), "prev": _ref(record_digest(records2[-1])),
+                         "baseline_ref": _ref(record_digest(records2[0])), "channel": "app_chat"},
+           "body": {"from": "counterparty", "content_commitment": commitment(nonce("buyer-message"), "Would you take 1850?"),
+                    "sent_at": "2026-10-07T10:08:30Z"}}
+    records2.append(msg)
+    names2.append(f"{len(records2):02d}-message-from-the-buyer.json")
+    m1 = len(records2) - 1
+    add_typed2("proposed-action-offer-answering", "proposed-action/v0", {
+        "action": "offer", "amount_minor": 185000, "currency": "USD",
+        "terms": {**offer_terms, "price_minor": 185000}}, refs=[("supersedes", o1), ("source", m1)])
+    story_by_name = {
+        names2[o1]: "A first offer, before any buyer message: it answers no proposal (no_proposal), so there is none "
+                    "to go stale.",
+        names2[m1]: "The buyer's message, by commitment, with the platform's own time for it (sent_at) beside the "
+                    "time it was noted (at).",
+        names2[-1]: "The next offer answers that message (source) and supersedes the first: a rule on the proposal's "
+                    "age reads the message's sent_at.",
+    }
     stories2 = {
         "baseline": "First contact on a seller's deal: the user sells an example bicycle.",
         "task-authority/v0": "The seller's task authority: their words by commitment and the allowed actions.",
@@ -1822,15 +1873,74 @@ def regen():
     for n, r in zip(names2, records2):
         d = record_digest(r)
         digests.append((f"positive-typed-seller/{n}", d))
-        dump(FIX / "positive-typed-seller" / n, {"fixture": n, "expect": "valid", "story": stories2[record_type_of(r)],
+        dump(FIX / "positive-typed-seller" / n, {"fixture": n, "expect": "valid",
+                                                 "story": story_by_name.get(n) or stories2[record_type_of(r)],
                                                  "record": r, "expected_digest": d})
-    r = json.loads(json.dumps(records2[-1]))
+    r = json.loads(json.dumps(records2[share_at]))
     r["body"]["disclosed"]["fields"][0]["class"] = "pickup_location"
     dump(FIX / "negative" / "neg-typed-seller-pickup-location-before-acceptance.json", {
         "fixture": "neg-typed-seller-pickup-location-before-acceptance", "expect": "invalid",
         "description": "The same share naming pickup_location, the exact spot: an address class, so a seller "
                        "gives it out only for an offer the other party accepted.",
         "expected_stage": "chain", "expected_error_contains": "no offer is on record",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:share_at], "record": r})
+    # The offer's proposal, held to the chain and the schema.
+    r = json.loads(json.dumps(records2[-1]))
+    r["body"]["no_proposal"] = True
+    dump(FIX / "negative" / "neg-typed-seller-offer-no-proposal-beside-source.json", {
+        "fixture": "neg-typed-seller-offer-no-proposal-beside-source", "expect": "invalid",
+        "description": "An offer answering the buyer's message (source) that also claims it answers no proposal.",
+        "expected_stage": "schema", "expected_error_contains": "should not be valid under",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:-1], "record": r})
+    r = json.loads(json.dumps(records2[-1]))
+    r["body"]["action"] = "commit"
+    dump(FIX / "negative" / "neg-typed-seller-source-on-a-commit.json", {
+        "fixture": "neg-typed-seller-source-on-a-commit", "expect": "invalid",
+        "description": "A commit check naming a buyer's message: only an offer answers one; a commit rests on the "
+                       "buyer's acceptance of an offer.",
+        "expected_stage": "schema", "expected_error_contains": "'offer' was expected",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:-1], "record": r})
+    r = json.loads(json.dumps(records2[-1]))
+    r["refs"][1]["digest"] = record_digest(records2[sta])
+    dump(FIX / "negative" / "neg-typed-seller-offer-answers-no-message.json", {
+        "fixture": "neg-typed-seller-offer-answers-no-message", "expect": "invalid",
+        "description": "An offer whose source names the task authority, not a message from the buyer.",
+        "expected_stage": "chain", "expected_error_contains": "'source' must point at a message record",
+        "chain_dir": "positive-typed-seller", "chain_prefix": names2[:-1], "record": r})
+    for name, sent_at, contains, desc in (
+            ("neg-typed-seller-message-sent-after-noted", "2026-10-07T10:09:30Z",
+             "sent_at is later than when it was noted",
+             "A buyer message whose sent_at is later than when it was noted."),
+            ("neg-typed-seller-message-sent-at-not-a-date", "2026-02-30T10:08:30Z",
+             "sent_at is not a valid UTC time",
+             "A buyer message whose sent_at matches the shape but names no real date.")):
+        r = json.loads(json.dumps(records2[m1]))
+        r["body"]["sent_at"] = sent_at
+        dump(FIX / "negative" / f"{name}.json", {
+            "fixture": name, "expect": "invalid", "description": desc,
+            "expected_stage": "chain", "expected_error_contains": contains,
+            "chain_dir": "positive-typed-seller", "chain_prefix": names2[:m1], "record": r})
+    for sender in ("agent", "user"):
+        # The chain up to the buyer's message, with that message from someone
+        # else: the offer answering it names no counterparty message.
+        msg_other = json.loads(json.dumps(records2[m1]))
+        msg_other["body"]["from"] = sender
+        r = json.loads(json.dumps(records2[-1]))
+        r["prev"]["digest"] = record_digest(msg_other)
+        r["refs"][1]["digest"] = record_digest(msg_other)
+        dump(FIX / "negative" / f"neg-typed-seller-offer-answers-the-{sender}s-message.json", {
+            "fixture": f"neg-typed-seller-offer-answers-the-{sender}s-message", "expect": "invalid",
+            "description": f"An offer whose source names a message from the {sender}, not from the buyer.",
+            "expected_stage": "chain", "expected_error_contains": "an offer answers a message from the counterparty",
+            "chain_dir": "positive-typed-seller", "chain_prefix": names2[:m1], "chain_between": [msg_other],
+            "record": r})
+    r = json.loads(json.dumps(records2[-1]))
+    del r["refs"][1]
+    r["body"]["no_proposal"] = True
+    dump(FIX / "negative" / "neg-typed-seller-no-proposal-after-a-buyer-message.json", {
+        "fixture": "neg-typed-seller-no-proposal-after-a-buyer-message", "expect": "invalid",
+        "description": "An offer claiming it answers no proposal after the buyer's message was sealed.",
+        "expected_stage": "chain", "expected_error_contains": "no_proposal on an offer after a message from the counterparty",
         "chain_dir": "positive-typed-seller", "chain_prefix": names2[:-1], "record": r})
     # terms.handover (capsule-engine#192): a seller's term, one of HANDOVERS, on a
     # check or the opening only. A typed check's terms are open, so the set is

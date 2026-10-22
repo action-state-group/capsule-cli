@@ -1,0 +1,86 @@
+{
+  "fixture": "neg-typed-seller-offer-answers-the-agents-message",
+  "expect": "invalid",
+  "description": "An offer whose source names a message from the agent, not from the buyer.",
+  "expected_stage": "chain",
+  "expected_error_contains": "an offer answers a message from the counterparty",
+  "chain_dir": "positive-typed-seller",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json",
+    "03-proposed-action.json",
+    "04-action-evaluation.json",
+    "05-approval-on-the-card.json",
+    "06-action-record-share-pickup-area.json",
+    "07-proposed-action-offer-no-proposal.json"
+  ],
+  "chain_between": [
+    {
+      "x-deal-v0": {
+        "profile": "x-deal-v0",
+        "canonicalization": "jcs",
+        "deal_id": "deal-5c2e8a1f3b7d9046",
+        "record_type": "message",
+        "seq": 8,
+        "at": "2026-10-07T10:09:00Z",
+        "prev": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "4b8217aeef91331f12b3bb733a62e063e52aa527eca7f6b04f484cfd4ebcef59"
+        },
+        "baseline_ref": {
+          "type": "deal-record",
+          "digest_alg": "SHA-256",
+          "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+        },
+        "channel": "app_chat"
+      },
+      "body": {
+        "from": "agent",
+        "content_commitment": "f297064285faea549c09716f4c39f4c60cea3a7091708159c44dc539678b0ba4",
+        "sent_at": "2026-10-07T10:08:30Z"
+      }
+    }
+  ],
+  "record": {
+    "type": "proposed-action/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-5c2e8a1f3b7d9046",
+    "seq": 9,
+    "at": "2026-10-07T10:30:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "01d416e2ec4a22c49fde4d7c15012b4abd96523974699a2d23e8ac7e15e2d913"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+    },
+    "refs": [
+      {
+        "rel": "supersedes",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "4b8217aeef91331f12b3bb733a62e063e52aa527eca7f6b04f484cfd4ebcef59"
+      },
+      {
+        "rel": "source",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "01d416e2ec4a22c49fde4d7c15012b4abd96523974699a2d23e8ac7e15e2d913"
+      }
+    ],
+    "body": {
+      "action": "offer",
+      "amount_minor": 185000,
+      "currency": "USD",
+      "terms": {
+        "item": "example bicycle",
+        "quantity": 1,
+        "price_minor": 185000
+      }
+    }
+  }
+}

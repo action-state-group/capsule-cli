@@ -80,8 +80,8 @@ func TestNoProposalAtWhenALaterOfferIsNotAccepted(t *testing.T) {
 	assert.NotContains(t, input["record"], "proposal_at")
 }
 
-// Only a seller's commit carries it: not an offer's own check, and nothing on
-// a deal where the user buys.
+// An offer that answers no buyer message carries none (deal_proposal_test.go
+// covers one that does), and nothing on a deal where the user buys does.
 func TestNoProposalAtOffACommitOrOnABuyersDeal(t *testing.T) {
 	dealFixture(t)
 	id := openTyped(t, sellerTyped)

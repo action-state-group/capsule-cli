@@ -38,6 +38,10 @@
       "then": { "properties": { "body": { "$ref": "#/$defs/body_detail_change" } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "check" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_check" } } } },
+    { "if": { "properties": { "x-deal-v0": { "required": ["refs"], "properties": { "record_type": { "const": "check" }, "refs": { "contains": { "properties": { "rel": { "const": "source" } } } } } } } },
+      "then": { "properties": { "body": { "properties": { "action": { "const": "offer" } }, "not": { "required": ["no_proposal"] } } } } },
+    { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "check" } } }, "body": { "required": ["no_proposal"] } }, "required": ["body"] },
+      "then": { "properties": { "body": { "properties": { "action": { "const": "offer" } } } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "verdict" } } } } },
       "then": { "properties": { "body": { "$ref": "#/$defs/body_verdict" } } } },
     { "if": { "properties": { "x-deal-v0": { "properties": { "record_type": { "const": "approval" } } } } },
@@ -311,7 +315,8 @@
       "required": ["from", "content_commitment"],
       "properties": {
         "from": { "enum": ["counterparty", "user", "agent"] },
-        "content_commitment": { "$ref": "#/$defs/hex64" }
+        "content_commitment": { "$ref": "#/$defs/hex64" },
+        "sent_at": { "description": "The platform's own time for the message, when the agent could read it, in UTC. The record's at is when it was noted. Absent when not known, and on messages noted before it was recorded.", "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" }
       }
     },
     "body_claim": { "$ref": "#/$defs/claim" },
@@ -478,6 +483,7 @@
         "upfront_amount_minor": { "$ref": "#/$defs/safe_uint", "description": "What the action asks for up front, in minor units: the deposit the check's own terms state (terms.deposit_minor), and only that. Absent when the check states no deposit; never inferred." },
         "recourse": { "$ref": "#/$defs/recourse" },
         "description_commitment": { "$ref": "#/$defs/hex64" },
+        "no_proposal": { "description": "On an offer only: no message from the counterparty was sealed in this deal before the check, so the offer answers no proposal and there is none to go stale. Decided by the producer from its whole log. Never beside a source ref (the message an offer answers).", "const": true },
         "pack_id": { "$ref": "#/$defs/pack_id" },
         "pack_digest": { "$ref": "#/$defs/hex64" }
       }

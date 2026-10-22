@@ -41,3 +41,6 @@ d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4  positive-typed
 ef03752e0bf86b683d83bea52ec2c820c26a6f22191a2674d4567257fb1f9dce  positive-typed-seller/04-action-evaluation.json
 95d925d6186fc51995a83e0c13612573b2fc254be7052d3b30abd97446f398e9  positive-typed-seller/05-approval-on-the-card.json
 7614ac62c3b48ffd827c0c5c0de5a0d1ea5050f37074f163bb778c47331cb280  positive-typed-seller/06-action-record-share-pickup-area.json
+4b8217aeef91331f12b3bb733a62e063e52aa527eca7f6b04f484cfd4ebcef59  positive-typed-seller/07-proposed-action-offer-no-proposal.json
+4151612e2591363e6380fa351ba1766a50bd2e897c0061821a0479ced3084a85  positive-typed-seller/08-message-from-the-buyer.json
+4ecd9d9b2ca2a510c84bb07c2811b1dc7f5d98970e62b4673cf262da9ca122bf  positive-typed-seller/09-proposed-action-offer-answering.json
