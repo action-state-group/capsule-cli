@@ -185,3 +185,31 @@ func TestAListingDateHasTheYearOnlyWhenItIsAnother(t *testing.T) {
 	assert.Equal(t, "Oct 20", listingDate(now.AddDate(0, 0, -1).Format(time.RFC3339)))
 	assert.Equal(t, "Oct 20, 2025", listingDate(now.AddDate(-1, 0, -1).Format(time.RFC3339)))
 }
+
+// A seller's offer and commit are not receipt moments: the first receipt is
+// the thread's close, and it says why a seller keeps it. The listing says it
+// sold, with no amount: a seller's payments are evidence notes, not acts.
+func TestASellersFirstReceiptIsTheThreadsClose(t *testing.T) {
+	dealFixture(t)
+	id := openTyped(t, sellerTyped)
+	check := offerAt(t, id, "190000")
+	offer := dealRun(t, "note", "--deal", id, "--kind", "act", "--input", writeJSON(t, `{"action":"offer","amount_minor":190000}`))
+	assert.NotContains(t, offer["say"], words("say.receipt.first.keep.sold"))
+	_, err := acceptOffer(t, id, check)
+	require.NoError(t, err)
+	commit := commitNow(t, id, "190000")
+	assert.NotContains(t, commit["say"], words("say.receipt.first.keep.sold"))
+	closed := dealRun(t, "close", "--deal", id, "--input", writeJSON(t, `{"status":"received"}`))
+	assert.True(t, strings.HasSuffix(closed["say"].(string), "\n"+words("say.receipt.first.keep.sold")), closed["say"])
+	assert.NotContains(t, closed["say"], words("say.receipt.first.keep")+"\n")
+
+	assert.Regexp(t, `^example bicycle \(demo\): sold, [A-Z][a-z]{2} \d{1,2}\.$`, listings(t, "--json")[id])
+}
+
+// A sale whose listing ended says so, dated when it ended.
+func TestAnEndedSaleListsAsEnded(t *testing.T) {
+	dealFixture(t)
+	sale, _ := newSale(t)
+	dealRun(t, "sale", "close", "--sale", sale)
+	assert.Regexp(t, `^[^:]+: listing ended, [A-Z][a-z]{2} \d{1,2}\.$`, listings(t, "--json")[sale])
+}

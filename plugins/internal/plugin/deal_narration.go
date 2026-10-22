@@ -256,8 +256,11 @@ func firstReceiptLines(w cli.Wording, events []sealedEvent) []string {
 			return []string{w.Line("say.receipt.first.keep.called_off", nil)}
 		}
 	}
+	if dealRole(events) == dealRoleSeller {
+		return []string{w.Line("say.receipt.first.keep.sold", nil)}
+	}
 	var lines []string
-	if m := buildDealMoney(events, state.terms.Currency); m != nil && m.PaidMinor > 0 && state.open.Type == "purchase" && dealRole(events) != dealRoleSeller {
+	if m := buildDealMoney(events, state.terms.Currency); m != nil && m.PaidMinor > 0 && state.open.Type == "purchase" {
 		// Only a sealed name that reads as one: never one from an email or
 		// a website field, and never an id or a domain.
 		if name := strings.TrimSpace(legWho(events).Name); name != "" && !idLike.MatchString(name) {
@@ -275,13 +278,18 @@ var idLike = regexp.MustCompile(`[_@/]|^[^\s]+\.[A-Za-z]{2,}$`)
 // isFirstReceipt is whether the step just sealed (the last of events) is the
 // profile's first receipt moment: the deal's only act or final close, and no
 // other deal has an act or a close. It is read from the sealed steps alone;
-// nothing records that a receipt was shown. Another deal's close counts even
-// when it left the deal open, so the lines are never said twice; a seller's
-// first receipt is its thread's close.
+// nothing records that a receipt was shown. Another deal's act or close
+// counts even when it is a seller's or left the deal open, so the lines are
+// never said twice. A seller's acts (an offer, accepting one) are not
+// receipt moments: a seller's first receipt is its thread's close.
 func (s *dealSession) isFirstReceipt(ctx context.Context, dealID string, events []sealedEvent) bool {
+	seller := dealRole(events) == dealRoleSeller
+	if seller && events[len(events)-1].Event.Kind == "act" {
+		return false
+	}
 	n := 0
 	for _, se := range events {
-		if se.Event.Kind == "act" {
+		if se.Event.Kind == "act" && !seller {
 			n++
 		}
 		if c := se.Event.Close; se.Event.Kind == "close" && c != nil {
@@ -355,6 +363,12 @@ func listingSay(w cli.Wording, l dealListing, events []sealedEvent) string {
 	}
 	vals := cli.V{"item": item, "date": listingDate(date)}
 	if l.Kind == "sale" {
+		for _, se := range events {
+			if se.Event.Kind == "sale_close" {
+				vals["date"] = listingDate(se.Event.At)
+				return w.Line("say.list.sale.closed", vals)
+			}
+		}
 		return w.Line("say.list.sale", vals)
 	}
 	key, ok := listingKeys[outcome]
