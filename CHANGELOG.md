@@ -6,11 +6,12 @@
 
 ### The receipt moments of the Muse chat contract (capsule-cli#373)
 
-- **Added:** the first receipt says two more lines, once per profile: the
-  first act or final close when no other deal in the store has an act or a
-  close. A paid purchase with a sealed counterparty name (not an id or a
-  domain) gets a contrast line; a called-off first receipt and a seller's
-  first receipt (the thread's close) get their own keep line. Read from the
+- **Added:** the first receipt says up to two more lines, once per profile:
+  the first act or final close when no other deal in the store has an act or
+  a close. Every first receipt gets a keep line, with its own wording for a
+  called-off errand and for a seller's first receipt (the thread's close); a
+  paid purchase with a sealed counterparty name (not an id or a domain) also
+  gets a contrast line. Read from the
   sealed steps; nothing new is stored. A seller's offer or commit is never a
   receipt moment.
 - **Added:** a `called_off` or `not_selected` close, and `deal report` on such
@@ -21,8 +22,8 @@
   item, how the deal ended, the amount paid, an ended sale's listing, the
   local date with the year when not this year's; demos marked; no id), with
   or without a range.
-- **Changed:** the page message's label is `report.private` ("PRIVATE"), not
-  "View details"; a `--share` copy is silent. 14 new wording-pack keys
+- **Changed:** the page message's label is `report.private` ("PRIVATE: your
+  own copy."), not "View details". 20 new wording-pack keys
   (`say.receipt.first.*`, `say.close.nothing_done`, `say.close.nothing_paid`,
   `say.list.*`, `report.private`): a pinned pack needs them, or the built-in
   pack is used.
@@ -30,23 +31,24 @@
   label as its only words; says when a receipt goes out by itself (a
   payment, an errand ending arrived or called off, a sale thread closing,
   an updated receipt only on a material change); closes an errand that a
-  hold or deny ended as `called_off`; answers "show my receipts" from
+  hold or deny ended as `called_off` when no act is on record; answers "show my receipts" from
   `deal list --json`, never memory, and re-attaches one with
   `deal report --html`.
 
 ### A period's checks and agent anomalies in `deal list` (capsule-cli#385)
 
 - **Added:** `deal list --since/--until --json` adds two members to
-  `totals`, always present on a range with every key at zero: `checks`
+  `totals`, both present on every range: `checks`
   (`verdicts`: `pass`/`pause`/`deny`; `rules`: `evaluated`,
   `partly_unanswered`, `not_evaluated`, `not_configured`, `unrecorded`;
-  `rulesets`: `{ruleset_id, definition_digest, checks}` for the checks whose
-  rules were evaluated) and `anomalies`, one per act, disclosure or claim
-  sealed in the range (`skipped_check`, `acted_against_answer`,
-  `unsealed_approval`, `differs_from_check`, `unapproved_disclosure`,
-  `unapproved_representation`). Every step sealed in the range counts,
-  sales' own logs included. A word outside the known ones is counted under
-  its own key, never dropped.
+  `rulesets`: `[{ruleset_id, definition_digest, checks}]` for the checks whose
+  rules were evaluated) and `anomalies`, at most one for each act,
+  disclosure or claim sealed in the range that has one (`skipped_check`,
+  `acted_against_answer`, `unsealed_approval`, `differs_from_check`,
+  `unapproved_disclosure`, `unapproved_representation`). Every step sealed
+  in the range counts, sales' own logs included. A known key with nothing
+  to count is zero (`rulesets` is `[]`); a word outside the known ones is
+  counted under its own key, never dropped.
 - **Changed:** the agent answering an ask's card itself
   (`ask_needs_your_words`) is `unsealed_approval` in `deal report` too,
   where it read `skipped_check`; the check was made.
