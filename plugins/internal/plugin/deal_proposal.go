@@ -25,7 +25,7 @@ func messageSentAt(value string) (string, error) {
 	}
 	at, err := time.Parse(time.RFC3339, value)
 	if err != nil || at.After(cli.DealClock()) {
-		return "", cli.InputError("sent_at is when the message was sent, as the platform shows it, in RFC 3339 (2026-10-06T09:14:00Z), not in the future")
+		return "", cli.InputError("`sent_at` must be when the platform shows the message was sent, in RFC 3339 (for example 2026-10-06T09:14:00Z), and not in the future.")
 	}
 	return at.UTC().Truncate(time.Second).Format("2006-01-02T15:04:05Z"), nil
 }
@@ -38,7 +38,7 @@ func messageSentAt(value string) (string, error) {
 func checkAnswering(events []sealedEvent, snap *dealSnapshot) error {
 	snap.NoProposal = false
 	if snap.Answering != "" && snap.Action != offerAction {
-		return cli.InputError("answering goes with an offer: it names the buyer's message the offer answers. A commit rests on the buyer's acceptance of your offer")
+		return cli.InputError("`answering` goes only with an offer, naming the buyer's message the offer answers. A commit doesn't take it: it rests on the buyer's acceptance of your offer.")
 	}
 	if snap.Action != offerAction {
 		return nil
@@ -48,7 +48,7 @@ func checkAnswering(events []sealedEvent, snap *dealSnapshot) error {
 		return nil
 	}
 	if counterpartyMessage(events, snap.Answering) == nil {
-		return cli.InputError("answering names no message the buyer sent in this deal: give the capsule_id `deal note --kind message` returned for the buyer's message (from counterparty), noted before this check")
+		return cli.InputError("`answering` names no message the buyer sent in this deal. Give the capsule_id that `deal note --kind message` returned when you noted the buyer's message (`\"from\": \"counterparty\"`), before this check.")
 	}
 	return nil
 }

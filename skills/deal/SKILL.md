@@ -736,7 +736,9 @@ hold an offer to the age of the message it answers, and without `sent_at` a
 message counts from when you noted it. When an offer answers a buyer's
 message (their price, their question), name that message in the offer's check
 with `"answering": "<the capsule_id the message note returned>"`. A first offer
-before the buyer wrote anything names none. Only an offer takes `answering`. A
+before the buyer wrote anything names none. Once the buyer has written, an
+offer that names no message asks the user first. Only an offer takes
+`answering`. A
 buyer's price is answered with an offer, which the buyer then accepts; a
 commit rests on that acceptance and never names a message.
 

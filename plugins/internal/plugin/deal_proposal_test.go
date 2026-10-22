@@ -97,7 +97,7 @@ func TestASentAtInTheFutureOrUnreadableIsRefused(t *testing.T) {
 	for _, at := range []string{cli.DealClock().Add(time.Hour).UTC().Format(time.RFC3339), "yesterday", "2026-10-06 09:14"} {
 		err := dealRunErr(t, "note", "--deal", id, "--kind", "message", "--input", writeJSON(t, `{"from":"counterparty","text":"hi","sent_at":"`+at+`"}`))
 		require.Error(t, err, at)
-		assert.Contains(t, err.Error(), "sent_at is when the message was sent")
+		assert.Contains(t, err.Error(), "`sent_at` must be when the platform shows the message was sent")
 	}
 }
 
@@ -161,7 +161,7 @@ func TestAnsweringIsRefusedUnlessItNamesABuyersMessageOnAnOffer(t *testing.T) {
 	} {
 		err := dealRunErr(t, "check", "--deal", id, "--input", writeJSON(t, answeringOffer(answering)))
 		require.Error(t, err, name)
-		assert.Contains(t, err.Error(), "answering names no message the buyer sent in this deal", name)
+		assert.Contains(t, err.Error(), "`answering` names no message the buyer sent in this deal", name)
 	}
 	for name, check := range map[string]string{
 		"a commit": `{"action":"commit","amount_minor":185000,"terms":{"item":"example bicycle","quantity":1,"price_minor":185000},"answering":"` + buyer + `"}`,
@@ -169,7 +169,7 @@ func TestAnsweringIsRefusedUnlessItNamesABuyersMessageOnAnOffer(t *testing.T) {
 	} {
 		err := dealRunErr(t, "check", "--deal", id, "--input", writeJSON(t, check))
 		require.Error(t, err, name)
-		assert.Contains(t, err.Error(), "answering goes with an offer", name)
+		assert.Contains(t, err.Error(), "`answering` goes only with an offer", name)
 	}
 }
 

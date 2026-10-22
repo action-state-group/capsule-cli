@@ -25,7 +25,8 @@
   3, 6 rule 9 and 8), `external-check-input/v0`'s `proposal_at`,
   `check_profile.py` (a check's `source` names a counterparty message, on an
   offer only, never beside `no_proposal`; `no_proposal` never after such a
-  message) with fixtures, and the deal skill (note each buyer message as it
+  message; a message's `sent_at` is a real UTC time at or before its `at`)
+  with fixtures, and the deal skill (note each buyer message as it
   arrives, with `sent_at` when visible; `answering` on offers). A commit keeps
   the accepted offer's time.
 

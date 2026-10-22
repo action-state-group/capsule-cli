@@ -22,6 +22,7 @@ that is malformed in other ways)
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import hmac
 import json
@@ -761,6 +762,16 @@ def check_chain(records):
             if j is None or j >= i:
                 fail(i, f"ref {r['rel']} does not name an earlier record of this deal")
             by_rel.setdefault(r["rel"], []).append(j)
+
+        if t == "message" and "sent_at" in body:
+            # The platform's own time for the message: a real UTC time, never
+            # later than when the message was noted.
+            try:
+                sent = datetime.datetime.strptime(body["sent_at"], "%Y-%m-%dT%H:%M:%SZ")
+            except (TypeError, ValueError):
+                fail(i, "a message's sent_at is not a valid UTC time")
+            if sent > datetime.datetime.strptime(b["at"], "%Y-%m-%dT%H:%M:%SZ"):
+                fail(i, "a message's sent_at is later than when it was noted (at)")
 
         def one(rel, types, required=True):
             js = by_rel.get(rel, [])
@@ -1896,6 +1907,33 @@ def regen():
         "description": "An offer whose source names the task authority, not a message from the buyer.",
         "expected_stage": "chain", "expected_error_contains": "'source' must point at a message record",
         "chain_dir": "positive-typed-seller", "chain_prefix": names2[:-1], "record": r})
+    for name, sent_at, contains, desc in (
+            ("neg-typed-seller-message-sent-after-noted", "2026-10-07T10:09:30Z",
+             "sent_at is later than when it was noted",
+             "A buyer message whose sent_at is later than when it was noted."),
+            ("neg-typed-seller-message-sent-at-not-a-date", "2026-02-30T10:08:30Z",
+             "sent_at is not a valid UTC time",
+             "A buyer message whose sent_at matches the shape but names no real date.")):
+        r = json.loads(json.dumps(records2[m1]))
+        r["body"]["sent_at"] = sent_at
+        dump(FIX / "negative" / f"{name}.json", {
+            "fixture": name, "expect": "invalid", "description": desc,
+            "expected_stage": "chain", "expected_error_contains": contains,
+            "chain_dir": "positive-typed-seller", "chain_prefix": names2[:m1], "record": r})
+    for sender in ("agent", "user"):
+        # The chain up to the buyer's message, with that message from someone
+        # else: the offer answering it names no counterparty message.
+        msg_other = json.loads(json.dumps(records2[m1]))
+        msg_other["body"]["from"] = sender
+        r = json.loads(json.dumps(records2[-1]))
+        r["prev"]["digest"] = record_digest(msg_other)
+        r["refs"][1]["digest"] = record_digest(msg_other)
+        dump(FIX / "negative" / f"neg-typed-seller-offer-answers-the-{sender}s-message.json", {
+            "fixture": f"neg-typed-seller-offer-answers-the-{sender}s-message", "expect": "invalid",
+            "description": f"An offer whose source names a message from the {sender}, not from the buyer.",
+            "expected_stage": "chain", "expected_error_contains": "an offer answers a message from the counterparty",
+            "chain_dir": "positive-typed-seller", "chain_prefix": names2[:m1], "chain_between": [msg_other],
+            "record": r})
     r = json.loads(json.dumps(records2[-1]))
     del r["refs"][1]
     r["body"]["no_proposal"] = True
