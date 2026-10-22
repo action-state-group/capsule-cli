@@ -45,6 +45,9 @@ const (
 	classExternalCommitOther = "external_commitment.other"
 	classMarketplaceOffer    = "marketplace.offer"
 	classCommunicationSend   = "communication.send"
+	// classCommunicationPublish is a sale's listing post: the agent
+	// publishing the user's words to everyone on a platform.
+	classCommunicationPublish = "communication.publish"
 )
 
 // dealOfferClassVersion marks a step whose seller's offer is classed
@@ -118,6 +121,9 @@ func dealRoleActionClass(role, dealType, action, direction string) string {
 	if action == representAction {
 		return classCommunicationSend
 	}
+	if action == postAction {
+		return classCommunicationPublish
+	}
 	return dealActionClass(dealType, action, direction)
 }
 
@@ -141,7 +147,7 @@ func dealRoleSpendMinor(role, action, direction string, amount *int64) (int64, b
 // cancel, there is none.
 func dealSpendMinor(action, direction string, amount *int64) (int64, bool) {
 	switch {
-	case action == "cancel", action == offerAction, action == representAction:
+	case action == "cancel", action == offerAction, action == representAction, action == postAction:
 		return 0, true
 	case amount == nil || direction == "in":
 		return 0, false

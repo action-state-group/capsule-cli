@@ -282,27 +282,107 @@
         "no_proposal": {
           "description": "On an offer only: no message from the counterparty was sealed in this chain before the check, so the offer answers no proposal and there is none to go stale. Decided by the producer from its whole log. Never beside a source ref (the message an offer answers).",
           "const": true
-        }
-      },
-      "if": {
-        "properties": {
-          "action": {
-            "const": "represent"
+        },
+        "posting": {
+          "description": "On a post check (a sale's own log): the listing about to be posted. Its exact words as a salted commitment; the representation classes it states (the agent's label, shown on the card the user approves) and the platform it goes on, by the site's registrable domain, in the clear. A later post on the same platform replaces the earlier one there.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text_commitment",
+            "classes",
+            "platform"
+          ],
+          "properties": {
+            "text_commitment": {
+              "$ref": "record-common-v0.schema.json#/$defs/hex64"
+            },
+            "classes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "$ref": "record-common-v0.schema.json#/$defs/representation_class"
+              }
+            },
+            "platform": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 253,
+              "pattern": "^[^\\s/@]+\\.[^\\s/@]+$"
+            }
+          }
+        },
+        "listing_classes": {
+          "description": "Rule input, on an offer or commit check of a sale's thread: the representation classes every live listing of the sale states when the check is made, the intersection over the latest post act per platform on the sale's log ([] when they state no class in common). Absent when the sale has no post act. Class names only, never a reference to the post.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "record-common-v0.schema.json#/$defs/representation_class"
           }
         }
       },
-      "then": {
-        "required": [
-          "representing"
-        ]
-      },
-      "else": {
-        "not": {
-          "required": [
-            "representing"
-          ]
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "represent"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "representing"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "representing"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "post"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "posting"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "posting"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "offer",
+                  "commit"
+                ]
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "listing_classes"
+              ]
+            }
+          }
         }
-      }
+      ]
     }
   },
   "allOf": [

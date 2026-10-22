@@ -346,6 +346,11 @@ func evaluationBody(ev dealEvent, events []sealedEvent, v0 map[string]interface{
 	}
 	// The ruleset the profile's external checker ran, when it ran: the
 	// ruleset_digest above stays the built-in rule table's.
+	// No checker runs on a sale's post: the evaluation says so (rules_status),
+	// where every other evaluation states nothing new and keeps its bytes.
+	if r := ck.Rules; r != nil && r.Status == rulesNotApplicable {
+		out["rules_status"] = rulesNotApplicable
+	}
 	if r := ck.Rules; r != nil && r.Status == "evaluated" {
 		out["rules_checks"] = []interface{}{map[string]interface{}{"ruleset_id": r.RulesetID, "definition_digest": r.DefinitionDigest, "verdict": r.Verdict}}
 	}

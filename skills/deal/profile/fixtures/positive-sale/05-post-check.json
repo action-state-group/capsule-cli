@@ -1,0 +1,41 @@
+{
+  "fixture": "05-post-check.json",
+  "expect": "valid",
+  "story": "The listing about to be posted: its words by commitment, the classes it states and its platform. Every post check asks.",
+  "record": {
+    "type": "proposed-action/v0",
+    "canonicalization": "jcs",
+    "chain_id": "sale-3c9e1a7b5d2f8064",
+    "seq": 5,
+    "at": "2026-10-06T08:00:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "89cc7e938f97efd2ad00521394577a30349b48809af061ee9369012fb44ebd15"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
+    },
+    "body": {
+      "action": "post",
+      "action_class": "communication.publish",
+      "taxonomy_version": "6",
+      "spend_minor": 0,
+      "posting": {
+        "text_commitment": "20913576fec73e8383cfd1853bd6b78f600a8735c6691d0c3fbf593cb54fb1eb",
+        "classes": [
+          "condition"
+        ],
+        "platform": "marketplace.example"
+      },
+      "task_authority_ref": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "0d3ddcce45dc09d9cd0441f391c5d112959a9048e8b3d9e5fff964256edfcede"
+      }
+    }
+  },
+  "expected_digest": "b890ac8f6988245e1e8461f050953a91051833c43f1b9b1abbc3eee422b9fe6f"
+}

@@ -1,0 +1,70 @@
+{
+  "fixture": "06-post-evaluation.json",
+  "expect": "valid",
+  "story": "The post check asks (ASK), with capsulectl's own public_post difference: no rules checker runs on a post.",
+  "record": {
+    "type": "action-evaluation/v0",
+    "canonicalization": "jcs",
+    "chain_id": "sale-3c9e1a7b5d2f8064",
+    "seq": 6,
+    "at": "2026-10-06T08:00:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "b890ac8f6988245e1e8461f050953a91051833c43f1b9b1abbc3eee422b9fe6f"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
+    },
+    "refs": [
+      {
+        "rel": "checks",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "b890ac8f6988245e1e8461f050953a91051833c43f1b9b1abbc3eee422b9fe6f"
+      }
+    ],
+    "body": {
+      "disposition": "ASK",
+      "findings": [
+        {
+          "question": "asked",
+          "rule": "public_post",
+          "field": "posting"
+        }
+      ],
+      "options": [
+        "hold",
+        "proceed"
+      ],
+      "rendering_commitment": "6088b04c7cb51304b84b18bf97589e4b196d710f21c718f9caea5f67c0aff173",
+      "judge": {
+        "kind": "rules"
+      },
+      "proposed_action_digest": "b890ac8f6988245e1e8461f050953a91051833c43f1b9b1abbc3eee422b9fe6f",
+      "task_authority_ref": {
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "0d3ddcce45dc09d9cd0441f391c5d112959a9048e8b3d9e5fff964256edfcede"
+      },
+      "ruleset_digest": "0a2a70b102a3c1a08f7a18db0c30ef991aff18a93c4cdcfea0fc6aec5088d60a",
+      "materiality": "predicate",
+      "materiality_digest": "53af8695f236e1351c36c7996efadcc8665c7185862f95d9ac8acf070ad6b6d1",
+      "valid_until": "2026-10-06T08:15:00Z",
+      "authority_basis": [
+        {
+          "type": "task_authority",
+          "ref": {
+            "type": "record",
+            "digest_alg": "SHA-256",
+            "digest": "0d3ddcce45dc09d9cd0441f391c5d112959a9048e8b3d9e5fff964256edfcede"
+          }
+        }
+      ],
+      "rules_status": "not_applicable"
+    }
+  },
+  "expected_digest": "a194b566fe2ad9ac34aeaf8b649a330a6e71f6f3d579969258a290850a126fa0"
+}

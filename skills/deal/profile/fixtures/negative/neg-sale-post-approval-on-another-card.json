@@ -1,0 +1,48 @@
+{
+  "fixture": "neg-sale-post-approval-on-another-card",
+  "expect": "invalid",
+  "description": "The user's answer to a post check given on a card other than the one it rendered.",
+  "expected_stage": "chain",
+  "expected_error_contains": "not the card the post check rendered",
+  "chain_dir": "positive-sale",
+  "chain_prefix": [
+    "01-sale.json",
+    "02-task-authority.json",
+    "03-thread.json",
+    "04-thread-opened.json",
+    "05-post-check.json",
+    "06-post-evaluation.json"
+  ],
+  "record": {
+    "type": "action-approval/v0",
+    "canonicalization": "jcs",
+    "chain_id": "sale-3c9e1a7b5d2f8064",
+    "seq": 7,
+    "at": "2026-10-06T08:00:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "a194b566fe2ad9ac34aeaf8b649a330a6e71f6f3d579969258a290850a126fa0"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "902ce82ea4c41861520d5f4f4c9dc24473d090c5dd2a70ef7adcd759bbf88f2f"
+    },
+    "refs": [
+      {
+        "rel": "approves",
+        "type": "record",
+        "digest_alg": "SHA-256",
+        "digest": "a194b566fe2ad9ac34aeaf8b649a330a6e71f6f3d579969258a290850a126fa0"
+      }
+    ],
+    "body": {
+      "authority": "user_approval",
+      "choice": "proceed",
+      "proceed": true,
+      "said_commitment": "7551520de07a9da0842bcf667deab519f49ce6bb5ae2ac72bdd9ffe6a0fb43a7",
+      "rendering_commitment": "733ae8b5785856233bb3619e593b8fa6a64002f019dfe797a7b9c45de2d12bad"
+    }
+  }
+}

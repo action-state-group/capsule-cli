@@ -137,6 +137,10 @@
         "ruleset_digest": {
           "$ref": "record-common-v0.schema.json#/$defs/hex64"
         },
+        "rules_status": {
+          "description": "No rules checker ran on this check, pinned or not: a sale's post, which always asks. Absent on every other evaluation, whose rules_checks (or their absence) say what ran.",
+          "const": "not_applicable"
+        },
         "rules_checks": {
           "type": "array",
           "minItems": 1,

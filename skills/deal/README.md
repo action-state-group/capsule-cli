@@ -333,6 +333,8 @@ user's own and is never sent by default.
     be used (for example it failed, or reported another ruleset than the
     one pinned);
   - `not_configured`: the profile has no rules checker;
+  - `not_applicable`: no rules checker runs on the check, pinned or not (a
+    sale's listing post, which always asks);
   - `unrecorded`: a check sealed before checks recorded the rules.
 
   Each set of counts adds up to the number of checks. `rulesets` counts the
@@ -378,7 +380,7 @@ the array it always was):
     "money": [ { "currency": "USD", "spent_out_minor": 627, "refunded_in_minor": 0, "sold_for_minor": 190000 } ],
     "checks": {
       "verdicts": { "deny": 0, "pass": 3, "pause": 1 },
-      "rules": { "evaluated": 3, "not_configured": 0, "not_evaluated": 0, "partly_unanswered": 0, "unrecorded": 1 },
+      "rules": { "evaluated": 3, "not_applicable": 0, "not_configured": 0, "not_evaluated": 0, "partly_unanswered": 0, "unrecorded": 1 },
       "rulesets": [ { "ruleset_id": "asg/everyday/0.3.7", "definition_digest": "c1ce…", "checks": 3 } ]
     },
     "anomalies": { "acted_against_answer": 0, "differs_from_check": 0, "skipped_check": 1, "unapproved_disclosure": 0, "unapproved_representation": 0, "unsealed_approval": 0 }

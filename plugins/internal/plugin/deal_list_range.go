@@ -65,7 +65,7 @@ type dealListRuleset struct {
 func newDealListChecks() dealListChecks {
 	return dealListChecks{
 		Verdicts: map[string]int{"pass": 0, "pause": 0, "deny": 0},
-		Rules:    map[string]int{"evaluated": 0, "partly_unanswered": 0, "not_evaluated": 0, "not_configured": 0, "unrecorded": 0},
+		Rules:    map[string]int{"evaluated": 0, "partly_unanswered": 0, "not_evaluated": 0, "not_configured": 0, "not_applicable": 0, "unrecorded": 0},
 		Rulesets: []dealListRuleset{},
 	}
 }

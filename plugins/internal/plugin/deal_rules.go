@@ -318,6 +318,16 @@ type dealSnapshot struct {
 	// the offer answers no proposal, so there is none to go stale. Sealed as
 	// the rule input no_proposal; never beside Answering.
 	NoProposal bool `json:"no_proposal,omitempty"`
+	// Posting is, on a post check of a sale's own log, the listing about to
+	// be posted: its exact words (sealed as a commitment), the classes it
+	// states and the platform (deal_post.go).
+	Posting *dealPosting `json:"posting,omitempty"`
+	// ListingClasses is, on an offer or commit check of a sale's thread, the
+	// classes every live listing of the sale states when the check is made
+	// (listingClasses): set by `deal check` from the sale's log, never from
+	// the input file, and sealed as the rule input listing_classes. nil when
+	// the sale has no post act, or the check is of anything else.
+	ListingClasses *[]string `json:"listing_classes,omitempty"`
 }
 
 type dealDifference struct {
@@ -587,6 +597,10 @@ type dealAct struct {
 	// as its own amount: never the amount a spend cap evaluates (spend_minor
 	// is 0 on every cancel).
 	FeeMinor *int64 `json:"fee_minor,omitempty"`
+	// Posting is, on a sale's post act, the listing posted, exactly as its
+	// check sealed it: kept on this device, so a thread's later check reads
+	// the classes every live listing states (listingClasses).
+	Posting *dealPosting `json:"posting,omitempty"`
 }
 
 // actDirection is which way an act's amount moved, and the act it reverses.

@@ -33,7 +33,11 @@ import (
 //
 // Lookalike letters from other scripts are not folded here: matching reads
 // them through confusableSkeleton.
-func foldText(s string) string {
+func foldText(s string) string { return foldDecoded(decodeEscapes(s)) }
+
+// decodeEscapes is foldText's first stage: percent-escapes, HTML character
+// references and \uXXXX escapes decoded, repeatedly.
+func decodeEscapes(s string) string {
 	for i := 0; i < 4; i++ {
 		before := s
 		// A backslash escaped as in a JSON string (\\u0037) is one backslash.
@@ -61,6 +65,13 @@ func foldText(s string) string {
 			break
 		}
 	}
+	return s
+}
+
+// foldDecoded is the rest of foldText, on text whose escapes are decoded:
+// what draws nothing removed, NFKD, nonspacing marks dropped and digits made
+// ASCII.
+func foldDecoded(s string) string {
 	s = strings.Map(func(r rune) rune {
 		if ignorable(r) {
 			return -1

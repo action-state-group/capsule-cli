@@ -556,6 +556,9 @@ capsulectl. Follow them; never make up your own narration of a step.
 | `booking` | `pay`, `commit`, `cancel`, `share_contact`, `share_credentials` |
 | `service` | `pay`, `commit`, `sign`, `cancel`, `share_contact`, `share_credentials` |
 
+On a sale, the sale itself (`deal check --deal SALE_ID`) takes only `post`,
+a listing, which always asks.
+
 `commit` means sending a commitment (confirming a booking, accepting an
 offer, agreeing to buy). `cancel` means cancelling with the merchant. `deal
 check` refuses any other action name. A cancel-by date is a point of no return
@@ -752,6 +755,28 @@ none. Once the buyer has written, an offer that names no message asks the user
 first. Only an offer takes `answering`. A buyer's price is answered with an
 offer, which the buyer then accepts; a commit rests on that acceptance and
 never names a message.
+
+Posting a listing always asks the user first. Check it on the sale itself,
+before any buyer:
+
+1. Run `deal check --deal SALE_ID` with `{"action": "post", "posting":
+   {"text": "<the listing's exact words>", "classes": ["condition",
+   "price"], "platform": "<the site's domain>"}}`. `classes` are what the
+   listing states about the item, from the classes above.
+2. Show the user its card, as it is: it quotes the words and names what they
+   state. Seal their answer in their own words with `--shown-card`.
+3. Post only after their yes, those exact words, then note `deal note --deal
+   SALE_ID --kind act` with `{"action": "post", "posting": <the same
+   posting>}`. Changed words are a new check, and ask again.
+
+A listing never says the item is authentic, genuine, original, certified or
+legit, or that it is not fake, a replica or a knockoff, in any form. Such a
+word is refused. Say the seller's own claim only in their words, as one
+sentence "The seller says … (unverified)", with `authenticity` in `classes`,
+or reword it ("comes with its original box" becomes "comes with its box").
+`authenticity` goes in `classes` only with such a sentence, and always with
+one.
+A later post on the same site replaces the listing there.
 
 Seal an `intent` whenever the user changes what they asked (for example,
 "go ahead and share my number"), picks from options you offered (see "The

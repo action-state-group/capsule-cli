@@ -1,0 +1,39 @@
+{
+  "fixture": "neg-typed-seller-post-in-a-deal",
+  "expect": "invalid",
+  "description": "A post check in a seller's deal: a listing is posted on the sale's own log only.",
+  "expected_stage": "chain",
+  "expected_error_contains": "a step of a sale's own log",
+  "chain_dir": "positive-typed-seller",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-task-authority.json"
+  ],
+  "record": {
+    "type": "proposed-action/v0",
+    "canonicalization": "jcs",
+    "chain_id": "deal-5c2e8a1f3b7d9046",
+    "seq": 3,
+    "at": "2026-10-07T10:05:00Z",
+    "prev": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "3aad448872a1fa11371059d0cb4be9de7e57c73eb8f802aa7eacb98adc18c1f8"
+    },
+    "chain_root": {
+      "type": "record",
+      "digest_alg": "SHA-256",
+      "digest": "d3a51c0baef0520548ecdb5eb6016d117f2dab2a6e671cb9264e4eb64aec77f4"
+    },
+    "body": {
+      "action": "post",
+      "posting": {
+        "text_commitment": "62d2ecaa0dcd0308443a43a74344c37f9ae8409129ef66fe40cfeab3070d1920",
+        "classes": [
+          "condition"
+        ],
+        "platform": "marketplace.example"
+      }
+    }
+  }
+}
