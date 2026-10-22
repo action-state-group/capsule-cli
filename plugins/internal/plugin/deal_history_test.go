@@ -13,6 +13,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -444,8 +445,9 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 
 	path, _ := writeHistory(t, all, sentTo, picked...)
 	raw := string(mustRead(t, path))
+	readable := withoutRandomEncodings(raw)
 	for _, v := range append(buyerA, private...) {
-		assert.NotContains(t, raw, v, "the History sent to buyer B, whole file")
+		assert.NotContains(t, readable, v, "the History sent to buyer B, whole file")
 	}
 	verdict, _, findings, err := verifyHistory(t, path)
 	require.NoError(t, err, "%v", findings)
@@ -465,6 +467,33 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 	assert.Equal(t, "VALID", verdict)
 	assert.Equal(t, cli.DealAudienceKeep, entry["audience"], "verify says the file is the keep copy")
 	assert.NotContains(t, entry, "not_proven", "a keep copy discloses every payload")
+}
+
+// randomEncoding is a run of 16 or more hex digits (digests, nonces, ids) or
+// of 40 or more base64 or base64url characters (signatures, COSE): bytes
+// that are random to the reader, where any short digit string turns up by
+// chance about once per sixteen million positions (capsule-cli#403's run
+// found a six-digit amount inside one).
+var randomEncoding = regexp.MustCompile(`[0-9a-f]{16,}|[A-Za-z0-9+/_=-]{40,}`)
+
+// withoutRandomEncodings is raw with every random encoding masked, so a
+// check that a value is absent reads only what a person could read: field
+// names, ids' prefixes, times and every disclosed value.
+func withoutRandomEncodings(raw string) string {
+	return randomEncoding.ReplaceAllString(raw, "#")
+}
+
+// The mask hides only random bytes: a disclosed value, as a field or in a
+// sentence, still reads.
+func TestWithoutRandomEncodingsKeepsDisclosedValues(t *testing.T) {
+	in := `{"price_minor":170000,"text":"Avery here: 12 Juniper Court, 555 014 2233","digest":"` +
+		"a17000017000017000017000017000017000017000017000017000017000aaaa" + `","sig":"` +
+		"MTcwMDAwMTcwMDAwMTcwMDAwMTcwMDAwMTcwMDAwMTcwMDAwMTcwMDAw" + `"}`
+	out := withoutRandomEncodings(in)
+	for _, v := range []string{"170000", "Avery", "Juniper", "555 014 2233"} {
+		assert.Contains(t, out, v)
+	}
+	assert.Equal(t, 1, strings.Count(out, "170000"), "only the field's value, not the digest's or the signature's digits")
 }
 
 // A step sealed after the deal's latest checkpoint is not in the copy (no
