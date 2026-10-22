@@ -157,6 +157,10 @@
   (PROFILE.md section 8 and `check_profile.py`'s typed seller fixture) and the
   rules checker's input, so the everyday rules (0.3.8) need not ask again
   for a repeat. The input file cannot set them.
+- **Changed:** a share the user refused, or data given without authority (a
+  disclosure sealed `authority: none`), is not told: only what was given
+  with the user's rules or approval counts, for both rule inputs and for
+  capsulectl's own first-telling pause.
 
 ## v0.1.0-rc20
 

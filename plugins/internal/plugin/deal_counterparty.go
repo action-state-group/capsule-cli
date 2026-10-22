@@ -186,7 +186,11 @@ func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ 
 			if rc := ev.Check.Recipient; rc != nil && rc.NewProfile && ev.Check.Verdict == "pause" {
 				m.newProfileNoted = true
 			}
-		case kind == "disclosure" && ev.Disclosure != nil && opened[id] != nil:
+		// Only what was given with the user's rules or approval is told: a
+		// disclosure sealed with no authority (authority none) is not, so it
+		// never turns a later telling into a repeat. A share the user refused
+		// seals no disclosure at all.
+		case kind == "disclosure" && ev.Disclosure != nil && opened[id] != nil && ev.Disclosure.AuthorizedBy != "":
 			keys := disclosureRecipientKeys(*ev.Disclosure, leg[id], opened[id].Channel)
 			for _, f := range ev.Disclosure.Fields {
 				m.told = append(m.told, dealPartyTold{keys: keys, class: f.Class, at: ev.At})
@@ -261,7 +265,8 @@ func (m *dealCounterpartyMemory) firstTime(keys []string) bool {
 	return len(keys) == 0 || !slices.ContainsFunc(m.dealt, func(d dealPartyDeal) bool { return sameParty(keys, d.keys) })
 }
 
-// toldBefore returns when class was first disclosed to this party, or "".
+// toldBefore returns when class was first disclosed to this party with
+// authority, or "".
 func (m *dealCounterpartyMemory) toldBefore(keys []string, class string) string {
 	first := ""
 	if len(keys) == 0 {

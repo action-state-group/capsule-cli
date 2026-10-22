@@ -111,6 +111,46 @@ func TestNoMemoryNoTellingInputs(t *testing.T) {
 	assert.Equal(t, &dealTelling{Repeat: []string{}, ToldBefore: false}, m.telling([]string{"domain:society6.com"}, []string{"email"}))
 }
 
+// A share the user refused, with nothing given, is not told: the next check
+// of the same class to the same party is still a first telling.
+func TestARefusedShareIsNotTold(t *testing.T) {
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	sealed, given, _ := ruleInputs(t, id, shareInput(`"email"`))
+	tellings(t, sealed, given, []any{}, false)
+	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", latestCheck(t, id), "--choice", "hold", "--said", "no, don't")
+	held := heldNote(t, id, `{"fields":[{"class":"email","value":"`+homeEmail+`"}]}`)
+	assert.Equal(t, []any{"email"}, held["held"], "nothing is given")
+
+	sealed, given, _ = ruleInputs(t, id, shareInput(`"email"`))
+	tellings(t, sealed, given, []any{}, false)
+}
+
+// Data given without authority (a disclosure sealed authority none) is not
+// told: neither rule input, nor capsulectl's own first telling, counts it.
+func TestADisclosureWithoutAuthorityIsNotTold(t *testing.T) {
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	p, err := cli.LoadProfile("deal")
+	require.NoError(t, err)
+	s, err := openDealSession(t.Context(), p)
+	require.NoError(t, err)
+	require.NoError(t, s.useDeal(t.Context(), id, false))
+	events, err := s.load(t.Context(), id)
+	require.NoError(t, err)
+	_, err = s.seal(t.Context(), id, events, dealEvent{Kind: "disclosure", Disclosure: &dealDisclosure{
+		To: "counterparty", Fields: []dealDisclosureField{{Class: "email", Value: homeEmail}},
+		Reason: "no check covered it", Rule: "no_check"}})
+	require.NoError(t, err)
+	require.NoError(t, s.close())
+
+	sealed, given, _ := ruleInputs(t, id, shareInput(`"email"`))
+	tellings(t, sealed, given, []any{}, false)
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"email"`)))
+	assert.Equal(t, "pause", check["verdict"], "still a first telling")
+	assert.Contains(t, differenceTexts(check), "First time telling Shop your email")
+}
+
 // latestCheck is the id of the deal's latest check record.
 func latestCheck(t *testing.T, dealID string) string {
 	t.Helper()
