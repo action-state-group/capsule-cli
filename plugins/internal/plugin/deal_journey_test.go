@@ -724,4 +724,45 @@ func TestTheUsersAnswerIsTheirMove(t *testing.T) {
 	moves := journeyMoves(t, id)
 	assert.Equal(t, 1, strings.Count(strings.Join(moves, " "), "user:declined"), moves)
 	assert.NotContains(t, moves, "user:approved", "a card click is not the user's OK")
+
+	// The page words the no as the report does.
+	var want []any
+	for _, s := range dealRun(t, "report", "--deal", id)["journey"].([]any) {
+		want = append(want, s.(map[string]any)["label"])
+	}
+	assert.Equal(t, want, renderJourney(t, id, false)["labels"])
+}
+
+// An answer to an offer's or a commitment's check is worded by its amount,
+// in the card's currency; an answer not applied, or another choice, is no
+// move.
+func TestTheUsersAnswerToAnOfferNamesItsAmount(t *testing.T) {
+	amount := int64(190000)
+	events := []sealedEvent{
+		{CapsuleID: "open", Event: dealEvent{Kind: "open", Open: &dealOpen{Terms: dealTerms{Currency: "USD"}}}},
+		{CapsuleID: "snap", Event: dealEvent{Kind: "snapshot", Snapshot: &dealSnapshot{Action: "offer", AmountMinor: &amount}}},
+		{CapsuleID: "check", Event: dealEvent{Kind: "check", Check: &dealCheckResult{Action: "offer", Snapshot: "snap", Verdict: "pause"}}},
+		{CapsuleID: "ok", Event: dealEvent{Kind: "approval", Approval: &dealApproval{Check: "check", Approver: "user", Proceed: true}}},
+		{CapsuleID: "snap2", Event: dealEvent{Kind: "snapshot", Snapshot: &dealSnapshot{Action: "commit", AmountMinor: &amount}}},
+		{CapsuleID: "check2", Event: dealEvent{Kind: "check", Check: &dealCheckResult{Action: "commit", Snapshot: "snap2", Verdict: "pause"}}},
+		{CapsuleID: "no", Event: dealEvent{Kind: "approval", Approval: &dealApproval{Check: "check2", Approver: "user", Choice: "hold"}}},
+		// An answer not applied (the check was answered already) and a
+		// choice that is neither an OK nor a hold are no move.
+		{CapsuleID: "again", Event: dealEvent{Kind: "approval", Approval: &dealApproval{Check: "check2", Approver: "user", Proceed: true, Reason: "answered"}}},
+		{CapsuleID: "verify", Event: dealEvent{Kind: "approval", Approval: &dealApproval{Check: "check2", Approver: "user", Choice: "verify_contact"}}},
+		// The amount is in the card's currency, the snapshot's own.
+		{CapsuleID: "snap3", Event: dealEvent{Kind: "snapshot", Snapshot: &dealSnapshot{Action: "pay", AmountMinor: &amount, Terms: &dealTerms{Currency: "EUR"}}}},
+		{CapsuleID: "check3", Event: dealEvent{Kind: "check", Check: &dealCheckResult{Action: "pay", Snapshot: "snap3", Verdict: "pause"}}},
+		{CapsuleID: "eur", Event: dealEvent{Kind: "approval", Approval: &dealApproval{Check: "check3", Approver: "user", Proceed: true}}},
+		// A check of anything else is worded without its details.
+		{CapsuleID: "snap4", Event: dealEvent{Kind: "snapshot", Snapshot: &dealSnapshot{Action: "sign"}}},
+		{CapsuleID: "check4", Event: dealEvent{Kind: "check", Check: &dealCheckResult{Action: "sign", Snapshot: "snap4", Verdict: "pause"}}},
+		{CapsuleID: "signed", Event: dealEvent{Kind: "approval", Approval: &dealApproval{Check: "check4", Approver: "user", Choice: "hold"}}},
+	}
+	var labels []string
+	for _, s := range dealJourney(events, cli.BuiltinWording()) {
+		labels = append(labels, s.By+": "+s.Label)
+	}
+	assert.Equal(t, []string{"user: Asked", "agent: Waited for your OK", "user: OK'd offering $1,900", "agent: Waited for your OK", "user: Said no to agreeing to $1,900",
+		"agent: Waited for your OK", "user: OK'd paying €1,900", "agent: Waited for your OK", "user: Said no"}, labels)
 }
