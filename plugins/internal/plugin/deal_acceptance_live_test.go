@@ -188,18 +188,15 @@ func TestOnlyTheAcceptanceRuleFailingNamesTheAcceptance(t *testing.T) {
 	assert.Equal(t, "", acceptanceRuleVerdict(rules(dealRulesFinding{ID: "x", Check: "seller.release_on_acceptance_extra/1", Verdict: "fail"})))
 	assert.Equal(t, "", acceptanceRuleVerdict(&dealRules{Status: "not_evaluated"}))
 	assert.Equal(t, "", acceptanceRuleVerdict(nil))
-	// A not_evaluable s13 beside another rule's deny names the age, but
-	// never as the deny's cause.
+	notEvaluable := dealRulesFinding{ID: "s13", Check: s13.Check, Verdict: "not_evaluable", Reason: "no history"}
+	assert.Equal(t, "fail", acceptanceRuleVerdict(rules(notEvaluable, s13)), "a fail wins, whatever the order")
+	assert.Equal(t, "fail", acceptanceRuleVerdict(rules(s13, notEvaluable)), "a fail wins, whatever the order")
+	// A not_evaluable s13 beside another rule's deny did not cause the deny,
+	// so the card gives only the plain deny reason.
+	w := cli.BuiltinWording()
 	f := cardFacts{acceptanceOld: true, acceptanceRefused: false}
-	deny := dealCheckResult{Differences: diffs("rules_deny", "rules_not_evaluable")}
-	for _, row := range cardReasons {
-		if row.when != nil && row.key == "card.why.rules_deny.acceptance_too_old" {
-			assert.False(t, row.when(deny, dealSnapshot{}, f), "a deny s13 didn't cause")
-		}
-		if row.when != nil && row.key == "card.why.rules_deny" {
-			assert.True(t, row.when(deny, dealSnapshot{}, f), "the plain deny reason")
-		}
-	}
+	assert.Equal(t, []string{"your rules don't allow this"},
+		cardWhy(w, dealCheckResult{Differences: diffs("rules_deny")}, dealSnapshot{Action: "share_contact"}, f))
 }
 
 // setClock replaces the deal clock for the rest of the test.

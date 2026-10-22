@@ -165,20 +165,19 @@
 - **Added:** the check of that cancel asks "The buyer backed out: record
   their acceptance as called off?" (wording key
   `card.question.cancel.acceptance`).
-- **Added:** when the user's rules refuse a seller's share to the
-  thread's buyer, or could not fully check it, with a failing or
-  not-evaluable finding of the acceptance rule (`release_on_acceptance`,
-  s13), and every commit of that
-  thread is older than the cutoff of the 31-day history the rules checker
-  was given, the card says why. A refusal reads "Why I stopped: your rules
-  don't allow this, because the buyer's acceptance is older than 31 days.
-  Ask them to accept again." (wording key
-  `card.why.rules_deny.acceptance_too_old`); otherwise the reason is "the
-  buyer's acceptance is older than 31 days; ask them to accept again"
-  (`card.why.acceptance_too_old`). Both take `{days}`. Never on an
-  escalation, a finding of another rule, or a share of only the public
-  `pickup_area`; the refusal is always said, after at most one reason
-  above it. capsulectl
+- **Added:** when every commit of a sale thread is older than the cutoff
+  of the 31-day history the rules checker was given, the card on a
+  seller's share to the thread's buyer says why. When the acceptance rule
+  (`release_on_acceptance`, s13) fails and the rules refuse, it reads "Why
+  I stopped: your rules don't allow this, because the buyer's acceptance
+  is older than 31 days. Ask them to accept again." (wording key
+  `card.why.rules_deny.acceptance_too_old`). When s13 could not be
+  evaluated and nothing refused, the reason is "the buyer's acceptance is
+  older than 31 days; ask them to accept again"
+  (`card.why.acceptance_too_old`). Both take `{days}`. A refusal that s13
+  did not fail keeps the plain reason. Never on an escalation, a finding
+  of another rule, or a share of only the public `pickup_area`; the
+  refusal is always said, after at most one reason above it. capsulectl
   holds the whole thread, so it tells this from no acceptance at all.
 - **Changed:** the deal skill has the agent record the seller's `cancel`
   in the thread when a buyer who accepted withdraws, rather than closing
