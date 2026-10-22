@@ -231,7 +231,7 @@
     "say.receipt.first.contrast": "{merchant}'s receipt covers what you bought. This one covers how I bought it.",
     "say.receipt.first.keep": "Keep it for a missing item, a wrong charge, a refund, an expense report, or to check I did only what you OK'd.",
     "say.receipt.first.keep.called_off": "Keep it as a record of what I didn't do.",
-    "say.receipt.first.keep.sold": "Keep it for a buyer's dispute, a refund, your own records, or to check I did only what you OK'd.",
+    "say.receipt.first.keep.sold": "Keep it for a buyer's dispute, a refund request, your own records, or to check I did only what you OK'd.",
     "say.receipt.saved": "Our receipt for this is saved: what you asked, what you OK'd and what I did, locked.",
     "say.receipt.what.other": "going ahead",
     "say.receipt.what.pay": "paying {amount}",
