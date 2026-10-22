@@ -60,6 +60,13 @@ func TestAPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
 		"Zone 2, Park Place", "10 min on the way to Dallas", "Hartford, CT, 2 miles from downtown",
 		// Stated limits: a street type after the number, none at all, or more
 		// than three name words between.
+		// Text in another script is read as written: "ст." is a station.
+		"\u0432 5 \u043c\u0438\u043d\u0443\u0442\u0430\u0445 \u043e\u0442 \u0441\u0442. \u043c. \u0421\u043e\u043a\u043e\u043b",
+		"\u0417\u0430 \u0441\u0442. \u043c\u0435\u0442\u0440\u043e \u0421\u043e\u043a\u043e\u043b",
+		"5 \u043c\u0438\u043d \u043e\u0442 \u0441\u0442. \u043c\u0435\u0442\u0440\u043e \u0421\u043e\u043a\u043e\u043b",
+		// A stated limit: beside text in another script, a word wholly in that
+		// script is read as that script, even when it draws like a street type.
+		"12 Oak \u0405\u0442 \u0438",
 		"Hauptstraße 7", "1600 Broadway", "7 Old Mill Creek Run Rd",
 	} {
 		assert.False(t, readsAsStreetAddress(v), v)
@@ -185,7 +192,7 @@ func TestAPickupAreaWrittenToHideAStreetAddressIsRefused(t *testing.T) {
 		"HTML character reference":            "12 Oak &#83;t",
 		"named HTML reference":                "12&nbsp;Oak&nbsp;St",
 		"percent escape":                      "12%20Oak%20St",
-		"JSON escape":                         `12 Oak St`,
+		"JSON escape":                         "12 Oak \x5cu0053t",
 		"an escaped control":                  `12 Oak S\u0001t`,
 		"HTML tags around words":              `12 <span class="x">Oak</span> <i>St</i>`,
 		"HTML tag inside a word":              "12 Oak S<b></b>t",
@@ -208,6 +215,19 @@ func TestAPickupAreaWrittenToHideAStreetAddressIsRefused(t *testing.T) {
 		"Cyrillic О for a 0":                  "1ОО Oak St",
 		"lookalike stroke as l":               "8 Penny ǀn",
 		"unit with fullwidth #":               "＃5, Hyde Park",
+		// Review round 2 of #420.
+		"text that only looks like a tag": "Pickup <12 Oak St>",
+		"a unit in angle brackets":        "Near <Apt 4>",
+		"a < inside a tag":                "12 Oak S<b x=<>t",
+		"a tag opened twice":              "12 Oak S<b<>t",
+		"a link target with parentheses":  "12 Oak S[](x(y))t",
+		"a stroke for the number":         "\u01c0 Oak St",
+		"strokes for the number":          "\u01c0\u01c0 Oak St",
+		"Greek \u0399 for the number":     "\u0399 Oak St",
+		"a stroke in a unit number":       "Apt \u01c02",
+		"strokes and zeros in a unit":     "Suite \u01c0\u041e\u041e",
+		"a stroke after #":                "#\u01c02",
+		"Greek \u0399 in a unit number":   "Apt \u03992",
 	} {
 		assert.True(t, readsAsStreetAddress(v), "%s: %q", name, v)
 		err := dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate()
