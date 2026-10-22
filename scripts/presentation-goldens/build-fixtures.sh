@@ -1,34 +1,24 @@
 #!/usr/bin/env bash
-# build-fixtures.sh -- (re)build the presentation goldens' fixtures: six
+# build-fixtures.sh -- (re)build the presentation goldens' fixtures: the
 # synthetic bundles and the pages capsulectl emits for them, written to
 # internal/cli/testdata/presentation/. Run it once, when a fixture is added
 # or changed on purpose; TestPresentationGoldens then holds every later
 # version of the viewer to what these pages show.
 #
-#   scripts/presentation-goldens/build-fixtures.sh AAC_CHECKOUT
+#   scripts/presentation-goldens/build-fixtures.sh
 #
-# AAC_CHECKOUT is an agent-action-capsule clone that has the commit or the
-# go/ tag go.mod pins (fixture 3 is built with its composed/v1 vector generator). Each page
-# is emitted by the real CLI, so the page gate (internal/cli/page_gate.go)
-# applies: a refused page is recorded with the refusal instead. Keys and
-# capsule ids are fresh on every run, so a rebuild rewrites every fixture.
+# Each page is emitted by the real CLI, so the page gate
+# (internal/cli/page_gate.go) applies, and every fixture's page must pass it.
+# Keys and capsule ids are fresh on every run, so a rebuild rewrites every
+# fixture.
 #
-# Needs bash, jq, python3 (with `cryptography`) and git. Writes only the
-# fixtures' directory and its own temp directory.
+# Needs bash, go, jq, perl and python3. Writes only the fixtures' directory and its own
+# temp directory.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 here="$root/scripts/presentation-goldens"
 out="$root/internal/cli/testdata/presentation"
-aac="${1:?usage: build-fixtures.sh AAC_CHECKOUT}"
-# The Git ref of the agent-action-capsule commit go.mod pins: a
-# pseudo-version's commit hash, or the go module's tag (go/vX.Y.Z).
-aac_version=$(cd "$root" && go list -m -f '{{.Version}}' github.com/action-state-group/agent-action-capsule/go)
-if [[ "$aac_version" =~ [0-9]{14}-([0-9a-f]{12})$ ]]; then
-  aac_commit="${BASH_REMATCH[1]}"
-else
-  aac_commit="go/$aac_version"
-fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
@@ -236,13 +226,74 @@ capsulectl --profile deal deal report --deal "$id" --html page.html --bundle bun
 cp bundle.json page.html "$out/9-seller-later-evidence/"
 meta 9-seller-later-evidence "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "seller-later-evidence", emitted_by: "capsulectl deal report --deal ID --html page.html --bundle bundle.json (share keep), after a close and two later evidence records that confirm it", rerender: "deal-report", page: "written", verify: $v}')"
 
-# --- 3. bilateral receipt: composed/v1 joined, two members, one mismatch ---
+# --- 3. bilateral receipt: composed/v1 of the buyer's and seller's copies ---
+# A buyer opens a deal and the seller opens its side under the same deal id.
+# The buyer asks itself and the seller for their copies over the
+# evidence-request carrier, records both answers under the pinned keys, and
+# composes them with `deal compose`: the container's root is the composition
+# record on the buyer's compositions log for the deal, under its checkpoint, and each member
+# carries its responder's checkpoint, so `verify --bundle` says VALID
+# (capsule-cli#149). The two copies join on the deal id and agree.
 fixture 3-bilateral-composed
-git -C "$aac" show "${aac_commit}:python/scripts/generate_bundle_composed_vectors.py" >generator.py
-python3 "$here/composed_mismatch.py" generator.py >bundle.json
-cp bundle.json "$out/3-bilateral-composed/"
-meta 3-bilateral-composed "$(jq -n --arg v "$(verdict bundle.json)" --arg c "$aac_commit" '{kind: "bilateral-composed", emitted_by: ("composed_mismatch.py over agent-action-capsule " + $c + " python/scripts/generate_bundle_composed_vectors.py"), rerender: "page", page: "refused", verify: $v,
-  refused_because: "no capsulectl command renders a bundle file to a page; the page gate refuses this bundle (verify --bundle: INCOMPLETE, no checkpoint), as it does every published composed/v1 vector; the vendored viewer has no composed/v1 view"}')"
+export CAPSULE_DEAL_CHECK_URL=
+mkdir -p buyer seller
+# side PARTY: act as that party, in its own config and directory.
+side() { export XDG_CONFIG_HOME="$work/3-bilateral-composed/$1/config"; cd "$work/3-bilateral-composed/$1"; }
+side buyer
+capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
+cat >open.json <<'JSON'
+{"type": "purchase", "channel": "web",
+ "intent": {"verbatim": "buy me the example bicycle for at most 1900", "max_total_minor": 190000, "allowed": ["pay"]},
+ "who": {"name": "Example Seller", "domain": "seller.example"},
+ "terms": {"item": "example bicycle", "price_minor": 190000, "currency": "USD"},
+ "recourse": {"rail": "card", "refundable": false}}
+JSON
+id=$(capsulectl --profile deal deal open --input open.json | jq -r .deal_id)
+# The signing and checkpoint public keys the other party pins for this one.
+buyer_key=$(capsulectl profile show deal | jq -er '.TrustedKeys[0]')
+buyer_checkpoint=$(capsulectl profile show deal | jq -er '.Checkpoint.TrustedKeys[0]')
+side seller
+capsulectl deal init --profile deal --dir ./deal --no-witness --materiality "$root/skills/deal/profile/materiality-predicate/neutral.json" >/dev/null
+cat >open.json <<'JSON'
+{"type": "purchase", "demo": true, "channel": "web",
+ "intent": {"verbatim": "Sell my example bicycle; ask 1900", "party_role": "seller",
+            "asked": {"item": "example bicycle", "quantity": 1}, "allowed": ["offer", "commit"]},
+ "who": {"name": "Example Buyer", "domain": "buyer.example"},
+ "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000, "currency": "USD"},
+ "recourse": {"rail": "card", "refundable": false}}
+JSON
+capsulectl --profile deal deal open --records typed --deal-id "$id" --input open.json >/dev/null
+echo '{"action": "offer", "amount_minor": 190000, "terms": {"item": "example bicycle", "quantity": 1, "price_minor": 190000}}' >offer.json
+capsulectl --profile deal deal check --deal "$id" --input offer.json >/dev/null
+seller_key=$(capsulectl profile show deal | jq -er '.TrustedKeys[0]')
+seller_checkpoint=$(capsulectl profile show deal | jq -er '.Checkpoint.TrustedKeys[0]')
+# ask RESPONDER KEY CHECKPOINT: the buyer asks RESPONDER for its copy, the
+# responder answers, and the buyer records the answer. Sets record to the
+# request record id. It runs in this shell, not in $(...), so set -e stops
+# the build at the step that fails.
+ask() {
+  local dir="$work/3-bilateral-composed"
+  side buyer
+  jq -n --arg id "$id" '{subject: {kind: "correlation", value: $id}, coverage: {min_freshness: {size: 1}}}' >"ask-$1.json"
+  record=$(capsulectl --profile deal deal request --request "ask-$1.json" --responder "the $1" --output "$dir/request-$1.json" | jq -er .record_id)
+  side "$1"
+  capsulectl --profile deal deal respond --request "$dir/request-$1.json" --requester "the buyer" --output "$dir/response-$1.json" >/dev/null
+  side buyer
+  capsulectl --profile deal deal request --response "$dir/response-$1.json" --for "$record" --responder-key "$2" --responder-checkpoint-key "$3" >/dev/null
+}
+ask buyer "$buyer_key" "$buyer_checkpoint"
+own=$record
+ask seller "$seller_key" "$seller_checkpoint"
+theirs=$record
+side buyer
+capsulectl --profile deal deal compose --deal "$id" --member "$own" --member "$theirs" --output bundle.json >/dev/null
+# The page as anyone renders it: no plugin installed, no profile.
+# An empty CAPSULECTL_PLUGIN_ROOTS would mean the default roots, so it names
+# an empty directory.
+mkdir -p "$work/3-bilateral-composed/no-plugins"
+CAPSULECTL_PLUGIN_ROOTS="$work/3-bilateral-composed/no-plugins" XDG_CONFIG_HOME="$work/3-bilateral-composed/none" capsulectl presentation build --bundle bundle.json --out page.html >/dev/null
+cp bundle.json page.html "$out/3-bilateral-composed/"
+meta 3-bilateral-composed "$(jq -n --arg v "$(verdict bundle.json)" '{kind: "bilateral-composed", emitted_by: "capsulectl deal compose --deal ID --member BUYER_REQUEST --member SELLER_REQUEST --output bundle.json, then capsulectl presentation build --bundle bundle.json --out page.html", rerender: "presentation-build", page: "written", verify: $v}')"
 
 # --- 4 and 5. monthly outcome and compliance reports: Result v0 roots ------
 # A Result v0 sealed as the payload of a SQLite record. When these fixtures
@@ -289,4 +340,4 @@ mkdir -p "$out/6-generic-fallback-unknown-extension"
 jq '.extensions = ((.extensions // {}) + {"x-example-unknown/v1": {"anything": "a block no reader knows"}})' bundle.json >"$out/6-generic-fallback-unknown-extension/bundle.json"
 meta 6-generic-fallback-unknown-extension "$(jq -n --arg v "$(verdict "$out/6-generic-fallback-unknown-extension/bundle.json")" '{kind: "generic-fallback-unknown-extension", emitted_by: "fixture 6 bundle + extensions[\"x-example-unknown/v1\"]; no capsulectl command renders a bundle file, so its page is emitted by the gate and renderer disclose --html uses (see the golden test)", rerender: "page", page: "written", verify: $v}')"
 
-printf 'fixtures written to %s (agent-action-capsule %s)\n' "$out" "$aac_commit"
+printf 'fixtures written to %s\n' "$out"

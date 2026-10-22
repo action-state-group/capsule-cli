@@ -6,5 +6,10 @@
     "runner": "ubuntu-24.04"
   },
   "tolerance_px": 4,
-  "views": {}
+  "views": {
+    "3-bilateral-composed": {
+      "1280": 2091,
+      "print": 2091
+    }
+  }
 }
