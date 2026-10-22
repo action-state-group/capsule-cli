@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -58,23 +57,22 @@ func TestTaxWithinTheLimitIsNoChange(t *testing.T) {
 // A condition first carried on a non-pay check is counted at that check,
 // but r09 does not apply there: material_fields_changed/1.1.0 leaves
 // disclosure.personal out, and this share pauses only for its first
-// disclosure. Approving it adopts the condition into what was agreed, so
-// the pay check carrying it again counts no change and nothing asks about
-// it. This pins today's behaviour; capsule-cli#380 changes it (an approval
-// adopts only the terms its card named), and this test flips with it.
-func TestAConditionOnAnApprovedShareIsAdoptedWithoutAnAsk(t *testing.T) {
+// disclosure. Its card names the condition (capsule-cli#380), so the user's
+// approval adopts it knowingly: the pay check carrying it again counts no
+// change.
+func TestAConditionOnAnApprovedShareIsNamedOnItsCard(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name"],"terms":{"conditions":{"shipping":"Free shipping"}}}`))
 	require.Equal(t, "pause", share["verdict"], share["card"])
 	// It pauses for the first telling alone; no rule asks about the
-	// condition, and the card the user approves doesn't name it.
+	// condition, but the card the user approves names it.
 	assert.Equal(t, []string{"first_disclosure"}, rules(share))
-	assert.NotContains(t, strings.ToLower(share["card"].(string)), "shipping")
+	assert.Contains(t, share["card"], "Saying yes also agrees to shipping: Free shipping.")
 	_, err := answer(t, id, share["check_id"].(string), "yes", shownCard(t, share["card"].(string)))
 	require.NoError(t, err)
 	sealed, given, _ := ruleInputs(t, id, freeShippingPay)
 	for _, b := range []map[string]any{sealed, given} {
-		assert.Equal(t, float64(0), b["material_fields_changed"], "adopted by the share's approval (capsule-cli#380)")
+		assert.Equal(t, float64(0), b["material_fields_changed"], "adopted by the approval of the card that named it")
 	}
 	bodies := checkBodies(t, id)
 	require.Len(t, bodies, 2)

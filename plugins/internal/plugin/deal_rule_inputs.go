@@ -32,8 +32,14 @@ import (
 // A step sealed before records carried them has no RuleInputs and
 // re-derives without any. Version "2" (capsule-cli#340) counts
 // material_fields_changed against the leg in force (materialChanges2);
-// a step sealed under "1" re-derives with the count it had.
-const dealRuleInputsVersion = "2"
+// a step sealed under "1" re-derives with the count it had. Version "3"
+// (capsule-cli#380) counts the same way against an agreement that an
+// approval changes only by the terms its card named (adoptsNamedTermsOnly);
+// a step sealed under "2" or before re-derives with the agreement it had.
+// A check sealed under "3" or later says so in its record
+// (rule_inputs_version), so a verifier knows which rule its approval
+// adopts by. A var only so that a test can seal a deal across versions.
+var dealRuleInputsVersion = "3"
 
 // The field lists the two counts read, in this order, keyed as the check
 // body names them. terms.conditions counts as one key, so a count is never
@@ -192,28 +198,19 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 	if err != nil {
 		return
 	}
-	// The proposal as the check evaluates it: the deal as it stands, with
-	// what the check states on top.
-	who, terms, recourse := state.who, state.terms, state.wayToPay()
-	if sn.Who != nil {
-		who = overlayWho(who, *sn.Who)
-	}
-	if sn.Terms != nil {
-		terms = overlayTerms(terms, *sn.Terms)
-	}
-	if sn.Recourse != nil {
-		recourse = overlayRecourse(recourse, *sn.Recourse)
-	}
-	proposed := dealFieldValues(terms, &recourse, payeeOf(who))
-	agreedRecourse := state.agreedRecourse
+	agreed, proposed := state.materialSides(sn)
 	if version == "1" {
-		agreed := dealFieldValues(state.agreed, &agreedRecourse, payeeOf(open.Who))
+		agreedRecourse := state.agreedRecourse
+		agreed = dealFieldValues(state.agreed, &agreedRecourse, payeeOf(open.Who))
 		body["material_fields_changed"] = changedFields(materialFields, agreed, proposed)
 	} else {
-		agreed := dealFieldValues(state.agreed, &agreedRecourse, payeeOf(state.legFirst))
-		body["material_fields_changed"] = materialChanges2(agreed, proposed, agreedRecourse)
+		body["material_fields_changed"] = materialChanges2(agreed, proposed, state.agreedRecourse)
 	}
 	body["material_fields_basis"] = materialFieldsBasis
+	if adoptsNamedTermsOnly(version) {
+		// Which rule an approval of this check adopts by (foldDeal).
+		body["rule_inputs_version"] = 3
+	}
 	// Against the user's own words (intent.asked), only over the offer keys
 	// those words state: a key they never state (refundability, which they
 	// cannot) is not a change. With none stated there is nothing to compare,
@@ -225,6 +222,26 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 	}
 }
 
+// materialSides are the two sides material_fields_changed compares from
+// rule inputs "2" on: what was agreed, with the payee of the leg in force,
+// and the proposal as the check evaluates it (the deal as it stands, with
+// what the check states on top). The check card names the terms the same
+// comparison finds changed (cardChangedTerms).
+func (s dealState) materialSides(sn *dealSnapshot) (agreed, proposed map[string]interface{}) {
+	who, terms, recourse := s.who, s.terms, s.wayToPay()
+	if sn.Who != nil {
+		who = overlayWho(who, *sn.Who)
+	}
+	if sn.Terms != nil {
+		terms = overlayTerms(terms, *sn.Terms)
+	}
+	if sn.Recourse != nil {
+		recourse = overlayRecourse(recourse, *sn.Recourse)
+	}
+	agreedRecourse := s.agreedRecourse
+	return dealFieldValues(s.agreed, &agreedRecourse, payeeOf(s.legFirst)), dealFieldValues(terms, &recourse, payeeOf(who))
+}
+
 // materialChanges2 is material_fields_changed under rule inputs "2", over
 // the same list, against the leg in force: a quantity either side leaves
 // out is 1; a place counts only when both state it, and a refinement of the
@@ -232,6 +249,11 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 // counts only once something was agreed about it with this leg. Every other
 // key counts as changedFields does, a key added included.
 func materialChanges2(agreedIn, proposedIn map[string]interface{}, agreedRecourse dealRecourse) int {
+	return len(materialChangedKeys2(agreedIn, proposedIn, agreedRecourse))
+}
+
+// materialChangedKeys2 are the keys materialChanges2 counts, in list order.
+func materialChangedKeys2(agreedIn, proposedIn map[string]interface{}, agreedRecourse dealRecourse) []string {
 	// Copies: the caller's maps are read again (offer_fields_changed).
 	agreed, proposed := maps.Clone(agreedIn), maps.Clone(proposedIn)
 	for _, side := range []map[string]interface{}{agreed, proposed} {
@@ -239,14 +261,14 @@ func materialChanges2(agreedIn, proposedIn map[string]interface{}, agreedRecours
 			side["terms.quantity"] = int64(1)
 		}
 	}
-	n := 0
+	var changed []string
 	for _, k := range materialFields {
 		x, inA := agreed[k]
 		y, inB := proposed[k]
 		switch k {
 		case "terms.place":
 			if inA && inB && !samePlace(x.(string), y.(string)) {
-				n++
+				changed = append(changed, k)
 			}
 			continue
 		case "recourse.rail":
@@ -258,14 +280,11 @@ func materialChanges2(agreedIn, proposedIn map[string]interface{}, agreedRecours
 				continue
 			}
 		}
-		switch {
-		case inA != inB:
-			n++
-		case inA && !jcsEqual(x, y):
-			n++
+		if inA != inB || (inA && !jcsEqual(x, y)) {
+			changed = append(changed, k)
 		}
 	}
-	return n
+	return changed
 }
 
 // statedChanges counts the keys of list that stated states and proposed

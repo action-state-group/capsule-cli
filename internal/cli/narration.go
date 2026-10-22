@@ -51,12 +51,14 @@ type Narration struct {
 }
 
 // Ask is a card the agent shows the user (voice ask). On a check it is the
-// sealed card's parts; Options are the check's sealed options. Reply
-// "words" says the answer is the user's own words rather than a button.
+// sealed card's parts; Options are the check's sealed options. Terms names
+// each term a yes agrees to beside the action itself. Reply "words" says
+// the answer is the user's own words rather than a button.
 type Ask struct {
 	Tag        string      `json:"tag"`
 	Question   string      `json:"question"`
 	Facts      string      `json:"facts,omitempty"`
+	Terms      string      `json:"terms,omitempty"`
 	Why        []string    `json:"why,omitempty"`
 	GoodToKnow string      `json:"good_to_know,omitempty"`
 	Next       string      `json:"next,omitempty"`
@@ -519,10 +521,11 @@ func NarrateWith(c *cobra.Command, build func(Wording) Narration) Narration {
 }
 
 // AskText is a card as the lines the user reads: the tag, the question,
-// the facts, why it is asked, what is good to know and what comes next.
+// the facts, the terms a yes agrees to, why it is asked, what is good to
+// know and what comes next.
 // Button labels are not part of it.
 func AskText(w Wording, a Ask) string {
-	lines := []string{a.Tag, a.Question, a.Facts}
+	lines := []string{a.Tag, a.Question, a.Facts, a.Terms}
 	if len(a.Why) > 0 {
 		key := a.WhyKey
 		if key == "" {

@@ -199,6 +199,10 @@
           "$ref": "record-common-v0.schema.json#/$defs/hex64",
           "description": "Lowercase hex SHA-256 of the JCS bytes of the material field list, in order."
         },
+        "rule_inputs_version": {
+          "const": 3,
+          "description": "The rule inputs version the check was sealed under, from 3 on: what was agreed, which material_fields_changed compares with, changes by an approval of this check only in the terms its card named (PROFILE section 6 rule 13). Absent on a check sealed before; an approval of such a check adopts the checked terms whole, as it did."
+        },
         "offer_fields_changed": {
           "type": "integer",
           "minimum": 0,

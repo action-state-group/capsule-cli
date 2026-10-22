@@ -677,6 +677,10 @@ def check_chain(records):
         late_answer = t == "approval" and body.get("choice") == "confirm_limits" and not body.get("proceed")
         if typed_chain and not b.get("typed") and t in ("check", "verdict", "approval", "action", "outcome") and not late_answer:
             fail(i, f"in a chain of typed records a {t} step is a typed record")
+        # A check that states its rule inputs version (section 8) carries the count that version
+        # defines; one without it re-derives and verifies as before.
+        if t == "check" and "rule_inputs_version" in body and "material_fields_basis" not in body:
+            fail(i, "a check that states rule_inputs_version carries material_fields_changed and material_fields_basis")
         if typed_chain and t == "disclosure" and body.get("authority") == "approval":
             fail(i, "in a chain of typed records an approved disclosure is an action-record/v0")
         if t == "one_shot_override":
@@ -1902,6 +1906,11 @@ def regen():
     r = copy.deepcopy(records[5]); r["body"]["limits"]["new"]["max_total_minor"] = 90000
     neg("neg-confirm-limits-not-the-proposal", "chain", "not what the intent proposed", r, 5,
         "A confirm_limits answer whose new version raises the limit, which the intent it approves did not propose.")
+
+    # A check that states its rule inputs version but carries no count under it.
+    r = copy.deepcopy(records[12]); r["body"]["rule_inputs_version"] = 3
+    neg("neg-rule-inputs-version-without-count", "chain", "states rule_inputs_version", r, 12,
+        "The pay check states rule_inputs_version 3 but carries no material_fields_changed or material_fields_basis.")
 
     # An answer given on a card other than the one the check rendered: its card_commitment, under
     # the verdict's card nonce, differs from the verdict's.

@@ -126,6 +126,27 @@
   Pkwy, or a numbered unit such as Apt 4 or #5), naming `pickup_location`
   for an exact spot; nothing is sealed.
 
+### An approval agrees only to the terms its card named (capsule-cli#380)
+
+- **Changed (breaking):** a check's card names every term the check changes
+  from what was agreed, whatever the action, in one new line: `Saying yes
+  also agrees to <terms>.` (new `card.terms.*` keys: a pinned pack needs
+  them, or the built-in pack is used). The terms are the ones
+  `material_fields_changed` counts, the payee aside.
+- **Changed (breaking):** an approved proceed adopts a changed term into what
+  was agreed only when the card it was given on named it. An approval with
+  no card (`standing_intent`, on a check that passed) adopts none, so the
+  next check carrying that term still counts it and r09 asks at the pay. A
+  term stated for the first time is still adopted. PROFILE.md section 6 rule
+  13 and section 8 say so.
+- **Added:** a check sealed under this rule states `rule_inputs_version: 3`
+  in its record (x-deal-v0 check body and `proposed-action/v0`), so a
+  verifier knows which rule an approval of it adopts by. Each approval
+  adopts by its own check's rule: a check without the member re-derives and
+  verifies as before, in a deal that mixes versions too. The profile checker
+  refuses a check that states it without `material_fields_changed` and
+  `material_fields_basis`.
+
 ## v0.1.0-rc19
 
 ### The deal page's as-of line (capsule-cli#362)
