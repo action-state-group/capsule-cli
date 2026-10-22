@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"regexp"
 	"strings"
 	"time"
 
@@ -241,6 +242,181 @@ func receiptLines(w cli.Wording, events []sealedEvent) []string {
 	return append(lines, w.Line("say.receipt.saved", nil))
 }
 
+// firstReceiptLines are what the first receipt adds, once: what this one
+// covers next to the merchant's (a paid purchase from a merchant with a
+// sealed name), and why it is worth keeping, or, for an errand called off,
+// that it is a record of what was not done (actionstate-muse#208).
+func firstReceiptLines(w cli.Wording, events []sealedEvent) []string {
+	state, err := foldDeal(events)
+	if err != nil {
+		return nil
+	}
+	if fc := finalClose(events); fc >= 0 {
+		if o := events[fc].Event.Close.Outcome; o == "called_off" || o == "not_selected" {
+			return []string{w.Line("say.receipt.first.keep.called_off", nil)}
+		}
+	}
+	if dealRole(events) == dealRoleSeller {
+		return []string{w.Line("say.receipt.first.keep.sold", nil)}
+	}
+	var lines []string
+	if m := buildDealMoney(events, state.terms.Currency); m != nil && m.PaidMinor > 0 && state.open.Type == "purchase" {
+		// Only a sealed name that reads as one: never one from an email or
+		// a website field, and never an id or a domain.
+		if name := strings.TrimSpace(legWho(events).Name); name != "" && !idLike.MatchString(name) {
+			lines = append(lines, w.Line("say.receipt.first.contrast", cli.V{"merchant": name}))
+		}
+	}
+	return append(lines, w.Line("say.receipt.first.keep", nil))
+}
+
+// idLike is a name that is an id, a handle or a domain rather than what
+// people call a merchant: "sticker_shop_example", "shop@example.com",
+// "marketplace.example".
+var idLike = regexp.MustCompile(`[_@/]|^[^\s]+\.[A-Za-z]{2,}$`)
+
+// isFirstReceipt is whether the step just sealed (the last of events) is the
+// profile's first receipt moment: the deal's only act or final close, and no
+// other deal has a buyer's act or a close. It is read from the sealed steps
+// alone; nothing records that a receipt was shown. Another deal's close
+// counts even when it left the deal open, so the lines are never said twice.
+// A seller's acts (an offer, accepting one) are not receipt moments, here or
+// in another deal: a seller's first receipt is its thread's close.
+func (s *dealSession) isFirstReceipt(ctx context.Context, dealID string, events []sealedEvent) bool {
+	seller := dealRole(events) == dealRoleSeller
+	if seller && events[len(events)-1].Event.Kind == "act" {
+		return false
+	}
+	n := 0
+	for _, se := range events {
+		if se.Event.Kind == "act" && !seller {
+			n++
+		}
+		if c := se.Event.Close; se.Event.Kind == "close" && c != nil {
+			if _, final := closeKeys[c.Outcome]; final {
+				n++
+			}
+		}
+	}
+	if n != 1 {
+		return false
+	}
+	others, err := s.index.steps(ctx, stepFilter{Kinds: []string{"open", "act", "close"}, ExceptDeal: dealID})
+	if err != nil {
+		return false
+	}
+	sellers := map[string]bool{}
+	for _, st := range others {
+		var ev dealEvent
+		if st.Kind == "open" && json.Unmarshal([]byte(st.Local), &ev) == nil && ev.Open != nil && ev.Open.Intent.PartyRole == dealRoleSeller {
+			sellers[st.DealID] = true
+		}
+	}
+	for _, st := range others {
+		if st.Kind == "close" || st.Kind == "act" && !sellers[st.DealID] {
+			return false
+		}
+	}
+	return true
+}
+
+// nothingDoneLine is a called-off purchase's proof line: the receipt shows
+// nothing paid (and nothing shared). `deal close` refuses called_off and
+// not_selected on a deal with an act, so only a disclosure can have
+// happened. A seller's thread says neither: its payments are evidence
+// notes, not acts.
+func nothingDoneLine(w cli.Wording, events []sealedEvent) string {
+	if dealRole(events) == dealRoleSeller {
+		return ""
+	}
+	for _, se := range events {
+		if se.Event.Kind == "disclosure" {
+			return w.Line("say.close.nothing_paid", nil)
+		}
+	}
+	return w.Line("say.close.nothing_done", nil)
+}
+
+// closeLines are a final close's receipt lines: the outcome, and, when the
+// deal was called off, what the receipt shows was not done.
+func closeLines(w cli.Wording, key string, events []sealedEvent) []string {
+	lines := []string{w.Line(key, nil)}
+	if key == "say.close.called_off" {
+		lines = append(lines, nothingDoneLine(w, events))
+	}
+	return lines
+}
+
+// listingKeys name a listing's chat line by how the deal ended: its final
+// close's outcome, and "open" while it has none.
+var listingKeys = map[string]string{"completed": "say.list.deal.bought", "mismatch": "say.list.deal.mismatch", "called_off": "say.list.deal.called_off", "not_selected": "say.list.deal.not_chosen", "open": "say.list.deal.open"}
+
+// listingSay is a listing's line for "show my receipts": the item as the
+// deal last agreed it, how it ended, the amount paid when the deal paid it
+// in one currency, and the local date it ended (or opened, while open). No
+// deal id; a demo says so.
+func listingSay(w cli.Wording, l dealListing, events []sealedEvent) string {
+	item := ""
+	if state, err := foldDeal(events); err == nil {
+		item = shortTitle(state.agreed.Item)
+	} else if open := events[0].Event.Open; open != nil {
+		// A sale's log opens with the sale, not a deal.
+		item = shortTitle(open.Terms.Item)
+	}
+	if item == "" && l.Summary.What != dealNotRecorded {
+		item = shortTitle(l.Summary.What)
+	}
+	if item == "" {
+		item = w.Line("say.list.untitled", nil)
+	}
+	if open := events[0].Event.Open; open != nil && open.Demo {
+		item = w.Line("say.list.demo", cli.V{"item": item})
+	}
+	outcome, date := "open", l.OpenedAt
+	if fc := finalClose(events); fc >= 0 {
+		outcome, date = events[fc].Event.Close.Outcome, events[fc].Event.At
+	}
+	vals := cli.V{"item": item, "date": listingDate(date)}
+	if l.Kind == "sale" {
+		for _, se := range events {
+			if se.Event.Kind == "sale_close" {
+				vals["date"] = listingDate(se.Event.At)
+				return w.Line("say.list.sale.closed", vals)
+			}
+		}
+		return w.Line("say.list.sale", vals)
+	}
+	key, ok := listingKeys[outcome]
+	if !ok {
+		return ""
+	}
+	if outcome == "completed" || outcome == "mismatch" {
+		if outcome == "completed" && l.Result == dealResultSold {
+			key = "say.list.deal.sold"
+		}
+		if a := l.Summary.Amount; a != nil && a.Basis == "paid" && a.OtherCurrencyActs == 0 && a.AmountMinor > 0 {
+			vals["amount"] = spokenMoney(a.AmountMinor, a.Currency)
+		} else {
+			key += ".no_amount"
+		}
+	}
+	return w.Line(key, vals)
+}
+
+// listingDate is a listing's local date: "Oct 20", with the year when it is
+// not this year's.
+func listingDate(at string) string {
+	t, err := time.Parse(time.RFC3339, at)
+	if err != nil {
+		return localDate(at)
+	}
+	t = t.In(time.Local)
+	if t.Year() != cli.DealClock().In(time.Local).Year() {
+		return t.Format("Jan 2, 2006")
+	}
+	return t.Format("Jan 2")
+}
+
 // shortTitle shortens an item's title for a chat line: its first eight
 // words, and an ellipsis when it had more.
 func shortTitle(title string) string {
@@ -252,12 +428,14 @@ func shortTitle(title string) string {
 }
 
 // report is a report's narration: its lines, then, when a page was written,
-// "View details" and the page to send.
+// "View details" and the page to send in its own message, labelled as the
+// user's own copy. A narrated page is always that copy: a copy for someone
+// else is silent.
 func report(w cli.Wording, lines []string, htmlPath string) cli.Narration {
 	n := cli.Narration{Voice: cli.VoiceReport}
 	if htmlPath != "" {
 		lines = append(lines, w.Line("report.view_details", nil))
-		n.Attach = &cli.Attach{Path: htmlPath, MediaType: "text/html", Label: w.Line("report.view_details", nil)}
+		n.Attach = &cli.Attach{Path: htmlPath, MediaType: "text/html", Label: w.Line("report.private", nil)}
 	}
 	n.Say = cli.Lines(lines...)
 	return n
@@ -331,7 +509,7 @@ func reportSay(out map[string]any, p cli.Profile, events []sealedEvent, htmlPath
 		for _, se := range events {
 			if se.Event.Kind == "close" && se.Event.Close != nil {
 				if key, final := closeKeys[se.Event.Close.Outcome]; final {
-					lines = append([]string{w.Line(key, nil)}, lines...)
+					lines = append(closeLines(w, key, events), lines...)
 				}
 			}
 		}

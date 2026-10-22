@@ -1754,7 +1754,14 @@ func dealNoteCommand() *cobra.Command {
 				out["reason"] = ev.Act.Reason
 				out["rule"] = ev.Act.Rule
 				all := append(events, se)
-				s.stepReport(ctx, out, all, htmlPath, cli.VoiceReport, func(w cli.Wording) []string { return receiptLines(w, all) })
+				first := s.isFirstReceipt(ctx, dealID, all)
+				s.stepReport(ctx, out, all, htmlPath, cli.VoiceReport, func(w cli.Wording) []string {
+					lines := receiptLines(w, all)
+					if first {
+						lines = append(lines, firstReceiptLines(w, all)...)
+					}
+					return lines
+				})
 			case "claim":
 				if cl := ev.Claim; cl.SourceKind == "agent" && representationRules(events) {
 					out["authorized_by"] = cl.AuthorizedBy
@@ -2291,7 +2298,14 @@ func dealCloseCommand() *cobra.Command {
 			}
 			all := append(events, se)
 			if key, final := closeKeys[result.Outcome]; final {
-				s.stepReport(ctx, out, all, htmlPath, cli.VoiceReport, func(w cli.Wording) []string { return []string{w.Line(key, nil)} })
+				first := s.isFirstReceipt(ctx, dealID, all)
+				s.stepReport(ctx, out, all, htmlPath, cli.VoiceReport, func(w cli.Wording) []string {
+					lines := closeLines(w, key, all)
+					if first {
+						lines = append(lines, firstReceiptLines(w, all)...)
+					}
+					return lines
+				})
 			} else {
 				s.stepReport(ctx, out, all, htmlPath, cli.VoiceLine, func(w cli.Wording) []string { return []string{w.Line("say.close.open", nil)} })
 			}

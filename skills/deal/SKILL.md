@@ -426,8 +426,10 @@ capsulectl. Follow them; never make up your own narration of a step.
     `ask.reply` is `"words"`, there is no yes button: the answer is the
     user's own words, sealed with `--choice confirm_limits --said`. If
     they hold, run nothing and say `ask.hold_say`.
-  - `report`: say `say`; when the result has `attach`, send that file next,
-    in its own message, after the "View details" line.
+  - `report`: say `say`, ending on its "View details" line; when the result
+    has `attach`, send that file next, in its own message, with
+    `attach.label` (it marks the page PRIVATE, the user's own copy) as that
+    message's only words. Never put the page and buttons in one message.
   - `error`: say `say`, then stop. Nothing is paid or shared after it. When
     the failed step was one that already happened (an act, a payment, a
     delivery, a close, evidence), never run it again: run `deal report` and
@@ -440,6 +442,30 @@ capsulectl. Follow them; never make up your own narration of a step.
   the same turn after a merchant email, a payment received, a delivery or a
   refund is noted; and on the next turn about a deal whose email came back
   `"state": "deferred"`, once a tick has sealed it.
+- **When a receipt goes out by itself.** Send the receipt, unasked, at
+  these moments only:
+  - after a payment: `deal note --kind act --html FILE`;
+  - when an errand ends, arrived or called off, and when a sale's buyer
+    thread closes: `deal close --html FILE`. When a hold or a deny ends
+    an errand where nothing was done yet (no act on record), close it
+    `called_off` all the same: its receipt shows nothing was paid (or
+    shared), and the user keeps it as proof. After an act, close it with
+    what happened (`received`, `not_received`);
+  - an updated receipt only on a material change: a merchant email added,
+    a refund, and on a sale a payment received or the handover (the list
+    above). Nothing else sends one: the cadence, `deal tick`, checkpoints
+    and other bookkeeping stay silent.
+
+  The first receipt the user ever gets carries one or two more lines (what
+  it covers next to the merchant's, and why to keep it); capsulectl adds
+  them to `say` that once. Never add them yourself.
+- **"Show my receipts" comes from the record, never from memory.** Run
+  `deal list --json` (with `--since` and `--until` when the user names a
+  period, and then say its `say` first) and say each deal's `say`, one per
+  line, in the order listed. For "show my receipt for <item>", find that
+  deal in the same list by its `say` and `summary`, run `deal report --deal
+  ID --html FILE`, and send it as any `report`. Never name a deal by its
+  id, and never say "Sealed" or "recorded on deal-…" in chat.
 - **Fields for you, not the user.** `next`, `note` and `reason` tell you
   what to do; never read them out.
 - **Times are the host's.** Times in `say` are in the time zone capsulectl
