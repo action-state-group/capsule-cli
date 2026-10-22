@@ -338,9 +338,9 @@ user's own and is never sent by default.
     made before the details changed, an act taken before a statement the
     user asked the agent to make first, or a seller's commit with no
     accepted offer or on terms other than the accepted offer's.
-  - `unsealed_approval`: an act without a go-ahead in force: the user said
-    not to proceed or gave no answer, the go-ahead was already used up, or
-    the only answer was the agent's own.
+  - `acted_against_answer`: an act the user had said not to go ahead with.
+  - `unsealed_approval`: an act without a go-ahead in force: no answer, the
+    go-ahead was already used up, or the only answer was the agent's own.
   - `differs_from_check`: an act other than what was checked (`deal
     report`'s `asked_vs_did`).
   - `unapproved_disclosure`: a disclosure no approval covered.
@@ -373,7 +373,7 @@ the array it always was):
       "rules": { "evaluated": 3, "not_configured": 0, "not_evaluated": 0, "partly_unanswered": 0, "unrecorded": 1 },
       "rulesets": [ { "ruleset_id": "asg/everyday/0.3.7", "definition_digest": "c1ce…", "checks": 3 } ]
     },
-    "anomalies": { "differs_from_check": 0, "skipped_check": 1, "unapproved_disclosure": 0, "unapproved_representation": 0, "unsealed_approval": 0 }
+    "anomalies": { "acted_against_answer": 0, "differs_from_check": 0, "skipped_check": 1, "unapproved_disclosure": 0, "unapproved_representation": 0, "unsealed_approval": 0 }
   },
   "disclosures": [ { "class": "address", "recipients": 4, "to_sellers": 3, "to_buyers": 1, "to_others": 0 } ]
 }

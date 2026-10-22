@@ -53,7 +53,7 @@ func TestDealListCountsEmptyRange(t *testing.T) {
 		"checks":{"verdicts":{"pass":0,"pause":0,"deny":0},
 			"rules":{"evaluated":0,"partly_unanswered":0,"not_evaluated":0,"not_configured":0,"unrecorded":0},
 			"rulesets":[]},
-		"anomalies":{"skipped_check":0,"unsealed_approval":0,"differs_from_check":0,"unapproved_disclosure":0,"unapproved_representation":0}}`, string(raw))
+		"anomalies":{"acted_against_answer":0,"skipped_check":0,"unsealed_approval":0,"differs_from_check":0,"unapproved_disclosure":0,"unapproved_representation":0}}`, string(raw))
 }
 
 func TestDealListCountsChecks(t *testing.T) {
@@ -147,12 +147,12 @@ func TestDealListCountsAnomalies(t *testing.T) {
 	}
 	r, err := dealListInRange(logs, countsRange)
 	require.NoError(t, err)
-	assert.Equal(t, map[string]int{"skipped_check": 1, "unsealed_approval": 3, "differs_from_check": 1, "unapproved_disclosure": 1, "unapproved_representation": 1}, r.Totals.Anomalies)
+	assert.Equal(t, map[string]int{"acted_against_answer": 1, "skipped_check": 1, "unsealed_approval": 2, "differs_from_check": 1, "unapproved_disclosure": 1, "unapproved_representation": 1}, r.Totals.Anomalies)
 	assert.Equal(t, 1, r.Totals.Checks.Verdicts["pass"])
 
 	later, err := dealListInRange(logs, dealListBounds{since: countsRange.until})
 	require.NoError(t, err)
-	assert.Equal(t, map[string]int{"skipped_check": 0, "unsealed_approval": 0, "differs_from_check": 1, "unapproved_disclosure": 0, "unapproved_representation": 0}, later.Totals.Anomalies)
+	assert.Equal(t, map[string]int{"acted_against_answer": 0, "skipped_check": 0, "unsealed_approval": 0, "differs_from_check": 1, "unapproved_disclosure": 0, "unapproved_representation": 0}, later.Totals.Anomalies)
 	assert.Equal(t, 0, later.Totals.Checks.Verdicts["pass"])
 }
 
@@ -160,7 +160,7 @@ func TestDealListCountsAnomalies(t *testing.T) {
 func TestActAnomalyKind(t *testing.T) {
 	for rule, want := range map[string]string{
 		"differs_from_check":     "differs_from_check",
-		"answer_was_not_proceed": "unsealed_approval",
+		"answer_was_not_proceed": "acted_against_answer",
 		"no_sealed_approval":     "unsealed_approval",
 		"approval_already_used":  "unsealed_approval",
 		// The check asked, and only the agent's card answered it.

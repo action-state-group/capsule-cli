@@ -71,11 +71,12 @@ func newDealListChecks() dealListChecks {
 }
 
 // newDealListAnomalies lists the act- and disclosure-level anomaly kinds of
-// `deal report`, and a seller's representation nothing authorized, each at
-// zero. Counterparty-side kinds and the causes of a check's pause are not
+// `deal report` (with an act against the user's answer not to proceed apart
+// from the other unsealed approvals), and a seller's representation nothing
+// authorized, each at zero. Counterparty-side kinds and the causes of a check's pause are not
 // counted: the verdicts count the pauses.
 func newDealListAnomalies() map[string]int {
-	return map[string]int{"skipped_check": 0, "unsealed_approval": 0, "differs_from_check": 0, "unapproved_disclosure": 0, "unapproved_representation": 0}
+	return map[string]int{"skipped_check": 0, "unsealed_approval": 0, "differs_from_check": 0, "unapproved_disclosure": 0, "unapproved_representation": 0, "acted_against_answer": 0}
 }
 
 // dealRulesAnswer is what a check's sealed rules answered: unrecorded on a
@@ -103,9 +104,10 @@ func dealRulesAnswer(r *dealRules) string {
 
 // actAnomalyKind is the anomaly an act sealed without a valid check is, as
 // `deal report` names it; "" for a checked act. An act whose check asked and
-// that went ahead on anything but the user's own yes (an answer not to
-// proceed, none, one already used, or the agent's card answer to an ask) is
-// unsealed_approval; one with no check in force is skipped_check.
+// that went ahead against the user's answer not to proceed is
+// acted_against_answer; on no go-ahead in force (none, one already used, or
+// the agent's card answer to an ask) unsealed_approval; one with no check in
+// force is skipped_check.
 func actAnomalyKind(a dealAct) string {
 	if !a.Unchecked {
 		return ""
@@ -113,7 +115,9 @@ func actAnomalyKind(a dealAct) string {
 	switch a.Rule {
 	case "differs_from_check":
 		return "differs_from_check"
-	case "answer_was_not_proceed", "no_sealed_approval", "approval_already_used", "ask_needs_your_words":
+	case "answer_was_not_proceed":
+		return "acted_against_answer"
+	case "no_sealed_approval", "approval_already_used", "ask_needs_your_words":
 		return "unsealed_approval"
 	}
 	return "skipped_check"

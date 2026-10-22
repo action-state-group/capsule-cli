@@ -2350,7 +2350,8 @@ func buildDealReport(events []sealedEvent) dealReport {
 			switch actAnomalyKind(*a) {
 			case "differs_from_check":
 				agent("asked_vs_did", "Did something other than what was checked: "+did+" ("+a.Reason+")", se.CapsuleID)
-			case "unsealed_approval":
+			case "unsealed_approval", "acted_against_answer":
+				// The receipt names both as going ahead without approval.
 				agent("unsealed_approval", "Went ahead without your approval: "+did+" ("+a.Reason+")", se.CapsuleID)
 			default:
 				agent("skipped_check", "Skipped the check: "+did+" ("+a.Reason+")", se.CapsuleID)

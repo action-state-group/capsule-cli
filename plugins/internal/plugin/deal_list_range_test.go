@@ -135,7 +135,7 @@ func TestDealListRangeStatement(t *testing.T) {
 		Checks: dealListChecks{Verdicts: map[string]int{"pass": 3, "pause": 1, "deny": 0},
 			Rules:    map[string]int{"evaluated": 0, "partly_unanswered": 0, "not_evaluated": 0, "not_configured": 4, "unrecorded": 0},
 			Rulesets: []dealListRuleset{}},
-		Anomalies: map[string]int{"skipped_check": 1, "unsealed_approval": 0, "differs_from_check": 0, "unapproved_disclosure": 1, "unapproved_representation": 0},
+		Anomalies: map[string]int{"acted_against_answer": 0, "skipped_check": 1, "unsealed_approval": 0, "differs_from_check": 0, "unapproved_disclosure": 1, "unapproved_representation": 0},
 	}, r.Totals)
 
 	told := toldByClass(r)
@@ -225,7 +225,7 @@ func TestDealListRangeEmpty(t *testing.T) {
 	assert.Equal(t, dealListTotals{Money: []dealListMoneyIn{}, Checks: newDealListChecks(), Anomalies: newDealListAnomalies()}, r.Totals)
 	// Present with every key at zero, so an absent member means not counted.
 	assert.Contains(t, raw, `"checks":{"verdicts":{"deny":0,"pass":0,"pause":0},"rules":{"evaluated":0,"not_configured":0,"not_evaluated":0,"partly_unanswered":0,"unrecorded":0},"rulesets":[]}`)
-	assert.Contains(t, raw, `"anomalies":{"differs_from_check":0,"skipped_check":0,"unapproved_disclosure":0,"unapproved_representation":0,"unsealed_approval":0}`)
+	assert.Contains(t, raw, `"anomalies":{"acted_against_answer":0,"differs_from_check":0,"skipped_check":0,"unapproved_disclosure":0,"unapproved_representation":0,"unsealed_approval":0}`)
 	require.Len(t, r.Told, len(disclosureClasses))
 	for _, row := range r.Told {
 		assert.Equal(t, dealListTold{Class: row.Class}, row)
