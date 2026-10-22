@@ -209,6 +209,27 @@ func TestRearmRefusedDelivery(t *testing.T) {
 	assert.Equal(t, "pending: the witness answered with an error (HTTP 409) and this delivery is not retried.", text)
 }
 
+// cll checkpoint publish (DeliverWitness) re-arms its own refused row
+// before it delivers: the row is attempted again instead of being skipped
+// as failed for good.
+func TestDeliverWitnessRearmsARefusedRow(t *testing.T) {
+	p, store, _, _ := witnessReceiptFixture(t)
+	defer func() { require.NoError(t, store.Close()) }()
+	p.Checkpoint.Endpoint = "https://127.0.0.1:1"
+	due, e := store.GetWitness(t.Context(), "service-test", 1)
+	require.NoError(t, e)
+	stored := due
+	stored.Attempts, stored.Permanent = 1, true
+	stored.LastError = "witness returned HTTP 400: checkpoint submission failed (the witness answered HTTP 403); response details suppressed"
+	require.NoError(t, store.CommitWitness(t.Context(), due.Attempts, stored))
+	state, e := DeliverWitness(t.Context(), p, store, "service-test", 1)
+	require.NoError(t, e)
+	assert.Equal(t, uint32(2), state.Attempts, "attempted again")
+	assert.False(t, state.Permanent)
+	reason, _ := WitnessPendingReason(state, p.Checkpoint.Endpoint)
+	assert.Equal(t, "network_consent_needed", reason, "this attempt did not reach the witness")
+}
+
 // A proxy asking for authorization did not let the request reach the
 // witness: it stays network_consent_needed, as a transport error does.
 func TestWitnessProxyAuthIsNotReached(t *testing.T) {

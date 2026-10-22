@@ -351,6 +351,49 @@ func TestDealBlockedDeliveryIsShownAsNetworkConsent(t *testing.T) {
 	assert.Contains(t, assurance["text"], "Witness pending: network consent needed")
 }
 
+// A delivery the witness failed for good is not said to be retried, on
+// the tick or on the receipt (capsule-cli#335).
+func TestDealPermanentDeliveryIsNotSaidToBeRetried(t *testing.T) {
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	p := cadenceFixture(t, "https://127.0.0.1:1", public, "1h", "0s", 0)
+	dealID := retailDeal(t)
+	tick := dealRun(t, "tick")
+	size := uint64(tick["checkpoint"].(float64))
+	service, err := cli.ServiceID(p)
+	require.NoError(t, err)
+	target, err := cli.OpenDealTarget(t.Context(), p, cli.UseCLL, &dealStoreLock{held: true})
+	require.NoError(t, err)
+	state, err := target.Log.GetWitness(t.Context(), service, size)
+	require.NoError(t, err)
+	conflict := state
+	conflict.Permanent = true
+	conflict.LastError = "witness returned HTTP 400: " + cli.WitnessFailureBody(409)
+	require.NoError(t, target.Log.CommitWitness(t.Context(), state.Attempts, conflict))
+	require.NoError(t, target.Close())
+
+	withBundle := dealRun(t, "report", "--deal", dealID, "--bundle", filepath.Join(t.TempDir(), "b.json"))
+	assurance := withBundle["assurance"].(map[string]any)
+	assert.Equal(t, "pending", assurance["witness_state"])
+	assert.NotContains(t, assurance, "witness_reason")
+	assert.Contains(t, assurance["text"], "Witness pending: the witness answered with an error (HTTP 409) and this delivery is not retried.")
+	assert.NotContains(t, assurance["text"], "retried at every tick")
+
+	// A refused delivery is said with its reason and the standing grant.
+	target, err = cli.OpenDealTarget(t.Context(), p, cli.UseCLL, &dealStoreLock{held: true})
+	require.NoError(t, err)
+	refused := conflict
+	refused.Permanent = false
+	refused.LastError = "witness returned HTTP 503: " + cli.WitnessFailureBody(403)
+	require.NoError(t, target.Log.CommitWitness(t.Context(), conflict.Attempts, refused))
+	require.NoError(t, target.Close())
+	withBundle = dealRun(t, "report", "--deal", dealID, "--bundle", filepath.Join(t.TempDir(), "b.json"))
+	assurance = withBundle["assurance"].(map[string]any)
+	assert.Equal(t, "refused", assurance["witness_reason"])
+	assert.Contains(t, assurance["text"], "Witness pending: the request was refused (HTTP 403), by the witness or by a network gate on this host; it is retried at every tick.")
+	assert.Contains(t, assurance["text"], `a standing grant ("Always allow this site")`)
+}
+
 func TestWitnessPendingReasons(t *testing.T) {
 	reason, text := cli.WitnessPendingReason(cll.WitnessState{Attempts: 1, LastError: "witness returned HTTP 503: " + cli.WitnessNotReached}, cli.DealDefaultWitness)
 	assert.Equal(t, "network_consent_needed", reason)
