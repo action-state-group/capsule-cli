@@ -152,10 +152,11 @@ through and adds nothing to it.
 - Words come from a wording pack in the published `aac.wording-pack/v0`
   format: the built-in neutral pack, or the complete pack a profile pins
   with `profile update --wording FILE`. A pinned pack that is missing,
-  changed or incomplete, or whose `card.terms.*` entries don't use exactly
-  the built-in placeholders (so a card could hide a term a yes agrees to),
-  is not used: the whole built-in pack speaks, the result carries
-  `"wording": "built-in"` and `doctor` names the problem.
+  changed or incomplete, or whose `card.terms.*` entries are blank or don't
+  use exactly the built-in placeholders (so a card could hide a term a yes
+  agrees to), is not used: the whole built-in pack speaks, the result
+  carries `"wording": "built-in"` and `doctor` names the problem.
+  `profile update --wording` refuses such a pack up front.
 - A failed command that printed nothing gets one error object on stdout
   from the binary that ran it, after the usual stderr line, with the same
   exit code. `capsulectl` never writes one for a launcher that ran. A
