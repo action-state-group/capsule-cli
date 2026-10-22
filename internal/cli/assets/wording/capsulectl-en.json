@@ -194,7 +194,7 @@
     "say.email.added": "Added {sender}'s email to our receipt.",
     "say.email.deferred": "The email's signature will be checked later.",
     "say.error.after": "That step happened, but I couldn't finish recording it, so I've stopped. I'll check the record before doing anything again.",
-    "say.error.before": "I couldn't record that step, so I've stopped. Nothing was paid or shared.",
+    "say.error.before": "I couldn't record that step, so I stopped before paying or sharing anything.",
     "say.error.cause.conflict": "It clashes with what is already recorded.",
     "say.error.cause.input": "Something in the request was not right.",
     "say.error.cause.no_answer": "The other side did not answer.",
