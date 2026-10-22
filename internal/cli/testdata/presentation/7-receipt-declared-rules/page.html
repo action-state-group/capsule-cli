@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-OpNhaC3A/VvkifX+3L8bxPrCVBd81MGrBKexBzfC5ss=' 'sha256-DhIctxjpsy9MCWFnsVDi753lLPzxNa7c8BxXxeo1AcM=' 'sha256-rHo6i1Cn9uJuxBDynn6TLC/NRvAdxKdJCGkITHgzUCg='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-o8f8raSsfDeyxIFpYGAs1FrywK+hjppQ8Db6Y22N25g='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W4oT/KCilxTcHlBRMRLgLaIUl58q7LQKITUbYggNV+A=' 'sha256-OpNhaC3A/VvkifX+3L8bxPrCVBd81MGrBKexBzfC5ss=' 'sha256-mX6oZ/VmK8yjOhcS6Px0AfJ/L794uETfYRhx8vGrHVg=' 'sha256-rHo6i1Cn9uJuxBDynn6TLC/NRvAdxKdJCGkITHgzUCg='; style-src 'sha256-ZGx2jpoJlDefSM2vZzACsjIIO+39oeIWYKrKuHni+Lw=' 'sha256-OvFajC9liMWF/BSOZHNxvh2l1sQ2aAZql11wyZX6bms=' 'sha256-FGABpmCNZicVD3SvE/9VMzL4Dv6qke5r7iJ6x+zH654=' 'sha256-oQbkQzXDT++dH4m6vbr18yW8/0w+dKjfRWSIo3mhgYs=' 'sha256-o8f8raSsfDeyxIFpYGAs1FrywK+hjppQ8Db6Y22N25g='; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deal report: “Order the cat sticker in my cart at Example Stickers”</title>
     <style>
@@ -14236,7 +14236,9 @@ const dealJourneyLabel = (words, move) => {
   if (typeof text !== "string") return "";
   const facts = move.facts && typeof move.facts === "object" ? move.facts : {};
   const vals = {};
-  for (const [k, v] of Object.entries(facts)) if (typeof v === "string") vals[k] = v;
+  // An "other" reason's detail is the reason's value, never a placeholder
+  // of its own: the report words the same values.
+  for (const [k, v] of Object.entries(facts)) if (typeof v === "string" && k !== "detail") vals[k] = v;
   if (typeof facts.reason === "string") {
     const word = words["journey.reason." + facts.reason];
     vals.reason = facts.reason === "other" ? facts.detail : typeof word === "string" ? word : "";

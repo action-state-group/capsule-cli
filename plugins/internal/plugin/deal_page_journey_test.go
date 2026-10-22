@@ -218,3 +218,26 @@ func TestThePageWordsTheJourneyFromThePinnedPack(t *testing.T) {
 	assert.Contains(t, want, "Switched to eBay", "the built-in words")
 	assert.Equal(t, want, renderJourney(t, id, false)["labels"])
 }
+
+// An "other" reason is worded by its own detail, on the page as in the
+// report.
+func TestTheJourneyWordsAnOtherReasonByItsDetail(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "couldnt", `{"reason":"other","detail":"the checkout page kept reloading"}`)
+	var labels []any
+	for _, s := range dealRun(t, "report", "--deal", id)["journey"].([]any) {
+		labels = append(labels, s.(map[string]any)["label"])
+	}
+	assert.Contains(t, labels, "Couldn't (the checkout page kept reloading)")
+	assert.Equal(t, labels, renderJourney(t, id, false)["labels"])
+
+	// A detail is a reason's value, not a placeholder of its own.
+	pinJourneyPack(t, func(e map[string]any) { e["journey.agent.couldnt"] = "Couldn't ({detail})" })
+	labels = nil
+	for _, s := range dealRun(t, "report", "--deal", id)["journey"].([]any) {
+		labels = append(labels, s.(map[string]any)["label"])
+	}
+	assert.Contains(t, labels, "")
+	assert.Equal(t, labels, renderJourney(t, id, false)["labels"])
+}

@@ -54,7 +54,9 @@ const dealJourneyLabel = (words, move) => {
   if (typeof text !== "string") return "";
   const facts = move.facts && typeof move.facts === "object" ? move.facts : {};
   const vals = {};
-  for (const [k, v] of Object.entries(facts)) if (typeof v === "string") vals[k] = v;
+  // An "other" reason's detail is the reason's value, never a placeholder
+  // of its own: the report words the same values.
+  for (const [k, v] of Object.entries(facts)) if (typeof v === "string" && k !== "detail") vals[k] = v;
   if (typeof facts.reason === "string") {
     const word = words["journey.reason." + facts.reason];
     vals.reason = facts.reason === "other" ? facts.detail : typeof word === "string" ? word : "";
