@@ -276,9 +276,9 @@ func TestAShareChangingTheWayBackNeverPassesOnStandingIntent(t *testing.T) {
 	assert.Contains(t, share["card"], "\nSaying yes also agrees to no refunds (was refunds allowed).\n")
 }
 
-// A click on the card the agent composed (agent_card) answers that card:
+// An answer to the card with no words of the user's (agent_card) answers that card:
 // it adopts the terms the card named.
-func TestACardClickAdoptsTheNamedTerms(t *testing.T) {
+func TestACardAnswerWithoutWordsAdoptsTheNamedTerms(t *testing.T) {
 	id := stickerDeal(t, "card", false)
 	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, freeShippingShare))
 	require.Equal(t, "pause", share["verdict"], share["card"])

@@ -1399,7 +1399,7 @@ func dealNoteCommand() *cobra.Command {
 			approver := "user"
 			if strings.TrimSpace(said) == "" {
 				if choice == "confirm_limits" {
-					return cli.InputError("confirm_limits needs --said with the user's own words: raising their limits takes their consent, not a card click")
+					return cli.InputError("confirm_limits needs --said with the user's own words: raising their limits takes their consent, not an answer without their words")
 				}
 				approver, said = "agent_card", ""
 			}

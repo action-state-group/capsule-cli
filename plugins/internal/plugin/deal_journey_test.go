@@ -723,13 +723,13 @@ func TestTheUsersAnswerIsTheirMove(t *testing.T) {
 	assert.Contains(t, labels, "user:Said no to sharing your name and address")
 	assert.NotContains(t, labels, "user:OK'd sharing your name and address")
 
-	// A click on the agent's card carries no words of the user's: no move.
+	// An answer with no words of the user's (no --said) is no move.
 	pay := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"pay","amount_minor":190,"authorized_max_minor":190,"terms":{"item":"Fawn Sticker","price_minor":175},"recourse":{"rail":"card","refundable":true}}`))
 	require.Equal(t, "pause", pay["verdict"], pay["card"])
 	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", pay["check_id"].(string), "--choice", "proceed")
 	moves := journeyMoves(t, id)
 	assert.Equal(t, 1, strings.Count(strings.Join(moves, " "), "user:declined"), moves)
-	assert.NotContains(t, moves, "user:approved", "a card click is not the user's OK")
+	assert.NotContains(t, moves, "user:approved", "an answer without their words is not the user's OK")
 
 	// The page words the no as the report does.
 	var want []any

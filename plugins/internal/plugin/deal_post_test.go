@@ -97,7 +97,7 @@ func TestAPostAlwaysAsksAndOnlyTheUsersYesPostsIt(t *testing.T) {
 	_, err = postAct(t, saleID, posting)
 	require.ErrorIs(t, err, cli.ErrInput)
 	assert.Contains(t, err.Error(), "no approval of the user's")
-	// A card click is no approval of a post.
+	// An answer without the user's words is no approval of a post.
 	_, err = answerCheck(t, saleID, ck["check_id"].(string), "", ck["card"].(string))
 	require.NoError(t, err)
 	_, err = postAct(t, saleID, posting)

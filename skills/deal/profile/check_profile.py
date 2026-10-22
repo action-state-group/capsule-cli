@@ -2365,7 +2365,7 @@ def regen():
     neg("neg-approval-card-not-checked", "chain", "card shown is not the card checked", r, 14,
         "The Hold answer commits to a card text other than the one its verdict rendered.")
 
-    # agent_card: a click on a card the agent composed. It carries no words of the user's, so a
+    # agent_card: an answer to the card with no words of the user's. It carries none, so a
     # said_commitment on it is a schema error, and it can never confirm the user's limits.
     r = copy.deepcopy(records[14]); r["body"]["approver"] = "agent_card"
     neg("neg-agent-card-with-words", "schema", "said_commitment", r, 14,
