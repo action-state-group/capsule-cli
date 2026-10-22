@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -179,6 +180,29 @@ func (w Wording) missingKeys() []string {
 	return missing
 }
 
+// hidingTerms is the first card.terms entry of w that could hide a term
+// from the card's terms line, or "": an approval adopts exactly the terms
+// that line names (capsule-cli#380), so each entry must say something and
+// keep every placeholder the built-in entry fills.
+func (w Wording) hidingTerms() string {
+	builtin := BuiltinWording().Entries
+	for _, k := range slices.Sorted(maps.Keys(builtin)) {
+		if !strings.HasPrefix(k, "card.terms.") {
+			continue
+		}
+		got := w.Entries[k]
+		if strings.TrimSpace(got) == "" {
+			return k
+		}
+		for _, m := range placeholder.FindAllString(builtin[k], -1) {
+			if !strings.Contains(got, m) {
+				return k
+			}
+		}
+	}
+	return ""
+}
+
 func packDigest(raw []byte) string {
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
@@ -212,6 +236,9 @@ func pinWording(p *Profile, path string) error {
 	if missing := w.missingKeys(); len(missing) > 0 {
 		return InputError(fmt.Sprintf("--wording %s is not complete: it lacks %d of the built-in pack's keys, first %s", path, len(missing), missing[0]))
 	}
+	if k := w.hidingTerms(); k != "" {
+		return InputError(fmt.Sprintf("--wording %s could hide a term a yes agrees to: %s must say something and keep the built-in entry's placeholders", path, k))
+	}
 	p.Wording = ProfileWording{Path: abs, SHA256: packDigest(raw)}
 	return nil
 }
@@ -237,6 +264,9 @@ func ActiveWording(p Profile) (Wording, string) {
 	}
 	if missing := w.missingKeys(); len(missing) > 0 {
 		return BuiltinWording(), "the pinned wording pack lacks keys this release uses: " + strings.Join(missing, ", ")
+	}
+	if k := w.hidingTerms(); k != "" {
+		return BuiltinWording(), "the pinned wording pack could hide a term a yes agrees to: " + k
 	}
 	w.Source = "pinned"
 	return w, ""

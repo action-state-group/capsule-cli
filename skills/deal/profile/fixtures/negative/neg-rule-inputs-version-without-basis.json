@@ -1,0 +1,59 @@
+{
+  "fixture": "neg-rule-inputs-version-without-basis",
+  "expect": "invalid",
+  "description": "The pay check states rule_inputs_version 3 and material_fields_changed, but not the field list's basis.",
+  "expected_stage": "chain",
+  "expected_error_contains": "states rule_inputs_version",
+  "chain_prefix": [
+    "01-baseline.json",
+    "02-message-quote.json",
+    "03-claim.json",
+    "04-evidence.json",
+    "05-intent.json",
+    "06-approval-confirm-limits.json",
+    "07-check-share-contact.json",
+    "08-verdict-pass.json",
+    "09-approval-standing.json",
+    "10-action-share-contact.json",
+    "11-message-switch.json",
+    "12-detail-change-payee.json"
+  ],
+  "record": {
+    "x-deal-v0": {
+      "profile": "x-deal-v0",
+      "canonicalization": "jcs",
+      "deal_id": "deal-3f9c2a7be4d15068",
+      "record_type": "check",
+      "seq": 13,
+      "at": "2026-10-01T18:43:00Z",
+      "prev": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "bea5d9b724f52eac68f27ef189841b8900fb8c191d3d2af15e7bce942944ac37"
+      },
+      "baseline_ref": {
+        "type": "deal-record",
+        "digest_alg": "SHA-256",
+        "digest": "f9c1b032be606cc18fd3741fb5183716c731144322164b246c4d145b71a81f09"
+      },
+      "counterparty": {
+        "fp_alg": "hmac-sha256-deal-key",
+        "ids": {
+          "payee": "9b1a281f73398f41d5adbb54228cd8e6648fdeaa85aa1505ed5b4634a8645dd1"
+        }
+      }
+    },
+    "body": {
+      "action": "pay",
+      "amount_minor": 20000,
+      "currency": "USD",
+      "seen_item": false,
+      "recourse": {
+        "rail": "zelle",
+        "refundable": false
+      },
+      "rule_inputs_version": 3,
+      "material_fields_changed": 2
+    }
+  }
+}

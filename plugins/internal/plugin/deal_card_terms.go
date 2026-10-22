@@ -14,7 +14,7 @@ import (
 // the action, from the comparison material_fields_changed counts
 // (materialChangedKeys2). An approval adopts a changed term into what was
 // agreed only when the card it was given on named that term, with the value
-// it named. An approval with no card shown (standing_intent, on a check that
+// it named, a named drop included. An approval with no card shown (standing_intent, on a check that
 // passed) adopts no changed term, so the next check carrying it still counts
 // it. A term stated for the first time, or restated in other words, is no
 // change and is adopted as before.
@@ -60,66 +60,94 @@ func (s dealState) cardChangedTerms(snap dealSnapshot) (keys []string, agreed, p
 	return keys, agreed, proposed
 }
 
-// namedOnCard is what the card of a sealed check named as changing the
-// agreement: each key with the value it named (nil for a term it dropped).
-// Nil for a check with no card that takes a yes (a pass, a deny) and for
-// one sealed before cards named terms (snapRuleInputs, its snapshot's
-// version).
-func (s dealState) namedOnCard(se sealedEvent, snap *dealSnapshot, snapRuleInputs string) map[string]interface{} {
-	ck := se.Event.Check
-	if ck == nil || snap == nil || ck.Card == "" || ck.Verdict == "deny" || !adoptsNamedTermsOnly(snapRuleInputs) {
-		return nil
-	}
-	keys, _, proposed := s.cardChangedTerms(*snap)
-	if len(keys) == 0 {
-		return nil
-	}
-	named := make(map[string]interface{}, len(keys))
-	for _, k := range keys {
-		named[k] = proposed[k]
-	}
-	return named
+// checkedTerms are what a check sealed under rule inputs "3" on evaluated:
+// the proposal (the deal as it stood with the check on top), and the keys
+// its card named as changing what was agreed.
+type checkedTerms struct {
+	terms    dealTerms
+	recourse dealRecourse
+	named    map[string]bool
 }
 
-// keepUnnamedChanges undoes, in what an approval just adopted, every change
-// from before that the card it answered did not name with that value.
-func (s *dealState) keepUnnamedChanges(before dealTerms, beforeRecourse dealRecourse, a dealApproval) {
-	var named map[string]interface{}
-	if a.Approver != "standing_intent" {
-		named = s.cardNamed[a.Check]
+// checkedOn is what the sealed check se evaluated, from its snapshot and
+// the agreement in force when it was sealed, which is what its card was
+// rendered from. Its card names terms only when it takes a yes (not a pass,
+// which has none, nor a deny). ok is false for a check sealed before the
+// rule (snapRuleInputs, its snapshot's version).
+func (s dealState) checkedOn(se sealedEvent, snap *dealSnapshot, snapRuleInputs string) (checkedTerms, bool) {
+	ck := se.Event.Check
+	if ck == nil || snap == nil || !adoptsNamedTermsOnly(snapRuleInputs) {
+		return checkedTerms{}, false
 	}
-	wasRecourse, nowRecourse := beforeRecourse, s.agreedRecourse
-	was := dealFieldValues(before, &wasRecourse, "")
-	now := dealFieldValues(s.agreed, &nowRecourse, "")
-	for _, k := range materialChangedKeys2(was, now, beforeRecourse) {
-		v, isNamed := named[k]
-		got, has := now[k]
-		if isNamed && ((v == nil && !has) || (v != nil && has && jcsEqual(v, got))) {
+	_, terms, recourse := s.proposal(snap)
+	c := checkedTerms{terms: terms, recourse: recourse}
+	if ck.Card != "" && ck.Verdict != "deny" {
+		keys, _, _ := s.cardChangedTerms(*snap)
+		c.named = make(map[string]bool, len(keys))
+		for _, k := range keys {
+			c.named[k] = true
+		}
+	}
+	return c, true
+}
+
+// adoptChecked is what an approved proceed of a check sealed under rule
+// inputs "3" on makes agreed. From the agreement before it, each key the
+// check's proposal changes (materialChangedKeys2) takes the proposal's value
+// only when the card the approval was given on named it, a named drop
+// included; a standing_intent approval was given on no card. A key the
+// proposal states that is no change (stated for the first time, or the same
+// place refined) takes the proposal's value, as before.
+func (s *dealState) adoptChecked(a dealApproval, snap *dealSnapshot) {
+	c, ok := s.checked[a.Check]
+	if !ok {
+		// An approval of a check this fold did not see: no card named anything.
+		_, c.terms, c.recourse = s.proposal(snap)
+	}
+	named := c.named
+	if a.Approver == "standing_intent" {
+		named = nil
+	}
+	before, beforeRecourse := s.agreed, s.agreedRecourse
+	proposedRecourse := c.recourse
+	was := dealFieldValues(before, &beforeRecourse, "")
+	now := dealFieldValues(c.terms, &proposedRecourse, "")
+	changed := materialChangedKeys2(was, now, beforeRecourse)
+	out, outRecourse := before, beforeRecourse
+	out.Conditions = maps.Clone(before.Conditions)
+	for _, k := range materialFields {
+		_, states := now[k]
+		if slices.Contains(changed, k) {
+			if !named[k] {
+				continue
+			}
+		} else if !states {
 			continue
 		}
 		switch k {
 		case "terms.item":
-			s.agreed.Item = before.Item
+			out.Item = c.terms.Item
 		case "terms.quantity":
-			s.agreed.Quantity = before.Quantity
+			out.Quantity = c.terms.Quantity
 		case "terms.price_minor":
-			s.agreed.PriceMinor = before.PriceMinor
+			out.PriceMinor = c.terms.PriceMinor
 		case "terms.deposit_minor":
-			s.agreed.DepositMinor = before.DepositMinor
+			out.DepositMinor = c.terms.DepositMinor
 		case "terms.currency":
-			s.agreed.Currency = before.Currency
+			out.Currency = c.terms.Currency
 		case "terms.when":
-			s.agreed.When = before.When
+			out.When = c.terms.When
 		case "terms.place":
-			s.agreed.Place = before.Place
+			out.Place = c.terms.Place
 		case "terms.conditions":
-			s.agreed.Conditions = maps.Clone(before.Conditions)
+			out.Conditions = maps.Clone(c.terms.Conditions)
 		case "recourse.rail":
-			s.agreedRecourse.Rail = beforeRecourse.Rail
+			outRecourse.Rail = c.recourse.Rail
 		case "recourse.refundable":
-			s.agreedRecourse.Refundable = beforeRecourse.Refundable
+			outRecourse.Refundable = c.recourse.Refundable
 		}
 	}
+	s.agreed, s.agreedRecourse = out, outRecourse
 }
 
 // cardTermsLine is the card's line naming each term the check changes from
@@ -130,9 +158,15 @@ func cardTermsLine(w cli.Wording, state dealState, snap dealSnapshot, r dealChec
 		return ""
 	}
 	keys, agreed, proposed := state.cardChangedTerms(snap)
+	// A new value is said in the proposal's currency, an agreed one (what
+	// it was, or what is dropped) in the agreed currency.
 	currency, _ := proposed["terms.currency"].(string)
+	agreedCurrency, _ := agreed["terms.currency"].(string)
 	if currency == "" {
-		currency, _ = agreed["terms.currency"].(string)
+		currency = agreedCurrency
+	}
+	if agreedCurrency == "" {
+		agreedCurrency = currency
 	}
 	// A term that had an agreed value says it; one added or dropped needs
 	// no "was".
@@ -170,9 +204,9 @@ func cardTermsLine(w cli.Wording, state dealState, snap dealSnapshot, r dealChec
 		old, had := agreed[k]
 		switch {
 		case !ok:
-			said = append(said, w.Line("card.terms.dropped", cli.V{"what": termWords(w, k, old, currency)}))
+			said = append(said, w.Line("card.terms.dropped", cli.V{"what": termWords(w, k, old, agreedCurrency)}))
 		case had:
-			said = append(said, withWas(termWords(w, k, v, currency), termValue(w, k, old, currency)))
+			said = append(said, withWas(termWords(w, k, v, currency), termValue(w, k, old, agreedCurrency)))
 		default:
 			said = append(said, termWords(w, k, v, currency))
 		}

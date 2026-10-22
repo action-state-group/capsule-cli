@@ -1,7 +1,7 @@
 {
   "fixture": "neg-rule-inputs-version-without-count",
   "expect": "invalid",
-  "description": "The pay check states rule_inputs_version 3 but carries no material_fields_changed or material_fields_basis.",
+  "description": "The pay check states rule_inputs_version 3 and the field list's basis, but no material_fields_changed.",
   "expected_stage": "chain",
   "expected_error_contains": "states rule_inputs_version",
   "chain_prefix": [
@@ -52,7 +52,8 @@
         "rail": "zelle",
         "refundable": false
       },
-      "rule_inputs_version": 3
+      "rule_inputs_version": 3,
+      "material_fields_basis": "effa16bb95192a3208f24daa127a4f0ac387095e139856b7ce390ebd96b772c3"
     }
   }
 }

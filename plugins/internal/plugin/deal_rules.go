@@ -951,10 +951,10 @@ type dealState struct {
 	// (the way to pay is then the leg's own, adopted on approval).
 	chose      string
 	legStarted bool
-	// cardNamed is, by check, the terms its card named as changing what
-	// was agreed and the value it named for each (cardChangedTerms): what
-	// an approval on that card may adopt (adoptsNamedTermsOnly).
-	cardNamed map[string]map[string]interface{}
+	// checked is, by check sealed under rule inputs "3" on, the proposal it
+	// evaluated and the terms its card named: what an approval of it may
+	// adopt (adoptChecked).
+	checked map[string]checkedTerms
 }
 
 func foldDeal(events []sealedEvent) (dealState, error) {
@@ -1013,11 +1013,11 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 		case "snapshot":
 			lastSnapshot, lastRuleInputs = e.Snapshot, e.RuleInputs
 		case "check":
-			if named := s.namedOnCard(se, lastSnapshot, lastRuleInputs); named != nil {
-				if s.cardNamed == nil {
-					s.cardNamed = map[string]map[string]interface{}{}
+			if c, ok := s.checkedOn(se, lastSnapshot, lastRuleInputs); ok {
+				if s.checked == nil {
+					s.checked = map[string]checkedTerms{}
 				}
-				s.cardNamed[se.CapsuleID] = named
+				s.checked[se.CapsuleID] = c
 			}
 		case "approval":
 			// The user's confirmation of proposed limits is the new version of
@@ -1046,7 +1046,10 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 			// change only when the card it was given on named it
 			// (adoptsNamedTermsOnly).
 			if e.Approval.Proceed && e.Approval.Reason == "" && lastSnapshot != nil && lastSnapshot.Action != representAction {
-				before, beforeRecourse := s.agreed, s.agreedRecourse
+				if adoptsNamedTermsOnly(lastRuleInputs) {
+					s.adoptChecked(*e.Approval, lastSnapshot)
+					continue
+				}
 				if lastSnapshot.Terms != nil {
 					s.agreed = overlayTerms(s.agreed, *lastSnapshot.Terms)
 				}
@@ -1054,9 +1057,6 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 				s.agreedRecourse = overlayRecourse(s.agreedRecourse, s.recourse)
 				if lastSnapshot.Recourse != nil {
 					s.agreedRecourse = overlayRecourse(s.agreedRecourse, *lastSnapshot.Recourse)
-				}
-				if adoptsNamedTermsOnly(lastRuleInputs) {
-					s.keepUnnamedChanges(before, beforeRecourse, *e.Approval)
 				}
 			}
 		}

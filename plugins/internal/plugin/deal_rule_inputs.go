@@ -228,6 +228,13 @@ func sealRuleInputs(body map[string]interface{}, events []sealedEvent, sn *dealS
 // what the check states on top). The check card names the terms the same
 // comparison finds changed (cardChangedTerms).
 func (s dealState) materialSides(sn *dealSnapshot) (agreed, proposed map[string]interface{}) {
+	who, terms, recourse := s.proposal(sn)
+	agreedRecourse := s.agreedRecourse
+	return dealFieldValues(s.agreed, &agreedRecourse, payeeOf(s.legFirst)), dealFieldValues(terms, &recourse, payeeOf(who))
+}
+
+// proposal is the deal as it stands with what the check states on top.
+func (s dealState) proposal(sn *dealSnapshot) (dealWho, dealTerms, dealRecourse) {
 	who, terms, recourse := s.who, s.terms, s.wayToPay()
 	if sn.Who != nil {
 		who = overlayWho(who, *sn.Who)
@@ -238,8 +245,7 @@ func (s dealState) materialSides(sn *dealSnapshot) (agreed, proposed map[string]
 	if sn.Recourse != nil {
 		recourse = overlayRecourse(recourse, *sn.Recourse)
 	}
-	agreedRecourse := s.agreedRecourse
-	return dealFieldValues(s.agreed, &agreedRecourse, payeeOf(s.legFirst)), dealFieldValues(terms, &recourse, payeeOf(who))
+	return who, terms, recourse
 }
 
 // materialChanges2 is material_fields_changed under rule inputs "2", over

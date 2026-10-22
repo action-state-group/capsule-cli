@@ -128,6 +128,18 @@ func TestAProfilePinsOnlyAValidCompletePack(t *testing.T) {
 	assert.ErrorContains(t, pinWording(&p, incomplete), "is not complete")
 	assert.Equal(t, complete, p.Wording.Path, "a refused pin leaves the pin as it was")
 
+	// The terms line is what an approval binds to: a pack can't hide it.
+	for key, text := range map[string]string{
+		"card.terms.label":          "Saying yes also agrees.",
+		"card.terms.price":          "a new price",
+		"card.terms.was":            "(was)",
+		"card.terms.not_refundable": " ",
+	} {
+		hiding := writePack(t, func(e map[string]string) { e[key] = text })
+		assert.ErrorContains(t, pinWording(&p, hiding), "could hide a term a yes agrees to: "+key, key)
+	}
+	assert.Equal(t, complete, p.Wording.Path, "a refused pin leaves the pin as it was")
+
 	invalid := filepath.Join(t.TempDir(), "bad.json")
 	require.NoError(t, os.WriteFile(invalid, []byte(`{"entries":{}}`), 0o600))
 	assert.ErrorContains(t, pinWording(&p, invalid), "not a valid aac.wording-pack/v0")

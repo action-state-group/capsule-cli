@@ -216,3 +216,72 @@ func TestATermsLineListsThreeTerms(t *testing.T) {
 	require.Equal(t, "pause", pay["verdict"], pay["card"])
 	assert.Contains(t, pay["card"], "\nSaying yes also agrees to a price of $4.80 (was $4.54), shipping: Free shipping and paying by PayPal (was card).\n")
 }
+
+// A named term replaces a value the deal already states: the approval
+// adopts the value its card named, not the one the deal stated before.
+func TestANamedTermReplacesTheOneTheDealStates(t *testing.T) {
+	id := stickerDeal(t, "card", false)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name"],"terms":{"price_minor":480}}`))
+	require.Equal(t, "pause", share["verdict"], share["card"])
+	assert.Contains(t, share["card"], "\nSaying yes also agrees to a price of $4.80 (was $4.54).\n")
+	_, err := answer(t, id, share["check_id"].(string), "yes", shownCard(t, share["card"].(string)))
+	require.NoError(t, err)
+	// Another check carrying it names nothing: it is agreed.
+	again := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["email"],"terms":{"price_minor":480}}`))
+	require.Equal(t, "pause", again["verdict"], again["card"])
+	assert.NotContains(t, again["card"], "agrees to")
+	_, err = answer(t, id, again["check_id"].(string), "yes", shownCard(t, again["card"].(string)))
+	require.NoError(t, err)
+	assert.Equal(t, float64(0), payCount(t, id, `{"action":"pay","amount_minor":480,"authorized_max_minor":480,"terms":{"item":"otter sticker","price_minor":480},"recourse":{"rail":"card","refundable":true}}`))
+}
+
+// A named drop applies: a condition agreed on one card and dropped on the
+// next is no longer agreed.
+func TestANamedDropApplies(t *testing.T) {
+	id := stickerDeal(t, "card", false)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, freeShippingShare))
+	require.Equal(t, "pause", share["verdict"], share["card"])
+	_, err := answer(t, id, share["check_id"].(string), "yes", shownCard(t, share["card"].(string)))
+	require.NoError(t, err)
+	drop := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["email"]}`))
+	require.Equal(t, "pause", drop["verdict"], drop["card"])
+	assert.Contains(t, drop["card"], "\nSaying yes also agrees to dropping shipping: Free shipping.\n")
+	_, err = answer(t, id, drop["check_id"].(string), "yes", shownCard(t, drop["card"].(string)))
+	require.NoError(t, err)
+	assert.Equal(t, float64(0), payCount(t, id, stickerPay), "no condition agreed, none on the pay")
+}
+
+// A value that was agreed is said in the agreed currency, a new one in the
+// proposal's, whatever their minor units.
+func TestWhatATermWasIsSaidInItsOwnCurrency(t *testing.T) {
+	id := stickerDeal(t, "card", false)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name"],"terms":{"price_minor":700,"currency":"JPY"}}`))
+	require.Equal(t, "pause", share["verdict"], share["card"])
+	assert.Contains(t, share["card"], "\nSaying yes also agrees to a price of ¥700 (was $4.54) and paying in JPY (was USD).\n")
+}
+
+// A passing check can't carry a change of the way to pay: recourse_changed
+// pauses every action whose rail or refundability differs from what was
+// agreed, so no standing intent approves one.
+func TestAShareChangingTheWayBackNeverPassesOnStandingIntent(t *testing.T) {
+	id := knownShare(t, `{"rail":"card","refundable":true}`)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name"],"recourse":{"refundable":false}}`))
+	require.Equal(t, "pause", share["verdict"], share["card"])
+	assert.Contains(t, rules(share), "recourse_changed")
+	assert.Contains(t, share["card"], "\nSaying yes also agrees to no refunds (was refunds allowed).\n")
+}
+
+// A click on the card the agent composed (agent_card) answers that card:
+// it adopts the terms the card named.
+func TestACardClickAdoptsTheNamedTerms(t *testing.T) {
+	id := stickerDeal(t, "card", false)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, freeShippingShare))
+	require.Equal(t, "pause", share["verdict"], share["card"])
+	_, err := answer(t, id, share["check_id"].(string), "", shownCard(t, share["card"].(string)))
+	require.NoError(t, err)
+	events, _ := dealEvents(t, id)
+	last := events[len(events)-1].Event
+	require.NotNil(t, last.Approval)
+	require.Equal(t, "agent_card", last.Approval.Approver)
+	assert.Equal(t, float64(0), payCount(t, id, freeShippingPay))
+}

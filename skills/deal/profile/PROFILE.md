@@ -708,9 +708,10 @@ A verifier holding one deal's records in `seq` order checks:
     marks an intent that asks for more, whatever its move; it applies only on `confirm_limits`.
     An approval agrees only to the terms its card named: on a check that states
     `rule_inputs_version` 3 (section 8), the card names each term the check changes from what was
-    agreed, and an approved proceed adopts a changed term only when the card it was given on named
-    it, so a `standing_intent` approval adopts none and the next check carrying that term still
-    counts it. An approval of a check without it adopts the checked terms whole, as before.
+    agreed, and an approved proceed adopts a changed term, with the value the check proposed (a
+    dropped term included), only when the card it was given on named it, so a `standing_intent`
+    approval adopts none and the next check carrying that term still counts it. An approval of a
+    check without it adopts the checked terms whole, as before.
 
 ## 7. Outcome conventions: `completed | mismatch | open`
 
