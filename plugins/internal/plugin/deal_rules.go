@@ -2658,14 +2658,17 @@ var pickupAreaStreetTypes = map[string]bool{
 	"loop": true, "plaza": true, "alley": true, "pike": true,
 }
 
-// pickupAreaBreaks are words that say a number is a distance, a time or a
-// label rather than a house number: after the number they end the street
-// name ("2 blocks from Main St", "10 min on the way"), and before it they
-// make it a label ("Exit 12", "Ward 3", "Zone 2").
-var pickupAreaBreaks = map[string]bool{
+// pickupAreaLabels are words that make the number after them a label, not a
+// house number ("Exit 12", "Ward 3", "Zone 2").
+var pickupAreaLabels = map[string]bool{"exit": true, "ward": true, "zone": true}
+
+// pickupAreaDistances are words that make the number before them a distance
+// or a time, not a house number ("2 blocks from Main St", "10 min on the
+// way"). Only these end the street name: "off 12 Oak St" and "12 The Grove
+// Rd" are addresses.
+var pickupAreaDistances = map[string]bool{
 	"block": true, "blocks": true, "mile": true, "miles": true, "mi": true, "min": true,
-	"mins": true, "minute": true, "minutes": true, "km": true, "from": true, "near": true,
-	"of": true, "to": true, "off": true, "exit": true, "ward": true, "zone": true, "the": true,
+	"mins": true, "minute": true, "minutes": true, "km": true,
 }
 
 // readsAsStreetAddress is whether a pickup_area value looks like a street
@@ -2687,11 +2690,11 @@ func readsAsStreetAddress(v string) bool {
 	for _, part := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ';' }) {
 		words := pickupAreaWord.FindAllString(strings.ToLower(part), -1)
 		for i, w := range words {
-			if !pickupAreaNumber.MatchString(w) || (i > 0 && pickupAreaBreaks[words[i-1]]) {
+			if !pickupAreaNumber.MatchString(w) || (i > 0 && pickupAreaLabels[words[i-1]]) {
 				continue
 			}
 			for _, next := range words[i+1 : min(i+5, len(words))] {
-				if pickupAreaBreaks[next] {
+				if pickupAreaDistances[next] {
 					break
 				}
 				if pickupAreaStreetTypes[next] {
