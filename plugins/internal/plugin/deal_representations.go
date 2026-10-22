@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
 )
@@ -59,11 +60,20 @@ const (
 	attributedPrefix   = "The seller says "
 	attributedSuffix   = " (unverified)"
 	attributedTemplate = `"The seller says … (unverified)"`
-	// attributedSentenceMarks end a sentence or start a line, ASCII and the
-	// common non-ASCII ones; the engine's promise_never/1.1.0 reads the same
-	// set (its attributed_template.sentence_marks).
-	attributedSentenceMarks = ".!?\n\r。！？…．"
+	// attributedSentenceMarks end a sentence or a line, in any script: . ! ?,
+	// every line terminator Python's str.splitlines uses, and the CJK,
+	// fullwidth, double, Arabic and Devanagari sentence ends. The engine's
+	// promise_never/1.1.0 reads the same set (attributed_template.sentence_marks).
+	attributedSentenceMarks = ".!?" +
+		"\n\r\v\f\x1c\x1d\x1e\u0085\u2028\u2029" +
+		"。！？…．｡" + "‼⁇⁈⁉" + "؟۔" + "।॥"
 )
+
+// attributedBlank is whether a claim is blank as Python's str.strip sees it,
+// as the engine does: Unicode white space and U+001C-U+001F.
+func attributedBlank(claim string) bool {
+	return strings.TrimFunc(claim, func(r rune) bool { return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f) }) == ""
+}
 
 // attributedWords is whether text follows the attribution template exactly:
 // the prefix, a claim that is not blank and holds no sentence mark
@@ -74,7 +84,7 @@ func attributedWords(text string) bool {
 		return false
 	}
 	claim := text[len(attributedPrefix) : len(text)-len(attributedSuffix)]
-	return strings.TrimSpace(claim) != "" && !strings.ContainsAny(claim, attributedSentenceMarks)
+	return !attributedBlank(claim) && !strings.ContainsAny(claim, attributedSentenceMarks)
 }
 
 // representationGated are the acts an ordered representation must come
@@ -217,7 +227,7 @@ func checkAttribution(to, class, text string) error {
 	case class != attributedClass:
 		return cli.InputError("only an authenticity claim can be attributed to the user: leave attributed_to out of a " + classWord(class) + " claim")
 	case !attributedWords(text):
-		return cli.InputError("refusing to check: the user's claim must read " + attributedTemplate + ", one sentence, with no full stop, ! or ? before \"(unverified)\", so the buyer sees whose claim it is and that it is unverified")
+		return cli.InputError("refusing to check: the user's claim must read " + attributedTemplate + ", one sentence, with no full stop, !, ? or line break before \"(unverified)\" (in any script), so the buyer sees whose claim it is and that it is unverified")
 	}
 	return nil
 }

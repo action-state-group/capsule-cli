@@ -720,8 +720,8 @@ it. When the user themselves claims it is authentic and wants the buyer
 told, say it as their claim, marked unverified: add `"attributed_to":
 "user"` to `representing`, class `authenticity`, with words in exactly this
 form, one sentence: "The seller says <their claim> (unverified)", e.g. "The
-seller says it's authentic (unverified)". No `.`, `!`, `?` or line break before the
-ending. Any other words are refused. This check always asks: show the user
+seller says it's authentic (unverified)". No full stop, `!`, `?` or line break
+before the ending, in any script. Any other words are refused. This check always asks: show the user
 the card, and only their own answer, in their words, lets you say it. Never
 attribute a claim the user did not make.
 
