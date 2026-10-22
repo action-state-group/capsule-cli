@@ -198,7 +198,7 @@ const (
 var passFixtures = []passFixture{
 	{dir: "1-rules-comparison", list: "aac.builtin.report-rows/v0", view: "report-rows"},
 	{dir: "2-unilateral-receipt", list: passDealView, listOther: passNoAggregate, view: "no-aggregate", differs: passDealDiffers},
-	{dir: "3-bilateral-composed"},
+	{dir: "3-bilateral-composed", list: passNoAggregate, view: "no-aggregate"},
 	{dir: "4-monthly-outcome", list: "aac.builtin.result-outcome-report/v0", view: "outcome-report", differs: passCardDiffers},
 	{dir: "5-monthly-compliance", list: "aac.builtin.result-compliance/v0", view: "compliance", differs: passCardDiffers},
 	{dir: "6-generic-fallback", list: passNoAggregate, view: "no-aggregate"},

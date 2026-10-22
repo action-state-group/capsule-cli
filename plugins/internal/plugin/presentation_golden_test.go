@@ -249,6 +249,14 @@ func rerenderPresentationPage(t *testing.T, dir string, meta presentationMeta, b
 		}
 		page, err := os.ReadFile(out)
 		return string(page), err
+	case "presentation-build":
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		out := filepath.Join(t.TempDir(), "page.html")
+		if _, err := invoke(t, "", "presentation", "build", "--bundle", filepath.Join(dir, "bundle.json"), "--out", out); err != nil {
+			return "", err
+		}
+		page, err := os.ReadFile(out)
+		return string(page), err
 	}
 	t.Fatalf("unknown rerender %q", meta.Rerender)
 	return "", nil

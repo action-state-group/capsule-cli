@@ -32,7 +32,7 @@ through the real CLI. Run it only to change a fixture on purpose.
 | --- | --- | --- | --- |
 | `1-rules-comparison` | a `report/v1` root, three rule rows (same / different / same) citing their sealed records; record type `example.rules_compare/v0`, a neutral stand-in | `disclose --root … --html` | written |
 | `2-unilateral-receipt` | a deal receipt (`x-deal-v0`), audience `keep`, from the synthetic retail-checkout demo | `deal report --html` | written |
-| `3-bilateral-composed` | `composed/v1`, two responders joined on a pre-agreed identifier, one mismatch (their transcript digests differ; declared and derived `mismatch`), built with agent-action-capsule's own composed/v1 vector generator and its published test seeds | none | **refused** |
+| `3-bilateral-composed` | `composed/v1` of a deal's two copies: the buyer asks itself and the seller for their copies over the evidence-request carrier and composes the recorded answers. The container's root is the composition record on the buyer's log, under its checkpoint, and each member carries its responder's checkpoint, so it verifies VALID. The copies join on the deal id (a pre-agreed identifier), declared and derived `agree` | `deal compose`, then `presentation build --bundle` | written |
 | `4-monthly-outcome` | a month of judged support conversations: a Result v0 root citing 32 `evaluation-report/v1` records over 8 days, opted into the outcome card (calendar, drill-down) | `book report build --card outcome` | written |
 | `5-monthly-compliance` | a month of judged sessions against an example obligations pack, opted into the EU AI Act obligations card | `book report build --card obligation` | written |
 | `6-generic-fallback` | a plain record with no report and no aggregate: the viewer's fallback | `disclose --root … --html` | written |
@@ -43,11 +43,16 @@ through the real CLI. Run it only to change a fixture on purpose.
 
 ## What these fixtures found
 
-- **Fixture 3 gets no page.** No capsulectl command renders a bundle file to a page.
-  The page gate refuses this bundle, as it refuses every published composed/v1 vector:
-  `verify --bundle` calls it INCOMPLETE because it carries no checkpoint. The vendored
-  viewer has no composed/v1 view either. The fixture is kept so a composed view, once
-  added, has a bundle to render.
+- **Fixture 3 got no page at first.** It was then agent-action-capsule's composed/v1
+  vector with one mismatch, and like every published composed/v1 vector it carries no
+  checkpoint, so `verify --bundle` called it INCOMPLETE and the page gate refused it.
+  No command rendered a bundle file, and the viewer had no composed/v1 view. Since
+  `presentation build --bundle` (capsule-cli#183) and capsule-viewer's composed/v1
+  section, the fixture is rebuilt with `deal compose`, whose container is checkpointed,
+  and gets a page (capsule-cli#149). The page shows each member, the join (declared and
+  derived) and the agreement. A checkpointed composed/v1 vector in agent-action-capsule
+  is agent-action-capsule#374. The page's own composed/v1 check reads "withheld": the browser
+  verifier does not check the members' response signatures, which `verify --bundle` does.
 - **Fixtures 4 and 5 seal their Result v0 as the payload of a SQLite record.**
   `result build` seals only into a jsonl evidence book, and when these fixtures were
   taken that book's bundles left out producer signatures, so `verify --bundle` called
@@ -79,8 +84,7 @@ the one registry, shell and builder capsulectl has, with no plugin installed:
   capsule-viewer's offline packaging of the bundle as given (`emitter.BuildOfflineHTML`),
   so no bundle kind has a renderer of its own.
 - **Refused packagings.** `presentation build` does not build fragment or embedded, and static is
-  unavailable: the test asserts each refusal for every bundle. Fixture 3 gets no page: its bundle
-  does not verify VALID.
+  unavailable: the test asserts each refusal for every bundle.
 - **Views agree.** In Chrome, each page's semantic snapshot is the same at 390px, at 1280px, in
   print and for both audiences. The snapshot reads the DOM, whatever CSS shows or hides. The
   vendored runtime builds the same DOM at every width and medium, so this check catches only a
@@ -101,7 +105,7 @@ What `presentation build` shows, against these goldens (built through other comm
 | --- | --- | --- |
 | `1-rules-comparison` | yes | |
 | `2-unilateral-receipt` | no: `build-snapshot.json` | The golden is `deal report --html`, with the deal view (`capsulectl.deal-view/v0`). `presentation list` names the deal view, but `presentation build` does not carry it, so the page falls back to `aac.builtin.no-aggregate/v0`. The page has no `data-sealed="x-deal-v0"` and shows the no-aggregate notice, in about a fifth of the golden's words. The evidence identifiers and `data-verify` are the golden's. |
-| `3-bilateral-composed` | yes: refused | Both record the page as refused. |
+| `3-bilateral-composed` | yes | |
 | `4-monthly-outcome` | yes, less the card | `book report build` stamps `report-card/v1` into the bundle, and `presentation build` packages the bundle as given. Two things differ: the bundle digest, and the card's extension row (`report-card/v1 covered Integrity verified; meaning not interpreted by this viewer`). The test derives build's snapshot from the golden by exactly those two changes. |
 | `5-monthly-compliance` | yes, less the card | As fixture 4. |
 | `6-generic-fallback` | yes | |
