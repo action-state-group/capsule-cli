@@ -58,14 +58,14 @@ func TestAPickupAreaThatReadsAsAStreetAddressIsRefused(t *testing.T) {
 		"near 5th Ave", "Midway, Utah 84049", "District 9", "Union Square", "Community Unit area",
 		"Ward 3, near Main St", "2 blocks from Main St", "Exit 12, Commerce Dr area", "Exit 12 Commerce Dr",
 		"Zone 2, Park Place", "10 min on the way to Dallas", "Hartford, CT, 2 miles from downtown",
-		// Stated limits: a street type after the number, none at all, or more
-		// than three name words between.
 		// Text in another script is read as written: "ст." is a station.
 		"\u0432 5 \u043c\u0438\u043d\u0443\u0442\u0430\u0445 \u043e\u0442 \u0441\u0442. \u043c. \u0421\u043e\u043a\u043e\u043b",
 		"\u0417\u0430 \u0441\u0442. \u043c\u0435\u0442\u0440\u043e \u0421\u043e\u043a\u043e\u043b",
 		"5 \u043c\u0438\u043d \u043e\u0442 \u0441\u0442. \u043c\u0435\u0442\u0440\u043e \u0421\u043e\u043a\u043e\u043b",
-		// A stated limit: beside text in another script, a word wholly in that
-		// script is read as that script, even when it draws like a street type.
+		// Stated limits: beside text in its own script, a word wholly in that
+		// script is read as that script, even when it draws like a street type;
+		// a street type after the number, none at all, or more than three name
+		// words between.
 		"12 Oak \u0405\u0442 \u0438",
 		"Hauptstraße 7", "1600 Broadway", "7 Old Mill Creek Run Rd",
 	} {
@@ -228,6 +228,16 @@ func TestAPickupAreaWrittenToHideAStreetAddressIsRefused(t *testing.T) {
 		"strokes and zeros in a unit":     "Suite \u01c0\u041e\u041e",
 		"a stroke after #":                "#\u01c02",
 		"Greek \u0399 in a unit number":   "Apt \u03992",
+		// Review round 3 of #420.
+		"a Hangul filler after a lookalike word":  "12 Oak \u0405\u0442\u3164",
+		"a control splitting a mixed word":        "12 Oak S\u0001\u0442 \u0438",
+		"a modifier apostrophe after a lookalike": "12 Oak \u0405\u0422\u02bc",
+		"a Latin \u00f0 beside a lookalike word":  "12 Oak \u0405\u0422 \u00f0",
+		"Han beside a Cyrillic lookalike word":    "12 Oak \u0405\u0422 \u4e2d",
+		"Cyrillic beside a Greek lookalike unit":  "\u0391\u03a1\u03a4 4 \u0438",
+		"a fullwidth stroke between words":        "12 Oak\uff5cSt",
+		"a box stroke between words":              "12 Oak \u2502St",
+		"a danda between words":                   "12 Oak\u0964St",
 	} {
 		assert.True(t, readsAsStreetAddress(v), "%s: %q", name, v)
 		err := dealDisclosure{To: "counterparty", Fields: []dealDisclosureField{{Class: "pickup_area", Value: v}}}.validate()
@@ -239,6 +249,8 @@ func TestAPickupAreaWrittenToHideAStreetAddressIsRefused(t *testing.T) {
 	for _, v := range []string{
 		"2 bedrooms in Hyde Park", "Pickup 5 in Austin", "Lot 4 in the park", "12 pi Hyde Park",
 		"Pickup 5 ｉｎ Austin", "2 rooms Ｉn Austin", "2 ｍiles from Main St",
+		"Austin \uff5c Main St", "Austin \u2223 Main St", "Hyde Park \u2502 Oak St corridor",
+		"Near Rajiv Chowk \u0964 Janpath Rd", "Amager \u00d8 near Main St", "Kbh \u00d8 n\u00e6r \u00d8sterport St.",
 		"Austin | Main St", "I5 near Main St", "Hyde Park", "St. Louis, MO 63101",
 		"<b>Hyde</b> <i>Park</i>", "**Downtown** Austin", "[Hyde Park](https://example.com/map)",
 		"Austin TX 78701", "Sаint Louis", "Zone 2, Park Place", "2 blocks from Main St",

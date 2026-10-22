@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -2797,8 +2798,10 @@ var pickupAreaWord = regexp.MustCompile(`[\p{L}\p{Nd}\x{E000}\x{E001}]+`)
 
 // pickupAreaNumber is a house number: decimal digits, with an optional
 // letter ("12", "12345", "12B"), not an ordinal ("5th"). A lookalike read as
-// pickupAreaEither or pickupAreaO stands for a 1 or a 0 ("ǀ2", "1ОО", "ǀ").
-var pickupAreaNumber = regexp.MustCompile(`^[\p{Nd}\x{E000}\x{E001}]+\p{L}?$`)
+// pickupAreaEither or pickupAreaO stands for a 1 or a 0 ("ǀ2", "1ОО", "ǀ"),
+// with a digit or a 1 among them: a lone O lookalike (the Danish Ø) is a
+// word.
+var pickupAreaNumber = regexp.MustCompile(`^[\p{Nd}\x{E000}\x{E001}]*[\p{Nd}\x{E000}][\p{Nd}\x{E000}\x{E001}]*\p{L}?$`)
 
 // pickupAreaUnit is a numbered unit: "Apt 4", "Suite 200", "Ste. 3", "#5",
 // matched on the reading, where pickupAreaEither may stand for an i or a 1
@@ -2917,26 +2920,35 @@ func readsAsStreetAddress(v string) bool {
 // character) and every mark (\p{M}: nonspacing, spacing and enclosing, such
 // as U+20DD) read as nothing; every separator (\p{Z}) and space as a space;
 // any script's decimal digit as its ASCII digit; a vertical stroke outside
-// ASCII (pipeLike) as pickupAreaEither. A letter outside ASCII reads as its
-// compatibility fold when that is plain ASCII (fullwidth Ｓ and ｍ, math 𝐒,
-// an accented é). Otherwise a lookalike, a letter whose TR39 confusable
+// ASCII that is a letter (pipeLike: ǀ, a Greek Ι) as pickupAreaEither. A
+// letter outside ASCII reads as its compatibility fold when that is plain
+// ASCII (fullwidth Ｓ and ｍ, math 𝐒, an accented é). Otherwise a lookalike, a letter whose TR39 confusable
 // skeleton (confusableSkeleton) is plain letters and digits, reads as that
 // skeleton, with an i or l in it read as pickupAreaEither and an o as
 // pickupAreaO, so a Cyrillic Ѕ reads s, where TR39 would flag it: in a word
-// that mixes it with ASCII letters, or in a value whose letters outside
-// ASCII are all lookalikes (whole-script confusable with Latin). A value
-// that also holds a letter of another script with no such skeleton (и, л,
-// ж) is text in that script, and its words that are wholly in it are read
-// as folded: "в 5 минутах от ст. метро" is Russian, not "ct" after a 5.
+// that mixes it with ASCII letters, or when the value holds no visible text
+// in the lookalike's own script (whole-script confusable with Latin). A
+// value that also holds a letter of that script with no such skeleton (и,
+// л, ж for Cyrillic) is text in that script, and its words that are wholly
+// in it are read as folded: "в 5 минутах от ст. метро" is Russian, not "ct"
+// after a 5. A vertical stroke that is not a letter (｜, │, ।), and a letter
+// of no script that reads as nothing in ASCII (ʼ), is a gap.
 // Then lower case.
 func pickupAreaReading(v string) string {
 	runes := []rune(v)
-	// A letter outside ASCII that no ASCII form or skeleton reads: the value
-	// is written in another script.
-	otherScript := slices.ContainsFunc(runes, func(r rune) bool {
-		_, ok := pickupAreaLookalike(r)
-		return r > 0x7f && unicode.IsLetter(r) && !pickupAreaASCIILetter(r) && !pickupAreaPipe(r) && !ok
-	})
+	// The scripts the value is written in, other than Latin: those of its
+	// visible letters outside ASCII that no ASCII form or skeleton reads.
+	otherScripts := map[string]bool{}
+	for _, r := range runes {
+		if _, ok := pickupAreaLookalike(r); !ok && r > 0x7f && unicode.IsLetter(r) && !ignorable(r) && !pickupAreaPipe(r) {
+			if sc := scriptOf(r); sc != "Latin" && sc != "Common" && sc != "Inherited" {
+				otherScripts[sc] = true
+			}
+		}
+	}
+	// A lookalike is read as its skeleton unless the value has text in its
+	// own script and its word is wholly in that script.
+	asSkeleton := func(r rune, mixed bool) bool { return mixed || !otherScripts[scriptOf(r)] }
 	var b strings.Builder
 	for i := 0; i < len(runes); {
 		// One word: letters, digits, marks and what draws nothing.
@@ -2958,11 +2970,21 @@ func pickupAreaReading(v string) string {
 			case unicode.Is(unicode.Nd, r):
 				// A digit stays a digit, even one drawn like a stroke (١).
 				b.WriteString(foldDecoded(string(r)))
-			case pickupAreaPipe(r) && (!unicode.IsLetter(r) || mixed || !otherScript):
+			case pickupAreaPipe(r) && !unicode.IsLetter(r):
+				// A stroke that is not a letter is drawn as a stroke, between
+				// words.
+				b.WriteByte(' ')
+			case pickupAreaPipe(r) && asSkeleton(r, mixed):
 				b.WriteRune(pickupAreaEither)
 			default:
-				if sk, ok := pickupAreaLookalike(r); ok && (mixed || !otherScript) {
+				if sk, ok := pickupAreaLookalike(r); ok && asSkeleton(r, mixed) {
 					b.WriteString(sk)
+					break
+				}
+				if sc := scriptOf(r); r > 0x7f && unicode.IsLetter(r) && (sc == "Common" || sc == "Inherited") {
+					// A letter of no script (a modifier apostrophe ʼ) draws
+					// as punctuation, between words.
+					b.WriteByte(' ')
 					break
 				}
 				b.WriteString(foldDecoded(string(r)))
@@ -2981,8 +3003,33 @@ func pickupAreaReading(v string) string {
 // pickupAreaInWord is whether r is part of a word as pickupAreaReading reads
 // one.
 func pickupAreaInWord(r rune) bool {
-	return unicode.IsLetter(r) || unicode.Is(unicode.Nd, r) || unicode.Is(unicode.M, r) || ignorable(r)
+	return unicode.IsLetter(r) || unicode.Is(unicode.Nd, r) || unicode.Is(unicode.M, r) || ignorable(r) ||
+		unicode.Is(unicode.Co, r) || (unicode.Is(unicode.Cc, r) && !unicode.IsSpace(r))
 }
+
+// scriptOf is the name of r's Unicode script, "" when it has none.
+func scriptOf(r rune) string {
+	if r <= 0x7f {
+		if unicode.IsLetter(r) {
+			return "Latin"
+		}
+		return "Common"
+	}
+	if sc, ok := scriptCache.Load(r); ok {
+		return sc.(string)
+	}
+	sc := ""
+	for name, table := range unicode.Scripts {
+		if unicode.Is(table, r) {
+			sc = name
+			break
+		}
+	}
+	scriptCache.Store(r, sc)
+	return sc
+}
+
+var scriptCache sync.Map
 
 // pickupAreaASCIILetter is an ASCII letter, or a letter whose compatibility
 // fold is plain ASCII (fullwidth ｉ, math 𝐒, é).
