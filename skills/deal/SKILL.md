@@ -179,10 +179,12 @@ not at the final review. Keep it for the whole errand: one deal per errand.
    `deal check` with `"action": "cancel"`, and once it proceeds,
    `deal note --kind act` with `{"action": "cancel"}`. Until it is
    recorded, their acceptance stays live; after it, every share in that
-   thread asks first. Do not close the thread instead: after an offer or a
-   commit, `deal close` refuses `called_off` and `not_selected`. When a
-   share's card says the buyer's acceptance is older than 31 days, make
-   the offer again and record their new acceptance before you share.
+   thread asks first, until the buyer accepts again. Recording a cancel
+   does not reopen the item to other buyers. Don't use `deal close`
+   instead: once there is an offer or a commit, it refuses `called_off`
+   and `not_selected`. When a share's card says the buyer's acceptance is
+   older than 31 days, make the offer again, record their acceptance,
+   then check and record the commit, and only then share.
 9. **Find deals with `deal list`**, never from memory.
 
 ### Booking

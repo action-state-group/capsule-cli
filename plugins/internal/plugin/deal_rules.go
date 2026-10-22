@@ -957,12 +957,16 @@ type dealState struct {
 	checked map[string]checkedTerms
 	// On a sale's thread where the user sells: buyerAccepted is that the
 	// buyer accepted an offer, calledOff that the seller's cancel act came
-	// after it (the deal is no longer live, capsule-engine#179), and
-	// commitsAt when each accepted commit act that a rules history carries
-	// (it states its amount) was sealed.
+	// after the latest acceptance (the deal is no longer live until the
+	// buyer accepts again, capsule-engine#179), and commitsAt when each
+	// accepted commit act that a rules history carries (it states its
+	// amount) was sealed.
 	buyerAccepted bool
 	calledOff     bool
 	commitsAt     []string
+	// historySince is the cutoff of the history the rules checker was
+	// given on this check; zero when no checker ran.
+	historySince time.Time
 }
 
 func foldDeal(events []sealedEvent) (dealState, error) {
@@ -1028,7 +1032,11 @@ func foldDeal(events []sealedEvent) (dealState, error) {
 				s.checked[se.CapsuleID] = c
 			}
 		case "acceptance":
-			s.buyerAccepted = s.saleThread()
+			// A cancel calls off only the acceptances before it: the
+			// buyer accepting again makes the deal live again.
+			if s.saleThread() {
+				s.buyerAccepted, s.calledOff = true, false
+			}
 		case "act":
 			if e.Act == nil || !s.saleThread() {
 				continue
@@ -1090,14 +1098,14 @@ func (s dealState) saleThread() bool {
 }
 
 // acceptanceOutsideHistory is whether the thread's buyer accepted, the seller
-// committed, and every such commit is older than the history window the
-// rules checker is given (cli.RulesHistoryDays): the checker then reads no
-// acceptance at all, though the thread holds one (capsule-engine#179).
-func (s dealState) acceptanceOutsideHistory(now time.Time) bool {
-	if len(s.commitsAt) == 0 {
+// committed, and every such commit was sealed before since, the cutoff of
+// the history the rules checker was given (cli.RulesHistoryDays back): the
+// checker then reads no acceptance at all, though the thread holds one
+// (capsule-engine#179). With no checker run (since zero) it is false.
+func (s dealState) acceptanceOutsideHistory(since time.Time) bool {
+	if len(s.commitsAt) == 0 || since.IsZero() {
 		return false
 	}
-	since := now.Add(-cli.RulesHistoryDays * 24 * time.Hour)
 	for _, at := range s.commitsAt {
 		t, err := time.Parse(time.RFC3339, at)
 		if err != nil || !t.Before(since) {

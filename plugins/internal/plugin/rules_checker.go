@@ -78,6 +78,10 @@ type dealRulesHistory struct {
 	Days     int  `json:"days"`
 	Acts     int  `json:"acts"`
 	Complete bool `json:"complete"`
+	// Since is the cutoff the history was read from (acts sealed before it
+	// were left out), so the card tells the same window apart: never
+	// sealed or sent.
+	Since time.Time `json:"-"`
 }
 
 // externalCheckResult is the neutral shape a checker prints.
@@ -790,7 +794,7 @@ func (s *dealSession) rulesHistory(ctx context.Context) ([]interface{}, *dealRul
 		acts = append(acts, act{deal, id, at})
 	}
 	sort.SliceStable(acts, func(i, j int) bool { return acts[i].at.After(acts[j].at) })
-	scope := &dealRulesHistory{Days: cli.RulesHistoryDays, Complete: true}
+	scope := &dealRulesHistory{Days: cli.RulesHistoryDays, Complete: true, Since: since}
 	if len(acts) > rulesHistoryMax {
 		acts, scope.Complete = acts[:rulesHistoryMax], false
 	}

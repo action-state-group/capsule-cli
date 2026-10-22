@@ -153,22 +153,33 @@
 
 ### A buyer's acceptance releases a seller's details only while the deal is live (capsule-engine#179)
 
-- **Added:** on a sale's thread, after the seller's `cancel` act that
-  follows the buyer's acceptance, every later share check asks: a new
-  built-in difference `acceptance_called_off` (question `safety`), with the
-  card reason "the buyer's acceptance was called off" (wording key
-  `card.why.acceptance_called_off`). It joins the rule table, so
-  `ruleset_digest` changes and the profile's typed fixtures are
-  regenerated.
-- **Added:** when the user's rules refuse or ask on a seller's share to
-  the thread's buyer and every commit of that thread is older than the
-  31-day history the rules checker is given, the card says why: "the
+- **Added:** on a sale's thread, after the seller cancels the buyer's
+  acceptance (a `cancel` act after it), every later share check asks,
+  until the buyer accepts again: a new built-in difference
+  `acceptance_called_off` (question `safety`), with the card reason "the
+  buyer's acceptance was called off" (wording key
+  `card.why.acceptance_called_off`). A cancel calls off only the
+  acceptances before it; a cancel checked but never recorded calls off
+  nothing. The rule joins the rule table, so `ruleset_digest` changes and
+  the profile's typed fixtures are regenerated.
+- **Added:** the check of that cancel asks "The buyer backed out: record
+  their acceptance as called off?" (wording key
+  `card.question.cancel.acceptance`).
+- **Added:** when the user's rules refuse a seller's share to the
+  thread's buyer, or could not fully check it, and every commit of that
+  thread is older than the cutoff of the 31-day history the rules checker
+  was given, the card says why. A refusal reads "Why I stopped: your rules
+  don't allow this, because the buyer's acceptance is older than 31 days.
+  Ask them to accept again." (wording key
+  `card.why.rules_deny.acceptance_too_old`); otherwise the reason is "the
   buyer's acceptance is older than 31 days; ask them to accept again"
-  (wording key `card.why.acceptance_too_old`, with `{days}`). capsulectl
+  (`card.why.acceptance_too_old`). Both take `{days}`. Never on an
+  escalation, or on a share of only the public `pickup_area`. capsulectl
   holds the whole thread, so it tells this from no acceptance at all.
 - **Changed:** the deal skill has the agent record the seller's `cancel`
   in the thread when a buyer who accepted withdraws, rather than closing
-  it, and make the offer again when the acceptance is too old.
+  it, and, when the acceptance is too old, make the offer again, record
+  the acceptance and check and record the commit before sharing.
 
 ## v0.1.0-rc19
 

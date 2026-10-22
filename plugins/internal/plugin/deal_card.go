@@ -61,12 +61,19 @@ var cardReasons = []cardReason{
 	{key: "card.why.credentials_requested", rules: []string{"credentials_requested", "verification_code_request"}},
 	{key: "card.why.pay_before_seeing", rules: []string{"pay_before_seeing"}},
 	{key: "card.why.acceptance_called_off", rules: []string{"acceptance_called_off"}},
-	// Why the user's rules found no acceptance, said before they refuse:
-	// capsulectl holds the whole thread, the checker only its window.
-	{key: "card.why.acceptance_too_old", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
-		return f.acceptanceOld && (hasRule(r, "rules_deny") || hasRule(r, "rules_escalate") || hasRule(r, "rules_not_evaluable"))
+	// Why the user's rules found no acceptance: capsulectl holds the whole
+	// thread, the checker only its window. Under a deny it is the deny's
+	// own reason; where the rules could not be fully checked it stands
+	// alone. An escalation is the rules asking for something else.
+	{key: "card.why.rules_deny.acceptance_too_old", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return f.acceptanceOld && hasRule(r, "rules_deny")
 	}},
-	{key: "card.why.rules_deny", rules: []string{"rules_deny"}},
+	{key: "card.why.rules_deny", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return hasRule(r, "rules_deny") && !f.acceptanceOld
+	}},
+	{key: "card.why.acceptance_too_old", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
+		return f.acceptanceOld && !hasRule(r, "rules_deny") && hasRule(r, "rules_not_evaluable")
+	}},
 	{key: "card.why.over_limit_asked", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
 		return f.askedOver && hasRule(r, "over_limit")
 	}},
@@ -135,6 +142,11 @@ func cardWhy(w cli.Wording, r dealCheckResult, snap dealSnapshot, f cardFacts) [
 		text := w.Line(row.key, cli.V{"limit": f.limit, "floor": f.floor, "what": what, "days": strconv.Itoa(cli.RulesHistoryDays)})
 		if text != "" && !slices.Contains(why, text) {
 			why = append(why, text)
+		}
+		// A refusal for an acceptance past the window ends on what to do:
+		// nothing is said after it.
+		if row.key == "card.why.rules_deny.acceptance_too_old" && text != "" {
+			break
 		}
 		if len(why) == 2 {
 			break
@@ -217,6 +229,12 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	vals := cli.V{"amount": amount, "payee": payee, "where": where, "item": item,
 		"what": disclosureWords(w, snap.Disclosing), "description": snap.Description}
 	ask.Question = cardQuestion(w, snap, vals)
+	// A seller's cancel on a sale's thread with a live acceptance records
+	// that the buyer backed out: the user confirms that, not a cancellation
+	// with a merchant.
+	if snap.Action == "cancel" && state.saleThread() && state.buyerAccepted && !state.calledOff {
+		ask.Question = w.Line("card.question.cancel.acceptance", vals)
+	}
 	if r.Verdict == "deny" {
 		// A deny takes no yes: it says what will not happen, and why it
 		// stopped (u245: "will not do it and will not ask").
@@ -232,9 +250,11 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	if r.Recipient != nil {
 		told = r.Recipient.First
 	}
-	// A share to the thread's buyer (a platform's is not the acceptance's
-	// to release).
-	acceptanceOld := isShare(snap.Action) && snap.DisclosingTo != "platform" && state.saleThread() && state.acceptanceOutsideHistory(cli.DealClock())
+	// A share to the thread's buyer of something the acceptance releases
+	// (a platform's or anyone else's is not its to release, and the public
+	// pickup area needs none).
+	acceptanceOld := isShare(snap.Action) && snap.DisclosingTo == "counterparty" && slices.ContainsFunc(snap.Disclosing, func(c string) bool { return c != "pickup_area" }) &&
+		state.saleThread() && state.acceptanceOutsideHistory(state.historySince)
 	ask.Why = cardWhy(w, r, snap, cardFacts{limit: limit, floor: floor, picked: pickedWords(r), told: disclosureWords(w, told), askedOver: askedOver, acceptanceOld: acceptanceOld})
 	ask.GoodToKnow = cardGoodToKnow(w, r)
 	// A share before a payment is the first of two stops; the charge is not
