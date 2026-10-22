@@ -172,7 +172,7 @@ func TestAListingSaysWhatWasBoughtAndHowItEnded(t *testing.T) {
 
 	byID := listings(t, "--json")
 	assert.Regexp(t, `^Fawn Sticker: bought for \$1\.90, `, byID[picked])
-	assert.Regexp(t, `^Fawn Sticker: didn't arrive as agreed, `, byID[lost])
+	assert.Regexp(t, `^Fawn Sticker: paid \$1\.90, didn't arrive as agreed, `, byID[lost])
 	assert.Regexp(t, `^Fawn Sticker \(demo\): open since `, byID[demo])
 }
 

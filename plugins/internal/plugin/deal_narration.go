@@ -390,8 +390,8 @@ func listingSay(w cli.Wording, l dealListing, events []sealedEvent) string {
 	if !ok {
 		return ""
 	}
-	if outcome == "completed" {
-		if l.Result == dealResultSold {
+	if outcome == "completed" || outcome == "mismatch" {
+		if outcome == "completed" && l.Result == dealResultSold {
 			key = "say.list.deal.sold"
 		}
 		if a := l.Summary.Amount; a != nil && a.Basis == "paid" && a.OtherCurrencyActs == 0 && a.AmountMinor > 0 {
