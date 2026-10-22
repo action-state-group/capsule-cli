@@ -11,30 +11,28 @@
   a close. Every first receipt gets a keep line, with its own wording for a
   called-off errand and for a seller's first receipt (the thread's close); a
   paid purchase with a sealed counterparty name (not an id or a domain) also
-  gets a contrast line. Read from the
-  sealed steps; nothing new is stored. A seller's offer or commit is never a
-  receipt moment.
+  gets a contrast line. It is read from the sealed steps; nothing new is
+  stored. A seller's offer or commit is never a receipt moment.
 - **Added:** a `called_off` or `not_selected` close, and `deal report` on such
   a deal, says "The receipt shows nothing paid and nothing shared.", or
   "…nothing paid." when a disclosure was noted. A seller's thread says
   neither.
-- **Added:** `deal list --json` gives each listing a `say` line (the agreed
+- **Added:** `deal list --json` gives each deal a `say` line (the agreed
   item, how the deal ended, the amount paid, an ended sale's listing, the
   local date with the year when not this year's; demos marked; no id), with
   or without a range.
 - **Changed:** the page message's label is `report.private` ("PRIVATE: your
   own copy."), not "View details"; the chat line still ends with "View
-  details". 20 new wording-pack keys
-  (`say.receipt.first.*`, `say.close.nothing_done`, `say.close.nothing_paid`,
-  `say.list.*`, `report.private`): a pinned pack needs them, or the built-in
-  pack is used.
+  details". 20 new wording-pack keys (`say.receipt.first.*`,
+  `say.close.nothing_done`, `say.close.nothing_paid`, `say.list.*`,
+  `report.private`): a pinned pack needs them, or the built-in pack is used.
 - **Changed:** the deal skill sends the page in its own message with the
   label as its only words; says when a receipt goes out by itself (a
   payment, an errand ending arrived or called off, a sale thread closing,
   an updated receipt only on a material change); closes an errand that a
-  hold or deny ended as `called_off` when no act is on record; answers "show my receipts" from
-  `deal list --json`, never memory, and re-attaches one with
-  `deal report --html`.
+  hold or deny ended as `called_off` when no act is on record; answers "show
+  my receipts" from `deal list --json`, never memory, and re-attaches one
+  with `deal report --html`.
 
 ### A period's checks and agent anomalies in `deal list` (capsule-cli#385)
 
@@ -53,7 +51,8 @@
   sealed without a valid check whose rule is none of these counts as
   `skipped_check`, as `deal report` names it. `acted_against_answer` is an act that
   went ahead after the user answered not to proceed; `deal report` lists it
-  under `unsealed_approval`.
+  under `unsealed_approval` (two keys in `totals`, one heading in
+  `deal report`).
 - **Changed:** the agent answering an ask's card itself
   (`ask_needs_your_words`) is `unsealed_approval` in `deal report` too,
   where it read `skipped_check`; the check was made.
