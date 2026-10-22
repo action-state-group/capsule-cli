@@ -766,3 +766,35 @@ func TestTheUsersAnswerToAnOfferNamesItsAmount(t *testing.T) {
 	assert.Equal(t, []string{"user: Asked", "agent: Waited for your OK", "user: OK'd offering $1,900", "agent: Waited for your OK", "user: Said no to agreeing to $1,900",
 		"agent: Waited for your OK", "user: OK'd paying €1,900", "agent: Waited for your OK", "user: Said no"}, labels)
 }
+
+// A tapped button's label is the user's answer (capsule-cli#416): passed as
+// --said, the approval is sealed as the user's, and it is their OK row. Left
+// out, the same tap is sealed as the card's and is no row.
+func TestATappedLabelIsTheUsersAnswer(t *testing.T) {
+	dealFixture(t)
+	id := dealRun(t, "open", "--input", writeJSON(t, fawnErrand))["deal_id"].(string)
+	note(t, id, "intent", `{"verbatim":"lets change to ebay","who":{"name":"eBay","domain":"ebay.com"}}`)
+	share := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, `{"action":"share_contact","disclosing_to":"counterparty","disclosing":["name","address"]}`))
+	require.Equal(t, "pause", share["verdict"], share["card"])
+	dealRun(t, "note", "--deal", id, "--kind", "approval", "--check", share["check_id"].(string),
+		"--choice", "proceed", "--said", "Share anyway", "--shown-card", shownCard(t, share["card"].(string)))
+	var approvers []any
+	for _, r := range checkApprovals(t, id) {
+		approvers = append(approvers, r["approver"])
+	}
+	assert.Equal(t, []any{"user"}, approvers, "a tapped label is the user's answer")
+	assert.Contains(t, journeyMoves(t, id), "user:approved")
+}
+
+// checkApprovals are the deal's sealed approval record bodies, in order.
+func checkApprovals(t *testing.T, id string) []map[string]any {
+	t.Helper()
+	records, _ := exportRecords(t, id)
+	var out []map[string]any
+	for _, r := range records {
+		if b, ok := r["x-deal-v0"].(map[string]any); ok && b["record_type"] == "approval" {
+			out = append(out, r["body"].(map[string]any))
+		}
+	}
+	return out
+}

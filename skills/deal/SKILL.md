@@ -842,8 +842,12 @@ checker said (see "Your rules" below).
   a file and pass it with `--shown-card`: the answer then commits to that
   card, and the record shows it is the card the check produced (a different
   text is refused).
-  `--said` is the user's own words; without them the answer is sealed as the
-  card's (`agent_card`), not the user's:
+  `--said` is the user's own words. When the user taps one of the card's
+  buttons, that option's label is their answer: pass it verbatim as
+  `--said` (for example `--said "Pay anyway"`). When they type an answer,
+  pass what they typed. Leave `--said` out only for a card nobody answered
+  in words: the answer is then sealed as the card's (`agent_card`), not the
+  user's, and it satisfies no ask:
 
 ```sh
 capsulectl --profile deal deal note --deal ID --kind approval --check CHECK_ID --choice hold --said "the user's words" --shown-card card.txt
