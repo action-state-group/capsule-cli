@@ -213,9 +213,36 @@ func verdictError(verdict string) error {
 // only after this same verdict is VALID (pageGate), so the page can never
 // claim more than verify --bundle does about the bundle it carries.
 func BundleVerdict(value map[string]interface{}, directory *witness.Directory) (string, map[string]any) {
-	result := aacbundle.VerifyBundleWithOptions(value, aacbundle.Options{RefusalSignature: verifyRefusalSignature, ResponseSignature: verifyResponseSignature})
+	result := aacbundle.VerifyBundleWithOptions(value, bundleOptions)
 	report, verdict := assessBundle(value, result, directory)
 	return verdict, report
+}
+
+// bundleOptions are the AAC verifier options verify --bundle uses.
+var bundleOptions = aacbundle.Options{RefusalSignature: verifyRefusalSignature, ResponseSignature: verifyResponseSignature}
+
+// withSelection takes a producer-selected bundle's interval coverage and
+// per-record membership from AAC's strict reading (capsule-cli#301): its
+// certificate binds the producer's pick, not an interval, so coverage is
+// withheld (selection_not_checkable) and each record's own inclusion proof
+// is checked against the signed checkpoint. Every other bundle keeps the
+// plain verifier's reading, so no other verdict moves.
+//
+// Strict checks those proofs only once its own checkpoint check passes,
+// which is stricter than CheckpointClaim (it requires checkpoint.log_id
+// itself). So that a tampered proof cannot hide behind that difference, a
+// failing strict checkpoint claim is returned too, and the caller reports it
+// as the bundle's checkpoint claim; nil otherwise.
+func withSelection(value map[string]interface{}, result aacbundle.VerificationResult) (aacbundle.VerificationResult, *aacbundle.ClaimResult) {
+	if completeness, _ := value["completeness"].(map[string]interface{}); completeness["selection"] != aacbundle.SelectionProducerSelected {
+		return result, nil
+	}
+	strict := aacbundle.VerifyStrict(value, aacbundle.StrictOptions{Options: bundleOptions})
+	result.IntervalCoverage, result.PerRecordMembership = strict.IntervalCoverage, strict.PerRecordMembership
+	if checkpoint := strict.Claim("checkpoint"); checkpoint != nil && checkpoint.Status == "fail" {
+		return result, checkpoint
+	}
+	return result, nil
 }
 
 // assessBundle reports one Evidence Bundle's claims and its verdict. A
@@ -224,6 +251,7 @@ func BundleVerdict(value map[string]interface{}, directory *witness.Directory) (
 // Bundle's, but a failed member or block fails the verdict, and one with
 // something not shown makes it INCOMPLETE.
 func assessBundle(value map[string]interface{}, result aacbundle.VerificationResult, directory *witness.Directory) (map[string]any, string) {
+	result, strictCheckpoint := withSelection(value, result)
 	records := map[string]string{}
 	ids := make([]string, 0, len(result.CapsuleResults))
 	for id := range result.CapsuleResults {
@@ -273,6 +301,9 @@ func assessBundle(value map[string]interface{}, result aacbundle.VerificationRes
 	rawRecords, _ := value["records"].([]interface{})
 	signatures, signatureStates := producerSignatureClaim(rawRecords)
 	signedCheckpoint, statement := CheckpointClaim(value)
+	if strictCheckpoint != nil && signedCheckpoint.Status != "fail" {
+		signedCheckpoint = *strictCheckpoint
+	}
 	witnesses, witnessReceipts := witnessClaim(value, statement, directory)
 	// A deal bundle's receipt is on the cadence checkpoint its own
 	// checkpoint is anchored in; that chain is the bundle's witness claim.

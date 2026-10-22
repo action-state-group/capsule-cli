@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Producer-selected bundles read as AAC strict reads them (capsule-cli#301)
+
+- **Changed:** a producer-selected Evidence Bundle
+  (`completeness.selection` `producer-selected`, no certificate range) no
+  longer reads INVALID: `verify --bundle` reads it as INCOMPLETE (exits 3,
+  as for any partial bundle), as agent-action-capsule's strict verifier
+  does. `interval_coverage` is withheld with `selection_not_checkable`, and
+  `per_record_membership` checks each record's own inclusion proof against
+  the signed checkpoint. As in AAC strict, such a bundle's checkpoint must
+  carry its own `log_id`; one stated only in the completeness certificate
+  fails `checkpoint`. A composed/v1 member that is such a bundle is read the
+  same way. Every other bundle keeps its verdict, and a bundle without a
+  selection whose completeness certificate has no range (`first_seq`,
+  `last_seq`) still reads as malformed.
+
 ## v0.1.0-rc20
 
 ### The receipt moments of the Muse chat contract (capsule-cli#373)

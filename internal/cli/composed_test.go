@@ -286,3 +286,30 @@ func TestEvidenceBookRefusalSignature(t *testing.T) {
 	delete(unsigned, "key_id")
 	assert.Equal(t, aacbundle.RefusalSignatureUnverified, verifyRefusalSignature(unsigned))
 }
+
+// A composed/v1 member that is a producer-selected bundle is read as a
+// top-level one is (capsule-cli#301): INCOMPLETE, its membership checked.
+func TestVerifyBundleComposedProducerSelectedMember(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	container := composedVectors(t)[0].Container
+	block := container["extensions"].(map[string]interface{})["composed/v1"].(map[string]interface{})
+	b := block["members"].([]interface{})[1].(map[string]interface{})
+	selected := selectedBundle(t, nil)
+	b["bundle"] = selected
+	var err error
+	b["digest"], err = aacbundle.BundleDigest(selected)
+	require.NoError(t, err)
+	block["joins"] = []interface{}{}
+	block["composed_digest"], err = aacbundle.ComposedDigest(block)
+	require.NoError(t, err)
+
+	result, err := verifyBundleOutput(t, writeBundle(t, container))
+	_, composed := composedOf(t, result)
+	member := composed["members"].([]interface{})[1].(map[string]interface{})
+	assert.Equal(t, "reproduced", member["digest"], member["findings"])
+	report := member["bundle"].(map[string]interface{})
+	assert.Equal(t, "INCOMPLETE", report["verdict"])
+	assert.Equal(t, map[string]interface{}{"status": "withheld", "findings": []interface{}{"selection_not_checkable"}}, report["interval_coverage"])
+	assert.Equal(t, "pass", status(report, "per_record_membership"))
+	assert.ErrorIs(t, err, ErrPartial, composed["findings"])
+}
