@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/action-state-group/capsule-cli/internal/cli"
@@ -126,11 +127,10 @@ func TestARefusedShareIsNotTold(t *testing.T) {
 	tellings(t, sealed, given, []any{}, false)
 }
 
-// Data given without authority (a disclosure sealed authority none) is not
-// told: neither rule input, nor capsulectl's own first telling, counts it.
-func TestADisclosureWithoutAuthorityIsNotTold(t *testing.T) {
-	dealFixture(t)
-	id := openShop(t, "redbubble.com")
+// leakEmail seals, straight into the deal, an email disclosure with no
+// authority (authority none), as a step the agent took without the user's OK.
+func leakEmail(t *testing.T, id string) {
+	t.Helper()
 	p, err := cli.LoadProfile("deal")
 	require.NoError(t, err)
 	s, err := openDealSession(t.Context(), p)
@@ -143,12 +143,61 @@ func TestADisclosureWithoutAuthorityIsNotTold(t *testing.T) {
 		Reason: "no check covered it", Rule: "no_check"}})
 	require.NoError(t, err)
 	require.NoError(t, s.close())
+}
+
+// Data given without authority (a disclosure sealed authority none) is not
+// told: neither rule input counts it, and the next share still pauses. The
+// card says it went before without the user's OK, never "first time".
+func TestADisclosureWithoutAuthorityIsNotTold(t *testing.T) {
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	leakEmail(t, id)
 
 	sealed, given, _ := ruleInputs(t, id, shareInput(`"email"`))
 	tellings(t, sealed, given, []any{}, false)
 	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"email"`)))
-	assert.Equal(t, "pause", check["verdict"], "still a first telling")
+	assert.Equal(t, "pause", check["verdict"], "still not told")
+	assert.Contains(t, differenceTexts(check), "Your email already went to Shop without your OK")
+	assert.NotContains(t, differenceTexts(check), "First time telling Shop your email")
+	assert.Equal(t, []any{"email"}, check["recipient"].(map[string]any)["unapproved_disclosures"])
+	card := check["card"].(string)
+	assert.Contains(t, card, "Your email already went to Shop (redbubble.com) without your OK. Share it again?")
+	assert.NotContains(t, strings.ToLower(card), "first time")
+
+	// Held, the note says so without "first time" either.
+	held := heldNote(t, id, `{"fields":[{"class":"email","value":"`+homeEmail+`"}]}`)
+	assert.Equal(t, "You haven't OK'd telling Shop your email, and no check the user approved named it", held["reason"])
+}
+
+// A true first telling keeps its words.
+func TestATrueFirstTellingSaysFirstTime(t *testing.T) {
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"email"`)))
 	assert.Contains(t, differenceTexts(check), "First time telling Shop your email")
+	assert.NotContains(t, check["card"], "already went")
+	assert.Contains(t, check["card"], "Why I'm asking: first time they get your details.")
+	held := heldNote(t, id, `{"fields":[{"class":"email","value":"`+homeEmail+`"}]}`)
+	assert.Equal(t, "First time telling Shop your email, and no check the user approved named it", held["reason"])
+}
+
+// One class went before without the user's OK, one is new: each is said as
+// what it is.
+func TestALeakedClassBesideANewOne(t *testing.T) {
+	dealFixture(t)
+	id := openShop(t, "redbubble.com")
+	leakEmail(t, id)
+	check := dealRun(t, "check", "--deal", id, "--input", writeJSON(t, shareInput(`"email","phone"`)))
+	assert.Equal(t, "pause", check["verdict"])
+	texts := differenceTexts(check)
+	assert.Contains(t, texts, "Your email already went to Shop without your OK")
+	assert.Contains(t, texts, "First time telling Shop your phone")
+	assert.NotContains(t, texts, "First time telling Shop your email")
+	card := check["card"].(string)
+	assert.Contains(t, card, "Your email already went to Shop (redbubble.com) without your OK. Share it again?")
+	assert.Contains(t, card, "first time they get your phone")
+	assert.NotContains(t, card, "first time they get your details")
+	assert.NotContains(t, card, "first time they get your email")
 }
 
 // latestCheck is the id of the deal's latest check record.

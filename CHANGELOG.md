@@ -161,6 +161,14 @@
   disclosure sealed `authority: none`), is not told: only what was given
   with the user's rules or approval counts, for both rule inputs and for
   capsulectl's own first-telling pause.
+- **Changed:** a class that went to a recipient before without the user's
+  OK is never called a first time. The check's difference reads `Your
+  <class> already went to <recipient> without your OK`, and the card asks
+  `Your <class> already went to <recipient> without your OK. Share it
+  again?` (new wording-pack key `card.question.share.unapproved_before`);
+  a class new to them beside it keeps `First time telling …` and the card's
+  `first time they get your <class>`. A held disclosure note naming such a
+  class says `You haven't OK'd telling <recipient> your <class>`.
 
 ## v0.1.0-rc20
 

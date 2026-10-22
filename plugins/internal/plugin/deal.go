@@ -1686,12 +1686,20 @@ func dealNoteCommand() *cobra.Command {
 						name = recipientName(*d.Who)
 					}
 					words := make([]string, len(first))
+					leaked := false
 					for i, c := range first {
 						words[i] = classWord(c)
+						leaked = leaked || memory.leakedBefore(keys, c)
+					}
+					// Never "first time" for a class that went to them before
+					// without the user's OK.
+					reason := "First time telling " + name + " your " + strings.Join(words, ", ")
+					if leaked {
+						reason = "You haven't OK'd telling " + name + " your " + strings.Join(words, ", ")
 					}
 					if err := cli.Output(c, map[string]any{
 						"deal_id": dealID, "proceed": false, "verdict": "pause", "held": first,
-						"reason": "First time telling " + name + " your " + strings.Join(words, ", ") + ", and no check the user approved named it",
+						"reason": reason + ", and no check the user approved named it",
 						"next":   `do not send it; run deal check with "disclosing" naming ` + strings.Join(first, ", ") + `, show its card, and note this again only once the user approves`,
 					}); err != nil {
 						return err

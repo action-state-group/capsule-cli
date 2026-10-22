@@ -1570,6 +1570,11 @@ func evaluateDeal(s dealState, snap dealSnapshot) dealCheckResult {
 				r.Recipient.Repeat = append(r.Recipient.Repeat, class)
 				continue
 			}
+			if s.memory.leakedBefore(keys, class) {
+				r.Recipient.Unapproved = append(r.Recipient.Unapproved, class)
+				add("who", "first_disclosure", class, fmt.Sprintf("Your %s already went to %s without your OK", classWord(class), r.Recipient.Name))
+				continue
+			}
 			r.Recipient.First = append(r.Recipient.First, class)
 			add("who", "first_disclosure", class, fmt.Sprintf("First time telling %s your %s", r.Recipient.Name, classWord(class)))
 		}

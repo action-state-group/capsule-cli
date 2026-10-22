@@ -25,9 +25,12 @@ import (
 type dealCounterpartyMemory struct {
 	// dealt lists the other deals, each with its counterparty's identities.
 	dealt []dealPartyDeal
-	// told lists every disclosure: the recipient's identities, the class and
-	// when.
+	// told lists every disclosure given with authority: the recipient's
+	// identities, the class and when.
 	told []dealPartyTold
+	// leaked lists every disclosure sealed with no authority (authority
+	// none): never told, but a later card must not call it a first time.
+	leaked []dealPartyTold
 	// newProfileNoted: a paused check already said this profile had no
 	// earlier counterparties.
 	newProfileNoted bool
@@ -190,10 +193,15 @@ func (s *dealSession) counterpartyMemory(ctx context.Context, dealID string) (_ 
 		// disclosure sealed with no authority (authority none) is not, so it
 		// never turns a later telling into a repeat. A share the user refused
 		// seals no disclosure at all.
-		case kind == "disclosure" && ev.Disclosure != nil && opened[id] != nil && ev.Disclosure.AuthorizedBy != "":
+		case kind == "disclosure" && ev.Disclosure != nil && opened[id] != nil:
 			keys := disclosureRecipientKeys(*ev.Disclosure, leg[id], opened[id].Channel)
 			for _, f := range ev.Disclosure.Fields {
-				m.told = append(m.told, dealPartyTold{keys: keys, class: f.Class, at: ev.At})
+				t := dealPartyTold{keys: keys, class: f.Class, at: ev.At}
+				if ev.Disclosure.AuthorizedBy == "" {
+					m.leaked = append(m.leaked, t)
+				} else {
+					m.told = append(m.told, t)
+				}
 			}
 		}
 	}
@@ -280,6 +288,14 @@ func (m *dealCounterpartyMemory) toldBefore(keys []string, class string) string 
 	return first
 }
 
+// leakedBefore reports whether class went to this party before with no
+// authority: not told, and not a first time either.
+func (m *dealCounterpartyMemory) leakedBefore(keys []string, class string) bool {
+	return len(keys) > 0 && slices.ContainsFunc(m.leaked, func(t dealPartyTold) bool {
+		return t.class == class && sameParty(keys, t.keys)
+	})
+}
+
 // dealRecipient is what the counterparty memory says about the party a
 // check is about: whether the user has dealt with them before, and, for a
 // share, which classes are told to them for the first time and which again.
@@ -287,7 +303,11 @@ type dealRecipient struct {
 	Name      string   `json:"name"`
 	FirstTime bool     `json:"first_time"`
 	First     []string `json:"first_disclosures,omitempty"`
-	Repeat    []string `json:"repeat_disclosures,omitempty"`
+	// Unapproved are the classes not told to them with authority that went
+	// to them before without it (authority none): a pause, never called a
+	// first time.
+	Unapproved []string `json:"unapproved_disclosures,omitempty"`
+	Repeat     []string `json:"repeat_disclosures,omitempty"`
 	// NewProfile: this profile has no counterparty history yet, said once,
 	// on its first pause.
 	NewProfile bool `json:"new_profile,omitempty"`

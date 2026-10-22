@@ -90,10 +90,13 @@ var cardReasons = []cardReason{
 	{key: "card.why.representation_outside", rules: []string{ruleRepresentationOutside}},
 	// To someone dealt with before, only what is new to them.
 	{key: "card.why.first_disclosure", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
-		return hasRule(r, "first_disclosure") && (r.Recipient == nil || r.Recipient.FirstTime || f.told == "")
+		// Never "first time" for a class that went before without the
+		// user's OK (Recipient.Unapproved): only a true first telling.
+		return hasRule(r, "first_disclosure") && (r.Recipient == nil ||
+			(len(r.Recipient.Unapproved) == 0 && (r.Recipient.FirstTime || f.told == "")))
 	}},
 	{key: "card.why.first_disclosure.some", when: func(r dealCheckResult, _ dealSnapshot, f cardFacts) bool {
-		return hasRule(r, "first_disclosure") && r.Recipient != nil && !r.Recipient.FirstTime && f.told != ""
+		return hasRule(r, "first_disclosure") && r.Recipient != nil && (!r.Recipient.FirstTime || len(r.Recipient.Unapproved) > 0) && f.told != ""
 	}},
 	{key: "card.why.not_asked", rules: []string{"not_asked"}},
 	{key: "card.why.agent_picked", rules: []string{"agent_picked"}},
@@ -250,6 +253,13 @@ func checkCard(w cli.Wording, state dealState, snap dealSnapshot, r dealCheckRes
 	// with a merchant.
 	if snap.Action == "cancel" && state.saleThread() && state.buyerAccepted && !state.calledOff {
 		ask.Question = w.Line("card.question.cancel.acceptance", vals)
+	}
+	// A class that went to them before without the user's OK is said as
+	// that, never as a first time.
+	if r.Recipient != nil && len(r.Recipient.Unapproved) > 0 && isShare(snap.Action) {
+		if line := w.Line("card.question.share.unapproved_before", cli.V{"what": disclosureWords(w, r.Recipient.Unapproved), "payee": payee, "where": where}); line != "" {
+			ask.Question = line
+		}
 	}
 	if r.Verdict == "deny" {
 		// A deny takes no yes: it says what will not happen, and why it

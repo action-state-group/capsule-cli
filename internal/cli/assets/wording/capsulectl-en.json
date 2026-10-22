@@ -70,6 +70,8 @@
     "card.question.pay.no_item": "Pay {amount} to {payee}{where}?",
     "card.question.represent": "Tell {buyer} about the {class}: \"{text}\"?",
     "card.question.represent.attributed": "Tell {buyer}, as your own claim: \"{text}\"?",
+
+    "card.question.share.unapproved_before": "Your {what} already went to {payee}{where} without your OK. Share it again?",
     "card.question.share_contact": "Share your {what} with {payee}{where} for the {item}?",
     "card.question.share_contact.details": "Share your details with {payee}{where}?",
     "card.question.share_contact.no_item": "Share your {what} with {payee}{where}?",
