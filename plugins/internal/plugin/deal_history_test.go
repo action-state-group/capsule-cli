@@ -473,7 +473,8 @@ func TestDealHistoryForAnotherBuyerCarriesNothingOfTheFirst(t *testing.T) {
 // historyTexts is everything a History file says that a reader could take a
 // value from, so a check that a value is absent reads all of it except the
 // bundle's own cryptographic fields, outside every disclosed payload (an
-// entry of a disclosures map, read whole, whatever its field names): a 64-hex
+// entry of a disclosures map, or a deal report extension, read whole,
+// whatever its field names): a 64-hex
 // digest under a field that holds one (historyDigestFields), a digest map key
 // under memberships or disclosures, and the nonce of a deal-history log_id. A
 // record's hex signature envelope is read decoded to its bytes; any other hex
@@ -528,7 +529,7 @@ func historyTexts(t *testing.T, raw []byte) []string {
 				if inPayload || !(digest.MatchString(k) && (key == "memberships" || key == "disclosures")) {
 					readString("", k, inPayload)
 				}
-				walk(k, e, inPayload || key == "disclosures")
+				walk(k, e, inPayload || key == "disclosures" || historyPayloadExtensions[k])
 			}
 		case []any:
 			for _, e := range v {
@@ -545,6 +546,11 @@ func historyTexts(t *testing.T, raw []byte) []string {
 	walk("", doc, false)
 	return out
 }
+
+// historyPayloadExtensions are the extensions a History carries disclosed
+// content in, read whole like a disclosures entry: a deal's report, inline
+// (x-deal-v0) or standalone (x-deal-report/v0).
+var historyPayloadExtensions = map[string]bool{"x-deal-v0": true, "x-deal-report/v0": true}
 
 // historyLogIDOfDigest is the log id of a History selection: its own log's
 // kind and the History's random 64-hex nonce.
@@ -631,6 +637,16 @@ func TestHistoryTextsSkipOnlyDigests(t *testing.T) {
 	// amount, capsule_id, log_id, the signature (raw hex has none; decoded:
 	// 1) and the memberships key inside the payload; none outside it.
 	assert.Equal(t, 5, got, "%q", inside)
+	// So is a deal report, inline or standalone.
+	for _, ext := range []string{"x-deal-v0", "x-deal-report/v0"} {
+		report := historyTexts(t, []byte(`{"extensions":{"`+ext+`":{"agent_input":{"report":{"money":{"currency":"`+val+`"}}}}},`+
+			`"capsule_id":"`+val+`"}`))
+		n := 0
+		for _, s := range report {
+			n += strings.Count(s, "170000")
+		}
+		assert.Equal(t, 1, n, "%s: the report's currency, not the record's capsule_id", ext)
+	}
 	sig := historyTexts(t, []byte(`{"signature":"`+hex.EncodeToString([]byte("Avery 170000"))+`"}`))
 	assert.Contains(t, sig, "Avery 170000", "a signature envelope is read decoded")
 	found := 0
